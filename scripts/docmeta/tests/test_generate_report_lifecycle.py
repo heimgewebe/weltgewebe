@@ -13,6 +13,23 @@ from scripts.docmeta.generate_report_lifecycle import (
 from scripts.docmeta.generate_report_lifecycle_inventory import collect_reports, InventoryConfig
 from scripts.docmeta.validate_report_lifecycle import _load_frontmatter
 
+
+def _section(content: str, heading: str) -> str:
+    parts = content.split(f"## {heading}")
+    if len(parts) < 2:
+        raise AssertionError(f"Section '## {heading}' not found.")
+    return parts[1].split("\n## ")[0]
+
+
+def _row_for_path(section: str, path: str) -> str:
+    lines = [line for line in section.splitlines() if f" {path} " in line]
+    if not lines:
+        raise AssertionError(f"Path '{path}' not found in section.")
+    if len(lines) > 1:
+        raise AssertionError(f"Path '{path}' found multiple times in section.")
+    return lines[0]
+
+
 class TestGenerateReportLifecycle(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -20,19 +37,19 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         self.reports_dir = self.root / "docs" / "reports"
         self.reports_dir.mkdir(parents=True)
         self.output_path = self.root / "output.md"
-        
+
         (self.root / "docs" / "_generated").mkdir(parents=True, exist_ok=True)
-        
+
     def tearDown(self):
         self.temp_dir.cleanup()
-        
+
     def _write_report(self, name: str, content: str):
         (self.reports_dir / name).write_text(content, encoding="utf-8")
 
     def test_generate_writes_output(self):
         self._write_report("empty.md", "")
         generate(self.root, self.output_path)
-        
+
         self.assertTrue(self.output_path.exists())
         content = self.output_path.read_text(encoding="utf-8")
         self.assertTrue(content.startswith("---"))
@@ -42,10 +59,10 @@ class TestGenerateReportLifecycle(unittest.TestCase):
     def test_summary_counts_reports_and_non_reports(self):
         self._write_report("report1.md", "---\ndoc_type: report\n---")
         self._write_report("ref.md", "---\ndoc_type: reference\n---")
-        
+
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
-        
+
         self.assertIn("| files_scanned | 2 |", content)
         self.assertIn("| reports_checked | 1 |", content)
         self.assertIn("| reports_ignored_non_report | 1 |", content)
@@ -58,78 +75,109 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
         self.assertIn("| reports_checked | 1 |", content)
-        self.assertIn("docs/reports/mixed.md", content)
+
+        section = _section(content, "Active Reports")
+        _row_for_path(section, "docs/reports/mixed.md")
 
     def test_active_report_group(self):
         self._write_report("active1.md", "---\ndoc_type: report\nlifecycle_state: active\nstatus: active\nlifecycle: production\nowner_task: T123\nreview_after: 2026-01-01\n---")
-        
+
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
-        
-        self.assertIn("## Active Reports", content)
-        self.assertRegex(content, r"\|\s*docs/reports/active1\.md\s*\|")
+
+        section = _section(content, "Active Reports")
+        row = _row_for_path(section, "docs/reports/active1.md")
+        self.assertIn(" active ", row)
+
+        with self.assertRaises(AssertionError):
+            _row_for_path(_section(content, "Unclassified Reports"), "docs/reports/active1.md")
 
     def test_unclassified_report_group(self):
         self._write_report("unclass.md", "---\ndoc_type: report\nstatus: draft\n---")
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
-        
-        self.assertIn("## Unclassified Reports", content)
-        self.assertRegex(content, r"\|\s*docs/reports/unclass\.md\s*\|")
-        
-        self.assertIn("## Reports With Findings", content)
-        self.assertIn("missing_lifecycle_state", content)
+
+        section = _section(content, "Unclassified Reports")
+        _row_for_path(section, "docs/reports/unclass.md")
+
+        findings_section = _section(content, "Reports With Findings")
+        row = _row_for_path(findings_section, "docs/reports/unclass.md")
+        self.assertIn("missing_lifecycle_state", row)
 
     def test_non_report_section(self):
         self._write_report("status.md", "---\ndoc_type: status-matrix\n---")
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
-        
-        self.assertIn("## Non-Report Files Under docs/reports", content)
-        self.assertRegex(content, r"\|\s*docs/reports/status\.md\s*\|\s*status-matrix\s*\|")
+
+        section = _section(content, "Non-Report Files Under docs/reports")
+        row = _row_for_path(section, "docs/reports/status.md")
+        self.assertIn(" status-matrix ", row)
+
+        with self.assertRaises(AssertionError):
+            _row_for_path(_section(content, "Unclassified Reports"), "docs/reports/status.md")
+        with self.assertRaises(AssertionError):
+            _row_for_path(_section(content, "Reports With Findings"), "docs/reports/status.md")
 
     def test_superseded_report_with_missing_superseded_by(self):
         self._write_report("super.md", "---\ndoc_type: report\nstatus: archived\nlifecycle_state: superseded\nlifecycle: eol\nowner_task: T123\n---")
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
-        
-        self.assertIn("## Superseded Reports", content)
-        self.assertIn("## Reports With Findings", content)
-        self.assertIn("missing_superseded_by", content)
+
+        section = _section(content, "Superseded Reports")
+        _row_for_path(section, "docs/reports/super.md")
+
+        findings_section = _section(content, "Reports With Findings")
+        row = _row_for_path(findings_section, "docs/reports/super.md")
+        self.assertIn("missing_superseded_by", row)
 
     def test_deferred_and_archived_groups(self):
         self._write_report("def.md", "---\ndoc_type: report\nstatus: draft\nlifecycle_state: deferred\nlifecycle: backlog\nowner_task: T1\nreview_after: 2026-01-01\n---")
         self._write_report("arch.md", "---\ndoc_type: report\nstatus: archived\nlifecycle_state: archived\nlifecycle: eol\nowner_task: T2\n---")
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
-        
-        self.assertIn("## Deferred Reports", content)
-        self.assertRegex(content, r"\|\s*docs/reports/def\.md\s*\|")
-        
-        self.assertIn("## Archived Reports", content)
-        self.assertRegex(content, r"\|\s*docs/reports/arch\.md\s*\|")
-        
-        self.assertNotIn("missing_superseded_by", content)
+
+        deferred_section = _section(content, "Deferred Reports")
+        _row_for_path(deferred_section, "docs/reports/def.md")
+
+        archived_section = _section(content, "Archived Reports")
+        arch_row = _row_for_path(archived_section, "docs/reports/arch.md")
+        self.assertNotIn("superseded", arch_row)
+
+        with self.assertRaises(AssertionError):
+            _row_for_path(_section(content, "Superseded Reports"), "docs/reports/arch.md")
 
     def test_markdown_cells_escape_pipes(self):
         self._write_report("pipes.md", "---\ndoc_type: report\nlifecycle_state: active\nstatus: active\nlifecycle: production\nowner_task: \"Team | Task\"\nreview_after: 2026-01-01\n---")
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
-        self.assertIn("Team &#124; Task", content)
+
+        section = _section(content, "Active Reports")
+        row = _row_for_path(section, "docs/reports/pipes.md")
+        self.assertIn("Team &#124; Task", row)
 
     def test_output_is_deterministically_sorted(self):
         self._write_report("b.md", "---\ndoc_type: report\nlifecycle_state: active\n---")
         self._write_report("a.md", "---\ndoc_type: report\nlifecycle_state: active\n---")
         self._write_report("c.md", "---\ndoc_type: report\nlifecycle_state: active\n---")
-        
+
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
-        
-        pos_a = content.find("docs/reports/a.md")
-        pos_b = content.find("docs/reports/b.md")
-        pos_c = content.find("docs/reports/c.md")
-        
-        self.assertTrue(pos_a < pos_b < pos_c)
+
+        section = _section(content, "Active Reports")
+
+        paths = []
+        for line in section.splitlines():
+            if line.startswith("| docs/reports/"):
+                paths.append(line.split("|")[1].strip())
+
+        self.assertEqual(
+            paths,
+            [
+                "docs/reports/a.md",
+                "docs/reports/b.md",
+                "docs/reports/c.md",
+            ],
+        )
 
     def test_missing_currently_enforced_fields_section(self):
         self._write_report("unclass.md", "---\ndoc_type: report\nstatus: active\n---")
@@ -137,21 +185,16 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
 
-        self.assertIn("## Reports With Missing Currently-Enforced Fields", content)
-        section = content.split(
-            "## Reports With Missing Currently-Enforced Fields", 1
-        )[1].split("\n## ", 1)[0]
-        # Exact row: field names in rule-precedence order (not finding codes).
-        self.assertIn(
-            "| docs/reports/unclass.md | active |  | "
-            "lifecycle_state, lifecycle, review_after |",
-            section,
-        )
-        # Presence-only caveat present; no completeness overclaim.
+        section = _section(content, "Reports With Missing Currently-Enforced Fields")
+
+        row = _row_for_path(section, "docs/reports/unclass.md")
+        self.assertIn("lifecycle_state, lifecycle, review_after", row)
+
         self.assertIn("field presence only", section)
         self.assertNotIn("Complete Reports", section)
-        # Non-reports never appear in the section.
-        self.assertNotIn("docs/reports/reference.md", section)
+
+        with self.assertRaises(AssertionError):
+            _row_for_path(section, "docs/reports/reference.md")
 
     def test_classified_report_absent_from_missing_fields_section(self):
         self._write_report(
@@ -162,23 +205,23 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
 
-        section = content.split("## Reports With Missing Currently-Enforced Fields", 1)[1]
-        section = section.split("\n## ", 1)[0]
+        section = _section(content, "Reports With Missing Currently-Enforced Fields")
         self.assertIn("| _None_ |", section)
-        self.assertNotIn("docs/reports/arch.md", section)
+        with self.assertRaises(AssertionError):
+            _row_for_path(section, "docs/reports/arch.md")
 
     def test_no_real_repo_mutation_when_output_is_temp(self):
-        import time
-        start_time = time.time()
+        default_output = self.root / "docs" / "_generated" / "report-lifecycle.md"
+        default_output.parent.mkdir(parents=True, exist_ok=True)
+
+        original_content = "sentinel"
+        default_output.write_text(original_content, encoding="utf-8")
 
         self._write_report("fake.md", "---\ndoc_type: report\n---")
         generate(self.root, self.output_path)
 
-        real_output = Path(__file__).resolve().parents[3] / "docs" / "_generated" / "report-lifecycle.md"
-
-        if real_output.exists():
-            stat = real_output.stat()
-            self.assertTrue(stat.st_mtime < start_time, "Real repo file was modified!")
+        self.assertTrue(self.output_path.exists())
+        self.assertEqual(default_output.read_text(encoding="utf-8"), original_content)
 
     def _make_config(self) -> InventoryConfig:
         return InventoryConfig(
@@ -226,12 +269,11 @@ class TestGenerateReportLifecycle(unittest.TestCase):
 
         row = collect_lifecycle_rows(self.root, [conflicting_record])[0]
 
-        # title and refs remain Record-based
+        self.assertEqual(row.path, "docs/reports/real.md")
         self.assertEqual(row.title, "Record Title")
         self.assertEqual(row.primary_refs, 1)
         self.assertEqual(row.derived_refs, 2)
 
-        # seven policy fields must come from file frontmatter
         self.assertEqual(row.doc_type, "report")
         self.assertEqual(row.status, "deprecated")
         self.assertEqual(row.lifecycle_state, "archived")
@@ -243,6 +285,21 @@ class TestGenerateReportLifecycle(unittest.TestCase):
     def test_inline_list_values_are_normalized(self):
         """Inline-list frontmatter values must normalize to empty string, not appear as-is."""
         CASES = [
+            {
+                "name": "doc_type_list",
+                "field": "doc_type",
+                "inline_value": "[report]",
+                "extra_fields": (
+                    "status: deprecated\n"
+                    "lifecycle_state: archived\n"
+                    "lifecycle: audit\n"
+                    "owner_task: TASK-1\n"
+                ),
+                "expect_row_field": "doc_type",
+                "expect_row_value": "",
+                "expect_finding": None,
+                "expect_group": "non_report",
+            },
             {
                 "name": "status_empty_list",
                 "field": "status",
@@ -304,6 +361,22 @@ class TestGenerateReportLifecycle(unittest.TestCase):
                 "expect_group": "unclassified",
             },
             {
+                "name": "lifecycle_list",
+                "field": "lifecycle",
+                "inline_value": "[audit]",
+                "extra_fields": (
+                    "doc_type: report\n"
+                    "status: active\n"
+                    "lifecycle_state: active\n"
+                    "owner_task: TASK-1\n"
+                    "review_after: 2026-07-01\n"
+                ),
+                "expect_row_field": "lifecycle",
+                "expect_row_value": "",
+                "expect_finding": "missing_lifecycle",
+                "expect_group": "active",
+            },
+            {
                 "name": "owner_task_list",
                 "field": "owner_task",
                 "inline_value": "[TASK-1]",
@@ -317,6 +390,38 @@ class TestGenerateReportLifecycle(unittest.TestCase):
                 "expect_row_value": "",
                 "expect_finding": "missing_owner_task",
                 "expect_group": "archived",
+            },
+            {
+                "name": "review_after_list",
+                "field": "review_after",
+                "inline_value": "[2026-07-01]",
+                "extra_fields": (
+                    "doc_type: report\n"
+                    "status: active\n"
+                    "lifecycle_state: active\n"
+                    "lifecycle: audit\n"
+                    "owner_task: TASK-1\n"
+                ),
+                "expect_row_field": "review_after",
+                "expect_row_value": "",
+                "expect_finding": "missing_review_after",
+                "expect_group": "active",
+            },
+            {
+                "name": "superseded_by_list",
+                "field": "superseded_by",
+                "inline_value": "[docs/reports/replacement.md]",
+                "extra_fields": (
+                    "doc_type: report\n"
+                    "status: deprecated\n"
+                    "lifecycle_state: superseded\n"
+                    "lifecycle: audit\n"
+                    "owner_task: TASK-1\n"
+                ),
+                "expect_row_field": "superseded_by",
+                "expect_row_value": "",
+                "expect_finding": "missing_superseded_by",
+                "expect_group": "superseded",
             },
         ]
 
@@ -332,7 +437,6 @@ class TestGenerateReportLifecycle(unittest.TestCase):
                 self._write_report(fname, content)
                 path = self.reports_dir / fname
 
-                # prove the validator parser returns a list for the inline value
                 fm = _load_frontmatter(path)
                 self.assertIsInstance(
                     fm.get(case["field"]),
@@ -345,7 +449,6 @@ class TestGenerateReportLifecycle(unittest.TestCase):
                 record = next(r for r in records if r.path.endswith(fname))
                 row = collect_lifecycle_rows(self.root, [record])[0]
 
-                # policy field must be normalized to empty string
                 actual_value = getattr(row, case["expect_row_field"])
                 self.assertEqual(
                     actual_value,
@@ -356,14 +459,13 @@ class TestGenerateReportLifecycle(unittest.TestCase):
                     ),
                 )
 
-                # expected finding must be present
-                self.assertIn(
-                    case["expect_finding"],
-                    row.findings,
-                    msg=f"{case['name']}: expected finding {case['expect_finding']!r}",
-                )
+                if case["expect_finding"]:
+                    self.assertIn(
+                        case["expect_finding"],
+                        row.findings,
+                        msg=f"{case['name']}: expected finding {case['expect_finding']!r}",
+                    )
 
-                # grouping must match validator interpretation
                 groups = group_rows([row])
                 self.assertIn(
                     case["expect_group"],
@@ -375,8 +477,10 @@ class TestGenerateReportLifecycle(unittest.TestCase):
                     msg=f"{case['name']}: row not in group {case['expect_group']!r}",
                 )
 
-                # summary counts lifecycle_state empty as missing
-                if case["field"] == "lifecycle_state":
+                if case["field"] == "doc_type":
+                    summary = build_summary([row])
+                    self.assertEqual(summary["reports_checked"], 0)
+                elif case["field"] == "lifecycle_state":
                     summary = build_summary([row])
                     self.assertEqual(
                         summary["reports_missing_lifecycle_state"],
@@ -389,7 +493,6 @@ class TestGenerateReportLifecycle(unittest.TestCase):
                         msg=f"{case['name']}: inline list must not count as present lifecycle_state",
                     )
 
-                # clean up report for next subTest
                 path.unlink()
 
     def test_rendering_with_status_inline_list(self):
@@ -407,11 +510,15 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
 
-        # inline list string must not appear as a policy value in any table cell
         self.assertNotIn("[active]", content)
 
-        # finding must be reported because the value normalizes to empty
-        self.assertIn("missing_status", content)
+        section = _section(content, "Archived Reports")
+        row = _row_for_path(section, "docs/reports/status_list.md")
+        self.assertNotIn("[active]", row)
+
+        findings_section = _section(content, "Reports With Findings")
+        findings_row = _row_for_path(findings_section, "docs/reports/status_list.md")
+        self.assertIn("missing_status", findings_row)
 
     def test_rendering_with_lifecycle_state_inline_list(self):
         """[archived] lifecycle_state must not appear, row goes to unclassified, not archived."""
@@ -428,24 +535,39 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
 
-        # inline list string must not appear as a policy value
         self.assertNotIn("[archived]", content)
 
-        # finding must be reported
-        self.assertIn("missing_lifecycle_state", content)
+        unclassified_section = _section(content, "Unclassified Reports")
+        _row_for_path(unclassified_section, "docs/reports/ls_list.md")
 
-        # row must be in Unclassified, not Archived
-        unclassified_section = content.split("## Unclassified Reports", 1)
-        self.assertEqual(len(unclassified_section), 2, "Unclassified Reports section missing")
-        self.assertIn("docs/reports/ls_list.md", unclassified_section[1].split("## ")[0])
+        with self.assertRaises(AssertionError):
+            _row_for_path(_section(content, "Archived Reports"), "docs/reports/ls_list.md")
 
-        archived_section = content.split("## Archived Reports", 1)
-        self.assertEqual(len(archived_section), 2, "Archived Reports section missing")
-        self.assertNotIn("docs/reports/ls_list.md", archived_section[1].split("## ")[0])
+        findings_section = _section(content, "Reports With Findings")
+        row = _row_for_path(findings_section, "docs/reports/ls_list.md")
+        self.assertIn("missing_lifecycle_state", row)
 
-        # summary: lifecycle_state counts as missing
         self.assertIn("| reports_missing_lifecycle_state | 1 |", content)
         self.assertIn("| reports_with_lifecycle_state | 0 |", content)
+
+    def test_other_lifecycle_state_groups_to_other_and_renders_in_summary(self):
+        self._write_report("exp.md", "---\ndoc_type: report\nstatus: active\nlifecycle_state: experimental\nlifecycle: audit\nowner_task: T1\nreview_after: 2026-01-01\n---")
+
+        config = self._make_config()
+        records = collect_reports(config)
+        rows = collect_lifecycle_rows(self.root, records)
+        groups = group_rows(rows)
+
+        self.assertIn("other", groups)
+        self.assertEqual(len(groups["other"]), 1)
+        self.assertEqual(groups["other"][0].path, "docs/reports/exp.md")
+
+        summary = build_summary(rows)
+        from scripts.docmeta.generate_report_lifecycle import render_markdown
+        content = render_markdown(rows, summary)
+
+        self.assertIn("| other | 1 |", content)
+
 
 if __name__ == "__main__":
     unittest.main()
