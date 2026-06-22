@@ -17,7 +17,10 @@ from scripts.docmeta.generate_report_lifecycle_inventory import (
     _cell,
 )
 from scripts.docmeta.validate_report_lifecycle import _validate_report, _load_frontmatter
-from scripts.docmeta.report_lifecycle_requirements import missing_required_report_fields
+from scripts.docmeta.report_lifecycle_requirements import (
+    missing_required_report_fields,
+    string_value,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -61,17 +64,20 @@ def collect_lifecycle_rows(root: Path, records: list[ReportRecord]) -> list[Life
         findings = _validate_report(full_path, frontmatter, root)
         finding_codes = tuple(sorted(f.code for f in findings))
 
+        # Policy-visible values use the same parsed frontmatter and
+        # normalization as validator findings. ReportRecord remains
+        # the source for path, title, and reference metadata.
         rows.append(
             LifecycleOverviewRow(
                 path=record.path,
                 title=record.title,
-                doc_type=record.doc_type,
-                status=record.status,
-                lifecycle_state=record.lifecycle_state,
-                lifecycle=record.lifecycle,
-                owner_task=record.owner_task,
-                review_after=record.review_after,
-                superseded_by=record.superseded_by,
+                doc_type=string_value(frontmatter.get("doc_type")),
+                status=string_value(frontmatter.get("status")),
+                lifecycle_state=string_value(frontmatter.get("lifecycle_state")),
+                lifecycle=string_value(frontmatter.get("lifecycle")),
+                owner_task=string_value(frontmatter.get("owner_task")),
+                review_after=string_value(frontmatter.get("review_after")),
+                superseded_by=string_value(frontmatter.get("superseded_by")),
                 primary_refs=record.referenced_by_count,
                 derived_refs=len(record.derived_referenced_by_paths),
                 findings=finding_codes,
