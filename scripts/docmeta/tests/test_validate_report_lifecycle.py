@@ -343,9 +343,12 @@ lifecycle_state: active
 
         extracted = []
         for line in lines:
-            parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 5:
-                extracted.append((parts[1], parts[3]))
+            parts = [
+                part.strip()
+                for part in line.strip().strip("|").split("|")
+            ]
+            self.assertEqual(len(parts), 5)
+            extracted.append((parts[0], parts[2]))
 
         self.assertEqual(
             extracted,
@@ -356,7 +359,7 @@ lifecycle_state: active
                 ("docs/reports/b_example.md", "missing_lifecycle"),
                 ("docs/reports/b_example.md", "missing_owner_task"),
                 ("docs/reports/b_example.md", "missing_review_after"),
-            ]
+            ],
         )
 
         rendered_again, exit_code_again = run(self.tmp_root, "report")

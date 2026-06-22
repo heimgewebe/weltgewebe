@@ -5,6 +5,28 @@ from pathlib import Path
 import scripts.docmeta.generate_report_lifecycle_inventory as gen
 
 
+def _parse_warning_cells(markdown: str, path: str) -> list[str]:
+    marker = "## Parse Warnings"
+    lines = markdown.splitlines()
+    matches = [i for i, l in enumerate(lines) if l == marker]
+    if len(matches) != 1:
+        raise AssertionError(f"Expected exactly one {marker!r} section, found {len(matches)}.")
+
+    start = matches[0] + 1
+    end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
+    section = "\n".join(lines[start:end])
+
+    rows = []
+    for line in section.splitlines():
+        if line.startswith(f"| {path} |"):
+            rows.append(line)
+
+    if len(rows) != 1:
+        raise AssertionError(f"Expected exactly one warning row for {path!r}, found {len(rows)}.")
+
+    return [cell.strip() for cell in rows[0].strip().strip("|").split("|")]
+
+
 class TestGenerateReportLifecycleInventory(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -481,17 +503,14 @@ relations:
         self.assertEqual(records[0].frontmatter_parse_warning, "frontmatter start found without closing delimiter")
         
         markdown = gen.render_inventory(records)
-        marker = "## Parse Warnings"
-        lines = markdown.splitlines()
-        matches = [i for i, l in enumerate(lines) if l == marker]
-        self.assertEqual(len(matches), 1)
-        start = matches[0] + 1
-        end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
-        section = "\n".join(lines[start:end])
-        
-        rows = [line for line in section.splitlines() if line.startswith("| docs/reports/broken.md |")]
-        self.assertEqual(len(rows), 1)
-        self.assertIn("frontmatter start found without closing delimiter", rows[0])
+        cells = _parse_warning_cells(markdown, "docs/reports/broken.md")
+        self.assertEqual(
+            cells,
+            [
+                "docs/reports/broken.md",
+                "frontmatter start found without closing delimiter",
+            ],
+        )
 
     def test_parse_warning_unsupported_relations_inline_form(self) -> None:
         self._write(
@@ -503,17 +522,14 @@ relations:
         self.assertEqual(records[0].relations_count, 0)
         
         markdown = gen.render_inventory(records)
-        marker = "## Parse Warnings"
-        lines = markdown.splitlines()
-        matches = [i for i, l in enumerate(lines) if l == marker]
-        self.assertEqual(len(matches), 1)
-        start = matches[0] + 1
-        end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
-        section = "\n".join(lines[start:end])
-        
-        rows = [line for line in section.splitlines() if line.startswith("| docs/reports/inline.md |")]
-        self.assertEqual(len(rows), 1)
-        self.assertIn("relations must use block list syntax for this inventory", rows[0])
+        cells = _parse_warning_cells(markdown, "docs/reports/inline.md")
+        self.assertEqual(
+            cells,
+            [
+                "docs/reports/inline.md",
+                "relations must use block list syntax for this inventory",
+            ],
+        )
 
 
 def _rel(path: Path, root: Path) -> str:
