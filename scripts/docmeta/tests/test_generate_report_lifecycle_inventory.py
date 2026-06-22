@@ -475,5 +475,51 @@ def _rel(path: Path, root: Path) -> str:
     return str(path.relative_to(root)).replace("\\", "/")
 
 
+
+    def test_parse_warning_missing_closing_delimiter(self) -> None:
+        self._write(
+            "docs/reports/broken.md",
+            "---\nid: docs.reports.broken\ntitle: Broken\n",
+        )
+        records = gen.collect_reports(self._config())
+        self.assertTrue(records[0].has_frontmatter)
+        self.assertEqual(records[0].frontmatter_parse_warning, "frontmatter start found without closing delimiter")
+        
+        markdown = gen.render_inventory(records)
+        marker = "## Parse Warnings"
+        lines = markdown.splitlines()
+        matches = [i for i, l in enumerate(lines) if l == marker]
+        self.assertEqual(len(matches), 1)
+        start = matches[0] + 1
+        end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
+        section = "\n".join(lines[start:end])
+        
+        rows = [line for line in section.splitlines() if line.startswith("| docs/reports/broken.md |")]
+        self.assertEqual(len(rows), 1)
+        self.assertIn("frontmatter start found without closing delimiter", rows[0])
+
+    def test_parse_warning_unsupported_relations_inline_form(self) -> None:
+        self._write(
+            "docs/reports/inline.md",
+            "---\nid: docs.reports.inline\nrelations: [{type: relates_to, target: docs/reports/other.md}]\n---\n",
+        )
+        records = gen.collect_reports(self._config())
+        self.assertEqual(records[0].frontmatter_parse_warning, "relations must use block list syntax for this inventory")
+        self.assertEqual(records[0].relations_count, 0)
+        
+        markdown = gen.render_inventory(records)
+        marker = "## Parse Warnings"
+        lines = markdown.splitlines()
+        matches = [i for i, l in enumerate(lines) if l == marker]
+        self.assertEqual(len(matches), 1)
+        start = matches[0] + 1
+        end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
+        section = "\n".join(lines[start:end])
+        
+        rows = [line for line in section.splitlines() if line.startswith("| docs/reports/inline.md |")]
+        self.assertEqual(len(rows), 1)
+        self.assertIn("relations must use block list syntax for this inventory", rows[0])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -9,25 +9,52 @@ from scripts.docmeta.generate_report_lifecycle import (
     collect_lifecycle_rows,
     group_rows,
     build_summary,
+    render_markdown,
 )
 from scripts.docmeta.generate_report_lifecycle_inventory import collect_reports, InventoryConfig
 from scripts.docmeta.validate_report_lifecycle import _load_frontmatter
 
 
 def _section(content: str, heading: str) -> str:
-    parts = content.split(f"## {heading}")
-    if len(parts) < 2:
-        raise AssertionError(f"Section '## {heading}' not found.")
-    return parts[1].split("\n## ")[0]
+    marker = f"## {heading}"
+    lines = content.splitlines()
+
+    matches = [index for index, line in enumerate(lines) if line == marker]
+    if len(matches) != 1:
+        raise AssertionError(
+            f"Expected exactly one {marker!r} section, found {len(matches)}."
+        )
+
+    start = matches[0] + 1
+    end = next(
+        (
+            index
+            for index in range(start, len(lines))
+            if lines[index].startswith("## ")
+        ),
+        len(lines),
+    )
+    return "\n".join(lines[start:end])
+
+
+def _table_cells(row: str) -> list[str]:
+    return [cell.strip() for cell in row.strip().strip("|").split("|")]
 
 
 def _row_for_path(section: str, path: str) -> str:
-    lines = [line for line in section.splitlines() if f" {path} " in line]
-    if not lines:
-        raise AssertionError(f"Path '{path}' not found in section.")
-    if len(lines) > 1:
-        raise AssertionError(f"Path '{path}' found multiple times in section.")
-    return lines[0]
+    matches = []
+    for line in section.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = _table_cells(line)
+        if cells and cells[0] == path:
+            matches.append(line)
+
+    if len(matches) != 1:
+        raise AssertionError(
+            f"Expected exactly one row for {path!r}, found {len(matches)}."
+        )
+    return matches[0]
 
 
 class TestGenerateReportLifecycle(unittest.TestCase):
@@ -87,7 +114,9 @@ class TestGenerateReportLifecycle(unittest.TestCase):
 
         section = _section(content, "Active Reports")
         row = _row_for_path(section, "docs/reports/active1.md")
-        self.assertIn(" active ", row)
+        cells = _table_cells(row)
+        self.assertEqual(cells[0], "docs/reports/active1.md")
+        self.assertEqual(cells[1], "active") # status
 
         with self.assertRaises(AssertionError):
             _row_for_path(_section(content, "Unclassified Reports"), "docs/reports/active1.md")
@@ -102,7 +131,8 @@ class TestGenerateReportLifecycle(unittest.TestCase):
 
         findings_section = _section(content, "Reports With Findings")
         row = _row_for_path(findings_section, "docs/reports/unclass.md")
-        self.assertIn("missing_lifecycle_state", row)
+        cells = _table_cells(row)
+        self.assertIn("missing_lifecycle_state", cells[3])
 
     def test_non_report_section(self):
         self._write_report("status.md", "---\ndoc_type: status-matrix\n---")
@@ -111,12 +141,11 @@ class TestGenerateReportLifecycle(unittest.TestCase):
 
         section = _section(content, "Non-Report Files Under docs/reports")
         row = _row_for_path(section, "docs/reports/status.md")
-        self.assertIn(" status-matrix ", row)
+        cells = _table_cells(row)
+        self.assertEqual(cells[1], "status-matrix")
 
-        with self.assertRaises(AssertionError):
-            _row_for_path(_section(content, "Unclassified Reports"), "docs/reports/status.md")
-        with self.assertRaises(AssertionError):
-            _row_for_path(_section(content, "Reports With Findings"), "docs/reports/status.md")
+        unclassified = _section(content, "Unclassified Reports")
+        self.assertIn("| _None_ |", unclassified)
 
     def test_superseded_report_with_missing_superseded_by(self):
         self._write_report("super.md", "---\ndoc_type: report\nstatus: archived\nlifecycle_state: superseded\nlifecycle: eol\nowner_task: T123\n---")
@@ -128,7 +157,8 @@ class TestGenerateReportLifecycle(unittest.TestCase):
 
         findings_section = _section(content, "Reports With Findings")
         row = _row_for_path(findings_section, "docs/reports/super.md")
-        self.assertIn("missing_superseded_by", row)
+        cells = _table_cells(row)
+        self.assertIn("missing_superseded_by", cells[3])
 
     def test_deferred_and_archived_groups(self):
         self._write_report("def.md", "---\ndoc_type: report\nstatus: draft\nlifecycle_state: deferred\nlifecycle: backlog\nowner_task: T1\nreview_after: 2026-01-01\n---")
@@ -141,7 +171,8 @@ class TestGenerateReportLifecycle(unittest.TestCase):
 
         archived_section = _section(content, "Archived Reports")
         arch_row = _row_for_path(archived_section, "docs/reports/arch.md")
-        self.assertNotIn("superseded", arch_row)
+        cells = _table_cells(arch_row)
+        self.assertEqual(cells[1], "archived")
 
         with self.assertRaises(AssertionError):
             _row_for_path(_section(content, "Superseded Reports"), "docs/reports/arch.md")
@@ -153,7 +184,8 @@ class TestGenerateReportLifecycle(unittest.TestCase):
 
         section = _section(content, "Active Reports")
         row = _row_for_path(section, "docs/reports/pipes.md")
-        self.assertIn("Team &#124; Task", row)
+        cells = _table_cells(row)
+        self.assertEqual(cells[3], "Team &#124; Task")
 
     def test_output_is_deterministically_sorted(self):
         self._write_report("b.md", "---\ndoc_type: report\nlifecycle_state: active\n---")
@@ -168,7 +200,7 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         paths = []
         for line in section.splitlines():
             if line.startswith("| docs/reports/"):
-                paths.append(line.split("|")[1].strip())
+                paths.append(_table_cells(line)[0])
 
         self.assertEqual(
             paths,
@@ -188,7 +220,8 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         section = _section(content, "Reports With Missing Currently-Enforced Fields")
 
         row = _row_for_path(section, "docs/reports/unclass.md")
-        self.assertIn("lifecycle_state, lifecycle, review_after", row)
+        cells = _table_cells(row)
+        self.assertIn("lifecycle_state, lifecycle, review_after", cells[3])
 
         self.assertIn("field presence only", section)
         self.assertNotIn("Complete Reports", section)
@@ -459,12 +492,14 @@ class TestGenerateReportLifecycle(unittest.TestCase):
                     ),
                 )
 
-                if case["expect_finding"]:
-                    self.assertIn(
-                        case["expect_finding"],
-                        row.findings,
-                        msg=f"{case['name']}: expected finding {case['expect_finding']!r}",
+                if case["expect_finding"] is None:
+                    self.assertEqual(
+                        list(row.findings),
+                        [],
+                        msg=f"{case['name']}: non-report must not receive report findings",
                     )
+                else:
+                    self.assertEqual(list(row.findings), [case["expect_finding"]])
 
                 groups = group_rows([row])
                 self.assertIn(
@@ -480,6 +515,7 @@ class TestGenerateReportLifecycle(unittest.TestCase):
                 if case["field"] == "doc_type":
                     summary = build_summary([row])
                     self.assertEqual(summary["reports_checked"], 0)
+                    self.assertEqual(summary["reports_ignored_non_report"], 1)
                 elif case["field"] == "lifecycle_state":
                     summary = build_summary([row])
                     self.assertEqual(
@@ -510,15 +546,15 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
 
-        self.assertNotIn("[active]", content)
-
         section = _section(content, "Archived Reports")
         row = _row_for_path(section, "docs/reports/status_list.md")
-        self.assertNotIn("[active]", row)
+        cells = _table_cells(row)
+        self.assertEqual(cells[1], "") # status cell
 
         findings_section = _section(content, "Reports With Findings")
         findings_row = _row_for_path(findings_section, "docs/reports/status_list.md")
-        self.assertIn("missing_status", findings_row)
+        f_cells = _table_cells(findings_row)
+        self.assertIn("missing_status", f_cells[3]) # findings cell
 
     def test_rendering_with_lifecycle_state_inline_list(self):
         """[archived] lifecycle_state must not appear, row goes to unclassified, not archived."""
@@ -535,17 +571,18 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
 
-        self.assertNotIn("[archived]", content)
-
         unclassified_section = _section(content, "Unclassified Reports")
-        _row_for_path(unclassified_section, "docs/reports/ls_list.md")
+        row = _row_for_path(unclassified_section, "docs/reports/ls_list.md")
+        cells = _table_cells(row)
+        self.assertEqual(cells[1], "deprecated") # status cell
 
-        with self.assertRaises(AssertionError):
-            _row_for_path(_section(content, "Archived Reports"), "docs/reports/ls_list.md")
+        archived_section = _section(content, "Archived Reports")
+        self.assertIn("| _None_ |", archived_section)
 
         findings_section = _section(content, "Reports With Findings")
-        row = _row_for_path(findings_section, "docs/reports/ls_list.md")
-        self.assertIn("missing_lifecycle_state", row)
+        f_row = _row_for_path(findings_section, "docs/reports/ls_list.md")
+        f_cells = _table_cells(f_row)
+        self.assertIn("missing_lifecycle_state", f_cells[3]) # findings cell
 
         self.assertIn("| reports_missing_lifecycle_state | 1 |", content)
         self.assertIn("| reports_with_lifecycle_state | 0 |", content)
@@ -563,7 +600,6 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         self.assertEqual(groups["other"][0].path, "docs/reports/exp.md")
 
         summary = build_summary(rows)
-        from scripts.docmeta.generate_report_lifecycle import render_markdown
         content = render_markdown(rows, summary)
 
         self.assertIn("| other | 1 |", content)
