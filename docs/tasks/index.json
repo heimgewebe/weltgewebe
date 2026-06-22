@@ -1245,24 +1245,27 @@
         "Global strict bleibt bis zur Bereinigung des Bestands deaktiviert"
       ],
       "acceptance": [
+        "Policy und Contract-Alignment beschreiben den tatsächlich implementierten Rollout-Stand ohne überholte Gegenwartsclaims",
+        "owner_task- und review_after-Semantik sind als report-spezifische Prozessregel dokumentiert",
+        "Der Lifecycle-Validator läuft für relevante Änderungen im CI-Warnmodus; Lifecycle-Findings bleiben nicht blockierend, technische Validatorfehler bleiben blockierend",
+        "Lifecycle-Overview und Lifecycle-Inventory werden deterministisch durch ihre Generatoren erzeugt",
+        "Alle verbleibenden Reports erhalten in späteren kleinen Slices eine evidenzbasierte Klassifikation oder eine explizit begründete Leerstelle",
         "alle acht Restreports besitzen gültige Lifecycle-Metadaten",
-        "jede gesetzte owner_task-ID ist in einer normativen Quelle auflösbar",
-        "keine Platzhalter-Owner",
+        "jede gesetzte owner_task-ID ist in einer normativen Quelle auflösbar (keine Platzhalter-Owner)",
         "OPT-Markdown und OPT-JSON besitzen vollständige getestete Parität oder der spätere Resolver liest die kanonische Quelle direkt",
-        "Lifecycle-Enums geprüft",
-        "review_after als ISO-Datum geprüft",
-        "Supersession konsistent",
-        "fehlendes oder defektes Frontmatter angemessen blockiert",
-        "Archivpfade entschieden",
-        "changed-only strict aktiviert",
-        "global strict aktiviert oder durch separate dokumentierte Policy-Entscheidung verworfen"
+        "Lifecycle-Enums, review_after als ISO-Datum und Supersession sind geprüft",
+        "fehlendes oder defektes Frontmatter wird angemessen blockiert",
+        "Archivpfade sind entschieden",
+        "changed-only strict ist aktiviert",
+        "global strict ist aktiviert oder durch separate dokumentierte Policy-Entscheidung verworfen"
       ],
       "links": {
         "issues": [],
         "prs": [
           "1246",
           "1255",
-          "1256"
+          "1256",
+          "1257"
         ],
         "docs": [
           "docs/process/report-lifecycle.md",
