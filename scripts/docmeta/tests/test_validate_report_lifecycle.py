@@ -334,7 +334,13 @@ lifecycle_state: active
         rendered, exit_code = run(self.tmp_root, "report")
         self.assertEqual(exit_code, 0)
 
-        lines = [line for line in rendered.splitlines() if " docs/reports/" in line and " | " in line]
+        lines = [
+            line
+            for line in rendered.splitlines()
+            if line.startswith("| docs/reports/")
+        ]
+        self.assertEqual(len(lines), 6)
+
         extracted = []
         for line in lines:
             parts = [p.strip() for p in line.split("|")]
@@ -352,6 +358,10 @@ lifecycle_state: active
                 ("docs/reports/b_example.md", "missing_review_after"),
             ]
         )
+
+        rendered_again, exit_code_again = run(self.tmp_root, "report")
+        self.assertEqual(exit_code_again, exit_code)
+        self.assertEqual(rendered_again, rendered)
 
     def test_validate_report_with_datetime_date_review_after(self) -> None:
         fm = {

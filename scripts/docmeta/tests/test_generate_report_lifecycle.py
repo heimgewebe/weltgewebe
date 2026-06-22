@@ -582,6 +582,8 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         findings_section = _section(content, "Reports With Findings")
         f_row = _row_for_path(findings_section, "docs/reports/ls_list.md")
         f_cells = _table_cells(f_row)
+        self.assertEqual(f_cells[1], "")
+        self.assertEqual(f_cells[2], "deprecated")
         self.assertIn("missing_lifecycle_state", f_cells[3]) # findings cell
 
         self.assertIn("| reports_missing_lifecycle_state | 1 |", content)

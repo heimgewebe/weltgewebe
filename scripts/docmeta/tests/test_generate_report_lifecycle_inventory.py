@@ -471,11 +471,6 @@ relations:
         self.assertEqual([record.path for record in records], ["docs/reports/alpha.md", "docs/reports/zeta.md"])
 
 
-def _rel(path: Path, root: Path) -> str:
-    return str(path.relative_to(root)).replace("\\", "/")
-
-
-
     def test_parse_warning_missing_closing_delimiter(self) -> None:
         self._write(
             "docs/reports/broken.md",
@@ -519,6 +514,10 @@ def _rel(path: Path, root: Path) -> str:
         rows = [line for line in section.splitlines() if line.startswith("| docs/reports/inline.md |")]
         self.assertEqual(len(rows), 1)
         self.assertIn("relations must use block list syntax for this inventory", rows[0])
+
+
+def _rel(path: Path, root: Path) -> str:
+    return str(path.relative_to(root)).replace("\\", "/")
 
 
 if __name__ == "__main__":
