@@ -8,12 +8,25 @@ import scripts.docmeta.generate_report_lifecycle_inventory as gen
 def _parse_warning_cells(markdown: str, path: str) -> list[str]:
     marker = "## Parse Warnings"
     lines = markdown.splitlines()
-    matches = [i for i, l in enumerate(lines) if l == marker]
+    matches = [
+        index
+        for index, line in enumerate(lines)
+        if line == marker
+    ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected exactly one {marker!r} section, found {len(matches)}.")
+        raise AssertionError(
+            f"Expected exactly one {marker!r} section, found {len(matches)}."
+        )
 
     start = matches[0] + 1
-    end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
+    end = next(
+        (
+            index
+            for index in range(start, len(lines))
+            if lines[index].startswith("## ")
+        ),
+        len(lines),
+    )
     section = "\n".join(lines[start:end])
 
     rows = []
@@ -22,7 +35,9 @@ def _parse_warning_cells(markdown: str, path: str) -> list[str]:
             rows.append(line)
 
     if len(rows) != 1:
-        raise AssertionError(f"Expected exactly one warning row for {path!r}, found {len(rows)}.")
+        raise AssertionError(
+            f"Expected exactly one warning row for {path!r}, found {len(rows)}."
+        )
 
     return [cell.strip() for cell in rows[0].strip().strip("|").split("|")]
 
@@ -492,7 +507,6 @@ relations:
 
         self.assertEqual([record.path for record in records], ["docs/reports/alpha.md", "docs/reports/zeta.md"])
 
-
     def test_parse_warning_missing_closing_delimiter(self) -> None:
         self._write(
             "docs/reports/broken.md",
@@ -501,7 +515,7 @@ relations:
         records = gen.collect_reports(self._config())
         self.assertTrue(records[0].has_frontmatter)
         self.assertEqual(records[0].frontmatter_parse_warning, "frontmatter start found without closing delimiter")
-        
+
         markdown = gen.render_inventory(records)
         cells = _parse_warning_cells(markdown, "docs/reports/broken.md")
         self.assertEqual(
@@ -520,7 +534,7 @@ relations:
         records = gen.collect_reports(self._config())
         self.assertEqual(records[0].frontmatter_parse_warning, "relations must use block list syntax for this inventory")
         self.assertEqual(records[0].relations_count, 0)
-        
+
         markdown = gen.render_inventory(records)
         cells = _parse_warning_cells(markdown, "docs/reports/inline.md")
         self.assertEqual(
