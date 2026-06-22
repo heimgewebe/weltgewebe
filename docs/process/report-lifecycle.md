@@ -184,6 +184,67 @@ vorkommen. Der DocMeta-Status beschreibt die allgemeine Dokumentgültigkeit;
 Die Feldnamen sind verbindlich snake_case:
 `lifecycle`, `owner_task`, `review_after`, `lifecycle_state`, `superseded_by`.
 
+## Owner resolution
+
+Das Feld `owner_task` referenziert eine stabile Arbeits- oder Prozess-ID für den verantwortlichen Task, das Vorhaben, den Kontrollpunkt oder den Prozess. Der Feldname bleibt unverändert.
+
+Das Feld `owner` hingegen kann eine Rolle, Gruppe oder organisatorische Zuständigkeit bezeichnen. Beide Felder sind strikt getrennt und nicht austauschbar. Ein Eintrag wie `owner: docs-mechanik` macht `docs-mechanik` nicht automatisch zu einer gültigen `owner_task`-ID.
+
+### Normative Registrierungsquellen
+
+Die initialen normativen Quellen zur Registrierung einer gültigen `owner_task`-ID sind:
+
+- `docs/tasks/index.json`: Registriert strukturierte Task-Control-IDs.
+- `docs/reports/optimierungsstatus.md`: Die kanonische menschliche Wahrheitsquelle für OPT-IDs.
+
+### Maschinenlesbare Lookup-Fläche
+
+Die Datei `docs/reports/optimierungsstatus.json` ist ein maschinenlesbarer Zwilling der OPT-Statusmatrix. Sie dient als Lookup-Fläche und für bestehende Driftprüfungen, besitzt aber **keine eigenständige normative Wahrheit**. Sie darf vor vollständigem Paritätsnachweis nicht allein über die fachliche Gültigkeit einer Owner-ID entscheiden.
+
+### Historische Ownership
+
+Ein erledigter oder geschlossener Task (Status `done`) darf weiterhin Owner eines historischen Reports bleiben. Die Auflösbarkeit der ID ist von ihrem aktuellen Status zu trennen. Eine spätere Prüfung der Statuskompatibilität zwischen Report und Owner ist nicht Teil dieses Richtlinienstandes.
+
+### Ungültige Platzhalter und unregistrierte Kontrollpunkte
+
+Nicht als aufgelöst gelten:
+- `TBD`, `none`, `null`
+- `pending`, `pending-namespace`
+- `docs-mechanik` oder andere freie Rollenbezeichnungen
+- Bloß präfixförmig plausible IDs
+- Unregistrierte Kontrollpunkte
+
+Insbesondere IDs wie `MAP-PROOF-001` oder `MAP-PROOF-002` sind erst gültige Owner, wenn sie in einer zugelassenen normativen Quelle registriert wurden. Eine Präfix-Allowlist als Ersatz für die explizite Registrierung ist unzulässig.
+
+### Künftige Erweiterbarkeit
+
+Weitere Registrierungsquellen benötigen zwingend:
+- Eine kanonische Quelle
+- Eine dokumentierte ID-Semantik
+- Eine maschinenlesbare Oberfläche oder einen deterministischen Parser
+- Einen vollständigen Drift-/Paritätsnachweis
+- Eine klare Konfliktregel
+
+### Enforcement-Grenze
+
+Dieser Schritt entscheidet nur die Policy. Eine technische Owner-Existenzprüfung, Owner-Statusprüfung, Markdown–JSON-Paritätsguard, neue Lifecycle-Enums, neue Lifecycle-States oder Strict-Aktivierung sind nicht implementiert.
+
+### Beispiele
+
+Gültig:
+```yaml
+owner_task: DOCMETA-REPORT-LIFECYCLE-001
+owner_task: OPT-API-002
+```
+Nur gültig, weil die IDs in einer normativen Quelle registriert sind.
+
+Ungültig:
+```yaml
+owner_task: TBD
+owner_task: docs-mechanik
+owner_task: MAP-PROOF-001
+```
+
 ## Pflichtfelder nach Lifecycle-Zustand
 
 | lifecycle_state | lifecycle | owner_task | review_after | superseded_by | Bemerkung |
@@ -308,9 +369,12 @@ zugehörigen Task begründet werden.
 
 - zulässige Werte für `lifecycle`,
 - zulässige Werte für `lifecycle_state`,
-- genaue Regeln für `owner_task`,
 - zusätzliche Regeln für `review_after`,
 - Verhältnis von `deprecated` und `superseded`,
 - physische Archivierung,
 - eigene Lifecycle-Policy für `docs/proofs/**`,
-- Review-Logik für generierte Reports.
+- Review-Logik für generierte Reports,
+- technische Owner-Auflösung,
+- vollständige OPT-Markdown–JSON-Parität,
+- Enforcement-Zeitpunkt,
+- spätere Statuskompatibilität.

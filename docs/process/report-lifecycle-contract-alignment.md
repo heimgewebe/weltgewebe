@@ -169,13 +169,58 @@ erforderlich.
 Eine maschinenlesbare Legacy-Ausnahme und deren Validatorprüfung sind noch
 nicht implementiert.
 
+### Owner-resolution decision
+
+- **Normative Quellen**: `docs/tasks/index.json` (für strukturierte Task-Control-IDs) und `docs/reports/optimierungsstatus.md` (als kanonische menschliche Wahrheitsquelle für OPT-IDs).
+- **Lookup-Fläche**: `docs/reports/optimierungsstatus.json` dient als maschinenlesbare Lookup-Fläche.
+- **Wahrheit**: Es gibt keine eigenständige JSON-Wahrheit; die JSON-Datei darf vor vollständigem Paritätsnachweis nicht allein über die Gültigkeit entscheiden.
+- **Historische Ownership**: Ein erledigter oder geschlossener Task darf weiterhin Owner eines historischen Reports bleiben.
+- **Verbot von Platzhaltern**: Platzhalter (z. B. `TBD`, `docs-mechanik`) sowie unregistrierte Kontrollpunkte (z. B. `MAP-PROOF-001`) sind ungültig.
+
+### Compatibility baseline
+
+| Owner-ID | Verwendungen | Task-Index | OPT-Markdown | OPT-JSON | Identität | Status | Parität |
+| -------- | -----------: | ---------- | ------------ | -------- | --------- | ------ | ------- |
+| `DOCMETA-REPORT-LIFECYCLE-001` | 1 | True | False | False | resolved_task_index | not_comparable | unproven |
+| `DOMAIN-PG-002` | 1 | True | False | False | resolved_task_index | not_comparable | unproven |
+| `OPT-API-002` | 5 | False | True | True | resolved_opt_markdown | not_comparable | confirmed_for_id |
+| `OPT-ARC-001` | 8 | True | True | True | resolved_both | consistent | confirmed_for_id |
+| `TASK-CTL-005` | 1 | True | False | False | resolved_task_index | not_comparable | unproven |
+
+### Decision status
+
+- owner semantics: decided
+- normative sources: decided
+- compatibility audit: complete
+- OPT markdown/json full parity: open
+- validator enforcement: future-gated
+- owner status compatibility: open
+
+### Rollout-Reihenfolge
+
+- warn
+- triage
+- small backfill slices
+- semantic hardening
+- changed-only strict
+- global strict
+
+### Enforcement-Vorbedingungen
+
+Eine spätere blockierende Owner-Prüfung darf erst aktiviert werden, wenn:
+- alle bestehenden Owner-IDs normativ auflösbar sind;
+- vollständige OPT-Markdown–JSON-Parität geprüft wird oder der Resolver direkt die kanonische Markdown-Quelle liest;
+- keine historische Ownership regressiert;
+- Tests für beide normativen Quellen, Lookup-Drift und Konflikte existieren;
+- Backfill-Restbestand ausreichend bereinigt ist.
+
 ## Verbleibende Entscheidungen
 
 - Schemaort für report-spezifische Lifecycle-Felder
 - zulässige Werte für `lifecycle`
 - zulässige Werte für `lifecycle_state`
 - ISO-Datumsvalidierung für `review_after`
-- `owner_task`-Existenzprüfung
+- technische `owner_task`-Existenzprüfung (ohne Namensraum-Leerstelle, da dieser nun definiert ist)
 - Supersession-Konsistenz (`superseded_by` vs. `relations[type=supersedes]`)
 - Changed-only strict
 - Global strict

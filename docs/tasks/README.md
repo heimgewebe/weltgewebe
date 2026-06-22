@@ -34,8 +34,9 @@ Sie ergänzt die Statusmatrizen in `docs/reports/`, ist aber keine zweite Wahrhe
 
 ## Wahrheitsklärung
 
-- `docs/reports/optimierungsstatus.md` ist die menschliche Statusmatrix und bleibt die Wahrheitsquelle für OPT-* Einträge.
-- `docs/tasks/index.json` ist eine strukturierte Arbeitskarte, kein Statusersatz.
+- `docs/reports/optimierungsstatus.md` ist die kanonische menschliche Wahrheitsquelle für OPT-IDs und deren Status.
+- `docs/tasks/index.json` ist eine strukturierte Task-Control-Fläche und normative Registrierungsquelle für dort eingetragene IDs. Es ist jedoch keine vollständige Wahrheit für alle OPT-IDs und kein Ersatz für OPT-Markdown.
+- `docs/reports/optimierungsstatus.json` ist ein maschinenlesbarer Zwilling und dient als Lookup-Fläche. Es besitzt keinen eigenen Wahrheitsstatus. Eine vollständige Parität zum Markdown ist Voraussetzung für eine spätere alleinige maschinelle Nutzung.
 - Kein Status in `index.json` oder `optimierungsstatus.json` darf dem Markdown widersprechen.
 - `done` gilt nicht ohne reproduzierbaren Evidenz-Eintrag in der Statusmatrix.
 - Stille Statusupgrades sind verboten.
