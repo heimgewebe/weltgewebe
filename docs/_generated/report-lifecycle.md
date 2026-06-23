@@ -19,9 +19,9 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | files_scanned | 28 |
 | reports_checked | 24 |
 | reports_ignored_non_report | 4 |
-| reports_with_lifecycle_state | 16 |
-| reports_missing_lifecycle_state | 8 |
-| findings_total | 24 |
+| reports_with_lifecycle_state | 17 |
+| reports_missing_lifecycle_state | 7 |
+| findings_total | 21 |
 
 ## Lifecycle State Summary
 
@@ -30,16 +30,16 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | active | 9 |
 | deferred | 0 |
 | superseded | 5 |
-| archived | 2 |
-| missing | 8 |
+| archived | 3 |
+| missing | 7 |
 
 ## Finding Summary
 
 | Code | Count |
 | --- | ---: |
-| missing_lifecycle | 8 |
-| missing_lifecycle_state | 8 |
-| missing_review_after | 8 |
+| missing_lifecycle | 7 |
+| missing_lifecycle_state | 7 |
+| missing_review_after | 7 |
 
 ## Active Reports
 
@@ -75,6 +75,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
+| docs/reports/passkey-register-verify-prep.md | deprecated | decision-prep | AUTH-PG-002 |  |  |
 | docs/reports/planning-registration-findings.md | deprecated | audit | TASK-CTL-005 |  |  |
 | docs/reports/report-lifecycle-restbestand-triage.md | deprecated | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  |
 
@@ -89,7 +90,6 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/map-architekturkritik.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/optimierungsbericht.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
-| docs/reports/passkey-register-verify-prep.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 
 ## Reports With Findings
 
@@ -102,7 +102,6 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/map-architekturkritik.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-basemap-proof-gap-reconciliation.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/optimierungsbericht.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
-| docs/reports/passkey-register-verify-prep.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 
 ## Reports With Missing Currently-Enforced Fields
 
@@ -117,7 +116,6 @@ Fields required by the currently implemented validator rules that are absent, in
 | docs/reports/map-architekturkritik.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/optimierungsbericht.md | active |  | lifecycle_state, lifecycle, review_after |
-| docs/reports/passkey-register-verify-prep.md | active |  | lifecycle_state, lifecycle, review_after |
 
 ## Non-Report Files Under docs/reports
 

@@ -21,12 +21,12 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | files_without_frontmatter | 0 |
 | files_with_status | 28 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 16 |
-| files_missing_lifecycle_state | 12 |
-| files_with_lifecycle | 16 |
-| files_missing_lifecycle | 12 |
-| files_with_owner_task | 16 |
-| files_missing_owner_task | 12 |
+| files_with_lifecycle_state | 17 |
+| files_missing_lifecycle_state | 11 |
+| files_with_lifecycle | 17 |
+| files_missing_lifecycle | 11 |
+| files_with_owner_task | 17 |
+| files_missing_owner_task | 11 |
 | files_with_review_after | 9 |
 | files_missing_review_after | 19 |
 | files_primary_referenced | 26 |
@@ -73,7 +73,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  |  | 8 | 5 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/optimierungsbericht.md | report | active |  |  |  |  |  | 2 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 22 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/passkey-register-verify-prep.md | report | active |  |  |  |  |  | 0 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/passkey-register-verify-prep.md | report | deprecated | archived | decision-prep | AUTH-PG-002 |  |  | 0 | 4 | 4 | review_after |  |
 | docs/reports/planning-registration-findings.md | report | deprecated | archived | audit | TASK-CTL-005 |  |  | 1 | 4 | 2 | review_after |  |
 | docs/reports/report-lifecycle-restbestand-triage.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  | 1 | 4 | 3 | review_after |  |
 
@@ -97,7 +97,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/map-status-matrix.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/optimierungsbericht.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/optimierungsstatus.md | lifecycle, owner_task, review_after, lifecycle_state |
-| docs/reports/passkey-register-verify-prep.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/passkey-register-verify-prep.md | review_after |
 | docs/reports/planning-registration-findings.md | review_after |
 | docs/reports/report-lifecycle-restbestand-triage.md | review_after |
 

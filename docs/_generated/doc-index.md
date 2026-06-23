@@ -112,7 +112,7 @@ Generated automatically. Do not edit.
 | reports.inwx-zone-reconciliation-plan | INWX Zone Reconciliation Plan | report | active | docs/reports/inwx-zone-reconciliation-plan.md |
 | reports.optimierungsbericht | Optimierungsbericht Weltgewebe | report | active | docs/reports/optimierungsbericht.md |
 | reports.optimierungsstatus | Optimierungsstatus Weltgewebe | status-matrix | active | docs/reports/optimierungsstatus.md |
-| reports.passkey-register-verify-prep | Passkey Register-Verify – Vorbereitungsbericht | report | active | docs/reports/passkey-register-verify-prep.md |
+| reports.passkey-register-verify-prep | Passkey Register-Verify – Vorbereitungsbericht | report | deprecated | docs/reports/passkey-register-verify-prep.md |
 | reports.planning-registration-findings | Planning Registration Findings Triage | report | deprecated | docs/reports/planning-registration-findings.md |
 | reports.report-lifecycle-restbestand-triage | Report Lifecycle Restbestand Triage | report | deprecated | docs/reports/report-lifecycle-restbestand-triage.md |
 | runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |

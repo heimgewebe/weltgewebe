@@ -1233,10 +1233,11 @@
         "scripts/docmeta/generate_report_lifecycle.py",
         "scripts/docmeta/generate_report_lifecycle_inventory.py",
         ".github/workflows/docs-guard.yml",
-        "docs/reports/report-lifecycle-restbestand-triage.md"
+        "docs/reports/report-lifecycle-restbestand-triage.md",
+        "docs/reports/passkey-register-verify-prep.md"
       ],
       "missing_evidence": [
-        "Die acht vom Lifecycle-Validator gemeldeten Restbestand-Reports sind in docs/reports/report-lifecycle-restbestand-triage.md evidenzbasiert triagiert (je Fall Klassifikation oder begründete Leerstelle); der eigentliche Frontmatter-Backfill der acht Zielreports steht noch aus und erfolgt in kleinen Slices",
+        "Acht Reports wurden ursprünglich triagiert. Slice A (passkey-register-verify-prep.md) ist backgefüllt; sieben Reports bleiben für die Slices B–F offen.",
         "Fehlendes oder nicht parsebares Report-Frontmatter wird noch nicht vollständig blockierend erkannt",
         "Semantische Validatorprüfungen für Lifecycle-Enums, ISO-Datum und Supersession-Konsistenz fehlen",
         "Die owner_task-Semantik und die normativen Registrierungsquellen sind entschieden und gegen den bestehenden Bestand kompatibilitätsgeprüft; vollständige OPT-Markdown–JSON-Parität und technische Existenzprüfung bleiben nach den Backfill-Slices offen.",
@@ -1265,7 +1266,8 @@
           "1246",
           "1255",
           "1256",
-          "1257"
+          "1257",
+          "1258"
         ],
         "docs": [
           "docs/process/report-lifecycle.md",

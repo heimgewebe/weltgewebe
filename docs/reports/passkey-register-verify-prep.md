@@ -2,7 +2,10 @@
 id: reports.passkey-register-verify-prep
 title: Passkey Register-Verify – Vorbereitungsbericht
 doc_type: report
-status: active
+status: deprecated
+lifecycle_state: archived
+lifecycle: decision-prep
+owner_task: AUTH-PG-002
 summary: >
   Diagnose- und Vorbereitungsbericht für POST /auth/passkeys/register/verify.
   Dokumentiert den belegten Ist-Zustand, offene Persistenzfragen,
@@ -19,6 +22,15 @@ relations:
 ---
 
 # Passkey Register-Verify – Vorbereitungsbericht
+
+## Lifecycle-Einordnung
+
+Dieser Bericht bleibt als historische Entscheidungsvorbereitung erhalten.
+Der Register-Verify-Pfad ist umgesetzt; die offene
+WebAuthn-Credential-Persistenz wird unter `AUTH-PG-002` weitergeführt.
+Die Owner-Zuordnung öffnet die abgeschlossene Register-Verify-Arbeit nicht
+erneut. Ein vollständiges Ersatzartefakt existiert nicht; der Bericht ist
+daher archiviert, aber nicht als superseded markiert.
 
 **Datum:** 2026-05-10
 **Autor:** Agent (Diagnose-PR)
