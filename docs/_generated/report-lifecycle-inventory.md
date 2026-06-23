@@ -64,7 +64,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 6 | 8 |  |  |
 | docs/reports/domain-node-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 6 |  |  |
 | docs/reports/domain-postgres-instance-coherence-decision.md | report | active | active | audit | DOMAIN-PG-002 | 2026-12-18 |  | 2 | 5 | 6 |  |  |
-| docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | 3 | 4 | 3 |  |  |
+| docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | 4 | 4 | 3 |  |  |
 | docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 5 |  |  |
 | docs/reports/domain-runtime-data-source-reconciliation.md | report | active |  |  |  |  |  | 1 | 4 | 5 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | deprecated | archived | planning | DEPLOY-DNS-001 |  |  | 1 | 4 | 4 | review_after |  |
@@ -214,6 +214,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/tasks/board.md`
 
 - `docs/reports/domain-provider-role-finding.md`
+  - `docs/deploy/secondary-domain-web-surfaces.md`
   - `docs/reports/inwx-zone-reconciliation-plan.md`
   - `docs/runbooks/domain-mail-cutover.md`
   - `docs/tasks/board.md`

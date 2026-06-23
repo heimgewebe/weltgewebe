@@ -22,14 +22,19 @@
         "docs/adr/ADR-0008__domain-mail-provider-boundaries.md",
         "docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md",
         "docs/reports/domain-provider-role-finding.md",
-        "externe Audit-Artefakte (keine privaten Rohdaten im Repo)"
+        "externe Audit-Artefakte (keine privaten Rohdaten im Repo)",
+        "apps/web/static/weltweberei/index.html",
+        "apps/web/static/weltweberei/styles.css",
+        "apps/web/tests/weltweberei-information.spec.ts",
+        "docs/deploy/secondary-domain-web-surfaces.md"
       ],
       "missing_evidence": [
         "Autoritative INWX-Delegation für weltweb.net ist noch nicht belegt",
         "Permanenter Redirect und HTTPS für weltweb.net sind noch nicht belegt",
         "Autoritative INWX-Delegation für weltweberei.org ist noch nicht belegt",
         "Informationsseite und HTTPS für weltweberei.org sind noch nicht belegt",
-        "Öffentliche und autoritative No-Mail-Records für beide Nebendomains sind noch nicht belegt"
+        "Öffentliche und autoritative No-Mail-Records für beide Nebendomains sind noch nicht belegt",
+        "Das Heimserver-Edge-Template und die aktive Edge-Konfiguration bedienen weltweb.net und weltweberei.org noch nicht nachweislich gemäß dem dokumentierten Handoff-Vertrag (docs/deploy/secondary-domain-web-surfaces.md)"
       ],
       "acceptance": [
         "weltweb.net ist auf INWX delegiert",

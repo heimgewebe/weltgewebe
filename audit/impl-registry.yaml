@@ -60,9 +60,11 @@ implementations:
       - apps/web/README.md
       - docs/blueprints/ui-blaupause.md
       - docs/blueprints/ui-roadmap.md
+      - docs/deploy/secondary-domain-web-surfaces.md
     verified_by:
       - .github/workflows/web.yml
       - apps/web/tests/smoke.home.spec.ts
+      - apps/web/tests/weltweberei-information.spec.ts
       - apps/web/src/lib/stores/uiInvariants.test.ts
 
   - id: impl.infra.compose

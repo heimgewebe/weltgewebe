@@ -17,6 +17,8 @@ relations:
     target: docs/deploy/security.md
   - type: relates_to
     target: docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
+  - type: relates_to
+    target: docs/deploy/secondary-domain-web-surfaces.md
 ---
 # Weltgewebe – Deployment
 
@@ -26,6 +28,7 @@ Es ist normativ. Abweichungen davon gelten als Drift.
 **Weitere Dokumente:**
 
 - [Domain-/Mail-Migration](domain-mail-migration-ionos-to-inwx-mailbox-brevo.md) – Plan für den Umzug von IONOS zu INWX + mailbox.org + Brevo
+- [Sekundäre Domain-Webflächen](secondary-domain-web-surfaces.md) – Artefakt- und Handoff-Vertrag für die Weltweberei-Informationsfläche und den späteren Heimserver-Edge (keine öffentliche Einsatzbereitschaft)
 - [Deployment-Änderungsprotokoll](./CHANGELOG.md) – Infrastrukturänderungen und deren Auswirkungen
 - [Drift-Taxonomie & Guard-Policy](./DRIFT_POLICY.md) – Klassifizierung und Handling von Drift
 

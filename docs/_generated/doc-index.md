@@ -41,6 +41,7 @@ Generated automatically. Do not edit.
 | deploy.heimserver.deployment | Heimserver Deployment | reference | active | docs/deploy/heimserver.deployment.md |
 | deploy.heimserver.integration | Heimserver Integration | reference | active | docs/deploy/heimserver.integration.md |
 | deploy.public-app-base-url | Public APP_BASE_URL Contract | reference | active | docs/deploy/public-app-base-url.md |
+| deploy.secondary-domain-web-surfaces | Sekundäre Domain-Webflächen | reference | active | docs/deploy/secondary-domain-web-surfaces.md |
 | deploy.security | Deploy Security | architecture | active | docs/deploy/security.md |
 | deploy.vps | VPS-Deployment | reference | active | docs/deploy/vps.md |
 | deploy.weltgewebe.naming | Weltgewebe Naming | reference | active | docs/deploy/weltgewebe.naming.md |

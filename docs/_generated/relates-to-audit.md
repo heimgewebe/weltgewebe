@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 417 |
+| Relationen gesamt | 422 |
 | — depends_on | 18 |
-| — relates_to | 396 |
+| — relates_to | 401 |
 | — supersedes | 3 |
 | relates_to Anteil | 95% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (152 Dokumente):
+**Cluster 1** (153 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -89,6 +89,7 @@ _Keine Lücken erkannt._
 - `docs/deploy/heimserver.deployment.md`
 - `docs/deploy/heimserver.integration.md`
 - `docs/deploy/public-app-base-url.md`
+- `docs/deploy/secondary-domain-web-surfaces.md`
 - `docs/deploy/security.md`
 - `docs/deploy/vps.md`
 - `docs/deploy/weltgewebe.naming.md`
@@ -237,15 +238,15 @@ _Keine Lücken erkannt._
 - relates_to → `docs/tasks/index.json`
 - relates_to → `repo.meta.yaml`
 
-**`docs/reports/domain-edge-create-semantics-preflight.md`**:
+**`docs/deploy/README.md`**:
 
-- relates_to → `contracts/domain/edge.schema.json`
-- relates_to → `docs/blueprints/domain-data-postgres-cutover.md`
-- relates_to → `docs/reports/domain-account-write-path-proof.md`
-- relates_to → `docs/reports/domain-node-write-path-proof.md`
-- relates_to → `docs/reports/opt-arc-001-db-proof-matrix.json`
-- relates_to → `docs/tasks/board.md`
-- relates_to → `docs/tasks/index.json`
+- relates_to → `docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md`
+- relates_to → `docs/deploy/heimserver.deployment.md`
+- relates_to → `docs/deploy/heimserver.integration.md`
+- relates_to → `docs/deploy/secondary-domain-web-surfaces.md`
+- relates_to → `docs/deploy/security.md`
+- relates_to → `docs/deployment.md`
+- relates_to → `docs/deployment_governance.md`
 
 ### Hinweise
 
