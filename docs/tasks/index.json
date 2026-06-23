@@ -21,10 +21,16 @@
       "evidence": [
         "docs/adr/ADR-0008__domain-mail-provider-boundaries.md",
         "docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md",
-        "docs/runbooks/domain-mail-cutover.md",
+        "docs/reports/domain-provider-role-finding.md",
         "externe Audit-Artefakte (keine privaten Rohdaten im Repo)"
       ],
-      "missing_evidence": [],
+      "missing_evidence": [
+        "Autoritative INWX-Delegation für weltweb.net ist noch nicht belegt",
+        "Permanenter Redirect und HTTPS für weltweb.net sind noch nicht belegt",
+        "Autoritative INWX-Delegation für weltweberei.org ist noch nicht belegt",
+        "Informationsseite und HTTPS für weltweberei.org sind noch nicht belegt",
+        "Öffentliche und autoritative No-Mail-Records für beide Nebendomains sind noch nicht belegt"
+      ],
       "acceptance": [
         "weltweb.net ist auf INWX delegiert",
         "permanenter Redirect auf weltgewebe.net funktioniert",
@@ -39,7 +45,7 @@
         "docs": [
           "docs/adr/ADR-0008__domain-mail-provider-boundaries.md",
           "docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md",
-          "docs/runbooks/domain-mail-cutover.md"
+          "docs/reports/domain-provider-role-finding.md"
         ]
       },
       "updated_at": "2026-06-23"

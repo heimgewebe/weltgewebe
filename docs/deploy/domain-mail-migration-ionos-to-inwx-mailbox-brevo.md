@@ -25,7 +25,7 @@ relations:
 
 ## 1. Erreichter Zustand
 
-Der Registrar-/DNS-Cutover für die Hauptdomain ist abgeschlossen. INWX ist der zentrale Provider. IONOS ist als Provider vollständig abgelöst und gekündigt. 
+Der Registrar-/DNS-Cutover für `weltgewebe.net` ist abgeschlossen. INWX ist Registrar aller drei Domains und autoritativer DNS-Provider für `weltgewebe.net`. Die IONOS-Verträge sind gekündigt. Bis zum noch offenen DNS-Cutover verweisen `weltweb.net` und `weltweberei.org` weiterhin auf alte UI-DNS-/IONOS-Nameserver.
 
 Die IONOS-Kündigung wurde nach menschlicher Freigabe durchgeführt. Ein reproduzierbarer 48-Stunden-Nachweis ist nicht Bestandteil dieses Repository-Artefakts.
 
