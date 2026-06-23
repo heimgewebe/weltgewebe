@@ -4,8 +4,8 @@ title: Sekundäre Domain-Webflächen
 doc_type: reference
 status: active
 summary: >
-  Definiert das Weltweberei-Webartefakt und den Handoff an den
-  externen Heimserver-Edge für weltweb.net und weltweberei.org.
+  Definiert das Weltweberei-Webartefakt und den verhaltensorientierten
+  Handoff an den externen Heimserver-Edge für weltweb.net und weltweberei.org.
 relations:
   - type: relates_to
     target: docs/deploy/README.md
@@ -29,41 +29,42 @@ Repo `heimgewebe/heimserver` und anschließende Operatorarbeit.
 
 ## 1. Eigentumsgrenzen
 
-```text
-heimgewebe/weltgewebe
-- besitzt Inhalt und Build-Artefakt der Informationsseite;
-- beweist den statischen Buildpfad;
-- verändert nicht die aktive öffentliche Frontdoor.
+`heimgewebe/weltgewebe` besitzt:
 
-heimgewebe/heimserver
-- besitzt das operative Edge-Template;
-- muss den aktiven Edge-Zustand vor einem Patch read-only prüfen;
-- implementiert später Redirect und statische Domainroute;
-- synchronisiert erst nach Review zum Host.
+- den Inhalt;
+- das statische Quellartefakt;
+- den Web-Build;
+- den Build- und Browser-Proof;
+- den verhaltensorientierten Handoff-Vertrag.
 
-INWX
-- besitzt Registrar- und DNS-Rolle;
-- wird nicht durch diesen PR verändert.
-```
+`heimgewebe/heimserver` besitzt:
 
-## 2. Belegte Artefaktkette
+- das operative Edge-Template;
+- die konkrete Caddy-Syntax;
+- die Synchronisierung nach `/opt/heimgewebe/edge`;
+- Caddy-Validierung und Reload;
+- Runtime- und Reachability-Evidenz.
 
-```text
-Quelle:
-apps/web/static/weltweberei/
+INWX besitzt die Registrar- und DNS-Rolle und wird durch diesen PR nicht
+verändert.
 
-Build:
-apps/web/build/weltweberei/
+## 2. Repo-seitig belegte Ziel-Artefaktkette
 
-Host-Mount:
- /opt/weltgewebe/apps/web/build
+Der Quell- und Buildpfad wird durch diesen PR belegt.
 
-Edge-Mount:
- /srv/weltgewebe-web
+Host- und Edge-Mounts werden durch eingecheckte Integrations- und
+Deploymentverträge beschrieben. Sie sind in diesem Slice nicht gegen die
+aktive Heimserver-Laufzeit verifiziert und stellen daher keinen
+Runtime-Nachweis dar.
 
-Vorgesehener Site-Root:
- /srv/weltgewebe-web/weltweberei
-```
+### Durch diesen PR belegt
+
+- Quelle:
+  `apps/web/static/weltweberei/`
+- Build-Artefakt:
+  `apps/web/build/weltweberei/`
+- reproduzierbarer Web-Build;
+- Browser-Proof für die statische Informationsfläche.
 
 Der Quell-zu-Build-Schritt ist deterministisch belegt: `apps/web/static/`
 wird durch den normalen Web-Build (`CI=true pnpm -C apps/web build`)
@@ -71,46 +72,64 @@ unverändert nach `apps/web/build/` kopiert. Der Browser-Proof
 (`apps/web/tests/weltweberei-information.spec.ts`) prüft das Artefakt auf
 Inhalt, Ressourcenfreiheit, Layout und Tastaturzugänglichkeit.
 
+### Als Zielvertrag beschrieben, aber nicht live verifiziert
+
+- vorgesehener Hostpfad:
+  `/opt/weltgewebe/apps/web/build`
+- vorgesehener Edge-Mount:
+  `/srv/weltgewebe-web`
+- vorgesehener Site-Root:
+  `/srv/weltgewebe-web/weltweberei`
+
 ## 3. Vorgesehener späterer Edge-Vertrag
 
-Die folgenden Snippets sind ausschließlich ein **Handoff-Vertrag** für den
-späteren Heimserver-PR. Sie sind kein laufender Zustand, kein
-Deploymentbeweis, keine Provideranweisung und kein DNS-Nachweis.
+Die konkrete Edge- und Caddy-Implementierung gehört ausschließlich in das
+Owner-Repo `heimgewebe/heimserver`.
 
-Für `weltweb.net`:
+Dieses Dokument definiert nur das von außen beobachtbare Zielverhalten und
+den Artefakt-Handoff. Es ist weder eine aktive Edge-Konfiguration noch eine
+Copy-Paste-Vorlage für den Betrieb.
 
-```caddyfile
-http://weltweb.net {
-    redir https://weltgewebe.net{uri} 308
-}
+### `weltweb.net`
 
-https://weltweb.net {
-    redir https://weltgewebe.net{uri} 308
-}
-```
+Der spätere Heimserver-Edge muss folgendes Verhalten herstellen und
+automatisiert prüfen:
 
-Für `weltweberei.org`:
+- HTTP-Anfragen werden auf das kanonische HTTPS-Ziel umgeleitet.
+- Das endgültige Ziel ist `https://weltgewebe.net`.
+- Pfad und Queryparameter bleiben erhalten.
+- Die Umleitung ist permanent.
+- Unter `weltweb.net` wird kein eigener Anwendungsinhalt ausgeliefert.
+- Die konkrete Statuscode- und Caddy-Syntax wird im Owner-Repo festgelegt und
+  dort getestet.
 
-```caddyfile
-http://weltweberei.org {
-    redir https://weltweberei.org{uri} 308
-}
+### `weltweberei.org`
 
-https://weltweberei.org {
-    root * /srv/weltgewebe-web/weltweberei
-    encode zstd gzip
+Der spätere Heimserver-Edge muss folgendes Verhalten herstellen und
+automatisiert prüfen:
 
-    header {
-        Content-Security-Policy "default-src 'none'; style-src 'self'; img-src 'self' data:; script-src 'none'; connect-src 'none'; font-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
-        X-Content-Type-Options "nosniff"
-        Referrer-Policy "no-referrer"
-        X-Frame-Options "DENY"
-        Cache-Control "no-cache, must-revalidate"
-    }
+- HTTP-Anfragen werden dauerhaft auf HTTPS derselben Domain umgeleitet.
+- HTTPS liefert ausschließlich das statische Weltweberei-Artefakt aus.
+- Der vorgesehene Edge-Pfad ist
+  `/srv/weltgewebe-web/weltweberei`.
+- Die Wurzelroute liefert die Informationsseite.
+- Anfragen werden weder an die Weltgewebe-App noch an die API
+  weitergereicht.
+- Es werden restriktive Sicherheitsheader gesetzt.
+- Skripte, Formulare, Frames, externe Ressourcen und Tracking bleiben
+  ausgeschlossen.
+- Die konkrete Caddy-Syntax wird ausschließlich im Owner-Repo implementiert
+  und validiert.
 
-    file_server
-}
-```
+### Nicht entschiedene Hostnamen
+
+Für folgende Hostnamen besteht in diesem Slice keine kanonische
+Routingentscheidung:
+
+- `www.weltweb.net`
+- `www.weltweberei.org`
+
+Sie dürfen im späteren Edge-PR nicht still ergänzt werden.
 
 ## 4. Explizit offene Punkte
 
