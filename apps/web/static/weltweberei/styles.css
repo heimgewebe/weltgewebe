@@ -11,7 +11,7 @@
   --surface: #ffffff;
   --muted: #5a5a5a;
   --accent: #1457a8;
-  --accent-bright: #7cc4ff;
+  --focus: #0b376d;
 }
 
 *,
@@ -107,8 +107,7 @@ a {
   background: #0e427f;
 }
 
-a:focus-visible,
-.button:focus-visible {
-  outline: 3px solid var(--accent-bright);
+a:focus-visible {
+  outline: 3px solid var(--focus);
   outline-offset: 3px;
 }

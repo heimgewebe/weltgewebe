@@ -41,12 +41,21 @@ Repo `heimgewebe/heimserver` und anschließende Operatorarbeit.
 
 - das operative Edge-Template;
 - die konkrete Caddy-Syntax;
-- die Synchronisierung nach `/opt/heimgewebe/edge`;
-- Caddy-Validierung und Reload;
-- Runtime- und Reachability-Evidenz.
+- die Validierungs- und Synchronisierungsmechanismen;
+- den Runbook-Vertrag für den Edge-Cutover.
 
-INWX besitzt die Registrar- und DNS-Rolle und wird durch diesen PR nicht
-verändert.
+Der Operator besitzt:
+
+- die Freigabe der Live-Mutation;
+- die Synchronisierung in den aktiven Edge-Pfad;
+- Caddy-Validierung und Reload in der Laufzeit;
+- Runtime-, TLS-, DNS- und Reachability-Nachweise.
+
+INWX ist als Registrar und als Zielprovider für das autoritative DNS
+vorgesehen.
+
+Die aktive autoritative Delegation der Nebendomains auf INWX-Nameserver ist
+in diesem Slice nicht belegt und bleibt Operatorarbeit.
 
 ## 2. Repo-seitig belegte Ziel-Artefaktkette
 
@@ -81,7 +90,26 @@ Inhalt, Ressourcenfreiheit, Layout und Tastaturzugänglichkeit.
 - vorgesehener Site-Root:
   `/srv/weltgewebe-web/weltweberei`
 
-## 3. Vorgesehener späterer Edge-Vertrag
+## 3. Voraktivierungszustand
+
+Das Weltweberei-Artefakt ist Teil des normalen Web-Builds.
+
+Dadurch kann es bereits auf Branch-Previews oder bestehenden Webhosts unter
+`/weltweberei/` erreichbar sein. Diese technische Erreichbarkeit ist kein
+Beleg für die Aktivierung von `weltweberei.org` und keine rechtliche
+Veröffentlichungsfreigabe.
+
+Bis zum abgeschlossenen Aktivierungsgate gilt:
+
+- `robots` bleibt `noindex, nofollow`;
+- es wird kein Canonical-Link auf `weltweberei.org` veröffentlicht;
+- die Ziel-Domain wird nicht als live ausgegeben;
+- das Artefakt bleibt inhaltlich frei von Kontakt- und Privatdaten.
+
+Der spätere Aktivierungs-PR darf `index, follow` und den Canonical-Link erst
+nach belegtem HTTPS-, Edge-, DNS- und Publikationsgate setzen.
+
+## 4. Vorgesehener späterer Edge-Vertrag
 
 Die konkrete Edge- und Caddy-Implementierung gehört ausschließlich in das
 Owner-Repo `heimgewebe/heimserver`.
@@ -121,6 +149,16 @@ automatisiert prüfen:
 - Die konkrete Caddy-Syntax wird ausschließlich im Owner-Repo implementiert
   und validiert.
 
+Der spätere Edge muss mindestens folgende Sicherheitseigenschaften
+herstellen:
+
+- Einbettung in fremde Frames ist untersagt.
+- Referrer-Informationen werden nicht an fremde Ursprünge übertragen.
+- Nicht benötigte Browserfähigkeiten sind deaktiviert.
+- Inhaltstypen dürfen nicht erraten werden.
+- Die Content Security Policy erlaubt ausschließlich die für das statische
+  Artefakt erforderlichen lokalen Ressourcen.
+
 ### Nicht entschiedene Hostnamen
 
 Für folgende Hostnamen besteht in diesem Slice keine kanonische
@@ -131,7 +169,7 @@ Routingentscheidung:
 
 Sie dürfen im späteren Edge-PR nicht still ergänzt werden.
 
-## 4. Explizit offene Punkte
+## 5. Explizit offene Punkte
 
 - aktives `/opt/heimgewebe/edge/Caddyfile` noch nicht als Target-Proof gelesen;
 - aktiver Edge-Compose-Stand noch nicht belegt;
@@ -147,7 +185,7 @@ Sie dürfen im späteren Edge-PR nicht still ergänzt werden.
 - rechtliche Veröffentlichungsvoraussetzungen der eigenständigen Domain noch
   nicht menschlich freigegeben.
 
-## 5. Rechtliches Publikationsgate
+## 6. Rechtliches Publikationsgate
 
 ```text
 Dieser Slice erstellt ein technisches Informationsartefakt.
@@ -161,10 +199,12 @@ erforderlich sind und wo sie bereitgestellt werden.
 Der Coding-Agent darf dafür keine Privatdaten oder Rechtstexte erfinden.
 ```
 
-## 6. Verbotener Claim
+## 7. Epistemische Grenze
 
 ```text
-infra/caddy/Caddyfile.prod ist für das aktuelle Heimserver-Deployment
-nicht als aktive öffentliche Frontdoor belegt und wird in diesem Slice
-nicht verändert.
+infra/caddy/Caddyfile.prod darf nicht als aktive öffentliche Frontdoor des
+aktuellen Heimserver-Deployments ausgegeben werden.
+
+In diesem Slice ist weder seine aktive Verwendung noch seine
+Übereinstimmung mit /opt/heimgewebe/edge/Caddyfile belegt.
 ```

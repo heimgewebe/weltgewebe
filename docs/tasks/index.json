@@ -34,7 +34,9 @@
         "Autoritative INWX-Delegation für weltweberei.org ist noch nicht belegt",
         "Informationsseite und HTTPS für weltweberei.org sind noch nicht belegt",
         "Öffentliche und autoritative No-Mail-Records für beide Nebendomains sind noch nicht belegt",
-        "Das Heimserver-Edge-Template und die aktive Edge-Konfiguration bedienen weltweb.net und weltweberei.org noch nicht nachweislich gemäß dem dokumentierten Handoff-Vertrag (docs/deploy/secondary-domain-web-surfaces.md)"
+        "Das Heimserver-Edge-Template enthält den Redirect- und Static-Surface-Vertrag noch nicht nachweislich",
+        "Die aktive Edge-Konfiguration ist noch nicht gegen das Heimserver-Template abgeglichen",
+        "Das öffentliche Runtime-Verhalten von weltweb.net und weltweberei.org ist noch nicht nachgewiesen"
       ],
       "acceptance": [
         "weltweb.net ist auf INWX delegiert",
