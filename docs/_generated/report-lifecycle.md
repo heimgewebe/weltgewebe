@@ -19,27 +19,27 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | files_scanned | 28 |
 | reports_checked | 24 |
 | reports_ignored_non_report | 4 |
-| reports_with_lifecycle_state | 17 |
-| reports_missing_lifecycle_state | 7 |
-| findings_total | 21 |
+| reports_with_lifecycle_state | 19 |
+| reports_missing_lifecycle_state | 5 |
+| findings_total | 15 |
 
 ## Lifecycle State Summary
 
 | lifecycle_state | Count |
 | --- | ---: |
-| active | 9 |
+| active | 10 |
 | deferred | 0 |
 | superseded | 5 |
-| archived | 3 |
-| missing | 7 |
+| archived | 4 |
+| missing | 5 |
 
 ## Finding Summary
 
 | Code | Count |
 | --- | ---: |
-| missing_lifecycle | 7 |
-| missing_lifecycle_state | 7 |
-| missing_review_after | 7 |
+| missing_lifecycle | 5 |
+| missing_lifecycle_state | 5 |
+| missing_review_after | 5 |
 
 ## Active Reports
 
@@ -53,6 +53,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/domain-edge-write-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-node-write-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-postgres-instance-coherence-decision.md | active | audit | DOMAIN-PG-002 | 2026-12-18 |  |
+| docs/reports/domain-provider-role-finding.md | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  |
 | docs/reports/domain-read-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 
 ## Deferred Reports
@@ -75,6 +76,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
+| docs/reports/inwx-zone-reconciliation-plan.md | deprecated | planning | DEPLOY-DNS-001 |  |  |
 | docs/reports/passkey-register-verify-prep.md | deprecated | decision-prep | AUTH-PG-002 |  |  |
 | docs/reports/planning-registration-findings.md | deprecated | audit | TASK-CTL-005 |  |  |
 | docs/reports/report-lifecycle-restbestand-triage.md | deprecated | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  |
@@ -84,9 +86,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
 | docs/reports/cost-report.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
-| docs/reports/domain-provider-role-finding.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/domain-runtime-data-source-reconciliation.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
-| docs/reports/inwx-zone-reconciliation-plan.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-architekturkritik.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/optimierungsbericht.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
@@ -96,9 +96,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | Report | lifecycle_state | status | findings |
 | --- | --- | --- | --- |
 | docs/reports/cost-report.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
-| docs/reports/domain-provider-role-finding.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/domain-runtime-data-source-reconciliation.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
-| docs/reports/inwx-zone-reconciliation-plan.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-architekturkritik.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-basemap-proof-gap-reconciliation.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/optimierungsbericht.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
@@ -110,9 +108,7 @@ Fields required by the currently implemented validator rules that are absent, in
 | Report | status | lifecycle_state | Missing currently-enforced fields |
 | --- | --- | --- | --- |
 | docs/reports/cost-report.md | active |  | lifecycle_state, lifecycle, review_after |
-| docs/reports/domain-provider-role-finding.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/domain-runtime-data-source-reconciliation.md | active |  | lifecycle_state, lifecycle, review_after |
-| docs/reports/inwx-zone-reconciliation-plan.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/map-architekturkritik.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/optimierungsbericht.md | active |  | lifecycle_state, lifecycle, review_after |

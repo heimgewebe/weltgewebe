@@ -319,18 +319,13 @@ provisorisch, auch wenn der genannte Task registriert ist.
 - Begründung Reihenfolge: einziger Fall mit `archived` ohne `review_after`-Bedarf,
   Owner als registrierter Task identifizierbar, Kernzweck CI-bewiesen.
 
-### Slice B — DNS-Cutover-Dokumente (R2, R4) — *Owner belegt, Live-Check offen*
+### Slice B — DNS-Cutover-Dokumente (R2, R4) — *Owner belegt, Hauptdomain-Live-Check erbracht, Nebendomains offen*
 
 - Dateien: `domain-provider-role-finding.md`, `inwx-zone-reconciliation-plan.md`.
-- Vorgeschlagene Metadaten: R2 `audit/active`, R4 `planning/active`, beide
+- Gewählte Metadaten: R2 `audit/active`, R4 `planning/archived`, beide
   `owner_task: DEPLOY-DNS-001`.
-- Offene Vorbedingungen: fachlich begründetes `review_after` (Cutover-/
-  Live-Check-Trigger, **kein** Kalenderdatum); `planning`-Enum-Stützung (R4);
-  Live-Provider-Check als Vorbedingung, nicht als Hinweis; DNSSEC-Stop-Gate
-  erhalten.
-- Akzeptanz: 0 neue Findings; keine Live-Claims ohne Nachweis; keine privaten
-  Rohdaten.
-- Risiko/Abhängigkeit: extern (Provider/DNS); Strang-Infra.
+- Begründung: Der alte INWX-Plan (R4) hat kein einzelnes vollständiges Ersatzartefakt und ist deshalb `archived`, nicht `superseded`. Keine alte IONOS-Anweisung bleibt operativ.
+- Status: Hauptdomain-Live-Check erbracht. Nebendomains bleiben offener Restbestand.
 
 ### Slice C — DB-Runtime-Audit (R3) — *Owner belegt, Runtime-Recheck offen*
 
