@@ -16,10 +16,15 @@ relations:
 
 ## Kontext
 
-Dieses Runbook dokumentiert die Migration des Weltgewebe-Deployments von **Netlify**
+Dieses Runbook dokumentiert die historische Migration des Weltgewebe-Deployments von **Netlify**
 zu einem **self-hosted Heimserver-Deployment mit edge-caddy**.
 
-Die Migration beinhaltete:
+> [!NOTE]
+> **Historische DNS-Phase**
+> Dieses Dokument beschreibt den historischen Schritt von Netlify zu IONOS.
+> Der heutige Zustand von `weltgewebe.net` nutzt INWX und dynamisches DDNS. Die Nebendomains sind DNS-seitig noch offen.
+
+Die damalige Migration beinhaltete:
 
 * DNS-Umstellung
 * Router-Portfreigaben
@@ -35,7 +40,7 @@ Ziel ist ein reproduzierbares Deployment-Runbook.
 * Caddy-Gateway
 * typische Fehler
 
-## DNS-Migration
+## DNS-Migration (Historisch)
 
 Domain:
 
@@ -53,7 +58,7 @@ Domain:
 `ns1086.ui-dns.biz`
 `ns1036.ui-dns.de`
 
-### notwendige Records
+### Historische Altwerte (ehemals notwendige IONOS-Records)
 
 ```text
 # A-Records
@@ -202,7 +207,7 @@ Deployment-Kette:
 ```text
 weltgewebe.net / api.weltgewebe.net
   ↓
-IONOS DNS
+INWX DNS / DDNS (für weltgewebe.net)
   ↓
 Router Portforward
   ↓

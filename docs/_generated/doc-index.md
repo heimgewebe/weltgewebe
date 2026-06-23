@@ -36,7 +36,7 @@ Generated automatically. Do not edit.
 | deploy.CHANGELOG | Deploy Changelog | reference | active | docs/deploy/CHANGELOG.md |
 | deploy.DRIFT_POLICY | Drift Policy | reference | active | docs/deploy/DRIFT_POLICY.md |
 | deploy.README | Deployment-Übersicht | reference | active | docs/deploy/README.md |
-| deploy.domain-mail-migration-ionos-inwx-mailbox-brevo | Domain-/Mail-Migration: IONOS zu INWX + mailbox.org + Brevo | reference | active | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md |
+| deploy.domain-mail-migration-ionos-inwx-mailbox-brevo | Architektur & Historie: Domain-/Mail-Migration IONOS zu INWX | reference | active | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md |
 | deploy.heim-first-phase0 | Heim-First Phase 0 | reference | active | docs/deploy/heim-first-phase0.md |
 | deploy.heimserver.deployment | Heimserver Deployment | reference | active | docs/deploy/heimserver.deployment.md |
 | deploy.heimserver.integration | Heimserver Integration | reference | active | docs/deploy/heimserver.integration.md |
@@ -109,7 +109,7 @@ Generated automatically. Do not edit.
 | reports.domain-postgres-instance-coherence-decision | Domain PostgreSQL Instance Coherence Decision — DOMAIN-PG-002 | report | active | docs/reports/domain-postgres-instance-coherence-decision.md |
 | reports.domain-provider-role-finding | Finding: Aktuelle Domain- und Provider-Rollen | report | active | docs/reports/domain-provider-role-finding.md |
 | reports.domain-read-path-proof | Domain Read Path Proof | report | active | docs/reports/domain-read-path-proof.md |
-| reports.inwx-zone-reconciliation-plan | INWX Zone Reconciliation Plan | report | active | docs/reports/inwx-zone-reconciliation-plan.md |
+| reports.inwx-zone-reconciliation-plan | INWX Zone Reconciliation Plan | report | deprecated | docs/reports/inwx-zone-reconciliation-plan.md |
 | reports.optimierungsbericht | Optimierungsbericht Weltgewebe | report | active | docs/reports/optimierungsbericht.md |
 | reports.optimierungsstatus | Optimierungsstatus Weltgewebe | status-matrix | active | docs/reports/optimierungsstatus.md |
 | reports.passkey-register-verify-prep | Passkey Register-Verify – Vorbereitungsbericht | report | deprecated | docs/reports/passkey-register-verify-prep.md |
@@ -118,7 +118,7 @@ Generated automatically. Do not edit.
 | runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |
 | runbooks.codespaces-recovery | Codespaces Recovery | reference | active | docs/runbooks/codespaces-recovery.md |
 | runbooks.db-recovery | DB Recovery Runbook | reference | active | docs/runbooks/db-recovery.md |
-| runbooks.domain-mail-cutover | Runbook — Domain-, Mail- und SMTP-Cutover | runbook | active | docs/runbooks/domain-mail-cutover.md |
+| runbooks.domain-mail-cutover | Runbook — Domain-, Mail- und SMTP-Cutover | runbook | deprecated | docs/runbooks/domain-mail-cutover.md |
 | runbooks.incident-response | Incident Response Runbook | reference | active | docs/runbooks/incident-response.md |
 | runbooks.ops.runbook.weltgewebe-selfhost-deploy | Selfhost-Deploy Runbook | reference | active | docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md |
 | runbooks.uv-tooling | UV-Tooling | reference | active | docs/runbooks/uv-tooling.md |

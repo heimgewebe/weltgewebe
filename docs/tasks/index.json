@@ -13,7 +13,7 @@
       "id": "DEPLOY-DNS-001",
       "title": "INWX Registrar/DNS Cutover vorbereiten und durchführen",
       "area": "infra",
-      "status": "open",
+      "status": "partial",
       "priority": "high",
       "effort": "M",
       "risk": "high",
@@ -22,18 +22,16 @@
         "docs/adr/ADR-0008__domain-mail-provider-boundaries.md",
         "docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md",
         "docs/runbooks/domain-mail-cutover.md",
-        "docs/reports/inwx-zone-reconciliation-plan.md"
+        "externe Audit-Artefakte (keine privaten Rohdaten im Repo)"
       ],
       "missing_evidence": [],
       "acceptance": [
-        "Offline-Zonenmanifest ist vollständig und reviewed",
-        "Abruptes INWX-Aktivierungsfenster ist dokumentiert",
-        "DNSSEC ist für alle drei Cutover-Domains geprüft; bei Bedarf deaktiviert und jeweilige Parent-DS-Entfernung verifiziert; alter DS ohne passende INWX-Signierung blockiert die betroffene Domain",
-        "INWX authoritative DNS sowie Web-, mailbox.org- und Brevo-DNS/Subdomain-Gates pass",
-        "Live-Runtime zeigt nach Restart/Recreate die erwarteten Brevo-SMTP-Werte",
-        "Ein erst danach erzeugter Magic-Link wird via Brevo zugestellt und erzeugt erfolgreich eine Session",
-        "Registrar at INWX confirmed",
-        "Keine Secrets oder Auth-Codes im Repo"
+        "weltweb.net ist auf INWX delegiert",
+        "permanenter Redirect auf weltgewebe.net funktioniert",
+        "weltweberei.org ist auf INWX delegiert",
+        "Informationsseite funktioniert",
+        "beide Domains besitzen öffentlich und autoritativ belegte No-Mail-Records",
+        "danach Taskabschluss prüfen"
       ],
       "links": {
         "issues": [],
@@ -41,11 +39,10 @@
         "docs": [
           "docs/adr/ADR-0008__domain-mail-provider-boundaries.md",
           "docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md",
-          "docs/runbooks/domain-mail-cutover.md",
-          "docs/reports/inwx-zone-reconciliation-plan.md"
+          "docs/runbooks/domain-mail-cutover.md"
         ]
       },
-      "updated_at": "2026-06-06"
+      "updated_at": "2026-06-23"
     },
     {
       "id": "DEPLOY-DNS-002",
@@ -1237,7 +1234,7 @@
         "docs/reports/passkey-register-verify-prep.md"
       ],
       "missing_evidence": [
-        "Acht Reports wurden ursprünglich triagiert. Slice A (passkey-register-verify-prep.md) ist backgefüllt; sieben Reports bleiben für die Slices B–F offen.",
+        "Acht Reports wurden ursprünglich triagiert. Slice A und B sind abgeschlossen. 5 Reports verbleiben unklassifiziert.",
         "Fehlendes oder nicht parsebares Report-Frontmatter wird noch nicht vollständig blockierend erkannt",
         "Semantische Validatorprüfungen für Lifecycle-Enums, ISO-Datum und Supersession-Konsistenz fehlen",
         "Die owner_task-Semantik und die normativen Registrierungsquellen sind entschieden und gegen den bestehenden Bestand kompatibilitätsgeprüft; vollständige OPT-Markdown–JSON-Parität und technische Existenzprüfung bleiben nach den Backfill-Slices offen.",
@@ -1274,7 +1271,7 @@
           "docs/process/report-lifecycle-contract-alignment.md"
         ]
       },
-      "updated_at": "2026-06-22"
+      "updated_at": "2026-06-23"
     }
   ]
 }

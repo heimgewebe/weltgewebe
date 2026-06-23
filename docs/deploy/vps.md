@@ -8,21 +8,24 @@ relations:
   - type: relates_to
     target: docs/deploy/README.md
 ---
-# VPS Deployment Runbook
+# VPS Deployment Runbook (Alternatives Modell)
+
+> [!NOTE]
+> Dieses Runbook beschreibt ein **alternatives** Deployment-Modell auf einem klassischen VPS mit fester IP. Die aktuelle Weltgewebe-Produktion nutzt stattdessen ein Heimserver-Setup mit dynamischer IP (DDNS).
 
 Dieses Runbook beschreibt die Schritte zur Bereitstellung der Weltgewebe-Infrastruktur (API, Datenbank, Proxy)
 auf einem VPS. Das Frontend wird weiterhin über einen externen Provider (z.B. Vercel oder Cloudflare Pages) ausgeliefert,
-aber über den Caddy-Proxy auf dem VPS unter `weltgewebe.net` eingebunden.
+aber über den Caddy-Proxy auf dem VPS unter der Domain eingebunden.
 
 ## Voraussetzungen
 
-1. **VPS**: Ein Linux-Server (z.B. Ubuntu) mit öffentlicher IPv4 (und optional IPv6).
-2. **Domain**: `weltgewebe.net` ist bei IONOS registriert.
+1. **VPS**: Ein Linux-Server (z.B. Ubuntu) mit öffentlicher statischer IPv4 (und optional IPv6).
+2. **Domain**: Zugriff auf die DNS-Verwaltung deiner Domain (z.B. `weltgewebe.net`).
 3. **Docker & Docker Compose**: Müssen auf dem VPS installiert sein.
 
-## 1. DNS Konfiguration (IONOS)
+## 1. DNS Konfiguration
 
-Richte folgende DNS-Records ein, damit `weltgewebe.net` auf deinen VPS zeigt:
+Richte folgende DNS-Records ein, damit die Domain auf deinen VPS zeigt:
 
 * **A-Record**: `weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
 * **AAAA-Record** (falls IPv6 verfügbar): `weltgewebe.net` -> `<VPS_IPV6_ADRESSE>`
