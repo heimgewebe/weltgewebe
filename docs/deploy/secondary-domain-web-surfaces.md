@@ -106,8 +106,17 @@ Bis zum abgeschlossenen Aktivierungsgate gilt:
 - die Ziel-Domain wird nicht als live ausgegeben;
 - das Artefakt bleibt inhaltlich frei von Kontakt- und Privatdaten.
 
-Der spätere Aktivierungs-PR darf `index, follow` und den Canonical-Link erst
-nach belegtem HTTPS-, Edge-, DNS- und Publikationsgate setzen.
+Ein späterer, separater Aktivierungs-PR im Owner-Repo
+`heimgewebe/weltgewebe` darf den Robots-Endzustand und den Canonical-Link
+erst nach belegtem HTTPS-, Edge-, DNS- und Publikationsgate ändern.
+
+Die Aktivierungsreihenfolge ist:
+
+1. Das Repo `heimgewebe/heimserver` implementiert und validiert den
+   Edge-Vertrag.
+2. Der Operator belegt Deployment, HTTPS, DNS und öffentliche Runtime.
+3. Erst danach aktualisiert ein separater PR in `heimgewebe/weltgewebe`
+   Robots-Metadaten, Canonical-Link, Browser-Proof und Task-Evidenz.
 
 ## 4. Vorgesehener späterer Edge-Vertrag
 
