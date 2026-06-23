@@ -290,6 +290,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/heim-first-phase0.md
 - [relates_to] docs/deploy/heimserver.deployment.md
 - [relates_to] docs/deploy/heimserver.integration.md
+- [relates_to] docs/deploy/secondary-domain-web-surfaces.md
 - [relates_to] docs/deploy/security.md
 - [relates_to] docs/deploy/vps.md
 - [relates_to] docs/deploy/weltgewebe.naming.md
@@ -303,6 +304,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/ADR-0008__domain-mail-provider-boundaries.md
 - [relates_to] docs/deploy/README.md
 - [relates_to] docs/deploy/public-app-base-url.md
+- [relates_to] docs/deploy/secondary-domain-web-surfaces.md
 - [relates_to] docs/reports/domain-provider-role-finding.md
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
 - [relates_to] docs/runbooks/domain-mail-cutover.md
@@ -324,6 +326,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/deploy/README.md
 - [relates_to] docs/deploy/heimserver.deployment.md
+
+## docs/deploy/secondary-domain-web-surfaces.md
+
+- [relates_to] docs/deploy/README.md
 
 ## docs/deploy/security.md
 
@@ -530,6 +536,7 @@ Generated automatically. Do not edit.
 
 ## docs/reports/domain-provider-role-finding.md
 
+- [relates_to] docs/deploy/secondary-domain-web-surfaces.md
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
 
 ## docs/reports/domain-read-path-proof.md
@@ -700,6 +707,7 @@ Generated automatically. Do not edit.
 ## docs/tasks/board.md
 
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/deploy/secondary-domain-web-surfaces.md
 - [relates_to] docs/reports/domain-account-write-path-proof.md
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
 - [relates_to] docs/reports/domain-edge-reference-audit.md
