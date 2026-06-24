@@ -3,7 +3,7 @@ id: docs.reference.agent-operability-fixture-matrix
 title: Agent-Betriebsfaehigkeit: Fixture-Matrix
 doc_type: reference
 status: active
-summary: Fixture-Matrix fuer AGENT-SAFE-004 Task-Contracts und den Non-Ideal-Guard.
+summary: Fixture-Matrix fuer Agent-Task-Contracts, Non-Ideal-Guard und Handoff-Validierung.
 relations:
   - type: relates_to
     target: contracts/agent/task.schema.json
@@ -11,14 +11,20 @@ relations:
     target: scripts/agent/check_non_ideal_task.py
   - type: relates_to
     target: scripts/agent/tests/test_check_non_ideal_task.py
+  - type: relates_to
+    target: contracts/agent/handoff.schema.json
+  - type: relates_to
+    target: scripts/agent/validate_handoff.py
+  - type: relates_to
+    target: scripts/agent/tests/test_validate_handoff.py
 ---
 
 # Agent-Betriebsfaehigkeit: Fixture-Matrix
 
 ## Zweck
 
-Diese Matrix dokumentiert die AGENT-SAFE-004 Fixtures fuer minimale Agent-Contracts
-und den Non-Ideal-Task-Guard.
+Diese Matrix dokumentiert die Fixtures fuer minimale Agent-Task-Contracts,
+den Non-Ideal-Task-Guard und den anschliessenden Handoff-Validator.
 
 ## Valid Fixtures
 
@@ -48,9 +54,23 @@ und den Non-Ideal-Task-Guard.
 - `CLAIM_REGISTRY_INVALID`
 - `CONTRADICTION_FOUND`
 
+## Handoff Fixtures
+
+| Fixture | Erwartung |
+|---|---|
+| `tests/fixtures/agent/handoff-task.json` | gueltiger Task-Contract und Digest-Quelle |
+| `tests/fixtures/agent/handoff-valid.json` | Exit `0`, `status = valid`, keine Findings |
+| `tests/fixtures/agent/handoff-invalid-digest.json` | Exit `1`, `TASK_DIGEST_MISMATCH` |
+| `tests/fixtures/agent/handoff-invalid-path.json` | Exit `1`, `PATH_OUT_OF_REPO` |
+| `tests/fixtures/agent/handoff-invalid-outcome.json` | Exit `1`, `CONTRADICTORY_OUTCOME` |
+
+Der Handoff ist ein Review-Beleg, keine Merge- oder Done-Freigabe. Der Validator
+prueft Task-Bindung, Scope, Claims, Evidence, Validierungsresultate und
+widerspruchsfreie Outcomes. Er fuehrt keine Kommandos aus und veraendert keine
+Dateien.
+
 ## Offene Luecken
 
 - Kein Dry-Run Runner in diesem Slice.
 - Kein Write Mode in diesem Slice.
-- Kein Handoff Validator in diesem Slice.
 - Kein Blocking-CI in diesem Slice.
