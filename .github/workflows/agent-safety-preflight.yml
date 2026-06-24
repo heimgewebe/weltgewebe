@@ -5,7 +5,13 @@ name: agent-safety-preflight
   pull_request:
     paths:
       - "scripts/agent/**"
+      - "scripts/docmeta/generate_agent_readiness.py"
+      - "scripts/docmeta/tests/test_generate_agent_readiness.py"
+      - "contracts/agent/**"
+      - "tests/fixtures/agent/**"
       - "docs/security/**"
+      - "docs/reference/agent-operability-fixture-matrix.md"
+      - "docs/_generated/agent-readiness.md"
       - "agent-policy.yaml"
       - "AGENTS.md"
       - "repo.meta.yaml"
@@ -24,7 +30,7 @@ env:
 
 jobs:
   preflight-tests:
-    name: Safety-Preflight Guard Tests (AGENT-SAFE-001)
+    name: Agent Safety Contract Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,3 +74,24 @@ jobs:
             --task-file /tmp/agent-task.yaml \
             --changed-paths docs/security/agent-write-scope-baseline.md \
             --mode report-only
+
+      - name: Smoke-check handoff validator (valid fixture)
+        run: |
+          set -euo pipefail
+          python3 -m scripts.agent.validate_handoff \
+            --task-file tests/fixtures/agent/handoff-task.json \
+            --handoff-file tests/fixtures/agent/handoff-valid.json
+
+      - name: Smoke-check handoff validator (invalid fixture)
+        run: |
+          set -euo pipefail
+          set +e
+          python3 -m scripts.agent.validate_handoff \
+            --task-file tests/fixtures/agent/handoff-task.json \
+            --handoff-file tests/fixtures/agent/handoff-invalid-digest.json
+          rc=$?
+          set -e
+          if [ "$rc" -ne 1 ]; then
+            printf 'Expected exit code 1 for invalid handoff, got %s\n' "$rc" >&2
+            exit 1
+          fi
