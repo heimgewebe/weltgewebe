@@ -67,7 +67,10 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self._touch("contracts/agent/task.schema.json", "{}\n")
         self._touch("scripts/agent/check_non_ideal_task.py")
         self._touch("scripts/agent/tests/test_check_non_ideal_task.py")
-        self._touch("scripts/agent/handoff_validator.py")
+        self._touch("contracts/agent/handoff.schema.json", "{}\n")
+        self._touch("scripts/agent/validate_handoff.py")
+        self._touch("scripts/agent/tests/test_validate_handoff.py")
+        self._touch("tests/fixtures/agent/handoff-valid.json", "{}\n")
         self._touch("scripts/agent/dry_run_runner.py")
 
         gen.generate(self.root)
@@ -105,20 +108,27 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertRegex(report, r"\| safety_preflight \| (pass|partial|open|fail) \|")
         self.assertRegex(report, r"\| claim_evidence_spine \| (pass|partial|open|fail) \|")
 
-    def test_handoff_docs_only_is_partial(self):
-        self._touch("AGENTS.md")
-        self._touch("agent-policy.yaml")
-        self._touch("scripts/agent/check_agent_preflight.py")
-        self._touch("scripts/agent/tests/test_check_agent_preflight.py")
-        self._touch(".github/workflows/agent-safety-preflight.yml")
-        self._touch("docs/security/agent-write-scope-baseline.md")
-        self._touch("docs/process/handoff-guideline.md")
+    def test_handoff_single_artifact_is_partial_not_pass(self):
+        self._touch("contracts/agent/handoff.schema.json", "{}\n")
 
-        gen.generate(self.root)
+        results = gen.evaluate_capabilities(self.root)
+        status = self._status_map(results)
+        handoff = next(
+            result for result in results if result.id == "handoff_validation"
+        )
+
+        self.assertEqual(status["handoff_validation"], "partial")
+        self.assertIn("scripts/agent/validate_handoff.py", handoff.missing)
+        self.assertIn("scripts/agent/tests/test_validate_handoff.py", handoff.missing)
+        self.assertIn("tests/fixtures/agent/handoff-valid.json", handoff.missing)
+
+    def test_handoff_named_file_alone_cannot_create_false_green(self):
+        self._touch("scripts/agent/handoff_placeholder.py")
+
         results = gen.evaluate_capabilities(self.root)
         status = self._status_map(results)
 
-        self.assertEqual(status["handoff_validation"], "partial")
+        self.assertEqual(status["handoff_validation"], "open")
 
     def test_agent_policy_directory_artifact_fails_overall(self):
         (self.root / "AGENTS.md").mkdir(parents=True, exist_ok=True)
