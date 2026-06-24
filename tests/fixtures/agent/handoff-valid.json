@@ -1,0 +1,31 @@
+{
+  "handoff_id": "HANDOFF-AGENT-SAFE-004-001",
+  "task_id": "AGENT-SAFE-004",
+  "task_contract_sha256": "fd0a9670488128671cbd917158cf966fb7b255668305c01d79d4fe0a1afeed6c",
+  "source_revision": "b72e5c148301000424eac1e7ede75563122a1cb5",
+  "producer": "fixture-agent/1",
+  "outcome": "ready_for_review",
+  "changed_paths": [
+    "contracts/agent/handoff.schema.json",
+    "scripts/agent/validate_handoff.py",
+    "scripts/agent/tests/test_validate_handoff.py"
+  ],
+  "deleted_paths": [],
+  "claims_addressed": [
+    "CLAIM-AGENT-SAFE-003"
+  ],
+  "evidence_produced": [
+    "contracts/agent/handoff.schema.json",
+    "scripts/agent/validate_handoff.py",
+    "scripts/agent/tests/test_validate_handoff.py"
+  ],
+  "missing_evidence": [],
+  "validation_results": [
+    {
+      "command": "python3 -m unittest scripts.agent.tests.test_validate_handoff",
+      "status": "passed"
+    }
+  ],
+  "blockers": [],
+  "residual_gaps": []
+}
