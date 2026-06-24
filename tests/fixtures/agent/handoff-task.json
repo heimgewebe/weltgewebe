@@ -1,0 +1,26 @@
+{
+  "task_id": "AGENT-SAFE-004",
+  "goal": "Handoff validation against an existing agent task contract",
+  "task_type": "governance",
+  "allowed_paths": [
+    "contracts/agent/",
+    "scripts/agent/",
+    "tests/fixtures/agent/"
+  ],
+  "forbidden_paths": [
+    "secrets/",
+    "snapshots/"
+  ],
+  "claims": [
+    "CLAIM-AGENT-SAFE-003"
+  ],
+  "expected_evidence": [
+    "contracts/agent/handoff.schema.json",
+    "scripts/agent/validate_handoff.py",
+    "scripts/agent/tests/test_validate_handoff.py"
+  ],
+  "validation_commands": [
+    "python3 -m unittest scripts.agent.tests.test_validate_handoff"
+  ],
+  "delete_allowed": false
+}
