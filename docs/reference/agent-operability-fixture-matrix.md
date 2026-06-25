@@ -62,9 +62,11 @@ den Non-Ideal-Task-Guard und den anschliessenden Handoff-Validator.
 | `tests/fixtures/agent/handoff-valid.json` | Exit `0`, `status = valid`, keine Findings |
 | `tests/fixtures/agent/handoff-invalid-digest.json` | Exit `1`, `TASK_DIGEST_MISMATCH` |
 | `tests/fixtures/agent/handoff-invalid-path.json` | Exit `1`, `PATH_OUT_OF_REPO` |
-| `tests/fixtures/agent/handoff-invalid-outcome.json` | Exit `0`; transparente `residual_gaps` sind mit Reviewfaehigkeit vereinbar |
+| `tests/fixtures/agent/handoff-valid-residual-gap.json` | Exit `0`; transparente `residual_gaps` sind mit Reviewfaehigkeit vereinbar |
 
-Die Handoff-Fixture bindet zur Rueckwaertskompatibilitaet an den bestehenden\n`AGENT-SAFE-004`-Fixture-Contract. Die produktive Capability wird als\n`AGENT-SAFE-005` gefuehrt. Der Handoff ist ein Review-Beleg, keine Merge- oder
+Die Handoff-Fixture bindet zur Rueckwaertskompatibilitaet an den bestehenden
+`AGENT-SAFE-004`-Fixture-Contract. Die produktive Capability wird als
+`AGENT-SAFE-005` gefuehrt. Der Handoff ist ein Review-Beleg, keine Merge- oder
 Done-Freigabe. Der Validator prueft den kanonischen Task-Contract und den
 Non-Ideal-Guard, Task-Bindung, Scope, vollstaendige Claim-Abdeckung, lokale
 Evidence, Validierungsresultate und widerspruchsfreie Outcomes. Er fuehrt keine
