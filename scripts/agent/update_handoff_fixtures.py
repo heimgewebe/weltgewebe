@@ -18,7 +18,7 @@ from scripts.docmeta.docmeta import REPO_ROOT
 TASK_PATH = Path("tests/fixtures/agent/handoff-task.json")
 DIGEST_FIXTURES = (
     Path("tests/fixtures/agent/handoff-valid.json"),
-    Path("tests/fixtures/agent/handoff-invalid-outcome.json"),
+    Path("tests/fixtures/agent/handoff-valid-residual-gap.json"),
     Path("tests/fixtures/agent/handoff-invalid-path.json"),
 )
 
