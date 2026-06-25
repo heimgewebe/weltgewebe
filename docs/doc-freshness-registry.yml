@@ -62,3 +62,30 @@ entries:
         target: scripts/docmeta/validate_claim_registry.py
       - kind: test
         target: scripts/docmeta/tests/test_validate_claim_registry.py
+
+  - id: claim-agent-safe-005
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-AGENT-SAFE-005]
+    claim: >-
+      Ein Handoff-Validator prüft Task-Bindung, Scope, Claims, Evidence,
+      Validierungen und Outcome.
+    status: partial
+    owner: docs-mechanik
+    last_verified: "2026-06-24"
+    evidence:
+      - kind: file
+        target: contracts/agent/handoff.schema.json
+      - kind: file
+        target: scripts/agent/json_contract.py
+      - kind: file
+        target: scripts/agent/validate_handoff.py
+      - kind: file
+        target: scripts/contracts-agent-check.sh
+      - kind: test
+        target: scripts/agent/tests/test_validate_handoff.py
+      - kind: file
+        target: docs/reference/agent-operability-fixture-matrix.md
+      - kind: file
+        target: .github/workflows/agent-safety-preflight.yml
+      - kind: file
+        target: .github/workflows/contracts-validate.yml

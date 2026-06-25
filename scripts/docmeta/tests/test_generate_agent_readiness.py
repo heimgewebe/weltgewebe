@@ -1,3 +1,5 @@
+import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,6 +19,62 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         path = self.root / rel_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+
+    def _copy_handoff_capability(self) -> None:
+        source_root = Path(gen.REPO_ROOT).resolve()
+        handoff_path = source_root / "tests/fixtures/agent/handoff-valid.json"
+        handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+        evidence = handoff.get("evidence_produced")
+
+        if not isinstance(evidence, list) or any(
+            not isinstance(item, str) or not item for item in evidence
+        ):
+            raise AssertionError(
+                "handoff-valid.json must declare evidence_produced strings"
+            )
+
+        registry_path = source_root / "docs/claims/registry.yml"
+        registry_raw = registry_path.read_text(encoding="utf-8")
+        if not registry_raw.startswith("---\n"):
+            raise AssertionError("claim registry must use JSON-compatible YAML")
+        registry = json.loads(registry_raw[4:])
+        registry_evidence = [
+            item["path"]
+            for claim in registry.get("claims", [])
+            if isinstance(claim, dict)
+            for item in claim.get("evidence", [])
+            if isinstance(item, dict)
+            and isinstance(item.get("path"), str)
+            and item["path"]
+        ]
+
+        required_paths = list(
+            dict.fromkeys(
+                [
+                    *gen.HANDOFF_REQUIRED_FILES,
+                    *evidence,
+                    *registry_evidence,
+                ]
+            )
+        )
+
+        for rel_path in required_paths:
+            source = (source_root / rel_path).resolve()
+            try:
+                source.relative_to(source_root)
+            except ValueError as exc:
+                raise AssertionError(
+                    f"fixture dependency escapes repository root: {rel_path}"
+                ) from exc
+
+            if not source.is_file():
+                raise AssertionError(
+                    f"fixture dependency is missing or not a file: {rel_path}"
+                )
+
+            target = self.root / rel_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
 
     def _status_map(self, results: list[gen.CapabilityResult]) -> dict[str, str]:
         return {result.id: result.status for result in results}
@@ -64,10 +122,8 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self._touch("docs/security/agent-write-scope-baseline.md")
         self._touch("docs/claims/registry.yml")
         self._touch("scripts/docmeta/validate_claim_registry.py")
-        self._touch("contracts/agent/task.schema.json", "{}\n")
-        self._touch("scripts/agent/check_non_ideal_task.py")
+        self._copy_handoff_capability()
         self._touch("scripts/agent/tests/test_check_non_ideal_task.py")
-        self._touch("scripts/agent/handoff_validator.py")
         self._touch("scripts/agent/dry_run_runner.py")
 
         gen.generate(self.root)
@@ -105,20 +161,73 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertRegex(report, r"\| safety_preflight \| (pass|partial|open|fail) \|")
         self.assertRegex(report, r"\| claim_evidence_spine \| (pass|partial|open|fail) \|")
 
-    def test_handoff_docs_only_is_partial(self):
-        self._touch("AGENTS.md")
-        self._touch("agent-policy.yaml")
-        self._touch("scripts/agent/check_agent_preflight.py")
-        self._touch("scripts/agent/tests/test_check_agent_preflight.py")
-        self._touch(".github/workflows/agent-safety-preflight.yml")
-        self._touch("docs/security/agent-write-scope-baseline.md")
-        self._touch("docs/process/handoff-guideline.md")
+    def test_handoff_single_artifact_is_partial_not_pass(self):
+        self._touch("contracts/agent/handoff.schema.json", "{}\n")
 
-        gen.generate(self.root)
+        results = gen.evaluate_capabilities(self.root)
+        status = self._status_map(results)
+        handoff = next(
+            result for result in results if result.id == "handoff_validation"
+        )
+
+        self.assertEqual(status["handoff_validation"], "partial")
+        self.assertIn("scripts/agent/validate_handoff.py", handoff.missing)
+        self.assertIn("scripts/agent/tests/test_validate_handoff.py", handoff.missing)
+        self.assertIn("tests/fixtures/agent/handoff-valid.json", handoff.missing)
+
+    def test_handoff_complete_placeholder_set_fails_functional_smoke(self):
+        for rel_path in gen.HANDOFF_REQUIRED_FILES:
+            self._touch(rel_path, "{}\n" if rel_path.endswith(".json") else "# placeholder\n")
+
+        result = next(
+            item
+            for item in gen.evaluate_capabilities(self.root)
+            if item.id == "handoff_validation"
+        )
+
+        self.assertEqual(result.status, "fail")
+        self.assertIn("functional handoff smoke", result.missing)
+
+    def test_handoff_missing_claim_in_real_registry_fails_smoke(self):
+        self._copy_handoff_capability()
+
+        task = json.loads(
+            (self.root / "tests/fixtures/agent/handoff-task.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        claim_id = task["claims"][0]
+        registry_path = self.root / "docs/claims/registry.yml"
+        raw = registry_path.read_text(encoding="utf-8")
+        self.assertTrue(raw.startswith("---\n"))
+        registry = json.loads(raw[4:])
+        registry["claims"] = [
+            claim
+            for claim in registry["claims"]
+            if claim.get("id") != claim_id
+        ]
+        registry_path.write_text(
+            "---\n"
+            + json.dumps(registry, ensure_ascii=False, indent=2)
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = next(
+            item
+            for item in gen.evaluate_capabilities(self.root)
+            if item.id == "handoff_validation"
+        )
+        self.assertEqual(result.status, "fail")
+        self.assertIn("functional handoff smoke", result.missing)
+
+    def test_handoff_named_file_alone_cannot_create_false_green(self):
+        self._touch("scripts/agent/handoff_placeholder.py")
+
         results = gen.evaluate_capabilities(self.root)
         status = self._status_map(results)
 
-        self.assertEqual(status["handoff_validation"], "partial")
+        self.assertEqual(status["handoff_validation"], "open")
 
     def test_agent_policy_directory_artifact_fails_overall(self):
         (self.root / "AGENTS.md").mkdir(parents=True, exist_ok=True)

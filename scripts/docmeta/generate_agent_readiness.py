@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
+import json
+import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,6 +11,7 @@ from typing import Iterable
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from scripts.agent.json_contract import DuplicateKeyError, loads_json_strict
 from scripts.docmeta.docmeta import REPO_ROOT
 
 
@@ -23,6 +27,111 @@ class CapabilityResult:
 
 
 VALID_STATUSES = {"pass", "partial", "open", "fail"}
+
+HANDOFF_TASK_FILE = "tests/fixtures/agent/handoff-task.json"
+HANDOFF_VALID_FILE = "tests/fixtures/agent/handoff-valid.json"
+HANDOFF_REQUIRED_FILES = [
+    "contracts/agent/task.schema.json",
+    "contracts/agent/handoff.schema.json",
+    "scripts/agent/json_contract.py",
+    "scripts/agent/check_non_ideal_task.py",
+    "scripts/agent/validate_handoff.py",
+    "scripts/agent/tests/test_validate_handoff.py",
+    "scripts/docmeta/docmeta.py",
+    "scripts/docmeta/validate_claim_registry.py",
+    "docs/claims/registry.yml",
+    HANDOFF_TASK_FILE,
+    HANDOFF_VALID_FILE,
+]
+
+
+def _handoff_failure(
+    presence: CapabilityResult,
+    diagnostic: str,
+) -> CapabilityResult:
+    diagnostic = diagnostic.strip()
+    if len(diagnostic) > 240:
+        diagnostic = diagnostic[:237] + "..."
+    suffix = f": {diagnostic}" if diagnostic else "."
+    return CapabilityResult(
+        id=presence.id,
+        title=presence.title,
+        hard=presence.hard,
+        status="fail",
+        evidence=presence.evidence,
+        missing=["functional handoff smoke"],
+        rationale=f"{presence.rationale} Functional smoke failed{suffix}",
+    )
+
+
+def _evaluate_handoff_validation(root: Path) -> CapabilityResult:
+    presence = _evaluate_required_files(
+        root=root,
+        cap_id="handoff_validation",
+        title="Handoff validation",
+        hard=True,
+        required_files=HANDOFF_REQUIRED_FILES,
+        rationale=(
+            "Handoff-Checks begrenzen unvollstaendige oder unsichere "
+            "Uebergaben."
+        ),
+    )
+    if presence.status != "pass":
+        return presence
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(root)
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "scripts.agent.validate_handoff",
+                "--task-file",
+                HANDOFF_TASK_FILE,
+                "--handoff-file",
+                HANDOFF_VALID_FILE,
+            ],
+            cwd=root,
+            env=env,
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return _handoff_failure(presence, str(exc))
+
+    try:
+        payload = loads_json_strict(completed.stdout)
+    except (json.JSONDecodeError, DuplicateKeyError) as exc:
+        return _handoff_failure(presence, f"invalid JSON output: {exc}")
+
+    expected_output = (
+        completed.returncode == 0
+        and isinstance(payload, dict)
+        and payload.get("status") == "valid"
+        and payload.get("findings_count") == 0
+        and payload.get("findings") == []
+        and payload.get("task_file") == HANDOFF_TASK_FILE
+        and payload.get("handoff_file") == HANDOFF_VALID_FILE
+    )
+    if not expected_output:
+        diagnostic = completed.stderr or completed.stdout
+        return _handoff_failure(presence, diagnostic or "unexpected CLI result")
+
+    return CapabilityResult(
+        id=presence.id,
+        title=presence.title,
+        hard=presence.hard,
+        status="pass",
+        evidence=presence.evidence,
+        missing=[],
+        rationale=(
+            f"{presence.rationale} Required files and the canonical CLI smoke "
+            "both pass."
+        ),
+    )
 
 
 def _as_rel(root: Path, path: Path) -> str:
@@ -154,46 +263,7 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
         )
     )
 
-    handoff_impl_evidence = _files_for_patterns(
-        repo_root,
-        [
-            "scripts/agent/*handoff*",
-            "contracts/agent/*handoff*",
-        ],
-    )
-    handoff_doc_evidence = _files_for_patterns(
-        repo_root,
-        ["docs/**/*handoff*"],
-    )
-    handoff_evidence = sorted(set(handoff_impl_evidence + handoff_doc_evidence))
-    if handoff_impl_evidence:
-        handoff_status = "pass"
-        handoff_missing: list[str] = []
-    elif handoff_doc_evidence:
-        handoff_status = "partial"
-        handoff_missing = [
-            "scripts/agent/*handoff*",
-            "contracts/agent/*handoff*",
-        ]
-    else:
-        handoff_status = "open"
-        handoff_missing = [
-            "scripts/agent/*handoff*",
-            "contracts/agent/*handoff*",
-            "docs/**/*handoff*",
-        ]
-
-    results.append(
-        CapabilityResult(
-            id="handoff_validation",
-            title="Handoff validation",
-            hard=True,
-            status=handoff_status,
-            evidence=handoff_evidence,
-            missing=handoff_missing,
-            rationale="Handoff-Checks begrenzen unvollstaendige oder unsichere Uebergaben.",
-        )
-    )
+    results.append(_evaluate_handoff_validation(repo_root))
 
     results.append(
         _evaluate_required_files(
@@ -250,7 +320,9 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
     return results
 
 
-def determine_overall_status(results: list[CapabilityResult]) -> tuple[str, str, list[str]]:
+def determine_overall_status(
+    results: list[CapabilityResult],
+) -> tuple[str, str, list[str]]:
     hard_gaps = [r.id for r in results if r.hard and r.status != "pass"]
     failing = [r.id for r in results if r.status == "fail"]
     passing = [r.id for r in results if r.status == "pass"]
@@ -268,12 +340,19 @@ def determine_overall_status(results: list[CapabilityResult]) -> tuple[str, str,
         return "pass", "All hard and non-hard capabilities are present.", []
 
     if not passing and not partial:
-        return "open", "No capability evidence detected yet.", [r.id for r in results if r.hard]
+        return "open", "No capability evidence detected yet.", [
+            r.id for r in results if r.hard
+        ]
 
     return "partial", "Capabilities are partially implemented.", hard_gaps
 
 
-def render_report(results: list[CapabilityResult], overall: str, reason: str, hard_gaps: list[str]) -> str:
+def render_report(
+    results: list[CapabilityResult],
+    overall: str,
+    reason: str,
+    hard_gaps: list[str],
+) -> str:
     lines: list[str] = []
     lines.append("---")
     lines.append("id: docs.generated.agent-readiness")
@@ -297,13 +376,35 @@ def render_report(results: list[CapabilityResult], overall: str, reason: str, ha
     lines.append("| Capability | Status | Hard | Evidence | Missing | Rationale |")
     lines.append("|---|---|---:|---|---|---|")
 
+    handoff_evidence: list[str] = []
     for result in results:
-        evidence = ", ".join(f"`{item}`" for item in result.evidence) if result.evidence else "-"
-        missing = ", ".join(f"`{item}`" for item in result.missing) if result.missing else "-"
+        if result.id == "handoff_validation":
+            handoff_evidence = result.evidence
+            evidence = "See Handoff Evidence"
+        else:
+            evidence = (
+                ", ".join(f"`{item}`" for item in result.evidence)
+                if result.evidence
+                else "-"
+            )
+        missing = (
+            ", ".join(f"`{item}`" for item in result.missing)
+            if result.missing
+            else "-"
+        )
         hard = "yes" if result.hard else "no"
         lines.append(
-            f"| {result.id} | {result.status} | {hard} | {evidence} | {missing} | {result.rationale} |"
+            f"| {result.id} | {result.status} | {hard} | {evidence} | "
+            f"{missing} | {result.rationale} |"
         )
+
+    lines.append("")
+    lines.append("## Handoff Evidence")
+    lines.append("")
+    if handoff_evidence:
+        lines.extend(f"- `{item}`" for item in handoff_evidence)
+    else:
+        lines.append("- No handoff evidence detected.")
 
     lines.append("")
     lines.append("## Residual Gaps")

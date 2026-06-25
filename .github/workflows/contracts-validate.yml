@@ -17,6 +17,9 @@ permissions:
       - "tests/fixtures/**"
       - ".github/workflows/contracts-validate.yml"
       - "scripts/contracts-domain-check.sh"
+      - "scripts/contracts-agent-check.sh"
+      - "scripts/agent/json_contract.py"
+      - "scripts/agent/validate_agent_contracts.py"
       - "package.json"
       - "pnpm-lock.yaml"
   pull_request:
@@ -25,6 +28,9 @@ permissions:
       - "tests/fixtures/**"
       - ".github/workflows/contracts-validate.yml"
       - "scripts/contracts-domain-check.sh"
+      - "scripts/contracts-agent-check.sh"
+      - "scripts/agent/json_contract.py"
+      - "scripts/agent/validate_agent_contracts.py"
       - "package.json"
       - "pnpm-lock.yaml"
 
@@ -138,6 +144,20 @@ jobs:
           import sys
           from pathlib import Path
 
+          class DuplicateKeyError(ValueError):
+              pass
+
+          def strict_object(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise DuplicateKeyError(f"duplicate JSON key: {key}")
+                  result[key] = value
+              return result
+
+          def reject_constant(value):
+              raise ValueError(f"non-standard JSON constant: {value}")
+
           roots = ("contracts/", "tests/fixtures/")
           tracked = subprocess.run(
               ["git", "ls-files", "--", *roots],
@@ -154,8 +174,12 @@ jobs:
           failures: list[str] = []
           for path in paths:
               try:
-                  json.loads(path.read_text(encoding="utf-8"))
-              except (OSError, json.JSONDecodeError) as exc:
+                  json.loads(
+                      path.read_text(encoding="utf-8"),
+                      object_pairs_hook=strict_object,
+                      parse_constant=reject_constant,
+                  )
+              except (OSError, json.JSONDecodeError, ValueError) as exc:
                   failures.append(f"{path}: {exc}")
 
           if failures:
@@ -187,3 +211,32 @@ jobs:
 
       - name: Validate repository-owned domain contracts
         run: bash scripts/contracts-domain-check.sh
+
+  agent-contracts:
+    name: Compile agent schemas and validate fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: ".node-version"
+          cache: "pnpm"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install locked repository dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate agent contracts with AJV
+        run: bash scripts/contracts-agent-check.sh
+
+      - name: Validate Python contract parity and semantics
+        run: python3 -m scripts.agent.validate_agent_contracts

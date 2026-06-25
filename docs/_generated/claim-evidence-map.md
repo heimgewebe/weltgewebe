@@ -15,6 +15,7 @@ Generated automatically. Do not edit.
 | claim-agent-safe-001 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-001] | partial | docs-mechanik | 2026-06-05 | 4 items |
 | claim-agent-safe-002 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-002] | partial | docs-mechanik | 2026-06-05 | 3 items |
 | claim-agent-safe-003 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-003] | partial | docs-mechanik | 2026-06-05 | 4 items |
+| claim-agent-safe-005 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-005] | partial | docs-mechanik | 2026-06-24 | 8 items |
 
 ## Details
 
@@ -75,6 +76,31 @@ Evidence:
 | `file` | `docs/claims/README.md` |
 | `file` | `scripts/docmeta/validate_claim_registry.py` |
 | `test` | `scripts/docmeta/tests/test_validate_claim_registry.py` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
+
+### CLAIM-AGENT-SAFE-005
+
+- Entry: `claim-agent-safe-005`
+- Locator: `claims[id=CLAIM-AGENT-SAFE-005]`
+- Status: `partial`
+- Owner: `docs-mechanik`
+- Last verified: `2026-06-24`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `contracts/agent/handoff.schema.json` |
+| `file` | `scripts/agent/json_contract.py` |
+| `file` | `scripts/agent/validate_handoff.py` |
+| `file` | `scripts/contracts-agent-check.sh` |
+| `test` | `scripts/agent/tests/test_validate_handoff.py` |
+| `file` | `docs/reference/agent-operability-fixture-matrix.md` |
+| `file` | `.github/workflows/agent-safety-preflight.yml` |
+| `file` | `.github/workflows/contracts-validate.yml` |
 
 Does not prove:
 

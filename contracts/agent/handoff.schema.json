@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://weltgewebe.org/schemas/agent/handoff.schema.json",
+  "title": "Agent Handoff Contract",
+  "description": "Machine-readable review handoff for an agent task.",
+  "type": "object",
+  "required": [
+    "handoff_id",
+    "task_id",
+    "task_contract_sha256",
+    "source_revision",
+    "producer",
+    "outcome",
+    "changed_paths",
+    "deleted_paths",
+    "claims_addressed",
+    "evidence_produced",
+    "missing_evidence",
+    "validation_results",
+    "blockers",
+    "residual_gaps"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "handoff_id": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]+(-[A-Z0-9]+)*$"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[A-Z]+(-[A-Z]+)*-[0-9]{3}$"
+    },
+    "task_contract_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_revision": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "producer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "ready_for_review",
+        "blocked",
+        "incomplete"
+      ]
+    },
+    "changed_paths": {
+      "$ref": "#/definitions/uniqueStrings"
+    },
+    "deleted_paths": {
+      "$ref": "#/definitions/uniqueStrings"
+    },
+    "claims_addressed": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/uniqueStrings"
+        },
+        {
+          "minItems": 1
+        }
+      ]
+    },
+    "evidence_produced": {
+      "$ref": "#/definitions/uniqueStrings"
+    },
+    "missing_evidence": {
+      "$ref": "#/definitions/uniqueStrings"
+    },
+    "validation_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "command",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "failed",
+              "not_run"
+            ]
+          }
+        }
+      },
+      "uniqueItems": true
+    },
+    "blockers": {
+      "$ref": "#/definitions/uniqueStrings"
+    },
+    "residual_gaps": {
+      "$ref": "#/definitions/uniqueStrings"
+    }
+  },
+  "definitions": {
+    "uniqueStrings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

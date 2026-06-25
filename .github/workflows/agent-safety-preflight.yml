@@ -5,7 +5,21 @@ name: agent-safety-preflight
   pull_request:
     paths:
       - "scripts/agent/**"
+      - "scripts/docmeta/generate_agent_readiness.py"
+      - "scripts/docmeta/tests/test_generate_agent_readiness.py"
+      - "scripts/docmeta/tests/test_agent_readiness_smoke_contract.py"
+      - "contracts/agent/**"
+      - "tests/fixtures/agent/**"
       - "docs/security/**"
+      - "docs/reference/agent-operability-fixture-matrix.md"
+      - "docs/reference/agent-handoff-contract.md"
+      - "docs/blueprints/blueprint-agent-safety-control-layer.md"
+      - "docs/claims/registry.yml"
+      - "docs/doc-freshness-registry.yml"
+      - "docs/tasks/index.json"
+      - "docs/tasks/board.md"
+      - ".gitattributes"
+      - "docs/_generated/agent-readiness.md"
       - "agent-policy.yaml"
       - "AGENTS.md"
       - "repo.meta.yaml"
@@ -24,7 +38,7 @@ env:
 
 jobs:
   preflight-tests:
-    name: Safety-Preflight Guard Tests (AGENT-SAFE-001)
+    name: Agent Safety Contract Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,10 +48,10 @@ jobs:
         with:
           python-version-file: '.python-version'
 
-      - name: Run preflight unit tests
+      - name: Run agent unit and CLI contract tests
         run: python3 -m unittest discover scripts/agent/tests/ -v
 
-      - name: Smoke-check CLI (report-only, no task file needed error)
+      - name: Smoke-check CLI (report-only, missing task file)
         run: |
           set -euo pipefail
           set +e
@@ -49,9 +63,8 @@ jobs:
             printf 'Expected exit code 2 for missing task file, got %s\n' "$rc" >&2
             exit 1
           fi
-          printf 'CLI smoke check passed (exit 2 for missing file).\n'
 
-      - name: Smoke-check CLI (valid task fixture, no findings)
+      - name: Smoke-check CLI (valid task fixture)
         run: |
           set -euo pipefail
           cat > /tmp/agent-task.yaml <<'YAML'
@@ -68,3 +81,23 @@ jobs:
             --task-file /tmp/agent-task.yaml \
             --changed-paths docs/security/agent-write-scope-baseline.md \
             --mode report-only
+
+      - name: Smoke-check handoff validator (valid fixture)
+        run: |
+          set -euo pipefail
+          python3 -m scripts.agent.validate_handoff \
+            --task-file tests/fixtures/agent/handoff-task.json \
+            --handoff-file tests/fixtures/agent/handoff-valid.json
+
+      - name: Run agent readiness tests
+        run: |
+          python3 -m unittest \
+            scripts.docmeta.tests.test_generate_agent_readiness \
+            scripts.docmeta.tests.test_agent_readiness_smoke_contract \
+            -v
+
+      - name: Validate agent contracts (Python)
+        run: python3 -m scripts.agent.validate_agent_contracts
+
+      - name: Check handoff fixture digest is fresh
+        run: python3 -m scripts.agent.update_handoff_fixtures --check
