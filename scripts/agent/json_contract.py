@@ -18,7 +18,7 @@ class DuplicateKeyError(ValueError):
     """Raised when a JSON object contains the same key more than once."""
 
 
-class UnsupportedSchemaError(ValueError):
+class UnsupportedSchemaError(RuntimeError):
     """Raised when a contract uses an unsupported schema construct."""
 
 
@@ -53,7 +53,11 @@ def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _reject_constant(value: str) -> None:
-    raise ValueError(f"non-standard JSON constant: {value}")
+    raise json.JSONDecodeError(
+        f"non-standard JSON constant: {value}",
+        value,
+        0,
+    )
 
 
 def loads_json_strict(raw: str) -> Any:
