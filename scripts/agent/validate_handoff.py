@@ -26,9 +26,18 @@ from scripts.docmeta.docmeta import REPO_ROOT
 WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:/")
 
 
+class CliInputError(Exception):
+    """Stable machine-readable CLI input error."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
 class _ArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
-        raise ValueError(message)
+        raise CliInputError("INVALID_ARGUMENTS", message)
 
 
 def _finding(code: str, message: str, field: str | None = None) -> dict[str, str]:
@@ -202,12 +211,14 @@ def _validate_evidence(
     repo_root: Path,
 ) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
-    expected = set(task["expected_evidence"])
-    produced = set(handoff["evidence_produced"])
-    missing = set(handoff["missing_evidence"])
+    expected_values = task["expected_evidence"]
+    produced_values = handoff["evidence_produced"]
+    missing_values = handoff["missing_evidence"]
 
-    normalized_produced = _normalized_file_set(list(produced))
-    normalized_missing = _normalized_file_set(list(missing))
+    normalized_expected = _normalized_file_set(expected_values)
+    normalized_produced = _normalized_file_set(produced_values)
+    normalized_missing = _normalized_file_set(missing_values)
+
     for evidence in sorted(normalized_produced & normalized_missing):
         findings.append(
             _finding(
@@ -217,7 +228,9 @@ def _validate_evidence(
             )
         )
 
-    for evidence in sorted(expected - produced - missing):
+    for evidence in sorted(
+        normalized_expected - normalized_produced - normalized_missing
+    ):
         findings.append(
             _finding(
                 "EXPECTED_EVIDENCE_UNACCOUNTED",
@@ -226,10 +239,19 @@ def _validate_evidence(
             )
         )
 
+    for evidence in sorted(normalized_missing - normalized_expected):
+        findings.append(
+            _finding(
+                "UNEXPECTED_MISSING_EVIDENCE",
+                f"Missing evidence was not required by task: {evidence}",
+                "missing_evidence",
+            )
+        )
+
     root = repo_root.resolve()
     for field, values in (
-        ("evidence_produced", handoff["evidence_produced"]),
-        ("missing_evidence", handoff["missing_evidence"]),
+        ("evidence_produced", produced_values),
+        ("missing_evidence", missing_values),
     ):
         for evidence in values:
             normalized = _normalize_repo_path(evidence)
@@ -334,8 +356,8 @@ def _validate_results_and_outcome(
         findings.append(
             _finding(
                 "CONTRADICTORY_OUTCOME",
-                "incomplete requires an unresolved claim, missing evidence, "
-                "validation gap or residual gap",
+                "incomplete requires explicitly accounted missing evidence, "
+                "a failed or not-run validation, or a residual gap",
                 "outcome",
             )
         )
@@ -456,18 +478,21 @@ def _read_json(path: Path, *, kind: str) -> Any:
     try:
         return load_json_strict(path)
     except DuplicateKeyError as exc:
-        raise ValueError(f"DUPLICATE_JSON_KEY:{exc}") from exc
+        raise CliInputError("DUPLICATE_JSON_KEY", str(exc)) from exc
     except json.JSONDecodeError as exc:
-        raise ValueError(f"{kind}_JSON_INVALID:JSON parse error: {exc.msg}") from exc
+        raise CliInputError(
+            f"{kind}_JSON_INVALID",
+            f"JSON parse error: {exc.msg}",
+        ) from exc
     except OSError as exc:
-        raise ValueError(f"{kind}_FILE_UNREADABLE:{exc}") from exc
+        raise CliInputError(f"{kind}_FILE_UNREADABLE", str(exc)) from exc
 
 
 def main(argv: list[str] | None = None) -> int:
     try:
         args = _build_parser().parse_args(argv)
-    except ValueError as exc:
-        return _emit_error("INVALID_ARGUMENTS", str(exc))
+    except CliInputError as exc:
+        return _emit_error(exc.code, exc.message)
 
     repo_root = Path(REPO_ROOT)
     try:
@@ -507,10 +532,12 @@ def main(argv: list[str] | None = None) -> int:
             repo_root=repo_root,
             claim_registry=claim_registry,
         )
-    except ValueError as exc:
-        raw = str(exc)
-        code, _, message = raw.partition(":")
-        return _emit_error(code or "JSON_INVALID", message or raw)
+    except CliInputError as exc:
+        return _emit_error(exc.code, exc.message)
+    except DuplicateKeyError as exc:
+        return _emit_error("CONTRACT_SCHEMA_INVALID", str(exc))
+    except json.JSONDecodeError as exc:
+        return _emit_error("CONTRACT_SCHEMA_INVALID", str(exc))
     except UnsupportedSchemaError as exc:
         return _emit_error("CONTRACT_SCHEMA_UNSUPPORTED", str(exc))
     except OSError as exc:
