@@ -103,6 +103,39 @@ jobs:
             exit 1
           fi
 
+      - name: Smoke-check strict JSON constants through handoff CLI
+        run: |
+          set -euo pipefail
+          tmp="tests/fixtures/agent/.tmp-invalid-constant.json"
+          trap 'rm -f "$tmp"' EXIT
+          printf '{"value":NaN}\n' > "$tmp"
+
+          for kind in TASK HANDOFF; do
+            task="tests/fixtures/agent/handoff-task.json"
+            handoff="tests/fixtures/agent/handoff-valid.json"
+            if [ "$kind" = TASK ]; then
+              task="$tmp"
+            else
+              handoff="$tmp"
+            fi
+
+            set +e
+            error="$(
+              python3 -m scripts.agent.validate_handoff \
+                --task-file "$task" \
+                --handoff-file "$handoff" \
+                2>&1 >/dev/null
+            )"
+            rc=$?
+            set -e
+
+            if [ "$rc" -ne 2 ]; then
+              printf 'Expected exit code 2 for %s JSON, got %s\n' "$kind" "$rc" >&2
+              exit 1
+            fi
+            printf '%s\n' "$error" | grep -F "\"code\": \"${kind}_JSON_INVALID\""
+          done
+
       - name: Run agent readiness tests
         run: python3 -m unittest scripts.docmeta.tests.test_generate_agent_readiness -v
 
@@ -111,10 +144,6 @@ jobs:
 
       - name: Validate agent contracts (Python)
         run: python3 -m scripts.agent.validate_agent_contracts
-
-      - name: Validate agent contracts (shell/AJV)
-        if: ${{ hashFiles('node_modules/.bin/ajv') != '' }}
-        run: bash scripts/contracts-agent-check.sh
 
       - name: Check handoff fixture digest is fresh
         run: |
