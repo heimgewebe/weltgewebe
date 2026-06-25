@@ -39,9 +39,10 @@ HANDOFF_REQUIRED_FILES = [
 ]
 
 
-def _required(root, cap_id, title, hard, files, rationale):
-    evidence, missing = [], []
-    for rel in files:
+def _required(root, cap_id, title, hard, paths, rationale):
+    evidence = []
+    missing = []
+    for rel in paths:
         path = root / rel
         if path.exists() and not path.is_file():
             return CapabilityResult(
@@ -61,7 +62,7 @@ def _required(root, cap_id, title, hard, files, rationale):
 
 
 def _handoff(root):
-    presence = _required(
+    result = _required(
         root,
         "handoff_validation",
         "Handoff validation",
@@ -69,8 +70,8 @@ def _handoff(root):
         HANDOFF_REQUIRED_FILES,
         "Handoff-Checks begrenzen unvollstaendige oder unsichere Uebergaben.",
     )
-    if presence.status != "pass":
-        return presence
+    if result.status != "pass":
+        return result
 
     env = os.environ.copy()
     env["PYTHONPATH"] = str(root)
@@ -95,66 +96,67 @@ def _handoff(root):
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return CapabilityResult(
-            presence.id,
-            presence.title,
-            presence.hard,
+            result.id,
+            result.title,
+            result.hard,
             "fail",
-            presence.evidence,
+            result.evidence,
             ["functional handoff smoke"],
-            f"{presence.rationale} Functional smoke failed: {exc}",
+            f"{result.rationale} Functional smoke failed: {exc}",
         )
-    if run.returncode:
+    if run.returncode != 0:
         diagnostic = (run.stderr or run.stdout).strip()
-        if len(diagnostic) > 240:
-            diagnostic = diagnostic[:237] + "..."
+        diagnostic = diagnostic[:237] + "..." if len(diagnostic) > 240 else diagnostic
         suffix = f": {diagnostic}" if diagnostic else "."
         return CapabilityResult(
-            presence.id,
-            presence.title,
-            presence.hard,
+            result.id,
+            result.title,
+            result.hard,
             "fail",
-            presence.evidence,
+            result.evidence,
             ["functional handoff smoke"],
-            f"{presence.rationale} Functional smoke failed{suffix}",
+            f"{result.rationale} Functional smoke failed{suffix}",
         )
     return CapabilityResult(
-        presence.id,
-        presence.title,
-        presence.hard,
+        result.id,
+        result.title,
+        result.hard,
         "pass",
-        presence.evidence,
+        result.evidence,
         [],
         (
-            f"{presence.rationale} Required files and the repository CLI smoke "
-            "both pass against the real claim registry."
+            f"{result.rationale} Required files and an isolated valid-fixture "
+            "smoke both pass."
         ),
     )
 
 
-def _regex_files(root, regex):
-    matcher = re.compile(regex)
-    found = []
+def _matching_files(root, pattern):
+    matcher = re.compile(pattern)
     base = root / "scripts/agent"
     if not base.is_dir():
-        return found
-    for path in base.rglob("*"):
-        if path.is_file():
-            rel = str(path.relative_to(root)).replace("\\", "/")
-            if matcher.search(rel.lower()):
-                found.append(rel)
-    return sorted(set(found))
+        return []
+    return sorted(
+        rel
+        for path in base.rglob("*")
+        if path.is_file()
+        for rel in [str(path.relative_to(root)).replace("\\", "/")]
+        if matcher.search(rel.lower())
+    )
 
 
-def evaluate_capabilities(repo_root):
-    specs = [
-        (
+def evaluate_capabilities(root):
+    results = [
+        _required(
+            root,
             "agent_policy",
             "Agent policy baseline",
             False,
             ["AGENTS.md", "agent-policy.yaml"],
             "Agenten brauchen dokumentierte Grenzen und Schreibregeln.",
         ),
-        (
+        _required(
+            root,
             "safety_preflight",
             "Safety preflight guard",
             False,
@@ -166,7 +168,8 @@ def evaluate_capabilities(repo_root):
             ],
             "Report-only Preflight schafft belastbare Baseline vor Blocking.",
         ),
-        (
+        _required(
+            root,
             "claim_evidence_spine",
             "Claim evidence spine",
             True,
@@ -176,19 +179,17 @@ def evaluate_capabilities(repo_root):
             ],
             "Ohne Claim-Registry und Validator fehlt maschinenlesbare Evidenzbindung.",
         ),
-        (
+        _required(
+            root,
             "agent_contracts",
             "Agent contracts",
             True,
             ["contracts/agent/task.schema.json"],
             "Contracts definieren maschinenlesbare Agent-Task-Grenzen.",
         ),
-    ]
-    out = [_required(repo_root, *spec) for spec in specs]
-    out.append(_handoff(repo_root))
-    out.append(
+        _handoff(root),
         _required(
-            repo_root,
+            root,
             "non_ideal_guard",
             "Non-ideal guard",
             True,
@@ -197,20 +198,19 @@ def evaluate_capabilities(repo_root):
                 "scripts/agent/tests/test_check_non_ideal_task.py",
             ],
             "Non-Ideal-Guard erkennt riskante Ausnahmefaelle vor Ausfuehrung.",
-        )
-    )
+        ),
+    ]
 
-    evidence = _regex_files(repo_root, r"(?=.*dry[_-]?run)(?=.*runner)")
-    partial = _regex_files(repo_root, r"dry[_-]?run|runner")
+    evidence = _matching_files(root, r"(?=.*dry[_-]?run)(?=.*runner)")
+    partial = _matching_files(root, r"dry[_-]?run|runner")
+    missing = ["scripts/agent/*dry_run*runner*"]
     if evidence:
         status, shown, missing = "pass", evidence, []
     elif partial:
         status, shown = "partial", partial
-        missing = ["scripts/agent/*dry_run*runner*"]
     else:
         status, shown = "open", []
-        missing = ["scripts/agent/*dry_run*runner*"]
-    out.append(
+    results.append(
         CapabilityResult(
             "dry_run_runner",
             "Dry-run runner",
@@ -221,10 +221,10 @@ def evaluate_capabilities(repo_root):
             "Dry-Run Runner prueft Agentenpfade ohne schreibende Seiteneffekte.",
         )
     )
-    for item in out:
+    for item in results:
         if item.status not in VALID_STATUSES:
             raise ValueError(f"Invalid status for {item.id}: {item.status}")
-    return out
+    return results
 
 
 def determine_overall_status(results):
@@ -233,33 +233,20 @@ def determine_overall_status(results):
     passing = [item.id for item in results if item.status == "pass"]
     partial = [item.id for item in results if item.status == "partial"]
     if failing:
-        return (
-            "fail",
-            f"Inconsistent capability state detected: {', '.join(failing)}",
-            gaps,
-        )
+        return "fail", f"Inconsistent capability state detected: {', '.join(failing)}", gaps
     if gaps:
-        return (
-            "partial",
-            f"Hard capabilities are still missing: {', '.join(gaps)}",
-            gaps,
-        )
+        return "partial", f"Hard capabilities are still missing: {', '.join(gaps)}", gaps
     if len(passing) == len(results):
         return "pass", "All hard and non-hard capabilities are present.", []
     if not passing and not partial:
-        hard = [item.id for item in results if item.hard]
-        return "open", "No capability evidence detected yet.", hard
+        return "open", "No capability evidence detected yet.", [
+            item.id for item in results if item.hard
+        ]
     return "partial", "Capabilities are partially implemented.", gaps
 
 
-def _display(items):
-    if not items:
-        return "-"
-    shown = items[:4]
-    text = ", ".join(f"`{item}`" for item in shown)
-    if len(items) > len(shown):
-        text += f", … (+{len(items) - len(shown)} more)"
-    return text
+def _items(values):
+    return ", ".join(f"`{value}`" for value in values) if values else "-"
 
 
 def render_report(results, overall, reason, gaps):
@@ -287,17 +274,22 @@ def render_report(results, overall, reason, gaps):
         "|---|---|---:|---|---|---|",
     ]
     for item in results:
+        evidence = item.evidence
+        if item.id == "handoff_validation":
+            evidence = [
+                value for value in evidence if value != "docs/claims/registry.yml"
+            ]
         hard = "yes" if item.hard else "no"
         lines.append(
-            f"| {item.id} | {item.status} | {hard} | "
-            f"{_display(item.evidence)} | {_display(item.missing)} | "
-            f"{item.rationale} |"
+            f"| {item.id} | {item.status} | {hard} | {_items(evidence)} | "
+            f"{_items(item.missing)} | {item.rationale} |"
         )
     lines.extend(["", "## Residual Gaps", ""])
-    if gaps:
-        lines.extend(f"- Hard capability missing: {gap}" for gap in gaps)
-    else:
-        lines.append("- No residual hard gaps detected.")
+    lines.extend(
+        [f"- Hard capability missing: {gap}" for gap in gaps]
+        if gaps
+        else ["- No residual hard gaps detected."]
+    )
     lines.extend(
         [
             "",
@@ -316,10 +308,7 @@ def generate(repo_root=None):
     out_file.parent.mkdir(parents=True, exist_ok=True)
     results = evaluate_capabilities(root)
     overall, reason, gaps = determine_overall_status(results)
-    out_file.write_text(
-        render_report(results, overall, reason, gaps),
-        encoding="utf-8",
-    )
+    out_file.write_text(render_report(results, overall, reason, gaps), encoding="utf-8")
     return out_file
 
 
