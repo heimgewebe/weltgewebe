@@ -52,6 +52,14 @@ AJV und `scripts/agent/json_contract.py` prüfen dieselben Draft-07-Assertions.
 | `blockers` | Blockierende Einträge |
 | `residual_gaps` | Bekannte tolerierte Restlücken. Sie dürfen bei `ready_for_review` befüllt sein, sofern sie keine Pflicht-Evidence, Claim-Abdeckung oder bestandene Pflichtvalidierung ersetzen. |
 
+## Task-Bindung
+
+`task_contract_sha256` bindet die exakten Bytes der Task-Datei; Zeilenenden
+werden beim Hashing nicht normalisiert. Die repository-eigenen JSON-Contracts
+und Agent-Fixtures werden über `.gitattributes` mit LF ausgecheckt. Jede
+Byteänderung, einschließlich einer Zeilenendenänderung, macht einen bestehenden
+Handoff absichtlich ungültig.
+
 ## Outcome-Regeln
 
 | Outcome | Voraussetzungen |
@@ -64,6 +72,14 @@ Bloß ausgelassene Pflichtclaims oder Pflichtresultate sind kein gültiges
 `incomplete`. Sie bleiben harte Findings. Ihre Berücksichtigung im
 Outcome-Zweig verhindert lediglich ein redundantes zusätzliches
 `CONTRADICTORY_OUTCOME`.
+
+## Scope-Regeln
+
+`allowed_paths` müssen konkrete repository-relative Dateien oder Verzeichnisse
+benennen. `"."`, `""`, `"/"` und vergleichbare repository-weite Scopes sind
+nicht zulässig und werden durch den Non-Ideal-Guard als `SCOPE_TOO_BROAD`
+abgelehnt. Globale Prüfkommandos dürfen weiterhin ausgeführt werden; ein
+repository-weiter Linter begründet keinen globalen Schreibscope.
 
 ## Validierungslogik
 
