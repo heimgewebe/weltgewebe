@@ -93,7 +93,7 @@ Die Validierung erfolgt in `scripts/agent/validate_handoff.py` und nutzt `script
 
 ## Fixture-Verwaltung
 
-Der SHA-256-Digest der Task-Datei ist in allen Digest-Fixtures (`handoff-valid.json`, `handoff-invalid-outcome.json`, `handoff-invalid-path.json`) als `task_contract_sha256` gespeichert. Nach Änderungen an `tests/fixtures/agent/handoff-task.json` muss `scripts/agent/update_handoff_fixtures.py --write` ausgeführt werden. CI prüft mit `--check`.
+Der SHA-256-Digest der Task-Datei ist in allen Digest-Fixtures (`handoff-valid.json`, `handoff-valid-residual-gap.json`, `handoff-invalid-path.json`) als `task_contract_sha256` gespeichert. Nach Änderungen an `tests/fixtures/agent/handoff-task.json` muss `scripts/agent/update_handoff_fixtures.py --write` ausgeführt werden. CI prüft mit `--check`.
 
 ## Beispiel-Fixture
 
