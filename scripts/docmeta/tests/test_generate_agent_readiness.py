@@ -33,8 +33,29 @@ class TestGenerateAgentReadiness(unittest.TestCase):
                 "handoff-valid.json must declare evidence_produced strings"
             )
 
+        registry_path = source_root / "docs/claims/registry.yml"
+        registry_raw = registry_path.read_text(encoding="utf-8")
+        if not registry_raw.startswith("---\n"):
+            raise AssertionError("claim registry must use JSON-compatible YAML")
+        registry = json.loads(registry_raw[4:])
+        registry_evidence = [
+            item["path"]
+            for claim in registry.get("claims", [])
+            if isinstance(claim, dict)
+            for item in claim.get("evidence", [])
+            if isinstance(item, dict)
+            and isinstance(item.get("path"), str)
+            and item["path"]
+        ]
+
         required_paths = list(
-            dict.fromkeys([*gen.HANDOFF_REQUIRED_FILES, *evidence])
+            dict.fromkeys(
+                [
+                    *gen.HANDOFF_REQUIRED_FILES,
+                    *evidence,
+                    *registry_evidence,
+                ]
+            )
         )
 
         for rel_path in required_paths:
