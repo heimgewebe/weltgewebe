@@ -29,6 +29,7 @@ HANDOFF_REQUIRED_FILES = [
     "contracts/agent/handoff.schema.json",
     "scripts/agent/json_contract.py",
     "scripts/agent/check_non_ideal_task.py",
+    "scripts/agent/check_handoff_readiness_smoke.sh",
     "scripts/agent/validate_handoff.py",
     "scripts/agent/tests/test_validate_handoff.py",
     "scripts/docmeta/docmeta.py",
@@ -76,13 +77,9 @@ def _handoff(root):
     env = os.environ.copy()
     env["PYTHONPATH"] = str(root)
     command = [
+        "bash",
+        "scripts/agent/check_handoff_readiness_smoke.sh",
         sys.executable,
-        "-m",
-        "scripts.agent.validate_handoff",
-        "--task-file",
-        "tests/fixtures/agent/handoff-task.json",
-        "--handoff-file",
-        "tests/fixtures/agent/handoff-valid.json",
     ]
     try:
         run = subprocess.run(
