@@ -9,6 +9,7 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from scripts.docmeta.agent_readiness_smoke import smoke_succeeded
 from scripts.docmeta.docmeta import REPO_ROOT
 
 
@@ -101,7 +102,7 @@ def _handoff(root):
             ["functional handoff smoke"],
             f"{result.rationale} Functional smoke failed: {exc}",
         )
-    if run.returncode != 0:
+    if not smoke_succeeded(run):
         diagnostic = (run.stderr or run.stdout).strip()
         diagnostic = diagnostic[:237] + "..." if len(diagnostic) > 240 else diagnostic
         suffix = f": {diagnostic}" if diagnostic else "."
@@ -273,9 +274,11 @@ def render_report(results, overall, reason, gaps):
     for item in results:
         evidence = item.evidence
         if item.id == "handoff_validation":
-            evidence = [
-                value for value in evidence if value != "docs/claims/registry.yml"
-            ]
+            hidden = {
+                "docs/claims/registry.yml",
+                "scripts/agent/check_handoff_readiness_smoke.sh",
+            }
+            evidence = [value for value in evidence if value not in hidden]
         hard = "yes" if item.hard else "no"
         lines.append(
             f"| {item.id} | {item.status} | {hard} | {_items(evidence)} | "
