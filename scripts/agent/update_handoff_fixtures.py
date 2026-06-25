@@ -20,6 +20,7 @@ DIGEST_FIXTURES = (
     Path("tests/fixtures/agent/handoff-valid.json"),
     Path("tests/fixtures/agent/handoff-valid-residual-gap.json"),
     Path("tests/fixtures/agent/handoff-invalid-path.json"),
+    Path("tests/fixtures/agent/handoff-invalid-outcome.json"),
 )
 
 

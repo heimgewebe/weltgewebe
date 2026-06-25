@@ -220,6 +220,35 @@ class TestCheckNonIdealTask(unittest.TestCase):
         finally:
             temp_path.unlink(missing_ok=True)
 
+    def test_whitespace_only_contract_strings_are_rejected(self):
+        baseline = json.loads(
+            (self.repo_root / self._fixture("valid-doc-drift-task.json")).read_text(
+                encoding="utf-8"
+            )
+        )
+        cases = (
+            ("goal", "   "),
+            ("allowed_paths", ["   "]),
+            ("forbidden_paths", ["   "]),
+            ("claims", ["   "]),
+            ("expected_evidence", ["   "]),
+            ("validation_commands", ["   "]),
+        )
+
+        for field, value in cases:
+            task = dict(baseline)
+            task[field] = value
+            findings = guard.run_non_ideal_guard(task, {})
+            with self.subTest(field=field):
+                self.assertTrue(
+                    any(
+                        finding["code"] == "TASK_SCHEMA_INVALID"
+                        and finding.get("field", "").startswith(field)
+                        for finding in findings
+                    ),
+                    findings,
+                )
+
     def test_done_status_emits_code(self):
         proc = self._run_cli(self._fixture("invalid-status-done-by-agent.json"))
         payload = self._parse_stdout(proc)

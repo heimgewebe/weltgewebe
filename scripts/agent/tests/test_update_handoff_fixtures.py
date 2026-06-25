@@ -9,6 +9,17 @@ from scripts.agent import update_handoff_fixtures as updater
 
 
 class TestUpdateHandoffFixtures(unittest.TestCase):
+    def test_digest_fixture_inventory_is_complete(self):
+        self.assertEqual(
+            updater.DIGEST_FIXTURES,
+            (
+                Path("tests/fixtures/agent/handoff-valid.json"),
+                Path("tests/fixtures/agent/handoff-valid-residual-gap.json"),
+                Path("tests/fixtures/agent/handoff-invalid-path.json"),
+                Path("tests/fixtures/agent/handoff-invalid-outcome.json"),
+            ),
+        )
+
     def _repo(self) -> Path:
         root = Path(tempfile.mkdtemp())
         fixture_dir = root / "tests/fixtures/agent"
