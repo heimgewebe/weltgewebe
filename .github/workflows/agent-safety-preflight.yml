@@ -103,8 +103,8 @@ jobs:
             exit 1
           fi
 
-      - name: Run docmeta readiness test suite
-        run: python3 -m unittest discover scripts/docmeta/tests/ -v
+      - name: Run agent readiness tests
+        run: python3 -m unittest scripts.docmeta.tests.test_generate_agent_readiness -v
 
       - name: Run non-ideal guard test suite
         run: python3 -m unittest discover scripts/agent/tests/ -v

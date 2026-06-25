@@ -91,7 +91,7 @@
       "id": "CLAIM-AGENT-SAFE-005",
       "status": "proposed",
       "subject": "AGENT-SAFE-005",
-      "statement": "Ein deterministischer Agent-Handoff-Validator prüft einen Review-Handoff gegen den kanonischen Task-Contract, deklarierte Scope-Grenzen, Claim-Abdeckung, Evidence-Bilanz, Validierungsangaben und Outcome-Konsistenz.",
+      "statement": "Ein Handoff-Validator prüft Task-Bindung, Scope, Claims, Evidence, Validierungen und Outcome.",
       "evidence": [
         {
           "path": "contracts/agent/handoff.schema.json",

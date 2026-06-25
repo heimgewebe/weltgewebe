@@ -67,10 +67,8 @@ entries:
     doc: docs/claims/registry.yml
     locator: claims[id=CLAIM-AGENT-SAFE-005]
     claim: >-
-      Ein deterministischer Agent-Handoff-Validator prüft einen Review-Handoff
-      gegen den kanonischen Task-Contract, deklarierte Scope-Grenzen,
-      Claim-Abdeckung, Evidence-Bilanz, Validierungsangaben und
-      Outcome-Konsistenz.
+      Ein Handoff-Validator prüft Task-Bindung, Scope, Claims, Evidence,
+      Validierungen und Outcome.
     status: partial
     owner: docs-mechanik
     last_verified: "2026-06-24"
