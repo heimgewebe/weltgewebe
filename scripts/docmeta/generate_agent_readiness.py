@@ -376,12 +376,17 @@ def render_report(
     lines.append("| Capability | Status | Hard | Evidence | Missing | Rationale |")
     lines.append("|---|---|---:|---|---|---|")
 
+    handoff_evidence: list[str] = []
     for result in results:
-        evidence = (
-            ", ".join(f"`{item}`" for item in result.evidence)
-            if result.evidence
-            else "-"
-        )
+        if result.id == "handoff_validation":
+            handoff_evidence = result.evidence
+            evidence = "See Handoff Evidence"
+        else:
+            evidence = (
+                ", ".join(f"`{item}`" for item in result.evidence)
+                if result.evidence
+                else "-"
+            )
         missing = (
             ", ".join(f"`{item}`" for item in result.missing)
             if result.missing
@@ -392,6 +397,14 @@ def render_report(
             f"| {result.id} | {result.status} | {hard} | {evidence} | "
             f"{missing} | {result.rationale} |"
         )
+
+    lines.append("")
+    lines.append("## Handoff Evidence")
+    lines.append("")
+    if handoff_evidence:
+        lines.extend(f"- `{item}`" for item in handoff_evidence)
+    else:
+        lines.append("- No handoff evidence detected.")
 
     lines.append("")
     lines.append("## Residual Gaps")
