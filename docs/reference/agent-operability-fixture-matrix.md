@@ -62,6 +62,7 @@ den Non-Ideal-Task-Guard und den anschliessenden Handoff-Validator.
 | `tests/fixtures/agent/handoff-valid.json` | Exit `0`, `status = valid`, keine Findings |
 | `tests/fixtures/agent/handoff-invalid-digest.json` | Exit `1`, `TASK_DIGEST_MISMATCH` |
 | `tests/fixtures/agent/handoff-invalid-path.json` | Exit `1`, `PATH_OUT_OF_REPO` |
+| `tests/fixtures/agent/handoff-invalid-outcome.json` | Exit `1`, `HANDOFF_SCHEMA_INVALID`; negativer Kompatibilitaetsmarker |
 | `tests/fixtures/agent/handoff-valid-residual-gap.json` | Exit `0`; transparente `residual_gaps` sind mit Reviewfaehigkeit vereinbar |
 
 Die Handoff-Fixture bindet zur Rueckwaertskompatibilitaet an den bestehenden
