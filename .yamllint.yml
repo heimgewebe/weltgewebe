@@ -11,6 +11,9 @@ rules:
   line-length:
     max: 120
     allow-non-breakable-words: true
+    ignore: |
+      # JSON-compatible registry strings cannot be YAML-folded safely.
+      docs/claims/registry.yml
   truthy:
     level: warning
   comments:
