@@ -12,3 +12,4 @@ output="$(
 printf '%s\n' "$output" | "$PYTHON_BIN" -m json.tool >/dev/null
 printf '%s\n' "$output" | grep -F '"status": "valid"' >/dev/null
 printf '%s\n' "$output" | grep -F '"findings_count": 0' >/dev/null
+printf '%s\n' 'handoff-readiness-smoke:valid'
