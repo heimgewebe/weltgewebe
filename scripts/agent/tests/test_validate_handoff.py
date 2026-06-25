@@ -299,6 +299,28 @@ class TestValidateHandoff(unittest.TestCase):
             "VALIDATION_RESULT_DUPLICATE", self._codes(self._validate(handoff))
         )
 
+    def test_all_reported_validation_results_control_ready_for_review(self):
+        extra_command = "python3 -m unittest optional.extra.check"
+        self.assertNotIn(extra_command, self.task["validation_commands"])
+
+        for status, expected_codes in (
+            ("passed", []),
+            ("failed", ["CONTRADICTORY_OUTCOME"]),
+            ("not_run", ["CONTRADICTORY_OUTCOME"]),
+        ):
+            handoff = copy.deepcopy(self.handoff)
+            handoff["validation_results"].append(
+                {
+                    "command": extra_command,
+                    "status": status,
+                }
+            )
+            with self.subTest(status=status):
+                self.assertEqual(
+                    self._codes(self._validate(handoff)),
+                    expected_codes,
+                )
+
     def test_incomplete_accepts_explicit_failed_or_not_run_result(self):
         for status in ("failed", "not_run"):
             handoff = copy.deepcopy(self.handoff)
@@ -362,6 +384,40 @@ class TestValidateHandoff(unittest.TestCase):
         self.assertEqual(
             self.handoff["task_contract_sha256"],
             hashlib.sha256(self.task_path.read_bytes()).hexdigest(),
+        )
+
+    def test_task_digest_binds_raw_bytes_not_normalized_json(self):
+        task = copy.deepcopy(self.task)
+        lf_bytes = self._task_bytes(task)
+        crlf_bytes = lf_bytes.replace(b"\n", b"\r\n")
+        lf_digest = hashlib.sha256(lf_bytes).hexdigest()
+        crlf_digest = hashlib.sha256(crlf_bytes).hexdigest()
+
+        self.assertNotEqual(lf_digest, crlf_digest)
+
+        handoff = copy.deepcopy(self.handoff)
+        handoff["task_contract_sha256"] = lf_digest
+        self.assertEqual(
+            validator.validate_handoff(
+                task,
+                handoff,
+                task_bytes=lf_bytes,
+                repo_root=self.root,
+                claim_registry=self.registry,
+            ),
+            [],
+        )
+        self.assertEqual(
+            self._codes(
+                validator.validate_handoff(
+                    task,
+                    handoff,
+                    task_bytes=crlf_bytes,
+                    repo_root=self.root,
+                    claim_registry=self.registry,
+                )
+            ),
+            ["TASK_DIGEST_MISMATCH"],
         )
 
     def test_duplicate_key_and_malformed_json_exit_two(self):
