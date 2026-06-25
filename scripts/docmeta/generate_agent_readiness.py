@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import os
 import re
 import subprocess
@@ -10,7 +11,7 @@ from typing import Iterable
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.docmeta.agent_readiness_smoke import smoke_succeeded
+from scripts.agent.json_contract import DuplicateKeyError, loads_json_strict
 from scripts.docmeta.docmeta import REPO_ROOT
 
 
@@ -27,20 +28,40 @@ class CapabilityResult:
 
 VALID_STATUSES = {"pass", "partial", "open", "fail"}
 
+HANDOFF_TASK_FILE = "tests/fixtures/agent/handoff-task.json"
+HANDOFF_VALID_FILE = "tests/fixtures/agent/handoff-valid.json"
 HANDOFF_REQUIRED_FILES = [
     "contracts/agent/task.schema.json",
     "contracts/agent/handoff.schema.json",
     "scripts/agent/json_contract.py",
     "scripts/agent/check_non_ideal_task.py",
-    "scripts/agent/check_handoff_readiness_smoke.sh",
     "scripts/agent/validate_handoff.py",
     "scripts/agent/tests/test_validate_handoff.py",
     "scripts/docmeta/docmeta.py",
     "scripts/docmeta/validate_claim_registry.py",
     "docs/claims/registry.yml",
-    "tests/fixtures/agent/handoff-task.json",
-    "tests/fixtures/agent/handoff-valid.json",
+    HANDOFF_TASK_FILE,
+    HANDOFF_VALID_FILE,
 ]
+
+
+def _handoff_failure(
+    presence: CapabilityResult,
+    diagnostic: str,
+) -> CapabilityResult:
+    diagnostic = diagnostic.strip()
+    if len(diagnostic) > 240:
+        diagnostic = diagnostic[:237] + "..."
+    suffix = f": {diagnostic}" if diagnostic else "."
+    return CapabilityResult(
+        id=presence.id,
+        title=presence.title,
+        hard=presence.hard,
+        status="fail",
+        evidence=presence.evidence,
+        missing=["functional handoff smoke"],
+        rationale=f"{presence.rationale} Functional smoke failed{suffix}",
+    )
 
 
 def _evaluate_handoff_validation(root: Path) -> CapabilityResult:
@@ -63,9 +84,13 @@ def _evaluate_handoff_validation(root: Path) -> CapabilityResult:
     try:
         completed = subprocess.run(
             [
-                "bash",
-                "scripts/agent/check_handoff_readiness_smoke.sh",
                 sys.executable,
+                "-m",
+                "scripts.agent.validate_handoff",
+                "--task-file",
+                HANDOFF_TASK_FILE,
+                "--handoff-file",
+                HANDOFF_VALID_FILE,
             ],
             cwd=root,
             env=env,
@@ -75,32 +100,25 @@ def _evaluate_handoff_validation(root: Path) -> CapabilityResult:
             timeout=15,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return CapabilityResult(
-            id=presence.id,
-            title=presence.title,
-            hard=presence.hard,
-            status="fail",
-            evidence=presence.evidence,
-            missing=["functional handoff smoke"],
-            rationale=f"{presence.rationale} Functional smoke failed: {exc}",
-        )
+        return _handoff_failure(presence, str(exc))
 
-    if not smoke_succeeded(completed):
-        diagnostic = (completed.stderr or completed.stdout).strip()
-        if len(diagnostic) > 240:
-            diagnostic = diagnostic[:237] + "..."
-        return CapabilityResult(
-            id=presence.id,
-            title=presence.title,
-            hard=presence.hard,
-            status="fail",
-            evidence=presence.evidence,
-            missing=["functional handoff smoke"],
-            rationale=(
-                f"{presence.rationale} Functional smoke failed"
-                + (f": {diagnostic}" if diagnostic else ".")
-            ),
-        )
+    try:
+        payload = loads_json_strict(completed.stdout)
+    except (json.JSONDecodeError, DuplicateKeyError) as exc:
+        return _handoff_failure(presence, f"invalid JSON output: {exc}")
+
+    expected_output = (
+        completed.returncode == 0
+        and isinstance(payload, dict)
+        and payload.get("status") == "valid"
+        and payload.get("findings_count") == 0
+        and payload.get("findings") == []
+        and payload.get("task_file") == HANDOFF_TASK_FILE
+        and payload.get("handoff_file") == HANDOFF_VALID_FILE
+    )
+    if not expected_output:
+        diagnostic = completed.stderr or completed.stdout
+        return _handoff_failure(presence, diagnostic or "unexpected CLI result")
 
     return CapabilityResult(
         id=presence.id,
@@ -110,8 +128,8 @@ def _evaluate_handoff_validation(root: Path) -> CapabilityResult:
         evidence=presence.evidence,
         missing=[],
         rationale=(
-            f"{presence.rationale} Required files and an isolated valid-fixture "
-            "smoke both pass."
+            f"{presence.rationale} Required files and the canonical CLI smoke "
+            "both pass."
         ),
     )
 
@@ -302,7 +320,9 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
     return results
 
 
-def determine_overall_status(results: list[CapabilityResult]) -> tuple[str, str, list[str]]:
+def determine_overall_status(
+    results: list[CapabilityResult],
+) -> tuple[str, str, list[str]]:
     hard_gaps = [r.id for r in results if r.hard and r.status != "pass"]
     failing = [r.id for r in results if r.status == "fail"]
     passing = [r.id for r in results if r.status == "pass"]
@@ -320,12 +340,19 @@ def determine_overall_status(results: list[CapabilityResult]) -> tuple[str, str,
         return "pass", "All hard and non-hard capabilities are present.", []
 
     if not passing and not partial:
-        return "open", "No capability evidence detected yet.", [r.id for r in results if r.hard]
+        return "open", "No capability evidence detected yet.", [
+            r.id for r in results if r.hard
+        ]
 
     return "partial", "Capabilities are partially implemented.", hard_gaps
 
 
-def render_report(results: list[CapabilityResult], overall: str, reason: str, hard_gaps: list[str]) -> str:
+def render_report(
+    results: list[CapabilityResult],
+    overall: str,
+    reason: str,
+    hard_gaps: list[str],
+) -> str:
     lines: list[str] = []
     lines.append("---")
     lines.append("id: docs.generated.agent-readiness")
@@ -350,18 +377,20 @@ def render_report(results: list[CapabilityResult], overall: str, reason: str, ha
     lines.append("|---|---|---:|---|---|---|")
 
     for result in results:
-        evidence_items = result.evidence
-        if result.id == "handoff_validation":
-            hidden = {
-                "docs/claims/registry.yml",
-                "scripts/agent/check_handoff_readiness_smoke.sh",
-            }
-            evidence_items = [item for item in evidence_items if item not in hidden]
-        evidence = ", ".join(f"`{item}`" for item in evidence_items) if evidence_items else "-"
-        missing = ", ".join(f"`{item}`" for item in result.missing) if result.missing else "-"
+        evidence = (
+            ", ".join(f"`{item}`" for item in result.evidence)
+            if result.evidence
+            else "-"
+        )
+        missing = (
+            ", ".join(f"`{item}`" for item in result.missing)
+            if result.missing
+            else "-"
+        )
         hard = "yes" if result.hard else "no"
         lines.append(
-            f"| {result.id} | {result.status} | {hard} | {evidence} | {missing} | {result.rationale} |"
+            f"| {result.id} | {result.status} | {hard} | {evidence} | "
+            f"{missing} | {result.rationale} |"
         )
 
     lines.append("")
