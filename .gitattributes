@@ -1,2 +1,4 @@
 .github/workflows/* text eol=lf
 *.sh text eol=lf
+contracts/agent/*.json text eol=lf
+tests/fixtures/agent/*.json text eol=lf

@@ -1,14 +1,21 @@
 {
-  "handoff_id": "HANDOFF-AGENT-SAFE-004-001",
+  "handoff_id": "HANDOFF-AGENT-SAFE-004-002",
   "task_id": "AGENT-SAFE-004",
-  "task_contract_sha256": "fd0a9670488128671cbd917158cf966fb7b255668305c01d79d4fe0a1afeed6c",
+  "task_contract_sha256": "7ef7f3f35a6f6217db5f0080e6cf05ebb6126fd4edb82d58f31f41020015b178",
   "source_revision": "b72e5c148301000424eac1e7ede75563122a1cb5",
-  "producer": "fixture-agent/1",
+  "producer": "fixture-agent/2",
   "outcome": "ready_for_review",
   "changed_paths": [
     "contracts/agent/handoff.schema.json",
+    "contracts/agent/task.schema.json",
+    "scripts/agent/json_contract.py",
     "scripts/agent/validate_handoff.py",
-    "scripts/agent/tests/test_validate_handoff.py"
+    "scripts/agent/tests/test_validate_handoff.py",
+    "scripts/agent/tests/test_json_contract.py",
+    "scripts/docmeta/generate_agent_readiness.py",
+    "scripts/docmeta/tests/test_generate_agent_readiness.py",
+    "tests/fixtures/agent/handoff-task.json",
+    "tests/fixtures/agent/handoff-valid.json"
   ],
   "deleted_paths": [],
   "claims_addressed": [
@@ -16,13 +23,20 @@
   ],
   "evidence_produced": [
     "contracts/agent/handoff.schema.json",
+    "contracts/agent/task.schema.json",
+    "scripts/agent/json_contract.py",
     "scripts/agent/validate_handoff.py",
-    "scripts/agent/tests/test_validate_handoff.py"
+    "scripts/agent/tests/test_validate_handoff.py",
+    "scripts/agent/tests/test_json_contract.py"
   ],
   "missing_evidence": [],
   "validation_results": [
     {
       "command": "python3 -m unittest scripts.agent.tests.test_validate_handoff",
+      "status": "passed"
+    },
+    {
+      "command": "python3 -m unittest scripts.agent.tests.test_json_contract",
       "status": "passed"
     }
   ],

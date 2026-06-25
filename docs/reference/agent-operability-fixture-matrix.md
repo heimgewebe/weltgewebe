@@ -62,15 +62,49 @@ den Non-Ideal-Task-Guard und den anschliessenden Handoff-Validator.
 | `tests/fixtures/agent/handoff-valid.json` | Exit `0`, `status = valid`, keine Findings |
 | `tests/fixtures/agent/handoff-invalid-digest.json` | Exit `1`, `TASK_DIGEST_MISMATCH` |
 | `tests/fixtures/agent/handoff-invalid-path.json` | Exit `1`, `PATH_OUT_OF_REPO` |
-| `tests/fixtures/agent/handoff-invalid-outcome.json` | Exit `1`, `CONTRADICTORY_OUTCOME` |
+| `tests/fixtures/agent/handoff-invalid-outcome.json` | Exit `0`; transparente `residual_gaps` sind mit Reviewfaehigkeit vereinbar |
 
-Der Handoff ist ein Review-Beleg, keine Merge- oder Done-Freigabe. Der Validator
-prueft Task-Bindung, Scope, Claims, Evidence, Validierungsresultate und
-widerspruchsfreie Outcomes. Er fuehrt keine Kommandos aus und veraendert keine
-Dateien.
+Die Handoff-Fixture bindet zur Rueckwaertskompatibilitaet an den bestehenden\n`AGENT-SAFE-004`-Fixture-Contract. Die produktive Capability wird als\n`AGENT-SAFE-005` gefuehrt. Der Handoff ist ein Review-Beleg, keine Merge- oder
+Done-Freigabe. Der Validator prueft den kanonischen Task-Contract und den
+Non-Ideal-Guard, Task-Bindung, Scope, vollstaendige Claim-Abdeckung, lokale
+Evidence, Validierungsresultate und widerspruchsfreie Outcomes. Er fuehrt keine
+Kommandos aus und veraendert keine Dateien. Adversariale Unit-Tests decken unter
+anderem doppelte JSON-Schluessel, ungueltige Tasks, Pfadzustandswidersprueche,
+erfundene Evidence und zusaetzliche fehlgeschlagene Validierungen ab.
 
 ## Offene Luecken
 
 - Kein Dry-Run Runner in diesem Slice.
 - Kein Write Mode in diesem Slice.
-- Kein Blocking-CI in diesem Slice.
+- Keine unabhaengige Run-Attestierung in diesem Slice.
+- Keine Git-Aufloesung oder Diff-Bindung von `source_revision` in diesem Slice.
+
+## Handoff-Vertrauensgrenze
+
+Ein erfolgreicher Validatorlauf belegt, dass Task und Handoff ihren Contracts
+entsprechen, der Task den Non-Ideal-Guard besteht, der Digest an die exakten
+Task-Dateibytes bindet und Scope, Claims, lokale Evidence, Validierungsangaben
+und Outcome widerspruchsfrei bilanziert sind. Er belegt nicht die tatsaechliche
+Ausfuehrung der gemeldeten Kommandos, fachliche Korrektheit, Git-Diff-Bindung,
+Producer-Authentizitaet oder Merge-Reife.
+
+### Pfade und Evidence
+
+- Pfade sind repository-relativ; absolute Pfade, `.` und `..` sind ungueltig.
+- Verzeichnisscopes enden mit `/`, Dateiscopes gelten exakt, Globs und Root-Scope
+  bleiben verboten.
+- `changed_paths` und `deleted_paths` duerfen sich nicht ueberschneiden.
+- produzierte Evidence bezeichnet lokale Dateien innerhalb des Repository-Roots.
+- `task_contract_sha256` bindet exakte LF-normalisierte Repository-Dateibytes;
+  das Fixture-Werkzeug erkennt Digest-Drift ohne Bypass.
+
+### Outcomes
+
+- `ready_for_review`: keine Blocker oder fehlende Evidence; alle Pflichtclaims
+  adressiert; alle gemeldeten und geforderten Validierungen `passed`.
+  Transparente Restluecken sind erlaubt.
+- `blocked`: mindestens ein Blocker.
+- `incomplete`: mindestens eine echte offene Position.
+
+`source_revision` wird in diesem Slice nur syntaktisch geprueft. Run-Evidence,
+Dry-Run Runner, Git-Ancestry und Write Mode bleiben spaetere Slices.

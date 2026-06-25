@@ -1,3 +1,5 @@
+import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,6 +19,41 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         path = self.root / rel_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+
+    def _copy_handoff_capability(self) -> None:
+        source_root = Path(gen.REPO_ROOT).resolve()
+        handoff_path = source_root / "tests/fixtures/agent/handoff-valid.json"
+        handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+        evidence = handoff.get("evidence_produced")
+
+        if not isinstance(evidence, list) or any(
+            not isinstance(item, str) or not item for item in evidence
+        ):
+            raise AssertionError(
+                "handoff-valid.json must declare evidence_produced strings"
+            )
+
+        required_paths = list(
+            dict.fromkeys([*gen.HANDOFF_REQUIRED_FILES, *evidence])
+        )
+
+        for rel_path in required_paths:
+            source = (source_root / rel_path).resolve()
+            try:
+                source.relative_to(source_root)
+            except ValueError as exc:
+                raise AssertionError(
+                    f"fixture dependency escapes repository root: {rel_path}"
+                ) from exc
+
+            if not source.is_file():
+                raise AssertionError(
+                    f"fixture dependency is missing or not a file: {rel_path}"
+                )
+
+            target = self.root / rel_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
 
     def _status_map(self, results: list[gen.CapabilityResult]) -> dict[str, str]:
         return {result.id: result.status for result in results}
@@ -64,13 +101,8 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self._touch("docs/security/agent-write-scope-baseline.md")
         self._touch("docs/claims/registry.yml")
         self._touch("scripts/docmeta/validate_claim_registry.py")
-        self._touch("contracts/agent/task.schema.json", "{}\n")
-        self._touch("scripts/agent/check_non_ideal_task.py")
+        self._copy_handoff_capability()
         self._touch("scripts/agent/tests/test_check_non_ideal_task.py")
-        self._touch("contracts/agent/handoff.schema.json", "{}\n")
-        self._touch("scripts/agent/validate_handoff.py")
-        self._touch("scripts/agent/tests/test_validate_handoff.py")
-        self._touch("tests/fixtures/agent/handoff-valid.json", "{}\n")
         self._touch("scripts/agent/dry_run_runner.py")
 
         gen.generate(self.root)
@@ -121,6 +153,19 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertIn("scripts/agent/validate_handoff.py", handoff.missing)
         self.assertIn("scripts/agent/tests/test_validate_handoff.py", handoff.missing)
         self.assertIn("tests/fixtures/agent/handoff-valid.json", handoff.missing)
+
+    def test_handoff_complete_placeholder_set_fails_functional_smoke(self):
+        for rel_path in gen.HANDOFF_REQUIRED_FILES:
+            self._touch(rel_path, "{}\n" if rel_path.endswith(".json") else "# placeholder\n")
+
+        result = next(
+            item
+            for item in gen.evaluate_capabilities(self.root)
+            if item.id == "handoff_validation"
+        )
+
+        self.assertEqual(result.status, "fail")
+        self.assertIn("functional handoff smoke", result.missing)
 
     def test_handoff_named_file_alone_cannot_create_false_green(self):
         self._touch("scripts/agent/handoff_placeholder.py")

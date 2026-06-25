@@ -13,6 +13,13 @@ from typing import Any
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from scripts.agent.json_contract import (
+    DuplicateKeyError,
+    UnsupportedSchemaError,
+    load_json_strict,
+    loads_json_strict,
+    validate_instance,
+)
 from scripts.docmeta.docmeta import REPO_ROOT
 from scripts.docmeta.validate_claim_registry import load_registry, validate_registry_data
 
@@ -95,7 +102,9 @@ def _load_json(path: Path) -> tuple[Any | None, str | None]:
         return None, f"Datei kann nicht gelesen werden: {exc}"
 
     try:
-        return json.loads(raw), None
+        return loads_json_strict(raw), None
+    except DuplicateKeyError as exc:
+        return None, str(exc)
     except json.JSONDecodeError as exc:
         return None, f"JSON parse error: {exc.msg}"
 
@@ -116,76 +125,28 @@ def _resolve_repo_relative(repo_root: Path, value: str) -> Path:
     return resolved
 
 
-def _validate_task_schema(task: Any) -> list[dict[str, str]]:
+def _load_task_schema(schema_path: Path | None = None) -> dict[str, Any]:
+    path = schema_path or (Path(REPO_ROOT) / "contracts/agent/task.schema.json")
+    schema = load_json_strict(path)
+    if not isinstance(schema, dict):
+        raise UnsupportedSchemaError("task schema must be a JSON object")
+    return schema
+
+
+def _validate_task_schema(
+    task: Any, *, task_schema: dict[str, Any] | None = None
+) -> list[dict[str, str]]:
+    schema = task_schema or _load_task_schema()
     findings: list[dict[str, str]] = []
-
-    if not isinstance(task, dict):
-        return [_finding("TASK_SCHEMA_INVALID", "Task contract must be a JSON object")]
-
-    for key in task:
-        if key not in TASK_ALLOWED_FIELDS:
-            findings.append(
-                _finding(
-                    "TASK_SCHEMA_INVALID",
-                    f"Unexpected field '{key}' in task contract",
-                    key,
-                )
-            )
-
-    task_id = task.get("task_id")
-    if not isinstance(task_id, str) or not TASK_ID_RE.match(task_id):
+    for violation in validate_instance(task, schema):
+        field = violation["path"].removeprefix("$.")
         findings.append(
             _finding(
                 "TASK_SCHEMA_INVALID",
-                "task_id must match pattern [A-Z]+(-[A-Z]+)*-[0-9]{3}",
-                "task_id",
+                violation["message"],
+                field if field != "$" else None,
             )
         )
-
-    goal = task.get("goal")
-    if not isinstance(goal, str) or not goal.strip():
-        findings.append(_finding("TASK_SCHEMA_INVALID", "goal must be a non-empty string", "goal"))
-
-    task_type = task.get("task_type")
-    if not isinstance(task_type, str) or task_type not in TASK_TYPES:
-        findings.append(
-            _finding(
-                "TASK_SCHEMA_INVALID",
-                "task_type must be one of doc_change, ci_change, infra_change, governance, generated_refresh",
-                "task_type",
-            )
-        )
-
-    for field in ("allowed_paths", "forbidden_paths", "claims", "expected_evidence", "validation_commands"):
-        value = task.get(field)
-        if not isinstance(value, list):
-            findings.append(_finding("TASK_SCHEMA_INVALID", f"{field} must be an array", field))
-            continue
-        if field != "forbidden_paths" and len(value) == 0:
-            findings.append(_finding("TASK_SCHEMA_INVALID", f"{field} must not be empty", field))
-            continue
-        for item in value:
-            if not isinstance(item, str) or not item.strip():
-                findings.append(
-                    _finding(
-                        "TASK_SCHEMA_INVALID",
-                        f"{field} entries must be non-empty strings",
-                        field,
-                    )
-                )
-                break
-
-    if not isinstance(task.get("delete_allowed"), bool):
-        findings.append(
-            _finding("TASK_SCHEMA_INVALID", "delete_allowed must be a boolean", "delete_allowed")
-        )
-
-    for optional in ("status", "decision", "repo_status"):
-        if optional in task and not isinstance(task.get(optional), str):
-            findings.append(
-                _finding("TASK_SCHEMA_INVALID", f"{optional} must be a string when present", optional)
-            )
-
     return findings
 
 
@@ -321,6 +282,9 @@ def _load_claim_registry(registry_path: Path) -> tuple[dict[str, Any] | None, di
     return data, None
 
 
+load_claim_registry = _load_claim_registry
+
+
 def _validate_claims(task: dict[str, Any], registry: dict[str, Any]) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
 
@@ -364,10 +328,15 @@ def _validate_claims(task: dict[str, Any], registry: dict[str, Any]) -> list[dic
     return findings
 
 
-def run_non_ideal_guard(task: Any, registry: dict[str, Any]) -> list[dict[str, str]]:
+def run_non_ideal_guard(
+    task: Any,
+    registry: dict[str, Any],
+    *,
+    task_schema: dict[str, Any] | None = None,
+) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
 
-    findings.extend(_validate_task_schema(task))
+    findings.extend(_validate_task_schema(task, task_schema=task_schema))
 
     if isinstance(task, dict):
         findings.extend(_validate_scope_rules(task))
@@ -481,7 +450,17 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(registry_error, ensure_ascii=False), file=sys.stderr)
         return 2
 
-    findings = run_non_ideal_guard(task, registry_data)
+    try:
+        findings = run_non_ideal_guard(task, registry_data)
+    except (OSError, json.JSONDecodeError, DuplicateKeyError, UnsupportedSchemaError) as exc:
+        print(
+            json.dumps(
+                {"code": "CONTRACT_SCHEMA_INVALID", "error": str(exc)},
+                ensure_ascii=False,
+            ),
+            file=sys.stderr,
+        )
+        return 2
 
     result = {
         "mode": args.mode,
@@ -497,4 +476,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

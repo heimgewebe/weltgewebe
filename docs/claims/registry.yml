@@ -86,6 +86,52 @@
       ],
       "owner": "unknown",
       "updated": "2026-06-01"
+    },
+    {
+      "id": "CLAIM-AGENT-SAFE-005",
+      "status": "proposed",
+      "subject": "AGENT-SAFE-005",
+      "statement": "Ein deterministischer Agent-Handoff-Validator prüft einen Review-Handoff gegen den kanonischen Task-Contract, deklarierte Scope-Grenzen, Claim-Abdeckung, Evidence-Bilanz, Validierungsangaben und Outcome-Konsistenz.",
+      "evidence": [
+        {
+          "path": "contracts/agent/handoff.schema.json",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/agent/json_contract.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/agent/validate_handoff.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/contracts-agent-check.sh",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/agent/tests/test_validate_handoff.py",
+          "kind": "test"
+        },
+        {
+          "path": "docs/reference/agent-operability-fixture-matrix.md",
+          "kind": "documentation"
+        },
+        {
+          "path": ".github/workflows/agent-safety-preflight.yml",
+          "kind": "ci"
+        },
+        {
+          "path": ".github/workflows/contracts-validate.yml",
+          "kind": "ci"
+        }
+      ],
+      "validation": [
+        "python3 -m unittest scripts.agent.tests.test_validate_handoff -v",
+        "python3 -m scripts.agent.validate_agent_contracts"
+      ],
+      "owner": "unknown",
+      "updated": "2026-06-24"
     }
   ]
 }

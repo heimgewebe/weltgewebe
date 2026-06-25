@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
+import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +25,114 @@ class CapabilityResult:
 
 
 VALID_STATUSES = {"pass", "partial", "open", "fail"}
+
+HANDOFF_REQUIRED_FILES = [
+    "contracts/agent/task.schema.json",
+    "contracts/agent/handoff.schema.json",
+    "scripts/agent/json_contract.py",
+    "scripts/agent/check_non_ideal_task.py",
+    "scripts/agent/validate_handoff.py",
+    "scripts/agent/tests/test_validate_handoff.py",
+    "scripts/docmeta/docmeta.py",
+    "scripts/docmeta/validate_claim_registry.py",
+    "tests/fixtures/agent/handoff-task.json",
+    "tests/fixtures/agent/handoff-valid.json",
+]
+
+
+def _evaluate_handoff_validation(root: Path) -> CapabilityResult:
+    presence = _evaluate_required_files(
+        root=root,
+        cap_id="handoff_validation",
+        title="Handoff validation",
+        hard=True,
+        required_files=HANDOFF_REQUIRED_FILES,
+        rationale=(
+            "Handoff-Checks begrenzen unvollstaendige oder unsichere "
+            "Uebergaben."
+        ),
+    )
+    if presence.status != "pass":
+        return presence
+
+    smoke = r"""
+from pathlib import Path
+from scripts.agent.json_contract import load_json_strict
+from scripts.agent.validate_handoff import validate_handoff
+
+root = Path.cwd()
+task_path = root / "tests/fixtures/agent/handoff-task.json"
+handoff_path = root / "tests/fixtures/agent/handoff-valid.json"
+task = load_json_strict(task_path)
+handoff = load_json_strict(handoff_path)
+registry = {
+    "claims": [
+        {"id": claim_id, "status": "proposed"}
+        for claim_id in task["claims"]
+    ]
+}
+findings = validate_handoff(
+    task,
+    handoff,
+    task_bytes=task_path.read_bytes(),
+    repo_root=root,
+    claim_registry=registry,
+)
+if findings:
+    raise SystemExit(repr(findings))
+"""
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(root)
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", smoke],
+            cwd=root,
+            env=env,
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return CapabilityResult(
+            id=presence.id,
+            title=presence.title,
+            hard=presence.hard,
+            status="fail",
+            evidence=presence.evidence,
+            missing=["functional handoff smoke"],
+            rationale=f"{presence.rationale} Functional smoke failed: {exc}",
+        )
+
+    if completed.returncode != 0:
+        diagnostic = (completed.stderr or completed.stdout).strip()
+        if len(diagnostic) > 240:
+            diagnostic = diagnostic[:237] + "..."
+        return CapabilityResult(
+            id=presence.id,
+            title=presence.title,
+            hard=presence.hard,
+            status="fail",
+            evidence=presence.evidence,
+            missing=["functional handoff smoke"],
+            rationale=(
+                f"{presence.rationale} Functional smoke failed"
+                + (f": {diagnostic}" if diagnostic else ".")
+            ),
+        )
+
+    return CapabilityResult(
+        id=presence.id,
+        title=presence.title,
+        hard=presence.hard,
+        status="pass",
+        evidence=presence.evidence,
+        missing=[],
+        rationale=(
+            f"{presence.rationale} Required files and an isolated valid-fixture "
+            "smoke both pass."
+        ),
+    )
 
 
 def _as_rel(root: Path, path: Path) -> str:
@@ -154,21 +264,7 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
         )
     )
 
-    results.append(
-        _evaluate_required_files(
-            root=repo_root,
-            cap_id="handoff_validation",
-            title="Handoff validation",
-            hard=True,
-            required_files=[
-                "contracts/agent/handoff.schema.json",
-                "scripts/agent/validate_handoff.py",
-                "scripts/agent/tests/test_validate_handoff.py",
-                "tests/fixtures/agent/handoff-valid.json",
-            ],
-            rationale="Handoff-Checks begrenzen unvollstaendige oder unsichere Uebergaben.",
-        )
-    )
+    results.append(_evaluate_handoff_validation(repo_root))
 
     results.append(
         _evaluate_required_files(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate an agent handoff against its task contract."""
+"""Validate an agent review handoff against its canonical task contract."""
 
 from __future__ import annotations
 
@@ -14,40 +14,16 @@ from typing import Any
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from scripts.agent.check_non_ideal_task import load_claim_registry, run_non_ideal_guard
+from scripts.agent.json_contract import (
+    DuplicateKeyError,
+    UnsupportedSchemaError,
+    load_json_strict,
+    validate_instance,
+)
 from scripts.docmeta.docmeta import REPO_ROOT
 
-TASK_REQUIRED_FIELDS = {
-    "task_id",
-    "allowed_paths",
-    "forbidden_paths",
-    "claims",
-    "expected_evidence",
-    "validation_commands",
-    "delete_allowed",
-}
-HANDOFF_REQUIRED_FIELDS = {
-    "handoff_id",
-    "task_id",
-    "task_contract_sha256",
-    "source_revision",
-    "producer",
-    "outcome",
-    "changed_paths",
-    "deleted_paths",
-    "claims_addressed",
-    "evidence_produced",
-    "missing_evidence",
-    "validation_results",
-    "blockers",
-    "residual_gaps",
-}
-HANDOFF_ALLOWED_FIELDS = HANDOFF_REQUIRED_FIELDS
-HANDOFF_OUTCOMES = {"ready_for_review", "blocked", "incomplete"}
-VALIDATION_STATUSES = {"passed", "failed", "not_run"}
-TASK_ID_RE = re.compile(r"^[A-Z]+(?:-[A-Z]+)*-[0-9]{3}$")
-HANDOFF_ID_RE = re.compile(r"^[A-Z0-9]+(?:-[A-Z0-9]+)*$")
-SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-SOURCE_REVISION_RE = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
+WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:/")
 
 
 class _ArgumentParser(argparse.ArgumentParser):
@@ -62,20 +38,11 @@ def _finding(code: str, message: str, field: str | None = None) -> dict[str, str
     return finding
 
 
-def _load_json(path: Path) -> tuple[Any | None, str | None]:
-    try:
-        return json.loads(path.read_text(encoding="utf-8")), None
-    except OSError as exc:
-        return None, f"Datei kann nicht gelesen werden: {exc}"
-    except json.JSONDecodeError as exc:
-        return None, f"JSON parse error: {exc.msg}"
-
-
 def _resolve_repo_relative(repo_root: Path, value: str) -> Path:
-    raw = Path(value)
-    if raw.is_absolute():
+    raw_text = value.replace("\\", "/").strip()
+    if not raw_text or raw_text.startswith("/") or WINDOWS_DRIVE_RE.match(raw_text):
         raise ValueError(f"Path must be repository-relative: {value}")
-
+    raw = Path(raw_text)
     root = repo_root.resolve()
     resolved = (root / raw).resolve()
     try:
@@ -85,265 +52,114 @@ def _resolve_repo_relative(repo_root: Path, value: str) -> Path:
     return resolved
 
 
-def _normalize_repo_path(value: str) -> str | None:
-    normalized = value.replace("\\", "/").strip()
-    if not normalized or normalized.startswith("/"):
+def _normalize_repo_path(value: str, *, allow_directory: bool = False) -> str | None:
+    if not isinstance(value, str):
         return None
-    parts = [part for part in normalized.split("/") if part not in {"", "."}]
-    if not parts or ".." in parts:
+    raw = value.replace("\\", "/").strip()
+    if not raw or raw.startswith("/") or WINDOWS_DRIVE_RE.match(raw):
         return None
-    return "/".join(parts)
+
+    is_directory = raw.endswith("/")
+    if is_directory:
+        raw = raw[:-1]
+    parts = raw.split("/")
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        return None
+    if is_directory and not allow_directory:
+        return None
+
+    normalized = "/".join(parts)
+    return f"{normalized}/" if is_directory else normalized
 
 
 def _path_matches_scope(path: str, scope: str) -> bool:
     normalized_path = _normalize_repo_path(path)
-    normalized_scope = _normalize_repo_path(scope)
+    normalized_scope = _normalize_repo_path(scope, allow_directory=True)
     if normalized_path is None or normalized_scope is None:
         return False
-    return normalized_path == normalized_scope or normalized_path.startswith(
-        normalized_scope.rstrip("/") + "/"
-    )
+    if normalized_scope.endswith("/"):
+        return normalized_path.startswith(normalized_scope)
+    return normalized_path == normalized_scope
 
 
-def _validate_string_array(
-    payload: dict[str, Any], field: str, *, allow_empty: bool
+def _schema_findings(
+    payload: Any,
+    schema: dict[str, Any],
+    *,
+    code: str,
 ) -> list[dict[str, str]]:
-    value = payload.get(field)
-    if not isinstance(value, list):
-        return [_finding("HANDOFF_SCHEMA_INVALID", f"{field} must be an array", field)]
-    if not allow_empty and not value:
-        return [_finding("HANDOFF_SCHEMA_INVALID", f"{field} must not be empty", field)]
-    if any(not isinstance(item, str) or not item.strip() for item in value):
-        return [
-            _finding(
-                "HANDOFF_SCHEMA_INVALID",
-                f"{field} entries must be non-empty strings",
-                field,
-            )
-        ]
-    if len(value) != len(set(value)):
-        return [_finding("HANDOFF_SCHEMA_INVALID", f"{field} must be unique", field)]
-    return []
-
-
-def _validate_task_shape(task: Any) -> list[dict[str, str]]:
-    if not isinstance(task, dict):
-        return [_finding("TASK_SCHEMA_INVALID", "Task contract must be a JSON object")]
-
     findings: list[dict[str, str]] = []
-    missing = sorted(TASK_REQUIRED_FIELDS - set(task))
-    for field in missing:
-        findings.append(_finding("TASK_SCHEMA_INVALID", f"Missing required field: {field}", field))
-
-    task_id = task.get("task_id")
-    if not isinstance(task_id, str) or not TASK_ID_RE.fullmatch(task_id):
+    for violation in validate_instance(payload, schema):
+        field = violation["path"].removeprefix("$.")
         findings.append(
-            _finding(
-                "TASK_SCHEMA_INVALID",
-                "task_id must match [A-Z]+(-[A-Z]+)*-[0-9]{3}",
-                "task_id",
-            )
-        )
-
-    for field in (
-        "allowed_paths",
-        "forbidden_paths",
-        "claims",
-        "expected_evidence",
-        "validation_commands",
-    ):
-        value = task.get(field)
-        if not isinstance(value, list) or any(
-            not isinstance(item, str) or not item.strip() for item in value
-        ):
-            findings.append(
-                _finding(
-                    "TASK_SCHEMA_INVALID",
-                    f"{field} must be an array of non-empty strings",
-                    field,
-                )
-            )
-
-    if not isinstance(task.get("delete_allowed"), bool):
-        findings.append(
-            _finding("TASK_SCHEMA_INVALID", "delete_allowed must be a boolean", "delete_allowed")
+            _finding(code, violation["message"], field if field != "$" else None)
         )
     return findings
 
 
-def _validate_handoff_shape(handoff: Any) -> list[dict[str, str]]:
-    if not isinstance(handoff, dict):
-        return [_finding("HANDOFF_SCHEMA_INVALID", "Handoff must be a JSON object")]
-
-    findings: list[dict[str, str]] = []
-    missing = sorted(HANDOFF_REQUIRED_FIELDS - set(handoff))
-    unexpected = sorted(set(handoff) - HANDOFF_ALLOWED_FIELDS)
-    for field in missing:
-        findings.append(
-            _finding("HANDOFF_SCHEMA_INVALID", f"Missing required field: {field}", field)
-        )
-    for field in unexpected:
-        findings.append(
-            _finding("HANDOFF_SCHEMA_INVALID", f"Unexpected field: {field}", field)
-        )
-
-    handoff_id = handoff.get("handoff_id")
-    if not isinstance(handoff_id, str) or not HANDOFF_ID_RE.fullmatch(handoff_id):
-        findings.append(
-            _finding(
-                "HANDOFF_SCHEMA_INVALID",
-                "handoff_id must contain uppercase letters, digits and hyphens",
-                "handoff_id",
-            )
-        )
-
-    task_id = handoff.get("task_id")
-    if not isinstance(task_id, str) or not TASK_ID_RE.fullmatch(task_id):
-        findings.append(
-            _finding("HANDOFF_SCHEMA_INVALID", "task_id has invalid format", "task_id")
-        )
-
-    digest = handoff.get("task_contract_sha256")
-    if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
-        findings.append(
-            _finding(
-                "HANDOFF_SCHEMA_INVALID",
-                "task_contract_sha256 must be 64 lowercase hex characters",
-                "task_contract_sha256",
-            )
-        )
-
-    revision = handoff.get("source_revision")
-    if not isinstance(revision, str) or not SOURCE_REVISION_RE.fullmatch(revision):
-        findings.append(
-            _finding(
-                "HANDOFF_SCHEMA_INVALID",
-                "source_revision must be a 40- or 64-character lowercase hex revision",
-                "source_revision",
-            )
-        )
-
-    producer = handoff.get("producer")
-    if not isinstance(producer, str) or not producer.strip():
-        findings.append(
-            _finding("HANDOFF_SCHEMA_INVALID", "producer must be non-empty", "producer")
-        )
-
-    outcome = handoff.get("outcome")
-    if outcome not in HANDOFF_OUTCOMES:
-        findings.append(
-            _finding(
-                "HANDOFF_SCHEMA_INVALID",
-                f"outcome must be one of {sorted(HANDOFF_OUTCOMES)}",
-                "outcome",
-            )
-        )
-
-    for field in (
-        "changed_paths",
-        "deleted_paths",
-        "evidence_produced",
-        "missing_evidence",
-        "blockers",
-        "residual_gaps",
-    ):
-        findings.extend(_validate_string_array(handoff, field, allow_empty=True))
-    findings.extend(_validate_string_array(handoff, "claims_addressed", allow_empty=False))
-
-    results = handoff.get("validation_results")
-    if not isinstance(results, list):
-        findings.append(
-            _finding(
-                "HANDOFF_SCHEMA_INVALID",
-                "validation_results must be an array",
-                "validation_results",
-            )
-        )
-    else:
-        seen_commands: set[str] = set()
-        for index, result in enumerate(results):
-            field = f"validation_results[{index}]"
-            if not isinstance(result, dict):
-                findings.append(
-                    _finding("HANDOFF_SCHEMA_INVALID", "validation result must be an object", field)
-                )
-                continue
-            if set(result) != {"command", "status"}:
-                findings.append(
-                    _finding(
-                        "HANDOFF_SCHEMA_INVALID",
-                        "validation result requires only command and status",
-                        field,
-                    )
-                )
-                continue
-            command = result.get("command")
-            status = result.get("status")
-            if not isinstance(command, str) or not command.strip():
-                findings.append(
-                    _finding("HANDOFF_SCHEMA_INVALID", "command must be non-empty", field)
-                )
-            elif command in seen_commands:
-                findings.append(
-                    _finding("HANDOFF_SCHEMA_INVALID", "validation commands must be unique", field)
-                )
-            else:
-                seen_commands.add(command)
-            if status not in VALIDATION_STATUSES:
-                findings.append(
-                    _finding(
-                        "HANDOFF_SCHEMA_INVALID",
-                        f"status must be one of {sorted(VALIDATION_STATUSES)}",
-                        field,
-                    )
-                )
-    return findings
+def _load_schema(repo_root: Path, name: str) -> dict[str, Any]:
+    schema = load_json_strict(repo_root / "contracts/agent" / name)
+    if not isinstance(schema, dict):
+        raise UnsupportedSchemaError(f"{name} must contain a JSON object")
+    return schema
 
 
-def _validate_binding(
-    task: dict[str, Any], handoff: dict[str, Any], task_bytes: bytes
+def _normalized_file_set(values: list[str]) -> set[str]:
+    return {
+        normalized
+        for value in values
+        if (normalized := _normalize_repo_path(value)) is not None
+    }
+
+
+def _validate_paths(
+    task: dict[str, Any], handoff: dict[str, Any]
 ) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
+    allowed_paths = task["allowed_paths"]
+    forbidden_paths = task["forbidden_paths"]
 
-    if handoff.get("task_id") != task.get("task_id"):
-        findings.append(
-            _finding("TASK_ID_MISMATCH", "Handoff task_id does not match task contract", "task_id")
-        )
-
-    expected_digest = hashlib.sha256(task_bytes).hexdigest()
-    if handoff.get("task_contract_sha256") != expected_digest:
-        findings.append(
-            _finding(
-                "TASK_DIGEST_MISMATCH",
-                "Handoff task_contract_sha256 does not match task file bytes",
-                "task_contract_sha256",
-            )
-        )
-
-    allowed_paths = task.get("allowed_paths", [])
-    forbidden_paths = task.get("forbidden_paths", [])
     for field in ("changed_paths", "deleted_paths"):
-        values = handoff.get(field, [])
-        if not isinstance(values, list):
-            continue
-        for path in values:
-            normalized = _normalize_repo_path(path) if isinstance(path, str) else None
+        for declared_path in handoff[field]:
+            normalized = _normalize_repo_path(declared_path)
             if normalized is None:
                 findings.append(
-                    _finding("PATH_OUT_OF_REPO", f"Invalid repository-relative path: {path}", field)
+                    _finding(
+                        "PATH_OUT_OF_REPO",
+                        f"Invalid repository-relative file path: {declared_path}",
+                        field,
+                    )
                 )
                 continue
             if not any(_path_matches_scope(normalized, scope) for scope in allowed_paths):
                 findings.append(
-                    _finding("PATH_OUT_OF_SCOPE", f"Path is not allowed by task: {path}", field)
+                    _finding(
+                        "PATH_OUT_OF_SCOPE",
+                        f"Path is not allowed by task: {declared_path}",
+                        field,
+                    )
                 )
             if any(_path_matches_scope(normalized, scope) for scope in forbidden_paths):
                 findings.append(
-                    _finding("FORBIDDEN_PATH", f"Path is forbidden by task: {path}", field)
+                    _finding(
+                        "FORBIDDEN_PATH",
+                        f"Path is forbidden by task: {declared_path}",
+                        field,
+                    )
                 )
 
-    deleted_paths = handoff.get("deleted_paths", [])
-    if isinstance(deleted_paths, list) and deleted_paths and not task.get("delete_allowed"):
+    changed = _normalized_file_set(handoff["changed_paths"])
+    deleted = _normalized_file_set(handoff["deleted_paths"])
+    for path in sorted(changed & deleted):
+        findings.append(
+            _finding(
+                "PATH_STATE_CONTRADICTION",
+                f"Path cannot be both changed and deleted: {path}",
+                "deleted_paths",
+            )
+        )
+
+    if deleted and not task["delete_allowed"]:
         findings.append(
             _finding(
                 "DELETE_WITHOUT_PERMISSION",
@@ -351,24 +167,57 @@ def _validate_binding(
                 "deleted_paths",
             )
         )
+    return findings
 
-    task_claims = set(task.get("claims", []))
-    addressed = handoff.get("claims_addressed", [])
-    if isinstance(addressed, list):
-        for claim in addressed:
-            if claim not in task_claims:
-                findings.append(
-                    _finding(
-                        "CLAIM_NOT_DECLARED",
-                        f"Handoff addresses undeclared claim: {claim}",
-                        "claims_addressed",
-                    )
-                )
 
-    expected_evidence = set(task.get("expected_evidence", []))
-    produced = set(handoff.get("evidence_produced", []))
-    missing = set(handoff.get("missing_evidence", []))
-    for evidence in sorted(expected_evidence - produced - missing):
+def _validate_claims(
+    task: dict[str, Any], handoff: dict[str, Any]
+) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+    task_claims = set(task["claims"])
+    addressed = set(handoff["claims_addressed"])
+    for claim in sorted(addressed - task_claims):
+        findings.append(
+            _finding(
+                "CLAIM_NOT_DECLARED",
+                f"Handoff addresses undeclared claim: {claim}",
+                "claims_addressed",
+            )
+        )
+    for claim in sorted(task_claims - addressed):
+        findings.append(
+            _finding(
+                "CLAIM_NOT_ADDRESSED",
+                f"Task claim is not addressed by handoff: {claim}",
+                "claims_addressed",
+            )
+        )
+    return findings
+
+
+def _validate_evidence(
+    task: dict[str, Any],
+    handoff: dict[str, Any],
+    *,
+    repo_root: Path,
+) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+    expected = set(task["expected_evidence"])
+    produced = set(handoff["evidence_produced"])
+    missing = set(handoff["missing_evidence"])
+
+    normalized_produced = _normalized_file_set(list(produced))
+    normalized_missing = _normalized_file_set(list(missing))
+    for evidence in sorted(normalized_produced & normalized_missing):
+        findings.append(
+            _finding(
+                "EVIDENCE_STATE_CONTRADICTION",
+                f"Evidence cannot be both produced and missing: {evidence}",
+                "missing_evidence",
+            )
+        )
+
+    for evidence in sorted(expected - produced - missing):
         findings.append(
             _finding(
                 "EXPECTED_EVIDENCE_UNACCOUNTED",
@@ -377,13 +226,61 @@ def _validate_binding(
             )
         )
 
-    required_commands = set(task.get("validation_commands", []))
-    result_map = {
-        item.get("command"): item.get("status")
-        for item in handoff.get("validation_results", [])
-        if isinstance(item, dict)
-    }
-    for command in sorted(required_commands - set(result_map)):
+    root = repo_root.resolve()
+    for field, values in (
+        ("evidence_produced", handoff["evidence_produced"]),
+        ("missing_evidence", handoff["missing_evidence"]),
+    ):
+        for evidence in values:
+            normalized = _normalize_repo_path(evidence)
+            if normalized is None:
+                findings.append(
+                    _finding(
+                        "EVIDENCE_PATH_INVALID",
+                        f"Evidence must be a repository-relative file path: {evidence}",
+                        field,
+                    )
+                )
+                continue
+            if field == "evidence_produced":
+                candidate = repo_root / normalized
+                try:
+                    candidate.resolve().relative_to(root)
+                    valid_local_file = candidate.is_file()
+                except (OSError, ValueError):
+                    valid_local_file = False
+                if not valid_local_file:
+                    findings.append(
+                        _finding(
+                            "EVIDENCE_NOT_FOUND",
+                            "Produced evidence file does not exist inside the "
+                            f"repository: {evidence}",
+                            field,
+                        )
+                    )
+    return findings
+
+
+def _validate_results_and_outcome(
+    task: dict[str, Any], handoff: dict[str, Any]
+) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+    result_map: dict[str, str] = {}
+    for index, item in enumerate(handoff["validation_results"]):
+        command = item["command"]
+        if command in result_map:
+            findings.append(
+                _finding(
+                    "VALIDATION_RESULT_DUPLICATE",
+                    f"Validation command is recorded more than once: {command}",
+                    f"validation_results[{index}]",
+                )
+            )
+        result_map[command] = item["status"]
+
+    required = set(task["validation_commands"])
+    missing_results = required - set(result_map)
+    for command in sorted(missing_results):
         findings.append(
             _finding(
                 "VALIDATION_RESULT_MISSING",
@@ -392,24 +289,30 @@ def _validate_binding(
             )
         )
 
-    outcome = handoff.get("outcome")
-    blockers = handoff.get("blockers", [])
-    residual_gaps = handoff.get("residual_gaps", [])
-    required_statuses = [result_map.get(command) for command in required_commands]
+    outcome = handoff["outcome"]
+    blockers = handoff["blockers"]
+    residual_gaps = handoff["residual_gaps"]
+    missing_evidence = handoff["missing_evidence"]
+    non_passed = sorted(
+        command for command, status in result_map.items() if status != "passed"
+    )
+    unaddressed = set(task["claims"]) - set(handoff["claims_addressed"])
+
     if outcome == "ready_for_review":
-        if blockers or missing or residual_gaps:
+        if blockers or missing_evidence:
             findings.append(
                 _finding(
                     "CONTRADICTORY_OUTCOME",
-                    "ready_for_review requires no blockers, missing evidence or residual gaps",
+                    "ready_for_review requires no blockers or missing evidence",
                     "outcome",
                 )
             )
-        if any(status != "passed" for status in required_statuses):
+        if non_passed or missing_results:
             findings.append(
                 _finding(
                     "CONTRADICTORY_OUTCOME",
-                    "ready_for_review requires every task validation to pass",
+                    "ready_for_review requires every recorded and required "
+                    "validation to pass",
                     "outcome",
                 )
             )
@@ -421,24 +324,102 @@ def _validate_binding(
                 "blockers",
             )
         )
-    elif outcome == "incomplete" and not (missing or residual_gaps):
+    elif outcome == "incomplete" and not (
+        missing_evidence
+        or residual_gaps
+        or non_passed
+        or missing_results
+        or unaddressed
+    ):
         findings.append(
             _finding(
                 "CONTRADICTORY_OUTCOME",
-                "incomplete requires missing evidence or residual gaps",
+                "incomplete requires an unresolved claim, missing evidence, "
+                "validation gap or residual gap",
                 "outcome",
             )
         )
+    return findings
 
+
+def _validate_binding(
+    task: dict[str, Any],
+    handoff: dict[str, Any],
+    task_bytes: bytes,
+    *,
+    repo_root: Path,
+) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+    if handoff["task_id"] != task["task_id"]:
+        findings.append(
+            _finding(
+                "TASK_ID_MISMATCH",
+                "Handoff task_id does not match task contract",
+                "task_id",
+            )
+        )
+
+    expected_digest = hashlib.sha256(task_bytes).hexdigest()
+    if handoff["task_contract_sha256"] != expected_digest:
+        findings.append(
+            _finding(
+                "TASK_DIGEST_MISMATCH",
+                "Handoff task_contract_sha256 does not match task file bytes",
+                "task_contract_sha256",
+            )
+        )
+
+    findings.extend(_validate_paths(task, handoff))
+    findings.extend(_validate_claims(task, handoff))
+    findings.extend(_validate_evidence(task, handoff, repo_root=repo_root))
+    findings.extend(_validate_results_and_outcome(task, handoff))
     return findings
 
 
 def validate_handoff(
-    task: Any, handoff: Any, *, task_bytes: bytes
+    task: Any,
+    handoff: Any,
+    *,
+    task_bytes: bytes,
+    repo_root: Path | None = None,
+    claim_registry: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
-    findings = _validate_task_shape(task) + _validate_handoff_shape(handoff)
-    if not findings and isinstance(task, dict) and isinstance(handoff, dict):
-        findings.extend(_validate_binding(task, handoff, task_bytes))
+    root = Path(repo_root or REPO_ROOT)
+    task_schema = _load_schema(root, "task.schema.json")
+    handoff_schema = _load_schema(root, "handoff.schema.json")
+
+    if claim_registry is None:
+        claim_registry, registry_error = load_claim_registry(
+            root / "docs/claims/registry.yml"
+        )
+        if registry_error is not None or claim_registry is None:
+            code = (
+                registry_error.get("code", "CLAIM_REGISTRY_INVALID")
+                if registry_error
+                else "CLAIM_REGISTRY_INVALID"
+            )
+            message = (
+                registry_error.get("message", "Claim registry is invalid")
+                if registry_error
+                else "Claim registry is invalid"
+            )
+            return [_finding(code, message)]
+
+    findings = _schema_findings(task, task_schema, code="TASK_SCHEMA_INVALID")
+    findings.extend(
+        _schema_findings(handoff, handoff_schema, code="HANDOFF_SCHEMA_INVALID")
+    )
+    if isinstance(task, dict):
+        findings.extend(
+            run_non_ideal_guard(task, claim_registry, task_schema=task_schema)
+        )
+
+    has_shape_error = any(
+        item["code"] in {"TASK_SCHEMA_INVALID", "HANDOFF_SCHEMA_INVALID"}
+        for item in findings
+    )
+    if not has_shape_error and isinstance(task, dict) and isinstance(handoff, dict):
+        findings.extend(_validate_binding(task, handoff, task_bytes, repo_root=root))
 
     unique = {
         (item.get("code", ""), item.get("field", ""), item.get("message", "")): item
@@ -451,12 +432,35 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = _ArgumentParser(description="Validate an agent handoff")
     parser.add_argument("--task-file", required=True)
     parser.add_argument("--handoff-file", required=True)
+    parser.add_argument(
+        "--claim-registry",
+        default="docs/claims/registry.yml",
+        help="Path to claim registry relative to repository root",
+    )
     return parser
 
 
 def _emit_error(code: str, message: str) -> int:
-    print(json.dumps({"code": code, "message": message}, sort_keys=True), file=sys.stderr)
+    print(
+        json.dumps(
+            {"code": code, "message": message},
+            ensure_ascii=False,
+            sort_keys=True,
+        ),
+        file=sys.stderr,
+    )
     return 2
+
+
+def _read_json(path: Path, *, kind: str) -> Any:
+    try:
+        return load_json_strict(path)
+    except DuplicateKeyError as exc:
+        raise ValueError(f"DUPLICATE_JSON_KEY:{exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{kind}_JSON_INVALID:JSON parse error: {exc.msg}") from exc
+    except OSError as exc:
+        raise ValueError(f"{kind}_FILE_UNREADABLE:{exc}") from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -469,6 +473,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         task_path = _resolve_repo_relative(repo_root, args.task_file)
         handoff_path = _resolve_repo_relative(repo_root, args.handoff_file)
+        registry_path = _resolve_repo_relative(repo_root, args.claim_registry)
     except ValueError as exc:
         return _emit_error("PATH_OUT_OF_REPO", str(exc))
 
@@ -476,15 +481,41 @@ def main(argv: list[str] | None = None) -> int:
         return _emit_error("TASK_FILE_NOT_FOUND", args.task_file)
     if not handoff_path.is_file():
         return _emit_error("HANDOFF_FILE_NOT_FOUND", args.handoff_file)
+    if not registry_path.is_file():
+        return _emit_error("CLAIM_REGISTRY_NOT_FOUND", args.claim_registry)
 
-    task, task_error = _load_json(task_path)
-    if task_error is not None:
-        return _emit_error("TASK_JSON_INVALID", task_error)
-    handoff, handoff_error = _load_json(handoff_path)
-    if handoff_error is not None:
-        return _emit_error("HANDOFF_JSON_INVALID", handoff_error)
+    try:
+        task = _read_json(task_path, kind="TASK")
+        handoff = _read_json(handoff_path, kind="HANDOFF")
+        claim_registry, registry_error = load_claim_registry(registry_path)
+        if registry_error is not None or claim_registry is None:
+            code = (
+                registry_error.get("code", "CLAIM_REGISTRY_INVALID")
+                if registry_error
+                else "CLAIM_REGISTRY_INVALID"
+            )
+            message = (
+                registry_error.get("message", "Claim registry is invalid")
+                if registry_error
+                else "Claim registry is invalid"
+            )
+            return _emit_error(code, message)
+        findings = validate_handoff(
+            task,
+            handoff,
+            task_bytes=task_path.read_bytes(),
+            repo_root=repo_root,
+            claim_registry=claim_registry,
+        )
+    except ValueError as exc:
+        raw = str(exc)
+        code, _, message = raw.partition(":")
+        return _emit_error(code or "JSON_INVALID", message or raw)
+    except UnsupportedSchemaError as exc:
+        return _emit_error("CONTRACT_SCHEMA_UNSUPPORTED", str(exc))
+    except OSError as exc:
+        return _emit_error("CONTRACT_FILE_UNREADABLE", str(exc))
 
-    findings = validate_handoff(task, handoff, task_bytes=task_path.read_bytes())
     payload = {
         "status": "valid" if not findings else "invalid",
         "task_file": args.task_file,
@@ -497,4 +528,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

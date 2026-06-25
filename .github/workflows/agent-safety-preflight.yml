@@ -11,6 +11,13 @@ name: agent-safety-preflight
       - "tests/fixtures/agent/**"
       - "docs/security/**"
       - "docs/reference/agent-operability-fixture-matrix.md"
+      - "docs/reference/agent-handoff-contract.md"
+      - "docs/blueprints/blueprint-agent-safety-control-layer.md"
+      - "docs/claims/registry.yml"
+      - "docs/doc-freshness-registry.yml"
+      - "docs/tasks/index.json"
+      - "docs/tasks/board.md"
+      - ".gitattributes"
       - "docs/_generated/agent-readiness.md"
       - "agent-policy.yaml"
       - "AGENTS.md"
@@ -95,3 +102,21 @@ jobs:
             printf 'Expected exit code 1 for invalid handoff, got %s\n' "$rc" >&2
             exit 1
           fi
+
+      - name: Run docmeta readiness test suite
+        run: python3 -m unittest discover scripts/docmeta/tests/ -v
+
+      - name: Run non-ideal guard test suite
+        run: python3 -m unittest discover scripts/agent/tests/ -v
+
+      - name: Validate agent contracts (Python)
+        run: python3 -m scripts.agent.validate_agent_contracts
+
+      - name: Validate agent contracts (shell/AJV)
+        if: ${{ hashFiles('node_modules/.bin/ajv') != '' }}
+        run: bash scripts/contracts-agent-check.sh
+
+      - name: Check handoff fixture digest is fresh
+        run: |
+          set -euo pipefail
+          python3 -m scripts.agent.update_handoff_fixtures --check

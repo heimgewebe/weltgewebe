@@ -892,6 +892,41 @@ staleness_policy: warn
 
 Keine aktive Roadmap oder Policy ohne Owner und Review-Intervall.
 
+#### PR 17 — agent/handoff-validation-v1
+
+##### PR 17 — agent/handoff-validation-v1: Zweck
+
+Handoff-Validierung auf AJV-kompilierbare JSON-Schema-Assertions heben. Strict-JSON-Loading (doppelte Keys, NaN/Infinity), deterministische Validierung gegen Draft-07-Schemas, Digest-Freshness-Guard, AJV-Shell-Check und isolierter Smoke als Readiness-Gate.
+
+##### PR 17 — agent/handoff-validation-v1: Neue Artefakte
+
+- `scripts/agent/json_contract.py` — Strict JSON-Loader + deterministische Schema-Validation (kein AJV-Abhängigkeit für Python-Tests)
+- `scripts/agent/validate_agent_contracts.py` — prüft task.schema.json und handoff.schema.json gegen die Repository-Fixtures
+- `scripts/agent/update_handoff_fixtures.py` — hält task_contract_sha256-Felder in allen Digest-Fixtures aktuell
+- `scripts/contracts-agent-check.sh` — AJV-Shell-Check für beide Schemas (optional in CI)
+- `scripts/agent/tests/test_json_contract.py`
+- `scripts/agent/tests/test_update_handoff_fixtures.py`
+- `scripts/agent/tests/test_validate_agent_contracts.py`
+- `docs/reference/agent-handoff-contract.md`
+
+##### PR 17 — agent/handoff-validation-v1: Geänderte Artefakte
+
+- `scripts/agent/validate_handoff.py` — nutzt `json_contract.load_json_strict`, delegiert Schema-Checks an `validate_instance`, prüft Evidence-Dateien, PATH_STATE_CONTRADICTION, VALIDATION_RESULT_DUPLICATE
+- `scripts/agent/check_non_ideal_task.py` — nutzt `json_contract.validate_instance` statt manueller Feldprüfung; `load_claim_registry`-Alias für `validate_handoff`
+- `scripts/docmeta/generate_agent_readiness.py` — `handoff_validation` Capability führt jetzt Datei-Präsenz + Subprocess-Smoke durch
+- `contracts/agent/handoff.schema.json` — `producer` erhält `maxLength` + `pattern`; `validation_results` erhält `uniqueItems`
+- `contracts/agent/task.schema.json` — alle Array-Felder erhalten `uniqueItems: true`
+- `tests/fixtures/agent/handoff-task.json` — erweiterte `allowed_paths`, `expected_evidence`, `validation_commands`
+- `tests/fixtures/agent/handoff-valid.json` — aktualisierter Digest + erweiterte Evidence
+
+##### PR 17 — agent/handoff-validation-v1: Akzeptanzkriterien
+
+- `python3 -m scripts.agent.validate_agent_contracts` gibt exit 0
+- `python3 -m scripts.agent.validate_handoff --task-file tests/fixtures/agent/handoff-task.json --handoff-file tests/fixtures/agent/handoff-valid.json` gibt exit 0
+- `python3 -m unittest discover scripts/agent/tests/ -v` ohne Fehler
+- `python3 -m scripts.agent.update_handoff_fixtures --check` gibt exit 0
+- `handoff_validation` in `docs/_generated/agent-readiness.md` zeigt `pass`
+
 ## 7. Ratchet-Strategie
 
 Jeder neue Check durchläuft vier Stufen:

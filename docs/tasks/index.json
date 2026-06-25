@@ -360,6 +360,50 @@
       "updated_at": "2026-06-01"
     },
     {
+      "id": "AGENT-SAFE-005",
+      "title": "Deterministische Agent-Handoff-Validierung einführen",
+      "area": "governance",
+      "status": "partial",
+      "priority": "high",
+      "effort": "M",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "contracts/agent/handoff.schema.json",
+        "scripts/agent/json_contract.py",
+        "scripts/agent/validate_handoff.py",
+        "scripts/contracts-agent-check.sh",
+        "scripts/agent/tests/test_validate_handoff.py",
+        "tests/fixtures/agent/handoff-task.json",
+        "tests/fixtures/agent/handoff-valid.json",
+        "docs/reference/agent-operability-fixture-matrix.md",
+        ".github/workflows/agent-safety-preflight.yml",
+        ".github/workflows/contracts-validate.yml"
+      ],
+      "missing_evidence": [
+        "Merge auf main und post-merge Verfügbarkeit stehen aus",
+        "Unabhängige Run-Attestierung und tatsächliche Command-Ausführung bleiben einem späteren Runner-Slice vorbehalten"
+      ],
+      "acceptance": [
+        "Handoffs werden gegen den kanonischen Task-Contract und den Non-Ideal-Guard geprüft",
+        "Task-Bindung, Scope, Claims, Evidence, Validierungsresultate und Outcome-Konsistenz werden deterministisch validiert",
+        "Readiness kann nicht durch leere oder bloß passend benannte Dateien auf pass wechseln",
+        "Der Handoff bleibt ein Review-Beleg und behauptet keine unabhängige Run-Attestierung"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [
+          "1261"
+        ],
+        "docs": [
+          "docs/blueprints/blueprint-agent-safety-control-layer.md",
+          "docs/reference/agent-operability-fixture-matrix.md",
+          "docs/tasks/board.md"
+        ]
+      },
+      "updated_at": "2026-06-24"
+    },
+    {
       "id": "DOCMETA-FRESHNESS-001",
       "title": "Claim-Evidence/Freshness-Spine registrieren und reviewbar halten",
       "area": "docs",
@@ -384,7 +428,7 @@
       ],
       "missing_evidence": [],
       "acceptance": [
-        "Eine minimale Claim-Evidence-Spine existiert mit drei CLAIM-AGENT-SAFE-* Claims",
+        "Eine minimale Claim-Evidence-Spine existiert mit vier CLAIM-AGENT-SAFE-* Claims",
         "Die Spine ist deterministisch validierbar via Claim-Registry, Doc-Freshness-Registry und Claim-Evidence-Map",
         "Claim-Evidence-Map und Doc-Freshness-Registry sind vorhanden und über Repo-Checks validierbar",
         "Task-Control-Registrierung bleibt sichtbar; epistemische Grenzen bleiben sichtbar",
