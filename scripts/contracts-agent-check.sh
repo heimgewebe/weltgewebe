@@ -5,12 +5,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-if command -v ajv >/dev/null 2>&1; then
-  AJV_BIN="$(command -v ajv)"
-elif [[ -x node_modules/.bin/ajv ]]; then
-  AJV_BIN="node_modules/.bin/ajv"
-else
-  echo "error: ajv executable not found; run pnpm install first" >&2
+AJV_BIN="${AJV_BIN:-node_modules/.bin/ajv}"
+if [[ ! -x "$AJV_BIN" ]]; then
+  echo "error: pinned AJV executable not found at $AJV_BIN; run pnpm install first" >&2
   exit 2
 fi
 
