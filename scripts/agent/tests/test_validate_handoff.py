@@ -14,7 +14,7 @@ from scripts.docmeta.docmeta import REPO_ROOT
 
 
 class TestValidateHandoff(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.root = Path(REPO_ROOT)
         self.task_path = self.root / "tests/fixtures/agent/handoff-task.json"
         self.handoff_path = self.root / "tests/fixtures/agent/handoff-valid.json"
@@ -25,11 +25,17 @@ class TestValidateHandoff(unittest.TestCase):
         )
 
     @staticmethod
-    def _task_bytes(task):
+    def _task_bytes(task: dict) -> bytes:
         return (json.dumps(task, ensure_ascii=False, indent=2) + "\n").encode()
 
-    def _validate(self, handoff, *, task=None, bind_digest=False):
-        task_data = copy.deepcopy(self.task if task is None else task)
+    def _validate(
+        self,
+        handoff: dict,
+        *,
+        task: dict | None = None,
+        bind_digest: bool = False,
+    ) -> list[dict[str, str]]:
+        task_data = copy.deepcopy(task if task is not None else self.task)
         handoff_data = copy.deepcopy(handoff)
         task_bytes = self._task_bytes(task_data)
         if bind_digest:
@@ -43,10 +49,10 @@ class TestValidateHandoff(unittest.TestCase):
         )
 
     @staticmethod
-    def _codes(findings):
+    def _codes(findings: list[dict[str, str]]) -> list[str]:
         return [item["code"] for item in findings]
 
-    def _cli(self, name):
+    def _cli(self, handoff_name: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
                 "python3",
@@ -55,7 +61,7 @@ class TestValidateHandoff(unittest.TestCase):
                 "--task-file",
                 "tests/fixtures/agent/handoff-task.json",
                 "--handoff-file",
-                f"tests/fixtures/agent/{name}",
+                f"tests/fixtures/agent/{handoff_name}",
             ],
             cwd=self.root,
             check=False,
@@ -92,8 +98,10 @@ class TestValidateHandoff(unittest.TestCase):
             task = copy.deepcopy(self.task)
             mutate(task)
             with self.subTest(task=task):
-                findings = self._validate(self.handoff, task=task, bind_digest=True)
-                self.assertIn("TASK_SCHEMA_INVALID", self._codes(findings))
+                self.assertIn(
+                    "TASK_SCHEMA_INVALID",
+                    self._codes(self._validate(self.handoff, task=task, bind_digest=True)),
+                )
 
     def test_task_id_and_claim_binding(self):
         handoff = copy.deepcopy(self.handoff)
@@ -102,8 +110,10 @@ class TestValidateHandoff(unittest.TestCase):
 
         task = copy.deepcopy(self.task)
         task["claims"].append("CLAIM-AGENT-SAFE-001")
-        findings = self._validate(self.handoff, task=task, bind_digest=True)
-        self.assertIn("CLAIM_NOT_ADDRESSED", self._codes(findings))
+        self.assertIn(
+            "CLAIM_NOT_ADDRESSED",
+            self._codes(self._validate(self.handoff, task=task, bind_digest=True)),
+        )
 
         handoff = copy.deepcopy(self.handoff)
         handoff["claims_addressed"] = ["CLAIM-AGENT-SAFE-001"]
@@ -118,14 +128,18 @@ class TestValidateHandoff(unittest.TestCase):
         task["delete_allowed"] = True
         handoff["changed_paths"] = ["scripts/agent/validate_handoff.py"]
         handoff["deleted_paths"] = [r"scripts\agent\validate_handoff.py"]
-        findings = self._validate(handoff, task=task, bind_digest=True)
-        self.assertIn("PATH_STATE_CONTRADICTION", self._codes(findings))
+        self.assertIn(
+            "PATH_STATE_CONTRADICTION",
+            self._codes(self._validate(handoff, task=task, bind_digest=True)),
+        )
 
         task["allowed_paths"] = ["scripts/agent/validate_handoff.py"]
         handoff["changed_paths"] = ["scripts/agent/validate_handoff.py/child"]
         handoff["deleted_paths"] = []
-        findings = self._validate(handoff, task=task, bind_digest=True)
-        self.assertIn("PATH_OUT_OF_SCOPE", self._codes(findings))
+        self.assertIn(
+            "PATH_OUT_OF_SCOPE",
+            self._codes(self._validate(handoff, task=task, bind_digest=True)),
+        )
 
     def test_evidence_must_be_accounted_and_exist(self):
         handoff = copy.deepcopy(self.handoff)
@@ -138,8 +152,10 @@ class TestValidateHandoff(unittest.TestCase):
         task["expected_evidence"].append("scripts/agent/does-not-exist.py")
         handoff = copy.deepcopy(self.handoff)
         handoff["evidence_produced"].append("scripts/agent/does-not-exist.py")
-        findings = self._validate(handoff, task=task, bind_digest=True)
-        self.assertIn("EVIDENCE_NOT_FOUND", self._codes(findings))
+        self.assertIn(
+            "EVIDENCE_NOT_FOUND",
+            self._codes(self._validate(handoff, task=task, bind_digest=True)),
+        )
 
         handoff = copy.deepcopy(self.handoff)
         handoff["missing_evidence"] = [r"contracts\agent\handoff.schema.json"]
@@ -157,8 +173,10 @@ class TestValidateHandoff(unittest.TestCase):
             task["expected_evidence"].append(rel)
             handoff = copy.deepcopy(self.handoff)
             handoff["evidence_produced"].append(rel)
-            findings = self._validate(handoff, task=task, bind_digest=True)
-            self.assertIn("EVIDENCE_NOT_FOUND", self._codes(findings))
+            self.assertIn(
+                "EVIDENCE_NOT_FOUND",
+                self._codes(self._validate(handoff, task=task, bind_digest=True)),
+            )
         finally:
             link.unlink(missing_ok=True)
             outside.unlink(missing_ok=True)
@@ -190,7 +208,8 @@ class TestValidateHandoff(unittest.TestCase):
         handoff = copy.deepcopy(self.handoff)
         handoff["residual_gaps"] = ["independent run attestation is outside this slice"]
         self.assertNotIn("CONTRADICTORY_OUTCOME", self._codes(self._validate(handoff)))
-        self.assertEqual(self._cli("handoff-valid-residual-gap.json").returncode, 0)
+        proc = self._cli("handoff-valid-residual-gap.json")
+        self.assertEqual(proc.returncode, 0)
 
     def test_missing_field_has_one_schema_finding(self):
         handoff = copy.deepcopy(self.handoff)
@@ -213,8 +232,10 @@ class TestValidateHandoff(unittest.TestCase):
         self.assertEqual(keys, sorted(keys))
 
     def test_digest_fixture_matches_task_bytes(self):
-        digest = hashlib.sha256(self.task_path.read_bytes()).hexdigest()
-        self.assertEqual(self.handoff["task_contract_sha256"], digest)
+        self.assertEqual(
+            self.handoff["task_contract_sha256"],
+            hashlib.sha256(self.task_path.read_bytes()).hexdigest(),
+        )
 
     def test_duplicate_key_and_malformed_json_exit_two(self):
         variants = (
