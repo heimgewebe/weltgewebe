@@ -167,6 +167,39 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertEqual(result.status, "fail")
         self.assertIn("functional handoff smoke", result.missing)
 
+    def test_handoff_missing_claim_in_real_registry_fails_smoke(self):
+        self._copy_handoff_capability()
+
+        task = json.loads(
+            (self.root / "tests/fixtures/agent/handoff-task.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        claim_id = task["claims"][0]
+        registry_path = self.root / "docs/claims/registry.yml"
+        raw = registry_path.read_text(encoding="utf-8")
+        self.assertTrue(raw.startswith("---\n"))
+        registry = json.loads(raw[4:])
+        registry["claims"] = [
+            claim
+            for claim in registry["claims"]
+            if claim.get("id") != claim_id
+        ]
+        registry_path.write_text(
+            "---\n"
+            + json.dumps(registry, ensure_ascii=False, indent=2)
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = next(
+            item
+            for item in gen.evaluate_capabilities(self.root)
+            if item.id == "handoff_validation"
+        )
+        self.assertEqual(result.status, "fail")
+        self.assertIn("functional handoff smoke", result.missing)
+
     def test_handoff_named_file_alone_cannot_create_false_green(self):
         self._touch("scripts/agent/handoff_placeholder.py")
 
