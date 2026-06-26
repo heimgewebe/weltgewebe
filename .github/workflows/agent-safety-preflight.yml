@@ -11,6 +11,7 @@ name: agent-safety-preflight
       - "contracts/agent/**"
       - "tests/fixtures/agent/**"
       - "docs/security/**"
+      - "docs/reference/agent-*.md"
       - "docs/reference/agent-operability-fixture-matrix.md"
       - "docs/reference/agent-handoff-contract.md"
       - "docs/blueprints/blueprint-agent-safety-control-layer.md"
@@ -88,6 +89,36 @@ jobs:
           python3 -m scripts.agent.validate_handoff \
             --task-file tests/fixtures/agent/handoff-task.json \
             --handoff-file tests/fixtures/agent/handoff-valid.json
+
+      - name: Smoke-check dry-run runner (no write)
+        run: |
+          set -euo pipefail
+
+          BEFORE="$(git status --porcelain=v1 --untracked-files=all)"
+          OUT="$(mktemp -d)"
+          trap 'rm -rf -- "$OUT"' EXIT
+
+          python3 -m scripts.agent.run_task \
+            --dry-run \
+            --output-dir "$OUT/doc-drift" \
+            tests/fixtures/agent/valid-doc-drift-task.json
+
+          python3 -m scripts.agent.run_task \
+            --dry-run \
+            --output-dir "$OUT/roadmap" \
+            tests/fixtures/agent/valid-roadmap-claim-task.json
+
+          python3 -m scripts.agent.run_task \
+            --dry-run \
+            --output-dir "$OUT/generated-refresh" \
+            tests/fixtures/agent/valid-generated-refresh-task.json
+
+          AFTER="$(git status --porcelain=v1 --untracked-files=all)"
+          if [ "$BEFORE" != "$AFTER" ]; then
+            printf 'Dry-run runner changed repository status\n' >&2
+            git status --short --untracked-files=all >&2
+            exit 1
+          fi
 
       - name: Run agent readiness tests
         run: |

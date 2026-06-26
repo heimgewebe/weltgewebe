@@ -11,8 +11,14 @@ from typing import Iterable
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.agent.json_contract import DuplicateKeyError, loads_json_strict
+from scripts.agent.json_contract import (
+    DuplicateKeyError,
+    load_json_strict,
+    loads_json_strict,
+)
+from scripts.agent.validate_handoff import validate_handoff
 from scripts.docmeta.docmeta import REPO_ROOT
+from scripts.docmeta import validate_claim_registry
 
 
 @dataclass(frozen=True)
@@ -30,6 +36,7 @@ VALID_STATUSES = {"pass", "partial", "open", "fail"}
 
 HANDOFF_TASK_FILE = "tests/fixtures/agent/handoff-task.json"
 HANDOFF_VALID_FILE = "tests/fixtures/agent/handoff-valid.json"
+DRY_RUN_TASK_FILE = "tests/fixtures/agent/valid-doc-drift-task.json"
 HANDOFF_REQUIRED_FILES = [
     "contracts/agent/task.schema.json",
     "contracts/agent/handoff.schema.json",
@@ -42,6 +49,11 @@ HANDOFF_REQUIRED_FILES = [
     "docs/claims/registry.yml",
     HANDOFF_TASK_FILE,
     HANDOFF_VALID_FILE,
+]
+DRY_RUN_REQUIRED_FILES = [
+    "scripts/agent/run_task.py",
+    "scripts/agent/tests/test_run_task.py",
+    DRY_RUN_TASK_FILE,
 ]
 
 
@@ -64,6 +76,26 @@ def _handoff_failure(
     )
 
 
+def _capability_failure(
+    presence: CapabilityResult,
+    missing_item: str,
+    diagnostic: str,
+) -> CapabilityResult:
+    diagnostic = diagnostic.strip()
+    if len(diagnostic) > 240:
+        diagnostic = diagnostic[:237] + "..."
+    suffix = f": {diagnostic}" if diagnostic else "."
+    return CapabilityResult(
+        id=presence.id,
+        title=presence.title,
+        hard=presence.hard,
+        status="fail",
+        evidence=presence.evidence,
+        missing=[missing_item],
+        rationale=f"{presence.rationale} Functional smoke failed{suffix}",
+    )
+
+
 def _evaluate_handoff_validation(root: Path) -> CapabilityResult:
     presence = _evaluate_required_files(
         root=root,
@@ -72,8 +104,7 @@ def _evaluate_handoff_validation(root: Path) -> CapabilityResult:
         hard=True,
         required_files=HANDOFF_REQUIRED_FILES,
         rationale=(
-            "Handoff-Checks begrenzen unvollstaendige oder unsichere "
-            "Uebergaben."
+            "Handoff-Checks begrenzen unvollstaendige oder unsichere Uebergaben."
         ),
     )
     if presence.status != "pass":
@@ -130,6 +161,147 @@ def _evaluate_handoff_validation(root: Path) -> CapabilityResult:
         rationale=(
             f"{presence.rationale} Required files and the canonical CLI smoke "
             "both pass."
+        ),
+    )
+
+
+def _git_status_bytes(root: Path) -> bytes:
+    completed = subprocess.run(
+        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        timeout=15,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError("git status failed")
+    return completed.stdout
+
+
+def _validate_dry_run_payload(root: Path, payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return "runner output must be a JSON object"
+    if payload.get("mode") != "dry_run":
+        return "mode is not dry_run"
+    if payload.get("status") != "planned":
+        return "status is not planned"
+    if payload.get("findings") != []:
+        return "findings are not empty"
+    if payload.get("repository_unchanged") is not True:
+        return "repository_unchanged is not true"
+
+    handoff = payload.get("handoff")
+    if not isinstance(handoff, dict):
+        return "handoff is missing"
+    if handoff.get("outcome") != "incomplete":
+        return "handoff outcome is not incomplete"
+    validation_results = handoff.get("validation_results")
+    if not isinstance(validation_results, list) or not validation_results:
+        return "handoff validation_results are missing"
+    if any(
+        not isinstance(item, dict) or item.get("status") != "not_run"
+        for item in validation_results
+    ):
+        return "handoff validation_results are not all not_run"
+
+    try:
+        task = load_json_strict(root / DRY_RUN_TASK_FILE)
+        task_bytes = (root / DRY_RUN_TASK_FILE).read_bytes()
+        registry, parser_findings, parser_exit = validate_claim_registry.load_registry(
+            root / "docs/claims/registry.yml"
+        )
+    except (OSError, json.JSONDecodeError, DuplicateKeyError) as exc:
+        return f"dry-run validation dependency failed: {exc}"
+    if parser_exit != 0 or registry is None:
+        return f"claim registry could not be loaded: {parser_findings}"
+    findings = validate_handoff(
+        task,
+        handoff,
+        task_bytes=task_bytes,
+        repo_root=root,
+        claim_registry=registry,
+    )
+    if findings:
+        return f"handoff validator findings: {findings[:3]}"
+    return None
+
+
+def _evaluate_dry_run_runner(root: Path) -> CapabilityResult:
+    presence = _evaluate_required_files(
+        root=root,
+        cap_id="dry_run_runner",
+        title="Dry-run runner",
+        hard=True,
+        required_files=DRY_RUN_REQUIRED_FILES,
+        rationale="Dry-Run Runner prueft Agentenpfade ohne schreibende Seiteneffekte.",
+    )
+    if presence.status != "pass":
+        return presence
+
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHONPATH": str(root),
+        "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
+    }
+    try:
+        before = _git_status_bytes(root)
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "scripts.agent.run_task",
+                "--dry-run",
+                DRY_RUN_TASK_FILE,
+            ],
+            cwd=root,
+            env=env,
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=20,
+        )
+        after = _git_status_bytes(root)
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        return _capability_failure(presence, "functional dry-run smoke", str(exc))
+
+    if before != after:
+        return _capability_failure(
+            presence,
+            "functional dry-run smoke",
+            "git status changed during smoke",
+        )
+    try:
+        payload = loads_json_strict(completed.stdout)
+    except (json.JSONDecodeError, DuplicateKeyError) as exc:
+        return _capability_failure(
+            presence,
+            "functional dry-run smoke",
+            f"invalid JSON output: {exc}",
+        )
+    if completed.returncode != 0 or completed.stderr:
+        return _capability_failure(
+            presence,
+            "functional dry-run smoke",
+            completed.stderr or f"unexpected exit code {completed.returncode}",
+        )
+    payload_error = _validate_dry_run_payload(root, payload)
+    if payload_error is not None:
+        return _capability_failure(
+            presence,
+            "functional dry-run smoke",
+            payload_error,
+        )
+
+    return CapabilityResult(
+        id=presence.id,
+        title=presence.title,
+        hard=presence.hard,
+        status="pass",
+        evidence=presence.evidence,
+        missing=[],
+        rationale=(
+            f"{presence.rationale} Required files and the canonical dry-run "
+            "smoke both pass."
         ),
     )
 
@@ -279,39 +451,7 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
         )
     )
 
-    dry_run_evidence = _files_for_regex(
-        repo_root,
-        ["scripts/agent"],
-        r"(?=.*dry[_-]?run)(?=.*runner)",
-    )
-    dry_run_partial = _files_for_regex(
-        repo_root,
-        ["scripts/agent"],
-        r"dry[_-]?run|runner",
-    )
-    if dry_run_evidence:
-        dry_run_status = "pass"
-        dry_run_missing: list[str] = []
-        dry_run_report = dry_run_evidence
-    elif dry_run_partial:
-        dry_run_status = "partial"
-        dry_run_missing = ["scripts/agent/*dry_run*runner*"]
-        dry_run_report = dry_run_partial
-    else:
-        dry_run_status = "open"
-        dry_run_missing = ["scripts/agent/*dry_run*runner*"]
-        dry_run_report = []
-    results.append(
-        CapabilityResult(
-            id="dry_run_runner",
-            title="Dry-run runner",
-            hard=True,
-            status=dry_run_status,
-            evidence=dry_run_report,
-            missing=dry_run_missing,
-            rationale="Dry-Run Runner prueft Agentenpfade ohne schreibende Seiteneffekte.",
-        )
-    )
+    results.append(_evaluate_dry_run_runner(repo_root))
 
     for result in results:
         if result.status not in VALID_STATUSES:
@@ -340,9 +480,11 @@ def determine_overall_status(
         return "pass", "All hard and non-hard capabilities are present.", []
 
     if not passing and not partial:
-        return "open", "No capability evidence detected yet.", [
-            r.id for r in results if r.hard
-        ]
+        return (
+            "open",
+            "No capability evidence detected yet.",
+            [r.id for r in results if r.hard],
+        )
 
     return "partial", "Capabilities are partially implemented.", hard_gaps
 
@@ -388,9 +530,7 @@ def render_report(
                 else "-"
             )
         missing = (
-            ", ".join(f"`{item}`" for item in result.missing)
-            if result.missing
-            else "-"
+            ", ".join(f"`{item}`" for item in result.missing) if result.missing else "-"
         )
         hard = "yes" if result.hard else "no"
         lines.append(
@@ -419,6 +559,12 @@ def render_report(
     lines.append("## Interpretation Rule")
     lines.append("")
     lines.append("Dieser Report ist diagnostisch. Er aktiviert keinen Blocking-Mode.")
+    lines.append(
+        "`pass` bezeichnet nur die read-only Contract- und Planungsfaehigkeit "
+        "der Agent-Safety-Schicht. Es bestaetigt keine Task-Ausfuehrung, "
+        "keine Run-Attestierung, keine Patch-Anwendung, keinen Write Mode und "
+        "keine autonome Merge-Faehigkeit."
+    )
     lines.append("")
     return "\n".join(lines)
 

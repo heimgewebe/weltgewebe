@@ -28,8 +28,10 @@ Dieses Dokument legt fest, welche Pfade Agenten beschreiben dürfen, welche Pfad
 verboten sind und welche Fehlercodes der Safety-Preflight Guard (`scripts/agent/check_agent_preflight.py`)
 erzeugt, wenn Grenzen verletzt werden.
 
-Die Guard-Implementierung ist deterministisch und report-only (Stufe 1 gemäß Blueprint-Ratchet).
-Kein automatisches Blockieren, kein Write-Mode, keine Claim-Registry.
+Die Guard-Implementierung ist deterministisch und report-only (Stufe 1 gemaess Blueprint-Ratchet).
+Kein automatisches Blockieren und kein Write-Mode. Claim-Registry,
+Agent-Contracts, Handoff-Validierung und Dry-Run-Runner sind separate
+Agent-Safety-Slices und ersetzen diesen Preflight-Guard nicht.
 
 ## Erlaubte Schreibpfade
 
@@ -97,8 +99,9 @@ Der Preflight Guard erzeugt maschinenlesbare Fehlercodes:
 Der Guard befindet sich in Stufe 1 (report-only / warn).
 Er erkennt und meldet Verletzungen, blockiert aber keinen PR automatisch.
 
-Stufe 3 (blocking) wird erst aktiviert, wenn spätere Slices (`AGENT-SAFE-002` bis `AGENT-SAFE-004`)
-die nötigen Claim-/Proof-Mechaniken aufgebaut haben.
+Stufe 3 (blocking) bleibt deaktiviert, bis ein separater Ratchet-Slice die
+Claim-, Contract-, Handoff- und Runner-Belege in eine blockierende Policy
+ueberfuehrt.
 
 ### Dateibasiertes Scanning
 
@@ -116,7 +119,6 @@ Folgende Punkte sind bekannt und werden in späteren Slices adressiert:
 
 | Gap | Slice |
 |---|---|
-| Claim-Registry für `ROADMAP_DONE_WITHOUT_CLAIM` fehlt noch | `AGENT-SAFE-003` |
-| Blocking-Modus (Stufe 3) ist noch nicht aktiviert | `AGENT-SAFE-002` / `AGENT-SAFE-004` |
-| Agent-Contracts (`contracts/agent/`) sind noch nicht vorhanden | `AGENT-SAFE-004` |
-| Dry-Run Runner und Write-Mode nicht implementiert | Spätere Slices |
+| Blocking-Modus (Stufe 3) ist noch nicht aktiviert | Spaeterer Ratchet-Slice |
+| Run-Evidence und unabhaengige Run-Attestierung fehlen noch | Folge-Slice nach `AGENT-SAFE-006` |
+| Write-Mode nicht implementiert | Spaeterer gated Write-Mode-Slice |

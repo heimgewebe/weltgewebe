@@ -71,7 +71,7 @@ entries:
       Validierungen und Outcome.
     status: partial
     owner: docs-mechanik
-    last_verified: "2026-06-24"
+    last_verified: "2026-06-26"
     evidence:
       - kind: file
         target: contracts/agent/handoff.schema.json
@@ -89,3 +89,28 @@ entries:
         target: .github/workflows/agent-safety-preflight.yml
       - kind: file
         target: .github/workflows/contracts-validate.yml
+
+  - id: claim-agent-safe-006
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-AGENT-SAFE-006]
+    claim: >-
+      Dry-Run-Runner validiert Agent-Tasks, bilanziert Claims/Evidence und
+      weist No-Write nach.
+    status: partial
+    owner: docs-mechanik
+    last_verified: "2026-06-26"
+    evidence:
+      - kind: file
+        target: scripts/agent/run_task.py
+      - kind: test
+        target: scripts/agent/tests/test_run_task.py
+      - kind: file
+        target: scripts/docmeta/generate_agent_readiness.py
+      - kind: test
+        target: scripts/docmeta/tests/test_generate_agent_readiness.py
+      - kind: test
+        target: scripts/docmeta/tests/test_agent_readiness_smoke_contract.py
+      - kind: file
+        target: .github/workflows/agent-safety-preflight.yml
+      - kind: file
+        target: docs/reference/agent-dry-run-runner.md

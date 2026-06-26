@@ -12,8 +12,8 @@ Generated automatically. Do not edit.
 
 ## Overall Status
 
-- **Overall:** partial
-- **Reason:** Hard capabilities are still missing: dry_run_runner
+- **Overall:** pass
+- **Reason:** All hard and non-hard capabilities are present.
 
 ## Capability Matrix
 
@@ -25,7 +25,7 @@ Generated automatically. Do not edit.
 | agent_contracts | pass | yes | `contracts/agent/task.schema.json` | - | Contracts definieren maschinenlesbare Agent-Task-Grenzen. |
 | handoff_validation | pass | yes | See Handoff Evidence | - | Handoff-Checks begrenzen unvollstaendige oder unsichere Uebergaben. Required files and the canonical CLI smoke both pass. |
 | non_ideal_guard | pass | yes | `scripts/agent/check_non_ideal_task.py`, `scripts/agent/tests/test_check_non_ideal_task.py` | - | Non-Ideal-Guard erkennt riskante Ausnahmefaelle vor Ausfuehrung. |
-| dry_run_runner | open | yes | - | `scripts/agent/*dry_run*runner*` | Dry-Run Runner prueft Agentenpfade ohne schreibende Seiteneffekte. |
+| dry_run_runner | pass | yes | `scripts/agent/run_task.py`, `scripts/agent/tests/test_run_task.py`, `tests/fixtures/agent/valid-doc-drift-task.json` | - | Dry-Run Runner prueft Agentenpfade ohne schreibende Seiteneffekte. Required files and the canonical dry-run smoke both pass. |
 
 ## Handoff Evidence
 
@@ -43,8 +43,9 @@ Generated automatically. Do not edit.
 
 ## Residual Gaps
 
-- Hard capability missing: dry_run_runner
+- No residual hard gaps detected.
 
 ## Interpretation Rule
 
 Dieser Report ist diagnostisch. Er aktiviert keinen Blocking-Mode.
+`pass` bezeichnet nur die read-only Contract- und Planungsfaehigkeit der Agent-Safety-Schicht. Es bestaetigt keine Task-Ausfuehrung, keine Run-Attestierung, keine Patch-Anwendung, keinen Write Mode und keine autonome Merge-Faehigkeit.

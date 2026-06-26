@@ -70,7 +70,7 @@ Typische `kind`-Werte:
 
 ## Nicht-Ziele dieses Slices
 
-Dieser Slice fuehrt nicht ein:
+Der urspruengliche Claim-Spine-Slice fuehrte nicht ein:
 
 - Agent-Contract-Suite
 - Handoff-Validator
@@ -80,7 +80,10 @@ Dieser Slice fuehrt nicht ein:
 - Blocking-CI
 - Vollstaendige Proof-Engine
 
-AGENT-SAFE-004 bleibt offen.
+AGENT-SAFE-004 und AGENT-SAFE-005 sind inzwischen separat implementiert und
+belegt. AGENT-SAFE-006 fuehrt den read-only Dry-Run-Runner ein. Write Mode,
+Blocking-CI fuer alle Agent-Safety-Befunde und vollstaendige Run-Evidence
+bleiben Folgearbeiten.
 
 ## Freshness Registry (Lenskit Bridge)
 

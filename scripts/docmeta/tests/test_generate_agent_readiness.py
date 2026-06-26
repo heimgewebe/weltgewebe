@@ -1,5 +1,6 @@
 import json
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -76,6 +77,41 @@ class TestGenerateAgentReadiness(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
 
+    def _copy_dry_run_capability(self) -> None:
+        source_root = Path(gen.REPO_ROOT).resolve()
+        for rel_path in gen.DRY_RUN_REQUIRED_FILES:
+            source = (source_root / rel_path).resolve()
+            try:
+                source.relative_to(source_root)
+            except ValueError as exc:
+                raise AssertionError(
+                    f"dry-run fixture dependency escapes repository root: {rel_path}"
+                ) from exc
+            if not source.is_file():
+                raise AssertionError(
+                    f"dry-run fixture dependency is missing or not a file: {rel_path}"
+                )
+            target = self.root / rel_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+
+    def _init_git_repo(self) -> None:
+        subprocess_kwargs = {
+            "cwd": self.root,
+            "check": True,
+            "stdout": subprocess.DEVNULL,
+            "stderr": subprocess.DEVNULL,
+        }
+
+        subprocess.run(["git", "init"], **subprocess_kwargs)
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.invalid"],
+            **subprocess_kwargs,
+        )
+        subprocess.run(["git", "config", "user.name", "Test User"], **subprocess_kwargs)
+        subprocess.run(["git", "add", "."], **subprocess_kwargs)
+        subprocess.run(["git", "commit", "-m", "initial"], **subprocess_kwargs)
+
     def _status_map(self, results: list[gen.CapabilityResult]) -> dict[str, str]:
         return {result.id: result.status for result in results}
 
@@ -123,8 +159,9 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self._touch("docs/claims/registry.yml")
         self._touch("scripts/docmeta/validate_claim_registry.py")
         self._copy_handoff_capability()
+        self._copy_dry_run_capability()
         self._touch("scripts/agent/tests/test_check_non_ideal_task.py")
-        self._touch("scripts/agent/dry_run_runner.py")
+        self._init_git_repo()
 
         gen.generate(self.root)
         results = gen.evaluate_capabilities(self.root)
@@ -159,7 +196,9 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertIn("## Interpretation Rule", report)
         self.assertRegex(report, r"\| agent_policy \| (pass|partial|open|fail) \|")
         self.assertRegex(report, r"\| safety_preflight \| (pass|partial|open|fail) \|")
-        self.assertRegex(report, r"\| claim_evidence_spine \| (pass|partial|open|fail) \|")
+        self.assertRegex(
+            report, r"\| claim_evidence_spine \| (pass|partial|open|fail) \|"
+        )
 
     def test_handoff_single_artifact_is_partial_not_pass(self):
         self._touch("contracts/agent/handoff.schema.json", "{}\n")
@@ -177,7 +216,9 @@ class TestGenerateAgentReadiness(unittest.TestCase):
 
     def test_handoff_complete_placeholder_set_fails_functional_smoke(self):
         for rel_path in gen.HANDOFF_REQUIRED_FILES:
-            self._touch(rel_path, "{}\n" if rel_path.endswith(".json") else "# placeholder\n")
+            self._touch(
+                rel_path, "{}\n" if rel_path.endswith(".json") else "# placeholder\n"
+            )
 
         result = next(
             item
@@ -202,14 +243,10 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertTrue(raw.startswith("---\n"))
         registry = json.loads(raw[4:])
         registry["claims"] = [
-            claim
-            for claim in registry["claims"]
-            if claim.get("id") != claim_id
+            claim for claim in registry["claims"] if claim.get("id") != claim_id
         ]
         registry_path.write_text(
-            "---\n"
-            + json.dumps(registry, ensure_ascii=False, indent=2)
-            + "\n",
+            "---\n" + json.dumps(registry, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
 
@@ -229,6 +266,14 @@ class TestGenerateAgentReadiness(unittest.TestCase):
 
         self.assertEqual(status["handoff_validation"], "open")
 
+    def test_dry_run_named_placeholder_cannot_create_false_green(self):
+        self._touch("scripts/agent/dry_run_runner.py", '"""Placeholder."""\n')
+
+        results = gen.evaluate_capabilities(self.root)
+        status = self._status_map(results)
+
+        self.assertNotEqual(status["dry_run_runner"], "pass")
+
     def test_agent_policy_directory_artifact_fails_overall(self):
         (self.root / "AGENTS.md").mkdir(parents=True, exist_ok=True)
         self._touch("agent-policy.yaml")
@@ -247,7 +292,9 @@ class TestGenerateAgentReadiness(unittest.TestCase):
     def test_claim_registry_directory_artifact_is_hard_fail_and_gap(self):
         self._touch("AGENTS.md")
         self._touch("agent-policy.yaml")
-        (self.root / "docs" / "claims" / "registry.yml").mkdir(parents=True, exist_ok=True)
+        (self.root / "docs" / "claims" / "registry.yml").mkdir(
+            parents=True, exist_ok=True
+        )
 
         out_file = gen.generate(self.root)
         report = out_file.read_text(encoding="utf-8")
