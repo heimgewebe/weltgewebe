@@ -74,8 +74,14 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
 
+## contracts/agent/handoff.schema.json
+
+- [relates_to] docs/reference/agent-handoff-contract.md
+- [relates_to] docs/reference/agent-operability-fixture-matrix.md
+
 ## contracts/agent/task.schema.json
 
+- [relates_to] docs/reference/agent-handoff-contract.md
 - [relates_to] docs/reference/agent-operability-fixture-matrix.md
 
 ## contracts/domain/edge.schema.json
@@ -174,6 +180,7 @@ Generated automatically. Do not edit.
 ## docs/blueprints/blueprint-agent-safety-control-layer.md
 
 - [relates_to] docs/claims/README.md
+- [relates_to] docs/reference/agent-handoff-contract.md
 - [relates_to] docs/security/agent-write-scope-baseline.md
 
 ## docs/blueprints/doc-structure-task-control-examples.md
@@ -788,8 +795,21 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reference/agent-operability-fixture-matrix.md
 
+## scripts/agent/json_contract.py
+
+- [relates_to] docs/reference/agent-handoff-contract.md
+
 ## scripts/agent/tests/test_check_non_ideal_task.py
 
+- [relates_to] docs/reference/agent-operability-fixture-matrix.md
+
+## scripts/agent/tests/test_validate_handoff.py
+
+- [relates_to] docs/reference/agent-operability-fixture-matrix.md
+
+## scripts/agent/validate_handoff.py
+
+- [relates_to] docs/reference/agent-handoff-contract.md
 - [relates_to] docs/reference/agent-operability-fixture-matrix.md
 
 ## scripts/basemap/build-hamburg-pmtiles.sh
@@ -828,6 +848,10 @@ Generated automatically. Do not edit.
 ## scripts/tests/test_domain_single_instance_guard.sh
 
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
+
+## tests/fixtures/agent/handoff-valid.json
+
+- [relates_to] docs/reference/agent-handoff-contract.md
 
 ## tools/py/cost/model.csv
 

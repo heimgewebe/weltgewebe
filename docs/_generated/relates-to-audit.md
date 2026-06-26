@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 422 |
+| Relationen gesamt | 431 |
 | — depends_on | 18 |
-| — relates_to | 401 |
+| — relates_to | 410 |
 | — supersedes | 3 |
 | relates_to Anteil | 95% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (153 Dokumente):
+**Cluster 1** (163 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -45,6 +45,8 @@ _Keine Lücken erkannt._
 - `apps/api/tests/db_domain_account_write_path.rs`
 - `apps/api/tests/db_domain_backfill.rs`
 - `audit/impl-registry.yaml`
+- `contracts/agent/handoff.schema.json`
+- `contracts/agent/task.schema.json`
 - `contracts/domain/edge.schema.json`
 - `docs/_generated/report-lifecycle-inventory.md`
 - `docs/adr/0043-edge-vs-conversation.md`
@@ -118,6 +120,8 @@ _Keine Lücken erkannt._
 - `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
 - `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`
 - `docs/quickstart-gate-c.md`
+- `docs/reference/agent-handoff-contract.md`
+- `docs/reference/agent-operability-fixture-matrix.md`
 - `docs/reference/glossar.md`
 - `docs/reports/agent-readiness-audit.md`
 - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
@@ -176,6 +180,11 @@ _Keine Lücken erkannt._
 - `docs/zusammenstellung.md`
 - `infra/compose/compose.prod.override.yml`
 - `repo.meta.yaml`
+- `scripts/agent/check_non_ideal_task.py`
+- `scripts/agent/json_contract.py`
+- `scripts/agent/tests/test_check_non_ideal_task.py`
+- `scripts/agent/tests/test_validate_handoff.py`
+- `scripts/agent/validate_handoff.py`
 - `scripts/basemap/build-hamburg-pmtiles.sh`
 - `scripts/docmeta/audit_account_email_uniqueness.py`
 - `scripts/docmeta/audit_domain_edge_references.py`
@@ -185,6 +194,7 @@ _Keine Lücken erkannt._
 - `scripts/guard/basemap-runtime-proof.sh`
 - `scripts/guard/domain-single-instance-guard.sh`
 - `scripts/tests/test_domain_single_instance_guard.sh`
+- `tests/fixtures/agent/handoff-valid.json`
 
 **Cluster 2** (4 Dokumente):
 
@@ -193,14 +203,7 @@ _Keine Lücken erkannt._
 - `tools/py/cost/model.csv`
 - `tools/py/cost/report.py`
 
-**Cluster 3** (4 Dokumente):
-
-- `contracts/agent/task.schema.json`
-- `docs/reference/agent-operability-fixture-matrix.md`
-- `scripts/agent/check_non_ideal_task.py`
-- `scripts/agent/tests/test_check_non_ideal_task.py`
-
-**Cluster 4** (3 Dokumente):
+**Cluster 3** (3 Dokumente):
 
 - `docs/adr/0042-consume-semantah-contracts.md`
 - `docs/x-repo/peers-learnings.md`
