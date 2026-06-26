@@ -15,7 +15,8 @@ Generated automatically. Do not edit.
 | claim-agent-safe-001 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-001] | partial | docs-mechanik | 2026-06-05 | 4 items |
 | claim-agent-safe-002 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-002] | partial | docs-mechanik | 2026-06-05 | 3 items |
 | claim-agent-safe-003 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-003] | partial | docs-mechanik | 2026-06-05 | 4 items |
-| claim-agent-safe-005 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-005] | partial | docs-mechanik | 2026-06-24 | 8 items |
+| claim-agent-safe-005 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-005] | partial | docs-mechanik | 2026-06-26 | 8 items |
+| claim-agent-safe-006 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-006] | partial | docs-mechanik | 2026-06-26 | 7 items |
 
 ## Details
 
@@ -87,7 +88,7 @@ Does not prove:
 - Locator: `claims[id=CLAIM-AGENT-SAFE-005]`
 - Status: `partial`
 - Owner: `docs-mechanik`
-- Last verified: `2026-06-24`
+- Last verified: `2026-06-26`
 
 Evidence:
 
@@ -101,6 +102,30 @@ Evidence:
 | `file` | `docs/reference/agent-operability-fixture-matrix.md` |
 | `file` | `.github/workflows/agent-safety-preflight.yml` |
 | `file` | `.github/workflows/contracts-validate.yml` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
+
+### CLAIM-AGENT-SAFE-006
+
+- Entry: `claim-agent-safe-006`
+- Locator: `claims[id=CLAIM-AGENT-SAFE-006]`
+- Status: `partial`
+- Owner: `docs-mechanik`
+- Last verified: `2026-06-26`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `scripts/agent/run_task.py` |
+| `test` | `scripts/agent/tests/test_run_task.py` |
+| `file` | `scripts/docmeta/generate_agent_readiness.py` |
+| `test` | `scripts/docmeta/tests/test_generate_agent_readiness.py` |
+| `test` | `scripts/docmeta/tests/test_agent_readiness_smoke_contract.py` |
+| `file` | `.github/workflows/agent-safety-preflight.yml` |
+| `file` | `docs/reference/agent-dry-run-runner.md` |
 
 Does not prove:
 

@@ -230,7 +230,7 @@
         "docs/security/agent-write-scope-baseline.md"
       ],
       "missing_evidence": [
-        "Claim-Spine, Agent-Contracts und Blocking-Mode sind bewusst in AGENT-SAFE-002 bis AGENT-SAFE-004 nachgelagert"
+        "Blocking-Modus und Write Mode sind nicht Teil dieses report-only Safety-Preflight-Slices"
       ],
       "acceptance": [
         "ein minimaler Preflight prüft vor agentischen Schreiboperationen Task-ID, Ziel, erlaubte Pfade, Claims, erwartete Evidence und Validierungskommandos",
@@ -246,7 +246,7 @@
           "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-06-01"
+      "updated_at": "2026-06-26"
     },
     {
       "id": "AGENT-SAFE-002",
@@ -262,15 +262,12 @@
         "scripts/docmeta/tests/test_generate_agent_readiness.py",
         "docs/tasks/board.md"
       ],
-      "missing_evidence": [
-        "Agent-Contracts sind noch nicht implementiert",
-        "Handoff-Validierung, Non-Ideal-Guard und Dry-Run-Runner sind noch nicht implementiert"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "fehlende als verpflichtend markierte Agent-Fähigkeiten führen zu hard fail statt soft degrade",
         "Capability-Matrix oder äquivalente Quelle unterscheidet optionale und verpflichtende Fähigkeiten",
         "Task-Control und Roadmap behaupten keinen Done-Status ohne belegten Hard-Fail-Mechanismus",
-        "offene Capability-Artefakte bleiben explizit in missing_evidence und Folge-Slices AGENT-SAFE-003/004"
+        "offene Capability-Artefakte bleiben explizit sichtbar und laufen in eigenen Folge-Slices"
       ],
       "links": {
         "issues": [],
@@ -281,7 +278,7 @@
           "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-06-01"
+      "updated_at": "2026-06-26"
     },
     {
       "id": "AGENT-SAFE-003",
@@ -346,7 +343,7 @@
       "acceptance": [
         "ein minimaler Contract beschreibt Pflichtfelder, Claims und erlaubte Pfade für agentische Tasks",
         "ein Guard blockiert Non-Ideal-Tasks ohne vollständigen Arbeitsauftrag",
-        "Readiness zeigt Agent-Contracts und Non-Ideal-Guard als vorhanden, ohne offene Hard-Gaps zu glätten"
+        "Readiness zeigt Agent-Contracts und Non-Ideal-Guard als vorhanden, ohne offene Hard-Gaps zu glätten; Handoff, Dry-Run und Write Mode bleiben eigene Slices"
       ],
       "links": {
         "issues": [],
@@ -357,13 +354,13 @@
           "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-06-01"
+      "updated_at": "2026-06-26"
     },
     {
       "id": "AGENT-SAFE-005",
       "title": "Deterministische Agent-Handoff-Validierung einführen",
       "area": "governance",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "high",
@@ -378,10 +375,10 @@
         "tests/fixtures/agent/handoff-valid.json",
         "docs/reference/agent-operability-fixture-matrix.md",
         ".github/workflows/agent-safety-preflight.yml",
-        ".github/workflows/contracts-validate.yml"
+        ".github/workflows/contracts-validate.yml",
+        "PR #1261 Merge-Commit 260a8d1ea39ea6c2de5f7b34ed75a20e5a2d9389"
       ],
       "missing_evidence": [
-        "Merge auf main und post-merge Verfügbarkeit stehen aus",
         "Unabhängige Run-Attestierung und tatsächliche Command-Ausführung bleiben einem späteren Runner-Slice vorbehalten"
       ],
       "acceptance": [
@@ -401,7 +398,49 @@
           "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-06-24"
+      "updated_at": "2026-06-26"
+    },
+    {
+      "id": "AGENT-SAFE-006",
+      "title": "Deterministischen Read-only-Dry-Run-Runner mit funktionalem Readiness-Gate einführen",
+      "area": "governance",
+      "status": "partial",
+      "priority": "high",
+      "effort": "L",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "scripts/agent/run_task.py",
+        "scripts/agent/tests/test_run_task.py",
+        "scripts/docmeta/generate_agent_readiness.py",
+        "scripts/docmeta/tests/test_generate_agent_readiness.py",
+        "scripts/docmeta/tests/test_agent_readiness_smoke_contract.py",
+        ".github/workflows/agent-safety-preflight.yml",
+        "docs/reference/agent-dry-run-runner.md",
+        "docs/reference/agent-operability-fixture-matrix.md"
+      ],
+      "missing_evidence": [
+        "Merge auf main und post-merge Verfuegbarkeit stehen fuer diesen Slice noch aus",
+        "Persistente Run-Evidence, Run-Attestierung, Patch-Anwendung und Write Mode bleiben Folge-Slices"
+      ],
+      "acceptance": [
+        "Der Runner laedt Task-Dateien strikt als Raw Bytes und bindet den SHA-256-Digest an das Handoff",
+        "Der Runner validiert Task-Schema, Claim-Registry, Non-Ideal-Guard und Handoff-Contract ohne Task-Kommandos auszufuehren",
+        "Der Runner erzeugt ein validatorgueltiges incomplete-Handoff mit vollstaendiger Claim-, Evidence- und Validierungsbilanz",
+        "Runner und CI vergleichen den persistenten, nicht ignorierten Git-sichtbaren Zustand zwischen Pruefpunkten; ignorierte Pfade, .git, externe Pfade und transiente Write-then-revert-Vorgaenge liegen ausserhalb dieses Nachweises",
+        "Agent-Readiness markiert dry_run_runner nur nach funktionalem Smoke als pass"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/blueprint-agent-safety-control-layer.md",
+          "docs/reference/agent-dry-run-runner.md",
+          "docs/reference/agent-operability-fixture-matrix.md",
+          "docs/tasks/board.md"
+        ]
+      },
+      "updated_at": "2026-06-26"
     },
     {
       "id": "DOCMETA-FRESHNESS-001",

@@ -17,6 +17,10 @@ relations:
     target: scripts/agent/validate_handoff.py
   - type: relates_to
     target: scripts/agent/tests/test_validate_handoff.py
+  - type: relates_to
+    target: scripts/agent/run_task.py
+  - type: relates_to
+    target: scripts/agent/tests/test_run_task.py
 ---
 
 # Agent-Betriebsfaehigkeit: Fixture-Matrix
@@ -24,7 +28,8 @@ relations:
 ## Zweck
 
 Diese Matrix dokumentiert die Fixtures fuer minimale Agent-Task-Contracts,
-den Non-Ideal-Task-Guard und den Handoff-Validator.
+den Non-Ideal-Task-Guard, den Handoff-Validator und den read-only
+Dry-Run-Runner.
 
 ## Valid Fixtures
 
@@ -64,6 +69,51 @@ Die Handoff-Fixtures verwenden weiterhin den bestehenden
 `AGENT-SAFE-005` gefuehrt. Der Handoff ist ein Review-Beleg, keine Merge- oder
 Done-Freigabe.
 
+## Dry-Run Runner Fixtures
+
+| Fixture | Erwartung |
+|---|---|
+| `tests/fixtures/agent/valid-doc-drift-task.json` | Exit `0`; `status = planned`; `execution_plan` ist nur Scope-Bilanz; Handoff `incomplete`; alle Validierungen `not_run`; keine Repository-Aenderung |
+| `tests/fixtures/agent/valid-roadmap-claim-task.json` | Exit `0`; Claims und erwartete Evidence werden bilanziert; keine Task-Kommandos werden ausgefuehrt |
+| `tests/fixtures/agent/valid-generated-refresh-task.json` | Exit `0`; Generator-Command bleibt `not_run`; `docs/_generated/agent-readiness.md` wird nicht durch den Runner veraendert |
+
+Der Runner liest die Task-Datei als Raw Bytes, bindet den SHA-256-Digest an das
+Handoff und nutzt den echten lokalen `HEAD` in CLI-Laeufen. Tests injizieren die
+Source Revision im Core, damit keine oeffentlichen Fake-Flags entstehen.
+
+## Dry-Run Negative Gegenwelten
+
+Die Runner-Tests decken insbesondere ab:
+
+- malformed JSON, Duplicate Keys, `NaN`, `Infinity` und ungueltiges UTF-8
+- fehlende Pflichtfelder und whitespace-only Pflichtwerte
+- Non-Ideal-Tasks und unbekannte Claims
+- absolute Task-Pfade, Parent-Traversal und Task-Symlinks aus dem Repository
+- fehlenden Git-`HEAD`
+- ungueltiges `--write`
+- Output-Ziele im Repository, Symlinks, nicht leere Verzeichnisse und vorhandene Zieldateien
+- simulierten Repository-Drift waehrend des Dry Runs
+- ungueltig erzeugte Handoffs
+- unvollstaendige Evidence- und Validierungsbilanz
+
+Die Determinismus-Tests fuehren denselben Task mit derselben Source Revision in
+zwei getrennte externe Output-Verzeichnisse aus und vergleichen `handoff.json`
+und `run-result.json` bytegleich.
+
+## Functional Readiness Smoke
+
+`dry_run_runner = pass` entsteht nicht mehr durch Dateinamen. Der
+Readiness-Generator fuehrt einen echten Runner-Smoke aus, prueft Strict-JSON,
+`mode = dry_run`, `status = planned`, leere Findings, `repository_unchanged`,
+ein vorhandenes Handoff, Handoff-Validator-Akzeptanz, `outcome = incomplete`,
+vollstaendige `not_run`-Validierungen und einen unveraenderten
+inhaltssensitiven Git-Zustandsfingerabdruck.
+
+Explizite False-Green-Gegenwelten pruefen passend benannte Placeholder-Dateien,
+ungueltiges JSON, falschen Modus, falschen Status, fehlendes oder ungueltiges
+Handoff, `ready_for_review`, faelschlich bestandene Validierungen,
+`repository_unchanged = false`, persistente Git-Zustandsdrift und Timeout.
+
 ## Evidence-Regeln
 
 - produzierte Evidence bezeichnet lokale Dateien innerhalb des Repository-Roots.
@@ -86,10 +136,12 @@ Done-Freigabe.
 
 ## Offene Luecken
 
-- Kein Dry-Run Runner in diesem Slice.
+- Keine Task-Command-Ausfuehrung in diesem Slice.
+- Keine echte Kontextakquise in diesem Slice.
+- Kein echter Patch-Plan in diesem Slice.
+- Kein persistentes Run-Archiv und keine unabhaengige Run-Attestierung in diesem Slice.
 - Kein Write Mode in diesem Slice.
-- Keine unabhaengige Run-Attestierung in diesem Slice.
-- Keine Git-Aufloesung oder Diff-Bindung von `source_revision` in diesem Slice.
+- Keine Git-Ancestry- oder Diff-Bindung von `source_revision` in diesem Slice.
 
 ## Vertrauensgrenze
 
@@ -99,5 +151,6 @@ ein dazu passendes Outcome. Er belegt nicht die tatsaechliche Ausfuehrung der
 gemeldeten Kommandos, fachliche Korrektheit, Producer-Authentizitaet oder
 Merge-Reife.
 
-`source_revision` wird in diesem Slice nur syntaktisch geprueft. Run-Evidence,
-Dry-Run Runner, Git-Ancestry und Write Mode bleiben spaetere Slices.
+`source_revision` wird im Runner-v1 nur als tatsaechlicher lokaler `HEAD`
+aufgeloest und syntaktisch gebunden. Run-Evidence, Git-Ancestry, Diff-Bindung
+und Write Mode bleiben spaetere Slices.
