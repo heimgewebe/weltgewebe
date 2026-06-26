@@ -18,6 +18,8 @@ relations:
   - type: relates_to
     target: docs/runbooks/domain-mail-cutover.md
   - type: relates_to
+    target: docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
+  - type: relates_to
     target: docs/adr/ADR-0008__domain-mail-provider-boundaries.md
 ---
 
@@ -57,6 +59,38 @@ Die IONOS-Kündigung wurde nach menschlicher Freigabe durchgeführt. Ein reprodu
 ## 4. DNS- und DDNS-Prinzip
 
 Die Produktions-Runtime erfordert keine statische WAN-IP. Das Routing erfolgt primär über DDNS für `weltgewebe.net`. Die öffentliche URL der Anwendung wird zusätzlich in `docs/deploy/public-app-base-url.md` vertraglich geregelt.
+
+### Implementierungsbesitz
+
+Dieses Repository besitzt den öffentlichen Vertrag, nicht die Heimberry-Implementierung. Der Implementierungsbesitzer ist das Repository `heimgewebe/heimserver`. Dort liegen die kanonischen Pfade:
+
+- `scripts/heimberry/weltgewebe_ddns.py` – fail-closed Reconciliation-Client,
+- `scripts/heimberry/install_weltgewebe_ddns.sh` – Installation, read-only Driftprüfung und explizite Aktivierung,
+- `ops/systemd/weltgewebe-ddns.service` und `ops/systemd/weltgewebe-ddns.timer` – Laufzeitsteuerung,
+- `runbooks/weltgewebe-dyndns.md` – Betrieb, Diagnose und Rollback.
+
+Die öffentliche Host-Allowlist ist exakt:
+
+- `weltgewebe.net`,
+- `www.weltgewebe.net`,
+- `api.weltgewebe.net`.
+
+Weitere öffentliche DynDNS-Hosts, Wildcards oder eine statische WAN-IP benötigen eine neue Architekturentscheidung. Credentials und installierter Runtime-Zustand gehören nicht in dieses Repository.
+
+### Beweisgrenze
+
+Ein grüner Repository-Test im Implementierungsrepo beweist Quellcode, Installervertrag und deterministische Gegenwelten. Er beweist weder, dass Heimberry bereits aktualisiert wurde, noch dass DNS, Edge und Anwendung live den Zielzustand erfüllen.
+
+Ein vollständiger Runtime-Nachweis erfordert separat:
+
+1. installierte Programm- und Unit-Dateien stimmen mit einem exakten gemergten `heimserver`-Commit überein,
+2. Service und Timer besitzen den erwarteten Zustand,
+3. alle drei autoritativen INWX-Nameserver liefern für alle drei erlaubten Hosts den erwarteten einzelnen A-Record,
+4. öffentliches HTTPS antwortet für Apex, `www` und `api`,
+5. der kanonische API-Health-Pfad antwortet erfolgreich,
+6. Heimberry besitzt keinen eingehenden öffentlichen DDNS-Dienst und App-, Admin- oder Datenbankports sind nicht direkt exponiert.
+
+Live-Aktivierung erfolgt erst nach Review und Merge des Implementierungscommits. Ein PR, ein Merge-Dump oder ein erfolgreicher Health-Bericht ersetzt diesen Runtime-Nachweis nicht.
 
 ## 5. Wiederherstellungsgrenze
 
