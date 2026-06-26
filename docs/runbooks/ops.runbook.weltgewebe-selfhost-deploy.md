@@ -40,19 +40,19 @@ Dieses Runbook besitzt weder den Updater noch Credentials oder eine statische WA
 
 Die damalige Migration beinhaltete:
 
-* DNS-Umstellung
-* Router-Portfreigaben
-* Edge-Gateway-Validierung
-* Mail-DNS-Fix
+- DNS-Umstellung
+- Router-Portfreigaben
+- Edge-Gateway-Validierung
+- Mail-DNS-Fix
 
 Ziel ist ein reproduzierbares Deployment-Runbook.
 
 ## Scope
 
-* DNS-Migration
-* Router-Portforward
-* Caddy-Gateway
-* typische Fehler
+- DNS-Migration
+- Router-Portforward
+- Caddy-Gateway
+- typische Fehler
 
 ## DNS-Migration (Historisch)
 
@@ -96,9 +96,9 @@ _dmarc  TXT    "v=DMARC1; p=quarantine; rua=mailto:postmaster@weltgewebe.net"
 
 Dabei:
 
-* `<public-ip>` bleibt Platzhalter
-* `<selector>` bleibt generisch
-* keine provider-internen Details einbauen
+- `<public-ip>` bleibt Platzhalter
+- `<selector>` bleibt generisch
+- keine provider-internen Details einbauen
 
 ## Router-Konfiguration (kritisch)
 
@@ -157,8 +157,8 @@ Grund:
 
 Der HTTP-Host-Header lautet dann `<public-ip>`, während Caddy-vHosts typischerweise nur auf
 
-* `weltgewebe.net`
-* `api.weltgewebe.net`
+- `weltgewebe.net`
+- `api.weltgewebe.net`
 
 matchen.
 
@@ -219,9 +219,9 @@ curl -I https://weltgewebe.net
 
 Erwartung:
 
-* HTTPS antwortet
-* Zertifikat wird sauber ausgeliefert (kein SSL/TLS-Fehler)
-* Response kommt über Caddy
+- HTTPS antwortet
+- Zertifikat wird sauber ausgeliefert (kein SSL/TLS-Fehler)
+- Response kommt über Caddy
 
 ## Ergebnis
 
@@ -245,15 +245,15 @@ System ist jetzt öffentlich erreichbar.
 
 Ohne diese Dokumentation sind typische Fehlerszenarien schwer zu diagnostizieren:
 
-* DNS korrekt, aber Router blockiert
-* NAT-Loopback-Fehler
-* fehlende MX-Records
-* falsche DNS-Authority
+- DNS korrekt, aber Router blockiert
+- NAT-Loopback-Fehler
+- fehlende MX-Records
+- falsche DNS-Authority
 
 Das Runbook verhindert zukünftige Deployment-Blocker.
 
 ## Optionale weitere Härtung
 
-* DNS Healthcheck CI
-* Deploy-Guard für fehlende A-Records
-* Mail-Delivery Test
+- DNS Healthcheck CI
+- Deploy-Guard für fehlende A-Records
+- Mail-Delivery Test
