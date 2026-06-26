@@ -23,20 +23,10 @@ zu einem **self-hosted Heimserver-Deployment mit edge-caddy**.
 > **Historische DNS-Phase**
 > Dieses Dokument beschreibt den historischen Schritt von Netlify zu IONOS.
 > Der heutige Zustand von `weltgewebe.net` nutzt INWX und dynamisches DDNS. Die Nebendomains sind DNS-seitig noch offen.
-
-## Aktueller DDNS-Handoff
-
-Die folgenden IONOS-Recordbeispiele sind ausschließlich historisch und dürfen nicht als aktuelle Betriebsanweisung verwendet werden. Der heutige Vertrag steht in `docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md`.
-
-Die Heimberry-Implementierung wird im Repository `heimgewebe/heimserver` verwaltet:
-
-- `scripts/heimberry/weltgewebe_ddns.py`,
-- `scripts/heimberry/install_weltgewebe_ddns.sh`,
-- `ops/systemd/weltgewebe-ddns.service`,
-- `ops/systemd/weltgewebe-ddns.timer`,
-- `runbooks/weltgewebe-dyndns.md`.
-
-Dieses Runbook besitzt weder den Updater noch Credentials oder eine statische WAN-IP. Erlaubt sind ausschließlich `weltgewebe.net`, `www.weltgewebe.net` und `api.weltgewebe.net`. Ein Repository-Pass im Implementierungsrepo ist noch kein Live-Nachweis auf Heimberry.
+>
+> Die aktuelle DDNS-Installation und Runtime-Abnahme steht ausschließlich in
+> `docs/runbooks/weltgewebe-ddns-runtime-verification.md`. Die folgenden
+> IONOS-Beispiele sind keine heutige Betriebsanweisung.
 
 Die damalige Migration beinhaltete:
 
@@ -184,19 +174,10 @@ Hairpin-NAT kann zusätzlich lokale Tests beeinflussen.
 
 ### DNS
 
-Die aktuelle DDNS-Abnahme muss die autoritative Sicht aller drei INWX-Nameserver prüfen:
-
 ```bash
-for ns in ns.inwx.de ns2.inwx.de ns3.inwx.eu; do
-  for host in weltgewebe.net www.weltgewebe.net api.weltgewebe.net; do
-    dig +noall +comments +answer "@$ns" "$host" A
-  done
-done
-
+dig A weltgewebe.net
 dig MX weltgewebe.net
 ```
-
-Erwartet wird pro Host und Nameserver genau derselbe einzelne A-Record. DNS-Protokollfehler wie `SERVFAIL` oder `REFUSED` sind kein leerer Record und dürfen keine Korrekturschreibung auslösen.
 
 ### HTTP
 

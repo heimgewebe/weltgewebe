@@ -18,7 +18,7 @@ relations:
   - type: relates_to
     target: docs/runbooks/domain-mail-cutover.md
   - type: relates_to
-    target: docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
+    target: docs/runbooks/weltgewebe-ddns-runtime-verification.md
   - type: relates_to
     target: docs/adr/ADR-0008__domain-mail-provider-boundaries.md
 ---
@@ -68,6 +68,8 @@ Dieses Repository besitzt den öffentlichen Vertrag, nicht die Heimberry-Impleme
 - `scripts/heimberry/install_weltgewebe_ddns.sh` – Installation, read-only Driftprüfung und explizite Aktivierung,
 - `ops/systemd/weltgewebe-ddns.service` und `ops/systemd/weltgewebe-ddns.timer` – Laufzeitsteuerung,
 - `runbooks/weltgewebe-dyndns.md` – Betrieb, Diagnose und Rollback.
+
+Die repository-übergreifende Runtime-Abnahme steht in `docs/runbooks/weltgewebe-ddns-runtime-verification.md`.
 
 Die öffentliche Host-Allowlist ist exakt:
 
