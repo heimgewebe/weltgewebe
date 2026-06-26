@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import io
+import inspect
 import json
 import subprocess
 import sys
@@ -171,10 +172,10 @@ class TestRunTask(unittest.TestCase):
         for fixture in fixtures:
             with self.subTest(fixture=fixture):
                 before = run_task.repository_state_bytes(self.root)
-                outcome = run_task.run_dry_run(
+                outcome = run_task._run_dry_run(
                     repo_root=self.root,
                     task_file=fixture,
-                    source_revision=self.source_revision,
+                    source_revision_resolver=lambda _root: self.source_revision,
                 )
                 after = run_task.repository_state_bytes(self.root)
                 self.assertEqual(before, after)
@@ -187,10 +188,10 @@ class TestRunTask(unittest.TestCase):
     def test_generated_refresh_fixture_does_not_execute_generator_command(self):
         readiness = self.root / "docs/_generated/agent-readiness.md"
         before_bytes = readiness.read_bytes()
-        outcome = run_task.run_dry_run(
+        outcome = run_task._run_dry_run(
             repo_root=self.root,
             task_file=self._fixture("valid-generated-refresh-task.json"),
-            source_revision=self.source_revision,
+            source_revision_resolver=lambda _root: self.source_revision,
         )
         self.assertEqual(outcome.exit_code, 0)
         self.assertEqual(readiness.read_bytes(), before_bytes)
@@ -222,10 +223,10 @@ class TestRunTask(unittest.TestCase):
             out_b.mkdir()
 
             for output in (out_a, out_b):
-                outcome = run_task.run_dry_run(
+                outcome = run_task._run_dry_run(
                     repo_root=self.root,
                     task_file=self._fixture("valid-doc-drift-task.json"),
-                    source_revision=self.source_revision,
+                    source_revision_resolver=lambda _root: self.source_revision,
                     output_dir=output,
                 )
                 self.assertEqual(outcome.exit_code, 0)
@@ -341,6 +342,12 @@ class TestRunTask(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertEqual(json.loads(proc.stderr)["code"], "TASK_PATH_INVALID")
 
+    def test_public_runner_has_no_source_revision_override(self):
+        parameters = inspect.signature(run_task.run_dry_run).parameters
+        self.assertNotIn("source_revision", parameters)
+        self.assertNotIn("source_revision_resolver", parameters)
+        self.assertNotIn("repository_state_reader", parameters)
+
     def test_source_revision_unavailable_is_exit_two(self):
         stderr = io.StringIO()
         stdout = io.StringIO()
@@ -383,7 +390,6 @@ class TestRunTask(unittest.TestCase):
             base = Path(tmp)
             target = base / "symlink-output"
             actual = base / "actual"
-            actual.mkdir()
             target.symlink_to(actual)
             proc = self._run_cli(
                 "--dry-run",
@@ -424,13 +430,53 @@ class TestRunTask(unittest.TestCase):
             return states.pop(0)
 
         with self.assertRaises(run_task.RunnerError) as ctx:
-            run_task.run_dry_run(
+            run_task._run_dry_run(
                 repo_root=self.root,
                 task_file=self._fixture("valid-doc-drift-task.json"),
-                source_revision=self.source_revision,
+                source_revision_resolver=lambda _root: self.source_revision,
                 repository_state_reader=reader,
             )
         self.assertEqual(ctx.exception.code, "REPO_MUTATED_DURING_DRY_RUN")
+
+    def test_source_revision_change_is_detected(self):
+        revisions = [self.source_revision, "2" * 40]
+
+        def resolver(_root: Path) -> str:
+            return revisions.pop(0)
+
+        with self.assertRaises(run_task.RunnerError) as ctx:
+            run_task._run_dry_run(
+                repo_root=self.root,
+                task_file=self._fixture("valid-doc-drift-task.json"),
+                repository_state_reader=lambda _root: b"unchanged",
+                source_revision_resolver=resolver,
+            )
+        self.assertEqual(ctx.exception.code, "SOURCE_REVISION_CHANGED_DURING_DRY_RUN")
+
+    def test_repository_fingerprint_fails_closed_on_head_race(self):
+        with (
+            unittest.mock.patch.object(
+                run_task, "resolve_git_head", side_effect=["1" * 40, "2" * 40]
+            ),
+            unittest.mock.patch.object(run_task, "_git_output", return_value=b""),
+        ):
+            with self.assertRaises(run_task.RunnerError) as ctx:
+                run_task.repository_state_bytes(self.root)
+        self.assertEqual(ctx.exception.code, "GIT_STATE_UNAVAILABLE")
+
+    def test_repository_fingerprint_detects_head_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._init_git_repo(repo)
+            before = run_task.repository_state_bytes(repo)
+            subprocess.run(
+                ["git", "commit", "--allow-empty", "-m", "second"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+            )
+            after = run_task.repository_state_bytes(repo)
+            self.assertNotEqual(before, after)
 
     def test_repository_fingerprint_detects_dirty_tracked_content_change(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -464,13 +510,42 @@ class TestRunTask(unittest.TestCase):
             return states.pop(0)
 
         with self.assertRaises(run_task.RunnerError) as ctx:
-            run_task.run_dry_run(
+            run_task._run_dry_run(
                 repo_root=self.root,
                 task_file=rel,
-                source_revision=self.source_revision,
+                source_revision_resolver=lambda _root: self.source_revision,
                 repository_state_reader=reader,
             )
         self.assertEqual(ctx.exception.code, "REPO_MUTATED_DURING_DRY_RUN")
+
+    def test_cleanup_failure_does_not_hide_revision_drift(self):
+        revisions = [self.source_revision, self.source_revision, "2" * 40]
+
+        def resolver(_root: Path) -> str:
+            return revisions.pop(0)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "output"
+            with unittest.mock.patch.object(
+                run_task,
+                "_remove_published_output",
+                side_effect=OSError("synthetic cleanup failure"),
+            ):
+                with self.assertRaises(run_task.RunnerError) as ctx:
+                    run_task._run_dry_run(
+                        repo_root=self.root,
+                        task_file=self._fixture("valid-doc-drift-task.json"),
+                        output_dir=output_dir,
+                        repository_state_reader=lambda _root: b"unchanged",
+                        source_revision_resolver=resolver,
+                    )
+        self.assertEqual(ctx.exception.code, "SOURCE_REVISION_CHANGED_DURING_DRY_RUN")
+        self.assertTrue(
+            any(
+                "synthetic cleanup failure" in item
+                for item in ctx.exception.cleanup_errors
+            )
+        )
 
     def test_invalid_generated_handoff_is_operational_error(self):
         with unittest.mock.patch.object(
@@ -479,10 +554,10 @@ class TestRunTask(unittest.TestCase):
             return_value=[{"code": "TEST", "message": "synthetic failure"}],
         ):
             with self.assertRaises(run_task.RunnerError) as ctx:
-                run_task.run_dry_run(
+                run_task._run_dry_run(
                     repo_root=self.root,
                     task_file=self._fixture("valid-doc-drift-task.json"),
-                    source_revision=self.source_revision,
+                    source_revision_resolver=lambda _root: self.source_revision,
                 )
         self.assertEqual(ctx.exception.code, "HANDOFF_VALIDATION_FAILED")
 
@@ -497,10 +572,10 @@ class TestRunTask(unittest.TestCase):
             },
         ):
             with self.assertRaises(run_task.RunnerError) as ctx:
-                run_task.run_dry_run(
+                run_task._run_dry_run(
                     repo_root=self.root,
                     task_file=self._fixture("valid-doc-drift-task.json"),
-                    source_revision=self.source_revision,
+                    source_revision_resolver=lambda _root: self.source_revision,
                 )
         self.assertEqual(ctx.exception.code, "EVIDENCE_ACCOUNTING_INCOMPLETE")
 
@@ -518,10 +593,10 @@ class TestRunTask(unittest.TestCase):
             run_task, "_handoff", side_effect=incomplete_handoff
         ):
             with self.assertRaises(run_task.RunnerError) as ctx:
-                run_task.run_dry_run(
+                run_task._run_dry_run(
                     repo_root=self.root,
                     task_file=self._fixture("valid-doc-drift-task.json"),
-                    source_revision=self.source_revision,
+                    source_revision_resolver=lambda _root: self.source_revision,
                 )
         self.assertEqual(ctx.exception.code, "HANDOFF_VALIDATION_FAILED")
 

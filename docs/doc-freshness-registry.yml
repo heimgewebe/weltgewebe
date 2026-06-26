@@ -94,8 +94,8 @@ entries:
     doc: docs/claims/registry.yml
     locator: claims[id=CLAIM-AGENT-SAFE-006]
     claim: >-
-      Dry-Run-Runner validiert Agent-Tasks, bilanziert Claims/Evidence und
-      weist No-Write nach.
+      Der Dry-Run-Runner validiert Tasks und erkennt persistente Drift
+      im sichtbaren Git-Zustand.
     status: partial
     owner: docs-mechanik
     last_verified: "2026-06-26"

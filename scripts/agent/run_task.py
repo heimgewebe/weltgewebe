@@ -68,6 +68,7 @@ class RunnerError(Exception):
         super().__init__(message)
         self.code = code
         self.message = message
+        self.cleanup_errors: list[str] = []
 
 
 class _ArgumentParser(argparse.ArgumentParser):
@@ -328,6 +329,7 @@ def repository_state_bytes(repo_root: Path) -> bytes:
     """Return a content-sensitive fingerprint of non-ignored Git-visible state."""
 
     root = repo_root.resolve()
+    head_before = resolve_git_head(root)
     index_diff = _git_output(
         root,
         [
@@ -349,6 +351,7 @@ def repository_state_bytes(repo_root: Path) -> bytes:
     )
 
     hasher = hashlib.sha256()
+    _hash_record(hasher, b"head", head_before.encode("ascii"))
     _hash_record(hasher, b"index-diff", index_diff)
     _hash_record(hasher, b"worktree-diff", worktree_diff)
 
@@ -358,6 +361,12 @@ def repository_state_bytes(repo_root: Path) -> bytes:
         _hash_record(hasher, b"untracked-kind", kind)
         _hash_record(hasher, b"untracked-mode", mode)
         _hash_record(hasher, b"untracked-content-sha256", content_digest)
+    head_after = resolve_git_head(root)
+    if head_before != head_after:
+        raise RunnerError(
+            "GIT_STATE_UNAVAILABLE",
+            "Git HEAD changed while fingerprinting repository state",
+        )
 
     return hasher.digest()
 
@@ -479,7 +488,7 @@ def _repo_contains(root: Path, candidate: Path) -> bool:
 def _ensure_no_symlink_parents(path: Path) -> None:
     current = path if path.exists() else path.parent
     while True:
-        if current.exists() and current.is_symlink():
+        if current.is_symlink():
             raise RunnerError(
                 "OUTPUT_DIR_INVALID",
                 "Output path and its parents must not be symlinks",
@@ -501,7 +510,7 @@ def validate_output_dir(repo_root: Path, output_dir: Path) -> Path:
             "OUTPUT_DIR_IN_REPOSITORY",
             "Output directory must be outside the repository root",
         )
-    if candidate.exists() and candidate.is_symlink():
+    if candidate.is_symlink():
         raise RunnerError(
             "OUTPUT_DIR_INVALID", "Output directory must not be a symlink"
         )
@@ -560,11 +569,10 @@ def _remove_published_output(target: Path) -> None:
         pass
 
 
-def run_dry_run(
+def _run_dry_run(
     *,
     repo_root: Path,
     task_file: str,
-    source_revision: str | None = None,
     output_dir: Path | None = None,
     repository_state_reader: RepositoryStateReader | None = None,
     source_revision_resolver: SourceRevisionResolver | None = None,
@@ -625,9 +633,7 @@ def run_dry_run(
             return DryRunOutcome(result=result, exit_code=1)
         _stage_status(statuses, "run_non_ideal_guard", "passed")
 
-        revision = (
-            revision_resolver(root) if source_revision is None else source_revision
-        )
+        revision = revision_resolver(root)
         validate_source_revision(revision)
         _stage_status(statuses, "resolve_source_revision", "passed")
 
@@ -659,6 +665,11 @@ def run_dry_run(
             )
         _stage_status(statuses, "validate_handoff", "passed")
 
+        if revision_resolver(root) != revision:
+            raise RunnerError(
+                "SOURCE_REVISION_CHANGED_DURING_DRY_RUN",
+                "Git HEAD changed during dry run",
+            )
         _assert_repository_unchanged(root, before_state, state_reader)
         _stage_status(statuses, "verify_repository_unchanged", "passed")
         _stage_status(statuses, "finalize_result", "passed")
@@ -681,20 +692,50 @@ def run_dry_run(
                 root, output_dir, run_result=result, handoff=handoff
             )
 
+        if revision_resolver(root) != revision:
+            raise RunnerError(
+                "SOURCE_REVISION_CHANGED_DURING_DRY_RUN",
+                "Git HEAD changed during dry run",
+            )
         _assert_repository_unchanged(root, before_state, state_reader)
         return DryRunOutcome(result=result, exit_code=0)
     except Exception as exc:
-        if isinstance(exc, RunnerError) and exc.code == "REPO_MUTATED_DURING_DRY_RUN":
+        guarded_codes = {
+            "REPO_MUTATED_DURING_DRY_RUN",
+            "SOURCE_REVISION_CHANGED_DURING_DRY_RUN",
+        }
+        if isinstance(exc, RunnerError) and exc.code in guarded_codes:
             if published_target is not None:
-                _remove_published_output(published_target)
+                try:
+                    _remove_published_output(published_target)
+                except OSError as cleanup_error:
+                    exc.cleanup_errors.append(str(cleanup_error))
             raise
         try:
             _assert_repository_unchanged(root, before_state, state_reader)
         except RunnerError as mutation_error:
             if published_target is not None:
-                _remove_published_output(published_target)
+                try:
+                    _remove_published_output(published_target)
+                except OSError as cleanup_error:
+                    mutation_error.cleanup_errors.append(str(cleanup_error))
             raise mutation_error from exc
         raise
+
+
+def run_dry_run(
+    *,
+    repo_root: Path,
+    task_file: str,
+    output_dir: Path | None = None,
+) -> DryRunOutcome:
+    return _run_dry_run(
+        repo_root=repo_root,
+        task_file=task_file,
+        output_dir=output_dir,
+        repository_state_reader=repository_state_bytes,
+        source_revision_resolver=resolve_git_head,
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:

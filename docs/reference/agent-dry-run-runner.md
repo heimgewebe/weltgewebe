@@ -111,11 +111,11 @@ Die CLI ermittelt die Revision mit:
 git rev-parse --verify HEAD
 ```
 
-Die Aufloesung erfolgt innerhalb des gestuften Runner-Ablaufs. Der Core kann die
-Revision als explizite Abhaengigkeit erhalten, damit Tests ohne Fake-CLI-Flag
-deterministisch bleiben. In diesem Slice wird nur der lokale aktuelle `HEAD`
-syntaktisch gebunden. Es wird keine Remote-Erreichbarkeit, Main-Ancestry oder
-Diff-Bindung behauptet.
+Die Aufloesung erfolgt innerhalb des gestuften Runner-Ablaufs. Tests koennen
+einen privaten Resolver als Abhaengigkeit injizieren; ein frei vorgegebener SHA
+ist kein Teil des Runner-Vertrags. Vor erfolgreicher Finalisierung und nach
+optionalem externem Output wird `HEAD` erneut auf dieselbe Revision geprueft.
+Es wird keine Remote-Erreichbarkeit, Main-Ancestry oder Diff-Bindung behauptet.
 
 ## Execution-Plan-v1
 
@@ -182,21 +182,27 @@ werden abgewiesen.
 
 ## No-Write-Invariante
 
-Der Runner bildet vor dem Task-Laden und nach jedem Ausgang einen
+Der Runner bildet vor dem Task-Laden und an den Abschlussgrenzen einen
 inhaltssensitiven Fingerabdruck des nicht ignorierten, Git-sichtbaren Zustands.
-Er umfasst getrennte binaere Diffs des Index gegen `HEAD` und des Working Trees
-gegen den Index sowie Pfad, Typ, Modus und Inhaltsdigest aller ungetrackten
-Pfade. Dadurch werden auch weitere Aenderungen an bereits schmutzigen getrackten
-Dateien und Inhaltswechsel bereits ungetrackter Dateien erkannt.
+Er umfasst den aktuellen `HEAD`, getrennte binaere Diffs des Index gegen `HEAD`
+und des Working Trees gegen den Index sowie Pfad, Typ, Modus und Inhaltsdigest
+aller ungetrackten Pfade. Dadurch werden auch weitere Aenderungen an bereits
+schmutzigen getrackten Dateien, Inhaltswechsel bereits ungetrackter Dateien und
+ein Wechsel von `HEAD` erkannt.
 
 Ein bereits schmutziger Ausgangszustand ist erlaubt, sofern dieser Fingerabdruck
 unveraendert bleibt. Die Wache gilt fuer geplante, blockierte und fehlerhafte
-Laeufe. Bei Drift endet der Runner mit `REPO_MUTATED_DURING_DRY_RUN`. Er bereinigt
-den Working Tree nicht. Ignorierte Dateien liegen weiterhin ausserhalb dieses
-Git-sichtbaren Beweises.
+Laeufe. Bei persistenter Drift endet der Runner mit
+`REPO_MUTATED_DURING_DRY_RUN`; ein Wechsel von `HEAD` wird zusaetzlich als
+`SOURCE_REVISION_CHANGED_DURING_DRY_RUN` abgewiesen. Der Runner bereinigt den
+Working Tree nicht.
 
-Tests und CI vergleichen denselben inhaltssensitiven Zustand zusaetzlich von
-aussen, damit der Runner nicht alleiniger Zeuge seiner No-Write-Eigenschaft ist.
+Dieser Vergleich belegt Gleichheit an den Pruefpunkten, nicht die Abwesenheit
+jeder zwischenzeitlichen Schreiboperation. Schreiben mit anschliessender
+Ruecksetzung, ignorierte Pfade, `.git`-interne Aenderungen und externe Pfade
+liegen ausserhalb dieses Nachweises. Tests und CI rufen denselben kanonischen
+Fingerabdruck in getrennten Prozessen auf; das ist eine aeussere Gegenpruefung,
+aber kein unabhaengig implementiertes Orakel.
 
 ## Readiness-Smoke
 

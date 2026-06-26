@@ -106,12 +106,13 @@ und `run-result.json` bytegleich.
 Readiness-Generator fuehrt einen echten Runner-Smoke aus, prueft Strict-JSON,
 `mode = dry_run`, `status = planned`, leere Findings, `repository_unchanged`,
 ein vorhandenes Handoff, Handoff-Validator-Akzeptanz, `outcome = incomplete`,
-vollstaendige `not_run`-Validierungen und unveraenderten Git-Status.
+vollstaendige `not_run`-Validierungen und einen unveraenderten
+inhaltssensitiven Git-Zustandsfingerabdruck.
 
 Explizite False-Green-Gegenwelten pruefen passend benannte Placeholder-Dateien,
 ungueltiges JSON, falschen Modus, falschen Status, fehlendes oder ungueltiges
 Handoff, `ready_for_review`, faelschlich bestandene Validierungen,
-`repository_unchanged = false`, Git-Status-Drift und Timeout.
+`repository_unchanged = false`, persistente Git-Zustandsdrift und Timeout.
 
 ## Evidence-Regeln
 

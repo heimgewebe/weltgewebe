@@ -420,14 +420,14 @@
         "docs/reference/agent-operability-fixture-matrix.md"
       ],
       "missing_evidence": [
-        "PR-CI und Review stehen fuer diesen Slice noch aus",
+        "Merge auf main und post-merge Verfuegbarkeit stehen fuer diesen Slice noch aus",
         "Persistente Run-Evidence, Run-Attestierung, Patch-Anwendung und Write Mode bleiben Folge-Slices"
       ],
       "acceptance": [
         "Der Runner laedt Task-Dateien strikt als Raw Bytes und bindet den SHA-256-Digest an das Handoff",
         "Der Runner validiert Task-Schema, Claim-Registry, Non-Ideal-Guard und Handoff-Contract ohne Task-Kommandos auszufuehren",
         "Der Runner erzeugt ein validatorgueltiges incomplete-Handoff mit vollstaendiger Claim-, Evidence- und Validierungsbilanz",
-        "Interne und externe Git-Statusvergleiche belegen, dass der Dry Run das Repository nicht veraendert",
+        "Runner und CI vergleichen den persistenten, nicht ignorierten Git-sichtbaren Zustand zwischen Pruefpunkten; ignorierte Pfade, .git, externe Pfade und transiente Write-then-revert-Vorgaenge liegen ausserhalb dieses Nachweises",
         "Agent-Readiness markiert dry_run_runner nur nach funktionalem Smoke als pass"
       ],
       "links": {

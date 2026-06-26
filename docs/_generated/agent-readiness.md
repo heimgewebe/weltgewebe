@@ -13,7 +13,7 @@ Generated automatically. Do not edit.
 ## Overall Status
 
 - **Overall:** pass
-- **Reason:** All hard and non-hard capabilities are present.
+- **Reason:** All capabilities declared in the readiness matrix passed their configured checks.
 
 ## Capability Matrix
 

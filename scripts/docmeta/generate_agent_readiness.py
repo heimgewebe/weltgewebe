@@ -532,7 +532,11 @@ def determine_overall_status(
         return "partial", reason, hard_gaps
 
     if len(passing) == len(results):
-        return "pass", "All hard and non-hard capabilities are present.", []
+        return (
+            "pass",
+            "All capabilities declared in the readiness matrix passed their configured checks.",
+            [],
+        )
 
     if not passing and not partial:
         return (

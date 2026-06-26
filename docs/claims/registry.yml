@@ -137,7 +137,7 @@
       "id": "CLAIM-AGENT-SAFE-006",
       "status": "proposed",
       "subject": "AGENT-SAFE-006",
-      "statement": "Dry-Run-Runner validiert Agent-Tasks, bilanziert Claims/Evidence und weist No-Write nach.",
+      "statement": "Der Dry-Run-Runner validiert Tasks und erkennt persistente Drift im sichtbaren Git-Zustand.",
       "evidence": [
         {
           "path": "scripts/agent/run_task.py",
