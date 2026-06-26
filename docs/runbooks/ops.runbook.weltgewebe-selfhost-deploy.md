@@ -2,8 +2,8 @@
 id: runbooks.ops.runbook.weltgewebe-selfhost-deploy
 title: Selfhost-Deploy Runbook
 doc_type: reference
-status: active
-summary: Operatives Runbook für Selfhost-Deployments des Weltgewebe.
+status: deprecated
+summary: Historische Referenz der Netlify-/IONOS-Selfhost-Migration.
 relations:
   - type: relates_to
     target: docs/runbooks/README.md
@@ -11,6 +11,8 @@ relations:
     target: docs/deployment.md
   - type: relates_to
     target: docs/deploy/heimserver.deployment.md
+  - type: relates_to
+    target: docs/runbooks/weltgewebe-ddns-runtime-verification.md
 ---
 # Ops Runbook: Weltgewebe Self-Hosted Deployment
 
@@ -23,22 +25,26 @@ zu einem **self-hosted Heimserver-Deployment mit edge-caddy**.
 > **Historische DNS-Phase**
 > Dieses Dokument beschreibt den historischen Schritt von Netlify zu IONOS.
 > Der heutige Zustand von `weltgewebe.net` nutzt INWX und dynamisches DDNS. Die Nebendomains sind DNS-seitig noch offen.
+>
+> Die aktuelle DDNS-Installation und Runtime-Abnahme steht ausschließlich in
+> `docs/runbooks/weltgewebe-ddns-runtime-verification.md`. Die folgenden
+> IONOS-Beispiele sind keine heutige Betriebsanweisung.
 
 Die damalige Migration beinhaltete:
 
-* DNS-Umstellung
-* Router-Portfreigaben
-* Edge-Gateway-Validierung
-* Mail-DNS-Fix
+- DNS-Umstellung
+- Router-Portfreigaben
+- Edge-Gateway-Validierung
+- Mail-DNS-Fix
 
 Ziel ist ein reproduzierbares Deployment-Runbook.
 
 ## Scope
 
-* DNS-Migration
-* Router-Portforward
-* Caddy-Gateway
-* typische Fehler
+- DNS-Migration
+- Router-Portforward
+- Caddy-Gateway
+- typische Fehler
 
 ## DNS-Migration (Historisch)
 
@@ -82,9 +88,9 @@ _dmarc  TXT    "v=DMARC1; p=quarantine; rua=mailto:postmaster@weltgewebe.net"
 
 Dabei:
 
-* `<public-ip>` bleibt Platzhalter
-* `<selector>` bleibt generisch
-* keine provider-internen Details einbauen
+- `<public-ip>` bleibt Platzhalter
+- `<selector>` bleibt generisch
+- keine provider-internen Details einbauen
 
 ## Router-Konfiguration (kritisch)
 
@@ -143,8 +149,8 @@ Grund:
 
 Der HTTP-Host-Header lautet dann `<public-ip>`, während Caddy-vHosts typischerweise nur auf
 
-* `weltgewebe.net`
-* `api.weltgewebe.net`
+- `weltgewebe.net`
+- `api.weltgewebe.net`
 
 matchen.
 
@@ -196,9 +202,9 @@ curl -I https://weltgewebe.net
 
 Erwartung:
 
-* HTTPS antwortet
-* Zertifikat wird sauber ausgeliefert (kein SSL/TLS-Fehler)
-* Response kommt über Caddy
+- HTTPS antwortet
+- Zertifikat wird sauber ausgeliefert (kein SSL/TLS-Fehler)
+- Response kommt über Caddy
 
 ## Ergebnis
 
@@ -222,15 +228,15 @@ System ist jetzt öffentlich erreichbar.
 
 Ohne diese Dokumentation sind typische Fehlerszenarien schwer zu diagnostizieren:
 
-* DNS korrekt, aber Router blockiert
-* NAT-Loopback-Fehler
-* fehlende MX-Records
-* falsche DNS-Authority
+- DNS korrekt, aber Router blockiert
+- NAT-Loopback-Fehler
+- fehlende MX-Records
+- falsche DNS-Authority
 
 Das Runbook verhindert zukünftige Deployment-Blocker.
 
 ## Optionale weitere Härtung
 
-* DNS Healthcheck CI
-* Deploy-Guard für fehlende A-Records
-* Mail-Delivery Test
+- DNS Healthcheck CI
+- Deploy-Guard für fehlende A-Records
+- Mail-Delivery Test
