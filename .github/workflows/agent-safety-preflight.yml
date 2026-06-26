@@ -5,6 +5,7 @@ name: agent-safety-preflight
   pull_request:
     paths:
       - "scripts/agent/**"
+      - "scripts/contracts-agent-check.sh"
       - "scripts/docmeta/generate_agent_readiness.py"
       - "scripts/docmeta/tests/test_generate_agent_readiness.py"
       - "scripts/docmeta/tests/test_agent_readiness_smoke_contract.py"
@@ -19,6 +20,7 @@ name: agent-safety-preflight
       - "docs/doc-freshness-registry.yml"
       - "docs/tasks/index.json"
       - "docs/tasks/board.md"
+      - "docs/roadmap.md"
       - ".gitattributes"
       - "docs/_generated/agent-readiness.md"
       - "agent-policy.yaml"
@@ -90,7 +92,7 @@ jobs:
             --task-file tests/fixtures/agent/handoff-task.json \
             --handoff-file tests/fixtures/agent/handoff-valid.json
 
-      - name: Smoke-check dry-run runner (no write)
+      - name: Smoke-check dry-run runner (evidence, no repository write)
         run: |
           set -euo pipefail
 
@@ -122,6 +124,12 @@ jobs:
             --dry-run \
             --output-dir "$OUT/generated-refresh" \
             tests/fixtures/agent/valid-generated-refresh-task.json
+
+          for run_dir in "$OUT/doc-drift" "$OUT/roadmap" "$OUT/generated-refresh"; do
+            for artifact in task.yml handoff.json validation.json run-result.json; do
+              test -f "$run_dir/$artifact"
+            done
+          done
 
           AFTER="$(repository_state)"
           if [ "$BEFORE" != "$AFTER" ]; then

@@ -404,7 +404,7 @@
       "id": "AGENT-SAFE-006",
       "title": "Deterministischen Read-only-Dry-Run-Runner mit funktionalem Readiness-Gate einführen",
       "area": "governance",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "L",
       "risk": "high",
@@ -419,10 +419,7 @@
         "docs/reference/agent-dry-run-runner.md",
         "docs/reference/agent-operability-fixture-matrix.md"
       ],
-      "missing_evidence": [
-        "Merge auf main und post-merge Verfuegbarkeit stehen fuer diesen Slice noch aus",
-        "Persistente Run-Evidence, Run-Attestierung, Patch-Anwendung und Write Mode bleiben Folge-Slices"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Der Runner laedt Task-Dateien strikt als Raw Bytes und bindet den SHA-256-Digest an das Handoff",
         "Der Runner validiert Task-Schema, Claim-Registry, Non-Ideal-Guard und Handoff-Contract ohne Task-Kommandos auszufuehren",
@@ -432,11 +429,59 @@
       ],
       "links": {
         "issues": [],
-        "prs": [],
+        "prs": [
+          "1262"
+        ],
         "docs": [
           "docs/blueprints/blueprint-agent-safety-control-layer.md",
           "docs/reference/agent-dry-run-runner.md",
           "docs/reference/agent-operability-fixture-matrix.md",
+          "docs/tasks/board.md"
+        ]
+      },
+      "updated_at": "2026-06-26"
+    },
+    {
+      "id": "AGENT-SAFE-007",
+      "title": "Run Evidence Lite für erfolgreiche Agent-Dry-Runs einführen",
+      "area": "governance",
+      "status": "partial",
+      "priority": "high",
+      "effort": "L",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "contracts/agent/validation.schema.json",
+        "contracts/agent/run-result.schema.json",
+        "scripts/agent/run_task.py",
+        "scripts/agent/tests/test_run_task.py",
+        "scripts/agent/validate_agent_contracts.py",
+        "scripts/contracts-agent-check.sh",
+        "scripts/docmeta/generate_agent_readiness.py",
+        "scripts/docmeta/tests/test_generate_agent_readiness.py",
+        ".github/workflows/agent-safety-preflight.yml",
+        "docs/reference/agent-run-evidence-lite.md"
+      ],
+      "missing_evidence": [
+        "Merge auf main und post-merge Verifikation stehen aus",
+        "Failure-Evidence, unabhängige Attestierung, Command-Ausführung, Patch-Anwendung und Write Mode bleiben Folge-Slices"
+      ],
+      "acceptance": [
+        "Erfolgreiche geplante Dry-Runs publizieren genau vier Artefakte atomar und überschreiben kein vorhandenes Ziel",
+        "task.yml bewahrt die exakten Eingabebytes; Task-ID, Task-SHA-256, lokaler Git-HEAD und Repository-Fingerabdruck sind gebunden",
+        "validation.json und run-result.json sind gegen repository-eigene Draft-07-Contracts validiert",
+        "Readiness markiert run_evidence_lite nur nach funktionalem Persistenz-Smoke als pass",
+        "Der Slice aktiviert weder Task-Ausführung noch Write Mode, externe Attestierung oder autonome Merge-Fähigkeit"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [
+          "1265"
+        ],
+        "docs": [
+          "docs/blueprints/blueprint-agent-safety-control-layer.md",
+          "docs/reference/agent-run-evidence-lite.md",
+          "docs/reference/agent-dry-run-runner.md",
           "docs/tasks/board.md"
         ]
       },

@@ -610,6 +610,11 @@ python scripts/agent/run_task.py --dry-run tests/fixtures/agent/valid-generated-
 
 #### PR 7 — agent/run-evidence-lite
 
+> **Umsetzungsstand 2026-06-26:** Der Lite-Slice ist im Implementierungsbranch
+> als `AGENT-SAFE-007` in PR #1265 vorhanden; Merge und post-merge Verifikation stehen aus.
+> Persistiert werden nur erfolgreich geplante Dry-Runs. Universelle
+> Failure-Evidence, externe Attestierung und Write Mode bleiben Folgearbeit.
+
 ##### PR 7 — agent/run-evidence-lite: Zweck
 
 Jeder Dry-Run erzeugt minimale, schema-valide Evidence.
@@ -634,8 +639,8 @@ Diese kommen erst nach stabilem Runner.
 
 ##### PR 7 — agent/run-evidence-lite: Akzeptanzkriterien
 
-- Jeder Dry-Run erzeugt einen eindeutigen `run_id`.
-- Jeder Dry-Run schreibt schema-valide Run-Artefakte.
+- Jeder erfolgreich geplante persistierte Dry-Run erzeugt einen eindeutigen `run_id`.
+- Jeder erfolgreich geplante persistierte Dry-Run schreibt schema-valide Run-Artefakte.
 - Run-Artefakte enthalten Task-ID, Claims, Validierung und Ergebnis.
 - `blocked` wird als eigenes Ergebnis modelliert.
 

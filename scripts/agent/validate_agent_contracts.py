@@ -28,14 +28,21 @@ def validate_contracts(repo_root: Path) -> list[dict[str, str]]:
         handoff_schema = load_json_strict(
             repo_root / "contracts/agent/handoff.schema.json"
         )
+        validation_schema = load_json_strict(
+            repo_root / "contracts/agent/validation.schema.json"
+        )
+        run_result_schema = load_json_strict(
+            repo_root / "contracts/agent/run-result.schema.json"
+        )
         task = load_json_strict(repo_root / "tests/fixtures/agent/handoff-task.json")
         handoff = load_json_strict(
             repo_root / "tests/fixtures/agent/handoff-valid.json"
         )
-        if not isinstance(task_schema, dict) or not isinstance(handoff_schema, dict):
+        schemas = (task_schema, handoff_schema, validation_schema, run_result_schema)
+        if not all(isinstance(schema, dict) for schema in schemas):
             raise UnsupportedSchemaError("schema root must be an object")
-        ensure_supported_schema(task_schema)
-        ensure_supported_schema(handoff_schema)
+        for schema in schemas:
+            ensure_supported_schema(schema)
 
         cases = [
             ("tests/fixtures/agent/handoff-task.json", task, task_schema, True),
@@ -43,7 +50,14 @@ def validate_contracts(repo_root: Path) -> list[dict[str, str]]:
         ]
         invalid_handoff = copy.deepcopy(handoff)
         invalid_handoff.pop("producer", None)
-        cases.append(("synthetic:handoff-without-producer", invalid_handoff, handoff_schema, False))
+        cases.append(
+            (
+                "synthetic:handoff-without-producer",
+                invalid_handoff,
+                handoff_schema,
+                False,
+            )
+        )
 
         for label, fixture, schema, expected_valid in cases:
             violations = validate_instance(fixture, schema)
@@ -74,7 +88,9 @@ def validate_contracts(repo_root: Path) -> list[dict[str, str]]:
             }
         )
 
-    return sorted(findings, key=lambda item: (item["code"], item["path"], item["message"]))
+    return sorted(
+        findings, key=lambda item: (item["code"], item["path"], item["message"])
+    )
 
 
 def main() -> int:

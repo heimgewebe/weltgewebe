@@ -26,7 +26,9 @@ aus. Der Runner prueft den Task bis unmittelbar vor die Schreib- und
 Ausfuehrungsgrenze, bilanziert Claims, Evidence und Validierungen und erzeugt
 ein gueltiges `incomplete`-Handoff.
 
-Der Runner fuehrt keine Task-Kommandos aus und aendert keine Repository-Dateien.
+Der Runner fuehrt keine Task-Kommandos aus und aendert keine Task-Zieldateien.
+Erfolgreiche CLI-Laeufe persistieren standardmaessig einen von Git ignorierten
+Run-Evidence-Lite-Satz unter `artifacts/agent-runs/`.
 
 ## CLI
 
@@ -37,7 +39,7 @@ python3 -m scripts.agent.run_task \
 ```
 
 `--dry-run` ist optional, weil Dry Run der einzige Modus ist. `--write` ist kein
-gueltiges Flag.
+gueltiges Flag. Mit `--no-persist` bleibt der Lauf vollstaendig stdout-only.
 
 Mit externem Output:
 
@@ -160,25 +162,33 @@ Evidence unter `missing_evidence` gefuehrt.
 
 ## Output-Vertrag
 
-Ohne `--output-dir` schreibt der Runner nichts und gibt das vollstaendige
-Run-Result inklusive Handoff auf stdout aus.
-
-Mit `--output-dir` erzeugt der Runner ausserhalb des Repositorys genau:
+Ein erfolgreich geplanter CLI-Lauf erzeugt standardmaessig:
 
 ```text
-handoff.json
-run-result.json
+artifacts/agent-runs/<run-id>/
+├── task.yml
+├── handoff.json
+├── validation.json
+└── run-result.json
 ```
 
-Die Inhalte enthalten keine temp-spezifischen absoluten Output-Pfade.
+`task.yml` enthaelt die exakten Eingabebytes. Die JSON-Artefakte sind
+schema-validiert und ueber Task-Digest, Git-Revision, Repository-Fingerabdruck
+sowie relative Pfade und Hashes gebunden. Details stehen in
+[Agent Run Evidence Lite](agent-run-evidence-lite.md).
+
+`--no-persist` unterdrueckt das Bundle und belaesst das Ergebnis auf stdout.
+`--output-dir` waehlt stattdessen ein einzelnes neues Ziel ausserhalb des
+Repositorys. Die beiden Optionen sind gegenseitig ausgeschlossen.
 
 ## Externe Output-Verzeichnisregeln
 
-Das Output-Ziel muss ausserhalb des Repository-Roots liegen, neu oder leer sein
-und darf weder selbst ein Symlink sein noch ueber Symlink-Eltern aufgeloest
-werden. Repository-Root, Unterverzeichnisse des Repositories, vorhandene
-Zieldateien, nicht leere Verzeichnisse und nicht aufloesbare Elternstrukturen
-werden abgewiesen.
+Das benutzerdefinierte Output-Ziel muss ausserhalb des Repository-Roots liegen,
+darf noch nicht existieren, keine Parent-Traversal enthalten und darf weder
+selbst ein Symlink sein noch ueber Symlink-Eltern aufgeloest werden.
+Repository-Root, Unterverzeichnisse des Repositories, vorhandene Ziele und
+nicht aufloesbare Elternstrukturen werden
+abgewiesen.
 
 ## No-Write-Invariante
 
@@ -212,6 +222,7 @@ aber kein unabhaengig implementiertes Orakel.
 ```bash
 python3 -m scripts.agent.run_task \
   --dry-run \
+  --no-persist \
   tests/fixtures/agent/valid-doc-drift-task.json
 ```
 

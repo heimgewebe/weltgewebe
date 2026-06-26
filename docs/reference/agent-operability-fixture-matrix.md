@@ -73,7 +73,7 @@ Done-Freigabe.
 
 | Fixture | Erwartung |
 |---|---|
-| `tests/fixtures/agent/valid-doc-drift-task.json` | Exit `0`; `status = planned`; `execution_plan` ist nur Scope-Bilanz; Handoff `incomplete`; alle Validierungen `not_run`; keine Repository-Aenderung |
+| `tests/fixtures/agent/valid-doc-drift-task.json` | Exit `0`; `status = planned`; `execution_plan` ist nur Scope-Bilanz; Handoff `incomplete`; alle Validierungen `not_run`; keine Git-sichtbare Repository-Aenderung; bei Persistenz exakt vier Run-Evidence-Dateien |
 | `tests/fixtures/agent/valid-roadmap-claim-task.json` | Exit `0`; Claims und erwartete Evidence werden bilanziert; keine Task-Kommandos werden ausgefuehrt |
 | `tests/fixtures/agent/valid-generated-refresh-task.json` | Exit `0`; Generator-Command bleibt `not_run`; `docs/_generated/agent-readiness.md` wird nicht durch den Runner veraendert |
 
@@ -91,14 +91,17 @@ Die Runner-Tests decken insbesondere ab:
 - absolute Task-Pfade, Parent-Traversal und Task-Symlinks aus dem Repository
 - fehlenden Git-`HEAD`
 - ungueltiges `--write`
-- Output-Ziele im Repository, Symlinks, nicht leere Verzeichnisse und vorhandene Zieldateien
+- Output-Ziele im Repository, Symlinks und bereits vorhandene Ziele
 - simulierten Repository-Drift waehrend des Dry Runs
 - ungueltig erzeugte Handoffs
 - unvollstaendige Evidence- und Validierungsbilanz
 
-Die Determinismus-Tests fuehren denselben Task mit derselben Source Revision in
-zwei getrennte externe Output-Verzeichnisse aus und vergleichen `handoff.json`
-und `run-result.json` bytegleich.
+Run-Evidence-Tests pruefen exakte Task-Bytes, schema-valide JSON-Artefakte,
+Task- und Git-Bindung, eindeutige Run-IDs, `--no-persist`, ein explizites
+externes Ziel, Zielkollisionen, Symlink-/Traversal-Schutz und die Abwesenheit
+eines sichtbaren Teilbuendels bei simuliertem Schreibfehler. Die Run-ID und der
+Erstellungszeitpunkt sind absichtlich nicht deterministisch; deterministisch
+sind die gebundenen Task-Bytes und die fachlichen Bilanzdaten.
 
 ## Functional Readiness Smoke
 
@@ -107,7 +110,9 @@ Readiness-Generator fuehrt einen echten Runner-Smoke aus, prueft Strict-JSON,
 `mode = dry_run`, `status = planned`, leere Findings, `repository_unchanged`,
 ein vorhandenes Handoff, Handoff-Validator-Akzeptanz, `outcome = incomplete`,
 vollstaendige `not_run`-Validierungen und einen unveraenderten
-inhaltssensitiven Git-Zustandsfingerabdruck.
+inhaltssensitiven Git-Zustandsfingerabdruck. `run_evidence_lite = pass`
+erfordert zusaetzlich einen funktionalen Persistenz-Smoke mit exakt vier
+Dateien, Schema-Pruefung sowie Task- und Artefakt-Hash-Bindung.
 
 Explizite False-Green-Gegenwelten pruefen passend benannte Placeholder-Dateien,
 ungueltiges JSON, falschen Modus, falschen Status, fehlendes oder ungueltiges

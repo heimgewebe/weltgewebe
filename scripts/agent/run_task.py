@@ -4,14 +4,19 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
+import errno
 import hashlib
 import json
 import os
 import re
+import secrets
+import shutil
 import stat
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -55,7 +60,12 @@ PRODUCER = "scripts.agent.run_task"
 RESIDUAL_GAPS = [
     "dry-run does not execute task validation commands",
     "dry-run does not apply repository changes",
+    "run-evidence-lite persists only successfully planned dry-runs",
+    "run-evidence-lite is not a CI attestation or write-mode authorization",
 ]
+
+RUN_ID_RE = re.compile(r"^RUN-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$")
+EVIDENCE_FILES = ("task.yml", "handoff.json", "validation.json", "run-result.json")
 
 RepositoryStateReader = Callable[[Path], bytes]
 SourceRevisionResolver = Callable[[Path], str]
@@ -485,21 +495,141 @@ def _repo_contains(root: Path, candidate: Path) -> bool:
         return False
 
 
-def _ensure_no_symlink_parents(path: Path) -> None:
+def _ensure_no_symlink_parents(path: Path, *, stop_at: Path | None = None) -> None:
     current = path if path.exists() else path.parent
+    stop = stop_at.resolve() if stop_at is not None else None
     while True:
         if current.is_symlink():
             raise RunnerError(
                 "OUTPUT_DIR_INVALID",
                 "Output path and its parents must not be symlinks",
             )
+        if stop is not None and current.resolve(strict=False) == stop:
+            break
         parent = current.parent
         if parent == current:
             break
         current = parent
 
 
+def _utc_timestamp() -> str:
+    return (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="microseconds")
+        .replace("+00:00", "Z")
+    )
+
+
+def _new_run_id() -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"RUN-{timestamp}-{secrets.token_hex(6)}"
+
+
+def _load_evidence_schema(repo_root: Path, name: str) -> dict[str, Any]:
+    try:
+        schema = load_json_strict(repo_root / "contracts/agent" / name)
+    except (OSError, json.JSONDecodeError, DuplicateKeyError) as exc:
+        raise RunnerError("CONTRACT_SCHEMA_INVALID", str(exc)) from exc
+    if not isinstance(schema, dict):
+        raise RunnerError("CONTRACT_SCHEMA_INVALID", f"{name} must be an object")
+    return schema
+
+
+def _validate_evidence_payload(
+    payload: dict[str, Any], schema: dict[str, Any], *, label: str
+) -> None:
+    try:
+        violations = validate_instance(payload, schema)
+    except UnsupportedSchemaError as exc:
+        raise RunnerError("CONTRACT_SCHEMA_UNSUPPORTED", str(exc)) from exc
+    if violations:
+        first = violations[0]
+        raise RunnerError(
+            "RUN_EVIDENCE_SCHEMA_INVALID",
+            f"{label} failed schema validation at {first['path']}: {first['message']}",
+        )
+
+
+def _json_bytes(data: Any) -> bytes:
+    return _json(data).encode("utf-8")
+
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _write_file_sync(path: Path, data: bytes) -> None:
+    descriptor = os.open(
+        path,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+        0o600,
+    )
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _rename_noreplace(source: Path, target: Path) -> None:
+    """Atomically publish one directory without replacing an existing target."""
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise RunnerError(
+            "OUTPUT_ATOMIC_PUBLISH_UNAVAILABLE",
+            "renameat2(RENAME_NOREPLACE) is required for atomic publication",
+        )
+    renameat2.argtypes = [
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    ]
+    renameat2.restype = ctypes.c_int
+    result = renameat2(
+        -100,
+        os.fsencode(source),
+        -100,
+        os.fsencode(target),
+        1,
+    )
+    if result == 0:
+        return
+    error_number = ctypes.get_errno()
+    if error_number in {errno.EEXIST, errno.ENOTEMPTY}:
+        raise RunnerError(
+            "OUTPUT_DIR_EXISTS",
+            "Output directory must not already exist",
+        )
+    raise RunnerError("OUTPUT_WRITE_FAILED", os.strerror(error_number))
+
+
+def _default_evidence_target(repo_root: Path, run_id: str) -> tuple[Path, str]:
+    if not RUN_ID_RE.fullmatch(run_id):
+        raise RunnerError("RUN_ID_INVALID", "Generated run_id has an invalid format")
+    evidence_root = repo_root / "artifacts" / "agent-runs"
+    _ensure_no_symlink_parents(evidence_root, stop_at=repo_root)
+    evidence_root.mkdir(parents=True, exist_ok=True)
+    _ensure_no_symlink_parents(evidence_root, stop_at=repo_root)
+    return evidence_root / run_id, f"artifacts/agent-runs/{run_id}"
+
+
 def validate_output_dir(repo_root: Path, output_dir: Path) -> Path:
+    if ".." in output_dir.parts:
+        raise RunnerError(
+            "OUTPUT_DIR_INVALID",
+            "Relative output directory must not contain parent traversal",
+        )
     candidate = output_dir if output_dir.is_absolute() else (Path.cwd() / output_dir)
     candidate = candidate.absolute()
     root = repo_root.resolve()
@@ -508,7 +638,7 @@ def validate_output_dir(repo_root: Path, output_dir: Path) -> Path:
     if resolved_candidate == root or _repo_contains(root, resolved_candidate):
         raise RunnerError(
             "OUTPUT_DIR_IN_REPOSITORY",
-            "Output directory must be outside the repository root",
+            "Custom output directory must be outside the repository root",
         )
     if candidate.is_symlink():
         raise RunnerError(
@@ -520,53 +650,177 @@ def validate_output_dir(repo_root: Path, output_dir: Path) -> Path:
             "Output directory parent must be an existing directory",
         )
     _ensure_no_symlink_parents(candidate)
-
     if candidate.exists():
-        if not candidate.is_dir():
-            raise RunnerError("OUTPUT_DIR_INVALID", "Output path must be a directory")
-        if any(candidate.iterdir()):
-            raise RunnerError(
-                "OUTPUT_DIR_NOT_EMPTY",
-                "Output directory must be new or empty",
-            )
+        raise RunnerError(
+            "OUTPUT_DIR_EXISTS",
+            "Output directory must not already exist",
+        )
     return candidate
 
 
-def publish_output_dir(
-    repo_root: Path,
-    output_dir: Path,
+def _validation_payload(
     *,
+    run_id: str,
+    task: dict[str, Any],
+    task_digest: str,
+    source_revision: str,
+    repository_state_sha256: str,
+    created_at: str,
+) -> dict[str, Any]:
+    return {
+        "schema_version": "1.0",
+        "run_id": run_id,
+        "created_at": created_at,
+        "task_id": task["task_id"],
+        "task_contract_sha256": task_digest,
+        "source_revision": source_revision,
+        "repository_state_sha256": repository_state_sha256,
+        "status": "passed",
+        "checks": [
+            {"name": "task_schema", "status": "passed"},
+            {"name": "claim_registry", "status": "passed"},
+            {"name": "non_ideal_guard", "status": "passed"},
+            {"name": "handoff_contract", "status": "passed"},
+            {"name": "repository_unchanged", "status": "passed"},
+        ],
+    }
+
+
+def publish_evidence_bundle(
+    repo_root: Path,
+    output_dir: Path | None,
+    *,
+    run_id: str,
+    raw_task: bytes,
+    task: dict[str, Any],
+    task_digest: str,
+    source_revision: str,
+    repository_state_sha256: str,
+    started_at: str,
+    completed_at: str,
     run_result: dict[str, Any],
     handoff: dict[str, Any],
-) -> Path:
-    target = validate_output_dir(repo_root, output_dir)
+) -> tuple[Path, str]:
+    if output_dir is None:
+        target, display_path = _default_evidence_target(repo_root, run_id)
+    else:
+        target = validate_output_dir(repo_root, output_dir)
+        display_path = str(output_dir)
+
     parent = target.parent
-    staging_raw = tempfile.mkdtemp(prefix=".run-task-", dir=parent)
-    staging = Path(staging_raw)
+    if target.exists() or target.is_symlink():
+        raise RunnerError(
+            "OUTPUT_DIR_EXISTS", "Output directory must not already exist"
+        )
+
+    handoff_bytes = _json_bytes(handoff)
+    validation = _validation_payload(
+        run_id=run_id,
+        task=task,
+        task_digest=task_digest,
+        source_revision=source_revision,
+        repository_state_sha256=repository_state_sha256,
+        created_at=completed_at,
+    )
+    validation_schema = _load_evidence_schema(repo_root, "validation.schema.json")
+    _validate_evidence_payload(validation, validation_schema, label="validation.json")
+    validation_bytes = _json_bytes(validation)
+
+    persisted_result = {
+        **run_result,
+        "schema_version": "1.0",
+        "run_id": run_id,
+        "outcome": handoff["outcome"],
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "repository_state_sha256": repository_state_sha256,
+        "repository_state": {
+            "source_revision": source_revision,
+            "git_visible_sha256": repository_state_sha256,
+        },
+        "artifacts": {
+            "task": {"path": "task.yml", "sha256": _sha256(raw_task)},
+            "handoff": {"path": "handoff.json", "sha256": _sha256(handoff_bytes)},
+            "validation": {
+                "path": "validation.json",
+                "sha256": _sha256(validation_bytes),
+            },
+            "run_result": {"path": "run-result.json"},
+        },
+        "residual_gaps": list(RESIDUAL_GAPS),
+    }
+    result_schema = _load_evidence_schema(repo_root, "run-result.schema.json")
+    _validate_evidence_payload(persisted_result, result_schema, label="run-result.json")
+    result_bytes = _json_bytes(persisted_result)
+
+    staged_payloads = {
+        "task.yml": raw_task,
+        "handoff.json": handoff_bytes,
+        "validation.json": validation_bytes,
+        "run-result.json": result_bytes,
+    }
+    staging = Path(tempfile.mkdtemp(prefix=".agent-run-staging-", dir=parent))
+    published = False
+    pending_error: RunnerError | None = None
     try:
-        (staging / "handoff.json").write_text(_json(handoff), encoding="utf-8")
-        (staging / "run-result.json").write_text(_json(run_result), encoding="utf-8")
-        os.replace(staging, target)
+        os.chmod(staging, 0o700)
+        for name, payload in staged_payloads.items():
+            _write_file_sync(staging / name, payload)
+        actual_names = {path.name for path in staging.iterdir()}
+        if actual_names != set(EVIDENCE_FILES):
+            raise RunnerError(
+                "RUN_EVIDENCE_INCOMPLETE",
+                "Staged evidence bundle does not contain exactly four files",
+            )
+        for name, expected in staged_payloads.items():
+            if (staging / name).read_bytes() != expected:
+                raise RunnerError(
+                    "RUN_EVIDENCE_WRITE_MISMATCH",
+                    f"Staged evidence file does not match serialized payload: {name}",
+                )
+        _fsync_directory(staging)
+        _rename_noreplace(staging, target)
+        published = True
+        _fsync_directory(parent)
+    except RunnerError as exc:
+        pending_error = exc
+        if published and target.is_dir() and not target.is_symlink():
+            try:
+                shutil.rmtree(target)
+                _fsync_directory(parent)
+            except OSError as cleanup_error:
+                exc.cleanup_errors.append(str(cleanup_error))
+        raise
     except OSError as exc:
-        raise RunnerError("OUTPUT_WRITE_FAILED", str(exc)) from exc
+        runner_error = RunnerError("OUTPUT_WRITE_FAILED", str(exc))
+        pending_error = runner_error
+        if published and target.is_dir() and not target.is_symlink():
+            try:
+                shutil.rmtree(target)
+                _fsync_directory(parent)
+            except OSError as cleanup_error:
+                runner_error.cleanup_errors.append(str(cleanup_error))
+        raise runner_error from exc
     finally:
         if staging.exists():
-            for child in staging.iterdir():
-                child.unlink(missing_ok=True)
-            staging.rmdir()
-    return target
+            try:
+                shutil.rmtree(staging)
+            except OSError as cleanup_error:
+                if pending_error is not None:
+                    pending_error.cleanup_errors.append(str(cleanup_error))
+                else:
+                    raise RunnerError(
+                        "OUTPUT_CLEANUP_FAILED", str(cleanup_error)
+                    ) from cleanup_error
+    return target, display_path
 
 
 def _remove_published_output(target: Path) -> None:
-    for name in ("handoff.json", "run-result.json"):
-        candidate = target / name
-        if candidate.exists() or candidate.is_symlink():
-            candidate.unlink()
-    try:
-        target.rmdir()
-    except OSError:
-        # Best-effort cleanup must not hide the original no-write violation.
-        pass
+    if target.is_symlink():
+        target.unlink()
+        return
+    if target.is_dir():
+        shutil.rmtree(target)
 
 
 def _run_dry_run(
@@ -574,6 +828,8 @@ def _run_dry_run(
     repo_root: Path,
     task_file: str,
     output_dir: Path | None = None,
+    persist: bool = False,
+    run_id_factory: Callable[[], str] | None = None,
     repository_state_reader: RepositoryStateReader | None = None,
     source_revision_resolver: SourceRevisionResolver | None = None,
 ) -> DryRunOutcome:
@@ -582,6 +838,8 @@ def _run_dry_run(
     revision_resolver = source_revision_resolver or resolve_git_head
     statuses: dict[str, str] = {}
     published_target: Path | None = None
+    started_at = _utc_timestamp()
+    should_persist = persist or output_dir is not None
 
     before_state = state_reader(root)
     _stage_status(statuses, "capture_repository_state", "passed")
@@ -687,10 +945,26 @@ def _run_dry_run(
             handoff=handoff,
             repository_unchanged=True,
         )
-        if output_dir is not None:
-            published_target = publish_output_dir(
-                root, output_dir, run_result=result, handoff=handoff
+        if should_persist:
+            run_id = (run_id_factory or _new_run_id)()
+            if not RUN_ID_RE.fullmatch(run_id):
+                raise RunnerError("RUN_ID_INVALID", "run_id has an invalid format")
+            completed_at = _utc_timestamp()
+            published_target, evidence_path = publish_evidence_bundle(
+                root,
+                output_dir,
+                run_id=run_id,
+                raw_task=raw_task,
+                task=task,
+                task_digest=task_digest,
+                source_revision=revision,
+                repository_state_sha256=hashlib.sha256(before_state).hexdigest(),
+                started_at=started_at,
+                completed_at=completed_at,
+                run_result=result,
+                handoff=handoff,
             )
+            result = {**result, "run_id": run_id, "evidence_path": evidence_path}
 
         if revision_resolver(root) != revision:
             raise RunnerError(
@@ -728,11 +1002,13 @@ def run_dry_run(
     repo_root: Path,
     task_file: str,
     output_dir: Path | None = None,
+    persist: bool = True,
 ) -> DryRunOutcome:
     return _run_dry_run(
         repo_root=repo_root,
         task_file=task_file,
         output_dir=output_dir,
+        persist=persist,
         repository_state_reader=repository_state_bytes,
         source_revision_resolver=resolve_git_head,
     )
@@ -747,7 +1023,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--output-dir",
-        help="Optional output directory outside the repository root",
+        help="Optional single evidence-bundle target outside the repository root",
+    )
+    parser.add_argument(
+        "--no-persist",
+        action="store_true",
+        help="Emit the dry-run result to stdout without writing run evidence",
     )
     parser.add_argument("task_file", help="Repository-relative task JSON file")
     return parser
@@ -762,10 +1043,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = _build_parser().parse_args(argv)
         root = Path(REPO_ROOT)
+        if args.no_persist and args.output_dir:
+            raise RunnerError(
+                "INVALID_ARGUMENTS",
+                "--no-persist and --output-dir cannot be used together",
+            )
         outcome = run_dry_run(
             repo_root=root,
             task_file=args.task_file,
             output_dir=Path(args.output_dir) if args.output_dir else None,
+            persist=not args.no_persist,
         )
     except RunnerError as exc:
         return _emit_error(exc.code, exc.message)

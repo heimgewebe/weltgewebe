@@ -135,7 +135,7 @@
     },
     {
       "id": "CLAIM-AGENT-SAFE-006",
-      "status": "proposed",
+      "status": "established",
       "subject": "AGENT-SAFE-006",
       "statement": "Der Dry-Run-Runner validiert Tasks und erkennt persistente Drift im sichtbaren Git-Zustand.",
       "evidence": [
@@ -173,6 +173,62 @@
         "python3 -m unittest scripts.docmeta.tests.test_generate_agent_readiness -v",
         "python3 -m unittest scripts.docmeta.tests.test_agent_readiness_smoke_contract -v",
         "python3 -m scripts.agent.validate_agent_contracts"
+      ],
+      "owner": "unknown",
+      "updated": "2026-06-26"
+    },
+    {
+      "id": "CLAIM-AGENT-SAFE-007",
+      "status": "proposed",
+      "subject": "AGENT-SAFE-007",
+      "statement": "Erfolgreiche geplante Agent-Dry-Runs erzeugen einen schema-validen, task- und revisionsgebundenen Run-Evidence-Lite-Satz.",
+      "evidence": [
+        {
+          "path": "contracts/agent/validation.schema.json",
+          "kind": "implementation"
+        },
+        {
+          "path": "contracts/agent/run-result.schema.json",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/agent/run_task.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/agent/tests/test_run_task.py",
+          "kind": "test"
+        },
+        {
+          "path": "scripts/agent/validate_agent_contracts.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/contracts-agent-check.sh",
+          "kind": "ci"
+        },
+        {
+          "path": "scripts/docmeta/generate_agent_readiness.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/docmeta/tests/test_generate_agent_readiness.py",
+          "kind": "test"
+        },
+        {
+          "path": ".github/workflows/agent-safety-preflight.yml",
+          "kind": "ci"
+        },
+        {
+          "path": "docs/reference/agent-run-evidence-lite.md",
+          "kind": "documentation"
+        }
+      ],
+      "validation": [
+        "python3 -m unittest scripts.agent.tests.test_run_task -v",
+        "python3 -m unittest scripts.docmeta.tests.test_generate_agent_readiness -v",
+        "python3 -m scripts.agent.validate_agent_contracts",
+        "bash scripts/contracts-agent-check.sh"
       ],
       "owner": "unknown",
       "updated": "2026-06-26"

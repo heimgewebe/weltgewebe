@@ -76,13 +76,23 @@ Generated automatically. Do not edit.
 
 ## contracts/agent/handoff.schema.json
 
+- [relates_to] docs/reference/agent-dry-run-runner.md
 - [relates_to] docs/reference/agent-handoff-contract.md
 - [relates_to] docs/reference/agent-operability-fixture-matrix.md
+
+## contracts/agent/run-result.schema.json
+
+- [relates_to] docs/reference/agent-run-evidence-lite.md
 
 ## contracts/agent/task.schema.json
 
+- [relates_to] docs/reference/agent-dry-run-runner.md
 - [relates_to] docs/reference/agent-handoff-contract.md
 - [relates_to] docs/reference/agent-operability-fixture-matrix.md
+
+## contracts/agent/validation.schema.json
+
+- [relates_to] docs/reference/agent-run-evidence-lite.md
 
 ## contracts/domain/edge.schema.json
 
@@ -180,7 +190,9 @@ Generated automatically. Do not edit.
 ## docs/blueprints/blueprint-agent-safety-control-layer.md
 
 - [relates_to] docs/claims/README.md
+- [relates_to] docs/reference/agent-dry-run-runner.md
 - [relates_to] docs/reference/agent-handoff-contract.md
+- [relates_to] docs/reference/agent-run-evidence-lite.md
 - [relates_to] docs/security/agent-write-scope-baseline.md
 
 ## docs/blueprints/doc-structure-task-control-examples.md
@@ -475,6 +487,10 @@ Generated automatically. Do not edit.
 ## docs/quickstart-gate-c.md
 
 - [relates_to] docs/dev/codespaces.md
+
+## docs/reference/agent-dry-run-runner.md
+
+- [relates_to] docs/reference/agent-run-evidence-lite.md
 
 ## docs/reports/agent-readiness-audit.md
 
@@ -808,7 +824,17 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reference/agent-handoff-contract.md
 
+## scripts/agent/run_task.py
+
+- [relates_to] docs/reference/agent-dry-run-runner.md
+- [relates_to] docs/reference/agent-operability-fixture-matrix.md
+- [relates_to] docs/reference/agent-run-evidence-lite.md
+
 ## scripts/agent/tests/test_check_non_ideal_task.py
+
+- [relates_to] docs/reference/agent-operability-fixture-matrix.md
+
+## scripts/agent/tests/test_run_task.py
 
 - [relates_to] docs/reference/agent-operability-fixture-matrix.md
 
@@ -836,6 +862,10 @@ Generated automatically. Do not edit.
 ## scripts/docmeta/check_planning_registration.py
 
 - [relates_to] docs/reports/planning-registration-findings.md
+
+## scripts/docmeta/generate_agent_readiness.py
+
+- [relates_to] docs/reference/agent-dry-run-runner.md
 
 ## scripts/docmeta/validate_claim_registry.py
 

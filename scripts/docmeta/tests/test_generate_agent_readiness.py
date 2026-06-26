@@ -95,6 +95,24 @@ class TestGenerateAgentReadiness(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
 
+    def _copy_run_evidence_capability(self) -> None:
+        source_root = Path(gen.REPO_ROOT).resolve()
+        for rel_path in gen.RUN_EVIDENCE_REQUIRED_FILES:
+            source = (source_root / rel_path).resolve()
+            try:
+                source.relative_to(source_root)
+            except ValueError as exc:
+                raise AssertionError(
+                    f"run-evidence fixture dependency escapes repository root: {rel_path}"
+                ) from exc
+            if not source.is_file():
+                raise AssertionError(
+                    f"run-evidence fixture dependency is missing or not a file: {rel_path}"
+                )
+            target = self.root / rel_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+
     def _init_git_repo(self) -> None:
         subprocess_kwargs = {
             "cwd": self.root,
@@ -160,6 +178,7 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self._touch("scripts/docmeta/validate_claim_registry.py")
         self._copy_handoff_capability()
         self._copy_dry_run_capability()
+        self._copy_run_evidence_capability()
         self._touch("scripts/agent/tests/test_check_non_ideal_task.py")
         self._init_git_repo()
 
@@ -178,6 +197,7 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertEqual(status["handoff_validation"], "pass")
         self.assertEqual(status["non_ideal_guard"], "pass")
         self.assertEqual(status["dry_run_runner"], "pass")
+        self.assertEqual(status["run_evidence_lite"], "pass")
 
     def test_generated_markdown_contains_matrix_sections_and_status_values(self):
         self._touch("AGENTS.md")
@@ -199,6 +219,7 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertRegex(
             report, r"\| claim_evidence_spine \| (pass|partial|open|fail) \|"
         )
+        self.assertRegex(report, r"\| run_evidence_lite \| (pass|partial|open|fail) \|")
 
     def test_handoff_single_artifact_is_partial_not_pass(self):
         self._touch("contracts/agent/handoff.schema.json", "{}\n")
@@ -273,6 +294,25 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         status = self._status_map(results)
 
         self.assertNotEqual(status["dry_run_runner"], "pass")
+
+    def test_run_evidence_complete_placeholder_set_fails_functional_smoke(self):
+        for rel_path in gen.RUN_EVIDENCE_REQUIRED_FILES:
+            if rel_path.endswith(".json"):
+                content = "{}\n"
+            elif rel_path.endswith(".md"):
+                content = "---\nid: placeholder\ntitle: Placeholder\ndoc_type: reference\nstatus: active\n---\n"
+            else:
+                content = "# placeholder\n"
+            self._touch(rel_path, content)
+
+        result = next(
+            item
+            for item in gen.evaluate_capabilities(self.root)
+            if item.id == "run_evidence_lite"
+        )
+
+        self.assertEqual(result.status, "fail")
+        self.assertIn("functional run-evidence smoke", result.missing)
 
     def test_agent_policy_directory_artifact_fails_overall(self):
         (self.root / "AGENTS.md").mkdir(parents=True, exist_ok=True)

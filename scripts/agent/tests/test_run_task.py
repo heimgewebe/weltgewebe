@@ -5,6 +5,8 @@ import hashlib
 import io
 import inspect
 import json
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -205,6 +207,7 @@ class TestRunTask(unittest.TestCase):
     def test_cli_emits_single_json_document(self):
         proc = self._run_cli(
             "--dry-run",
+            "--no-persist",
             self._fixture("valid-doc-drift-task.json"),
         )
         self.assertEqual(proc.returncode, 0)
@@ -214,32 +217,169 @@ class TestRunTask(unittest.TestCase):
         self.assertEqual(payload["mode"], "dry_run")
         self.assertEqual(payload["status"], "planned")
 
-    def test_output_files_are_deterministic_and_do_not_embed_output_path(self):
+    def test_output_bundle_contains_exact_bound_artifacts_without_absolute_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
-            out_a = base / "a"
-            out_b = base / "b"
-            out_a.mkdir()
-            out_b.mkdir()
+            output = base / "run"
+            fixture = self._fixture("valid-doc-drift-task.json")
+            outcome = run_task._run_dry_run(
+                repo_root=self.root,
+                task_file=fixture,
+                source_revision_resolver=lambda _root: self.source_revision,
+                output_dir=output,
+                run_id_factory=lambda: "RUN-20990101T000000Z-abcdef123456",
+            )
+            self.assertEqual(outcome.exit_code, 0)
+            self.assertEqual(
+                sorted(path.name for path in output.iterdir()),
+                sorted(run_task.EVIDENCE_FILES),
+            )
+            self.assertEqual(
+                (output / "task.yml").read_bytes(), (self.root / fixture).read_bytes()
+            )
+            validation = load_json_strict(output / "validation.json")
+            result = load_json_strict(output / "run-result.json")
+            self.assertEqual(validation["run_id"], outcome.result["run_id"])
+            self.assertEqual(result["run_id"], outcome.result["run_id"])
+            self.assertEqual(
+                result["task_contract_sha256"],
+                hashlib.sha256((self.root / fixture).read_bytes()).hexdigest(),
+            )
+            self.assertEqual(
+                result["artifacts"]["task"]["sha256"], result["task_contract_sha256"]
+            )
+            self.assertEqual(result["outcome"], result["handoff"]["outcome"])
+            self.assertEqual(result["outcome"], "incomplete")
+            self.assertLessEqual(result["started_at"], result["completed_at"])
+            self.assertEqual(validation["created_at"], result["completed_at"])
+            self.assertEqual(
+                result["repository_state"]["source_revision"], self.source_revision
+            )
+            self.assertEqual(
+                result["repository_state"]["git_visible_sha256"],
+                validation["repository_state_sha256"],
+            )
+            with self.assertRaises(run_task.RunnerError) as traversal:
+                run_task.validate_output_dir(self.root, Path("../outside"))
+            self.assertEqual(traversal.exception.code, "OUTPUT_DIR_INVALID")
+            for name in run_task.EVIDENCE_FILES:
+                artifact_path = output / name
+                self.assertNotIn(str(base).encode(), artifact_path.read_bytes())
+                self.assertEqual(stat.S_IMODE(artifact_path.stat().st_mode), 0o600)
 
-            for output in (out_a, out_b):
-                outcome = run_task._run_dry_run(
-                    repo_root=self.root,
-                    task_file=self._fixture("valid-doc-drift-task.json"),
-                    source_revision_resolver=lambda _root: self.source_revision,
-                    output_dir=output,
-                )
-                self.assertEqual(outcome.exit_code, 0)
-                self.assertEqual(
-                    sorted(path.name for path in output.iterdir()),
-                    ["handoff.json", "run-result.json"],
-                )
+    def test_default_persistence_and_no_persist_are_distinct(self):
+        run_id = "RUN-20990101T000001Z-abcdef123456"
+        target = self.root / "artifacts" / "agent-runs" / run_id
+        if target.exists():
+            shutil.rmtree(target)
+        self.addCleanup(shutil.rmtree, target, ignore_errors=True)
 
-            for name in ("handoff.json", "run-result.json"):
-                a_bytes = (out_a / name).read_bytes()
-                b_bytes = (out_b / name).read_bytes()
-                self.assertEqual(a_bytes, b_bytes)
-                self.assertNotIn(str(base).encode(), a_bytes)
+        outcome = run_task._run_dry_run(
+            repo_root=self.root,
+            task_file=self._fixture("valid-doc-drift-task.json"),
+            source_revision_resolver=lambda _root: self.source_revision,
+            persist=True,
+            run_id_factory=lambda: run_id,
+        )
+        self.assertEqual(
+            outcome.result["evidence_path"], f"artifacts/agent-runs/{run_id}"
+        )
+        self.assertEqual(
+            sorted(path.name for path in target.iterdir()),
+            sorted(run_task.EVIDENCE_FILES),
+        )
+
+        no_persist_id = "RUN-20990101T000002Z-abcdef123456"
+        no_persist_target = self.root / "artifacts" / "agent-runs" / no_persist_id
+        no_persist = run_task._run_dry_run(
+            repo_root=self.root,
+            task_file=self._fixture("valid-doc-drift-task.json"),
+            source_revision_resolver=lambda _root: self.source_revision,
+            persist=False,
+            run_id_factory=lambda: no_persist_id,
+        )
+        self.assertNotIn("run_id", no_persist.result)
+        self.assertFalse(no_persist_target.exists())
+
+    def test_atomic_publish_never_replaces_existing_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            source = base / "source"
+            target = base / "target"
+            source.mkdir()
+            target.mkdir()
+            (source / "new.txt").write_text("new\n", encoding="utf-8")
+            (target / "sentinel.txt").write_text("keep\n", encoding="utf-8")
+
+            with self.assertRaises(run_task.RunnerError) as ctx:
+                run_task._rename_noreplace(source, target)
+
+            self.assertEqual(ctx.exception.code, "OUTPUT_DIR_EXISTS")
+            self.assertTrue((source / "new.txt").is_file())
+            self.assertEqual(
+                (target / "sentinel.txt").read_text(encoding="utf-8"),
+                "keep\n",
+            )
+
+    def test_partial_write_does_not_publish_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "run"
+            original = run_task._write_file_sync
+            calls = 0
+
+            def fail_second(path: Path, data: bytes) -> None:
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise OSError("synthetic write failure")
+                original(path, data)
+
+            with unittest.mock.patch.object(
+                run_task, "_write_file_sync", side_effect=fail_second
+            ):
+                with self.assertRaises(run_task.RunnerError) as ctx:
+                    run_task._run_dry_run(
+                        repo_root=self.root,
+                        task_file=self._fixture("valid-doc-drift-task.json"),
+                        source_revision_resolver=lambda _root: self.source_revision,
+                        output_dir=target,
+                        run_id_factory=lambda: "RUN-20990101T000003Z-abcdef123456",
+                    )
+            self.assertEqual(ctx.exception.code, "OUTPUT_WRITE_FAILED")
+            self.assertFalse(target.exists())
+            self.assertEqual(list(Path(tmp).glob(".agent-run-staging-*")), [])
+
+    def test_staging_cleanup_failure_does_not_hide_write_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "run"
+            with (
+                unittest.mock.patch.object(
+                    run_task,
+                    "_write_file_sync",
+                    side_effect=OSError("synthetic write failure"),
+                ),
+                unittest.mock.patch.object(
+                    run_task.shutil,
+                    "rmtree",
+                    side_effect=OSError("synthetic staging cleanup failure"),
+                ),
+            ):
+                with self.assertRaises(run_task.RunnerError) as ctx:
+                    run_task._run_dry_run(
+                        repo_root=self.root,
+                        task_file=self._fixture("valid-doc-drift-task.json"),
+                        source_revision_resolver=lambda _root: self.source_revision,
+                        output_dir=target,
+                        run_id_factory=lambda: "RUN-20990101T000005Z-abcdef123456",
+                    )
+            self.assertEqual(ctx.exception.code, "OUTPUT_WRITE_FAILED")
+            self.assertTrue(
+                any(
+                    "synthetic staging cleanup failure" in item
+                    for item in ctx.exception.cleanup_errors
+                )
+            )
+            self.assertFalse(target.exists())
 
     def test_malformed_json_duplicate_keys_constants_and_utf8_fail_exit_two(self):
         cases = (
@@ -410,7 +550,7 @@ class TestRunTask(unittest.TestCase):
                 self._fixture("valid-doc-drift-task.json"),
             )
             self.assertEqual(proc.returncode, 2)
-            self.assertEqual(json.loads(proc.stderr)["code"], "OUTPUT_DIR_NOT_EMPTY")
+            self.assertEqual(json.loads(proc.stderr)["code"], "OUTPUT_DIR_EXISTS")
 
             file_target = base / "target-file"
             file_target.write_text("x", encoding="utf-8")
@@ -421,7 +561,61 @@ class TestRunTask(unittest.TestCase):
                 self._fixture("valid-doc-drift-task.json"),
             )
             self.assertEqual(proc.returncode, 2)
-            self.assertEqual(json.loads(proc.stderr)["code"], "OUTPUT_DIR_INVALID")
+            self.assertEqual(json.loads(proc.stderr)["code"], "OUTPUT_DIR_EXISTS")
+
+    def test_output_directory_rejects_parent_traversal_and_symlink_parent(self):
+        with self.assertRaises(run_task.RunnerError) as traversal:
+            run_task.validate_output_dir(self.root, Path("../outside-run"))
+        self.assertEqual(traversal.exception.code, "OUTPUT_DIR_INVALID")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            actual_parent = base / "actual-parent"
+            actual_parent.mkdir()
+            symlink_parent = base / "symlink-parent"
+            symlink_parent.symlink_to(actual_parent, target_is_directory=True)
+
+            with self.assertRaises(run_task.RunnerError) as symlink:
+                run_task.validate_output_dir(self.root, symlink_parent / "run")
+            self.assertEqual(symlink.exception.code, "OUTPUT_DIR_INVALID")
+
+            existing_empty = base / "existing-empty"
+            existing_empty.mkdir()
+            with self.assertRaises(run_task.RunnerError) as existing:
+                run_task.validate_output_dir(self.root, existing_empty)
+            self.assertEqual(existing.exception.code, "OUTPUT_DIR_EXISTS")
+
+    def test_default_evidence_root_rejects_symlink_parent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo = base / "repo"
+            repo.mkdir()
+            outside = base / "outside"
+            outside.mkdir()
+            (repo / "artifacts").symlink_to(outside, target_is_directory=True)
+
+            with self.assertRaises(run_task.RunnerError) as ctx:
+                run_task._default_evidence_target(
+                    repo, "RUN-20990101T000004Z-abcdef123456"
+                )
+            self.assertEqual(ctx.exception.code, "OUTPUT_DIR_INVALID")
+            self.assertEqual(list(outside.iterdir()), [])
+
+    def test_blocked_run_does_not_publish_requested_evidence(self):
+        task = load_json_strict(self._fixture_path("valid-doc-drift-task.json"))
+        task.pop("goal")
+        rel = self._write_temp_task(task)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "blocked-run"
+            outcome = run_task._run_dry_run(
+                repo_root=self.root,
+                task_file=rel,
+                output_dir=target,
+                source_revision_resolver=lambda _root: self.source_revision,
+            )
+            self.assertEqual(outcome.exit_code, 1)
+            self.assertEqual(outcome.result["status"], "blocked")
+            self.assertFalse(target.exists())
 
     def test_repository_drift_is_detected(self):
         states = [b"before", b"after"]

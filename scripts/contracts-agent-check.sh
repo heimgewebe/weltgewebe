@@ -13,6 +13,8 @@ fi
 
 TASK_SCHEMA="contracts/agent/task.schema.json"
 HANDOFF_SCHEMA="contracts/agent/handoff.schema.json"
+VALIDATION_SCHEMA="contracts/agent/validation.schema.json"
+RUN_RESULT_SCHEMA="contracts/agent/run-result.schema.json"
 TASK_FIXTURE="tests/fixtures/agent/handoff-task.json"
 VALID_HANDOFF="tests/fixtures/agent/handoff-valid.json"
 TMP_DIR="$(mktemp -d)"
@@ -27,7 +29,7 @@ data.pop("producer")
 print(json.dumps(data))
 PY
 
-for schema in "$TASK_SCHEMA" "$HANDOFF_SCHEMA"; do
+for schema in "$TASK_SCHEMA" "$HANDOFF_SCHEMA" "$VALIDATION_SCHEMA" "$RUN_RESULT_SCHEMA"; do
   echo "==> compile $schema"
   "$AJV_BIN" compile -s "$schema" --spec=draft7 --strict=false
 done
