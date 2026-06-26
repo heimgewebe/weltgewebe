@@ -315,6 +315,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-provider-role-finding.md
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
 - [relates_to] docs/runbooks/domain-mail-cutover.md
+- [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
 - [relates_to] docs/tasks/DEPLOY-DNS-001B.md
 
 ## docs/deploy/heim-first-phase0.md
@@ -328,6 +329,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/heim-first-phase0.md
 - [relates_to] docs/deploy/heimserver.integration.md
 - [relates_to] docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
+- [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
 
 ## docs/deploy/heimserver.integration.md
 
@@ -633,6 +635,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/runbooks/incident-response.md
 - [relates_to] docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
 - [relates_to] docs/runbooks/uv-tooling.md
+- [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
 
 ## docs/runbooks/codespaces-recovery.md
 
@@ -656,15 +659,19 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/runbooks/README.md
 - [relates_to] docs/runbooks/db-recovery.md
+- [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
 
 ## docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
 
-- [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 - [relates_to] docs/runbooks/README.md
 
 ## docs/runbooks/uv-tooling.md
 
 - [relates_to] docs/runbooks/README.md
+
+## docs/runbooks/weltgewebe-ddns-runtime-verification.md
+
+- [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 
 ## docs/specs/auth-api.md
 

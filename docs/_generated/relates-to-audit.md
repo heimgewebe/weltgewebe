@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 432 |
+| Relationen gesamt | 436 |
 | — depends_on | 18 |
-| — relates_to | 411 |
+| — relates_to | 415 |
 | — supersedes | 3 |
 | relates_to Anteil | 95% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (163 Dokumente):
+**Cluster 1** (164 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -161,6 +161,7 @@ _Keine Lücken erkannt._
 - `docs/runbooks/incident-response.md`
 - `docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md`
 - `docs/runbooks/uv-tooling.md`
+- `docs/runbooks/weltgewebe-ddns-runtime-verification.md`
 - `docs/security/agent-write-scope-baseline.md`
 - `docs/specs/auth-api.md`
 - `docs/specs/auth-blueprint.md`

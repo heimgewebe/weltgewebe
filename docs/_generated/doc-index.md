@@ -124,6 +124,7 @@ Generated automatically. Do not edit.
 | runbooks.incident-response | Incident Response Runbook | reference | active | docs/runbooks/incident-response.md |
 | runbooks.ops.runbook.weltgewebe-selfhost-deploy | Selfhost-Deploy Runbook | reference | active | docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md |
 | runbooks.uv-tooling | UV-Tooling | reference | active | docs/runbooks/uv-tooling.md |
+| runbooks.weltgewebe-ddns-runtime-verification | Weltgewebe DynDNS Runtime-Verifikation | runbook | active | docs/runbooks/weltgewebe-ddns-runtime-verification.md |
 | specs.auth-api | Auth API Spec | reference | active | docs/specs/auth-api.md |
 | specs.auth-blueprint | Auth Blueprint | reference | active | docs/specs/auth-blueprint.md |
 | specs.auth-state-machine | Auth State Machine | reference | active | docs/specs/auth-state-machine.md |
