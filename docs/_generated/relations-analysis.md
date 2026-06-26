@@ -17,9 +17,9 @@ Generated automatically. Do not edit.
 | Dokumente gesamt | 133 |
 | Dokumente mit ausgehenden Relationen | 132 |
 | Dokumente als Ziel referenziert | 102 |
-| Relationen gesamt | 436 |
+| Relationen gesamt | 437 |
 | — depends_on | 18 |
-| — relates_to | 415 |
+| — relates_to | 416 |
 | — supersedes | 3 |
 | Isolierte Dokumente | 0 |
 | depends_on Zyklen | 0 |

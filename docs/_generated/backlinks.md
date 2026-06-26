@@ -672,6 +672,7 @@ Generated automatically. Do not edit.
 ## docs/runbooks/weltgewebe-ddns-runtime-verification.md
 
 - [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
+- [relates_to] docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
 
 ## docs/specs/auth-api.md
 

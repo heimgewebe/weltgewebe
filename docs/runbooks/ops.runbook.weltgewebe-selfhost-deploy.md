@@ -2,8 +2,8 @@
 id: runbooks.ops.runbook.weltgewebe-selfhost-deploy
 title: Selfhost-Deploy Runbook
 doc_type: reference
-status: active
-summary: Operatives Runbook für Selfhost-Deployments des Weltgewebe.
+status: deprecated
+summary: Historische Referenz der Netlify-/IONOS-Selfhost-Migration.
 relations:
   - type: relates_to
     target: docs/runbooks/README.md
@@ -11,6 +11,8 @@ relations:
     target: docs/deployment.md
   - type: relates_to
     target: docs/deploy/heimserver.deployment.md
+  - type: relates_to
+    target: docs/runbooks/weltgewebe-ddns-runtime-verification.md
 ---
 # Ops Runbook: Weltgewebe Self-Hosted Deployment
 
