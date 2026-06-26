@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -34,18 +35,18 @@ from scripts.docmeta.validate_claim_registry import (
 )
 
 STAGE_NAMES = [
+    "capture_repository_state",
     "load_task",
     "validate_task_schema",
     "load_claim_registry",
     "run_non_ideal_guard",
     "resolve_source_revision",
-    "capture_repository_state",
     "prepare_execution_plan",
     "account_expected_evidence",
     "build_handoff",
     "validate_handoff",
     "verify_repository_unchanged",
-    "emit_result",
+    "finalize_result",
 ]
 
 SOURCE_REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -56,7 +57,8 @@ RESIDUAL_GAPS = [
     "dry-run does not apply repository changes",
 ]
 
-RepositoryStatusReader = Callable[[Path], bytes]
+RepositoryStateReader = Callable[[Path], bytes]
+SourceRevisionResolver = Callable[[Path], str]
 
 
 class RunnerError(Exception):
@@ -247,21 +249,129 @@ def resolve_git_head(repo_root: Path) -> str:
     return revision
 
 
-def git_status_bytes(repo_root: Path) -> bytes:
+def _git_output(repo_root: Path, arguments: list[str]) -> bytes:
     try:
         completed = subprocess.run(
-            ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+            ["git", *arguments],
             cwd=repo_root,
             check=False,
             capture_output=True,
             timeout=15,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise RunnerError("GIT_STATUS_UNAVAILABLE", str(exc)) from exc
+        raise RunnerError("GIT_STATE_UNAVAILABLE", str(exc)) from exc
 
     if completed.returncode != 0:
-        raise RunnerError("GIT_STATUS_UNAVAILABLE", "Unable to read Git status")
+        raise RunnerError(
+            "GIT_STATE_UNAVAILABLE",
+            f"Unable to read Git-visible repository state: {' '.join(arguments)}",
+        )
     return completed.stdout
+
+
+def _hash_record(hasher: Any, label: bytes, payload: bytes) -> None:
+    for part in (label, payload):
+        hasher.update(len(part).to_bytes(8, byteorder="big", signed=False))
+        hasher.update(part)
+
+
+def _untracked_record(root: Path, raw_path: bytes) -> tuple[bytes, bytes, bytes]:
+    candidate = root / Path(os.fsdecode(raw_path))
+    try:
+        before = candidate.lstat()
+        mode = stat.S_IMODE(before.st_mode)
+        if stat.S_ISLNK(before.st_mode):
+            kind = b"symlink"
+            content_digest = hashlib.sha256(
+                os.fsencode(os.readlink(candidate))
+            ).digest()
+        elif stat.S_ISREG(before.st_mode):
+            kind = b"file"
+            content_hasher = hashlib.sha256()
+            with candidate.open("rb") as handle:
+                while chunk := handle.read(1024 * 1024):
+                    content_hasher.update(chunk)
+            content_digest = content_hasher.digest()
+        else:
+            kind = f"special:{stat.S_IFMT(before.st_mode):o}".encode("ascii")
+            content_digest = hashlib.sha256(b"").digest()
+        after = candidate.lstat()
+    except OSError as exc:
+        raise RunnerError(
+            "GIT_STATE_UNAVAILABLE",
+            f"Unable to fingerprint untracked path: {os.fsdecode(raw_path)}",
+        ) from exc
+
+    before_identity = (
+        before.st_dev,
+        before.st_ino,
+        before.st_mode,
+        before.st_size,
+        before.st_mtime_ns,
+    )
+    after_identity = (
+        after.st_dev,
+        after.st_ino,
+        after.st_mode,
+        after.st_size,
+        after.st_mtime_ns,
+    )
+    if before_identity != after_identity:
+        raise RunnerError(
+            "GIT_STATE_UNAVAILABLE",
+            f"Untracked path changed while fingerprinting: {os.fsdecode(raw_path)}",
+        )
+    return kind, f"{mode:o}".encode("ascii"), content_digest
+
+
+def repository_state_bytes(repo_root: Path) -> bytes:
+    """Return a content-sensitive fingerprint of non-ignored Git-visible state."""
+
+    root = repo_root.resolve()
+    index_diff = _git_output(
+        root,
+        [
+            "diff",
+            "--cached",
+            "--no-ext-diff",
+            "--binary",
+            "--full-index",
+            "HEAD",
+            "--",
+        ],
+    )
+    worktree_diff = _git_output(
+        root,
+        ["diff", "--no-ext-diff", "--binary", "--full-index", "--"],
+    )
+    untracked_raw = _git_output(
+        root, ["ls-files", "--others", "--exclude-standard", "-z"]
+    )
+
+    hasher = hashlib.sha256()
+    _hash_record(hasher, b"index-diff", index_diff)
+    _hash_record(hasher, b"worktree-diff", worktree_diff)
+
+    for raw_path in sorted(path for path in untracked_raw.split(b"\0") if path):
+        kind, mode, content_digest = _untracked_record(root, raw_path)
+        _hash_record(hasher, b"untracked-path", raw_path)
+        _hash_record(hasher, b"untracked-kind", kind)
+        _hash_record(hasher, b"untracked-mode", mode)
+        _hash_record(hasher, b"untracked-content-sha256", content_digest)
+
+    return hasher.digest()
+
+
+def _assert_repository_unchanged(
+    repo_root: Path,
+    before_state: bytes,
+    repository_state_reader: RepositoryStateReader,
+) -> None:
+    if before_state != repository_state_reader(repo_root):
+        raise RunnerError(
+            "REPO_MUTATED_DURING_DRY_RUN",
+            "Git-visible repository content changed during dry run",
+        )
 
 
 def _execution_plan(task: dict[str, Any]) -> dict[str, Any]:
@@ -446,6 +556,7 @@ def _remove_published_output(target: Path) -> None:
     try:
         target.rmdir()
     except OSError:
+        # Best-effort cleanup must not hide the original no-write violation.
         pass
 
 
@@ -453,119 +564,137 @@ def run_dry_run(
     *,
     repo_root: Path,
     task_file: str,
-    source_revision: str,
+    source_revision: str | None = None,
     output_dir: Path | None = None,
-    repository_status_reader: RepositoryStatusReader = git_status_bytes,
+    repository_state_reader: RepositoryStateReader | None = None,
+    source_revision_resolver: SourceRevisionResolver | None = None,
 ) -> DryRunOutcome:
     root = repo_root.resolve()
+    state_reader = repository_state_reader or repository_state_bytes
+    revision_resolver = source_revision_resolver or resolve_git_head
     statuses: dict[str, str] = {}
-    task_path, task_rel = resolve_task_path(root, task_file)
+    published_target: Path | None = None
 
-    raw_task, task_digest, task = _load_task_bytes(task_path)
-    _stage_status(statuses, "load_task", "passed")
-
-    task_schema = _load_task_schema(root)
-    schema_findings = _schema_findings(task, task_schema)
-    if schema_findings:
-        _stage_status(statuses, "validate_task_schema", "blocked")
-        result = _base_result(
-            status="blocked",
-            task_file=task_rel,
-            source_revision=source_revision,
-            stages=_render_stages(statuses),
-            findings=schema_findings,
-            task_id=task.get("task_id") if isinstance(task, dict) else None,
-            task_digest=task_digest,
-        )
-        return DryRunOutcome(result=result, exit_code=1)
-    _stage_status(statuses, "validate_task_schema", "passed")
-
-    registry = _load_claim_registry(root)
-    _stage_status(statuses, "load_claim_registry", "passed")
-
-    guard_findings = run_non_ideal_guard(task, registry, task_schema=task_schema)
-    if guard_findings:
-        _stage_status(statuses, "run_non_ideal_guard", "blocked")
-        result = _base_result(
-            status="blocked",
-            task_file=task_rel,
-            source_revision=source_revision,
-            stages=_render_stages(statuses),
-            findings=guard_findings,
-            task_id=task["task_id"] if isinstance(task, dict) else None,
-            task_digest=task_digest,
-        )
-        return DryRunOutcome(result=result, exit_code=1)
-    _stage_status(statuses, "run_non_ideal_guard", "passed")
-
-    validate_source_revision(source_revision)
-    _stage_status(statuses, "resolve_source_revision", "passed")
-
-    before_status = repository_status_reader(root)
+    before_state = state_reader(root)
     _stage_status(statuses, "capture_repository_state", "passed")
 
-    if not isinstance(task, dict):
-        raise RunnerError("TASK_SCHEMA_INVALID", "Task must be a JSON object")
+    try:
+        task_path, task_rel = resolve_task_path(root, task_file)
+        raw_task, task_digest, task = _load_task_bytes(task_path)
+        _stage_status(statuses, "load_task", "passed")
 
-    execution_plan = _execution_plan(task)
-    _stage_status(statuses, "prepare_execution_plan", "passed")
-
-    evidence_accounting = _evidence_accounting(task)
-    _validate_evidence_accounting(task, evidence_accounting)
-    _stage_status(statuses, "account_expected_evidence", "passed")
-
-    handoff = _handoff(task, task_digest, source_revision)
-    _stage_status(statuses, "build_handoff", "passed")
-
-    handoff_findings = validate_handoff(
-        task,
-        handoff,
-        task_bytes=raw_task,
-        repo_root=root,
-        claim_registry=registry,
-    )
-    if handoff_findings:
-        first = handoff_findings[0]
-        raise RunnerError(
-            "HANDOFF_VALIDATION_FAILED",
-            first.get("message", "Generated dry-run handoff failed validation"),
-        )
-    _stage_status(statuses, "validate_handoff", "passed")
-
-    after_status = repository_status_reader(root)
-    if before_status != after_status:
-        raise RunnerError(
-            "REPO_MUTATED_DURING_DRY_RUN",
-            "Repository status changed during dry run",
-        )
-    _stage_status(statuses, "verify_repository_unchanged", "passed")
-    _stage_status(statuses, "emit_result", "passed")
-
-    result = _base_result(
-        status="planned",
-        task_file=task_rel,
-        task_id=task["task_id"],
-        task_digest=task_digest,
-        source_revision=source_revision,
-        stages=_render_stages(statuses),
-        findings=[],
-        execution_plan=execution_plan,
-        evidence_accounting=evidence_accounting,
-        handoff=handoff,
-        repository_unchanged=True,
-    )
-    if output_dir is not None:
-        target = publish_output_dir(
-            root, output_dir, run_result=result, handoff=handoff
-        )
-        after_output_status = repository_status_reader(root)
-        if before_status != after_output_status:
-            _remove_published_output(target)
-            raise RunnerError(
-                "REPO_MUTATED_DURING_DRY_RUN",
-                "Repository status changed during dry run",
+        task_schema = _load_task_schema(root)
+        schema_findings = _schema_findings(task, task_schema)
+        if schema_findings:
+            _stage_status(statuses, "validate_task_schema", "blocked")
+            _assert_repository_unchanged(root, before_state, state_reader)
+            _stage_status(statuses, "verify_repository_unchanged", "passed")
+            _stage_status(statuses, "finalize_result", "passed")
+            result = _base_result(
+                status="blocked",
+                task_file=task_rel,
+                source_revision=None,
+                stages=_render_stages(statuses),
+                findings=schema_findings,
+                task_id=task.get("task_id") if isinstance(task, dict) else None,
+                task_digest=task_digest,
+                repository_unchanged=True,
             )
-    return DryRunOutcome(result=result, exit_code=0)
+            return DryRunOutcome(result=result, exit_code=1)
+        _stage_status(statuses, "validate_task_schema", "passed")
+
+        registry = _load_claim_registry(root)
+        _stage_status(statuses, "load_claim_registry", "passed")
+
+        guard_findings = run_non_ideal_guard(task, registry, task_schema=task_schema)
+        if guard_findings:
+            _stage_status(statuses, "run_non_ideal_guard", "blocked")
+            _assert_repository_unchanged(root, before_state, state_reader)
+            _stage_status(statuses, "verify_repository_unchanged", "passed")
+            _stage_status(statuses, "finalize_result", "passed")
+            result = _base_result(
+                status="blocked",
+                task_file=task_rel,
+                source_revision=None,
+                stages=_render_stages(statuses),
+                findings=guard_findings,
+                task_id=task["task_id"] if isinstance(task, dict) else None,
+                task_digest=task_digest,
+                repository_unchanged=True,
+            )
+            return DryRunOutcome(result=result, exit_code=1)
+        _stage_status(statuses, "run_non_ideal_guard", "passed")
+
+        revision = (
+            revision_resolver(root) if source_revision is None else source_revision
+        )
+        validate_source_revision(revision)
+        _stage_status(statuses, "resolve_source_revision", "passed")
+
+        if not isinstance(task, dict):
+            raise RunnerError("TASK_SCHEMA_INVALID", "Task must be a JSON object")
+
+        execution_plan = _execution_plan(task)
+        _stage_status(statuses, "prepare_execution_plan", "passed")
+
+        evidence_accounting = _evidence_accounting(task)
+        _validate_evidence_accounting(task, evidence_accounting)
+        _stage_status(statuses, "account_expected_evidence", "passed")
+
+        handoff = _handoff(task, task_digest, revision)
+        _stage_status(statuses, "build_handoff", "passed")
+
+        handoff_findings = validate_handoff(
+            task,
+            handoff,
+            task_bytes=raw_task,
+            repo_root=root,
+            claim_registry=registry,
+        )
+        if handoff_findings:
+            first = handoff_findings[0]
+            raise RunnerError(
+                "HANDOFF_VALIDATION_FAILED",
+                first.get("message", "Generated dry-run handoff failed validation"),
+            )
+        _stage_status(statuses, "validate_handoff", "passed")
+
+        _assert_repository_unchanged(root, before_state, state_reader)
+        _stage_status(statuses, "verify_repository_unchanged", "passed")
+        _stage_status(statuses, "finalize_result", "passed")
+
+        result = _base_result(
+            status="planned",
+            task_file=task_rel,
+            task_id=task["task_id"],
+            task_digest=task_digest,
+            source_revision=revision,
+            stages=_render_stages(statuses),
+            findings=[],
+            execution_plan=execution_plan,
+            evidence_accounting=evidence_accounting,
+            handoff=handoff,
+            repository_unchanged=True,
+        )
+        if output_dir is not None:
+            published_target = publish_output_dir(
+                root, output_dir, run_result=result, handoff=handoff
+            )
+
+        _assert_repository_unchanged(root, before_state, state_reader)
+        return DryRunOutcome(result=result, exit_code=0)
+    except Exception as exc:
+        if isinstance(exc, RunnerError) and exc.code == "REPO_MUTATED_DURING_DRY_RUN":
+            if published_target is not None:
+                _remove_published_output(published_target)
+            raise
+        try:
+            _assert_repository_unchanged(root, before_state, state_reader)
+        except RunnerError as mutation_error:
+            if published_target is not None:
+                _remove_published_output(published_target)
+            raise mutation_error from exc
+        raise
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -592,11 +721,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = _build_parser().parse_args(argv)
         root = Path(REPO_ROOT)
-        source_revision = resolve_git_head(root)
         outcome = run_dry_run(
             repo_root=root,
             task_file=args.task_file,
-            source_revision=source_revision,
             output_dir=Path(args.output_dir) if args.output_dir else None,
         )
     except RunnerError as exc:

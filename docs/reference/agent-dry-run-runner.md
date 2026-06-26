@@ -64,21 +64,23 @@ Regulaere Ergebnisse erscheinen als genau ein JSON-Dokument auf stdout.
 Der Runner nutzt diese feste Reihenfolge:
 
 ```text
+capture_repository_state
 load_task
 validate_task_schema
 load_claim_registry
 run_non_ideal_guard
 resolve_source_revision
-capture_repository_state
 prepare_execution_plan
 account_expected_evidence
 build_handoff
 validate_handoff
 verify_repository_unchanged
-emit_result
+finalize_result
 ```
 
-Bei fruehem Blockieren bleiben spaetere Stufen `not_run`.
+Die Zustandswache beginnt vor Task-Pfadauflösung und Task-Laden. Bei fruehem
+Blockieren bleiben die nicht erreichten Fachstufen `not_run`; die abschliessende
+Unveraenderlichkeitspruefung und Ergebnisfinalisierung werden dennoch ausgefuehrt.
 
 ## Task-Laden
 
@@ -109,10 +111,11 @@ Die CLI ermittelt die Revision mit:
 git rev-parse --verify HEAD
 ```
 
-Der Core akzeptiert die Revision als explizite Abhaengigkeit, damit Tests ohne
-Fake-CLI-Flag deterministisch bleiben. In diesem Slice wird nur der lokale
-aktuelle `HEAD` syntaktisch gebunden. Es wird keine Remote-Erreichbarkeit,
-Main-Ancestry oder Diff-Bindung behauptet.
+Die Aufloesung erfolgt innerhalb des gestuften Runner-Ablaufs. Der Core kann die
+Revision als explizite Abhaengigkeit erhalten, damit Tests ohne Fake-CLI-Flag
+deterministisch bleiben. In diesem Slice wird nur der lokale aktuelle `HEAD`
+syntaktisch gebunden. Es wird keine Remote-Erreichbarkeit, Main-Ancestry oder
+Diff-Bindung behauptet.
 
 ## Execution-Plan-v1
 
@@ -179,17 +182,21 @@ werden abgewiesen.
 
 ## No-Write-Invariante
 
-Der Runner erfasst vor und nach der planenden Verarbeitung:
+Der Runner bildet vor dem Task-Laden und nach jedem Ausgang einen
+inhaltssensitiven Fingerabdruck des nicht ignorierten, Git-sichtbaren Zustands.
+Er umfasst getrennte binaere Diffs des Index gegen `HEAD` und des Working Trees
+gegen den Index sowie Pfad, Typ, Modus und Inhaltsdigest aller ungetrackten
+Pfade. Dadurch werden auch weitere Aenderungen an bereits schmutzigen getrackten
+Dateien und Inhaltswechsel bereits ungetrackter Dateien erkannt.
 
-```bash
-git status --porcelain=v1 --untracked-files=all
-```
+Ein bereits schmutziger Ausgangszustand ist erlaubt, sofern dieser Fingerabdruck
+unveraendert bleibt. Die Wache gilt fuer geplante, blockierte und fehlerhafte
+Laeufe. Bei Drift endet der Runner mit `REPO_MUTATED_DURING_DRY_RUN`. Er bereinigt
+den Working Tree nicht. Ignorierte Dateien liegen weiterhin ausserhalb dieses
+Git-sichtbaren Beweises.
 
-Die Byteausgaben muessen identisch bleiben. Ein bereits schmutziger
-Ausgangszustand ist erlaubt, solange er unveraendert bleibt.
-
-Tests und CI vergleichen den Git-Status zusaetzlich von aussen, damit der
-Runner nicht alleiniger Zeuge seiner No-Write-Eigenschaft ist.
+Tests und CI vergleichen denselben inhaltssensitiven Zustand zusaetzlich von
+aussen, damit der Runner nicht alleiniger Zeuge seiner No-Write-Eigenschaft ist.
 
 ## Readiness-Smoke
 
@@ -202,16 +209,19 @@ python3 -m scripts.agent.run_task \
   tests/fixtures/agent/valid-doc-drift-task.json
 ```
 
-Der Smoke prueft Exit-Code, Strict-JSON-Output, `mode`, `status`,
-`repository_unchanged`, Handoff-Semantik, `not_run`-Validierungen,
-Handoff-Validator und unveraenderten Git-Status.
+Der Smoke prueft Exit-Code, Strict-JSON-Output, `mode`, `status`, den echten
+Git-`HEAD`, kanonische Task-ID und Raw-Byte-Digest, die exakte Stage-Folge,
+Execution- und Evidence-Bilanz, `repository_unchanged`, Handoff-Semantik,
+`not_run`-Validierungen, Handoff-Validator und den unveraenderten
+Git-sichtbaren Inhaltsfingerabdruck.
 
 ## Trust Boundary
 
 Ein erfolgreicher Dry Run belegt read-only Contract- und Planungsfaehigkeit. Er
 belegt keine fachliche Task-Erledigung, keine Ausfuehrung der
 Validierungskommandos, keine Run-Attestierung, keine Producer-Authentizitaet,
-keinen Patch und keine Merge-Reife.
+keinen Patch und keine Merge-Reife. Ignorierte Dateien und externe Pfade sind
+nicht Bestandteil des Git-sichtbaren No-Write-Fingerabdrucks.
 
 ## Non-Goals
 

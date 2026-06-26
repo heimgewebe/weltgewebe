@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import hashlib
 import json
 import os
 import re
@@ -11,14 +12,15 @@ from typing import Iterable
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from scripts.agent import run_task
 from scripts.agent.json_contract import (
     DuplicateKeyError,
     load_json_strict,
     loads_json_strict,
 )
 from scripts.agent.validate_handoff import validate_handoff
-from scripts.docmeta.docmeta import REPO_ROOT
 from scripts.docmeta import validate_claim_registry
+from scripts.docmeta.docmeta import REPO_ROOT
 
 
 @dataclass(frozen=True)
@@ -165,20 +167,17 @@ def _evaluate_handoff_validation(root: Path) -> CapabilityResult:
     )
 
 
-def _git_status_bytes(root: Path) -> bytes:
-    completed = subprocess.run(
-        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
-        cwd=root,
-        check=False,
-        capture_output=True,
-        timeout=15,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError("git status failed")
-    return completed.stdout
+def _repository_state_bytes(root: Path) -> bytes:
+    return run_task.repository_state_bytes(root)
 
 
-def _validate_dry_run_payload(root: Path, payload: object) -> str | None:
+def _git_head(root: Path) -> str:
+    return run_task.resolve_git_head(root)
+
+
+def _validate_dry_run_payload(
+    root: Path, payload: object, *, expected_head: str
+) -> str | None:
     if not isinstance(payload, dict):
         return "runner output must be a JSON object"
     if payload.get("mode") != "dry_run":
@@ -190,23 +189,71 @@ def _validate_dry_run_payload(root: Path, payload: object) -> str | None:
     if payload.get("repository_unchanged") is not True:
         return "repository_unchanged is not true"
 
+    try:
+        task = load_json_strict(root / DRY_RUN_TASK_FILE)
+        task_bytes = (root / DRY_RUN_TASK_FILE).read_bytes()
+    except (OSError, json.JSONDecodeError, DuplicateKeyError) as exc:
+        return f"dry-run task dependency failed: {exc}"
+    if not isinstance(task, dict):
+        return "dry-run task is not an object"
+
+    expected_digest = hashlib.sha256(task_bytes).hexdigest()
+    expected_plan = {
+        "allowed_paths": task["allowed_paths"],
+        "forbidden_paths": task["forbidden_paths"],
+        "delete_allowed": task["delete_allowed"],
+        "planned_changed_paths": [],
+        "planned_deleted_paths": [],
+    }
+    expected_accounting = {
+        "expected_evidence": task["expected_evidence"],
+        "evidence_produced": [],
+        "missing_evidence": task["expected_evidence"],
+    }
+    expected_fields = {
+        "task_file": DRY_RUN_TASK_FILE,
+        "task_id": task["task_id"],
+        "task_contract_sha256": expected_digest,
+        "source_revision": expected_head,
+        "execution_plan": expected_plan,
+        "evidence_accounting": expected_accounting,
+    }
+    for field, expected in expected_fields.items():
+        if payload.get(field) != expected:
+            return f"{field} does not match the canonical dry-run task"
+
+    stages = payload.get("stages")
+    if not isinstance(stages, list):
+        return "stages are missing"
+    if [
+        item.get("name") for item in stages if isinstance(item, dict)
+    ] != run_task.STAGE_NAMES:
+        return "stage sequence does not match the runner contract"
+    if any(
+        not isinstance(item, dict) or item.get("status") != "passed" for item in stages
+    ):
+        return "not all dry-run stages passed"
+
     handoff = payload.get("handoff")
     if not isinstance(handoff, dict):
         return "handoff is missing"
     if handoff.get("outcome") != "incomplete":
         return "handoff outcome is not incomplete"
-    validation_results = handoff.get("validation_results")
-    if not isinstance(validation_results, list) or not validation_results:
-        return "handoff validation_results are missing"
-    if any(
-        not isinstance(item, dict) or item.get("status") != "not_run"
-        for item in validation_results
-    ):
-        return "handoff validation_results are not all not_run"
+    if handoff.get("source_revision") != expected_head:
+        return "handoff source_revision does not match Git HEAD"
+    if handoff.get("task_id") != task["task_id"]:
+        return "handoff task_id does not match the canonical dry-run task"
+    if handoff.get("task_contract_sha256") != expected_digest:
+        return "handoff task digest does not match the canonical dry-run task"
+
+    expected_validation_results = [
+        {"command": command, "status": "not_run"}
+        for command in task["validation_commands"]
+    ]
+    if handoff.get("validation_results") != expected_validation_results:
+        return "handoff validation_results do not match the canonical task"
 
     try:
-        task = load_json_strict(root / DRY_RUN_TASK_FILE)
-        task_bytes = (root / DRY_RUN_TASK_FILE).read_bytes()
         registry, parser_findings, parser_exit = validate_claim_registry.load_registry(
             root / "docs/claims/registry.yml"
         )
@@ -244,7 +291,8 @@ def _evaluate_dry_run_runner(root: Path) -> CapabilityResult:
         "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
     }
     try:
-        before = _git_status_bytes(root)
+        expected_head = _git_head(root)
+        before = _repository_state_bytes(root)
         completed = subprocess.run(
             [
                 sys.executable,
@@ -260,15 +308,20 @@ def _evaluate_dry_run_runner(root: Path) -> CapabilityResult:
             capture_output=True,
             timeout=20,
         )
-        after = _git_status_bytes(root)
-    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        after = _repository_state_bytes(root)
+    except (
+        OSError,
+        RuntimeError,
+        run_task.RunnerError,
+        subprocess.TimeoutExpired,
+    ) as exc:
         return _capability_failure(presence, "functional dry-run smoke", str(exc))
 
     if before != after:
         return _capability_failure(
             presence,
             "functional dry-run smoke",
-            "git status changed during smoke",
+            "Git-visible repository content changed during smoke",
         )
     try:
         payload = loads_json_strict(completed.stdout)
@@ -284,7 +337,9 @@ def _evaluate_dry_run_runner(root: Path) -> CapabilityResult:
             "functional dry-run smoke",
             completed.stderr or f"unexpected exit code {completed.returncode}",
         )
-    payload_error = _validate_dry_run_payload(root, payload)
+    payload_error = _validate_dry_run_payload(
+        root, payload, expected_head=expected_head
+    )
     if payload_error is not None:
         return _capability_failure(
             presence,

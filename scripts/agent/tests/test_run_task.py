@@ -8,8 +8,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
-from unittest import mock
 
 from scripts.agent import run_task
 from scripts.agent.json_contract import load_json_strict
@@ -74,6 +74,29 @@ class TestRunTask(unittest.TestCase):
         path = Path(handle.name)
         self.addCleanup(path.unlink, missing_ok=True)
         return str(path.relative_to(self.root))
+
+    @staticmethod
+    def _init_git_repo(root: Path) -> None:
+        subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.invalid"],
+            cwd=root,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=root,
+            check=True,
+        )
+        seed = root / "seed.txt"
+        seed.write_text("seed\n", encoding="utf-8")
+        subprocess.run(["git", "add", "seed.txt"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "initial"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
 
     @staticmethod
     def _parse_single_json_document(raw: str) -> object:
@@ -147,13 +170,13 @@ class TestRunTask(unittest.TestCase):
         handoff_ids: set[str] = set()
         for fixture in fixtures:
             with self.subTest(fixture=fixture):
-                before = run_task.git_status_bytes(self.root)
+                before = run_task.repository_state_bytes(self.root)
                 outcome = run_task.run_dry_run(
                     repo_root=self.root,
                     task_file=fixture,
                     source_revision=self.source_revision,
                 )
-                after = run_task.git_status_bytes(self.root)
+                after = run_task.repository_state_bytes(self.root)
                 self.assertEqual(before, after)
                 self.assertEqual(outcome.exit_code, 0)
                 self._assert_valid_planned_result(outcome.result, fixture)
@@ -236,7 +259,7 @@ class TestRunTask(unittest.TestCase):
                 self.assertEqual(proc.stdout, "")
                 self.assertEqual(json.loads(proc.stderr)["code"], expected_code)
 
-    def test_schema_invalid_task_blocks_with_not_run_later_stages(self):
+    def test_schema_invalid_task_blocks_with_truthful_stages(self):
         task = load_json_strict(self._fixture_path("valid-doc-drift-task.json"))
         task.pop("goal")
         rel = self._write_temp_task(task)
@@ -246,11 +269,16 @@ class TestRunTask(unittest.TestCase):
         self.assertEqual(proc.stderr, "")
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["status"], "blocked")
-        self.assertEqual(payload["stages"][1]["name"], "validate_task_schema")
-        self.assertEqual(payload["stages"][1]["status"], "blocked")
-        self.assertTrue(
-            all(item["status"] == "not_run" for item in payload["stages"][2:])
-        )
+        stages = {item["name"]: item["status"] for item in payload["stages"]}
+        self.assertEqual(stages["capture_repository_state"], "passed")
+        self.assertEqual(stages["load_task"], "passed")
+        self.assertEqual(stages["validate_task_schema"], "blocked")
+        self.assertEqual(stages["load_claim_registry"], "not_run")
+        self.assertEqual(stages["resolve_source_revision"], "not_run")
+        self.assertEqual(stages["verify_repository_unchanged"], "passed")
+        self.assertEqual(stages["finalize_result"], "passed")
+        self.assertIsNone(payload["source_revision"])
+        self.assertTrue(payload["repository_unchanged"])
         self.assertIn(
             "TASK_SCHEMA_INVALID", {item["code"] for item in payload["findings"]}
         )
@@ -316,7 +344,7 @@ class TestRunTask(unittest.TestCase):
     def test_source_revision_unavailable_is_exit_two(self):
         stderr = io.StringIO()
         stdout = io.StringIO()
-        with mock.patch.object(
+        with unittest.mock.patch.object(
             run_task,
             "resolve_git_head",
             side_effect=run_task.RunnerError(
@@ -390,22 +418,62 @@ class TestRunTask(unittest.TestCase):
             self.assertEqual(json.loads(proc.stderr)["code"], "OUTPUT_DIR_INVALID")
 
     def test_repository_drift_is_detected(self):
-        statuses = [b"", b" M docs/tasks/board.md\n"]
+        states = [b"before", b"after"]
 
         def reader(_root: Path) -> bytes:
-            return statuses.pop(0)
+            return states.pop(0)
 
         with self.assertRaises(run_task.RunnerError) as ctx:
             run_task.run_dry_run(
                 repo_root=self.root,
                 task_file=self._fixture("valid-doc-drift-task.json"),
                 source_revision=self.source_revision,
-                repository_status_reader=reader,
+                repository_state_reader=reader,
+            )
+        self.assertEqual(ctx.exception.code, "REPO_MUTATED_DURING_DRY_RUN")
+
+    def test_repository_fingerprint_detects_dirty_tracked_content_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._init_git_repo(repo)
+            tracked = repo / "seed.txt"
+            tracked.write_text("dirty-one\n", encoding="utf-8")
+            before = run_task.repository_state_bytes(repo)
+            tracked.write_text("dirty-two\n", encoding="utf-8")
+            after = run_task.repository_state_bytes(repo)
+            self.assertNotEqual(before, after)
+
+    def test_repository_fingerprint_detects_untracked_content_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._init_git_repo(repo)
+            untracked = repo / "untracked.txt"
+            untracked.write_text("one\n", encoding="utf-8")
+            before = run_task.repository_state_bytes(repo)
+            untracked.write_text("two\n", encoding="utf-8")
+            after = run_task.repository_state_bytes(repo)
+            self.assertNotEqual(before, after)
+
+    def test_blocked_task_is_covered_by_repository_guard(self):
+        task = load_json_strict(self._fixture_path("valid-doc-drift-task.json"))
+        task.pop("goal")
+        rel = self._write_temp_task(task)
+        states = [b"before", b"after"]
+
+        def reader(_root: Path) -> bytes:
+            return states.pop(0)
+
+        with self.assertRaises(run_task.RunnerError) as ctx:
+            run_task.run_dry_run(
+                repo_root=self.root,
+                task_file=rel,
+                source_revision=self.source_revision,
+                repository_state_reader=reader,
             )
         self.assertEqual(ctx.exception.code, "REPO_MUTATED_DURING_DRY_RUN")
 
     def test_invalid_generated_handoff_is_operational_error(self):
-        with mock.patch.object(
+        with unittest.mock.patch.object(
             run_task,
             "validate_handoff",
             return_value=[{"code": "TEST", "message": "synthetic failure"}],
@@ -419,7 +487,7 @@ class TestRunTask(unittest.TestCase):
         self.assertEqual(ctx.exception.code, "HANDOFF_VALIDATION_FAILED")
 
     def test_incomplete_evidence_accounting_is_operational_error(self):
-        with mock.patch.object(
+        with unittest.mock.patch.object(
             run_task,
             "_evidence_accounting",
             return_value={
@@ -446,7 +514,9 @@ class TestRunTask(unittest.TestCase):
             handoff["validation_results"] = handoff["validation_results"][:-1]
             return handoff
 
-        with mock.patch.object(run_task, "_handoff", side_effect=incomplete_handoff):
+        with unittest.mock.patch.object(
+            run_task, "_handoff", side_effect=incomplete_handoff
+        ):
             with self.assertRaises(run_task.RunnerError) as ctx:
                 run_task.run_dry_run(
                     repo_root=self.root,

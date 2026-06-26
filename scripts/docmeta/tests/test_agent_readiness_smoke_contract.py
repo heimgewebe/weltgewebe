@@ -1,13 +1,13 @@
-import json
 import hashlib
+import json
 import subprocess
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
-from unittest import mock
 
-from scripts.agent import run_task
 import scripts.docmeta.generate_agent_readiness as gen
+from scripts.agent import run_task
 
 
 class TestAgentReadinessSmokeContract(unittest.TestCase):
@@ -26,7 +26,7 @@ class TestAgentReadinessSmokeContract(unittest.TestCase):
         self._tmp.cleanup()
 
     def _result(self, completed: subprocess.CompletedProcess[str]):
-        with mock.patch.object(gen.subprocess, "run", return_value=completed):
+        with unittest.mock.patch.object(gen.subprocess, "run", return_value=completed):
             return next(
                 item
                 for item in gen.evaluate_capabilities(self.root)
@@ -61,10 +61,22 @@ class TestAgentReadinessSmokeContract(unittest.TestCase):
             "task_id": task["task_id"],
             "task_contract_sha256": digest,
             "source_revision": source_revision,
-            "stages": [],
+            "stages": [
+                {"name": name, "status": "passed"} for name in run_task.STAGE_NAMES
+            ],
             "findings": [],
-            "execution_plan": {},
-            "evidence_accounting": {},
+            "execution_plan": {
+                "allowed_paths": task["allowed_paths"],
+                "forbidden_paths": task["forbidden_paths"],
+                "delete_allowed": task["delete_allowed"],
+                "planned_changed_paths": [],
+                "planned_deleted_paths": [],
+            },
+            "evidence_accounting": {
+                "expected_evidence": task["expected_evidence"],
+                "evidence_produced": [],
+                "missing_evidence": task["expected_evidence"],
+            },
             "handoff": handoff,
             "repository_unchanged": True,
         }
@@ -73,24 +85,28 @@ class TestAgentReadinessSmokeContract(unittest.TestCase):
         self,
         completed: subprocess.CompletedProcess[str],
         *,
-        before_status: bytes = b"",
-        after_status: bytes = b"",
+        before_state: bytes = b"before",
+        after_state: bytes = b"before",
         timeout: bool = False,
     ):
         self._copy_dry_run_smoke_dependencies()
-        git_statuses = [before_status, after_status]
 
         def run_side_effect(args, **kwargs):
-            if args[:2] == ["git", "status"]:
-                status = git_statuses.pop(0)
-                return subprocess.CompletedProcess(
-                    args=args, returncode=0, stdout=status, stderr=b""
-                )
             if timeout:
                 raise subprocess.TimeoutExpired(cmd=args, timeout=20)
             return completed
 
-        with mock.patch.object(gen.subprocess, "run", side_effect=run_side_effect):
+        with (
+            unittest.mock.patch.object(
+                gen,
+                "_repository_state_bytes",
+                side_effect=[before_state, after_state],
+            ),
+            unittest.mock.patch.object(gen, "_git_head", return_value="1" * 40),
+            unittest.mock.patch.object(
+                gen.subprocess, "run", side_effect=run_side_effect
+            ),
+        ):
             return gen._evaluate_dry_run_runner(self.root)
 
     def test_smoke_requires_complete_structured_success(self):
@@ -167,10 +183,35 @@ class TestAgentReadinessSmokeContract(unittest.TestCase):
                 self.assertEqual(result.status, "fail")
                 self.assertIn("functional dry-run smoke", result.missing)
 
+    def test_dry_run_smoke_rejects_canonical_binding_drift(self):
+        valid = self._valid_dry_run_payload()
+        cases = (
+            {**valid, "source_revision": "2" * 40},
+            {**valid, "task_contract_sha256": "0" * 64},
+            {**valid, "task_id": "OTHER-TASK"},
+            {**valid, "stages": []},
+            {**valid, "execution_plan": {}},
+            {**valid, "evidence_accounting": {}},
+        )
+        for payload in cases:
+            with self.subTest(payload=payload):
+                completed = subprocess.CompletedProcess(
+                    args=["runner"],
+                    returncode=0,
+                    stdout=json.dumps(payload),
+                    stderr="",
+                )
+                result = self._dry_run_result(completed)
+                self.assertEqual(result.status, "fail")
+                self.assertIn("functional dry-run smoke", result.missing)
+
     def test_dry_run_smoke_rejects_bad_handoff_semantics(self):
         valid = self._valid_dry_run_payload()
         invalid_handoff = dict(valid["handoff"])
         invalid_handoff["task_contract_sha256"] = "0" * 64
+
+        wrong_revision_handoff = dict(valid["handoff"])
+        wrong_revision_handoff["source_revision"] = "2" * 40
 
         review_handoff = dict(valid["handoff"])
         review_handoff["outcome"] = "ready_for_review"
@@ -183,6 +224,7 @@ class TestAgentReadinessSmokeContract(unittest.TestCase):
 
         cases = (
             {**valid, "handoff": invalid_handoff},
+            {**valid, "handoff": wrong_revision_handoff},
             {**valid, "handoff": review_handoff},
             {**valid, "handoff": passed_validation_handoff},
         )
@@ -198,7 +240,7 @@ class TestAgentReadinessSmokeContract(unittest.TestCase):
                 self.assertEqual(result.status, "fail")
                 self.assertIn("functional dry-run smoke", result.missing)
 
-    def test_dry_run_smoke_rejects_git_status_change_and_timeout(self):
+    def test_dry_run_smoke_rejects_content_fingerprint_change_and_timeout(self):
         valid = self._valid_dry_run_payload()
         completed = subprocess.CompletedProcess(
             args=["runner"],
@@ -208,8 +250,8 @@ class TestAgentReadinessSmokeContract(unittest.TestCase):
         )
         changed = self._dry_run_result(
             completed,
-            before_status=b"",
-            after_status=b"?? new-file\n",
+            before_state=b"before",
+            after_state=b"after",
         )
         self.assertEqual(changed.status, "fail")
         self.assertIn("functional dry-run smoke", changed.missing)
