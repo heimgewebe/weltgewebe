@@ -1,0 +1,152 @@
+{
+  "artifacts": {
+    "handoff": {
+      "path": "handoff.json",
+      "sha256": "bd1ecf1dccb1b7cbb21df788b7bea0072f778bf95955cd5774065be3ad6c833a"
+    },
+    "run_result": {
+      "path": "run-result.json"
+    },
+    "task": {
+      "path": "task.yml",
+      "sha256": "bca60a9867eed0a96d584a716a34ca0327e67fde5e9f6d984bb88b6bca8faaeb"
+    },
+    "validation": {
+      "path": "validation.json",
+      "sha256": "d623951426cf5f64ff241046ac54f5ccc26733cbd729977467fdad6455498c99"
+    }
+  },
+  "completed_at": "2026-06-27T10:00:01.000000Z",
+  "evidence_accounting": {
+    "evidence_produced": [],
+    "expected_evidence": [
+      "docs/tasks/board.md",
+      "docs/tasks/index.json"
+    ],
+    "missing_evidence": [
+      "docs/tasks/board.md",
+      "docs/tasks/index.json"
+    ]
+  },
+  "execution_plan": {
+    "allowed_paths": [
+      "docs/"
+    ],
+    "delete_allowed": false,
+    "forbidden_paths": [
+      "docs/_generated/",
+      "secrets/",
+      "snapshots/"
+    ],
+    "planned_changed_paths": [],
+    "planned_deleted_paths": []
+  },
+  "findings": [],
+  "handoff": {
+    "blockers": [],
+    "changed_paths": [],
+    "claims_addressed": [
+      "CLAIM-AGENT-SAFE-003"
+    ],
+    "deleted_paths": [],
+    "evidence_produced": [],
+    "handoff_id": "DRY-RUN-AGENT-SAFE-004-BCA60A9867EE",
+    "missing_evidence": [
+      "docs/tasks/board.md",
+      "docs/tasks/index.json"
+    ],
+    "outcome": "incomplete",
+    "producer": "scripts.agent.run_task",
+    "residual_gaps": [
+      "dry-run does not execute task validation commands",
+      "dry-run does not apply repository changes",
+      "run-evidence-lite persists only successfully planned dry-runs",
+      "run-evidence-lite is not a CI attestation or write-mode authorization"
+    ],
+    "source_revision": "1111111111111111111111111111111111111111",
+    "task_contract_sha256": "bca60a9867eed0a96d584a716a34ca0327e67fde5e9f6d984bb88b6bca8faaeb",
+    "task_id": "AGENT-SAFE-004",
+    "validation_results": [
+      {
+        "command": "python3 -m scripts.docmeta.validate_claim_registry",
+        "status": "not_run"
+      },
+      {
+        "command": "python3 -m scripts.docmeta.validate_schema",
+        "status": "not_run"
+      }
+    ]
+  },
+  "mode": "dry_run",
+  "outcome": "incomplete",
+  "repository_state": {
+    "git_visible_sha256": "d23b46bf412a6294ef4134f82bccfcb245ff7604644642736bd6eeda9a38852d",
+    "source_revision": "1111111111111111111111111111111111111111"
+  },
+  "repository_state_sha256": "d23b46bf412a6294ef4134f82bccfcb245ff7604644642736bd6eeda9a38852d",
+  "repository_unchanged": true,
+  "residual_gaps": [
+    "dry-run does not execute task validation commands",
+    "dry-run does not apply repository changes",
+    "run-evidence-lite persists only successfully planned dry-runs",
+    "run-evidence-lite is not a CI attestation or write-mode authorization"
+  ],
+  "run_id": "RUN-20260627T100001Z-abcdef123456",
+  "schema_version": "1.0",
+  "source_revision": "1111111111111111111111111111111111111111",
+  "stages": [
+    {
+      "name": "capture_repository_state",
+      "status": "passed"
+    },
+    {
+      "name": "load_task",
+      "status": "passed"
+    },
+    {
+      "name": "validate_task_schema",
+      "status": "passed"
+    },
+    {
+      "name": "load_claim_registry",
+      "status": "passed"
+    },
+    {
+      "name": "run_non_ideal_guard",
+      "status": "passed"
+    },
+    {
+      "name": "resolve_source_revision",
+      "status": "passed"
+    },
+    {
+      "name": "prepare_execution_plan",
+      "status": "passed"
+    },
+    {
+      "name": "account_expected_evidence",
+      "status": "passed"
+    },
+    {
+      "name": "build_handoff",
+      "status": "passed"
+    },
+    {
+      "name": "validate_handoff",
+      "status": "passed"
+    },
+    {
+      "name": "verify_repository_unchanged",
+      "status": "passed"
+    },
+    {
+      "name": "finalize_result",
+      "status": "passed"
+    }
+  ],
+  "started_at": "2026-06-27T10:00:00.000000Z",
+  "status": "planned",
+  "task_contract_sha256": "bca60a9867eed0a96d584a716a34ca0327e67fde5e9f6d984bb88b6bca8faaeb",
+  "task_file": "tests/fixtures/agent/valid-doc-drift-task.json",
+  "task_id": "AGENT-SAFE-004"
+}

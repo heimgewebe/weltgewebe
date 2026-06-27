@@ -26,7 +26,9 @@ aus. Der Runner prueft den Task bis unmittelbar vor die Schreib- und
 Ausfuehrungsgrenze, bilanziert Claims, Evidence und Validierungen und erzeugt
 ein gueltiges `incomplete`-Handoff.
 
-Der Runner fuehrt keine Task-Kommandos aus und aendert keine Repository-Dateien.
+Der Runner fuehrt keine Task-Kommandos aus und aendert keine Task-Zieldateien.
+Erfolgreiche CLI-Laeufe persistieren standardmaessig einen von Git ignorierten
+Run-Evidence-Lite-Satz unter `artifacts/agent-runs/`.
 
 ## CLI
 
@@ -37,7 +39,7 @@ python3 -m scripts.agent.run_task \
 ```
 
 `--dry-run` ist optional, weil Dry Run der einzige Modus ist. `--write` ist kein
-gueltiges Flag.
+gueltiges Flag. Mit `--no-persist` bleibt der Lauf vollstaendig stdout-only.
 
 Mit externem Output:
 
@@ -57,7 +59,10 @@ python3 -m scripts.agent.run_task \
 | 2 | Aufruf-, JSON-, Pfad-, Git-, Contract-, Output- oder interner Betriebsfehler |
 
 Betriebsfehler werden auf stderr als JSON mit `code` und `message` ausgegeben.
-Regulaere Ergebnisse erscheinen als genau ein JSON-Dokument auf stdout.
+Falls ein Bundle bereits atomar sichtbar ist, enthaelt dasselbe Dokument
+zusaetzlich `evidence_path`. Unvollstaendige Bereinigungs- oder
+Finalisierungsdetails stehen in `cleanup_errors`. Regulaere Ergebnisse erscheinen
+als genau ein JSON-Dokument auf stdout.
 
 ## Stage-Modell
 
@@ -105,17 +110,26 @@ Zeilenendenkonvertierung.
 
 ## Source Revision
 
-Die CLI ermittelt die Revision mit:
+Die CLI ermittelt zuerst den kanonischen Repository-Root und danach die
+Revision mit:
 
 ```bash
+git rev-parse --show-toplevel
 git rev-parse --verify HEAD
 ```
 
+Alle geerbten `GIT_*`-Umgebungsvariablen werden entfernt; globale und
+systemweite Git-Konfiguration sind deaktiviert. Der von Git gemeldete Toplevel
+muss exakt dem aufgeloesten `repo_root` entsprechen. Damit koennen insbesondere
+`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` oder `GIT_CONFIG_COUNT` die
+Evidence nicht an ein anderes Repository binden.
+
 Die Aufloesung erfolgt innerhalb des gestuften Runner-Ablaufs. Tests koennen
 einen privaten Resolver als Abhaengigkeit injizieren; ein frei vorgegebener SHA
-ist kein Teil des Runner-Vertrags. Vor erfolgreicher Finalisierung und nach
-optionalem externem Output wird `HEAD` erneut auf dieselbe Revision geprueft.
-Es wird keine Remote-Erreichbarkeit, Main-Ancestry oder Diff-Bindung behauptet.
+ist kein Teil des Runner-Vertrags. Vor erfolgreicher Finalisierung und
+unmittelbar vor einer atomaren Evidence-Publikation wird `HEAD` erneut auf
+dieselbe Revision geprueft. Es wird keine Remote-Erreichbarkeit, Main-Ancestry
+oder Diff-Bindung behauptet.
 
 ## Execution-Plan-v1
 
@@ -160,35 +174,49 @@ Evidence unter `missing_evidence` gefuehrt.
 
 ## Output-Vertrag
 
-Ohne `--output-dir` schreibt der Runner nichts und gibt das vollstaendige
-Run-Result inklusive Handoff auf stdout aus.
-
-Mit `--output-dir` erzeugt der Runner ausserhalb des Repositorys genau:
+Ein erfolgreich geplanter CLI-Lauf erzeugt standardmaessig:
 
 ```text
-handoff.json
-run-result.json
+artifacts/agent-runs/<run-id>/
+├── task.yml
+├── handoff.json
+├── validation.json
+└── run-result.json
 ```
 
-Die Inhalte enthalten keine temp-spezifischen absoluten Output-Pfade.
+`task.yml` enthaelt die exakten Eingabebytes. Die JSON-Artefakte sind
+schema-validiert und ueber Task-Digest, Git-Revision, Repository-Fingerabdruck
+sowie relative Pfade und Hashes gebunden. Details stehen in
+[Agent Run Evidence Lite](agent-run-evidence-lite.md).
+
+`--no-persist` unterdrueckt das Bundle und belaesst das Ergebnis auf stdout.
+`--output-dir` waehlt stattdessen ein einzelnes neues Ziel ausserhalb des
+Repositorys. Die beiden Optionen sind gegenseitig ausgeschlossen.
 
 ## Externe Output-Verzeichnisregeln
 
-Das Output-Ziel muss ausserhalb des Repository-Roots liegen, neu oder leer sein
-und darf weder selbst ein Symlink sein noch ueber Symlink-Eltern aufgeloest
-werden. Repository-Root, Unterverzeichnisse des Repositories, vorhandene
-Zieldateien, nicht leere Verzeichnisse und nicht aufloesbare Elternstrukturen
-werden abgewiesen.
+Das benutzerdefinierte Output-Ziel muss ausserhalb des Repository-Roots liegen,
+darf noch nicht existieren, keine Parent-Traversal enthalten und darf weder
+selbst ein Symlink sein noch ueber Symlink-Eltern aufgeloest werden.
+Repository-Root, Unterverzeichnisse des Repositories, vorhandene Ziele und
+nicht aufloesbare Elternstrukturen werden
+abgewiesen.
 
 ## No-Write-Invariante
 
 Der Runner bildet vor dem Task-Laden und an den Abschlussgrenzen einen
-inhaltssensitiven Fingerabdruck des nicht ignorierten, Git-sichtbaren Zustands.
-Er umfasst den aktuellen `HEAD`, getrennte binaere Diffs des Index gegen `HEAD`
-und des Working Trees gegen den Index sowie Pfad, Typ, Modus und Inhaltsdigest
-aller ungetrackten Pfade. Dadurch werden auch weitere Aenderungen an bereits
-schmutzigen getrackten Dateien, Inhaltswechsel bereits ungetrackter Dateien und
-ein Wechsel von `HEAD` erkannt.
+inhaltssensitiven Fingerabdruck des Git-sichtbaren Zustands. Globale und systemweite Git-Konfiguration sowie geerbte `GIT_*`-Steuerwerte
+werden dabei deaktiviert; fuer ungetrackte Pfade gelten nur repository-eigene
+`.gitignore`-Dateien. Persoenliche globale Ignore-Regeln oder umgebungsbasierte
+Repository-Umlenkungen koennen den Nachweis daher weder veraendern noch an ein
+fremdes Repository binden.
+
+Der Fingerabdruck umfasst den aktuellen `HEAD`, getrennte binaere Diffs des
+Index gegen `HEAD` und des Working Trees gegen den Index sowie Pfad, Typ, Modus
+und Inhaltsdigest aller nicht durch Repository-Regeln ignorierten ungetrackten
+Pfade. Dadurch werden auch weitere Aenderungen an bereits schmutzigen getrackten
+Dateien, Inhaltswechsel bereits ungetrackter Dateien und ein Wechsel von `HEAD`
+erkannt.
 
 Ein bereits schmutziger Ausgangszustand ist erlaubt, sofern dieser Fingerabdruck
 unveraendert bleibt. Die Wache gilt fuer geplante, blockierte und fehlerhafte
@@ -199,10 +227,10 @@ Working Tree nicht.
 
 Dieser Vergleich belegt Gleichheit an den Pruefpunkten, nicht die Abwesenheit
 jeder zwischenzeitlichen Schreiboperation. Schreiben mit anschliessender
-Ruecksetzung, ignorierte Pfade, `.git`-interne Aenderungen und externe Pfade
-liegen ausserhalb dieses Nachweises. Tests und CI rufen denselben kanonischen
-Fingerabdruck in getrennten Prozessen auf; das ist eine aeussere Gegenpruefung,
-aber kein unabhaengig implementiertes Orakel.
+Ruecksetzung, durch repository-eigene Regeln ignorierte Pfade, `.git`-interne
+Aenderungen und externe Pfade liegen ausserhalb dieses Nachweises. Tests und CI
+rufen denselben kanonischen Fingerabdruck in getrennten Prozessen auf; das ist
+eine aeussere Gegenpruefung, aber kein unabhaengig implementiertes Orakel.
 
 ## Readiness-Smoke
 
@@ -212,6 +240,7 @@ aber kein unabhaengig implementiertes Orakel.
 ```bash
 python3 -m scripts.agent.run_task \
   --dry-run \
+  --no-persist \
   tests/fixtures/agent/valid-doc-drift-task.json
 ```
 
@@ -238,15 +267,16 @@ Nicht Teil dieses Slices:
 - Dateiinhalte als Agent-Kontext
 - Patch-Erzeugung
 - Task-Command-Ausfuehrung
-- persistentes Run-Archiv
-- Run-Evidence
+- vollstaendiges Run-Archiv fuer blockierte oder betriebsfehlerhafte Laeufe
+- externe Run-Attestierung und Signatur
 - Git-Ancestry- oder Diff-Bindung
 - Write Mode
 - autonome PR- oder Merge-Ausfuehrung
 
 ## Folge-Slices
 
-Folgearbeiten koennen Run-Evidence, persistente Run-Artefakte,
-Command-Ausfuehrung, Patch-Planung und spaeter gated Write Mode entwerfen. Diese
+Folgearbeiten koennen vollstaendige Fehler- und Blocked-Run-Evidence, externe
+Attestierung, Command-Ausfuehrung, Patch-Planung und spaeter gated Write Mode
+entwerfen. Diese
 Funktionen brauchen eigene Contracts und duerfen nicht aus diesem Runner-v1
 abgeleitet werden.

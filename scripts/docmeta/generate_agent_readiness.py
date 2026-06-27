@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -15,8 +16,10 @@ if __package__ in {None, ""}:
 from scripts.agent import run_task
 from scripts.agent.json_contract import (
     DuplicateKeyError,
+    UnsupportedSchemaError,
     load_json_strict,
     loads_json_strict,
+    validate_instance,
 )
 from scripts.agent.validate_handoff import validate_handoff
 from scripts.docmeta import validate_claim_registry
@@ -55,6 +58,20 @@ HANDOFF_REQUIRED_FILES = [
 DRY_RUN_REQUIRED_FILES = [
     "scripts/agent/run_task.py",
     "scripts/agent/tests/test_run_task.py",
+    DRY_RUN_TASK_FILE,
+]
+RUN_EVIDENCE_REQUIRED_FILES = [
+    "contracts/agent/validation.schema.json",
+    "contracts/agent/run-result.schema.json",
+    "scripts/agent/json_contract.py",
+    "scripts/agent/run_task.py",
+    "scripts/agent/tests/test_json_contract.py",
+    "scripts/agent/tests/test_run_task.py",
+    "scripts/agent/validate_agent_contracts.py",
+    "scripts/contracts-agent-check.sh",
+    "docs/reference/agent-run-evidence-lite.md",
+    "tests/fixtures/agent/validation-valid.json",
+    "tests/fixtures/agent/run-result-valid.json",
     DRY_RUN_TASK_FILE,
 ]
 
@@ -285,11 +302,9 @@ def _evaluate_dry_run_runner(root: Path) -> CapabilityResult:
     if presence.status != "pass":
         return presence
 
-    env = {
-        "PATH": os.environ.get("PATH", ""),
-        "PYTHONPATH": str(root),
-        "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
-    }
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(root)
+    env.setdefault("LC_ALL", "C.UTF-8")
     try:
         expected_head = _git_head(root)
         before = _repository_state_bytes(root)
@@ -299,6 +314,7 @@ def _evaluate_dry_run_runner(root: Path) -> CapabilityResult:
                 "-m",
                 "scripts.agent.run_task",
                 "--dry-run",
+                "--no-persist",
                 DRY_RUN_TASK_FILE,
             ],
             cwd=root,
@@ -356,6 +372,206 @@ def _evaluate_dry_run_runner(root: Path) -> CapabilityResult:
         missing=[],
         rationale=(
             f"{presence.rationale} Required files and the canonical dry-run "
+            "smoke both pass."
+        ),
+    )
+
+
+def _evaluate_run_evidence_lite(root: Path) -> CapabilityResult:
+    presence = _evaluate_required_files(
+        root=root,
+        cap_id="run_evidence_lite",
+        title="Run evidence lite",
+        hard=True,
+        required_files=RUN_EVIDENCE_REQUIRED_FILES,
+        rationale=(
+            "Erfolgreiche geplante Dry-Runs muessen ein schema-valides, "
+            "task- und revisionsgebundenes Evidenzbuendel atomar publizieren."
+        ),
+    )
+    if presence.status != "pass":
+        return presence
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(root)
+    env.setdefault("LC_ALL", "C.UTF-8")
+    try:
+        before = _repository_state_bytes(root)
+        expected_head = _git_head(root)
+        expected_state_sha256 = hashlib.sha256(before).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "run-evidence"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "scripts.agent.run_task",
+                    "--dry-run",
+                    "--output-dir",
+                    str(target),
+                    DRY_RUN_TASK_FILE,
+                ],
+                cwd=root,
+                env=env,
+                check=False,
+                text=True,
+                capture_output=True,
+                timeout=20,
+            )
+            after = _repository_state_bytes(root)
+            if completed.returncode != 0 or completed.stderr:
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    completed.stderr or f"unexpected exit code {completed.returncode}",
+                )
+            if before != after:
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    "Git-visible repository content changed during smoke",
+                )
+            payload = loads_json_strict(completed.stdout)
+            expected_files = set(run_task.EVIDENCE_FILES)
+            actual_files = {item.name for item in target.iterdir()}
+            if actual_files != expected_files:
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    f"unexpected bundle files: {sorted(actual_files)}",
+                )
+            task_bytes = (root / DRY_RUN_TASK_FILE).read_bytes()
+            if (target / "task.yml").read_bytes() != task_bytes:
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    "task.yml does not preserve the exact task bytes",
+                )
+            validation = load_json_strict(target / "validation.json")
+            run_result = load_json_strict(target / "run-result.json")
+            validation_schema = load_json_strict(
+                root / "contracts/agent/validation.schema.json"
+            )
+            run_result_schema = load_json_strict(
+                root / "contracts/agent/run-result.schema.json"
+            )
+            validation_findings = validate_instance(validation, validation_schema)
+            result_findings = validate_instance(run_result, run_result_schema)
+            if validation_findings or result_findings:
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    f"schema findings: {validation_findings + result_findings}",
+                )
+            if not isinstance(payload, dict) or payload.get("run_id") != run_result.get(
+                "run_id"
+            ):
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    "stdout and persisted run IDs do not match",
+                )
+            if (
+                run_result.get("task_contract_sha256")
+                != hashlib.sha256(task_bytes).hexdigest()
+            ):
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    "run result is not bound to the exact task bytes",
+                )
+            repository_state = run_result.get("repository_state")
+            if not isinstance(repository_state, dict):
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    "repository state binding is missing",
+                )
+            if (
+                repository_state.get("source_revision") != expected_head
+                or run_result.get("source_revision") != expected_head
+                or validation.get("source_revision") != expected_head
+            ):
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    "source revision binding does not match current Git HEAD",
+                )
+            if (
+                repository_state.get("git_visible_sha256") != expected_state_sha256
+                or run_result.get("repository_state_sha256") != expected_state_sha256
+                or validation.get("repository_state_sha256") != expected_state_sha256
+            ):
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    "repository state binding does not match the observed state",
+                )
+            if run_result.get("outcome") != run_result.get("handoff", {}).get(
+                "outcome"
+            ):
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    "run outcome is not bound to the handoff outcome",
+                )
+            started_at = run_result.get("started_at")
+            completed_at = run_result.get("completed_at")
+            if (
+                not isinstance(started_at, str)
+                or not isinstance(completed_at, str)
+                or started_at > completed_at
+            ):
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    "run chronology is missing or invalid",
+                )
+            artifacts = run_result.get("artifacts")
+            if not isinstance(artifacts, dict):
+                return _capability_failure(
+                    presence,
+                    "functional run-evidence smoke",
+                    "run-result artifacts must be an object",
+                )
+            for artifact_name in ("task", "handoff", "validation"):
+                artifact = artifacts.get(artifact_name)
+                if not isinstance(artifact, dict):
+                    return _capability_failure(
+                        presence,
+                        "functional run-evidence smoke",
+                        f"missing artifact record: {artifact_name}",
+                    )
+                artifact_path = target / artifact["path"]
+                if (
+                    hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+                    != artifact["sha256"]
+                ):
+                    return _capability_failure(
+                        presence,
+                        "functional run-evidence smoke",
+                        f"artifact hash mismatch: {artifact['path']}",
+                    )
+    except (
+        OSError,
+        RuntimeError,
+        json.JSONDecodeError,
+        DuplicateKeyError,
+        UnsupportedSchemaError,
+        run_task.RunnerError,
+        subprocess.TimeoutExpired,
+    ) as exc:
+        return _capability_failure(presence, "functional run-evidence smoke", str(exc))
+
+    return CapabilityResult(
+        id=presence.id,
+        title=presence.title,
+        hard=presence.hard,
+        status="pass",
+        evidence=presence.evidence,
+        missing=[],
+        rationale=(
+            f"{presence.rationale} Required files and the functional persistence "
             "smoke both pass."
         ),
     )
@@ -507,6 +723,7 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
     )
 
     results.append(_evaluate_dry_run_runner(repo_root))
+    results.append(_evaluate_run_evidence_lite(repo_root))
 
     for result in results:
         if result.status not in VALID_STATUSES:

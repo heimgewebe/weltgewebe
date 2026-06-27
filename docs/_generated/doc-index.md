@@ -59,8 +59,10 @@ Generated automatically. Do not edit.
 | docs.policies.agent-reading-protocol | Agent Reading Protocol | policy | canonical | docs/policies/agent-reading-protocol.md |
 | docs.policies.architecture-critique | Architekturkritik-Skill: weltgewebe.architecture.critique | policy | canonical | docs/policies/architecture-critique.md |
 | docs.proofs.basemap-hamburg-artifact-proof | Basemap Hamburg Artifact Proof (Heimserver) | proof | active | docs/proofs/basemap-hamburg-artifact-proof.md |
+| docs.reference.agent-dry-run-runner | Agent Dry-Run Runner | reference | active | docs/reference/agent-dry-run-runner.md |
 | docs.reference.agent-handoff-contract | Agent Handoff Contract | reference | active | docs/reference/agent-handoff-contract.md |
 | docs.reference.agent-operability-fixture-matrix | Agent-Betriebsfaehigkeit: Fixture-Matrix | reference | active | docs/reference/agent-operability-fixture-matrix.md |
+| docs.reference.agent-run-evidence-lite | Agent Run Evidence Lite | reference | active | docs/reference/agent-run-evidence-lite.md |
 | docs.reports.agent-readiness-audit | Agent Readiness Audit | documentation | active | docs/reports/agent-readiness-audit.md |
 | docs.reports.domain-runtime-data-source-reconciliation | Domain Runtime Data Source Reconciliation | report | active | docs/reports/domain-runtime-data-source-reconciliation.md |
 | docs.roadmap | Weltgewebe — Master-Umsetzungsroadmap | roadmap | active | docs/roadmap.md |

@@ -28,22 +28,74 @@ def validate_contracts(repo_root: Path) -> list[dict[str, str]]:
         handoff_schema = load_json_strict(
             repo_root / "contracts/agent/handoff.schema.json"
         )
+        validation_schema = load_json_strict(
+            repo_root / "contracts/agent/validation.schema.json"
+        )
+        run_result_schema = load_json_strict(
+            repo_root / "contracts/agent/run-result.schema.json"
+        )
         task = load_json_strict(repo_root / "tests/fixtures/agent/handoff-task.json")
         handoff = load_json_strict(
             repo_root / "tests/fixtures/agent/handoff-valid.json"
         )
-        if not isinstance(task_schema, dict) or not isinstance(handoff_schema, dict):
+        validation = load_json_strict(
+            repo_root / "tests/fixtures/agent/validation-valid.json"
+        )
+        run_result = load_json_strict(
+            repo_root / "tests/fixtures/agent/run-result-valid.json"
+        )
+        schemas = (task_schema, handoff_schema, validation_schema, run_result_schema)
+        if not all(isinstance(schema, dict) for schema in schemas):
             raise UnsupportedSchemaError("schema root must be an object")
-        ensure_supported_schema(task_schema)
-        ensure_supported_schema(handoff_schema)
+        for schema in schemas:
+            ensure_supported_schema(schema)
 
         cases = [
             ("tests/fixtures/agent/handoff-task.json", task, task_schema, True),
             ("tests/fixtures/agent/handoff-valid.json", handoff, handoff_schema, True),
+            (
+                "tests/fixtures/agent/validation-valid.json",
+                validation,
+                validation_schema,
+                True,
+            ),
+            (
+                "tests/fixtures/agent/run-result-valid.json",
+                run_result,
+                run_result_schema,
+                True,
+            ),
         ]
         invalid_handoff = copy.deepcopy(handoff)
         invalid_handoff.pop("producer", None)
-        cases.append(("synthetic:handoff-without-producer", invalid_handoff, handoff_schema, False))
+        cases.append(
+            (
+                "synthetic:handoff-without-producer",
+                invalid_handoff,
+                handoff_schema,
+                False,
+            )
+        )
+        invalid_validation = copy.deepcopy(validation)
+        invalid_validation["checks"] = list(reversed(invalid_validation["checks"]))
+        cases.append(
+            (
+                "synthetic:validation-checks-reversed",
+                invalid_validation,
+                validation_schema,
+                False,
+            )
+        )
+        invalid_result = copy.deepcopy(run_result)
+        invalid_result["stages"] = list(reversed(invalid_result["stages"]))
+        cases.append(
+            (
+                "synthetic:run-result-stages-reversed",
+                invalid_result,
+                run_result_schema,
+                False,
+            )
+        )
 
         for label, fixture, schema, expected_valid in cases:
             violations = validate_instance(fixture, schema)
@@ -74,7 +126,9 @@ def validate_contracts(repo_root: Path) -> list[dict[str, str]]:
             }
         )
 
-    return sorted(findings, key=lambda item: (item["code"], item["path"], item["message"]))
+    return sorted(
+        findings, key=lambda item: (item["code"], item["path"], item["message"])
+    )
 
 
 def main() -> int:
@@ -83,7 +137,7 @@ def main() -> int:
         json.dumps(
             {
                 "status": "valid" if not findings else "invalid",
-                "cases": 3,
+                "cases": 7,
                 "findings_count": len(findings),
                 "findings": findings,
             },

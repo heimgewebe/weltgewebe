@@ -17,6 +17,7 @@ Generated automatically. Do not edit.
 | claim-agent-safe-003 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-003] | partial | docs-mechanik | 2026-06-05 | 4 items |
 | claim-agent-safe-005 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-005] | partial | docs-mechanik | 2026-06-26 | 8 items |
 | claim-agent-safe-006 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-006] | partial | docs-mechanik | 2026-06-26 | 7 items |
+| claim-agent-safe-007 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-007] | partial | docs-mechanik | 2026-06-26 | 10 items |
 
 ## Details
 
@@ -126,6 +127,33 @@ Evidence:
 | `test` | `scripts/docmeta/tests/test_agent_readiness_smoke_contract.py` |
 | `file` | `.github/workflows/agent-safety-preflight.yml` |
 | `file` | `docs/reference/agent-dry-run-runner.md` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
+
+### CLAIM-AGENT-SAFE-007
+
+- Entry: `claim-agent-safe-007`
+- Locator: `claims[id=CLAIM-AGENT-SAFE-007]`
+- Status: `partial`
+- Owner: `docs-mechanik`
+- Last verified: `2026-06-26`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `contracts/agent/validation.schema.json` |
+| `file` | `contracts/agent/run-result.schema.json` |
+| `file` | `scripts/agent/run_task.py` |
+| `test` | `scripts/agent/tests/test_run_task.py` |
+| `file` | `scripts/agent/validate_agent_contracts.py` |
+| `file` | `scripts/contracts-agent-check.sh` |
+| `file` | `scripts/docmeta/generate_agent_readiness.py` |
+| `test` | `scripts/docmeta/tests/test_generate_agent_readiness.py` |
+| `file` | `.github/workflows/agent-safety-preflight.yml` |
+| `file` | `docs/reference/agent-run-evidence-lite.md` |
 
 Does not prove:
 

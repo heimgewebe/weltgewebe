@@ -114,3 +114,33 @@ entries:
         target: .github/workflows/agent-safety-preflight.yml
       - kind: file
         target: docs/reference/agent-dry-run-runner.md
+
+  - id: claim-agent-safe-007
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-AGENT-SAFE-007]
+    claim: >-
+      Geplante Dry-Runs erzeugen schema-valide, task- und revisionsgebundene Run-Evidence-Lite-Saetze.
+    status: partial
+    owner: docs-mechanik
+    last_verified: "2026-06-26"
+    evidence:
+      - kind: file
+        target: contracts/agent/validation.schema.json
+      - kind: file
+        target: contracts/agent/run-result.schema.json
+      - kind: file
+        target: scripts/agent/run_task.py
+      - kind: test
+        target: scripts/agent/tests/test_run_task.py
+      - kind: file
+        target: scripts/agent/validate_agent_contracts.py
+      - kind: file
+        target: scripts/contracts-agent-check.sh
+      - kind: file
+        target: scripts/docmeta/generate_agent_readiness.py
+      - kind: test
+        target: scripts/docmeta/tests/test_generate_agent_readiness.py
+      - kind: file
+        target: .github/workflows/agent-safety-preflight.yml
+      - kind: file
+        target: docs/reference/agent-run-evidence-lite.md

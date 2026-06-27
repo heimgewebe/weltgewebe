@@ -1,0 +1,701 @@
+{
+  "$id": "https://weltgewebe.org/schemas/agent/run-result.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Agent Run Evidence Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "mode",
+    "status",
+    "task_file",
+    "task_id",
+    "task_contract_sha256",
+    "source_revision",
+    "stages",
+    "findings",
+    "execution_plan",
+    "evidence_accounting",
+    "handoff",
+    "repository_unchanged",
+    "repository_state_sha256",
+    "artifacts",
+    "residual_gaps",
+    "outcome",
+    "started_at",
+    "completed_at",
+    "repository_state"
+  ],
+  "properties": {
+    "schema_version": {
+      "enum": [
+        "1.0"
+      ]
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^RUN-[0-9]{4}(?:(?:0[13578]|1[02])(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)(?:0[1-9]|[12][0-9]|30)|02(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3])[0-5][0-9][0-5][0-9]Z-[0-9a-f]{12}$"
+    },
+    "mode": {
+      "enum": [
+        "dry_run"
+      ]
+    },
+    "status": {
+      "enum": [
+        "planned"
+      ]
+    },
+    "task_file": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[A-Z]+(-[A-Z]+)*-[0-9]{3}$"
+    },
+    "task_contract_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "capture_repository_state"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "load_task"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "validate_task_schema"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "load_claim_registry"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "run_non_ideal_guard"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "resolve_source_revision"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "prepare_execution_plan"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "account_expected_evidence"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "build_handoff"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "validate_handoff"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "verify_repository_unchanged"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "finalize_result"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        }
+      ],
+      "additionalItems": false
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "execution_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_paths",
+        "forbidden_paths",
+        "delete_allowed",
+        "planned_changed_paths",
+        "planned_deleted_paths"
+      ],
+      "properties": {
+        "allowed_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "minItems": 1
+        },
+        "forbidden_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          }
+        },
+        "delete_allowed": {
+          "type": "boolean"
+        },
+        "planned_changed_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "maxItems": 0
+        },
+        "planned_deleted_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "maxItems": 0
+        }
+      }
+    },
+    "evidence_accounting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_evidence",
+        "evidence_produced",
+        "missing_evidence"
+      ],
+      "properties": {
+        "expected_evidence": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "minItems": 1
+        },
+        "evidence_produced": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "maxItems": 0
+        },
+        "missing_evidence": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "handoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "handoff_id",
+        "task_id",
+        "task_contract_sha256",
+        "source_revision",
+        "producer",
+        "outcome",
+        "changed_paths",
+        "deleted_paths",
+        "claims_addressed",
+        "evidence_produced",
+        "missing_evidence",
+        "validation_results",
+        "blockers",
+        "residual_gaps"
+      ],
+      "properties": {
+        "handoff_id": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]+(-[A-Z0-9]+)*$"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^[A-Z]+(-[A-Z]+)*-[0-9]{3}$"
+        },
+        "task_contract_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "producer": {
+          "enum": [
+            "scripts.agent.run_task"
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "incomplete"
+          ]
+        },
+        "changed_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "maxItems": 0
+        },
+        "deleted_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "maxItems": 0
+        },
+        "claims_addressed": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "minItems": 1
+        },
+        "evidence_produced": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "maxItems": 0
+        },
+        "missing_evidence": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "minItems": 1
+        },
+        "validation_results": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "command",
+              "status"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "status": {
+                "enum": [
+                  "not_run"
+                ]
+              }
+            }
+          }
+        },
+        "blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "maxItems": 0
+        },
+        "residual_gaps": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "dry-run does not execute task validation commands",
+              "dry-run does not apply repository changes",
+              "run-evidence-lite persists only successfully planned dry-runs",
+              "run-evidence-lite is not a CI attestation or write-mode authorization"
+            ]
+          }
+        }
+      }
+    },
+    "repository_unchanged": {
+      "enum": [
+        true
+      ]
+    },
+    "repository_state_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task",
+        "handoff",
+        "validation",
+        "run_result"
+      ],
+      "properties": {
+        "task": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "enum": [
+                "task.yml"
+              ]
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "handoff": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "enum": [
+                "handoff.json"
+              ]
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "enum": [
+                "validation.json"
+              ]
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "run_result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "enum": [
+                "run-result.json"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "residual_gaps": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "dry-run does not execute task validation commands",
+          "dry-run does not apply repository changes",
+          "run-evidence-lite persists only successfully planned dry-runs",
+          "run-evidence-lite is not a CI attestation or write-mode authorization"
+        ]
+      }
+    },
+    "outcome": {
+      "enum": [
+        "incomplete"
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{6}Z$"
+    },
+    "completed_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{6}Z$"
+    },
+    "repository_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_revision",
+        "git_visible_sha256"
+      ],
+      "properties": {
+        "source_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "git_visible_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}
