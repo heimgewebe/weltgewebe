@@ -119,10 +119,10 @@ entries:
     doc: docs/claims/registry.yml
     locator: claims[id=CLAIM-AGENT-SAFE-007]
     claim: >-
-      Geplante Dry-Runs erzeugen schema-valide, task- und revisionsgebundene Run-Evidence-Lite-Saetze.
+      Erfolgreich geplante Dry-Runs erzeugen gebundene Run-Evidence-Lite-Saetze.
     status: partial
     owner: docs-mechanik
-    last_verified: "2026-06-26"
+    last_verified: "2026-06-27"
     evidence:
       - kind: file
         target: contracts/agent/validation.schema.json
@@ -144,3 +144,28 @@ entries:
         target: .github/workflows/agent-safety-preflight.yml
       - kind: file
         target: docs/reference/agent-run-evidence-lite.md
+
+  - id: claim-agent-safe-008
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-AGENT-SAFE-008]
+    claim: >-
+      Kritische Dokumentationsartefakte sind manifestgebunden und blockierend
+      auf Drift pruefbar.
+    status: partial
+    owner: docs-mechanik
+    last_verified: "2026-06-27"
+    evidence:
+      - kind: file
+        target: .wgx/generated-artifacts.yml
+      - kind: file
+        target: scripts/docmeta/validate_generated_artifacts.py
+      - kind: test
+        target: scripts/docmeta/tests/test_validate_generated_artifacts.py
+      - kind: file
+        target: scripts/docmeta/generate_agent_readiness.py
+      - kind: file
+        target: scripts/docmeta/generated-files-guard.sh
+      - kind: file
+        target: .github/workflows/docs-guard.yml
+      - kind: file
+        target: docs/reference/generated-artifact-control.md

@@ -208,7 +208,7 @@ docs/tasks/board.md ──→ docs/tasks/index.json
 docs/claims/registry.yml ←→ audit/impl-registry.yaml
         │                    │
         ▼                    ▼
-docs/_generated/claim-evidence.md/json
+docs/_generated/claim-evidence-map.md
 docs/_generated/impl-evidence.md/json
         │
         ▼
@@ -394,7 +394,7 @@ Handlungsleitende Claims werden maschinenlesbar und beweispflichtig.
 - `docs/claims/registry.yml`
 - `docs/claims/schema.json`
 - `scripts/docmeta/check_claim_evidence.py`
-- `docs/_generated/claim-evidence.md`
+- `docs/_generated/claim-evidence-map.md`
 - `docs/_generated/claim-evidence.json`
 
 ##### PR 3 — evidence/minimal-claim-spine: Start-Claim-Typen
@@ -610,10 +610,10 @@ python -m scripts.agent.run_task --dry-run --no-persist tests/fixtures/agent/val
 
 #### PR 7 — agent/run-evidence-lite
 
-> **Umsetzungsstand 2026-06-26:** Der Lite-Slice ist im Implementierungsbranch
-> als `AGENT-SAFE-007` in PR #1265 vorhanden; Merge und post-merge Verifikation stehen aus.
-> Persistiert werden nur erfolgreich geplante Dry-Runs. Universelle
-> Failure-Evidence, externe Attestierung und Write Mode bleiben Folgearbeit.
+> **Umsetzungsstand 2026-06-27:** Der Lite-Slice ist als `AGENT-SAFE-007`
+> mit PR #1265 auf `main` integriert und post-merge verifiziert. Persistiert
+> werden nur erfolgreich geplante Dry-Runs. Universelle Failure-Evidence,
+> externe Attestierung und Write Mode bleiben Folgearbeit.
 
 ##### PR 7 — agent/run-evidence-lite: Zweck
 
@@ -642,11 +642,17 @@ Diese kommen erst nach stabilem Runner.
 - Jeder erfolgreich geplante persistierte Dry-Run erzeugt einen eindeutigen `run_id`.
 - Jeder erfolgreich geplante persistierte Dry-Run schreibt schema-valide Run-Artefakte.
 - Run-Artefakte enthalten Task-ID, Claims, Validierung und Ergebnis.
-- `blocked` wird als eigenes Ergebnis modelliert.
+- Blockierte und betriebsfehlerhafte Runs bleiben außerhalb des Lite-Slices und werden nicht als erfolgreiches Evidence-Bundle ausgegeben.
 
 ### Welle 5 — Generated und Roadmap hart machen
 
 #### PR 8 — docs/generated-control-minimal
+
+> **Umsetzungsstand 2026-06-27:** `AGENT-SAFE-008` implementiert den
+> Minimalvertrag im Branch `feat/agent-generated-control-minimal`.
+> Der reale Claim-Map-Pfad ist `docs/_generated/claim-evidence-map.md`.
+> `docs/tasks/index.json` ist ein kuratierter kanonischer Index und wird daher
+> über Schema- und Cross-Artifact-Checks kontrolliert, nicht als Generator-Output.
 
 ##### PR 8 — docs/generated-control-minimal: Zweck
 
@@ -655,7 +661,7 @@ Die gefährlichsten Generated-Artefakte werden zuerst kontrolliert.
 ##### PR 8 — docs/generated-control-minimal: Startumfang
 
 - `docs/_generated/agent-readiness.md`
-- `docs/_generated/claim-evidence.md`
+- `docs/_generated/claim-evidence-map.md`
 - `docs/tasks/index.json`
 
 ##### PR 8 — docs/generated-control-minimal: Artefakt
@@ -680,10 +686,11 @@ artifacts:
 
 ##### PR 8 — docs/generated-control-minimal: Akzeptanzkriterien
 
-- Agent-Readiness, Claim-Evidence und Task-Index dürfen nicht manuell editiert werden.
-- Alle drei Artefakte sind aus Quellen regenerierbar.
-- Quellenänderungen erzeugen erwartete Regeneration.
-- Direkte Edits werden blockiert.
+- Agent-Readiness und Claim-Evidence-Map dürfen nicht manuell editiert werden.
+- Beide Derived-Artefakte sind aus deklarierten Quellen regenerierbar und schreibfrei prüfbar.
+- Der kuratierte Task-Index bleibt kanonisch und muss Schema- sowie Cross-Artifact-Checks bestehen.
+- Quellenänderungen erzeugen erwartete Regeneration oder einen blockierenden Driftbefund.
+- Direkte Edits an Derived-Artefakten werden blockiert.
 
 #### PR 9 — docs/roadmap-ratchet-minimal
 
@@ -1077,7 +1084,7 @@ Der Blueprint gilt als umgesetzt, wenn:
 
 **Entscheidung:** Vollausbau bleibt Ziel, aber nicht als Big Bang. Start mit Safety Preflight, Readiness Hard Fail, Minimal Claim Spine, Minimal Contracts und Non-Ideal Guard.
 
-**Nächste Aktion:** PR 1 `agent/safety-preflight`.
+**Nächste Aktion:** PR 8 `docs/generated-control-minimal` abschließen und post-merge verifizieren.
 
 Minimaler erster Scope:
 
