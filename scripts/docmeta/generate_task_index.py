@@ -50,6 +50,7 @@ GENERATED_PREFIX = "docs/_generated/"
 # "CI-Job basemap-range-delivery-proof PROVEN, Commit 14feefd6".
 KNOWN_ROOTS = (
     ".github/",
+    ".wgx/",
     "apps/",
     "architecture/",
     "audit/",

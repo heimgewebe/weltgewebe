@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import hashlib
 import json
 import os
@@ -845,20 +846,50 @@ def render_report(
     return "\n".join(lines)
 
 
+def _expected_content(root: Path) -> str:
+    results = evaluate_capabilities(root)
+    overall, reason, hard_missing = determine_overall_status(results)
+    return render_report(results, overall, reason, hard_missing)
+
+
 def generate(repo_root: str | Path | None = None) -> Path:
     root = Path(repo_root) if repo_root is not None else Path(REPO_ROOT)
     out_file = root / "docs" / "_generated" / "agent-readiness.md"
     out_file.parent.mkdir(parents=True, exist_ok=True)
-
-    results = evaluate_capabilities(root)
-    overall, reason, hard_missing = determine_overall_status(results)
-    content = render_report(results, overall, reason, hard_missing)
-    out_file.write_text(content, encoding="utf-8")
+    out_file.write_text(_expected_content(root), encoding="utf-8")
     return out_file
 
 
-def main() -> int:
+def check(repo_root: str | Path | None = None) -> list[str]:
+    root = Path(repo_root) if repo_root is not None else Path(REPO_ROOT)
+    out_file = root / "docs" / "_generated" / "agent-readiness.md"
+    actual = out_file.read_text(encoding="utf-8") if out_file.is_file() else None
+    return [] if actual == _expected_content(root) else [str(out_file.relative_to(root))]
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Generate the agent-readiness report")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Verify the committed report without writing it",
+    )
+    args = parser.parse_args(argv)
     try:
+        if args.check:
+            drift = check()
+            if drift:
+                print(
+                    "Agent readiness drift detected in: " + ", ".join(drift),
+                    file=sys.stderr,
+                )
+                print(
+                    "Run: python3 -m scripts.docmeta.generate_agent_readiness",
+                    file=sys.stderr,
+                )
+                return 1
+            print("Agent readiness is up to date.")
+            return 0
         out_file = generate()
         print(f"Generated {out_file}")
         return 0

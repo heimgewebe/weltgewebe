@@ -179,9 +179,9 @@
     },
     {
       "id": "CLAIM-AGENT-SAFE-007",
-      "status": "proposed",
+      "status": "established",
       "subject": "AGENT-SAFE-007",
-      "statement": "Geplante Dry-Runs erzeugen schema-valide, task- und revisionsgebundene Run-Evidence-Lite-Saetze.",
+      "statement": "Erfolgreich geplante Dry-Runs erzeugen gebundene Run-Evidence-Lite-Saetze.",
       "evidence": [
         {
           "path": "contracts/agent/validation.schema.json",
@@ -231,7 +231,50 @@
         "bash scripts/contracts-agent-check.sh"
       ],
       "owner": "unknown",
-      "updated": "2026-06-26"
+      "updated": "2026-06-27"
+    },
+    {
+      "id": "CLAIM-AGENT-SAFE-008",
+      "status": "proposed",
+      "subject": "AGENT-SAFE-008",
+      "statement": "Kritische Dokumentationsartefakte sind manifestgebunden und blockierend auf Drift pruefbar.",
+      "evidence": [
+        {
+          "path": ".wgx/generated-artifacts.yml",
+          "kind": "registry"
+        },
+        {
+          "path": "scripts/docmeta/validate_generated_artifacts.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/docmeta/tests/test_validate_generated_artifacts.py",
+          "kind": "test"
+        },
+        {
+          "path": "scripts/docmeta/generate_agent_readiness.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "kind": "ci"
+        },
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "kind": "ci"
+        },
+        {
+          "path": "docs/reference/generated-artifact-control.md",
+          "kind": "documentation"
+        }
+      ],
+      "validation": [
+        "python3 -m unittest scripts.docmeta.tests.test_validate_generated_artifacts -v",
+        "python3 -m scripts.docmeta.validate_generated_artifacts --check",
+        "bash scripts/docmeta/generated-files-guard.sh"
+      ],
+      "owner": "unknown",
+      "updated": "2026-06-27"
     }
   ]
 }

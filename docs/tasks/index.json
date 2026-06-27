@@ -445,7 +445,7 @@
       "id": "AGENT-SAFE-007",
       "title": "Run Evidence Lite für erfolgreiche Agent-Dry-Runs einführen",
       "area": "governance",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "L",
       "risk": "high",
@@ -464,10 +464,10 @@
         "scripts/agent/json_contract.py",
         "scripts/agent/tests/test_json_contract.py",
         "tests/fixtures/agent/validation-valid.json",
-        "tests/fixtures/agent/run-result-valid.json"
+        "tests/fixtures/agent/run-result-valid.json",
+        "PR #1265 Merge-Commit 13f42aaa945d6df5a8f106148ca9b8b7b478093b"
       ],
       "missing_evidence": [
-        "Merge auf main und post-merge Verifikation stehen aus",
         "Failure-Evidence, unabhängige Attestierung, Command-Ausführung, Patch-Anwendung und Write Mode bleiben Folge-Slices"
       ],
       "acceptance": [
@@ -488,6 +488,47 @@
           "docs/blueprints/blueprint-agent-safety-control-layer.md",
           "docs/reference/agent-run-evidence-lite.md",
           "docs/reference/agent-dry-run-runner.md",
+          "docs/tasks/board.md"
+        ]
+      },
+      "updated_at": "2026-06-27"
+    },
+    {
+      "id": "AGENT-SAFE-008",
+      "title": "Minimalen Generated-Artifact-Kontrollvertrag einführen",
+      "area": "governance",
+      "status": "partial",
+      "priority": "high",
+      "effort": "M",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        ".wgx/generated-artifacts.yml",
+        "scripts/docmeta/validate_generated_artifacts.py",
+        "scripts/docmeta/tests/test_validate_generated_artifacts.py",
+        "scripts/docmeta/generate_agent_readiness.py",
+        "scripts/docmeta/tests/test_generate_agent_readiness.py",
+        "scripts/docmeta/generated-files-guard.sh",
+        ".github/workflows/docs-guard.yml",
+        "docs/reference/generated-artifact-control.md"
+      ],
+      "missing_evidence": [
+        "PR-CI, Merge auf main und post-merge Verifikation stehen aus",
+        "Der Vollausbau auf alle docs/_generated-Artefakte bleibt PR 13"
+      ],
+      "acceptance": [
+        "Ein maschinenlesbares Manifest bindet die drei kritischen Kontrollpfade an Rolle, Kanonizität, Quellen und blockierende Checks",
+        "Agent-Readiness und Claim-Evidence-Map besitzen schreibfreie deterministische Drift-Checks",
+        "Der kuratierte Task-Index wird korrekt als kanonischer Index mit Schema- und Cross-Artifact-Checks modelliert, nicht als erfundener Generator-Output",
+        "Fehlende Pfade, Quellen, Marker, repository-fremde Kommandos, Symlinks und Scope-Ausweitungen werden fail-closed blockiert",
+        "Der Generated-Files-Guard führt den Manifestvalidator im blockierenden Check-Modus aus"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/blueprint-agent-safety-control-layer.md",
+          "docs/reference/generated-artifact-control.md",
           "docs/tasks/board.md"
         ]
       },

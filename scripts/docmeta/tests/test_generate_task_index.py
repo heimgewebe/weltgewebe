@@ -145,6 +145,26 @@ class TestGenerateTaskIndex(unittest.TestCase):
         )
         self.assertEqual(self._run(), [])
 
+    def test_wgx_evidence_path_is_existence_checked(self):
+        self._write(
+            _index(
+                [
+                    _task(
+                        priority="medium",
+                        evidence=[".wgx/generated-artifacts.yml"],
+                    )
+                ]
+            ),
+            _board(active=["OPT-API-001"]),
+            _status([{"id": "OPT-API-001", "status": "partial"}]),
+        )
+        errors = self._run()
+        self.assertTrue(
+            any(".wgx/generated-artifacts.yml" in error for error in errors), errors
+        )
+        self._touch(".wgx/generated-artifacts.yml")
+        self.assertEqual(self._run(), [])
+
     def test_nonexistent_evidence_path_explained_passes(self):
         self._write(
             _index(

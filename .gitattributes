@@ -2,3 +2,4 @@
 *.sh text eol=lf
 contracts/agent/*.json text eol=lf
 tests/fixtures/agent/*.json text eol=lf
+.wgx/generated-artifacts.yml text eol=lf

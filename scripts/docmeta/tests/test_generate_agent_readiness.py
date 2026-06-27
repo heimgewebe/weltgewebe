@@ -349,5 +349,15 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertIn("- Hard capability missing: claim_evidence_spine", report)
 
 
+    def test_check_detects_drift_without_writing(self):
+        out_file = gen.generate(self.root)
+        self.assertEqual(gen.check(self.root), [])
+        out_file.write_text("manual drift\n", encoding="utf-8")
+        before = out_file.read_text(encoding="utf-8")
+        self.assertEqual(
+            gen.check(self.root),
+            ["docs/_generated/agent-readiness.md"],
+        )
+        self.assertEqual(out_file.read_text(encoding="utf-8"), before)
 if __name__ == "__main__":
     unittest.main()

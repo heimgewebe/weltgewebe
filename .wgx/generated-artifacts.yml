@@ -1,0 +1,87 @@
+---
+{
+  "schema_version": 1,
+  "artifacts": [
+    {
+      "path": "docs/_generated/agent-readiness.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_agent_readiness"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.generate_agent_readiness",
+          "--check"
+        ]
+      ],
+      "sources": [
+        "contracts/agent",
+        "scripts/agent",
+        "scripts/docmeta/generate_agent_readiness.py",
+        "docs/claims/registry.yml"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/claim-evidence-map.md",
+      "kind": "generated",
+      "role": "navigation",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_claim_evidence_map"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.generate_claim_evidence_map",
+          "--check"
+        ]
+      ],
+      "sources": [
+        "docs/doc-freshness-registry.yml",
+        "docs/claims/registry.yml",
+        "scripts/docmeta/generate_claim_evidence_map.py",
+        "scripts/docmeta/validate_doc_freshness_registry.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/tasks/index.json",
+      "kind": "curated_index",
+      "role": "task_control",
+      "canonicality": "canonical",
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_task_index",
+          "docs/tasks/index.json"
+        ],
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.generate_task_index",
+          "--check"
+        ]
+      ],
+      "sources": [
+        "docs/tasks/board.md",
+        "docs/tasks/schema.json",
+        "docs/reports/optimierungsstatus.json"
+      ],
+      "commit_required": true,
+      "blocking": true
+    }
+  ]
+}
