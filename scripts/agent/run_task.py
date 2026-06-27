@@ -1214,7 +1214,6 @@ def publish_evidence_bundle(
             try:
                 if staging_fd is not None:
                     _cleanup_staging(parent_fd, staging_fd, staging_name)
-                    staging_fd = None
                 else:
                     os.rmdir(staging_name, dir_fd=parent_fd)
             except OSError as cleanup_error:
@@ -1228,7 +1227,6 @@ def publish_evidence_bundle(
         if published and staging_fd is not None:
             try:
                 os.close(staging_fd)
-                staging_fd = None
             except OSError as close_error:
                 if pending_error is not None:
                     pending_error.cleanup_errors.append(str(close_error))
