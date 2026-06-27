@@ -38,6 +38,12 @@ def validate_contracts(repo_root: Path) -> list[dict[str, str]]:
         handoff = load_json_strict(
             repo_root / "tests/fixtures/agent/handoff-valid.json"
         )
+        validation = load_json_strict(
+            repo_root / "tests/fixtures/agent/validation-valid.json"
+        )
+        run_result = load_json_strict(
+            repo_root / "tests/fixtures/agent/run-result-valid.json"
+        )
         schemas = (task_schema, handoff_schema, validation_schema, run_result_schema)
         if not all(isinstance(schema, dict) for schema in schemas):
             raise UnsupportedSchemaError("schema root must be an object")
@@ -47,6 +53,18 @@ def validate_contracts(repo_root: Path) -> list[dict[str, str]]:
         cases = [
             ("tests/fixtures/agent/handoff-task.json", task, task_schema, True),
             ("tests/fixtures/agent/handoff-valid.json", handoff, handoff_schema, True),
+            (
+                "tests/fixtures/agent/validation-valid.json",
+                validation,
+                validation_schema,
+                True,
+            ),
+            (
+                "tests/fixtures/agent/run-result-valid.json",
+                run_result,
+                run_result_schema,
+                True,
+            ),
         ]
         invalid_handoff = copy.deepcopy(handoff)
         invalid_handoff.pop("producer", None)
@@ -55,6 +73,26 @@ def validate_contracts(repo_root: Path) -> list[dict[str, str]]:
                 "synthetic:handoff-without-producer",
                 invalid_handoff,
                 handoff_schema,
+                False,
+            )
+        )
+        invalid_validation = copy.deepcopy(validation)
+        invalid_validation["checks"] = list(reversed(invalid_validation["checks"]))
+        cases.append(
+            (
+                "synthetic:validation-checks-reversed",
+                invalid_validation,
+                validation_schema,
+                False,
+            )
+        )
+        invalid_result = copy.deepcopy(run_result)
+        invalid_result["stages"] = list(reversed(invalid_result["stages"]))
+        cases.append(
+            (
+                "synthetic:run-result-stages-reversed",
+                invalid_result,
+                run_result_schema,
                 False,
             )
         )
@@ -99,7 +137,7 @@ def main() -> int:
         json.dumps(
             {
                 "status": "valid" if not findings else "invalid",
-                "cases": 3,
+                "cases": 7,
                 "findings_count": len(findings),
                 "findings": findings,
             },

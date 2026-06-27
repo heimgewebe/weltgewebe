@@ -35,7 +35,7 @@
     },
     "run_id": {
       "type": "string",
-      "pattern": "^RUN-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+      "pattern": "^RUN-[0-9]{4}(?:(?:0[13578]|1[02])(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)(?:0[1-9]|[12][0-9]|30)|02(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3])[0-5][0-9][0-5][0-9]Z-[0-9a-f]{12}$"
     },
     "mode": {
       "enum": [
@@ -69,37 +69,249 @@
       "minItems": 12,
       "maxItems": 12,
       "uniqueItems": true,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "name",
-          "status"
-        ],
-        "properties": {
-          "name": {
-            "enum": [
-              "capture_repository_state",
-              "load_task",
-              "validate_task_schema",
-              "load_claim_registry",
-              "run_non_ideal_guard",
-              "resolve_source_revision",
-              "prepare_execution_plan",
-              "account_expected_evidence",
-              "build_handoff",
-              "validate_handoff",
-              "verify_repository_unchanged",
-              "finalize_result"
-            ]
-          },
-          "status": {
-            "enum": [
-              "passed"
-            ]
+      "items": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "capture_repository_state"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "load_task"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "validate_task_schema"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "load_claim_registry"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "run_non_ideal_guard"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "resolve_source_revision"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "prepare_execution_plan"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "account_expected_evidence"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "build_handoff"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "validate_handoff"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "verify_repository_unchanged"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "finalize_result"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
           }
         }
-      }
+      ],
+      "additionalItems": false
     },
     "findings": {
       "type": "array",
@@ -461,11 +673,11 @@
     },
     "started_at": {
       "type": "string",
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$"
+      "pattern": "^[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{6}Z$"
     },
     "completed_at": {
       "type": "string",
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$"
+      "pattern": "^[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{6}Z$"
     },
     "repository_state": {
       "type": "object",

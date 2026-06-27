@@ -59,9 +59,10 @@ python3 -m scripts.agent.run_task \
 | 2 | Aufruf-, JSON-, Pfad-, Git-, Contract-, Output- oder interner Betriebsfehler |
 
 Betriebsfehler werden auf stderr als JSON mit `code` und `message` ausgegeben.
-Falls eine Bereinigung nicht vollstaendig gelingt, enthaelt dasselbe Dokument
-zusaetzlich `cleanup_errors`. Regulaere Ergebnisse erscheinen als genau ein
-JSON-Dokument auf stdout.
+Falls ein Bundle bereits atomar sichtbar ist, enthaelt dasselbe Dokument
+zusaetzlich `evidence_path`. Unvollstaendige Bereinigungs- oder
+Finalisierungsdetails stehen in `cleanup_errors`. Regulaere Ergebnisse erscheinen
+als genau ein JSON-Dokument auf stdout.
 
 ## Stage-Modell
 
@@ -109,11 +110,19 @@ Zeilenendenkonvertierung.
 
 ## Source Revision
 
-Die CLI ermittelt die Revision mit:
+Die CLI ermittelt zuerst den kanonischen Repository-Root und danach die
+Revision mit:
 
 ```bash
+git rev-parse --show-toplevel
 git rev-parse --verify HEAD
 ```
+
+Alle geerbten `GIT_*`-Umgebungsvariablen werden entfernt; globale und
+systemweite Git-Konfiguration sind deaktiviert. Der von Git gemeldete Toplevel
+muss exakt dem aufgeloesten `repo_root` entsprechen. Damit koennen insbesondere
+`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` oder `GIT_CONFIG_COUNT` die
+Evidence nicht an ein anderes Repository binden.
 
 Die Aufloesung erfolgt innerhalb des gestuften Runner-Ablaufs. Tests koennen
 einen privaten Resolver als Abhaengigkeit injizieren; ein frei vorgegebener SHA
@@ -196,11 +205,11 @@ abgewiesen.
 ## No-Write-Invariante
 
 Der Runner bildet vor dem Task-Laden und an den Abschlussgrenzen einen
-inhaltssensitiven Fingerabdruck des Git-sichtbaren Zustands. Globale und
-systemweite Git-Konfiguration werden dabei deaktiviert; fuer ungetrackte Pfade
-gelten nur repository-eigene `.gitignore`-Dateien. Persoenliche globale
-Ignore-Regeln koennen den Nachweis daher weder veraendern noch agentenwirksame
-Dateien unsichtbar machen.
+inhaltssensitiven Fingerabdruck des Git-sichtbaren Zustands. Globale und systemweite Git-Konfiguration sowie geerbte `GIT_*`-Steuerwerte
+werden dabei deaktiviert; fuer ungetrackte Pfade gelten nur repository-eigene
+`.gitignore`-Dateien. Persoenliche globale Ignore-Regeln oder umgebungsbasierte
+Repository-Umlenkungen koennen den Nachweis daher weder veraendern noch an ein
+fremdes Repository binden.
 
 Der Fingerabdruck umfasst den aktuellen `HEAD`, getrennte binaere Diffs des
 Index gegen `HEAD` und des Working Trees gegen den Index sowie Pfad, Typ, Modus

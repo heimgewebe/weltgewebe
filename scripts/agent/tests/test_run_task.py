@@ -795,6 +795,163 @@ class TestRunTask(unittest.TestCase):
             self.assertEqual(ctx.exception.code, "OUTPUT_DIR_INVALID")
             self.assertEqual(list(outside.iterdir()), [])
 
+    def test_git_environment_cannot_redirect_repository_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo = base / "repo"
+            other = base / "other"
+            repo.mkdir()
+            other.mkdir()
+            self._init_git_repo(repo)
+            self._init_git_repo(other)
+            (other / "other.txt").write_text("other\n", encoding="utf-8")
+            subprocess.run(["git", "add", "other.txt"], cwd=other, check=True)
+            subprocess.run(
+                ["git", "commit", "-m", "other state"],
+                cwd=other,
+                check=True,
+                capture_output=True,
+            )
+            expected_head = run_task.resolve_git_head(repo)
+            expected_state = run_task.repository_state_bytes(repo)
+            hostile_environment = {
+                "GIT_DIR": str(other / ".git"),
+                "GIT_WORK_TREE": str(other),
+                "GIT_INDEX_FILE": str(other / ".git" / "index"),
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "core.worktree",
+                "GIT_CONFIG_VALUE_0": str(other),
+            }
+            with unittest.mock.patch.dict(
+                os.environ, hostile_environment, clear=False
+            ):
+                self.assertEqual(run_task.resolve_git_head(repo), expected_head)
+                self.assertEqual(run_task.repository_state_bytes(repo), expected_state)
+
+    def test_parent_move_after_open_is_reported_after_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            parent = base / "parent"
+            moved = base / "moved"
+            parent.mkdir()
+            output = parent / "run"
+            original = run_task._rename_noreplace_at
+
+            def move_parent_then_publish(*args, **kwargs):
+                parent.rename(moved)
+                parent.mkdir()
+                return original(*args, **kwargs)
+
+            with unittest.mock.patch.object(
+                run_task,
+                "_rename_noreplace_at",
+                side_effect=move_parent_then_publish,
+            ):
+                with self.assertRaises(run_task.RunnerError) as ctx:
+                    run_task._run_dry_run(
+                        repo_root=self.root,
+                        task_file=self._fixture("valid-doc-drift-task.json"),
+                        output_dir=output,
+                        repository_state_reader=lambda _root: b"unchanged",
+                        source_revision_resolver=lambda _root: self.source_revision,
+                    )
+            self.assertEqual(ctx.exception.code, "OUTPUT_LOCATION_CHANGED")
+            self.assertEqual(ctx.exception.evidence_path, str(output))
+            self.assertFalse(output.exists())
+            self.assertTrue((moved / "run").is_dir())
+
+    def test_close_failure_after_publish_is_not_reported_as_write_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "run"
+            original_open = run_task.os.open
+            original_close = run_task.os.close
+            staging_descriptor: int | None = None
+            published = False
+
+            def capture_staging_open(path, flags, *args, **kwargs):
+                nonlocal staging_descriptor
+                descriptor = original_open(path, flags, *args, **kwargs)
+                if isinstance(path, str) and path.startswith(".agent-run-staging-"):
+                    staging_descriptor = descriptor
+                return descriptor
+
+            original_rename = run_task._rename_noreplace_at
+
+            def publish_then_arm_close(*args, **kwargs):
+                nonlocal published
+                result = original_rename(*args, **kwargs)
+                published = True
+                return result
+
+            def fail_staging_close(descriptor: int) -> None:
+                if published and descriptor == staging_descriptor:
+                    raise OSError("synthetic staging close failure")
+                original_close(descriptor)
+
+            with (
+                unittest.mock.patch.object(
+                    run_task.os, "open", side_effect=capture_staging_open
+                ),
+                unittest.mock.patch.object(
+                    run_task,
+                    "_rename_noreplace_at",
+                    side_effect=publish_then_arm_close,
+                ),
+                unittest.mock.patch.object(
+                    run_task.os, "close", side_effect=fail_staging_close
+                ),
+            ):
+                with self.assertRaises(run_task.RunnerError) as ctx:
+                    run_task._run_dry_run(
+                        repo_root=self.root,
+                        task_file=self._fixture("valid-doc-drift-task.json"),
+                        output_dir=output,
+                        repository_state_reader=lambda _root: b"unchanged",
+                        source_revision_resolver=lambda _root: self.source_revision,
+                    )
+            self.assertEqual(ctx.exception.code, "OUTPUT_FINALIZATION_UNCONFIRMED")
+            self.assertEqual(ctx.exception.evidence_path, str(output))
+            self.assertTrue(output.is_dir())
+            self.assertTrue(
+                any(
+                    "synthetic staging close failure" in item
+                    for item in ctx.exception.cleanup_errors
+                )
+            )
+
+    def test_target_replacement_after_publish_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            output = base / "run"
+            moved = base / "moved-run"
+            original = run_task._assert_published_parent_identity
+
+            def replace_target_then_check(parent, parent_fd, *, evidence_path):
+                output.rename(moved)
+                output.mkdir()
+                return original(parent, parent_fd, evidence_path=evidence_path)
+
+            with unittest.mock.patch.object(
+                run_task,
+                "_assert_published_parent_identity",
+                side_effect=replace_target_then_check,
+            ):
+                with self.assertRaises(run_task.RunnerError) as ctx:
+                    run_task._run_dry_run(
+                        repo_root=self.root,
+                        task_file=self._fixture("valid-doc-drift-task.json"),
+                        output_dir=output,
+                        repository_state_reader=lambda _root: b"unchanged",
+                        source_revision_resolver=lambda _root: self.source_revision,
+                    )
+            self.assertEqual(ctx.exception.code, "OUTPUT_LOCATION_CHANGED")
+            self.assertEqual(ctx.exception.evidence_path, str(output))
+            self.assertEqual(list(output.iterdir()), [])
+            self.assertEqual(
+                sorted(path.name for path in moved.iterdir()),
+                sorted(run_task.EVIDENCE_FILES),
+            )
+
     def test_repository_fingerprint_ignores_global_git_configuration(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
@@ -811,6 +968,10 @@ class TestRunTask(unittest.TestCase):
                 encoding="utf-8",
             )
             before = run_task.repository_state_bytes(repo)
+            with unittest.mock.patch.dict(os.environ, {"HOME": str(home)}):
+                configured_before = run_task.repository_state_bytes(repo)
+            self.assertEqual(before, configured_before)
+
             hidden = repo / ".claude" / "settings.local.json"
             hidden.parent.mkdir()
             hidden.write_text('{"permissions":{"allow":["Bash(*)"]}}\n', encoding="utf-8")
@@ -854,6 +1015,37 @@ class TestRunTask(unittest.TestCase):
                 for index in range(5)
             ]
             self.assertTrue(validate_instance(validation, validation_schema))
+
+            result = load_json_strict(output / "run-result.json")
+            result["stages"] = list(reversed(result["stages"]))
+            self.assertTrue(validate_instance(result, result_schema))
+
+            validation = load_json_strict(output / "validation.json")
+            validation["created_at"] = "2026-02-31T10:00:00.000000Z"
+            self.assertTrue(validate_instance(validation, validation_schema))
+
+    def test_impossible_calendar_timestamp_blocks_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "run"
+            with unittest.mock.patch.object(
+                run_task,
+                "_utc_timestamp",
+                side_effect=[
+                    "2026-02-29T10:00:00.000000Z",
+                    "2026-02-29T10:00:01.000000Z",
+                ],
+            ):
+                with self.assertRaises(run_task.RunnerError) as ctx:
+                    run_task._run_dry_run(
+                        repo_root=self.root,
+                        task_file=self._fixture("valid-doc-drift-task.json"),
+                        output_dir=output,
+                        run_id_factory=lambda: "RUN-20260227T100001Z-abcdef123456",
+                        repository_state_reader=lambda _root: b"unchanged",
+                        source_revision_resolver=lambda _root: self.source_revision,
+                    )
+            self.assertEqual(ctx.exception.code, "RUN_EVIDENCE_SEMANTIC_INVALID")
+            self.assertFalse(output.exists())
 
     def test_parent_fsync_failure_reports_published_bundle(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -916,6 +1108,7 @@ class TestRunTask(unittest.TestCase):
 
     def test_error_output_exposes_cleanup_failures(self):
         error = run_task.RunnerError("OUTPUT_WRITE_FAILED", "write failed")
+        error.evidence_path = "/tmp/published-run"
         error.cleanup_errors.append("staging cleanup failed")
         with (
             unittest.mock.patch.object(run_task, "run_dry_run", side_effect=error),
@@ -926,6 +1119,7 @@ class TestRunTask(unittest.TestCase):
             )
         self.assertEqual(exit_code, 2)
         payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["evidence_path"], "/tmp/published-run")
         self.assertEqual(payload["cleanup_errors"], ["staging cleanup failed"])
 
 

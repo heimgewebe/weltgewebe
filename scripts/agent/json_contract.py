@@ -39,6 +39,7 @@ ASSERTION_KEYS = {
     "maxItems",
     "uniqueItems",
     "items",
+    "additionalItems",
 }
 SUPPORTED_KEYS = ANNOTATION_KEYS | ASSERTION_KEYS
 SUPPORTED_TYPES = {"object", "array", "string", "boolean", "null"}
@@ -160,7 +161,19 @@ def ensure_supported_schema(schema: Any, *, path: str = "$") -> None:
 
     items = schema.get("items")
     if items is not None:
-        ensure_supported_schema(items, path=f"{path}.items")
+        if isinstance(items, dict):
+            ensure_supported_schema(items, path=f"{path}.items")
+        elif isinstance(items, list):
+            for index, child in enumerate(items):
+                ensure_supported_schema(child, path=f"{path}.items[{index}]")
+        else:
+            raise UnsupportedSchemaError(
+                f"{path}.items must be an object or an array of schema objects"
+            )
+
+    additional_items = schema.get("additionalItems")
+    if additional_items is not None and not isinstance(additional_items, bool):
+        raise UnsupportedSchemaError(f"{path}.additionalItems must be boolean")
 
     all_of = schema.get("allOf")
     if all_of is not None:
@@ -265,7 +278,7 @@ def validate_instance(
                 seen.add(canonical)
 
         items = schema.get("items")
-        if items is not None:
+        if isinstance(items, dict):
             for index, value in enumerate(instance):
                 findings.extend(
                     validate_instance(
@@ -274,6 +287,25 @@ def validate_instance(
                         root_schema=root,
                         path=f"{path}[{index}]",
                     )
+                )
+        elif isinstance(items, list):
+            for index, child in enumerate(items):
+                if index >= len(instance):
+                    break
+                findings.extend(
+                    validate_instance(
+                        instance[index],
+                        child,
+                        root_schema=root,
+                        path=f"{path}[{index}]",
+                    )
+                )
+            if len(instance) > len(items) and schema.get("additionalItems") is False:
+                findings.append(
+                    {
+                        "path": f"{path}[{len(items)}]",
+                        "message": "additional array item is not allowed",
+                    }
                 )
 
     if isinstance(instance, str):

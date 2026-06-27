@@ -74,7 +74,10 @@ Task-Ausfuehrung und keine erwartete Task-Evidence abgeschlossen wurde.
 - die weiterhin offenen Grenzen des Lite-Slices.
 
 `validation.json` bezeichnet ausschliesslich die vor der Ausfuehrungsgrenze
-geprueften Contracts und Guards. Die im Task verlangten
+geprueften Contracts und Guards. Die fuenf Checks muessen in kanonischer
+Reihenfolge vorliegen; ebenso erzwingt `run-result.json` die feste Reihenfolge
+der zwoelf Runner-Stages. Run-ID und Zeitfelder werden nicht nur per Muster,
+sondern auch als reale UTC-Kalenderwerte geprueft. Die im Task verlangten
 `validation_commands` bleiben im Handoff weiterhin `not_run`.
 
 `run-result.json` kann seinen eigenen endgueltigen Hash nicht ohne
@@ -94,9 +97,14 @@ Linux-Faehigkeit, schlaegt die Publikation geschlossen fehl.
 
 Alle Pfadoperationen nach der Vorpruefung sind an bereits geoeffnete
 Verzeichnis-Deskriptoren gebunden. `O_NOFOLLOW` verhindert, dass ein nachtraeglich
-ausgetauschter Symlink-Elternpfad das Bundle an einen anderen Ort umlenkt. Ein
-bestehendes Ziel wird atomar nicht ersetzt. Parent-Traversal, Pfad-Ausbruch und
-ein benutzerdefiniertes Ziel innerhalb des Repositorys werden abgewiesen.
+ausgetauschter Symlink-Elternpfad das Bundle an einen anderen Ort umlenkt. Nach
+der Umbenennung werden Eltern- und Zielpfad erneut gegen die offengehaltenen
+Device-/Inode-Identitaeten geprueft. Auch die vier publizierten Dateibytes werden
+vor der Erfolgsgrenze nochmals ueber den festgehaltenen Ziel-Deskriptor gelesen.
+Ein verschobenes oder ersetztes Eltern- oder Zielverzeichnis fuehrt zu
+`OUTPUT_LOCATION_CHANGED`; der Fehler enthaelt den bekannten `evidence_path`.
+Ein bestehendes Ziel wird atomar nicht ersetzt. Parent-Traversal, Pfad-Ausbruch
+und ein benutzerdefiniertes Ziel innerhalb des Repositorys werden abgewiesen.
 Bundle-Dateien werden mit Modus `0600` erzeugt. Bei einem Fehler vor der
 Umbenennung bleibt kein sichtbares Zielbuendel zurueck.
 
@@ -105,6 +113,10 @@ die anschliessende Synchronisierung des Elternverzeichnisses fehl, wird es nicht
 als vermeintlich ungueltiges Bundle entfernt. Stattdessen meldet der Runner
 `OUTPUT_DURABILITY_UNCONFIRMED` und weist ausdruecklich darauf hin, dass das
 Bundle publiziert wurde, seine Crash-Dauerhaftigkeit aber nicht bestaetigt ist.
+Andere Fehler nach erfolgreichem Rename werden als
+`OUTPUT_FINALIZATION_UNCONFIRMED` gemeldet. Beide Fehlerklassen enthalten den
+bekannten `evidence_path`, damit ein Aufrufer ein bereits sichtbares Bundle nicht
+mit einem vollstaendig fehlgeschlagenen Schreibversuch verwechselt.
 
 ## CLI
 
@@ -135,6 +147,13 @@ python3 -m scripts.agent.run_task \
 ```
 
 `--no-persist` und `--output-dir` sind gegenseitig ausgeschlossen.
+
+## Contract-Fixtures
+
+`tests/fixtures/agent/validation-valid.json` und
+`tests/fixtures/agent/run-result-valid.json` sind statische Gut-Faelle. Der
+Python-Contract-Check und AJV validieren sie direkt; synthetisch umgekehrte
+Check- und Stage-Reihenfolgen muessen fehlschlagen.
 
 ## Bewusste Grenzen
 

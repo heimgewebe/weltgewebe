@@ -23,11 +23,11 @@
     },
     "run_id": {
       "type": "string",
-      "pattern": "^RUN-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+      "pattern": "^RUN-[0-9]{4}(?:(?:0[13578]|1[02])(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)(?:0[1-9]|[12][0-9]|30)|02(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3])[0-5][0-9][0-5][0-9]Z-[0-9a-f]{12}$"
     },
     "created_at": {
       "type": "string",
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$"
+      "pattern": "^[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{6}Z$"
     },
     "task_id": {
       "type": "string",
@@ -55,30 +55,109 @@
       "minItems": 5,
       "maxItems": 5,
       "uniqueItems": true,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "name",
-          "status"
-        ],
-        "properties": {
-          "name": {
-            "enum": [
-              "task_schema",
-              "claim_registry",
-              "non_ideal_guard",
-              "handoff_contract",
-              "repository_unchanged"
-            ]
-          },
-          "status": {
-            "enum": [
-              "passed"
-            ]
+      "items": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "task_schema"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "claim_registry"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "non_ideal_guard"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "handoff_contract"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "status"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "repository_unchanged"
+              ]
+            },
+            "status": {
+              "enum": [
+                "passed"
+              ]
+            }
           }
         }
-      }
+      ],
+      "additionalItems": false
     }
   }
 }

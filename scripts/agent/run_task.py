@@ -64,6 +64,13 @@ RESIDUAL_GAPS = [
 
 RUN_ID_RE = re.compile(r"^RUN-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$")
 EVIDENCE_FILES = ("task.yml", "handoff.json", "validation.json", "run-result.json")
+VALIDATION_CHECK_NAMES = [
+    "task_schema",
+    "claim_registry",
+    "non_ideal_guard",
+    "handoff_contract",
+    "repository_unchanged",
+]
 
 RepositoryStateReader = Callable[[Path], bytes]
 SourceRevisionResolver = Callable[[Path], str]
@@ -77,6 +84,7 @@ class RunnerError(Exception):
         self.code = code
         self.message = message
         self.cleanup_errors: list[str] = []
+        self.evidence_path: str | None = None
 
 
 class _ArgumentParser(argparse.ArgumentParser):
@@ -235,18 +243,53 @@ def validate_source_revision(source_revision: str) -> None:
 
 
 def _git_environment() -> dict[str, str]:
-    environment = os.environ.copy()
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
+    }
     environment.update(
         {
             "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_TERMINAL_PROMPT": "0",
             "LC_ALL": "C",
         }
     )
     return environment
 
 
+def _resolve_git_toplevel(repo_root: Path) -> Path:
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=repo_root,
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=15,
+            env=_git_environment(),
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RunnerError("SOURCE_REVISION_UNAVAILABLE", str(exc)) from exc
+    if completed.returncode != 0:
+        raise RunnerError(
+            "SOURCE_REVISION_UNAVAILABLE",
+            "Unable to resolve Git repository root",
+        )
+    try:
+        observed = Path(completed.stdout.strip()).resolve(strict=True)
+        expected = repo_root.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise RunnerError("SOURCE_REVISION_UNAVAILABLE", str(exc)) from exc
+    if observed != expected:
+        raise RunnerError(
+            "GIT_REPOSITORY_MISMATCH",
+            "Git commands resolved a repository other than repo_root",
+        )
+    return observed
+
+
 def resolve_git_head(repo_root: Path) -> str:
+    _resolve_git_toplevel(repo_root)
     try:
         completed = subprocess.run(
             ["git", "rev-parse", "--verify", "HEAD"],
@@ -521,17 +564,14 @@ def _repo_contains(root: Path, candidate: Path) -> bool:
         return False
 
 
-def _ensure_no_symlink_parents(path: Path, *, stop_at: Path | None = None) -> None:
+def _ensure_no_symlink_parents(path: Path) -> None:
     current = path if path.exists() else path.parent
-    stop = stop_at.resolve() if stop_at is not None else None
     while True:
         if current.is_symlink():
             raise RunnerError(
                 "OUTPUT_DIR_INVALID",
                 "Output path and its parents must not be symlinks",
             )
-        if stop is not None and current.resolve(strict=False) == stop:
-            break
         parent = current.parent
         if parent == current:
             break
@@ -639,6 +679,7 @@ def _ensure_child_directory(parent_fd: int, name: str, mode: int = 0o700) -> int
     try:
         os.mkdir(name, mode=mode, dir_fd=parent_fd)
     except FileExistsError:
+        # Existing directories are permitted and validated by the no-follow open below.
         pass
     try:
         return os.open(name, _directory_flags(), dir_fd=parent_fd)
@@ -692,6 +733,18 @@ def _rename_noreplace_at(
 
 
 def _default_evidence_target(repo_root: Path, run_id: str) -> tuple[Path, str]:
+    target, display_path, parent_fd = _acquire_default_evidence_target(
+        repo_root, run_id
+    )
+    try:
+        return target, display_path
+    finally:
+        os.close(parent_fd)
+
+
+def _acquire_default_evidence_target(
+    repo_root: Path, run_id: str
+) -> tuple[Path, str, int]:
     if not RUN_ID_RE.fullmatch(run_id):
         raise RunnerError("RUN_ID_INVALID", "Generated run_id has an invalid format")
     repo_fd = _open_directory_no_symlinks(repo_root.resolve())
@@ -702,6 +755,8 @@ def _default_evidence_target(repo_root: Path, run_id: str) -> tuple[Path, str]:
         evidence_fd = _ensure_child_directory(artifacts_fd, "agent-runs")
         _fsync_fd(artifacts_fd)
         _fsync_fd(repo_fd)
+        retained_fd = evidence_fd
+        evidence_fd = None
     finally:
         if evidence_fd is not None:
             os.close(evidence_fd)
@@ -709,7 +764,11 @@ def _default_evidence_target(repo_root: Path, run_id: str) -> tuple[Path, str]:
             os.close(artifacts_fd)
         os.close(repo_fd)
     evidence_root = repo_root / "artifacts" / "agent-runs"
-    return evidence_root / run_id, f"artifacts/agent-runs/{run_id}"
+    return (
+        evidence_root / run_id,
+        f"artifacts/agent-runs/{run_id}",
+        retained_fd,
+    )
 
 
 def validate_output_dir(repo_root: Path, output_dir: Path) -> Path:
@@ -746,6 +805,26 @@ def validate_output_dir(repo_root: Path, output_dir: Path) -> Path:
     return candidate
 
 
+def _acquire_custom_evidence_target(
+    repo_root: Path, output_dir: Path
+) -> tuple[Path, str, int]:
+    target = validate_output_dir(repo_root, output_dir)
+    parent = target.parent
+    expected_parent = parent.stat()
+    parent_fd = _open_directory_no_symlinks(parent)
+    opened_parent = os.fstat(parent_fd)
+    if (expected_parent.st_dev, expected_parent.st_ino) != (
+        opened_parent.st_dev,
+        opened_parent.st_ino,
+    ):
+        os.close(parent_fd)
+        raise RunnerError(
+            "OUTPUT_DIR_INVALID",
+            "Output directory parent changed during validation",
+        )
+    return target, str(output_dir), parent_fd
+
+
 def _validation_payload(
     *,
     run_id: str,
@@ -774,6 +853,30 @@ def _validation_payload(
     }
 
 
+def _parse_evidence_timestamp(value: str, *, label: str) -> datetime:
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ").replace(
+            tzinfo=timezone.utc
+        )
+    except (TypeError, ValueError) as exc:
+        raise RunnerError(
+            "RUN_EVIDENCE_SEMANTIC_INVALID",
+            f"{label} is not a real UTC timestamp",
+        ) from exc
+
+
+def _validate_run_id_timestamp(run_id: str) -> None:
+    if not RUN_ID_RE.fullmatch(run_id):
+        raise RunnerError("RUN_ID_INVALID", "run_id has an invalid format")
+    try:
+        datetime.strptime(run_id[4:20], "%Y%m%dT%H%M%SZ")
+    except ValueError as exc:
+        raise RunnerError(
+            "RUN_EVIDENCE_SEMANTIC_INVALID",
+            "run_id contains an impossible UTC timestamp",
+        ) from exc
+
+
 def _validate_evidence_bindings(
     *,
     raw_task: bytes,
@@ -795,10 +898,30 @@ def _validate_evidence_bindings(
         raise RunnerError("RUN_EVIDENCE_BINDING_INVALID", "handoff payload mismatch")
     if persisted_result["outcome"] != handoff["outcome"]:
         raise RunnerError("RUN_EVIDENCE_BINDING_INVALID", "handoff outcome mismatch")
-    if persisted_result["started_at"] > persisted_result["completed_at"]:
+    _validate_run_id_timestamp(persisted_result["run_id"])
+    started_at = _parse_evidence_timestamp(
+        persisted_result["started_at"], label="started_at"
+    )
+    completed_at = _parse_evidence_timestamp(
+        persisted_result["completed_at"], label="completed_at"
+    )
+    _parse_evidence_timestamp(validation["created_at"], label="validation.created_at")
+    if started_at > completed_at:
         raise RunnerError(
             "CLOCK_MOVED_BACKWARDS",
             "completed_at precedes started_at",
+        )
+    stage_names = [item.get("name") for item in persisted_result["stages"]]
+    if stage_names != STAGE_NAMES:
+        raise RunnerError(
+            "RUN_EVIDENCE_SEMANTIC_INVALID",
+            "run-result stages are not in canonical execution order",
+        )
+    check_names = [item.get("name") for item in validation["checks"]]
+    if check_names != VALIDATION_CHECK_NAMES:
+        raise RunnerError(
+            "RUN_EVIDENCE_SEMANTIC_INVALID",
+            "validation checks are not in canonical execution order",
         )
     if validation["created_at"] != persisted_result["completed_at"]:
         raise RunnerError(
@@ -829,19 +952,114 @@ def _validate_evidence_bindings(
 def _cleanup_staging(parent_fd: int, staging_fd: int, staging_name: str) -> None:
     cleanup_errors: list[str] = []
     try:
-        for name in os.listdir(staging_fd):
-            try:
-                os.unlink(name, dir_fd=staging_fd)
-            except OSError as exc:
-                cleanup_errors.append(str(exc))
-    finally:
+        names = os.listdir(staging_fd)
+    except OSError as exc:
+        names = []
+        cleanup_errors.append(str(exc))
+    for name in names:
+        try:
+            os.unlink(name, dir_fd=staging_fd)
+        except OSError as exc:
+            cleanup_errors.append(str(exc))
+    try:
         os.close(staging_fd)
+    except OSError as exc:
+        cleanup_errors.append(str(exc))
     try:
         os.rmdir(staging_name, dir_fd=parent_fd)
     except OSError as exc:
         cleanup_errors.append(str(exc))
     if cleanup_errors:
         raise OSError("; ".join(cleanup_errors))
+
+
+def _published_error(
+    code: str, message: str, *, evidence_path: str, detail: str | None = None
+) -> RunnerError:
+    error = RunnerError(code, message)
+    error.evidence_path = evidence_path
+    if detail:
+        error.cleanup_errors.append(detail)
+    return error
+
+
+def _assert_published_parent_identity(
+    parent: Path, parent_fd: int, *, evidence_path: str
+) -> None:
+    expected = os.fstat(parent_fd)
+    try:
+        observed_fd = _open_directory_no_symlinks(parent)
+    except RunnerError as exc:
+        cause = exc.__cause__
+        location_errnos = {errno.ENOENT, errno.ENOTDIR, errno.ELOOP, errno.EACCES}
+        if isinstance(cause, OSError) and cause.errno not in location_errnos:
+            raise _published_error(
+                "OUTPUT_FINALIZATION_UNCONFIRMED",
+                "Evidence was published, but parent-path verification failed",
+                evidence_path=evidence_path,
+                detail=str(cause),
+            ) from exc
+        raise _published_error(
+            "OUTPUT_LOCATION_CHANGED",
+            "Evidence was published, but its parent path no longer resolves safely",
+            evidence_path=evidence_path,
+            detail=exc.message,
+        ) from exc
+    pending_error: RunnerError | None = None
+    try:
+        observed = os.fstat(observed_fd)
+        if (expected.st_dev, expected.st_ino) != (observed.st_dev, observed.st_ino):
+            pending_error = _published_error(
+                "OUTPUT_LOCATION_CHANGED",
+                "Evidence was published, but its parent path now identifies another directory",
+                evidence_path=evidence_path,
+            )
+            raise pending_error
+    finally:
+        try:
+            os.close(observed_fd)
+        except OSError as exc:
+            if pending_error is not None:
+                pending_error.cleanup_errors.append(str(exc))
+            else:
+                raise
+
+
+def _assert_published_target_identity(
+    parent_fd: int,
+    target_name: str,
+    published_fd: int,
+    *,
+    evidence_path: str,
+) -> None:
+    expected = os.fstat(published_fd)
+    try:
+        observed_fd = os.open(target_name, _directory_flags(), dir_fd=parent_fd)
+    except OSError as exc:
+        raise _published_error(
+            "OUTPUT_LOCATION_CHANGED",
+            "Evidence was published, but the target path no longer resolves safely",
+            evidence_path=evidence_path,
+            detail=str(exc),
+        ) from exc
+    pending_error: RunnerError | None = None
+    try:
+        observed = os.fstat(observed_fd)
+        if (expected.st_dev, expected.st_ino) != (observed.st_dev, observed.st_ino):
+            pending_error = _published_error(
+                "OUTPUT_LOCATION_CHANGED",
+                "Evidence was published, but the target path now identifies another directory",
+                evidence_path=evidence_path,
+            )
+            raise pending_error
+    finally:
+        try:
+            os.close(observed_fd)
+        except OSError as exc:
+            if pending_error is not None:
+                pending_error.cleanup_errors.append(str(exc))
+            else:
+                raise
 
 
 def publish_evidence_bundle(
@@ -860,14 +1078,6 @@ def publish_evidence_bundle(
     handoff: dict[str, Any],
     pre_publish_guard: Callable[[], None] | None = None,
 ) -> tuple[Path, str]:
-    if output_dir is None:
-        target, display_path = _default_evidence_target(repo_root, run_id)
-    else:
-        target = validate_output_dir(repo_root, output_dir)
-        display_path = str(output_dir)
-
-    parent = target.parent
-
     handoff_bytes = _json_bytes(handoff)
     validation = _validation_payload(
         run_id=run_id,
@@ -904,28 +1114,25 @@ def publish_evidence_bundle(
         },
         "residual_gaps": list(RESIDUAL_GAPS),
     }
+    result_schema = _load_evidence_schema(repo_root, "run-result.schema.json")
+    _validate_evidence_payload(persisted_result, result_schema, label="run-result.json")
     _validate_evidence_bindings(
         raw_task=raw_task,
         handoff=handoff,
         validation=validation,
         persisted_result=persisted_result,
     )
-    result_schema = _load_evidence_schema(repo_root, "run-result.schema.json")
-    _validate_evidence_payload(persisted_result, result_schema, label="run-result.json")
     result_bytes = _json_bytes(persisted_result)
 
-    expected_parent = parent.stat()
-    parent_fd = _open_directory_no_symlinks(parent)
-    opened_parent = os.fstat(parent_fd)
-    if (expected_parent.st_dev, expected_parent.st_ino) != (
-        opened_parent.st_dev,
-        opened_parent.st_ino,
-    ):
-        os.close(parent_fd)
-        raise RunnerError(
-            "OUTPUT_DIR_INVALID",
-            "Output directory parent changed during validation",
+    if output_dir is None:
+        target, display_path, parent_fd = _acquire_default_evidence_target(
+            repo_root, run_id
         )
+    else:
+        target, display_path, parent_fd = _acquire_custom_evidence_target(
+            repo_root, output_dir
+        )
+    parent = target.parent
 
     staged_payloads = {
         "task.yml": raw_task,
@@ -960,22 +1167,46 @@ def publish_evidence_bundle(
             pre_publish_guard()
         _rename_noreplace_at(parent_fd, staging_name, parent_fd, target.name)
         published = True
-        os.close(staging_fd)
-        staging_fd = None
         try:
             _fsync_fd(parent_fd)
         except OSError as exc:
-            durability_error = RunnerError(
+            raise _published_error(
                 "OUTPUT_DURABILITY_UNCONFIRMED",
                 "Evidence was atomically published, but parent-directory sync failed",
-            )
-            durability_error.cleanup_errors.append(str(exc))
-            raise durability_error from exc
+                evidence_path=display_path,
+                detail=str(exc),
+            ) from exc
+        _assert_published_parent_identity(
+            parent, parent_fd, evidence_path=display_path
+        )
+        _assert_published_target_identity(
+            parent_fd,
+            target.name,
+            staging_fd,
+            evidence_path=display_path,
+        )
+        for name, expected in staged_payloads.items():
+            if _read_file_at(staging_fd, name) != expected:
+                raise _published_error(
+                    "RUN_EVIDENCE_WRITE_MISMATCH",
+                    f"Published evidence file changed before finalization: {name}",
+                    evidence_path=display_path,
+                )
     except RunnerError as exc:
+        if published and exc.evidence_path is None:
+            exc.evidence_path = display_path
         pending_error = exc
         raise
     except OSError as exc:
-        runner_error = RunnerError("OUTPUT_WRITE_FAILED", str(exc))
+        if published:
+            runner_error = _published_error(
+                "OUTPUT_FINALIZATION_UNCONFIRMED",
+                "Evidence was atomically published, but finalization failed",
+                evidence_path=display_path,
+                detail=str(exc),
+            )
+        else:
+            runner_error = RunnerError("OUTPUT_WRITE_FAILED", str(exc))
         pending_error = runner_error
         raise runner_error from exc
     finally:
@@ -990,11 +1221,41 @@ def publish_evidence_bundle(
                 if pending_error is not None:
                     pending_error.cleanup_errors.append(str(cleanup_error))
                 else:
-                    os.close(parent_fd)
-                    raise RunnerError(
+                    pending_error = RunnerError(
                         "OUTPUT_CLEANUP_FAILED", str(cleanup_error)
-                    ) from cleanup_error
-        os.close(parent_fd)
+                    )
+                    raise pending_error from cleanup_error
+        if published and staging_fd is not None:
+            try:
+                os.close(staging_fd)
+                staging_fd = None
+            except OSError as close_error:
+                if pending_error is not None:
+                    pending_error.cleanup_errors.append(str(close_error))
+                else:
+                    pending_error = _published_error(
+                        "OUTPUT_FINALIZATION_UNCONFIRMED",
+                        "Evidence was atomically published, but finalization failed",
+                        evidence_path=display_path,
+                        detail=str(close_error),
+                    )
+                    raise pending_error from close_error
+        try:
+            os.close(parent_fd)
+        except OSError as close_error:
+            if pending_error is not None:
+                pending_error.cleanup_errors.append(str(close_error))
+            elif published:
+                raise _published_error(
+                    "OUTPUT_FINALIZATION_UNCONFIRMED",
+                    "Evidence was atomically published, but finalization failed",
+                    evidence_path=display_path,
+                    detail=str(close_error),
+                ) from close_error
+            else:
+                raise RunnerError(
+                    "OUTPUT_CLEANUP_FAILED", str(close_error)
+                ) from close_error
     return target, display_path
 
 
@@ -1216,6 +1477,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _emit_error(error: RunnerError) -> int:
     payload: dict[str, Any] = _error(error.code, error.message)
+    if error.evidence_path is not None:
+        payload["evidence_path"] = error.evidence_path
     if error.cleanup_errors:
         payload["cleanup_errors"] = list(error.cleanup_errors)
     sys.stderr.write(_json(payload))

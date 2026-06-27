@@ -1,0 +1,32 @@
+{
+  "checks": [
+    {
+      "name": "task_schema",
+      "status": "passed"
+    },
+    {
+      "name": "claim_registry",
+      "status": "passed"
+    },
+    {
+      "name": "non_ideal_guard",
+      "status": "passed"
+    },
+    {
+      "name": "handoff_contract",
+      "status": "passed"
+    },
+    {
+      "name": "repository_unchanged",
+      "status": "passed"
+    }
+  ],
+  "created_at": "2026-06-27T10:00:01.000000Z",
+  "repository_state_sha256": "d23b46bf412a6294ef4134f82bccfcb245ff7604644642736bd6eeda9a38852d",
+  "run_id": "RUN-20260627T100001Z-abcdef123456",
+  "schema_version": "1.0",
+  "source_revision": "1111111111111111111111111111111111111111",
+  "status": "passed",
+  "task_contract_sha256": "bca60a9867eed0a96d584a716a34ca0327e67fde5e9f6d984bb88b6bca8faaeb",
+  "task_id": "AGENT-SAFE-004"
+}

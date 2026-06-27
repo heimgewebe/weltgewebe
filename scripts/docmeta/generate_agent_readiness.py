@@ -63,11 +63,15 @@ DRY_RUN_REQUIRED_FILES = [
 RUN_EVIDENCE_REQUIRED_FILES = [
     "contracts/agent/validation.schema.json",
     "contracts/agent/run-result.schema.json",
+    "scripts/agent/json_contract.py",
     "scripts/agent/run_task.py",
+    "scripts/agent/tests/test_json_contract.py",
     "scripts/agent/tests/test_run_task.py",
     "scripts/agent/validate_agent_contracts.py",
     "scripts/contracts-agent-check.sh",
     "docs/reference/agent-run-evidence-lite.md",
+    "tests/fixtures/agent/validation-valid.json",
+    "tests/fixtures/agent/run-result-valid.json",
     DRY_RUN_TASK_FILE,
 ]
 

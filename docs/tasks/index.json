@@ -460,7 +460,11 @@
         "scripts/docmeta/generate_agent_readiness.py",
         "scripts/docmeta/tests/test_generate_agent_readiness.py",
         ".github/workflows/agent-safety-preflight.yml",
-        "docs/reference/agent-run-evidence-lite.md"
+        "docs/reference/agent-run-evidence-lite.md",
+        "scripts/agent/json_contract.py",
+        "scripts/agent/tests/test_json_contract.py",
+        "tests/fixtures/agent/validation-valid.json",
+        "tests/fixtures/agent/run-result-valid.json"
       ],
       "missing_evidence": [
         "Merge auf main und post-merge Verifikation stehen aus",
@@ -468,8 +472,10 @@
       ],
       "acceptance": [
         "Erfolgreiche geplante Dry-Runs publizieren genau vier Artefakte atomar und überschreiben kein vorhandenes Ziel",
-        "task.yml bewahrt die exakten Eingabebytes; Task-ID, Task-SHA-256, lokaler Git-HEAD und Repository-Fingerabdruck sind gebunden",
-        "validation.json und run-result.json sind gegen repository-eigene Draft-07-Contracts validiert",
+        "task.yml bewahrt die exakten Task-Eingabebytes ohne Normalisierung oder Neuformatierung",
+        "Task-ID, Task-SHA-256, kanonischer lokaler Git-HEAD und Repository-Fingerabdruck sind gegen Git-Umgebungsumlenkung gebunden",
+        "Der gemeldete Output-Pfad identifiziert bei der finalen Erfolgsgrenze weiterhin das geöffnete Publikationsverzeichnis",
+        "validation.json und run-result.json erzwingen geordnete Checks und Stages sowie semantisch reale UTC-Zeitwerte",
         "Readiness markiert run_evidence_lite nur nach funktionalem Persistenz-Smoke als pass",
         "Der Slice aktiviert weder Task-Ausführung noch Write Mode, externe Attestierung oder autonome Merge-Fähigkeit"
       ],
@@ -485,7 +491,7 @@
           "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-06-26"
+      "updated_at": "2026-06-27"
     },
     {
       "id": "DOCMETA-FRESHNESS-001",

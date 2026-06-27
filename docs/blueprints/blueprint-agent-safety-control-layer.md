@@ -595,15 +595,15 @@ emit run-result.json
 ##### PR 6 — agent/dry-run-runner: Smoke-Test
 
 ```bash
-python scripts/agent/run_task.py --dry-run tests/fixtures/agent/valid-doc-drift-task.json
-python scripts/agent/run_task.py --dry-run tests/fixtures/agent/valid-roadmap-claim-task.json
-python scripts/agent/run_task.py --dry-run tests/fixtures/agent/valid-generated-refresh-task.json
+python -m scripts.agent.run_task --dry-run --no-persist tests/fixtures/agent/valid-doc-drift-task.json
+python -m scripts.agent.run_task --dry-run --no-persist tests/fixtures/agent/valid-roadmap-claim-task.json
+python -m scripts.agent.run_task --dry-run --no-persist tests/fixtures/agent/valid-generated-refresh-task.json
 ```
 
 ##### PR 6 — agent/dry-run-runner: Akzeptanzkriterien
 
 - Drei reale Tasktypen laufen deterministisch durch.
-- Keine Dateien werden geändert.
+- Mit `--no-persist` werden weder Task-Zieldateien noch Evidence-Dateien erzeugt.
 - Handoff wird erzeugt.
 - Run-Result wird erzeugt.
 - Ungültige Tasks werden vor Kontextlesen oder Patchplanung blockiert.
