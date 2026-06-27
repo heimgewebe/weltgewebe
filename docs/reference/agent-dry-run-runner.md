@@ -59,7 +59,9 @@ python3 -m scripts.agent.run_task \
 | 2 | Aufruf-, JSON-, Pfad-, Git-, Contract-, Output- oder interner Betriebsfehler |
 
 Betriebsfehler werden auf stderr als JSON mit `code` und `message` ausgegeben.
-Regulaere Ergebnisse erscheinen als genau ein JSON-Dokument auf stdout.
+Falls eine Bereinigung nicht vollstaendig gelingt, enthaelt dasselbe Dokument
+zusaetzlich `cleanup_errors`. Regulaere Ergebnisse erscheinen als genau ein
+JSON-Dokument auf stdout.
 
 ## Stage-Modell
 
@@ -115,9 +117,10 @@ git rev-parse --verify HEAD
 
 Die Aufloesung erfolgt innerhalb des gestuften Runner-Ablaufs. Tests koennen
 einen privaten Resolver als Abhaengigkeit injizieren; ein frei vorgegebener SHA
-ist kein Teil des Runner-Vertrags. Vor erfolgreicher Finalisierung und nach
-optionalem externem Output wird `HEAD` erneut auf dieselbe Revision geprueft.
-Es wird keine Remote-Erreichbarkeit, Main-Ancestry oder Diff-Bindung behauptet.
+ist kein Teil des Runner-Vertrags. Vor erfolgreicher Finalisierung und
+unmittelbar vor einer atomaren Evidence-Publikation wird `HEAD` erneut auf
+dieselbe Revision geprueft. Es wird keine Remote-Erreichbarkeit, Main-Ancestry
+oder Diff-Bindung behauptet.
 
 ## Execution-Plan-v1
 
@@ -193,12 +196,18 @@ abgewiesen.
 ## No-Write-Invariante
 
 Der Runner bildet vor dem Task-Laden und an den Abschlussgrenzen einen
-inhaltssensitiven Fingerabdruck des nicht ignorierten, Git-sichtbaren Zustands.
-Er umfasst den aktuellen `HEAD`, getrennte binaere Diffs des Index gegen `HEAD`
-und des Working Trees gegen den Index sowie Pfad, Typ, Modus und Inhaltsdigest
-aller ungetrackten Pfade. Dadurch werden auch weitere Aenderungen an bereits
-schmutzigen getrackten Dateien, Inhaltswechsel bereits ungetrackter Dateien und
-ein Wechsel von `HEAD` erkannt.
+inhaltssensitiven Fingerabdruck des Git-sichtbaren Zustands. Globale und
+systemweite Git-Konfiguration werden dabei deaktiviert; fuer ungetrackte Pfade
+gelten nur repository-eigene `.gitignore`-Dateien. Persoenliche globale
+Ignore-Regeln koennen den Nachweis daher weder veraendern noch agentenwirksame
+Dateien unsichtbar machen.
+
+Der Fingerabdruck umfasst den aktuellen `HEAD`, getrennte binaere Diffs des
+Index gegen `HEAD` und des Working Trees gegen den Index sowie Pfad, Typ, Modus
+und Inhaltsdigest aller nicht durch Repository-Regeln ignorierten ungetrackten
+Pfade. Dadurch werden auch weitere Aenderungen an bereits schmutzigen getrackten
+Dateien, Inhaltswechsel bereits ungetrackter Dateien und ein Wechsel von `HEAD`
+erkannt.
 
 Ein bereits schmutziger Ausgangszustand ist erlaubt, sofern dieser Fingerabdruck
 unveraendert bleibt. Die Wache gilt fuer geplante, blockierte und fehlerhafte
@@ -209,10 +218,10 @@ Working Tree nicht.
 
 Dieser Vergleich belegt Gleichheit an den Pruefpunkten, nicht die Abwesenheit
 jeder zwischenzeitlichen Schreiboperation. Schreiben mit anschliessender
-Ruecksetzung, ignorierte Pfade, `.git`-interne Aenderungen und externe Pfade
-liegen ausserhalb dieses Nachweises. Tests und CI rufen denselben kanonischen
-Fingerabdruck in getrennten Prozessen auf; das ist eine aeussere Gegenpruefung,
-aber kein unabhaengig implementiertes Orakel.
+Ruecksetzung, durch repository-eigene Regeln ignorierte Pfade, `.git`-interne
+Aenderungen und externe Pfade liegen ausserhalb dieses Nachweises. Tests und CI
+rufen denselben kanonischen Fingerabdruck in getrennten Prozessen auf; das ist
+eine aeussere Gegenpruefung, aber kein unabhaengig implementiertes Orakel.
 
 ## Readiness-Smoke
 
@@ -249,15 +258,16 @@ Nicht Teil dieses Slices:
 - Dateiinhalte als Agent-Kontext
 - Patch-Erzeugung
 - Task-Command-Ausfuehrung
-- persistentes Run-Archiv
-- Run-Evidence
+- vollstaendiges Run-Archiv fuer blockierte oder betriebsfehlerhafte Laeufe
+- externe Run-Attestierung und Signatur
 - Git-Ancestry- oder Diff-Bindung
 - Write Mode
 - autonome PR- oder Merge-Ausfuehrung
 
 ## Folge-Slices
 
-Folgearbeiten koennen Run-Evidence, persistente Run-Artefakte,
-Command-Ausfuehrung, Patch-Planung und spaeter gated Write Mode entwerfen. Diese
+Folgearbeiten koennen vollstaendige Fehler- und Blocked-Run-Evidence, externe
+Attestierung, Command-Ausfuehrung, Patch-Planung und spaeter gated Write Mode
+entwerfen. Diese
 Funktionen brauchen eigene Contracts und duerfen nicht aus diesem Runner-v1
 abgeleitet werden.

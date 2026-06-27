@@ -181,7 +181,7 @@
       "id": "CLAIM-AGENT-SAFE-007",
       "status": "proposed",
       "subject": "AGENT-SAFE-007",
-      "statement": "Erfolgreiche geplante Agent-Dry-Runs erzeugen einen schema-validen, task- und revisionsgebundenen Run-Evidence-Lite-Satz.",
+      "statement": "Geplante Dry-Runs erzeugen schema-valide, task- und revisionsgebundene Run-Evidence-Lite-Saetze.",
       "evidence": [
         {
           "path": "contracts/agent/validation.schema.json",

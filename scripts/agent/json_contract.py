@@ -36,6 +36,7 @@ ASSERTION_KEYS = {
     "maxLength",
     "pattern",
     "minItems",
+    "maxItems",
     "uniqueItems",
     "items",
 }
@@ -121,7 +122,7 @@ def ensure_supported_schema(schema: Any, *, path: str = "$") -> None:
     if enum is not None and not isinstance(enum, list):
         raise UnsupportedSchemaError(f"{path}.enum must be an array")
 
-    for keyword in ("minLength", "maxLength", "minItems"):
+    for keyword in ("minLength", "maxLength", "minItems", "maxItems"):
         value = schema.get(keyword)
         if value is not None and (
             not isinstance(value, int) or isinstance(value, bool) or value < 0
@@ -245,6 +246,12 @@ def validate_instance(
         if min_items is not None and len(instance) < min_items:
             findings.append(
                 {"path": path, "message": f"must contain at least {min_items} item(s)"}
+            )
+
+        max_items = schema.get("maxItems")
+        if max_items is not None and len(instance) > max_items:
+            findings.append(
+                {"path": path, "message": f"must contain at most {max_items} item(s)"}
             )
 
         if schema.get("uniqueItems") is True:

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import hashlib
 import io
 import inspect
+import os
 import json
 import shutil
 import stat
@@ -15,7 +17,7 @@ import unittest.mock
 from pathlib import Path
 
 from scripts.agent import run_task
-from scripts.agent.json_contract import load_json_strict
+from scripts.agent.json_contract import load_json_strict, validate_instance
 from scripts.agent.validate_handoff import validate_handoff
 from scripts.docmeta.docmeta import REPO_ROOT
 from scripts.docmeta.validate_claim_registry import load_registry
@@ -310,9 +312,14 @@ class TestRunTask(unittest.TestCase):
             target.mkdir()
             (source / "new.txt").write_text("new\n", encoding="utf-8")
             (target / "sentinel.txt").write_text("keep\n", encoding="utf-8")
-
-            with self.assertRaises(run_task.RunnerError) as ctx:
-                run_task._rename_noreplace(source, target)
+            parent_fd = run_task._open_directory_no_symlinks(base)
+            try:
+                with self.assertRaises(run_task.RunnerError) as ctx:
+                    run_task._rename_noreplace_at(
+                        parent_fd, source.name, parent_fd, target.name
+                    )
+            finally:
+                os.close(parent_fd)
 
             self.assertEqual(ctx.exception.code, "OUTPUT_DIR_EXISTS")
             self.assertTrue((source / "new.txt").is_file())
@@ -324,18 +331,18 @@ class TestRunTask(unittest.TestCase):
     def test_partial_write_does_not_publish_bundle(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "run"
-            original = run_task._write_file_sync
+            original = run_task._write_file_sync_at
             calls = 0
 
-            def fail_second(path: Path, data: bytes) -> None:
+            def fail_second(directory_fd: int, name: str, data: bytes) -> None:
                 nonlocal calls
                 calls += 1
                 if calls == 2:
                     raise OSError("synthetic write failure")
-                original(path, data)
+                original(directory_fd, name, data)
 
             with unittest.mock.patch.object(
-                run_task, "_write_file_sync", side_effect=fail_second
+                run_task, "_write_file_sync_at", side_effect=fail_second
             ):
                 with self.assertRaises(run_task.RunnerError) as ctx:
                     run_task._run_dry_run(
@@ -355,12 +362,12 @@ class TestRunTask(unittest.TestCase):
             with (
                 unittest.mock.patch.object(
                     run_task,
-                    "_write_file_sync",
+                    "_write_file_sync_at",
                     side_effect=OSError("synthetic write failure"),
                 ),
                 unittest.mock.patch.object(
-                    run_task.shutil,
-                    "rmtree",
+                    run_task,
+                    "_cleanup_staging",
                     side_effect=OSError("synthetic staging cleanup failure"),
                 ),
             ):
@@ -712,7 +719,7 @@ class TestRunTask(unittest.TestCase):
             )
         self.assertEqual(ctx.exception.code, "REPO_MUTATED_DURING_DRY_RUN")
 
-    def test_cleanup_failure_does_not_hide_revision_drift(self):
+    def test_prepublish_revision_drift_leaves_no_visible_bundle(self):
         revisions = [self.source_revision, self.source_revision, "2" * 40]
 
         def resolver(_root: Path) -> str:
@@ -720,26 +727,207 @@ class TestRunTask(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp) / "output"
+            with self.assertRaises(run_task.RunnerError) as ctx:
+                run_task._run_dry_run(
+                    repo_root=self.root,
+                    task_file=self._fixture("valid-doc-drift-task.json"),
+                    output_dir=output_dir,
+                    repository_state_reader=lambda _root: b"unchanged",
+                    source_revision_resolver=resolver,
+                )
+            self.assertFalse(output_dir.exists())
+            self.assertEqual(list(Path(tmp).glob(".agent-run-staging-*")), [])
+        self.assertEqual(ctx.exception.code, "SOURCE_REVISION_CHANGED_DURING_DRY_RUN")
+        self.assertEqual(ctx.exception.cleanup_errors, [])
+
+    def test_clock_regression_blocks_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "output"
             with unittest.mock.patch.object(
                 run_task,
-                "_remove_published_output",
-                side_effect=OSError("synthetic cleanup failure"),
+                "_utc_timestamp",
+                side_effect=[
+                    "2026-06-27T10:00:02.000000Z",
+                    "2026-06-27T10:00:01.000000Z",
+                ],
             ):
                 with self.assertRaises(run_task.RunnerError) as ctx:
                     run_task._run_dry_run(
                         repo_root=self.root,
                         task_file=self._fixture("valid-doc-drift-task.json"),
                         output_dir=output_dir,
-                        repository_state_reader=lambda _root: b"unchanged",
-                        source_revision_resolver=resolver,
+                        source_revision_resolver=lambda _root: self.source_revision,
                     )
-        self.assertEqual(ctx.exception.code, "SOURCE_REVISION_CHANGED_DURING_DRY_RUN")
-        self.assertTrue(
-            any(
-                "synthetic cleanup failure" in item
-                for item in ctx.exception.cleanup_errors
+            self.assertEqual(ctx.exception.code, "CLOCK_MOVED_BACKWARDS")
+            self.assertFalse(output_dir.exists())
+
+    def test_output_parent_swap_to_symlink_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            parent = base / "parent"
+            parent.mkdir()
+            outside = base / "outside"
+            outside.mkdir()
+            output_dir = parent / "output"
+            original = run_task._open_directory_no_symlinks
+            swapped = False
+
+            def swap_before_open(path: Path) -> int:
+                nonlocal swapped
+                if path == parent and not swapped:
+                    swapped = True
+                    parent.rmdir()
+                    parent.symlink_to(outside, target_is_directory=True)
+                return original(path)
+
+            with unittest.mock.patch.object(
+                run_task,
+                "_open_directory_no_symlinks",
+                side_effect=swap_before_open,
+            ):
+                with self.assertRaises(run_task.RunnerError) as ctx:
+                    run_task._run_dry_run(
+                        repo_root=self.root,
+                        task_file=self._fixture("valid-doc-drift-task.json"),
+                        output_dir=output_dir,
+                        source_revision_resolver=lambda _root: self.source_revision,
+                    )
+            self.assertEqual(ctx.exception.code, "OUTPUT_DIR_INVALID")
+            self.assertEqual(list(outside.iterdir()), [])
+
+    def test_repository_fingerprint_ignores_global_git_configuration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo = base / "repo"
+            repo.mkdir()
+            self._init_git_repo(repo)
+            home = base / "home"
+            home.mkdir()
+            (home / "global-ignore").write_text(
+                ".claude/settings.local.json\n", encoding="utf-8"
             )
-        )
+            (home / ".gitconfig").write_text(
+                "[core]\n\texcludesfile = " + str(home / "global-ignore") + "\n",
+                encoding="utf-8",
+            )
+            before = run_task.repository_state_bytes(repo)
+            hidden = repo / ".claude" / "settings.local.json"
+            hidden.parent.mkdir()
+            hidden.write_text('{"permissions":{"allow":["Bash(*)"]}}\n', encoding="utf-8")
+            with unittest.mock.patch.dict(os.environ, {"HOME": str(home)}):
+                after = run_task.repository_state_bytes(repo)
+            self.assertNotEqual(before, after)
+
+    def test_evidence_schemas_reject_hollow_or_fabricated_payloads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "run"
+            run_task._run_dry_run(
+                repo_root=self.root,
+                task_file=self._fixture("valid-doc-drift-task.json"),
+                source_revision_resolver=lambda _root: self.source_revision,
+                output_dir=output,
+            )
+            result = load_json_strict(output / "run-result.json")
+            result_schema = load_json_strict(
+                self.root / "contracts/agent/run-result.schema.json"
+            )
+            for field, value in (
+                ("handoff", {}),
+                ("execution_plan", {}),
+                ("evidence_accounting", {}),
+                ("stages", ["not-an-object"]),
+                ("findings", ["fabricated"]),
+            ):
+                candidate = copy.deepcopy(result)
+                candidate[field] = value
+                self.assertTrue(
+                    validate_instance(candidate, result_schema),
+                    msg=f"schema accepted invalid {field}",
+                )
+
+            validation = load_json_strict(output / "validation.json")
+            validation_schema = load_json_strict(
+                self.root / "contracts/agent/validation.schema.json"
+            )
+            validation["checks"] = [
+                {"name": f"arbitrary_{index}", "status": "passed"}
+                for index in range(5)
+            ]
+            self.assertTrue(validate_instance(validation, validation_schema))
+
+    def test_parent_fsync_failure_reports_published_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "run"
+            original = run_task._fsync_fd
+            calls = 0
+
+            def fail_parent_sync(descriptor: int) -> None:
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise OSError("synthetic parent fsync failure")
+                original(descriptor)
+
+            with unittest.mock.patch.object(
+                run_task, "_fsync_fd", side_effect=fail_parent_sync
+            ):
+                with self.assertRaises(run_task.RunnerError) as ctx:
+                    run_task._run_dry_run(
+                        repo_root=self.root,
+                        task_file=self._fixture("valid-doc-drift-task.json"),
+                        output_dir=output,
+                        source_revision_resolver=lambda _root: self.source_revision,
+                    )
+            self.assertEqual(ctx.exception.code, "OUTPUT_DURABILITY_UNCONFIRMED")
+            self.assertTrue(output.is_dir())
+            self.assertEqual(
+                sorted(path.name for path in output.iterdir()),
+                sorted(run_task.EVIDENCE_FILES),
+            )
+            self.assertTrue(
+                any(
+                    "synthetic parent fsync failure" in item
+                    for item in ctx.exception.cleanup_errors
+                )
+            )
+
+    def test_cross_artifact_binding_mismatch_blocks_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "run"
+            original = run_task._validation_payload
+
+            def mismatched_validation(**kwargs):
+                payload = original(**kwargs)
+                payload["task_id"] = "AGENT-SAFE-999"
+                return payload
+
+            with unittest.mock.patch.object(
+                run_task, "_validation_payload", side_effect=mismatched_validation
+            ):
+                with self.assertRaises(run_task.RunnerError) as ctx:
+                    run_task._run_dry_run(
+                        repo_root=self.root,
+                        task_file=self._fixture("valid-doc-drift-task.json"),
+                        output_dir=output,
+                        source_revision_resolver=lambda _root: self.source_revision,
+                    )
+            self.assertEqual(ctx.exception.code, "RUN_EVIDENCE_BINDING_INVALID")
+            self.assertFalse(output.exists())
+
+    def test_error_output_exposes_cleanup_failures(self):
+        error = run_task.RunnerError("OUTPUT_WRITE_FAILED", "write failed")
+        error.cleanup_errors.append("staging cleanup failed")
+        with (
+            unittest.mock.patch.object(run_task, "run_dry_run", side_effect=error),
+            contextlib.redirect_stderr(io.StringIO()) as stderr,
+        ):
+            exit_code = run_task.main(
+                ["--dry-run", "--no-persist", self._fixture("valid-doc-drift-task.json")]
+            )
+        self.assertEqual(exit_code, 2)
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["cleanup_errors"], ["staging cleanup failed"])
+
 
     def test_invalid_generated_handoff_is_operational_error(self):
         with unittest.mock.patch.object(

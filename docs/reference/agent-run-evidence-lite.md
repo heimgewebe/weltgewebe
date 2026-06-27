@@ -85,17 +85,26 @@ Pfad. Eine externe Manifest- oder Attestierungsschicht bleibt Folgearbeit.
 
 Der Runner schreibt alle vier Dateien zunaechst in ein zufaellig benanntes
 Staging-Verzeichnis unter demselben Elternverzeichnis. Er validiert die beiden
-neuen JSON-Artefakte gegen ihre Contracts, synchronisiert Dateien und
-Verzeichnisse soweit das Betriebssystem dies anbietet und benennt danach das
-vollstaendige Staging-Verzeichnis mit
-`renameat2(RENAME_NOREPLACE)` auf das Ziel um. Fehlt diese Linux-Faehigkeit,
-schlaegt die Publikation geschlossen fehl.
+neuen JSON-Artefakte gegen ihre Contracts und prueft zusaetzlich die
+felduebergreifenden Bindungen zwischen Task, Handoff, Validation und Run Result.
+Unmittelbar vor der Publikation werden Git-`HEAD` und Repository-Fingerabdruck
+erneut geprueft. Erst danach wird das vollstaendige Staging-Verzeichnis mit
+`renameat2(RENAME_NOREPLACE)` auf das Ziel umbenannt. Fehlt diese
+Linux-Faehigkeit, schlaegt die Publikation geschlossen fehl.
 
-Ein bestehendes Ziel wird atomar nicht ersetzt. Symlinks, Parent-Traversal,
-Pfad-Ausbruch und ein benutzerdefiniertes Ziel innerhalb des Repositorys werden
-abgewiesen. Bundle-Dateien werden mit Modus `0600` erzeugt. Bei einem Fehler vor
-der Umbenennung bleibt kein sichtbares Zielbuendel zurueck; Fehler nach der
-Umbenennung loesen eine bestmoegliche Entfernung des vollstaendigen Bundles aus.
+Alle Pfadoperationen nach der Vorpruefung sind an bereits geoeffnete
+Verzeichnis-Deskriptoren gebunden. `O_NOFOLLOW` verhindert, dass ein nachtraeglich
+ausgetauschter Symlink-Elternpfad das Bundle an einen anderen Ort umlenkt. Ein
+bestehendes Ziel wird atomar nicht ersetzt. Parent-Traversal, Pfad-Ausbruch und
+ein benutzerdefiniertes Ziel innerhalb des Repositorys werden abgewiesen.
+Bundle-Dateien werden mit Modus `0600` erzeugt. Bei einem Fehler vor der
+Umbenennung bleibt kein sichtbares Zielbuendel zurueck.
+
+Nach der Umbenennung ist das Bundle logisch vollstaendig und sichtbar. Schlaegt
+die anschliessende Synchronisierung des Elternverzeichnisses fehl, wird es nicht
+als vermeintlich ungueltiges Bundle entfernt. Stattdessen meldet der Runner
+`OUTPUT_DURABILITY_UNCONFIRMED` und weist ausdruecklich darauf hin, dass das
+Bundle publiziert wurde, seine Crash-Dauerhaftigkeit aber nicht bestaetigt ist.
 
 ## CLI
 

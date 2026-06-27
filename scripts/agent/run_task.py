@@ -11,13 +11,11 @@ import json
 import os
 import re
 import secrets
-import shutil
 import stat
 import subprocess
 import sys
-import tempfile
-from datetime import datetime, timezone
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -236,6 +234,18 @@ def validate_source_revision(source_revision: str) -> None:
         )
 
 
+def _git_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "LC_ALL": "C",
+        }
+    )
+    return environment
+
+
 def resolve_git_head(repo_root: Path) -> str:
     try:
         completed = subprocess.run(
@@ -245,6 +255,7 @@ def resolve_git_head(repo_root: Path) -> str:
             text=True,
             capture_output=True,
             timeout=15,
+            env=_git_environment(),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RunnerError("SOURCE_REVISION_UNAVAILABLE", str(exc)) from exc
@@ -268,6 +279,7 @@ def _git_output(repo_root: Path, arguments: list[str]) -> bytes:
             check=False,
             capture_output=True,
             timeout=15,
+            env=_git_environment(),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RunnerError("GIT_STATE_UNAVAILABLE", str(exc)) from exc
@@ -346,6 +358,7 @@ def repository_state_bytes(repo_root: Path) -> bytes:
             "diff",
             "--cached",
             "--no-ext-diff",
+            "--no-textconv",
             "--binary",
             "--full-index",
             "HEAD",
@@ -354,10 +367,23 @@ def repository_state_bytes(repo_root: Path) -> bytes:
     )
     worktree_diff = _git_output(
         root,
-        ["diff", "--no-ext-diff", "--binary", "--full-index", "--"],
+        [
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--binary",
+            "--full-index",
+            "--",
+        ],
     )
     untracked_raw = _git_output(
-        root, ["ls-files", "--others", "--exclude-standard", "-z"]
+        root,
+        [
+            "ls-files",
+            "--others",
+            "--exclude-per-directory=.gitignore",
+            "-z",
+        ],
     )
 
     hasher = hashlib.sha256()
@@ -558,11 +584,12 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _write_file_sync(path: Path, data: bytes) -> None:
+def _write_file_sync_at(directory_fd: int, name: str, data: bytes) -> None:
     descriptor = os.open(
-        path,
-        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+        name,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
         0o600,
+        dir_fd=directory_fd,
     )
     with os.fdopen(descriptor, "wb") as handle:
         handle.write(data)
@@ -570,16 +597,66 @@ def _write_file_sync(path: Path, data: bytes) -> None:
         os.fsync(handle.fileno())
 
 
-def _fsync_directory(path: Path) -> None:
-    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+def _read_file_at(directory_fd: int, name: str) -> bytes:
+    descriptor = os.open(
+        name,
+        os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+        dir_fd=directory_fd,
+    )
+    with os.fdopen(descriptor, "rb") as handle:
+        return handle.read()
+
+
+def _directory_flags() -> int:
+    required = ("O_DIRECTORY", "O_NOFOLLOW")
+    if any(not hasattr(os, name) for name in required):
+        raise RunnerError(
+            "OUTPUT_SAFE_PATH_UNAVAILABLE",
+            "Directory file descriptors with O_NOFOLLOW are required",
+        )
+    return os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+
+
+def _open_directory_no_symlinks(path: Path) -> int:
+    absolute = path.absolute()
+    flags = _directory_flags()
+    descriptor = os.open(os.sep, flags)
     try:
-        os.fsync(descriptor)
-    finally:
+        for part in absolute.parts[1:]:
+            next_descriptor = os.open(part, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except OSError as exc:
         os.close(descriptor)
+        raise RunnerError(
+            "OUTPUT_DIR_INVALID",
+            "Output directory parent changed or contains a symlink",
+        ) from exc
 
 
-def _rename_noreplace(source: Path, target: Path) -> None:
-    """Atomically publish one directory without replacing an existing target."""
+def _ensure_child_directory(parent_fd: int, name: str, mode: int = 0o700) -> int:
+    try:
+        os.mkdir(name, mode=mode, dir_fd=parent_fd)
+    except FileExistsError:
+        pass
+    try:
+        return os.open(name, _directory_flags(), dir_fd=parent_fd)
+    except OSError as exc:
+        raise RunnerError(
+            "OUTPUT_DIR_INVALID",
+            f"Evidence directory is not a real directory: {name}",
+        ) from exc
+
+
+def _fsync_fd(descriptor: int) -> None:
+    os.fsync(descriptor)
+
+
+def _rename_noreplace_at(
+    source_parent_fd: int, source_name: str, target_parent_fd: int, target_name: str
+) -> None:
+    """Atomically publish one directory without following path components."""
 
     libc = ctypes.CDLL(None, use_errno=True)
     renameat2 = getattr(libc, "renameat2", None)
@@ -597,10 +674,10 @@ def _rename_noreplace(source: Path, target: Path) -> None:
     ]
     renameat2.restype = ctypes.c_int
     result = renameat2(
-        -100,
-        os.fsencode(source),
-        -100,
-        os.fsencode(target),
+        source_parent_fd,
+        os.fsencode(source_name),
+        target_parent_fd,
+        os.fsencode(target_name),
         1,
     )
     if result == 0:
@@ -617,10 +694,21 @@ def _rename_noreplace(source: Path, target: Path) -> None:
 def _default_evidence_target(repo_root: Path, run_id: str) -> tuple[Path, str]:
     if not RUN_ID_RE.fullmatch(run_id):
         raise RunnerError("RUN_ID_INVALID", "Generated run_id has an invalid format")
+    repo_fd = _open_directory_no_symlinks(repo_root.resolve())
+    artifacts_fd: int | None = None
+    evidence_fd: int | None = None
+    try:
+        artifacts_fd = _ensure_child_directory(repo_fd, "artifacts")
+        evidence_fd = _ensure_child_directory(artifacts_fd, "agent-runs")
+        _fsync_fd(artifacts_fd)
+        _fsync_fd(repo_fd)
+    finally:
+        if evidence_fd is not None:
+            os.close(evidence_fd)
+        if artifacts_fd is not None:
+            os.close(artifacts_fd)
+        os.close(repo_fd)
     evidence_root = repo_root / "artifacts" / "agent-runs"
-    _ensure_no_symlink_parents(evidence_root, stop_at=repo_root)
-    evidence_root.mkdir(parents=True, exist_ok=True)
-    _ensure_no_symlink_parents(evidence_root, stop_at=repo_root)
     return evidence_root / run_id, f"artifacts/agent-runs/{run_id}"
 
 
@@ -686,6 +774,76 @@ def _validation_payload(
     }
 
 
+def _validate_evidence_bindings(
+    *,
+    raw_task: bytes,
+    handoff: dict[str, Any],
+    validation: dict[str, Any],
+    persisted_result: dict[str, Any],
+) -> None:
+    identity_fields = ("task_id", "task_contract_sha256", "source_revision")
+    for field in identity_fields:
+        expected = persisted_result[field]
+        if validation[field] != expected or handoff[field] != expected:
+            raise RunnerError(
+                "RUN_EVIDENCE_BINDING_INVALID",
+                f"Evidence identity mismatch: {field}",
+            )
+    if validation["run_id"] != persisted_result["run_id"]:
+        raise RunnerError("RUN_EVIDENCE_BINDING_INVALID", "run_id mismatch")
+    if persisted_result["handoff"] != handoff:
+        raise RunnerError("RUN_EVIDENCE_BINDING_INVALID", "handoff payload mismatch")
+    if persisted_result["outcome"] != handoff["outcome"]:
+        raise RunnerError("RUN_EVIDENCE_BINDING_INVALID", "handoff outcome mismatch")
+    if persisted_result["started_at"] > persisted_result["completed_at"]:
+        raise RunnerError(
+            "CLOCK_MOVED_BACKWARDS",
+            "completed_at precedes started_at",
+        )
+    if validation["created_at"] != persisted_result["completed_at"]:
+        raise RunnerError(
+            "RUN_EVIDENCE_BINDING_INVALID",
+            "validation timestamp mismatch",
+        )
+    repository_hash = persisted_result["repository_state_sha256"]
+    if validation["repository_state_sha256"] != repository_hash:
+        raise RunnerError(
+            "RUN_EVIDENCE_BINDING_INVALID",
+            "repository fingerprint mismatch",
+        )
+    repository_state = persisted_result["repository_state"]
+    if repository_state["git_visible_sha256"] != repository_hash:
+        raise RunnerError(
+            "RUN_EVIDENCE_BINDING_INVALID",
+            "nested repository fingerprint mismatch",
+        )
+    if repository_state["source_revision"] != persisted_result["source_revision"]:
+        raise RunnerError(
+            "RUN_EVIDENCE_BINDING_INVALID",
+            "nested source revision mismatch",
+        )
+    if persisted_result["artifacts"]["task"]["sha256"] != _sha256(raw_task):
+        raise RunnerError("RUN_EVIDENCE_BINDING_INVALID", "task hash mismatch")
+
+
+def _cleanup_staging(parent_fd: int, staging_fd: int, staging_name: str) -> None:
+    cleanup_errors: list[str] = []
+    try:
+        for name in os.listdir(staging_fd):
+            try:
+                os.unlink(name, dir_fd=staging_fd)
+            except OSError as exc:
+                cleanup_errors.append(str(exc))
+    finally:
+        os.close(staging_fd)
+    try:
+        os.rmdir(staging_name, dir_fd=parent_fd)
+    except OSError as exc:
+        cleanup_errors.append(str(exc))
+    if cleanup_errors:
+        raise OSError("; ".join(cleanup_errors))
+
+
 def publish_evidence_bundle(
     repo_root: Path,
     output_dir: Path | None,
@@ -700,6 +858,7 @@ def publish_evidence_bundle(
     completed_at: str,
     run_result: dict[str, Any],
     handoff: dict[str, Any],
+    pre_publish_guard: Callable[[], None] | None = None,
 ) -> tuple[Path, str]:
     if output_dir is None:
         target, display_path = _default_evidence_target(repo_root, run_id)
@@ -708,10 +867,6 @@ def publish_evidence_bundle(
         display_path = str(output_dir)
 
     parent = target.parent
-    if target.exists() or target.is_symlink():
-        raise RunnerError(
-            "OUTPUT_DIR_EXISTS", "Output directory must not already exist"
-        )
 
     handoff_bytes = _json_bytes(handoff)
     validation = _validation_payload(
@@ -749,9 +904,28 @@ def publish_evidence_bundle(
         },
         "residual_gaps": list(RESIDUAL_GAPS),
     }
+    _validate_evidence_bindings(
+        raw_task=raw_task,
+        handoff=handoff,
+        validation=validation,
+        persisted_result=persisted_result,
+    )
     result_schema = _load_evidence_schema(repo_root, "run-result.schema.json")
     _validate_evidence_payload(persisted_result, result_schema, label="run-result.json")
     result_bytes = _json_bytes(persisted_result)
+
+    expected_parent = parent.stat()
+    parent_fd = _open_directory_no_symlinks(parent)
+    opened_parent = os.fstat(parent_fd)
+    if (expected_parent.st_dev, expected_parent.st_ino) != (
+        opened_parent.st_dev,
+        opened_parent.st_ino,
+    ):
+        os.close(parent_fd)
+        raise RunnerError(
+            "OUTPUT_DIR_INVALID",
+            "Output directory parent changed during validation",
+        )
 
     staged_payloads = {
         "task.yml": raw_task,
@@ -759,68 +933,69 @@ def publish_evidence_bundle(
         "validation.json": validation_bytes,
         "run-result.json": result_bytes,
     }
-    staging = Path(tempfile.mkdtemp(prefix=".agent-run-staging-", dir=parent))
+    staging_name = f".agent-run-staging-{secrets.token_hex(12)}"
+    staging_fd: int | None = None
+    staging_created = False
     published = False
     pending_error: RunnerError | None = None
     try:
-        os.chmod(staging, 0o700)
+        os.mkdir(staging_name, mode=0o700, dir_fd=parent_fd)
+        staging_created = True
+        staging_fd = os.open(staging_name, _directory_flags(), dir_fd=parent_fd)
         for name, payload in staged_payloads.items():
-            _write_file_sync(staging / name, payload)
-        actual_names = {path.name for path in staging.iterdir()}
-        if actual_names != set(EVIDENCE_FILES):
+            _write_file_sync_at(staging_fd, name, payload)
+        if set(os.listdir(staging_fd)) != set(EVIDENCE_FILES):
             raise RunnerError(
                 "RUN_EVIDENCE_INCOMPLETE",
                 "Staged evidence bundle does not contain exactly four files",
             )
         for name, expected in staged_payloads.items():
-            if (staging / name).read_bytes() != expected:
+            if _read_file_at(staging_fd, name) != expected:
                 raise RunnerError(
                     "RUN_EVIDENCE_WRITE_MISMATCH",
                     f"Staged evidence file does not match serialized payload: {name}",
                 )
-        _fsync_directory(staging)
-        _rename_noreplace(staging, target)
+        _fsync_fd(staging_fd)
+        if pre_publish_guard is not None:
+            pre_publish_guard()
+        _rename_noreplace_at(parent_fd, staging_name, parent_fd, target.name)
         published = True
-        _fsync_directory(parent)
+        os.close(staging_fd)
+        staging_fd = None
+        try:
+            _fsync_fd(parent_fd)
+        except OSError as exc:
+            durability_error = RunnerError(
+                "OUTPUT_DURABILITY_UNCONFIRMED",
+                "Evidence was atomically published, but parent-directory sync failed",
+            )
+            durability_error.cleanup_errors.append(str(exc))
+            raise durability_error from exc
     except RunnerError as exc:
         pending_error = exc
-        if published and target.is_dir() and not target.is_symlink():
-            try:
-                shutil.rmtree(target)
-                _fsync_directory(parent)
-            except OSError as cleanup_error:
-                exc.cleanup_errors.append(str(cleanup_error))
         raise
     except OSError as exc:
         runner_error = RunnerError("OUTPUT_WRITE_FAILED", str(exc))
         pending_error = runner_error
-        if published and target.is_dir() and not target.is_symlink():
-            try:
-                shutil.rmtree(target)
-                _fsync_directory(parent)
-            except OSError as cleanup_error:
-                runner_error.cleanup_errors.append(str(cleanup_error))
         raise runner_error from exc
     finally:
-        if staging.exists():
+        if not published and staging_created:
             try:
-                shutil.rmtree(staging)
+                if staging_fd is not None:
+                    _cleanup_staging(parent_fd, staging_fd, staging_name)
+                    staging_fd = None
+                else:
+                    os.rmdir(staging_name, dir_fd=parent_fd)
             except OSError as cleanup_error:
                 if pending_error is not None:
                     pending_error.cleanup_errors.append(str(cleanup_error))
                 else:
+                    os.close(parent_fd)
                     raise RunnerError(
                         "OUTPUT_CLEANUP_FAILED", str(cleanup_error)
                     ) from cleanup_error
+        os.close(parent_fd)
     return target, display_path
-
-
-def _remove_published_output(target: Path) -> None:
-    if target.is_symlink():
-        target.unlink()
-        return
-    if target.is_dir():
-        shutil.rmtree(target)
 
 
 def _run_dry_run(
@@ -837,7 +1012,6 @@ def _run_dry_run(
     state_reader = repository_state_reader or repository_state_bytes
     revision_resolver = source_revision_resolver or resolve_git_head
     statuses: dict[str, str] = {}
-    published_target: Path | None = None
     started_at = _utc_timestamp()
     should_persist = persist or output_dir is not None
 
@@ -950,7 +1124,21 @@ def _run_dry_run(
             if not RUN_ID_RE.fullmatch(run_id):
                 raise RunnerError("RUN_ID_INVALID", "run_id has an invalid format")
             completed_at = _utc_timestamp()
-            published_target, evidence_path = publish_evidence_bundle(
+            if completed_at < started_at:
+                raise RunnerError(
+                    "CLOCK_MOVED_BACKWARDS",
+                    "completed_at precedes started_at",
+                )
+
+            def pre_publish_guard() -> None:
+                if revision_resolver(root) != revision:
+                    raise RunnerError(
+                        "SOURCE_REVISION_CHANGED_DURING_DRY_RUN",
+                        "Git HEAD changed during dry run",
+                    )
+                _assert_repository_unchanged(root, before_state, state_reader)
+
+            _, evidence_path = publish_evidence_bundle(
                 root,
                 output_dir,
                 run_id=run_id,
@@ -963,15 +1151,17 @@ def _run_dry_run(
                 completed_at=completed_at,
                 run_result=result,
                 handoff=handoff,
+                pre_publish_guard=pre_publish_guard,
             )
             result = {**result, "run_id": run_id, "evidence_path": evidence_path}
 
-        if revision_resolver(root) != revision:
-            raise RunnerError(
-                "SOURCE_REVISION_CHANGED_DURING_DRY_RUN",
-                "Git HEAD changed during dry run",
-            )
-        _assert_repository_unchanged(root, before_state, state_reader)
+        if not should_persist:
+            if revision_resolver(root) != revision:
+                raise RunnerError(
+                    "SOURCE_REVISION_CHANGED_DURING_DRY_RUN",
+                    "Git HEAD changed during dry run",
+                )
+            _assert_repository_unchanged(root, before_state, state_reader)
         return DryRunOutcome(result=result, exit_code=0)
     except Exception as exc:
         guarded_codes = {
@@ -979,20 +1169,10 @@ def _run_dry_run(
             "SOURCE_REVISION_CHANGED_DURING_DRY_RUN",
         }
         if isinstance(exc, RunnerError) and exc.code in guarded_codes:
-            if published_target is not None:
-                try:
-                    _remove_published_output(published_target)
-                except OSError as cleanup_error:
-                    exc.cleanup_errors.append(str(cleanup_error))
             raise
         try:
             _assert_repository_unchanged(root, before_state, state_reader)
         except RunnerError as mutation_error:
-            if published_target is not None:
-                try:
-                    _remove_published_output(published_target)
-                except OSError as cleanup_error:
-                    mutation_error.cleanup_errors.append(str(cleanup_error))
             raise mutation_error from exc
         raise
 
@@ -1034,8 +1214,11 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _emit_error(code: str, message: str) -> int:
-    sys.stderr.write(_json(_error(code, message)))
+def _emit_error(error: RunnerError) -> int:
+    payload: dict[str, Any] = _error(error.code, error.message)
+    if error.cleanup_errors:
+        payload["cleanup_errors"] = list(error.cleanup_errors)
+    sys.stderr.write(_json(payload))
     return 2
 
 
@@ -1055,9 +1238,9 @@ def main(argv: list[str] | None = None) -> int:
             persist=not args.no_persist,
         )
     except RunnerError as exc:
-        return _emit_error(exc.code, exc.message)
+        return _emit_error(exc)
     except (OSError, ValueError, UnsupportedSchemaError) as exc:
-        return _emit_error("RUNNER_ERROR", str(exc))
+        return _emit_error(RunnerError("RUNNER_ERROR", str(exc)))
 
     sys.stdout.write(_json(outcome.result))
     return outcome.exit_code

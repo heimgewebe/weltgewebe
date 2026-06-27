@@ -57,6 +57,12 @@ class TestJsonContract(unittest.TestCase):
             "duplicate array item",
         )
 
+    def test_max_items_is_enforced(self):
+        self.assertEqual(
+            validate_instance(["x", "y"], {"type": "array", "maxItems": 1}),
+            [{"path": "$", "message": "must contain at most 1 item(s)"}],
+        )
+
     def test_unknown_keyword_fails_closed(self):
         with self.assertRaises(UnsupportedSchemaError):
             validate_instance("x", {"type": "string", "format": "uuid"})

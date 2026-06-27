@@ -119,8 +119,7 @@ entries:
     doc: docs/claims/registry.yml
     locator: claims[id=CLAIM-AGENT-SAFE-007]
     claim: >-
-      Erfolgreiche geplante Agent-Dry-Runs erzeugen einen schema-validen,
-      task- und revisionsgebundenen Run-Evidence-Lite-Satz.
+      Geplante Dry-Runs erzeugen schema-valide, task- und revisionsgebundene Run-Evidence-Lite-Saetze.
     status: partial
     owner: docs-mechanik
     last_verified: "2026-06-26"
