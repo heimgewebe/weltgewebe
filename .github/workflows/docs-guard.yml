@@ -68,6 +68,9 @@ jobs:
       - name: Report lifecycle warnings
         run: python3 -m scripts.docmeta.validate_report_lifecycle --mode warn
 
+      - name: Test generated artifact control
+        run: python3 -m unittest scripts.docmeta.tests.test_validate_generated_artifacts -v
+
       - name: run-ci-validate
         run: make ci-validate
 
