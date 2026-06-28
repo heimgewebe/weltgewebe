@@ -17,6 +17,5 @@ concurrency:
 
 jobs:
   guard:
-    # Fleet-Repos, die von metarepo aus via wgx up Templates beziehen,
-    # werden auf den kanonischen Guard-Workflow aus heimgewebe/wgx gesetzt.
-    uses: heimgewebe/wgx/.github/workflows/wgx-guard.yml@main
+    # Pin the reusable workflow to reviewed bytes. Updating this SHA is a deliberate supply-chain change.
+    uses: heimgewebe/wgx/.github/workflows/wgx-guard.yml@fd3c8d22c42fa15e2aa63a1f39706dcedbdf503a
