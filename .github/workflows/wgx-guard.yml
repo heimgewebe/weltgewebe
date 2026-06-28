@@ -17,4 +17,4 @@ concurrency:
 
 jobs:
   guard:
-    uses: heimgewebe/wgx/.github/workflows/wgx-guard.yml@wgx-reusable-guard-fix
+    uses: heimgewebe/wgx/.github/workflows/wgx-guard.yml@main
