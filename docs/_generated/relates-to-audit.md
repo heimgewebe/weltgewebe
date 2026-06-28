@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 437 |
+| Relationen gesamt | 450 |
 | — depends_on | 18 |
-| — relates_to | 416 |
+| — relates_to | 429 |
 | — supersedes | 3 |
 | relates_to Anteil | 95% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (164 Dokumente):
+**Cluster 1** (172 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -46,7 +46,9 @@ _Keine Lücken erkannt._
 - `apps/api/tests/db_domain_backfill.rs`
 - `audit/impl-registry.yaml`
 - `contracts/agent/handoff.schema.json`
+- `contracts/agent/run-result.schema.json`
 - `contracts/agent/task.schema.json`
+- `contracts/agent/validation.schema.json`
 - `contracts/domain/edge.schema.json`
 - `docs/_generated/report-lifecycle-inventory.md`
 - `docs/adr/0043-edge-vs-conversation.md`
@@ -120,8 +122,11 @@ _Keine Lücken erkannt._
 - `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
 - `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`
 - `docs/quickstart-gate-c.md`
+- `docs/reference/agent-dry-run-runner.md`
 - `docs/reference/agent-handoff-contract.md`
 - `docs/reference/agent-operability-fixture-matrix.md`
+- `docs/reference/agent-run-evidence-lite.md`
+- `docs/reference/generated-artifact-control.md`
 - `docs/reference/glossar.md`
 - `docs/reports/agent-readiness-audit.md`
 - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
@@ -183,13 +188,16 @@ _Keine Lücken erkannt._
 - `repo.meta.yaml`
 - `scripts/agent/check_non_ideal_task.py`
 - `scripts/agent/json_contract.py`
+- `scripts/agent/run_task.py`
 - `scripts/agent/tests/test_check_non_ideal_task.py`
+- `scripts/agent/tests/test_run_task.py`
 - `scripts/agent/tests/test_validate_handoff.py`
 - `scripts/agent/validate_handoff.py`
 - `scripts/basemap/build-hamburg-pmtiles.sh`
 - `scripts/docmeta/audit_account_email_uniqueness.py`
 - `scripts/docmeta/audit_domain_edge_references.py`
 - `scripts/docmeta/check_planning_registration.py`
+- `scripts/docmeta/generate_agent_readiness.py`
 - `scripts/docmeta/validate_claim_registry.py`
 - `scripts/docmeta/validate_report_lifecycle.py`
 - `scripts/guard/basemap-runtime-proof.sh`
@@ -242,15 +250,16 @@ _Keine Lücken erkannt._
 - relates_to → `docs/tasks/index.json`
 - relates_to → `repo.meta.yaml`
 
-**`docs/deploy/README.md`**:
+**`docs/reference/agent-operability-fixture-matrix.md`**:
 
-- relates_to → `docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md`
-- relates_to → `docs/deploy/heimserver.deployment.md`
-- relates_to → `docs/deploy/heimserver.integration.md`
-- relates_to → `docs/deploy/secondary-domain-web-surfaces.md`
-- relates_to → `docs/deploy/security.md`
-- relates_to → `docs/deployment.md`
-- relates_to → `docs/deployment_governance.md`
+- relates_to → `contracts/agent/handoff.schema.json`
+- relates_to → `contracts/agent/task.schema.json`
+- relates_to → `scripts/agent/check_non_ideal_task.py`
+- relates_to → `scripts/agent/run_task.py`
+- relates_to → `scripts/agent/tests/test_check_non_ideal_task.py`
+- relates_to → `scripts/agent/tests/test_run_task.py`
+- relates_to → `scripts/agent/tests/test_validate_handoff.py`
+- relates_to → `scripts/agent/validate_handoff.py`
 
 ### Hinweise
 

@@ -63,6 +63,7 @@ Generated automatically. Do not edit.
 | docs.reference.agent-handoff-contract | Agent Handoff Contract | reference | active | docs/reference/agent-handoff-contract.md |
 | docs.reference.agent-operability-fixture-matrix | Agent-Betriebsfaehigkeit: Fixture-Matrix | reference | active | docs/reference/agent-operability-fixture-matrix.md |
 | docs.reference.agent-run-evidence-lite | Agent Run Evidence Lite | reference | active | docs/reference/agent-run-evidence-lite.md |
+| docs.reference.generated-artifact-control | Generated Artifact Control | reference | active | docs/reference/generated-artifact-control.md |
 | docs.reports.agent-readiness-audit | Agent Readiness Audit | documentation | active | docs/reports/agent-readiness-audit.md |
 | docs.reports.domain-runtime-data-source-reconciliation | Domain Runtime Data Source Reconciliation | report | active | docs/reports/domain-runtime-data-source-reconciliation.md |
 | docs.roadmap | Weltgewebe — Master-Umsetzungsroadmap | roadmap | active | docs/roadmap.md |

@@ -12,7 +12,12 @@ name: Docs Guard
       - 'architecture/**'
       - 'runtime/**'
       - 'runbooks/**'
+      - 'contracts/agent/**'
+      - 'scripts/agent/**'
+      - 'tests/fixtures/agent/**'
+      - 'scripts/contracts-agent-check.sh'
       - 'scripts/docmeta/**'
+      - '.wgx/generated-artifacts.yml'
       - '.github/workflows/docs-guard.yml'
       - 'docs/_generated/system-map.md'
       - 'docs/_generated/report-lifecycle.md'
@@ -23,6 +28,13 @@ name: Docs Guard
       - 'docs/process/report-lifecycle-contract-alignment.md'
       - 'docs/claims/**'
       - 'docs/_generated/claim-evidence-map.md'
+      - 'docs/_generated/agent-readiness.md'
+      - 'docs/tasks/index.json'
+      - 'docs/tasks/board.md'
+      - 'docs/tasks/schema.json'
+      - 'docs/reports/optimierungsstatus.json'
+      - 'docs/reference/agent-run-evidence-lite.md'
+      - 'docs/security/agent-write-scope-baseline.md'
       - 'AGENTS.md'
       - 'repo.meta.yaml'
       - 'agent-policy.yaml'
@@ -55,6 +67,9 @@ jobs:
 
       - name: Report lifecycle warnings
         run: python3 -m scripts.docmeta.validate_report_lifecycle --mode warn
+
+      - name: Test generated artifact control
+        run: python3 -m unittest scripts.docmeta.tests.test_validate_generated_artifacts -v
 
       - name: run-ci-validate
         run: make ci-validate

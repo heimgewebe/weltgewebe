@@ -17,7 +17,8 @@ Generated automatically. Do not edit.
 | claim-agent-safe-003 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-003] | partial | docs-mechanik | 2026-06-05 | 4 items |
 | claim-agent-safe-005 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-005] | partial | docs-mechanik | 2026-06-26 | 8 items |
 | claim-agent-safe-006 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-006] | partial | docs-mechanik | 2026-06-26 | 7 items |
-| claim-agent-safe-007 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-007] | partial | docs-mechanik | 2026-06-26 | 10 items |
+| claim-agent-safe-007 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-007] | partial | docs-mechanik | 2026-06-27 | 10 items |
+| claim-agent-safe-008 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-008] | partial | docs-mechanik | 2026-06-27 | 7 items |
 
 ## Details
 
@@ -138,7 +139,7 @@ Does not prove:
 - Locator: `claims[id=CLAIM-AGENT-SAFE-007]`
 - Status: `partial`
 - Owner: `docs-mechanik`
-- Last verified: `2026-06-26`
+- Last verified: `2026-06-27`
 
 Evidence:
 
@@ -154,6 +155,30 @@ Evidence:
 | `test` | `scripts/docmeta/tests/test_generate_agent_readiness.py` |
 | `file` | `.github/workflows/agent-safety-preflight.yml` |
 | `file` | `docs/reference/agent-run-evidence-lite.md` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
+
+### CLAIM-AGENT-SAFE-008
+
+- Entry: `claim-agent-safe-008`
+- Locator: `claims[id=CLAIM-AGENT-SAFE-008]`
+- Status: `partial`
+- Owner: `docs-mechanik`
+- Last verified: `2026-06-27`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `.wgx/generated-artifacts.yml` |
+| `file` | `scripts/docmeta/validate_generated_artifacts.py` |
+| `test` | `scripts/docmeta/tests/test_validate_generated_artifacts.py` |
+| `file` | `scripts/docmeta/generate_agent_readiness.py` |
+| `file` | `scripts/docmeta/generated-files-guard.sh` |
+| `file` | `.github/workflows/docs-guard.yml` |
+| `file` | `docs/reference/generated-artifact-control.md` |
 
 Does not prove:
 

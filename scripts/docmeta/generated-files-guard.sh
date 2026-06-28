@@ -50,6 +50,14 @@ for file in docs/_generated/*.md; do
     fi
 done
 
+if [ ! -f ".wgx/generated-artifacts.yml" ]; then
+    echo "ERROR: .wgx/generated-artifacts.yml missing."
+    FAIL=1
+elif ! python3 -m scripts.docmeta.validate_generated_artifacts --check; then
+    echo "ERROR: generated artifact control validation failed."
+    FAIL=1
+fi
+
 if [ "$FAIL" -eq 1 ]; then
     exit 1
 fi

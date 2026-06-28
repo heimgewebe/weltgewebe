@@ -193,6 +193,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reference/agent-dry-run-runner.md
 - [relates_to] docs/reference/agent-handoff-contract.md
 - [relates_to] docs/reference/agent-run-evidence-lite.md
+- [relates_to] docs/reference/generated-artifact-control.md
 - [relates_to] docs/security/agent-write-scope-baseline.md
 
 ## docs/blueprints/doc-structure-task-control-examples.md
