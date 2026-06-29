@@ -343,20 +343,21 @@
       "id": "OPT-CI-003",
       "area": "CI/CD",
       "title": "Action-Refs vereinheitlichen",
-      "status": "partial",
+      "status": "done",
       "priority": "low",
       "risk": "low",
       "effort": "low",
       "evidence_status": "ci",
       "evidence": [
-        ".github/workflows/python-tooling.yml"
+        "toolchain.versions.yml",
+        ".github/workflows/ci.yml",
+        ".github/workflows/python-tooling.yml",
+        ".github/workflows/api-smoke.yml",
+        ".github/workflows/security.yml"
       ],
-      "missing_evidence": [
-        "dtolnay/rust-toolchain weiterhin gemischt @stable/@v1",
-        "gepinnte uv-Version nicht erzwungen"
-      ],
-      "next_action": "Rust-Toolchain-Action-Refs vereinheitlichen",
-      "updated_at": "2026-05-25"
+      "missing_evidence": [],
+      "next_action": "keine; Rust-Action-Refs sind vereinheitlicht und uv-Version wird zentral aus toolchain.versions.yml gelesen",
+      "updated_at": "2026-06-29"
     },
     {
       "id": "OPT-CI-004",

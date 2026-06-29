@@ -88,7 +88,6 @@ Die optimierte TODO-Liste wurde gegen den Repo-Stand abgeglichen und einsortiert
 |---|---|---|
 | TASK-CTL-002 | Entscheidung abgeschlossen: GitHub Issue Forms, PR-Template und Release-Konfiguration werden aktuell nicht eingeführt, weil der Nutzen gegenüber kontextgenauen PR-Bodies nicht belegt ist. | Externe Beitragende ohne Projekteinblick werden relevant, PR-Bodies verlieren wiederholt Task-/Evidenzbezüge oder der Release-Prozess ist stabil genug für Release-Labels. |
 | DOMAIN-PG-003 | Edge-Cache-Limit-Performance: kein Lastproblem und kein Cutover-Blocker nachgewiesen (TODO C1) | Erst Messpunkt/Design mit Trade-offs, dann ggf. Umbau; kein spekulativer Performance-Umbau |
-| OPT-CI-003 | dtolnay/uv-Ref-Vereinheitlichung: niedrige Priorität, nicht cutover-relevant | Jederzeit als kleiner CI-Hygiene-PR möglich |
 | OPT-INF-002 | SHA-Pinning der Third-Party-Actions: erst nach Update-Automation sinnvoll (TODO C3) | Nach OPT-CI-004 (Dependency-Update-Automation/Policy) |
 
 ## Erledigte Tasks

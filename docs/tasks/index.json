@@ -1319,18 +1319,19 @@
       "id": "OPT-CI-003",
       "title": "Action-Refs vereinheitlichen (dtolnay/rust-toolchain + uv-Pin)",
       "area": "ci",
-      "status": "partial",
+      "status": "done",
       "priority": "low",
       "effort": "S",
       "risk": "low",
       "owner": "unknown",
       "evidence": [
-        ".github/workflows/python-tooling.yml"
+        "toolchain.versions.yml",
+        ".github/workflows/ci.yml",
+        ".github/workflows/python-tooling.yml",
+        ".github/workflows/api-smoke.yml",
+        ".github/workflows/security.yml"
       ],
-      "missing_evidence": [
-        "dtolnay/rust-toolchain weiterhin gemischt @stable/@v1",
-        "gepinnte uv-Version nicht erzwungen"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Keine gemischten dtolnay-rust-toolchain-Refs; Rust-Version weiterhin aus zentraler Quelle",
         "uv-Version ist zentral nachvollziehbar und in CI wirksam, ohne zweite Pinning-Logik"
@@ -1342,7 +1343,7 @@
           "docs/reports/optimierungsstatus.md"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-06-29"
     },
     {
       "id": "OPT-CI-004",

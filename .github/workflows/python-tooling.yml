@@ -11,6 +11,7 @@ name: python-tooling
       - "**/uv.lock"
       - ".github/workflows/python-tooling.yml"
       - ".python-version"
+      - "toolchain.versions.yml"
   push:
     branches: [main]
     paths:
@@ -20,6 +21,7 @@ name: python-tooling
       - "**/uv.lock"
       - ".github/workflows/python-tooling.yml"
       - ".python-version"
+      - "toolchain.versions.yml"
   workflow_dispatch: {}
 
 env:
@@ -44,8 +46,26 @@ jobs:
         with:
           python-version-file: '.python-version'
 
+      - name: Read uv version
+        id: uv-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f toolchain.versions.yml ]; then
+            echo "toolchain.versions.yml not found" >&2
+            exit 1
+          fi
+          UV_VERSION=$(grep '^uv:' toolchain.versions.yml | cut -d '"' -f2)
+          if [ -z "${UV_VERSION}" ]; then
+            echo "failed to parse uv version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'uv_version=%s\n' "${UV_VERSION}" >> "${GITHUB_OUTPUT}"
+
       # Official uv setup (adds `uv` to PATH)
       - uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ steps.uv-version.outputs.uv_version }}
 
       - name: Cache uv downloads
         uses: actions/cache@v4
@@ -56,7 +76,12 @@ jobs:
             uv-${{ runner.os }}-
 
       - name: Show uv version
-        run: uv --version
+        env:
+          UV_VERSION: ${{ steps.uv-version.outputs.uv_version }}
+        run: |
+          set -euo pipefail
+          uv --version
+          uv --version | grep -F "${UV_VERSION}"
 
       - name: Sync dependencies if present
         shell: bash
