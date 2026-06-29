@@ -121,16 +121,17 @@
       "id": "TASK-CTL-002",
       "title": "GitHub-native Arbeitsobjekte minimal evaluieren",
       "area": "governance",
-      "status": "open",
+      "status": "done",
       "priority": "low",
       "effort": "S",
       "risk": "low",
       "owner": "unknown",
-      "evidence": [],
-      "missing_evidence": [
-        "Issue Forms, PR-Template und Release-Konfiguration bewusst zurückgestellt: erhöhen Formular-Overhead ohne belegten Mehrwert gegenüber kontextgenauen PR-Bodies",
-        "Wiederaufnahme sinnvoll wenn: externe Beitragende ohne Projekteinblick aktiv werden oder Release-Prozess stabilisiert ist"
+      "evidence": [
+        "CONTRIBUTING.md",
+        "docs/tasks/board.md",
+        "docs/blueprints/doc-structure-task-control.md"
       ],
+      "missing_evidence": [],
       "acceptance": [
         "Entscheidung dokumentiert in CONTRIBUTING.md und board.md",
         "Kein Artefakt unter .github/ISSUE_TEMPLATE/ oder .github/pull_request_template.md ohne belegten Nutzen eingeführt"
@@ -142,7 +143,7 @@
           "docs/blueprints/doc-structure-task-control.md"
         ]
       },
-      "updated_at": "2026-05-28"
+      "updated_at": "2026-06-29"
     },
     {
       "id": "TASK-CTL-003",
