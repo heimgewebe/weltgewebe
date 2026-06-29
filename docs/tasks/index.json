@@ -497,7 +497,7 @@
       "id": "AGENT-SAFE-008",
       "title": "Minimalen Generated-Artifact-Kontrollvertrag einführen",
       "area": "governance",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "high",
@@ -513,8 +513,7 @@
         "docs/reference/generated-artifact-control.md"
       ],
       "missing_evidence": [
-        "PR-CI, Merge auf main und post-merge Verifikation stehen aus",
-        "Der Vollausbau auf alle docs/_generated-Artefakte bleibt PR 13"
+        "Full generated-artifact coverage remains a separate follow-up slice; this task closes the minimal control contract."
       ],
       "acceptance": [
         "Ein maschinenlesbares Manifest bindet die drei kritischen Kontrollpfade an Rolle, Kanonizität, Quellen und blockierende Checks",
@@ -532,7 +531,7 @@
           "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-06-27"
+      "updated_at": "2026-06-29"
     },
     {
       "id": "DOCMETA-FRESHNESS-001",
