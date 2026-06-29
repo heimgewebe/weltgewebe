@@ -235,7 +235,7 @@
     },
     {
       "id": "CLAIM-AGENT-SAFE-008",
-      "status": "proposed",
+      "status": "established",
       "subject": "AGENT-SAFE-008",
       "statement": "Kritische Dokumentationsartefakte sind manifestgebunden und blockierend auf Drift pruefbar.",
       "evidence": [
@@ -274,7 +274,7 @@
         "bash scripts/docmeta/generated-files-guard.sh"
       ],
       "owner": "unknown",
-      "updated": "2026-06-27"
+      "updated": "2026-06-29"
     }
   ]
 }
