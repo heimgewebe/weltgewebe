@@ -65,7 +65,7 @@ Die optimierte TODO-Liste wurde gegen den Repo-Stand abgeglichen und einsortiert
 | DOMAIN-PG-002 | infra | Single-Instance-Invariante oder Multi-Instance-Kohärenz entscheiden | done | high | `docs/reports/domain-postgres-instance-coherence-decision.md`, `docs/blueprints/domain-data-postgres-cutover.md`, `scripts/guard/domain-single-instance-guard.sh`, `scripts/tests/test_domain_single_instance_guard.sh`, `.github/workflows/ci.yml`, `scripts/guard/run.sh` | Option A entschieden: höchstens eine API-Instanz; statischer Guard erlaubt bei `services.api.scale` und `services.api.deploy.replicas` nur `0`/`1`, verbietet direkte `services.api.replicas`, prüft tokenbasierte Docker-Compose-CLI-Skalierung inklusive `--scale api=*`, `--scale=api=*` und `scale api=*`, und kommentarnormalisierte Caddy-Upstreamzeilen; kein Runtime- oder Cross-Instance-Kohärenz-Claim |
 | AUTH-PG-001 | auth | Step-up-E-Mail-Persistenz nach PostgreSQL | open | high | `apps/api/src/routes/auth.rs` (PUT /auth/me/email vorhanden); OPT-ARC-001-Non-Goal `step_up_email_persistence` | PostgreSQL-Write-Pfad + Restart-Stabilitäts-Proof; E-Mail-Unique-Regel bleibt gewahrt (409) |
 | AUTH-PG-002 | auth | WebAuthn-Credential-Persistenz / Passkey-Cutover | open | high | `apps/api/src/auth/passkeys.rs` (PasskeyStore In-Memory); OPT-ARC-001-Non-Goal `webauthn_credential_writeback` | PostgreSQL-Persistenzmodell + Restart-Proof (Register→Reload→Login); Public/Private-Trennung; menschliches Review (credentials/) |
-| CI-TOOL-001 | ci | Dev-Setup: Task-Runner-Dedup (Makefile/Justfile) + Node/pnpm engines | open | medium | `Makefile`, `Justfile` (beide direkt `docker compose ... up/down`), `apps/web/package.json` (engines vorhanden), Root-`package.json` (engines fehlt) | Eine Compose-Ebene führt, andere delegiert; engines konsistent ergänzen; kleiner risikoarmer PR |
+| CI-TOOL-001 | ci | Dev-Setup: Task-Runner-Dedup (Makefile/Justfile) + Node/pnpm engines | done | medium | `Makefile` führt Compose-up/down, `Justfile` delegiert an `make up/down`; Root- und Web-`package.json` deklarieren konsistente `engines`; `.node-version` und `.nvmrc` stehen auf `20.19.0`; JSON validiert | Abgeschlossen: keine Containerstarts nötig; Nachweis über Task-Index-Validator und JSON-Parse-Checks |
 | DOCS-CTL-001 | docs | Orphan-Dokumente einordnen (cost-report, DEPLOY-DNS-001B) | done | medium | `docs/reports/cost-report.md`, `docs/tasks/DEPLOY-DNS-001B.md` (beide im Orphan-Generator), PR #1240 | Fachliche Lifecycle-Einordnung statt kosmetischer Verlinkung; alte Deploy-/DNS-Aufgabe nicht reaktivieren |
 
 ## Blocker
@@ -82,7 +82,6 @@ Die optimierte TODO-Liste wurde gegen den Repo-Stand abgeglichen und einsortiert
 |---|---|---|
 | OPT-CON-001 | Schema-Constraints: `additionalProperties: false` alle 6 Schemas | `just contracts-domain-check` pass + kein permissives Nested-Object |
 | DB-PROOF-001 | Edge-Orphan-/Referenz-Audit (read-only, keine Migration) | Reproduzierbarer redigierter Bericht: valide/Orphan-Counts + Policy-Empfehlung (Option A FK vs. Option B Guard) |
-| CI-TOOL-001 | Dev-Setup: Makefile/Justfile-Dedup + Node/pnpm engines (kleiner Hygiene-PR) | Eine Compose-Ebene führt, andere delegiert; engines konsistent; JSON valide; keine Container-Starts nötig |
 
 ## Zurückgestellte / optionale Tasks
 
