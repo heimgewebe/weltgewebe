@@ -379,23 +379,23 @@
       "id": "OPT-CI-005",
       "area": "CI/CD",
       "title": "GitHub Actions Node-24 Runtime Readiness",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "risk": "medium",
       "effort": "medium",
       "evidence_status": "ci",
       "evidence": [
-        ".github/workflows/",
+        "docs/reports/github-actions-node24-readiness.md",
+        ".github/workflows/opt-arc-001-db-proof-matrix.yml",
         "scripts/ci/check_actions_node24_readiness.py",
-        "scripts/ci/tests/test_check_actions_node24_readiness.py"
+        "scripts/ci/tests/test_check_actions_node24_readiness.py",
+        ".github/workflows/"
       ],
       "missing_evidence": [
-        "PR-CI-Lauf unter erzwungener Node-24-Action-Runtime ausstehend",
-        "Verbleibende Node-20-Metadatenwarnungen müssen nach PR-CI für Stage B erfasst werden",
-        "Action-Ref-Modernisierung bleibt Stage B, falls Warnungen bestehen"
+        "Stage B bleibt separat: wiederverwendbare externe Workflows und verbleibende Node-20-Metadatenwarnungen der Actions bewerten."
       ],
-      "next_action": "CI-Lauf unter erzwungener Node-24-Action-Runtime prüfen und verbleibende Node-20-Metadatenwarnungen für Stage B erfassen.",
-      "updated_at": "2026-06-05"
+      "next_action": "Stage B separat planen: reusable workflows und verbleibende Node-20-Metadatenwarnungen bewerten.",
+      "updated_at": "2026-06-29"
     },
     {
       "id": "OPT-INF-002",
