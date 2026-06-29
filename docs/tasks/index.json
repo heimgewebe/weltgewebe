@@ -732,7 +732,7 @@
       "id": "OPT-CON-001",
       "title": "additionalProperties: false und String-Constraints in Domain-Schemas",
       "area": "ci",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "S",
       "risk": "medium",
@@ -744,11 +744,12 @@
         "contracts/domain/message.schema.json",
         "contracts/domain/node.schema.json",
         "contracts/domain/role.schema.json",
-        "scripts/contracts-domain-check.sh"
+        "contracts/domain/examples/message.example.json",
+        "contracts/domain/examples/role.example.json",
+        "scripts/contracts-domain-check.sh",
+        ".github/workflows/contracts-domain.yml"
       ],
-      "missing_evidence": [
-        "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "alle 6 Domain-Schemas schließen unkontrollierte Zusatzfelder; Top-Level additionalProperties ist false, bewusste Extension-Flächen sind wertseitig begrenzt",
         "String-Constraints (minLength, maxLength) konsistent gesetzt",
@@ -761,7 +762,7 @@
           "docs/reports/optimierungsstatus.md"
         ]
       },
-      "updated_at": "2026-05-29"
+      "updated_at": "2026-06-29"
     },
     {
       "id": "TASK-CTL-005",

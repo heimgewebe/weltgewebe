@@ -31,11 +31,11 @@
       "id": "OPT-CON-001",
       "area": "Contracts",
       "title": "additionalProperties: false + String-Constraints",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "risk": "medium",
       "effort": "low",
-      "evidence_status": "code",
+      "evidence_status": "ci",
       "evidence": [
         "contracts/domain/account.schema.json",
         "contracts/domain/conversation.schema.json",
@@ -43,13 +43,14 @@
         "contracts/domain/message.schema.json",
         "contracts/domain/node.schema.json",
         "contracts/domain/role.schema.json",
-        "scripts/contracts-domain-check.sh"
+        "contracts/domain/examples/message.example.json",
+        "contracts/domain/examples/role.example.json",
+        "scripts/contracts-domain-check.sh",
+        ".github/workflows/contracts-domain.yml"
       ],
-      "missing_evidence": [
-        "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
-      ],
-      "next_action": "CI-Lauf abwarten; bei grünem contracts-domain-check / Validate Domain Schemas als erledigt markieren",
-      "updated_at": "2026-05-29"
+      "missing_evidence": [],
+      "next_action": "keine; OPT-CON-002 ist durch denselben Schema-/Example-/Workflow-Nachweis konsolidiert",
+      "updated_at": "2026-06-29"
     },
     {
       "id": "OPT-DOC-001",
@@ -298,11 +299,11 @@
       "id": "OPT-CON-002",
       "area": "Contracts",
       "title": "maxLength + verbleibende additionalProperties: false",
-      "status": "partial",
+      "status": "done",
       "priority": "medium",
       "risk": "medium",
       "effort": "low",
-      "evidence_status": "code",
+      "evidence_status": "ci",
       "evidence": [
         "contracts/domain/account.schema.json",
         "contracts/domain/conversation.schema.json",
@@ -310,13 +311,14 @@
         "contracts/domain/message.schema.json",
         "contracts/domain/node.schema.json",
         "contracts/domain/role.schema.json",
-        "scripts/contracts-domain-check.sh"
+        "contracts/domain/examples/message.example.json",
+        "contracts/domain/examples/role.example.json",
+        "scripts/contracts-domain-check.sh",
+        ".github/workflows/contracts-domain.yml"
       ],
-      "missing_evidence": [
-        "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
-      ],
-      "next_action": "CI-Lauf abwarten; danach mit OPT-CON-001 konsolidieren oder als erledigt markieren",
-      "updated_at": "2026-05-29"
+      "missing_evidence": [],
+      "next_action": "keine; mit OPT-CON-001 konsolidiert",
+      "updated_at": "2026-06-29"
     },
     {
       "id": "OPT-CI-002",
