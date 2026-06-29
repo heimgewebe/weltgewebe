@@ -1216,7 +1216,7 @@
       "id": "CI-TOOL-001",
       "title": "Dev-Setup-Hygiene: Task-Runner-Dedup (Makefile/Justfile) und Node/pnpm engines",
       "area": "ci",
-      "status": "open",
+      "status": "done",
       "priority": "medium",
       "effort": "S",
       "risk": "low",
@@ -1224,14 +1224,12 @@
       "evidence": [
         "Makefile",
         "Justfile",
+        "package.json",
         "apps/web/package.json",
         ".node-version",
         ".nvmrc"
       ],
-      "missing_evidence": [
-        "Makefile und Justfile fuehren up/down beide direkt 'docker compose ... --profile dev' aus (Duplikat ohne Delegation)",
-        "Root package.json hat kein engines-Feld (apps/web/package.json hat eines: node ^20.19.0 || ^22.13.0 || >=24)"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Nur eine Ebene enthaelt echte Compose-up/down-Logik; die andere delegiert",
         "Node-/pnpm-Versionen sind konsistent sichtbar (engines), ohne ein zweites Versionssystem zu erzeugen; JSON bleibt valide",
@@ -1244,7 +1242,7 @@
           "docs/techstack.md"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-06-29"
     },
     {
       "id": "DOCS-CTL-001",
