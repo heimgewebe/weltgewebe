@@ -133,6 +133,8 @@ Issue Forms, PR-Template und Release-Konfiguration werden aktuell nicht eingefü
 
 Issue Forms können später separat eingeführt werden, wenn externe Beitragende ohne Projekteinblick aktiv werden. Release-Konfiguration kann separat betrachtet werden, wenn der Release-Prozess stabilisiert ist.
 
+Diese Entscheidung schließt TASK-CTL-002: GitHub-native Arbeitsobjekte bleiben vorerst bewusste Nicht-Implementierung. Neue Dateien unter `.github/ISSUE_TEMPLATE/` oder `.github/pull_request_template.md` brauchen künftig einen belegten Nutzen und einen eigenen PR-Schnitt.
+
 Noch offen für Folge-PRs:
 
 - **Task-Index-Generator und CI-Guard** (TASK-CTL-003) — Drift-Check (`generate_task_index.py --check`) und `.github/workflows/task-index.yml` eingeführt; CI-Lauf-Nachweis steht noch aus
