@@ -55,7 +55,7 @@ jobs:
             echo "toolchain.versions.yml not found" >&2
             exit 1
           fi
-          UV_VERSION="$(python3 -c 'import yaml; print(yaml.safe_load(open("toolchain.versions.yml"))["uv"])')"
+          UV_VERSION=$(sed -nE 's/^uv: "([^"]+)"/1/p' toolchain.versions.yml)
           if [ -z "${UV_VERSION}" ]; then
             echo "failed to parse uv version from toolchain.versions.yml" >&2
             exit 1
