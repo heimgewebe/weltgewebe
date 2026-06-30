@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -22,6 +23,7 @@ VALID_MODES = ("report", "warn", "strict")
 VALID_LIFECYCLE_STATES = frozenset(("active", "deferred", "superseded", "archived"))
 VALID_LIFECYCLES = frozenset(("audit", "decision", "decision-prep", "generated", "planning", "proof"))
 ISO_DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+OPT_STATUS_ID_RE = re.compile(r"\|\s*(OPT-[A-Z0-9-]+)\s*\|")
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,32 @@ def _superseded_by_target_exists(value: str, root: Path) -> bool:
     if target.is_absolute() or ".." in target.parts:
         return False
     return (root / target).is_file()
+
+
+def _registered_owner_tasks(root: Path) -> set[str] | None:
+    registered: set[str] = set()
+    sources_found = False
+
+    task_index = root / "docs" / "tasks" / "index.json"
+    if task_index.is_file():
+        sources_found = True
+        try:
+            data = json.loads(task_index.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            data = {}
+        for item in data.get("tasks", []):
+            task_id = _string_value(item.get("id") if isinstance(item, dict) else None)
+            if task_id:
+                registered.add(task_id)
+
+    opt_status = root / "docs" / "reports" / "optimierungsstatus.md"
+    if opt_status.is_file():
+        sources_found = True
+        registered.update(OPT_STATUS_ID_RE.findall(opt_status.read_text(encoding="utf-8")))
+
+    if not sources_found:
+        return None
+    return registered
 
 
 def _validate_report(path: Path, frontmatter: dict[str, object], root: Path) -> list[Finding]:
@@ -115,6 +143,21 @@ def _validate_report(path: Path, frontmatter: dict[str, object], root: Path) -> 
             message="review_after must be a valid ISO date in YYYY-MM-DD format",
         ))
 
+    owner_task = _string_value(frontmatter.get("owner_task")).strip()
+    registered_owner_tasks = _registered_owner_tasks(root)
+    if (
+        owner_task
+        and registered_owner_tasks is not None
+        and owner_task not in registered_owner_tasks
+    ):
+        findings.append(Finding(
+            path=rel_path,
+            code="invalid_owner_task",
+            severity="warn",
+            field="owner_task",
+            message="owner_task must resolve in docs/tasks/index.json or docs/reports/optimierungsstatus.md",
+        ))
+
     superseded_by = _string_value(frontmatter.get("superseded_by")).strip()
     if superseded_by:
         if superseded_by == rel_path:
@@ -158,6 +201,7 @@ def _build_summary(
         "invalid_lifecycle_state": 0,
         "invalid_review_after": 0,
         "invalid_superseded_by": 0,
+        "invalid_owner_task": 0,
     }
     for f in findings:
         if f.code in summary:
@@ -189,6 +233,7 @@ def _render_report(findings: list[Finding], summary: dict[str, int], mode: str) 
         f"| invalid_lifecycle_state | {summary['invalid_lifecycle_state']} |",
         f"| invalid_review_after | {summary['invalid_review_after']} |",
         f"| invalid_superseded_by | {summary['invalid_superseded_by']} |",
+        f"| invalid_owner_task | {summary['invalid_owner_task']} |",
         "",
         "## Findings",
         "",

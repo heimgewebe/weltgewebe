@@ -241,7 +241,7 @@ Weitere Registrierungsquellen benötigen zwingend:
 
 ### Enforcement-Grenze
 
-Dieser Schritt entscheidet nur die Policy. Lifecycle-Enums, `review_after` als ISO-Datum und einfache `superseded_by`-Zielpfade werden technisch geprüft. Owner-Existenzprüfung, Owner-Statusprüfung, Markdown–JSON-Paritätsguard, neue Lifecycle-States und Strict-Aktivierung sind nicht implementiert.
+Dieser Schritt entscheidet nur die Policy. Lifecycle-Enums, `review_after` als ISO-Datum, technische `owner_task`-Existenz und einfache `superseded_by`-Zielpfade werden technisch geprüft. Owner-Statusprüfung, Markdown–JSON-Paritätsguard, neue Lifecycle-States und Strict-Aktivierung sind nicht implementiert.
 
 ### Gültige und ungültige Owner
 
@@ -392,6 +392,6 @@ zugehörigen Task begründet werden.
 - eigene Lifecycle-Policy für `docs/proofs/**`,
 - Review-Logik für generierte Reports,
 - technische Owner-Auflösung,
-- vollständige OPT-Markdown–JSON-Parität,
+- vollständige OPT-Markdown–JSON-Parität und Owner-Statusprüfung,
 - Enforcement-Zeitpunkt,
 - spätere Statuskompatibilität.
