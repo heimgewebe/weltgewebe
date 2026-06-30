@@ -51,7 +51,6 @@ werden aber nicht als Reports validiert.
 ## Aktuelle Nicht-Ziele
 
 - kein Massen-Backfill bestehender Reports,
-- kein global strict,
 - keine Erweiterung des globalen DocMeta-Contracts,
 - keine automatische Archivierung,
 - keine Löschung,
@@ -76,7 +75,7 @@ werden aber nicht als Reports validiert.
 ### Aktueller Rollout-Stand
 
 - vollständige Dokument-Reconciliation,
-- CI-Warnmodus,
+- CI global strict,
 - deterministische Erzeugung beider Lifecycle-Flächen,
 - Task-Control-Registrierung.
 
@@ -84,7 +83,6 @@ werden aber nicht als Reports validiert.
 
 - restliche Reportklassifikation,
 - semantische Validatorhärtung,
-- global strict,
 - Archivierungsprozess,
 - separate Löschprüfung.
 
@@ -93,14 +91,14 @@ werden aber nicht als Reports validiert.
 - Lifecycle-Felder sind als report-spezifisches Modell implementiert.
 - Der globale DocMeta-Contract bleibt unverändert.
 - Inventory und Validator lesen `lifecycle_state`.
-- Der CI-Warnmodus ist aktiv.
+- Der CI-Strict-Modus ist aktiv.
 - Technische Validatorfehler wie ungefangene Import- oder Laufzeitfehler
   blockieren.
-- Lifecycle-Findings bleiben im Warnmodus nicht blockierend.
+- Lifecycle-Findings sind im globalen Strict-Modus blockierend.
 - Die vollständige blockierende Erkennung fehlenden oder nicht parsebaren
   Report-Frontmatters ist noch nicht umgesetzt.
 - Lifecycle-Enums, `review_after` als ISO-Datum und einfache `superseded_by`-Zielpfade werden technisch geprüft.
-- Task-Existenz, Relationskonsistenz und Strict-Ratchets bleiben nachgelagert.
+- Relationskonsistenz bleibt nachgelagert.
 
 ## Begriffe
 
@@ -237,7 +235,7 @@ Weitere Registrierungsquellen benötigen zwingend:
 
 ### Enforcement-Grenze
 
-Dieser Schritt entscheidet nur die Policy. Lifecycle-Enums, `review_after` als ISO-Datum, technische `owner_task`-Existenz und einfache `superseded_by`-Zielpfade werden technisch geprüft. Owner-Statuskompatibilität wird technisch geprüft. Neue Lifecycle-States und globale Strict-Aktivierung sind nicht implementiert.
+Dieser Schritt entscheidet nur die Policy. Lifecycle-Enums, `review_after` als ISO-Datum, technische `owner_task`-Existenz und einfache `superseded_by`-Zielpfade werden technisch geprüft. Owner-Statuskompatibilität wird technisch geprüft. Neue Lifecycle-States sind nicht implementiert; globale Strict-Aktivierung ist implementiert.
 
 ### Gültige und ungültige Owner
 
@@ -337,7 +335,7 @@ Löschen ist nur zulässig, wenn:
 2. evidenzbasierte Resttriage,
 3. kleine Backfill-Slices,
 4. semantische Validatorhärtung,
-5. global strict erst bei bereinigtem Bestand,
+5. global strict bei bereinigtem Bestand,
 6. Archivierung nach Policy- und Referenzprüfung,
 7. Löschung nur separat und nach vollständigem Referenzcheck.
 

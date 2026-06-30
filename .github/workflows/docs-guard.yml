@@ -65,8 +65,8 @@ jobs:
         with:
           python-version-file: '.python-version'
 
-      - name: Report lifecycle warnings
-        run: python3 -m scripts.docmeta.validate_report_lifecycle --mode warn
+      - name: Report lifecycle global strict
+        run: python3 -m scripts.docmeta.validate_report_lifecycle --mode strict
 
       - name: Optimierungsstatus Markdown JSON parity
         run: python3 -m scripts.docmeta.validate_optimierungsstatus_parity

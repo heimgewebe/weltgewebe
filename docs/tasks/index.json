@@ -1401,7 +1401,7 @@
       "id": "DOCMETA-REPORT-LIFECYCLE-001",
       "title": "Report-Lifecycle-Rollout reconciliieren und Restbestand ratcheten",
       "area": "docs",
-      "status": "partial",
+      "status": "done",
       "priority": "medium",
       "effort": "M",
       "risk": "medium",
@@ -1428,24 +1428,18 @@
         "docs/reports/optimierungsstatus.md",
         "docs/reports/optimierungsstatus.json"
       ],
-      "missing_evidence": [
-        "Fehlendes oder nicht parsebares Report-Frontmatter wird noch nicht vollständig blockierend erkannt",
-        "Global strict bleibt bis zur Bereinigung des Bestands deaktiviert"
-      ],
+      "missing_evidence": [],
       "acceptance": [
-        "Policy und Contract-Alignment beschreiben den tatsächlich implementierten Rollout-Stand ohne überholte Gegenwartsclaims",
+        "Policy und Contract-Alignment beschreiben den implementierten Rollout-Stand ohne überholte Gegenwartsclaims",
         "owner_task- und review_after-Semantik sind als report-spezifische Prozessregel dokumentiert",
-        "Der Lifecycle-Validator läuft für relevante Änderungen im CI-Warnmodus; Lifecycle-Findings bleiben nicht blockierend, technische Validatorfehler bleiben blockierend",
+        "Report-Lifecycle-Validator läuft in Docs Guard global blockierend im strict-Modus",
         "Lifecycle-Overview und Lifecycle-Inventory werden deterministisch durch ihre Generatoren erzeugt",
-        "Alle verbleibenden Reports erhalten in späteren kleinen Slices eine evidenzbasierte Klassifikation oder eine explizit begründete Leerstelle",
-        "alle acht Restreports besitzen gültige Lifecycle-Metadaten",
-        "jede gesetzte owner_task-ID ist in einer normativen Quelle auflösbar (keine Platzhalter-Owner)",
-        "OPT-Markdown und OPT-JSON besitzen vollständige getestete Parität oder der spätere Resolver liest die kanonische Quelle direkt",
-        "Lifecycle-Enums, review_after als ISO-Datum und Supersession sind geprüft",
-        "fehlendes oder defektes Frontmatter wird angemessen blockiert",
-        "Archivpfade sind entschieden",
-        "changed-only strict ist aktiviert",
-        "global strict ist aktiviert oder durch separate dokumentierte Policy-Entscheidung verworfen"
+        "alle ursprünglich unklassifizierten Reports besitzen gültige Lifecycle-Metadaten",
+        "jede gesetzte owner_task-ID ist in einer normativen Quelle auflösbar und statuskompatibel",
+        "OPT-Markdown und OPT-JSON besitzen getestete Parität für die stabile Statusmatrix-Oberfläche",
+        "Lifecycle-Enums, review_after als ISO-Datum, Supersession, Frontmatter und Owner-Status werden geprüft",
+        "Archivpfade werden rekursiv erfasst",
+        "changed-only strict und global strict sind aktiviert"
       ],
       "links": {
         "issues": [],
@@ -1461,7 +1455,7 @@
           "docs/process/report-lifecycle-contract-alignment.md"
         ]
       },
-      "updated_at": "2026-06-29"
+      "updated_at": "2026-06-30"
     }
   ]
 }
