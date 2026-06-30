@@ -16,8 +16,9 @@ permissions:
 
 jobs:
   metrics:
-    uses: heimgewebe/metarepo/.github/workflows/wgx-metrics.yml@9450e1dc7d1e75bb349dc14278e2f3ec691e5f0f
+    uses: heimgewebe/metarepo/.github/workflows/wgx-metrics.yml@12d45ad97eb40fe6e5dc97546ead71f66acab6ca
     with:
-      metarepo_ref: "9450e1dc7d1e75bb349dc14278e2f3ec691e5f0f"
+      metarepo_ref: "12d45ad97eb40fe6e5dc97546ead71f66acab6ca"
     secrets:
       post_url: ${{ secrets.HAUSKI_METRICS_URL }}
+      post_token: ${{ secrets.HAUSKI_METRICS_TOKEN }}
