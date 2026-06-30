@@ -224,8 +224,6 @@ Eine spätere blockierende Owner-Prüfung darf erst aktiviert werden, wenn:
 - Schemaort für report-spezifische Lifecycle-Felder
 - zulässige Werte für `lifecycle`
 - zulässige Werte für `lifecycle_state`
-- technische `owner_task`-Existenzpruefung
-- technische `owner_task`-Existenzpruefung
 - Supersession-Relationspruefung
 - Changed-only strict
 - Global strict

@@ -1426,7 +1426,7 @@
       ],
       "missing_evidence": [
         "Fehlendes oder nicht parsebares Report-Frontmatter wird noch nicht vollständig blockierend erkannt",
-        "Die owner_task-Semantik und die normativen Registrierungsquellen sind entschieden und gegen den bestehenden Bestand kompatibilitätsgeprüft; vollständige OPT-Markdown–JSON-Parität und technische Existenzprüfung bleiben nach den Backfill-Slices offen.",
+        "Die owner_task-Semantik und die normativen Registrierungsquellen sind entschieden und gegen den bestehenden Bestand kompatibilitätsgeprüft; vollständige OPT-Markdown–JSON-Parität und Owner-Statusprüfung bleiben offen.",
         "Physische Archivpfade unter docs/reports/archive/** werden von Validator und Inventory noch nicht rekursiv erfasst",
         "Changed-only strict ist noch nicht umgesetzt",
         "Global strict bleibt bis zur Bereinigung des Bestands deaktiviert"

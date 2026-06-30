@@ -391,6 +391,75 @@ status: active
         findings = _validate_report(path, fm, self.tmp_root)
         self.assertNotIn("invalid_superseded_by", [f.code for f in findings])
 
+    def test_unknown_owner_task_is_reported_when_registry_exists(self) -> None:
+        task_index = self.tmp_root / "docs" / "tasks" / "index.json"
+        task_index.parent.mkdir(parents=True, exist_ok=True)
+        task_index.write_text('{"tasks":[{"id":"OPT-ARC-001"}]}', encoding="utf-8")
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "active",
+            "lifecycle": "audit",
+            "owner_task": "MISSING-TASK",
+            "review_after": "2026-07-13",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertIn("invalid_owner_task", [f.code for f in findings])
+
+    def test_owner_task_resolves_from_task_index(self) -> None:
+        task_index = self.tmp_root / "docs" / "tasks" / "index.json"
+        task_index.parent.mkdir(parents=True, exist_ok=True)
+        task_index.write_text('{"tasks":[{"id":"DOCMETA-REPORT-LIFECYCLE-001"}]}', encoding="utf-8")
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "active",
+            "lifecycle": "audit",
+            "owner_task": "DOCMETA-REPORT-LIFECYCLE-001",
+            "review_after": "2026-07-13",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertNotIn("invalid_owner_task", [f.code for f in findings])
+
+    def test_owner_task_resolves_from_optimization_status_markdown(self) -> None:
+        status = self.tmp_root / "docs" / "reports" / "optimierungsstatus.md"
+        status.parent.mkdir(parents=True, exist_ok=True)
+        status.write_text("| ID | Titel |\n| --- | --- |\n| OPT-API-002 | Auth |\n", encoding="utf-8")
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "active",
+            "lifecycle": "audit",
+            "owner_task": "OPT-API-002",
+            "review_after": "2026-07-13",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertNotIn("invalid_owner_task", [f.code for f in findings])
+
+    def test_owner_task_check_is_skipped_without_registry_sources(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "active",
+            "lifecycle": "audit",
+            "owner_task": "FREEFORM-OWNER",
+            "review_after": "2026-07-13",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertNotIn("invalid_owner_task", [f.code for f in findings])
+
     def test_render_output_contains_expected_structure(self) -> None:
         write_report(
             self.tmp_root,
@@ -415,6 +484,7 @@ status: active
         self.assertIn("| invalid_lifecycle |", rendered)
         self.assertIn("| invalid_review_after |", rendered)
         self.assertIn("| invalid_superseded_by |", rendered)
+        self.assertIn("| invalid_owner_task |", rendered)
         self.assertIn("| Path | Severity | Code | Field | Message |", rendered)
 
     def test_findings_are_deterministically_sorted_by_path_and_code(self) -> None:
