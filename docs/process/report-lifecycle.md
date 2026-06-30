@@ -205,6 +205,20 @@ Die Datei `docs/reports/optimierungsstatus.json` ist ein maschinenlesbarer Zwill
 
 Ein erledigter oder geschlossener Task (Status `done`) darf weiterhin Owner eines historischen Reports bleiben. Die Auflösbarkeit der ID ist von ihrem aktuellen Status zu trennen. Eine spätere Prüfung der Statuskompatibilität zwischen Report und Owner ist nicht Teil dieses Richtlinienstandes.
 
+### Legacy-Backfill-Ownership
+
+Wenn ein historischer Report keinen registrierten fachlichen Task besitzt und keine
+normative Quelle eine bessere Owner-ID auflöst, darf `DOCMETA-REPORT-LIFECYCLE-001`
+als **Lifecycle-Pflegeowner** gesetzt werden. Diese Fallback-Ownership bedeutet
+nur: Der Report wird durch den Report-Lifecycle-Rollout klassifiziert und künftig
+wieder auffindbar gemacht. Sie bedeutet nicht, dass der Lifecycle-Task die
+fachlichen Claims des Reports bestätigt, aktualisiert oder als Produkt-Roadmap
+übernimmt.
+
+Diese Regel ist nur für Legacy-Backfill-Slices zulässig. Neue Reports sollen
+weiterhin eine fachliche, registrierte Owner-ID tragen oder die Leerstelle
+explizit sichtbar lassen.
+
 ### Ungültige Platzhalter und unregistrierte Kontrollpunkte
 
 Nicht als aufgelöst gelten:

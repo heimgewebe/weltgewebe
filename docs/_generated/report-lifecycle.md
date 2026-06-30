@@ -19,27 +19,27 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | files_scanned | 31 |
 | reports_checked | 27 |
 | reports_ignored_non_report | 4 |
-| reports_with_lifecycle_state | 24 |
-| reports_missing_lifecycle_state | 3 |
-| findings_total | 9 |
+| reports_with_lifecycle_state | 26 |
+| reports_missing_lifecycle_state | 1 |
+| findings_total | 3 |
 
 ## Lifecycle State Summary
 
 | lifecycle_state | Count |
 | --- | ---: |
-| active | 15 |
+| active | 17 |
 | deferred | 0 |
 | superseded | 5 |
 | archived | 4 |
-| missing | 3 |
+| missing | 1 |
 
 ## Finding Summary
 
 | Code | Count |
 | --- | ---: |
-| missing_lifecycle | 3 |
-| missing_lifecycle_state | 3 |
-| missing_review_after | 3 |
+| missing_lifecycle | 1 |
+| missing_lifecycle_state | 1 |
+| missing_review_after | 1 |
 
 ## Active Reports
 
@@ -59,6 +59,8 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/domain-read-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-runtime-data-source-reconciliation.md | active | audit | DB-PROOF-001 | 2026-07-18 |  |
 | docs/reports/github-actions-node24-readiness.md | active | audit | OPT-CI-005 | 2026-09-29 |  |
+| docs/reports/map-architekturkritik.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
+| docs/reports/map-basemap-proof-gap-reconciliation.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
 | docs/reports/proof-matrix-generalization-decision.md | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  |
 
 ## Deferred Reports
@@ -90,16 +92,12 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
-| docs/reports/map-architekturkritik.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
-| docs/reports/map-basemap-proof-gap-reconciliation.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/optimierungsbericht.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 
 ## Reports With Findings
 
 | Report | lifecycle_state | status | findings |
 | --- | --- | --- | --- |
-| docs/reports/map-architekturkritik.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
-| docs/reports/map-basemap-proof-gap-reconciliation.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/optimierungsbericht.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 
 ## Reports With Missing Currently-Enforced Fields
@@ -108,8 +106,6 @@ Fields required by the currently implemented validator rules that are absent, in
 
 | Report | status | lifecycle_state | Missing currently-enforced fields |
 | --- | --- | --- | --- |
-| docs/reports/map-architekturkritik.md | active |  | lifecycle_state, lifecycle, review_after |
-| docs/reports/map-basemap-proof-gap-reconciliation.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/optimierungsbericht.md | active |  | lifecycle_state, lifecycle, review_after |
 
 ## Non-Report Files Under docs/reports

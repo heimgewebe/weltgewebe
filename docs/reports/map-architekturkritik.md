@@ -3,6 +3,10 @@ id: map-architekturkritik
 title: Architekturkritik Map-Implementierung
 doc_type: report
 status: active
+lifecycle_state: active
+lifecycle: audit
+owner_task: DOCMETA-REPORT-LIFECYCLE-001
+review_after: 2026-09-29
 summary: Strukturelle Architekturkritik der aktuellen Kartenroute auf Basis des tatsaechlichen Repo-Stands.
 relations:
   - type: relates_to

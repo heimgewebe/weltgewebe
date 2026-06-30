@@ -3,6 +3,10 @@ id: map-basemap-proof-gap-reconciliation
 title: MAP-PROOF-001 — Basemap Proof Gap Reconciliation
 doc_type: report
 status: active
+lifecycle_state: active
+lifecycle: audit
+owner_task: DOCMETA-REPORT-LIFECYCLE-001
+review_after: 2026-09-29
 summary: Diagnose-/Reconciliation-Report, der den belegbaren Beweisstand der Basemap-Runtime (statische Config, gemockter Client, Caddy-Range, PMTiles-Content, Browser-/PMTiles-Init, visuelle Artefakte, Produktions-Caddy) gegen verifizierte CI-Evidenz abgleicht und den naechsten Implementierungs-PR ableitet.
 relations:
   - type: relates_to
