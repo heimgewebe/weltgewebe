@@ -46,6 +46,10 @@ def _load_frontmatter(path: Path) -> dict[str, object]:
     return fm
 
 
+def _has_parseable_frontmatter(path: Path) -> bool:
+    return parse_frontmatter(str(path)) is not None
+
+
 def _iter_report_paths(root: Path) -> list[Path]:
     reports_dir = root / "docs" / "reports"
     if not reports_dir.exists():
@@ -326,6 +330,7 @@ def _build_summary(
         "missing_review_after": 0,
         "missing_superseded_by": 0,
         "missing_lifecycle_state": 0,
+        "missing_frontmatter": 0,
         "invalid_lifecycle": 0,
         "invalid_lifecycle_state": 0,
         "invalid_review_after": 0,
@@ -359,6 +364,7 @@ def _render_report(findings: list[Finding], summary: dict[str, int], mode: str) 
         f"| missing_review_after | {summary['missing_review_after']} |",
         f"| missing_superseded_by | {summary['missing_superseded_by']} |",
         f"| missing_lifecycle_state | {summary['missing_lifecycle_state']} |",
+        f"| missing_frontmatter | {summary['missing_frontmatter']} |",
         f"| invalid_lifecycle | {summary['invalid_lifecycle']} |",
         f"| invalid_lifecycle_state | {summary['invalid_lifecycle_state']} |",
         f"| invalid_review_after | {summary['invalid_review_after']} |",
@@ -426,6 +432,19 @@ def run(root: Path, mode: str, changed_from: str | None = None, changed_to: str 
             reports_checked += 1
         else:
             reports_ignored_non_report += 1
+        if not _has_parseable_frontmatter(p):
+            try:
+                rel_path = p.relative_to(root).as_posix()
+            except ValueError:
+                rel_path = str(p)
+            all_findings.append(Finding(
+                path=rel_path,
+                code="missing_frontmatter",
+                severity="warn",
+                field=None,
+                message="docs/reports markdown files must have parseable frontmatter",
+            ))
+            continue
         findings = _validate_report(p, fm, root)
         all_findings.extend(findings)
 

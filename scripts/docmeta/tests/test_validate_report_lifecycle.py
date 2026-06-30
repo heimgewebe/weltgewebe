@@ -565,6 +565,7 @@ status: active
         self.assertIn("| reports_ignored_non_report |", rendered)
         self.assertIn("| findings_total |", rendered)
         self.assertIn("| missing_lifecycle_state |", rendered)
+        self.assertIn("| missing_frontmatter |", rendered)
         self.assertIn("| invalid_lifecycle |", rendered)
         self.assertIn("| invalid_review_after |", rendered)
         self.assertIn("| invalid_superseded_by |", rendered)
@@ -776,6 +777,17 @@ status: active
         self.assertEqual(exit_code, 1)
         self.assertIn("docs/reports/changed-invalid.md", rendered)
         self.assertIn("missing_lifecycle_state", rendered)
+
+    def test_absent_report_metadata_is_reported(self) -> None:
+        path = self.tmp_root / "docs" / "reports" / "missing.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# Missing metadata\n", encoding="utf-8")
+
+        rendered, exit_code = run(self.tmp_root, "strict")
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("missing_frontmatter", rendered)
+        self.assertIn("docs/reports/missing.md", rendered)
 
     def test_blank_frontmatter_values_are_missing(self) -> None:
         write_report(

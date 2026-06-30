@@ -27,8 +27,8 @@ relations:
 - Entscheidung ist implementiert,
 - report-spezifische Felder werden verwendet,
 - globaler Contract bleibt unverändert,
-- Warnmodus ist CI-aktiv,
-- Strict sowie Owner- und Relation-Pruefungen bleiben offen.
+- global strict ist CI-aktiv,
+- Relation-Pruefungen bleiben offen.
 
 ## Ausgangslage
 
@@ -55,7 +55,6 @@ relations:
 
 - kein globaler Contract-Umbau,
 - kein Massen-Backfill,
-- kein Strict-Enforcement,
 - keine Archivierung oder Löschung,
 - keine automatische Owner- oder Reviewdatum-Ableitung.
 
@@ -151,12 +150,11 @@ Dabei gilt:
 - Der Validator existiert.
 - Modi `report`, `warn` und `strict` existieren.
 - Pilot und Teil-Backfills sind erfolgt.
-- Der Warnmodus ist im Docs Guard aktiv.
-- Lifecycle-Findings bleiben im Warnmodus nicht blockierend.
+- Global strict ist im Docs Guard aktiv.
+- Lifecycle-Findings sind im globalen Strict-Modus blockierend.
 - Technische Fehler des Lifecycle-Validators bleiben im blockierenden
   Validierungsjob blockierend.
 - Die Lifecycle-Generatoren laufen im nicht blockierenden Diagnosejob.
-- Kein Strict-Blocking.
 - Validator und Inventory erfassen derzeit nur direkte Markdown-Dateien unter
   `docs/reports/`; rekursive Archivpfade bleiben Folgearbeit.
 
@@ -206,7 +204,6 @@ Result: 5 unique IDs across 16 report usages; 0 unresolved IDs.
 - triage
 - small backfill slices
 - semantic hardening
-- global strict
 
 ### Enforcement-Vorbedingungen
 
