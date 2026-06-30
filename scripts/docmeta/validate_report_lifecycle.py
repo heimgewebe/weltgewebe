@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 from dataclasses import dataclass
 from pathlib import Path
+import re
 import sys
 
 if __package__ in {None, ""}:
@@ -17,6 +19,9 @@ from scripts.docmeta.report_lifecycle_requirements import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALID_MODES = ("report", "warn", "strict")
+VALID_LIFECYCLE_STATES = frozenset(("active", "deferred", "superseded", "archived"))
+VALID_LIFECYCLES = frozenset(("audit", "decision", "decision-prep", "generated", "planning", "proof"))
+ISO_DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 
 
 @dataclass(frozen=True)
@@ -42,13 +47,30 @@ def _iter_report_paths(root: Path) -> list[Path]:
     return sorted([p for p in reports_dir.glob("*.md") if p.is_file()])
 
 
+def _invalid_review_after(value: str) -> bool:
+    if not ISO_DATE_RE.match(value):
+        return True
+    try:
+        dt.date.fromisoformat(value)
+    except ValueError:
+        return True
+    return False
+
+
+def _superseded_by_target_exists(value: str, root: Path) -> bool:
+    target = Path(value)
+    if target.is_absolute() or ".." in target.parts:
+        return False
+    return (root / target).is_file()
+
+
 def _validate_report(path: Path, frontmatter: dict[str, object], root: Path) -> list[Finding]:
     try:
         rel_path = path.relative_to(root).as_posix()
     except ValueError:
         rel_path = str(path)
 
-    return [
+    findings = [
         Finding(
             path=rel_path,
             code=requirement.code,
@@ -58,6 +80,61 @@ def _validate_report(path: Path, frontmatter: dict[str, object], root: Path) -> 
         )
         for requirement in missing_required_report_field_rules(frontmatter)
     ]
+
+    doc_type = _string_value(frontmatter.get("doc_type")).strip().lower()
+    if doc_type != "report":
+        return findings
+
+    lifecycle_state = _string_value(frontmatter.get("lifecycle_state")).strip().lower()
+    if lifecycle_state and lifecycle_state not in VALID_LIFECYCLE_STATES:
+        findings.append(Finding(
+            path=rel_path,
+            code="invalid_lifecycle_state",
+            severity="warn",
+            field="lifecycle_state",
+            message="lifecycle_state must be one of: active, archived, deferred, superseded",
+        ))
+
+    lifecycle = _string_value(frontmatter.get("lifecycle")).strip().lower()
+    if lifecycle and lifecycle not in VALID_LIFECYCLES:
+        findings.append(Finding(
+            path=rel_path,
+            code="invalid_lifecycle",
+            severity="warn",
+            field="lifecycle",
+            message="lifecycle must be one of: audit, decision, decision-prep, generated, planning, proof",
+        ))
+
+    review_after = _string_value(frontmatter.get("review_after")).strip()
+    if review_after and _invalid_review_after(review_after):
+        findings.append(Finding(
+            path=rel_path,
+            code="invalid_review_after",
+            severity="warn",
+            field="review_after",
+            message="review_after must be a valid ISO date in YYYY-MM-DD format",
+        ))
+
+    superseded_by = _string_value(frontmatter.get("superseded_by")).strip()
+    if superseded_by:
+        if superseded_by == rel_path:
+            findings.append(Finding(
+                path=rel_path,
+                code="invalid_superseded_by",
+                severity="warn",
+                field="superseded_by",
+                message="superseded_by must not point to the report itself",
+            ))
+        elif not _superseded_by_target_exists(superseded_by, root):
+            findings.append(Finding(
+                path=rel_path,
+                code="invalid_superseded_by",
+                severity="warn",
+                field="superseded_by",
+                message="superseded_by must point to an existing repository file",
+            ))
+
+    return findings
 
 
 def _build_summary(
@@ -77,6 +154,10 @@ def _build_summary(
         "missing_review_after": 0,
         "missing_superseded_by": 0,
         "missing_lifecycle_state": 0,
+        "invalid_lifecycle": 0,
+        "invalid_lifecycle_state": 0,
+        "invalid_review_after": 0,
+        "invalid_superseded_by": 0,
     }
     for f in findings:
         if f.code in summary:
@@ -104,6 +185,10 @@ def _render_report(findings: list[Finding], summary: dict[str, int], mode: str) 
         f"| missing_review_after | {summary['missing_review_after']} |",
         f"| missing_superseded_by | {summary['missing_superseded_by']} |",
         f"| missing_lifecycle_state | {summary['missing_lifecycle_state']} |",
+        f"| invalid_lifecycle | {summary['invalid_lifecycle']} |",
+        f"| invalid_lifecycle_state | {summary['invalid_lifecycle_state']} |",
+        f"| invalid_review_after | {summary['invalid_review_after']} |",
+        f"| invalid_superseded_by | {summary['invalid_superseded_by']} |",
         "",
         "## Findings",
         "",

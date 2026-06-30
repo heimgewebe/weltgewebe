@@ -285,6 +285,112 @@ status: active
         findings = _validate_report(path, fm, self.tmp_root)
         self.assertEqual(findings, [])
 
+    def test_invalid_lifecycle_state_is_reported(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "current",
+            "lifecycle": "audit",
+            "owner_task": "OPT-ARC-001",
+            "review_after": "2026-07-13",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertIn("invalid_lifecycle_state", [f.code for f in findings])
+
+    def test_invalid_lifecycle_is_reported(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "active",
+            "lifecycle": "status",
+            "owner_task": "OPT-ARC-001",
+            "review_after": "2026-07-13",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertIn("invalid_lifecycle", [f.code for f in findings])
+
+    def test_invalid_review_after_format_is_reported(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "active",
+            "lifecycle": "audit",
+            "owner_task": "OPT-ARC-001",
+            "review_after": "20260713",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertIn("invalid_review_after", [f.code for f in findings])
+
+    def test_invalid_review_after_calendar_date_is_reported(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "active",
+            "lifecycle": "audit",
+            "owner_task": "OPT-ARC-001",
+            "review_after": "2026-02-30",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertIn("invalid_review_after", [f.code for f in findings])
+
+    def test_superseded_by_must_point_to_existing_file(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "deprecated",
+            "lifecycle_state": "superseded",
+            "lifecycle": "audit",
+            "owner_task": "OPT-ARC-001",
+            "superseded_by": "docs/reports/missing.md",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertIn("invalid_superseded_by", [f.code for f in findings])
+
+    def test_superseded_by_must_not_point_to_self(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "deprecated",
+            "lifecycle_state": "superseded",
+            "lifecycle": "audit",
+            "owner_task": "OPT-ARC-001",
+            "superseded_by": "docs/reports/example.md",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertIn("invalid_superseded_by", [f.code for f in findings])
+
+    def test_superseded_by_existing_file_is_valid(self) -> None:
+        write_report(self.tmp_root, "replacement.md", VALID_REPORT_FRONTMATTER)
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "deprecated",
+            "lifecycle_state": "superseded",
+            "lifecycle": "audit",
+            "owner_task": "OPT-ARC-001",
+            "superseded_by": "docs/reports/replacement.md",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertNotIn("invalid_superseded_by", [f.code for f in findings])
+
     def test_render_output_contains_expected_structure(self) -> None:
         write_report(
             self.tmp_root,
@@ -306,6 +412,9 @@ status: active
         self.assertIn("| reports_ignored_non_report |", rendered)
         self.assertIn("| findings_total |", rendered)
         self.assertIn("| missing_lifecycle_state |", rendered)
+        self.assertIn("| invalid_lifecycle |", rendered)
+        self.assertIn("| invalid_review_after |", rendered)
+        self.assertIn("| invalid_superseded_by |", rendered)
         self.assertIn("| Path | Severity | Code | Field | Message |", rendered)
 
     def test_findings_are_deterministically_sorted_by_path_and_code(self) -> None:
