@@ -21,17 +21,17 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | files_without_frontmatter | 0 |
 | files_with_status | 31 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 23 |
-| files_missing_lifecycle_state | 8 |
-| files_with_lifecycle | 23 |
-| files_missing_lifecycle | 8 |
-| files_with_owner_task | 23 |
-| files_missing_owner_task | 8 |
-| files_with_review_after | 14 |
-| files_missing_review_after | 17 |
+| files_with_lifecycle_state | 24 |
+| files_missing_lifecycle_state | 7 |
+| files_with_lifecycle | 24 |
+| files_missing_lifecycle | 7 |
+| files_with_owner_task | 24 |
+| files_missing_owner_task | 7 |
+| files_with_review_after | 15 |
+| files_missing_review_after | 16 |
 | files_primary_referenced | 28 |
 | files_primary_unreferenced | 3 |
-| files_with_derived_references | 28 |
+| files_with_derived_references | 31 |
 | files_with_relations | 31 |
 | files_with_missing_supersession_target | 0 |
 
@@ -59,7 +59,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-account-email-uniqueness-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-13 |  | 2 | 4 | 4 |  |  |
 | docs/reports/domain-account-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 7 | 4 | 6 |  |  |
 | docs/reports/domain-backfill-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 4 |  |  |
-| docs/reports/domain-edge-cache-limit-design.md | report | active | active | decision-prep | DOMAIN-PG-003 | 2026-09-29 |  | 0 | 0 | 5 |  |  |
+| docs/reports/domain-edge-cache-limit-design.md | report | active | active | decision-prep | DOMAIN-PG-003 | 2026-09-29 |  | 0 | 1 | 5 |  |  |
 | docs/reports/domain-edge-create-semantics-preflight.md | report | deprecated | superseded | decision-prep | OPT-ARC-001 |  | docs/reports/domain-edge-write-path-proof.md | 1 | 5 | 7 | review_after |  |
 | docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 2 | 4 | 6 |  |  |
 | docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 6 | 8 |  |  |
@@ -67,8 +67,8 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-postgres-instance-coherence-decision.md | report | active | active | audit | DOMAIN-PG-002 | 2026-12-18 |  | 2 | 5 | 6 |  |  |
 | docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | 4 | 4 | 3 |  |  |
 | docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 5 |  |  |
-| docs/reports/domain-runtime-data-source-reconciliation.md | report | active |  |  |  |  |  | 1 | 4 | 5 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/github-actions-node24-readiness.md | report | active | active | audit | OPT-CI-005 | 2026-09-29 |  | 2 | 0 | 5 |  |  |
+| docs/reports/domain-runtime-data-source-reconciliation.md | report | active | active | audit | DB-PROOF-001 | 2026-07-18 |  | 1 | 4 | 5 |  |  |
+| docs/reports/github-actions-node24-readiness.md | report | active | active | audit | OPT-CI-005 | 2026-09-29 |  | 2 | 1 | 5 |  |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | deprecated | archived | planning | DEPLOY-DNS-001 |  |  | 1 | 4 | 4 | review_after |  |
 | docs/reports/map-architekturkritik.md | report | active |  |  |  |  |  | 4 | 5 | 2 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | report | active |  |  |  |  |  | 2 | 4 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
@@ -77,7 +77,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 22 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/passkey-register-verify-prep.md | report | deprecated | archived | decision-prep | AUTH-PG-002 |  |  | 0 | 4 | 4 | review_after |  |
 | docs/reports/planning-registration-findings.md | report | deprecated | archived | audit | TASK-CTL-005 |  |  | 1 | 4 | 2 | review_after |  |
-| docs/reports/proof-matrix-generalization-decision.md | report | active | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  | 1 | 0 | 6 |  |  |
+| docs/reports/proof-matrix-generalization-decision.md | report | active | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  | 1 | 1 | 6 |  |  |
 | docs/reports/report-lifecycle-restbestand-triage.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  | 1 | 4 | 3 | review_after |  |
 
 ## Absent Core Lifecycle Metadata
@@ -91,7 +91,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/auth-persistence-runtime-proof.md | review_after |
 | docs/reports/auth-status-matrix.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/domain-edge-create-semantics-preflight.md | review_after |
-| docs/reports/domain-runtime-data-source-reconciliation.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/inwx-zone-reconciliation-plan.md | review_after |
 | docs/reports/map-architekturkritik.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | lifecycle, owner_task, review_after, lifecycle_state |
@@ -368,6 +367,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
 
+- `docs/reports/domain-edge-cache-limit-design.md`
+  - `docs/_generated/report-lifecycle.md`
+
 - `docs/reports/domain-edge-create-semantics-preflight.md`
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
@@ -420,6 +422,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
 
+- `docs/reports/github-actions-node24-readiness.md`
+  - `docs/_generated/report-lifecycle.md`
+
 - `docs/reports/inwx-zone-reconciliation-plan.md`
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
@@ -469,6 +474,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/report-lifecycle.md`
+
+- `docs/reports/proof-matrix-generalization-decision.md`
   - `docs/_generated/report-lifecycle.md`
 
 - `docs/reports/report-lifecycle-restbestand-triage.md`

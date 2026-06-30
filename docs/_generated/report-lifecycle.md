@@ -19,27 +19,27 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | files_scanned | 31 |
 | reports_checked | 27 |
 | reports_ignored_non_report | 4 |
-| reports_with_lifecycle_state | 23 |
-| reports_missing_lifecycle_state | 4 |
-| findings_total | 12 |
+| reports_with_lifecycle_state | 24 |
+| reports_missing_lifecycle_state | 3 |
+| findings_total | 9 |
 
 ## Lifecycle State Summary
 
 | lifecycle_state | Count |
 | --- | ---: |
-| active | 14 |
+| active | 15 |
 | deferred | 0 |
 | superseded | 5 |
 | archived | 4 |
-| missing | 4 |
+| missing | 3 |
 
 ## Finding Summary
 
 | Code | Count |
 | --- | ---: |
-| missing_lifecycle | 4 |
-| missing_lifecycle_state | 4 |
-| missing_review_after | 4 |
+| missing_lifecycle | 3 |
+| missing_lifecycle_state | 3 |
+| missing_review_after | 3 |
 
 ## Active Reports
 
@@ -57,6 +57,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/domain-postgres-instance-coherence-decision.md | active | audit | DOMAIN-PG-002 | 2026-12-18 |  |
 | docs/reports/domain-provider-role-finding.md | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  |
 | docs/reports/domain-read-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
+| docs/reports/domain-runtime-data-source-reconciliation.md | active | audit | DB-PROOF-001 | 2026-07-18 |  |
 | docs/reports/github-actions-node24-readiness.md | active | audit | OPT-CI-005 | 2026-09-29 |  |
 | docs/reports/proof-matrix-generalization-decision.md | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  |
 
@@ -89,7 +90,6 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
-| docs/reports/domain-runtime-data-source-reconciliation.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-architekturkritik.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/optimierungsbericht.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
@@ -98,7 +98,6 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Report | lifecycle_state | status | findings |
 | --- | --- | --- | --- |
-| docs/reports/domain-runtime-data-source-reconciliation.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-architekturkritik.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-basemap-proof-gap-reconciliation.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/optimierungsbericht.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
@@ -109,7 +108,6 @@ Fields required by the currently implemented validator rules that are absent, in
 
 | Report | status | lifecycle_state | Missing currently-enforced fields |
 | --- | --- | --- | --- |
-| docs/reports/domain-runtime-data-source-reconciliation.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/map-architekturkritik.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/optimierungsbericht.md | active |  | lifecycle_state, lifecycle, review_after |
