@@ -7,6 +7,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 if __package__ in {None, ""}:
@@ -47,6 +48,28 @@ def _iter_report_paths(root: Path) -> list[Path]:
     if not reports_dir.exists():
         return []
     return sorted([p for p in reports_dir.rglob("*.md") if p.is_file()])
+
+
+def _changed_report_paths(root: Path, changed_from: str, changed_to: str) -> list[Path]:
+    completed = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=ACMR", changed_from, changed_to],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    reports_dir = (root / "docs" / "reports").resolve()
+    paths: set[Path] = set()
+    for rel in completed.stdout.splitlines():
+        candidate = (root / rel).resolve()
+        if candidate.suffix != ".md" or not candidate.is_file():
+            continue
+        try:
+            candidate.relative_to(reports_dir)
+        except ValueError:
+            continue
+        paths.add(candidate)
+    return sorted(paths)
 
 
 def _invalid_review_after(value: str) -> bool:
@@ -276,10 +299,14 @@ def _render_github_warnings(findings: list[Finding]) -> str:
     return "\n".join(lines)
 
 
-def run(root: Path, mode: str) -> tuple[str, int]:
+def run(root: Path, mode: str, changed_from: str | None = None, changed_to: str = "HEAD") -> tuple[str, int]:
     if mode not in VALID_MODES:
         raise ValueError(f"unsupported report lifecycle mode: {mode}")
-    paths = _iter_report_paths(root)
+    paths = (
+        _changed_report_paths(root, changed_from, changed_to)
+        if changed_from
+        else _iter_report_paths(root)
+    )
     all_findings = []
     reports_checked = 0
     reports_ignored_non_report = 0
@@ -329,12 +356,29 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Alternative repository root path"
     )
+    parser.add_argument(
+        "--changed-from",
+        type=str,
+        default=None,
+        help="Git revision to diff from for changed-only validation"
+    )
+    parser.add_argument(
+        "--changed-to",
+        type=str,
+        default="HEAD",
+        help="Git revision to diff to for changed-only validation"
+    )
     args = parser.parse_args(argv)
 
     root_path = Path(args.root) if args.root else REPO_ROOT
 
     try:
-        report_str, exit_code = run(root_path, args.mode)
+        report_str, exit_code = run(
+            root_path,
+            args.mode,
+            changed_from=args.changed_from,
+            changed_to=args.changed_to,
+        )
         sys.stdout.write(report_str)
         return exit_code
     except Exception as e:

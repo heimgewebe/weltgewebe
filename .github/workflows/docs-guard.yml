@@ -68,6 +68,16 @@ jobs:
       - name: Report lifecycle warnings
         run: python3 -m scripts.docmeta.validate_report_lifecycle --mode warn
 
+      - name: Report lifecycle changed-only strict
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          python3 -m scripts.docmeta.validate_report_lifecycle
+          --mode strict
+          --changed-from "$BASE_SHA"
+          --changed-to "$GITHUB_SHA"
+
       - name: Test generated artifact control
         run: python3 -m unittest scripts.docmeta.tests.test_validate_generated_artifacts -v
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime
 import io
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -617,6 +618,80 @@ status: active
         self.assertIn("| files_scanned | 1 |", rendered)
         self.assertIn("| reports_checked | 1 |", rendered)
         self.assertIn("No findings.", rendered)
+
+    def test_changed_only_strict_ignores_unchanged_invalid_report(self) -> None:
+        def git(*args: str) -> str:
+            completed = subprocess.run(
+                ["git", *args],
+                cwd=self.tmp_root,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            return completed.stdout.strip()
+
+        git("init")
+        git("config", "user.email", "test@example.invalid")
+        git("config", "user.name", "Test")
+        write_report(
+            self.tmp_root,
+            "legacy-invalid.md",
+            """
+id: reports.legacy-invalid
+title: Legacy Invalid
+doc_type: report
+status: active
+            """
+        )
+        git("add", ".")
+        git("commit", "-m", "base")
+        base = git("rev-parse", "HEAD")
+        write_report(self.tmp_root, "new-valid.md", VALID_REPORT_FRONTMATTER)
+        git("add", ".")
+        git("commit", "-m", "change")
+
+        rendered, exit_code = run(self.tmp_root, "strict", changed_from=base)
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("| files_scanned | 1 |", rendered)
+        self.assertIn("No findings.", rendered)
+
+    def test_changed_only_strict_reports_changed_invalid_report(self) -> None:
+        def git(*args: str) -> str:
+            completed = subprocess.run(
+                ["git", *args],
+                cwd=self.tmp_root,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            return completed.stdout.strip()
+
+        git("init")
+        git("config", "user.email", "test@example.invalid")
+        git("config", "user.name", "Test")
+        write_report(self.tmp_root, "base.md", VALID_REPORT_FRONTMATTER)
+        git("add", ".")
+        git("commit", "-m", "base")
+        base = git("rev-parse", "HEAD")
+        write_report(
+            self.tmp_root,
+            "changed-invalid.md",
+            """
+id: reports.changed-invalid
+title: Changed Invalid
+doc_type: report
+status: active
+            """
+        )
+        git("add", ".")
+        git("commit", "-m", "change")
+
+        rendered, exit_code = run(self.tmp_root, "strict", changed_from=base)
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("docs/reports/changed-invalid.md", rendered)
+        self.assertIn("missing_lifecycle_state", rendered)
 
     def test_blank_frontmatter_values_are_missing(self) -> None:
         write_report(
