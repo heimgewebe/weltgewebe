@@ -77,4 +77,6 @@ json=$(jq -n \
   }')
 
 printf '%s\n' "$json" > "$output_path"
-((print_json)) && printf '%s\n' "$json"
+if ((print_json)); then
+  printf '%s\n' "$json"
+fi
