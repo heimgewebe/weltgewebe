@@ -608,6 +608,16 @@ status: active
         self.assertIn("| reports_checked | 1 |", rendered)
         self.assertIn("| reports_ignored_non_report | 1 |", rendered)
 
+    def test_run_recurses_into_subdirectories(self) -> None:
+        write_report(self.tmp_root, "nested/2026/old.md", VALID_REPORT_FRONTMATTER)
+
+        rendered, exit_code = run(self.tmp_root, "report")
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("| files_scanned | 1 |", rendered)
+        self.assertIn("| reports_checked | 1 |", rendered)
+        self.assertIn("No findings.", rendered)
+
     def test_blank_frontmatter_values_are_missing(self) -> None:
         write_report(
             self.tmp_root,

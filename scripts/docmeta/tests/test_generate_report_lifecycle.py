@@ -93,7 +93,9 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _write_report(self, name: str, content: str):
-        (self.reports_dir / name).write_text(content, encoding="utf-8")
+        path = self.reports_dir / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
 
     def test_generate_writes_output(self):
         self._write_report("empty.md", "")
@@ -104,6 +106,14 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         self.assertTrue(content.startswith("---"))
         self.assertIn("Generated automatically.", content)
         self.assertIn("# Report Lifecycle Overview", content)
+
+    def test_generate_recurses_into_nested_report_paths(self):
+        self._write_report("nested/2026/old.md", "---\ndoc_type: report\nstatus: active\nlifecycle_state: active\nlifecycle: audit\nowner_task: TASK-1\nreview_after: 2026-07-13\n---\n# Old\n")
+
+        generate(self.root, self.output_path)
+        content = self.output_path.read_text(encoding="utf-8")
+
+        self.assertIn("docs/reports/nested/2026/old.md", content)
 
     def test_summary_counts_reports_and_non_reports(self):
         self._write_report("report1.md", "---\ndoc_type: report\n---")

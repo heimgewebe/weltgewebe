@@ -118,6 +118,27 @@ relations:
         self.assertFalse(record.missing_supersession_target)
         self.assertEqual(record.frontmatter_parse_warning, "")
 
+    def test_collect_reports_recurses_into_subdirectories(self) -> None:
+        self._write(
+            "docs/reports/nested/2026/report.md",
+            """---
+id: docs.reports.nested
+title: Nested
+doc_type: report
+status: active
+lifecycle_state: active
+lifecycle: audit
+owner_task: TASK-1
+review_after: 2026-07-13
+---
+# Nested
+""",
+        )
+
+        records = gen.collect_reports(self._config())
+
+        self.assertEqual([record.path for record in records], ["docs/reports/nested/2026/report.md"])
+
     def test_collect_reports_keeps_report_without_frontmatter(self) -> None:
         self._write("docs/reports/no-frontmatter.md", "# No frontmatter\n")
 

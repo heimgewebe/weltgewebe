@@ -407,7 +407,7 @@ def _build_reference_index(
 def collect_reports(config: InventoryConfig | None = None) -> list[ReportRecord]:
     inventory_config = config or default_inventory_config()
     report_paths = sorted(
-        path for path in inventory_config.reports_dir.glob("*.md") if path.is_file()
+        path for path in inventory_config.reports_dir.rglob("*.md") if path.is_file()
     )
     primary_reference_index = _build_reference_index(
         report_paths=report_paths,
