@@ -21,14 +21,14 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | files_without_frontmatter | 0 |
 | files_with_status | 31 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 24 |
-| files_missing_lifecycle_state | 7 |
-| files_with_lifecycle | 24 |
-| files_missing_lifecycle | 7 |
-| files_with_owner_task | 24 |
-| files_missing_owner_task | 7 |
-| files_with_review_after | 15 |
-| files_missing_review_after | 16 |
+| files_with_lifecycle_state | 26 |
+| files_missing_lifecycle_state | 5 |
+| files_with_lifecycle | 26 |
+| files_missing_lifecycle | 5 |
+| files_with_owner_task | 26 |
+| files_missing_owner_task | 5 |
+| files_with_review_after | 17 |
+| files_missing_review_after | 14 |
 | files_primary_referenced | 28 |
 | files_primary_unreferenced | 3 |
 | files_with_derived_references | 31 |
@@ -70,8 +70,8 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-runtime-data-source-reconciliation.md | report | active | active | audit | DB-PROOF-001 | 2026-07-18 |  | 1 | 4 | 5 |  |  |
 | docs/reports/github-actions-node24-readiness.md | report | active | active | audit | OPT-CI-005 | 2026-09-29 |  | 2 | 1 | 5 |  |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | deprecated | archived | planning | DEPLOY-DNS-001 |  |  | 1 | 4 | 4 | review_after |  |
-| docs/reports/map-architekturkritik.md | report | active |  |  |  |  |  | 4 | 5 | 2 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/map-basemap-proof-gap-reconciliation.md | report | active |  |  |  |  |  | 2 | 4 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/map-architekturkritik.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 4 | 5 | 2 |  |  |
+| docs/reports/map-basemap-proof-gap-reconciliation.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 2 | 4 | 6 |  |  |
 | docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  |  | 8 | 5 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/optimierungsbericht.md | report | active |  |  |  |  |  | 2 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 22 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
@@ -92,8 +92,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/auth-status-matrix.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/domain-edge-create-semantics-preflight.md | review_after |
 | docs/reports/inwx-zone-reconciliation-plan.md | review_after |
-| docs/reports/map-architekturkritik.md | lifecycle, owner_task, review_after, lifecycle_state |
-| docs/reports/map-basemap-proof-gap-reconciliation.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/map-status-matrix.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/optimierungsbericht.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/optimierungsstatus.md | lifecycle, owner_task, review_after, lifecycle_state |
