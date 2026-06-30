@@ -3,6 +3,10 @@ id: reports.optimierungsbericht
 title: "Optimierungsbericht Weltgewebe"
 doc_type: report
 status: active
+lifecycle_state: active
+lifecycle: audit
+owner_task: DOCMETA-REPORT-LIFECYCLE-001
+review_after: 2026-09-29
 created: 2026-04-19
 lang: de
 summary: >

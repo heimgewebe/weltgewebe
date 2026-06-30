@@ -1421,10 +1421,10 @@
         "docs/reports/cost-report.md",
         "docs/reports/domain-runtime-data-source-reconciliation.md",
         "docs/reports/map-architekturkritik.md",
-        "docs/reports/map-basemap-proof-gap-reconciliation.md"
+        "docs/reports/map-basemap-proof-gap-reconciliation.md",
+        "docs/reports/optimierungsbericht.md"
       ],
       "missing_evidence": [
-        "Acht Reports wurden ursprünglich triagiert. Slice A, B, Cost-Report-Backfill, Runtime-Source-Reconciliation-Backfill und Map-Report-Backfill sind abgeschlossen. 1 Report verbleibt unklassifiziert.",
         "Fehlendes oder nicht parsebares Report-Frontmatter wird noch nicht vollständig blockierend erkannt",
         "Semantische Validatorprüfungen für Lifecycle-Enums, ISO-Datum und Supersession-Konsistenz fehlen",
         "Die owner_task-Semantik und die normativen Registrierungsquellen sind entschieden und gegen den bestehenden Bestand kompatibilitätsgeprüft; vollständige OPT-Markdown–JSON-Parität und technische Existenzprüfung bleiben nach den Backfill-Slices offen.",
