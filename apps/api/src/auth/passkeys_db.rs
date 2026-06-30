@@ -47,10 +47,12 @@ pub enum DbPasskeyStoreError {
     DuplicateCredentialId,
     #[error("credential not found for account")]
     NotFound,
+    #[error("passkey credential-id encoding failed")]
+    CredentialIdEncoding,
     #[error("passkey credential (de)serialization failed")]
-    Serialization,
+    Serialization(#[source] serde_json::Error),
     #[error("passkey credential backend unavailable")]
-    Backend,
+    Backend(#[source] sqlx::Error),
 }
 
 /// Stable, deterministic text key for a credential ID.
@@ -61,22 +63,45 @@ pub enum DbPasskeyStoreError {
 /// — it stays stable across webauthn-rs point releases. It is used as the
 /// `passkey_credentials.credential_id` primary key.
 pub fn credential_id_key(credential_id: &CredentialID) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
     let bytes: &[u8] = credential_id.as_ref();
-    let mut key = String::with_capacity(bytes.len() * 2);
+    let mut encoded = Vec::with_capacity(bytes.len() * 2);
     for byte in bytes {
-        use std::fmt::Write as _;
-        // Writing to a String is infallible; the result is ignored on purpose.
-        let _ = write!(key, "{byte:02x}");
+        encoded.push(HEX[(byte >> 4) as usize]);
+        encoded.push(HEX[(byte & 0x0f) as usize]);
     }
-    key
+    String::from_utf8(encoded).expect("hex encoding emits valid UTF-8")
+}
+
+fn hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn credential_id_from_key(key: &str) -> Result<CredentialID, DbPasskeyStoreError> {
+    if key.len() % 2 != 0 {
+        return Err(DbPasskeyStoreError::CredentialIdEncoding);
+    }
+
+    let mut bytes = Vec::with_capacity(key.len() / 2);
+    for pair in key.as_bytes().chunks_exact(2) {
+        let high = hex_nibble(pair[0]).ok_or(DbPasskeyStoreError::CredentialIdEncoding)?;
+        let low = hex_nibble(pair[1]).ok_or(DbPasskeyStoreError::CredentialIdEncoding)?;
+        bytes.push((high << 4) | low);
+    }
+    Ok(CredentialID::from(bytes))
 }
 
 fn passkey_from_text(text: &str) -> Result<Passkey, DbPasskeyStoreError> {
-    serde_json::from_str(text).map_err(|_| DbPasskeyStoreError::Serialization)
+    serde_json::from_str(text).map_err(DbPasskeyStoreError::Serialization)
 }
 
 fn passkey_to_text(passkey: &Passkey) -> Result<String, DbPasskeyStoreError> {
-    serde_json::to_string(passkey).map_err(|_| DbPasskeyStoreError::Serialization)
+    serde_json::to_string(passkey).map_err(DbPasskeyStoreError::Serialization)
 }
 
 /// Database-backed store for registered passkey credentials.
@@ -118,7 +143,7 @@ impl DbPasskeyStore {
         .bind(&credential)
         .execute(&self.pool)
         .await
-        .map_err(|_| DbPasskeyStoreError::Backend)?;
+        .map_err(DbPasskeyStoreError::Backend)?;
 
         if result.rows_affected() == 0 {
             return Err(DbPasskeyStoreError::DuplicateCredentialId);
@@ -139,13 +164,13 @@ impl DbPasskeyStore {
         .bind(account_id)
         .fetch_all(&self.pool)
         .await
-        .map_err(|_| DbPasskeyStoreError::Backend)?;
+        .map_err(DbPasskeyStoreError::Backend)?;
 
         rows.into_iter()
             .map(|row| {
                 let text: String = row
                     .try_get("credential")
-                    .map_err(|_| DbPasskeyStoreError::Backend)?;
+                    .map_err(DbPasskeyStoreError::Backend)?;
                 passkey_from_text(&text)
             })
             .collect()
@@ -160,12 +185,24 @@ impl DbPasskeyStore {
         &self,
         account_id: &str,
     ) -> Result<Vec<CredentialID>, DbPasskeyStoreError> {
-        Ok(self
-            .list_for_account(account_id)
-            .await?
-            .iter()
-            .map(|passkey| passkey.cred_id().clone())
-            .collect())
+        let rows = sqlx::query(
+            "SELECT credential_id FROM passkey_credentials \
+             WHERE account_id = $1 \
+             ORDER BY created_at, credential_id",
+        )
+        .bind(account_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(DbPasskeyStoreError::Backend)?;
+
+        rows.into_iter()
+            .map(|row| {
+                let key: String = row
+                    .try_get("credential_id")
+                    .map_err(DbPasskeyStoreError::Backend)?;
+                credential_id_from_key(&key)
+            })
+            .collect()
     }
 
     /// Finds a passkey by credential ID across all accounts.
@@ -184,7 +221,7 @@ impl DbPasskeyStore {
         .bind(&key)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|_| DbPasskeyStoreError::Backend)?;
+        .map_err(DbPasskeyStoreError::Backend)?;
 
         let Some(row) = row else {
             return Ok(None);
@@ -192,10 +229,10 @@ impl DbPasskeyStore {
 
         let account_id: String = row
             .try_get("account_id")
-            .map_err(|_| DbPasskeyStoreError::Backend)?;
+            .map_err(DbPasskeyStoreError::Backend)?;
         let text: String = row
             .try_get("credential")
-            .map_err(|_| DbPasskeyStoreError::Backend)?;
+            .map_err(DbPasskeyStoreError::Backend)?;
         let passkey = passkey_from_text(&text)?;
         Ok(Some(StoredPasskey {
             account_id,
@@ -222,7 +259,7 @@ impl DbPasskeyStore {
         .bind(&key)
         .execute(&self.pool)
         .await
-        .map_err(|_| DbPasskeyStoreError::Backend)?;
+        .map_err(DbPasskeyStoreError::Backend)?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -249,7 +286,7 @@ impl DbPasskeyStore {
             .pool
             .begin()
             .await
-            .map_err(|_| DbPasskeyStoreError::Backend)?;
+            .map_err(DbPasskeyStoreError::Backend)?;
 
         let row = sqlx::query(
             "SELECT credential::text AS credential FROM passkey_credentials \
@@ -260,7 +297,7 @@ impl DbPasskeyStore {
         .bind(account_id)
         .fetch_optional(&mut *tx)
         .await
-        .map_err(|_| DbPasskeyStoreError::Backend)?;
+        .map_err(DbPasskeyStoreError::Backend)?;
 
         let Some(row) = row else {
             // tx is dropped (rolled back) on return.
@@ -269,7 +306,7 @@ impl DbPasskeyStore {
 
         let text: String = row
             .try_get("credential")
-            .map_err(|_| DbPasskeyStoreError::Backend)?;
+            .map_err(DbPasskeyStoreError::Backend)?;
         let mut passkey = passkey_from_text(&text)?;
 
         // `Passkey::update_credential` only yields `None` on a credential-id
@@ -293,12 +330,10 @@ impl DbPasskeyStore {
             .bind(account_id)
             .execute(&mut *tx)
             .await
-            .map_err(|_| DbPasskeyStoreError::Backend)?;
+            .map_err(DbPasskeyStoreError::Backend)?;
         }
 
-        tx.commit()
-            .await
-            .map_err(|_| DbPasskeyStoreError::Backend)?;
+        tx.commit().await.map_err(DbPasskeyStoreError::Backend)?;
         Ok(changed)
     }
 }
@@ -404,5 +439,26 @@ mod tests {
             vec![42u8; 32],
             "key derived from a passkey must match its raw credential-id bytes"
         );
+    }
+
+    #[test]
+    fn credential_id_from_key_round_trips_lowercase_and_uppercase_hex() {
+        let bytes = vec![0xABu8; 32];
+        let lowercase = "ab".repeat(32);
+        let uppercase = "AB".repeat(32);
+        assert_eq!(credential_id_from_key(&lowercase).unwrap().as_ref(), bytes);
+        assert_eq!(credential_id_from_key(&uppercase).unwrap().as_ref(), bytes);
+    }
+
+    #[test]
+    fn credential_id_from_key_rejects_malformed_hex() {
+        assert!(matches!(
+            credential_id_from_key("abc"),
+            Err(DbPasskeyStoreError::CredentialIdEncoding)
+        ));
+        assert!(matches!(
+            credential_id_from_key("zz"),
+            Err(DbPasskeyStoreError::CredentialIdEncoding)
+        ));
     }
 }

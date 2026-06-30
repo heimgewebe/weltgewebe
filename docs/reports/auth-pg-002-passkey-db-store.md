@@ -36,11 +36,11 @@ relations:
 - Isolierter `DbPasskeyStore` (`apps/api/src/auth/passkeys_db.rs`) mit
   `insert` / `list_for_account` / `credential_ids_for_account` /
   `find_by_credential_id` / `remove_for_account` / `update_credential`.
-- Reine (DB-freie) Unit-Tests für die zwei Persistenz-Invarianten:
-  `Passkey`-JSON-Roundtrip und Stabilität/Reversibilität des
-  Credential-ID-Schlüssels.
+- Reine (DB-freie) Unit-Tests für die Persistenz-Invarianten:
+  `Passkey`-JSON-Roundtrip, Stabilität/Reversibilität des
+  Credential-ID-Schlüssels und Fehlerfälle beim Hex-Decode.
 - Ignored Integration-Proof `tests/db_passkey_store_persistence.rs` analog zu
-  `db_session_store_persistence.rs`, plus CI-Job-Entwurf
+  `db_session_store_persistence.rs`, plus CI-Job
   `db-passkey-persistence-proof` in `.github/workflows/api.yml`.
 
 **Ausdrücklich NICHT belegt / Nicht-Scope dieses Slice:**
@@ -53,7 +53,6 @@ relations:
   kompatibel).
 - Kein Production-Cutover, keine JSONL-Demontage, kein
   `webauthn_user_id`-Backfill (AUTH-PG-003 bleibt blocked).
-- Kein PR-CI-Beleg (siehe §5): der Restart-Proof lief bisher nur lokal.
 
 ## 2. Datenmodell
 
@@ -79,6 +78,11 @@ opt-in PostgreSQL-Passkey-Modus (Slice B), der zusätzlich
 referenzierte Account-Zeile garantiert existiert. Das ist eine **explizit
 aufgeschobene Vorbedingung, keine stille Orphan-Toleranz.**
 
+**Index-Entscheidung:** Kein Index auf `webauthn_user_id` in diesem Slice. Es
+gibt noch keinen Query-Pfad, der danach selektiert; ein Index gehört in Slice B,
+sobald Runtime-Facade, Identity-Abgleich, Löschung oder Backfill diesen Zugriff
+wirklich benötigen.
+
 **Serialisierung:** `Passkey` und `AuthenticationResult` sind über `serde_json`
 stabil serialisierbar (durch bestehende Fixtures in `passkeys.rs` und durch die
 neuen Unit-Tests belegt). Es werden keine privaten Schlüssel gespeichert;
@@ -91,6 +95,13 @@ keine öffentliche Projektion).
 - **Duplicate:** `INSERT ... ON CONFLICT (credential_id) DO NOTHING` +
   `rows_affected == 0` → `DuplicateCredentialId`. Die DB-Unique ist die letzte
   Wahrheit auch bei nebenläufigen Inserts.
+- **Observability:** Backend- und Serialisierungsfehler werden nicht geglättet;
+  `DbPasskeyStoreError` bewahrt den ursprünglichen `sqlx::Error` bzw.
+  `serde_json::Error` als `#[source]`. Runtime-Logger können damit Ursache,
+  SQL-State und Backendfehler sehen, ohne Credential-Rohdaten zu loggen.
+- **Credential-ID-Liste:** `credential_ids_for_account` liest nur
+  `credential_id` aus PostgreSQL und decodiert Hex. Die große `credential`-
+  JSONB-Spalte wird dafür nicht deserialisiert.
 - **Cross-Account:** `find_by_credential_id` ist global (löst nur den Owner
   auf, autorisiert nichts). `update_credential` und `remove_for_account` sind
   owner-gebunden (`account_id`-Prädikat).
@@ -109,7 +120,9 @@ Offline (ohne DB), Teil des Standard-`cargo test`:
 auth::passkeys_db::tests::passkey_survives_json_roundtrip ... ok
 auth::passkeys_db::tests::credential_id_key_is_stable_and_reversible ... ok
 auth::passkeys_db::tests::credential_id_key_matches_passkey_cred_id ... ok
-cargo test --locked -p weltgewebe-api --all-features  ->  252 passed; 0 failed
+auth::passkeys_db::tests::credential_id_from_key_round_trips_lowercase_and_uppercase_hex ... ok
+auth::passkeys_db::tests::credential_id_from_key_rejects_malformed_hex ... ok
+cargo test --locked -p weltgewebe-api --all-features  ->  252+ passed; 0 failed
 cargo fmt --all -- --check  ->  ok
 cargo clippy --locked -p weltgewebe-api --all-targets --all-features -- -D warnings  ->  ok
 ```
@@ -127,14 +140,11 @@ test result: ok. 5 passed; 0 failed
 ```
 
 Migration up→down→up wurde gegen dieselbe Instanz manuell als reversibel
-verifiziert.
+verifiziert. Der PR-CI-Job `db passkey persistence proof (direct postgres)` ist
+der maßgebliche Merge-Beleg und muss auf der aktuellen PR-Revision grün sein.
 
 ## 5. Offene Leerstellen
 
-- **PR-CI-Beleg fehlt.** Der Restart-Proof lief nur lokal gegen eine
-  Wegwerf-DB. Der CI-Job `db-passkey-persistence-proof` ist als Entwurf
-  vorhanden, aber es existiert noch kein grüner GitHub-PR-CI-Run. Nach
-  Repo-Policy (`github_pr_ci_required`) ist das die noch fehlende Evidenz.
 - **Routen-Cutover fehlt (Slice B).** Solange die Routen den In-Memory-Store
   nutzen, ändert dieser Slice das Laufzeitverhalten nicht. `exclude_credentials`
   und Credential-Resolution müssen für echte Restart-Stabilität aus dem
@@ -149,6 +159,6 @@ verifiziert.
 ## 6. Status
 
 AUTH-PG-002 bleibt **open**. Dieser Slice liefert die Persistenz-Primitive und
-einen lokal grünen Restart-Proof, aber keinen Cutover. `OPT-ARC-001` bleibt
+einen Restart-Proof auf Store-Ebene, aber keinen Cutover. `OPT-ARC-001` bleibt
 `partial`; `webauthn_credential_writeback` war dort ein Non-Goal und wird hier
 nur auf Store-Ebene vorbereitet, nicht als Produktions-Cutover deklariert.

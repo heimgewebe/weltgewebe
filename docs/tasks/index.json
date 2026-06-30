@@ -1129,12 +1129,12 @@
         "apps/api/migrations/20260630000001_create_passkey_credentials.up.sql",
         "apps/api/src/auth/passkeys_db.rs",
         "apps/api/tests/db_passkey_store_persistence.rs",
+        ".github/workflows/api.yml",
         "docs/reports/auth-pg-002-passkey-db-store.md"
       ],
       "missing_evidence": [
         "Store-Slice belegt (Migration passkey_credentials + DbPasskeyStore + lokal gruener Restart-Proof), aber KEIN Routen-Cutover: register/verify, auth/options, auth/verify nutzen weiter den In-Memory-PasskeyStore",
         "Keine Runtime-Facade und keine Config (passkey_credential_source / WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE, Default in_memory, fail-closed ohne Pool) — Slice B offen",
-        "Kein PR-CI-Beleg fuer den DB-Store: CI-Job-Entwurf db-passkey-persistence-proof vorhanden, aber kein gruener GitHub-PR-CI-Run (github_pr_ci_required)",
         "FK passkey_credentials.account_id -> domain_accounts(id) bewusst aufgeschoben bis Slice B die Vorbedingung domain_read_source=postgres + vorhandene Account-Zeile garantiert",
         "Menschliches Review fuer credentials/ vor Merge steht aus"
       ],
