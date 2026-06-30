@@ -23,6 +23,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 VALID_MODES = ("report", "warn", "strict")
 VALID_LIFECYCLE_STATES = frozenset(("active", "deferred", "superseded", "archived"))
 VALID_LIFECYCLES = frozenset(("audit", "decision", "decision-prep", "generated", "planning", "proof"))
+VALID_OWNER_STATUSES = frozenset(("blocked", "contradicted", "done", "obsolete", "open", "partial"))
+ACTIVE_OWNER_LIFECYCLE_STATES = frozenset(("active", "deferred"))
+TERMINAL_OWNER_STATUSES = frozenset(("contradicted", "obsolete"))
 ISO_DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 OPT_STATUS_ID_RE = re.compile(r"\|\s*(OPT-[A-Z0-9-]+)\s*\|")
 
@@ -115,6 +118,100 @@ def _registered_owner_tasks(root: Path) -> set[str] | None:
     return registered
 
 
+def _parse_opt_status_rows(path: Path) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    headers: list[str] = []
+    in_matrix = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip() == "## Matrix":
+            in_matrix = True
+            continue
+        if in_matrix and line.startswith("## "):
+            break
+        if not in_matrix or not line.startswith("|"):
+            continue
+        cells = [cell.strip().strip("`") for cell in line.strip().strip("|").split("|")]
+        if cells and all(set(cell) <= set("-: ") for cell in cells):
+            continue
+        if not headers:
+            headers = cells
+            continue
+        if len(cells) == len(headers):
+            rows.append(dict(zip(headers, cells, strict=True)))
+    return rows
+
+
+def _owner_task_statuses(root: Path) -> dict[str, set[str]] | None:
+    statuses: dict[str, set[str]] = {}
+    sources_found = False
+
+    task_index = root / "docs" / "tasks" / "index.json"
+    if task_index.is_file():
+        sources_found = True
+        try:
+            data = json.loads(task_index.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            data = {}
+        for item in data.get("tasks", []):
+            if not isinstance(item, dict):
+                continue
+            task_id = _string_value(item.get("id"))
+            status = _string_value(item.get("status")).strip().lower()
+            if task_id and status:
+                statuses.setdefault(task_id, set()).add(status)
+
+    opt_status = root / "docs" / "reports" / "optimierungsstatus.md"
+    if opt_status.is_file():
+        sources_found = True
+        for row in _parse_opt_status_rows(opt_status):
+            task_id = _string_value(row.get("id"))
+            status = _string_value(row.get("status")).strip().lower()
+            if task_id and status:
+                statuses.setdefault(task_id, set()).add(status)
+
+    if not sources_found:
+        return None
+    return statuses
+
+
+def _owner_status_finding(
+    rel_path: str,
+    owner_task: str,
+    lifecycle_state: str,
+    owner_statuses: dict[str, set[str]] | None,
+) -> Finding | None:
+    if not owner_task or owner_statuses is None or owner_task not in owner_statuses:
+        return None
+    statuses = owner_statuses[owner_task]
+    unknown = sorted(status for status in statuses if status not in VALID_OWNER_STATUSES)
+    if unknown:
+        return Finding(
+            path=rel_path,
+            code="invalid_owner_status",
+            severity="warn",
+            field="owner_task",
+            message=f"owner_task {owner_task} has unsupported status value(s): {', '.join(unknown)}",
+        )
+    if len(statuses) > 1:
+        return Finding(
+            path=rel_path,
+            code="invalid_owner_status",
+            severity="warn",
+            field="owner_task",
+            message=f"owner_task {owner_task} resolves to inconsistent status values: {', '.join(sorted(statuses))}",
+        )
+    status = next(iter(statuses))
+    if lifecycle_state in ACTIVE_OWNER_LIFECYCLE_STATES and status in TERMINAL_OWNER_STATUSES:
+        return Finding(
+            path=rel_path,
+            code="invalid_owner_status",
+            severity="warn",
+            field="owner_task",
+            message=f"owner_task {owner_task} has terminal status {status} for {lifecycle_state} report",
+        )
+    return None
+
+
 def _validate_report(path: Path, frontmatter: dict[str, object], root: Path) -> list[Finding]:
     try:
         rel_path = path.relative_to(root).as_posix()
@@ -180,6 +277,15 @@ def _validate_report(path: Path, frontmatter: dict[str, object], root: Path) -> 
             field="owner_task",
             message="owner_task must resolve in docs/tasks/index.json or docs/reports/optimierungsstatus.md",
         ))
+    else:
+        owner_status_finding = _owner_status_finding(
+            rel_path=rel_path,
+            owner_task=owner_task,
+            lifecycle_state=lifecycle_state,
+            owner_statuses=_owner_task_statuses(root),
+        )
+        if owner_status_finding is not None:
+            findings.append(owner_status_finding)
 
     superseded_by = _string_value(frontmatter.get("superseded_by")).strip()
     if superseded_by:
@@ -225,6 +331,7 @@ def _build_summary(
         "invalid_review_after": 0,
         "invalid_superseded_by": 0,
         "invalid_owner_task": 0,
+        "invalid_owner_status": 0,
     }
     for f in findings:
         if f.code in summary:
@@ -257,6 +364,7 @@ def _render_report(findings: list[Finding], summary: dict[str, int], mode: str) 
         f"| invalid_review_after | {summary['invalid_review_after']} |",
         f"| invalid_superseded_by | {summary['invalid_superseded_by']} |",
         f"| invalid_owner_task | {summary['invalid_owner_task']} |",
+        f"| invalid_owner_status | {summary['invalid_owner_status']} |",
         "",
         "## Findings",
         "",
