@@ -30,7 +30,7 @@
     {
       "id": "OPT-CON-001",
       "area": "Contracts",
-      "title": "additionalProperties: false + String-Constraints",
+      "title": "geschlossene Schemas + begrenzte Extension-Flächen",
       "status": "done",
       "priority": "high",
       "risk": "medium",
@@ -298,7 +298,7 @@
     {
       "id": "OPT-CON-002",
       "area": "Contracts",
-      "title": "maxLength + verbleibende additionalProperties: false",
+      "title": "maxLength + begrenzte Extension-Flächen",
       "status": "done",
       "priority": "medium",
       "risk": "medium",

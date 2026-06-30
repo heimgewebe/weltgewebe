@@ -1422,11 +1422,14 @@
         "docs/reports/domain-runtime-data-source-reconciliation.md",
         "docs/reports/map-architekturkritik.md",
         "docs/reports/map-basemap-proof-gap-reconciliation.md",
-        "docs/reports/optimierungsbericht.md"
+        "docs/reports/optimierungsbericht.md",
+        "scripts/docmeta/validate_optimierungsstatus_parity.py",
+        "scripts/docmeta/tests/test_validate_optimierungsstatus_parity.py",
+        "docs/reports/optimierungsstatus.md",
+        "docs/reports/optimierungsstatus.json"
       ],
       "missing_evidence": [
         "Fehlendes oder nicht parsebares Report-Frontmatter wird noch nicht vollständig blockierend erkannt",
-        "Die owner_task-Semantik und die normativen Registrierungsquellen sind entschieden und gegen den bestehenden Bestand kompatibilitätsgeprüft; vollständige OPT-Markdown–JSON-Parität und Owner-Statusprüfung bleiben offen.",
         "Global strict bleibt bis zur Bereinigung des Bestands deaktiviert"
       ],
       "acceptance": [

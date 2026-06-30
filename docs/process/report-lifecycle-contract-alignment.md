@@ -196,7 +196,7 @@ Result: 5 unique IDs across 16 report usages; 0 unresolved IDs.
 - owner semantics: decided
 - normative sources: decided
 - compatibility audit: complete
-- OPT markdown/json full parity: open
+- OPT markdown/json stable status-matrix parity: enforced by `scripts/docmeta/validate_optimierungsstatus_parity.py`
 - validator enforcement: future-gated
 - owner status compatibility: open
 
@@ -213,7 +213,7 @@ Result: 5 unique IDs across 16 report usages; 0 unresolved IDs.
 Eine spätere blockierende Owner-Prüfung darf erst aktiviert werden, wenn:
 
 - alle bestehenden Owner-IDs normativ auflösbar sind;
-- vollständige OPT-Markdown–JSON-Parität geprüft wird oder der Resolver direkt die kanonische Markdown-Quelle liest;
+- der OPT-Markdown–JSON-Paritätsguard grün ist und der Resolver für Owner-IDs weiter die kanonische Markdown-Quelle nutzt;
 - keine historische Ownership regressiert;
 - Tests für beide normativen Quellen, Lookup-Drift und Konflikte existieren;
 - Backfill-Restbestand ausreichend bereinigt ist.
