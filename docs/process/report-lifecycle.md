@@ -103,9 +103,8 @@ werden aber nicht als Reports validiert.
 - Lifecycle-Findings bleiben im Warnmodus nicht blockierend.
 - Die vollständige blockierende Erkennung fehlenden oder nicht parsebaren
   Report-Frontmatters ist noch nicht umgesetzt.
-- Enums, ISO-Datum, Task-Existenz und Supersession-Konsistenz sind noch nicht
-  vollständig geprüft.
-- Strict-Modi bleiben deaktiviert.
+- Lifecycle-Enums, `review_after` als ISO-Datum und einfache `superseded_by`-Zielpfade werden technisch geprüft.
+- Task-Existenz, Relationskonsistenz und Strict-Ratchets bleiben nachgelagert.
 
 ## Begriffe
 
@@ -171,16 +170,15 @@ vorkommen. Der DocMeta-Status beschreibt die allgemeine Dokumentgültigkeit;
   - überfällig bedeutet reviewbedürftig, nicht automatisch falsch,
   - externe Provider-, DNS- oder Runtime-Claims brauchen frischen Live-Check.
 - **lifecycle_state**: report-spezifischer Lifecycle-Zustand. Der Validator
-  verarbeitet das Feld bereits für Anwesenheits- und zustandsabhängige
-  Pflichtfeldprüfungen. Enums und weitere Konsistenzprüfungen sind
-  nachgelagert.
-- **superseded_by**: Pfad zum ablösenden Artefakt. Das Feld wird bereits
-  verwendet, darf aber nicht alleinige Supersession-Wahrheit sein. Die
-  Relationenkonsistenz wird noch nicht vollständig geprüft.
+  verarbeitet das Feld für Anwesenheits-, zustandsabhängige Pflichtfeld- und
+  Enum-Prüfungen.
+- **superseded_by**: Pfad zum ablösenden Artefakt. Der Validator prüft, dass
+  ein gesetzter Pfad existiert und nicht auf denselben Report zeigt. Das Feld
+  darf aber nicht alleinige Supersession-Wahrheit sein; die Relationenkonsistenz
+  wird noch nicht vollständig geprüft.
 
 `lifecycle` ersetzt `doc_type` nicht. `doc_type` beschreibt die Dokumentart;
 `lifecycle` beschreibt die Rolle des Reports im Lebenszyklus.
-
 Die Feldnamen sind verbindlich snake_case:
 `lifecycle`, `owner_task`, `review_after`, `lifecycle_state`, `superseded_by`.
 
@@ -243,7 +241,7 @@ Weitere Registrierungsquellen benötigen zwingend:
 
 ### Enforcement-Grenze
 
-Dieser Schritt entscheidet nur die Policy. Eine technische Owner-Existenzprüfung, Owner-Statusprüfung, Markdown–JSON-Paritätsguard, neue Lifecycle-Enums, neue Lifecycle-States oder Strict-Aktivierung sind nicht implementiert.
+Dieser Schritt entscheidet nur die Policy. Lifecycle-Enums, `review_after` als ISO-Datum und einfache `superseded_by`-Zielpfade werden technisch geprüft. Owner-Existenzprüfung, Owner-Statusprüfung, Markdown–JSON-Paritätsguard, neue Lifecycle-States und Strict-Aktivierung sind nicht implementiert.
 
 ### Gültige und ungültige Owner
 

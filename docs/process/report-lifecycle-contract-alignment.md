@@ -28,7 +28,7 @@ relations:
 - report-spezifische Felder werden verwendet,
 - globaler Contract bleibt unverändert,
 - Warnmodus ist CI-aktiv,
-- Strict und semantische Härtung bleiben offen.
+- Strict sowie Owner- und Relation-Pruefungen bleiben offen.
 
 ## Ausgangslage
 
@@ -224,8 +224,8 @@ Eine spätere blockierende Owner-Prüfung darf erst aktiviert werden, wenn:
 - Schemaort für report-spezifische Lifecycle-Felder
 - zulässige Werte für `lifecycle`
 - zulässige Werte für `lifecycle_state`
-- ISO-Datumsvalidierung für `review_after`
-- technische `owner_task`-Existenzprüfung (ohne Namensraum-Leerstelle, da dieser nun definiert ist)
-- Supersession-Konsistenz (`superseded_by` vs. `relations[type=supersedes]`)
+- technische `owner_task`-Existenzpruefung
+- technische `owner_task`-Existenzpruefung
+- Supersession-Relationspruefung
 - Changed-only strict
 - Global strict

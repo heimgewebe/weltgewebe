@@ -129,7 +129,7 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         _row_for_path(section, "docs/reports/mixed.md")
 
     def test_active_report_group(self):
-        self._write_report("active1.md", "---\ndoc_type: report\nstatus: draft\nlifecycle_state: active\nlifecycle: production\nowner_task: T123\nreview_after: 2026-01-01\n---")
+        self._write_report("active1.md", "---\ndoc_type: report\nstatus: draft\nlifecycle_state: active\nlifecycle: audit\nowner_task: T123\nreview_after: 2026-01-01\n---")
 
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
@@ -172,7 +172,7 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         self.assertEqual(_table_paths(unclassified), [])
 
     def test_superseded_report_with_missing_superseded_by(self):
-        self._write_report("super.md", "---\ndoc_type: report\nstatus: archived\nlifecycle_state: superseded\nlifecycle: eol\nowner_task: T123\n---")
+        self._write_report("super.md", "---\ndoc_type: report\nstatus: archived\nlifecycle_state: superseded\nlifecycle: audit\nowner_task: T123\n---")
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
 
@@ -185,8 +185,8 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         self.assertEqual(cells[3], "missing_superseded_by")
 
     def test_deferred_and_archived_groups(self):
-        self._write_report("def.md", "---\ndoc_type: report\nstatus: draft\nlifecycle_state: deferred\nlifecycle: backlog\nowner_task: T1\nreview_after: 2026-01-01\n---")
-        self._write_report("arch.md", "---\ndoc_type: report\nstatus: deprecated\nlifecycle_state: archived\nlifecycle: eol\nowner_task: T2\n---")
+        self._write_report("def.md", "---\ndoc_type: report\nstatus: draft\nlifecycle_state: deferred\nlifecycle: decision-prep\nowner_task: T1\nreview_after: 2026-01-01\n---")
+        self._write_report("arch.md", "---\ndoc_type: report\nstatus: deprecated\nlifecycle_state: archived\nlifecycle: audit\nowner_task: T2\n---")
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
 
@@ -201,7 +201,7 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         self.assertEqual(_rows_for_path(_section(content, "Superseded Reports"), "docs/reports/arch.md"), [])
 
     def test_markdown_cells_escape_pipes(self):
-        self._write_report("pipes.md", "---\ndoc_type: report\nlifecycle_state: active\nstatus: active\nlifecycle: production\nowner_task: \"Team | Task\"\nreview_after: 2026-01-01\n---")
+        self._write_report("pipes.md", "---\ndoc_type: report\nlifecycle_state: active\nstatus: active\nlifecycle: audit\nowner_task: \"Team | Task\"\nreview_after: 2026-01-01\n---")
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
 

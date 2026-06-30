@@ -118,8 +118,7 @@ def string_value(value: object) -> str:
     """Normalize scalar values exactly like the lifecycle validator.
 
     This module mirrors the validator's currently implemented field-presence
-    requirements. It is not the complete normative lifecycle policy and does
-    not validate enums, dates, owners, or relation consistency.
+    Semantic checks are implemented in the report lifecycle validator.
     """
     if value is None:
         return ""

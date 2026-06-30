@@ -1426,7 +1426,6 @@
       ],
       "missing_evidence": [
         "Fehlendes oder nicht parsebares Report-Frontmatter wird noch nicht vollständig blockierend erkannt",
-        "Semantische Validatorprüfungen für Lifecycle-Enums, ISO-Datum und Supersession-Konsistenz fehlen",
         "Die owner_task-Semantik und die normativen Registrierungsquellen sind entschieden und gegen den bestehenden Bestand kompatibilitätsgeprüft; vollständige OPT-Markdown–JSON-Parität und technische Existenzprüfung bleiben nach den Backfill-Slices offen.",
         "Physische Archivpfade unter docs/reports/archive/** werden von Validator und Inventory noch nicht rekursiv erfasst",
         "Changed-only strict ist noch nicht umgesetzt",
