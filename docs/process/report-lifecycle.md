@@ -157,7 +157,6 @@ vorkommen. Der DocMeta-Status beschreibt die allgemeine Dokumentgültigkeit;
 `superseded` braucht eine nachvollziehbare Ablösung.
 
 ## Lifecycle-Felder
-## Lifecycle-Felder
 
 - **lifecycle**: Report-Klasse oder Lifecycle-Rolle.
 - **owner_task**: verantwortlicher Task, Vorhaben, Kontrollpunkt oder Prozess.
@@ -243,6 +242,7 @@ Weitere Registrierungsquellen benötigen zwingend:
 ### Enforcement-Grenze
 
 Dieser Schritt entscheidet nur die Policy. Lifecycle-Enums, `review_after` als ISO-Datum und einfache `superseded_by`-Zielpfade werden technisch geprüft. Owner-Existenzprüfung, Owner-Statusprüfung, Markdown–JSON-Paritätsguard, neue Lifecycle-States und Strict-Aktivierung sind nicht implementiert.
+
 ### Gültige und ungültige Owner
 
 Gültig:
