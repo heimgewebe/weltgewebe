@@ -168,6 +168,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 - `PasskeyRegistrationStore` für laufende Registrierungen (In-Memory, TTL 5 Min) aktiv genutzt (nach Grant-Consume)
 - Langlebiger `PasskeyStore` für registrierte Credentials (In-Memory, account-gebunden, duplicate detection, list/find/remove)
 - `AccountStore.update_webauthn_user_id(account_id, uuid)` als Writeback-Mutation implementiert
+- AUTH-PG-002 Store-Slice (kein Cutover, In-Memory bleibt Default): PostgreSQL-Migration `passkey_credentials` und isolierter `DbPasskeyStore` (`apps/api/src/auth/passkeys_db.rs`) mit Insert/List/Find/Update/Remove; Counter-Update owner-gebunden in Transaktion mit `FOR UPDATE`; Duplicate über PK. Store-Ebene Restart-Stabilität ist lokal grün (`apps/api/tests/db_passkey_store_persistence.rs`, 5 Tests gegen direkten PostgreSQL); **PR-CI-Beleg steht noch aus** (CI-Job-Entwurf `db-passkey-persistence-proof` in `api.yml`). Details: [reports/auth-pg-002-passkey-db-store.md](auth-pg-002-passkey-db-store.md)
 
 **Dokumentationsbelege:** auth-roadmap.md (Phase 4 aktualisiert), [reports/passkey-register-verify-prep.md](passkey-register-verify-prep.md) (Vorbereitungsbericht Register-Verify)
 **Code-, Test- und Verifikationsbelege:**
@@ -180,7 +181,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 - Unit-Tests in `apps/api/src/auth/passkeys.rs` und `apps/api/src/auth/accounts.rs`; Integrationstests in `apps/api/tests/api_auth.rs` (inkl. `passkey_register_verify_*`-Negativpfade) und `apps/api/tests/auth_security_invariants.rs` (CSRF-Drift-Guard erfasst `POST /auth/passkeys/register/verify`)
 - Browser-Proof in `apps/web/tests/proofs/passkey-register-positive.proof.ts` ist durch CI belegt ([Run 27487642565](https://github.com/heimgewebe/weltgewebe/actions/runs/27487642565), Commit `cc54460`, Workflow `auth-passkey-register-proof`).
 
-**Fehlende Belege:** Passkey-Login-Flow (`auth/options`, `auth/verify`); Passkey List/Remove; persistente Ablage über Neustart; E2E-UI-Aktivierung
+**Fehlende Belege:** Passkey-Login-Flow (`auth/options`, `auth/verify`); Passkey List/Remove; E2E-UI-Aktivierung; persistente Ablage über Neustart auf **Routen-/Runtime-Ebene** (Store-Primitive existiert und ist lokal belegt, aber Routen nutzen weiter den In-Memory-Store; Runtime-Facade/Config und PR-CI-Beleg für den DB-Store stehen aus — AUTH-PG-002)
 **Status:** Teil
 **Risiko:** mittel
 
