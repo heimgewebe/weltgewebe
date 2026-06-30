@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Test: scripts/guard/metrics-ref-guard.sh
+# Tests for the metrics reusable-workflow contract and local snapshot producer.
 # Verifies that the metrics ref guard correctly detects mismatches
 # between uses: ref and metarepo_ref in the metrics workflow.
+# It also locks the snapshot script's default file-output exit semantics.
 #
-# Tests call the REAL guard script via REPO_ROOT override — no
-# shadow reimplementation of guard logic.
+# Tests call the REAL guard and snapshot scripts — no shadow
+# reimplementation of production logic.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 GUARD_SCRIPT="$REPO_ROOT/scripts/guard/metrics-ref-guard.sh"
+SNAPSHOT_SCRIPT="$REPO_ROOT/scripts/wgx-metrics-snapshot.sh"
 
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -93,6 +95,21 @@ if REPO_ROOT="$TEMP_DIR/case4" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
   report 0 "Quoted metarepo_ref correctly matches"
 else
   report 1 "Quoted metarepo_ref should be stripped and match"
+fi
+
+# Case 5: Default snapshot mode writes the file and exits successfully without stdout
+snapshot_output="$TEMP_DIR/snapshot.json"
+snapshot_stdout="$TEMP_DIR/snapshot.stdout"
+if WGX_METRICS_OUTPUT="$snapshot_output" bash "$SNAPSHOT_SCRIPT" >"$snapshot_stdout"; then
+  if [ -s "$snapshot_output" ] && [ ! -s "$snapshot_stdout" ] && \
+    jq -e '.ts and .host and .updates and .backup and .drift' \
+      "$snapshot_output" >/dev/null; then
+    report 0 "Default snapshot mode writes valid JSON and exits zero"
+  else
+    report 1 "Default snapshot mode output contract should hold"
+  fi
+else
+  report 1 "Default snapshot mode should exit zero"
 fi
 
 echo ""
