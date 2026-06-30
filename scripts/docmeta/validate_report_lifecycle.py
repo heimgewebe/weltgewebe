@@ -46,7 +46,7 @@ def _iter_report_paths(root: Path) -> list[Path]:
     reports_dir = root / "docs" / "reports"
     if not reports_dir.exists():
         return []
-    return sorted([p for p in reports_dir.glob("*.md") if p.is_file()])
+    return sorted([p for p in reports_dir.rglob("*.md") if p.is_file()])
 
 
 def _invalid_review_after(value: str) -> bool:
