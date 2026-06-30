@@ -206,7 +206,6 @@ Result: 5 unique IDs across 16 report usages; 0 unresolved IDs.
 - triage
 - small backfill slices
 - semantic hardening
-- changed-only strict
 - global strict
 
 ### Enforcement-Vorbedingungen
@@ -225,5 +224,4 @@ Eine spätere blockierende Owner-Prüfung darf erst aktiviert werden, wenn:
 - zulässige Werte für `lifecycle`
 - zulässige Werte für `lifecycle_state`
 - Supersession-Relationspruefung
-- Changed-only strict
 - Global strict

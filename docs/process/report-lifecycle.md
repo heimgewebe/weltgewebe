@@ -54,7 +54,6 @@ werden aber nicht als Reports validiert.
 ## Aktuelle Nicht-Ziele
 
 - kein Massen-Backfill bestehender Reports,
-- kein changed-only strict,
 - kein global strict,
 - keine Erweiterung des globalen DocMeta-Contracts,
 - keine automatische Archivierung,
@@ -73,6 +72,7 @@ werden aber nicht als Reports validiert.
 - Pilot,
 - report-spezifischer Validator,
 - Modi `report`, `warn`, `strict`,
+- changed-only strict im PR-Kontext,
 - generierte Overview,
 - Teil-Backfills.
 
@@ -87,7 +87,6 @@ werden aber nicht als Reports validiert.
 
 - restliche Reportklassifikation,
 - semantische Validatorhärtung,
-- changed-only strict,
 - global strict,
 - Archivierungsprozess,
 - separate Löschprüfung.
@@ -344,13 +343,12 @@ Löschen ist nur zulässig, wenn:
 2. evidenzbasierte Resttriage,
 3. kleine Backfill-Slices,
 4. semantische Validatorhärtung,
-5. changed-only strict,
-6. global strict erst bei bereinigtem Bestand,
-7. Archivierung nach Policy- und Referenzprüfung,
-8. Löschung nur separat und nach vollständigem Referenzcheck.
+5. global strict erst bei bereinigtem Bestand,
+6. Archivierung nach Policy- und Referenzprüfung,
+7. Löschung nur separat und nach vollständigem Referenzcheck.
 
-Changed-only strict kommt vor global strict, damit Altlasten nicht jeden
-Feature-PR blockieren.
+Changed-only strict ist der Zwischenzustand: geänderte Report-Dateien werden
+blockierend geprüft, ohne jeden Feature-PR durch unberührte Altlasten zu blockieren.
 
 ## Beispiele
 
