@@ -529,7 +529,7 @@ jobs:
         working-directory: apps/web
 
       - name: Download reusable PMTiles artefact from content proof
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: basemap-visual-proof-input
           path: /tmp/basemap-visual-proof-input
