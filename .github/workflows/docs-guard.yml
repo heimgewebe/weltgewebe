@@ -68,6 +68,9 @@ jobs:
       - name: Report lifecycle warnings
         run: python3 -m scripts.docmeta.validate_report_lifecycle --mode warn
 
+      - name: Optimierungsstatus Markdown JSON parity
+        run: python3 -m scripts.docmeta.validate_optimierungsstatus_parity
+
       - name: Report lifecycle changed-only strict
         if: github.event_name == 'pull_request'
         env:

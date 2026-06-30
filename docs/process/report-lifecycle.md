@@ -38,15 +38,12 @@ Diese Policy ist eine Regelgrundlage, keine rückwirkende Bereinigung.
 
 ## Geltungsbereich
 
-**Discovery-Surface:** Alle Markdown-Dateien direkt unter `docs/reports/`
-(`docs/reports/*.md`) werden inventarisiert.
+**Discovery-Surface:** Alle Markdown-Dateien unter docs/reports werden rekursiv inventarisiert.
 
-**Policy-Scope:** Die Report-Lifecycle-Regeln gelten für Dateien direkt unter
-`docs/reports/` mit `doc_type: report`.
+**Policy-Scope:** Die Report-Lifecycle-Regeln gelten für Report-Dateien unter docs/reports.
 
-**Aktueller Validator-Scope:** Der Validator prüft Markdown-Dateien direkt
-unter `docs/reports/`, deren `doc_type` den Wert `report` trägt. Er setzt die
-Policy derzeit nur teilweise technisch durch.
+**Aktueller Validator-Scope:** Der Validator prüft Report-Dateien unter docs/reports rekursiv.
+Er setzt die Policy weiterhin schrittweise technisch durch.
 
 Andere `doc_type`-Werte direkt unter `docs/reports/` erscheinen im Inventory,
 werden aber nicht als Reports validiert.
@@ -107,7 +104,7 @@ werden aber nicht als Reports validiert.
 
 ## Begriffe
 
-- **Report**: Markdown-Dokument unter `docs/reports/*.md`, das einen Befund,
+- **Report**: Markdown-Dokument unter docs/reports, das einen Befund,
   Audit, Proof, Status oder eine entscheidungsvorbereitende Auswertung
   beschreibt.
 - **Lifecycle**: Rolle eines Reports im Lebenszyklus: warum er existiert, wie
@@ -304,12 +301,9 @@ Lifecycle-State-only-Archivierung ist der derzeit unterstützte Weg. Die Datei
 bleibt an ihrem bestehenden Pfad; dadurch bleiben Links und die aktuelle
 Scannerreichweite stabil.
 
-Physische Archivierung nach
-`docs/reports/archive/YYYY/<report>.md` ist derzeit nicht operativ
-freigegeben. Validator und Inventory erfassen aktuell nur Markdown-Dateien
-direkt unter `docs/reports/`.
-
-Vor der ersten physischen Archivierung müssen beide Scanner rekursiv arbeiten
+Physische Archivierung ist technisch vorbereitet: Validator, Inventory und
+Overview erfassen Report-Dateien rekursiv. Eine Verschiebung bleibt trotzdem
+reviewpflichtig, weil Links und Referenzflächen bewusst geprüft werden müssen.
 und durch Tests für verschachtelte Archivpfade abgesichert sein.
 
 Für eine spätere physische Archivierung gelten zusätzlich folgende
@@ -390,6 +384,6 @@ zugehörigen Task begründet werden.
 - eigene Lifecycle-Policy für `docs/proofs/**`,
 - Review-Logik für generierte Reports,
 - technische Owner-Auflösung,
-- vollständige OPT-Markdown–JSON-Parität und Owner-Statusprüfung,
+- Owner-Statuspruefung,
 - Enforcement-Zeitpunkt,
 - spätere Statuskompatibilität.
