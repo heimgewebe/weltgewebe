@@ -21,14 +21,14 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | files_without_frontmatter | 0 |
 | files_with_status | 31 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 26 |
-| files_missing_lifecycle_state | 5 |
-| files_with_lifecycle | 26 |
-| files_missing_lifecycle | 5 |
-| files_with_owner_task | 26 |
-| files_missing_owner_task | 5 |
-| files_with_review_after | 17 |
-| files_missing_review_after | 14 |
+| files_with_lifecycle_state | 27 |
+| files_missing_lifecycle_state | 4 |
+| files_with_lifecycle | 27 |
+| files_missing_lifecycle | 4 |
+| files_with_owner_task | 27 |
+| files_missing_owner_task | 4 |
+| files_with_review_after | 18 |
+| files_missing_review_after | 13 |
 | files_primary_referenced | 28 |
 | files_primary_unreferenced | 3 |
 | files_with_derived_references | 31 |
@@ -70,10 +70,10 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-runtime-data-source-reconciliation.md | report | active | active | audit | DB-PROOF-001 | 2026-07-18 |  | 1 | 4 | 5 |  |  |
 | docs/reports/github-actions-node24-readiness.md | report | active | active | audit | OPT-CI-005 | 2026-09-29 |  | 2 | 1 | 5 |  |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | deprecated | archived | planning | DEPLOY-DNS-001 |  |  | 1 | 4 | 4 | review_after |  |
-| docs/reports/map-architekturkritik.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 4 | 5 | 2 |  |  |
-| docs/reports/map-basemap-proof-gap-reconciliation.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 2 | 4 | 6 |  |  |
+| docs/reports/map-architekturkritik.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 5 | 5 | 2 |  |  |
+| docs/reports/map-basemap-proof-gap-reconciliation.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 3 | 4 | 6 |  |  |
 | docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  |  | 8 | 5 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/optimierungsbericht.md | report | active |  |  |  |  |  | 2 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/optimierungsbericht.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 3 | 4 | 4 |  |  |
 | docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 22 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/passkey-register-verify-prep.md | report | deprecated | archived | decision-prep | AUTH-PG-002 |  |  | 0 | 4 | 4 | review_after |  |
 | docs/reports/planning-registration-findings.md | report | deprecated | archived | audit | TASK-CTL-005 |  |  | 1 | 4 | 2 | review_after |  |
@@ -93,7 +93,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-edge-create-semantics-preflight.md | review_after |
 | docs/reports/inwx-zone-reconciliation-plan.md | review_after |
 | docs/reports/map-status-matrix.md | lifecycle, owner_task, review_after, lifecycle_state |
-| docs/reports/optimierungsbericht.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/optimierungsstatus.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/passkey-register-verify-prep.md | review_after |
 | docs/reports/planning-registration-findings.md | review_after |
@@ -243,10 +242,12 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/blueprints/kartenklarheit-roadmap.md`
   - `docs/blueprints/kartenklarheit.md`
   - `docs/reports/map-status-matrix.md`
+  - `docs/tasks/board.md`
 
 - `docs/reports/map-basemap-proof-gap-reconciliation.md`
   - `docs/blueprints/kartenklarheit-roadmap.md`
   - `docs/reports/map-status-matrix.md`
+  - `docs/tasks/board.md`
 
 - `docs/reports/map-status-matrix.md`
   - `docs/blueprints/kartenklarheit-phase6.md`
@@ -261,6 +262,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 - `docs/reports/optimierungsbericht.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
   - `docs/reports/optimierungsstatus.md`
+  - `docs/tasks/board.md`
 
 - `docs/reports/optimierungsstatus.md`
   - `docs/blueprints/auth-persistence-runtime-proof.md`

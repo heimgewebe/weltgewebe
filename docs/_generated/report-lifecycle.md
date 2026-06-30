@@ -19,27 +19,25 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | files_scanned | 31 |
 | reports_checked | 27 |
 | reports_ignored_non_report | 4 |
-| reports_with_lifecycle_state | 26 |
-| reports_missing_lifecycle_state | 1 |
-| findings_total | 3 |
+| reports_with_lifecycle_state | 27 |
+| reports_missing_lifecycle_state | 0 |
+| findings_total | 0 |
 
 ## Lifecycle State Summary
 
 | lifecycle_state | Count |
 | --- | ---: |
-| active | 17 |
+| active | 18 |
 | deferred | 0 |
 | superseded | 5 |
 | archived | 4 |
-| missing | 1 |
+| missing | 0 |
 
 ## Finding Summary
 
 | Code | Count |
 | --- | ---: |
-| missing_lifecycle | 1 |
-| missing_lifecycle_state | 1 |
-| missing_review_after | 1 |
+| _None_ | 0 |
 
 ## Active Reports
 
@@ -61,6 +59,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/github-actions-node24-readiness.md | active | audit | OPT-CI-005 | 2026-09-29 |  |
 | docs/reports/map-architekturkritik.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
+| docs/reports/optimierungsbericht.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
 | docs/reports/proof-matrix-generalization-decision.md | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  |
 
 ## Deferred Reports
@@ -92,13 +91,13 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
-| docs/reports/optimierungsbericht.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
+| _None_ | | | | | |
 
 ## Reports With Findings
 
 | Report | lifecycle_state | status | findings |
 | --- | --- | --- | --- |
-| docs/reports/optimierungsbericht.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
+| _None_ | | | |
 
 ## Reports With Missing Currently-Enforced Fields
 
@@ -106,7 +105,7 @@ Fields required by the currently implemented validator rules that are absent, in
 
 | Report | status | lifecycle_state | Missing currently-enforced fields |
 | --- | --- | --- | --- |
-| docs/reports/optimierungsbericht.md | active |  | lifecycle_state, lifecycle, review_after |
+| _None_ | | | |
 
 ## Non-Report Files Under docs/reports
 
