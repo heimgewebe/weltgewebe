@@ -16,23 +16,23 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 | Metric | Count |
 | --- | ---: |
-| files_total | 28 |
-| files_with_frontmatter | 28 |
+| files_total | 31 |
+| files_with_frontmatter | 31 |
 | files_without_frontmatter | 0 |
-| files_with_status | 28 |
+| files_with_status | 31 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 19 |
-| files_missing_lifecycle_state | 9 |
-| files_with_lifecycle | 19 |
-| files_missing_lifecycle | 9 |
-| files_with_owner_task | 19 |
-| files_missing_owner_task | 9 |
-| files_with_review_after | 10 |
-| files_missing_review_after | 18 |
-| files_primary_referenced | 26 |
-| files_primary_unreferenced | 2 |
+| files_with_lifecycle_state | 23 |
+| files_missing_lifecycle_state | 8 |
+| files_with_lifecycle | 23 |
+| files_missing_lifecycle | 8 |
+| files_with_owner_task | 23 |
+| files_missing_owner_task | 8 |
+| files_with_review_after | 14 |
+| files_missing_review_after | 17 |
+| files_primary_referenced | 28 |
+| files_primary_unreferenced | 3 |
 | files_with_derived_references | 28 |
-| files_with_relations | 28 |
+| files_with_relations | 31 |
 | files_with_missing_supersession_target | 0 |
 
 ## Doc Type Distribution
@@ -41,7 +41,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | --- | ---: |
 | documentation | 1 |
 | reference | 1 |
-| report | 24 |
+| report | 27 |
 | status-matrix | 2 |
 
 ## Reports
@@ -55,10 +55,11 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/auth-persistence-runtime-proof.md | report | deprecated | superseded | proof | OPT-API-002 |  | docs/reports/optimierungsstatus.md | 4 | 4 | 6 | review_after |  |
 | docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active | active | audit | OPT-API-002 | 2026-07-17 |  | 1 | 4 | 5 |  |  |
 | docs/reports/auth-status-matrix.md | reference | active |  |  |  |  |  | 5 | 4 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/cost-report.md | report | active |  |  |  |  |  | 1 | 4 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/cost-report.md | report | active | active | generated | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 1 | 4 | 3 |  |  |
 | docs/reports/domain-account-email-uniqueness-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-13 |  | 2 | 4 | 4 |  |  |
 | docs/reports/domain-account-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 7 | 4 | 6 |  |  |
 | docs/reports/domain-backfill-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 4 |  |  |
+| docs/reports/domain-edge-cache-limit-design.md | report | active | active | decision-prep | DOMAIN-PG-003 | 2026-09-29 |  | 0 | 0 | 5 |  |  |
 | docs/reports/domain-edge-create-semantics-preflight.md | report | deprecated | superseded | decision-prep | OPT-ARC-001 |  | docs/reports/domain-edge-write-path-proof.md | 1 | 5 | 7 | review_after |  |
 | docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 2 | 4 | 6 |  |  |
 | docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 6 | 8 |  |  |
@@ -67,6 +68,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | 4 | 4 | 3 |  |  |
 | docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 5 |  |  |
 | docs/reports/domain-runtime-data-source-reconciliation.md | report | active |  |  |  |  |  | 1 | 4 | 5 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/github-actions-node24-readiness.md | report | active | active | audit | OPT-CI-005 | 2026-09-29 |  | 2 | 0 | 5 |  |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | deprecated | archived | planning | DEPLOY-DNS-001 |  |  | 1 | 4 | 4 | review_after |  |
 | docs/reports/map-architekturkritik.md | report | active |  |  |  |  |  | 4 | 5 | 2 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | report | active |  |  |  |  |  | 2 | 4 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
@@ -75,6 +77,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 22 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/passkey-register-verify-prep.md | report | deprecated | archived | decision-prep | AUTH-PG-002 |  |  | 0 | 4 | 4 | review_after |  |
 | docs/reports/planning-registration-findings.md | report | deprecated | archived | audit | TASK-CTL-005 |  |  | 1 | 4 | 2 | review_after |  |
+| docs/reports/proof-matrix-generalization-decision.md | report | active | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  | 1 | 0 | 6 |  |  |
 | docs/reports/report-lifecycle-restbestand-triage.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  | 1 | 4 | 3 | review_after |  |
 
 ## Absent Core Lifecycle Metadata
@@ -87,7 +90,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/auth-persistence-readiness.md | review_after |
 | docs/reports/auth-persistence-runtime-proof.md | review_after |
 | docs/reports/auth-status-matrix.md | lifecycle, owner_task, review_after, lifecycle_state |
-| docs/reports/cost-report.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/domain-edge-create-semantics-preflight.md | review_after |
 | docs/reports/domain-runtime-data-source-reconciliation.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/inwx-zone-reconciliation-plan.md | review_after |
@@ -115,6 +117,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-account-email-uniqueness-audit.md | 4 | relates_to | apps/api/src/auth/accounts.rs, apps/api/src/routes/accounts.rs, docs/blueprints/domain-data-postgres-cutover.md, scripts/docmeta/audit_account_email_uniqueness.py |
 | docs/reports/domain-account-write-path-proof.md | 6 | relates_to | .github/workflows/api.yml, apps/api/tests/db_domain_account_write_path.rs, docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md |
 | docs/reports/domain-backfill-proof.md | 4 | relates_to | .github/workflows/api.yml, apps/api/tests/db_domain_backfill.rs, docs/blueprints/domain-data-postgres-cutover.md, docs/tasks/index.json |
+| docs/reports/domain-edge-cache-limit-design.md | 5 | relates_to | apps/api/src/domain_db.rs, apps/api/src/routes/edges.rs, docs/blueprints/domain-data-postgres-cutover.md, docs/tasks/board.md, docs/tasks/index.json |
 | docs/reports/domain-edge-create-semantics-preflight.md | 7 | relates_to | contracts/domain/edge.schema.json, docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-node-write-path-proof.md, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, docs/tasks/index.json |
 | docs/reports/domain-edge-reference-audit.md | 6 | relates_to | apps/api/migrations/20260531000002_create_domain_edges.up.sql, contracts/domain/edge.schema.json, docs/blueprints/domain-data-postgres-cutover.md, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, scripts/docmeta/audit_domain_edge_references.py |
 | docs/reports/domain-edge-write-path-proof.md | 8 | relates_to, supersedes | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-edge-create-semantics-preflight.md, docs/reports/domain-node-write-path-proof.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md, docs/tasks/index.json |
@@ -123,6 +126,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-provider-role-finding.md | 3 | relates_to | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md, docs/runbooks/domain-mail-cutover.md, docs/tasks/board.md |
 | docs/reports/domain-read-path-proof.md | 5 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-backfill-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md |
 | docs/reports/domain-runtime-data-source-reconciliation.md | 5 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-edge-reference-audit.md, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, docs/tasks/index.json |
+| docs/reports/github-actions-node24-readiness.md | 5 | relates_to | .github/workflows/opt-arc-001-db-proof-matrix.yml, docs/tasks/board.md, docs/tasks/index.json, scripts/ci/check_actions_node24_readiness.py, scripts/ci/tests/test_check_actions_node24_readiness.py |
 | docs/reports/inwx-zone-reconciliation-plan.md | 4 | relates_to | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md, docs/reports/domain-provider-role-finding.md, docs/runbooks/domain-mail-cutover.md, docs/tasks/board.md |
 | docs/reports/map-architekturkritik.md | 2 | relates_to | docs/blueprints/kartenklarheit-roadmap.md, docs/reports/map-status-matrix.md |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | 6 | relates_to | .github/workflows/basemap-runtime-proof.yml, docs/blueprints/kartenklarheit-phase6.md, docs/blueprints/kartenklarheit-roadmap.md, docs/proofs/basemap-hamburg-artifact-proof.md, docs/reports/map-status-matrix.md, scripts/guard/basemap-runtime-proof.sh |
@@ -131,6 +135,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/optimierungsstatus.md | 4 | depends_on, relates_to | docs/policies/agent-reading-protocol.md, docs/reports/auth-persistence-readiness.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsbericht.md |
 | docs/reports/passkey-register-verify-prep.md | 4 | relates_to | docs/adr/ADR-0006__auth-magic-link-session-passkey.md, docs/blueprints/auth-roadmap.md, docs/reports/auth-status-matrix.md, docs/specs/auth-api.md |
 | docs/reports/planning-registration-findings.md | 2 | relates_to | docs/tasks/index.json, scripts/docmeta/check_planning_registration.py |
+| docs/reports/proof-matrix-generalization-decision.md | 6 | relates_to | .github/workflows/opt-arc-001-db-proof-matrix.yml, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, docs/tasks/index.json, scripts/docmeta/tests/test_validate_opt_arc_001_db_proof_matrix.py, scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py |
 | docs/reports/report-lifecycle-restbestand-triage.md | 3 | relates_to | docs/process/report-lifecycle.md, docs/tasks/index.json, scripts/docmeta/validate_report_lifecycle.py |
 
 ## Primary Referenced Reports
@@ -229,6 +234,10 @@ Primary references are exact path matches in canonical documentation surfaces. D
 - `docs/reports/domain-runtime-data-source-reconciliation.md`
   - `docs/tasks/board.md`
 
+- `docs/reports/github-actions-node24-readiness.md`
+  - `docs/reports/optimierungsstatus.md`
+  - `docs/tasks/board.md`
+
 - `docs/reports/inwx-zone-reconciliation-plan.md`
   - `docs/tasks/DEPLOY-DNS-001B.md`
 
@@ -281,6 +290,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/tasks/board.md`
 
 - `docs/reports/planning-registration-findings.md`
+  - `docs/tasks/board.md`
+
+- `docs/reports/proof-matrix-generalization-decision.md`
   - `docs/tasks/board.md`
 
 - `docs/reports/report-lifecycle-restbestand-triage.md`
@@ -468,6 +480,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 ## Primary Unreferenced Reports
 
 - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
+- `docs/reports/domain-edge-cache-limit-design.md`
 - `docs/reports/passkey-register-verify-prep.md`
 
 ## Supersession Target Diagnostics

@@ -16,45 +16,49 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Metric | Count |
 | --- | ---: |
-| files_scanned | 28 |
-| reports_checked | 24 |
+| files_scanned | 31 |
+| reports_checked | 27 |
 | reports_ignored_non_report | 4 |
-| reports_with_lifecycle_state | 19 |
-| reports_missing_lifecycle_state | 5 |
-| findings_total | 15 |
+| reports_with_lifecycle_state | 23 |
+| reports_missing_lifecycle_state | 4 |
+| findings_total | 12 |
 
 ## Lifecycle State Summary
 
 | lifecycle_state | Count |
 | --- | ---: |
-| active | 10 |
+| active | 14 |
 | deferred | 0 |
 | superseded | 5 |
 | archived | 4 |
-| missing | 5 |
+| missing | 4 |
 
 ## Finding Summary
 
 | Code | Count |
 | --- | ---: |
-| missing_lifecycle | 5 |
-| missing_lifecycle_state | 5 |
-| missing_review_after | 5 |
+| missing_lifecycle | 4 |
+| missing_lifecycle_state | 4 |
+| missing_review_after | 4 |
 
 ## Active Reports
 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
 | docs/reports/auth-persistence-runtime-target-reconciliation.md | active | audit | OPT-API-002 | 2026-07-17 |  |
+| docs/reports/cost-report.md | active | generated | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
 | docs/reports/domain-account-email-uniqueness-audit.md | active | audit | OPT-ARC-001 | 2026-07-13 |  |
 | docs/reports/domain-account-write-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-backfill-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
+| docs/reports/domain-edge-cache-limit-design.md | active | decision-prep | DOMAIN-PG-003 | 2026-09-29 |  |
 | docs/reports/domain-edge-reference-audit.md | active | audit | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-edge-write-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-node-write-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-postgres-instance-coherence-decision.md | active | audit | DOMAIN-PG-002 | 2026-12-18 |  |
 | docs/reports/domain-provider-role-finding.md | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  |
 | docs/reports/domain-read-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
+| docs/reports/github-actions-node24-readiness.md | active | audit | OPT-CI-005 | 2026-09-29 |  |
+| docs/reports/proof-matrix-generalization-decision.md | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  |
 
 ## Deferred Reports
 
@@ -85,7 +89,6 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
-| docs/reports/cost-report.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/domain-runtime-data-source-reconciliation.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-architekturkritik.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
@@ -95,7 +98,6 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Report | lifecycle_state | status | findings |
 | --- | --- | --- | --- |
-| docs/reports/cost-report.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/domain-runtime-data-source-reconciliation.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-architekturkritik.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/map-basemap-proof-gap-reconciliation.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
@@ -107,7 +109,6 @@ Fields required by the currently implemented validator rules that are absent, in
 
 | Report | status | lifecycle_state | Missing currently-enforced fields |
 | --- | --- | --- | --- |
-| docs/reports/cost-report.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/domain-runtime-data-source-reconciliation.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/map-architekturkritik.md | active |  | lifecycle_state, lifecycle, review_after |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | active |  | lifecycle_state, lifecycle, review_after |
