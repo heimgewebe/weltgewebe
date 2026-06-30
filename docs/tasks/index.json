@@ -1418,10 +1418,11 @@
         "docs/reports/report-lifecycle-restbestand-triage.md",
         "docs/reports/passkey-register-verify-prep.md",
         "tools/py/cost/report.py",
-        "docs/reports/cost-report.md"
+        "docs/reports/cost-report.md",
+        "docs/reports/domain-runtime-data-source-reconciliation.md"
       ],
       "missing_evidence": [
-        "Acht Reports wurden ursprünglich triagiert. Slice A, B und Cost-Report-Backfill sind abgeschlossen. 4 Reports verbleiben unklassifiziert.",
+        "Acht Reports wurden ursprünglich triagiert. Slice A, B, Cost-Report-Backfill und Runtime-Source-Reconciliation-Backfill sind abgeschlossen. 3 Reports verbleiben unklassifiziert.",
         "Fehlendes oder nicht parsebares Report-Frontmatter wird noch nicht vollständig blockierend erkannt",
         "Semantische Validatorprüfungen für Lifecycle-Enums, ISO-Datum und Supersession-Konsistenz fehlen",
         "Die owner_task-Semantik und die normativen Registrierungsquellen sind entschieden und gegen den bestehenden Bestand kompatibilitätsgeprüft; vollständige OPT-Markdown–JSON-Parität und technische Existenzprüfung bleiben nach den Backfill-Slices offen.",

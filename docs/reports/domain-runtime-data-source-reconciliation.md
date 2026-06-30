@@ -3,6 +3,10 @@ id: docs.reports.domain-runtime-data-source-reconciliation
 title: Domain Runtime Data Source Reconciliation
 doc_type: report
 status: active
+lifecycle_state: active
+lifecycle: audit
+owner_task: DB-PROOF-001
+review_after: 2026-07-18
 owner: docs-mechanik
 summary: Dokumentiert, warum DB-PROOF-001 derzeit nicht aus der Runtime beweisbar ist: heimserver-API und PostgreSQL laufen, aber Domain-Nodes/-Edges fehlen sowohl in PostgreSQL als auch in JSONL.
 relations:
