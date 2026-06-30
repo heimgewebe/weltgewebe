@@ -461,6 +461,89 @@ status: active
         findings = _validate_report(path, fm, self.tmp_root)
         self.assertNotIn("invalid_owner_task", [f.code for f in findings])
 
+    def write_task_index(self, task_id: str, status: str) -> None:
+        path = self.tmp_root / "docs" / "tasks" / "index.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            '{"tasks":[{"id":"' + task_id + '","status":"' + status + '"}]}',
+            encoding="utf-8",
+        )
+
+    def write_opt_status(self, task_id: str, status: str) -> None:
+        path = self.tmp_root / "docs" / "reports" / "optimierungsstatus.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "## Matrix\n\n"
+            "| id | bereich | maßnahme | status | befund_evidenzgrad | risiko | aufwand | priorität | nachweis | test | restlücke | zuletzt_geprüft |\n"
+            "|---|---|---|---|---|---|---|---|---|---|---|---|\n"
+            f"| {task_id} | API | X | {status} | code | low | low | low | n | t | r | 2026-06-29 |\n",
+            encoding="utf-8",
+        )
+
+    def test_done_owner_status_remains_valid_for_active_audit_report(self) -> None:
+        self.write_task_index("TASK-CTL-001", "done")
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "active",
+            "lifecycle": "audit",
+            "owner_task": "TASK-CTL-001",
+            "review_after": "2026-07-13",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertNotIn("invalid_owner_status", [f.code for f in findings])
+
+    def test_inconsistent_owner_status_between_sources_is_reported(self) -> None:
+        self.write_task_index("OPT-ARC-001", "partial")
+        self.write_opt_status("OPT-ARC-001", "done")
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "active",
+            "lifecycle": "audit",
+            "owner_task": "OPT-ARC-001",
+            "review_after": "2026-07-13",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertIn("invalid_owner_status", [f.code for f in findings])
+
+    def test_active_report_rejects_terminal_owner_status(self) -> None:
+        self.write_task_index("TASK-CTL-001", "obsolete")
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "active",
+            "lifecycle": "audit",
+            "owner_task": "TASK-CTL-001",
+            "review_after": "2026-07-13",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertIn("invalid_owner_status", [f.code for f in findings])
+
+    def test_archived_report_allows_terminal_owner_status(self) -> None:
+        self.write_task_index("TASK-CTL-001", "obsolete")
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "deprecated",
+            "lifecycle_state": "archived",
+            "lifecycle": "audit",
+            "owner_task": "TASK-CTL-001",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertNotIn("invalid_owner_status", [f.code for f in findings])
+
     def test_render_output_contains_expected_structure(self) -> None:
         write_report(
             self.tmp_root,
@@ -486,6 +569,7 @@ status: active
         self.assertIn("| invalid_review_after |", rendered)
         self.assertIn("| invalid_superseded_by |", rendered)
         self.assertIn("| invalid_owner_task |", rendered)
+        self.assertIn("| invalid_owner_status |", rendered)
         self.assertIn("| Path | Severity | Code | Field | Message |", rendered)
 
     def test_findings_are_deterministically_sorted_by_path_and_code(self) -> None:

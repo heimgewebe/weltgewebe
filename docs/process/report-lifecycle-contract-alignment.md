@@ -198,7 +198,7 @@ Result: 5 unique IDs across 16 report usages; 0 unresolved IDs.
 - compatibility audit: complete
 - OPT markdown/json stable status-matrix parity: enforced by `scripts/docmeta/validate_optimierungsstatus_parity.py`
 - validator enforcement: future-gated
-- owner status compatibility: open
+- owner status compatibility: enforced by scripts/docmeta/validate_report_lifecycle.py
 
 ### Rollout-Reihenfolge
 
