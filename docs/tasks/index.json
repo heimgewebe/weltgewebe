@@ -1416,10 +1416,12 @@
         "scripts/docmeta/generate_report_lifecycle_inventory.py",
         ".github/workflows/docs-guard.yml",
         "docs/reports/report-lifecycle-restbestand-triage.md",
-        "docs/reports/passkey-register-verify-prep.md"
+        "docs/reports/passkey-register-verify-prep.md",
+        "tools/py/cost/report.py",
+        "docs/reports/cost-report.md"
       ],
       "missing_evidence": [
-        "Acht Reports wurden ursprünglich triagiert. Slice A und B sind abgeschlossen. 5 Reports verbleiben unklassifiziert.",
+        "Acht Reports wurden ursprünglich triagiert. Slice A, B und Cost-Report-Backfill sind abgeschlossen. 4 Reports verbleiben unklassifiziert.",
         "Fehlendes oder nicht parsebares Report-Frontmatter wird noch nicht vollständig blockierend erkannt",
         "Semantische Validatorprüfungen für Lifecycle-Enums, ISO-Datum und Supersession-Konsistenz fehlen",
         "Die owner_task-Semantik und die normativen Registrierungsquellen sind entschieden und gegen den bestehenden Bestand kompatibilitätsgeprüft; vollständige OPT-Markdown–JSON-Parität und technische Existenzprüfung bleiben nach den Backfill-Slices offen.",
@@ -1456,7 +1458,7 @@
           "docs/process/report-lifecycle-contract-alignment.md"
         ]
       },
-      "updated_at": "2026-06-23"
+      "updated_at": "2026-06-29"
     }
   ]
 }

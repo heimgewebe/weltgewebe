@@ -37,6 +37,10 @@ id: reports.cost-report
 title: Cost Report
 doc_type: report
 status: active
+lifecycle_state: active
+lifecycle: generated
+owner_task: DOCMETA-REPORT-LIFECYCLE-001
+review_after: 2026-09-29
 owner: docs-mechanik
 summary: Automatisch erzeugter monatlicher Kostenbericht aus tools/py/cost/model.csv.
 relations:
