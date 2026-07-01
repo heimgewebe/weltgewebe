@@ -1198,15 +1198,18 @@
         "apps/api/src/routes/accounts.rs",
         "docs/reports/auth-pg-003-backfill-readiness.md",
         "apps/api/src/domain_db.rs",
-        "apps/api/tests/db_webauthn_user_id_backfill_audit.rs"
+        "apps/api/tests/db_webauthn_user_id_backfill_audit.rs",
+        "scripts/docmeta/audit_webauthn_user_id_backfill_runtime.py",
+        "scripts/docmeta/tests/test_audit_webauthn_user_id_backfill_runtime.py"
       ],
       "missing_evidence": [
         "legacy_webauthn_user_id_backfill und webauthn_user_id_not_null sind ausdrueckliche Non-Goals von OPT-ARC-001 (docs/reports/opt-arc-001-db-proof-matrix.json)",
-        "Audit-Proof vorbereitet; Live-Produktions-Audit und Backfill fehlen weiter",
+        "Audit-Proof und Runtime-Audit-Werkzeug vorbereitet; Live-Produktions-Audit und Backfill fehlen weiter",
         "Kein NOT NULL vor erfolgreichem Backfill-Proof und Cutover-Entscheidung"
       ],
       "acceptance": [
         "Audit der Accounts mit fehlender webauthn_user_id liegt vor; Backfill-Strategie ist dokumentiert und testbar",
+        "Runtime-Audit klassifiziert Schema-, Backfill- und Cutover-Blocker read-only und redigiert Account-Samples",
         "Reload erzeugt keine neue Identitaet (keine stille UUID-Neuerzeugung)",
         "NOT NULL wird erst nach Audit und erfolgreichem Backfill geprueft; Migration ist nachvollziehbar"
       ],

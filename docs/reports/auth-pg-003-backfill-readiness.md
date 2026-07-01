@@ -104,7 +104,38 @@ Der ignored DB-Proof selbst ist fixture-mutierend: Er führt Migrationen aus und
 
 Die Zähler sind nicht zwingend disjunkt; Multi-UUID-Fälle können zusätzlich als Account-/Credential-UUID-Mismatch erscheinen. Der Audit beweist auch keine Race-Freiheit während eines späteren Backfills.
 
-## 7. Nicht-Beweise
+## 7. Runtime-Audit-Werkzeug
+
+AUTH-PG-003-AUDIT-002 ergänzt ein read-only Runtime-Audit-Werkzeug:
+
+```bash
+python3 -m scripts.docmeta.audit_webauthn_user_id_backfill_runtime \
+  --database-url-env DATABASE_URL \
+  --source-label runtime-postgres \
+  --pretty
+```
+
+Das Werkzeug benötigt lokal verfügbare PostgreSQL-Client-Tools (`psql`); ohne
+einen echten Client bricht es fail-closed ab, statt ein Pseudo-Audit auszugeben.
+
+Das Werkzeug läuft in `BEGIN TRANSACTION READ ONLY`, gibt keine Account-IDs,
+Credential-IDs, WebAuthn-User-IDs oder Credential-Payloads aus und hasht
+Account-Samples als `account:sha256:<12>`. Vor der eigentlichen Zählung prüft es
+`domain_accounts` und `passkey_credentials` per `to_regclass`; fehlende Tabellen
+werden als Audit-Blocker ausgegeben, nicht als leerer Audit.
+
+Die Runtime-Ausgabe klassifiziert vier nächste Schritte:
+
+- `fix_runtime_schema_before_backfill_audit`: benötigte Tabellen fehlen.
+- `review_identity_blockers_before_backfill`: Orphan-, Multi-UUID-,
+  NULL-Credential- oder Mismatch-Fälle blockieren einen mechanischen Backfill.
+- `prepare_idempotent_backfill_proof`: keine Blocker, aber NULL-Scope vorhanden.
+- `counts_ready_for_not_null_review`: keine NULLs und keine Count-Blocker; das
+  ist nur Count-Readiness, kein automatisches `NOT NULL`.
+
+AUTH-PG-003-AUDIT-002 mutiert keine Daten und enthält weiterhin keinen Backfill.
+
+## 8. Nicht-Beweise
 
 Dieser Bericht beweist nicht:
 
@@ -115,10 +146,11 @@ Dieser Bericht beweist nicht:
 - dass `passkey_credentials.account_id -> domain_accounts(id)` schon als FK
   aktiviert werden kann.
 
-## 8. Nächste Aktion
+## 9. Nächste Aktion
 
 `AUTH-PG-003-AUDIT-001` ist als read-only Audit-Helfer und explizit fixture-mutierender Scratch-DB-Proof vorbereitet.
-Nächster PR-Schnitt: Backfill-Regeln aus Audit-Zählern ableiten; danach erst Backfill-Migration und `NOT NULL` prüfen.
+`AUTH-PG-003-AUDIT-002` ist als read-only Runtime-Audit-Werkzeug vorbereitet.
+Nächster PR-Schnitt: Runtime-Audit gegen die Zielumgebung ausführen und daraus erst den idempotenten Backfill-Proof ableiten; danach erst Backfill-Migration und `NOT NULL` prüfen.
 
 Humorlos gesagt: Erst zählen, dann füllen, dann verriegeln. Wer zuerst verriegelt,
 baut ein Museum für ausgesperrte Nutzer.
