@@ -38,6 +38,7 @@ Runtime-Auswahl für registrierte WebAuthn-/Passkey-Credentials ein:
 - `postgres` verlangt `domain_read_source=postgres` auf Config-Ebene
 - `postgres` verlangt beim Start einen verfügbaren PostgreSQL-Pool
 - kein stiller Fallback zu In-Memory, wenn `postgres` explizit gewählt ist
+- YAML und Environment verwenden konsistent `in_memory` / `postgres`
 
 Kurzlebige Ceremony-Stores bleiben bewusst in-memory:
 
@@ -74,6 +75,9 @@ Diese Routen nutzen nun die Runtime-Facade statt direkt `state.passkeys`:
   - das verifizierte Credential wird vor `ok: true` im gewählten Store
     persistiert
   - Duplicate bleibt `409 CREDENTIAL_ALREADY_REGISTERED`
+  - vor der Persistenz wird der Account frisch revalidiert; gelöschte,
+    deaktivierte oder zwischenzeitlich geänderte Account-Bindings speichern kein
+    Credential
   - Backendfehler liefern fail-closed `503 PASSKEY_CREDENTIAL_BACKEND_UNAVAILABLE`
 - `POST /auth/passkeys/auth/options`
   - Credentials werden aus dem gewählten Store gelesen
@@ -90,7 +94,7 @@ Offline/Standardpfad:
 
 ```text
 cargo test --locked -p weltgewebe-api config::tests::passkey_credential --all-features
--> 4 passed
+-> 6 passed
 
 cargo clippy --locked -p weltgewebe-api --all-targets --all-features -- -D warnings
 -> ok
@@ -102,13 +106,17 @@ cargo test --locked -p weltgewebe-api --all-features
 Neuer ignored DB-Proof in `apps/api/tests/db_passkey_store_persistence.rs`:
 
 - `passkey_runtime_facade_postgres_persists_across_state_reinit`
+- `passkey_auth_options_route_reads_postgres_runtime_facade`
 
 Der Test baut zwei `ApiState`-Instanzen mit
 `passkey_credential_source=postgres` über getrennten Pool-Instanzen. Ein über
 die Runtime-Facade persistiertes Credential wird nach State-/Pool-Reinitialisierung
 über dieselbe Facade wieder per `credential_ids_for_account` und
-`find_by_credential_id` gefunden. Damit ist belegt, dass die Runtime-Facade im
-Postgres-Modus nicht heimlich den In-Memory-Store nutzt.
+`find_by_credential_id` gefunden. Zusätzlich belegt der Route-Level-Test, dass
+`auth/options` im Postgres-Modus ein Credential findet, obwohl der
+In-Memory-`PasskeyStore` leer ist, und die Credential-ID in `allowCredentials`
+zurückgibt. Damit ist belegt, dass die Runtime-Facade im Postgres-Modus nicht
+heimlich den In-Memory-Store nutzt.
 
 Lokale Ausführung des ignored DB-Tests wurde versucht, scheiterte aber an
 lokaler PostgreSQL-Erreichbarkeit (`PoolTimedOut` auf `localhost:5432`). Das ist
@@ -121,6 +129,8 @@ PostgreSQL-Service aus und ist der maßgebliche Merge-Beleg.
 AUTH-PG-002 bleibt **partial**:
 
 - kein Produktions-Cutover
+- kein Foreign Key `passkey_credentials.account_id -> domain_accounts(id)`;
+  dieser bleibt bis zum Integritäts-/Produktions-Cutover aufgeschoben
 - kein `webauthn_user_id`-Backfill und kein späteres `NOT NULL`
 - kein vollständiger Browser-/Authenticator-E2E für Register → Reload → Login
 - kein Passkey-Management-UI/List/Remove-Cutover

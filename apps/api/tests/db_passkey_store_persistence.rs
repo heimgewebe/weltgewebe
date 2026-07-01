@@ -20,8 +20,15 @@
 //! - DATABASE_URL must point to direct PostgreSQL (not PgBouncer at :6432).
 //! - Fixtures use a recognizable account-id namespace and are cleaned up.
 
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc};
 
+use axum::{
+    body,
+    extract::{ConnectInfo, State},
+    http::{HeaderMap, StatusCode},
+    response::IntoResponse,
+    Json,
+};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use serde_json::json;
@@ -34,15 +41,20 @@ use tokio::sync::{Mutex, RwLock};
 use weltgewebe_api::{
     auth::{
         accounts::AccountStore,
-        passkeys::PasskeyStore,
+        passkeys::{build_webauthn, PasskeyStore},
         passkeys_db::{credential_id_key, DbPasskeyStore, DbPasskeyStoreError},
         passkeys_runtime,
         rate_limit::AuthRateLimiter,
+        role::Role,
         session::SessionBackend,
     },
     config::{
         AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
         DomainReadSource, PasskeyCredentialSource,
+    },
+    routes::{
+        accounts::{AccountInternal, AccountMode, AccountPublic},
+        auth::{passkey_auth_options, PasskeyAuthOptionsPayload},
     },
     state::{ApiState, OrderedCache},
     telemetry::{BuildInfo, Metrics},
@@ -119,9 +131,9 @@ fn postgres_passkey_runtime_state(pool: sqlx::PgPool) -> ApiState {
         smtp_pass: None,
         smtp_from: None,
         auth_log_magic_token: true,
-        webauthn_rp_id: None,
-        webauthn_rp_origin: None,
-        webauthn_rp_name: None,
+        webauthn_rp_id: Some("example.com".to_string()),
+        webauthn_rp_origin: Some("https://example.com".to_string()),
+        webauthn_rp_name: Some("Weltgewebe Test".to_string()),
     };
     let metrics = Metrics::try_new(BuildInfo {
         version: "test",
@@ -130,6 +142,9 @@ fn postgres_passkey_runtime_state(pool: sqlx::PgPool) -> ApiState {
     })
     .expect("metrics");
     let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
+    let webauthn = build_webauthn(&config)
+        .expect("webauthn config must be valid")
+        .expect("webauthn must be configured");
 
     ApiState {
         db_pool: Some(pool),
@@ -149,7 +164,7 @@ fn postgres_passkey_runtime_state(pool: sqlx::PgPool) -> ApiState {
         edges: Arc::new(RwLock::new(OrderedCache::new())),
         rate_limiter,
         mailer: None,
-        webauthn: None,
+        webauthn: Some(webauthn),
         passkey_registrations: Default::default(),
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
@@ -508,4 +523,82 @@ async fn passkey_runtime_facade_postgres_persists_across_state_reinit() {
     assert_eq!(stored.account_id, account_id);
 
     cleanup_account(&pool2, &stored.account_id).await;
+}
+
+/// Route-level proof: `auth/options` reads registered credentials through the
+/// runtime facade. The in-memory `PasskeyStore` stays empty; the only credential
+/// lives in PostgreSQL.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn passkey_auth_options_route_reads_postgres_runtime_facade() {
+    let pool = connect_pool().await;
+    let account_id = unique_account_id("runtime-route-auth-options");
+    cleanup_account(&pool, &account_id).await;
+
+    let state = postgres_passkey_runtime_state(pool.clone());
+    let email = format!("{account_id}@example.invalid");
+    let webauthn_user_id = Uuid::new_v4();
+    {
+        let mut accounts = state.accounts.write().await;
+        accounts.insert(AccountInternal {
+            public: AccountPublic {
+                id: account_id.clone(),
+                kind: "garnrolle".to_string(),
+                title: "Runtime Facade User".to_string(),
+                summary: None,
+                public_pos: None,
+                mode: AccountMode::Verortet,
+                radius_m: 0,
+                disabled: false,
+                tags: vec![],
+            },
+            role: Role::Weber,
+            email: Some(email.clone()),
+            webauthn_user_id,
+        });
+    }
+
+    let passkey = test_passkey(82);
+    let credential_id = passkey.cred_id().clone();
+    passkeys_runtime::insert(&state, &account_id, webauthn_user_id, passkey)
+        .await
+        .expect("runtime facade must persist credential to postgres");
+    assert!(
+        state.passkeys.list_for_account(&account_id).is_empty(),
+        "test must prove the route does not accidentally read the in-memory store"
+    );
+
+    let response = passkey_auth_options(
+        State(state.clone()),
+        ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 12345))),
+        HeaderMap::new(),
+        Ok(Json(PasskeyAuthOptionsPayload { email })),
+    )
+    .await
+    .into_response();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        !response
+            .headers()
+            .contains_key(axum::http::header::SET_COOKIE),
+        "auth/options must never set a session cookie"
+    );
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("response body must be readable");
+    let json: serde_json::Value = serde_json::from_slice(&bytes).expect("response must be JSON");
+    let allow_credentials = json["options"]["publicKey"]["allowCredentials"]
+        .as_array()
+        .expect("allowCredentials must be present");
+    assert_eq!(allow_credentials.len(), 1);
+    let id_b64 = allow_credentials[0]["id"]
+        .as_str()
+        .expect("allow credential id must be string");
+    let decoded_id = URL_SAFE_NO_PAD
+        .decode(id_b64)
+        .expect("credential id must be base64url");
+    assert_eq!(decoded_id, credential_id.as_ref());
+
+    cleanup_account(&pool, &account_id).await;
 }

@@ -1143,8 +1143,8 @@
         "docs/reports/auth-pg-002-passkey-runtime-facade.md"
       ],
       "missing_evidence": [
-        "Runtime-Facade und Config-Gate sind vorbereitet, aber PR-CI-Beleg fuer den neuen passkey_runtime_facade_postgres_persists_across_state_reinit steht aus",
         "Kein Produktions-Cutover; passkey_credential_source bleibt Default in_memory",
+        "FK passkey_credentials.account_id -> domain_accounts(id) bewusst aufgeschoben bis der Produktionsmodus domain_read_source=postgres und vorhandene Account-Zeilen garantiert",
         "Kein vollstaendiger Browser-/Authenticator-E2E fuer Register -> Reload -> Login",
         "Kein webauthn_user_id-Backfill/NOT NULL (AUTH-PG-003 bleibt offen)",
         "Passkey-Management-UI/List/Remove-Cutover fehlt",

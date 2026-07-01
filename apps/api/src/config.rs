@@ -174,10 +174,10 @@ impl DomainEdgeWriteSource {
 /// `domain_read_source=postgres` (validated at config load) plus a live pool
 /// (validated at startup). No silent fallback is allowed.
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum PasskeyCredentialSource {
     #[default]
-    #[serde(alias = "memory", alias = "mem")]
+    #[serde(alias = "memory", alias = "mem", alias = "inmemory")]
     InMemory,
     #[serde(alias = "pg", alias = "db")]
     Postgres,
@@ -1753,6 +1753,40 @@ delegation_expire_days: 28
         let _source = EnvGuard::set("WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE", "db");
 
         let cfg = AppConfig::load_from_path(file.path())?;
+
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Postgres);
+        assert_eq!(
+            cfg.passkey_credential_source,
+            PasskeyCredentialSource::Postgres
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn passkey_credential_source_yaml_accepts_in_memory() -> Result<()> {
+        let yaml = format!(
+            "{YAML}passkey_credential_source: in_memory
+"
+        );
+        let cfg = AppConfig::load_from_str(&yaml)?;
+
+        assert_eq!(
+            cfg.passkey_credential_source,
+            PasskeyCredentialSource::InMemory
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn passkey_credential_source_yaml_accepts_postgres() -> Result<()> {
+        let yaml = format!(
+            "{YAML}domain_read_source: postgres
+passkey_credential_source: postgres
+"
+        );
+        let cfg = AppConfig::load_from_str(&yaml)?;
 
         assert_eq!(cfg.domain_read_source, DomainReadSource::Postgres);
         assert_eq!(
