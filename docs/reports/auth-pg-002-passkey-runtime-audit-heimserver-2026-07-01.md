@@ -111,7 +111,7 @@ Die nächste Frage ist jetzt nicht FK-Migration, sondern Runtime-Schema-Readines
 
 Empfohlen:
 
-**AUTH-PG-002-R1: Runtime schema migration readiness**
+### AUTH-PG-002-R1: Runtime schema migration readiness
 
 Scope:
 
