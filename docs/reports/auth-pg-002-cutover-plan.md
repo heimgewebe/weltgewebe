@@ -4,7 +4,7 @@ title: "AUTH-PG-002 Passkey PostgreSQL Cutover Plan"
 doc_type: report
 status: active
 lifecycle_state: active
-lifecycle: plan
+lifecycle: planning
 owner_task: AUTH-PG-002
 review_after: 2026-09-30
 canonicality: evidence
@@ -141,7 +141,7 @@ Invarianten.
 
 Empfohlener nächster PR nach diesem Plan:
 
-**AUTH-PG-002-C1: Route-level Register→Reload→Auth proof**
+### AUTH-PG-002-C1: Route-level Register→Reload→Auth proof
 
 - kein Produktionsschalter,
 - kein FK,
