@@ -1200,11 +1200,12 @@
         "apps/api/src/domain_db.rs",
         "apps/api/tests/db_webauthn_user_id_backfill_audit.rs",
         "scripts/docmeta/audit_webauthn_user_id_backfill_runtime.py",
-        "scripts/docmeta/tests/test_audit_webauthn_user_id_backfill_runtime.py"
+        "scripts/docmeta/tests/test_audit_webauthn_user_id_backfill_runtime.py",
+        "docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md"
       ],
       "missing_evidence": [
         "legacy_webauthn_user_id_backfill und webauthn_user_id_not_null sind ausdrueckliche Non-Goals von OPT-ARC-001 (docs/reports/opt-arc-001-db-proof-matrix.json)",
-        "Audit-Proof und Runtime-Audit-Werkzeug vorbereitet; Live-Produktions-Audit und Backfill fehlen weiter",
+        "Audit-Proof, Runtime-Audit-Werkzeug und lokaler wg-pg-proof-Smoke vorbereitet; Live-Produktions-Audit und Backfill fehlen weiter",
         "Kein NOT NULL vor erfolgreichem Backfill-Proof und Cutover-Entscheidung"
       ],
       "acceptance": [
@@ -1221,7 +1222,8 @@
           "docs/reports/opt-arc-001-db-proof-matrix.json",
           "docs/reports/auth-pg-003-backfill-readiness.md",
           "docs/reports/auth-pg-002-passkey-runtime-facade.md",
-          "docs/reports/auth-pg-002-cutover-plan.md"
+          "docs/reports/auth-pg-002-cutover-plan.md",
+          "docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md"
         ]
       },
       "updated_at": "2026-07-01"
