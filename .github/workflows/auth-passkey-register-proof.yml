@@ -19,7 +19,7 @@
 #   - stored_credential_reflected: true
 #   - auth_options_status: 200
 #   - auth_verify_status: 200
-#   - auth_verify_set_cookie: true
+#   - auth_verify_session_cookie_present: true
 #   - virtual_authenticator_credentials > 0
 #
 # Scope distinction:

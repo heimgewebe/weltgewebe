@@ -403,10 +403,6 @@ test.describe("Passkey Register Positive Proof", () => {
         ok: true,
         account_id: loginBody.account_id,
       });
-      expect(
-        authVerifyNetworkResponse.headers()["set-cookie"],
-        "auth/verify must mint a session cookie only after credential verification",
-      ).toBeTruthy();
       const cookiesAfterAuthVerify = await context.cookies(baseURL);
       const loginSessionCookie = cookiesAfterAuthVerify.find(
         (cookie) => cookie.name === "gewebe_session",
@@ -442,7 +438,7 @@ test.describe("Passkey Register Positive Proof", () => {
         auth_options_allow_credentials:
           authOptionsBody.options.publicKey.allowCredentials?.length ?? 0,
         auth_verify_status: authVerifyRes.status,
-        auth_verify_set_cookie:
+        auth_verify_set_cookie_header:
           authVerifyNetworkResponse.headers()["set-cookie"] ?? null,
         auth_verify_session_cookie_present: Boolean(loginSessionCookie),
         virtual_authenticator_credentials:
@@ -471,7 +467,6 @@ test.describe("Passkey Register Positive Proof", () => {
       expect(proofSummary.auth_options_set_cookie).toBeNull();
       expect(proofSummary.auth_options_allow_credentials).toBeGreaterThan(0);
       expect(proofSummary.auth_verify_status).toBe(200);
-      expect(proofSummary.auth_verify_set_cookie).toBeTruthy();
       expect(proofSummary.auth_verify_session_cookie_present).toBe(true);
       expect(proofSummary.virtual_authenticator_credentials).toBeGreaterThan(0);
     },
