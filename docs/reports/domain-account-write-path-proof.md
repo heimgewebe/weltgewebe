@@ -11,10 +11,11 @@ canonicality: evidence
 created: 2026-06-04
 lang: de
 summary: >
-  Proof-Bericht für OPT-ARC-001 Phase E-A: optionaler PostgreSQL-Schreibpfad
-  ausschließlich für die Account-Erzeugung (`POST /accounts`) hinter explizitem
-  Write-Gate. JSONL bleibt Default; kein Dual-Write; Knoten-, Kanten-, Step-up-
-  E-Mail- und WebAuthn-Credential-Persistenz bleiben unverändert.
+  Proof-Bericht für OPT-ARC-001 Phase E-A: optionaler PostgreSQL-Schreibpfad für
+  die Account-Erzeugung (`POST /accounts`) und – über dasselbe enge Write-Gate –
+  die Step-up-E-Mail-Aktualisierung (AUTH-PG-001, `UpdateEmail`-Intent). JSONL
+  bleibt Default; kein Dual-Write; Knoten-, Kanten- und WebAuthn-Credential-
+  Persistenz bleiben unverändert.
 relations:
   - type: relates_to
     target: docs/blueprints/domain-data-postgres-cutover.md
@@ -35,8 +36,9 @@ relations:
 ## Scope
 
 Dieser Proof dokumentiert OPT-ARC-001 **Phase E-A** als bewusst engen,
-opt-in PostgreSQL-Schreibpfad **ausschließlich für die Account-Erzeugung**
-(`POST /accounts`).
+opt-in PostgreSQL-Schreibpfad für die Account-Erzeugung (`POST /accounts`)
+sowie den unter **AUTH-PG-001** ergänzten, über dasselbe Write-Gate laufenden
+Step-up-E-Mail-Aktualisierungspfad (`UpdateEmail`-Intent beim Step-up-Consume).
 
 Geltende Grenzen:
 
@@ -58,7 +60,6 @@ Geltende Grenzen:
 - Kein `PATCH /nodes` PostgreSQL-Write (im Postgres-Read-Modus weiterhin
   blockiert).
 - Kein Edge-Write-Path.
-- Keine Step-up-E-Mail-Persistenz nach PostgreSQL.
 - Kein WebAuthn-Credential-Writeback nach PostgreSQL.
 - Kein Backfill und kein `NOT NULL` für bestehende Accounts mit
   `webauthn_user_id IS NULL`.
@@ -191,6 +192,55 @@ Lokaler PostgreSQL-Proof in dieser Umgebung nicht ausgeführt. PR-CI ist maßgeb
 erhält Datenschutz über `visibility=private` und bestehende Loader-Semantik
 (siehe `NewDomainAccountRow::from_jsonl_record` in `apps/api/src/domain_db.rs`).
 
+## AUTH-PG-001: Step-up-E-Mail-Aktualisierung
+
+Der Step-up-`UpdateEmail`-Intent teilt sich das enge Account-Write-Gate mit
+`POST /accounts` (`reject_account_email_update_unless_writable` delegiert an
+`reject_account_create_unless_writable`). Es entsteht **kein** neues Config-Feld
+und **kein** breiter Write-Switch — PostgreSQL-Account-Mutationen bleiben nur
+erlaubt, wenn `domain_read_source` **und** `domain_account_write_source` beide
+`postgres` sind.
+
+### Ablauf (DB-vor-Cache)
+
+Im PostgreSQL-Account-Write-Modus schreibt der `UpdateEmail`-Consume die neue
+E-Mail zuerst nach `domain_accounts`; der `AccountStore`-Cache wird **erst nach**
+erfolgreichem DB-Write mutiert. Dadurch bleibt die Änderung restart-stabil und
+DB-Fehler hinterlassen keinen abweichenden Cache-Zustand. Im JSONL-Modus bleibt
+das bisherige cache-lokale Verhalten unverändert.
+
+Der Cache-Konfliktcheck (`get_by_email`) bleibt als schneller Vorabpfad
+erhalten; die eigentliche Race-Sicherheit liefert im Postgres-Modus die
+DB-Constraint.
+
+### Helper `update_account_email_in_postgres`
+
+`apps/api/src/domain_db.rs` ergänzt `update_account_email_in_postgres` (plain
+`UPDATE domain_accounts SET email=$2, updated_at=now() WHERE id=$1`) ohne
+In-Memory-Mutation und ohne JSONL-Write. Fehlerklassifikation über
+`AccountEmailUpdateError`:
+
+| Bedingung | Variante | Route-Antwort |
+|---|---|---|
+| `rows_affected == 0` | `NotFound` | `400` `ACCOUNT_INVALID` |
+| Constraint `domain_accounts_email_normalized_unique` | `DuplicateEmail` | `409` `CONFLICT` |
+| Constraint `domain_accounts_email_not_empty_after_trim` bzw. Länge/Leer vorab | `InvalidEmail` | `400` `BAD_REQUEST` |
+| sonstiger DB-Fehler | `Database` | `500` `INTERNAL_SERVER_ERROR` |
+
+Fehlt im Postgres-Modus der Pool, antwortet der Consume kontrolliert mit `500`
+statt still cache-only zu schreiben.
+
+### DB-gestützte Belege (ignored by default)
+
+- `update_account_email_helper_persists_and_classifies_duplicate`: Helper
+  persistiert die neue E-Mail, setzt `updated_at`, wird vom Phase-D-Loader
+  wiederhergestellt und klassifiziert einen normalisierten Duplikatkonflikt als
+  `DuplicateEmail`, ohne die bestehende E-Mail zu überschreiben.
+- `step_up_update_email_persists_to_postgres_and_reloads`: Route-Level-Proof —
+  Step-up-Consume schreibt vor der Cache-Mutation nach PostgreSQL (`204`),
+  Cache und `load_accounts_from_postgres` beobachten die neue E-Mail, kein
+  JSONL-Append.
+
 ## Verbleibende OPT-ARC-001-Phasen
 
 | Phase | Inhalt | Status |
@@ -201,7 +251,8 @@ erhält Datenschutz über `visibility=private` und bestehende Loader-Semantik
 | D | Read-Path-Switch (read-only, opt-in) | implementiert; CI-Beleg ausstehend |
 | E-A | Account-Create-Write-Path (diese Slice) | implementiert; CI-Beleg ausstehend |
 | E-B | Node-Patch-Write-Path (`PATCH /nodes`) | implementiert; CI-Beleg ausstehend |
-| E (Rest) | Step-up-E-Mail-Persistenz, WebAuthn-Credential-Writeback, Passkey-Cutover sowie Backfill/Audit und späteres `NOT NULL` für Legacy-NULL-Werte | offen |
+| E-A+ | Step-up-E-Mail-Aktualisierung (AUTH-PG-001, gleiches Gate) | implementiert; CI-Beleg ausstehend |
+| E (Rest) | WebAuthn-Credential-Writeback, Passkey-Cutover sowie Backfill/Audit und späteres `NOT NULL` für Legacy-NULL-Werte | offen |
 | F | Runtime-Smoke und CI-Beweis | offen |
 | G | JSONL-Demontage | offen |
 

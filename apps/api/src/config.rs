@@ -103,11 +103,11 @@ impl DomainNodeWriteSource {
     }
 }
 
-/// Selects where `POST /accounts` (account-create only) writes to.
+/// Selects where narrow account writes persist to.
 ///
 /// OPT-ARC-001 Phase E-A: this is a deliberately narrow gate. It governs the
-/// account-create write path **only** — node writes, edge writes, step-up email
-/// persistence and WebAuthn user-id writeback are out of scope and remain
+/// account-create and step-up email update write paths **only** — node writes,
+/// edge writes and WebAuthn user-id writeback are out of scope and remain
 /// unchanged. JSONL remains the default. PostgreSQL is opt-in via
 /// `WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE` or the `domain_account_write_source`
 /// config-file key, and additionally requires `domain_read_source=postgres`
@@ -176,8 +176,9 @@ pub struct AppConfig {
     #[serde(default)]
     pub domain_read_source: DomainReadSource,
 
-    /// Account-create write source (JSONL default, PostgreSQL opt-in).
-    /// OPT-ARC-001 Phase E-A: governs `POST /accounts` only.
+    /// Narrow account write source (JSONL default, PostgreSQL opt-in).
+    /// OPT-ARC-001 Phase E-A plus AUTH-PG-001: governs `POST /accounts` and
+    /// step-up `UpdateEmail` only.
     #[serde(default)]
     pub domain_account_write_source: DomainAccountWriteSource,
 

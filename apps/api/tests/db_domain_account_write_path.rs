@@ -6,8 +6,8 @@
 //! and that the Phase D loader reconstructs the same public projection and
 //! stable WebAuthn user identity.
 //!
-//! Phase scope: account-create only. Node writes, edge writes, step-up email
-//! persistence and WebAuthn credential writeback are NOT implemented.
+//! Phase scope: account-create plus AUTH-PG-001 step-up email update. Node
+//! writes, edge writes and WebAuthn credential writeback are NOT implemented.
 //!
 //! Run with:
 //!   DATABASE_URL=postgres://welt:gewebe@localhost:5432/weltgewebe \
@@ -33,13 +33,17 @@ use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
     auth::{
-        accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionBackend,
+        accounts::AccountStore, challenges::ChallengeIntent, rate_limit::AuthRateLimiter,
+        role::Role, session::SessionBackend,
     },
     config::{
         AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
         DomainReadSource,
     },
-    domain_db::{insert_account_from_jsonl_record, load_accounts_from_postgres, AccountWriteError},
+    domain_db::{
+        insert_account_from_jsonl_record, load_accounts_from_postgres,
+        update_account_email_in_postgres, AccountEmailUpdateError, AccountWriteError,
+    },
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountMode, AccountPublic},
@@ -83,6 +87,8 @@ async fn run_migrations(pool: &PgPool) {
 const RADIUS_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000002";
 const DUP_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000003";
 const WEBAUTHN_STABLE_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000004";
+const STEP_UP_EMAIL_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000030";
+const STEP_UP_EMAIL_DUP_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000031";
 
 async fn clean(pool: &PgPool) {
     pool.execute("DELETE FROM domain_accounts WHERE id LIKE 'aaaaaaaa-aaaa-4aaa-8aaa-%'")
@@ -206,6 +212,17 @@ fn post_accounts(cookie: &str, json_body: &str) -> Request<body::Body> {
         .header("Origin", "http://localhost")
         .header("Cookie", cookie)
         .body(body::Body::from(json_body.to_string()))
+        .unwrap()
+}
+
+fn post_step_up_consume(cookie: &str, token: &str, challenge_id: &str) -> Request<body::Body> {
+    let json_body = format!(r#"{{"token":"{token}","challenge_id":"{challenge_id}"}}"#);
+    Request::post("/auth/step-up/magic-link/consume")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .header("Cookie", cookie)
+        .body(body::Body::from(json_body))
         .unwrap()
 }
 
@@ -632,6 +649,160 @@ async fn route_maps_db_email_conflict_to_409_without_side_effects() -> Result<()
         state.accounts.read().await.get(&new_id).is_none(),
         "failed DB insert must not populate the in-memory cache"
     );
+    assert!(
+        !in_dir.join("demo.accounts.jsonl").exists(),
+        "PostgreSQL write mode must not append JSONL"
+    );
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// Direct AUTH-PG-001 proof: the email-update helper writes `domain_accounts`,
+/// bumps `updated_at`, reloads through the Phase D loader and classifies DB-only
+/// normalized-email conflicts as `DuplicateEmail`.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn update_account_email_helper_persists_and_classifies_duplicate() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    sqlx::query(
+        "INSERT INTO domain_accounts \
+            (id, kind, title, mode, radius_m, role, email, public_payload, private_payload) \
+         VALUES \
+            ($1, 'ron', 'Step Up Account', 'ron', 0, 'weber', $2, '{}'::jsonb, '{}'::jsonb), \
+            ($3, 'ron', 'Other Account', 'ron', 0, 'weber', $4, '{}'::jsonb, '{}'::jsonb)",
+    )
+    .bind(STEP_UP_EMAIL_ID)
+    .bind("old-step-up@example.invalid")
+    .bind(STEP_UP_EMAIL_DUP_ID)
+    .bind("taken@example.invalid")
+    .execute(&pool)
+    .await
+    .expect("seed step-up email fixtures");
+
+    update_account_email_in_postgres(&pool, STEP_UP_EMAIL_ID, "new-step-up@example.invalid")
+        .await
+        .expect("email update must persist");
+
+    let (email, updated_present): (Option<String>, bool) =
+        sqlx::query_as("SELECT email, updated_at IS NOT NULL FROM domain_accounts WHERE id = $1")
+            .bind(STEP_UP_EMAIL_ID)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(email.as_deref(), Some("new-step-up@example.invalid"));
+    assert!(updated_present, "email update must set updated_at");
+
+    let reloaded = load_accounts_from_postgres(&pool).await?;
+    let account = reloaded
+        .get(STEP_UP_EMAIL_ID)
+        .expect("updated account reloads from postgres");
+    assert_eq!(
+        account.email.as_deref(),
+        Some("new-step-up@example.invalid"),
+        "loader must observe the persisted email update"
+    );
+
+    let err = update_account_email_in_postgres(&pool, STEP_UP_EMAIL_ID, " TAKEN@example.invalid ")
+        .await
+        .expect_err("normalized duplicate must be rejected by DB constraint");
+    assert!(
+        matches!(err, AccountEmailUpdateError::DuplicateEmail),
+        "expected DuplicateEmail, got {err:?}"
+    );
+
+    let (email_after_conflict,): (Option<String>,) =
+        sqlx::query_as("SELECT email FROM domain_accounts WHERE id = $1")
+            .bind(STEP_UP_EMAIL_ID)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(
+        email_after_conflict.as_deref(),
+        Some("new-step-up@example.invalid"),
+        "duplicate update must not overwrite the existing email"
+    );
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// Route-level AUTH-PG-001 proof: Step-up `UpdateEmail` persists to PostgreSQL
+/// before mutating the cache, so a reload observes the new email.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn step_up_update_email_persists_to_postgres_and_reloads() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    sqlx::query(
+        "INSERT INTO domain_accounts \
+            (id, kind, title, mode, radius_m, role, email, public_payload, private_payload) \
+         VALUES ($1, 'ron', 'Step Up Account', 'ron', 0, 'admin', $2, '{}'::jsonb, '{}'::jsonb)",
+    )
+    .bind(STEP_UP_EMAIL_ID)
+    .bind("old-route-step-up@example.invalid")
+    .execute(&pool)
+    .await
+    .expect("seed account row to be updated");
+
+    let (app, cookie, state) = postgres_write_app(pool.clone(), STEP_UP_EMAIL_ID).await?;
+    let session = state
+        .sessions
+        .list_by_account(STEP_UP_EMAIL_ID)
+        .await?
+        .into_iter()
+        .next()
+        .expect("test session exists");
+    let new_email = "new-route-step-up@example.invalid";
+    let challenge = state.challenges.create(
+        STEP_UP_EMAIL_ID.to_string(),
+        session.device_id.clone(),
+        ChallengeIntent::UpdateEmail {
+            new_email: new_email.to_string(),
+        },
+    );
+    let token = state.step_up_tokens.create(
+        challenge.id.clone(),
+        STEP_UP_EMAIL_ID.to_string(),
+        session.device_id,
+    );
+
+    let res = app
+        .clone()
+        .oneshot(post_step_up_consume(&cookie, &token, &challenge.id))
+        .await?;
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    let (db_email,): (Option<String>,) =
+        sqlx::query_as("SELECT email FROM domain_accounts WHERE id = $1")
+            .bind(STEP_UP_EMAIL_ID)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(db_email.as_deref(), Some(new_email));
+
+    {
+        let accounts = state.accounts.read().await;
+        let cached = accounts
+            .get(STEP_UP_EMAIL_ID)
+            .expect("updated account remains in cache");
+        assert_eq!(cached.email.as_deref(), Some(new_email));
+    }
+
+    let reloaded = load_accounts_from_postgres(&pool).await?;
+    let account = reloaded
+        .get(STEP_UP_EMAIL_ID)
+        .expect("updated account reloads after step-up");
+    assert_eq!(account.email.as_deref(), Some(new_email));
     assert!(
         !in_dir.join("demo.accounts.jsonl").exists(),
         "PostgreSQL write mode must not append JSONL"
