@@ -168,7 +168,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 - `PasskeyRegistrationStore` für laufende Registrierungen (In-Memory, TTL 5 Min) aktiv genutzt (nach Grant-Consume)
 - Langlebiger `PasskeyStore` für registrierte Credentials (In-Memory, account-gebunden, duplicate detection, list/find/remove)
 - `AccountStore.update_webauthn_user_id(account_id, uuid)` als Writeback-Mutation implementiert
-- AUTH-PG-002 Store-Slice (kein Cutover, In-Memory bleibt Default): PostgreSQL-Migration `passkey_credentials` und isolierter `DbPasskeyStore` (`apps/api/src/auth/passkeys_db.rs`) mit Insert/List/Find/Update/Remove; Counter-Update owner-gebunden in Transaktion mit `FOR UPDATE`; Duplicate über PK. Store-Ebene Restart-Stabilität ist lokal grün (`apps/api/tests/db_passkey_store_persistence.rs`, 5 Tests gegen direkten PostgreSQL); **PR-CI-Beleg steht noch aus** (CI-Job-Entwurf `db-passkey-persistence-proof` in `api.yml`). Details: [reports/auth-pg-002-passkey-db-store.md](auth-pg-002-passkey-db-store.md)
+- AUTH-PG-002 Store-Slice: PostgreSQL-Migration `passkey_credentials` und isolierter `DbPasskeyStore` (`apps/api/src/auth/passkeys_db.rs`) mit Insert/List/Find/Update/Remove; Counter-Update owner-gebunden in Transaktion mit `FOR UPDATE`; Duplicate über PK. Store-Ebene Restart-Stabilität ist durch PR-CI belegt (`db passkey persistence proof`). Details: [reports/auth-pg-002-passkey-db-store.md](auth-pg-002-passkey-db-store.md)
 
 **Dokumentationsbelege:** auth-roadmap.md (Phase 4 aktualisiert), [reports/passkey-register-verify-prep.md](passkey-register-verify-prep.md) (Vorbereitungsbericht Register-Verify)
 **Code-, Test- und Verifikationsbelege:**
