@@ -1146,11 +1146,13 @@
         "docs/reports/auth-pg-002-passkey-fk-readiness-audit.md",
         "scripts/docmeta/audit_passkey_fk_runtime.py",
         "scripts/docmeta/tests/test_audit_passkey_fk_runtime.py",
-        "docs/reports/auth-pg-002-passkey-runtime-audit-plan.md"
+        "docs/reports/auth-pg-002-passkey-runtime-audit-plan.md",
+        "docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md"
       ],
       "missing_evidence": [
         "Kein Produktions-Cutover; passkey_credential_source bleibt Default in_memory",
-        "FK passkey_credentials.account_id -> domain_accounts(id) noch nicht implementiert; CI-Audit-Harness und read-only Runtime-Audit-Werkzeug existieren, aber ein konkreter redigierter Lauf gegen echte Daten fehlt",
+        "Heimserver-Runtime-PostgreSQL enthält zum Auditzeitpunkt keine Tabelle passkey_credentials; Runtime-Schema-Migration-Readiness fehlt",
+        "FK passkey_credentials.account_id -> domain_accounts(id) noch nicht implementiert; erneuter Runtime-Audit erst nach vorhandener Tabelle möglich",
         "Kein webauthn_user_id-Backfill/NOT NULL (AUTH-PG-003 bleibt offen)",
         "Passkey-Management-UI/List/Remove-Cutover fehlt"
       ],
@@ -1174,7 +1176,8 @@
           "docs/reports/auth-pg-002-passkey-runtime-facade.md",
           "docs/reports/auth-pg-002-cutover-plan.md",
           "docs/reports/auth-pg-002-passkey-fk-readiness-audit.md",
-          "docs/reports/auth-pg-002-passkey-runtime-audit-plan.md"
+          "docs/reports/auth-pg-002-passkey-runtime-audit-plan.md",
+          "docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md"
         ]
       },
       "updated_at": "2026-07-01"
