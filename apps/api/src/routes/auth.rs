@@ -1,3 +1,5 @@
+use super::domain_write_guard::reject_account_email_update_unless_writable;
+
 use axum::{
     extract::Path as AxumPath,
     extract::{rejection::JsonRejection, ConnectInfo, Form, Json, Query, State},
@@ -24,6 +26,8 @@ use crate::{
     auth::session::SessionBackendError,
     auth::step_up_tokens::ConsumeMatchResult,
     auth::{role::Role, tokens::TokenStore},
+    config::DomainAccountWriteSource,
+    domain_db::{update_account_email_in_postgres, AccountEmailUpdateError},
     middleware::auth::AuthContext,
     routes::accounts::{AccountInternal, AccountPublic},
     state::ApiState,
@@ -1075,7 +1079,10 @@ pub async fn update_email(
     let new_email = payload.new_email.trim().to_ascii_lowercase();
 
     // Pragmatic minimal validation: exactly one @, no spaces, non-empty local/domain parts.
-    if new_email.matches('@').count() != 1 || new_email.contains(|c: char| c.is_whitespace()) {
+    if new_email.len() > MAX_EMAIL_LEN
+        || new_email.matches('@').count() != 1
+        || new_email.contains(|c: char| c.is_whitespace())
+    {
         let err = serde_json::json!({"error": "BAD_REQUEST", "message": "Invalid email format"});
         return (StatusCode::BAD_REQUEST, Json(err)).into_response();
     }
@@ -1109,6 +1116,11 @@ pub async fn update_email(
                 return (StatusCode::CONFLICT, Json(err)).into_response();
             }
         }
+    }
+
+    if let Err((status, message)) = reject_account_email_update_unless_writable(&state) {
+        let err = serde_json::json!({"error": message});
+        return (status, Json(err)).into_response();
     }
 
     let challenge = state.challenges.create(
@@ -1692,9 +1704,136 @@ pub async fn consume_step_up(
                 account_id = %account_id,
                 "Step-up consume: executing UpdateEmail intent"
             );
-            let mut accounts = state.accounts.write().await;
 
-            // Check for conflict right before writing
+            if let Err((status, message)) = reject_account_email_update_unless_writable(&state) {
+                let err = serde_json::json!({"error": message});
+                return (status, jar, Json(err)).into_response();
+            }
+
+            let new_email = new_email.trim().to_ascii_lowercase();
+
+            if state.config.domain_account_write_source == DomainAccountWriteSource::Postgres {
+                {
+                    let accounts = state.accounts.read().await;
+
+                    // Check for conflict right before writing. PostgreSQL remains the
+                    // race-safety boundary in Postgres mode; this cache check preserves
+                    // the existing fast conflict path.
+                    if let Some(existing) = accounts.get_by_email(&new_email) {
+                        if existing.public.id != account_id {
+                            tracing::warn!(
+                                event = "auth.step_up.consume.update_email.conflict",
+                                request_id = %request_id,
+                                account_id = %account_id,
+                                "Email was taken by another account before step-up was consumed"
+                            );
+                            let err = serde_json::json!({
+                                "error": "CONFLICT",
+                                "message": "Email already in use"
+                            });
+                            return (StatusCode::CONFLICT, jar, Json(err)).into_response();
+                        }
+                    }
+
+                    if accounts.get(&account_id).is_none() {
+                        tracing::error!(
+                            event = "auth.step_up.consume.update_email.missing_account",
+                            request_id = %request_id,
+                            account_id = %account_id,
+                            "Account missing during email update step-up consume"
+                        );
+                        let err = serde_json::json!({"error": "ACCOUNT_INVALID"});
+                        return (StatusCode::BAD_REQUEST, jar, Json(err)).into_response();
+                    }
+                }
+
+                let Some(pool) = state.db_pool.as_ref() else {
+                    tracing::error!(
+                        event = "auth.step_up.consume.update_email.db_pool_missing",
+                        request_id = %request_id,
+                        account_id = %account_id,
+                        "PostgreSQL account write source selected without a database pool"
+                    );
+                    let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+                    return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(err)).into_response();
+                };
+
+                let _db_updated_at = match update_account_email_in_postgres(
+                    pool,
+                    &account_id,
+                    &new_email,
+                )
+                .await
+                {
+                    Ok(updated_at) => updated_at,
+                    Err(AccountEmailUpdateError::DuplicateEmail) => {
+                        tracing::warn!(
+                            event = "auth.step_up.consume.update_email.db_conflict",
+                            request_id = %request_id,
+                            account_id = %account_id,
+                            "PostgreSQL rejected duplicate normalized email during step-up consume"
+                        );
+                        let err = serde_json::json!({
+                            "error": "CONFLICT",
+                            "message": "Email already in use"
+                        });
+                        return (StatusCode::CONFLICT, jar, Json(err)).into_response();
+                    }
+                    Err(AccountEmailUpdateError::NotFound) => {
+                        tracing::error!(
+                            event = "auth.step_up.consume.update_email.db_missing_account",
+                            request_id = %request_id,
+                            account_id = %account_id,
+                            "PostgreSQL account row missing during step-up email update"
+                        );
+                        let err = serde_json::json!({"error": "ACCOUNT_INVALID"});
+                        return (StatusCode::BAD_REQUEST, jar, Json(err)).into_response();
+                    }
+                    Err(AccountEmailUpdateError::InvalidEmail) => {
+                        tracing::warn!(
+                            event = "auth.step_up.consume.update_email.db_invalid_email",
+                            request_id = %request_id,
+                            account_id = %account_id,
+                            "PostgreSQL rejected invalid email during step-up consume"
+                        );
+                        let err = serde_json::json!({
+                            "error": "BAD_REQUEST",
+                            "message": "Invalid email format"
+                        });
+                        return (StatusCode::BAD_REQUEST, jar, Json(err)).into_response();
+                    }
+                    Err(AccountEmailUpdateError::Database(error)) => {
+                        tracing::error!(
+                            event = "auth.step_up.consume.update_email.persist_failed",
+                            request_id = %request_id,
+                            account_id = %account_id,
+                            error = %error,
+                            "Failed to persist step-up email update to PostgreSQL"
+                        );
+                        let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+                        return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(err)).into_response();
+                    }
+                };
+
+                let mut accounts = state.accounts.write().await;
+                if let Some(mut account) = accounts.get(&account_id).cloned() {
+                    account.email = Some(new_email);
+                    accounts.insert(account);
+                } else {
+                    tracing::error!(
+                        event = "auth.step_up.consume.update_email.cache_missing_after_db_write",
+                        request_id = %request_id,
+                        account_id = %account_id,
+                        "Account cache entry disappeared after PostgreSQL email update"
+                    );
+                }
+                return (StatusCode::NO_CONTENT, jar).into_response();
+            }
+
+            let mut accounts = state.accounts.write().await;
+            // JSONL-mode behaviour remains cache-local, but conflict checking and
+            // mutation stay under the same write lock so concurrent in-memory
+            // email updates cannot bypass the duplicate guard.
             if let Some(existing) = accounts.get_by_email(&new_email) {
                 if existing.public.id != account_id {
                     tracing::warn!(
@@ -1703,16 +1842,17 @@ pub async fn consume_step_up(
                         account_id = %account_id,
                         "Email was taken by another account before step-up was consumed"
                     );
-                    let err =
-                        serde_json::json!({"error": "CONFLICT", "message": "Email already in use"});
+                    let err = serde_json::json!({
+                        "error": "CONFLICT",
+                        "message": "Email already in use"
+                    });
                     return (StatusCode::CONFLICT, jar, Json(err)).into_response();
                 }
             }
 
-            if let Some(account) = accounts.get(&account_id).cloned() {
-                let mut updated_account = account;
-                updated_account.email = Some(new_email);
-                accounts.insert(updated_account);
+            if let Some(mut account) = accounts.get(&account_id).cloned() {
+                account.email = Some(new_email);
+                accounts.insert(account);
                 (StatusCode::NO_CONTENT, jar).into_response()
             } else {
                 tracing::error!(

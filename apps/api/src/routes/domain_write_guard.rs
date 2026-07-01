@@ -125,6 +125,17 @@ pub(super) fn reject_account_create_unless_writable(
     Ok(())
 }
 
+/// Account email-update write gate (AUTH-PG-001).
+///
+/// Shares the deliberately narrow account-write config surface with
+/// account-create: PostgreSQL account mutations are allowed only when both
+/// `domain_read_source` and `domain_account_write_source` are PostgreSQL.
+pub(super) fn reject_account_email_update_unless_writable(
+    state: &ApiState,
+) -> Result<(), (StatusCode, String)> {
+    reject_account_create_unless_writable(state)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::auth::accounts::AccountStore;
 use crate::auth::role::Role;
 use crate::routes::accounts::{map_json_to_public_account, AccountInternal};
+use crate::routes::auth::MAX_EMAIL_LEN;
 use crate::routes::edges::Edge;
 use crate::routes::nodes::{Location, Node};
 use crate::state::OrderedCache;
@@ -470,7 +471,7 @@ pub async fn patch_node_in_postgres(
 // indistinguishable from "JSONL create + Phase C backfill". It does NOT touch
 // in-memory caches and does NOT write JSONL — the caller owns cache updates.
 //
-// Out of scope (unchanged): node writes, edge writes, step-up email persistence,
+// Out of scope (unchanged): node writes, edge writes,
 // WebAuthn user-id writeback persistence.
 
 fn json_f64(v: &Value) -> Option<f64> {
@@ -754,6 +755,70 @@ pub async fn insert_account_from_jsonl_record(
             }
         }
         Err(e) => Err(AccountWriteError::Database(e)),
+    }
+}
+
+/// Name of the check constraint that rejects after-trim empty persisted emails.
+pub const ACCOUNT_EMAIL_NOT_EMPTY_CONSTRAINT: &str = "domain_accounts_email_not_empty_after_trim";
+
+/// Error from the account email update write path.
+#[derive(Debug, thiserror::Error)]
+pub enum AccountEmailUpdateError {
+    /// The account id does not exist in `domain_accounts`.
+    #[error("account not found")]
+    NotFound,
+    /// Another account already persists the same normalized, non-empty email.
+    #[error("account email already exists")]
+    DuplicateEmail,
+    /// The supplied email cannot be persisted under the DB email constraints.
+    #[error("invalid account email")]
+    InvalidEmail,
+    /// Any other database failure.
+    #[error("failed to update account email in domain_accounts: {0}")]
+    Database(#[source] sqlx::Error),
+}
+
+/// Update one account email in `domain_accounts` (AUTH-PG-001).
+///
+/// This helper performs no in-memory mutation and writes no JSONL. Callers must
+/// update the `AccountStore` only after this function returns `Ok(())`, so the
+/// PostgreSQL path remains DB-before-cache and restart-stable.
+pub async fn update_account_email_in_postgres(
+    pool: &PgPool,
+    account_id: &str,
+    new_email: &str,
+) -> Result<DateTime<Utc>, AccountEmailUpdateError> {
+    let new_email = new_email.trim().to_ascii_lowercase();
+    if new_email.is_empty() || new_email.len() > MAX_EMAIL_LEN {
+        return Err(AccountEmailUpdateError::InvalidEmail);
+    }
+
+    let result = sqlx::query_scalar::<_, DateTime<Utc>>(
+        "UPDATE domain_accounts \
+         SET email = $2, updated_at = now() \
+         WHERE id = $1 \
+         RETURNING updated_at",
+    )
+    .bind(account_id)
+    .bind(&new_email)
+    .fetch_optional(pool)
+    .await;
+
+    match result {
+        Ok(Some(updated_at)) => Ok(updated_at),
+        Ok(None) => Err(AccountEmailUpdateError::NotFound),
+        Err(sqlx::Error::Database(db_err)) => {
+            if db_err.constraint() == Some(ACCOUNT_EMAIL_UNIQUE_CONSTRAINT) {
+                Err(AccountEmailUpdateError::DuplicateEmail)
+            } else if db_err.constraint() == Some(ACCOUNT_EMAIL_NOT_EMPTY_CONSTRAINT) {
+                Err(AccountEmailUpdateError::InvalidEmail)
+            } else {
+                Err(AccountEmailUpdateError::Database(sqlx::Error::Database(
+                    db_err,
+                )))
+            }
+        }
+        Err(e) => Err(AccountEmailUpdateError::Database(e)),
     }
 }
 

@@ -73,9 +73,9 @@
       "test": "apps/api/tests/db_domain_account_write_path.rs",
       "report": "docs/reports/domain-account-write-path-proof.md",
       "ci_evidence": {
-        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/27619224355",
-        "run_id": 27619224355,
-        "commit": "7fbbf99ff6e8b502b14a3cfb4c140a78c8abd6bd",
+        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/28490029530",
+        "run_id": 28490029530,
+        "commit": "c94c2c27ba9346a3b020a4bf01e2e9387c13d206",
         "job": "db-domain-account-write-path-proof"
       },
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_account_write_path -- --include-ignored --test-threads=1"
