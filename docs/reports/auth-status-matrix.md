@@ -181,7 +181,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 - Unit-Tests in `apps/api/src/auth/passkeys.rs` und `apps/api/src/auth/accounts.rs`; Integrationstests in `apps/api/tests/api_auth.rs` (inkl. `passkey_register_verify_*`-Negativpfade) und `apps/api/tests/auth_security_invariants.rs` (CSRF-Drift-Guard erfasst `POST /auth/passkeys/register/verify`)
 - Browser-Proof in `apps/web/tests/proofs/passkey-register-positive.proof.ts` ist durch CI belegt ([Run 27487642565](https://github.com/heimgewebe/weltgewebe/actions/runs/27487642565), Commit `cc54460`, Workflow `auth-passkey-register-proof`).
 
-**Fehlende Belege:** Passkey-Management-UI/List/Remove; Runtime-Schema-Migration-Readiness für `passkey_credentials`; erneuter redigierter Runtime-Audit nach vorhandener Tabelle; Produktions-Cutover; `webauthn_user_id`-Backfill/NOT-NULL (AUTH-PG-003). Store, Runtime-Facade, Browser-Route-Proof, CI-FK-Audit und Runtime-Audit-Werkzeug sind vorbereitet, bleiben aber bis Produktions-Cutover Teilstatus von AUTH-PG-002.
+**Fehlende Belege:** Passkey-Management-UI/List/Remove; Runtime-Schema-Preflight; erneuter redigierter Runtime-Audit nach vorhandener Tabelle; Produktions-Cutover; `webauthn_user_id`-Backfill/NOT-NULL (AUTH-PG-003). Store, Runtime-Facade, Browser-Route-Proof, CI-FK-Audit und Runtime-Audit-Werkzeug sind vorbereitet, bleiben aber bis Produktions-Cutover Teilstatus von AUTH-PG-002.
 **Status:** Teil
 **Risiko:** mittel
 
