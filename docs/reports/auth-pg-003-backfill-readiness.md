@@ -96,7 +96,15 @@ Ein späterer Implementierungs-PR sollte zunächst nur diese Belege liefern:
 - Negativtest: widersprüchliche Credential-UUIDs blockieren fail-closed.
 - Report-Update mit Zählergebnis und Nicht-Beweisen.
 
-## 6. Nicht-Beweise
+## 6. Umgesetzter Audit-Proof
+
+AUTH-PG-003-AUDIT-001 ergänzt einen read-only Audit-Helfer und einen ignored DB-Proof. Der Audit-Helfer zählt Account-, Credential-, Orphan-, Multi-UUID- und Mismatch-Fälle, mutiert aber keine Daten und bleibt kein Backfill.
+
+Der ignored DB-Proof selbst ist fixture-mutierend: Er führt Migrationen aus und legt Testzeilen mit dem Prefix `auth-pg-003-audit-proof` in `domain_accounts` und `passkey_credentials` an, bevor er sie wieder löscht. Er darf nur gegen eine disposable direkte PostgreSQL-Testdatenbank laufen und verlangt zusätzlich `AUTH_PG_003_FIXTURE_MUTATION=1`.
+
+Die Zähler sind nicht zwingend disjunkt; Multi-UUID-Fälle können zusätzlich als Account-/Credential-UUID-Mismatch erscheinen. Der Audit beweist auch keine Race-Freiheit während eines späteren Backfills.
+
+## 7. Nicht-Beweise
 
 Dieser Bericht beweist nicht:
 
@@ -107,10 +115,10 @@ Dieser Bericht beweist nicht:
 - dass `passkey_credentials.account_id -> domain_accounts(id)` schon als FK
   aktiviert werden kann.
 
-## 7. Nächste Aktion
+## 8. Nächste Aktion
 
-Nächster sinnvoller PR-Schnitt: `AUTH-PG-003-AUDIT-001` als read-only Audit- und
-Fixture-Proof. Erst danach Backfill-Migration planen. Danach erst `NOT NULL`.
+`AUTH-PG-003-AUDIT-001` ist als read-only Audit-Helfer und explizit fixture-mutierender Scratch-DB-Proof vorbereitet.
+Nächster PR-Schnitt: Backfill-Regeln aus Audit-Zählern ableiten; danach erst Backfill-Migration und `NOT NULL` prüfen.
 
 Humorlos gesagt: Erst zählen, dann füllen, dann verriegeln. Wer zuerst verriegelt,
 baut ein Museum für ausgesperrte Nutzer.

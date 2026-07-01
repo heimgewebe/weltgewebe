@@ -187,6 +187,131 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
     Ok(cache)
 }
 
+/// Read-only readiness counters for a future `domain_accounts.webauthn_user_id`
+/// backfill (AUTH-PG-003).
+///
+/// This is deliberately an audit surface, not a migration primitive: it reads
+/// `domain_accounts` and `passkey_credentials`, classifies unsafe states, and
+/// performs no writes. A later backfill/NOT NULL decision must use these counts
+/// as evidence instead of assuming that missing UUIDs can be regenerated safely.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct AuthUserIdBackfillAudit {
+    pub accounts_total: i64,
+    pub accounts_missing_auth_user_id: i64,
+    pub credential_rows_total: i64,
+    pub credential_account_ids_distinct: i64,
+    pub credential_accounts_missing_auth_user_id: i64,
+    pub credential_accounts_without_domain_account: i64,
+    pub credential_accounts_with_multiple_auth_user_ids: i64,
+    pub credential_accounts_with_account_credential_uuid_mismatch: i64,
+}
+
+impl AuthUserIdBackfillAudit {
+    /// `true` when a later backfill would have any account rows to touch.
+    pub fn has_backfill_scope(&self) -> bool {
+        self.accounts_missing_auth_user_id > 0
+    }
+
+    /// `true` when current credential/account data is not safe for cutover or
+    /// a mechanical NOT NULL migration without human review.
+    pub fn has_cutover_blockers(&self) -> bool {
+        self.credential_accounts_missing_auth_user_id > 0
+            || self.credential_accounts_without_domain_account > 0
+            || self.credential_accounts_with_multiple_auth_user_ids > 0
+            || self.credential_accounts_with_account_credential_uuid_mismatch > 0
+    }
+}
+
+async fn count_scalar(pool: &PgPool, sql: &str) -> Result<i64> {
+    sqlx::query_scalar::<_, i64>(sql)
+        .fetch_one(pool)
+        .await
+        .with_context(|| format!("failed to run AUTH-PG-003 audit query: {sql}"))
+}
+
+/// Audit `webauthn_user_id` backfill readiness without mutating the database.
+///
+/// The counters intentionally separate three cases that would otherwise be
+/// easy to flatten incorrectly:
+/// - accounts missing `webauthn_user_id` but carrying no credential yet
+///   (backfill scope, not automatically a cutover blocker),
+/// - credential-bearing accounts whose domain-account row has NULL
+///   `webauthn_user_id` (identity repair required before cutover),
+/// - credential rows that cannot be reconciled to exactly one account UUID
+///   (orphan, multi-UUID, or mismatch blockers).
+pub async fn audit_auth_user_id_backfill_readiness(
+    pool: &PgPool,
+) -> Result<AuthUserIdBackfillAudit> {
+    let accounts_total = count_scalar(pool, "SELECT COUNT(*) FROM domain_accounts").await?;
+    let accounts_missing_auth_user_id = count_scalar(
+        pool,
+        "SELECT COUNT(*) FROM domain_accounts WHERE webauthn_user_id IS NULL",
+    )
+    .await?;
+    let credential_rows_total =
+        count_scalar(pool, "SELECT COUNT(*) FROM passkey_credentials").await?;
+    let credential_account_ids_distinct = count_scalar(
+        pool,
+        "SELECT COUNT(DISTINCT account_id) FROM passkey_credentials",
+    )
+    .await?;
+    let credential_accounts_missing_auth_user_id = count_scalar(
+        pool,
+        "SELECT COUNT(*) FROM (\
+             SELECT p.account_id \
+             FROM passkey_credentials p \
+             JOIN domain_accounts a ON a.id = p.account_id \
+             WHERE a.webauthn_user_id IS NULL \
+             GROUP BY p.account_id\
+         ) credential_accounts_with_null_domain_uuid",
+    )
+    .await?;
+    let credential_accounts_without_domain_account = count_scalar(
+        pool,
+        "SELECT COUNT(*) FROM (\
+             SELECT p.account_id \
+             FROM passkey_credentials p \
+             LEFT JOIN domain_accounts a ON a.id = p.account_id \
+             WHERE a.id IS NULL \
+             GROUP BY p.account_id\
+         ) orphan_credential_accounts",
+    )
+    .await?;
+    let credential_accounts_with_multiple_auth_user_ids = count_scalar(
+        pool,
+        "SELECT COUNT(*) FROM (\
+             SELECT account_id \
+             FROM passkey_credentials \
+             GROUP BY account_id \
+             HAVING COUNT(DISTINCT webauthn_user_id) > 1\
+         ) multi_webauthn_user_id_accounts",
+    )
+    .await?;
+    let credential_accounts_with_account_credential_uuid_mismatch = count_scalar(
+        pool,
+        "SELECT COUNT(*) FROM (\
+             SELECT p.account_id \
+             FROM passkey_credentials p \
+             JOIN domain_accounts a ON a.id = p.account_id \
+             WHERE a.webauthn_user_id IS NOT NULL \
+               AND p.webauthn_user_id <> a.webauthn_user_id \
+             GROUP BY p.account_id\
+         ) credential_account_uuid_mismatches",
+    )
+    .await?;
+
+    Ok(AuthUserIdBackfillAudit {
+        accounts_total,
+        accounts_missing_auth_user_id,
+        credential_rows_total,
+        credential_account_ids_distinct,
+        credential_accounts_missing_auth_user_id,
+        credential_accounts_without_domain_account,
+        credential_accounts_with_multiple_auth_user_ids,
+        credential_accounts_with_account_credential_uuid_mismatch,
+    })
+}
+
 pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> {
     let rows: Vec<AccountRow> = sqlx::query_as(
         "SELECT id, kind, title, mode, radius_m, disabled, \
