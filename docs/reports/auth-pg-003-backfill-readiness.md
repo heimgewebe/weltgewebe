@@ -139,7 +139,19 @@ Die Runtime-Ausgabe klassifiziert vier nächste Schritte:
 
 AUTH-PG-003-AUDIT-002 mutiert keine Daten und enthält weiterhin keinen Backfill.
 
-## 8. Nicht-Beweise
+## 8. Heimserver-Runtime-Audit
+
+AUTH-PG-003-AUDIT-003 führte das Runtime-Audit-Werkzeug read-only gegen
+`heimserver / weltgewebe-db-1` aus. Ergebnis: `domain_accounts` existiert,
+`passkey_credentials` fehlt. Der Audit klassifiziert deshalb
+`schema_ready_for_audit=false` und `next_step=fix_runtime_schema_before_backfill_audit`.
+
+Das ist ein Schema-Blocker, kein Beweis für leere Credential-Daten. Vollständige
+Backfill-Counts bleiben offen, bis `passkey_credentials` in der Zielumgebung
+vorhanden ist. Siehe
+`docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md`.
+
+## 9. Nicht-Beweise
 
 Dieser Bericht beweist nicht:
 
@@ -150,7 +162,7 @@ Dieser Bericht beweist nicht:
 - dass `passkey_credentials.account_id -> domain_accounts(id)` schon als FK
   aktiviert werden kann.
 
-## 9. Nächste Aktion
+## 10. Nächste Aktion
 
 `AUTH-PG-003-AUDIT-001` ist als read-only Audit-Helfer und explizit fixture-mutierender Scratch-DB-Proof vorbereitet.
 `AUTH-PG-003-AUDIT-002` ist als read-only Runtime-Audit-Werkzeug vorbereitet.
