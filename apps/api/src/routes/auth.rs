@@ -27,7 +27,7 @@ use crate::{
     auth::session::SessionBackendError,
     auth::step_up_tokens::ConsumeMatchResult,
     auth::{role::Role, tokens::TokenStore},
-    config::DomainAccountWriteSource,
+    config::{DomainAccountWriteSource, DomainReadSource},
     domain_db::{update_account_email_in_postgres, AccountEmailUpdateError},
     middleware::auth::AuthContext,
     routes::accounts::{AccountInternal, AccountPublic},
@@ -2755,25 +2755,74 @@ pub async fn passkey_testing_bootstrap_session(
 ) -> impl IntoResponse {
     let request_id = get_request_id(&headers);
 
-    {
+    let webauthn_user_id = {
         let mut accounts = state.accounts.write().await;
-        if accounts.get(PASSKEY_PROOF_ACCOUNT_ID).is_none() {
-            accounts.insert(AccountInternal {
-                public: AccountPublic {
-                    id: PASSKEY_PROOF_ACCOUNT_ID.to_string(),
-                    kind: "garnrolle".to_string(),
-                    title: "Passkey Proof User".to_string(),
-                    summary: None,
-                    public_pos: None,
-                    mode: crate::routes::accounts::AccountMode::Ron,
-                    radius_m: 0,
-                    disabled: false,
-                    tags: vec![],
-                },
-                role: Role::Gast,
-                email: Some(PASSKEY_PROOF_ACCOUNT_EMAIL.to_string()),
-                webauthn_user_id: Uuid::new_v4(),
+        match accounts.get(PASSKEY_PROOF_ACCOUNT_ID) {
+            Some(account) => account.webauthn_user_id,
+            None => {
+                let webauthn_user_id = Uuid::new_v4();
+                accounts.insert(AccountInternal {
+                    public: AccountPublic {
+                        id: PASSKEY_PROOF_ACCOUNT_ID.to_string(),
+                        kind: "garnrolle".to_string(),
+                        title: "Passkey Proof User".to_string(),
+                        summary: None,
+                        public_pos: None,
+                        mode: crate::routes::accounts::AccountMode::Ron,
+                        radius_m: 0,
+                        disabled: false,
+                        tags: vec![],
+                    },
+                    role: Role::Gast,
+                    email: Some(PASSKEY_PROOF_ACCOUNT_EMAIL.to_string()),
+                    webauthn_user_id,
+                });
+                webauthn_user_id
+            }
+        }
+    };
+
+    if state.config.domain_read_source == DomainReadSource::Postgres {
+        let Some(pool) = state.db_pool.as_ref() else {
+            tracing::error!(
+                event = "auth.passkey.testing_bootstrap_session.db_pool_missing",
+                request_id = %request_id,
+                "PostgreSQL read source selected for passkey proof without a database pool"
+            );
+            let err = serde_json::json!({
+                "error": "INTERNAL_SERVER_ERROR",
+                "message": "PostgreSQL pool missing for passkey proof"
             });
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response();
+        };
+
+        if let Err(error) = sqlx::query(
+            "INSERT INTO domain_accounts \
+                (id, kind, title, mode, radius_m, disabled, role, email, webauthn_user_id, public_payload, private_payload) \
+             VALUES \
+                ($1, 'garnrolle', 'Passkey Proof User', 'ron', 0, false, 'gast', $2, $3, '{}'::jsonb, '{}'::jsonb) \
+             ON CONFLICT (id) DO UPDATE SET \
+                title = EXCLUDED.title, \
+                disabled = false, \
+                role = EXCLUDED.role, \
+                email = EXCLUDED.email, \
+                webauthn_user_id = EXCLUDED.webauthn_user_id, \
+                updated_at = now()",
+        )
+        .bind(PASSKEY_PROOF_ACCOUNT_ID)
+        .bind(PASSKEY_PROOF_ACCOUNT_EMAIL)
+        .bind(webauthn_user_id.to_string())
+        .execute(pool)
+        .await
+        {
+            tracing::error!(
+                event = "auth.passkey.testing_bootstrap_session.db_persist_failed",
+                request_id = %request_id,
+                error = %error,
+                "Failed to persist passkey proof account to PostgreSQL"
+            );
+            let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response();
         }
     }
 
@@ -2893,15 +2942,26 @@ pub async fn passkey_testing_list_credentials(
         }
     };
 
-    let credential_ids = state
-        .passkeys
-        .credential_ids_for_account(&account_id)
-        .into_iter()
-        .map(|credential_id| {
-            serde_json::to_value(credential_id)
-                .expect("CredentialID must serialize for integration-testing response")
-        })
-        .collect::<Vec<_>>();
+    let credential_ids =
+        match passkeys_runtime::credential_ids_for_account(&state, &account_id).await {
+            Ok(ids) => ids
+                .into_iter()
+                .map(|credential_id| {
+                    serde_json::to_value(credential_id)
+                        .expect("CredentialID must serialize for integration-testing response")
+                })
+                .collect::<Vec<_>>(),
+            Err(error) => {
+                tracing::error!(
+                    event = "auth.passkey.testing_list_credentials.credential_store_error",
+                    account_id = %account_id,
+                    error = ?error,
+                    "Failed to list passkey proof credentials from runtime store"
+                );
+                let err = serde_json::json!({"error": "PASSKEY_CREDENTIAL_BACKEND_UNAVAILABLE"});
+                return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
+            }
+        };
 
     let body = serde_json::json!({
         "account_id": account_id,
