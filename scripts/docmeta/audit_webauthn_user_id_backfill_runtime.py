@@ -21,6 +21,8 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 MAX_PSQL_STDERR_LOG_BYTES = 500
+MAX_SAMPLE_LIMIT = 100
+DEFAULT_PGCONNECT_TIMEOUT_SECONDS = "5"
 AUDIT_NAME = "webauthn_user_id_backfill_runtime"
 
 
@@ -65,6 +67,9 @@ def postgres_env_from_database_url(database_url: str) -> dict[str, str]:
             env[env_key] = values[-1]
 
     env["PGAPPNAME"] = env.get("PGAPPNAME", "weltgewebe-auth-pg-003-runtime-audit")
+    env["PGCONNECT_TIMEOUT"] = env.get(
+        "PGCONNECT_TIMEOUT", DEFAULT_PGCONNECT_TIMEOUT_SECONDS
+    )
     return env
 
 
@@ -103,8 +108,8 @@ ROLLBACK;
 
 
 def build_audit_sql(sample_limit: int) -> str:
-    if sample_limit < 0:
-        raise ValueError("sample_limit must be non-negative")
+    if sample_limit < 0 or sample_limit > MAX_SAMPLE_LIMIT:
+        raise ValueError(f"sample_limit must be between 0 and {MAX_SAMPLE_LIMIT}")
 
     return f"""
 BEGIN TRANSACTION READ ONLY;
@@ -333,7 +338,7 @@ def redacted_missing_schema_audit(
 
 def redaction_policy() -> dict[str, str]:
     return {
-        "account_ids": "sha256-prefix-12",
+        "account_ids": "pseudonymous-sha256-prefix-12",
         "credential_ids": "not_emitted",
         "webauthn_user_ids": "not_emitted",
         "credentials": "not_emitted",
@@ -389,7 +394,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--sample-limit",
         type=int,
         default=10,
-        help="maximum redacted samples to emit per finding class",
+        choices=range(0, MAX_SAMPLE_LIMIT + 1),
+        metavar=f"0..{MAX_SAMPLE_LIMIT}",
+        help=f"maximum pseudonymized samples to emit per finding class (0..{MAX_SAMPLE_LIMIT})",
     )
     parser.add_argument("--pretty", action="store_true", help="pretty-print JSON output")
     return parser.parse_args(argv)

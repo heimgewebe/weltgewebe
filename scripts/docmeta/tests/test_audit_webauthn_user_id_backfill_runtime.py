@@ -212,6 +212,31 @@ def test_postgres_env_from_database_url_redacts_ambient_pg(monkeypatch) -> None:
     assert env.get("DATABASE_URL") is None
 
 
+def test_postgres_env_from_database_url_sets_default_timeout(monkeypatch) -> None:
+    monkeypatch.delenv("PGCONNECT_TIMEOUT", raising=False)
+    env = audit.postgres_env_from_database_url("postgres://user:secret@db.example.invalid/welt")
+
+    assert env["PGCONNECT_TIMEOUT"] == audit.DEFAULT_PGCONNECT_TIMEOUT_SECONDS
+
+
+def test_build_audit_sql_rejects_too_large_sample_limit() -> None:
+    try:
+        audit.build_audit_sql(audit.MAX_SAMPLE_LIMIT + 1)
+    except ValueError as exc:
+        assert "sample_limit" in str(exc)
+    else:  # pragma: no cover - easier failure message than pytest.raises import.
+        raise AssertionError("too large sample limit must fail")
+
+
+def test_parse_args_rejects_too_large_sample_limit() -> None:
+    try:
+        audit.parse_args(["--sample-limit", str(audit.MAX_SAMPLE_LIMIT + 1)])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit.
+        raise AssertionError("too large CLI sample limit must fail")
+
+
 def test_sanitize_psql_stderr_redacts_url_parts() -> None:
     url = "postgres://user:secret@db.example.invalid:5432/welt"
     stderr = f"could not connect to {url}; password=secret; PGPASSWORD=secret"
