@@ -25,6 +25,20 @@ type RegisterOptionsResponse = {
   };
 };
 
+type AuthOptionsResponse = {
+  authentication_id: string;
+  options: {
+    publicKey: {
+      challenge: string;
+      timeout?: number;
+      rpId?: string;
+      allowCredentials?: Array<{ id: string; type: string }>;
+      userVerification?: UserVerificationRequirement;
+      extensions?: Record<string, unknown>;
+    };
+  };
+};
+
 test.describe("Passkey Register Positive Proof", () => {
   test(
     "proves positive passkey register verify with a virtual authenticator",
@@ -42,6 +56,7 @@ test.describe("Passkey Register Positive Proof", () => {
       fs.mkdirSync(proofDir, { recursive: true });
 
       const context = page.context();
+      const proofEmail = "proof-passkey-user@example.com";
       const baseURL = testInfo.project.use.baseURL;
       if (typeof baseURL !== "string") {
         throw new Error("baseURL must be configured for the passkey proof");
@@ -273,6 +288,130 @@ test.describe("Passkey Register Positive Proof", () => {
         "stored credential ids must include the newly registered credential",
       ).toBe(true);
 
+      await context.clearCookies();
+      await page.goto(`${baseURL}/build?proof=passkey-auth`);
+
+      const authOptionsResponsePromise = page.waitForResponse(
+        (response) =>
+          response.url() === `${baseURL}/api/auth/passkeys/auth/options` &&
+          response.request().method() === "POST",
+      );
+      const authOptionsRes = await postJsonInPage(
+        `${baseURL}/api/auth/passkeys/auth/options`,
+        { email: proofEmail },
+      );
+      const authOptionsNetworkResponse = await authOptionsResponsePromise;
+      expect(
+        authOptionsRes.status,
+        `auth/options must succeed after passkey registration; body=${authOptionsRes.bodyText}`,
+      ).toBe(200);
+      expect(
+        authOptionsNetworkResponse.headers()["set-cookie"],
+        "auth/options must not emit Set-Cookie",
+      ).toBeUndefined();
+      const authOptionsBody = authOptionsRes.json as AuthOptionsResponse;
+      expect(authOptionsBody.authentication_id).toBeTruthy();
+      expect(
+        authOptionsBody.options.publicKey.allowCredentials?.length,
+        "auth/options must expose an allowCredentials entry from the runtime store",
+      ).toBeGreaterThan(0);
+
+      const assertion = await page.evaluate(async (requestOptions) => {
+        const decodeBase64Url = (value: string): ArrayBuffer => {
+          const padded = value
+            .replace(/-/g, "+")
+            .replace(/_/g, "/")
+            .padEnd(Math.ceil(value.length / 4) * 4, "=");
+          const binary = atob(padded);
+          const buffer = new ArrayBuffer(binary.length);
+          const bytes = new Uint8Array(buffer);
+
+          for (let i = 0; i < binary.length; i += 1) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+
+          return buffer;
+        };
+
+        const encodeBase64Url = (value: ArrayBuffer): string => {
+          const bytes = new Uint8Array(value);
+          let binary = "";
+          for (const byte of bytes) {
+            binary += String.fromCharCode(byte);
+          }
+          return btoa(binary)
+            .replace(/\+/g, "-")
+            .replace(/\//g, "_")
+            .replace(/=+$/g, "");
+        };
+
+        const publicKey = {
+          ...requestOptions,
+          challenge: decodeBase64Url(requestOptions.challenge),
+          allowCredentials: (requestOptions.allowCredentials ?? []).map(
+            (descriptor) => ({
+              id: decodeBase64Url(descriptor.id),
+              type: "public-key" as const,
+            }),
+          ),
+        } as PublicKeyCredentialRequestOptions;
+
+        const credential = await navigator.credentials.get({ publicKey });
+        if (!(credential instanceof PublicKeyCredential)) {
+          throw new Error(
+            "navigator.credentials.get did not return a PublicKeyCredential",
+          );
+        }
+        const response = credential.response as AuthenticatorAssertionResponse;
+
+        return {
+          id: credential.id,
+          rawId: encodeBase64Url(credential.rawId),
+          response: {
+            authenticatorData: encodeBase64Url(response.authenticatorData),
+            clientDataJSON: encodeBase64Url(response.clientDataJSON),
+            signature: encodeBase64Url(response.signature),
+            userHandle:
+              response.userHandle === null
+                ? null
+                : encodeBase64Url(response.userHandle),
+          },
+          type: credential.type,
+          clientExtensionResults: credential.getClientExtensionResults(),
+          authenticatorAttachment: credential.authenticatorAttachment,
+        };
+      }, authOptionsBody.options.publicKey);
+
+      const authVerifyResponsePromise = page.waitForResponse(
+        (response) =>
+          response.url() === `${baseURL}/api/auth/passkeys/auth/verify` &&
+          response.request().method() === "POST",
+      );
+      const authVerifyRes = await postJsonInPage(
+        `${baseURL}/api/auth/passkeys/auth/verify`,
+        {
+          authentication_id: authOptionsBody.authentication_id,
+          credential: assertion,
+        },
+      );
+      const authVerifyNetworkResponse = await authVerifyResponsePromise;
+      expect(
+        authVerifyRes.status,
+        `auth/verify must succeed with a real WebAuthn assertion; body=${authVerifyRes.bodyText}`,
+      ).toBe(200);
+      expect(authVerifyRes.json).toEqual({
+        ok: true,
+        account_id: loginBody.account_id,
+      });
+      const cookiesAfterAuthVerify = await context.cookies(baseURL);
+      const loginSessionCookie = cookiesAfterAuthVerify.find(
+        (cookie) => cookie.name === "gewebe_session",
+      );
+      expect(
+        loginSessionCookie,
+        "auth/verify must install a session cookie",
+      ).toBeTruthy();
+
       const virtualCredentials = (await cdp.send("WebAuthn.getCredentials", {
         authenticatorId,
       })) as {
@@ -293,6 +432,15 @@ test.describe("Passkey Register Positive Proof", () => {
         stored_credential_count: storedCredentialsBody.credential_ids.length,
         stored_credential_reflected:
           storedCredentialsBody.credential_ids.includes(credential.rawId),
+        auth_options_status: authOptionsRes.status,
+        auth_options_set_cookie:
+          authOptionsNetworkResponse.headers()["set-cookie"] ?? null,
+        auth_options_allow_credentials:
+          authOptionsBody.options.publicKey.allowCredentials?.length ?? 0,
+        auth_verify_status: authVerifyRes.status,
+        auth_verify_set_cookie_header:
+          authVerifyNetworkResponse.headers()["set-cookie"] ?? null,
+        auth_verify_session_cookie_present: Boolean(loginSessionCookie),
         virtual_authenticator_credentials:
           virtualCredentials.credentials.length,
       };
@@ -315,6 +463,11 @@ test.describe("Passkey Register Positive Proof", () => {
       expect(proofSummary.register_verify_set_cookie).toBeNull();
       expect(proofSummary.session_cookie_unchanged).toBe(true);
       expect(proofSummary.stored_credential_reflected).toBe(true);
+      expect(proofSummary.auth_options_status).toBe(200);
+      expect(proofSummary.auth_options_set_cookie).toBeNull();
+      expect(proofSummary.auth_options_allow_credentials).toBeGreaterThan(0);
+      expect(proofSummary.auth_verify_status).toBe(200);
+      expect(proofSummary.auth_verify_session_cookie_present).toBe(true);
       expect(proofSummary.virtual_authenticator_credentials).toBeGreaterThan(0);
     },
   );

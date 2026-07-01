@@ -47,6 +47,12 @@ export default defineConfig({
         WEBAUTHN_RP_ID: "localhost",
         WEBAUTHN_RP_ORIGIN: `http://localhost:${PORT}`,
         WEBAUTHN_RP_NAME: "Weltgewebe Test",
+        ...(process.env.AUTH_PASSKEY_PROOF_POSTGRES === "1"
+          ? {
+              WELTGEWEBE_DOMAIN_READ_SOURCE: "postgres",
+              WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE: "postgres",
+            }
+          : {}),
       },
     },
     {
