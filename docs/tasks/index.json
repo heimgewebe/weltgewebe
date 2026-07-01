@@ -1141,12 +1141,13 @@
         "apps/api/src/config.rs",
         "apps/api/src/lib.rs",
         "docs/reports/auth-pg-002-passkey-runtime-facade.md",
-        "docs/reports/auth-pg-002-cutover-plan.md"
+        "docs/reports/auth-pg-002-cutover-plan.md",
+        "apps/api/tests/db_passkey_fk_readiness.rs",
+        "docs/reports/auth-pg-002-passkey-fk-readiness-audit.md"
       ],
       "missing_evidence": [
         "Kein Produktions-Cutover; passkey_credential_source bleibt Default in_memory",
-        "FK passkey_credentials.account_id -> domain_accounts(id) bewusst aufgeschoben bis der Produktionsmodus domain_read_source=postgres und vorhandene Account-Zeilen garantiert",
-        "Kein vollstaendiger Browser-/Authenticator-E2E fuer Register -> Reload -> Login",
+        "FK passkey_credentials.account_id -> domain_accounts(id) noch nicht implementiert; CI-Audit-Harness existiert, aber repräsentativer Runtime-/Produktionsaudit gegen echte Daten fehlt",
         "Kein webauthn_user_id-Backfill/NOT NULL (AUTH-PG-003 bleibt offen)",
         "Passkey-Management-UI/List/Remove-Cutover fehlt"
       ],
@@ -1168,7 +1169,8 @@
           "docs/reports/passkey-register-verify-prep.md",
           "docs/reports/auth-pg-002-passkey-db-store.md",
           "docs/reports/auth-pg-002-passkey-runtime-facade.md",
-          "docs/reports/auth-pg-002-cutover-plan.md"
+          "docs/reports/auth-pg-002-cutover-plan.md",
+          "docs/reports/auth-pg-002-passkey-fk-readiness-audit.md"
         ]
       },
       "updated_at": "2026-07-01"
