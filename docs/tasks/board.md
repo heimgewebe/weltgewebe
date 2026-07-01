@@ -73,7 +73,7 @@ Die optimierte TODO-Liste wurde gegen den Repo-Stand abgeglichen und einsortiert
 |---|---|---|---|
 | OPT-ARC-001 | Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback offen; Runtime-Smoke und Cutover ausstehend; JSONL-Demontage ausstehend | Offene Migrationsteile bzw. Cutover-Proof vorbereiten | JSONL bleibt Default-Lesequelle und Write-Truth bis vollständiger Cutover; POST /accounts, PATCH /nodes und POST /edges schreiben optional PostgreSQL; Schema- und Backfill-Proof sind belegt; der geänderte Read-Path-Proof-Harness wartet auf frische PR-CI-Evidence |
 | DOMAIN-PG-001 | Edge-Referenz-Policy (FK oder Guard) hängt am Edge-Orphan-Audit | DB-PROOF-001 ist nur partial; repräsentativer Runtime-/Deployment-Datenlauf mit auditable_edges_total > 0 und FK-vs-Guard-Policyentscheidung fehlen. | Kein FK-/Referenz-Cutover vor Audit; Orphans dürfen nicht still verworfen werden |
-| AUTH-PG-003 | `webauthn_user_id`-Backfill und späteres `NOT NULL` hängen an WebAuthn-Persistenz | AUTH-PG-002 Store/Runtime-Facade und Cutover-Plan sind belegt; Readiness-Strategie dokumentiert (`docs/reports/auth-pg-003-backfill-readiness.md`); Live-NULL-Audit, Backfill-Fixture und Backfill-Test fehlen | Kein `NOT NULL` vor Audit + Backfill; keine stille UUID-Neuerzeugung bei Reload |
+| AUTH-PG-003 | `webauthn_user_id`-Backfill und späteres `NOT NULL` hängen an WebAuthn-Persistenz | AUTH-PG-002 Store/Runtime-Facade und Cutover-Plan sind belegt; Readiness-Strategie dokumentiert (`docs/reports/auth-pg-003-backfill-readiness.md`); Audit-Proof vorbereitet; Live-Audit und Backfill fehlen weiter | Kein `NOT NULL` vor Audit + Backfill; keine stille UUID-Neuerzeugung bei Reload |
 
 ## Nächste PR-Kandidaten
 

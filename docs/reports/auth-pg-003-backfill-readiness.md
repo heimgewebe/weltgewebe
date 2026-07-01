@@ -96,7 +96,11 @@ Ein späterer Implementierungs-PR sollte zunächst nur diese Belege liefern:
 - Negativtest: widersprüchliche Credential-UUIDs blockieren fail-closed.
 - Report-Update mit Zählergebnis und Nicht-Beweisen.
 
-## 6. Nicht-Beweise
+## 6. Umgesetzter Audit-Proof
+
+AUTH-PG-003-AUDIT-001 ergaenzt einen read-only Audit-Helfer und einen ignored DB-Proof. Der Proof zaehlt Account-, Credential-, Orphan-, Multi-UUID- und Mismatch-Faelle, mutiert aber keine Daten und bleibt kein Backfill.
+
+## 7. Nicht-Beweise
 
 Dieser Bericht beweist nicht:
 
@@ -107,10 +111,10 @@ Dieser Bericht beweist nicht:
 - dass `passkey_credentials.account_id -> domain_accounts(id)` schon als FK
   aktiviert werden kann.
 
-## 7. Nächste Aktion
+## 8. Nächste Aktion
 
-Nächster sinnvoller PR-Schnitt: `AUTH-PG-003-AUDIT-001` als read-only Audit- und
-Fixture-Proof. Erst danach Backfill-Migration planen. Danach erst `NOT NULL`.
+`AUTH-PG-003-AUDIT-001` ist als read-only Audit- und Fixture-Proof vorbereitet.
+Nächster PR-Schnitt: Backfill-Regeln aus Audit-Zählern ableiten; danach erst Backfill-Migration und `NOT NULL` prüfen.
 
 Humorlos gesagt: Erst zählen, dann füllen, dann verriegeln. Wer zuerst verriegelt,
 baut ein Museum für ausgesperrte Nutzer.

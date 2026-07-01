@@ -1196,12 +1196,14 @@
       "owner": "unknown",
       "evidence": [
         "apps/api/src/routes/accounts.rs",
-        "docs/reports/auth-pg-003-backfill-readiness.md"
+        "docs/reports/auth-pg-003-backfill-readiness.md",
+        "apps/api/src/domain_db.rs",
+        "apps/api/tests/db_webauthn_user_id_backfill_audit.rs"
       ],
       "missing_evidence": [
         "legacy_webauthn_user_id_backfill und webauthn_user_id_not_null sind ausdrueckliche Non-Goals von OPT-ARC-001 (docs/reports/opt-arc-001-db-proof-matrix.json)",
-        "Kein Audit, wie viele Accounts webauthn_user_id IS NULL haben, und kein Backfill-Test",
-        "Readiness-Strategie ist dokumentiert; Live-NULL-Audit, Backfill-Fixture und Backfill-Test fehlen weiterhin"
+        "Audit-Proof vorbereitet; Live-Produktions-Audit und Backfill fehlen weiter",
+        "Kein NOT NULL vor erfolgreichem Backfill-Proof und Cutover-Entscheidung"
       ],
       "acceptance": [
         "Audit der Accounts mit fehlender webauthn_user_id liegt vor; Backfill-Strategie ist dokumentiert und testbar",
