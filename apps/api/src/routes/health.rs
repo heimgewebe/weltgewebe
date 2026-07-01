@@ -297,6 +297,7 @@ mod tests {
             domain_account_write_source: crate::config::DomainAccountWriteSource::Jsonl,
             domain_node_write_source: crate::config::DomainNodeWriteSource::Jsonl,
             domain_edge_write_source: crate::config::DomainEdgeWriteSource::Jsonl,
+            passkey_credential_source: crate::config::PasskeyCredentialSource::InMemory,
             auth_public_login: false,
             app_base_url: None,
             auth_trusted_proxies: None,

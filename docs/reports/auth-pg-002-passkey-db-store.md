@@ -45,10 +45,11 @@ relations:
 
 **Ausdrücklich NICHT belegt / Nicht-Scope dieses Slice:**
 
-- Kein Routen-Cutover: `register/verify`, `auth/options`, `auth/verify`,
-  `register/options` nutzen weiterhin den In-Memory-`PasskeyStore`.
-- Keine Runtime-Facade und keine neue Config (`passkey_credential_source`)
-  — Slice B.
+- Zum Zeitpunkt dieses Store-Slice war kein Routen-Cutover belegt:
+  `register/verify`, `auth/options`, `auth/verify` und `register/options`
+  nutzten weiterhin den In-Memory-`PasskeyStore`. Seit Slice B ist der
+  Runtime-Cutover separat dokumentiert in
+  `docs/reports/auth-pg-002-passkey-runtime-facade.md`.
 - Kein Default-Wechsel: In-Memory bleibt Default (JSONL-/Single-Instance-
   kompatibel).
 - Kein Production-Cutover, keine JSONL-Demontage, kein
@@ -145,14 +146,13 @@ der maßgebliche Merge-Beleg und muss auf der aktuellen PR-Revision grün sein.
 
 ## 5. Offene Leerstellen
 
-- **Routen-Cutover fehlt (Slice B).** Solange die Routen den In-Memory-Store
-  nutzen, ändert dieser Slice das Laufzeitverhalten nicht. `exclude_credentials`
-  und Credential-Resolution müssen für echte Restart-Stabilität aus dem
-  persistenten Store kommen.
-- **Config-Gate fehlt (Slice B).** `passkey_credential_source` /
-  `WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE` (Default `in_memory`), fail-closed bei
-  fehlendem Pool, und FK-Vorbedingung gegen `domain_accounts` sind noch nicht
-  umgesetzt.
+- **Produktions-Cutover fehlt.** `passkey_credential_source` existiert in
+  Slice B, bleibt aber default `in_memory`; bewusster Runtime-Cutover ist
+  weiterhin erforderlich.
+- **FK-/Integritäts-Cutover fehlt.** Ein Foreign Key
+  `passkey_credentials.account_id -> domain_accounts(id)` bleibt bewusst
+  aufgeschoben, bis der Produktionsmodus garantiert, dass Accounts aus
+  PostgreSQL gelesen werden und die referenzierte Account-Zeile existiert.
 - **Menschliches Review für `credentials/`** bleibt Akzeptanzkriterium vor
   Merge (AUTH-PG-002).
 

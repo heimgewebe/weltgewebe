@@ -1123,7 +1123,7 @@
       "id": "AUTH-PG-002",
       "title": "WebAuthn-Credential-Persistenz / Passkey-Cutover nach PostgreSQL",
       "area": "auth",
-      "status": "open",
+      "status": "partial",
       "priority": "high",
       "effort": "L",
       "risk": "high",
@@ -1136,13 +1136,19 @@
         "apps/api/src/auth/passkeys_db.rs",
         "apps/api/tests/db_passkey_store_persistence.rs",
         ".github/workflows/api.yml",
-        "docs/reports/auth-pg-002-passkey-db-store.md"
+        "docs/reports/auth-pg-002-passkey-db-store.md",
+        "apps/api/src/auth/passkeys_runtime.rs",
+        "apps/api/src/config.rs",
+        "apps/api/src/lib.rs",
+        "docs/reports/auth-pg-002-passkey-runtime-facade.md"
       ],
       "missing_evidence": [
-        "Store-Slice belegt (Migration passkey_credentials + DbPasskeyStore + lokal gruener Restart-Proof), aber KEIN Routen-Cutover: register/verify, auth/options, auth/verify nutzen weiter den In-Memory-PasskeyStore",
-        "Keine Runtime-Facade und keine Config (passkey_credential_source / WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE, Default in_memory, fail-closed ohne Pool) — Slice B offen",
-        "FK passkey_credentials.account_id -> domain_accounts(id) bewusst aufgeschoben bis Slice B die Vorbedingung domain_read_source=postgres + vorhandene Account-Zeile garantiert",
-        "Menschliches Review fuer credentials/ vor Merge steht aus"
+        "Kein Produktions-Cutover; passkey_credential_source bleibt Default in_memory",
+        "FK passkey_credentials.account_id -> domain_accounts(id) bewusst aufgeschoben bis der Produktionsmodus domain_read_source=postgres und vorhandene Account-Zeilen garantiert",
+        "Kein vollstaendiger Browser-/Authenticator-E2E fuer Register -> Reload -> Login",
+        "Kein webauthn_user_id-Backfill/NOT NULL (AUTH-PG-003 bleibt offen)",
+        "Passkey-Management-UI/List/Remove-Cutover fehlt",
+        "Menschliches Review fuer credentials/runtime-facade vor Merge steht aus"
       ],
       "acceptance": [
         "Registrierter WebAuthn-Credential-Zustand ist restart-stabil (kein reiner Cache)",
@@ -1156,10 +1162,11 @@
         "docs": [
           "docs/reports/auth-status-matrix.md",
           "docs/reports/passkey-register-verify-prep.md",
-          "docs/reports/auth-pg-002-passkey-db-store.md"
+          "docs/reports/auth-pg-002-passkey-db-store.md",
+          "docs/reports/auth-pg-002-passkey-runtime-facade.md"
         ]
       },
-      "updated_at": "2026-06-30"
+      "updated_at": "2026-07-01"
     },
     {
       "id": "AUTH-PG-003",

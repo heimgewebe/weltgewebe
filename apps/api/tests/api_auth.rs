@@ -74,6 +74,7 @@ fn test_state() -> Result<ApiState> {
         domain_account_write_source: weltgewebe_api::config::DomainAccountWriteSource::Jsonl,
         domain_node_write_source: weltgewebe_api::config::DomainNodeWriteSource::Jsonl,
         domain_edge_write_source: weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
+        passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
         auth_public_login: false,
         app_base_url: None,
         auth_trusted_proxies: None,

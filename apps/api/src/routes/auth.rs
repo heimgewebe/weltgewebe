@@ -21,8 +21,9 @@ use crate::{
     auth::challenges::ChallengeIntent,
     auth::passkeys::{
         start_passkey_authentication, start_passkey_registration, ConsumeGrantResult,
-        PasskeyAuthenticationStoreInsertError, PasskeyStoreInsertError, RegistrationInput,
+        PasskeyAuthenticationStoreInsertError, RegistrationInput,
     },
+    auth::passkeys_runtime::{self, PasskeyCredentialRuntimeError},
     auth::session::SessionBackendError,
     auth::step_up_tokens::ConsumeMatchResult,
     auth::{role::Role, tokens::TokenStore},
@@ -2038,14 +2039,22 @@ pub async fn passkey_register_options(
     };
     drop(accounts);
 
-    let exclude_credentials = {
-        let existing = state.passkeys.credential_ids_for_account(&account_id);
-        if existing.is_empty() {
-            None
-        } else {
-            Some(existing)
-        }
-    };
+    let exclude_credentials =
+        match passkeys_runtime::credential_ids_for_account(&state, &account_id).await {
+            Ok(existing) if existing.is_empty() => None,
+            Ok(existing) => Some(existing),
+            Err(error) => {
+                tracing::error!(
+                    event = "auth.passkey.register_options.credential_store_error",
+                    request_id = %request_id,
+                    account_id = %account_id,
+                    error = ?error,
+                    "Passkey register-options: credential store unavailable"
+                );
+                let err = serde_json::json!({"error": "PASSKEY_CREDENTIAL_BACKEND_UNAVAILABLE"});
+                return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
+            }
+        };
 
     let input = RegistrationInput {
         webauthn_user_id: account.webauthn_user_id,
@@ -2195,9 +2204,48 @@ pub async fn passkey_register_verify(
         }
     };
 
-    match state.passkeys.insert(account_id.clone(), passkey) {
+    let webauthn_user_id = {
+        let accounts = state.accounts.read().await;
+        match accounts.get(&account_id) {
+            Some(account) if account.public.disabled => {
+                tracing::warn!(
+                    event = "auth.passkey.register_verify.account_inactive_before_persist",
+                    request_id = %request_id,
+                    account_id = %account_id,
+                    "Passkey register-verify: account disabled before credential persistence"
+                );
+                let err = serde_json::json!({"error": "ACCOUNT_INACTIVE"});
+                return (StatusCode::FORBIDDEN, Json(err)).into_response();
+            }
+            Some(account) if account.webauthn_user_id == webauthn_user_id => {
+                account.webauthn_user_id
+            }
+            Some(_) => {
+                tracing::warn!(
+                    event = "auth.passkey.register_verify.webauthn_user_id_changed",
+                    request_id = %request_id,
+                    account_id = %account_id,
+                    "Passkey register-verify: account WebAuthn user id changed before credential persistence"
+                );
+                let err = serde_json::json!({"error": "ACCOUNT_INVALID"});
+                return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+            }
+            None => {
+                tracing::warn!(
+                    event = "auth.passkey.register_verify.account_missing_before_persist",
+                    request_id = %request_id,
+                    account_id = %account_id,
+                    "Passkey register-verify: account missing before credential persistence"
+                );
+                let err = serde_json::json!({"error": "ACCOUNT_INVALID"});
+                return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+            }
+        }
+    };
+
+    match passkeys_runtime::insert(&state, &account_id, webauthn_user_id, passkey).await {
         Ok(()) => {}
-        Err(PasskeyStoreInsertError::DuplicateCredentialId) => {
+        Err(PasskeyCredentialRuntimeError::DuplicateCredentialId) => {
             tracing::warn!(
                 event = "auth.passkey.register_verify.duplicate_credential",
                 request_id = %request_id,
@@ -2206,6 +2254,17 @@ pub async fn passkey_register_verify(
             );
             let err = serde_json::json!({"error": "CREDENTIAL_ALREADY_REGISTERED"});
             return (StatusCode::CONFLICT, Json(err)).into_response();
+        }
+        Err(error) => {
+            tracing::error!(
+                event = "auth.passkey.register_verify.credential_store_error",
+                request_id = %request_id,
+                account_id = %account_id,
+                error = ?error,
+                "Passkey register-verify: credential store failed before success response"
+            );
+            let err = serde_json::json!({"error": "PASSKEY_CREDENTIAL_BACKEND_UNAVAILABLE"});
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
         }
     }
 
@@ -2342,7 +2401,20 @@ pub async fn passkey_auth_options(
     // Unknown identifier and an account without passkeys both fail-close
     // identically: no server state, no cookie.
     let passkeys = match &account_id {
-        Some(id) => state.passkeys.list_for_account(id),
+        Some(id) => match passkeys_runtime::list_for_account(&state, id).await {
+            Ok(passkeys) => passkeys,
+            Err(error) => {
+                tracing::error!(
+                    event = "auth.passkey.auth_options.credential_store_error",
+                    request_id = %request_id,
+                    account_id = %id,
+                    error = ?error,
+                    "Passkey auth-options: credential store unavailable"
+                );
+                let err = serde_json::json!({"error": "PASSKEY_CREDENTIAL_BACKEND_UNAVAILABLE"});
+                return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
+            }
+        },
         None => Vec::new(),
     };
     let (account_id, passkeys) = match account_id {
@@ -2552,18 +2624,41 @@ pub async fn passkey_auth_verify(
     // Resolve the asserted credential to its owning account via the global
     // credential index, and assert it matches the account the ceremony was
     // started for (defence-in-depth against a credential/account mismatch).
-    let account_id = match state.passkeys.find_by_credential_id(auth_result.cred_id()) {
-        Some(stored) if stored.account_id == expected_account_id => stored.account_id,
-        _ => {
-            tracing::warn!(
-                event = "auth.passkey.auth_verify.credential_mismatch",
-                request_id = %request_id,
-                "Passkey auth-verify: asserted credential does not resolve to the ceremony account"
-            );
-            let err = serde_json::json!({"error": "CREDENTIAL_MISMATCH"});
-            return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
-        }
-    };
+    let account_id =
+        match passkeys_runtime::find_by_credential_id(&state, auth_result.cred_id()).await {
+            Ok(Some(stored)) if stored.account_id == expected_account_id => stored.account_id,
+            Ok(Some(stored)) => {
+                tracing::warn!(
+                    event = "auth.passkey.auth_verify.credential_mismatch",
+                    request_id = %request_id,
+                    credential_owner = %stored.account_id,
+                    expected_account_id = %expected_account_id,
+                    "Passkey auth-verify: asserted credential resolves to a different account"
+                );
+                let err = serde_json::json!({"error": "CREDENTIAL_MISMATCH"});
+                return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+            }
+            Ok(None) => {
+                tracing::warn!(
+                    event = "auth.passkey.auth_verify.credential_not_found",
+                    request_id = %request_id,
+                    expected_account_id = %expected_account_id,
+                    "Passkey auth-verify: asserted credential does not exist in credential store"
+                );
+                let err = serde_json::json!({"error": "CREDENTIAL_MISMATCH"});
+                return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+            }
+            Err(error) => {
+                tracing::error!(
+                    event = "auth.passkey.auth_verify.credential_store_error",
+                    request_id = %request_id,
+                    error = ?error,
+                    "Passkey auth-verify: credential store unavailable during credential resolution"
+                );
+                let err = serde_json::json!({"error": "PASSKEY_CREDENTIAL_BACKEND_UNAVAILABLE"});
+                return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
+            }
+        };
 
     // Reject before mutating any credential state if the account has been deleted
     // or disabled since auth/options. (Re-checked again immediately before the
@@ -2583,15 +2678,32 @@ pub async fn passkey_auth_verify(
     // so the global credential index stays consistent. A failure here means the
     // credential vanished between resolution and update (e.g. a concurrent
     // removal) — fail-closed rather than mint a session for a gone credential.
-    if let Err(e) = state.passkeys.update_credential(&account_id, &auth_result) {
-        tracing::warn!(
-            event = "auth.passkey.auth_verify.credential_update_failed",
-            request_id = %request_id,
-            error = %e,
-            "Passkey auth-verify: credential state update failed; refusing session"
-        );
-        let err = serde_json::json!({"error": "CREDENTIAL_MISMATCH"});
-        return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+    if let Err(error) = passkeys_runtime::update_credential(&state, &account_id, &auth_result).await
+    {
+        match error {
+            PasskeyCredentialRuntimeError::NotFound
+            | PasskeyCredentialRuntimeError::UpdateFailed => {
+                tracing::warn!(
+                    event = "auth.passkey.auth_verify.credential_update_failed",
+                    request_id = %request_id,
+                    error = ?error,
+                    "Passkey auth-verify: credential state update failed; refusing session"
+                );
+                let err = serde_json::json!({"error": "CREDENTIAL_MISMATCH"});
+                return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+            }
+            other => {
+                tracing::error!(
+                    event = "auth.passkey.auth_verify.credential_store_error",
+                    request_id = %request_id,
+                    account_id = %account_id,
+                    error = ?other,
+                    "Passkey auth-verify: credential state persistence failed; refusing session"
+                );
+                let err = serde_json::json!({"error": "PASSKEY_CREDENTIAL_BACKEND_UNAVAILABLE"});
+                return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
+            }
+        }
     }
 
     // Re-validate the account immediately before minting a session: it may have

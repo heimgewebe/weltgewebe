@@ -20,8 +20,15 @@
 //! - DATABASE_URL must point to direct PostgreSQL (not PgBouncer at :6432).
 //! - Fixtures use a recognizable account-id namespace and are cleaned up.
 
-use std::{path::PathBuf, str::FromStr};
+use std::{net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc};
 
+use axum::{
+    body,
+    extract::{ConnectInfo, State},
+    http::{HeaderMap, StatusCode},
+    response::IntoResponse,
+    Json,
+};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use serde_json::json;
@@ -29,7 +36,29 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use uuid::Uuid;
 use webauthn_rs::prelude::*;
 
-use weltgewebe_api::auth::passkeys_db::{credential_id_key, DbPasskeyStore, DbPasskeyStoreError};
+use tokio::sync::{Mutex, RwLock};
+
+use weltgewebe_api::{
+    auth::{
+        accounts::AccountStore,
+        passkeys::{build_webauthn, PasskeyStore},
+        passkeys_db::{credential_id_key, DbPasskeyStore, DbPasskeyStoreError},
+        passkeys_runtime,
+        rate_limit::AuthRateLimiter,
+        role::Role,
+        session::SessionBackend,
+    },
+    config::{
+        AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
+        DomainReadSource, PasskeyCredentialSource,
+    },
+    routes::{
+        accounts::{AccountInternal, AccountMode, AccountPublic},
+        auth::{passkey_auth_options, PasskeyAuthOptionsPayload},
+    },
+    state::{ApiState, OrderedCache},
+    telemetry::{BuildInfo, Metrics},
+};
 
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL").expect(
@@ -73,6 +102,74 @@ async fn cleanup_account(pool: &sqlx::PgPool, account_id: &str) {
         .execute(pool)
         .await
         .expect("failed to cleanup account passkeys");
+}
+
+fn postgres_passkey_runtime_state(pool: sqlx::PgPool) -> ApiState {
+    let config = AppConfig {
+        fade_days: 7,
+        ron_days: 84,
+        anonymize_opt_in: true,
+        delegation_expire_days: 28,
+        domain_read_source: DomainReadSource::Postgres,
+        domain_account_write_source: DomainAccountWriteSource::Jsonl,
+        domain_node_write_source: DomainNodeWriteSource::Jsonl,
+        domain_edge_write_source: DomainEdgeWriteSource::Jsonl,
+        passkey_credential_source: PasskeyCredentialSource::Postgres,
+        auth_public_login: false,
+        app_base_url: None,
+        auth_trusted_proxies: None,
+        auth_allow_emails: None,
+        auth_allow_email_domains: None,
+        auth_auto_provision: false,
+        auth_rl_ip_per_min: None,
+        auth_rl_ip_per_hour: None,
+        auth_rl_email_per_min: None,
+        auth_rl_email_per_hour: None,
+        smtp_host: None,
+        smtp_port: None,
+        smtp_user: None,
+        smtp_pass: None,
+        smtp_from: None,
+        auth_log_magic_token: true,
+        webauthn_rp_id: Some("example.com".to_string()),
+        webauthn_rp_origin: Some("https://example.com".to_string()),
+        webauthn_rp_name: Some("Weltgewebe Test".to_string()),
+    };
+    let metrics = Metrics::try_new(BuildInfo {
+        version: "test",
+        commit: "test",
+        build_timestamp: "test",
+    })
+    .expect("metrics");
+    let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
+    let webauthn = build_webauthn(&config)
+        .expect("webauthn config must be valid")
+        .expect("webauthn must be configured");
+
+    ApiState {
+        db_pool: Some(pool),
+        db_pool_configured: true,
+        nats_client: None,
+        nats_configured: false,
+        config,
+        metrics,
+        sessions: SessionBackend::new_in_memory(),
+        challenges: Default::default(),
+        tokens: Default::default(),
+        step_up_tokens: Default::default(),
+        accounts: Arc::new(RwLock::new(AccountStore::new())),
+        nodes: Arc::new(RwLock::new(OrderedCache::new())),
+        nodes_persist: Arc::new(Mutex::new(())),
+        accounts_persist: Arc::new(Mutex::new(())),
+        edges: Arc::new(RwLock::new(OrderedCache::new())),
+        rate_limiter,
+        mailer: None,
+        webauthn: Some(webauthn),
+        passkey_registrations: Default::default(),
+        passkey_registration_grants: Default::default(),
+        passkey_authentications: Default::default(),
+        passkeys: PasskeyStore::new(),
+    }
 }
 
 /// Builds a deterministic, valid `Passkey` from a seed without a browser or
@@ -390,4 +487,118 @@ async fn db_passkey_store_credential_id_key_is_primary_key() {
 
     cleanup_account(&pool, &account_id).await;
     pool.close().await;
+}
+
+/// Runtime-facade proof: when `passkey_credential_source=postgres`, the facade
+/// uses `DbPasskeyStore` rather than the in-memory `PasskeyStore`. A credential
+/// inserted through one `ApiState` is visible through a fresh `ApiState` backed
+/// by a separate pool.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn passkey_runtime_facade_postgres_persists_across_state_reinit() {
+    let pool1 = connect_pool().await;
+    let account_id = unique_account_id("runtime-facade");
+    cleanup_account(&pool1, &account_id).await;
+
+    let state1 = postgres_passkey_runtime_state(pool1.clone());
+    let passkey = test_passkey(81);
+    let credential_id = passkey.cred_id().clone();
+    let webauthn_user_id = Uuid::new_v4();
+
+    passkeys_runtime::insert(&state1, &account_id, webauthn_user_id, passkey)
+        .await
+        .expect("runtime facade must persist to postgres");
+
+    let pool2 = connect_pool().await;
+    let state2 = postgres_passkey_runtime_state(pool2.clone());
+    let ids = passkeys_runtime::credential_ids_for_account(&state2, &account_id)
+        .await
+        .expect("runtime facade must list from postgres after reinit");
+    assert_eq!(ids, vec![credential_id.clone()]);
+
+    let stored = passkeys_runtime::find_by_credential_id(&state2, &credential_id)
+        .await
+        .expect("runtime facade must search postgres after reinit")
+        .expect("credential must exist after reinit");
+    assert_eq!(stored.account_id, account_id);
+
+    cleanup_account(&pool2, &stored.account_id).await;
+}
+
+/// Route-level proof: `auth/options` reads registered credentials through the
+/// runtime facade. The in-memory `PasskeyStore` stays empty; the only credential
+/// lives in PostgreSQL.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn passkey_auth_options_route_reads_postgres_runtime_facade() {
+    let pool = connect_pool().await;
+    let account_id = unique_account_id("runtime-route-auth-options");
+    cleanup_account(&pool, &account_id).await;
+
+    let state = postgres_passkey_runtime_state(pool.clone());
+    let email = format!("{account_id}@example.invalid");
+    let webauthn_user_id = Uuid::new_v4();
+    {
+        let mut accounts = state.accounts.write().await;
+        accounts.insert(AccountInternal {
+            public: AccountPublic {
+                id: account_id.clone(),
+                kind: "garnrolle".to_string(),
+                title: "Runtime Facade User".to_string(),
+                summary: None,
+                public_pos: None,
+                mode: AccountMode::Verortet,
+                radius_m: 0,
+                disabled: false,
+                tags: vec![],
+            },
+            role: Role::Weber,
+            email: Some(email.clone()),
+            webauthn_user_id,
+        });
+    }
+
+    let passkey = test_passkey(82);
+    let credential_id = passkey.cred_id().clone();
+    passkeys_runtime::insert(&state, &account_id, webauthn_user_id, passkey)
+        .await
+        .expect("runtime facade must persist credential to postgres");
+    assert!(
+        state.passkeys.list_for_account(&account_id).is_empty(),
+        "test must prove the route does not accidentally read the in-memory store"
+    );
+
+    let response = passkey_auth_options(
+        State(state.clone()),
+        ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 12345))),
+        HeaderMap::new(),
+        Ok(Json(PasskeyAuthOptionsPayload { email })),
+    )
+    .await
+    .into_response();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        !response
+            .headers()
+            .contains_key(axum::http::header::SET_COOKIE),
+        "auth/options must never set a session cookie"
+    );
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("response body must be readable");
+    let json: serde_json::Value = serde_json::from_slice(&bytes).expect("response must be JSON");
+    let allow_credentials = json["options"]["publicKey"]["allowCredentials"]
+        .as_array()
+        .expect("allowCredentials must be present");
+    assert_eq!(allow_credentials.len(), 1);
+    let id_b64 = allow_credentials[0]["id"]
+        .as_str()
+        .expect("allow credential id must be string");
+    let decoded_id = URL_SAFE_NO_PAD
+        .decode(id_b64)
+        .expect("credential id must be base64url");
+    assert_eq!(decoded_id, credential_id.as_ref());
+
+    cleanup_account(&pool, &account_id).await;
 }
