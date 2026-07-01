@@ -165,6 +165,36 @@ impl DomainEdgeWriteSource {
     }
 }
 
+/// Selects where registered WebAuthn/passkey credentials are stored.
+///
+/// AUTH-PG-002 Slice B: only the long-lived credential records are switched.
+/// Registration/authentication ceremonies remain in-memory. PostgreSQL is
+/// explicit opt-in via `WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE` or the
+/// `passkey_credential_source` config-file key, and additionally requires
+/// `domain_read_source=postgres` (validated at config load) plus a live pool
+/// (validated at startup). No silent fallback is allowed.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum PasskeyCredentialSource {
+    #[default]
+    #[serde(alias = "memory", alias = "mem")]
+    InMemory,
+    #[serde(alias = "pg", alias = "db")]
+    Postgres,
+}
+
+impl PasskeyCredentialSource {
+    fn parse_env_value(value: &str) -> Result<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "in_memory" | "memory" | "mem" => Ok(Self::InMemory),
+            "postgres" | "pg" | "db" => Ok(Self::Postgres),
+            other => anyhow::bail!(
+                "invalid WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE value '{other}'; expected one of: in_memory, memory, mem, postgres, pg, db"
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
     pub fade_days: u32,
@@ -191,6 +221,11 @@ pub struct AppConfig {
     /// OPT-ARC-001 Phase E-C: governs `POST /edges` only.
     #[serde(default)]
     pub domain_edge_write_source: DomainEdgeWriteSource,
+
+    /// Registered passkey credential source (in-memory default, PostgreSQL opt-in).
+    /// AUTH-PG-002 Slice B: governs long-lived WebAuthn credential records only.
+    #[serde(default)]
+    pub passkey_credential_source: PasskeyCredentialSource,
 
     // Public Login Configuration
     #[serde(default)]
@@ -310,6 +345,12 @@ impl AppConfig {
         if let Ok(val) = env::var("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE") {
             if !val.trim().is_empty() {
                 self.domain_edge_write_source = DomainEdgeWriteSource::parse_env_value(&val)?;
+            }
+        }
+
+        if let Ok(val) = env::var("WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE") {
+            if !val.trim().is_empty() {
+                self.passkey_credential_source = PasskeyCredentialSource::parse_env_value(&val)?;
             }
         }
 
@@ -502,6 +543,17 @@ impl AppConfig {
             );
         }
 
+        if self.passkey_credential_source == PasskeyCredentialSource::Postgres
+            && self.domain_read_source != DomainReadSource::Postgres
+        {
+            anyhow::bail!(
+                "passkey_credential_source=postgres requires domain_read_source=postgres \
+                 (set WELTGEWEBE_DOMAIN_READ_SOURCE=postgres). Storing passkey credentials in \
+                 PostgreSQL while reading accounts from JSONL would create restart-invisible \
+                 credential bindings."
+            );
+        }
+
         if self.auth_public_login && self.app_base_url.is_none() {
             anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but APP_BASE_URL is not set. Please set APP_BASE_URL (e.g. https://mein-weltgewebe.de)");
         }
@@ -624,7 +676,7 @@ impl AppConfig {
 mod tests {
     use super::{
         AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
-        DomainReadSource,
+        DomainReadSource, PasskeyCredentialSource,
     };
     use crate::test_helpers::{DirGuard, EnvGuard};
     use anyhow::Result;
@@ -1672,6 +1724,72 @@ delegation_expire_days: 28
             cfg.domain_edge_write_source,
             DomainEdgeWriteSource::Postgres
         );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn passkey_credential_source_defaults_to_in_memory() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let _source = EnvGuard::unset("WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+
+        assert_eq!(
+            cfg.passkey_credential_source,
+            PasskeyCredentialSource::InMemory
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn passkey_credential_source_env_accepts_aliases() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _read = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "postgres");
+        let _source = EnvGuard::set("WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE", "db");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Postgres);
+        assert_eq!(
+            cfg.passkey_credential_source,
+            PasskeyCredentialSource::Postgres
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn passkey_credential_source_invalid_env_is_hard_error() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _source = EnvGuard::set("WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE", "sqlite");
+
+        let err = AppConfig::load_from_path(file.path()).unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains("invalid WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE"));
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn passkey_credential_postgres_with_jsonl_read_is_rejected() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _read = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "jsonl");
+        let _source = EnvGuard::set("WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE", "postgres");
+
+        let err = AppConfig::load_from_path(file.path()).unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains("passkey_credential_source=postgres requires domain_read_source=postgres"));
         Ok(())
     }
 }

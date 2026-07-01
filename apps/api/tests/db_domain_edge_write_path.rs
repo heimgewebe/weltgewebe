@@ -141,6 +141,7 @@ fn write_path_config(
         domain_account_write_source: DomainAccountWriteSource::Postgres,
         domain_node_write_source: DomainNodeWriteSource::Postgres,
         domain_edge_write_source,
+        passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
         auth_public_login: false,
         app_base_url: None,
         auth_trusted_proxies: None,

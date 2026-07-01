@@ -18,7 +18,7 @@ use async_nats::Client as NatsClient;
 use axum::{middleware::from_fn_with_state, routing::get, Router};
 use config::{
     AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
-    DomainReadSource,
+    DomainReadSource, PasskeyCredentialSource,
 };
 use middleware::auth::auth_middleware;
 use middleware::csrf::require_csrf;
@@ -137,6 +137,29 @@ pub async fn run() -> anyhow::Result<()> {
         }
         DomainEdgeWriteSource::Jsonl => {
             tracing::info!("Edge-create write source: JSONL (default).");
+        }
+    }
+
+    // AUTH-PG-002 Slice B: registered passkey credential store gate.
+    //
+    // Ceremony state (registration/authentication/grants) remains in-memory.
+    // Only durable WebAuthn credential records switch here. PostgreSQL mode is
+    // fail-closed: if explicitly selected but the pool is missing, startup
+    // refuses to continue rather than silently falling back to in-memory.
+    match app_config.passkey_credential_source {
+        PasskeyCredentialSource::Postgres => {
+            if db_pool.is_none() {
+                return Err(anyhow!(
+                    "passkey_credential_source=postgres requires DATABASE_URL and an available PostgreSQL pool; refusing in-memory fallback"
+                ));
+            }
+            tracing::info!(
+                "Passkey credential source: PostgreSQL (AUTH-PG-002 Slice B opt-in). \
+                 WebAuthn ceremony state remains in-memory."
+            );
+        }
+        PasskeyCredentialSource::InMemory => {
+            tracing::info!("Passkey credential source: in-memory (default).");
         }
     }
 
