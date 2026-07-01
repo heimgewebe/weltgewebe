@@ -117,10 +117,14 @@ python3 -m scripts.docmeta.audit_webauthn_user_id_backfill_runtime \
 
 Das Werkzeug benötigt lokal verfügbare PostgreSQL-Client-Tools (`psql`); ohne
 einen echten Client bricht es fail-closed ab, statt ein Pseudo-Audit auszugeben.
+Ohne expliziten `connect_timeout` setzt es `PGCONNECT_TIMEOUT=5`; `--sample-limit`
+ist auf 0 bis 100 begrenzt.
 
 Das Werkzeug läuft in `BEGIN TRANSACTION READ ONLY`, gibt keine Account-IDs,
 Credential-IDs, WebAuthn-User-IDs oder Credential-Payloads aus und hasht
-Account-Samples als `account:sha256:<12>`. Vor der eigentlichen Zählung prüft es
+Account-Samples als `account:sha256:<12>`. Diese Samples sind pseudonymisiert,
+nicht anonymisiert; externe Reports sollten bei unklarem Empfängerkreis mit
+`--sample-limit 0` erzeugt werden. Vor der eigentlichen Zählung prüft es
 `domain_accounts` und `passkey_credentials` per `to_regclass`; fehlende Tabellen
 werden als Audit-Blocker ausgegeben, nicht als leerer Audit.
 
