@@ -684,17 +684,26 @@ async fn update_account_email_helper_persists_and_classifies_duplicate() -> Resu
     .await
     .expect("seed step-up email fixtures");
 
-    update_account_email_in_postgres(&pool, STEP_UP_EMAIL_ID, "new-step-up@example.invalid")
-        .await
-        .expect("email update must persist");
+    let updated_at =
+        update_account_email_in_postgres(&pool, STEP_UP_EMAIL_ID, " New-Step-Up@example.invalid ")
+            .await
+            .expect("email update must persist");
 
     let (email, updated_present): (Option<String>, bool) =
         sqlx::query_as("SELECT email, updated_at IS NOT NULL FROM domain_accounts WHERE id = $1")
             .bind(STEP_UP_EMAIL_ID)
             .fetch_one(&pool)
             .await?;
-    assert_eq!(email.as_deref(), Some("new-step-up@example.invalid"));
+    assert_eq!(
+        email.as_deref(),
+        Some("new-step-up@example.invalid"),
+        "helper must normalize email casing before persisting"
+    );
     assert!(updated_present, "email update must set updated_at");
+    assert!(
+        updated_at.timestamp() > 0,
+        "helper must return the DB-updated timestamp"
+    );
 
     let reloaded = load_accounts_from_postgres(&pool).await?;
     let account = reloaded

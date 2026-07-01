@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::auth::accounts::AccountStore;
 use crate::auth::role::Role;
 use crate::routes::accounts::{map_json_to_public_account, AccountInternal};
+use crate::routes::auth::MAX_EMAIL_LEN;
 use crate::routes::edges::Edge;
 use crate::routes::nodes::{Location, Node};
 use crate::state::OrderedCache;
@@ -786,25 +787,26 @@ pub async fn update_account_email_in_postgres(
     pool: &PgPool,
     account_id: &str,
     new_email: &str,
-) -> Result<(), AccountEmailUpdateError> {
-    let new_email = new_email.trim();
-    if new_email.is_empty() || new_email.len() > 254 {
+) -> Result<DateTime<Utc>, AccountEmailUpdateError> {
+    let new_email = new_email.trim().to_ascii_lowercase();
+    if new_email.is_empty() || new_email.len() > MAX_EMAIL_LEN {
         return Err(AccountEmailUpdateError::InvalidEmail);
     }
 
-    let result = sqlx::query(
+    let result = sqlx::query_scalar::<_, DateTime<Utc>>(
         "UPDATE domain_accounts \
          SET email = $2, updated_at = now() \
-         WHERE id = $1",
+         WHERE id = $1 \
+         RETURNING updated_at",
     )
     .bind(account_id)
-    .bind(new_email)
-    .execute(pool)
+    .bind(&new_email)
+    .fetch_optional(pool)
     .await;
 
     match result {
-        Ok(done) if done.rows_affected() == 0 => Err(AccountEmailUpdateError::NotFound),
-        Ok(_) => Ok(()),
+        Ok(Some(updated_at)) => Ok(updated_at),
+        Ok(None) => Err(AccountEmailUpdateError::NotFound),
         Err(sqlx::Error::Database(db_err)) => {
             if db_err.constraint() == Some(ACCOUNT_EMAIL_UNIQUE_CONSTRAINT) {
                 Err(AccountEmailUpdateError::DuplicateEmail)

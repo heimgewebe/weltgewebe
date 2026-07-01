@@ -205,9 +205,12 @@ erlaubt, wenn `domain_read_source` **und** `domain_account_write_source` beide
 
 Im PostgreSQL-Account-Write-Modus schreibt der `UpdateEmail`-Consume die neue
 E-Mail zuerst nach `domain_accounts`; der `AccountStore`-Cache wird **erst nach**
-erfolgreichem DB-Write mutiert. Dadurch bleibt die Änderung restart-stabil und
-DB-Fehler hinterlassen keinen abweichenden Cache-Zustand. Im JSONL-Modus bleibt
-das bisherige cache-lokale Verhalten unverändert.
+erfolgreichem DB-Write mutiert. Dabei wird der Account nach dem asynchronen
+DB-Write frisch unter dem `write()`-Lock aus dem Cache geladen, damit parallele
+Cache-Mutationen nicht durch einen vor dem Await gelesenen Snapshot überschrieben
+werden. DB-Fehler hinterlassen keinen abweichenden Cache-Zustand. Im JSONL-Modus
+bleibt das bisherige cache-lokale Verhalten erhalten: Konfliktprüfung und
+Mutation laufen unter demselben Write-Lock.
 
 Der Cache-Konfliktcheck (`get_by_email`) bleibt als schneller Vorabpfad
 erhalten; die eigentliche Race-Sicherheit liefert im Postgres-Modus die
@@ -215,9 +218,11 @@ DB-Constraint.
 
 ### Helper `update_account_email_in_postgres`
 
-`apps/api/src/domain_db.rs` ergänzt `update_account_email_in_postgres` (plain
-`UPDATE domain_accounts SET email=$2, updated_at=now() WHERE id=$1`) ohne
-In-Memory-Mutation und ohne JSONL-Write. Fehlerklassifikation über
+`apps/api/src/domain_db.rs` ergänzt `update_account_email_in_postgres` mit
+normalisierendem `UPDATE domain_accounts SET email=$2, updated_at=now() WHERE
+id=$1 RETURNING updated_at` ohne In-Memory-Mutation und ohne JSONL-Write. Der
+Helper trimmt und lowercased selbst und gibt den von PostgreSQL gesetzten
+`updated_at`-Zeitpunkt zurück. Fehlerklassifikation über
 `AccountEmailUpdateError`:
 
 | Bedingung | Variante | Route-Antwort |
@@ -233,9 +238,10 @@ statt still cache-only zu schreiben.
 ### DB-gestützte Belege (ignored by default)
 
 - `update_account_email_helper_persists_and_classifies_duplicate`: Helper
-  persistiert die neue E-Mail, setzt `updated_at`, wird vom Phase-D-Loader
-  wiederhergestellt und klassifiziert einen normalisierten Duplikatkonflikt als
-  `DuplicateEmail`, ohne die bestehende E-Mail zu überschreiben.
+  normalisiert und persistiert die neue E-Mail, setzt und returned `updated_at`,
+  wird vom Phase-D-Loader wiederhergestellt und klassifiziert einen
+  normalisierten Duplikatkonflikt als `DuplicateEmail`, ohne die bestehende
+  E-Mail zu überschreiben.
 - `step_up_update_email_persists_to_postgres_and_reloads`: Route-Level-Proof —
   Step-up-Consume schreibt vor der Cache-Mutation nach PostgreSQL (`204`),
   Cache und `load_accounts_from_postgres` beobachten die neue E-Mail, kein

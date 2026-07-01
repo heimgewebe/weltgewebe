@@ -1712,31 +1712,30 @@ pub async fn consume_step_up(
 
             let new_email = new_email.trim().to_ascii_lowercase();
 
-            let account_snapshot = {
-                let accounts = state.accounts.read().await;
+            if state.config.domain_account_write_source == DomainAccountWriteSource::Postgres {
+                {
+                    let accounts = state.accounts.read().await;
 
-                // Check for conflict right before writing. PostgreSQL remains the
-                // race-safety boundary in Postgres mode; this cache check preserves
-                // the existing fast conflict path and JSONL-mode behaviour.
-                if let Some(existing) = accounts.get_by_email(&new_email) {
-                    if existing.public.id != account_id {
-                        tracing::warn!(
-                            event = "auth.step_up.consume.update_email.conflict",
-                            request_id = %request_id,
-                            account_id = %account_id,
-                            "Email was taken by another account before step-up was consumed"
-                        );
-                        let err = serde_json::json!({
-                            "error": "CONFLICT",
-                            "message": "Email already in use"
-                        });
-                        return (StatusCode::CONFLICT, jar, Json(err)).into_response();
+                    // Check for conflict right before writing. PostgreSQL remains the
+                    // race-safety boundary in Postgres mode; this cache check preserves
+                    // the existing fast conflict path.
+                    if let Some(existing) = accounts.get_by_email(&new_email) {
+                        if existing.public.id != account_id {
+                            tracing::warn!(
+                                event = "auth.step_up.consume.update_email.conflict",
+                                request_id = %request_id,
+                                account_id = %account_id,
+                                "Email was taken by another account before step-up was consumed"
+                            );
+                            let err = serde_json::json!({
+                                "error": "CONFLICT",
+                                "message": "Email already in use"
+                            });
+                            return (StatusCode::CONFLICT, jar, Json(err)).into_response();
+                        }
                     }
-                }
 
-                match accounts.get(&account_id).cloned() {
-                    Some(account) => account,
-                    None => {
+                    if accounts.get(&account_id).is_none() {
                         tracing::error!(
                             event = "auth.step_up.consume.update_email.missing_account",
                             request_id = %request_id,
@@ -1747,9 +1746,7 @@ pub async fn consume_step_up(
                         return (StatusCode::BAD_REQUEST, jar, Json(err)).into_response();
                     }
                 }
-            };
 
-            if state.config.domain_account_write_source == DomainAccountWriteSource::Postgres {
                 let Some(pool) = state.db_pool.as_ref() else {
                     tracing::error!(
                         event = "auth.step_up.consume.update_email.db_pool_missing",
@@ -1761,8 +1758,14 @@ pub async fn consume_step_up(
                     return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(err)).into_response();
                 };
 
-                match update_account_email_in_postgres(pool, &account_id, &new_email).await {
-                    Ok(()) => {}
+                let _db_updated_at = match update_account_email_in_postgres(
+                    pool,
+                    &account_id,
+                    &new_email,
+                )
+                .await
+                {
+                    Ok(updated_at) => updated_at,
                     Err(AccountEmailUpdateError::DuplicateEmail) => {
                         tracing::warn!(
                             event = "auth.step_up.consume.update_email.db_conflict",
@@ -1810,14 +1813,57 @@ pub async fn consume_step_up(
                         let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
                         return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(err)).into_response();
                     }
+                };
+
+                let mut accounts = state.accounts.write().await;
+                if let Some(mut account) = accounts.get(&account_id).cloned() {
+                    account.email = Some(new_email);
+                    accounts.insert(account);
+                } else {
+                    tracing::error!(
+                        event = "auth.step_up.consume.update_email.cache_missing_after_db_write",
+                        request_id = %request_id,
+                        account_id = %account_id,
+                        "Account cache entry disappeared after PostgreSQL email update"
+                    );
+                }
+                return (StatusCode::NO_CONTENT, jar).into_response();
+            }
+
+            let mut accounts = state.accounts.write().await;
+            // JSONL-mode behaviour remains cache-local, but conflict checking and
+            // mutation stay under the same write lock so concurrent in-memory
+            // email updates cannot bypass the duplicate guard.
+            if let Some(existing) = accounts.get_by_email(&new_email) {
+                if existing.public.id != account_id {
+                    tracing::warn!(
+                        event = "auth.step_up.consume.update_email.conflict",
+                        request_id = %request_id,
+                        account_id = %account_id,
+                        "Email was taken by another account before step-up was consumed"
+                    );
+                    let err = serde_json::json!({
+                        "error": "CONFLICT",
+                        "message": "Email already in use"
+                    });
+                    return (StatusCode::CONFLICT, jar, Json(err)).into_response();
                 }
             }
 
-            let mut updated_account = account_snapshot;
-            updated_account.email = Some(new_email);
-            let mut accounts = state.accounts.write().await;
-            accounts.insert(updated_account);
-            (StatusCode::NO_CONTENT, jar).into_response()
+            if let Some(mut account) = accounts.get(&account_id).cloned() {
+                account.email = Some(new_email);
+                accounts.insert(account);
+                (StatusCode::NO_CONTENT, jar).into_response()
+            } else {
+                tracing::error!(
+                    event = "auth.step_up.consume.update_email.missing_account",
+                    request_id = %request_id,
+                    account_id = %account_id,
+                    "Account missing during email update step-up consume"
+                );
+                let err = serde_json::json!({"error": "ACCOUNT_INVALID"});
+                (StatusCode::BAD_REQUEST, jar, Json(err)).into_response()
+            }
         }
         ChallengeIntent::BeginPasskeyRegistration => {
             let grant_id = state
