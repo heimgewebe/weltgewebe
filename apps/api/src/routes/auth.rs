@@ -2800,7 +2800,7 @@ pub async fn passkey_testing_bootstrap_session(
             "INSERT INTO domain_accounts \
                 (id, kind, title, mode, radius_m, disabled, role, email, webauthn_user_id, public_payload, private_payload) \
              VALUES \
-                ($1, 'garnrolle', 'Passkey Proof User', 'ron', 0, false, 'gast', $2, $3, '{}'::jsonb, '{}'::jsonb) \
+                ($1, 'garnrolle', 'Passkey Proof User', 'ron', 0, false, 'gast', $2, $3::uuid, '{}'::jsonb, '{}'::jsonb) \
              ON CONFLICT (id) DO UPDATE SET \
                 title = EXCLUDED.title, \
                 disabled = false, \

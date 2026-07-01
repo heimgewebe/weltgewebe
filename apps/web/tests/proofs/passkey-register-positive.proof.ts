@@ -411,7 +411,10 @@ test.describe("Passkey Register Positive Proof", () => {
       const loginSessionCookie = cookiesAfterAuthVerify.find(
         (cookie) => cookie.name === "gewebe_session",
       );
-      expect(loginSessionCookie, "auth/verify must install a session cookie").toBeTruthy();
+      expect(
+        loginSessionCookie,
+        "auth/verify must install a session cookie",
+      ).toBeTruthy();
 
       const virtualCredentials = (await cdp.send("WebAuthn.getCredentials", {
         authenticatorId,
