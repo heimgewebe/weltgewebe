@@ -1158,7 +1158,11 @@
       ],
       "links": {
         "issues": [],
-        "prs": [],
+        "prs": [
+          "#1295",
+          "#1299",
+          "#1300"
+        ],
         "docs": [
           "docs/reports/auth-status-matrix.md",
           "docs/reports/passkey-register-verify-prep.md",
@@ -1183,7 +1187,7 @@
       ],
       "missing_evidence": [
         "legacy_webauthn_user_id_backfill und webauthn_user_id_not_null sind ausdrueckliche Non-Goals von OPT-ARC-001 (docs/reports/opt-arc-001-db-proof-matrix.json)",
-        "WebAuthn-Credential-Persistenz (AUTH-PG-002) ist fachlich noch nicht geklaert; die Backfill-Strategie haengt davon ab",
+        "AUTH-PG-002 Store/Runtime-Facade und Cutover-Plan sind belegt; Produktions-Cutover, Browser-/Authenticator-E2E und Backfill-Strategie fuer Legacy-Accounts bleiben offen",
         "Kein Audit, wie viele Accounts webauthn_user_id IS NULL haben, und kein Backfill-Test"
       ],
       "acceptance": [
@@ -1199,7 +1203,7 @@
           "docs/reports/opt-arc-001-db-proof-matrix.json"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-07-01"
     },
     {
       "id": "DOMAIN-PG-003",
