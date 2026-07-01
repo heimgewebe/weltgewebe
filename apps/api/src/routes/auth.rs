@@ -27,7 +27,7 @@ use crate::{
     auth::session::SessionBackendError,
     auth::step_up_tokens::ConsumeMatchResult,
     auth::{role::Role, tokens::TokenStore},
-    config::{DomainAccountWriteSource, DomainReadSource},
+    config::DomainAccountWriteSource,
     domain_db::{update_account_email_in_postgres, AccountEmailUpdateError},
     middleware::auth::AuthContext,
     routes::accounts::{AccountInternal, AccountPublic},
@@ -2782,7 +2782,7 @@ pub async fn passkey_testing_bootstrap_session(
         }
     };
 
-    if state.config.domain_read_source == DomainReadSource::Postgres {
+    if state.config.domain_read_source == crate::config::DomainReadSource::Postgres {
         let Some(pool) = state.db_pool.as_ref() else {
             tracing::error!(
                 event = "auth.passkey.testing_bootstrap_session.db_pool_missing",
