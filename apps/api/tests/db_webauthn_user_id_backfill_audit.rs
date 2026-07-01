@@ -9,14 +9,22 @@ use weltgewebe_api::domain_db::{audit_auth_user_id_backfill_readiness, AuthUserI
 
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL").expect(
-        "DATABASE_URL must be set to run db_passkey_store_persistence tests; \
-         point it to direct PostgreSQL (port 5432)",
+        "DATABASE_URL must be set for this direct PostgreSQL proof; \
+         point it to a disposable direct PostgreSQL database (port 5432)",
     );
     assert!(
         !url.contains(":6432"),
         "DATABASE_URL must target direct PostgreSQL, not PgBouncer (port 6432)"
     );
     url
+}
+
+fn require_fixture_mutation_opt_in() {
+    let enabled = std::env::var("AUTH_PG_003_FIXTURE_MUTATION").unwrap_or_default();
+    assert_eq!(
+        enabled, "1",
+        "AUTH_PG_003_FIXTURE_MUTATION=1 must be set; this ignored proof runs migrations and inserts/deletes auth-pg-003-audit-proof* fixtures, so use a disposable direct PostgreSQL database"
+    );
 }
 
 async fn connect_pool() -> sqlx::PgPool {
@@ -66,9 +74,9 @@ fn delta(
         credential_accounts_with_multiple_auth_user_ids: after
             .credential_accounts_with_multiple_auth_user_ids
             - before.credential_accounts_with_multiple_auth_user_ids,
-        credential_account_auth_user_id_mismatches: after
-            .credential_account_auth_user_id_mismatches
-            - before.credential_account_auth_user_id_mismatches,
+        credential_accounts_with_account_credential_uuid_mismatch: after
+            .credential_accounts_with_account_credential_uuid_mismatch
+            - before.credential_accounts_with_account_credential_uuid_mismatch,
     }
 }
 
@@ -115,6 +123,7 @@ async fn insert_credential(pool: &sqlx::PgPool, id: &str, account_id: &str, user
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn db_webauthn_user_id_backfill_audit_classifies_fixture_delta() {
+    require_fixture_mutation_opt_in();
     let pool = connect_pool().await;
     cleanup(&pool).await;
     let before = audit_auth_user_id_backfill_readiness(&pool)
@@ -178,7 +187,10 @@ async fn db_webauthn_user_id_backfill_audit_classifies_fixture_delta() {
     assert_eq!(d.credential_accounts_missing_auth_user_id, 1);
     assert_eq!(d.credential_accounts_without_domain_account, 1);
     assert_eq!(d.credential_accounts_with_multiple_auth_user_ids, 1);
-    assert_eq!(d.credential_account_auth_user_id_mismatches, 2);
+    assert_eq!(
+        d.credential_accounts_with_account_credential_uuid_mismatch,
+        2
+    );
     assert!(d.has_backfill_scope());
     assert!(d.has_cutover_blockers());
 

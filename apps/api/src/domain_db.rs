@@ -203,7 +203,7 @@ pub struct AuthUserIdBackfillAudit {
     pub credential_accounts_missing_auth_user_id: i64,
     pub credential_accounts_without_domain_account: i64,
     pub credential_accounts_with_multiple_auth_user_ids: i64,
-    pub credential_account_auth_user_id_mismatches: i64,
+    pub credential_accounts_with_account_credential_uuid_mismatch: i64,
 }
 
 impl AuthUserIdBackfillAudit {
@@ -218,7 +218,7 @@ impl AuthUserIdBackfillAudit {
         self.credential_accounts_missing_auth_user_id > 0
             || self.credential_accounts_without_domain_account > 0
             || self.credential_accounts_with_multiple_auth_user_ids > 0
-            || self.credential_account_auth_user_id_mismatches > 0
+            || self.credential_accounts_with_account_credential_uuid_mismatch > 0
     }
 }
 
@@ -287,7 +287,7 @@ pub async fn audit_auth_user_id_backfill_readiness(
          ) multi_webauthn_user_id_accounts",
     )
     .await?;
-    let credential_account_auth_user_id_mismatches = count_scalar(
+    let credential_accounts_with_account_credential_uuid_mismatch = count_scalar(
         pool,
         "SELECT COUNT(*) FROM (\
              SELECT p.account_id \
@@ -308,7 +308,7 @@ pub async fn audit_auth_user_id_backfill_readiness(
         credential_accounts_missing_auth_user_id,
         credential_accounts_without_domain_account,
         credential_accounts_with_multiple_auth_user_ids,
-        credential_account_auth_user_id_mismatches,
+        credential_accounts_with_account_credential_uuid_mismatch,
     })
 }
 

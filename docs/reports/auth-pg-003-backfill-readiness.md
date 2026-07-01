@@ -98,7 +98,11 @@ Ein späterer Implementierungs-PR sollte zunächst nur diese Belege liefern:
 
 ## 6. Umgesetzter Audit-Proof
 
-AUTH-PG-003-AUDIT-001 ergaenzt einen read-only Audit-Helfer und einen ignored DB-Proof. Der Proof zaehlt Account-, Credential-, Orphan-, Multi-UUID- und Mismatch-Faelle, mutiert aber keine Daten und bleibt kein Backfill.
+AUTH-PG-003-AUDIT-001 ergänzt einen read-only Audit-Helfer und einen ignored DB-Proof. Der Audit-Helfer zählt Account-, Credential-, Orphan-, Multi-UUID- und Mismatch-Fälle, mutiert aber keine Daten und bleibt kein Backfill.
+
+Der ignored DB-Proof selbst ist fixture-mutierend: Er führt Migrationen aus und legt Testzeilen mit dem Prefix `auth-pg-003-audit-proof` in `domain_accounts` und `passkey_credentials` an, bevor er sie wieder löscht. Er darf nur gegen eine disposable direkte PostgreSQL-Testdatenbank laufen und verlangt zusätzlich `AUTH_PG_003_FIXTURE_MUTATION=1`.
+
+Die Zähler sind nicht zwingend disjunkt; Multi-UUID-Fälle können zusätzlich als Account-/Credential-UUID-Mismatch erscheinen. Der Audit beweist auch keine Race-Freiheit während eines späteren Backfills.
 
 ## 7. Nicht-Beweise
 
@@ -113,7 +117,7 @@ Dieser Bericht beweist nicht:
 
 ## 8. Nächste Aktion
 
-`AUTH-PG-003-AUDIT-001` ist als read-only Audit- und Fixture-Proof vorbereitet.
+`AUTH-PG-003-AUDIT-001` ist als read-only Audit-Helfer und explizit fixture-mutierender Scratch-DB-Proof vorbereitet.
 Nächster PR-Schnitt: Backfill-Regeln aus Audit-Zählern ableiten; danach erst Backfill-Migration und `NOT NULL` prüfen.
 
 Humorlos gesagt: Erst zählen, dann füllen, dann verriegeln. Wer zuerst verriegelt,
