@@ -1183,12 +1183,13 @@
       "risk": "medium",
       "owner": "unknown",
       "evidence": [
-        "apps/api/src/routes/accounts.rs"
+        "apps/api/src/routes/accounts.rs",
+        "docs/reports/auth-pg-003-backfill-readiness.md"
       ],
       "missing_evidence": [
         "legacy_webauthn_user_id_backfill und webauthn_user_id_not_null sind ausdrueckliche Non-Goals von OPT-ARC-001 (docs/reports/opt-arc-001-db-proof-matrix.json)",
-        "AUTH-PG-002 Store/Runtime-Facade und Cutover-Plan sind belegt; Produktions-Cutover, Browser-/Authenticator-E2E und Backfill-Strategie fuer Legacy-Accounts bleiben offen",
-        "Kein Audit, wie viele Accounts webauthn_user_id IS NULL haben, und kein Backfill-Test"
+        "Kein Audit, wie viele Accounts webauthn_user_id IS NULL haben, und kein Backfill-Test",
+        "Readiness-Strategie ist dokumentiert; Live-NULL-Audit, Backfill-Fixture und Backfill-Test fehlen weiterhin"
       ],
       "acceptance": [
         "Audit der Accounts mit fehlender webauthn_user_id liegt vor; Backfill-Strategie ist dokumentiert und testbar",
@@ -1200,7 +1201,10 @@
         "prs": [],
         "docs": [
           "docs/reports/auth-status-matrix.md",
-          "docs/reports/opt-arc-001-db-proof-matrix.json"
+          "docs/reports/opt-arc-001-db-proof-matrix.json",
+          "docs/reports/auth-pg-003-backfill-readiness.md",
+          "docs/reports/auth-pg-002-passkey-runtime-facade.md",
+          "docs/reports/auth-pg-002-cutover-plan.md"
         ]
       },
       "updated_at": "2026-07-01"
