@@ -104,10 +104,13 @@ proof-auth-session-sqlx-direct:    # run ignored SQLx direct-Postgres session CR
 # Lokaler Helper: Schnelltests & Linter – sicher mit Null-Trennung und Quoting
 lint:
 	@set -euo pipefail; \
-	if [ -n "$(git ls-files -- '*.sh' '*.bash')" ]; then \
-		git ls-files -z -- '*.sh' '*.bash' | xargs -0 -n 1 bash -n --; \
-		git ls-files -z -- '*.sh' '*.bash' | xargs -0 shfmt -d -i 2 -ci -sr --; \
-		git ls-files -z -- '*.sh' '*.bash' | xargs -0 shellcheck -S style --; \
+	shell_files="$$(mktemp)"; \
+	trap 'rm -f "$$shell_files"' EXIT; \
+	python3 scripts/tools/list-shell-files.py > "$$shell_files"; \
+	if [ -s "$$shell_files" ]; then \
+		xargs -0 -a "$$shell_files" -n 1 bash -n --; \
+		xargs -0 -a "$$shell_files" shfmt -d -i 2 -ci -sr --; \
+		xargs -0 -a "$$shell_files" shellcheck -S style --; \
 	else \
 		echo "Keine Shell-Dateien gefunden."; \
 	fi

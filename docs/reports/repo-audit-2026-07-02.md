@@ -13,8 +13,8 @@ lang: de
 summary: >
   Komplettaudit des Repositories (Code, CI, Meta-Dateien, Dokumentation):
   alle automatisierten Checks grün; dreizehn belegte Hygiene-/Konsistenzbefunde,
-  davon neun behoben (teils in diesem PR, teils durch #1315/#1317);
-  vier Restarbeiten unter REPO-AUDIT-001.
+  davon zehn behoben (teils in diesem PR, teils durch #1315/#1317/#1318);
+  drei Restarbeiten unter REPO-AUDIT-001.
 relations:
   - type: relates_to
     target: docs/reports/optimierungsstatus.md
@@ -104,7 +104,7 @@ strukturelle Ableitung.
 | R-08 | `.env.example` deklariert `WEB_PORT=5173`; kein Konsument im Repo (weder Compose noch Vite-Config noch Skripte) | belegt | tote Deklaration | **behoben**: durch Kommentar ersetzt |
 | R-09 | Verwaistes `src/routes/+page.svelte` im Repo-Root (Debug-Seite „SvelteKit lebt"); keine Referenz im Repo; außerhalb von `apps/web` von keinem Build erfasst | belegt (keine Referenz auffindbar); Obsoleszenz plausibel | möglicherweise obsoletes Artefakt | **behoben**: entfernt; `src/` aus `discovery_roots` genommen (Gegenhypothese in §6 dokumentiert) |
 | R-10 | `validate_opt_arc_001_db_proof_matrix` ist nicht Shallow-Clone-robust: CI-Evidence-Commits außerhalb der lokalen Historie erzeugen einen harten Fehler ohne Hinweis auf Shallow-Clone als Ursache (CI nutzt `fetch-depth: 0`, Agent-/lokale Umgebungen nicht zwingend) | belegt (reproduziert in dieser Audit-Umgebung) | Robustheitslücke (Tooling) | **offen** → REPO-AUDIT-001 |
-| R-11 | Shell-Lint-Lücke: `just lint` (bash -n, shfmt, shellcheck) läuft in keinem der 33 Workflows; der CI-Job „Docs & Shell Hygiene" (`ci.yml`) enthält keine Shell-Prüfung (nur markdownlint, lychee, yamllint, JSON) | belegt | CI-Abdeckungslücke + Namensproblem | **offen** → REPO-AUDIT-001 (Job-Name nicht umbenannt: möglicher Required-Check-Bezug) |
+| R-11 | Shell-Lint-Lücke: `just lint` (bash -n, shfmt, shellcheck) lief in keinem der 33 Workflows; der CI-Job „Docs & Shell Hygiene" (`ci.yml`) enthielt keine Shell-Prüfung (nur markdownlint, lychee, yamllint, JSON) | belegt | CI-Abdeckungslücke + Namensproblem | **behoben**: `Docs & Shell Hygiene` läuft nun bei Hygiene-Änderungen und führt blockierend bash/shfmt/shellcheck für getrackte `.sh`/`.bash`-Dateien aus (#1318) |
 | R-12 | `.lychee.toml` wird von keinem lychee-Aufruf geladen (lychee-Default ist `lychee.toml` ohne Punkt; beide Workflows übergeben alle Optionen via `args`); Datei wirkt nur als Cache-Key-Bestandteil in `ci.yml` | belegt (keine `--config`-Referenz im Repo) | tote Konfiguration | **offen** → REPO-AUDIT-001 (Entscheidung: laden oder entfernen) |
 | R-13 | `heavy.yml` e2e-Job wurde in den letzten 30 Läufen nie ausgeführt (alle Läufe Gate-only, e2e `skipped`; belegt via GitHub-Actions-API 2026-07-02, z. B. Run 28534919650) — der Fix aus R-06 braucht einen `workflow_dispatch`-Proof | belegt | schlafender CI-Pfad | **offen** → REPO-AUDIT-001 |
 
@@ -124,8 +124,7 @@ strukturelle Ableitung.
 - **Achse B (Contracts):** keine Befunde; Domain-Contracts validieren, der
   AGENT-SAFE-008-Kontrollvertrag (`.wgx/generated-artifacts.yml`) ist die
   richtige Keimzelle gegen R-03-artige Drift.
-- **Achse C (Semantik):** R-11 — der Jobname „Docs & Shell Hygiene"
-  verspricht ein Verhalten, das nicht existiert (Begriff ≠ Verhalten).
+- **Achse C (Semantik):** R-11 war ein Namens-/Verhaltensbruch („Docs & Shell Hygiene" ohne Shell-Lint); die CI-Abdeckung wurde in #1318 nachgezogen.
 - **Achse D (Runtime vs. Dokumentation):** R-01, R-07, R-08 — tote
   Kommandos/Variablen in operativer Doku.
 - **Achse G (Komplexität):** Die Kontroll-Redundanz (Board + Index + Matrix +
@@ -181,13 +180,12 @@ Folgearbeit" in AGENT-SAFE-008 angelegt.
 2. **Struktureller Hebel (offen):** Deklarations-Deduplikation über den
    Generated-Artifact-Kontrollvertrag (§5); anschlussfähig an
    AGENT-SAFE-008-Folgearbeit.
-3. **Später Ausbaupfad:** Shell-Lint (shellcheck/shfmt) als CI-Step
-   verankern (R-11), danach kann `just lint` als lokaler Spiegel gelten.
+3. **Später Ausbaupfad:** R-10/R-12/R-13 abschließen, ohne neue redundante Guard-Listen einzuführen.
 4. **Wahrscheinlichste Überkorrektur:** weitere Guards/Listen *hinzufügen*,
    statt bestehende zu deduplizieren — das würde die Drift-Klasse
    vergrößern, nicht verkleinern.
 
-**Folgepfad (Befundklasse B):** Steuerung der Restarbeiten (R-10…R-13) über
+**Folgepfad (Befundklasse B):** Steuerung der Restarbeiten (R-10/R-12/R-13) über
 Board-Task `REPO-AUDIT-001` (`docs/tasks/board.md`, `docs/tasks/index.json`).
 Bewusst kein neuer OPT-Eintrag in `docs/reports/optimierungsstatus.md`:
 Repo-Hygiene-Restarbeiten laufen — wie die Task-Control-Phasen — über

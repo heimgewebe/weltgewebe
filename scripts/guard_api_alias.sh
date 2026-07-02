@@ -7,6 +7,7 @@ set -euo pipefail
 # Guard scripts are executable, not meant to be sourced.
 if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
   echo "ERROR: scripts/guard_api_alias.sh must not be sourced. Run it as an executable."
+  # shellcheck disable=SC2317
   return 2 2> /dev/null || exit 2
 fi
 

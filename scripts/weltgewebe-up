@@ -36,9 +36,9 @@ usage() {
   echo
   echo "Options:"
   echo "  --with-caddy            Start the 'caddy' service (default: disabled/scale=0)"
-    echo "  --no-pull               Skip git sync/branch operations (no fetch, switch, pull)"
-    echo "  --branch BRANCH         Deploy explicit branch name (default: main, no origin/ prefix)"
-    echo "  --current-branch        Deploy the currently checked-out branch intentionally"
+  echo "  --no-pull               Skip git sync/branch operations (no fetch, switch, pull)"
+  echo "  --branch BRANCH         Deploy explicit branch name (default: main, no origin/ prefix)"
+  echo "  --current-branch        Deploy the currently checked-out branch intentionally"
   echo "  --build-mode MODE       Set build mode: auto (default), force, no"
   echo "  --no-build              Alias for --build-mode no"
   echo "  --force-build           Alias for --build-mode force"
@@ -59,59 +59,62 @@ while [[ "$#" -gt 0 ]]; do
     --with-caddy) WITH_CADDY=1 ;;
     --no-pull) DO_PULL=0 ;;
     --branch)
-       if [[ $# -lt 2 || -z "${2:-}" ]]; then
-           echo "ERROR: --branch requires a branch name."
-           usage
-       fi
-       DEPLOY_BRANCH_OVERRIDE="$2"
-       shift
-       ;;
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "ERROR: --branch requires a branch name."
+        usage
+      fi
+      DEPLOY_BRANCH_OVERRIDE="$2"
+      shift
+      ;;
     --current-branch) USE_CURRENT_BRANCH=1 ;;
     --build-mode)
-       if [[ $# -lt 2 || -z "${2:-}" ]]; then
-           echo "ERROR: --build-mode requires an argument (auto|force|no)."
-           usage
-       fi
-       case "$2" in
-           auto|force|no) BUILD_MODE="$2";;
-           *)
-               echo "ERROR: Invalid build-mode '$2'. Must be auto, force, or no."
-               usage
-               ;;
-       esac
-       shift
-       ;;
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "ERROR: --build-mode requires an argument (auto|force|no)."
+        usage
+      fi
+      case "$2" in
+        auto | force | no) BUILD_MODE="$2" ;;
+        *)
+          echo "ERROR: Invalid build-mode '$2'. Must be auto, force, or no."
+          usage
+          ;;
+      esac
+      shift
+      ;;
     --no-build) BUILD_MODE="no" ;;
     --force-build) BUILD_MODE="force" ;;
     --purge-compose-leaks) PURGE_ZOMBIES=1 ;;
     --build-web) BUILD_WEB="force" ;;
     --no-build-web) BUILD_WEB="no" ;;
     --refresh-edge) REFRESH_EDGE=1 ;;
-    -h|--help) usage ;;
-    *) echo "Unknown parameter passed: $1"; usage ;;
+    -h | --help) usage ;;
+    *)
+      echo "Unknown parameter passed: $1"
+      usage
+      ;;
   esac
   shift
 done
 
 if [[ -n "$DEPLOY_BRANCH_OVERRIDE" ]]; then
-    DEPLOY_BRANCH="$DEPLOY_BRANCH_OVERRIDE"
+  DEPLOY_BRANCH="$DEPLOY_BRANCH_OVERRIDE"
 fi
 
 if [[ "$USE_CURRENT_BRANCH" == "1" && -n "$DEPLOY_BRANCH_OVERRIDE" ]]; then
-    echo "ERROR: --branch and --current-branch are mutually exclusive."
-    exit 1
+  echo "ERROR: --branch and --current-branch are mutually exclusive."
+  exit 1
 fi
 
 if [[ "$DO_PULL" != "1" && "$USE_CURRENT_BRANCH" == "1" ]]; then
-    echo "ERROR: --current-branch cannot be combined with --no-pull."
-    echo "       --no-pull deploys the existing checkout without fetch/switch/pull."
-    exit 1
+  echo "ERROR: --current-branch cannot be combined with --no-pull."
+  echo "       --no-pull deploys the existing checkout without fetch/switch/pull."
+  exit 1
 fi
 
 if [[ "$USE_CURRENT_BRANCH" != "1" && -z "$DEPLOY_BRANCH" ]]; then
-    echo "ERROR: Deploy branch resolved to empty value."
-    echo "       Set WELTGEWEBE_DEPLOY_BRANCH or pass --branch <name>."
-    exit 1
+  echo "ERROR: Deploy branch resolved to empty value."
+  echo "       Set WELTGEWEBE_DEPLOY_BRANCH or pass --branch <name>."
+  exit 1
 fi
 
 EDGE_GATEWAY_CONTAINER="${EDGE_GATEWAY_CONTAINER:-edge-caddy}"
@@ -131,73 +134,73 @@ FOUND_REPO=""
 # 1. Environment Variable (Explicit - Strict)
 if [[ -n "${REPO_DIR:-}" ]]; then
   if [[ -f "${REPO_DIR}/${BASE_COMPOSE_FILE}" ]]; then
-     FOUND_REPO="$REPO_DIR"
+    FOUND_REPO="$REPO_DIR"
   else
-     echo "ERROR: REPO_DIR explicitly set to '$REPO_DIR' but config '$BASE_COMPOSE_FILE' not found." >&2
-     echo "       Refusing fallback to prevent deploying from wrong location." >&2
-     exit 1
+    echo "ERROR: REPO_DIR explicitly set to '$REPO_DIR' but config '$BASE_COMPOSE_FILE' not found." >&2
+    echo "       Refusing fallback to prevent deploying from wrong location." >&2
+    exit 1
   fi
 else
   # Auto-Detection Logic
 
   # 2. Git Root (if inside a git repo - Strongest Context)
   if [[ -z "$FOUND_REPO" ]]; then
-      if git rev-parse --show-toplevel >/dev/null 2>&1; then
-          GIT_ROOT="$(git rev-parse --show-toplevel)"
-          if [[ -f "${GIT_ROOT}/${BASE_COMPOSE_FILE}" ]]; then
-              FOUND_REPO="$GIT_ROOT"
-          fi
+    if git rev-parse --show-toplevel > /dev/null 2>&1; then
+      GIT_ROOT="$(git rev-parse --show-toplevel)"
+      if [[ -f "${GIT_ROOT}/${BASE_COMPOSE_FILE}" ]]; then
+        FOUND_REPO="$GIT_ROOT"
       fi
+    fi
   fi
 
   # 3. Current Working Directory (Local Context)
   if [[ -z "$FOUND_REPO" ]]; then
-      if [[ -f "./${BASE_COMPOSE_FILE}" ]]; then
-          FOUND_REPO="$(pwd)"
-      fi
+    if [[ -f "./${BASE_COMPOSE_FILE}" ]]; then
+      FOUND_REPO="$(pwd)"
+    fi
   fi
 
   # 4. Symlink / Script Location Resolution (Physical Context)
   if [[ -z "$FOUND_REPO" ]]; then
-      SCRIPT_SOURCE="${BASH_SOURCE[0]}"
-      while [ -h "$SCRIPT_SOURCE" ]; do
-        SCRIPT_DIR="$( cd -P "$( dirname "$SCRIPT_SOURCE" )" >/dev/null 2>&1 && pwd )"
-        SCRIPT_SOURCE="$(readlink "$SCRIPT_SOURCE")"
-        [[ $SCRIPT_SOURCE != /* ]] && SCRIPT_SOURCE="$SCRIPT_DIR/$SCRIPT_SOURCE"
-      done
-      SCRIPT_DIR="$( cd -P "$( dirname "$SCRIPT_SOURCE" )" >/dev/null 2>&1 && pwd )"
-      # Assuming script is in scripts/weltgewebe-up, repo root is parent
-      POTENTIAL_ROOT="$(dirname "$SCRIPT_DIR")"
-      if [[ -f "${POTENTIAL_ROOT}/${BASE_COMPOSE_FILE}" ]]; then
-          FOUND_REPO="$POTENTIAL_ROOT"
-      fi
+    SCRIPT_SOURCE="${BASH_SOURCE[0]}"
+    while [ -h "$SCRIPT_SOURCE" ]; do
+      SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_SOURCE")" > /dev/null 2>&1 && pwd)"
+      SCRIPT_SOURCE="$(readlink "$SCRIPT_SOURCE")"
+      [[ $SCRIPT_SOURCE != /* ]] && SCRIPT_SOURCE="$SCRIPT_DIR/$SCRIPT_SOURCE"
+    done
+    SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_SOURCE")" > /dev/null 2>&1 && pwd)"
+    # Assuming script is in scripts/weltgewebe-up, repo root is parent
+    POTENTIAL_ROOT="$(dirname "$SCRIPT_DIR")"
+    if [[ -f "${POTENTIAL_ROOT}/${BASE_COMPOSE_FILE}" ]]; then
+      FOUND_REPO="$POTENTIAL_ROOT"
+    fi
   fi
 
   # 5. Standard Path (/opt/weltgewebe - System Fallback)
   if [[ -z "$FOUND_REPO" ]]; then
-      if [[ -f "/opt/weltgewebe/${BASE_COMPOSE_FILE}" ]]; then
-          FOUND_REPO="/opt/weltgewebe"
-      fi
+    if [[ -f "/opt/weltgewebe/${BASE_COMPOSE_FILE}" ]]; then
+      FOUND_REPO="/opt/weltgewebe"
+    fi
   fi
 fi
 
 # Verification & Safety
 if [[ -z "$FOUND_REPO" ]]; then
-    echo "ERROR: Could not locate repository root containing $BASE_COMPOSE_FILE." >&2
-    echo "       Please run from repo root, install to /opt/weltgewebe, or set REPO_DIR." >&2
-    exit 1
+  echo "ERROR: Could not locate repository root containing $BASE_COMPOSE_FILE." >&2
+  echo "       Please run from repo root, install to /opt/weltgewebe, or set REPO_DIR." >&2
+  exit 1
 fi
 
 # Safety Guard: Prevent System Paths
 # If the script is installed to /usr/local/bin and we fallback incorrectly, we might try to write to /usr/local/.ops
 # Check both standard system paths and potentially dangerous ones
 case "$FOUND_REPO" in
-    /usr|/usr/*|/bin|/sbin|/etc|/etc/*|/var|/var/*)
-        echo "ERROR: Resolved REPO_DIR is system path: $FOUND_REPO" >&2
-        echo "       This prevents accidental system modification." >&2
-        echo "       Please set REPO_DIR explicitly to your repository path." >&2
-        exit 1
-        ;;
+  /usr | /usr/* | /bin | /sbin | /etc | /etc/* | /var | /var/*)
+    echo "ERROR: Resolved REPO_DIR is system path: $FOUND_REPO" >&2
+    echo "       This prevents accidental system modification." >&2
+    echo "       Please set REPO_DIR explicitly to your repository path." >&2
+    exit 1
+    ;;
 esac
 
 REPO_DIR="$FOUND_REPO"
@@ -228,75 +231,75 @@ COMPOSE_BAKE_VALUE=""
 WELTGEWEBE_APPS_PROBE="${WELTGEWEBE_APPS_PROBE:-/apps}"
 
 if [[ -z "${COMPOSE_BAKE:-}" ]]; then
-    # Normalize input to lowercase for robust matching
-    BAKE_MODE_NORMALIZED="${WELTGEWEBE_COMPOSE_BAKE,,}"
+  # Normalize input to lowercase for robust matching
+  BAKE_MODE_NORMALIZED="${WELTGEWEBE_COMPOSE_BAKE,,}"
 
-    case "$BAKE_MODE_NORMALIZED" in
-        auto)
-            # Heuristic: If the root /apps directory is missing, we assume a sparse/production environment
-            # where buildx bake might fail due to missing context.
-            if [[ ! -d "$WELTGEWEBE_APPS_PROBE" ]]; then
-                COMPOSE_BAKE_VALUE="0"
-                echo "NOTE: Apps directory '$WELTGEWEBE_APPS_PROBE' missing. Disabling COMPOSE_BAKE (auto)." >&2
-            fi
-            ;;
-        0|false|off|no)
-            COMPOSE_BAKE_VALUE="0"
-            ;;
-        1|true|on|yes)
-            COMPOSE_BAKE_VALUE="1"
-            ;;
-        *)
-            echo "WARNING: Unrecognized WELTGEWEBE_COMPOSE_BAKE value '$WELTGEWEBE_COMPOSE_BAKE' (expected: auto|0/1|true/false|on/off|yes/no). Ignoring." >&2
-            ;;
-    esac
+  case "$BAKE_MODE_NORMALIZED" in
+    auto)
+      # Heuristic: If the root /apps directory is missing, we assume a sparse/production environment
+      # where buildx bake might fail due to missing context.
+      if [[ ! -d "$WELTGEWEBE_APPS_PROBE" ]]; then
+        COMPOSE_BAKE_VALUE="0"
+        echo "NOTE: Apps directory '$WELTGEWEBE_APPS_PROBE' missing. Disabling COMPOSE_BAKE (auto)." >&2
+      fi
+      ;;
+    0 | false | off | no)
+      COMPOSE_BAKE_VALUE="0"
+      ;;
+    1 | true | on | yes)
+      COMPOSE_BAKE_VALUE="1"
+      ;;
+    *)
+      echo "WARNING: Unrecognized WELTGEWEBE_COMPOSE_BAKE value '$WELTGEWEBE_COMPOSE_BAKE' (expected: auto|0/1|true/false|on/off|yes/no). Ignoring." >&2
+      ;;
+  esac
 
-    if [[ -n "$COMPOSE_BAKE_VALUE" ]]; then
-        export COMPOSE_BAKE="$COMPOSE_BAKE_VALUE"
-    fi
+  if [[ -n "$COMPOSE_BAKE_VALUE" ]]; then
+    export COMPOSE_BAKE="$COMPOSE_BAKE_VALUE"
+  fi
 fi
 
 # Guard: no foreign compose project using our config
 # We specifically look for projects that are NOT ours but use our config files.
 # AND/OR containers labeled explicitly as project 'compose'.
 # Use grep -F to handle paths robustly.
-ZOMBIES=$(docker ps --format '{{.Names}} {{.Label "com.docker.compose.project"}} {{.Label "com.docker.compose.project.config_files"}}' \
-  | grep -F -- "$REPO_DIR/infra/compose" \
-  | awk -v expected="$COMPOSE_PROJECT" '$2 != expected {print}' || true)
+ZOMBIES=$(docker ps --format '{{.Names}} {{.Label "com.docker.compose.project"}} {{.Label "com.docker.compose.project.config_files"}}' |
+  grep -F -- "$REPO_DIR/infra/compose" |
+  awk -v expected="$COMPOSE_PROJECT" '$2 != expected {print}' || true)
 
 # Also explicitly catch generic "compose" project even if config path differs (e.g. via symlink or manual invocation)
 # Use awk for exact field matching to avoid regex false positives.
-ZOMBIES_GENERIC=$(docker ps --format '{{.Names}} {{.Label "com.docker.compose.project"}}' \
-  | awk '$2 == "compose" {print}' || true)
+ZOMBIES_GENERIC=$(docker ps --format '{{.Names}} {{.Label "com.docker.compose.project"}}' |
+  awk '$2 == "compose" {print}' || true)
 
 if [[ -n "$ZOMBIES" || -n "$ZOMBIES_GENERIC" ]]; then
   ALL_ZOMBIES=$(echo -e "$ZOMBIES\n$ZOMBIES_GENERIC" | sort | uniq | grep .)
 
   if [[ -n "$ALL_ZOMBIES" ]]; then
     if [[ "$PURGE_ZOMBIES" == "1" ]]; then
-       echo
-       echo "WARNING: Detected zombie containers. Purging as requested..."
-       # Extract container names (column 1)
-       CONTAINERS=$(echo "$ALL_ZOMBIES" | awk '{print $1}')
-       echo "Purging containers: $CONTAINERS"
-       # shellcheck disable=SC2086
-       docker rm -f $CONTAINERS
-       echo "Purged."
+      echo
+      echo "WARNING: Detected zombie containers. Purging as requested..."
+      # Extract container names (column 1)
+      CONTAINERS=$(echo "$ALL_ZOMBIES" | awk '{print $1}')
+      echo "Purging containers: $CONTAINERS"
+      # shellcheck disable=SC2086
+      docker rm -f $CONTAINERS
+      echo "Purged."
     else
-       echo
-       echo "ERROR: Detected foreign compose project using weltgewebe config (or project 'compose')."
-       echo "  Repo dir:              $REPO_DIR"
-       echo "  Expected project name: $COMPOSE_PROJECT"
-       echo
-       echo "Offending containers (name project config_files):"
-       echo "$ALL_ZOMBIES"
-       echo
-       echo "This causes port collisions and drift."
-       echo "Resolve: identify foreign project (column 2), then run:"
-       echo "  docker compose -p <foreign_project> down"
-       echo "  (Or run with --purge-compose-leaks to auto-clean via 'docker rm -f')"
-       echo
-       exit 3
+      echo
+      echo "ERROR: Detected foreign compose project using weltgewebe config (or project 'compose')."
+      echo "  Repo dir:              $REPO_DIR"
+      echo "  Expected project name: $COMPOSE_PROJECT"
+      echo
+      echo "Offending containers (name project config_files):"
+      echo "$ALL_ZOMBIES"
+      echo
+      echo "This causes port collisions and drift."
+      echo "Resolve: identify foreign project (column 2), then run:"
+      echo "  docker compose -p <foreign_project> down"
+      echo "  (Or run with --purge-compose-leaks to auto-clean via 'docker rm -f')"
+      echo
+      exit 3
     fi
   fi
 fi
@@ -348,25 +351,25 @@ if [[ "$DO_PULL" == "1" ]]; then
 
   UNMERGED=$(git diff --name-only --diff-filter=U)
   if [[ -n "$UNMERGED" ]]; then
-      echo "ERROR: Unresolved merge conflicts:"
-      while IFS= read -r path; do
-        [[ -n "$path" ]] && printf '  - %s\n' "$path"
-      done <<< "$UNMERGED"
-      echo "Resolve them first or use: $0 --no-pull"
-      exit 1
+    echo "ERROR: Unresolved merge conflicts:"
+    while IFS= read -r path; do
+      [[ -n "$path" ]] && printf '  - %s\n' "$path"
+    done <<< "$UNMERGED"
+    echo "Resolve them first or use: $0 --no-pull"
+    exit 1
   fi
 
   # Git-State Analysis defaults
   IS_DIRTY=0
   if [[ -n "$(git status --porcelain)" ]]; then
-      IS_DIRTY=1
+    IS_DIRTY=1
   fi
 
   if [[ "$IS_DIRTY" == "1" ]]; then
-      echo "ERROR: Dirty worktree detected."
-      echo "Local changes would block fast-forward pull."
-      echo "Commit, stash, or revert your changes first."
-      exit 1
+    echo "ERROR: Dirty worktree detected."
+    echo "Local changes would block fast-forward pull."
+    echo "Commit, stash, or revert your changes first."
+    exit 1
   fi
 
   echo ">> Git Fetch..."
@@ -378,99 +381,99 @@ if [[ "$DO_PULL" == "1" ]]; then
     exit 1
   fi
 
-    HEAD_BEFORE=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    if CURRENT_BRANCH_BEFORE="$(git symbolic-ref -q --short HEAD 2>/dev/null)"; then
-        :
-    else
-        CURRENT_BRANCH_BEFORE="DETACHED"
-        DETACHED_BEFORE_SWITCH="yes"
+  HEAD_BEFORE=$(git rev-parse --short HEAD 2> /dev/null || echo "unknown")
+  if CURRENT_BRANCH_BEFORE="$(git symbolic-ref -q --short HEAD 2> /dev/null)"; then
+    :
+  else
+    CURRENT_BRANCH_BEFORE="DETACHED"
+    DETACHED_BEFORE_SWITCH="yes"
+  fi
+
+  if [[ "$USE_CURRENT_BRANCH" == "1" ]]; then
+    if [[ "$CURRENT_BRANCH_BEFORE" == "DETACHED" ]]; then
+      echo "ERROR: --current-branch requires an attached branch (detached HEAD found)."
+      exit 1
     fi
+    DEPLOY_BRANCH_RESOLVED="$CURRENT_BRANCH_BEFORE"
+    echo ">> Git Branch Mode: current-branch (explicit)"
+  else
+    DEPLOY_BRANCH_RESOLVED="$DEPLOY_BRANCH"
+  fi
 
-    if [[ "$USE_CURRENT_BRANCH" == "1" ]]; then
-        if [[ "$CURRENT_BRANCH_BEFORE" == "DETACHED" ]]; then
-            echo "ERROR: --current-branch requires an attached branch (detached HEAD found)."
-            exit 1
-        fi
-        DEPLOY_BRANCH_RESOLVED="$CURRENT_BRANCH_BEFORE"
-        echo ">> Git Branch Mode: current-branch (explicit)"
+  if [[ -z "$DEPLOY_BRANCH_RESOLVED" ]]; then
+    echo "ERROR: Deploy branch is empty after resolution."
+    exit 1
+  fi
+
+  case "$DEPLOY_BRANCH_RESOLVED" in
+    refs/*)
+      echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+      echo "       Use a branch name like 'main' or 'feat/x', not a refs/... path."
+      exit 1
+      ;;
+    origin/*)
+      echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+      echo "       Use a branch name like 'main' or 'feat/x', not 'origin/main'."
+      exit 1
+      ;;
+  esac
+
+  first_segment="${DEPLOY_BRANCH_RESOLVED%%/*}"
+  if [[ "$DEPLOY_BRANCH_RESOLVED" == */* ]] && git remote | grep -Fxq "$first_segment"; then
+    echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+    echo "       Use a branch name like 'main' or 'feat/x', not '<remote>/<branch>'."
+    exit 1
+  fi
+
+  if ! git check-ref-format --branch "$DEPLOY_BRANCH_RESOLVED" > /dev/null 2>&1; then
+    echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+    echo "       Use a branch name like 'main' or 'feat/x'."
+    exit 1
+  fi
+
+  REMOTE_DEPLOY_BRANCH_SHA=$(git rev-parse --short "refs/remotes/${REMOTE}/${DEPLOY_BRANCH_RESOLVED}" 2> /dev/null || echo "unknown")
+
+  if [[ "$CURRENT_BRANCH_BEFORE" == "$DEPLOY_BRANCH_RESOLVED" ]]; then
+    BRANCH_SWITCH_RESULT="already_on_target"
+  else
+    BRANCH_SWITCH_ATTEMPTED="yes"
+    echo ">> Git Branch Switch: ${CURRENT_BRANCH_BEFORE} -> ${DEPLOY_BRANCH_RESOLVED}"
+
+    if git switch -- "$DEPLOY_BRANCH_RESOLVED" > /dev/null 2>&1; then
+      BRANCH_SWITCH_RESULT="switched"
+    elif git switch --track "${REMOTE}/${DEPLOY_BRANCH_RESOLVED}" > /dev/null 2>&1; then
+      BRANCH_SWITCH_RESULT="switched"
     else
-        DEPLOY_BRANCH_RESOLVED="$DEPLOY_BRANCH"
-    fi
-
-    if [[ -z "$DEPLOY_BRANCH_RESOLVED" ]]; then
-        echo "ERROR: Deploy branch is empty after resolution."
-        exit 1
-    fi
-
-        case "$DEPLOY_BRANCH_RESOLVED" in
-            refs/*)
-                echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
-                echo "       Use a branch name like 'main' or 'feat/x', not a refs/... path."
-                exit 1
-                ;;
-            origin/*)
-                echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
-                echo "       Use a branch name like 'main' or 'feat/x', not 'origin/main'."
-                exit 1
-                ;;
-        esac
-
-        first_segment="${DEPLOY_BRANCH_RESOLVED%%/*}"
-        if [[ "$DEPLOY_BRANCH_RESOLVED" == */* ]] && git remote | grep -Fxq "$first_segment"; then
-            echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
-            echo "       Use a branch name like 'main' or 'feat/x', not '<remote>/<branch>'."
-            exit 1
-        fi
-
-    if ! git check-ref-format --branch "$DEPLOY_BRANCH_RESOLVED" >/dev/null 2>&1; then
-        echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
-                echo "       Use a branch name like 'main' or 'feat/x'."
-        exit 1
-    fi
-
-    REMOTE_DEPLOY_BRANCH_SHA=$(git rev-parse --short "refs/remotes/${REMOTE}/${DEPLOY_BRANCH_RESOLVED}" 2>/dev/null || echo "unknown")
-
-    if [[ "$CURRENT_BRANCH_BEFORE" == "$DEPLOY_BRANCH_RESOLVED" ]]; then
-        BRANCH_SWITCH_RESULT="already_on_target"
-    else
-        BRANCH_SWITCH_ATTEMPTED="yes"
-        echo ">> Git Branch Switch: ${CURRENT_BRANCH_BEFORE} -> ${DEPLOY_BRANCH_RESOLVED}"
-
-        if git switch -- "$DEPLOY_BRANCH_RESOLVED" >/dev/null 2>&1; then
-            BRANCH_SWITCH_RESULT="switched"
-        elif git switch --track "${REMOTE}/${DEPLOY_BRANCH_RESOLVED}" >/dev/null 2>&1; then
-            BRANCH_SWITCH_RESULT="switched"
-    else
-            BRANCH_SWITCH_RESULT="failed"
-            echo "ERROR: Failed to switch to deploy branch '$DEPLOY_BRANCH_RESOLVED'."
-            echo "       Tried local branch and tracking '${REMOTE}/${DEPLOY_BRANCH_RESOLVED}'."
-            exit 1
+      BRANCH_SWITCH_RESULT="failed"
+      echo "ERROR: Failed to switch to deploy branch '$DEPLOY_BRANCH_RESOLVED'."
+      echo "       Tried local branch and tracking '${REMOTE}/${DEPLOY_BRANCH_RESOLVED}'."
+      exit 1
     fi
   fi
 
-    CURRENT_BRANCH_AFTER=$(git symbolic-ref -q --short HEAD 2>/dev/null || echo "DETACHED")
-    if [[ "$CURRENT_BRANCH_AFTER" != "$DEPLOY_BRANCH_RESOLVED" ]]; then
-        BRANCH_SWITCH_RESULT="failed"
-        echo "ERROR: Repository is on '$CURRENT_BRANCH_AFTER' after switch, expected '$DEPLOY_BRANCH_RESOLVED'."
-        exit 1
-    fi
+  CURRENT_BRANCH_AFTER=$(git symbolic-ref -q --short HEAD 2> /dev/null || echo "DETACHED")
+  if [[ "$CURRENT_BRANCH_AFTER" != "$DEPLOY_BRANCH_RESOLVED" ]]; then
+    BRANCH_SWITCH_RESULT="failed"
+    echo "ERROR: Repository is on '$CURRENT_BRANCH_AFTER' after switch, expected '$DEPLOY_BRANCH_RESOLVED'."
+    exit 1
+  fi
 
-    echo ">> Git Pull (fast-forward): ${REMOTE}/${DEPLOY_BRANCH_RESOLVED}"
-    GIT_PULL_ATTEMPTED="yes"
-    if ! git pull --ff-only "$REMOTE" "$DEPLOY_BRANCH_RESOLVED"; then
-        echo "ERROR: Git pull failed (fast-forward only) for '${REMOTE}/${DEPLOY_BRANCH_RESOLVED}'."
-        echo "       Please resolve manually or use: $0 --no-pull"
-        exit 1
-    fi
+  echo ">> Git Pull (fast-forward): ${REMOTE}/${DEPLOY_BRANCH_RESOLVED}"
+  GIT_PULL_ATTEMPTED="yes"
+  if ! git pull --ff-only "$REMOTE" "$DEPLOY_BRANCH_RESOLVED"; then
+    echo "ERROR: Git pull failed (fast-forward only) for '${REMOTE}/${DEPLOY_BRANCH_RESOLVED}'."
+    echo "       Please resolve manually or use: $0 --no-pull"
+    exit 1
+  fi
 
-    HEAD_AFTER=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    REMOTE_DEPLOY_BRANCH_SHA=$(git rev-parse --short "refs/remotes/${REMOTE}/${DEPLOY_BRANCH_RESOLVED}" 2>/dev/null || echo "$REMOTE_DEPLOY_BRANCH_SHA")
+  HEAD_AFTER=$(git rev-parse --short HEAD 2> /dev/null || echo "unknown")
+  REMOTE_DEPLOY_BRANCH_SHA=$(git rev-parse --short "refs/remotes/${REMOTE}/${DEPLOY_BRANCH_RESOLVED}" 2> /dev/null || echo "$REMOTE_DEPLOY_BRANCH_SHA")
 else
   echo
   echo ">> Git: Skipped (--no-pull)"
   GIT_PULL_SKIPPED_REASON="--no-pull"
-    DEPLOY_BRANCH_RESOLVED="$DEPLOY_BRANCH"
-    BRANCH_SWITCH_RESULT="skipped_no_pull"
+  DEPLOY_BRANCH_RESOLVED="$DEPLOY_BRANCH"
+  BRANCH_SWITCH_RESULT="skipped_no_pull"
 fi
 
 echo
@@ -478,11 +481,11 @@ echo ">> Git Summary:"
 echo "   Branch before deploy: $CURRENT_BRANCH_BEFORE"
 echo "   Current branch: $CURRENT_BRANCH_AFTER"
 echo "   Deploy branch: $DEPLOY_BRANCH_RESOLVED"
-echo "   Git mode: $( [[ "$DO_PULL" == "1" ]] && echo "pull" || echo "no-pull" )"
+echo "   Git mode: $([[ "$DO_PULL" == "1" ]] && echo "pull" || echo "no-pull")"
 if [[ "$DO_PULL" != "1" ]]; then
-    echo "   Deploy mode: existing checkout (--no-pull; branch contract not applied)"
+  echo "   Deploy mode: existing checkout (--no-pull; branch contract not applied)"
 fi
-echo "   Branch switch: $( [[ "$BRANCH_SWITCH_ATTEMPTED" == "yes" ]] && echo "yes" || echo "no" )"
+echo "   Branch switch: $([[ "$BRANCH_SWITCH_ATTEMPTED" == "yes" ]] && echo "yes" || echo "no")"
 echo "   Previous HEAD: $HEAD_BEFORE"
 echo "   Target HEAD after pull: $HEAD_AFTER"
 
@@ -503,40 +506,40 @@ generate_failure_bundle() {
   local error_msg="$1"
   local err_log_file="${2:-}"
   local extra_context_file="${3:-}"
-    local timestamp
-    timestamp=$(date +"%Y%m%d-%H%M%S")
+  local timestamp
+  timestamp=$(date +"%Y%m%d-%H%M%S")
   local bundle_dir=".ops/failures/${timestamp}"
 
   mkdir -p "$bundle_dir"
 
   # 1. git_state.txt
   {
-        local branch="$CURRENT_BRANCH_AFTER"
-        local head_commit="$HEAD_AFTER"
+    local branch="$CURRENT_BRANCH_AFTER"
+    local head_commit="$HEAD_AFTER"
 
-        if [[ "$branch" == "unknown" ]]; then
-            branch="$CURRENT_BRANCH_BEFORE"
-        fi
-        if [[ "$head_commit" == "unknown" ]]; then
-            head_commit="$HEAD_BEFORE"
-        fi
+    if [[ "$branch" == "unknown" ]]; then
+      branch="$CURRENT_BRANCH_BEFORE"
+    fi
+    if [[ "$head_commit" == "unknown" ]]; then
+      head_commit="$HEAD_BEFORE"
+    fi
 
-        echo "branch: $branch"
-        echo "head: $head_commit"
-        echo "deploy branch: $DEPLOY_BRANCH_RESOLVED"
-        echo "current branch before: $CURRENT_BRANCH_BEFORE"
-        echo "current branch after: $CURRENT_BRANCH_AFTER"
-        echo "head before: $HEAD_BEFORE"
-        echo "head after: $HEAD_AFTER"
-        echo "remote deploy branch: $REMOTE_DEPLOY_BRANCH_SHA"
-        echo "detached before switch: $DETACHED_BEFORE_SWITCH"
-        echo "branch switch attempted: $BRANCH_SWITCH_ATTEMPTED"
-        echo "branch switch result: $BRANCH_SWITCH_RESULT"
+    echo "branch: $branch"
+    echo "head: $head_commit"
+    echo "deploy branch: $DEPLOY_BRANCH_RESOLVED"
+    echo "current branch before: $CURRENT_BRANCH_BEFORE"
+    echo "current branch after: $CURRENT_BRANCH_AFTER"
+    echo "head before: $HEAD_BEFORE"
+    echo "head after: $HEAD_AFTER"
+    echo "remote deploy branch: $REMOTE_DEPLOY_BRANCH_SHA"
+    echo "detached before switch: $DETACHED_BEFORE_SWITCH"
+    echo "branch switch attempted: $BRANCH_SWITCH_ATTEMPTED"
+    echo "branch switch result: $BRANCH_SWITCH_RESULT"
     echo "fetch attempted: $GIT_FETCH_ATTEMPTED"
     echo "pull attempted: $GIT_PULL_ATTEMPTED"
 
     if [[ -n "$GIT_PULL_SKIPPED_REASON" ]]; then
-       echo "pull skipped reason: $GIT_PULL_SKIPPED_REASON"
+      echo "pull skipped reason: $GIT_PULL_SKIPPED_REASON"
     fi
   } > "${bundle_dir}/git_state.txt"
 
@@ -545,7 +548,7 @@ generate_failure_bundle() {
 
   # 3. unhealthy_containers.txt & 4. / 5. details
   local ps_format
-  ps_format=$(docker compose "${BASE_ARGS[@]}" ps --format '{{.Name}} {{.State}} {{.Health}}' 2>/dev/null || true)
+  ps_format=$(docker compose "${BASE_ARGS[@]}" ps --format '{{.Name}} {{.State}} {{.Health}}' 2> /dev/null || true)
 
   local unhealthy_containers=()
   while IFS= read -r line; do
@@ -558,40 +561,40 @@ generate_failure_bundle() {
     health=$(echo "$line" | awk '{print $3}')
 
     if [[ "$state" == "exited" || "$health" == "unhealthy" || "$state" == "dead" || "$state" == "created" ]]; then
-       unhealthy_containers+=("$name")
+      unhealthy_containers+=("$name")
     fi
   done <<< "$ps_format"
 
   if [[ ${#unhealthy_containers[@]} -gt 0 ]]; then
-      for c in "${unhealthy_containers[@]}"; do
-          echo "$c" >> "${bundle_dir}/unhealthy_containers.txt"
-          docker inspect --format '{{json .State.Health}}' "$c" > "${bundle_dir}/health_details_${c}.json" 2>/dev/null || true
-          docker logs --tail=100 "$c" > "${bundle_dir}/container_logs_${c}.log" 2>&1 || true
-      done
+    for c in "${unhealthy_containers[@]}"; do
+      echo "$c" >> "${bundle_dir}/unhealthy_containers.txt"
+      docker inspect --format '{{json .State.Health}}' "$c" > "${bundle_dir}/health_details_${c}.json" 2> /dev/null || true
+      docker logs --tail=100 "$c" > "${bundle_dir}/container_logs_${c}.log" 2>&1 || true
+    done
   else
-      echo "No specific unhealthy/exited containers detected." > "${bundle_dir}/unhealthy_containers.txt"
+    echo "No specific unhealthy/exited containers detected." > "${bundle_dir}/unhealthy_containers.txt"
   fi
 
   # 6. Compose Configuration Source
   {
     echo "Base Compose File: $BASE_COMPOSE_FILE"
     if [[ -f "$OVERRIDE_FILE" ]]; then
-        echo "Override File: $OVERRIDE_FILE"
+      echo "Override File: $OVERRIDE_FILE"
     else
-        echo "Override File: None"
+      echo "Override File: None"
     fi
   } > "${bundle_dir}/compose_files.txt"
 
   # 7. api_network_aliases.txt
-    local api_cid
-    api_cid=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
+  local api_cid
+  api_cid=$(docker compose "${BASE_ARGS[@]}" ps -q api 2> /dev/null || true)
   if [[ -n "$api_cid" ]]; then
-      docker inspect --format '{{range .NetworkSettings.Networks}}{{println .NetworkID}} {{println .Aliases}}{{end}}' "$api_cid" > "${bundle_dir}/api_network_aliases.txt" 2>/dev/null || true
+    docker inspect --format '{{range .NetworkSettings.Networks}}{{println .NetworkID}} {{println .Aliases}}{{end}}' "$api_cid" > "${bundle_dir}/api_network_aliases.txt" 2> /dev/null || true
   fi
 
   # 8. docker compose up stderr log (if provided)
   if [[ -n "$err_log_file" && -f "$err_log_file" ]]; then
-      cp "$err_log_file" "${bundle_dir}/compose_up.stderr.log"
+    cp "$err_log_file" "${bundle_dir}/compose_up.stderr.log"
   fi
 
   # 9. Additional diagnostics requested in deploy-hardening (Phase 2)
@@ -599,17 +602,17 @@ generate_failure_bundle() {
   docker compose "${BASE_ARGS[@]}" logs --tail=200 nats > "${bundle_dir}/docker_logs_nats.txt" 2>&1 || true
   docker compose "${BASE_ARGS[@]}" logs --tail=200 db > "${bundle_dir}/docker_logs_db.txt" 2>&1 || true
   {
-      echo "api.weltgewebe.home.arpa:"
-      getent hosts api.weltgewebe.home.arpa || echo "(unresolvable)"
-      echo "weltgewebe.home.arpa:"
-      getent hosts weltgewebe.home.arpa || echo "(unresolvable)"
+    echo "api.weltgewebe.home.arpa:"
+    getent hosts api.weltgewebe.home.arpa || echo "(unresolvable)"
+    echo "weltgewebe.home.arpa:"
+    getent hosts weltgewebe.home.arpa || echo "(unresolvable)"
   } > "${bundle_dir}/dns_lookup.txt" 2>&1 || true
   curl -fsS --cacert "$EDGE_CA" https://api.weltgewebe.home.arpa/health/ready > "${bundle_dir}/edge_api_health.txt" 2>&1 || true
   curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/api/health/ready > "${bundle_dir}/alias_route_health.txt" 2>&1 || true
   curl -fsSI --cacert "$EDGE_CA" https://weltgewebe.home.arpa > "${bundle_dir}/frontend_head.txt" 2>&1 || true
 
   if [[ -n "$extra_context_file" && -f "$extra_context_file" ]]; then
-      cp "$extra_context_file" "${bundle_dir}/version_guard_context.txt"
+    cp "$extra_context_file" "${bundle_dir}/version_guard_context.txt"
   fi
 
   ln -sfn "$PWD/$bundle_dir" /tmp/weltgewebe-deploy-failure
@@ -618,7 +621,7 @@ generate_failure_bundle() {
   echo
   echo "ERROR: Deploy failed."
   if [[ -n "$error_msg" ]]; then
-      echo "$error_msg"
+    echo "$error_msg"
   fi
   echo
   echo "Git state:"
@@ -632,7 +635,7 @@ generate_failure_bundle() {
     local srv_name
     srv_name=$(echo "$line" | awk '{print $1}')
     local srv
-    srv=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service"}}' "$srv_name" 2>/dev/null || echo "unknown")
+    srv=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service"}}' "$srv_name" 2> /dev/null || echo "unknown")
     local state
     state=$(echo "$line" | awk '{print $2}')
     local health
@@ -640,9 +643,9 @@ generate_failure_bundle() {
 
     local display_state="$state"
     if [[ "$health" == "healthy" || "$health" == "unhealthy" ]]; then
-        display_state="$health"
+      display_state="$health"
     elif [[ -z "$health" || "$health" == "<nil>" || "$health" == "starting" ]]; then
-        display_state="$state"
+      display_state="$state"
     fi
     echo "${srv}: ${display_state}"
   done <<< "$ps_format"
@@ -653,7 +656,7 @@ generate_failure_bundle() {
   echo
 }
 
-if ! docker compose "${BASE_ARGS[@]}" config >/dev/null; then
+if ! docker compose "${BASE_ARGS[@]}" config > /dev/null; then
   echo "ERROR: Docker Compose config failed. Please fix your configuration."
   exit 1
 fi
@@ -662,7 +665,7 @@ fi
 # Target specifically the Heimserver layout which relies on proxy/FQDN without host port publishing
 if [[ "$BASE_COMPOSE_FILE" == *"compose.prod.yml"* && "$OVERRIDE_FILE" == *"compose.prod.override.yml"* ]]; then
   set +e
-  api_published=$(docker compose "${BASE_ARGS[@]}" config --format json 2>/dev/null | python3 -c '
+  api_published=$(docker compose "${BASE_ARGS[@]}" config --format json 2> /dev/null | python3 -c '
 import sys, json
 try:
     cfg = json.load(sys.stdin)
@@ -703,50 +706,49 @@ LAST_DEPLOYED_SHA="unknown"
 
 # Get Current HEAD (safely)
 if [[ "$DO_PULL" == "1" ]]; then
-    CURRENT_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+  CURRENT_HEAD=$(git rev-parse HEAD 2> /dev/null || echo "unknown")
 else
-    # Explicitly avoid git calls if no-pull
-    CURRENT_HEAD="unknown"
+  # Explicitly avoid git calls if no-pull
+  CURRENT_HEAD="unknown"
 fi
 
 CURRENT_SHORT_SHA="unknown"
 if [[ "$DO_PULL" == "1" ]]; then
-    CURRENT_SHORT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+  CURRENT_SHORT_SHA=$(git rev-parse --short HEAD 2> /dev/null || echo "unknown")
 fi
 
 if [[ "$BUILD_MODE" == "force" ]]; then
-    DO_BUILD=1
-    REASON="Forced by --build-mode force"
+  DO_BUILD=1
+  REASON="Forced by --build-mode force"
 elif [[ "$BUILD_MODE" == "no" ]]; then
-    DO_BUILD=0
-    REASON="Skipped by --build-mode no"
+  DO_BUILD=0
+  REASON="Skipped by --build-mode no"
 else
-    # Auto Mode
-    if [[ "$CURRENT_HEAD" == "unknown" ]]; then
-        DO_BUILD=1
-        REASON="Auto: HEAD unknown (conservative build)"
-    elif [[ ! -f "$STATE_FILE" ]]; then
-        DO_BUILD=1
-        REASON="Auto: No previous deployment state found"
+  # Auto Mode
+  if [[ "$CURRENT_HEAD" == "unknown" ]]; then
+    DO_BUILD=1
+    REASON="Auto: HEAD unknown (conservative build)"
+  elif [[ ! -f "$STATE_FILE" ]]; then
+    DO_BUILD=1
+    REASON="Auto: No previous deployment state found"
+  else
+    LAST_DEPLOYED_SHA=$(cat "$STATE_FILE")
+    if [[ "$CURRENT_HEAD" != "$LAST_DEPLOYED_SHA" ]]; then
+      DO_BUILD=1
+      REASON="Auto: HEAD changed ($LAST_DEPLOYED_SHA -> $CURRENT_HEAD)"
     else
-        LAST_DEPLOYED_SHA=$(cat "$STATE_FILE")
-        if [[ "$CURRENT_HEAD" != "$LAST_DEPLOYED_SHA" ]]; then
-            DO_BUILD=1
-            REASON="Auto: HEAD changed ($LAST_DEPLOYED_SHA -> $CURRENT_HEAD)"
-        else
-            DO_BUILD=0
-            REASON="Auto: HEAD unchanged ($CURRENT_HEAD)"
-        fi
+      DO_BUILD=0
+      REASON="Auto: HEAD unchanged ($CURRENT_HEAD)"
     fi
+  fi
 fi
 
 echo "   Mode:   $BUILD_MODE"
 echo "   Reason: $REASON"
-echo "   Action: $( [[ "$DO_BUILD" == "1" ]] && echo "Build" || echo "Skip Build" )"
+echo "   Action: $([[ "$DO_BUILD" == "1" ]] && echo "Build" || echo "Skip Build")"
 echo "   Deploy branch:    $DEPLOY_BRANCH_RESOLVED"
 echo "   Last deployed SHA: $LAST_DEPLOYED_SHA"
 echo "   Current deploy SHA: $CURRENT_HEAD"
-
 
 # 5. Service Plan & Caddy Logic
 HAS_CADDY=0
@@ -770,7 +772,7 @@ if [[ "$HAS_CADDY" == "1" ]]; then
 else
   echo " - caddy: NOT FOUND"
   if [[ "$WITH_CADDY" == "1" ]]; then
-     echo "WARNING: --with-caddy requested but service 'caddy' not found."
+    echo "WARNING: --with-caddy requested but service 'caddy' not found."
   fi
 fi
 
@@ -815,7 +817,7 @@ if [[ -z "${REQUIRE_FRONTEND:-}" ]]; then
   esac
 else
   case "$REQUIRE_FRONTEND" in
-    0|1)
+    0 | 1)
       # valid explicit override
       ;;
     *)
@@ -858,108 +860,108 @@ fi
 # Typos (e.g. "local_sovereign", "garbage") would silently bypass the
 # build guard, so we hard-fail on any value that is not a known mode.
 case "${PUBLIC_BASEMAP_MODE:-}" in
-    ""|"local-sovereign"|"remote-style")
-        ;;
-    *)
-        echo "ERROR: Invalid PUBLIC_BASEMAP_MODE='${PUBLIC_BASEMAP_MODE}'."
-        echo "       Allowed values: local-sovereign, remote-style (or unset)."
-        exit 1
-        ;;
+  "" | "local-sovereign" | "remote-style") ;;
+
+  *)
+    echo "ERROR: Invalid PUBLIC_BASEMAP_MODE='${PUBLIC_BASEMAP_MODE}'."
+    echo "       Allowed values: local-sovereign, remote-style (or unset)."
+    exit 1
+    ;;
 esac
 
 BASEMAP_MODE_SOURCE="explicit PUBLIC_BASEMAP_MODE"
 if [[ -z "${PUBLIC_BASEMAP_MODE:-}" ]]; then
-    if [[ "$DEPLOY_FRONTEND_MODE" == "edge" || "$EDGE_RUNTIME_DETECTED" == "1" ]]; then
-        export PUBLIC_BASEMAP_MODE="local-sovereign"
-        BASEMAP_MODE_SOURCE="edge/heimserver default"
-    else
-        BASEMAP_MODE_SOURCE="web app default (unset)"
-    fi
+  if [[ "$DEPLOY_FRONTEND_MODE" == "edge" || "$EDGE_RUNTIME_DETECTED" == "1" ]]; then
+    export PUBLIC_BASEMAP_MODE="local-sovereign"
+    BASEMAP_MODE_SOURCE="edge/heimserver default"
+  else
+    BASEMAP_MODE_SOURCE="web app default (unset)"
+  fi
 else
-    # Honor and propagate an explicitly provided value to the build subprocess.
-    export PUBLIC_BASEMAP_MODE
+  # Honor and propagate an explicitly provided value to the build subprocess.
+  export PUBLIC_BASEMAP_MODE
 fi
 
 # 6b. Frontend Build
 
 # Returns the 'version' string from a local version.json, or empty on any error.
 _read_version_json() {
-    local json_file="$1"
-    python3 "$REPO_DIR/scripts/lib/parse-version-json.py" "$json_file" 2>/dev/null \
-        | head -n1 || true
+  local json_file="$1"
+  python3 "$REPO_DIR/scripts/lib/parse-version-json.py" "$json_file" 2> /dev/null |
+    head -n1 || true
 }
 
-if [[ -d "apps/web" && ( "$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force" ) ]]; then
+if [[ -d "apps/web" && ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") ]]; then
   NEEDS_WEB_BUILD=0
   WEB_MSG="OK"
 
   if [[ "$BUILD_WEB" == "force" ]]; then
-     NEEDS_WEB_BUILD=1
-     WEB_MSG="Forced"
+    NEEDS_WEB_BUILD=1
+    WEB_MSG="Forced"
   elif [[ "$BUILD_WEB" == "no" ]]; then
-     # Explicitly skipped — emit a warning if the build looks stale so the guard error is predictable.
-     if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
-         _stale_hint=""
-         if [[ ! -f "apps/web/build/index.html" ]]; then
-             _stale_hint="artifact missing"
-         elif [[ ! -f "apps/web/build/_app/version.json" ]]; then
-             _stale_hint="version.json missing"
-         elif [[ "$CURRENT_SHORT_SHA" != "unknown" ]]; then
-             _bv_no=$(_read_version_json "apps/web/build/_app/version.json")
-             if [[ -z "$_bv_no" ]]; then
-                 _stale_hint="version.json invalid"
-             elif [[ "$_bv_no" != "$CURRENT_SHORT_SHA" ]]; then
-                 _stale_hint="version stale ($_bv_no != $CURRENT_SHORT_SHA)"
-             fi
-         fi
-         if [[ -n "$_stale_hint" ]]; then
-             echo "WARNING: frontend build skipped by --no-build-web; stale version.json may fail guards. ($_stale_hint)"
-         fi
-     fi
-  else
-     # Auto
-     if [[ ! -f "apps/web/build/index.html" ]]; then
-        NEEDS_WEB_BUILD=1
-        WEB_MSG="Auto: Artifact missing"
-     elif [[ "$REQUIRE_FRONTEND" == "1" && "$CURRENT_SHORT_SHA" != "unknown" ]]; then
-        _vj="apps/web/build/_app/version.json"
-        if [[ ! -f "$_vj" ]]; then
-            NEEDS_WEB_BUILD=1
-            WEB_MSG="Auto: version.json missing"
-        else
-            _bv=$(_read_version_json "$_vj")
-            if [[ -z "$_bv" ]]; then
-                NEEDS_WEB_BUILD=1
-                WEB_MSG="Auto: version.json invalid"
-            elif [[ "$_bv" != "$CURRENT_SHORT_SHA" ]]; then
-                NEEDS_WEB_BUILD=1
-                WEB_MSG="Auto: version stale ($_bv != $CURRENT_SHORT_SHA)"
-            fi
+    # Explicitly skipped — emit a warning if the build looks stale so the guard error is predictable.
+    if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
+      _stale_hint=""
+      if [[ ! -f "apps/web/build/index.html" ]]; then
+        _stale_hint="artifact missing"
+      elif [[ ! -f "apps/web/build/_app/version.json" ]]; then
+        _stale_hint="version.json missing"
+      elif [[ "$CURRENT_SHORT_SHA" != "unknown" ]]; then
+        _bv_no=$(_read_version_json "apps/web/build/_app/version.json")
+        if [[ -z "$_bv_no" ]]; then
+          _stale_hint="version.json invalid"
+        elif [[ "$_bv_no" != "$CURRENT_SHORT_SHA" ]]; then
+          _stale_hint="version stale ($_bv_no != $CURRENT_SHORT_SHA)"
         fi
-     fi
+      fi
+      if [[ -n "$_stale_hint" ]]; then
+        echo "WARNING: frontend build skipped by --no-build-web; stale version.json may fail guards. ($_stale_hint)"
+      fi
+    fi
+  else
+    # Auto
+    if [[ ! -f "apps/web/build/index.html" ]]; then
+      NEEDS_WEB_BUILD=1
+      WEB_MSG="Auto: Artifact missing"
+    elif [[ "$REQUIRE_FRONTEND" == "1" && "$CURRENT_SHORT_SHA" != "unknown" ]]; then
+      _vj="apps/web/build/_app/version.json"
+      if [[ ! -f "$_vj" ]]; then
+        NEEDS_WEB_BUILD=1
+        WEB_MSG="Auto: version.json missing"
+      else
+        _bv=$(_read_version_json "$_vj")
+        if [[ -z "$_bv" ]]; then
+          NEEDS_WEB_BUILD=1
+          WEB_MSG="Auto: version.json invalid"
+        elif [[ "$_bv" != "$CURRENT_SHORT_SHA" ]]; then
+          NEEDS_WEB_BUILD=1
+          WEB_MSG="Auto: version stale ($_bv != $CURRENT_SHORT_SHA)"
+        fi
+      fi
+    fi
   fi
 
   if [[ "$NEEDS_WEB_BUILD" == "1" ]]; then
-     echo
-     echo ">> Frontend Build ($WEB_MSG)"
+    echo
+    echo ">> Frontend Build ($WEB_MSG)"
 
-     if command -v pnpm >/dev/null; then
-         # Check node_modules
-         if [[ ! -d "apps/web/node_modules" ]]; then
-             echo "   Installing dependencies..."
-             pnpm -C apps/web install --frozen-lockfile
-         fi
-         echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
-         echo "   Building..."
-         pnpm -C apps/web build
-     else
-         echo "WARNING: Frontend build required but 'pnpm' not found."
-         echo "         UI may be stale or broken."
-         if [[ "$BUILD_WEB" == "force" ]]; then
-             echo "ERROR: --build-web requested but pnpm missing."
-             exit 1
-         fi
-     fi
+    if command -v pnpm > /dev/null; then
+      # Check node_modules
+      if [[ ! -d "apps/web/node_modules" ]]; then
+        echo "   Installing dependencies..."
+        pnpm -C apps/web install --frozen-lockfile
+      fi
+      echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
+      echo "   Building..."
+      pnpm -C apps/web build
+    else
+      echo "WARNING: Frontend build required but 'pnpm' not found."
+      echo "         UI may be stale or broken."
+      if [[ "$BUILD_WEB" == "force" ]]; then
+        echo "ERROR: --build-web requested but pnpm missing."
+        exit 1
+      fi
+    fi
   fi
 elif [[ "$REQUIRE_FRONTEND" == "0" && -d "apps/web" && ! -f "apps/web/build/index.html" ]]; then
   echo
@@ -972,92 +974,92 @@ fi
 # must reference the local route. CSP stays hard; this catches build leaks early.
 # This ensures that even if an existing bundle is reused, it is verified.
 if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]]; then
-   WEB_IMMUTABLE_DIR="apps/web/build/_app/immutable"
-   echo
-   echo ">> Verifying sovereign frontend build (no remote basemap leaks)..."
-   if [[ ! -d "$WEB_IMMUTABLE_DIR" ]]; then
-       echo "ERROR: Cannot verify sovereign frontend bundle; immutable directory missing."
-       echo "       Expected: $WEB_IMMUTABLE_DIR"
-       exit 1
-   fi
-   
-   # Verification function: check bundle validity
-   verify_bundle() {
-       local carto_leak=0
-       local local_basemap=0
-        
-       if grep -RqE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR"; then
-           carto_leak=1
-       fi
-        
-       if grep -Rq 'local-basemap' "$WEB_IMMUTABLE_DIR"; then
-           local_basemap=1
-       fi
-        
-       echo "$carto_leak:$local_basemap"
-   }
-    
-   # Initial verification: check for CARTO leaks and local-basemap presence
-   VERIFY_RESULT=$(verify_bundle)
-   CARTO_LEAK_FOUND="${VERIFY_RESULT%%:*}"
-   LOCAL_BASEMAP_FOUND="${VERIFY_RESULT##*:}"
-     
-   # Determine if verification failed (either CARTO leak OR missing local-basemap)
-   VERIFICATION_FAILED=0
-   if [[ "$CARTO_LEAK_FOUND" == "1" ]] || [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
-       VERIFICATION_FAILED=1
-   fi
-     
-   # Auto-heal in auto mode: if verification failed and no rebuild was done, try rebuilding
-   if [[ "$VERIFICATION_FAILED" == "1" && "$BUILD_WEB" == "auto" && "$NEEDS_WEB_BUILD" == "0" ]]; then
-       echo "WARNING: Existing bundle failed sovereignty verification."
-       if [[ "$CARTO_LEAK_FOUND" == "1" ]]; then
-           echo "         - Contains CARTO references"
-       fi
-       if [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
-           echo "         - Missing local-basemap route"
-       fi
-       echo "         Forcing rebuild to ensure sovereignty..."
-       NEEDS_WEB_BUILD=1
-         
-       if command -v pnpm >/dev/null; then
-           if [[ ! -d "apps/web/node_modules" ]]; then
-               echo "   Installing dependencies..."
-               pnpm -C apps/web install --frozen-lockfile
-           fi
-           echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
-           echo "   Building..."
-           pnpm -C apps/web build
-             
-           # Re-verify after rebuild: recalculate both CARTO_LEAK_FOUND and LOCAL_BASEMAP_FOUND
-           # This ensures we catch any issues introduced or fixed by the rebuild
-           VERIFY_RESULT=$(verify_bundle)
-           CARTO_LEAK_FOUND="${VERIFY_RESULT%%:*}"
-           LOCAL_BASEMAP_FOUND="${VERIFY_RESULT##*:}"
-           VERIFICATION_FAILED=0
-           if [[ "$CARTO_LEAK_FOUND" == "1" ]] || [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
-               VERIFICATION_FAILED=1
-           fi
-       else
-           echo "ERROR: Auto-rebuild requested but pnpm not found."
-           exit 1
-       fi
-   fi
-    
-   # Hard fail if verification still fails
-   if [[ "$VERIFICATION_FAILED" == "1" ]]; then
-       if [[ "$CARTO_LEAK_FOUND" == "1" ]]; then
-           echo "ERROR: Frontend build leaked remote basemap references in local-sovereign mode."
-           grep -RlE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR" | sed 's/^/       leaked in: /'
-       fi
-       if [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
-           echo "ERROR: Frontend build is in local-sovereign mode but contains no '/local-basemap' references."
-           echo "       The sovereign basemap route appears to be missing from the bundle."
-       fi
-       exit 1
-   fi
-   
-   echo "[✓] Sovereign frontend build verified: no remote basemap references; local-basemap present."
+  WEB_IMMUTABLE_DIR="apps/web/build/_app/immutable"
+  echo
+  echo ">> Verifying sovereign frontend build (no remote basemap leaks)..."
+  if [[ ! -d "$WEB_IMMUTABLE_DIR" ]]; then
+    echo "ERROR: Cannot verify sovereign frontend bundle; immutable directory missing."
+    echo "       Expected: $WEB_IMMUTABLE_DIR"
+    exit 1
+  fi
+
+  # Verification function: check bundle validity
+  verify_bundle() {
+    local carto_leak=0
+    local local_basemap=0
+
+    if grep -RqE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR"; then
+      carto_leak=1
+    fi
+
+    if grep -Rq 'local-basemap' "$WEB_IMMUTABLE_DIR"; then
+      local_basemap=1
+    fi
+
+    echo "$carto_leak:$local_basemap"
+  }
+
+  # Initial verification: check for CARTO leaks and local-basemap presence
+  VERIFY_RESULT=$(verify_bundle)
+  CARTO_LEAK_FOUND="${VERIFY_RESULT%%:*}"
+  LOCAL_BASEMAP_FOUND="${VERIFY_RESULT##*:}"
+
+  # Determine if verification failed (either CARTO leak OR missing local-basemap)
+  VERIFICATION_FAILED=0
+  if [[ "$CARTO_LEAK_FOUND" == "1" ]] || [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
+    VERIFICATION_FAILED=1
+  fi
+
+  # Auto-heal in auto mode: if verification failed and no rebuild was done, try rebuilding
+  if [[ "$VERIFICATION_FAILED" == "1" && "$BUILD_WEB" == "auto" && "$NEEDS_WEB_BUILD" == "0" ]]; then
+    echo "WARNING: Existing bundle failed sovereignty verification."
+    if [[ "$CARTO_LEAK_FOUND" == "1" ]]; then
+      echo "         - Contains CARTO references"
+    fi
+    if [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
+      echo "         - Missing local-basemap route"
+    fi
+    echo "         Forcing rebuild to ensure sovereignty..."
+    NEEDS_WEB_BUILD=1
+
+    if command -v pnpm > /dev/null; then
+      if [[ ! -d "apps/web/node_modules" ]]; then
+        echo "   Installing dependencies..."
+        pnpm -C apps/web install --frozen-lockfile
+      fi
+      echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
+      echo "   Building..."
+      pnpm -C apps/web build
+
+      # Re-verify after rebuild: recalculate both CARTO_LEAK_FOUND and LOCAL_BASEMAP_FOUND
+      # This ensures we catch any issues introduced or fixed by the rebuild
+      VERIFY_RESULT=$(verify_bundle)
+      CARTO_LEAK_FOUND="${VERIFY_RESULT%%:*}"
+      LOCAL_BASEMAP_FOUND="${VERIFY_RESULT##*:}"
+      VERIFICATION_FAILED=0
+      if [[ "$CARTO_LEAK_FOUND" == "1" ]] || [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
+        VERIFICATION_FAILED=1
+      fi
+    else
+      echo "ERROR: Auto-rebuild requested but pnpm not found."
+      exit 1
+    fi
+  fi
+
+  # Hard fail if verification still fails
+  if [[ "$VERIFICATION_FAILED" == "1" ]]; then
+    if [[ "$CARTO_LEAK_FOUND" == "1" ]]; then
+      echo "ERROR: Frontend build leaked remote basemap references in local-sovereign mode."
+      grep -RlE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR" | sed 's/^/       leaked in: /'
+    fi
+    if [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
+      echo "ERROR: Frontend build is in local-sovereign mode but contains no '/local-basemap' references."
+      echo "       The sovereign basemap route appears to be missing from the bundle."
+    fi
+    exit 1
+  fi
+
+  echo "[✓] Sovereign frontend build verified: no remote basemap references; local-basemap present."
 fi
 
 # 6c. Basemap Artifact Guard (best effort)
@@ -1067,49 +1069,49 @@ echo
 echo ">> Basemap Artifact Guard:"
 
 evaluate_basemap_state() {
-    local pmtiles_files=()
-    mapfile -t pmtiles_files < <(compgen -G "$BASEMAP_DIR/*.pmtiles" || true)
-    PMTILES_COUNT="${#pmtiles_files[@]}"
-    if (( PMTILES_COUNT > 0 )); then
-        FIRST_PMTILES="${pmtiles_files[0]}"
-    else
-        FIRST_PMTILES=""
-    fi
+  local pmtiles_files=()
+  mapfile -t pmtiles_files < <(compgen -G "$BASEMAP_DIR/*.pmtiles" || true)
+  PMTILES_COUNT="${#pmtiles_files[@]}"
+  if ((PMTILES_COUNT > 0)); then
+    FIRST_PMTILES="${pmtiles_files[0]}"
+  else
+    FIRST_PMTILES=""
+  fi
 }
 
 evaluate_basemap_state
-if (( PMTILES_COUNT > 0 )); then
-    echo "   [✓] Artifacts already present. Found ${PMTILES_COUNT} PMTiles artifact(s) in ${BASEMAP_DIR}."
-    echo "       -> e.g. ${FIRST_PMTILES}"
+if ((PMTILES_COUNT > 0)); then
+  echo "   [✓] Artifacts already present. Found ${PMTILES_COUNT} PMTiles artifact(s) in ${BASEMAP_DIR}."
+  echo "       -> e.g. ${FIRST_PMTILES}"
 else
-    echo "   [!] Basemap artifact missing. Attempting best-effort PMTiles build..."
-    if [[ -x "scripts/basemap/build-hamburg-pmtiles.sh" ]]; then
-        if bash scripts/basemap/build-hamburg-pmtiles.sh; then
-            evaluate_basemap_state
-            if (( PMTILES_COUNT > 0 )); then
-                echo "   [✓] Basemap build succeeded. Generated ${PMTILES_COUNT} PMTiles artifact(s)."
-                echo "       -> e.g. ${FIRST_PMTILES}"
-            else
-                echo "   [X] WARNING: Basemap artifact still missing after build attempt. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
-            fi
-        else
-            evaluate_basemap_state
-            if (( PMTILES_COUNT > 0 )); then
-                echo "   [X] WARNING: PMTiles build script failed, but ${PMTILES_COUNT} PMTiles artifact(s) are present. Continuing deployment (best effort)."
-                echo "       -> e.g. ${FIRST_PMTILES}"
-            else
-                echo "   [X] WARNING: PMTiles build script failed. Continuing deployment (best effort). 0 PMTiles artifacts present in ${BASEMAP_DIR}."
-            fi
-        fi
+  echo "   [!] Basemap artifact missing. Attempting best-effort PMTiles build..."
+  if [[ -x "scripts/basemap/build-hamburg-pmtiles.sh" ]]; then
+    if bash scripts/basemap/build-hamburg-pmtiles.sh; then
+      evaluate_basemap_state
+      if ((PMTILES_COUNT > 0)); then
+        echo "   [✓] Basemap build succeeded. Generated ${PMTILES_COUNT} PMTiles artifact(s)."
+        echo "       -> e.g. ${FIRST_PMTILES}"
+      else
+        echo "   [X] WARNING: Basemap artifact still missing after build attempt. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
+      fi
     else
-        evaluate_basemap_state
-        if (( PMTILES_COUNT > 0 )); then
-            echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable, but ${PMTILES_COUNT} PMTiles artifact(s) are present in ${BASEMAP_DIR}."
-            echo "       -> e.g. ${FIRST_PMTILES}"
-        else
-            echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
-        fi
+      evaluate_basemap_state
+      if ((PMTILES_COUNT > 0)); then
+        echo "   [X] WARNING: PMTiles build script failed, but ${PMTILES_COUNT} PMTiles artifact(s) are present. Continuing deployment (best effort)."
+        echo "       -> e.g. ${FIRST_PMTILES}"
+      else
+        echo "   [X] WARNING: PMTiles build script failed. Continuing deployment (best effort). 0 PMTiles artifacts present in ${BASEMAP_DIR}."
+      fi
     fi
+  else
+    evaluate_basemap_state
+    if ((PMTILES_COUNT > 0)); then
+      echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable, but ${PMTILES_COUNT} PMTiles artifact(s) are present in ${BASEMAP_DIR}."
+      echo "       -> e.g. ${FIRST_PMTILES}"
+    else
+      echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
+    fi
+  fi
 fi
 # 6c2. Basemap Glyphs Guard (best effort)
 # Try to ensure the local glyphs (fonts) exist for offline rendering
@@ -1119,56 +1121,56 @@ echo
 echo ">> Basemap Glyphs Guard:"
 
 evaluate_glyphs_state() {
-    GLYPHS_READY=0
-    GLYPHS_ACTUAL_COUNT=0
-    if [ -f "$GLYPHS_DIR/.complete" ]; then
-        local stored_hash
-        local stored_count
-        stored_hash="$(grep '^HASH=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
-        stored_count="$(grep '^COUNT=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
+  GLYPHS_READY=0
+  GLYPHS_ACTUAL_COUNT=0
+  if [ -f "$GLYPHS_DIR/.complete" ]; then
+    local stored_hash
+    local stored_count
+    stored_hash="$(grep '^HASH=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
+    stored_count="$(grep '^COUNT=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
 
-        case "$stored_count" in
-            ''|*[!0-9]*) stored_count=-1 ;;
-        esac
+    case "$stored_count" in
+      '' | *[!0-9]*) stored_count=-1 ;;
+    esac
 
-        if [ "$stored_hash" = "$EXPECTED_GLYPHS_HASH" ] && [ "$stored_count" -ge 0 ]; then
-            GLYPHS_ACTUAL_COUNT="$(find "$GLYPHS_DIR" -maxdepth 1 -name '*.pbf' | wc -l | tr -d '[:space:]')"
-            if [ "$GLYPHS_ACTUAL_COUNT" -eq "$stored_count" ]; then
-                GLYPHS_READY=1
-            fi
-        fi
+    if [ "$stored_hash" = "$EXPECTED_GLYPHS_HASH" ] && [ "$stored_count" -ge 0 ]; then
+      GLYPHS_ACTUAL_COUNT="$(find "$GLYPHS_DIR" -maxdepth 1 -name '*.pbf' | wc -l | tr -d '[:space:]')"
+      if [ "$GLYPHS_ACTUAL_COUNT" -eq "$stored_count" ]; then
+        GLYPHS_READY=1
+      fi
     fi
+  fi
 }
 
 evaluate_glyphs_state
-if (( GLYPHS_READY == 1 )); then
-    echo "   [✓] Artifacts already present. Found verified glyph set (${GLYPHS_ACTUAL_COUNT} files) in ${GLYPHS_DIR}."
+if ((GLYPHS_READY == 1)); then
+  echo "   [✓] Artifacts already present. Found verified glyph set (${GLYPHS_ACTUAL_COUNT} files) in ${GLYPHS_DIR}."
 else
-    echo "   [!] Glyphs missing. Attempting best-effort download..."
-    if [[ -x "scripts/basemap/fetch-glyphs.sh" ]]; then
-        if bash scripts/basemap/fetch-glyphs.sh; then
-            evaluate_glyphs_state
-            if (( GLYPHS_READY == 1 )); then
-                echo "   [✓] Glyph fetch succeeded. Found verified glyph set (${GLYPHS_ACTUAL_COUNT} files)."
-            else
-                echo "   [X] WARNING: Glyphs still missing after fetch attempt. 0 verified glyph set present."
-            fi
-        else
-            evaluate_glyphs_state
-            if (( GLYPHS_READY == 1 )); then
-                echo "   [X] WARNING: Fetch script failed, but a verified glyph set is present. Continuing (best effort)."
-            else
-                echo "   [X] WARNING: Fetch script failed. Continuing deployment (best effort). 0 verified glyph set present."
-            fi
-        fi
+  echo "   [!] Glyphs missing. Attempting best-effort download..."
+  if [[ -x "scripts/basemap/fetch-glyphs.sh" ]]; then
+    if bash scripts/basemap/fetch-glyphs.sh; then
+      evaluate_glyphs_state
+      if ((GLYPHS_READY == 1)); then
+        echo "   [✓] Glyph fetch succeeded. Found verified glyph set (${GLYPHS_ACTUAL_COUNT} files)."
+      else
+        echo "   [X] WARNING: Glyphs still missing after fetch attempt. 0 verified glyph set present."
+      fi
     else
-        evaluate_glyphs_state
-        if (( GLYPHS_READY == 1 )); then
-            echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable, but a verified glyph set is present."
-        else
-            echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable. 0 verified glyph set present."
-        fi
+      evaluate_glyphs_state
+      if ((GLYPHS_READY == 1)); then
+        echo "   [X] WARNING: Fetch script failed, but a verified glyph set is present. Continuing (best effort)."
+      else
+        echo "   [X] WARNING: Fetch script failed. Continuing deployment (best effort). 0 verified glyph set present."
+      fi
     fi
+  else
+    evaluate_glyphs_state
+    if ((GLYPHS_READY == 1)); then
+      echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable, but a verified glyph set is present."
+    else
+      echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable. 0 verified glyph set present."
+    fi
+  fi
 fi
 
 # 6d. Static UI Runtime Guard & Edge Caddy Recreate
@@ -1185,82 +1187,82 @@ EDGE_CADDY_DIR="/opt/heimgewebe/edge"
 # auto = heuristic runtime detection
 # internal/off = no edge-refresh path
 if [[ "$REQUIRE_FRONTEND" == "1" ]] && { [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]] || { [[ "$DEPLOY_FRONTEND_MODE" == "auto" ]] && [[ "$EDGE_RUNTIME_DETECTED" == "1" ]]; }; }; then
-    EDGE_NEEDS_RECREATE=0
+  EDGE_NEEDS_RECREATE=0
 
-    if [[ "$REFRESH_EDGE" == "1" ]]; then
-        echo "   Recreation forced by --refresh-edge flag."
-        EDGE_NEEDS_RECREATE=1
-    elif docker ps --format '{{.Names}}' | grep -qFx "$EDGE_GATEWAY_CONTAINER"; then
-        # Check if running container sees the static artifacts properly
-        echo "   Checking static UI mount in $EDGE_GATEWAY_CONTAINER..."
-        if ! docker exec "$EDGE_GATEWAY_CONTAINER" sh -c 'test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app'; then
-            echo "WARNING: Static UI artifacts invisible in $EDGE_GATEWAY_CONTAINER."
-            echo "         Container mount state drift detected."
-            EDGE_NEEDS_RECREATE=1
-        else
-            echo "   Static UI mount is valid."
-        fi
+  if [[ "$REFRESH_EDGE" == "1" ]]; then
+    echo "   Recreation forced by --refresh-edge flag."
+    EDGE_NEEDS_RECREATE=1
+  elif docker ps --format '{{.Names}}' | grep -qFx "$EDGE_GATEWAY_CONTAINER"; then
+    # Check if running container sees the static artifacts properly
+    echo "   Checking static UI mount in $EDGE_GATEWAY_CONTAINER..."
+    if ! docker exec "$EDGE_GATEWAY_CONTAINER" sh -c 'test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app'; then
+      echo "WARNING: Static UI artifacts invisible in $EDGE_GATEWAY_CONTAINER."
+      echo "         Container mount state drift detected."
+      EDGE_NEEDS_RECREATE=1
     else
-        echo "   Container $EDGE_GATEWAY_CONTAINER is not running."
+      echo "   Static UI mount is valid."
+    fi
+  else
+    echo "   Container $EDGE_GATEWAY_CONTAINER is not running."
+    if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
+      echo "   Expected by edge mode. Forcing recreate attempt."
+      EDGE_NEEDS_RECREATE=1
+    else
+      echo "   Skipping runtime check."
+    fi
+  fi
+
+  if [[ "$EDGE_NEEDS_RECREATE" == "1" ]]; then
+    if [[ -d "$EDGE_CADDY_DIR" ]]; then
+      echo "   Refreshing canonical edge stack at $EDGE_CADDY_DIR..."
+
+      # Safe recreate logic
+      docker rm -f "$EDGE_GATEWAY_CONTAINER" > /dev/null 2>&1 || true
+
+      RECREATE_ERR_FILE=$(mktemp)
+      # We omit a specific service name here because the edge deployment configuration is external to this repository.
+      # We cannot reliably assume the exact service name (e.g., whether it is 'caddy' or 'edge-caddy').
+      # Recreating the whole stack with --force-recreate ensures all linked services are properly refreshed.
+      if ! (cd "$EDGE_CADDY_DIR" && docker compose -p edge -f docker-compose.yml up -d --force-recreate) > "$RECREATE_ERR_FILE" 2>&1; then
+        msg="Failed to recreate edge stack. The edge deployment is broken."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg" "$RECREATE_ERR_FILE"
+        rm -f "$RECREATE_ERR_FILE"
+        exit 1
+      fi
+      rm -f "$RECREATE_ERR_FILE"
+
+      echo "   Edge deployment refreshed; verifying ${EDGE_GATEWAY_CONTAINER}..."
+      if ! docker ps --format '{{.Names}}' | grep -qFx "$EDGE_GATEWAY_CONTAINER"; then
+        msg="Post-recreate verification failed: $EDGE_GATEWAY_CONTAINER is not running."
         if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
-            echo "   Expected by edge mode. Forcing recreate attempt."
-            EDGE_NEEDS_RECREATE=1
+          echo "ERROR: $msg"
+          generate_failure_bundle "$msg"
+          exit 1
         else
-            echo "   Skipping runtime check."
+          echo "WARNING: $msg"
         fi
-    fi
-
-    if [[ "$EDGE_NEEDS_RECREATE" == "1" ]]; then
-        if [[ -d "$EDGE_CADDY_DIR" ]]; then
-            echo "   Refreshing canonical edge stack at $EDGE_CADDY_DIR..."
-
-            # Safe recreate logic
-            docker rm -f "$EDGE_GATEWAY_CONTAINER" >/dev/null 2>&1 || true
-
-            RECREATE_ERR_FILE=$(mktemp)
-            # We omit a specific service name here because the edge deployment configuration is external to this repository.
-            # We cannot reliably assume the exact service name (e.g., whether it is 'caddy' or 'edge-caddy').
-            # Recreating the whole stack with --force-recreate ensures all linked services are properly refreshed.
-            if ! ( cd "$EDGE_CADDY_DIR" && docker compose -p edge -f docker-compose.yml up -d --force-recreate ) > "$RECREATE_ERR_FILE" 2>&1; then
-                msg="Failed to recreate edge stack. The edge deployment is broken."
-                echo "ERROR: $msg"
-                generate_failure_bundle "$msg" "$RECREATE_ERR_FILE"
-                rm -f "$RECREATE_ERR_FILE"
-                exit 1
-            fi
-            rm -f "$RECREATE_ERR_FILE"
-
-            echo "   Edge deployment refreshed; verifying ${EDGE_GATEWAY_CONTAINER}..."
-            if ! docker ps --format '{{.Names}}' | grep -qFx "$EDGE_GATEWAY_CONTAINER"; then
-                msg="Post-recreate verification failed: $EDGE_GATEWAY_CONTAINER is not running."
-                if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
-                    echo "ERROR: $msg"
-                    generate_failure_bundle "$msg"
-                    exit 1
-                else
-                    echo "WARNING: $msg"
-                fi
-            elif ! docker exec "$EDGE_GATEWAY_CONTAINER" sh -c 'test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app'; then
-                msg="Post-recreate verification failed: static UI artifacts still invisible in $EDGE_GATEWAY_CONTAINER."
-                if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
-                    echo "ERROR: $msg"
-                    generate_failure_bundle "$msg"
-                    exit 1
-                else
-                    echo "WARNING: $msg"
-                fi
-            else
-                echo "   Verified: ${EDGE_GATEWAY_CONTAINER} is running and UI mount is valid."
-            fi
+      elif ! docker exec "$EDGE_GATEWAY_CONTAINER" sh -c 'test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app'; then
+        msg="Post-recreate verification failed: static UI artifacts still invisible in $EDGE_GATEWAY_CONTAINER."
+        if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
+          echo "ERROR: $msg"
+          generate_failure_bundle "$msg"
+          exit 1
         else
-            msg="Could not refresh edge deployment. Directory $EDGE_CADDY_DIR not found."
-            echo "ERROR: $msg"
-            generate_failure_bundle "$msg"
-            exit 1
+          echo "WARNING: $msg"
         fi
+      else
+        echo "   Verified: ${EDGE_GATEWAY_CONTAINER} is running and UI mount is valid."
+      fi
+    else
+      msg="Could not refresh edge deployment. Directory $EDGE_CADDY_DIR not found."
+      echo "ERROR: $msg"
+      generate_failure_bundle "$msg"
+      exit 1
     fi
+  fi
 else
-    echo "   Skipped (Frontend not required for this deploy run)."
+  echo "   Skipped (Frontend not required for this deploy run)."
 fi
 
 # 7. Deploy
@@ -1292,8 +1294,8 @@ if [[ -x "scripts/preflight/csp_contract_static.sh" ]]; then
   # We look for the bind mount targeting /etc/caddy/Caddyfile
   # Using Python for robust JSON parsing since it's universally available in our stack
   EXTRACTED_CADDYFILE="$(
-    docker compose "${BASE_ARGS[@]}" config --format json 2>/dev/null | \
-    python3 -c '
+    docker compose "${BASE_ARGS[@]}" config --format json 2> /dev/null |
+      python3 -c '
 import json
 import sys
 
@@ -1306,19 +1308,19 @@ try:
             break
 except Exception:
     pass
-' 2>/dev/null || true
+' 2> /dev/null || true
   )"
 
   if [[ -n "${EDGE_CADDYFILE:-}" && -f "$EDGE_CADDYFILE" ]]; then
-     export CADDYFILE_PATH="$EDGE_CADDYFILE"
+    export CADDYFILE_PATH="$EDGE_CADDYFILE"
   elif [[ -n "$EXTRACTED_CADDYFILE" && -f "$EXTRACTED_CADDYFILE" ]]; then
-     export CADDYFILE_PATH="$EXTRACTED_CADDYFILE"
+    export CADDYFILE_PATH="$EXTRACTED_CADDYFILE"
   elif [[ -f "/opt/heimgewebe/edge/Caddyfile" ]]; then
-     export CADDYFILE_PATH="/opt/heimgewebe/edge/Caddyfile"
+    export CADDYFILE_PATH="/opt/heimgewebe/edge/Caddyfile"
   elif [[ -f "$REPO_DIR/Caddyfile" ]]; then
-     export CADDYFILE_PATH="$REPO_DIR/Caddyfile"
+    export CADDYFILE_PATH="$REPO_DIR/Caddyfile"
   elif [[ -f "$REPO_DIR/infra/caddy/Caddyfile.heim" ]]; then
-     export CADDYFILE_PATH="$REPO_DIR/infra/caddy/Caddyfile.heim"
+    export CADDYFILE_PATH="$REPO_DIR/infra/caddy/Caddyfile.heim"
   fi
 
   if ! bash scripts/preflight/csp_contract_static.sh; then
@@ -1333,7 +1335,7 @@ echo ">> Deploying..."
 CMD_BASE=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--remove-orphans")
 
 if [[ "$DO_BUILD" == "1" ]]; then
-    CMD_BASE+=("--build")
+  CMD_BASE+=("--build")
 fi
 
 if [[ "$ENABLE_CADDY" == "1" ]]; then
@@ -1343,32 +1345,32 @@ if [[ "$ENABLE_CADDY" == "1" ]]; then
   ERR_FILE=$(mktemp)
   # Capture all output (stdout and stderr) to prevent log flooding, but retain it for the failure bundle
   if ! "${CMD_BASE[@]}" > "$ERR_FILE" 2>&1; then
-     ERR_CONTENT=$(cat "$ERR_FILE")
+    ERR_CONTENT=$(cat "$ERR_FILE")
 
-     # Check for bind errors (port conflict)
-     if echo "$ERR_CONTENT" | grep -Eq "address already in use|port is already allocated|bind: address already in use"; then
-        echo
-        echo "WARNING: Port conflict detected (Caddy could not bind ports)."
-        echo "Retrying without Caddy (--scale caddy=0)..."
-        CMD_RETRY=("${CMD_BASE[@]}" "--scale" "caddy=0")
-        echo "Running: ${CMD_RETRY[*]}"
+    # Check for bind errors (port conflict)
+    if echo "$ERR_CONTENT" | grep -Eq "address already in use|port is already allocated|bind: address already in use"; then
+      echo
+      echo "WARNING: Port conflict detected (Caddy could not bind ports)."
+      echo "Retrying without Caddy (--scale caddy=0)..."
+      CMD_RETRY=("${CMD_BASE[@]}" "--scale" "caddy=0")
+      echo "Running: ${CMD_RETRY[*]}"
 
-        RETRY_ERR_FILE=$(mktemp)
-        if ! "${CMD_RETRY[@]}" > "$RETRY_ERR_FILE" 2>&1; then
-            generate_failure_bundle "Container startup failed (retry without Caddy)." "$RETRY_ERR_FILE"
-            rm -f "$RETRY_ERR_FILE" "$ERR_FILE"
-            exit 1
-        fi
+      RETRY_ERR_FILE=$(mktemp)
+      if ! "${CMD_RETRY[@]}" > "$RETRY_ERR_FILE" 2>&1; then
+        generate_failure_bundle "Container startup failed (retry without Caddy)." "$RETRY_ERR_FILE"
         rm -f "$RETRY_ERR_FILE" "$ERR_FILE"
-     else
-        # We don't want to spam stdout, so we just use the simple message
-        # The full log is safely stored in the bundle via $ERR_FILE
-        generate_failure_bundle "Container startup failed." "$ERR_FILE"
-        rm -f "$ERR_FILE"
         exit 1
-     fi
+      fi
+      rm -f "$RETRY_ERR_FILE" "$ERR_FILE"
+    else
+      # We don't want to spam stdout, so we just use the simple message
+      # The full log is safely stored in the bundle via $ERR_FILE
+      generate_failure_bundle "Container startup failed." "$ERR_FILE"
+      rm -f "$ERR_FILE"
+      exit 1
+    fi
   else
-     rm -f "$ERR_FILE"
+    rm -f "$ERR_FILE"
   fi
 else
   # Caddy disabled or not present
@@ -1377,11 +1379,11 @@ else
 
   ERR_FILE=$(mktemp)
   if ! "${CMD[@]}" > "$ERR_FILE" 2>&1; then
-     generate_failure_bundle "Container startup failed." "$ERR_FILE"
-     rm -f "$ERR_FILE"
-     exit 1
+    generate_failure_bundle "Container startup failed." "$ERR_FILE"
+    rm -f "$ERR_FILE"
+    exit 1
   else
-     rm -f "$ERR_FILE"
+    rm -f "$ERR_FILE"
   fi
 fi
 
@@ -1395,11 +1397,11 @@ echo ">> Health Check:"
 
 # Strategy Decision:
 
-API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
+API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2> /dev/null || true)
 if [[ -z "${API_CID:-}" ]]; then
-    echo "ERROR: Container 'api' not found."
-    echo "Tip: Run 'docker compose ps' and ensure the stack is up."
-    exit 1
+  echo "ERROR: Container 'api' not found."
+  echo "Tip: Run 'docker compose ps' and ensure the stack is up."
+  exit 1
 fi
 
 HAS_DOCKER_HEALTH="no"
@@ -1407,46 +1409,46 @@ DOCKER_INSPECT_FAILED="no"
 
 FIRST_CID=$(echo "$API_CID" | head -n 1)
 
-if ! HAS_DOCKER_HEALTH=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$FIRST_CID" 2>/dev/null); then
-    DOCKER_INSPECT_FAILED="yes"
-    HAS_DOCKER_HEALTH="no"
+if ! HAS_DOCKER_HEALTH=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$FIRST_CID" 2> /dev/null); then
+  DOCKER_INSPECT_FAILED="yes"
+  HAS_DOCKER_HEALTH="no"
 fi
 
 if [[ "$DOCKER_INSPECT_FAILED" == "yes" ]]; then
-    echo "WARN: docker inspect failed during health strategy probe; falling back to HTTP Health"
+  echo "WARN: docker inspect failed during health strategy probe; falling back to HTTP Health"
 fi
 
 if [[ "$HAS_DOCKER_HEALTH" == "yes" && "$DOCKER_INSPECT_FAILED" == "no" ]]; then
-    CHOSEN_STRATEGY="Docker Native Health"
-    echo "Using Docker Native Health (inspect)"
+  CHOSEN_STRATEGY="Docker Native Health"
+  echo "Using Docker Native Health (inspect)"
 else
-    CHOSEN_STRATEGY="HTTP Health"
+  CHOSEN_STRATEGY="HTTP Health"
 
-    if [[ -n "${HEALTH_URL:-}" ]]; then
-        echo "Using explicit health URL: $HEALTH_URL"
-    else
-        API_INTERNAL_PORT="${API_INTERNAL_PORT:-8080}"
-        API_PORT=""
-        if RAW_PORT=$(docker compose "${BASE_ARGS[@]}" port api "${API_INTERNAL_PORT}" 2>/dev/null); then
-            PORT_CANDIDATE=$(echo "$RAW_PORT" | awk -F: '{print $NF}' | head -n1)
-            if [[ "$PORT_CANDIDATE" != "0" && -n "$PORT_CANDIDATE" ]]; then
-                API_PORT="$PORT_CANDIDATE"
-            fi
-        fi
-
-        if [[ -n "$API_PORT" ]]; then
-            HEALTH_URL="http://127.0.0.1:${API_PORT}/health/ready"
-            echo "Using Host Port Mapping: $HEALTH_URL"
-        else
-            if [[ "$DOCKER_INSPECT_FAILED" == "yes" ]]; then
-                echo "ERROR: docker inspect failed; cannot determine Docker health."
-            else
-                echo "ERROR: Docker HEALTHCHECK not defined for container 'api'."
-            fi
-            echo "No published host port detected. Set HEALTH_URL explicitly."
-            exit 1
-        fi
+  if [[ -n "${HEALTH_URL:-}" ]]; then
+    echo "Using explicit health URL: $HEALTH_URL"
+  else
+    API_INTERNAL_PORT="${API_INTERNAL_PORT:-8080}"
+    API_PORT=""
+    if RAW_PORT=$(docker compose "${BASE_ARGS[@]}" port api "${API_INTERNAL_PORT}" 2> /dev/null); then
+      PORT_CANDIDATE=$(echo "$RAW_PORT" | awk -F: '{print $NF}' | head -n1)
+      if [[ "$PORT_CANDIDATE" != "0" && -n "$PORT_CANDIDATE" ]]; then
+        API_PORT="$PORT_CANDIDATE"
+      fi
     fi
+
+    if [[ -n "$API_PORT" ]]; then
+      HEALTH_URL="http://127.0.0.1:${API_PORT}/health/ready"
+      echo "Using Host Port Mapping: $HEALTH_URL"
+    else
+      if [[ "$DOCKER_INSPECT_FAILED" == "yes" ]]; then
+        echo "ERROR: docker inspect failed; cannot determine Docker health."
+      else
+        echo "ERROR: Docker HEALTHCHECK not defined for container 'api'."
+      fi
+      echo "No published host port detected. Set HEALTH_URL explicitly."
+      exit 1
+    fi
+  fi
 fi
 
 # Execution
@@ -1457,54 +1459,54 @@ SLEEP_SEC=5
 HEALTH_OK=0
 
 check_health() {
-    if [[ "$CHOSEN_STRATEGY" == "Docker Native Health" ]]; then
-        API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
-        if [[ -z "$API_CID" ]]; then
-            echo "Container 'api' not found."
-            return 1
-        fi
-
-        # Explicitly check if HEALTHCHECK is defined
-        HEALTH_DEFINED_RAW=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$API_CID" 2>/dev/null)
-        rc_health_defined=$?
-        if [[ $rc_health_defined -ne 0 ]]; then
-            echo "  ERROR: docker inspect failed while checking health metadata for container 'api'."
-            echo "         Docker may be restarting or unavailable. Retrying..."
-            return 1
-        fi
-
-        if [[ "$HEALTH_DEFINED_RAW" != "yes" ]]; then
-            echo "  ERROR: Docker HEALTHCHECK not defined for container 'api'."
-            echo "         Please define HEALTHCHECK in Dockerfile or set HEALTH_URL."
-            return 2
-        fi
-
-        STATUS=$(docker inspect --format '{{.State.Health.Status}}' "$API_CID" 2>/dev/null)
-        rc_status=$?
-        if [[ $rc_status -ne 0 || -z "$STATUS" ]]; then
-            echo "  Status: unknown (docker inspect failed)"
-            return 1
-        fi
-
-        if [[ "$STATUS" == "healthy" ]]; then
-            return 0
-        else
-            echo "  Status: $STATUS"
-            return 1
-        fi
-    else
-        # Standard URL check from host
-        if curl -fsS --connect-timeout 2 --max-time 5 "$HEALTH_URL" >/dev/null 2>&1; then
-             return 0
-        else
-             return 1
-        fi
+  if [[ "$CHOSEN_STRATEGY" == "Docker Native Health" ]]; then
+    API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2> /dev/null || true)
+    if [[ -z "$API_CID" ]]; then
+      echo "Container 'api' not found."
+      return 1
     fi
+
+    # Explicitly check if HEALTHCHECK is defined
+    HEALTH_DEFINED_RAW=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$API_CID" 2> /dev/null)
+    rc_health_defined=$?
+    if [[ $rc_health_defined -ne 0 ]]; then
+      echo "  ERROR: docker inspect failed while checking health metadata for container 'api'."
+      echo "         Docker may be restarting or unavailable. Retrying..."
+      return 1
+    fi
+
+    if [[ "$HEALTH_DEFINED_RAW" != "yes" ]]; then
+      echo "  ERROR: Docker HEALTHCHECK not defined for container 'api'."
+      echo "         Please define HEALTHCHECK in Dockerfile or set HEALTH_URL."
+      return 2
+    fi
+
+    STATUS=$(docker inspect --format '{{.State.Health.Status}}' "$API_CID" 2> /dev/null)
+    rc_status=$?
+    if [[ $rc_status -ne 0 || -z "$STATUS" ]]; then
+      echo "  Status: unknown (docker inspect failed)"
+      return 1
+    fi
+
+    if [[ "$STATUS" == "healthy" ]]; then
+      return 0
+    else
+      echo "  Status: $STATUS"
+      return 1
+    fi
+  else
+    # Standard URL check from host
+    if curl -fsS --connect-timeout 2 --max-time 5 "$HEALTH_URL" > /dev/null 2>&1; then
+      return 0
+    else
+      return 1
+    fi
+  fi
 }
 
 FATAL_REASON=""
 
-for ((i=1;i<=MAX_RETRIES;i++)); do
+for ((i = 1; i <= MAX_RETRIES; i++)); do
   set +e
   check_health
   HEALTH_RET=$?
@@ -1525,16 +1527,16 @@ for ((i=1;i<=MAX_RETRIES;i++)); do
 done
 
 if [[ "$HEALTH_OK" != "1" ]]; then
-    if [[ "$FATAL_REASON" == "missing_healthcheck" ]]; then
-        generate_failure_bundle "Health check aborted: missing Docker HEALTHCHECK for 'api'. Tip: Add HEALTHCHECK or set HEALTH_URL."
-        exit 1
-    fi
-
-    err_msg="Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds. Strategy: $CHOSEN_STRATEGY"
-    [[ -n "${HEALTH_URL:-}" ]] && err_msg="$err_msg URL: $HEALTH_URL"
-
-    generate_failure_bundle "$err_msg"
+  if [[ "$FATAL_REASON" == "missing_healthcheck" ]]; then
+    generate_failure_bundle "Health check aborted: missing Docker HEALTHCHECK for 'api'. Tip: Add HEALTHCHECK or set HEALTH_URL."
     exit 1
+  fi
+
+  err_msg="Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds. Strategy: $CHOSEN_STRATEGY"
+  [[ -n "${HEALTH_URL:-}" ]] && err_msg="$err_msg URL: $HEALTH_URL"
+
+  generate_failure_bundle "$err_msg"
+  exit 1
 fi
 
 echo
@@ -1542,299 +1544,299 @@ echo ">> Checking API DNS alias..."
 
 # 1. Primary check: Inspect container metadata (Ground Truth)
 # This works regardless of container OS (glibc/musl) or installed tools.
-API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
+API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2> /dev/null || true)
 if [[ -z "$API_CID" ]]; then
-    echo "ERROR: Container 'api' not found."
-    exit 1
+  echo "ERROR: Container 'api' not found."
+  exit 1
 fi
 
 ALIAS_FOUND=0
-if docker inspect --format '{{range .NetworkSettings.Networks}}{{println .Aliases}}{{end}}' "$API_CID" 2>/dev/null | grep -qw 'weltgewebe-api'; then
-    ALIAS_FOUND=1
+if docker inspect --format '{{range .NetworkSettings.Networks}}{{println .Aliases}}{{end}}' "$API_CID" 2> /dev/null | grep -qw 'weltgewebe-api'; then
+  ALIAS_FOUND=1
 fi
 
 if [[ "$ALIAS_FOUND" == "1" ]]; then
-    echo "OK (via docker inspect)"
+  echo "OK (via docker inspect)"
 
-    # 2. Secondary check: Resolution inside container (Integration Test)
-    # Only run if getent is available.
-    if docker compose "${BASE_ARGS[@]}" exec -T api sh -c 'command -v getent >/dev/null 2>&1' >/dev/null 2>&1; then
-        if docker compose "${BASE_ARGS[@]}" exec -T api getent hosts weltgewebe-api >/dev/null 2>&1; then
-            echo "   (Resolution verified via getent)"
-        else
-            echo "WARNING: Alias configured, but 'getent hosts' failed inside container."
-        fi
-    fi
-else
-    # Output detailed diagnostics to stdout as requested, then generate failure bundle
-    echo "ERROR: DNS alias weltgewebe-api missing in container metadata."
-    echo "       This violates the integration contract."
-    echo "       Found aliases:"
-    docker inspect --format '{{range .NetworkSettings.Networks}}{{println .NetworkID}} {{println .Aliases}}{{end}}' "$API_CID" 2>/dev/null || echo "       (docker inspect failed)"
-    echo "Ensure 'aliases: [weltgewebe-api]' is set in compose."
-
-    # Contract is strict. Fail unless explicitly opted out.
-    if [[ "${ALLOW_UNSTABLE_API_DNS:-0}" == "1" ]]; then
-        echo "WARNING: Continuing due to ALLOW_UNSTABLE_API_DNS=1."
+  # 2. Secondary check: Resolution inside container (Integration Test)
+  # Only run if getent is available.
+  if docker compose "${BASE_ARGS[@]}" exec -T api sh -c 'command -v getent >/dev/null 2>&1' > /dev/null 2>&1; then
+    if docker compose "${BASE_ARGS[@]}" exec -T api getent hosts weltgewebe-api > /dev/null 2>&1; then
+      echo "   (Resolution verified via getent)"
     else
-        msg="DNS alias weltgewebe-api missing in container metadata. This violates the integration contract."
-        generate_failure_bundle "$msg"
-        exit 1
+      echo "WARNING: Alias configured, but 'getent hosts' failed inside container."
     fi
+  fi
+else
+  # Output detailed diagnostics to stdout as requested, then generate failure bundle
+  echo "ERROR: DNS alias weltgewebe-api missing in container metadata."
+  echo "       This violates the integration contract."
+  echo "       Found aliases:"
+  docker inspect --format '{{range .NetworkSettings.Networks}}{{println .NetworkID}} {{println .Aliases}}{{end}}' "$API_CID" 2> /dev/null || echo "       (docker inspect failed)"
+  echo "Ensure 'aliases: [weltgewebe-api]' is set in compose."
+
+  # Contract is strict. Fail unless explicitly opted out.
+  if [[ "${ALLOW_UNSTABLE_API_DNS:-0}" == "1" ]]; then
+    echo "WARNING: Continuing due to ALLOW_UNSTABLE_API_DNS=1."
+  else
+    msg="DNS alias weltgewebe-api missing in container metadata. This violates the integration contract."
+    generate_failure_bundle "$msg"
+    exit 1
+  fi
 fi
 
 echo
 echo ">> Guard 1: DNS Resolution..."
-if ! getent hosts api.weltgewebe.home.arpa >/dev/null 2>&1 || ! getent hosts weltgewebe.home.arpa >/dev/null 2>&1; then
-    msg="DNS Guard failed: api.weltgewebe.home.arpa or weltgewebe.home.arpa is not resolvable."
-    echo "ERROR: $msg"
-    generate_failure_bundle "$msg"
-    exit 1
+if ! getent hosts api.weltgewebe.home.arpa > /dev/null 2>&1 || ! getent hosts weltgewebe.home.arpa > /dev/null 2>&1; then
+  msg="DNS Guard failed: api.weltgewebe.home.arpa or weltgewebe.home.arpa is not resolvable."
+  echo "ERROR: $msg"
+  generate_failure_bundle "$msg"
+  exit 1
 else
-    echo "OK (resolvable)"
+  echo "OK (resolvable)"
 fi
 
 echo
 echo ">> Guard 2: Container Health (API internals)..."
-if ! docker compose "${BASE_ARGS[@]}" exec -T api wget -qO- http://localhost:8080/health/ready >/dev/null 2>&1; then
-    msg="Container Health Guard failed: wget to http://localhost:8080/health/ready inside api container returned an error."
-    echo "ERROR: $msg"
-    generate_failure_bundle "$msg"
-    exit 1
+if ! docker compose "${BASE_ARGS[@]}" exec -T api wget -qO- http://localhost:8080/health/ready > /dev/null 2>&1; then
+  msg="Container Health Guard failed: wget to http://localhost:8080/health/ready inside api container returned an error."
+  echo "ERROR: $msg"
+  generate_failure_bundle "$msg"
+  exit 1
 else
-    echo "OK (health endpoint reachable)"
+  echo "OK (health endpoint reachable)"
 fi
 
 echo
 if [[ ! -f "$EDGE_CA" ]]; then
-    msg="Edge CA certificate missing: $EDGE_CA. Edge routing checks require this certificate."
-    echo "ERROR: $msg"
-    generate_failure_bundle "$msg"
-    exit 1
+  msg="Edge CA certificate missing: $EDGE_CA. Edge routing checks require this certificate."
+  echo "ERROR: $msg"
+  generate_failure_bundle "$msg"
+  exit 1
 fi
 
 echo ">> Guard 3: Edge Routing..."
-if ! curl -fsS --cacert "$EDGE_CA" https://api.weltgewebe.home.arpa/health/ready >/dev/null 2>&1; then
-    msg="Edge Routing Guard failed: Could not reach API via Edge Route."
-    echo "ERROR: $msg"
-    generate_failure_bundle "$msg"
-    exit 1
+if ! curl -fsS --cacert "$EDGE_CA" https://api.weltgewebe.home.arpa/health/ready > /dev/null 2>&1; then
+  msg="Edge Routing Guard failed: Could not reach API via Edge Route."
+  echo "ERROR: $msg"
+  generate_failure_bundle "$msg"
+  exit 1
 else
-    echo "OK (health endpoint reachable)"
+  echo "OK (health endpoint reachable)"
 fi
 
 echo
 echo ">> Guard 4: Alias Route..."
-if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/api/health/ready >/dev/null 2>&1; then
-    msg="Alias Route Guard failed: Could not reach API via Alias Route."
-    echo "ERROR: $msg"
-    generate_failure_bundle "$msg"
-    exit 1
+if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/api/health/ready > /dev/null 2>&1; then
+  msg="Alias Route Guard failed: Could not reach API via Alias Route."
+  echo "ERROR: $msg"
+  generate_failure_bundle "$msg"
+  exit 1
 else
-    echo "OK (health endpoint reachable)"
+  echo "OK (health endpoint reachable)"
 fi
 
 echo
 
 echo ">> Check 4b: Sovereign Basemap Route (Advisory Infrastructure Readiness)..."
 if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
-    echo "   (Note: weltgewebe-up cannot deterministically read PUBLIC_BASEMAP_MODE; sovereign route check is advisory only.)"
-    if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/style.json >/dev/null 2>&1; then
-        msg="Sovereign Basemap Check skipped/failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). Sovereign infrastructure routing is incomplete."
-        echo "   [!] WARNING: $msg"
-        echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
-    else
-        echo "OK (sovereign style.json reachable)"
-    fi
+  echo "   (Note: weltgewebe-up cannot deterministically read PUBLIC_BASEMAP_MODE; sovereign route check is advisory only.)"
+  if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/style.json > /dev/null 2>&1; then
+    msg="Sovereign Basemap Check skipped/failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). Sovereign infrastructure routing is incomplete."
+    echo "   [!] WARNING: $msg"
+    echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
+  else
+    echo "OK (sovereign style.json reachable)"
+  fi
 
-    if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/basemap-hamburg.meta.json >/dev/null 2>&1; then
-        msg="Sovereign Basemap Check skipped/failed: Could not fetch basemap-hamburg.meta.json via Edge Route (/local-basemap/basemap-hamburg.meta.json). PMTiles artifact volume or route is missing."
-        echo "   [!] WARNING: $msg"
-        echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
-    else
-        echo "OK (sovereign basemap-hamburg.meta.json reachable)"
-    fi
-    echo "   (Note: This proves edge routing readiness, not E2E client usage)"
+  if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/basemap-hamburg.meta.json > /dev/null 2>&1; then
+    msg="Sovereign Basemap Check skipped/failed: Could not fetch basemap-hamburg.meta.json via Edge Route (/local-basemap/basemap-hamburg.meta.json). PMTiles artifact volume or route is missing."
+    echo "   [!] WARNING: $msg"
+    echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
+  else
+    echo "OK (sovereign basemap-hamburg.meta.json reachable)"
+  fi
+  echo "   (Note: This proves edge routing readiness, not E2E client usage)"
 fi
 echo
 echo ">> Guard 5: Frontend Reachability..."
 if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
-    # Explicitly verify HTTP 200 and the presence of SvelteKit structural elements like _app
-    HTML_OUT=$(mktemp)
-    HTTP_CODE=$(curl -s -o "$HTML_OUT" -w "%{http_code}" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map")
+  # Explicitly verify HTTP 200 and the presence of SvelteKit structural elements like _app
+  HTML_OUT=$(mktemp)
+  HTTP_CODE=$(curl -s -o "$HTML_OUT" -w "%{http_code}" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map")
 
-    if [[ "$HTTP_CODE" != "200" ]]; then
-        msg="Frontend Reachability Guard failed: HTTP 200 expected for /map. HTML not reachable. Got: $HTTP_CODE"
-        echo "ERROR: $msg"
-        generate_failure_bundle "$msg"
-        rm -f "$HTML_OUT"
-        exit 1
+  if [[ "$HTTP_CODE" != "200" ]]; then
+    msg="Frontend Reachability Guard failed: HTTP 200 expected for /map. HTML not reachable. Got: $HTTP_CODE"
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    rm -f "$HTML_OUT"
+    exit 1
+  fi
+
+  if ! grep -q "_app/" "$HTML_OUT"; then
+    msg="Frontend Reachability Guard failed: /map route is reachable (200), but HTML without expected '_app/' structure. Container mount may be stale or empty."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    rm -f "$HTML_OUT"
+    exit 1
+  fi
+
+  # Phase B: Verifizieren der HTML Cache-Header (revalidating)
+  HTML_HEADERS_OUT=$(mktemp)
+  if ! curl -s -I --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map" > "$HTML_HEADERS_OUT"; then
+    msg="Frontend Cache Guard failed: curl connection failed while checking HTML headers for /map."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
+    exit 1
+  fi
+  if ! grep -iq "Cache-Control:.*no-cache" "$HTML_HEADERS_OUT" || ! grep -iq "Cache-Control:.*must-revalidate" "$HTML_HEADERS_OUT"; then
+    msg="Frontend Cache Guard failed: /map route did not return 'no-cache, must-revalidate' header."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
+    exit 1
+  fi
+  rm -f "$HTML_HEADERS_OUT"
+  echo "OK (frontend route /map cache-control verified)"
+
+  # Extract one real asset path (e.g. an immutable JS or CSS file) and verify it
+  # We use a robust grep and head -n 1 to grab exactly one asset URL, allowing optional ./ prefix
+  ASSET_PATH=$(grep -oE '\.?/_app/immutable/[^"'\'' ]+\.(js|css|png|svg|webp|jpg|jpeg)' "$HTML_OUT" | head -n 1 || true)
+
+  if [[ -n "$ASSET_PATH" ]]; then
+    # Normalize: ensure path starts with a single slash (handle relative ./ cases)
+    ASSET_PATH_NORMALIZED="/${ASSET_PATH#./}"
+    ASSET_PATH_NORMALIZED="${ASSET_PATH_NORMALIZED//\/\//\/}"
+
+    ASSET_URL="https://weltgewebe.home.arpa${ASSET_PATH_NORMALIZED}"
+
+    # Verify asset reachability and Cache-Control headers (immutable)
+    ASSET_HEADERS_OUT=$(mktemp)
+    if ! ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -D "$ASSET_HEADERS_OUT" --cacert "$EDGE_CA" "$ASSET_URL"); then
+      msg="Frontend Asset Guard failed: curl connection failed while fetching asset $ASSET_PATH_NORMALIZED."
+      echo "ERROR: $msg"
+      generate_failure_bundle "$msg"
+      rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+      exit 1
     fi
 
-    if ! grep -q "_app/" "$HTML_OUT"; then
-        msg="Frontend Reachability Guard failed: /map route is reachable (200), but HTML without expected '_app/' structure. Container mount may be stale or empty."
-        echo "ERROR: $msg"
-        generate_failure_bundle "$msg"
-        rm -f "$HTML_OUT"
-        exit 1
+    if [[ "$ASSET_HTTP_CODE" != "200" ]]; then
+      msg="Frontend Asset Guard failed: HTML is present, but structural asset $ASSET_PATH_NORMALIZED is referenced and not reachable (HTTP $ASSET_HTTP_CODE)."
+      echo "ERROR: $msg"
+      generate_failure_bundle "$msg"
+      rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+      exit 1
     fi
 
-    # Phase B: Verifizieren der HTML Cache-Header (revalidating)
-    HTML_HEADERS_OUT=$(mktemp)
-    if ! curl -s -I --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map" > "$HTML_HEADERS_OUT"; then
-        msg="Frontend Cache Guard failed: curl connection failed while checking HTML headers for /map."
-        echo "ERROR: $msg"
-        generate_failure_bundle "$msg"
-        rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
-        exit 1
+    if ! grep -iq "Cache-Control:.*immutable" "$ASSET_HEADERS_OUT" || ! grep -iq "Cache-Control:.*max-age=31536000" "$ASSET_HEADERS_OUT"; then
+      msg="Frontend Cache Guard failed: Immutable asset $ASSET_PATH_NORMALIZED did not return 'max-age=31536000, immutable' header."
+      echo "ERROR: $msg"
+      generate_failure_bundle "$msg"
+      rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+      exit 1
     fi
-    if ! grep -iq "Cache-Control:.*no-cache" "$HTML_HEADERS_OUT" || ! grep -iq "Cache-Control:.*must-revalidate" "$HTML_HEADERS_OUT"; then
-        msg="Frontend Cache Guard failed: /map route did not return 'no-cache, must-revalidate' header."
-        echo "ERROR: $msg"
-        generate_failure_bundle "$msg"
-        rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
-        exit 1
-    fi
-    rm -f "$HTML_HEADERS_OUT"
-    echo "OK (frontend route /map cache-control verified)"
+    rm -f "$ASSET_HEADERS_OUT"
 
-    # Extract one real asset path (e.g. an immutable JS or CSS file) and verify it
-    # We use a robust grep and head -n 1 to grab exactly one asset URL, allowing optional ./ prefix
-    ASSET_PATH=$(grep -oE '\.?/_app/immutable/[^"'\'' ]+\.(js|css|png|svg|webp|jpg|jpeg)' "$HTML_OUT" | head -n 1 || true)
+    echo "OK (frontend route /map reachable and structural asset $ASSET_PATH_NORMALIZED verified with immutable cache headers)"
+  else
+    # Fallback if the regex fails but _app/ is present (e.g. dev mode or different build structure)
+    echo "OK (frontend route /map reachable and structurally valid, but no specific immutable asset matched for deep check)"
+  fi
 
-    if [[ -n "$ASSET_PATH" ]]; then
-        # Normalize: ensure path starts with a single slash (handle relative ./ cases)
-        ASSET_PATH_NORMALIZED="/${ASSET_PATH#./}"
-        ASSET_PATH_NORMALIZED="${ASSET_PATH_NORMALIZED//\/\//\/}"
-
-        ASSET_URL="https://weltgewebe.home.arpa${ASSET_PATH_NORMALIZED}"
-
-        # Verify asset reachability and Cache-Control headers (immutable)
-        ASSET_HEADERS_OUT=$(mktemp)
-        if ! ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -D "$ASSET_HEADERS_OUT" --cacert "$EDGE_CA" "$ASSET_URL"); then
-            msg="Frontend Asset Guard failed: curl connection failed while fetching asset $ASSET_PATH_NORMALIZED."
-            echo "ERROR: $msg"
-            generate_failure_bundle "$msg"
-            rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
-            exit 1
-        fi
-
-        if [[ "$ASSET_HTTP_CODE" != "200" ]]; then
-            msg="Frontend Asset Guard failed: HTML is present, but structural asset $ASSET_PATH_NORMALIZED is referenced and not reachable (HTTP $ASSET_HTTP_CODE)."
-            echo "ERROR: $msg"
-            generate_failure_bundle "$msg"
-            rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
-            exit 1
-        fi
-
-        if ! grep -iq "Cache-Control:.*immutable" "$ASSET_HEADERS_OUT" || ! grep -iq "Cache-Control:.*max-age=31536000" "$ASSET_HEADERS_OUT"; then
-            msg="Frontend Cache Guard failed: Immutable asset $ASSET_PATH_NORMALIZED did not return 'max-age=31536000, immutable' header."
-            echo "ERROR: $msg"
-            generate_failure_bundle "$msg"
-            rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
-            exit 1
-        fi
-        rm -f "$ASSET_HEADERS_OUT"
-
-        echo "OK (frontend route /map reachable and structural asset $ASSET_PATH_NORMALIZED verified with immutable cache headers)"
-    else
-        # Fallback if the regex fails but _app/ is present (e.g. dev mode or different build structure)
-        echo "OK (frontend route /map reachable and structurally valid, but no specific immutable asset matched for deep check)"
-    fi
-
-    # Phase B: Verifizieren der maschinenlesbaren Build-ID (version.json)
-    # This is a hard guard: version.json is the deploy contract.
-    VERSION_OUT=$(mktemp)
-    VERSION_HEADERS_OUT=$(mktemp)
-    if ! VERSION_HTTP_CODE=$(curl -s -w "%{http_code}" -o "$VERSION_OUT" -D "$VERSION_HEADERS_OUT" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" 2>/dev/null); then
-        msg="Frontend Guard failed: curl connection failed while fetching /_app/version.json."
-        echo "ERROR: $msg"
-        generate_failure_bundle "$msg"
-        rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
-        exit 1
-    elif [[ "$VERSION_HTTP_CODE" == "200" ]]; then
-        # Check for Cache-Control: no-store
-        if ! grep -iq "Cache-Control:.*no-store" "$VERSION_HEADERS_OUT"; then
-            msg="Frontend Guard failed: /_app/version.json did not return 'no-store' header."
-            echo "ERROR: $msg"
-            generate_failure_bundle "$msg"
-            rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
-            exit 1
-        fi
-
-        # Robust parsing: ensure JSON is strictly parsable and contains canonical version
-        VERSION_PARSED_OUT=$(mktemp)
-        if python3 "$REPO_DIR/scripts/lib/parse-version-json.py" \
-                "$VERSION_OUT" > "$VERSION_PARSED_OUT" 2>/dev/null; then
-            PY_STATUS=0
-        else
-            PY_STATUS=$?
-        fi
-
-        if [ "$PY_STATUS" -ne 0 ]; then
-            if [ "$PY_STATUS" -eq 3 ]; then
-                msg="Frontend Guard failed: /_app/version.json is not valid JSON."
-            elif [ "$PY_STATUS" -eq 2 ]; then
-                msg="Frontend Guard failed: /_app/version.json missing valid canonical 'version' field."
-            else
-                msg="Frontend Guard failed: /_app/version.json parsing failed unexpectedly."
-            fi
-            echo "ERROR: $msg"
-            generate_failure_bundle "$msg"
-            rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT" "$VERSION_PARSED_OUT"
-            exit 1
-        fi
-
-        BUILD_VERSION=$(sed -n '1p' "$VERSION_PARSED_OUT")
-        BUILD_ID=$(sed -n '2p' "$VERSION_PARSED_OUT")
-        BUILD_COMMIT=$(sed -n '3p' "$VERSION_PARSED_OUT")
-        rm -f "$VERSION_PARSED_OUT"
-
-        if [[ "$CURRENT_SHORT_SHA" != "unknown" && "$BUILD_VERSION" != "$CURRENT_SHORT_SHA" ]]; then
-            _vctx=$(mktemp)
-            {
-                echo "live_version: $BUILD_VERSION"
-                echo "expected_short_sha: $CURRENT_SHORT_SHA"
-                [[ -n "$BUILD_ID" ]] && echo "build_id: $BUILD_ID"
-                [[ -n "$BUILD_COMMIT" ]] && echo "commit: $BUILD_COMMIT"
-                echo "---"
-                echo "version_json_body:"
-                cat "$VERSION_OUT" 2>/dev/null || true
-                echo "---"
-                echo "version_response_headers:"
-                cat "$VERSION_HEADERS_OUT" 2>/dev/null || true
-            } > "$_vctx"
-            msg="Frontend Guard failed: /_app/version.json is stale: version $BUILD_VERSION, expected $CURRENT_SHORT_SHA."
-            echo "ERROR: $msg"
-            generate_failure_bundle "$msg" "" "$_vctx"
-            rm -f "$_vctx" "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
-            exit 1
-        fi
-
-        if [[ -n "$BUILD_ID" && "$BUILD_ID" != "$BUILD_VERSION" ]]; then
-            echo "OK (Version: $BUILD_VERSION, Build-ID: $BUILD_ID verified via /_app/version.json with no-store)"
-        else
-            echo "OK (Version: $BUILD_VERSION verified via /_app/version.json with no-store)"
-        fi
-    else
-        msg="Frontend Guard failed: /_app/version.json not reachable (HTTP $VERSION_HTTP_CODE)."
-        echo "ERROR: $msg"
-        generate_failure_bundle "$msg"
-        rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
-        exit 1
-    fi
-
+  # Phase B: Verifizieren der maschinenlesbaren Build-ID (version.json)
+  # This is a hard guard: version.json is the deploy contract.
+  VERSION_OUT=$(mktemp)
+  VERSION_HEADERS_OUT=$(mktemp)
+  if ! VERSION_HTTP_CODE=$(curl -s -w "%{http_code}" -o "$VERSION_OUT" -D "$VERSION_HEADERS_OUT" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" 2> /dev/null); then
+    msg="Frontend Guard failed: curl connection failed while fetching /_app/version.json."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
     rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
+    exit 1
+  elif [[ "$VERSION_HTTP_CODE" == "200" ]]; then
+    # Check for Cache-Control: no-store
+    if ! grep -iq "Cache-Control:.*no-store" "$VERSION_HEADERS_OUT"; then
+      msg="Frontend Guard failed: /_app/version.json did not return 'no-store' header."
+      echo "ERROR: $msg"
+      generate_failure_bundle "$msg"
+      rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
+      exit 1
+    fi
+
+    # Robust parsing: ensure JSON is strictly parsable and contains canonical version
+    VERSION_PARSED_OUT=$(mktemp)
+    if python3 "$REPO_DIR/scripts/lib/parse-version-json.py" \
+      "$VERSION_OUT" > "$VERSION_PARSED_OUT" 2> /dev/null; then
+      PY_STATUS=0
+    else
+      PY_STATUS=$?
+    fi
+
+    if [ "$PY_STATUS" -ne 0 ]; then
+      if [ "$PY_STATUS" -eq 3 ]; then
+        msg="Frontend Guard failed: /_app/version.json is not valid JSON."
+      elif [ "$PY_STATUS" -eq 2 ]; then
+        msg="Frontend Guard failed: /_app/version.json missing valid canonical 'version' field."
+      else
+        msg="Frontend Guard failed: /_app/version.json parsing failed unexpectedly."
+      fi
+      echo "ERROR: $msg"
+      generate_failure_bundle "$msg"
+      rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT" "$VERSION_PARSED_OUT"
+      exit 1
+    fi
+
+    BUILD_VERSION=$(sed -n '1p' "$VERSION_PARSED_OUT")
+    BUILD_ID=$(sed -n '2p' "$VERSION_PARSED_OUT")
+    BUILD_COMMIT=$(sed -n '3p' "$VERSION_PARSED_OUT")
+    rm -f "$VERSION_PARSED_OUT"
+
+    if [[ "$CURRENT_SHORT_SHA" != "unknown" && "$BUILD_VERSION" != "$CURRENT_SHORT_SHA" ]]; then
+      _vctx=$(mktemp)
+      {
+        echo "live_version: $BUILD_VERSION"
+        echo "expected_short_sha: $CURRENT_SHORT_SHA"
+        [[ -n "$BUILD_ID" ]] && echo "build_id: $BUILD_ID"
+        [[ -n "$BUILD_COMMIT" ]] && echo "commit: $BUILD_COMMIT"
+        echo "---"
+        echo "version_json_body:"
+        cat "$VERSION_OUT" 2> /dev/null || true
+        echo "---"
+        echo "version_response_headers:"
+        cat "$VERSION_HEADERS_OUT" 2> /dev/null || true
+      } > "$_vctx"
+      msg="Frontend Guard failed: /_app/version.json is stale: version $BUILD_VERSION, expected $CURRENT_SHORT_SHA."
+      echo "ERROR: $msg"
+      generate_failure_bundle "$msg" "" "$_vctx"
+      rm -f "$_vctx" "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
+      exit 1
+    fi
+
+    if [[ -n "$BUILD_ID" && "$BUILD_ID" != "$BUILD_VERSION" ]]; then
+      echo "OK (Version: $BUILD_VERSION, Build-ID: $BUILD_ID verified via /_app/version.json with no-store)"
+    else
+      echo "OK (Version: $BUILD_VERSION verified via /_app/version.json with no-store)"
+    fi
+  else
+    msg="Frontend Guard failed: /_app/version.json not reachable (HTTP $VERSION_HTTP_CODE)."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
+    exit 1
+  fi
+
+  rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
 else
-    echo "   Skipped (Frontend not required for this deploy run)."
+  echo "   Skipped (Frontend not required for this deploy run)."
 fi
 
 # 8. Update State (Post-Health)
 if [[ "$CURRENT_HEAD" != "unknown" ]]; then
-    # Ensure directory exists just in case (e.g. if custom path changed during run)
-    mkdir -p "$(dirname "$STATE_FILE")"
-    echo "$CURRENT_HEAD" > "$STATE_FILE"
-    echo ">> State updated: $CURRENT_HEAD"
+  # Ensure directory exists just in case (e.g. if custom path changed during run)
+  mkdir -p "$(dirname "$STATE_FILE")"
+  echo "$CURRENT_HEAD" > "$STATE_FILE"
+  echo ">> State updated: $CURRENT_HEAD"
 fi
 
 # 9. Snapshot
