@@ -3,7 +3,7 @@ id: docs.reference.generated-artifact-control
 title: "Generated Artifact Control"
 doc_type: reference
 status: active
-summary: "Maschinenlesbarer Minimalvertrag für zwei generierte Diagnoseartefakte und den kuratierten Task-Index."
+summary: "Maschinenlesbarer Kontrollvertrag für alle docs/_generated/*-Diagnosen und den kuratierten Task-Index."
 relations:
   - type: relates_to
     target: docs/blueprints/blueprint-agent-safety-control-layer.md
@@ -13,33 +13,39 @@ relations:
 
 ## Zweck
 
-`.wgx/generated-artifacts.yml` beschreibt den ersten blockierenden
-Kontrollumfang für besonders sensible Dokumentationsartefakte. Der Vertrag
+`.wgx/generated-artifacts.yml` beschreibt den blockierenden
+Kontrollumfang für generierte Dokumentationsdiagnosen und den kuratierten Task-Index. Der Vertrag
 benennt für jedes Artefakt seine Rolle, Kanonizität, Quellen sowie die
 zulässigen Generator- und Prüfkommandos.
 
 Der Kontrollvertrag macht abgeleitete Dateien nicht zur Wahrheit. Er stellt nur
-sicher, dass ihre Herkunft und ihre Driftprüfung maschinenlesbar und
+sicher, dass ihre Herkunft und ihre Kontrollfläche maschinenlesbar und
 reproduzierbar sind.
 
-## Minimaler Umfang
+## Kontrollumfang
 
-| Pfad | Art | Kanonizität | Kontrolle |
-|---|---|---|---|
-| `docs/_generated/agent-readiness.md` | generated | derived | Generator und schreibfreier `--check` |
-| `docs/_generated/claim-evidence-map.md` | generated | derived | Generator und schreibfreier `--check` |
-| `docs/tasks/index.json` | curated_index | canonical | Schema- und Cross-Artifact-Driftprüfung |
+Der Vollausbau umfasst alle aktuell getrackten Dateien unter
+`docs/_generated/*.md` sowie `docs/tasks/index.json`.
 
-Der kontrollierte Claim-Pfad ist
-`docs/_generated/claim-evidence-map.md`. Ein JSON-Begleitartefakt gehört nicht
-zum Minimalumfang dieses Slices.
+Die erwartete `docs/_generated/*`-Oberfläche wird nicht mehr in
+`scripts/docmeta/generated-files-guard.sh` dupliziert. Der Validator gleicht
+stattdessen drei Flächen ab:
+
+1. reale Dateien in `docs/_generated/*.md`,
+2. Einträge in `.wgx/generated-artifacts.yml`,
+3. `repo.meta.yaml.generated_artifacts`.
+
+Damit entsteht eine einzige prüfbare Manifestfläche; `repo.meta.yaml` bleibt
+weiter sichtbar, darf aber nicht still davon abweichen.
 
 ## Generated und Curated Index
 
-Ein `generated`-Artefakt wird vollständig aus deklarierten Quellen erzeugt. Es
-muss einen repository-eigenen Generator und mindestens einen schreibfreien
-Check besitzen. Direkte Inhaltsänderungen scheitern, sobald der Check den
-committeten Inhalt mit der deterministisch berechneten Ausgabe vergleicht.
+Ein `generated`-Artefakt wird aus deklarierten Quellen erzeugt. Es muss einen
+repository-eigenen Generator besitzen. Wo der Generator einen schreibfreien
+`--check` anbietet, nutzt das Manifest diesen direkten Driftcheck. Ältere
+Generatoren ohne schreibfreien Einzelcheck bleiben trotzdem kontrolliert:
+Manifest-Coverage, `repo.meta.yaml`-Abgleich, Quellenvalidierung,
+Generator-Whitelist, Marker- und Frontmatter-Prüfung laufen blockierend.
 
 `docs/tasks/index.json` ist dagegen kein Generator-Output. Es ist die
 maschinenlesbare, kuratierte Task-Control-Quelle. Deshalb behauptet das Manifest
@@ -68,10 +74,13 @@ damit über `make validate-guards` ausgeführt.
 
 Der Validator blockiert unter anderem:
 
-- fehlende oder doppelte kritische Artefakte,
+- fehlende oder doppelte Artefakte,
+- reale `docs/_generated/*.md`-Dateien ohne Manifest-Eintrag,
+- Manifest-Einträge, die nicht zu `repo.meta.yaml.generated_artifacts` passen,
 - unbekannte Manifestfelder,
 - absolute Pfade, Parent-Traversal und Symlinks,
 - fehlende Quellen oder repository-fremde Prüfkommandos,
+- nicht geprüfte Shell-Kommandos außerhalb `scripts/docmeta/generate-*.sh`,
 - Generated-Artefakte ohne `derived`-Kanonizität,
 - einen fälschlich deklarierten Generator für den kuratierten Task-Index,
 - fehlende `commit_required`- oder `blocking`-Flags,
@@ -79,7 +88,8 @@ Der Validator blockiert unter anderem:
 
 ## Grenzen
 
-Der Kontrollvertrag beweist weder fachliche Richtigkeit noch Vollständigkeit
-der generierten Inhalte. Er attestiert keine Claims und ersetzt keine Reviews.
-Eine spätere Vollausbaustufe kann weitere Dateien aufnehmen; eine Erweiterung
-des Minimalumfangs ist bis dahin absichtlich blockiert.
+Der Kontrollvertrag beweist weder fachliche Richtigkeit noch Vollständigkeit der
+generierten Inhalte. Er attestiert keine Claims und ersetzt keine Reviews. Für
+Generatoren ohne schreibfreien Einzelcheck beweist der Vertrag zunächst die
+registrierte Kontrollfläche, nicht die inhaltliche Deterministik jedes einzelnen
+Outputs.

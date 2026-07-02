@@ -11,33 +11,10 @@ if [ ! -d "docs/_generated" ]; then
   FAIL=1
 fi
 
-REQUIRED_FILES=(
-  "doc-index.md"
-  "system-map.md"
-  "backlinks.md"
-  "impl-index.md"
-  "orphans.md"
-  "supersession-map.md"
-  "architecture-drift.md"
-  "doc-coverage.md"
-  "knowledge-gaps.md"
-  "implicit-dependencies.md"
-  "change-resonance.md"
-  "staleness-report.md"
-  "agent-readiness.md"
-  "claim-evidence-map.md"
-  "relates-to-audit.md"
-  "relations-analysis.md"
-  "report-lifecycle-inventory.md"
-  "report-lifecycle.md"
-)
-
-for req in "${REQUIRED_FILES[@]}"; do
-  if [ ! -f "docs/_generated/$req" ]; then
-    echo "ERROR: Missing expected generated file docs/_generated/$req"
-    FAIL=1
-  fi
-done
+# The expected generated-file surface is now declared in
+# .wgx/generated-artifacts.yml and cross-checked against repo.meta.yaml by
+# scripts.docmeta.validate_generated_artifacts. Keep this shell guard focused
+# on lightweight file-shape checks; do not duplicate the file list here.
 
 for file in docs/_generated/*.md; do
   if [ -f "$file" ]; then
