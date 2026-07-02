@@ -1,18 +1,19 @@
-# Retries & Timeouts
-max_redirects = 5
-timeout = 10
-retry_wait_time = 2
-retry_count = 2
+# Active lychee configuration for GitHub Actions link checks.
+# Workflows pass --config .lychee.toml and may still add per-job CLI flags.
 
-# Private/temporäre Hosts ignorieren (Beispiele)
+max_redirects = 5
+max_retries = 3
+max_concurrency = 3
+timeout = 20
+retry_wait_time = 3
+user_agent = "heimgewebe-ci-lychee"
+
 exclude = [
-  "localhost",
-  "127.0.0.1",
-  "0.0.0.0"
+  "https?://(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0)(:\\d+)?(/.*)?"
 ]
 
-# Pfade: node_modules & Git-Ordner ausnehmen
 exclude_path = [
   "node_modules",
+  "dist",
   ".git"
 ]
