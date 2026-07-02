@@ -46,7 +46,6 @@ discovery_roots:
   - infra/
   - policies/
   - scripts/
-  - src/
   - tools/
 
 generated_artifacts:
@@ -63,6 +62,11 @@ generated_artifacts:
   - docs/_generated/change-resonance.md
   - docs/_generated/staleness-report.md
   - docs/_generated/agent-readiness.md
+  - docs/_generated/claim-evidence-map.md
+  - docs/_generated/relates-to-audit.md
+  - docs/_generated/relations-analysis.md
+  - docs/_generated/report-lifecycle.md
+  - docs/_generated/report-lifecycle-inventory.md
 
 safe_read_paths:
   - README.md
@@ -85,6 +89,7 @@ required_checks:
   - repo-structure-guard
   - docs-relations-guard
   - generated-files-guard
+  - coverage-guard
 
 indexing:
   enabled: true

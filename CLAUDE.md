@@ -79,7 +79,7 @@ change.
 | Layer | Technology |
 |---|---|
 | Frontend | SvelteKit 2 / Svelte 5 (TypeScript, static adapter) |
-| Backend | Rust / Axum 0.7 (async, tokio) |
+| Backend | Rust / Axum 0.8 (async, tokio) |
 | Database | PostgreSQL 16 + PgBouncer 1.20 |
 | Messaging | NATS JetStream (optional, Gate C) |
 | Proxy | Caddy |
@@ -129,7 +129,6 @@ just check           # Hygiene: fmt + clippy + test + contracts + cargo-deny
 just lint            # Lint shell scripts (bash -n, shfmt, shellcheck)
 just db-wait         # Wait for Postgres readiness
 just db-migrate      # Run database migrations
-just seed            # Seed initial data
 just contracts-domain-check  # Validate JSON Schema contracts
 just demo-data       # Generate demo data (if not present)
 just serve-demo      # Start demo API server (PORT=8080 default)
@@ -180,7 +179,6 @@ Copy `.env.example` to `.env` for local development. Key variables:
 ```bash
 NODE_ENV=development
 RUST_LOG=info
-WEB_PORT=5173
 API_BIND=0.0.0.0:8080
 AUTH_DEV_LOGIN=0
 AUTH_COOKIE_SECURE=1

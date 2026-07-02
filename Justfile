@@ -98,8 +98,9 @@ proof-auth-session-sqlx-direct:    # run ignored SQLx direct-Postgres session CR
 	fi
 	DATABASE_URL="${PG_DIRECT_URL}" PG_DIRECT_URL="${PG_DIRECT_URL}" cargo test --locked -p weltgewebe-api --test sqlx_postgres_direct_session_crud -- --include-ignored
 
-seed:          # seed database with initial data
-	cargo run -p api -- seed
+# Hinweis: Ein API-seitiger `seed`-Subcommand existiert nicht.
+# Für Demo-Daten: `just demo-data`; für den ersten echten Account:
+# `just bootstrap-first-account` (siehe Abschnitt "Real seed" unten).
 
 # Lokaler Helper: Schnelltests & Linter – sicher mit Null-Trennung und Quoting
 lint:

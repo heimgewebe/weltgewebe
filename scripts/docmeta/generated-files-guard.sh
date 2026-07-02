@@ -26,6 +26,8 @@ REQUIRED_FILES=(
     "staleness-report.md"
     "agent-readiness.md"
     "claim-evidence-map.md"
+    "relates-to-audit.md"
+    "relations-analysis.md"
     "report-lifecycle-inventory.md"
     "report-lifecycle.md"
 )

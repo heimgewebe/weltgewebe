@@ -208,7 +208,11 @@ jobs:
       - name: Install cargo-deny
         run: |
           set -euo pipefail
-          DENY_VERSION="0.18.8"
+          # DENY_VERSION kommt aus toolchain.versions.yml (Step "Read toolchain versions").
+          if [ -z "${DENY_VERSION:-}" ]; then
+            echo "DENY_VERSION is not set (expected from toolchain.versions.yml)" >&2
+            exit 1
+          fi
           DENY_DIR="$HOME/.local/bin"
           DENY_BIN="$DENY_DIR/cargo-deny"
           mkdir -p "$DENY_DIR"
