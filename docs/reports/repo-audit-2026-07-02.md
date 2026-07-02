@@ -12,8 +12,8 @@ created: 2026-07-02
 lang: de
 summary: >
   Komplettaudit des Repositories (Code, CI, Meta-Dateien, Dokumentation):
-  alle automatisierten Checks grün; zwölf belegte Hygiene-/Konsistenzbefunde,
-  davon elf im zugehörigen PR behoben; vier Restarbeiten unter REPO-AUDIT-001.
+  alle automatisierten Checks grün; dreizehn belegte Hygiene-/Konsistenzbefunde,
+  davon neun im zugehörigen PR behoben; vier Restarbeiten unter REPO-AUDIT-001.
 relations:
   - type: relates_to
     target: docs/reports/optimierungsstatus.md
