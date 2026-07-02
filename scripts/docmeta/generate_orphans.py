@@ -7,10 +7,12 @@ Output: docs/_generated/orphans.md
 """
 
 import os
+import argparse
 import sys
 from collections import defaultdict
 
 from scripts.docmeta.docmeta import REPO_ROOT
+from scripts.docmeta.generated_check import write_or_check
 from scripts.docmeta.relations_parser import collect_file_relations
 
 OUT_FILE = os.path.join(REPO_ROOT, "docs", "_generated", "orphans.md")
@@ -31,8 +33,7 @@ Generated automatically. Do not edit.
 """
 
 
-def generate_orphans():
-    os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
+def render_orphans() -> str:
 
     file_relations = collect_file_relations(["docs"], REPO_ROOT)
 
@@ -61,16 +62,30 @@ def generate_orphans():
         if not is_targeted and not has_outgoing:
             orphans.append(file_path)
 
-    with open(OUT_FILE, "w", encoding="utf-8") as f:
-        f.write(HEADER)
-        if not orphans:
-            f.write("_No orphans found._\n")
-        else:
-            for o in sorted(orphans):
-                f.write(f"- {o}\n")
+    if not orphans:
+        body = "_No orphans found._\n"
+    else:
+        body = "".join(f"- {o}\n" for o in sorted(orphans))
+    return HEADER + body
 
-    print(f"Generated {os.path.relpath(OUT_FILE, REPO_ROOT)}")
+
+def generate_orphans() -> None:
+    rc = write_or_check(OUT_FILE, render_orphans(), label=os.path.relpath(OUT_FILE, REPO_ROOT))
+    if rc:
+        raise SystemExit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="compare output without rewriting it")
+    args = parser.parse_args(argv)
+    return write_or_check(
+        OUT_FILE,
+        render_orphans(),
+        check=args.check,
+        label=os.path.relpath(OUT_FILE, REPO_ROOT),
+    )
 
 
 if __name__ == "__main__":
-    generate_orphans()
+    sys.exit(main())

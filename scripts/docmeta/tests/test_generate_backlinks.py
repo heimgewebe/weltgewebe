@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 
 import scripts.docmeta.generate_backlinks as gen
 
@@ -14,15 +14,7 @@ class TestGenerateBacklinks(unittest.TestCase):
             "docs/source_C.md": [{"type": "implements", "target": "docs/target_Y.md"}],
         }
 
-        m_open = mock_open()
-        with patch('scripts.docmeta.generate_backlinks.open', m_open):
-            # Temporarily redirect stdout to suppress print
-            with patch('sys.stdout'):
-                gen.generate_backlinks()
-
-        # Reconstruct exactly what was written to the file
-        written_chunks = [call[0][0] for call in m_open().write.call_args_list]
-        full_content = "".join(written_chunks)
+        full_content = gen.render_backlinks()
 
         # Basic format checks
         self.assertIn("## docs/target_X.md\n\n- ", full_content, "Must have a blank line after heading")

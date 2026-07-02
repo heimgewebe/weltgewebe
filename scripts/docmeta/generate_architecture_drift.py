@@ -1,26 +1,40 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
 import os
 import sys
 from scripts.docmeta.docmeta import REPO_ROOT
+from scripts.docmeta.generated_check import write_or_check
 
-out_file = os.path.join(REPO_ROOT, "docs", "_generated", "architecture-drift.md")
-os.makedirs(os.path.dirname(out_file), exist_ok=True)
+OUT_FILE = os.path.join(REPO_ROOT, "docs", "_generated", "architecture-drift.md")
 
-try:
-    with open(out_file, "w", encoding="utf-8") as f:
-        f.write("---\n")
-        f.write("id: docs.generated.architecture-drift\n")
-        f.write("title: Architecture Drift\n")
-        f.write("doc_type: generated\n")
-        f.write("status: active\n")
-        f.write("summary: Automatisch generierter Report über Architektur-Drift.\n")
-        f.write("---\n\n")
-        f.write("## Weltgewebe Architecture Drift\n\n")
-        f.write("Generated automatically. Do not edit.\n\n")
-        f.write("> (Heuristic placeholder: comparing implementation roots and documented structure)\n\n")
-        f.write("- **No significant drift detected.**\n")
 
-    print(f"Generated {out_file}")
-except Exception as e:
-    print(f"Error generating architecture drift: {e}", file=sys.stderr)
-    sys.exit(1)
+def render() -> str:
+    return """---
+id: docs.generated.architecture-drift
+title: Architecture Drift
+doc_type: generated
+status: active
+summary: Automatisch generierter Report über Architektur-Drift.
+---
+
+## Weltgewebe Architecture Drift
+
+Generated automatically. Do not edit.
+
+> (Heuristic placeholder: comparing implementation roots and documented structure)
+
+- **No significant drift detected.**
+"""
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="compare output without rewriting it")
+    args = parser.parse_args(argv)
+    return write_or_check(OUT_FILE, render(), check=args.check, label=os.path.relpath(OUT_FILE, REPO_ROOT))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

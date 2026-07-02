@@ -7,9 +7,11 @@ Output: docs/_generated/supersession-map.md
 """
 
 import os
+import argparse
 import sys
 
 from scripts.docmeta.docmeta import REPO_ROOT
+from scripts.docmeta.generated_check import write_or_check
 from scripts.docmeta.relations_parser import collect_file_relations
 
 OUT_FILE = os.path.join(REPO_ROOT, "docs", "_generated", "supersession-map.md")
@@ -30,8 +32,7 @@ Generated automatically. Do not edit.
 """
 
 
-def generate_supersession_map():
-    os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
+def render_supersession_map() -> str:
 
     file_relations = collect_file_relations(["docs"], REPO_ROOT)
 
@@ -44,16 +45,33 @@ def generate_supersession_map():
                 if rel_type == "supersedes" and target:
                     supersession_relations.append((target, source_path))
 
-    with open(OUT_FILE, "w", encoding="utf-8") as f:
-        f.write(HEADER)
-        if not supersession_relations:
-            f.write("_No supersession relations found._\n")
-        else:
-            for old_doc, new_doc in sorted(supersession_relations):
-                f.write(f"- {old_doc} → superseded by → {new_doc}\n")
+    if not supersession_relations:
+        body = "_No supersession relations found._\n"
+    else:
+        body = "".join(
+            f"- {old_doc} → superseded by → {new_doc}\n"
+            for old_doc, new_doc in sorted(supersession_relations)
+        )
+    return HEADER + body
 
-    print(f"Generated {os.path.relpath(OUT_FILE, REPO_ROOT)}")
+
+def generate_supersession_map() -> None:
+    rc = write_or_check(OUT_FILE, render_supersession_map(), label=os.path.relpath(OUT_FILE, REPO_ROOT))
+    if rc:
+        raise SystemExit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="compare output without rewriting it")
+    args = parser.parse_args(argv)
+    return write_or_check(
+        OUT_FILE,
+        render_supersession_map(),
+        check=args.check,
+        label=os.path.relpath(OUT_FILE, REPO_ROOT),
+    )
 
 
 if __name__ == "__main__":
-    generate_supersession_map()
+    sys.exit(main())

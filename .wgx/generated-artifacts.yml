@@ -43,7 +43,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_architecture_drift",
+          "--check"
         ]
       ],
       "sources": [
@@ -67,7 +68,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_backlinks",
+          "--check"
         ]
       ],
       "sources": [
@@ -91,7 +93,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_change_resonance",
+          "--check"
         ]
       ],
       "sources": [
@@ -142,7 +145,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_doc_coverage",
+          "--check"
         ]
       ],
       "sources": [
@@ -189,7 +193,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_implicit_dependencies",
+          "--check"
         ]
       ],
       "sources": [
@@ -238,7 +243,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_knowledge_gaps",
+          "--check"
         ]
       ],
       "sources": [
@@ -262,7 +268,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_orphans",
+          "--check"
         ]
       ],
       "sources": [
@@ -383,7 +390,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_staleness_report",
+          "--check"
         ]
       ],
       "sources": [
@@ -407,7 +415,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_supersession_map",
+          "--check"
         ]
       ],
       "sources": [
