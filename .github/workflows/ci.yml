@@ -55,6 +55,7 @@ jobs:
               - '**/*.bash'
               - 'Justfile'
               - 'scripts/tools/list-shell-files.py'
+              - 'scripts/**'
             heavy:
               - '.github/workflows/*.yml'
               - '.github/workflows/*.yaml'
