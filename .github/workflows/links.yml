@@ -5,6 +5,7 @@ name: links
     - cron: "0 4 * * *"
   workflow_dispatch:
   # Link checks on pull requests are handled in the central CI.
+  # R-12 keeps lychee options explicit.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
