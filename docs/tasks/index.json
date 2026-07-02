@@ -1510,7 +1510,7 @@
     },
     {
       "id": "REPO-AUDIT-001",
-      "title": "Repo-Komplettaudit 2026-07-02: Restarbeiten (R-10/R-13)",
+      "title": "Repo-Komplettaudit 2026-07-02: Restarbeit (R-13)",
       "area": "ci",
       "status": "partial",
       "priority": "medium",
@@ -1530,14 +1530,13 @@
         "CLAUDE.md",
         ".env.example",
         "scripts/guard/auth-rate-limit-runtime-smoke.sh",
-        "scripts/guard_api_alias.sh"
+        "scripts/guard_api_alias.sh",
+        "scripts/docmeta/tests/test_validate_opt_arc_001_db_proof_matrix.py"
       ],
       "missing_evidence": [
-        "Shallow-Clone-Hinweis in scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py (R-10)",
         "Gruener workflow_dispatch-Lauf des heavy.yml-e2e-Jobs nach pnpm-Setup-Fix (R-13)"
       ],
       "acceptance": [
-        "R-10: OPT-ARC-001-Validator meldet bei Shallow-Clone einen erklaerenden Hinweis statt eines nackten Commit-Fehlers",
         "R-13: heavy.yml-e2e-Job hat einen gruenen Dispatch-Lauf als Laufzeit-Beweis des Setup-Fixes"
       ],
       "links": {

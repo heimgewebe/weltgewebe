@@ -838,6 +838,13 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
             with self.assertRaisesRegex(guard.GitFreshnessError, "fatal: invalid object"):
                 guard._git_commit_is_ancestor_of_head(self.root, "a" * 40)
 
+    def test_git_history_fetch_hint_detects_shallow_repo(self):
+        result = unittest.mock.Mock(returncode=0, stdout="true\n", stderr="")
+        with unittest.mock.patch.object(guard, "_run_git", return_value=result):
+            hint = guard._git_history_fetch_hint(self.root)
+        self.assertIn("Repository is shallow", hint)
+        self.assertIn("fetch-depth: 0", hint)
+
     def test_ci_proven_missing_evidence_commit_fails(self):
         matrix = _valid_matrix()
         matrix["proofs"][0]["state"] = "ci_proven"
@@ -853,6 +860,8 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
             errors = guard.validate(self.root)
         self.assertTrue(any("ci_evidence commit" in error for error in errors), errors)
         self.assertTrue(any("not found" in error for error in errors), errors)
+        self.assertTrue(any("shallow or partial checkout" in error for error in errors), errors)
+        self.assertTrue(any("fetch-depth: 0" in error for error in errors), errors)
         ancestor.assert_not_called()
         changed.assert_not_called()
 
