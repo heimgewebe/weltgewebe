@@ -13,8 +13,8 @@ lang: de
 summary: >
   Komplettaudit des Repositories (Code, CI, Meta-Dateien, Dokumentation):
   alle automatisierten Checks grün; dreizehn belegte Hygiene-/Konsistenzbefunde,
-  davon zehn behoben (teils in diesem PR, teils durch #1315/#1317/#1318);
-  eine Restarbeit unter REPO-AUDIT-001.
+  alle dreizehn behoben (teils durch #1315/#1317/#1318/#1320/#1323,
+  teils durch Run 28589031507).
 relations:
   - type: relates_to
     target: docs/reports/optimierungsstatus.md
@@ -99,14 +99,14 @@ strukturelle Ableitung.
 | R-03 | Drei widersprüchliche Generated-Artifacts-Listen: `repo.meta.yaml` (13), `generated-files-guard.sh` (16), real `docs/_generated/` (18); fehlend u. a. `relates-to-audit.md`, `relations-analysis.md` | belegt | Dokumentationsdrift | **behoben**: beide Listen auf 18 angeglichen |
 | R-04 | Required-Checks-Drift zwischen kanonischen Quellen gleicher Präzedenzklasse: `repo.meta.yaml` (3), `AGENTS.md` (4), `agent-policy.yaml` (5), `CLAUDE.md` (6); `coverage-guard` läuft real in `validate-guards` | belegt | Truth-Model-Inkonsistenz (Achse A) | **behoben**: Basis-Guard-Liste um `coverage-guard` ergänzt; `agent-policy.yaml`/`CLAUDE.md` behalten zusätzlich `lint`/`test` als Patch-Vorbedingungen; strukturelle Deduplikation bleibt Folgearbeit (§5) |
 | R-05 | `ci.yml`-Step „Install cargo-deny" hardcodet `DENY_VERSION="0.18.8"` und überschattet den zuvor aus `toolchain.versions.yml` gelesenen Env-Wert — der Pin in der Versionsdatei war wirkungslos | belegt | Kopplungsproblem (Version-Pinning) | **behoben**: Step nutzt Env-Wert, bricht ohne ihn ab |
-| R-06 | `heavy.yml` e2e-Job: `setup-node` mit `cache: 'pnpm'` **vor** pnpm-Verfügbarkeit (Corepack erst danach) — `setup-node` ruft `pnpm store path` auf; zudem `node-version: '22.x'` abweichend von der `.node-version`-Pinning-Strategie aller anderen Workflows | belegt (statisch); Laufzeitversagen plausibel, da Job schlafend | Laufzeitproblem (schlafender CI-Pfad) | **behoben**: `pnpm/action-setup@v6` vor `setup-node`, `node-version-file: '.node-version'` (Muster wie `web.yml`); Restarbeit: Dispatch-Proof (siehe R-13) |
+| R-06 | `heavy.yml` e2e-Job: `setup-node` mit `cache: 'pnpm'` **vor** pnpm-Verfügbarkeit (Corepack erst danach) — `setup-node` ruft `pnpm store path` auf; zudem `node-version: '22.x'` abweichend von der `.node-version`-Pinning-Strategie aller anderen Workflows | belegt (statisch); Laufzeitversagen plausibel, da Job schlafend | Laufzeitproblem (schlafender CI-Pfad) | **behoben**: `pnpm/action-setup@v6` vor `setup-node`, `node-version-file: '.node-version'` (Muster wie `web.yml`); Dispatch-Proof in R-13 erbracht |
 | R-07 | `CLAUDE.md` behauptet „Axum 0.7" (real: `axum = "0.8"` in `apps/api/Cargo.toml`), dokumentiert das defekte `just seed` und das tote `WEB_PORT` | belegt | Dokumentationsdrift | **behoben** |
 | R-08 | `.env.example` deklariert `WEB_PORT=5173`; kein Konsument im Repo (weder Compose noch Vite-Config noch Skripte) | belegt | tote Deklaration | **behoben**: durch Kommentar ersetzt |
 | R-09 | Verwaistes `src/routes/+page.svelte` im Repo-Root (Debug-Seite „SvelteKit lebt"); keine Referenz im Repo; außerhalb von `apps/web` von keinem Build erfasst | belegt (keine Referenz auffindbar); Obsoleszenz plausibel | möglicherweise obsoletes Artefakt | **behoben**: entfernt; `src/` aus `discovery_roots` genommen (Gegenhypothese in §6 dokumentiert) |
 | R-10 | `validate_opt_arc_001_db_proof_matrix` ist nicht Shallow-Clone-robust: CI-Evidence-Commits außerhalb der lokalen Historie erzeugen einen harten Fehler ohne Hinweis auf Shallow-Clone als Ursache (CI nutzt `fetch-depth: 0`, Agent-/lokale Umgebungen nicht zwingend) | belegt (reproduziert in dieser Audit-Umgebung) | Robustheitslücke (Tooling) | **behoben**: fehlende `ci_evidence.commit`-Objekte melden nun explizit Shallow-/Partial-Checkout als mögliche Ursache und nennen `fetch-depth: 0`; Testabdeckung ergänzt |
 | R-11 | Shell-Lint-Lücke: `just lint` (bash -n, shfmt, shellcheck) lief in keinem der 33 Workflows; der CI-Job „Docs & Shell Hygiene" (`ci.yml`) enthielt keine Shell-Prüfung (nur markdownlint, lychee, yamllint, JSON) | belegt | CI-Abdeckungslücke + Namensproblem | **behoben**: `Docs & Shell Hygiene` läuft nun bei Hygiene-Änderungen und führt blockierend bash/shfmt/shellcheck für getrackte Shell-Dateien aus; die Dateiliste wird über `scripts/tools/list-shell-files.py` erzeugt und umfasst `.sh`, `.bash` sowie Shell-Shebang-Dateien ohne Endung (#1318) |
 | R-12 | `.lychee.toml` wird von keinem lychee-Aufruf geladen (lychee-Default ist `lychee.toml` ohne Punkt; beide Workflows übergeben alle Optionen via `args`); Datei wirkt nur als Cache-Key-Bestandteil in `ci.yml` | belegt (keine `--config`-Referenz im Repo) | tote Konfiguration | **behoben**: `ci.yml` und `links.yml` laden `.lychee.toml` nun explizit via `--config .lychee.toml`; die Config wurde für Lychee v0.23 auf `max_retries` korrigiert (#1320) |
-| R-13 | `heavy.yml` e2e-Job wurde in den letzten 30 Läufen nie ausgeführt (alle Läufe Gate-only, e2e `skipped`; belegt via GitHub-Actions-API 2026-07-02, z. B. Run 28534919650) — der Fix aus R-06 braucht einen `workflow_dispatch`-Proof | belegt | schlafender CI-Pfad | **offen** → REPO-AUDIT-001 |
+| R-13 | `heavy.yml` e2e-Job wurde in den letzten 30 Läufen nie ausgeführt (alle Läufe Gate-only, e2e `skipped`; belegt via GitHub-Actions-API 2026-07-02, z. B. Run 28534919650) — der Fix aus R-06 braucht einen `workflow_dispatch`-Proof | belegt | schlafender CI-Pfad | **behoben**: `heavy.yml` wurde per `workflow_dispatch` auf `main` ausgeführt; Run 28589031507 war grün, Job `e2e` (84767696052) lief und schloss erfolgreich ab |
 
 ### Positivbefunde (Klasse D, earned)
 
@@ -159,9 +159,9 @@ Folgearbeit" in AGENT-SAFE-008 angelegt.
   `.node-version` folgt der dokumentierten Pinning-Strategie; ein bewusster
   Node-22-Kanal wäre als eigener, dokumentierter Job wieder einzuführen.
 - **Wahrscheinlichste Überdehnung der Diagnose:** R-06 als „defekt" zu
-  werten, obwohl der Pfad nie lief — das Laufzeitversagen ist abgeleitet
+  werten, obwohl der Pfad im ursprünglichen Audit noch nicht lief — das Laufzeitversagen ist abgeleitet
   (aus dem dokumentierten Verhalten von `setup-node` mit `cache: 'pnpm'`),
-  nicht beobachtet. Deshalb bleibt R-13 (Dispatch-Proof) offen.
+  nicht beobachtet. R-13 ist durch Run 28589031507 nachträglich belegt.
 - **Unsicherste Aussage:** R-12 — lychees Config-Discovery wurde nicht
   im Lauf verifiziert, sondern aus Default-Konfigurationspfad (`lychee.toml`)
   und fehlender `--config`-Übergabe abgeleitet.
@@ -180,12 +180,12 @@ Folgearbeit" in AGENT-SAFE-008 angelegt.
 2. **Struktureller Hebel (offen):** Deklarations-Deduplikation über den
    Generated-Artifact-Kontrollvertrag (§5); anschlussfähig an
    AGENT-SAFE-008-Folgearbeit.
-3. **Später Ausbaupfad:** R-13 abschließen, ohne neue redundante Guard-Listen einzuführen.
+3. **Später Ausbaupfad:** REPO-AUDIT-001 abschließen; neue redundante Guard-Listen weiterhin vermeiden.
 4. **Wahrscheinlichste Überkorrektur:** weitere Guards/Listen *hinzufügen*,
    statt bestehende zu deduplizieren — das würde die Drift-Klasse
    vergrößern, nicht verkleinern.
 
-**Folgepfad (Befundklasse B):** Steuerung der Restarbeiten (R-13) über
+**Folgepfad (Befundklasse B):** Abschluss der Restarbeiten über
 Board-Task `REPO-AUDIT-001` (`docs/tasks/board.md`, `docs/tasks/index.json`).
 Bewusst kein neuer OPT-Eintrag in `docs/reports/optimierungsstatus.md`:
 Repo-Hygiene-Restarbeiten laufen — wie die Task-Control-Phasen — über
@@ -195,11 +195,7 @@ Reihenfolge-Wechsel in einer Sub-Roadmap).
 
 **Unsicherheits- und Evidenzlage:**
 
-- Unsicherheitsgrad: **0.15** — Ursachen: R-06/R-12 statisch statt im Lauf
-  belegt; `cargo deny` lokal nicht ausführbar (Netzwerk-Policy der
-  Audit-Umgebung).
-- Evidenzstatus: teilweise belegt (R-06 Laufzeitversagen, R-12
-  Config-Discovery: strukturelle Ableitungen; alles Übrige belegt).
-- Offene Lücken: „Dispatch-Lauf von heavy.yml fehlt, nötig für
-  Laufzeit-Beweis von R-06-Fix" · „lychee-Lauf mit/ohne `.lychee.toml`
-  fehlt, nötig für R-12-Entscheidung".
+- Unsicherheitsgrad: **0.08** — Ursache: `cargo deny` war lokal nicht ausführbar
+  (Netzwerk-Policy der Audit-Umgebung); R-06/R-12/R-13 sind nun durch CI/Dispatch belegt.
+- Evidenzstatus: belegt für alle R-01…R-13-Entscheidungen; verbleibende Einschränkung: `cargo deny` lokal nicht ausführbar, CI deckt den Pfad ab.
+- Offene Lücken: keine aus REPO-AUDIT-001; struktureller Deduplikationspfad (§5) bleibt Folgearbeit außerhalb dieses Tasks.
