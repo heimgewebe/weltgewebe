@@ -1,89 +1,87 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
 import os
 import sys
 from scripts.docmeta.docmeta import REPO_ROOT, parse_frontmatter
+from scripts.docmeta.generated_check import write_or_check
 
-out_file = os.path.join(REPO_ROOT, "docs", "_generated", "knowledge-gaps.md")
-os.makedirs(os.path.dirname(out_file), exist_ok=True)
+OUT_FILE = os.path.join(REPO_ROOT, "docs", "_generated", "knowledge-gaps.md")
 
-def is_meaningful_gap(val):
-    """
-    Filters out technical, boolean, or empty values.
-    Returns True if the value appears to be a meaningful string.
-    """
-    if val is None:
+
+def is_meaningful_gap(val) -> bool:
+    if val is None or isinstance(val, bool):
         return False
-
-    if isinstance(val, bool):
-        return False
-
     val_str = str(val).strip().lower()
     if not val_str:
         return False
+    return val_str not in ["false", "true", "none", "null", "unknown", "n/a", "[]", "{}"]
 
-    # Ignore common placeholders
-    if val_str in ['false', 'true', 'none', 'null', 'unknown', 'n/a', '[]', '{}']:
-        return False
 
-    return True
-
-try:
-    gaps_found = []
+def collect_gaps() -> list[dict[str, object]]:
+    gaps_found: list[dict[str, object]] = []
     docs_dir = os.path.join(REPO_ROOT, "docs")
-
     for root, dirs, files in os.walk(docs_dir):
         if "_generated" in dirs:
             dirs.remove("_generated")
-
         for file in files:
-            if file.endswith(".md"):
-                file_path = os.path.join(root, file)
-                rel_path = os.path.relpath(file_path, REPO_ROOT)
+            if not file.endswith(".md"):
+                continue
+            file_path = os.path.join(root, file)
+            rel_path = os.path.relpath(file_path, REPO_ROOT)
+            frontmatter = parse_frontmatter(file_path)
+            if not frontmatter:
+                continue
+            doc_gaps: list[str] = []
+            val = frontmatter.get("audit_gaps")
+            if val is not None:
+                if isinstance(val, list):
+                    doc_gaps.extend(f"[audit_gaps] {str(item).strip()}" for item in val if is_meaningful_gap(item))
+                elif is_meaningful_gap(val):
+                    doc_gaps.append(f"[audit_gaps] {str(val).strip()}")
+            if doc_gaps:
+                gaps_found.append({"id": frontmatter.get("id", rel_path), "path": rel_path, "gaps": doc_gaps})
+    return gaps_found
 
-                frontmatter = parse_frontmatter(file_path)
-                if frontmatter:
-                    doc_gaps = []
-                    for key in ['audit_gaps']:
-                        val = frontmatter.get(key)
-                        if val is not None:
-                            if isinstance(val, list):
-                                for item in val:
-                                    if is_meaningful_gap(item):
-                                        doc_gaps.append(f"[{key}] {str(item).strip()}")
-                            else:
-                                if is_meaningful_gap(val):
-                                    doc_gaps.append(f"[{key}] {str(val).strip()}")
 
-                    if doc_gaps:
-                        doc_id = frontmatter.get('id', rel_path)
-                        gaps_found.append({
-                            'id': doc_id,
-                            'path': rel_path,
-                            'gaps': doc_gaps
-                        })
+def render() -> str:
+    gaps_found = collect_gaps()
+    lines = [
+        "---",
+        "id: docs.generated.knowledge-gaps",
+        "title: Knowledge Gaps",
+        "doc_type: generated",
+        "status: active",
+        "summary: Automatisch markierte Wissenslücken in der Repo-Landschaft.",
+        "---",
+        "",
+        "## Weltgewebe Knowledge Gaps",
+        "",
+        "Generated automatically. Do not edit.",
+        "",
+        "> **Note:** This report specifically aggregates explicit gaps declared via `audit_gaps` fields in markdown frontmatter. It does not scan the general content of documents.",
+        "",
+    ]
+    if not gaps_found:
+        lines.append("- **No critical knowledge gaps reported.**")
+    else:
+        for item in sorted(gaps_found, key=lambda x: str(x["id"])):
+            lines.append(f"### {item['id']}")
+            lines.append(f"Source: `{item['path']}`")
+            lines.append("")
+            for gap in item["gaps"]:
+                lines.append(f"- {gap}")
+            lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
 
-    with open(out_file, "w", encoding="utf-8") as f:
-        f.write("---\n")
-        f.write("id: docs.generated.knowledge-gaps\n")
-        f.write("title: Knowledge Gaps\n")
-        f.write("doc_type: generated\n")
-        f.write("status: active\n")
-        f.write("summary: Automatisch markierte Wissenslücken in der Repo-Landschaft.\n")
-        f.write("---\n\n")
-        f.write("## Weltgewebe Knowledge Gaps\n\n")
-        f.write("Generated automatically. Do not edit.\n\n")
-        f.write("> **Note:** This report specifically aggregates explicit gaps declared via `audit_gaps` fields in markdown frontmatter. It does not scan the general content of documents.\n\n")
 
-        if not gaps_found:
-            f.write("- **No critical knowledge gaps reported.**\n")
-        else:
-            for item in sorted(gaps_found, key=lambda x: x['id']):
-                f.write(f"### {item['id']}\n")
-                f.write(f"Source: `{item['path']}`\n\n")
-                for gap in item['gaps']:
-                    f.write(f"- {gap}\n")
-                f.write("\n")
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="compare output without rewriting it")
+    args = parser.parse_args(argv)
+    return write_or_check(OUT_FILE, render(), check=args.check, label=os.path.relpath(OUT_FILE, REPO_ROOT))
 
-    print(f"Generated {out_file}")
-except Exception as e:
-    print(f"Error generating knowledge gaps: {e}", file=sys.stderr)
-    sys.exit(1)
+
+if __name__ == "__main__":
+    sys.exit(main())
