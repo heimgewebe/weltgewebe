@@ -207,6 +207,18 @@ class TestValidateGeneratedArtifacts(unittest.TestCase):
         self._write_manifest(data)
         self.assertIn("CHECK_COMMAND_MISMATCH", self._codes())
 
+    def test_generated_artifact_requires_direct_check(self):
+        data = self._manifest()
+        data["artifacts"][0]["checks"] = [["python3", "-m", "scripts.docmeta." + "validate_" + "generated_artifacts"]]
+        self._write_manifest(data)
+        self.assertIn("GENERATED_DIRECT_CHECK_MISSING", self._codes())
+
+    def test_curated_index_may_use_surface_validator_without_direct_generated_check(self):
+        data = self._manifest()
+        data["artifacts"][2]["checks"] = [["python3", "-m", "scripts.docmeta." + "validate_" + "generated_artifacts"]]
+        self._write_manifest(data)
+        self.assertNotIn("GENERATED_DIRECT_CHECK_MISSING", self._codes())
+
     def test_repository_external_command_is_rejected(self):
         data = self._manifest()
         data["artifacts"][0]["checks"] = [["bash", "-lc", "true"]]
