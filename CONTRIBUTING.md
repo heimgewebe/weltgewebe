@@ -191,7 +191,7 @@ just contracts-domain-check
 oder:
 
 ```bash
-npm run contracts:domain:check
+pnpm run contracts:domain:check
 ```
 
 Das Skript kompiliert alle Schemas und validiert die Beispiel-Instanzen dagegen.
