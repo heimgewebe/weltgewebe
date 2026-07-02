@@ -600,6 +600,26 @@ def _git_commit_exists(repo_root, commit):
     return result.returncode == 0
 
 
+def _git_history_fetch_hint(repo_root):
+    """Return a human hint for incomplete local Git history."""
+    try:
+        result = _run_git(repo_root, ["rev-parse", "--is-shallow-repository"])
+    except GitFreshnessError:
+        result = None
+
+    if result is not None and result.returncode == 0:
+        if result.stdout.strip().lower() == "true":
+            return (
+                "Repository is shallow; fetch full history before validating "
+                "ci_proven evidence, or use actions/checkout with fetch-depth: 0."
+            )
+
+    return (
+        "If this is a shallow or partial checkout, fetch full history before "
+        "validating ci_proven evidence, or use actions/checkout with fetch-depth: 0."
+    )
+
+
 def _git_commit_is_ancestor_of_head(repo_root, commit):
     """Return whether commit belongs to the current HEAD history."""
     result = _run_git(repo_root, ["merge-base", "--is-ancestor", commit, "HEAD"])
@@ -720,7 +740,8 @@ def _validate_ci_evidence_freshness(proof_id, repo_root, ci_evidence, errors):
         if not _git_commit_exists(repo_root, commit):
             errors.append(
                 f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence commit '{commit}' "
-                "was not found in the local Git history"
+                "was not found in the local Git history. "
+                f"{_git_history_fetch_hint(repo_root)}"
             )
             return
         if not _git_commit_is_ancestor_of_head(repo_root, commit):
