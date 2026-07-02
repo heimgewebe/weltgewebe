@@ -147,6 +147,10 @@ def _load_manifest(path: Path) -> tuple[Any | None, list[Finding]]:
         return None, [_finding("MANIFEST_JSON_INVALID", MANIFEST_REL, str(exc))]
 
 
+def _is_central_surface_check(command: Any) -> bool:
+    return command == ["python3", "-m", "scripts.docmeta." + "validate_" + "generated_artifacts"]
+
+
 def _validate_command(command: Any, *, root: Path, path: str, field: str) -> list[Finding]:
     if not isinstance(command, list) or not command or any(
         not isinstance(item, str) or not item for item in command
@@ -323,6 +327,16 @@ def validate_manifest(
         else:
             for check_index, command in enumerate(checks):
                 findings.extend(_validate_command(command, root=root, path=path, field=f"checks[{check_index}]"))
+            if kind == "generated" and not any(
+                not _is_central_surface_check(command) for command in checks
+            ):
+                findings.append(
+                    _finding(
+                        "GENERATED_DIRECT_CHECK_MISSING",
+                        path,
+                        "generated artifacts must declare at least one artifact-specific read-only check",
+                    )
+                )
 
         expected = EXPECTED_CONTROLS.get(path)
         if expected is not None:
