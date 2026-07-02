@@ -511,7 +511,8 @@
         "scripts/docmeta/tests/test_generate_agent_readiness.py",
         "scripts/docmeta/generated-files-guard.sh",
         ".github/workflows/docs-guard.yml",
-        "docs/reference/generated-artifact-control.md"
+        "docs/reference/generated-artifact-control.md",
+        "repo.meta.yaml"
       ],
       "missing_evidence": [
         "Full generated-artifact coverage remains a separate follow-up slice; this task closes the minimal control contract."
@@ -532,7 +533,7 @@
           "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-06-29"
+      "updated_at": "2026-07-02"
     },
     {
       "id": "DOCMETA-FRESHNESS-001",

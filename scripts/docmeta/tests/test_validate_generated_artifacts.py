@@ -98,6 +98,13 @@ class TestValidateGeneratedArtifacts(unittest.TestCase):
         marker = "Generated automatically. Do not edit.\n"
         self._write("docs/_generated/agent-readiness.md", marker)
         self._write("docs/_generated/claim-evidence-map.md", marker)
+        self._write(
+            "repo.meta.yaml",
+            "generated_artifacts:\n"
+            "  - docs/_generated/agent-readiness.md\n"
+            "  - docs/_generated/claim-evidence-map.md\n"
+            "required_checks: []\n",
+        )
         self._write_manifest(self._manifest())
 
     def _codes(self) -> set[str]:
@@ -162,7 +169,7 @@ class TestValidateGeneratedArtifacts(unittest.TestCase):
         self._write_manifest(data)
         self.assertIn("GENERATED_SOURCE_INVALID", self._codes())
 
-    def test_scope_expansion_requires_validator_change(self):
+    def test_generated_scope_must_match_repo_meta(self):
         data = self._manifest()
         data["artifacts"].append(
             {
@@ -190,7 +197,7 @@ class TestValidateGeneratedArtifacts(unittest.TestCase):
         )
         self._write("docs/_generated/extra.md", "Generated automatically.\n")
         self._write_manifest(data)
-        self.assertIn("SCOPE_EXPANSION_UNREVIEWED", self._codes())
+        self.assertIn("REPO_META_GENERATED_DRIFT", self._codes())
 
     def test_generated_check_cannot_call_writing_generator(self):
         data = self._manifest()
@@ -205,6 +212,13 @@ class TestValidateGeneratedArtifacts(unittest.TestCase):
         data["artifacts"][0]["checks"] = [["bash", "-lc", "true"]]
         self._write_manifest(data)
         self.assertIn("COMMAND_NOT_ALLOWED", self._codes())
+
+    def test_reviewed_shell_generator_is_allowed(self):
+        self._write("scripts/docmeta/generate-fixture.sh", "#!/usr/bin/env bash\n")
+        data = self._manifest()
+        data["artifacts"][0]["generator"] = ["bash", "scripts/docmeta/generate-fixture.sh"]
+        self._write_manifest(data)
+        self.assertNotIn("COMMAND_NOT_ALLOWED", self._codes())
 
     def test_symlink_parent_source_is_rejected(self):
         source_dir = self.root / "docs" / "claims"

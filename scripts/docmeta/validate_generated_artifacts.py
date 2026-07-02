@@ -14,11 +14,9 @@ from typing import Any, Callable
 from scripts.docmeta.docmeta import REPO_ROOT
 
 MANIFEST_REL = ".wgx/generated-artifacts.yml"
-REQUIRED_ARTIFACTS = {
-    "docs/_generated/agent-readiness.md",
-    "docs/_generated/claim-evidence-map.md",
-    "docs/tasks/index.json",
-}
+REQUIRED_CURATED_ARTIFACTS = {"docs/tasks/index.json"}
+GENERATED_DIR_REL = "docs/_generated"
+REPO_META_REL = "repo.meta.yaml"
 ALLOWED_KINDS = {"generated", "curated_index"}
 ROLE_BY_KIND = {"generated": "diagnostic", "curated_index": "task_control"}
 ALLOWED_CANONICALITY = {"derived", "canonical"}
@@ -88,6 +86,50 @@ def _safe_repo_path(value: Any) -> str | None:
     return value
 
 
+def _actual_generated_artifacts(root: Path) -> tuple[set[str], list[Finding]]:
+    generated_dir = root / GENERATED_DIR_REL
+    if not generated_dir.is_dir() or _has_symlink_component(root, GENERATED_DIR_REL):
+        return set(), [_finding("GENERATED_DIR_MISSING", GENERATED_DIR_REL, "generated diagnostics directory missing or symlinked")]
+    return {
+        f"{GENERATED_DIR_REL}/{path.name}"
+        for path in generated_dir.iterdir()
+        if path.is_file() and path.suffix == ".md" and not _has_symlink_component(root, f"{GENERATED_DIR_REL}/{path.name}")
+    }, []
+
+
+def _repo_meta_generated_artifacts(root: Path) -> tuple[set[str] | None, list[Finding]]:
+    path = root / REPO_META_REL
+    if not path.is_file() or _has_symlink_component(root, REPO_META_REL):
+        return None, [_finding("REPO_META_MISSING", REPO_META_REL, "repo metadata file missing or symlinked")]
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        return None, [_finding("REPO_META_UNREADABLE", REPO_META_REL, str(exc))]
+
+    in_section = False
+    values: set[str] = set()
+    for line in lines:
+        if not in_section:
+            if line.strip() == "generated_artifacts:":
+                in_section = True
+            continue
+        if line and not line.startswith(" "):
+            break
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not stripped.startswith("- "):
+            continue
+        value = stripped[2:].strip().strip('"').strip("'")
+        safe = _safe_repo_path(value)
+        if safe is None:
+            return None, [_finding("REPO_META_GENERATED_PATH_INVALID", REPO_META_REL, f"invalid generated_artifacts entry: {value!r}")]
+        values.add(safe)
+    if not in_section:
+        return None, [_finding("REPO_META_GENERATED_SECTION_MISSING", REPO_META_REL, "generated_artifacts section missing")]
+    return values, []
+
+
 def _load_manifest(path: Path) -> tuple[Any | None, list[Finding]]:
     try:
         raw = path.read_text(encoding="utf-8")
@@ -110,15 +152,29 @@ def _validate_command(command: Any, *, root: Path, path: str, field: str) -> lis
         not isinstance(item, str) or not item for item in command
     ):
         return [_finding("COMMAND_INVALID", path, f"{field} must be a non-empty argv array")]
-    if len(command) < 3 or command[:2] != ["python3", "-m"]:
-        return [_finding("COMMAND_NOT_ALLOWED", path, f"{field} must use python3 -m")]
-    module = command[2]
-    if not module.startswith("scripts.docmeta."):
-        return [_finding("COMMAND_NOT_ALLOWED", path, f"module outside scripts.docmeta: {module}")]
-    module_rel = module.replace(".", "/") + ".py"
-    if not (root / module_rel).is_file() or _has_symlink_component(root, module_rel):
-        return [_finding("COMMAND_MODULE_MISSING", path, f"module not found: {module}")]
-    return []
+
+    if len(command) >= 3 and command[:2] == ["python3", "-m"]:
+        module = command[2]
+        if not module.startswith("scripts.docmeta."):
+            return [_finding("COMMAND_NOT_ALLOWED", path, f"module outside scripts.docmeta: {module}")]
+        module_rel = module.replace(".", "/") + ".py"
+        if not (root / module_rel).is_file() or _has_symlink_component(root, module_rel):
+            return [_finding("COMMAND_MODULE_MISSING", path, f"module not found: {module}")]
+        return []
+
+    if len(command) == 2 and command[0] == "bash":
+        script = _safe_repo_path(command[1])
+        if (
+            script is not None
+            and script.startswith("scripts/docmeta/generate-")
+            and script.endswith(".sh")
+            and (root / script).is_file()
+            and not _has_symlink_component(root, script)
+        ):
+            return []
+        return [_finding("COMMAND_NOT_ALLOWED", path, f"unsupported bash script for {field}: {command[1]!r}")]
+
+    return [_finding("COMMAND_NOT_ALLOWED", path, f"{field} must use python3 -m or a reviewed scripts/docmeta/generate-*.sh script")]
 
 
 def _execute_check(
@@ -133,9 +189,10 @@ def _execute_check(
         if key not in {"PYTHONHOME", "PYTHONPATH", "PYTHONSTARTUP", "PYTHONUSERBASE"}
     }
     env.update({"PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"})
+    effective_command = [sys.executable, *command[1:]] if command[:1] == ["python3"] else command
     try:
         completed = runner(
-            [sys.executable, *command[1:]],
+            effective_command,
             cwd=root,
             env=env,
             text=True,
@@ -179,7 +236,14 @@ def validate_manifest(
         findings.append(_finding("ARTIFACTS_INVALID", MANIFEST_REL, "artifacts must be an array"))
         return findings
 
+    actual_generated, generated_findings = _actual_generated_artifacts(root)
+    findings.extend(generated_findings)
+    repo_meta_generated, repo_meta_findings = _repo_meta_generated_artifacts(root)
+    findings.extend(repo_meta_findings)
+    required_artifacts = set(actual_generated) | REQUIRED_CURATED_ARTIFACTS
+
     seen: set[str] = set()
+    generated_seen: set[str] = set()
     parsed: list[dict[str, Any]] = []
     for index, artifact in enumerate(artifacts):
         label = f"{MANIFEST_REL}#artifacts[{index}]"
@@ -200,6 +264,8 @@ def validate_manifest(
         parsed.append(artifact)
 
         kind = artifact.get("kind")
+        if kind == "generated":
+            generated_seen.add(path)
         role = artifact.get("role")
         canonicality = artifact.get("canonicality")
         if kind not in ALLOWED_KINDS:
@@ -266,11 +332,25 @@ def validate_manifest(
             if artifact.get(flag) is not True:
                 findings.append(_finding("CONTROL_FLAG_INVALID", path, f"{flag} must be true"))
 
-    for path in sorted(REQUIRED_ARTIFACTS - seen):
-        findings.append(_finding("REQUIRED_ARTIFACT_MISSING", path, "critical artifact absent from manifest"))
-    extras = sorted(seen - REQUIRED_ARTIFACTS)
+    for path in sorted(required_artifacts - seen):
+        findings.append(_finding("REQUIRED_ARTIFACT_MISSING", path, "artifact absent from manifest"))
+    extras = sorted(seen - required_artifacts)
     if extras:
-        findings.append(_finding("SCOPE_EXPANSION_UNREVIEWED", MANIFEST_REL, ", ".join(extras)))
+        findings.append(_finding("UNEXPECTED_ARTIFACT_DECLARED", MANIFEST_REL, ", ".join(extras)))
+
+    if repo_meta_generated is not None:
+        meta_missing = sorted(actual_generated - repo_meta_generated)
+        meta_extra = sorted(repo_meta_generated - actual_generated)
+        if meta_missing or meta_extra:
+            details = []
+            if meta_missing:
+                details.append("missing in repo.meta.yaml: " + ", ".join(meta_missing))
+            if meta_extra:
+                details.append("not present in docs/_generated: " + ", ".join(meta_extra))
+            findings.append(_finding("REPO_META_GENERATED_DRIFT", REPO_META_REL, "; ".join(details)))
+        manifest_mismatch = sorted(repo_meta_generated ^ generated_seen)
+        if manifest_mismatch:
+            findings.append(_finding("REPO_META_MANIFEST_MISMATCH", REPO_META_REL, ", ".join(manifest_mismatch)))
 
     if run_checks and not findings:
         for artifact in parsed:

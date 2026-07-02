@@ -30,6 +30,78 @@
       "blocking": true
     },
     {
+      "path": "docs/_generated/architecture-drift.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_architecture_drift"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate_architecture_drift.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/backlinks.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_backlinks"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate_backlinks.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/change-resonance.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_change_resonance"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate_change_resonance.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
       "path": "docs/_generated/claim-evidence-map.md",
       "kind": "generated",
       "role": "diagnostic",
@@ -52,6 +124,319 @@
         "docs/claims/registry.yml",
         "scripts/docmeta/generate_claim_evidence_map.py",
         "scripts/docmeta/validate_doc_freshness_registry.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/doc-coverage.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_doc_coverage"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate_doc_coverage.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/doc-index.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "bash",
+        "scripts/docmeta/generate-doc-index.sh"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate-doc-index.sh"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/implicit-dependencies.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_implicit_dependencies"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate_implicit_dependencies.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/impl-index.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "bash",
+        "scripts/docmeta/generate-impl-index.sh"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "apps",
+        "scripts",
+        "contracts",
+        "scripts/docmeta/generate-impl-index.sh"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/knowledge-gaps.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_knowledge_gaps"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate_knowledge_gaps.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/orphans.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_orphans"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate_orphans.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/relates-to-audit.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_relates_to_audit"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate_relates_to_audit.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/relations-analysis.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_relations_analysis"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate_relations_analysis.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/report-lifecycle-inventory.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_report_lifecycle_inventory"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs/reports",
+        "scripts/docmeta/generate_report_lifecycle_inventory.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/report-lifecycle.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_report_lifecycle"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs/reports",
+        "scripts/docmeta/generate_report_lifecycle.py",
+        "docs/process/report-lifecycle.md"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/staleness-report.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_staleness_report"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate_staleness_report.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/supersession-map.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_supersession_map"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate_supersession_map.py"
+      ],
+      "commit_required": true,
+      "blocking": true
+    },
+    {
+      "path": "docs/_generated/system-map.md",
+      "kind": "generated",
+      "role": "diagnostic",
+      "canonicality": "derived",
+      "generator": [
+        "python3",
+        "-m",
+        "scripts.docmeta.generate_system_map"
+      ],
+      "checks": [
+        [
+          "python3",
+          "-m",
+          "scripts.docmeta.validate_generated_artifacts"
+        ]
+      ],
+      "sources": [
+        "docs",
+        "scripts/docmeta/generate_system_map.py"
       ],
       "commit_required": true,
       "blocking": true
