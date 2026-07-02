@@ -102,11 +102,23 @@ Generated automatically. Do not edit.
 | reports.auth-persistence-readiness | Auth-Persistenzbereitschaft — OPT-API-002 | report | deprecated | docs/reports/auth-persistence-readiness.md |
 | reports.auth-persistence-runtime-proof | Auth-Persistenz — Runtime-Proof | report | deprecated | docs/reports/auth-persistence-runtime-proof.md |
 | reports.auth-persistence-runtime-target-reconciliation | Auth-Persistenz — Runtime-Zielarchitektur-Abgleich (PgBouncer vs. direkter Postgres) | report | active | docs/reports/auth-persistence-runtime-target-reconciliation.md |
+| reports.auth-pg-002-controlled-preflight | AUTH-PG-002 Controlled Preflight | report | active | docs/reports/auth-pg-002-controlled-preflight.md |
+| reports.auth-pg-002-cutover-plan | AUTH-PG-002 Passkey PostgreSQL Cutover Plan | report | active | docs/reports/auth-pg-002-cutover-plan.md |
+| reports.auth-pg-002-passkey-db-store | AUTH-PG-002 Passkey Credential DB-Store (Slice A) Proof | report | active | docs/reports/auth-pg-002-passkey-db-store.md |
+| reports.auth-pg-002-passkey-fk-readiness-audit | AUTH-PG-002 Passkey Account FK Readiness Audit | report | active | docs/reports/auth-pg-002-passkey-fk-readiness-audit.md |
+| reports.auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01 | AUTH-PG-002 Heimserver Passkey Runtime Audit 2026-07-01 | report | active | docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md |
+| reports.auth-pg-002-passkey-runtime-audit-plan | AUTH-PG-002 Passkey Runtime FK Audit Plan | report | active | docs/reports/auth-pg-002-passkey-runtime-audit-plan.md |
+| reports.auth-pg-002-passkey-runtime-facade | AUTH-PG-002 Passkey Runtime Facade (Slice B) Proof | report | active | docs/reports/auth-pg-002-passkey-runtime-facade.md |
+| reports.auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01 | AUTH-PG-002 Heimserver Runtime Schema Readiness 2026-07-01 | report | active | docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md |
+| reports.auth-pg-003-backfill-readiness | AUTH-PG-003 Legacy webauthn_user_id Backfill Readiness | report | active | docs/reports/auth-pg-003-backfill-readiness.md |
+| reports.auth-pg-003-runtime-audit-heimserver-2026-07-01 | AUTH-PG-003 Heimserver Runtime Audit 2026-07-01 | report | active | docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md |
+| reports.auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01 | AUTH-PG-003 Runtime Audit Smoke: wg-pg-proof 2026-07-01 | report | active | docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md |
 | reports.auth-status-matrix | Auth Status Matrix | reference | active | docs/reports/auth-status-matrix.md |
 | reports.cost-report | Cost Report | report | active | docs/reports/cost-report.md |
 | reports.domain-account-email-uniqueness-audit | Domain Account E-Mail Uniqueness Audit | report | active | docs/reports/domain-account-email-uniqueness-audit.md |
 | reports.domain-account-write-path-proof | Domain Account Write Path Proof | report | active | docs/reports/domain-account-write-path-proof.md |
 | reports.domain-backfill-proof | Domain Backfill Proof | report | active | docs/reports/domain-backfill-proof.md |
+| reports.domain-edge-cache-limit-design | Domain Edge Cache-Limit Design — DOMAIN-PG-003 | report | active | docs/reports/domain-edge-cache-limit-design.md |
 | reports.domain-edge-create-semantics-preflight | Domain Edge Create Semantics Preflight — OPT-ARC-001 Phase E-C | report | deprecated | docs/reports/domain-edge-create-semantics-preflight.md |
 | reports.domain-edge-reference-audit | Domain Edge Reference Audit — OPT-ARC-001 Teilaufgabe 4 | report | active | docs/reports/domain-edge-reference-audit.md |
 | reports.domain-edge-write-path-proof | Domain Edge Write Path Proof | report | active | docs/reports/domain-edge-write-path-proof.md |
@@ -114,11 +126,14 @@ Generated automatically. Do not edit.
 | reports.domain-postgres-instance-coherence-decision | Domain PostgreSQL Instance Coherence Decision — DOMAIN-PG-002 | report | active | docs/reports/domain-postgres-instance-coherence-decision.md |
 | reports.domain-provider-role-finding | Finding: Aktuelle Domain- und Provider-Rollen | report | active | docs/reports/domain-provider-role-finding.md |
 | reports.domain-read-path-proof | Domain Read Path Proof | report | active | docs/reports/domain-read-path-proof.md |
+| reports.github-actions-node24-readiness | GitHub Actions Node-24 Runtime Readiness — OPT-CI-005 | report | active | docs/reports/github-actions-node24-readiness.md |
 | reports.inwx-zone-reconciliation-plan | INWX Zone Reconciliation Plan | report | deprecated | docs/reports/inwx-zone-reconciliation-plan.md |
 | reports.optimierungsbericht | Optimierungsbericht Weltgewebe | report | active | docs/reports/optimierungsbericht.md |
 | reports.optimierungsstatus | Optimierungsstatus Weltgewebe | status-matrix | active | docs/reports/optimierungsstatus.md |
 | reports.passkey-register-verify-prep | Passkey Register-Verify – Vorbereitungsbericht | report | deprecated | docs/reports/passkey-register-verify-prep.md |
 | reports.planning-registration-findings | Planning Registration Findings Triage | report | deprecated | docs/reports/planning-registration-findings.md |
+| reports.proof-matrix-generalization-decision | Proof-Matrix-Generalisierung — DOCMETA-PROOF-001 | report | active | docs/reports/proof-matrix-generalization-decision.md |
+| reports.repo-audit-2026-07-02 | Repo-Komplettaudit 2026-07-02 | report | active | docs/reports/repo-audit-2026-07-02.md |
 | reports.report-lifecycle-restbestand-triage | Report Lifecycle Restbestand Triage | report | deprecated | docs/reports/report-lifecycle-restbestand-triage.md |
 | runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |
 | runbooks.codespaces-recovery | Codespaces Recovery | reference | active | docs/runbooks/codespaces-recovery.md |
