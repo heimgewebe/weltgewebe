@@ -38,7 +38,7 @@ Fix on host:
 Do not copy private keys into the container."
 fi
 
-if ! ssh-add -l >/dev/null 2>&1; then
+if ! ssh-add -l > /dev/null 2>&1; then
   fail_or_warn 69 "SSH-AGENT-GUARD: forwarded SSH agent is available, but no identities are loaded.
 
 Fix on host:
@@ -54,14 +54,14 @@ if [ ! -f "$HOME/.ssh/known_hosts" ]; then
   chmod 600 "$HOME/.ssh/known_hosts"
 fi
 
-if ! ssh-keygen -F github.com -f "$HOME/.ssh/known_hosts" >/dev/null 2>&1; then
+if ! ssh-keygen -F github.com -f "$HOME/.ssh/known_hosts" > /dev/null 2>&1; then
   echo "SSH-AGENT-GUARD: github.com missing from known_hosts; adding via ssh-keyscan TOFU." >&2
-  ssh-keyscan github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
+  ssh-keyscan github.com >> "$HOME/.ssh/known_hosts" 2> /dev/null || true
   chmod 600 "$HOME/.ssh/known_hosts" || true
 fi
 
 agent_ssh_command="${GIT_SSH_COMMAND:-ssh -F /dev/null -o IdentityAgent=${SSH_AUTH_SOCK} -o IdentitiesOnly=no}"
-git config --global --unset-all core.sshCommand >/dev/null 2>&1 || true
+git config --global --unset-all core.sshCommand > /dev/null 2>&1 || true
 git config --global core.sshCommand "$agent_ssh_command"
 echo "SSH-AGENT-GUARD: git core.sshCommand uses forwarded agent."
 
@@ -75,7 +75,7 @@ if [ "$mode" = "github" ]; then
 
       remote="${SSH_AGENT_GUARD_GIT_REMOTE:-git@github.com:heimgewebe/weltgewebe.git}"
       if GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -F /dev/null -o IdentityAgent=/ssh-agent -o IdentitiesOnly=no}" \
-        git ls-remote "$remote" HEAD >/dev/null 2>&1; then
+        git ls-remote "$remote" HEAD > /dev/null 2>&1; then
         echo "SSH-AGENT-GUARD: ok Git transport works for $remote."
       else
         echo "SSH-AGENT-GUARD: Git transport was not proven for $remote." >&2

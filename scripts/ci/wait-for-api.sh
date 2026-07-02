@@ -13,7 +13,7 @@ check_endpoint() {
   local temp_out
   temp_out=$(mktemp)
 
-  if curl -sSf "$url" > "$temp_out" 2>/dev/null; then
+  if curl -sSf "$url" > "$temp_out" 2> /dev/null; then
     # Check if response is not empty (e.g. > 2 bytes, minimal for JSON "[]")
     if [ -s "$temp_out" ] && [ "$(wc -c < "$temp_out")" -gt 2 ]; then
       rm "$temp_out"
@@ -31,9 +31,9 @@ while [ $count -lt $MAX_RETRIES ]; do
     exit 0
   fi
 
-  echo "API not yet ready (or empty response). Retrying in ${SLEEP_SECONDS}s... ($((count+1))/$MAX_RETRIES)"
+  echo "API not yet ready (or empty response). Retrying in ${SLEEP_SECONDS}s... ($((count + 1))/$MAX_RETRIES)"
   sleep $SLEEP_SECONDS
-  count=$((count+1))
+  count=$((count + 1))
 done
 
 echo "❌ API failed to become ready within $((MAX_RETRIES * SLEEP_SECONDS)) seconds."

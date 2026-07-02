@@ -2,11 +2,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(
-  cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1
+  cd -- "$(dirname -- "${BASH_SOURCE[0]}")" > /dev/null 2>&1
   pwd
 )"
 REPO_ROOT="${REPO_ROOT:-$(
-  cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1
+  cd -- "${SCRIPT_DIR}/../.." > /dev/null 2>&1
   pwd
 )}"
 
@@ -20,12 +20,12 @@ for required_file in "$BASE_FILE" "$OVERRIDE_FILE"; do
   fi
 done
 
-if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+if ! command -v docker > /dev/null 2>&1 || ! docker compose version > /dev/null 2>&1; then
   echo "ERROR: docker compose is required" >&2
   exit 2
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
+if ! command -v python3 > /dev/null 2>&1; then
   echo "ERROR: python3 is required" >&2
   exit 2
 fi
@@ -39,7 +39,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cat >"$TMP_ENV" <<'EOF_ENV'
+cat > "$TMP_ENV" << 'EOF_ENV'
 DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy
 POSTGRES_USER=dummy
 POSTGRES_PASSWORD=dummy
@@ -51,17 +51,16 @@ EOF_ENV
 if ! WELTGEWEBE_ENV_FILE="$TMP_ENV" \
   REPO_DIR="$REPO_ROOT" \
   docker compose \
-    --env-file "$TMP_ENV" \
-    -f "$BASE_FILE" \
-    -f "$OVERRIDE_FILE" \
-    config --format json >"$TMP_JSON" 2>"$TMP_ERR"
-then
+  --env-file "$TMP_ENV" \
+  -f "$BASE_FILE" \
+  -f "$OVERRIDE_FILE" \
+  config --format json > "$TMP_JSON" 2> "$TMP_ERR"; then
   echo "ERROR: docker compose config failed" >&2
   cat "$TMP_ERR" >&2
   exit 2
 fi
 
-python3 - "$TMP_JSON" <<'PY'
+python3 - "$TMP_JSON" << 'PY'
 import json
 import sys
 from pathlib import Path

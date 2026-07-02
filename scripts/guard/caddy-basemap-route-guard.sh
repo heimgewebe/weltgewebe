@@ -26,8 +26,8 @@ set -euo pipefail
 # Regression protection: prevents silent re-introduction of the old /basemap/*
 # route, which caused the sovereign hosting path to be factually inactive.
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." > /dev/null 2>&1 && pwd)}"
 
 FAILED=0
 

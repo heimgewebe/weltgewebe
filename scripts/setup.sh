@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Function to check if a command exists
 command_exists() {
-  command -v "$1" >/dev/null 2>&1
+  command -v "$1" > /dev/null 2>&1
 }
 
 # Install rustup if not installed
@@ -11,6 +11,7 @@ if ! command_exists rustup; then
   echo "Rustup not found. Installing..."
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
   # Add cargo to path for the current session
+  # shellcheck disable=SC1091
   . "$HOME/.cargo/env"
 else
   echo "Rustup is already installed."

@@ -62,27 +62,27 @@ echo "PASS: PUBLIC_BASEMAP_MODE=remote-style accepted"
 # Part 2: validate_basemap_mode — invalid values are rejected
 # ===========================================================================
 
-if validate_basemap_mode "local_sovereign" 2>/dev/null; then
+if validate_basemap_mode "local_sovereign" 2> /dev/null; then
   fail "local_sovereign (underscore typo) must be rejected"
 fi
 echo "PASS: PUBLIC_BASEMAP_MODE=local_sovereign rejected"
 
-if validate_basemap_mode "garbage" 2>/dev/null; then
+if validate_basemap_mode "garbage" 2> /dev/null; then
   fail "garbage must be rejected"
 fi
 echo "PASS: PUBLIC_BASEMAP_MODE=garbage rejected"
 
-if validate_basemap_mode "local" 2>/dev/null; then
+if validate_basemap_mode "local" 2> /dev/null; then
   fail "partial value 'local' must be rejected"
 fi
 echo "PASS: PUBLIC_BASEMAP_MODE=local rejected"
 
-if validate_basemap_mode "REMOTE-STYLE" 2>/dev/null; then
+if validate_basemap_mode "REMOTE-STYLE" 2> /dev/null; then
   fail "uppercase REMOTE-STYLE must be rejected (case-sensitive)"
 fi
 echo "PASS: PUBLIC_BASEMAP_MODE=REMOTE-STYLE rejected (case-sensitive)"
 
-if validate_basemap_mode " local-sovereign" 2>/dev/null; then
+if validate_basemap_mode " local-sovereign" 2> /dev/null; then
   fail "leading-space value must be rejected"
 fi
 echo "PASS: PUBLIC_BASEMAP_MODE=' local-sovereign' (leading space) rejected"

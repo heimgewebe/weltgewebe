@@ -53,8 +53,8 @@ set -euo pipefail
 #   0 — Artefact absent and BASEMAP_PROOF_MODE=skip (NOT_PROVEN, explicitly skipped)
 #   1 — Proof failed or artefact absent in "require" mode
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." > /dev/null 2>&1 && pwd)}"
 
 BASEMAP_PROOF_SCOPE="${BASEMAP_PROOF_SCOPE:-range-delivery}"
 BASEMAP_PROOF_MODE="${BASEMAP_PROOF_MODE:-require}"
@@ -70,12 +70,12 @@ require_http_range_proof() {
 
   http_status="$({
     curl --silent \
-         --max-time 10 \
-         --header 'Range: bytes=0-511' \
-         --output /dev/null \
-         --dump-header "${header_tmp}" \
-         --write-out '%{http_code}' \
-         "${full_url}" 2>/dev/null
+      --max-time 10 \
+      --header 'Range: bytes=0-511' \
+      --output /dev/null \
+      --dump-header "${header_tmp}" \
+      --write-out '%{http_code}' \
+      "${full_url}" 2> /dev/null
   })" || {
     rm -f "${header_tmp}"
     printf 'ERROR: curl request to %s failed\n' "${full_url}" >&2
@@ -167,7 +167,7 @@ if [[ "${BASEMAP_PROOF_SCOPE}" == "pmtiles-content" ]]; then
     while IFS= read -r -d '' f; do
       PMTILES_FILE="${f}"
       break
-    done < <(find "${BASEMAP_ARTIFACT_DIR}" -maxdepth 1 -name '*.pmtiles' -print0 2>/dev/null)
+    done < <(find "${BASEMAP_ARTIFACT_DIR}" -maxdepth 1 -name '*.pmtiles' -print0 2> /dev/null)
     if [[ -n "${PMTILES_FILE}" ]]; then
       printf 'Auto-detected PMTiles file: %s\n' "${PMTILES_FILE}"
     fi
@@ -187,7 +187,7 @@ if [[ "${BASEMAP_PROOF_SCOPE}" == "pmtiles-content" ]]; then
   fi
 
   # Check non-empty
-  FILE_SIZE="$(stat -c '%s' "${PMTILES_FILE}" 2>/dev/null || echo 0)"
+  FILE_SIZE="$(stat -c '%s' "${PMTILES_FILE}" 2> /dev/null || echo 0)"
   if [[ "${FILE_SIZE}" -eq 0 ]]; then
     printf 'ERROR: PMTiles file is empty: %s\n' "${PMTILES_FILE}" >&2
     exit 1
@@ -196,7 +196,7 @@ if [[ "${BASEMAP_PROOF_SCOPE}" == "pmtiles-content" ]]; then
 
   # Verify PMTiles magic header (bytes 0-6 must be ASCII "PMTiles")
   MAGIC_EXPECTED="PMTiles"
-  MAGIC_ACTUAL="$(dd if="${PMTILES_FILE}" bs=1 count=7 skip=0 2>/dev/null | tr -d '\0')"
+  MAGIC_ACTUAL="$(dd if="${PMTILES_FILE}" bs=1 count=7 skip=0 2> /dev/null | tr -d '\0')"
   if [[ "${MAGIC_ACTUAL}" != "${MAGIC_EXPECTED}" ]]; then
     printf 'ERROR: Magic header mismatch in %s\n' "${PMTILES_FILE}" >&2
     printf '  Expected: %s\n' "${MAGIC_EXPECTED}" >&2
@@ -235,13 +235,13 @@ if [[ "${BASEMAP_PROOF_SCOPE}" == "pmtiles-content" ]]; then
   # Step 1: Verify HTTP-served PMTiles magic bytes (0-6)
   printf 'Step 1: Verifying HTTP magic bytes (Range: bytes=0-6)...\n'
   http_magic_tmp="$(mktemp)"
-  http_magic_status="$({ \
+  http_magic_status="$({
     curl --silent \
-         --max-time 10 \
-         --range 0-6 \
-         --output "${http_magic_tmp}" \
-         --write-out '%{http_code}' \
-         "${FULL_URL}" 2>/dev/null; \
+      --max-time 10 \
+      --range 0-6 \
+      --output "${http_magic_tmp}" \
+      --write-out '%{http_code}' \
+      "${FULL_URL}" 2> /dev/null
   })"
   http_magic_exit=$?
   if [[ ${http_magic_exit} -ne 0 ]]; then
@@ -259,7 +259,7 @@ if [[ "${BASEMAP_PROOF_SCOPE}" == "pmtiles-content" ]]; then
     exit 1
   fi
 
-  http_magic="$(cat "${http_magic_tmp}" 2>/dev/null | tr -d '\0')"
+  http_magic="$(tr -d '\0' < "${http_magic_tmp}" 2> /dev/null)"
   rm -f "${http_magic_tmp}"
 
   if [[ "${http_magic}" != "PMTiles" ]]; then
@@ -320,7 +320,7 @@ else
     while IFS= read -r -d '' f; do
       PMTILES_FILE="${f}"
       break
-    done < <(find "${BASEMAP_ARTIFACT_DIR}" -maxdepth 1 -name '*.pmtiles' -print0 2>/dev/null)
+    done < <(find "${BASEMAP_ARTIFACT_DIR}" -maxdepth 1 -name '*.pmtiles' -print0 2> /dev/null)
   fi
 
   if [[ -z "${PMTILES_FILE}" ]]; then

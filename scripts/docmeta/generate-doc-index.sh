@@ -26,20 +26,20 @@ HEADER
 TEMP_ENTRIES=$(mktemp)
 
 find docs -type f -name "*.md" ! -path "docs/_generated/*" -print0 | while IFS= read -r -d '' file; do
-    # Skip files without frontmatter
-    if ! head -n 1 "$file" | grep -q "^---$"; then
-        continue
-    fi
+  # Skip files without frontmatter
+  if ! head -n 1 "$file" | grep -q "^---$"; then
+    continue
+  fi
 
-    # Extract fields with basic sed
-    id=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^id:" | sed 's/^id: *//' | tr -d '"'\''')
-    title=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^title:" | sed 's/^title: *//' | tr -d '"'\''')
-    doc_type=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^doc_type:" | sed 's/^doc_type: *//' | tr -d '"'\''')
-    status=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^status:" | sed 's/^status: *//' | tr -d '"'\''')
+  # Extract fields with basic sed
+  id=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^id:" | sed 's/^id: *//' | tr -d '"'\''')
+  title=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^title:" | sed 's/^title: *//' | tr -d '"'\''')
+  doc_type=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^doc_type:" | sed 's/^doc_type: *//' | tr -d '"'\''')
+  status=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^status:" | sed 's/^status: *//' | tr -d '"'\''')
 
-    if [ -n "$id" ]; then
-        echo "| $id | $title | $doc_type | $status | $file |" >> "$TEMP_ENTRIES"
-    fi
+  if [ -n "$id" ]; then
+    echo "| $id | $title | $doc_type | $status | $file |" >> "$TEMP_ENTRIES"
+  fi
 done
 
 # Sort entries deterministically and append to output

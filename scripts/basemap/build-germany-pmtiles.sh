@@ -11,8 +11,8 @@ set -euo pipefail
 # - Pinned historical OSM snapshot with self-determined SHA256 integrity
 
 # 1. Resolve repo root securely
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." > /dev/null 2>&1 && pwd)"
 BASEMAP_DIR="$REPO_ROOT/build/basemap"
 
 # 2. Pin tools and OSM input for reproducible input provenance
@@ -40,15 +40,15 @@ echo "Format:  PMTiles"
 echo "=================================="
 
 # 3. Tool checks
-if ! command -v docker >/dev/null 2>&1; then
+if ! command -v docker > /dev/null 2>&1; then
   echo "Error: 'docker' is required but not installed or not in PATH." >&2
   exit 1
 fi
 
 DOWNLOADER=""
-if command -v wget >/dev/null 2>&1; then
+if command -v wget > /dev/null 2>&1; then
   DOWNLOADER="wget"
-elif command -v curl >/dev/null 2>&1; then
+elif command -v curl > /dev/null 2>&1; then
   DOWNLOADER="curl"
 else
   echo "Error: Neither 'wget' nor 'curl' is available for downloading the OSM data." >&2
@@ -63,18 +63,24 @@ cd "$BASEMAP_DIR"
 if [ ! -f "$OSM_FILE" ]; then
   echo "=> Downloading OSM data for Germany ($OSM_FILE)..."
   if [ "$DOWNLOADER" = "wget" ]; then
-    wget -qO "$OSM_FILE" "$OSM_URL" || { rm -f "$OSM_FILE"; exit 1; }
+    wget -qO "$OSM_FILE" "$OSM_URL" || {
+      rm -f "$OSM_FILE"
+      exit 1
+    }
   else
-    curl -fL -o "$OSM_FILE" "$OSM_URL" || { rm -f "$OSM_FILE"; exit 1; }
+    curl -fL -o "$OSM_FILE" "$OSM_URL" || {
+      rm -f "$OSM_FILE"
+      exit 1
+    }
   fi
 else
   echo "=> OSM data '$OSM_FILE' already exists locally, skipping download."
 fi
 
 echo "=> Verifying integrity of $OSM_FILE..."
-if command -v sha256sum >/dev/null 2>&1; then
+if command -v sha256sum > /dev/null 2>&1; then
   SHA256_CMD=(sha256sum)
-elif command -v shasum >/dev/null 2>&1; then
+elif command -v shasum > /dev/null 2>&1; then
   SHA256_CMD=(shasum -a 256)
 else
   echo "Error: 'sha256sum' or 'shasum' is required for artifact verification but not installed." >&2
@@ -138,7 +144,7 @@ else
   BUILD_TIMESTAMP_JSON=""
 fi
 
-cat <<MANIFEST > "$BASEMAP_DIR/$OUTPUT_META"
+cat << MANIFEST > "$BASEMAP_DIR/$OUTPUT_META"
 {
   "version": "${BASEMAP_VERSION}",
   "region": "germany",

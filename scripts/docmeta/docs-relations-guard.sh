@@ -8,8 +8,8 @@ FAIL=0
 
 # Dynamic check for required frontmatter fields using a python parser for robustness
 while IFS= read -r -d '' file; do
-    # Use python to extract frontmatter
-    python3 -c "
+  # Use python to extract frontmatter
+  python3 -c "
 import sys
 import os
 
@@ -86,7 +86,7 @@ sys.exit(0)
 done < <(find docs -type f -name "*.md" ! -path "docs/_generated/*" -print0)
 
 if [ "$FAIL" -eq 1 ]; then
-    exit 1
+  exit 1
 fi
 
 echo "docs-relations-guard pass."

@@ -9,8 +9,8 @@ set -euo pipefail
 # - SHA256 integrity verification of the downloaded archive
 # - Extracted assets placed in reproducible local paths
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." > /dev/null 2>&1 && pwd)"
 GLYPHS_DIR="$REPO_ROOT/map-style/glyphs"
 TARGET_FONT_DIR="$GLYPHS_DIR/Noto Sans Regular"
 
@@ -29,29 +29,28 @@ echo "=================================="
 
 # Tool checks
 DOWNLOADER=""
-if command -v wget >/dev/null 2>&1; then
+if command -v wget > /dev/null 2>&1; then
   DOWNLOADER="wget"
-elif command -v curl >/dev/null 2>&1; then
+elif command -v curl > /dev/null 2>&1; then
   DOWNLOADER="curl"
 else
   echo "Error: Neither 'wget' nor 'curl' is available for downloading the assets." >&2
   exit 1
 fi
 
-if ! command -v unzip >/dev/null 2>&1; then
+if ! command -v unzip > /dev/null 2>&1; then
   echo "Error: 'unzip' is required to extract the font archive." >&2
   exit 1
 fi
 
-if command -v sha256sum >/dev/null 2>&1; then
+if command -v sha256sum > /dev/null 2>&1; then
   SHA256_CMD=(sha256sum)
-elif command -v shasum >/dev/null 2>&1; then
+elif command -v shasum > /dev/null 2>&1; then
   SHA256_CMD=(shasum -a 256)
 else
   echo "Error: 'sha256sum' or 'shasum' is required for artifact verification but not installed." >&2
   exit 1
 fi
-
 
 echo "=> Preparing target directory ($TARGET_FONT_DIR)..."
 mkdir -p "$TARGET_FONT_DIR"
@@ -64,7 +63,7 @@ if [ -f "$TARGET_FONT_DIR/.complete" ]; then
 
   # Validate that STORED_COUNT is strictly numeric to safely use -eq
   case "$STORED_COUNT" in
-    ''|*[!0-9]*) STORED_COUNT=-1 ;;
+    '' | *[!0-9]*) STORED_COUNT=-1 ;;
   esac
 
   if [ "$STORED_HASH" = "$ASSET_SHA256" ] && [ "$STORED_COUNT" -ge 0 ]; then
@@ -131,9 +130,6 @@ cat << EOF_SENTINEL > "$TARGET_FONT_DIR/.complete"
 HASH=$ASSET_SHA256
 COUNT=$EXTRACTED_COUNT
 EOF_SENTINEL
-
-
-
 
 echo "=> Glyph fetching complete!"
 echo "Artifacts are now available in: $TARGET_FONT_DIR"

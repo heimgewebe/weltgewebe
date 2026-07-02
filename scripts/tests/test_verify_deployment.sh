@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2155
 # ------------------------------------------------------------------
 # Local Mock Test for Deployment Logic
 # Not intended for CI execution without mock setup.
@@ -12,7 +13,7 @@ cd "$(dirname "$0")/../.."
 cleanup() {
   rm -rf mock_bin test.env custom_state
   if [[ -n "${MOCK_PORT_CALLS_FILE:-}" ]]; then
-      rm -f "$MOCK_PORT_CALLS_FILE"
+    rm -f "$MOCK_PORT_CALLS_FILE"
   fi
   unset HEALTH_URL API_INTERNAL_PORT MOCK_HEALTH_EXISTS MOCK_PORT_CALLS_FILE
 }
@@ -215,7 +216,7 @@ echo "WEB_UPSTREAM_HOST=example.com" >> "$ENV_FILE"
 # 1. Test Project Validation
 echo ">>> Test 1: Project Validation (fail case)"
 export COMPOSE_PROJECT="compose"
-if ./scripts/weltgewebe-up --no-pull --no-build >/dev/null 2>&1; then
+if ./scripts/weltgewebe-up --no-pull --no-build > /dev/null 2>&1; then
   echo "FAIL: COMPOSE_PROJECT=compose check failed."
   exit 1
 else
@@ -232,19 +233,19 @@ OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 # Robust assertions: Check for key markers instead of exact full string
 if echo "$OUTPUT" | grep -q "ERROR: Detected foreign compose project"; then
-   if echo "$OUTPUT" | grep -q "Repo dir:" && \
-      echo "$OUTPUT" | grep -q "Expected project name:" && \
-      echo "$OUTPUT" | grep -q "docker compose -p <foreign_project> down"; then
-         echo "PASS: Detailed error message found (robust check)."
-   else
-      echo "FAIL: Missing remediation hints or context info."
-      echo "$OUTPUT"
-      exit 1
-   fi
+  if echo "$OUTPUT" | grep -q "Repo dir:" &&
+    echo "$OUTPUT" | grep -q "Expected project name:" &&
+    echo "$OUTPUT" | grep -q "docker compose -p <foreign_project> down"; then
+    echo "PASS: Detailed error message found (robust check)."
+  else
+    echo "FAIL: Missing remediation hints or context info."
+    echo "$OUTPUT"
+    exit 1
+  fi
 else
-   echo "FAIL: Zombie detection failed or error message mismatch."
-   echo "$OUTPUT"
-   exit 1
+  echo "FAIL: Zombie detection failed or error message mismatch."
+  echo "$OUTPUT"
+  exit 1
 fi
 
 # 3. Test Zombie Guard (Purge)
@@ -343,18 +344,18 @@ unset REPO_DIR COMPOSE_BAKE WELTGEWEBE_COMPOSE_BAKE WELTGEWEBE_APPS_PROBE VERIFY
 # We rely on CWD/Git fallback since we are in repo root (managed by test setup cd)
 # Ensure we are in a path that has the config file
 if [[ ! -f "infra/compose/compose.prod.yml" ]]; then
-    echo "FAIL: Test setup error - config file not found in CWD."
-    exit 1
+  echo "FAIL: Test setup error - config file not found in CWD."
+  exit 1
 fi
 
 # We expect success (exit 0) and validation that correct repo was picked
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 if echo "$OUTPUT" | grep -qF "Repo:    $(pwd)"; then
-    echo "PASS: Auto-detection worked and selected current directory."
+  echo "PASS: Auto-detection worked and selected current directory."
 else
-    echo "FAIL: Auto-detection failed or selected wrong repo."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Auto-detection failed or selected wrong repo."
+  echo "$OUTPUT"
+  exit 1
 fi
 
 # 9. Test REPO_DIR Strictness (Invalid Path)
@@ -363,17 +364,17 @@ export REPO_DIR="/invalid/path/to/repo"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "ERROR: REPO_DIR explicitly set"; then
-   if echo "$OUTPUT" | grep -q "Refusing fallback"; then
-      echo "PASS: Strict check rejected invalid REPO_DIR."
-   else
-      echo "FAIL: Error message missing 'Refusing fallback'."
-      echo "$OUTPUT"
-      exit 1
-   fi
+  if echo "$OUTPUT" | grep -q "Refusing fallback"; then
+    echo "PASS: Strict check rejected invalid REPO_DIR."
+  else
+    echo "FAIL: Error message missing 'Refusing fallback'."
+    echo "$OUTPUT"
+    exit 1
+  fi
 else
-   echo "FAIL: Script did not fail on invalid REPO_DIR."
-   echo "$OUTPUT"
-   exit 1
+  echo "FAIL: Script did not fail on invalid REPO_DIR."
+  echo "$OUTPUT"
+  exit 1
 fi
 unset REPO_DIR
 
@@ -387,17 +388,17 @@ export MOCK_EXEC_FAIL="0"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "Health strategy selected: Docker Native Health"; then
-    if echo "$OUTPUT" | grep -q "Health OK (Docker Native Health)"; then
-        echo "PASS: Fell back to Docker Native check."
-    else
-        echo "FAIL: Docker Native check failed."
-        echo "$OUTPUT"
-        exit 1
-    fi
-else
-    echo "FAIL: Did not use Docker Native check."
+  if echo "$OUTPUT" | grep -q "Health OK (Docker Native Health)"; then
+    echo "PASS: Fell back to Docker Native check."
+  else
+    echo "FAIL: Docker Native check failed."
     echo "$OUTPUT"
     exit 1
+  fi
+else
+  echo "FAIL: Did not use Docker Native check."
+  echo "$OUTPUT"
+  exit 1
 fi
 
 # 12. Test Health: Host Port (Valid)
@@ -408,17 +409,17 @@ export MOCK_HEALTH_EXISTS="0"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "Health strategy selected: HTTP Health"; then
-    if echo "$OUTPUT" | grep -q "Using Host Port Mapping"; then
-        echo "PASS: Used Host Port check when valid."
-    else
-        echo "FAIL: Did not output Host Port mapping."
-        echo "$OUTPUT"
-        exit 1
-    fi
-else
-    echo "FAIL: Did not use HTTP Health check."
+  if echo "$OUTPUT" | grep -q "Using Host Port Mapping"; then
+    echo "PASS: Used Host Port check when valid."
+  else
+    echo "FAIL: Did not output Host Port mapping."
     echo "$OUTPUT"
     exit 1
+  fi
+else
+  echo "FAIL: Did not use HTTP Health check."
+  echo "$OUTPUT"
+  exit 1
 fi
 unset MOCK_HEALTH_EXISTS
 
@@ -430,17 +431,17 @@ export MOCK_HEALTH_EXISTS="0"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "Health strategy selected: HTTP Health"; then
-    if echo "$OUTPUT" | grep -q "Using explicit health URL: http://explicit-url:8080/health"; then
-        echo "PASS: Used explicit HEALTH_URL."
-    else
-        echo "FAIL: Did not use explicit HEALTH_URL."
-        echo "$OUTPUT"
-        exit 1
-    fi
-else
-    echo "FAIL: Did not use HTTP Health check."
+  if echo "$OUTPUT" | grep -q "Using explicit health URL: http://explicit-url:8080/health"; then
+    echo "PASS: Used explicit HEALTH_URL."
+  else
+    echo "FAIL: Did not use explicit HEALTH_URL."
     echo "$OUTPUT"
     exit 1
+  fi
+else
+  echo "FAIL: Did not use HTTP Health check."
+  echo "$OUTPUT"
+  exit 1
 fi
 unset HEALTH_URL
 unset MOCK_HEALTH_EXISTS
@@ -453,17 +454,17 @@ mkdir -p "$WELTGEWEBE_STATE_DIR"
 OUTPUT=$(./scripts/weltgewebe-up --no-build 2>&1)
 
 if [[ -f "$WELTGEWEBE_STATE_DIR/weltgewebe-up.state" ]]; then
-    CONTENT=$(cat "$WELTGEWEBE_STATE_DIR/weltgewebe-up.state")
-    if [[ "$CONTENT" == "mock-sha-12345" ]]; then
-        echo "PASS: State file created in custom directory with correct SHA."
-    else
-        echo "FAIL: State file content incorrect. Got: $CONTENT"
-        exit 1
-    fi
-else
-    echo "FAIL: State file not found in custom directory."
-    echo "$OUTPUT"
+  CONTENT=$(cat "$WELTGEWEBE_STATE_DIR/weltgewebe-up.state")
+  if [[ "$CONTENT" == "mock-sha-12345" ]]; then
+    echo "PASS: State file created in custom directory with correct SHA."
+  else
+    echo "FAIL: State file content incorrect. Got: $CONTENT"
     exit 1
+  fi
+else
+  echo "FAIL: State file not found in custom directory."
+  echo "$OUTPUT"
+  exit 1
 fi
 rm -rf "$WELTGEWEBE_STATE_DIR"
 unset WELTGEWEBE_STATE_DIR
@@ -480,11 +481,11 @@ export EXPECT_INTERNAL_PORT="9090"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "Health strategy selected: HTTP Health" && echo "$OUTPUT" | grep -q "Using Host Port Mapping"; then
-     echo "PASS: Script ran successfully with custom internal port."
+  echo "PASS: Script ran successfully with custom internal port."
 else
-     echo "FAIL: Script failed or wrong strategy."
-     echo "$OUTPUT"
-     exit 1
+  echo "FAIL: Script failed or wrong strategy."
+  echo "$OUTPUT"
+  exit 1
 fi
 unset API_INTERNAL_PORT
 unset EXPECT_INTERNAL_PORT
@@ -499,25 +500,25 @@ export MOCK_INSPECT_FAIL="0"  # Ensure inspect succeeds so it's a true missing c
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "Docker HEALTHCHECK not defined for container 'api'"; then
-    if echo "$OUTPUT" | grep -q "Waiting for health..."; then
-        echo "FAIL: Script did not fail fast (retried despite missing healthcheck)."
-        echo "$OUTPUT"
-        exit 1
-    elif echo "$OUTPUT" | grep -q "Health check failed after"; then
-        echo "FAIL: Script printed misleading 'failed after X seconds' summary despite fail fast."
-        echo "$OUTPUT"
-        exit 1
-    elif ! echo "$OUTPUT" | grep -Fq "Docker HEALTHCHECK not defined for container 'api'"; then
-        echo "FAIL: Did not find expected HEALTHCHECK-missing message substring."
-        echo "$OUTPUT"
-        exit 1
-    else
-        echo "PASS: Detected missing HEALTHCHECK, failed fast, and printed correct summary."
-    fi
-else
-    echo "FAIL: Did not detect missing HEALTHCHECK."
+  if echo "$OUTPUT" | grep -q "Waiting for health..."; then
+    echo "FAIL: Script did not fail fast (retried despite missing healthcheck)."
     echo "$OUTPUT"
     exit 1
+  elif echo "$OUTPUT" | grep -q "Health check failed after"; then
+    echo "FAIL: Script printed misleading 'failed after X seconds' summary despite fail fast."
+    echo "$OUTPUT"
+    exit 1
+  elif ! echo "$OUTPUT" | grep -Fq "Docker HEALTHCHECK not defined for container 'api'"; then
+    echo "FAIL: Did not find expected HEALTHCHECK-missing message substring."
+    echo "$OUTPUT"
+    exit 1
+  else
+    echo "PASS: Detected missing HEALTHCHECK, failed fast, and printed correct summary."
+  fi
+else
+  echo "FAIL: Did not detect missing HEALTHCHECK."
+  echo "$OUTPUT"
+  exit 1
 fi
 unset MOCK_HEALTH_EXISTS
 unset MOCK_INSPECT_FAIL
@@ -533,27 +534,27 @@ rm -f "$MOCK_PORT_CALLS_FILE"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if ! echo "$OUTPUT" | grep -q "WARN: docker inspect failed during health strategy probe; falling back to HTTP Health"; then
-    echo "FAIL: Missing expected warning message for strategy inspect fail."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Missing expected warning message for strategy inspect fail."
+  echo "$OUTPUT"
+  exit 1
 fi
 
 if echo "$OUTPUT" | grep -q "Health strategy selected: HTTP Health" && echo "$OUTPUT" | grep -q "Using Host Port Mapping"; then
-    if echo "$OUTPUT" | grep -q "Health OK"; then
-        if [ ! -s "$MOCK_PORT_CALLS_FILE" ]; then
-            echo "FAIL: Strategy fell back to HTTP Health but no port probe occurred."
-            exit 1
-        fi
-        echo "PASS: Detected strategy inspect failure and fell back correctly."
-    else
-        echo "FAIL: Detected strategy inspect failure but did not attempt fallback."
-        echo "$OUTPUT"
-        exit 1
+  if echo "$OUTPUT" | grep -q "Health OK"; then
+    if [ ! -s "$MOCK_PORT_CALLS_FILE" ]; then
+      echo "FAIL: Strategy fell back to HTTP Health but no port probe occurred."
+      exit 1
     fi
-else
-    echo "FAIL: Did not fallback to HTTP Health / Host Port Mapping on strategy inspect failure."
+    echo "PASS: Detected strategy inspect failure and fell back correctly."
+  else
+    echo "FAIL: Detected strategy inspect failure but did not attempt fallback."
     echo "$OUTPUT"
     exit 1
+  fi
+else
+  echo "FAIL: Did not fallback to HTTP Health / Host Port Mapping on strategy inspect failure."
+  echo "$OUTPUT"
+  exit 1
 fi
 unset MOCK_INSPECT_FAIL_STRATEGY
 unset MOCK_HEALTH_EXISTS
@@ -568,22 +569,22 @@ export MOCK_INSPECT_FAIL_STATUS="1"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "docker inspect failed"; then
-    if echo "$OUTPUT" | grep -q "Waiting for health... (1/10)"; then
-        if echo "$OUTPUT" | grep -q "Health check aborted: missing Docker HEALTHCHECK"; then
-            echo "FAIL: Failed fast instead of retrying."
-            echo "$OUTPUT"
-            exit 1
-        fi
-        echo "PASS: Detected status inspect failure and retried correctly."
-    else
-        echo "FAIL: Detected status inspect failure but did not retry."
-        echo "$OUTPUT"
-        exit 1
+  if echo "$OUTPUT" | grep -q "Waiting for health... (1/10)"; then
+    if echo "$OUTPUT" | grep -q "Health check aborted: missing Docker HEALTHCHECK"; then
+      echo "FAIL: Failed fast instead of retrying."
+      echo "$OUTPUT"
+      exit 1
     fi
-else
-    echo "FAIL: Did not detect status inspect failure."
+    echo "PASS: Detected status inspect failure and retried correctly."
+  else
+    echo "FAIL: Detected status inspect failure but did not retry."
     echo "$OUTPUT"
     exit 1
+  fi
+else
+  echo "FAIL: Did not detect status inspect failure."
+  echo "$OUTPUT"
+  exit 1
 fi
 unset MOCK_INSPECT_FAIL_STATUS
 unset MOCK_HEALTH_EXISTS
@@ -598,22 +599,22 @@ rm -f "$MOCK_PORT_CALLS_FILE"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "Health strategy selected: Docker Native Health"; then
-    if [ -s "$MOCK_PORT_CALLS_FILE" ]; then
-        echo "FAIL: Attempted port mapping detection despite having a Docker native strategy."
-        echo "$OUTPUT"
-        exit 1
-    fi
-    if echo "$OUTPUT" | grep -q "Health OK (Docker Native Health)"; then
-        echo "PASS: Ignored missing port correctly with Docker Native Health Check."
-    else
-        echo "FAIL: Did not succeed with Docker Native Health."
-        echo "$OUTPUT"
-        exit 1
-    fi
-else
-    echo "FAIL: Did not use Docker Native Health Check strategy."
+  if [ -s "$MOCK_PORT_CALLS_FILE" ]; then
+    echo "FAIL: Attempted port mapping detection despite having a Docker native strategy."
     echo "$OUTPUT"
     exit 1
+  fi
+  if echo "$OUTPUT" | grep -q "Health OK (Docker Native Health)"; then
+    echo "PASS: Ignored missing port correctly with Docker Native Health Check."
+  else
+    echo "FAIL: Did not succeed with Docker Native Health."
+    echo "$OUTPUT"
+    exit 1
+  fi
+else
+  echo "FAIL: Did not use Docker Native Health Check strategy."
+  echo "$OUTPUT"
+  exit 1
 fi
 unset MOCK_HEALTH_EXISTS
 unset MOCK_PORT_MODE
@@ -624,16 +625,16 @@ export MOCK_MISSING_API="1"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "ERROR: Container 'api' not found."; then
-    if echo "$OUTPUT" | grep -q "HEALTHCHECK not defined"; then
-        echo "FAIL: Emitted 'missing healthcheck' despite missing container."
-        echo "$OUTPUT"
-        exit 1
-    fi
-    echo "PASS: Detected missing container before checking strategy."
-else
-    echo "FAIL: Did not detect missing container correctly."
+  if echo "$OUTPUT" | grep -q "HEALTHCHECK not defined"; then
+    echo "FAIL: Emitted 'missing healthcheck' despite missing container."
     echo "$OUTPUT"
     exit 1
+  fi
+  echo "PASS: Detected missing container before checking strategy."
+else
+  echo "FAIL: Did not detect missing container correctly."
+  echo "$OUTPUT"
+  exit 1
 fi
 unset MOCK_MISSING_API
 
@@ -666,11 +667,11 @@ export EDGE_CA="$PWD/mock_edge_ca.crt"
 export MOCK_HEALTH_EXISTS="1"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 if echo "$OUTPUT" | grep -q ">> Guard 5: Frontend Reachability..."; then
-    echo "PASS: DNS Guard succeeded and script progressed through guards."
+  echo "PASS: DNS Guard succeeded and script progressed through guards."
 else
-    echo "FAIL: Script did not reach Guard 5 as expected."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Script did not reach Guard 5 as expected."
+  echo "$OUTPUT"
+  exit 1
 fi
 unset MOCK_HEALTH_EXISTS
 
@@ -687,17 +688,17 @@ export EDGE_CA="$PWD/mock_edge_ca.crt"
 export MOCK_HEALTH_EXISTS="1"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 if echo "$OUTPUT" | grep -q "DNS Guard failed"; then
-    if echo "$OUTPUT" | grep -q "Diagnostics saved:"; then
-        echo "PASS: DNS Guard failed and generated bundle as expected."
-    else
-        echo "FAIL: DNS Guard failed but did not generate failure bundle."
-        echo "$OUTPUT"
-        exit 1
-    fi
-else
-    echo "FAIL: DNS Guard succeeded unexpectedly."
+  if echo "$OUTPUT" | grep -q "Diagnostics saved:"; then
+    echo "PASS: DNS Guard failed and generated bundle as expected."
+  else
+    echo "FAIL: DNS Guard failed but did not generate failure bundle."
     echo "$OUTPUT"
     exit 1
+  fi
+else
+  echo "FAIL: DNS Guard succeeded unexpectedly."
+  echo "$OUTPUT"
+  exit 1
 fi
 unset MOCK_HEALTH_EXISTS
 
@@ -756,16 +757,16 @@ OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 STATUS=$?
 set -e
 if [ "$STATUS" -eq 0 ]; then
-    echo "FAIL: Expected failure due to missing HTML cache headers, but got success."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Expected failure due to missing HTML cache headers, but got success."
+  echo "$OUTPUT"
+  exit 1
 fi
 if echo "$OUTPUT" | grep -q "Frontend Cache Guard failed: /map route did not return 'no-cache, must-revalidate' header"; then
-    echo "PASS: Detected missing HTML cache headers correctly."
+  echo "PASS: Detected missing HTML cache headers correctly."
 else
-    echo "FAIL: Did not detect missing HTML cache headers."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Did not detect missing HTML cache headers."
+  echo "$OUTPUT"
+  exit 1
 fi
 
 # Sub-test 22b: Missing Asset Cache Header
@@ -813,16 +814,16 @@ OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 STATUS=$?
 set -e
 if [ "$STATUS" -eq 0 ]; then
-    echo "FAIL: Expected failure due to missing immutable asset headers, but got success."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Expected failure due to missing immutable asset headers, but got success."
+  echo "$OUTPUT"
+  exit 1
 fi
 if echo "$OUTPUT" | grep -q "Frontend Cache Guard failed: Immutable asset .* did not return 'max-age=31536000, immutable' header"; then
-    echo "PASS: Detected missing immutable asset headers correctly."
+  echo "PASS: Detected missing immutable asset headers correctly."
 else
-    echo "FAIL: Did not detect missing immutable asset headers."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Did not detect missing immutable asset headers."
+  echo "$OUTPUT"
+  exit 1
 fi
 
 # Sub-test 22c: Valid Cache Headers (Positive Path)
@@ -900,18 +901,18 @@ OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 STATUS=$?
 set -e
 if [ "$STATUS" -ne 0 ]; then
-    echo "FAIL: Expected success but got exit code $STATUS."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Expected success but got exit code $STATUS."
+  echo "$OUTPUT"
+  exit 1
 fi
-if echo "$OUTPUT" | grep -q "OK (frontend route /map cache-control verified)" && \
-   echo "$OUTPUT" | grep -q "verified with immutable cache headers" && \
-   echo "$OUTPUT" | grep -q "OK (Version: mock-artifact-id, Build-ID: mock-build-id-123 verified via /_app/version.json with no-store)"; then
-    echo "PASS: Valid cache headers and version.json correctly passed the guards."
+if echo "$OUTPUT" | grep -q "OK (frontend route /map cache-control verified)" &&
+  echo "$OUTPUT" | grep -q "verified with immutable cache headers" &&
+  echo "$OUTPUT" | grep -q "OK (Version: mock-artifact-id, Build-ID: mock-build-id-123 verified via /_app/version.json with no-store)"; then
+  echo "PASS: Valid cache headers and version.json correctly passed the guards."
 else
-    echo "FAIL: Positive cache header validation path failed."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Positive cache header validation path failed."
+  echo "$OUTPUT"
+  exit 1
 fi
 
 # Sub-test 22d: Missing no-store header for version.json
@@ -988,16 +989,16 @@ OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 STATUS=$?
 set -e
 if [ "$STATUS" -eq 0 ]; then
-    echo "FAIL: Expected failure due to missing no-store header, but got success."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Expected failure due to missing no-store header, but got success."
+  echo "$OUTPUT"
+  exit 1
 fi
 if echo "$OUTPUT" | grep -q "Frontend Guard failed: /_app/version.json did not return 'no-store' header."; then
-    echo "PASS: Detected missing version.json cache headers correctly."
+  echo "PASS: Detected missing version.json cache headers correctly."
 else
-    echo "FAIL: Did not detect missing version.json cache headers."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Did not detect missing version.json cache headers."
+  echo "$OUTPUT"
+  exit 1
 fi
 
 # Sub-test 22e: Missing canonical version for version.json
@@ -1076,16 +1077,16 @@ OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 STATUS=$?
 set -e
 if [ "$STATUS" -eq 0 ]; then
-    echo "FAIL: Expected failure due to missing canonical version, but got success."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Expected failure due to missing canonical version, but got success."
+  echo "$OUTPUT"
+  exit 1
 fi
 if echo "$OUTPUT" | grep -q "Frontend Guard failed: /_app/version.json missing valid canonical 'version' field."; then
-    echo "PASS: Detected missing canonical version in version.json correctly."
+  echo "PASS: Detected missing canonical version in version.json correctly."
 else
-    echo "FAIL: Did not detect missing canonical version in version.json."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Did not detect missing canonical version in version.json."
+  echo "$OUTPUT"
+  exit 1
 fi
 
 unset REQUIRE_FRONTEND
@@ -1106,11 +1107,11 @@ export EDGE_CA="$PWD/mock_edge_ca.crt"
 export MOCK_HEALTH_EXISTS="1"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 if echo "$OUTPUT" | grep -q "Container Health Guard failed"; then
-    echo "PASS: Container Health Guard failed as expected."
+  echo "PASS: Container Health Guard failed as expected."
 else
-    echo "FAIL: Container Health Guard succeeded unexpectedly."
-    echo "$OUTPUT"
-    exit 1
+  echo "FAIL: Container Health Guard succeeded unexpectedly."
+  echo "$OUTPUT"
+  exit 1
 fi
 unset MOCK_EXEC_FAIL
 unset MOCK_HEALTH_EXISTS

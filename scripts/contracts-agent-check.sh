@@ -27,9 +27,9 @@ AJV_OUTPUT="$TMP_DIR/agent-contract-invalid.out"
 trap 'rm -rf -- "${TMP_DIR:?}"' EXIT
 
 INVALID_HANDOFF="$INVALID_HANDOFF" \
-INVALID_VALIDATION="$INVALID_VALIDATION" \
-INVALID_RUN_RESULT="$INVALID_RUN_RESULT" \
-python3 - <<'PY'
+  INVALID_VALIDATION="$INVALID_VALIDATION" \
+  INVALID_RUN_RESULT="$INVALID_RUN_RESULT" \
+  python3 - << 'PY'
 import json
 import os
 from pathlib import Path
@@ -75,7 +75,7 @@ expect_invalid() {
   local label="$3"
   echo "==> require $label to fail schema validation"
   set +e
-  "$AJV_BIN" validate -s "$schema" -d "$fixture" --spec=draft7 --strict=false >"$AJV_OUTPUT" 2>&1
+  "$AJV_BIN" validate -s "$schema" -d "$fixture" --spec=draft7 --strict=false > "$AJV_OUTPUT" 2>&1
   local rc=$?
   set -e
   if [[ "$rc" -ne 1 ]]; then
