@@ -2,9 +2,9 @@
 set -euxo pipefail
 
 CURL_COMMON=(-fsS --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2)
-if curl --help all 2>/dev/null | grep -q -- '--retry-all-errors'; then
+if curl --help all 2> /dev/null | grep -q -- '--retry-all-errors'; then
   CURL_COMMON+=(--retry-all-errors)
-elif curl --help 2>/dev/null | grep -q -- '--retry-all-errors'; then
+elif curl --help 2> /dev/null | grep -q -- '--retry-all-errors'; then
   CURL_COMMON+=(--retry-all-errors)
 fi
 
@@ -22,7 +22,7 @@ install_vale() {
     x86_64)
       vale_os="Linux_64-bit"
       ;;
-    aarch64|arm64)
+    aarch64 | arm64)
       vale_os="Linux_arm64"
       ;;
     *)
@@ -67,7 +67,7 @@ install_hadolint() {
     x86_64)
       hadolint_arch="x86_64"
       ;;
-    aarch64|arm64)
+    aarch64 | arm64)
       hadolint_arch="arm64"
       ;;
     *)

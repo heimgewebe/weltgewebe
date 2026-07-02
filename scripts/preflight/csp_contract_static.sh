@@ -63,7 +63,6 @@ while IFS= read -r tag; do
   fi
 done <<< "$SCRIPT_TAGS"
 
-
 if [[ "$HAS_INLINE_SCRIPT" == "1" ]]; then
 
   # Extract the configuration block for the target site.
@@ -80,8 +79,8 @@ if [[ "$HAS_INLINE_SCRIPT" == "1" ]]; then
   ' "$CADDYFILE" || true)
 
   if [[ -z "$TARGET_BLOCK" ]]; then
-     echo "ERROR: csp_contract_static could not find the host block for '$CADDY_TARGET_SITE' in $CADDYFILE." >&2
-     exit 1
+    echo "ERROR: csp_contract_static could not find the host block for '$CADDY_TARGET_SITE' in $CADDYFILE." >&2
+    exit 1
   fi
 
   # Extract CSP lines from the target block
@@ -89,32 +88,32 @@ if [[ "$HAS_INLINE_SCRIPT" == "1" ]]; then
   CSP_LINES=$(echo "$TARGET_BLOCK" | grep -i "Content-Security-Policy" || true)
 
   if [[ -z "$CSP_LINES" ]]; then
-     echo "csp_contract_static: No CSP found for $CADDY_TARGET_SITE in $CADDYFILE, assuming safe (or no CSP)."
-     exit 0
+    echo "csp_contract_static: No CSP found for $CADDY_TARGET_SITE in $CADDYFILE, assuming safe (or no CSP)."
+    exit 0
   fi
 
   # Handle multiple CSP lines: If ANY line satisfies the requirement, we pass.
   # This prevents false positives in multi-site Caddyfiles without needing a full parser.
   while IFS= read -r CSP_LINE; do
-      if [[ -z "$CSP_LINE" ]]; then
-          continue
+    if [[ -z "$CSP_LINE" ]]; then
+      continue
+    fi
+
+    # Look specifically within the script-src directive
+    if echo "$CSP_LINE" | grep -qi "script-src"; then
+      # Extract just the script-src part (up to the next semicolon or end of string) using sed for portability
+      SCRIPT_SRC=$(echo "$CSP_LINE" | sed -n 's/.*\([sS][cC][rR][iI][pP][tT]-[sS][rR][cC][^;]*\).*/\1/p')
+
+      if echo "$SCRIPT_SRC" | grep -qF "'unsafe-inline'"; then
+        echo "csp_contract_static: OK ('unsafe-inline' present in script-src of $CADDYFILE)"
+        exit 0
       fi
 
-      # Look specifically within the script-src directive
-      if echo "$CSP_LINE" | grep -qi "script-src"; then
-          # Extract just the script-src part (up to the next semicolon or end of string) using sed for portability
-          SCRIPT_SRC=$(echo "$CSP_LINE" | sed -n 's/.*\([sS][cC][rR][iI][pP][tT]-[sS][rR][cC][^;]*\).*/\1/p')
-
-          if echo "$SCRIPT_SRC" | grep -qF "'unsafe-inline'"; then
-              echo "csp_contract_static: OK ('unsafe-inline' present in script-src of $CADDYFILE)"
-              exit 0
-          fi
-
-          if echo "$SCRIPT_SRC" | grep -qE "'nonce-|'sha256-"; then
-              echo "csp_contract_static: OK (nonce/hash present in script-src of $CADDYFILE)"
-              exit 0
-          fi
+      if echo "$SCRIPT_SRC" | grep -qE "'nonce-|'sha256-"; then
+        echo "csp_contract_static: OK (nonce/hash present in script-src of $CADDYFILE)"
+        exit 0
       fi
+    fi
   done <<< "$CSP_LINES"
 
   echo "ERROR: Inline <script> detected in INDEX_HTML ($INDEX_HTML), but no matching Content-Security-Policy in CADDYFILE_PATH ($CADDYFILE) allows 'unsafe-inline' or nonce/hash." >&2

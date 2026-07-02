@@ -79,7 +79,7 @@ export CADDY_TARGET_SITE="weltgewebe.home.arpa"
 
 # Test 8: Target host strict, other host lenient -> FAIL
 echo '<script>console.log("inline")</script>' > "$INDEX_HTML"
-cat <<EOF > "$CADDYFILE_PATH"
+cat << EOF > "$CADDYFILE_PATH"
 weltgewebe.home.arpa {
   Content-Security-Policy "default-src 'self'; script-src 'self';"
 }
@@ -91,7 +91,7 @@ run_test "Target host strict, other host lenient -> FAIL" 1
 
 # Test 9: Target host lenient, other host strict -> PASS
 echo '<script>console.log("inline")</script>' > "$INDEX_HTML"
-cat <<EOF > "$CADDYFILE_PATH"
+cat << EOF > "$CADDYFILE_PATH"
 other.host {
   Content-Security-Policy "default-src 'self'; script-src 'self';"
 }

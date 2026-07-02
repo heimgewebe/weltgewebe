@@ -5,10 +5,10 @@ set -euo pipefail
 # Configuration (sane defaults)
 # -----------------------------
 # (Note: Infra updates (Edge/Public Login/Trusted Proxy/Drift Fix/Caddy Rate Limit Disabled/Basemap CSP Fix/Basemap PMTiles Hosting) require the pinned Caddy build (see infra/caddy/Dockerfile) and a strict upstream env; ensure snapshot captures this context)
-SNAPSHOT_MODE="${SNAPSHOT_MODE:-dry}"          # dry | live
+SNAPSHOT_MODE="${SNAPSHOT_MODE:-dry}" # dry | live
 COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/compose.prod.yml}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-compose}"
-HEALTH_MODE="${HEALTH_MODE:-container}"        # container | url
+HEALTH_MODE="${HEALTH_MODE:-container}" # container | url
 HEALTH_URL="${HEALTH_URL:-}"
 OUT_DIR="${OUT_DIR:-artifacts}"
 OUT_FILE="${OUT_DIR}/deploy.snapshot.json"
@@ -19,16 +19,16 @@ OUT_FILE="${OUT_DIR}/deploy.snapshot.json"
 iso_ts() { date -Is; }
 sha256() { sha256sum "$1" | awk '{print $1}'; }
 
-have() { command -v "$1" >/dev/null 2>&1; }
+have() { command -v "$1" > /dev/null 2>&1; }
 
 collect_compose_config() {
   local out
-  if have docker && docker compose version >/dev/null 2>&1; then
+  if have docker && docker compose version > /dev/null 2>&1; then
     set +e
     if [[ -n "${COMPOSE_ARGS:-}" ]]; then
       # Robustly parse args into an array (handles spaces/globbing better than unquoted expansion)
       local -a args=()
-      read -r -a args <<<"${COMPOSE_ARGS}"
+      read -r -a args <<< "${COMPOSE_ARGS}"
       out="$(docker compose "${args[@]}" config 2>&1)"
     else
       out="$(docker compose -f "$COMPOSE_FILE" config 2>&1)"
@@ -51,11 +51,11 @@ REPO_PATH="$(pwd)"
 REPO_SHA=""
 REPO_DIRTY="null"
 
-if have git && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  REPO_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo "")"
+if have git && git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+  REPO_SHA="$(git rev-parse --short HEAD 2> /dev/null || echo "")"
   # Robust dirty check: staged + unstaged changes
-  if git rev-parse --verify HEAD >/dev/null 2>&1; then
-    if git diff-index --quiet HEAD -- 2>/dev/null; then
+  if git rev-parse --verify HEAD > /dev/null 2>&1; then
+    if git diff-index --quiet HEAD -- 2> /dev/null; then
       REPO_DIRTY="false"
     else
       REPO_DIRTY="true"
@@ -126,7 +126,8 @@ if [[ "$SNAPSHOT_MODE" == "live" ]]; then
   export DB_CONTAINER="${COMPOSE_PROJECT}-db-1"
 
   # Pass service mapping to python via environment to avoid injection
-  export SVC_MAP_JSON="$(python3 - <<'PY'
+  SVC_MAP_JSON="$(
+    python3 - << 'PY'
 import json, os
 print(json.dumps({
   "api": os.environ["API_CONTAINER"],
@@ -134,9 +135,11 @@ print(json.dumps({
   "db": os.environ["DB_CONTAINER"],
 }))
 PY
-)"
+  )"
+  export SVC_MAP_JSON
 
-  CONTAINERS_JSON="$(python3 - <<'PY'
+  CONTAINERS_JSON="$(
+    python3 - << 'PY'
 import json, subprocess, os
 
 service_map = json.loads(os.environ['SVC_MAP_JSON'])
@@ -232,12 +235,13 @@ except Exception:
 out.sort(key=lambda x: x["service"])
 print(json.dumps(out, indent=2))
 PY
-)"
+  )"
 
   # Dynamic Volume Discovery
   # List all volumes starting with project prefix
   export PROJ_PREFIX="${COMPOSE_PROJECT}_"
-  VOLUMES_JSON="$(python3 - <<'PY'
+  VOLUMES_JSON="$(
+    python3 - << 'PY'
 import json, subprocess, os
 
 prefix = os.environ['PROJ_PREFIX']
@@ -262,11 +266,12 @@ except Exception:
 
 print(json.dumps(out, indent=2))
 PY
-)"
+  )"
 
   # Mounts for specific containers
   # We use the same service map to inspect mounts
-  MOUNTS_JSON="$(python3 - <<'PY'
+  MOUNTS_JSON="$(
+    python3 - << 'PY'
 import json, subprocess, os
 
 service_map = json.loads(os.environ['SVC_MAP_JSON'])
@@ -290,7 +295,7 @@ for c in containers:
         pass
 print(json.dumps(out, indent=2))
 PY
-)"
+  )"
 
   # Health Check
   if [[ "$HEALTH_MODE" == "container" ]]; then
@@ -309,35 +314,37 @@ PY
     "
 
     # Check if container is running using exact match via inspect
-    if docker inspect --format '{{.State.Running}}' "$TARGET_CONTAINER" 2>/dev/null | grep -q "true"; then
-       RES=$(docker exec "$TARGET_CONTAINER" sh -c "$HEALTH_CMD" 2>/dev/null || echo "exec_fail")
-       if [[ "$RES" == "ok" ]]; then
-         HEALTH_JSON='{ "mode":"container","url":null,"ok":true,"http_code":200,"reason":null }'
-       elif [[ "$RES" == "unknown" ]]; then
-         HEALTH_JSON='{ "mode":"container","url":null,"ok":null,"http_code":null,"reason":"neither wget nor curl available" }'
-       else
-         HEALTH_JSON='{ "mode":"container","url":null,"ok":false,"http_code":500,"reason":"health endpoint failed or exec error" }'
-       fi
+    if docker inspect --format '{{.State.Running}}' "$TARGET_CONTAINER" 2> /dev/null | grep -q "true"; then
+      RES=$(docker exec "$TARGET_CONTAINER" sh -c "$HEALTH_CMD" 2> /dev/null || echo "exec_fail")
+      if [[ "$RES" == "ok" ]]; then
+        HEALTH_JSON='{ "mode":"container","url":null,"ok":true,"http_code":200,"reason":null }'
+      elif [[ "$RES" == "unknown" ]]; then
+        HEALTH_JSON='{ "mode":"container","url":null,"ok":null,"http_code":null,"reason":"neither wget nor curl available" }'
+      else
+        HEALTH_JSON='{ "mode":"container","url":null,"ok":false,"http_code":500,"reason":"health endpoint failed or exec error" }'
+      fi
     else
-       HEALTH_JSON='{ "mode":"container","url":null,"ok":false,"http_code":null,"reason":"container not running" }'
+      HEALTH_JSON='{ "mode":"container","url":null,"ok":false,"http_code":null,"reason":"container not running" }'
     fi
   elif [[ "$HEALTH_MODE" == "url" ]]; then
-      if [[ -n "$HEALTH_URL" ]]; then
-          export HEALTH_URL
-          if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
-             HEALTH_JSON="$(python3 - <<'PY'
+    if [[ -n "$HEALTH_URL" ]]; then
+      export HEALTH_URL
+      if curl -fsS "$HEALTH_URL" > /dev/null 2>&1; then
+        HEALTH_JSON="$(
+          python3 - << 'PY'
 import json, os
 print(json.dumps({"mode":"url","url":os.environ["HEALTH_URL"],"ok":True,"http_code":200,"reason":None}))
 PY
-)"
-          else
-             HEALTH_JSON="$(python3 - <<'PY'
+        )"
+      else
+        HEALTH_JSON="$(
+          python3 - << 'PY'
 import json, os
 print(json.dumps({"mode":"url","url":os.environ["HEALTH_URL"],"ok":False,"http_code":None,"reason":"connection failed"}))
 PY
-)"
-          fi
+        )"
       fi
+    fi
   fi
 fi
 
@@ -352,7 +359,7 @@ export ISO_TS HOSTNAME REPO_PATH REPO_SHA REPO_DIRTY
 export COMPOSE_FILE COMPOSE_FILE_SHA CONFIG_SHA RENDER_DEGRADED
 export WARNINGS_JSON CONTAINERS_JSON VOLUMES_JSON MOUNTS_JSON HEALTH_JSON
 
-python3 - <<'PY' > "$OUT_FILE"
+python3 - << 'PY' > "$OUT_FILE"
 import json, sys, os
 
 # Safe boolean parsing

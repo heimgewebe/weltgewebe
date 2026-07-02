@@ -16,7 +16,7 @@ echo "Running test in $TEMP_DIR"
 
 # Mock docker
 mkdir -p "$TEMP_DIR/bin"
-cat > "$TEMP_DIR/bin/docker" <<EOF
+cat > "$TEMP_DIR/bin/docker" << EOF
 #!/bin/sh
 # Mock 'docker compose version'
 if [ "\$1" = "compose" ] && [ "\$2" = "version" ]; then
@@ -54,7 +54,7 @@ export PATH="$TEMP_DIR/bin:$PATH"
 export TMPDIR="$TEMP_DIR"
 
 echo ">>> Test 1: Successful config rendering (should cleanup)"
-"$SCRIPT_TO_TEST" >/dev/null
+"$SCRIPT_TO_TEST" > /dev/null
 
 # Check for leaked files (pattern guard_api_alias.* or tmp.* depending on mktemp)
 # Since we control TMPDIR, any file created there by mktemp should be gone.
@@ -73,7 +73,7 @@ fi
 echo ">>> Test 2: Failed config rendering (should cleanup)"
 touch "$TEMP_DIR/FAIL_CONFIG"
 # Script should exit 1, so we allow failure
-"$SCRIPT_TO_TEST" >/dev/null 2>&1 || true
+"$SCRIPT_TO_TEST" > /dev/null 2>&1 || true
 
 LEAK_COUNT=$(find "$TEMP_DIR" -maxdepth 1 -type f \( -name "tmp.*" -o -name "guard_api_alias.*" \) | wc -l)
 

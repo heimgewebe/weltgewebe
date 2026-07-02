@@ -32,7 +32,7 @@ run_guard() {
 
   local out rc
   set +e
-  out=$(python3 "$PARSE_HELPER" "$tmpfile" 2>/dev/null)
+  out=$(python3 "$PARSE_HELPER" "$tmpfile" 2> /dev/null)
   rc=$?
   set -e
 
@@ -43,8 +43,8 @@ run_guard() {
 # _read_version_json: mirrors the helper wrapper used in weltgewebe-up.
 # Returns the version string (line 1 of parser output), or empty on any error.
 _read_version_json() {
-    local json_file="$1"
-    python3 "$PARSE_HELPER" "$json_file" 2>/dev/null | head -n1 || true
+  local json_file="$1"
+  python3 "$PARSE_HELPER" "$json_file" 2> /dev/null | head -n1 || true
 }
 
 # ===========================================================================
@@ -74,8 +74,8 @@ rc="${result%%|*}"
 output="${result#*|}"
 [[ "$rc" == "0" ]] || fail "Test 3: expected exit 0, got $rc"
 commit_line=$(printf '%s' "$output" | sed -n '3p')
-[[ "$commit_line" == "c67aaa6730b78c5ab5cfbacb272eb60a06347473" ]] \
-    || fail "Test 3: commit not on 3rd line, got '$commit_line'"
+[[ "$commit_line" == "c67aaa6730b78c5ab5cfbacb272eb60a06347473" ]] ||
+  fail "Test 3: commit not on 3rd line, got '$commit_line'"
 echo "PASS: commit field output as 3rd line"
 
 # --- Test 4: missing 'version' field → exit 2 ---
@@ -141,15 +141,15 @@ echo "PASS: _read_version_json returns empty for blank version"
 # --- Test 11: stale → rebuild condition triggered ---
 _BUILT="17314c6a"
 _HEAD="c67aaa67"
-[[ "$_BUILT" != "$_HEAD" ]] \
-    || fail "Test 11: stale versions should differ"
+[[ "$_BUILT" != "$_HEAD" ]] ||
+  fail "Test 11: stale versions should differ"
 echo "PASS: staleness comparison contract — stale version triggers rebuild condition"
 
 # --- Test 12: matching → no rebuild ---
 _BUILT="c67aaa67"
 _HEAD="c67aaa67"
-[[ "$_BUILT" == "$_HEAD" ]] \
-    || fail "Test 12: matching versions should be equal"
+[[ "$_BUILT" == "$_HEAD" ]] ||
+  fail "Test 12: matching versions should be equal"
 echo "PASS: staleness comparison contract — matching version does not trigger rebuild"
 
 # --- Test 13: end-to-end stale detection via _read_version_json ---
@@ -158,8 +158,8 @@ printf '{"version":"17314c6a","build_id":"old"}' > "$_tmpf"
 _bv=$(_read_version_json "$_tmpf")
 rm -f "$_tmpf"
 _sha="c67aaa67"
-[[ -n "$_bv" && "$_bv" != "$_sha" ]] \
-    || fail "Test 13: expected stale detection (bv=$_bv sha=$_sha)"
+[[ -n "$_bv" && "$_bv" != "$_sha" ]] ||
+  fail "Test 13: expected stale detection (bv=$_bv sha=$_sha)"
 echo "PASS: staleness comparison contract — stale version.json detected end-to-end"
 
 # --- Test 14: end-to-end up-to-date detection ---
@@ -168,8 +168,8 @@ printf '{"version":"c67aaa67","build_id":"new"}' > "$_tmpf"
 _bv=$(_read_version_json "$_tmpf")
 rm -f "$_tmpf"
 _sha="c67aaa67"
-[[ -n "$_bv" && "$_bv" == "$_sha" ]] \
-    || fail "Test 14: expected up-to-date detection (bv=$_bv sha=$_sha)"
+[[ -n "$_bv" && "$_bv" == "$_sha" ]] ||
+  fail "Test 14: expected up-to-date detection (bv=$_bv sha=$_sha)"
 echo "PASS: staleness comparison contract — up-to-date build does not trigger rebuild"
 
 # ===========================================================================

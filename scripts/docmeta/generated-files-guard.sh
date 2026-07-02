@@ -7,59 +7,59 @@ echo "Checking generated files guard..."
 FAIL=0
 
 if [ ! -d "docs/_generated" ]; then
-    echo "ERROR: docs/_generated missing."
-    FAIL=1
+  echo "ERROR: docs/_generated missing."
+  FAIL=1
 fi
 
 REQUIRED_FILES=(
-    "doc-index.md"
-    "system-map.md"
-    "backlinks.md"
-    "impl-index.md"
-    "orphans.md"
-    "supersession-map.md"
-    "architecture-drift.md"
-    "doc-coverage.md"
-    "knowledge-gaps.md"
-    "implicit-dependencies.md"
-    "change-resonance.md"
-    "staleness-report.md"
-    "agent-readiness.md"
-    "claim-evidence-map.md"
-    "report-lifecycle-inventory.md"
-    "report-lifecycle.md"
+  "doc-index.md"
+  "system-map.md"
+  "backlinks.md"
+  "impl-index.md"
+  "orphans.md"
+  "supersession-map.md"
+  "architecture-drift.md"
+  "doc-coverage.md"
+  "knowledge-gaps.md"
+  "implicit-dependencies.md"
+  "change-resonance.md"
+  "staleness-report.md"
+  "agent-readiness.md"
+  "claim-evidence-map.md"
+  "report-lifecycle-inventory.md"
+  "report-lifecycle.md"
 )
 
 for req in "${REQUIRED_FILES[@]}"; do
-    if [ ! -f "docs/_generated/$req" ]; then
-        echo "ERROR: Missing expected generated file docs/_generated/$req"
-        FAIL=1
-    fi
+  if [ ! -f "docs/_generated/$req" ]; then
+    echo "ERROR: Missing expected generated file docs/_generated/$req"
+    FAIL=1
+  fi
 done
 
 for file in docs/_generated/*.md; do
-    if [ -f "$file" ]; then
-        if ! grep -q "Generated automatically." "$file"; then
-            echo "ERROR: Generated file $file missing 'Generated automatically.' string."
-            FAIL=1
-        fi
-        if ! head -n 1 "$file" | grep -q "^---$"; then
-            echo "ERROR: Generated file $file missing frontmatter block."
-            FAIL=1
-        fi
+  if [ -f "$file" ]; then
+    if ! grep -q "Generated automatically." "$file"; then
+      echo "ERROR: Generated file $file missing 'Generated automatically.' string."
+      FAIL=1
     fi
+    if ! head -n 1 "$file" | grep -q "^---$"; then
+      echo "ERROR: Generated file $file missing frontmatter block."
+      FAIL=1
+    fi
+  fi
 done
 
 if [ ! -f ".wgx/generated-artifacts.yml" ]; then
-    echo "ERROR: .wgx/generated-artifacts.yml missing."
-    FAIL=1
+  echo "ERROR: .wgx/generated-artifacts.yml missing."
+  FAIL=1
 elif ! python3 -m scripts.docmeta.validate_generated_artifacts --check; then
-    echo "ERROR: generated artifact control validation failed."
-    FAIL=1
+  echo "ERROR: generated artifact control validation failed."
+  FAIL=1
 fi
 
 if [ "$FAIL" -eq 1 ]; then
-    exit 1
+  exit 1
 fi
 
 echo "generated-files-guard pass."

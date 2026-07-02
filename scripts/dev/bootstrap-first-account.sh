@@ -123,7 +123,7 @@ _validate_no_control_chars() {
   # First check for common control characters using bash pattern matching
   # (more reliable than grep for detecting LF/CR in shell variables)
   case "$val" in
-    *$'\n'*|*$'\r'*|*$'\t'*)
+    *$'\n'* | *$'\r'* | *$'\t'*)
       echo "Error: $name contains control characters (CR, LF, TAB), which are not allowed." >&2
       exit 1
       ;;

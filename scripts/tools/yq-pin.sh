@@ -149,7 +149,7 @@ download_yq() {
   curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}" -o "${asset_path}"
 
   # Try individual sha256 first, then 'checksums'
-  if ! curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}.sha256" -o "${sha_path}" 2>/dev/null; then
+  if ! curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}.sha256" -o "${sha_path}" 2> /dev/null; then
     echo "Individual sha256 not found, trying 'checksums'..." >&2
     if ! curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/checksums" -o "${sha_path}"; then
       echo "checksums file not found at ${url_base}/checksums" >&2

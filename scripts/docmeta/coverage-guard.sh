@@ -5,11 +5,11 @@ set -euo pipefail
 echo "Checking implementation coverage..."
 
 CRITICAL_PATHS=(
-    "apps/api"
-    "apps/web"
-    "infra/compose"
-    ".github/workflows"
-    "contracts/domain"
+  "apps/api"
+  "apps/web"
+  "infra/compose"
+  ".github/workflows"
+  "contracts/domain"
 )
 
 FAIL=0
@@ -17,20 +17,20 @@ FAIL=0
 REGISTERED_PATHS=$(grep -E '^[[:space:]]*path:' audit/impl-registry.yaml | awk -F ': ' '{print $2}' | tr -d '"' | tr -d "'" | sed 's/\/$//')
 
 for path in "${CRITICAL_PATHS[@]}"; do
-    if [ -d "$path" ] || [ -f "$path" ]; then
-        found=0
-        for reg in $REGISTERED_PATHS; do
-            if [[ "$reg" == "$path" ]]; then
-                found=1
-                break
-            fi
-        done
+  if [ -d "$path" ] || [ -f "$path" ]; then
+    found=0
+    for reg in $REGISTERED_PATHS; do
+      if [[ "$reg" == "$path" ]]; then
+        found=1
+        break
+      fi
+    done
 
-        if [ "$found" -eq 0 ]; then
-            echo "ERROR: Critical implementation missing from registry: $path"
-            FAIL=1
-        fi
+    if [ "$found" -eq 0 ]; then
+      echo "ERROR: Critical implementation missing from registry: $path"
+      FAIL=1
     fi
+  fi
 done
 
 # Verify that documented_by links exist
@@ -58,14 +58,14 @@ except Exception:
 ")
 
 for doc in $DOC_REFS; do
-    if [ ! -f "$doc" ]; then
-        echo "ERROR: Registered implementation points to dead doc link: $doc"
-        FAIL=1
-    fi
+  if [ ! -f "$doc" ]; then
+    echo "ERROR: Registered implementation points to dead doc link: $doc"
+    FAIL=1
+  fi
 done
 
 if [ "$FAIL" -eq 1 ]; then
-    exit 1
+  exit 1
 fi
 
 echo "coverage-guard pass."

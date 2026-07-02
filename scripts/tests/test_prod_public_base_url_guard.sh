@@ -2,11 +2,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(
-  cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1
+  cd -- "$(dirname -- "${BASH_SOURCE[0]}")" > /dev/null 2>&1
   pwd
 )"
 REPO_ROOT="$(
-  cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1
+  cd -- "${SCRIPT_DIR}/../.." > /dev/null 2>&1
   pwd
 )"
 GUARD_SCRIPT="${REPO_ROOT}/scripts/guard/prod-public-base-url-guard.sh"
@@ -40,7 +40,7 @@ write_override() {
   local auth_login="$6"
   local auth_token="$7"
 
-  cat >"$TEST_TMP/infra/compose/compose.prod.override.yml" <<EOF_OVERRIDE
+  cat > "$TEST_TMP/infra/compose/compose.prod.override.yml" << EOF_OVERRIDE
 services:
   api:
     environment:

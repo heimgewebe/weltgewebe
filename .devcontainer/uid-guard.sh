@@ -14,7 +14,7 @@ current_uid="$(id -u)"
 current_gid="$(id -g)"
 
 if [ "$current_uid" != "$workspace_uid" ] || [ "$current_gid" != "$workspace_gid" ]; then
-  cat >&2 <<EOF
+  cat >&2 << EOF
 UID-GUARD: mismatch detected.
 container uid/gid: ${current_uid}:${current_gid}
 workspace uid/gid: ${workspace_uid}:${workspace_gid}

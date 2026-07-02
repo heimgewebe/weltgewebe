@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2012
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 SCRIPT_SOURCE="$REPO_ROOT/scripts/weltgewebe-up"
 REAL_GIT="$(command -v git)"
@@ -22,7 +23,7 @@ fail() {
 assert_contains() {
   local haystack="$1"
   local needle="$2"
-  if ! grep -Fq "$needle" <<<"$haystack"; then
+  if ! grep -Fq "$needle" <<< "$haystack"; then
     fail "expected output to contain: $needle"
   fi
 }
@@ -34,8 +35,8 @@ new_repo() {
   local repo="$root/repo"
 
   mkdir -p "$root"
-  git init --bare "$origin" >/dev/null
-  git clone "$origin" "$repo" >/dev/null 2>&1
+  git init --bare "$origin" > /dev/null
+  git clone "$origin" "$repo" > /dev/null 2>&1
 
   (
     cd "$repo"
@@ -46,41 +47,41 @@ new_repo() {
     cp "$SCRIPT_SOURCE" scripts/weltgewebe-up
     chmod +x scripts/weltgewebe-up
 
-    cat > .env <<'EOF'
+    cat > .env << 'EOF'
 WEB_UPSTREAM_URL=https://example.com
 WEB_UPSTREAM_HOST=example.com
 EOF
 
-    cat > infra/compose/compose.prod.yml <<'EOF'
+    cat > infra/compose/compose.prod.yml << 'EOF'
 services:
   api:
     image: busybox
 EOF
 
-    cat > infra/compose/compose.prod.override.yml <<'EOF'
+    cat > infra/compose/compose.prod.override.yml << 'EOF'
 services:
   api:
     image: busybox
 EOF
 
-    cat > apps/web/build/index.html <<'EOF'
+    cat > apps/web/build/index.html << 'EOF'
 <!doctype html><html><body><script src="/_app/immutable/test.js"></script></body></html>
 EOF
 
-    cat > apps/web/build/_app/version.json <<'EOF'
+    cat > apps/web/build/_app/version.json << 'EOF'
 {"version":"test-build"}
 EOF
 
     git add .
-    git commit -m "test: initial main" >/dev/null
+    git commit -m "test: initial main" > /dev/null
     git branch -M main
-    git push -u origin main >/dev/null
+    git push -u origin main > /dev/null
 
-    git checkout -b feat/x >/dev/null
+    git checkout -b feat/x > /dev/null
     echo "feature" > feature.txt
     git add feature.txt
-    git commit -m "feat: x" >/dev/null
-    git push -u origin feat/x >/dev/null
+    git commit -m "feat: x" > /dev/null
+    git push -u origin feat/x > /dev/null
   )
 
   echo "$repo"
@@ -91,16 +92,16 @@ advance_remote_branch() {
   local branch="$2"
   local tmp_clone
   tmp_clone="$(mktemp -d "$WORKDIR_ROOT/tmp-remote-XXXXXX")"
-  git clone "$origin" "$tmp_clone" >/dev/null 2>&1
+  git clone "$origin" "$tmp_clone" > /dev/null 2>&1
   (
     cd "$tmp_clone"
     git config user.name "Weltgewebe Test"
     git config user.email "tests@weltgewebe.local"
-    git checkout "$branch" >/dev/null 2>&1 || git checkout -b "$branch" "origin/$branch" >/dev/null
+    git checkout "$branch" > /dev/null 2>&1 || git checkout -b "$branch" "origin/$branch" > /dev/null
     printf '%s\n' "remote-${RANDOM}" >> remote.txt
     git add remote.txt
-    git commit -m "chore: advance $branch" >/dev/null
-    git push origin "$branch" >/dev/null
+    git commit -m "chore: advance $branch" > /dev/null
+    git push origin "$branch" > /dev/null
   )
   rm -rf "$tmp_clone"
 }
@@ -114,7 +115,7 @@ setup_mocks() {
 
   mkdir -p "$mock_bin" "$wrapper_bin"
 
-  cat > "$mock_bin/docker" <<'EOF'
+  cat > "$mock_bin/docker" << 'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 ARGS="$*"
@@ -185,7 +186,7 @@ fi
 exit 0
 EOF
 
-  cat > "$mock_bin/curl" <<'EOF'
+  cat > "$mock_bin/curl" << 'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 ARGS="$*"
@@ -205,18 +206,18 @@ echo '{"status":"ok"}'
 exit 0
 EOF
 
-  cat > "$mock_bin/pnpm" <<'EOF'
+  cat > "$mock_bin/pnpm" << 'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
 
-  cat > "$mock_bin/getent" <<'EOF'
+  cat > "$mock_bin/getent" << 'EOF'
 #!/usr/bin/env bash
 echo "127.0.0.1 localhost"
 exit 0
 EOF
 
-  cat > "$wrapper_bin/git" <<'EOF'
+  cat > "$wrapper_bin/git" << 'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ -n "${GIT_LOG_FILE:-}" ]]; then
@@ -245,14 +246,14 @@ run_up() {
   (
     cd "$repo"
     PATH="$wrapper_bin:$mock_bin:$PATH" \
-    REAL_GIT="$REAL_GIT" \
-    GIT_LOG_FILE="$git_log_file" \
-    REPO_DIR="$repo" \
-    ENV_FILE="$repo/.env" \
-    EDGE_CA="$EDGE_CA_FIXTURE" \
-    DEPLOY_FRONTEND_MODE=off \
-    WELTGEWEBE_STATE_DIR="$repo/.ops" \
-    bash scripts/weltgewebe-up "$@"
+      REAL_GIT="$REAL_GIT" \
+      GIT_LOG_FILE="$git_log_file" \
+      REPO_DIR="$repo" \
+      ENV_FILE="$repo/.env" \
+      EDGE_CA="$EDGE_CA_FIXTURE" \
+      DEPLOY_FRONTEND_MODE=off \
+      WELTGEWEBE_STATE_DIR="$repo/.ops" \
+      bash scripts/weltgewebe-up "$@"
   )
 }
 
@@ -260,7 +261,7 @@ run_up() {
 repo_default="$(new_repo default-main)"
 (
   cd "$repo_default"
-  git checkout feat/x >/dev/null
+  git checkout feat/x > /dev/null
 )
 if ! out_default="$(run_up "$repo_default" "$WORKDIR_ROOT/default-main.git.log" 2>&1)"; then
   echo "$out_default" >&2
@@ -294,7 +295,7 @@ echo "PASS: explicit --branch works"
 repo_current="$(new_repo current-branch)"
 (
   cd "$repo_current"
-  git checkout feat/x >/dev/null
+  git checkout feat/x > /dev/null
 )
 out_current="$(run_up "$repo_current" "$WORKDIR_ROOT/current-branch.git.log" --current-branch 2>&1)" || fail "--current-branch deploy should succeed"
 assert_contains "$out_current" "Git Branch Mode: current-branch (explicit)"
@@ -349,7 +350,7 @@ echo "PASS: refs/* branch path is rejected"
 repo_dirty="$(new_repo dirty-worktree)"
 (
   cd "$repo_dirty"
-  git checkout feat/x >/dev/null
+  git checkout feat/x > /dev/null
   echo "dirty" > dirty.txt
 )
 set +e
@@ -370,8 +371,8 @@ echo "PASS: dirty worktree blocks deploy"
 repo_detached="$(new_repo detached-head)"
 (
   cd "$repo_detached"
-  git checkout feat/x >/dev/null
-  git checkout --detach HEAD >/dev/null
+  git checkout feat/x > /dev/null
+  git checkout --detach HEAD > /dev/null
 )
 out_detached="$(run_up "$repo_detached" "$WORKDIR_ROOT/detached-head.git.log" 2>&1)" || fail "detached-head deploy should succeed"
 (
@@ -389,7 +390,7 @@ echo "PASS: detached head resolves via deploy-branch contract"
 repo_no_pull="$(new_repo no-pull)"
 (
   cd "$repo_no_pull"
-  git checkout feat/x >/dev/null
+  git checkout feat/x > /dev/null
 )
 out_no_pull="$(run_up "$repo_no_pull" "$WORKDIR_ROOT/no-pull.git.log" --no-pull 2>&1)" || fail "--no-pull run should succeed"
 assert_contains "$out_no_pull" "Git mode: no-pull"
@@ -425,15 +426,15 @@ repo_nonff="$(new_repo non-ff)"
 origin_nonff="$WORKDIR_ROOT/non-ff/origin.git"
 (
   cd "$repo_nonff"
-  git checkout main >/dev/null
+  git checkout main > /dev/null
   echo "local-only" > local-diverge.txt
   git add local-diverge.txt
-  git commit -m "local diverge" >/dev/null
+  git commit -m "local diverge" > /dev/null
 )
 advance_remote_branch "$origin_nonff" main
 (
   cd "$repo_nonff"
-  git checkout feat/x >/dev/null
+  git checkout feat/x > /dev/null
 )
 set +e
 out_nonff="$(run_up "$repo_nonff" "$WORKDIR_ROOT/non-ff.git.log" 2>&1)"
@@ -448,7 +449,7 @@ echo "PASS: non-fast-forward pull aborts"
 repo_bundle="$(new_repo failure-bundle)"
 (
   cd "$repo_bundle"
-  git checkout feat/x >/dev/null
+  git checkout feat/x > /dev/null
 )
 set +e
 out_bundle="$(MOCK_FAIL_CONFIG_GUARD=1 run_up "$repo_bundle" "$WORKDIR_ROOT/failure-bundle.git.log" 2>&1)"
@@ -457,7 +458,7 @@ set -e
 [[ "$rc_bundle" -ne 0 ]] || fail "failure-bundle case must fail"
 assert_contains "$out_bundle" "ERROR: Deploy failed."
 
-latest_bundle="$(ls -1dt "$repo_bundle"/.ops/failures/* 2>/dev/null | head -n1 || true)"
+latest_bundle="$(ls -1dt "$repo_bundle"/.ops/failures/* 2> /dev/null | head -n1 || true)"
 [[ -n "$latest_bundle" ]] || fail "expected a failure bundle directory"
 
 bundle_state="$(cat "$latest_bundle/git_state.txt")"

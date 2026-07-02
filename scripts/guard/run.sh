@@ -8,8 +8,8 @@ set -euo pipefail
 # Guards that need Docker Compose or other environment-specific tooling
 # are non-core and live outside this orchestration (see guard_api_alias.sh).
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." > /dev/null 2>&1 && pwd)"
 
 echo "== guard: compose no relative volumes =="
 "${REPO_ROOT}/scripts/guard-compose-no-relative-volumes.sh" \

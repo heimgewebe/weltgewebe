@@ -16,7 +16,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 AJV_BIN=""
-if command -v ajv >/dev/null 2>&1; then
+if command -v ajv > /dev/null 2>&1; then
   AJV_BIN="$(command -v ajv)"
 elif [ -f "node_modules/.bin/ajv" ]; then
   AJV_BIN="node_modules/.bin/ajv"

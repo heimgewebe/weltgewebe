@@ -15,8 +15,8 @@ fi
 #  - named volumes (db_data:/var/lib/...)
 #  - absolute paths (/opt/...)
 bad_lines="$(
-  sed 's/[[:space:]]#.*$//' "$COMPOSE_FILE" \
-  | grep -nE '^[[:space:]]*-[[:space:]]*(\./|\.\./)[^:]*:[^:]+'
+  sed 's/[[:space:]]#.*$//' "$COMPOSE_FILE" |
+    grep -nE '^[[:space:]]*-[[:space:]]*(\./|\.\./)[^:]*:[^:]+'
 )" || true
 
 # Fast path: no relative mounts at all

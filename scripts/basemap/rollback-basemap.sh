@@ -68,15 +68,15 @@ if [[ ! -f "$TARGET_DIR/$META_FILENAME" ]]; then
 fi
 
 # Determine verification tools
-if ! command -v python3 >/dev/null 2>&1; then
+if ! command -v python3 > /dev/null 2>&1; then
   echo "ERROR: 'python3' is required for sentinel verification but not installed." >&2
   EXIT_CODE=1
   exit $EXIT_CODE
 fi
 
-if command -v sha256sum >/dev/null 2>&1; then
+if command -v sha256sum > /dev/null 2>&1; then
   SHA256_CMD=(sha256sum)
-elif command -v shasum >/dev/null 2>&1; then
+elif command -v shasum > /dev/null 2>&1; then
   SHA256_CMD=(shasum -a 256)
 else
   echo "ERROR: 'sha256sum' or 'shasum' is required for artifact verification but not installed." >&2
@@ -113,13 +113,13 @@ except Exception as e:
     print(str(e), file=sys.stderr)
     sys.exit(5)
 PY
-    :
+  :
 else
-    PY_STATUS=$?
-    echo "ERROR: Sentinel contract validation failed (Exit Code: $PY_STATUS)." >&2
-    rm -f "$VERIFY_OUTPUT"
-    EXIT_CODE=1
-    exit $EXIT_CODE
+  PY_STATUS=$?
+  echo "ERROR: Sentinel contract validation failed (Exit Code: $PY_STATUS)." >&2
+  rm -f "$VERIFY_OUTPUT"
+  EXIT_CODE=1
+  exit $EXIT_CODE
 fi
 
 META_ARTIFACT_NAME=$(sed -n '1p' "$VERIFY_OUTPUT")
@@ -128,7 +128,7 @@ META_SIZE=$(sed -n '3p' "$VERIFY_OUTPUT")
 rm -f "$VERIFY_OUTPUT"
 
 case "$META_SIZE" in
-  ''|*[!0-9]*)
+  '' | *[!0-9]*)
     echo "ERROR: META_SIZE from sentinel is missing or non-numeric: '$META_SIZE'" >&2
     EXIT_CODE=1
     exit $EXIT_CODE
@@ -138,9 +138,9 @@ esac
 echo "   [✓] Schema valid. Status is 'ready'. Size parsed: $META_SIZE bytes."
 
 if [[ "$META_ARTIFACT_NAME" != "$PMTILES_FILENAME" ]]; then
-   echo "ERROR: artifact_name in meta ($META_ARTIFACT_NAME) does not match the provided PMTiles filename ($PMTILES_FILENAME)." >&2
-   EXIT_CODE=1
-   exit $EXIT_CODE
+  echo "ERROR: artifact_name in meta ($META_ARTIFACT_NAME) does not match the provided PMTiles filename ($PMTILES_FILENAME)." >&2
+  EXIT_CODE=1
+  exit $EXIT_CODE
 fi
 
 # 3. Artifact Verification
@@ -148,7 +148,7 @@ echo ">> Verifying PMTiles Artifact ($TARGET_DIR/$PMTILES_FILENAME)..."
 
 ACTUAL_SIZE=$(wc -c < "$TARGET_DIR/$PMTILES_FILENAME" | tr -d '[:space:]')
 case "$ACTUAL_SIZE" in
-  ''|*[!0-9]*)
+  '' | *[!0-9]*)
     echo "ERROR: Could not determine valid size for $TARGET_DIR/$PMTILES_FILENAME." >&2
     EXIT_CODE=1
     exit $EXIT_CODE
@@ -179,7 +179,7 @@ echo "   [✓] Integrity verified (SHA256 and Size match)."
 # We fallback to a generic name if parsing fails, but typical is basemap-hamburg.pmtiles
 REGION=$(echo "$META_ARTIFACT_NAME" | grep -oE "basemap-[a-zA-Z0-9_-]+" | sed 's/-v[0-9].*//g' | sed 's/\.pmtiles//g' || true)
 if [[ -z "$REGION" ]]; then
-    REGION="basemap"
+  REGION="basemap"
 fi
 
 ALIAS_PMTILES="${REGION}.pmtiles"

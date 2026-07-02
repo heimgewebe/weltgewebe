@@ -8,7 +8,7 @@ set -euo pipefail
 # Tests call the REAL guard script via REPO_ROOT override — no
 # shadow reimplementation of guard logic.
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 GUARD_SCRIPT="$REPO_ROOT/scripts/guard/token-leak-guard.sh"
 
@@ -42,7 +42,7 @@ setup_git_repo() {
 setup_git_repo
 echo "Hello world" > file.txt
 git add . && git commit -q -m "clean"
-if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
+if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" > /dev/null 2>&1; then
   report 0 "Clean repo passes"
 else
   report 1 "Clean repo should pass"
@@ -52,7 +52,7 @@ fi
 setup_git_repo
 echo "config token=abcdefghij1234567890" > config.txt
 git add . && git commit -q -m "with leak"
-if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
+if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" > /dev/null 2>&1; then
   report 1 "File with token= leak should fail"
 else
   report 0 "File with token= leak correctly detected"
@@ -62,7 +62,7 @@ fi
 setup_git_repo
 echo "database password=supersecret123password" > db.txt
 git add . && git commit -q -m "with password"
-if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
+if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" > /dev/null 2>&1; then
   report 1 "File with password= leak should fail"
 else
   report 0 "File with password= leak correctly detected"
@@ -72,7 +72,7 @@ fi
 setup_git_repo
 echo "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9" > api.txt
 git add . && git commit -q -m "with bearer"
-if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
+if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" > /dev/null 2>&1; then
   report 1 "File with Bearer token leak should fail"
 else
   report 0 "File with Bearer token leak correctly detected"
@@ -82,7 +82,7 @@ fi
 setup_git_repo
 echo "token=abc12345x" > short.txt
 git add . && git commit -q -m "short token"
-if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
+if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" > /dev/null 2>&1; then
   report 0 "Short token (9 chars, under threshold) correctly passes"
 else
   report 1 "Short token (9 chars) should not trigger detection"
@@ -92,7 +92,7 @@ fi
 setup_git_repo
 echo "/api/auth/magic-link/consume" > route.txt
 git add . && git commit -q -m "route only"
-if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
+if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" > /dev/null 2>&1; then
   report 0 "Route-only magic-link consume path passes"
 else
   report 1 "Route-only magic-link consume path should pass"
@@ -102,7 +102,7 @@ fi
 setup_git_repo
 echo "https://example.test/api/auth/magic-link/consume?token=abcdefghij1234567890" > url.txt
 git add . && git commit -q -m "url token"
-if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
+if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" > /dev/null 2>&1; then
   report 1 "Magic-link consume URL with token should fail"
 else
   report 0 "Magic-link consume URL with token correctly detected"

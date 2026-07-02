@@ -14,11 +14,11 @@ echo "Checking repo structure..."
 FAIL=0
 
 if [ ! -f "repo.meta.yaml" ]; then
-    echo "ERROR: repo.meta.yaml missing."
-    FAIL=1
+  echo "ERROR: repo.meta.yaml missing."
+  FAIL=1
 else
-    # parse yaml keys via python basic string parsing
-    python3 -c "
+  # parse yaml keys via python basic string parsing
+  python3 -c "
 import sys
 try:
     with open('repo.meta.yaml', 'r', encoding='utf-8') as f:
@@ -43,17 +43,17 @@ except Exception as e:
 fi
 
 if [ ! -f "docs/index.md" ]; then
-    echo "ERROR: docs/index.md missing."
-    FAIL=1
+  echo "ERROR: docs/index.md missing."
+  FAIL=1
 fi
 
 if [ ! -d "docs/_generated" ]; then
-    echo "ERROR: docs/_generated missing."
-    FAIL=1
+  echo "ERROR: docs/_generated missing."
+  FAIL=1
 fi
 
 if [ "$FAIL" -eq 1 ]; then
-    exit 1
+  exit 1
 fi
 
 echo "repo-structure-guard pass."
