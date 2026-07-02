@@ -13,7 +13,8 @@ lang: de
 summary: >
   Komplettaudit des Repositories (Code, CI, Meta-Dateien, Dokumentation):
   alle automatisierten Checks grün; dreizehn belegte Hygiene-/Konsistenzbefunde,
-  davon neun im zugehörigen PR behoben; vier Restarbeiten unter REPO-AUDIT-001.
+  davon neun behoben (teils in diesem PR, teils durch #1315/#1317);
+  vier Restarbeiten unter REPO-AUDIT-001.
 relations:
   - type: relates_to
     target: docs/reports/optimierungsstatus.md
@@ -59,10 +60,11 @@ Workflows, Env-Templates, Lockfiles und Toolchain-Pins.
 
 **These (wohlwollende Lesart).** Das Repository ist außergewöhnlich
 diszipliniert: vollständige Guard-/Validator-Ketten, Claim-Evidence-Spine,
-Task-Control-Schicht mit Drift-Checks, keine TODO/FIXME-Altlasten, alle
-Lint-/Test-Strecken grün, Toolchain-Pins (Rust 1.89.0, Node 20.19.0,
-pnpm 9.11.0) fast überall konsistent. Die gefundenen Mängel sind Randdrift,
-kein Strukturversagen.
+Task-Control-Schicht mit Drift-Checks, grüne Lint-/Test-Strecken und
+weitgehend konsistente Toolchain-Pins (Rust 1.89.0, Node 20.19.0,
+pnpm 9.11.0). Bestehende Aufgabenmarker in Tests/Reports sind
+dokumentierte Folge-/Proof-Bezüge, keine pauschal verschwundenen Altlasten.
+Die gefundenen Mängel sind Randdrift,
 
 **Antithese (kritische Lesart).** Genau die Stärke des Systems — viele
 redundante Wahrheits- und Kontrollflächen — erzeugt seine typische
@@ -93,9 +95,9 @@ strukturelle Ableitung.
 | # | Befund | Evidenz | Problemtyp | Status |
 |---|---|---|---|---|
 | R-01 | `Justfile`-Rezept `seed` doppelt defekt: `cargo run -p api` (Workspace-Paket heißt `weltgewebe-api`; `cargo pkgid -p api` schlägt fehl) und die API besitzt keinen `seed`-Subcommand (`apps/api/src/main.rs` ruft argumentlos `run()` auf) | belegt | Laufzeitproblem (totes Rezept) | **behoben**: Rezept entfernt, Hinweis auf `demo-data`/`bootstrap-first-account` |
-| R-02 | Root-`package-lock.json` veraltet (ajv `^8.18.0`, tsx `^4.21.0` vs. `package.json` ajv `^8.20.0`, tsx `^4.22.4`) in pnpm-verwaltetem Repo (`packageManager: pnpm@9.11.0`, Root-`pnpm-lock.yaml` vorhanden); mehrdeutig für Dependabot-npm-Ökosystem auf `/` | belegt | Dokumentationsdrift / Tooling-Ambiguität | **behoben**: Datei entfernt |
+| R-02 | Root-`package-lock.json` war gegenüber `package.json` veraltet und in einem pnpm-verwalteten Repo (`packageManager: pnpm@9.11.0`, Root-`pnpm-lock.yaml` vorhanden) mehrdeutig für Dependabot-npm-Ökosystem auf `/` | belegt | Dokumentationsdrift / Tooling-Ambiguität | **behoben**: Lockfile durch #1315 aktualisiert; ursprüngliche Löschstrategie nach Rebase verworfen |
 | R-03 | Drei widersprüchliche Generated-Artifacts-Listen: `repo.meta.yaml` (13), `generated-files-guard.sh` (16), real `docs/_generated/` (18); fehlend u. a. `relates-to-audit.md`, `relations-analysis.md` | belegt | Dokumentationsdrift | **behoben**: beide Listen auf 18 angeglichen |
-| R-04 | Required-Checks-Drift zwischen kanonischen Quellen gleicher Präzedenzklasse: `repo.meta.yaml` (3), `AGENTS.md` (4), `agent-policy.yaml` (5), `CLAUDE.md` (6); `coverage-guard` läuft real in `validate-guards` | belegt | Truth-Model-Inkonsistenz (Achse A) | **behoben**: `coverage-guard` in `repo.meta.yaml` und `agent-policy.yaml` ergänzt; Listen jetzt deckungsgleich (agent-policy führt zusätzlich `lint`/`test` als Patch-Vorbedingung) |
+| R-04 | Required-Checks-Drift zwischen kanonischen Quellen gleicher Präzedenzklasse: `repo.meta.yaml` (3), `AGENTS.md` (4), `agent-policy.yaml` (5), `CLAUDE.md` (6); `coverage-guard` läuft real in `validate-guards` | belegt | Truth-Model-Inkonsistenz (Achse A) | **behoben**: Basis-Guard-Liste um `coverage-guard` ergänzt; `agent-policy.yaml`/`CLAUDE.md` behalten zusätzlich `lint`/`test` als Patch-Vorbedingungen; strukturelle Deduplikation bleibt Folgearbeit (§5) |
 | R-05 | `ci.yml`-Step „Install cargo-deny" hardcodet `DENY_VERSION="0.18.8"` und überschattet den zuvor aus `toolchain.versions.yml` gelesenen Env-Wert — der Pin in der Versionsdatei war wirkungslos | belegt | Kopplungsproblem (Version-Pinning) | **behoben**: Step nutzt Env-Wert, bricht ohne ihn ab |
 | R-06 | `heavy.yml` e2e-Job: `setup-node` mit `cache: 'pnpm'` **vor** pnpm-Verfügbarkeit (Corepack erst danach) — `setup-node` ruft `pnpm store path` auf; zudem `node-version: '22.x'` abweichend von der `.node-version`-Pinning-Strategie aller anderen Workflows | belegt (statisch); Laufzeitversagen plausibel, da Job schlafend | Laufzeitproblem (schlafender CI-Pfad) | **behoben**: `pnpm/action-setup@v6` vor `setup-node`, `node-version-file: '.node-version'` (Muster wie `web.yml`); Restarbeit: Dispatch-Proof (siehe R-13) |
 | R-07 | `CLAUDE.md` behauptet „Axum 0.7" (real: `axum = "0.8"` in `apps/api/Cargo.toml`), dokumentiert das defekte `just seed` und das tote `WEB_PORT` | belegt | Dokumentationsdrift | **behoben** |
@@ -108,7 +110,7 @@ strukturelle Ableitung.
 
 ### Positivbefunde (Klasse D, earned)
 
-- Rust-/Web-Codebasis ohne TODO/FIXME-Marker; fmt/clippy/test vollständig grün — sound, weil per Lauf 2026-07-02 nachgewiesen.
+- Rust-/Web-Codebasis mit grünem fmt/clippy/test-Stand; Aufgabenmarker in Tests/Reports existieren weiterhin und sind als dokumentierte Folge-/Proof-Bezüge einzuordnen.
 - Toolchain-Pins Rust 1.89.0 konsistent über `toolchain.versions.yml`, `apps/api/Dockerfile`, `infra/compose/compose.core.yml`.
 - Docmeta-/Guard-/Task-Control-Ketten laufen vollständig und grün durch; `docs/_generated/*`-Diagnosen melden keine Orphans, keine Staleness, keine Drift.
 

@@ -42,7 +42,7 @@ Agent configuration, operational boundaries, and strict coding guidelines for We
 
 ## Discovery Rules
 
-Scan `.github/workflows/`, `apps/`, `contracts/`, `docs/`, `infra/`, `scripts/`, `src/`, and `tests/` for changes.
+Scan `.github/workflows/`, `apps/`, `contracts/`, `docs/`, `infra/`, `scripts/`, and `tests/` for changes.
 
 ## Roadmap Synchronization
 
@@ -80,7 +80,6 @@ Files in `docs/_generated/` are automatically generated and protected.
 - `docs/`
 - `infra/`
 - `scripts/`
-- `src/`
 
 ## Required Checks
 

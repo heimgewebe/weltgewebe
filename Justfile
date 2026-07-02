@@ -101,7 +101,6 @@ proof-auth-session-sqlx-direct:    # run ignored SQLx direct-Postgres session CR
 # Hinweis: Ein API-seitiger `seed`-Subcommand existiert nicht.
 # Für Demo-Daten: `just demo-data`; für den ersten echten Account:
 # `just bootstrap-first-account` (siehe Abschnitt "Real seed" unten).
-
 # Lokaler Helper: Schnelltests & Linter – sicher mit Null-Trennung und Quoting
 lint:
 	@set -euo pipefail; \
