@@ -29,6 +29,7 @@ required_checks_before_patch:
   - repo-structure-guard
   - docs-relations-guard
   - generated-files-guard
+  - coverage-guard
   - lint
   - test
 

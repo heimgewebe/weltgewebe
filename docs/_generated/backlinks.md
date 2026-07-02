@@ -23,6 +23,11 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/cost-report.md
 
+## .github/workflows/opt-arc-001-db-proof-matrix.yml
+
+- [relates_to] docs/reports/github-actions-node24-readiness.md
+- [relates_to] docs/reports/proof-matrix-generalization-decision.md
+
 ## AGENTS.md
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
@@ -44,6 +49,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
 
+## apps/api/src/domain_db.rs
+
+- [relates_to] docs/reports/domain-edge-cache-limit-design.md
+
 ## apps/api/src/routes/accounts.rs
 
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
@@ -52,6 +61,7 @@ Generated automatically. Do not edit.
 ## apps/api/src/routes/edges.rs
 
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/reports/domain-edge-cache-limit-design.md
 
 ## apps/api/src/routes/nodes.rs
 
@@ -144,6 +154,9 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/auth-persistence-direct-proof-diagnose-audit.md
 - [relates_to] docs/reports/auth-persistence-runtime-proof.md
 - [relates_to] docs/reports/auth-persistence-runtime-target-reconciliation.md
+- [relates_to] docs/reports/auth-pg-002-cutover-plan.md
+- [relates_to] docs/reports/auth-pg-002-passkey-db-store.md
+- [relates_to] docs/reports/auth-pg-002-passkey-runtime-facade.md
 - [relates_to] docs/reports/auth-status-matrix.md
 - [relates_to] docs/runbooks/db-recovery.md
 
@@ -217,6 +230,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
 - [relates_to] docs/reports/domain-account-write-path-proof.md
 - [relates_to] docs/reports/domain-backfill-proof.md
+- [relates_to] docs/reports/domain-edge-cache-limit-design.md
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
 - [relates_to] docs/reports/domain-edge-reference-audit.md
 - [relates_to] docs/reports/domain-edge-write-path-proof.md
@@ -429,7 +443,12 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/agent-readiness-audit.md
 - [relates_to] docs/reports/optimierungsbericht.md
 - [relates_to] docs/reports/optimierungsstatus.md
+- [relates_to] docs/reports/repo-audit-2026-07-02.md
 - [relates_to] docs/tasks/README.md
+
+## docs/policies/architecture-critique.md
+
+- [relates_to] docs/reports/repo-audit-2026-07-02.md
 
 ## docs/policies/orientierung.md
 
@@ -523,10 +542,69 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/adr/ADR-0007__auth-persistence-production-db-path.md
 
+## docs/reports/auth-pg-002-cutover-plan.md
+
+- [relates_to] docs/reports/auth-pg-002-passkey-fk-readiness-audit.md
+- [relates_to] docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md
+- [relates_to] docs/reports/auth-pg-002-passkey-runtime-audit-plan.md
+- [relates_to] docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md
+- [relates_to] docs/reports/auth-pg-003-backfill-readiness.md
+
+## docs/reports/auth-pg-002-passkey-db-store.md
+
+- [relates_to] docs/reports/auth-pg-002-cutover-plan.md
+- [relates_to] docs/reports/auth-pg-002-passkey-fk-readiness-audit.md
+- [relates_to] docs/reports/auth-pg-002-passkey-runtime-facade.md
+
+## docs/reports/auth-pg-002-passkey-fk-readiness-audit.md
+
+- [relates_to] docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md
+- [relates_to] docs/reports/auth-pg-002-passkey-runtime-audit-plan.md
+
+## docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md
+
+- [relates_to] docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md
+- [relates_to] docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md
+
+## docs/reports/auth-pg-002-passkey-runtime-audit-plan.md
+
+- [relates_to] docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md
+- [relates_to] docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md
+
+## docs/reports/auth-pg-002-passkey-runtime-facade.md
+
+- [relates_to] docs/reports/auth-pg-002-cutover-plan.md
+- [relates_to] docs/reports/auth-pg-002-passkey-fk-readiness-audit.md
+- [relates_to] docs/reports/auth-pg-003-backfill-readiness.md
+
+## docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md
+
+- [depends_on] docs/reports/auth-pg-002-controlled-preflight.md
+- [relates_to] docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md
+- [relates_to] docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md
+
+## docs/reports/auth-pg-003-backfill-readiness.md
+
+- [relates_to] docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md
+- [relates_to] docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md
+
+## docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md
+
+- [relates_to] docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md
+
 ## docs/reports/auth-status-matrix.md
 
 - [relates_to] docs/adr/ADR-0006__auth-magic-link-session-passkey.md
 - [relates_to] docs/blueprints/auth-roadmap.md
+- [relates_to] docs/reports/auth-pg-002-controlled-preflight.md
+- [relates_to] docs/reports/auth-pg-002-cutover-plan.md
+- [relates_to] docs/reports/auth-pg-002-passkey-db-store.md
+- [relates_to] docs/reports/auth-pg-002-passkey-fk-readiness-audit.md
+- [relates_to] docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md
+- [relates_to] docs/reports/auth-pg-002-passkey-runtime-audit-plan.md
+- [relates_to] docs/reports/auth-pg-002-passkey-runtime-facade.md
+- [relates_to] docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md
+- [relates_to] docs/reports/auth-pg-003-backfill-readiness.md
 - [relates_to] docs/reports/passkey-register-verify-prep.md
 - [depends_on] docs/roadmap.md
 
@@ -595,9 +673,11 @@ Generated automatically. Do not edit.
 
 ## docs/reports/opt-arc-001-db-proof-matrix.json
 
+- [relates_to] docs/reports/auth-pg-003-backfill-readiness.md
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
 - [relates_to] docs/reports/domain-edge-reference-audit.md
 - [relates_to] docs/reports/domain-runtime-data-source-reconciliation.md
+- [relates_to] docs/reports/proof-matrix-generalization-decision.md
 
 ## docs/reports/optimierungsbericht.md
 
@@ -614,10 +694,15 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-node-write-path-proof.md
 - [relates_to] docs/reports/domain-read-path-proof.md
 - [relates_to] docs/reports/optimierungsbericht.md
+- [relates_to] docs/reports/repo-audit-2026-07-02.md
 - [depends_on] docs/roadmap.md
 - [relates_to] docs/specs/list-pagination-api.md
 - [depends_on] docs/tasks/README.md
 - [depends_on] docs/tasks/board.md
+
+## docs/reports/passkey-register-verify-prep.md
+
+- [relates_to] docs/reports/auth-pg-002-passkey-db-store.md
 
 ## docs/roadmap.md
 
@@ -742,6 +827,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
 - [relates_to] docs/deploy/secondary-domain-web-surfaces.md
 - [relates_to] docs/reports/domain-account-write-path-proof.md
+- [relates_to] docs/reports/domain-edge-cache-limit-design.md
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
 - [relates_to] docs/reports/domain-edge-reference-audit.md
 - [relates_to] docs/reports/domain-edge-write-path-proof.md
@@ -750,7 +836,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-provider-role-finding.md
 - [relates_to] docs/reports/domain-read-path-proof.md
 - [relates_to] docs/reports/domain-runtime-data-source-reconciliation.md
+- [relates_to] docs/reports/github-actions-node24-readiness.md
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
+- [relates_to] docs/reports/proof-matrix-generalization-decision.md
+- [relates_to] docs/reports/repo-audit-2026-07-02.md
 - [relates_to] docs/security/agent-write-scope-baseline.md
 - [relates_to] docs/tasks/DEPLOY-DNS-001B.md
 - [relates_to] docs/tasks/README.md
@@ -762,12 +851,15 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
 - [relates_to] docs/claims/README.md
 - [relates_to] docs/reports/domain-backfill-proof.md
+- [relates_to] docs/reports/domain-edge-cache-limit-design.md
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
 - [relates_to] docs/reports/domain-edge-write-path-proof.md
 - [relates_to] docs/reports/domain-node-write-path-proof.md
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 - [relates_to] docs/reports/domain-runtime-data-source-reconciliation.md
+- [relates_to] docs/reports/github-actions-node24-readiness.md
 - [relates_to] docs/reports/planning-registration-findings.md
+- [relates_to] docs/reports/proof-matrix-generalization-decision.md
 - [relates_to] docs/reports/report-lifecycle-restbestand-triage.md
 - [relates_to] docs/tasks/board.md
 
@@ -852,6 +944,14 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/proofs/basemap-hamburg-artifact-proof.md
 
+## scripts/ci/check_actions_node24_readiness.py
+
+- [relates_to] docs/reports/github-actions-node24-readiness.md
+
+## scripts/ci/tests/test_check_actions_node24_readiness.py
+
+- [relates_to] docs/reports/github-actions-node24-readiness.md
+
 ## scripts/docmeta/audit_account_email_uniqueness.py
 
 - [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
@@ -868,9 +968,17 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reference/agent-dry-run-runner.md
 
+## scripts/docmeta/tests/test_validate_opt_arc_001_db_proof_matrix.py
+
+- [relates_to] docs/reports/proof-matrix-generalization-decision.md
+
 ## scripts/docmeta/validate_claim_registry.py
 
 - [relates_to] docs/claims/README.md
+
+## scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py
+
+- [relates_to] docs/reports/proof-matrix-generalization-decision.md
 
 ## scripts/docmeta/validate_report_lifecycle.py
 
