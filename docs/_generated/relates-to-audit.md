@@ -14,11 +14,11 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 450 |
-| — depends_on | 18 |
-| — relates_to | 429 |
+| Relationen gesamt | 507 |
+| — depends_on | 19 |
+| — relates_to | 485 |
 | — supersedes | 3 |
-| relates_to Anteil | 95% |
+| relates_to Anteil | 96% |
 
 ### Mögliche supersedes-Lücken
 
@@ -30,14 +30,16 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (172 Dokumente):
+**Cluster 1** (193 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
+- `.github/workflows/opt-arc-001-db-proof-matrix.yml`
 - `AGENTS.md`
 - `agent-policy.yaml`
 - `apps/api/migrations/20260531000002_create_domain_edges.up.sql`
 - `apps/api/src/auth/accounts.rs`
+- `apps/api/src/domain_db.rs`
 - `apps/api/src/routes/accounts.rs`
 - `apps/api/src/routes/edges.rs`
 - `apps/api/src/routes/nodes.rs`
@@ -134,10 +136,22 @@ _Keine Lücken erkannt._
 - `docs/reports/auth-persistence-readiness.md`
 - `docs/reports/auth-persistence-runtime-proof.md`
 - `docs/reports/auth-persistence-runtime-target-reconciliation.md`
+- `docs/reports/auth-pg-002-controlled-preflight.md`
+- `docs/reports/auth-pg-002-cutover-plan.md`
+- `docs/reports/auth-pg-002-passkey-db-store.md`
+- `docs/reports/auth-pg-002-passkey-fk-readiness-audit.md`
+- `docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md`
+- `docs/reports/auth-pg-002-passkey-runtime-audit-plan.md`
+- `docs/reports/auth-pg-002-passkey-runtime-facade.md`
+- `docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md`
+- `docs/reports/auth-pg-003-backfill-readiness.md`
+- `docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md`
+- `docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md`
 - `docs/reports/auth-status-matrix.md`
 - `docs/reports/domain-account-email-uniqueness-audit.md`
 - `docs/reports/domain-account-write-path-proof.md`
 - `docs/reports/domain-backfill-proof.md`
+- `docs/reports/domain-edge-cache-limit-design.md`
 - `docs/reports/domain-edge-create-semantics-preflight.md`
 - `docs/reports/domain-edge-reference-audit.md`
 - `docs/reports/domain-edge-write-path-proof.md`
@@ -146,6 +160,7 @@ _Keine Lücken erkannt._
 - `docs/reports/domain-provider-role-finding.md`
 - `docs/reports/domain-read-path-proof.md`
 - `docs/reports/domain-runtime-data-source-reconciliation.md`
+- `docs/reports/github-actions-node24-readiness.md`
 - `docs/reports/inwx-zone-reconciliation-plan.md`
 - `docs/reports/map-architekturkritik.md`
 - `docs/reports/map-basemap-proof-gap-reconciliation.md`
@@ -155,6 +170,8 @@ _Keine Lücken erkannt._
 - `docs/reports/optimierungsstatus.md`
 - `docs/reports/passkey-register-verify-prep.md`
 - `docs/reports/planning-registration-findings.md`
+- `docs/reports/proof-matrix-generalization-decision.md`
+- `docs/reports/repo-audit-2026-07-02.md`
 - `docs/reports/report-lifecycle-restbestand-triage.md`
 - `docs/roadmap.md`
 - `docs/runbook.md`
@@ -194,11 +211,15 @@ _Keine Lücken erkannt._
 - `scripts/agent/tests/test_validate_handoff.py`
 - `scripts/agent/validate_handoff.py`
 - `scripts/basemap/build-hamburg-pmtiles.sh`
+- `scripts/ci/check_actions_node24_readiness.py`
+- `scripts/ci/tests/test_check_actions_node24_readiness.py`
 - `scripts/docmeta/audit_account_email_uniqueness.py`
 - `scripts/docmeta/audit_domain_edge_references.py`
 - `scripts/docmeta/check_planning_registration.py`
 - `scripts/docmeta/generate_agent_readiness.py`
+- `scripts/docmeta/tests/test_validate_opt_arc_001_db_proof_matrix.py`
 - `scripts/docmeta/validate_claim_registry.py`
+- `scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py`
 - `scripts/docmeta/validate_report_lifecycle.py`
 - `scripts/guard/basemap-runtime-proof.sh`
 - `scripts/guard/domain-single-instance-guard.sh`

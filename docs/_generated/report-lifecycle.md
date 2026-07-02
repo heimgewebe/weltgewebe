@@ -16,10 +16,10 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Metric | Count |
 | --- | ---: |
-| files_scanned | 31 |
-| reports_checked | 27 |
+| files_scanned | 43 |
+| reports_checked | 39 |
 | reports_ignored_non_report | 4 |
-| reports_with_lifecycle_state | 27 |
+| reports_with_lifecycle_state | 39 |
 | reports_missing_lifecycle_state | 0 |
 | findings_total | 0 |
 
@@ -27,7 +27,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | lifecycle_state | Count |
 | --- | ---: |
-| active | 18 |
+| active | 30 |
 | deferred | 0 |
 | superseded | 5 |
 | archived | 4 |
@@ -44,6 +44,17 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
 | docs/reports/auth-persistence-runtime-target-reconciliation.md | active | audit | OPT-API-002 | 2026-07-17 |  |
+| docs/reports/auth-pg-002-controlled-preflight.md | active | planning | AUTH-PG-002 | 2026-09-30 |  |
+| docs/reports/auth-pg-002-cutover-plan.md | active | planning | AUTH-PG-002 | 2026-09-30 |  |
+| docs/reports/auth-pg-002-passkey-db-store.md | active | proof | AUTH-PG-002 | 2026-09-30 |  |
+| docs/reports/auth-pg-002-passkey-fk-readiness-audit.md | active | proof | AUTH-PG-002 | 2026-09-30 |  |
+| docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md | active | proof | AUTH-PG-002 | 2026-09-30 |  |
+| docs/reports/auth-pg-002-passkey-runtime-audit-plan.md | active | planning | AUTH-PG-002 | 2026-09-30 |  |
+| docs/reports/auth-pg-002-passkey-runtime-facade.md | active | proof | AUTH-PG-002 | 2026-09-30 |  |
+| docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md | active | proof | AUTH-PG-002 | 2026-09-30 |  |
+| docs/reports/auth-pg-003-backfill-readiness.md | active | proof | AUTH-PG-003 | 2026-09-30 |  |
+| docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md | active | proof | AUTH-PG-003 | 2026-09-30 |  |
+| docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md | active | proof | AUTH-PG-003 | 2026-09-30 |  |
 | docs/reports/cost-report.md | active | generated | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
 | docs/reports/domain-account-email-uniqueness-audit.md | active | audit | OPT-ARC-001 | 2026-07-13 |  |
 | docs/reports/domain-account-write-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
@@ -61,6 +72,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/map-basemap-proof-gap-reconciliation.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
 | docs/reports/optimierungsbericht.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
 | docs/reports/proof-matrix-generalization-decision.md | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  |
+| docs/reports/repo-audit-2026-07-02.md | active | audit | REPO-AUDIT-001 | 2026-10-31 |  |
 
 ## Deferred Reports
 

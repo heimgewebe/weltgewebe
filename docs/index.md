@@ -93,6 +93,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 
 ### Berichte & Audits
 
+– **Repo-Komplettaudit 2026-07-02:** [reports/repo-audit-2026-07-02.md](reports/repo-audit-2026-07-02.md) (Systemweites Hygiene-/Konsistenzaudit; Restarbeiten unter REPO-AUDIT-001)
 – **Optimierungsbericht:** [reports/optimierungsbericht.md](reports/optimierungsbericht.md) (Schichtenanalyse mit Handlungsempfehlungen)
 – **Optimierungsstatus:** [reports/optimierungsstatus.md](reports/optimierungsstatus.md) (Operative Statusmatrix mit Nachweisen – Wahrheitsquelle für OPT-* Einträge)
 – **Auth-Persistenzbereitschaft:** [reports/auth-persistence-readiness.md](reports/auth-persistence-readiness.md) (Diagnose zu OPT-API-002)
