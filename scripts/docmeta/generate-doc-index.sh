@@ -2,8 +2,19 @@
 
 set -euo pipefail
 
-OUT_FILE="docs/_generated/doc-index.md"
-mkdir -p docs/_generated
+CHECK_MODE=0
+if [[ "${1:-}" == "--check" ]]; then
+  CHECK_MODE=1
+fi
+
+TARGET_FILE="docs/_generated/doc-index.md"
+if [[ "${CHECK_MODE}" == "1" ]]; then
+  OUT_FILE="$(mktemp)"
+  trap 'rm -f "${OUT_FILE}"' EXIT
+else
+  OUT_FILE="${TARGET_FILE}"
+  mkdir -p docs/_generated
+fi
 
 cat << 'HEADER' > "$OUT_FILE"
 ---
@@ -46,4 +57,14 @@ done
 LC_ALL=C sort "$TEMP_ENTRIES" >> "$OUT_FILE"
 rm -f "$TEMP_ENTRIES"
 
-echo "Generated $OUT_FILE"
+if [[ "${CHECK_MODE}" == "1" ]]; then
+  if cmp -s "${TARGET_FILE}" "${OUT_FILE}"; then
+    echo "${TARGET_FILE} is up to date."
+  else
+    echo "ERROR: ${TARGET_FILE} is stale; regenerate it." >&2
+    diff -u "${TARGET_FILE}" "${OUT_FILE}" >&2 || true
+    exit 1
+  fi
+else
+  echo "Generated $OUT_FILE"
+fi

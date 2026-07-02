@@ -10,6 +10,7 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from scripts.docmeta.generated_check import write_or_check
 from scripts.docmeta.generate_report_lifecycle_inventory import (
     collect_reports,
     ReportRecord,
@@ -290,11 +291,27 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=str, default=None)
     parser.add_argument("--output", type=str, default=None)
+    parser.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
     
     root_path = Path(args.root) if args.root else REPO_ROOT
     output_path = Path(args.output) if args.output else None
-    
+
+    if args.check:
+        target = output_path or (root_path / "docs" / "_generated" / "report-lifecycle.md")
+        config = InventoryConfig(
+            repo_root=root_path,
+            reports_dir=root_path / "docs" / "reports",
+            output_path=target,
+            primary_search_paths=(root_path / "docs",),
+            derived_search_paths=(root_path / "docs" / "_generated",)
+        )
+        records = collect_reports(config)
+        rows = collect_lifecycle_rows(root_path, records)
+        summary = build_summary(rows)
+        content = render_markdown(rows, summary)
+        return write_or_check(target, content, check=True, label=str(target.relative_to(root_path)))
+
     out = generate(root_path, output_path)
     try:
         rel = out.relative_to(root_path)

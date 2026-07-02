@@ -167,9 +167,9 @@
       ],
       "checks": [
         [
-          "python3",
-          "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "bash",
+          "scripts/docmeta/generate-doc-index.sh",
+          "--check"
         ]
       ],
       "sources": [
@@ -215,9 +215,9 @@
       ],
       "checks": [
         [
-          "python3",
-          "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "bash",
+          "scripts/docmeta/generate-impl-index.sh",
+          "--check"
         ]
       ],
       "sources": [
@@ -293,7 +293,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_relates_to_audit",
+          "--check"
         ]
       ],
       "sources": [
@@ -317,7 +318,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_relations_analysis",
+          "--check"
         ]
       ],
       "sources": [
@@ -341,7 +343,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_report_lifecycle_inventory",
+          "--check"
         ]
       ],
       "sources": [
@@ -365,7 +368,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_report_lifecycle",
+          "--check"
         ]
       ],
       "sources": [
@@ -440,7 +444,8 @@
         [
           "python3",
           "-m",
-          "scripts.docmeta.validate_generated_artifacts"
+          "scripts.docmeta.generate_system_map",
+          "--check"
         ]
       ],
       "sources": [

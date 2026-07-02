@@ -2,8 +2,19 @@
 
 set -euo pipefail
 
-OUT_FILE="docs/_generated/impl-index.md"
-mkdir -p docs/_generated
+CHECK_MODE=0
+if [[ "${1:-}" == "--check" ]]; then
+  CHECK_MODE=1
+fi
+
+TARGET_FILE="docs/_generated/impl-index.md"
+if [[ "${CHECK_MODE}" == "1" ]]; then
+  OUT_FILE="$(mktemp)"
+  trap 'rm -f "${OUT_FILE}"' EXIT
+else
+  OUT_FILE="${TARGET_FILE}"
+  mkdir -p docs/_generated
+fi
 
 cat << 'HEADER' > "$OUT_FILE"
 ---
@@ -25,7 +36,7 @@ HEADER
 python3 -c "
 import sys
 
-out_file = 'docs/_generated/impl-index.md'
+out_file = '${OUT_FILE}'
 registry_file = 'audit/impl-registry.yaml'
 
 try:
@@ -101,8 +112,8 @@ try:
 
             f.write(f'| {impl_id} | {path} | {impl_type} | {criticality} | {docs_str} | {verif_str} | {evidence_level} |\n')
 
-    print(f'Generated {out_file}')
+    pass
 except Exception as e:
     print(f'Error processing impl-registry: {e}')
-    print(f'Generated {out_file}')
+    pass
 "
