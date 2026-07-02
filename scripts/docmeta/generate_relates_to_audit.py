@@ -13,11 +13,14 @@ Pure structural observation.
 Output: docs/_generated/relates-to-audit.md
 """
 
+import argparse
 import os
 import sys
+import tempfile
 from collections import defaultdict
 
 from scripts.docmeta.docmeta import REPO_ROOT
+from scripts.docmeta.generated_check import write_or_check
 from scripts.docmeta.relations_parser import extract_relations_from_content
 
 MAX_NEGATIVE_EXAMPLES = 3
@@ -213,9 +216,10 @@ def collect_negative_examples(edges, doc_counts, max_examples=MAX_NEGATIVE_EXAMP
 
 
 def write_output(edges, all_docs, doc_counts, supersedes_gaps, clusters,
-                 negative_examples):
+                 negative_examples, out_file=None):
     """Write the relates-to-audit.md output file."""
-    out_file = os.path.join(REPO_ROOT, "docs", "_generated", "relates-to-audit.md")
+    if out_file is None:
+        out_file = os.path.join(REPO_ROOT, "docs", "_generated", "relates-to-audit.md")
     os.makedirs(os.path.dirname(out_file), exist_ok=True)
 
     type_dist = compute_type_distribution(edges)
@@ -287,21 +291,38 @@ def write_output(edges, all_docs, doc_counts, supersedes_gaps, clusters,
     return out_file
 
 
-def main():
+def main(argv: list[str] | None = None) -> int:
     """Main entry point for the relates-to audit generator."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="compare output without rewriting it")
+    args = parser.parse_args(argv)
     try:
         edges, all_docs = collect_relations_graph()
         doc_counts = compute_per_doc_type_counts(edges)
         supersedes_gaps = find_supersedes_gaps(all_docs)
         clusters = find_relates_to_clusters(edges)
         negative_examples = collect_negative_examples(edges, doc_counts)
-        out_file = write_output(edges, all_docs, doc_counts, supersedes_gaps,
-                                clusters, negative_examples)
+        target = os.path.join(REPO_ROOT, "docs", "_generated", "relates-to-audit.md")
+        if args.check:
+            with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
+                tmp_path = tmp.name
+            try:
+                write_output(edges, all_docs, doc_counts, supersedes_gaps, clusters, negative_examples, out_file=tmp_path)
+                with open(tmp_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except FileNotFoundError:
+                    pass
+            return write_or_check(target, content, check=True, label=os.path.relpath(target, REPO_ROOT))
+        out_file = write_output(edges, all_docs, doc_counts, supersedes_gaps, clusters, negative_examples)
         print(f"Generated {out_file}")
+        return 0
     except Exception as e:
         print(f"Error generating relates-to audit: {e}", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -162,8 +162,10 @@ def _validate_command(command: Any, *, root: Path, path: str, field: str) -> lis
             return [_finding("COMMAND_MODULE_MISSING", path, f"module not found: {module}")]
         return []
 
-    if len(command) == 2 and command[0] == "bash":
+    if command[0] == "bash" and len(command) in {2, 3}:
         script = _safe_repo_path(command[1])
+        if len(command) == 3 and command[2] != "--check":
+            return [_finding("COMMAND_NOT_ALLOWED", path, f"unsupported bash argument for {field}: {command[2]!r}")]
         if (
             script is not None
             and script.startswith("scripts/docmeta/generate-")

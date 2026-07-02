@@ -220,6 +220,22 @@ class TestValidateGeneratedArtifacts(unittest.TestCase):
         self._write_manifest(data)
         self.assertNotIn("COMMAND_NOT_ALLOWED", self._codes())
 
+    def test_reviewed_shell_generator_check_argument_is_allowed(self):
+        self._write("scripts/docmeta/generate-fixture.sh", "#!/usr/bin/env bash\n")
+        data = self._manifest()
+        data["artifacts"][0]["generator"] = ["bash", "scripts/docmeta/generate-fixture.sh"]
+        data["artifacts"][0]["checks"] = [["bash", "scripts/docmeta/generate-fixture.sh", "--check"]]
+        self._write_manifest(data)
+        self.assertNotIn("COMMAND_NOT_ALLOWED", self._codes())
+
+    def test_reviewed_shell_generator_extra_argument_is_rejected(self):
+        self._write("scripts/docmeta/generate-fixture.sh", "#!/usr/bin/env bash\n")
+        data = self._manifest()
+        data["artifacts"][0]["generator"] = ["bash", "scripts/docmeta/generate-fixture.sh"]
+        data["artifacts"][0]["checks"] = [["bash", "scripts/docmeta/generate-fixture.sh", "--write"]]
+        self._write_manifest(data)
+        self.assertIn("COMMAND_NOT_ALLOWED", self._codes())
+
     def test_symlink_parent_source_is_rejected(self):
         source_dir = self.root / "docs" / "claims"
         target_dir = self.root / "real-claims"

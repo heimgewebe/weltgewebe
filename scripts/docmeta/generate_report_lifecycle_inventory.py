@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from collections import Counter, defaultdict
@@ -9,6 +10,8 @@ from pathlib import Path
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.docmeta.generated_check import write_or_check
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REPORTS_DIR = REPO_ROOT / "docs" / "reports"
@@ -665,10 +668,23 @@ def generate(config: InventoryConfig | None = None) -> Path:
     return inventory_config.output_path
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args(argv)
+    if args.check:
+        base = default_inventory_config()
+        content = render_inventory(collect_reports(base))
+        return write_or_check(
+            base.output_path,
+            content,
+            check=True,
+            label=_as_rel(base.output_path, base.repo_root),
+        )
     output_path = generate()
     print(f"Generated {_as_rel(output_path, default_inventory_config().repo_root)}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

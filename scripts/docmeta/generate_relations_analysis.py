@@ -11,11 +11,14 @@ Read-only analysis that makes relation quality visible:
 Output: docs/_generated/relations-analysis.md
 """
 
+import argparse
 import os
 import sys
+import tempfile
 from collections import defaultdict
 
 from scripts.docmeta.docmeta import REPO_ROOT
+from scripts.docmeta.generated_check import write_or_check
 from scripts.docmeta.relations_parser import extract_relations_from_content
 
 # Thresholds for heuristic warnings
@@ -214,9 +217,10 @@ def generate_warnings(edges, stats, cycles):
     return warnings
 
 
-def write_output(edges, all_docs, stats, cycles, warnings):
+def write_output(edges, all_docs, stats, cycles, warnings, out_file=None):
     """Write the relations-analysis.md output file."""
-    out_file = os.path.join(REPO_ROOT, "docs", "_generated", "relations-analysis.md")
+    if out_file is None:
+        out_file = os.path.join(REPO_ROOT, "docs", "_generated", "relations-analysis.md")
     os.makedirs(os.path.dirname(out_file), exist_ok=True)
 
     type_dist = compute_type_distribution(edges)
@@ -300,19 +304,37 @@ def write_output(edges, all_docs, stats, cycles, warnings):
     return out_file
 
 
-def main():
+def main(argv: list[str] | None = None) -> int:
     """Main entry point for the relations analysis generator."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="compare output without rewriting it")
+    args = parser.parse_args(argv)
     try:
         edges, all_docs = collect_relations_graph()
         stats = compute_degree_stats(edges, all_docs)
         cycles = find_cycles(edges)
         warnings = generate_warnings(edges, stats, cycles)
+        target = os.path.join(REPO_ROOT, "docs", "_generated", "relations-analysis.md")
+        if args.check:
+            with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
+                tmp_path = tmp.name
+            try:
+                write_output(edges, all_docs, stats, cycles, warnings, out_file=tmp_path)
+                with open(tmp_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except FileNotFoundError:
+                    pass
+            return write_or_check(target, content, check=True, label=os.path.relpath(target, REPO_ROOT))
         out_file = write_output(edges, all_docs, stats, cycles, warnings)
         print(f"Generated {out_file}")
+        return 0
     except Exception as e:
         print(f"Error generating relations analysis: {e}", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
