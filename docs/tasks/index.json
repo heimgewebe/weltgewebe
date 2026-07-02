@@ -1507,6 +1507,48 @@
         ]
       },
       "updated_at": "2026-06-30"
+    },
+    {
+      "id": "REPO-AUDIT-001",
+      "title": "Repo-Komplettaudit 2026-07-02: Restarbeiten (R-10…R-13)",
+      "area": "ci",
+      "status": "partial",
+      "priority": "medium",
+      "effort": "S",
+      "risk": "low",
+      "owner": "unknown",
+      "evidence": [
+        "docs/reports/repo-audit-2026-07-02.md",
+        "Justfile",
+        "repo.meta.yaml",
+        "agent-policy.yaml",
+        "scripts/docmeta/generated-files-guard.sh",
+        ".github/workflows/ci.yml",
+        ".github/workflows/heavy.yml",
+        "CLAUDE.md",
+        ".env.example"
+      ],
+      "missing_evidence": [
+        "Shallow-Clone-Hinweis in scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py (R-10)",
+        "Shell-Lint-Step (shellcheck/shfmt) in einem CI-Workflow (R-11)",
+        "Entscheidung + Umsetzung zu .lychee.toml: laden oder entfernen (R-12)",
+        "Gruener workflow_dispatch-Lauf des heavy.yml-e2e-Jobs nach pnpm-Setup-Fix (R-13)"
+      ],
+      "acceptance": [
+        "R-10: OPT-ARC-001-Validator meldet bei Shallow-Clone einen erklaerenden Hinweis statt eines nackten Commit-Fehlers",
+        "R-11: bash -n/shfmt/shellcheck laufen blockierend oder dokumentiert nicht-blockierend in CI",
+        "R-12: .lychee.toml wird entweder per --config geladen oder ersatzlos entfernt",
+        "R-13: heavy.yml-e2e-Job hat einen gruenen Dispatch-Lauf als Laufzeit-Beweis des Setup-Fixes"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/repo-audit-2026-07-02.md",
+          "docs/tasks/board.md"
+        ]
+      },
+      "updated_at": "2026-07-02"
     }
   ]
 }
