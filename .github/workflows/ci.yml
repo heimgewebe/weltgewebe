@@ -425,6 +425,7 @@ jobs:
           # lychee v0.15 expects integer seconds for retry wait time
           args: >
             --no-progress
+            --config .lychee.toml
             --accept "200,206,301,302,308,429,999"
             --timeout 20
             --max-concurrency 3
@@ -447,6 +448,7 @@ jobs:
           failIfEmpty: false
           args: >
             --no-progress
+            --config .lychee.toml
             --accept "200,206,301,302,308,429,999"
             --timeout 20
             --max-concurrency 3

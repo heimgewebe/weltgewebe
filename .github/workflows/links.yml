@@ -26,5 +26,6 @@ jobs:
             --max-redirects 5
             --exclude-mail
             --no-progress
+            --config .lychee.toml
             --exclude "https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?"
             "docs/**/*.md"

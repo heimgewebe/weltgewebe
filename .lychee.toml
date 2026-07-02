@@ -2,7 +2,7 @@
 max_redirects = 5
 timeout = 10
 retry_wait_time = 2
-retry_count = 2
+max_retries = 2
 
 # Private/temporäre Hosts ignorieren (Beispiele)
 exclude = [
