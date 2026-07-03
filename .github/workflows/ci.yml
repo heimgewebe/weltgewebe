@@ -206,7 +206,7 @@ jobs:
           CARGO_TERM_COLOR: always
 
       - name: Cache Cargo artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # tag: v4
         with:
           path: |
             ~/.cargo/registry
@@ -334,7 +334,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Cache Playwright browser binaries
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # tag: v4
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-ms-playwright-${{ hashFiles('apps/web/pnpm-lock.yaml') }}
@@ -409,7 +409,7 @@ jobs:
             !**/.git/**
 
       - name: Cache lychee responses
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # tag: v4
         with:
           path: .lycheecache
           key: ${{ runner.os }}-lychee-${{ hashFiles('**/*.md', '.lychee.toml') }}
