@@ -12,8 +12,8 @@ lang: de
 summary: >
   Abschlussbericht zu OPT-CI-005: Direkt ausgeführte Workflows mit bekannten
   JavaScript-Actions setzen FORCE_JAVASCRIPT_ACTIONS_TO_NODE24; der lokale
-  Scanner findet keine fehlende Force-Variable mehr. Verbleibende Warnungen
-  durch Action-Metadaten und wiederverwendbare externe Workflows bleiben Stage B.
+  Scanner findet keine fehlende Force-Variable mehr. Stage B klassifiziert die
+  wiederverwendbaren externen Workflows nach Pinning-Policy.
 relations:
   - type: relates_to
     target: scripts/ci/check_actions_node24_readiness.py
@@ -63,20 +63,35 @@ Dieser Workflow war die letzte vom Scanner gemeldete direkte Workflow-Lücke.
 - Der Scanner läuft lokal gegen `.github/workflows` ohne Missing-Force-Finding.
 - Mehrere aktuelle PR-CI-Läufe wurden unter erzwungener Node-24-Action-Runtime ausgeführt und GitHub hat die Merges akzeptiert.
 
-## Stage-B-Restfläche
+## Stage-B-Audit
 
-Der Scanner meldet weiterhin wiederverwendbare Workflows. Diese sind bewusst
-nicht durch Stage A bewiesen, weil ein Caller-`env` nicht automatisch belegt,
-dass der aufgerufene externe Workflow selbst Node-24-ready ist.
+Der Scanner klassifiziert wiederverwendbare Workflows jetzt explizit nach
+Referenztyp und Policy. Ein Caller-`env` beweist weiterhin nicht, dass der
+aufgerufene externe Workflow intern Node-24-ready ist; Stage B ist daher ein
+lokaler Risiko- und Pinning-Audit, kein Runtime-Beweis für fremde Repositories.
 
-Stage B umfasst daher:
+Aktueller Befund:
 
-- wiederverwendbare externe Workflows prüfen oder ersetzen,
-- verbleibende Node-20-Metadatenwarnungen der referenzierten Actions bewerten,
-- bei Bedarf Action-Refs modernisieren oder auf SHA-/Versionen mit Node-24-Metadaten aktualisieren.
+| Caller | Job | Reusable workflow | Ref | Policy |
+| --- | --- | --- | --- | --- |
+| `.github/workflows/metrics.yml` | `metrics` | `heimgewebe/metarepo/.github/workflows/wgx-metrics.yml@5c86ca69c0e2ae78a736c151f8d851e5cdda811e` | sha | pinned-sha |
+| `.github/workflows/pr-heimgewebe-commands.yml` | `dispatch` | `heimgewebe/metarepo/.github/workflows/heimgewebe-command-dispatch.yml@main` | named-ref | mutable-default-branch |
+| `.github/workflows/wgx-guard.yml` | `guard` | `heimgewebe/wgx/.github/workflows/wgx-guard.yml@17e349d872e16f927bdd8e0d770d2295f8b6e663` | sha | pinned-sha |
+| `.github/workflows/wgx-smoke.yml` | `smoke` | `heimgewebe/wgx/.github/workflows/wgx-smoke.yml@main` | named-ref | mutable-default-branch |
 
-Diese Stage-B-Arbeit ist nicht Teil von OPT-CI-005. OPT-CI-005 schließt den
-aktuellen Readiness-Schutz für direkt ausgeführte Workflows.
+Bewertung:
+
+- Zwei reusable Workflow Calls sind SHA-gepinnt.
+- Zwei reusable Workflow Calls nutzen `main` und bleiben bewusst als mutable
+  Default-Branch-Risiko sichtbar.
+- Der Scanner bleibt nicht-blockierend für reusable Workflows, weil die
+  Semantik fremder Workflows nicht aus dem Caller-Repository bewiesen werden
+  kann.
+- Ein späterer Härtungsschnitt kann die beiden `main`-Refs auf geprüfte SHAs
+  anheben, sobald das jeweilige Callee-Repository als Quelle geprüft wurde.
+
+Damit ist Stage B als lokaler Audit abgeschlossen. Nicht behauptet wird eine
+inhaltliche Node-24-Readiness der externen Callee-Workflows.
 
 ## Nicht-Ziele
 
