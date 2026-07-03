@@ -75,22 +75,20 @@ Aktueller Befund:
 | Caller | Job | Reusable workflow | Ref | Policy |
 | --- | --- | --- | --- | --- |
 | `.github/workflows/metrics.yml` | `metrics` | `heimgewebe/metarepo/.github/workflows/wgx-metrics.yml@5c86ca69c0e2ae78a736c151f8d851e5cdda811e` | sha | pinned-sha |
-| `.github/workflows/pr-heimgewebe-commands.yml` | `dispatch` | `heimgewebe/metarepo/.github/workflows/heimgewebe-command-dispatch.yml@main` | named-ref | mutable-default-branch |
+| `.github/workflows/pr-heimgewebe-commands.yml` | `dispatch` | `heimgewebe/metarepo/.github/workflows/heimgewebe-command-dispatch.yml@a1984186a98a1e4214769f87649c5affc9686a53` | sha | pinned-sha |
 | `.github/workflows/wgx-guard.yml` | `guard` | `heimgewebe/wgx/.github/workflows/wgx-guard.yml@17e349d872e16f927bdd8e0d770d2295f8b6e663` | sha | pinned-sha |
-| `.github/workflows/wgx-smoke.yml` | `smoke` | `heimgewebe/wgx/.github/workflows/wgx-smoke.yml@main` | named-ref | mutable-default-branch |
+| `.github/workflows/wgx-smoke.yml` | `smoke` | `heimgewebe/wgx/.github/workflows/wgx-smoke.yml@814d5e9102e4020c786d6bb7e1c377004cf2bbea` | sha | pinned-sha |
 
 Bewertung:
 
-- Zwei reusable Workflow Calls sind SHA-gepinnt.
-- Zwei reusable Workflow Calls nutzen `main` und bleiben bewusst als mutable
-  Default-Branch-Risiko sichtbar.
+- Alle vier reusable Workflow Calls sind SHA-gepinnt.
 - Der Scanner bleibt nicht-blockierend für reusable Workflows, weil die
   Semantik fremder Workflows nicht aus dem Caller-Repository bewiesen werden
   kann.
-- Ein späterer Härtungsschnitt kann die beiden `main`-Refs auf geprüfte SHAs
-  anheben, sobald das jeweilige Callee-Repository als Quelle geprüft wurde.
+- Die gepinnten SHAs wurden gegen die jeweilige `main`-Branch-Spitze und den
+  vorhandenen Workflow-Pfad im Callee-Repository geprüft.
 
-Damit ist Stage B als lokaler Audit abgeschlossen. Nicht behauptet wird eine
+Damit ist Stage B als lokaler Audit und Pinning-Härtung abgeschlossen. Nicht behauptet wird eine
 inhaltliche Node-24-Readiness der externen Callee-Workflows.
 
 ## Nicht-Ziele
