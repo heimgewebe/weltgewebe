@@ -1444,14 +1444,14 @@
         ".github/workflows/"
       ],
       "missing_evidence": [
-        "105 direkte GitHub Action uses bleiben named refs; vollständiges SHA-Pinning erfolgt in ratcheted Folge-Slices.",
+        "83 direkte GitHub Action uses bleiben named refs; vollständiges SHA-Pinning erfolgt in ratcheted Folge-Slices.",
         "12 actions/checkout uses in .github/workflows/api.yml bleiben bis zu einem separaten OPT-ARC-001-Proof-Refresh-Schnitt unpinned.",
         "Ursprungstag und Ziel-SHA müssen pro verbleibender Action-Familie dokumentiert werden."
       ],
       "acceptance": [
         "Ein reproduzierbarer Scanner klassifiziert alle GitHub-Workflow-uses-Referenzen nach Kind, Ref-Typ und Pinning-Policy.",
         "Der Audit-Report dokumentiert aktuelle Counts, verbleibende unique named refs und Pinning-Slices.",
-        "Reusable Workflows sind SHA-gepinnt; checkout ist außerhalb der OPT-ARC-001-DB-Proof-Harness-Datei auf einen geprüften SHA gepinnt.",
+        "Reusable Workflows sind SHA-gepinnt; checkout ist außerhalb der OPT-ARC-001-DB-Proof-Harness-Datei auf einen geprüften SHA gepinnt; upload-artifact ist repo-weit auf einen geprüften SHA gepinnt.",
         "CI-/Update-Pfad bleibt nachvollziehbar; kein repo-weites Blind-Pinning ohne Action-Familien-Slice."
       ],
       "links": {

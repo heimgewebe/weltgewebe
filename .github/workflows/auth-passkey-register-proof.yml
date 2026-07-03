@@ -182,7 +182,7 @@ jobs:
 
       - name: Upload proof summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
         with:
           name: auth-passkey-register-proof-summary
           path: build/proofs/auth-passkey-register/
@@ -191,7 +191,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
         with:
           name: auth-passkey-register-proof-report
           path: apps/web/playwright-report/
@@ -200,7 +200,7 @@ jobs:
 
       - name: Upload Playwright traces and test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
         with:
           name: auth-passkey-register-proof-traces
           path: apps/web/test-results/
