@@ -1444,7 +1444,7 @@
         ".github/workflows/"
       ],
       "missing_evidence": [
-        "52 direkte GitHub Action uses bleiben named refs; vollständiges SHA-Pinning erfolgt in ratcheted Folge-Slices.",
+        "50 direkte GitHub Action uses bleiben named refs; vollständiges SHA-Pinning erfolgt in ratcheted Folge-Slices.",
         "12 actions/checkout uses in .github/workflows/api.yml bleiben bis zu einem separaten OPT-ARC-001-Proof-Refresh-Schnitt unpinned.",
         "Ursprungstag und Ziel-SHA müssen pro verbleibender Action-Familie dokumentiert werden."
       ],

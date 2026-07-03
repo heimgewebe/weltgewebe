@@ -54,8 +54,8 @@ klassifiziert jede `uses:`-Referenz und schreibt keine Dateien.
 total=162
 kind.github-action=158
 kind.reusable-workflow=4
-policy.named-ref=52
-policy.pinned-sha=110
+policy.named-ref=50
+policy.pinned-sha=112
 ```
 
 Unique named refs:
@@ -65,7 +65,6 @@ DavidAnson/markdownlint-cli2-action@v16
 Swatinem/rust-cache@v2
 actions/download-artifact@v8
 anchore/sbom-action@v0
-astral-sh/setup-uv@v7
 docker/setup-buildx-action@v4
 dorny/paths-filter@v4
 dtolnay/rust-toolchain@v1
@@ -145,6 +144,18 @@ Alle ersetzten Workflow-Zeilen behalten den Ursprungstag als Inline-Kommentar:
 
 ```yaml
 uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # tag: v2
+```
+
+## Pinning Slice 7 — astral-sh/setup-uv
+
+| Action-Familie | Ursprungstag | Ziel-SHA | Vorkommen | Prüfung |
+| --- | --- | --- | ---: | --- |
+| `astral-sh/setup-uv` | `v7` | `37802adc94f370d6bfd71619e3f0bf239e1f3b78` | 2 | GitHub tag ref `astral-sh/setup-uv@v7` war ein annotierter Tag und wurde auf Commit-SHA `37802adc94f370d6bfd71619e3f0bf239e1f3b78` dereferenziert. |
+
+Alle ersetzten Workflow-Zeilen behalten den Ursprungstag als Inline-Kommentar:
+
+```yaml
+uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # tag: v7
 ```
 
 ## Bewertung
