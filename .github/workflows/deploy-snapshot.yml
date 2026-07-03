@@ -36,7 +36,7 @@ jobs:
             -c ajv-formats
 
       - name: Upload Snapshot
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
         with:
           name: deploy.snapshot.json
           path: artifacts/deploy.snapshot.json

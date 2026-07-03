@@ -54,8 +54,8 @@ klassifiziert jede `uses:`-Referenz und schreibt keine Dateien.
 total=162
 kind.github-action=158
 kind.reusable-workflow=4
-policy.named-ref=105
-policy.pinned-sha=57
+policy.named-ref=83
+policy.pinned-sha=79
 ```
 
 Unique named refs:
@@ -66,7 +66,6 @@ Swatinem/rust-cache@v2
 actions/cache@v4
 actions/download-artifact@v8
 actions/setup-python@v5
-actions/upload-artifact@v4
 anchore/sbom-action@v0
 astral-sh/setup-uv@v7
 docker/setup-buildx-action@v4
@@ -92,14 +91,27 @@ uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
 
 `.github/workflows/api.yml` bleibt in diesem Slice ausgenommen, weil diese Datei die OPT-ARC-001-DB-Proof-Harnesses trägt. Ein Checkout-Pin dort macht die Proof-Matrix-Evidence formal stale und braucht einen separaten Proof-Refresh-Schnitt.
 
+## Pinning Slice 2 — actions/upload-artifact
+
+| Action-Familie | Ursprungstag | Ziel-SHA | Vorkommen | Prüfung |
+| --- | --- | --- | ---: | --- |
+| `actions/upload-artifact` | `v4` | `ea165f8d65b6e75b540449e92b4886f43607fa02` | 22 | GitHub tag ref `actions/upload-artifact@v4` zeigte auf Commit-SHA `ea165f8d65b6e75b540449e92b4886f43607fa02`. |
+
+Alle ersetzten Workflow-Zeilen behalten den Ursprungstag als Inline-Kommentar:
+
+```yaml
+uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+```
+
 ## Bewertung
 
 - Alle reusable Workflows sind nach #1331 SHA-gepinnt.
 - `actions/checkout` ist außerhalb der OPT-ARC-001-DB-Proof-Harness-Datei SHA-gepinnt.
+- `actions/upload-artifact` ist repo-weit SHA-gepinnt.
 - Die verbleibende Pinning-Fläche liegt bei direkt verwendeten GitHub Actions
-  mit named refs. Größte verbleibende Familien sind `actions/upload-artifact`,
-  `dtolnay/rust-toolchain`, `Swatinem/rust-cache`, `pnpm/action-setup`,
-  `actions/setup-python` und `actions/cache`.
+  mit named refs. Größte verbleibende Familien sind `dtolnay/rust-toolchain`,
+  `Swatinem/rust-cache`, `pnpm/action-setup`, `actions/setup-python` und
+  `actions/cache`.
 - Der Audit bleibt bewusst nicht-blockierend. Er ist die Grundlage für spätere
   kontrollierte Pinning-Slices.
 
@@ -113,7 +125,7 @@ Ref, eine lokale Action oder eine Docker-Referenz zeigt.
 
 Nicht alle Actions in einem PR pinnen. Sinnvoller ist ein ratcheted Vorgehen:
 
-1. Als nächstes entweder `actions/upload-artifact` pinnen oder einen separaten Proof-Refresh-Schnitt für `.github/workflows/api.yml` planen.
+1. Als nächstes `dtolnay/rust-toolchain` oder `Swatinem/rust-cache` prüfen; `.github/workflows/api.yml` bleibt separat für einen OPT-ARC-001-Proof-Refresh-Schnitt.
 2. Ursprungstag und Ziel-SHA pro Familie dokumentieren.
 3. Nach jedem Slice prüfen, dass Dependabot/Update-Pfad weiterhin verständlich
    bleibt.

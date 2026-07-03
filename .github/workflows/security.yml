@@ -70,7 +70,7 @@ jobs:
         run: cargo audit --json | tee cargo-audit-report.json
       - name: Upload audit report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
         with:
           name: cargo-audit-report
           path: cargo-audit-report.json
@@ -115,7 +115,7 @@ jobs:
         run: cargo deny --format json check | tee cargo-deny-report.json
       - name: Upload cargo-deny report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
         with:
           name: cargo-deny-report
           path: cargo-deny-report.json
@@ -140,7 +140,7 @@ jobs:
           output-file: sbom.spdx.json
       - name: Upload SBOM artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
         with:
           name: sbom-spdx
           path: sbom.spdx.json

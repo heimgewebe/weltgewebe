@@ -87,7 +87,7 @@ jobs:
           cargo build --locked --release --bin weltgewebe-api 2>&1 | tee /tmp/build-logs/cargo-build.log
       - name: Upload cargo build log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
         with:
           name: cargo-build-log
           path: /tmp/build-logs/cargo-build.log
@@ -205,7 +205,7 @@ jobs:
           fi
       - name: Upload API log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
         with:
           name: api-log
           path: /tmp/api.log
