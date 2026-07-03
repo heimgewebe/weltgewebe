@@ -54,8 +54,8 @@ klassifiziert jede `uses:`-Referenz und schreibt keine Dateien.
 total=162
 kind.github-action=158
 kind.reusable-workflow=4
-policy.named-ref=55
-policy.pinned-sha=107
+policy.named-ref=52
+policy.pinned-sha=110
 ```
 
 Unique named refs:
@@ -70,7 +70,6 @@ docker/setup-buildx-action@v4
 dorny/paths-filter@v4
 dtolnay/rust-toolchain@v1
 extractions/setup-just@v2
-lycheeverse/lychee-action@v2
 softprops/action-gh-release@v2
 ```
 
@@ -134,6 +133,18 @@ Alle ersetzten Workflow-Zeilen behalten den Ursprungstag als Inline-Kommentar:
 
 ```yaml
 uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # tag: v4
+```
+
+## Pinning Slice 6 — lycheeverse/lychee-action
+
+| Action-Familie | Ursprungstag | Ziel-SHA | Vorkommen | Prüfung |
+| --- | --- | --- | ---: | --- |
+| `lycheeverse/lychee-action` | `v2` | `8646ba30535128ac92d33dfc9133794bfdd9b411` | 3 | GitHub tag ref `lycheeverse/lychee-action@v2` zeigte auf Commit-SHA `8646ba30535128ac92d33dfc9133794bfdd9b411`. |
+
+Alle ersetzten Workflow-Zeilen behalten den Ursprungstag als Inline-Kommentar:
+
+```yaml
+uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # tag: v2
 ```
 
 ## Bewertung

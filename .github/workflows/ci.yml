@@ -419,7 +419,7 @@ jobs:
       - name: Link check (lychee)
         id: lychee
         continue-on-error: true
-        uses: lycheeverse/lychee-action@v2
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # tag: v2
         with:
           failIfEmpty: false
           # lychee v0.15 expects integer seconds for retry wait time
@@ -443,7 +443,7 @@ jobs:
 
       - name: Link check (lychee - verbose retry)
         if: ${{ steps.lychee.outcome == 'failure' }}
-        uses: lycheeverse/lychee-action@v2
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # tag: v2
         with:
           failIfEmpty: false
           args: >
