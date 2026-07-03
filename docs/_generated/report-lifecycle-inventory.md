@@ -55,7 +55,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/auth-persistence-runtime-proof.md | report | deprecated | superseded | proof | OPT-API-002 |  | docs/reports/optimierungsstatus.md | 4 | 4 | 6 | review_after |  |
 | docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active | active | audit | OPT-API-002 | 2026-07-17 |  | 1 | 4 | 5 |  |  |
 | docs/reports/auth-pg-002-controlled-preflight.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 0 | 4 | 2 |  |  |
-| docs/reports/auth-pg-002-cutover-plan.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 6 | 4 | 4 |  |  |
+| docs/reports/auth-pg-002-cutover-plan.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 7 | 4 | 4 |  |  |
 | docs/reports/auth-pg-002-passkey-db-store.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 3 | 4 | 3 |  |  |
 | docs/reports/auth-pg-002-passkey-fk-readiness-audit.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 3 | 4 | 4 |  |  |
 | docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 3 | 4 | 4 |  |  |
@@ -193,6 +193,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/reports/auth-pg-002-passkey-fk-readiness-audit.md`
   - `docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md`
   - `docs/reports/auth-pg-002-passkey-runtime-audit-plan.md`
+  - `docs/reports/auth-pg-002-passkey-runtime-facade.md`
   - `docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md`
   - `docs/reports/auth-pg-003-backfill-readiness.md`
   - `docs/tasks/board.md`
