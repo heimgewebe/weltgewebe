@@ -43,5 +43,8 @@ integration-testing = []
 
 [dev-dependencies]
 base64 = "0.22"
+# Already in the dependency tree via webauthn-rs-core; used by the passkey
+# route-level proof to build a real ES256 software authenticator.
+openssl = "0.10"
 serial_test = "3"
 tempfile = "3"

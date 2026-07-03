@@ -124,6 +124,16 @@ kein Assert-Fehler des Tests. Der bestehende CI-Job `db passkey persistence proo
 (direct postgres)` führt das gesamte Testfile mit `--include-ignored` gegen einen
 PostgreSQL-Service aus und ist der maßgebliche Merge-Beleg.
 
+**Ergänzung 2026-07-03 (AUTH-PG-002-C1):** Dasselbe Testfile trägt nun
+zusätzlich den Route-Level-Register→Reload→Auth-Proof
+`passkey_register_reload_auth_route_proof` (echte Routen hinter echter
+Auth-Middleware, Software-Authenticator mit echter ES256-Kryptografie, volle
+State-Reinitialisierung, Counter-Update-Nachweis in PostgreSQL, Session-Mint
+erst danach) sowie den nicht-ignorierten, DB-freien Selbsttest
+`soft_authenticator_passes_bare_webauthn_ceremonies`, der die
+Authenticator-Fixture gegen die volle webauthn-rs-Verifikation pinnt. Details
+und Nicht-Beweise: `docs/reports/auth-pg-002-cutover-plan.md`, Gate B.
+
 ## 5. Weiterhin offen
 
 AUTH-PG-002 bleibt **partial**:
@@ -132,7 +142,9 @@ AUTH-PG-002 bleibt **partial**:
 - kein Foreign Key `passkey_credentials.account_id -> domain_accounts(id)`;
   dieser bleibt bis zum Integritäts-/Produktions-Cutover aufgeschoben
 - kein `webauthn_user_id`-Backfill und kein späteres `NOT NULL`
-- kein vollständiger Browser-/Authenticator-E2E für Register → Reload → Login
+- Register → Reload → Auth ist auf API-Routenebene bewiesen (AUTH-PG-002-C1);
+  weiterhin offen bleibt ein Browser-/Authenticator-E2E über einen echten
+  OS-Prozess-Neustart
 - kein Passkey-Management-UI/List/Remove-Cutover
 
 ## 6. Status

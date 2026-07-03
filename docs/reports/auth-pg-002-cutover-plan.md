@@ -81,6 +81,42 @@ ist ein Playwright-/Browser-Proof gegen eine Testinstanz der richtige Ort. Der
 vorhandene Runtime-Facade-DB-Test ist notwendig, aber nicht allein hinreichend
 für den Produktions-Cutover.
 
+**Stand 2026-07-03 (AUTH-PG-002-C1):** Die Browser-/Authenticator-Simulation
+ist im API-Test tragfähig. Der Route-Level-Proof
+`passkey_register_reload_auth_route_proof` in
+`apps/api/tests/db_passkey_store_persistence.rs` deckt alle sechs Schritte ab:
+
+1. Account wird ausschließlich in PostgreSQL angelegt und über den produktiven
+   Startup-Loader `load_accounts_from_postgres` geladen.
+2. Registration läuft über die echten Routen `register/options` +
+   `register/verify` hinter der echten Auth-Middleware; ein Test-interner
+   Software-Authenticator liefert eine echte ES256-Attestation
+   (P-256-Schlüsselpaar, CBOR `none`-Format), die Server-Verifikation
+   (`finish_passkey_registration`) läuft ungekürzt.
+3. Reinitialisierung: erster Pool wird geschlossen, sämtliche Caches und
+   Ceremony-Stores werden neu aufgebaut, Accounts werden erneut aus PostgreSQL
+   geladen; In-Memory-Zustand überlebt nicht.
+4. `auth/options` findet das Credential aus PostgreSQL (der In-Memory-Store
+   bleibt nachweislich leer).
+5. `auth/verify` verifiziert eine echte ES256-Assertion und persistiert den
+   Signatur-Counter (0 → 1) in `passkey_credentials`.
+6. Erst danach wird eine Session gemintet (DB-gestützter Session-Store,
+   `Set-Cookie`, Session-Zeile account-gebunden).
+
+Ein nicht-ignorierter, DB-freier Selbsttest
+(`soft_authenticator_passes_bare_webauthn_ceremonies`) pinnt die
+Authenticator-Fixture gegen die volle webauthn-rs-Verifikation, damit sie
+nicht stillschweigend verrotten kann. Lokaler Lauf gegen direktes PostgreSQL
+ist grün; der maßgebliche Merge-Beleg ist der bestehende PR-CI-Job
+`db-passkey-persistence-proof`, der das gesamte Testfile mit
+`--include-ignored` ausführt.
+
+**Nicht durch C1 bewiesen:** ein echter OS-Prozess-Neustart mit echtem
+Browser-Authenticator (der bestehende Playwright-Proof startet die API genau
+einmal und kann sie nicht mitten im Test neu starten — das bleibt ein
+möglicher späterer Slice), Produktions-Cutover, FK-Integrität,
+`webauthn_user_id`-Backfill.
+
 ### Gate C — FK-Readiness
 
 Der spätere Foreign Key `passkey_credentials.account_id -> domain_accounts(id)`
@@ -139,22 +175,27 @@ Invarianten.
 
 ## 5. Nächster kleinster technischer Slice
 
-Empfohlener nächster PR nach diesem Plan:
+### AUTH-PG-002-C1: Route-level Register→Reload→Auth proof — umgesetzt
 
-### AUTH-PG-002-C1: Route-level Register→Reload→Auth proof
+Der Slice ist wie geplant geschnitten worden:
 
 - kein Produktionsschalter,
 - kein FK,
 - kein Default-Wechsel,
 - nur ein harter Proof, dass die vorhandene Facade auf Routenebene den
-  Restart-Pfad trägt.
+  Restart-Pfad trägt (`passkey_register_reload_auth_route_proof`, Details in
+  Gate B oben).
 
-Erst danach sollte ein Deploy-/Config-Cutover diskutiert werden.
+Erst danach sollte ein Deploy-/Config-Cutover diskutiert werden. Der nächste
+kleinste Slice nach C1 ist der Runtime-Schema-Preflight plus erneuter
+Runtime-Audit (die Zielumgebung hat laut Heimserver-Audit noch keine
+`passkey_credentials`-Tabelle), danach die explizite FK-/Deploy-Entscheidung.
 
 ## 6. Statusentscheidung
 
 AUTH-PG-002 bleibt **partial**.
 
-Der nächste Fortschritt ist nicht mehr ein weiterer Store-Wrapper, sondern ein
-End-to-End-Beweis über den tatsächlichen WebAuthn-Routenpfad und danach eine
-explizite FK-/Deploy-Entscheidung.
+Gate B ist auf API-Ebene abgedeckt (lokal grün; PR-CI-Lauf des Jobs
+`db-passkey-persistence-proof` ist der maßgebliche Merge-Beleg). Offen bleiben
+Gate A in der Zielumgebung, Gate C (FK-Readiness), Gate D/E im Betrieb sowie
+der eigentliche Produktions-Cutover.
