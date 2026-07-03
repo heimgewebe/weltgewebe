@@ -41,11 +41,12 @@ weiter sichtbar, darf aber nicht still davon abweichen.
 ## Generated und Curated Index
 
 Ein `generated`-Artefakt wird aus deklarierten Quellen erzeugt. Es muss einen
-repository-eigenen Generator besitzen. Wo der Generator einen schreibfreien
-`--check` anbietet, nutzt das Manifest diesen direkten Driftcheck. Ältere
-Generatoren ohne schreibfreien Einzelcheck bleiben trotzdem kontrolliert:
-Manifest-Coverage, `repo.meta.yaml`-Abgleich, Quellenvalidierung,
-Generator-Whitelist, Marker- und Frontmatter-Prüfung laufen blockierend.
+repository-eigenen Generator besitzen und mindestens einen artefaktspezifischen,
+schreibfreien Driftcheck deklarieren. Der zentrale Manifestvalidator darf diese
+Direktprüfung ergänzen, aber nicht ersetzen.
+
+Shell-Generatoren sind auf reviewte `scripts/docmeta/generate-*.sh`-Pfade
+begrenzt. Als Zusatzargument ist dort nur `--check` erlaubt.
 
 `docs/tasks/index.json` ist dagegen kein Generator-Output. Es ist die
 maschinenlesbare, kuratierte Task-Control-Quelle. Deshalb behauptet das Manifest
@@ -80,7 +81,9 @@ Der Validator blockiert unter anderem:
 - unbekannte Manifestfelder,
 - absolute Pfade, Parent-Traversal und Symlinks,
 - fehlende Quellen oder repository-fremde Prüfkommandos,
+- `generated`-Artefakte ohne artefaktspezifischen schreibfreien Check,
 - nicht geprüfte Shell-Kommandos außerhalb `scripts/docmeta/generate-*.sh`,
+- Shell-Generatoren mit anderen Zusatzargumenten als `--check`,
 - Generated-Artefakte ohne `derived`-Kanonizität,
 - einen fälschlich deklarierten Generator für den kuratierten Task-Index,
 - fehlende `commit_required`- oder `blocking`-Flags,
@@ -89,7 +92,7 @@ Der Validator blockiert unter anderem:
 ## Grenzen
 
 Der Kontrollvertrag beweist weder fachliche Richtigkeit noch Vollständigkeit der
-generierten Inhalte. Er attestiert keine Claims und ersetzt keine Reviews. Für
-Generatoren ohne schreibfreien Einzelcheck beweist der Vertrag zunächst die
-registrierte Kontrollfläche, nicht die inhaltliche Deterministik jedes einzelnen
-Outputs.
+generierten Inhalte. Er attestiert keine Claims und ersetzt keine Reviews. Er
+beweist nur, dass die registrierten generierten Artefakte aus ihrer deklarierten
+Kontrollfläche heraus schreibfrei reproduzierbar sind und dass ein Rückfall auf
+central-only Kontrolle blockiert wird.

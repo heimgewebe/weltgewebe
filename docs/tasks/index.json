@@ -496,7 +496,7 @@
     },
     {
       "id": "AGENT-SAFE-008",
-      "title": "Minimalen Generated-Artifact-Kontrollvertrag einführen",
+      "title": "Generated-Artifact-Kontrollvertrag ausbauen und ratcheten",
       "area": "governance",
       "status": "done",
       "priority": "high",
@@ -512,16 +512,23 @@
         "scripts/docmeta/generated-files-guard.sh",
         ".github/workflows/docs-guard.yml",
         "docs/reference/generated-artifact-control.md",
-        "repo.meta.yaml"
+        "repo.meta.yaml",
+        "scripts/docmeta/generated_check.py",
+        "scripts/docmeta/generate-doc-index.sh",
+        "scripts/docmeta/generate-impl-index.sh",
+        "scripts/docmeta/generate_relates_to_audit.py",
+        "scripts/docmeta/generate_relations_analysis.py",
+        "scripts/docmeta/generate_report_lifecycle.py",
+        "scripts/docmeta/generate_report_lifecycle_inventory.py",
+        "scripts/docmeta/generate_system_map.py"
       ],
-      "missing_evidence": [
-        "Full generated-artifact coverage remains a separate follow-up slice; this task closes the minimal control contract."
-      ],
+      "missing_evidence": [],
       "acceptance": [
-        "Ein maschinenlesbares Manifest bindet die drei kritischen Kontrollpfade an Rolle, Kanonizität, Quellen und blockierende Checks",
-        "Agent-Readiness und Claim-Evidence-Map besitzen schreibfreie deterministische Drift-Checks",
+        "Ein maschinenlesbares Manifest bindet alle getrackten docs/_generated/*.md-Artefakte sowie den kuratierten Task-Index an Rolle, Kanonizität, Quellen und blockierende Checks",
+        "Alle generated-Artefakte besitzen mindestens einen artefaktspezifischen schreibfreien Drift-Check; central-only Checks werden für generated-Artefakte blockiert",
+        "Shell-Generatoren sind auf reviewte scripts/docmeta/generate-*.sh-Pfade begrenzt; als Zusatzargument ist nur --check erlaubt",
         "Der kuratierte Task-Index wird korrekt als kanonischer Index mit Schema- und Cross-Artifact-Checks modelliert, nicht als erfundener Generator-Output",
-        "Fehlende Pfade, Quellen, Marker, repository-fremde Kommandos, Symlinks und Scope-Ausweitungen werden fail-closed blockiert",
+        "Fehlende Pfade, Quellen, Marker, repository-fremde Kommandos, Symlinks, Manifest-/repo.meta-Drift und fehlende Direct-Checks werden fail-closed blockiert",
         "Der Generated-Files-Guard führt den Manifestvalidator im blockierenden Check-Modus aus"
       ],
       "links": {
