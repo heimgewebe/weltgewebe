@@ -16,23 +16,23 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 | Metric | Count |
 | --- | ---: |
-| files_total | 43 |
-| files_with_frontmatter | 43 |
+| files_total | 44 |
+| files_with_frontmatter | 44 |
 | files_without_frontmatter | 0 |
-| files_with_status | 43 |
+| files_with_status | 44 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 39 |
+| files_with_lifecycle_state | 40 |
 | files_missing_lifecycle_state | 4 |
-| files_with_lifecycle | 39 |
+| files_with_lifecycle | 40 |
 | files_missing_lifecycle | 4 |
-| files_with_owner_task | 39 |
+| files_with_owner_task | 40 |
 | files_missing_owner_task | 4 |
-| files_with_review_after | 30 |
+| files_with_review_after | 31 |
 | files_missing_review_after | 13 |
-| files_primary_referenced | 39 |
+| files_primary_referenced | 40 |
 | files_primary_unreferenced | 4 |
-| files_with_derived_references | 43 |
-| files_with_relations | 43 |
+| files_with_derived_references | 44 |
+| files_with_relations | 44 |
 | files_with_missing_supersession_target | 0 |
 
 ## Doc Type Distribution
@@ -41,7 +41,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | --- | ---: |
 | documentation | 1 |
 | reference | 1 |
-| report | 39 |
+| report | 40 |
 | status-matrix | 2 |
 
 ## Reports
@@ -79,6 +79,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | 4 | 4 | 3 |  |  |
 | docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 5 |  |  |
 | docs/reports/domain-runtime-data-source-reconciliation.md | report | active | active | audit | DB-PROOF-001 | 2026-07-18 |  | 1 | 4 | 5 |  |  |
+| docs/reports/github-action-ref-pinning-audit.md | report | active | active | audit | OPT-INF-002 | 2026-09-30 |  | 2 | 4 | 4 |  |  |
 | docs/reports/github-actions-node24-readiness.md | report | active | active | audit | OPT-CI-005 | 2026-09-29 |  | 2 | 4 | 5 |  |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | deprecated | archived | planning | DEPLOY-DNS-001 |  |  | 1 | 4 | 4 | review_after |  |
 | docs/reports/map-architekturkritik.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 4 | 5 | 2 |  |  |
@@ -145,6 +146,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-provider-role-finding.md | 3 | relates_to | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md, docs/runbooks/domain-mail-cutover.md, docs/tasks/board.md |
 | docs/reports/domain-read-path-proof.md | 5 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-backfill-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md |
 | docs/reports/domain-runtime-data-source-reconciliation.md | 5 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-edge-reference-audit.md, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, docs/tasks/index.json |
+| docs/reports/github-action-ref-pinning-audit.md | 4 | relates_to | docs/tasks/board.md, docs/tasks/index.json, scripts/ci/check_github_action_pinning.py, scripts/ci/tests/test_check_github_action_pinning.py |
 | docs/reports/github-actions-node24-readiness.md | 5 | relates_to | .github/workflows/opt-arc-001-db-proof-matrix.yml, docs/tasks/board.md, docs/tasks/index.json, scripts/ci/check_actions_node24_readiness.py, scripts/ci/tests/test_check_actions_node24_readiness.py |
 | docs/reports/inwx-zone-reconciliation-plan.md | 4 | relates_to | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md, docs/reports/domain-provider-role-finding.md, docs/runbooks/domain-mail-cutover.md, docs/tasks/board.md |
 | docs/reports/map-architekturkritik.md | 2 | relates_to | docs/blueprints/kartenklarheit-roadmap.md, docs/reports/map-status-matrix.md |
@@ -313,6 +315,10 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/tasks/board.md`
 
 - `docs/reports/domain-runtime-data-source-reconciliation.md`
+  - `docs/tasks/board.md`
+
+- `docs/reports/github-action-ref-pinning-audit.md`
+  - `docs/reports/optimierungsstatus.md`
   - `docs/tasks/board.md`
 
 - `docs/reports/github-actions-node24-readiness.md`
@@ -573,6 +579,12 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/report-lifecycle.md`
 
 - `docs/reports/domain-runtime-data-source-reconciliation.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/report-lifecycle.md`
+
+- `docs/reports/github-action-ref-pinning-audit.md`
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`

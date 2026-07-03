@@ -401,19 +401,23 @@
       "id": "OPT-INF-002",
       "area": "Infrastruktur",
       "title": "Third-Party-Actions per Commit-SHA pinnen",
-      "status": "open",
-      "priority": "low",
+      "status": "partial",
+      "priority": "medium",
       "risk": "medium",
       "effort": "low",
-      "evidence_status": "ci",
+      "evidence_status": "partial",
       "evidence": [
+        "scripts/ci/check_github_action_pinning.py",
+        "scripts/ci/tests/test_check_github_action_pinning.py",
+        "docs/reports/github-action-ref-pinning-audit.md",
         ".github/workflows/"
       ],
       "missing_evidence": [
-        "repo-weit nur Tag-Pinning, kein SHA-Pinning"
+        "146 direkte GitHub Action uses bleiben named refs; vollständiges SHA-Pinning erfolgt in ratcheted Folge-Slices.",
+        "Ursprungstag und Ziel-SHA müssen pro Action-Familie dokumentiert werden."
       ],
-      "next_action": "Actions auf Commit-SHA umstellen",
-      "updated_at": "2026-05-25"
+      "next_action": "Ratcheted SHA-Pinning nach Action-Familie planen; nicht repo-weit blind pinnen.",
+      "updated_at": "2026-07-03"
     },
     {
       "id": "OPT-FE-003",
