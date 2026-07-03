@@ -54,8 +54,8 @@ klassifiziert jede `uses:`-Referenz und schreibt keine Dateien.
 total=162
 kind.github-action=158
 kind.reusable-workflow=4
-policy.named-ref=62
-policy.pinned-sha=100
+policy.named-ref=55
+policy.pinned-sha=107
 ```
 
 Unique named refs:
@@ -63,7 +63,6 @@ Unique named refs:
 ```text
 DavidAnson/markdownlint-cli2-action@v16
 Swatinem/rust-cache@v2
-actions/cache@v4
 actions/download-artifact@v8
 anchore/sbom-action@v0
 astral-sh/setup-uv@v7
@@ -125,6 +124,18 @@ Alle ersetzten Workflow-Zeilen behalten den Ursprungstag als Inline-Kommentar:
 uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # tag: v5
 ```
 
+## Pinning Slice 5 — actions/cache
+
+| Action-Familie | Ursprungstag | Ziel-SHA | Vorkommen | Prüfung |
+| --- | --- | --- | ---: | --- |
+| `actions/cache` | `v4` | `0057852bfaa89a56745cba8c7296529d2fc39830` | 7 | GitHub tag ref `actions/cache@v4` zeigte auf Commit-SHA `0057852bfaa89a56745cba8c7296529d2fc39830`. |
+
+Alle ersetzten Workflow-Zeilen behalten den Ursprungstag als Inline-Kommentar:
+
+```yaml
+uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # tag: v4
+```
+
 ## Bewertung
 
 - Alle reusable Workflows sind nach #1331 SHA-gepinnt.
@@ -133,8 +144,8 @@ uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # tag: v5
 - `pnpm/action-setup` ist repo-weit SHA-gepinnt.
 - `actions/setup-python` ist repo-weit SHA-gepinnt.
 - Die verbleibende Pinning-Fläche liegt bei direkt verwendeten GitHub Actions
-  mit named refs. Größte verbleibende Familien sind `dtolnay/rust-toolchain`,
-  `Swatinem/rust-cache` und `actions/cache`.
+  mit named refs. Größte verbleibende Familien sind `dtolnay/rust-toolchain` und
+  `Swatinem/rust-cache`.
 - Der Audit bleibt bewusst nicht-blockierend. Er ist die Grundlage für spätere
   kontrollierte Pinning-Slices.
 
@@ -148,7 +159,7 @@ Ref, eine lokale Action oder eine Docker-Referenz zeigt.
 
 Nicht alle Actions in einem PR pinnen. Sinnvoller ist ein ratcheted Vorgehen:
 
-1. Als nächstes `actions/cache` prüfen; `dtolnay/rust-toolchain` und `Swatinem/rust-cache` berühren überwiegend `.github/workflows/api.yml` und bleiben eher Proof-Refresh-Schnitt.
+1. Als nächstes eine verbleibende nicht-api.yml-Action-Familie prüfen; `dtolnay/rust-toolchain` und `Swatinem/rust-cache` berühren überwiegend `.github/workflows/api.yml` und bleiben eher Proof-Refresh-Schnitt.
 2. Ursprungstag und Ziel-SHA pro Familie dokumentieren.
 3. Nach jedem Slice prüfen, dass Dependabot/Update-Pfad weiterhin verständlich
    bleibt.
