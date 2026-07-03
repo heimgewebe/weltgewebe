@@ -131,8 +131,8 @@ Auth-Middleware, Software-Authenticator mit echter ES256-Kryptografie, volle
 State-Reinitialisierung, Counter-Update-Nachweis in PostgreSQL, Session-Mint
 erst danach) sowie den nicht-ignorierten, DB-freien Selbsttest
 `soft_authenticator_passes_bare_webauthn_ceremonies`, der die
-Authenticator-Fixture gegen die volle webauthn-rs-Verifikation pinnt. Details
-und Nicht-Beweise: `docs/reports/auth-pg-002-cutover-plan.md`, Gate B.
+Authenticator-Fixture gegen die volle webauthn-rs-Verifikation pinnt. Der
+Cutover-Plan dokumentiert die Nicht-Beweise von AUTH-PG-002-C1.
 
 ## 5. Weiterhin offen
 
