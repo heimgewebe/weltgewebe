@@ -54,8 +54,8 @@ klassifiziert jede `uses:`-Referenz und schreibt keine Dateien.
 total=162
 kind.github-action=158
 kind.reusable-workflow=4
-policy.named-ref=72
-policy.pinned-sha=90
+policy.named-ref=62
+policy.pinned-sha=100
 ```
 
 Unique named refs:
@@ -65,7 +65,6 @@ DavidAnson/markdownlint-cli2-action@v16
 Swatinem/rust-cache@v2
 actions/cache@v4
 actions/download-artifact@v8
-actions/setup-python@v5
 anchore/sbom-action@v0
 astral-sh/setup-uv@v7
 docker/setup-buildx-action@v4
@@ -114,15 +113,28 @@ Alle ersetzten Workflow-Zeilen behalten den Ursprungstag als Inline-Kommentar:
 uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
 ```
 
+## Pinning Slice 4 — actions/setup-python
+
+| Action-Familie | Ursprungstag | Ziel-SHA | Vorkommen | Prüfung |
+| --- | --- | --- | ---: | --- |
+| `actions/setup-python` | `v5` | `a26af69be951a213d495a4c3e4e4022e16d87065` | 10 | GitHub tag ref `actions/setup-python@v5` zeigte auf Commit-SHA `a26af69be951a213d495a4c3e4e4022e16d87065`. |
+
+Alle ersetzten Workflow-Zeilen behalten den Ursprungstag als Inline-Kommentar:
+
+```yaml
+uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # tag: v5
+```
+
 ## Bewertung
 
 - Alle reusable Workflows sind nach #1331 SHA-gepinnt.
 - `actions/checkout` ist außerhalb der OPT-ARC-001-DB-Proof-Harness-Datei SHA-gepinnt.
 - `actions/upload-artifact` ist repo-weit SHA-gepinnt.
 - `pnpm/action-setup` ist repo-weit SHA-gepinnt.
+- `actions/setup-python` ist repo-weit SHA-gepinnt.
 - Die verbleibende Pinning-Fläche liegt bei direkt verwendeten GitHub Actions
   mit named refs. Größte verbleibende Familien sind `dtolnay/rust-toolchain`,
-  `Swatinem/rust-cache`, `actions/setup-python` und `actions/cache`.
+  `Swatinem/rust-cache` und `actions/cache`.
 - Der Audit bleibt bewusst nicht-blockierend. Er ist die Grundlage für spätere
   kontrollierte Pinning-Slices.
 
@@ -136,7 +148,7 @@ Ref, eine lokale Action oder eine Docker-Referenz zeigt.
 
 Nicht alle Actions in einem PR pinnen. Sinnvoller ist ein ratcheted Vorgehen:
 
-1. Als nächstes `actions/setup-python` oder `actions/cache` prüfen; `dtolnay/rust-toolchain` und `Swatinem/rust-cache` berühren überwiegend `.github/workflows/api.yml` und bleiben eher Proof-Refresh-Schnitt.
+1. Als nächstes `actions/cache` prüfen; `dtolnay/rust-toolchain` und `Swatinem/rust-cache` berühren überwiegend `.github/workflows/api.yml` und bleiben eher Proof-Refresh-Schnitt.
 2. Ursprungstag und Ziel-SHA pro Familie dokumentieren.
 3. Nach jedem Slice prüfen, dass Dependabot/Update-Pfad weiterhin verständlich
    bleibt.
