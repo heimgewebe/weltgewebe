@@ -28,6 +28,10 @@ Dieser Report haelt fest: Der naechste AUTH-PG-002-Schritt braucht zuerst eine
 kontrollierte Review-Grenze. Der Befund vom 2026-07-01 zeigt, dass die Runtime
 noch nicht auf dem erwarteten Passkey-Schema-Stand ist.
 
+Nach PR #1341 ist der Route-Level-Proof fuer Register -> Reload -> Auth auf
+API-Ebene belegt. Der naechste Engpass ist deshalb nicht ein weiterer Test des
+Routenpfads, sondern der Schemastand der Zielumgebung.
+
 ## Grenzen
 
 Dieser Slice ist ohne Runtime-Wirkung:
@@ -38,14 +42,27 @@ Dieser Slice ist ohne Runtime-Wirkung:
 - kein Umschalten der Credential-Quelle,
 - keine Ablage vertraulicher Runtime-Daten im Repo.
 
+## Befundbasis
+
+Belegt ist:
+
+- Die Repo-Migration fuer `passkey_credentials` existiert.
+- Die Migration erzeugt die Tabelle und einen Account-Index.
+- Sie setzt keinen Foreign Key.
+- Sie schaltet die Passkey-Credential-Quelle nicht um.
+- Der Runtime-Audit vom 2026-07-01 fand `domain_accounts`, aber keine
+  `passkey_credentials`.
+
 ## Prueffragen vor einer spaeteren Wirkung
 
 1. Ist das Zielsystem eindeutig benannt?
-2. Ist der Rueckweg bekannt?
+2. Ist der aktuelle Runtime-Stand erneut read-only geprueft?
 3. Ist der erwartete Repo-Stand gelesen?
-4. Ist der aktuelle Runtime-Stand erneut read-only geprueft?
+4. Ist der Rueckweg bekannt?
 5. Bleibt der Cutover getrennt?
 6. Ist ein read-only Nachaudit definiert?
+7. Ist klar dokumentiert, dass ein erfolgreicher Schema-Schritt kein
+   Produktions-Cutover ist?
 
 ## Freigabeform
 
