@@ -965,14 +965,16 @@
         ".github/workflows/opt-arc-001-db-proof-matrix.yml",
         "scripts/ci/check_actions_node24_readiness.py",
         "scripts/ci/tests/test_check_actions_node24_readiness.py",
-        ".github/workflows/"
+        ".github/workflows/",
+        ".github/workflows/pr-heimgewebe-commands.yml",
+        ".github/workflows/wgx-smoke.yml"
       ],
       "missing_evidence": [],
       "acceptance": [
         "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 ist in direkt ausgeführten Workflows mit bekannten JavaScript-Actions gesetzt.",
         "Kein Gebrauch von ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION.",
         "Reusable Workflow Calls werden nach Ref-Typ und Policy klassifiziert.",
-        "Mutable Default-Branch-Refs bleiben sichtbar, ohne fremde Workflow-Readiness zu behaupten."
+        "Alle reusable Workflow Calls sind auf geprüfte SHAs gepinnt, ohne fremde Workflow-Readiness zu behaupten."
       ],
       "links": {
         "issues": [],

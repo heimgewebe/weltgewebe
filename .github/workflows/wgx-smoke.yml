@@ -18,4 +18,4 @@ jobs:
   smoke:
     # auch hier: statt eigener CI-Logik nur noch Forwarder auf das
     # kanonische wgx-Workflow-Repo.
-    uses: heimgewebe/wgx/.github/workflows/wgx-smoke.yml@main
+    uses: heimgewebe/wgx/.github/workflows/wgx-smoke.yml@814d5e9102e4020c786d6bb7e1c377004cf2bbea
