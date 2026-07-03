@@ -53,6 +53,9 @@ class ReusableWorkflowCall:
     workflow: Path
     job: str
     uses: str
+    ref_type: str
+    ref_value: str
+    callee: str
 
 
 def truthy_env_value(value: str) -> bool:
@@ -85,6 +88,21 @@ def workflow_paths(workflows_dir: Path) -> list[Path]:
 
 def clean_uses(raw_uses: str) -> str:
     return raw_uses.strip().strip('"\'')
+
+
+def reusable_call_details(uses: str) -> tuple[str, str, str]:
+    callee, _, ref = uses.partition("@")
+    return callee, ref or "", ref_type_for(uses)
+
+
+def reusable_ref_policy(ref_type: str, ref_value: str) -> str:
+    if ref_type == "sha":
+        return "pinned-sha"
+    if ref_type == "no-ref":
+        return "missing-ref"
+    if ref_value in {"main", "master", "trunk"}:
+        return "mutable-default-branch"
+    return "named-ref"
 
 
 def line_indent(line: str) -> int:
@@ -149,8 +167,16 @@ def scan_workflow(path: Path) -> tuple[list[DirectActionUse], list[ReusableWorkf
 
         uses = clean_uses(uses_match.group("uses"))
         if ".github/workflows/" in uses:
+            callee, ref_value, ref_type = reusable_call_details(uses)
             reusable_workflows.append(
-                ReusableWorkflowCall(workflow=path, job=current_job, uses=uses)
+                ReusableWorkflowCall(
+                    workflow=path,
+                    job=current_job,
+                    uses=uses,
+                    ref_type=ref_type,
+                    ref_value=ref_value,
+                    callee=callee,
+                )
             )
             continue
         if not is_known_javascript_action(uses):
@@ -207,7 +233,11 @@ def print_report(
             "Node-24 readiness:"
         )
         for reusable in reusable_workflows:
-            print(f"- {reusable.workflow} {reusable.job} -> {reusable.uses}")
+            print(
+                f"- {reusable.workflow} {reusable.job} -> {reusable.uses} "
+                f"ref={reusable.ref_type} "
+                f"policy={reusable_ref_policy(reusable.ref_type, reusable.ref_value)}"
+            )
 
 
 def main() -> int:

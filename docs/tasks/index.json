@@ -967,13 +967,12 @@
         "scripts/ci/tests/test_check_actions_node24_readiness.py",
         ".github/workflows/"
       ],
-      "missing_evidence": [
-        "Stage B bleibt separat: wiederverwendbare externe Workflows und verbleibende Node-20-Metadatenwarnungen der Actions bewerten."
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 ist in direkt ausgeführten Workflows mit bekannten JavaScript-Actions gesetzt.",
         "Kein Gebrauch von ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION.",
-        "CI-Lauf dokumentiert, ob Node-20-Metadatenwarnungen verbleiben; verbleibende Warnungen werden Stage B zugeordnet."
+        "Reusable Workflow Calls werden nach Ref-Typ und Policy klassifiziert.",
+        "Mutable Default-Branch-Refs bleiben sichtbar, ohne fremde Workflow-Readiness zu behaupten."
       ],
       "links": {
         "issues": [],
@@ -983,7 +982,7 @@
           "docs/reports/optimierungsstatus.md"
         ]
       },
-      "updated_at": "2026-06-29"
+      "updated_at": "2026-07-03"
     },
     {
       "id": "DB-PROOF-001",

@@ -73,6 +73,39 @@ jobs:
 
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("Reusable workflow calls detected", result.stdout)
+        self.assertIn("ref=named-ref", result.stdout)
+        self.assertIn("policy=named-ref", result.stdout)
+
+
+    def test_reusable_workflow_default_branch_ref_is_flagged(self) -> None:
+        result = self.run_checker(
+            """
+name: mutable-reusable
+on: workflow_dispatch
+jobs:
+  metrics:
+    uses: owner/repo/.github/workflows/reusable.yml@main
+"""
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("ref=named-ref", result.stdout)
+        self.assertIn("policy=mutable-default-branch", result.stdout)
+
+    def test_reusable_workflow_sha_ref_is_flagged_as_pinned(self) -> None:
+        result = self.run_checker(
+            """
+name: pinned-reusable
+on: workflow_dispatch
+jobs:
+  metrics:
+    uses: owner/repo/.github/workflows/reusable.yml@1234567890123456789012345678901234567890
+"""
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("ref=sha", result.stdout)
+        self.assertIn("policy=pinned-sha", result.stdout)
 
     def test_uses_without_ref_does_not_crash(self) -> None:
         result = self.run_checker(
