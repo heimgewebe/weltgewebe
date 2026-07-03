@@ -33,7 +33,7 @@ jobs:
       hygiene: ${{ steps.filter.outputs.hygiene }}
       heavy: ${{ steps.filter.outputs.heavy }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
         with:
           fetch-depth: 0
 
@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
 
       - name: Check guard syntax
         shell: bash
@@ -135,7 +135,7 @@ jobs:
       needs.docs-changes.outputs.docs != 'true' ||
       needs.docs-changes.outputs.heavy == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
         with:
           fetch-depth: 0
 
@@ -312,7 +312,7 @@ jobs:
         shell: bash
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
         with:
           fetch-depth: 0
 
@@ -379,7 +379,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
         with:
           fetch-depth: 0
 

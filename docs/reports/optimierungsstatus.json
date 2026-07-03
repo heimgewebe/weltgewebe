@@ -413,10 +413,10 @@
         ".github/workflows/"
       ],
       "missing_evidence": [
-        "146 direkte GitHub Action uses bleiben named refs; vollständiges SHA-Pinning erfolgt in ratcheted Folge-Slices.",
-        "Ursprungstag und Ziel-SHA müssen pro Action-Familie dokumentiert werden."
+        "93 direkte GitHub Action uses bleiben named refs; vollständiges SHA-Pinning erfolgt in ratcheted Folge-Slices.",
+        "Ursprungstag und Ziel-SHA müssen pro verbleibender Action-Familie dokumentiert werden."
       ],
-      "next_action": "Ratcheted SHA-Pinning nach Action-Familie planen; nicht repo-weit blind pinnen.",
+      "next_action": "Nächsten Pinning-Slice für actions/upload-artifact planen.",
       "updated_at": "2026-07-03"
     },
     {

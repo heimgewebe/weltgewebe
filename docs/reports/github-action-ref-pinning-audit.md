@@ -54,8 +54,8 @@ klassifiziert jede `uses:`-Referenz und schreibt keine Dateien.
 total=162
 kind.github-action=158
 kind.reusable-workflow=4
-policy.named-ref=146
-policy.pinned-sha=16
+policy.named-ref=93
+policy.pinned-sha=69
 ```
 
 Unique named refs:
@@ -64,7 +64,6 @@ Unique named refs:
 DavidAnson/markdownlint-cli2-action@v16
 Swatinem/rust-cache@v2
 actions/cache@v4
-actions/checkout@v4
 actions/download-artifact@v8
 actions/setup-python@v5
 actions/upload-artifact@v4
@@ -79,14 +78,27 @@ pnpm/action-setup@v6
 softprops/action-gh-release@v2
 ```
 
+## Pinning Slice 1 — actions/checkout
+
+| Action-Familie | Ursprungstag | Ziel-SHA | Vorkommen | Prüfung |
+| --- | --- | --- | ---: | --- |
+| `actions/checkout` | `v4` | `34e114876b0b11c390a56381ad16ebd13914f8d5` | 53 | GitHub tag ref `actions/checkout@v4` zeigte auf Commit-SHA `34e114876b0b11c390a56381ad16ebd13914f8d5`. |
+
+Alle ersetzten Workflow-Zeilen behalten den Ursprungstag als Inline-Kommentar:
+
+```yaml
+uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+```
+
 ## Bewertung
 
 - Alle reusable Workflows sind nach #1331 SHA-gepinnt.
-- Die verbleibende Pinning-Fläche liegt bei direkt verwendeten GitHub Actions.
-- Der größte Anteil sind wiederholte Uses bekannter Action-Familien wie
-  `actions/checkout`, `dtolnay/rust-toolchain`, `Swatinem/rust-cache`,
-  `actions/upload-artifact`, `actions/cache` und Setup-Actions.
-- Der Audit ist bewusst nicht-blockierend. Er ist die Grundlage für spätere
+- `actions/checkout` ist nach diesem Slice repo-weit SHA-gepinnt.
+- Die verbleibende Pinning-Fläche liegt bei direkt verwendeten GitHub Actions
+  mit named refs. Größte verbleibende Familien sind `actions/upload-artifact`,
+  `dtolnay/rust-toolchain`, `Swatinem/rust-cache`, `pnpm/action-setup`,
+  `actions/setup-python` und `actions/cache`.
+- Der Audit bleibt bewusst nicht-blockierend. Er ist die Grundlage für spätere
   kontrollierte Pinning-Slices.
 
 ## Grenzen
@@ -99,8 +111,7 @@ Ref, eine lokale Action oder eine Docker-Referenz zeigt.
 
 Nicht alle Actions in einem PR pinnen. Sinnvoller ist ein ratcheted Vorgehen:
 
-1. Action-Familien mit hoher Wiederholung zuerst, etwa `actions/checkout` und
-   `actions/upload-artifact`.
+1. Als nächstes `actions/upload-artifact` prüfen und pinnen.
 2. Ursprungstag und Ziel-SHA pro Familie dokumentieren.
 3. Nach jedem Slice prüfen, dass Dependabot/Update-Pfad weiterhin verständlich
    bleibt.
