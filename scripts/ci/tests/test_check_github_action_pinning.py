@@ -86,6 +86,21 @@ jobs:
         self.assertIn("kind.local-action=1", result.stdout)
         self.assertIn("policy.local=1", result.stdout)
 
+    def test_inline_comment_is_ignored_for_sha_ref(self) -> None:
+        result = self.run_checker(
+            """
+name: pinned-comment
+on: workflow_dispatch
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@1234567890123456789012345678901234567890 # tag: v4
+"""
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("policy.pinned-sha=1", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

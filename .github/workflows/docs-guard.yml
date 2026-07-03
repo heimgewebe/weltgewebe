@@ -56,7 +56,7 @@ jobs:
     name: Blocking doc validations
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
         with:
           fetch-depth: 0
 
@@ -95,7 +95,7 @@ jobs:
     needs: blocking-doc-validations
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
 
       - name: Setup Python
         uses: actions/setup-python@v5

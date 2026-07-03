@@ -413,10 +413,11 @@
         ".github/workflows/"
       ],
       "missing_evidence": [
-        "146 direkte GitHub Action uses bleiben named refs; vollständiges SHA-Pinning erfolgt in ratcheted Folge-Slices.",
-        "Ursprungstag und Ziel-SHA müssen pro Action-Familie dokumentiert werden."
+        "105 direkte GitHub Action uses bleiben named refs; vollständiges SHA-Pinning erfolgt in ratcheted Folge-Slices.",
+        "12 actions/checkout uses in .github/workflows/api.yml bleiben bis zu einem separaten OPT-ARC-001-Proof-Refresh-Schnitt unpinned.",
+        "Ursprungstag und Ziel-SHA müssen pro verbleibender Action-Familie dokumentiert werden."
       ],
-      "next_action": "Ratcheted SHA-Pinning nach Action-Familie planen; nicht repo-weit blind pinnen.",
+      "next_action": "Nächsten Pinning-Slice für actions/upload-artifact planen oder .github/workflows/api.yml mit OPT-ARC-001-Proof-Refresh separat behandeln.",
       "updated_at": "2026-07-03"
     },
     {
