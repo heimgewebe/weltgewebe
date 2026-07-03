@@ -54,8 +54,8 @@ klassifiziert jede `uses:`-Referenz und schreibt keine Dateien.
 total=162
 kind.github-action=158
 kind.reusable-workflow=4
-policy.named-ref=50
-policy.pinned-sha=112
+policy.named-ref=49
+policy.pinned-sha=113
 ```
 
 Unique named refs:
@@ -63,7 +63,6 @@ Unique named refs:
 ```text
 DavidAnson/markdownlint-cli2-action@v16
 Swatinem/rust-cache@v2
-actions/download-artifact@v8
 anchore/sbom-action@v0
 docker/setup-buildx-action@v4
 dorny/paths-filter@v4
@@ -156,6 +155,16 @@ Alle ersetzten Workflow-Zeilen behalten den Ursprungstag als Inline-Kommentar:
 
 ```yaml
 uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # tag: v7
+```
+
+## Pinning Slice 8 — actions/download-artifact
+
+| Action-Familie | Ursprungstag | Ziel-SHA | Vorkommen | Prüfung |
+| --- | --- | --- | ---: | --- |
+| `actions/download-artifact` | `v8` | `3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c` | 1 | GitHub tag ref `actions/download-artifact@v8` zeigte auf Commit-SHA `3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c`. |
+
+```yaml
+uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # tag: v8
 ```
 
 ## Bewertung
