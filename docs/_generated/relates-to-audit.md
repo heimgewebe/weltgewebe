@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 507 |
+| Relationen gesamt | 511 |
 | — depends_on | 19 |
-| — relates_to | 485 |
+| — relates_to | 489 |
 | — supersedes | 3 |
 | relates_to Anteil | 96% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (193 Dokumente):
+**Cluster 1** (196 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -160,6 +160,7 @@ _Keine Lücken erkannt._
 - `docs/reports/domain-provider-role-finding.md`
 - `docs/reports/domain-read-path-proof.md`
 - `docs/reports/domain-runtime-data-source-reconciliation.md`
+- `docs/reports/github-action-ref-pinning-audit.md`
 - `docs/reports/github-actions-node24-readiness.md`
 - `docs/reports/inwx-zone-reconciliation-plan.md`
 - `docs/reports/map-architekturkritik.md`
@@ -212,7 +213,9 @@ _Keine Lücken erkannt._
 - `scripts/agent/validate_handoff.py`
 - `scripts/basemap/build-hamburg-pmtiles.sh`
 - `scripts/ci/check_actions_node24_readiness.py`
+- `scripts/ci/check_github_action_pinning.py`
 - `scripts/ci/tests/test_check_actions_node24_readiness.py`
+- `scripts/ci/tests/test_check_github_action_pinning.py`
 - `scripts/docmeta/audit_account_email_uniqueness.py`
 - `scripts/docmeta/audit_domain_edge_references.py`
 - `scripts/docmeta/check_planning_registration.py`

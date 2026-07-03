@@ -836,6 +836,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-provider-role-finding.md
 - [relates_to] docs/reports/domain-read-path-proof.md
 - [relates_to] docs/reports/domain-runtime-data-source-reconciliation.md
+- [relates_to] docs/reports/github-action-ref-pinning-audit.md
 - [relates_to] docs/reports/github-actions-node24-readiness.md
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
 - [relates_to] docs/reports/proof-matrix-generalization-decision.md
@@ -857,6 +858,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-node-write-path-proof.md
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 - [relates_to] docs/reports/domain-runtime-data-source-reconciliation.md
+- [relates_to] docs/reports/github-action-ref-pinning-audit.md
 - [relates_to] docs/reports/github-actions-node24-readiness.md
 - [relates_to] docs/reports/planning-registration-findings.md
 - [relates_to] docs/reports/proof-matrix-generalization-decision.md
@@ -948,9 +950,17 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/github-actions-node24-readiness.md
 
+## scripts/ci/check_github_action_pinning.py
+
+- [relates_to] docs/reports/github-action-ref-pinning-audit.md
+
 ## scripts/ci/tests/test_check_actions_node24_readiness.py
 
 - [relates_to] docs/reports/github-actions-node24-readiness.md
+
+## scripts/ci/tests/test_check_github_action_pinning.py
+
+- [relates_to] docs/reports/github-action-ref-pinning-audit.md
 
 ## scripts/docmeta/audit_account_email_uniqueness.py
 

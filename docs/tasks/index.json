@@ -1432,30 +1432,37 @@
       "id": "OPT-INF-002",
       "title": "Third-Party-Actions per Commit-SHA pinnen",
       "area": "infra",
-      "status": "open",
-      "priority": "low",
+      "status": "partial",
+      "priority": "medium",
       "effort": "S",
       "risk": "medium",
       "owner": "unknown",
       "evidence": [
+        "scripts/ci/check_github_action_pinning.py",
+        "scripts/ci/tests/test_check_github_action_pinning.py",
+        "docs/reports/github-action-ref-pinning-audit.md",
         ".github/workflows/"
       ],
       "missing_evidence": [
-        "repo-weit nur Tag-Pinning, kein SHA-Pinning",
-        "Sequenzierung (TODO C3): SHA-Pinning erst nach Dependency-Update-Automation (OPT-CI-004), sonst Update-Weg unklar"
+        "146 direkte GitHub Action uses bleiben named refs; vollständiges SHA-Pinning erfolgt in ratcheted Folge-Slices.",
+        "Ursprungstag und Ziel-SHA müssen pro Action-Familie dokumentiert werden."
       ],
       "acceptance": [
-        "Third-Party-Actions sind per Commit-SHA gepinnt; Ursprungstag als Kommentar; Update-Weg bleibt klar",
-        "Policy dokumentiert; CI gruen"
+        "Ein reproduzierbarer Scanner klassifiziert alle GitHub-Workflow-uses-Referenzen nach Kind, Ref-Typ und Pinning-Policy.",
+        "Der Audit-Report dokumentiert aktuelle Counts und die verbleibenden unique named refs.",
+        "Reusable Workflows sind bereits SHA-gepinnt; direkte GitHub Actions bleiben als Folge-Pinning-Fläche sichtbar.",
+        "CI-/Update-Pfad bleibt unverändert; kein Blind-Pinning ohne Update-Strategie."
       ],
       "links": {
         "issues": [],
         "prs": [],
         "docs": [
-          "docs/reports/optimierungsstatus.md"
+          "docs/reports/github-action-ref-pinning-audit.md",
+          "docs/reports/optimierungsstatus.md",
+          "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-07-03"
     },
     {
       "id": "DOCMETA-REPORT-LIFECYCLE-001",

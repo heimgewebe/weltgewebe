@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 151 |
-| Dokumente mit ausgehenden Relationen | 150 |
+| Dokumente gesamt | 152 |
+| Dokumente mit ausgehenden Relationen | 151 |
 | Dokumente als Ziel referenziert | 114 |
-| Relationen gesamt | 507 |
+| Relationen gesamt | 511 |
 | — depends_on | 19 |
-| — relates_to | 485 |
+| — relates_to | 489 |
 | — supersedes | 3 |
 | Isolierte Dokumente | 0 |
 | depends_on Zyklen | 0 |
@@ -33,7 +33,7 @@ Generated automatically. Do not edit.
 - ⚠️ High outbound count (9): `docs/blueprints/blueprint-agent-safety-control-layer.md` — possible over-linking
 - ⚠️ High outbound count (8): `docs/reference/agent-operability-fixture-matrix.md` — possible over-linking
 - ⚠️ High outbound count (8): `docs/reports/domain-edge-write-path-proof.md` — possible over-linking
-- ⚠️ High inbound count (19): `docs/tasks/board.md` — central dependency, review carefully
+- ⚠️ High inbound count (20): `docs/tasks/board.md` — central dependency, review carefully
 - ⚠️ High inbound count (15): `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — central dependency, review carefully
 - ⚠️ High inbound count (15): `docs/deploy/README.md` — central dependency, review carefully
 - ⚠️ High inbound count (13): `docs/adr/ADR-0007__auth-persistence-production-db-path.md` — central dependency, review carefully
@@ -59,7 +59,7 @@ _Keine Zyklen gefunden._
 
 **Eingehend (inbound):**
 
-- `docs/tasks/board.md` — 19 eingehende Relationen
+- `docs/tasks/board.md` — 20 eingehende Relationen
 - `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — 15 eingehende Relationen
 - `docs/deploy/README.md` — 15 eingehende Relationen
 - `docs/adr/ADR-0007__auth-persistence-production-db-path.md` — 13 eingehende Relationen
