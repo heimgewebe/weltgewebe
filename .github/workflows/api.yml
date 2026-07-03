@@ -38,7 +38,7 @@ jobs:
       CARGO_TERM_COLOR: always  # keep cargo output colorized in CI logs
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@v4
 
       # Optional: Validates that a default app config is parseable (if present)
       - name: Install PyYAML for config validation
@@ -101,7 +101,7 @@ jobs:
       CARGO_TERM_COLOR: never
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@v4
 
       - name: Read Rust version
         id: rust-version
@@ -167,7 +167,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@v4
 
       - name: Read Rust version
         id: rust-version
@@ -236,7 +236,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@v4
 
       - name: Read Rust version
         id: rust-version
@@ -296,7 +296,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@v4
 
       - name: Read Rust version
         id: rust-version
@@ -368,7 +368,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@v4
 
       - name: Read Rust version
         id: rust-version
@@ -440,7 +440,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@v4
 
       - name: Read Rust version
         id: rust-version
@@ -512,7 +512,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@v4
 
       - name: Read Rust version
         id: rust-version
@@ -584,7 +584,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@v4
 
       - name: Read Rust version
         id: rust-version
@@ -656,7 +656,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@v4
 
       - name: Read Rust version
         id: rust-version
@@ -711,7 +711,7 @@ jobs:
       CARGO_TERM_COLOR: never
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@v4
 
       - name: Read Rust version
         id: rust-version
@@ -764,7 +764,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'security'))
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@v4
       - name: Read Rust version
         id: rust-version
         shell: bash
