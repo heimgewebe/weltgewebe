@@ -51,8 +51,8 @@ CI-Job: `db-passkey-persistence-proof` in `.github/workflows/api.yml`
 |---|---|---|
 | 1 | Die Passkey-Migration ist Teil des compile-time eingebetteten Produktions-Migrators (`sqlx::migrate!("./migrations")`, identisch zu `lib.rs`), als reversibles up/down-Paar — nicht nur eine Datei auf der Platte | `passkey_migration_is_embedded_in_production_migrator` (laeuft auch offline, nicht ignored) |
 | 2 | Der eingebettete Migrator registriert `20260630000001` in `_sqlx_migrations` mit `success = true` — derselbe Check, den der Heimserver-Audit read-only ausfuehrt | `passkey_schema_preflight_migration_is_registered` |
-| 3 | `passkey_credentials` hat exakt die vertraglichen Spalten, Typen und Nullability; `created_at`/`updated_at` behalten den `now()`-Default | `passkey_schema_preflight_table_shape_matches_contract` |
-| 4 | PRIMARY KEY ist exakt `credential_id`; `passkey_credentials_account_id` existiert als nicht-unique Sekundaerindex; es existiert KEIN Foreign Key (bewusste, dokumentierte Verschiebung auf den gated Cutover-Slice — ein still ergaenzter FK laesst den Preflight fehlschlagen) | `passkey_schema_preflight_constraints_and_indexes` |
+| 3 | `passkey_credentials` hat exakt die vertraglichen Spalten, Typen und Nullability; `created_at`/`updated_at` behalten einen Current-Time-Default (`now()`/`CURRENT_TIMESTAMP`) | `passkey_schema_preflight_table_shape_matches_contract` |
+| 4 | PRIMARY KEY ist exakt `credential_id`; `passkey_credentials_account_id` existiert als nicht-unique Sekundaerindex und ein nicht-unique Index deckt semantisch exakt `(account_id)` ab; es existiert KEIN Foreign Key (bewusste, dokumentierte Verschiebung auf den gated Cutover-Slice — ein still ergaenzter FK laesst den Preflight fehlschlagen) | `passkey_schema_preflight_constraints_and_indexes` |
 | 5 | Die Datenbank selbst erzwingt NOT NULL auf `account_id`/`webauthn_user_id`/`credential` (SQLSTATE 23502) und Unique auf `credential_id` (SQLSTATE 23505), unabhaengig vom Store-Layer-Mapping | `passkey_schema_preflight_rejects_null_and_duplicate_rows` |
 
 ## 3. Grenzen (nicht bewiesen)

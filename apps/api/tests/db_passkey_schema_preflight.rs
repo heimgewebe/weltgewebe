@@ -37,6 +37,7 @@ use std::str::FromStr;
 use sqlx::migrate::MigrationType;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::Row;
+use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 /// The exact compile-time embedded migrator production runs at startup
@@ -45,8 +46,12 @@ use uuid::Uuid;
 /// embedded set, a directory-based `Migrator::new(..)` would still find the
 /// file on disk and hide the regression.
 static EMBEDDED_MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+static MIGRATIONS_APPLIED: OnceCell<()> = OnceCell::const_new();
 
 const PASSKEY_MIGRATION_VERSION: i64 = 20260630000001;
+const PASSKEY_MIGRATION_DESCRIPTION: &str = "create passkey credentials";
+const SQLSTATE_NOT_NULL_VIOLATION: &str = "23502";
+const SQLSTATE_UNIQUE_VIOLATION: &str = "23505";
 
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL").expect(
@@ -60,7 +65,10 @@ fn direct_database_url() -> String {
     url
 }
 
-/// Connects and applies the embedded production migrator (idempotent).
+/// Connects a fresh pool per async test runtime and applies the embedded
+/// production migrator once per test binary. Do not cache the `PgPool` itself:
+/// each `#[tokio::test]` owns its runtime, and sharing a pool across those
+/// runtimes can strand connections and produce `PoolTimedOut` failures.
 async fn preflight_pool() -> sqlx::PgPool {
     let connect_opts = PgConnectOptions::from_str(&direct_database_url())
         .expect("DATABASE_URL must be a valid postgres connection string");
@@ -69,11 +77,69 @@ async fn preflight_pool() -> sqlx::PgPool {
         .connect_with(connect_opts)
         .await
         .expect("failed to connect to direct PostgreSQL");
-    EMBEDDED_MIGRATOR
-        .run(&pool)
-        .await
-        .expect("embedded production migrator must apply cleanly");
+    MIGRATIONS_APPLIED
+        .get_or_init(|| async {
+            EMBEDDED_MIGRATOR
+                .run(&pool)
+                .await
+                .expect("embedded production migrator must apply cleanly");
+        })
+        .await;
     pool
+}
+
+fn is_current_time_default(default: Option<&str>) -> bool {
+    let Some(default) = default else {
+        return false;
+    };
+    let normalized = default
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    normalized == "now()"
+        || normalized == "current_timestamp"
+        || normalized.starts_with("current_timestamp(")
+}
+
+fn assert_database_code(error: &sqlx::Error, expected: &str, context: &str) {
+    let code = error
+        .as_database_error()
+        .and_then(|db| db.code())
+        .map(|code| code.to_string());
+    assert_eq!(
+        code.as_deref(),
+        Some(expected),
+        "{context} must raise SQLSTATE {expected}, got {error:?}"
+    );
+}
+
+async fn assert_not_null_violation(
+    pool: &sqlx::PgPool,
+    column: &str,
+    sql: &str,
+    bind_values: Vec<String>,
+) {
+    let mut tx = pool
+        .begin()
+        .await
+        .expect("not-null assertion transaction must begin");
+    let mut query = sqlx::query(sql);
+    for value in bind_values {
+        query = query.bind(value);
+    }
+    let error = match query.execute(&mut *tx).await {
+        Ok(_) => panic!("NULL {column} insert must be rejected"),
+        Err(error) => error,
+    };
+    assert_database_code(
+        &error,
+        SQLSTATE_NOT_NULL_VIOLATION,
+        &format!("NULL {column}"),
+    );
+    tx.rollback()
+        .await
+        .expect("not-null assertion transaction must roll back");
 }
 
 /// Offline containment proof (deliberately NOT ignored): the passkey migration
@@ -94,7 +160,7 @@ fn passkey_migration_is_embedded_in_production_migrator() {
     for migration in &passkey_migrations {
         assert_eq!(
             migration.description.as_ref(),
-            "create passkey credentials",
+            PASSKEY_MIGRATION_DESCRIPTION,
             "embedded migration {PASSKEY_MIGRATION_VERSION} must keep its description"
         );
     }
@@ -132,14 +198,14 @@ async fn passkey_schema_preflight_migration_is_registered() {
         success,
         "passkey migration must be registered as successful"
     );
-    assert_eq!(description, "create passkey credentials");
+    assert_eq!(description, PASSKEY_MIGRATION_DESCRIPTION);
 
     pool.close().await;
 }
 
 /// The migrated table carries exactly the contracted columns with the
 /// contracted types and nullability, and the timestamp columns keep their
-/// `now()` defaults.
+/// current-time defaults.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn passkey_schema_preflight_table_shape_matches_contract() {
@@ -195,10 +261,9 @@ async fn passkey_schema_preflight_table_shape_matches_contract() {
             .expect("timestamp column must exist")
             .try_get("column_default")
             .expect("column_default");
-        assert_eq!(
-            default.as_deref(),
-            Some("now()"),
-            "{column} must default to now()"
+        assert!(
+            is_current_time_default(default.as_deref()),
+            "{column} must default to the current time via now()/CURRENT_TIMESTAMP, got {default:?}"
         );
     }
 
@@ -253,6 +318,32 @@ async fn passkey_schema_preflight_constraints_and_indexes() {
         "passkey_credentials_account_id must exist as a non-unique secondary index"
     );
 
+    let index_rows = sqlx::query(
+        "SELECT c.relname, i.indisunique, i.indisprimary, \
+                COALESCE(( \
+                    SELECT array_agg(a.attname::text ORDER BY k.ordinality) \
+                    FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, ordinality) \
+                    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum \
+                ), ARRAY[]::text[]) AS columns \
+         FROM pg_index i \
+         JOIN pg_class c ON c.oid = i.indexrelid \
+         WHERE i.indrelid = 'passkey_credentials'::regclass",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("semantic index introspection must succeed");
+    let has_account_lookup_index = index_rows.iter().any(|row| {
+        let indisunique: bool = row.try_get("indisunique").expect("indisunique");
+        let indisprimary: bool = row.try_get("indisprimary").expect("indisprimary");
+        let columns: Vec<String> = row.try_get("columns").expect("columns");
+        !indisunique && !indisprimary && columns == vec!["account_id".to_string()]
+    });
+    assert!(
+        has_account_lookup_index,
+        "a non-unique secondary index must semantically cover exactly (account_id), \
+         regardless of the index-name contract"
+    );
+
     let fk_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM pg_constraint \
          WHERE conrelid = 'passkey_credentials'::regclass AND contype = 'f'",
@@ -265,7 +356,6 @@ async fn passkey_schema_preflight_constraints_and_indexes() {
         "no foreign key may exist yet: the account FK is deferred to the gated \
          cutover slice and must not appear silently"
     );
-
     pool.close().await;
 }
 
@@ -280,101 +370,69 @@ async fn passkey_schema_preflight_rejects_null_and_duplicate_rows() {
     let fixture = format!("db-passkey-schema-preflight-{}", Uuid::new_v4().simple());
     let account_id = format!("{fixture}-account");
 
-    sqlx::query("DELETE FROM passkey_credentials WHERE account_id = $1")
-        .bind(&account_id)
-        .execute(&pool)
-        .await
-        .expect("fixture cleanup must succeed");
-
-    fn assert_not_null_violation(
-        column: &str,
-        result: Result<sqlx::postgres::PgQueryResult, sqlx::Error>,
-    ) {
-        let error = match result {
-            Ok(_) => panic!("NULL {column} insert must be rejected"),
-            Err(error) => error,
-        };
-        let code = error
-            .as_database_error()
-            .and_then(|db| db.code())
-            .map(|code| code.to_string());
-        assert_eq!(
-            code.as_deref(),
-            Some("23502"),
-            "NULL {column} must raise a not-null violation, got {error:?}"
-        );
-    }
-
     assert_not_null_violation(
+        &pool,
         "account_id",
-        sqlx::query(
-            "INSERT INTO passkey_credentials \
-                 (credential_id, account_id, webauthn_user_id, credential) \
-             VALUES ($1, NULL, $2::uuid, '{}'::jsonb)",
-        )
-        .bind(format!("{fixture}-null-account-id"))
-        .bind(Uuid::new_v4().to_string())
-        .execute(&pool)
-        .await,
-    );
+        "INSERT INTO passkey_credentials \
+             (credential_id, account_id, webauthn_user_id, credential) \
+         VALUES ($1, NULL, $2::uuid, '{}'::jsonb)",
+        vec![
+            format!("{fixture}-null-account-id"),
+            Uuid::new_v4().to_string(),
+        ],
+    )
+    .await;
     assert_not_null_violation(
+        &pool,
         "webauthn_user_id",
-        sqlx::query(
-            "INSERT INTO passkey_credentials \
-                 (credential_id, account_id, webauthn_user_id, credential) \
-             VALUES ($1, $2, NULL, '{}'::jsonb)",
-        )
-        .bind(format!("{fixture}-null-webauthn-user-id"))
-        .bind(&account_id)
-        .execute(&pool)
-        .await,
-    );
+        "INSERT INTO passkey_credentials \
+             (credential_id, account_id, webauthn_user_id, credential) \
+         VALUES ($1, $2, NULL, '{}'::jsonb)",
+        vec![
+            format!("{fixture}-null-webauthn-user-id"),
+            account_id.clone(),
+        ],
+    )
+    .await;
     assert_not_null_violation(
+        &pool,
         "credential",
-        sqlx::query(
-            "INSERT INTO passkey_credentials \
-                 (credential_id, account_id, webauthn_user_id, credential) \
-             VALUES ($1, $2, $3::uuid, NULL)",
-        )
-        .bind(format!("{fixture}-null-credential"))
-        .bind(&account_id)
-        .bind(Uuid::new_v4().to_string())
-        .execute(&pool)
-        .await,
-    );
+        "INSERT INTO passkey_credentials \
+             (credential_id, account_id, webauthn_user_id, credential) \
+         VALUES ($1, $2, $3::uuid, NULL)",
+        vec![
+            format!("{fixture}-null-credential"),
+            account_id.clone(),
+            Uuid::new_v4().to_string(),
+        ],
+    )
+    .await;
 
     let duplicate_credential_id = format!("{fixture}-dup");
     let insert_sql = "INSERT INTO passkey_credentials \
              (credential_id, account_id, webauthn_user_id, credential) \
          VALUES ($1, $2, $3::uuid, '{}'::jsonb)";
+    let mut tx = pool
+        .begin()
+        .await
+        .expect("duplicate assertion transaction must begin");
     sqlx::query(insert_sql)
         .bind(&duplicate_credential_id)
         .bind(&account_id)
         .bind(Uuid::new_v4().to_string())
-        .execute(&pool)
+        .execute(&mut *tx)
         .await
-        .expect("first insert must succeed");
+        .expect("first insert must succeed inside rollback-only transaction");
     let error = sqlx::query(insert_sql)
         .bind(&duplicate_credential_id)
         .bind(&account_id)
         .bind(Uuid::new_v4().to_string())
-        .execute(&pool)
+        .execute(&mut *tx)
         .await
         .expect_err("duplicate credential_id insert must be rejected");
-    let code = error
-        .as_database_error()
-        .and_then(|db| db.code())
-        .map(|code| code.to_string());
-    assert_eq!(
-        code.as_deref(),
-        Some("23505"),
-        "duplicate credential_id must raise a unique violation, got {error:?}"
-    );
-
-    sqlx::query("DELETE FROM passkey_credentials WHERE account_id = $1")
-        .bind(&account_id)
-        .execute(&pool)
+    assert_database_code(&error, SQLSTATE_UNIQUE_VIOLATION, "duplicate credential_id");
+    tx.rollback()
         .await
-        .expect("fixture cleanup must succeed");
+        .expect("duplicate assertion transaction must roll back");
     pool.close().await;
 }
