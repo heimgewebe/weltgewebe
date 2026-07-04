@@ -1,0 +1,20 @@
+# DNS-free HTTP-only smoke configuration.
+# No TLS site blocks. Pre-cutover Host-header smoke only.
+
+:80 {
+	handle /health/proxy {
+		respond 200
+	}
+
+	handle_path /api/* {
+		reverse_proxy api:8080
+	}
+
+	handle /health/* {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		respond "dns-free smoke only" 404
+	}
+}
