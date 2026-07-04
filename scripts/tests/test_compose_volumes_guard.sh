@@ -79,6 +79,7 @@ services:
     volumes:
       - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
       - ../caddy/Caddyfile.heim:/etc/caddy/Caddyfile:ro
+      - ../caddy/Caddyfile.vps:/etc/caddy/Caddyfile:ro
       - ../caddy/heimserver:/etc/caddy/heimserver:ro
       - ../../build/basemap:/srv/weltgewebe-basemap:ro
       - ../../map-style:/srv/weltgewebe-map-style:ro

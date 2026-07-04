@@ -127,3 +127,36 @@ Richte einen Cronjob ein, um regelmäßig Dumps der Datenbank zu erstellen und a
 * **Logs ansehen**: `docker compose -f infra/compose/compose.prod.yml logs -f`
 * **Neustart**: `docker compose -f infra/compose/compose.prod.yml restart`
 * **Updates**: Repository aktualisieren (`git pull`), dann `./scripts/deploy_vps.sh` ausführen.
+
+## 4. Aktueller Zielpfad: VPS als Public Runtime
+
+Für den neuen Public-VPS-Pfad ist `scripts/weltgewebe-up` der bevorzugte
+Deploy-Wrapper. Der Zieltyp wird explizit gesetzt:
+
+```bash
+cd /opt/weltgewebe
+DEPLOY_TARGET=vps ENV_FILE=/opt/weltgewebe/.env ./scripts/weltgewebe-up --branch main
+```
+
+Der VPS-Zieltyp unterscheidet sich vom historischen Heimserver-Ziel:
+
+* er nutzt `infra/compose/compose.vps.override.yml`,
+* er startet den internen Caddy-Service standardmäßig mit,
+* er verwendet `infra/caddy/Caddyfile.vps`,
+* er erzwingt keine `*.home.arpa`-DNS-Guards,
+* er verlangt kein `/opt/heimgewebe/edge` und kein `edge-ca.crt`.
+
+Vor dem INWX-DNS-Cutover darf der Stack lokal auf dem VPS über den HTTP-Host-Header
+geprüft werden, ohne öffentliche DNS-Records umzubiegen:
+
+```bash
+curl -H 'Host: weltgewebe.net' http://127.0.0.1/health/proxy
+curl -H 'Host: weltgewebe.net' http://127.0.0.1/api/health/ready
+```
+
+Nach dem DNS-Cutover sind zusätzlich die öffentlichen HTTPS-Pfade zu prüfen:
+
+```bash
+curl -fsS https://weltgewebe.net/api/health/ready
+curl -fsS https://api.weltgewebe.net/health/ready
+```
