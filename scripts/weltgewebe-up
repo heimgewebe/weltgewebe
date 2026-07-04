@@ -14,12 +14,33 @@ ENV_FILE="${ENV_FILE:-/opt/weltgewebe/.env}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-weltgewebe}"
 REMOTE="${REMOTE:-origin}"
 WELTGEWEBE_COMPOSE_BAKE="${WELTGEWEBE_COMPOSE_BAKE:-auto}"
+DEPLOY_TARGET="${DEPLOY_TARGET:-heimserver}"
+
+case "$DEPLOY_TARGET" in
+  heimserver | vps) ;;
+  *)
+    echo "ERROR: Invalid DEPLOY_TARGET '$DEPLOY_TARGET'. Expected: heimserver|vps." >&2
+    exit 1
+    ;;
+esac
 
 # Base Compose File (always required)
 BASE_COMPOSE_FILE="infra/compose/compose.prod.yml"
-OVERRIDE_FILE="infra/compose/compose.prod.override.yml"
+if [[ -z "${OVERRIDE_FILE:-}" ]]; then
+  case "$DEPLOY_TARGET" in
+    heimserver) OVERRIDE_FILE="infra/compose/compose.prod.override.yml" ;;
+    vps) OVERRIDE_FILE="infra/compose/compose.vps.override.yml" ;;
+  esac
+fi
 
+DEPLOY_FRONTEND_MODE_WAS_SET="${DEPLOY_FRONTEND_MODE+x}"
 DEPLOY_FRONTEND_MODE="${DEPLOY_FRONTEND_MODE:-auto}"
+if [[ "$DEPLOY_TARGET" == "vps" && -z "$DEPLOY_FRONTEND_MODE_WAS_SET" ]]; then
+  DEPLOY_FRONTEND_MODE="internal"
+fi
+if [[ "$DEPLOY_TARGET" == "vps" && -z "${CADDY_BIND:-}" ]]; then
+  export CADDY_BIND="0.0.0.0"
+fi
 
 # Arguments
 WITH_CADDY=0
@@ -35,7 +56,8 @@ usage() {
   echo "Usage: $0 [options]"
   echo
   echo "Options:"
-  echo "  --with-caddy            Start the 'caddy' service (default: disabled/scale=0)"
+  echo "  --with-caddy            Start the 'caddy' service (default: disabled/scale=0; vps target enables it)"
+  echo "  DEPLOY_TARGET=TARGET    Select runtime target: heimserver (default) or vps"
   echo "  --no-pull               Skip git sync/branch operations (no fetch, switch, pull)"
   echo "  --branch BRANCH         Deploy explicit branch name (default: main, no origin/ prefix)"
   echo "  --current-branch        Deploy the currently checked-out branch intentionally"
@@ -98,6 +120,10 @@ done
 
 if [[ -n "$DEPLOY_BRANCH_OVERRIDE" ]]; then
   DEPLOY_BRANCH="$DEPLOY_BRANCH_OVERRIDE"
+fi
+
+if [[ "$DEPLOY_TARGET" == "vps" && "$WITH_CADDY" == "0" ]]; then
+  WITH_CADDY=1
 fi
 
 if [[ "$USE_CURRENT_BRANCH" == "1" && -n "$DEPLOY_BRANCH_OVERRIDE" ]]; then
@@ -312,6 +338,7 @@ STATE_FILE="${WELTGEWEBE_STATE_DIR}/weltgewebe-up.state"
 
 echo "== Weltgewebe Up =="
 echo "Repo:    $(pwd)"
+echo "Target:  $DEPLOY_TARGET"
 echo "Project: $COMPOSE_PROJECT"
 echo "Env:     $ENV_FILE"
 
@@ -763,7 +790,11 @@ echo
 echo ">> Service Plan:"
 if [[ "$HAS_CADDY" == "1" ]]; then
   if [[ "$WITH_CADDY" == "1" ]]; then
-    echo " - caddy: ENABLED (explicit request)"
+    if [[ "$DEPLOY_TARGET" == "vps" ]]; then
+      echo " - caddy: ENABLED (vps target)"
+    else
+      echo " - caddy: ENABLED (explicit request)"
+    fi
     ENABLE_CADDY=1
   else
     echo " - caddy: DISABLED (default)"
@@ -1285,7 +1316,14 @@ if [[ -x "scripts/preflight/csp_contract_static.sh" ]]; then
   export ROOT="$REPO_DIR"
 
   # Set the target site for the guard
-  export CADDY_TARGET_SITE="${CADDY_TARGET_SITE:-weltgewebe.home.arpa}"
+  if [[ -z "${CADDY_TARGET_SITE:-}" ]]; then
+    case "$DEPLOY_TARGET" in
+      vps) export CADDY_TARGET_SITE="weltgewebe.net" ;;
+      *) export CADDY_TARGET_SITE="weltgewebe.home.arpa" ;;
+    esac
+  else
+    export CADDY_TARGET_SITE
+  fi
 
   # Target Caddyfile detection
   export CADDYFILE_PATH=""
@@ -1585,250 +1623,260 @@ else
   fi
 fi
 
-echo
-echo ">> Guard 1: DNS Resolution..."
-if ! getent hosts api.weltgewebe.home.arpa > /dev/null 2>&1 || ! getent hosts weltgewebe.home.arpa > /dev/null 2>&1; then
-  msg="DNS Guard failed: api.weltgewebe.home.arpa or weltgewebe.home.arpa is not resolvable."
-  echo "ERROR: $msg"
-  generate_failure_bundle "$msg"
-  exit 1
-else
-  echo "OK (resolvable)"
-fi
+# shfmt: ignore
+if [[ "$DEPLOY_TARGET" != "vps" ]]; then
 
-echo
-echo ">> Guard 2: Container Health (API internals)..."
-if ! docker compose "${BASE_ARGS[@]}" exec -T api wget -qO- http://localhost:8080/health/ready > /dev/null 2>&1; then
-  msg="Container Health Guard failed: wget to http://localhost:8080/health/ready inside api container returned an error."
-  echo "ERROR: $msg"
-  generate_failure_bundle "$msg"
-  exit 1
-else
-  echo "OK (health endpoint reachable)"
-fi
-
-echo
-if [[ ! -f "$EDGE_CA" ]]; then
-  msg="Edge CA certificate missing: $EDGE_CA. Edge routing checks require this certificate."
-  echo "ERROR: $msg"
-  generate_failure_bundle "$msg"
-  exit 1
-fi
-
-echo ">> Guard 3: Edge Routing..."
-if ! curl -fsS --cacert "$EDGE_CA" https://api.weltgewebe.home.arpa/health/ready > /dev/null 2>&1; then
-  msg="Edge Routing Guard failed: Could not reach API via Edge Route."
-  echo "ERROR: $msg"
-  generate_failure_bundle "$msg"
-  exit 1
-else
-  echo "OK (health endpoint reachable)"
-fi
-
-echo
-echo ">> Guard 4: Alias Route..."
-if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/api/health/ready > /dev/null 2>&1; then
-  msg="Alias Route Guard failed: Could not reach API via Alias Route."
-  echo "ERROR: $msg"
-  generate_failure_bundle "$msg"
-  exit 1
-else
-  echo "OK (health endpoint reachable)"
-fi
-
-echo
-
-echo ">> Check 4b: Sovereign Basemap Route (Advisory Infrastructure Readiness)..."
-if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
-  echo "   (Note: weltgewebe-up cannot deterministically read PUBLIC_BASEMAP_MODE; sovereign route check is advisory only.)"
-  if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/style.json > /dev/null 2>&1; then
-    msg="Sovereign Basemap Check skipped/failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). Sovereign infrastructure routing is incomplete."
-    echo "   [!] WARNING: $msg"
-    echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
+  echo
+  echo ">> Guard 1: DNS Resolution..."
+  if ! getent hosts api.weltgewebe.home.arpa > /dev/null 2>&1 || ! getent hosts weltgewebe.home.arpa > /dev/null 2>&1; then
+    msg="DNS Guard failed: api.weltgewebe.home.arpa or weltgewebe.home.arpa is not resolvable."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    exit 1
   else
-    echo "OK (sovereign style.json reachable)"
+    echo "OK (resolvable)"
   fi
 
-  if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/basemap-hamburg.meta.json > /dev/null 2>&1; then
-    msg="Sovereign Basemap Check skipped/failed: Could not fetch basemap-hamburg.meta.json via Edge Route (/local-basemap/basemap-hamburg.meta.json). PMTiles artifact volume or route is missing."
-    echo "   [!] WARNING: $msg"
-    echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
+  echo
+  echo ">> Guard 2: Container Health (API internals)..."
+  if ! docker compose "${BASE_ARGS[@]}" exec -T api wget -qO- http://localhost:8080/health/ready > /dev/null 2>&1; then
+    msg="Container Health Guard failed: wget to http://localhost:8080/health/ready inside api container returned an error."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    exit 1
   else
-    echo "OK (sovereign basemap-hamburg.meta.json reachable)"
+    echo "OK (health endpoint reachable)"
   fi
-  echo "   (Note: This proves edge routing readiness, not E2E client usage)"
-fi
-echo
-echo ">> Guard 5: Frontend Reachability..."
-if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
-  # Explicitly verify HTTP 200 and the presence of SvelteKit structural elements like _app
-  HTML_OUT=$(mktemp)
-  HTTP_CODE=$(curl -s -o "$HTML_OUT" -w "%{http_code}" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map")
 
-  if [[ "$HTTP_CODE" != "200" ]]; then
-    msg="Frontend Reachability Guard failed: HTTP 200 expected for /map. HTML not reachable. Got: $HTTP_CODE"
+  echo
+  if [[ ! -f "$EDGE_CA" ]]; then
+    msg="Edge CA certificate missing: $EDGE_CA. Edge routing checks require this certificate."
     echo "ERROR: $msg"
     generate_failure_bundle "$msg"
-    rm -f "$HTML_OUT"
     exit 1
   fi
 
-  if ! grep -q "_app/" "$HTML_OUT"; then
-    msg="Frontend Reachability Guard failed: /map route is reachable (200), but HTML without expected '_app/' structure. Container mount may be stale or empty."
+  echo ">> Guard 3: Edge Routing..."
+  if ! curl -fsS --cacert "$EDGE_CA" https://api.weltgewebe.home.arpa/health/ready > /dev/null 2>&1; then
+    msg="Edge Routing Guard failed: Could not reach API via Edge Route."
     echo "ERROR: $msg"
     generate_failure_bundle "$msg"
-    rm -f "$HTML_OUT"
     exit 1
+  else
+    echo "OK (health endpoint reachable)"
   fi
 
-  # Phase B: Verifizieren der HTML Cache-Header (revalidating)
-  HTML_HEADERS_OUT=$(mktemp)
-  if ! curl -s -I --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map" > "$HTML_HEADERS_OUT"; then
-    msg="Frontend Cache Guard failed: curl connection failed while checking HTML headers for /map."
+  echo
+  echo ">> Guard 4: Alias Route..."
+  if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/api/health/ready > /dev/null 2>&1; then
+    msg="Alias Route Guard failed: Could not reach API via Alias Route."
     echo "ERROR: $msg"
     generate_failure_bundle "$msg"
-    rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
     exit 1
+  else
+    echo "OK (health endpoint reachable)"
   fi
-  if ! grep -iq "Cache-Control:.*no-cache" "$HTML_HEADERS_OUT" || ! grep -iq "Cache-Control:.*must-revalidate" "$HTML_HEADERS_OUT"; then
-    msg="Frontend Cache Guard failed: /map route did not return 'no-cache, must-revalidate' header."
-    echo "ERROR: $msg"
-    generate_failure_bundle "$msg"
-    rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
-    exit 1
+
+  echo
+
+  echo ">> Check 4b: Sovereign Basemap Route (Advisory Infrastructure Readiness)..."
+  if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
+    echo "   (Note: weltgewebe-up cannot deterministically read PUBLIC_BASEMAP_MODE; sovereign route check is advisory only.)"
+    if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/style.json > /dev/null 2>&1; then
+      msg="Sovereign Basemap Check skipped/failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). Sovereign infrastructure routing is incomplete."
+      echo "   [!] WARNING: $msg"
+      echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
+    else
+      echo "OK (sovereign style.json reachable)"
+    fi
+
+    if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/basemap-hamburg.meta.json > /dev/null 2>&1; then
+      msg="Sovereign Basemap Check skipped/failed: Could not fetch basemap-hamburg.meta.json via Edge Route (/local-basemap/basemap-hamburg.meta.json). PMTiles artifact volume or route is missing."
+      echo "   [!] WARNING: $msg"
+      echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
+    else
+      echo "OK (sovereign basemap-hamburg.meta.json reachable)"
+    fi
+    echo "   (Note: This proves edge routing readiness, not E2E client usage)"
   fi
-  rm -f "$HTML_HEADERS_OUT"
-  echo "OK (frontend route /map cache-control verified)"
+  echo
+  echo ">> Guard 5: Frontend Reachability..."
+  if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
+    # Explicitly verify HTTP 200 and the presence of SvelteKit structural elements like _app
+    HTML_OUT=$(mktemp)
+    HTTP_CODE=$(curl -s -o "$HTML_OUT" -w "%{http_code}" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map")
 
-  # Extract one real asset path (e.g. an immutable JS or CSS file) and verify it
-  # We use a robust grep and head -n 1 to grab exactly one asset URL, allowing optional ./ prefix
-  ASSET_PATH=$(grep -oE '\.?/_app/immutable/[^"'\'' ]+\.(js|css|png|svg|webp|jpg|jpeg)' "$HTML_OUT" | head -n 1 || true)
-
-  if [[ -n "$ASSET_PATH" ]]; then
-    # Normalize: ensure path starts with a single slash (handle relative ./ cases)
-    ASSET_PATH_NORMALIZED="/${ASSET_PATH#./}"
-    ASSET_PATH_NORMALIZED="${ASSET_PATH_NORMALIZED//\/\//\/}"
-
-    ASSET_URL="https://weltgewebe.home.arpa${ASSET_PATH_NORMALIZED}"
-
-    # Verify asset reachability and Cache-Control headers (immutable)
-    ASSET_HEADERS_OUT=$(mktemp)
-    if ! ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -D "$ASSET_HEADERS_OUT" --cacert "$EDGE_CA" "$ASSET_URL"); then
-      msg="Frontend Asset Guard failed: curl connection failed while fetching asset $ASSET_PATH_NORMALIZED."
+    if [[ "$HTTP_CODE" != "200" ]]; then
+      msg="Frontend Reachability Guard failed: HTTP 200 expected for /map. HTML not reachable. Got: $HTTP_CODE"
       echo "ERROR: $msg"
       generate_failure_bundle "$msg"
-      rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+      rm -f "$HTML_OUT"
       exit 1
     fi
 
-    if [[ "$ASSET_HTTP_CODE" != "200" ]]; then
-      msg="Frontend Asset Guard failed: HTML is present, but structural asset $ASSET_PATH_NORMALIZED is referenced and not reachable (HTTP $ASSET_HTTP_CODE)."
+    if ! grep -q "_app/" "$HTML_OUT"; then
+      msg="Frontend Reachability Guard failed: /map route is reachable (200), but HTML without expected '_app/' structure. Container mount may be stale or empty."
       echo "ERROR: $msg"
       generate_failure_bundle "$msg"
-      rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+      rm -f "$HTML_OUT"
       exit 1
     fi
 
-    if ! grep -iq "Cache-Control:.*immutable" "$ASSET_HEADERS_OUT" || ! grep -iq "Cache-Control:.*max-age=31536000" "$ASSET_HEADERS_OUT"; then
-      msg="Frontend Cache Guard failed: Immutable asset $ASSET_PATH_NORMALIZED did not return 'max-age=31536000, immutable' header."
+    # Phase B: Verifizieren der HTML Cache-Header (revalidating)
+    HTML_HEADERS_OUT=$(mktemp)
+    if ! curl -s -I --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map" > "$HTML_HEADERS_OUT"; then
+      msg="Frontend Cache Guard failed: curl connection failed while checking HTML headers for /map."
       echo "ERROR: $msg"
       generate_failure_bundle "$msg"
-      rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+      rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
       exit 1
     fi
-    rm -f "$ASSET_HEADERS_OUT"
+    if ! grep -iq "Cache-Control:.*no-cache" "$HTML_HEADERS_OUT" || ! grep -iq "Cache-Control:.*must-revalidate" "$HTML_HEADERS_OUT"; then
+      msg="Frontend Cache Guard failed: /map route did not return 'no-cache, must-revalidate' header."
+      echo "ERROR: $msg"
+      generate_failure_bundle "$msg"
+      rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
+      exit 1
+    fi
+    rm -f "$HTML_HEADERS_OUT"
+    echo "OK (frontend route /map cache-control verified)"
 
-    echo "OK (frontend route /map reachable and structural asset $ASSET_PATH_NORMALIZED verified with immutable cache headers)"
-  else
-    # Fallback if the regex fails but _app/ is present (e.g. dev mode or different build structure)
-    echo "OK (frontend route /map reachable and structurally valid, but no specific immutable asset matched for deep check)"
-  fi
+    # Extract one real asset path (e.g. an immutable JS or CSS file) and verify it
+    # We use a robust grep and head -n 1 to grab exactly one asset URL, allowing optional ./ prefix
+    ASSET_PATH=$(grep -oE '\.?/_app/immutable/[^"'\'' ]+\.(js|css|png|svg|webp|jpg|jpeg)' "$HTML_OUT" | head -n 1 || true)
 
-  # Phase B: Verifizieren der maschinenlesbaren Build-ID (version.json)
-  # This is a hard guard: version.json is the deploy contract.
-  VERSION_OUT=$(mktemp)
-  VERSION_HEADERS_OUT=$(mktemp)
-  if ! VERSION_HTTP_CODE=$(curl -s -w "%{http_code}" -o "$VERSION_OUT" -D "$VERSION_HEADERS_OUT" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" 2> /dev/null); then
-    msg="Frontend Guard failed: curl connection failed while fetching /_app/version.json."
-    echo "ERROR: $msg"
-    generate_failure_bundle "$msg"
-    rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
-    exit 1
-  elif [[ "$VERSION_HTTP_CODE" == "200" ]]; then
-    # Check for Cache-Control: no-store
-    if ! grep -iq "Cache-Control:.*no-store" "$VERSION_HEADERS_OUT"; then
-      msg="Frontend Guard failed: /_app/version.json did not return 'no-store' header."
+    if [[ -n "$ASSET_PATH" ]]; then
+      # Normalize: ensure path starts with a single slash (handle relative ./ cases)
+      ASSET_PATH_NORMALIZED="/${ASSET_PATH#./}"
+      ASSET_PATH_NORMALIZED="${ASSET_PATH_NORMALIZED//\/\//\/}"
+
+      ASSET_URL="https://weltgewebe.home.arpa${ASSET_PATH_NORMALIZED}"
+
+      # Verify asset reachability and Cache-Control headers (immutable)
+      ASSET_HEADERS_OUT=$(mktemp)
+      if ! ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -D "$ASSET_HEADERS_OUT" --cacert "$EDGE_CA" "$ASSET_URL"); then
+        msg="Frontend Asset Guard failed: curl connection failed while fetching asset $ASSET_PATH_NORMALIZED."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+        exit 1
+      fi
+
+      if [[ "$ASSET_HTTP_CODE" != "200" ]]; then
+        msg="Frontend Asset Guard failed: HTML is present, but structural asset $ASSET_PATH_NORMALIZED is referenced and not reachable (HTTP $ASSET_HTTP_CODE)."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+        exit 1
+      fi
+
+      if ! grep -iq "Cache-Control:.*immutable" "$ASSET_HEADERS_OUT" || ! grep -iq "Cache-Control:.*max-age=31536000" "$ASSET_HEADERS_OUT"; then
+        msg="Frontend Cache Guard failed: Immutable asset $ASSET_PATH_NORMALIZED did not return 'max-age=31536000, immutable' header."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+        exit 1
+      fi
+      rm -f "$ASSET_HEADERS_OUT"
+
+      echo "OK (frontend route /map reachable and structural asset $ASSET_PATH_NORMALIZED verified with immutable cache headers)"
+    else
+      # Fallback if the regex fails but _app/ is present (e.g. dev mode or different build structure)
+      echo "OK (frontend route /map reachable and structurally valid, but no specific immutable asset matched for deep check)"
+    fi
+
+    # Phase B: Verifizieren der maschinenlesbaren Build-ID (version.json)
+    # This is a hard guard: version.json is the deploy contract.
+    VERSION_OUT=$(mktemp)
+    VERSION_HEADERS_OUT=$(mktemp)
+    if ! VERSION_HTTP_CODE=$(curl -s -w "%{http_code}" -o "$VERSION_OUT" -D "$VERSION_HEADERS_OUT" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" 2> /dev/null); then
+      msg="Frontend Guard failed: curl connection failed while fetching /_app/version.json."
+      echo "ERROR: $msg"
+      generate_failure_bundle "$msg"
+      rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
+      exit 1
+    elif [[ "$VERSION_HTTP_CODE" == "200" ]]; then
+      # Check for Cache-Control: no-store
+      if ! grep -iq "Cache-Control:.*no-store" "$VERSION_HEADERS_OUT"; then
+        msg="Frontend Guard failed: /_app/version.json did not return 'no-store' header."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
+        exit 1
+      fi
+
+      # Robust parsing: ensure JSON is strictly parsable and contains canonical version
+      VERSION_PARSED_OUT=$(mktemp)
+      if python3 "$REPO_DIR/scripts/lib/parse-version-json.py" \
+        "$VERSION_OUT" > "$VERSION_PARSED_OUT" 2> /dev/null; then
+        PY_STATUS=0
+      else
+        PY_STATUS=$?
+      fi
+
+      if [ "$PY_STATUS" -ne 0 ]; then
+        if [ "$PY_STATUS" -eq 3 ]; then
+          msg="Frontend Guard failed: /_app/version.json is not valid JSON."
+        elif [ "$PY_STATUS" -eq 2 ]; then
+          msg="Frontend Guard failed: /_app/version.json missing valid canonical 'version' field."
+        else
+          msg="Frontend Guard failed: /_app/version.json parsing failed unexpectedly."
+        fi
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT" "$VERSION_PARSED_OUT"
+        exit 1
+      fi
+
+      BUILD_VERSION=$(sed -n '1p' "$VERSION_PARSED_OUT")
+      BUILD_ID=$(sed -n '2p' "$VERSION_PARSED_OUT")
+      BUILD_COMMIT=$(sed -n '3p' "$VERSION_PARSED_OUT")
+      rm -f "$VERSION_PARSED_OUT"
+
+      if [[ "$CURRENT_SHORT_SHA" != "unknown" && "$BUILD_VERSION" != "$CURRENT_SHORT_SHA" ]]; then
+        _vctx=$(mktemp)
+        {
+          echo "live_version: $BUILD_VERSION"
+          echo "expected_short_sha: $CURRENT_SHORT_SHA"
+          [[ -n "$BUILD_ID" ]] && echo "build_id: $BUILD_ID"
+          [[ -n "$BUILD_COMMIT" ]] && echo "commit: $BUILD_COMMIT"
+          echo "---"
+          echo "version_json_body:"
+          cat "$VERSION_OUT" 2> /dev/null || true
+          echo "---"
+          echo "version_response_headers:"
+          cat "$VERSION_HEADERS_OUT" 2> /dev/null || true
+        } > "$_vctx"
+        msg="Frontend Guard failed: /_app/version.json is stale: version $BUILD_VERSION, expected $CURRENT_SHORT_SHA."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg" "" "$_vctx"
+        rm -f "$_vctx" "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
+        exit 1
+      fi
+
+      if [[ -n "$BUILD_ID" && "$BUILD_ID" != "$BUILD_VERSION" ]]; then
+        echo "OK (Version: $BUILD_VERSION, Build-ID: $BUILD_ID verified via /_app/version.json with no-store)"
+      else
+        echo "OK (Version: $BUILD_VERSION verified via /_app/version.json with no-store)"
+      fi
+    else
+      msg="Frontend Guard failed: /_app/version.json not reachable (HTTP $VERSION_HTTP_CODE)."
       echo "ERROR: $msg"
       generate_failure_bundle "$msg"
       rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
       exit 1
     fi
 
-    # Robust parsing: ensure JSON is strictly parsable and contains canonical version
-    VERSION_PARSED_OUT=$(mktemp)
-    if python3 "$REPO_DIR/scripts/lib/parse-version-json.py" \
-      "$VERSION_OUT" > "$VERSION_PARSED_OUT" 2> /dev/null; then
-      PY_STATUS=0
-    else
-      PY_STATUS=$?
-    fi
-
-    if [ "$PY_STATUS" -ne 0 ]; then
-      if [ "$PY_STATUS" -eq 3 ]; then
-        msg="Frontend Guard failed: /_app/version.json is not valid JSON."
-      elif [ "$PY_STATUS" -eq 2 ]; then
-        msg="Frontend Guard failed: /_app/version.json missing valid canonical 'version' field."
-      else
-        msg="Frontend Guard failed: /_app/version.json parsing failed unexpectedly."
-      fi
-      echo "ERROR: $msg"
-      generate_failure_bundle "$msg"
-      rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT" "$VERSION_PARSED_OUT"
-      exit 1
-    fi
-
-    BUILD_VERSION=$(sed -n '1p' "$VERSION_PARSED_OUT")
-    BUILD_ID=$(sed -n '2p' "$VERSION_PARSED_OUT")
-    BUILD_COMMIT=$(sed -n '3p' "$VERSION_PARSED_OUT")
-    rm -f "$VERSION_PARSED_OUT"
-
-    if [[ "$CURRENT_SHORT_SHA" != "unknown" && "$BUILD_VERSION" != "$CURRENT_SHORT_SHA" ]]; then
-      _vctx=$(mktemp)
-      {
-        echo "live_version: $BUILD_VERSION"
-        echo "expected_short_sha: $CURRENT_SHORT_SHA"
-        [[ -n "$BUILD_ID" ]] && echo "build_id: $BUILD_ID"
-        [[ -n "$BUILD_COMMIT" ]] && echo "commit: $BUILD_COMMIT"
-        echo "---"
-        echo "version_json_body:"
-        cat "$VERSION_OUT" 2> /dev/null || true
-        echo "---"
-        echo "version_response_headers:"
-        cat "$VERSION_HEADERS_OUT" 2> /dev/null || true
-      } > "$_vctx"
-      msg="Frontend Guard failed: /_app/version.json is stale: version $BUILD_VERSION, expected $CURRENT_SHORT_SHA."
-      echo "ERROR: $msg"
-      generate_failure_bundle "$msg" "" "$_vctx"
-      rm -f "$_vctx" "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
-      exit 1
-    fi
-
-    if [[ -n "$BUILD_ID" && "$BUILD_ID" != "$BUILD_VERSION" ]]; then
-      echo "OK (Version: $BUILD_VERSION, Build-ID: $BUILD_ID verified via /_app/version.json with no-store)"
-    else
-      echo "OK (Version: $BUILD_VERSION verified via /_app/version.json with no-store)"
-    fi
-  else
-    msg="Frontend Guard failed: /_app/version.json not reachable (HTTP $VERSION_HTTP_CODE)."
-    echo "ERROR: $msg"
-    generate_failure_bundle "$msg"
     rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
-    exit 1
+  else
+    echo "   Skipped (Frontend not required for this deploy run)."
   fi
 
-  rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
 else
-  echo "   Skipped (Frontend not required for this deploy run)."
+  echo
+  echo ">> VPS Postflight:"
+  echo "   Legacy Heimserver edge/home.arpa guards skipped for DEPLOY_TARGET=vps."
+  echo "   Local/API health was verified by the generic health check above."
 fi
 
 # 8. Update State (Post-Health)
