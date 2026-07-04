@@ -110,6 +110,7 @@ Generated automatically. Do not edit.
 | reports.auth-pg-002-passkey-runtime-audit-plan | AUTH-PG-002 Passkey Runtime FK Audit Plan | report | active | docs/reports/auth-pg-002-passkey-runtime-audit-plan.md |
 | reports.auth-pg-002-passkey-runtime-facade | AUTH-PG-002 Passkey Runtime Facade (Slice B) Proof | report | active | docs/reports/auth-pg-002-passkey-runtime-facade.md |
 | reports.auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01 | AUTH-PG-002 Heimserver Runtime Schema Readiness 2026-07-01 | report | active | docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md |
+| reports.auth-pg-002-schema-preflight-ci | AUTH-PG-002-C2 Passkey-Schema-Preflight (CI, heimserverfrei) | report | active | docs/reports/auth-pg-002-schema-preflight-ci.md |
 | reports.auth-pg-003-backfill-readiness | AUTH-PG-003 Legacy webauthn_user_id Backfill Readiness | report | active | docs/reports/auth-pg-003-backfill-readiness.md |
 | reports.auth-pg-003-runtime-audit-heimserver-2026-07-01 | AUTH-PG-003 Heimserver Runtime Audit 2026-07-01 | report | active | docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md |
 | reports.auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01 | AUTH-PG-003 Runtime Audit Smoke: wg-pg-proof 2026-07-01 | report | active | docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md |

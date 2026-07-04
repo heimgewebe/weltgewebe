@@ -542,12 +542,17 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/adr/ADR-0007__auth-persistence-production-db-path.md
 
+## docs/reports/auth-pg-002-controlled-preflight.md
+
+- [relates_to] docs/reports/auth-pg-002-schema-preflight-ci.md
+
 ## docs/reports/auth-pg-002-cutover-plan.md
 
 - [relates_to] docs/reports/auth-pg-002-passkey-fk-readiness-audit.md
 - [relates_to] docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md
 - [relates_to] docs/reports/auth-pg-002-passkey-runtime-audit-plan.md
 - [relates_to] docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md
+- [relates_to] docs/reports/auth-pg-002-schema-preflight-ci.md
 - [relates_to] docs/reports/auth-pg-003-backfill-readiness.md
 
 ## docs/reports/auth-pg-002-passkey-db-store.md
@@ -580,6 +585,7 @@ Generated automatically. Do not edit.
 ## docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md
 
 - [depends_on] docs/reports/auth-pg-002-controlled-preflight.md
+- [depends_on] docs/reports/auth-pg-002-schema-preflight-ci.md
 - [relates_to] docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md
 - [relates_to] docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md
 
@@ -604,6 +610,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/auth-pg-002-passkey-runtime-audit-plan.md
 - [relates_to] docs/reports/auth-pg-002-passkey-runtime-facade.md
 - [relates_to] docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md
+- [relates_to] docs/reports/auth-pg-002-schema-preflight-ci.md
 - [relates_to] docs/reports/auth-pg-003-backfill-readiness.md
 - [relates_to] docs/reports/passkey-register-verify-prep.md
 - [depends_on] docs/roadmap.md

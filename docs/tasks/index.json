@@ -1152,17 +1152,20 @@
         "docs/reports/auth-pg-002-passkey-runtime-facade.md",
         "docs/reports/auth-pg-002-cutover-plan.md",
         "apps/api/tests/db_passkey_fk_readiness.rs",
+        "apps/api/tests/db_passkey_schema_preflight.rs",
         "docs/reports/auth-pg-002-passkey-fk-readiness-audit.md",
         "scripts/docmeta/audit_passkey_fk_runtime.py",
         "scripts/docmeta/tests/test_audit_passkey_fk_runtime.py",
         "docs/reports/auth-pg-002-passkey-runtime-audit-plan.md",
         "docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md",
-        "docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md"
+        "docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md",
+        "docs/reports/auth-pg-002-controlled-preflight.md",
+        "docs/reports/auth-pg-002-schema-preflight-ci.md"
       ],
       "missing_evidence": [
         "Kein Produktions-Cutover; passkey_credential_source bleibt Default in_memory",
         "Heimserver-Runtime-PostgreSQL hat _sqlx_migrations und domain_accounts, aber passkey_credentials fehlt",
-        "Runtime-Preflight für 20260630000001_create_passkey_credentials fehlt",
+        "CI-Schema-Preflight (db_passkey_schema_preflight) ist belegt; die kontrollierte Runtime-Anwendung der Migration 20260630000001 auf dem Heimserver (AUTH-PG-002-R2) und der erneute read-only Runtime-Audit fehlen",
         "FK passkey_credentials.account_id -> domain_accounts(id) noch nicht implementiert; erneuter Runtime-Audit erst nach vorhandener Tabelle möglich",
         "Kein webauthn_user_id-Backfill/NOT NULL (AUTH-PG-003 bleibt offen)",
         "Passkey-Management-UI/List/Remove-Cutover fehlt"
@@ -1189,10 +1192,12 @@
           "docs/reports/auth-pg-002-passkey-fk-readiness-audit.md",
           "docs/reports/auth-pg-002-passkey-runtime-audit-plan.md",
           "docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md",
-          "docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md"
+          "docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md",
+          "docs/reports/auth-pg-002-controlled-preflight.md",
+          "docs/reports/auth-pg-002-schema-preflight-ci.md"
         ]
       },
-      "updated_at": "2026-07-01"
+      "updated_at": "2026-07-04"
     },
     {
       "id": "AUTH-PG-003",

@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 152 |
-| Dokumente mit ausgehenden Relationen | 151 |
-| Dokumente als Ziel referenziert | 114 |
-| Relationen gesamt | 511 |
-| — depends_on | 19 |
-| — relates_to | 489 |
+| Dokumente gesamt | 153 |
+| Dokumente mit ausgehenden Relationen | 152 |
+| Dokumente als Ziel referenziert | 115 |
+| Relationen gesamt | 515 |
+| — depends_on | 20 |
+| — relates_to | 492 |
 | — supersedes | 3 |
 | Isolierte Dokumente | 0 |
 | depends_on Zyklen | 0 |
@@ -36,8 +36,8 @@ Generated automatically. Do not edit.
 - ⚠️ High inbound count (20): `docs/tasks/board.md` — central dependency, review carefully
 - ⚠️ High inbound count (15): `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — central dependency, review carefully
 - ⚠️ High inbound count (15): `docs/deploy/README.md` — central dependency, review carefully
+- ⚠️ High inbound count (14): `docs/reports/auth-status-matrix.md` — central dependency, review carefully
 - ⚠️ High inbound count (13): `docs/adr/ADR-0007__auth-persistence-production-db-path.md` — central dependency, review carefully
-- ⚠️ High inbound count (13): `docs/reports/auth-status-matrix.md` — central dependency, review carefully
 - ⚠️ High inbound count (13): `docs/reports/optimierungsstatus.md` — central dependency, review carefully
 - ⚠️ High inbound count (12): `docs/deployment.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/blueprints/auth-roadmap.md` — central dependency, review carefully
@@ -62,8 +62,8 @@ _Keine Zyklen gefunden._
 - `docs/tasks/board.md` — 20 eingehende Relationen
 - `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — 15 eingehende Relationen
 - `docs/deploy/README.md` — 15 eingehende Relationen
+- `docs/reports/auth-status-matrix.md` — 14 eingehende Relationen
 - `docs/adr/ADR-0007__auth-persistence-production-db-path.md` — 13 eingehende Relationen
-- `docs/reports/auth-status-matrix.md` — 13 eingehende Relationen
 - `docs/reports/optimierungsstatus.md` — 13 eingehende Relationen
 - `docs/deployment.md` — 12 eingehende Relationen
 - `docs/blueprints/auth-roadmap.md` — 11 eingehende Relationen

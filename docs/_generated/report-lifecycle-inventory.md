@@ -16,23 +16,23 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 | Metric | Count |
 | --- | ---: |
-| files_total | 44 |
-| files_with_frontmatter | 44 |
+| files_total | 45 |
+| files_with_frontmatter | 45 |
 | files_without_frontmatter | 0 |
-| files_with_status | 44 |
+| files_with_status | 45 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 40 |
+| files_with_lifecycle_state | 41 |
 | files_missing_lifecycle_state | 4 |
-| files_with_lifecycle | 40 |
+| files_with_lifecycle | 41 |
 | files_missing_lifecycle | 4 |
-| files_with_owner_task | 40 |
+| files_with_owner_task | 41 |
 | files_missing_owner_task | 4 |
-| files_with_review_after | 31 |
+| files_with_review_after | 32 |
 | files_missing_review_after | 13 |
-| files_primary_referenced | 40 |
-| files_primary_unreferenced | 4 |
-| files_with_derived_references | 44 |
-| files_with_relations | 44 |
+| files_primary_referenced | 42 |
+| files_primary_unreferenced | 3 |
+| files_with_derived_references | 45 |
+| files_with_relations | 45 |
 | files_with_missing_supersession_target | 0 |
 
 ## Doc Type Distribution
@@ -41,7 +41,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | --- | ---: |
 | documentation | 1 |
 | reference | 1 |
-| report | 40 |
+| report | 41 |
 | status-matrix | 2 |
 
 ## Reports
@@ -54,18 +54,19 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/auth-persistence-readiness.md | report | deprecated | superseded | decision-prep | OPT-API-002 |  | docs/reports/auth-persistence-next-step.md | 4 | 5 | 3 | review_after |  |
 | docs/reports/auth-persistence-runtime-proof.md | report | deprecated | superseded | proof | OPT-API-002 |  | docs/reports/optimierungsstatus.md | 4 | 4 | 6 | review_after |  |
 | docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active | active | audit | OPT-API-002 | 2026-07-17 |  | 1 | 4 | 5 |  |  |
-| docs/reports/auth-pg-002-controlled-preflight.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 0 | 4 | 2 |  |  |
-| docs/reports/auth-pg-002-cutover-plan.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 7 | 4 | 4 |  |  |
+| docs/reports/auth-pg-002-controlled-preflight.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 2 | 4 | 2 |  |  |
+| docs/reports/auth-pg-002-cutover-plan.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 8 | 4 | 4 |  |  |
 | docs/reports/auth-pg-002-passkey-db-store.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 3 | 4 | 3 |  |  |
 | docs/reports/auth-pg-002-passkey-fk-readiness-audit.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 3 | 4 | 4 |  |  |
 | docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 3 | 4 | 4 |  |  |
 | docs/reports/auth-pg-002-passkey-runtime-audit-plan.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 3 | 4 | 3 |  |  |
 | docs/reports/auth-pg-002-passkey-runtime-facade.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 5 | 4 | 3 |  |  |
-| docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 4 | 4 | 4 |  |  |
+| docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 5 | 4 | 4 |  |  |
+| docs/reports/auth-pg-002-schema-preflight-ci.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 1 | 4 | 4 |  |  |
 | docs/reports/auth-pg-003-backfill-readiness.md | report | active | active | proof | AUTH-PG-003 | 2026-09-30 |  | 3 | 4 | 4 |  |  |
 | docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md | report | active | active | proof | AUTH-PG-003 | 2026-09-30 |  | 1 | 4 | 4 |  |  |
 | docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md | report | active | active | proof | AUTH-PG-003 | 2026-09-30 |  | 1 | 4 | 2 |  |  |
-| docs/reports/auth-status-matrix.md | reference | active |  |  |  |  |  | 14 | 5 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/auth-status-matrix.md | reference | active |  |  |  |  |  | 15 | 5 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/cost-report.md | report | active | active | generated | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 1 | 4 | 3 |  |  |
 | docs/reports/domain-account-email-uniqueness-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-13 |  | 2 | 4 | 4 |  |  |
 | docs/reports/domain-account-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 7 | 4 | 6 |  |  |
@@ -129,6 +130,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/auth-pg-002-passkey-runtime-audit-plan.md | 3 | relates_to | docs/reports/auth-pg-002-cutover-plan.md, docs/reports/auth-pg-002-passkey-fk-readiness-audit.md, docs/reports/auth-status-matrix.md |
 | docs/reports/auth-pg-002-passkey-runtime-facade.md | 3 | relates_to | docs/adr/ADR-0007__auth-persistence-production-db-path.md, docs/reports/auth-pg-002-passkey-db-store.md, docs/reports/auth-status-matrix.md |
 | docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md | 4 | relates_to | docs/reports/auth-pg-002-cutover-plan.md, docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md, docs/reports/auth-pg-002-passkey-runtime-audit-plan.md, docs/reports/auth-status-matrix.md |
+| docs/reports/auth-pg-002-schema-preflight-ci.md | 4 | depends_on, relates_to | docs/reports/auth-pg-002-controlled-preflight.md, docs/reports/auth-pg-002-cutover-plan.md, docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md, docs/reports/auth-status-matrix.md |
 | docs/reports/auth-pg-003-backfill-readiness.md | 4 | relates_to | docs/reports/auth-pg-002-cutover-plan.md, docs/reports/auth-pg-002-passkey-runtime-facade.md, docs/reports/auth-status-matrix.md, docs/reports/opt-arc-001-db-proof-matrix.json |
 | docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md | 4 | relates_to | docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md, docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md, docs/reports/auth-pg-003-backfill-readiness.md, docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md |
 | docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md | 2 | relates_to | docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md, docs/reports/auth-pg-003-backfill-readiness.md |
@@ -189,12 +191,17 @@ Primary references are exact path matches in canonical documentation surfaces. D
 - `docs/reports/auth-persistence-runtime-target-reconciliation.md`
   - `docs/adr/ADR-0007__auth-persistence-production-db-path.md`
 
+- `docs/reports/auth-pg-002-controlled-preflight.md`
+  - `docs/reports/auth-pg-002-schema-preflight-ci.md`
+  - `docs/tasks/board.md`
+
 - `docs/reports/auth-pg-002-cutover-plan.md`
   - `docs/reports/auth-pg-002-passkey-fk-readiness-audit.md`
   - `docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md`
   - `docs/reports/auth-pg-002-passkey-runtime-audit-plan.md`
   - `docs/reports/auth-pg-002-passkey-runtime-facade.md`
   - `docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md`
+  - `docs/reports/auth-pg-002-schema-preflight-ci.md`
   - `docs/reports/auth-pg-003-backfill-readiness.md`
   - `docs/tasks/board.md`
 
@@ -227,8 +234,12 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md`
   - `docs/reports/auth-pg-002-controlled-preflight.md`
+  - `docs/reports/auth-pg-002-schema-preflight-ci.md`
   - `docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md`
   - `docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md`
+  - `docs/tasks/board.md`
+
+- `docs/reports/auth-pg-002-schema-preflight-ci.md`
   - `docs/tasks/board.md`
 
 - `docs/reports/auth-pg-003-backfill-readiness.md`
@@ -253,6 +264,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/reports/auth-pg-002-passkey-runtime-audit-plan.md`
   - `docs/reports/auth-pg-002-passkey-runtime-facade.md`
   - `docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md`
+  - `docs/reports/auth-pg-002-schema-preflight-ci.md`
   - `docs/reports/auth-pg-003-backfill-readiness.md`
   - `docs/reports/optimierungsstatus.md`
   - `docs/reports/passkey-register-verify-prep.md`
@@ -478,6 +490,12 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
 
+- `docs/reports/auth-pg-002-schema-preflight-ci.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/report-lifecycle.md`
+
 - `docs/reports/auth-pg-003-backfill-readiness.md`
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
@@ -669,7 +687,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 ## Primary Unreferenced Reports
 
 - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
-- `docs/reports/auth-pg-002-controlled-preflight.md`
 - `docs/reports/domain-edge-cache-limit-design.md`
 - `docs/reports/report-lifecycle-restbestand-triage.md`
 

@@ -16,10 +16,10 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Metric | Count |
 | --- | ---: |
-| files_scanned | 44 |
-| reports_checked | 40 |
+| files_scanned | 45 |
+| reports_checked | 41 |
 | reports_ignored_non_report | 4 |
-| reports_with_lifecycle_state | 40 |
+| reports_with_lifecycle_state | 41 |
 | reports_missing_lifecycle_state | 0 |
 | findings_total | 0 |
 
@@ -27,7 +27,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | lifecycle_state | Count |
 | --- | ---: |
-| active | 31 |
+| active | 32 |
 | deferred | 0 |
 | superseded | 5 |
 | archived | 4 |
@@ -52,6 +52,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/auth-pg-002-passkey-runtime-audit-plan.md | active | planning | AUTH-PG-002 | 2026-09-30 |  |
 | docs/reports/auth-pg-002-passkey-runtime-facade.md | active | proof | AUTH-PG-002 | 2026-09-30 |  |
 | docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md | active | proof | AUTH-PG-002 | 2026-09-30 |  |
+| docs/reports/auth-pg-002-schema-preflight-ci.md | active | proof | AUTH-PG-002 | 2026-09-30 |  |
 | docs/reports/auth-pg-003-backfill-readiness.md | active | proof | AUTH-PG-003 | 2026-09-30 |  |
 | docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md | active | proof | AUTH-PG-003 | 2026-09-30 |  |
 | docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md | active | proof | AUTH-PG-003 | 2026-09-30 |  |
