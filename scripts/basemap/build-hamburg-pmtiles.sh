@@ -62,7 +62,7 @@ cd "$BASEMAP_DIR"
 if [ ! -f "$OSM_FILE" ]; then
   echo "=> Downloading OSM data for Hamburg ($OSM_FILE)..."
   if [ "$DOWNLOADER" = "wget" ]; then
-    wget -qO "$OSM_FILE" "$OSM_URL" || {
+    wget --tries=5 --waitretry=3 --retry-connrefused --timeout=30 -O "$OSM_FILE" "$OSM_URL" || {
       rm -f "$OSM_FILE"
       exit 1
     }
