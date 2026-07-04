@@ -81,14 +81,30 @@
 	}
 }
 
-# HTTP sites are intentionally present so a new VPS can be smoke-tested locally
-# with `curl -H 'Host: weltgewebe.net' http://127.0.0.1/...` before DNS cutover.
+# HTTP sites are intentionally narrow: they support pre-DNS smoke tests for
+# health/API readiness, but do not serve the full app over plaintext.
 http://weltgewebe.net, http://www.weltgewebe.net {
-	import app_common
+	handle /health/proxy {
+		respond 200
+	}
+
+	handle_path /api/* {
+		reverse_proxy api:8080
+	}
+
+	redir https://{host}{uri} 308
 }
 
 http://api.weltgewebe.net {
-	import api_common
+	handle /health/proxy {
+		respond 200
+	}
+
+	handle /health/* {
+		reverse_proxy api:8080
+	}
+
+	redir https://{host}{uri} 308
 }
 
 https://weltgewebe.net, https://www.weltgewebe.net {
