@@ -149,6 +149,66 @@ Required follow-up outcome:
 
 This diagnostic PR does neither.
 
+## Read-order decision prep
+
+Status: decision_required / no runtime change.
+
+The current implementation and diagnostic now leave a policy decision rather
+than a missing proof. `domain_db.rs` loads PostgreSQL nodes and edges in
+id-ascending order. The legacy JSONL path for `/nodes` and `/edges` retains file
+or insertion order for `offset` / `limit` list responses. The cursor contract is
+already id-ascending and is not the conflict.
+
+### Decision axes
+
+Option A: preserve legacy list order for `/nodes` and `/edges`.
+
+- Consequence: requires an explicit persisted import ordinal or equivalent
+  provenance-derived position for nodes and edges.
+- Likely code shape: schema/backfill/import update plus loader ordering such as
+  `ORDER BY source_order ASC, id ASC` for the legacy-list-compatible path.
+- Benefit: maximizes compatibility with existing legacy array responses.
+- Cost: adds schema and backfill complexity before read cutover.
+
+Option B: revise the API contract so legacy array responses also use `id ASC`.
+
+- Consequence: the current PostgreSQL loader order becomes the target contract.
+- Benefit: smallest database change and aligns bare arrays with cursor order.
+- Cost: changes legacy response semantics and must be approved in blueprint and
+  API-spec documentation before any proof can claim parity.
+
+Option C: split the cutover contract.
+
+- Consequence: cursor/envelope responses can remain `id ASC`, while legacy bare
+  arrays either keep JSONL as their truth until an ordinal proof exists or are
+  explicitly excluded from PostgreSQL read cutover.
+- Benefit: avoids pretending that one ordering rule satisfies both surfaces.
+- Cost: increases operational and documentation complexity during cutover.
+
+### Recommendation
+
+Under the current blueprint, Option A is the conservative default: preserve
+legacy `/nodes` and `/edges` order before claiming PostgreSQL read-cutover
+parity. If product/API maintainers prefer the simpler id-order future, Option B
+must happen first as an explicit blueprint/spec decision PR. Option C is useful
+as a staged transition, but should not be treated as a final cutover proof.
+
+### Next implementable slice
+
+Do exactly one of the following before changing loader order:
+
+1. Create a schema/backfill design for a persisted nodes/edges source ordinal,
+   then implement and prove legacy-order preservation in PostgreSQL.
+2. Revise `docs/blueprints/domain-data-postgres-cutover.md` and
+   `docs/specs/list-pagination-api.md` to make id-ascending legacy arrays the
+   canonical contract, then update tests to prove that revised contract.
+3. Document a split-contract cutover plan that keeps legacy bare arrays outside
+   PostgreSQL read cutover until an ordinal proof exists.
+
+Any future PR that marks `db-domain-read-path-proof` as complete must name which
+option was chosen and cite either PR-CI evidence for the implemented order or the
+explicit API-contract revision that made the current order correct.
+
 ### Non-goals
 
 - no runtime cutover
