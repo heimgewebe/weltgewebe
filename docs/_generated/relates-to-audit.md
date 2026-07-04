@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 511 |
-| — depends_on | 19 |
-| — relates_to | 489 |
+| Relationen gesamt | 515 |
+| — depends_on | 20 |
+| — relates_to | 492 |
 | — supersedes | 3 |
 | relates_to Anteil | 96% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (196 Dokumente):
+**Cluster 1** (197 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -144,6 +144,7 @@ _Keine Lücken erkannt._
 - `docs/reports/auth-pg-002-passkey-runtime-audit-plan.md`
 - `docs/reports/auth-pg-002-passkey-runtime-facade.md`
 - `docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md`
+- `docs/reports/auth-pg-002-schema-preflight-ci.md`
 - `docs/reports/auth-pg-003-backfill-readiness.md`
 - `docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md`
 - `docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md`

@@ -263,8 +263,11 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Run db passkey persistence and FK-readiness proofs (direct PostgreSQL, --include-ignored)
+      - name: Run db passkey schema preflight, persistence and FK-readiness proofs (direct PostgreSQL, --include-ignored)
         run: |
+          cargo test --locked -p weltgewebe-api \
+            --test db_passkey_schema_preflight \
+            -- --include-ignored --test-threads=1
           cargo test --locked -p weltgewebe-api \
             --test db_passkey_store_persistence \
             -- --include-ignored --test-threads=1
