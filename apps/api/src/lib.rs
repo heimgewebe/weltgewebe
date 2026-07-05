@@ -12,7 +12,7 @@ pub mod utils;
 pub mod test_helpers;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     env,
     io::ErrorKind,
     net::SocketAddr,
@@ -447,13 +447,15 @@ fn record_applied_startup_migration(
     version: i64,
     migration: AppliedStartupMigration,
 ) -> anyhow::Result<()> {
-    if applied.insert(version, migration).is_some() {
-        return Err(anyhow!(
+    match applied.entry(version) {
+        Entry::Vacant(slot) => {
+            slot.insert(migration);
+            Ok(())
+        }
+        Entry::Occupied(_) => Err(anyhow!(
             "duplicate startup migration version {version} in _sqlx_migrations; refusing to start in verify-applied mode"
-        ));
+        )),
     }
-
-    Ok(())
 }
 
 fn validate_applied_startup_migrations(
