@@ -109,6 +109,7 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
         required_doc_phrases = [
             "infra/compose/compose.vps.override.yml",
             "WELTGEWEBE_CADDYFILE=../caddy/Caddyfile.http-smoke",
+            "WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied",
             "the smoke path, not the default production Caddyfile, was selected",
         ]
         for phrase in required_doc_phrases:
@@ -117,6 +118,10 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
 
         caddyfile_source = self._caddyfile_volume_source(compose_text)
         self.assertIn("WELTGEWEBE_CADDYFILE", caddyfile_source)
+        self.assertIn(
+            "WELTGEWEBE_API_STARTUP_MIGRATIONS: ${WELTGEWEBE_API_STARTUP_MIGRATIONS:-run}",
+            compose_text,
+        )
 
     def test_vps_compose_default_does_not_silently_select_http_smoke_file(self) -> None:
         compose_text = self.compose_override.read_text(encoding="utf-8")
@@ -125,6 +130,18 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
         default = caddyfile_source.removeprefix("${WELTGEWEBE_CADDYFILE:-").removesuffix("}")
         self.assertEqual(default, "../caddy/Caddyfile.vps")
         self.assertNotEqual(default, "../caddy/Caddyfile.http-smoke")
+
+    def test_vps_api_startup_migration_hook_defaults_to_run(self) -> None:
+        compose_text = self.compose_override.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "WELTGEWEBE_API_STARTUP_MIGRATIONS: ${WELTGEWEBE_API_STARTUP_MIGRATIONS:-run}",
+            compose_text,
+        )
+        self.assertNotIn(
+            "WELTGEWEBE_API_STARTUP_MIGRATIONS:-verify-applied",
+            compose_text,
+        )
 
 
 if __name__ == "__main__":

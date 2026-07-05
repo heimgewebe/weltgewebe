@@ -11,7 +11,7 @@ pub mod utils;
 #[doc(hidden)]
 pub mod test_helpers;
 
-use std::{env, io::ErrorKind, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, env, io::ErrorKind, net::SocketAddr, sync::Arc};
 
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
@@ -23,7 +23,7 @@ use config::{
 use middleware::auth::auth_middleware;
 use middleware::csrf::require_csrf;
 use routes::{api_router, health::health_routes, meta::meta_routes};
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{postgres::PgPoolOptions, PgPool, Row};
 use state::ApiState;
 use telemetry::{metrics_handler, BuildInfo, Metrics, MetricsLayer};
 use tokio::net::TcpListener;
@@ -55,12 +55,7 @@ pub async fn run() -> anyhow::Result<()> {
     let (db_pool, db_pool_configured) = initialise_database_pool().await?;
     let (nats_client, nats_configured) = initialise_nats_client().await;
 
-    if let (true, Some(pool)) = (db_pool_configured, db_pool.as_ref()) {
-        sqlx::migrate!("./migrations")
-            .run(pool)
-            .await
-            .context("database migration failed")?;
-    }
+    handle_startup_migrations(db_pool_configured, db_pool.as_ref()).await?;
 
     // OPT-ARC-001 Phase E-A: account-create write-path gate.
     //
@@ -336,6 +331,113 @@ fn init_tracing() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StartupMigrationMode {
+    Run,
+    VerifyApplied,
+}
+
+impl StartupMigrationMode {
+    fn load() -> anyhow::Result<Self> {
+        let raw = match env::var("WELTGEWEBE_API_STARTUP_MIGRATIONS") {
+            Ok(value) => value,
+            Err(env::VarError::NotPresent) => return Ok(Self::Run),
+            Err(error) => {
+                return Err(anyhow!(error)).context(
+                    "failed to read WELTGEWEBE_API_STARTUP_MIGRATIONS from the environment",
+                );
+            }
+        };
+
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "" | "run" => Ok(Self::Run),
+            "verify-applied" => Ok(Self::VerifyApplied),
+            _ => Err(anyhow!(
+                "invalid WELTGEWEBE_API_STARTUP_MIGRATIONS value {raw:?}; expected `run` or `verify-applied`"
+            )),
+        }
+    }
+}
+
+async fn handle_startup_migrations(
+    db_pool_configured: bool,
+    db_pool: Option<&PgPool>,
+) -> anyhow::Result<()> {
+    let Some(pool) = db_pool.filter(|_| db_pool_configured) else {
+        return Ok(());
+    };
+
+    match StartupMigrationMode::load()? {
+        StartupMigrationMode::Run => {
+            sqlx::migrate!("./migrations")
+                .run(pool)
+                .await
+                .context("database migration failed")?;
+        }
+        StartupMigrationMode::VerifyApplied => {
+            verify_startup_migrations_applied(pool).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn verify_startup_migrations_applied(pool: &PgPool) -> anyhow::Result<()> {
+    let rows = sqlx::query("SELECT version, success, checksum FROM _sqlx_migrations")
+        .fetch_all(pool)
+        .await
+        .context(
+            "WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied could not read _sqlx_migrations; refusing to apply migrations",
+        )?;
+
+    let mut applied: HashMap<i64, (bool, Vec<u8>)> = HashMap::new();
+    for row in rows {
+        let version: i64 = row
+            .try_get("version")
+            .context("_sqlx_migrations.version must be readable")?;
+        let success: bool = row
+            .try_get("success")
+            .context("_sqlx_migrations.success must be readable")?;
+        let checksum: Vec<u8> = row
+            .try_get("checksum")
+            .context("_sqlx_migrations.checksum must be readable")?;
+        applied.insert(version, (success, checksum));
+    }
+
+    for migration in sqlx::migrate!("./migrations").iter() {
+        if migration.migration_type.is_down_migration() {
+            continue;
+        }
+
+        let Some((success, checksum)) = applied.get(&migration.version) else {
+            return Err(anyhow!(
+                "pending startup migration {} ({}) under WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied; refusing to apply migrations",
+                migration.version,
+                migration.description
+            ));
+        };
+
+        if !success {
+            return Err(anyhow!(
+                "startup migration {} ({}) is not marked successful; refusing to start in verify-applied mode",
+                migration.version,
+                migration.description
+            ));
+        }
+
+        if checksum.as_slice() != migration.checksum.as_ref() {
+            return Err(anyhow!(
+                "startup migration {} ({}) checksum differs from the embedded migration; refusing to start in verify-applied mode",
+                migration.version,
+                migration.description
+            ));
+        }
+    }
+
+    tracing::info!("startup migrations verified as already applied; no migration SQL executed");
+    Ok(())
+}
+
 /// Initialise the PostgreSQL pool from `DATABASE_URL`.
 ///
 /// Startup contract (fail-fast). Per ADR-0007 the production auth/session and
@@ -398,7 +500,7 @@ async fn initialise_nats_client() -> (Option<NatsClient>, bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::initialise_database_pool;
+    use super::{initialise_database_pool, StartupMigrationMode};
     use crate::test_helpers::EnvGuard;
     use serial_test::serial;
 
@@ -435,6 +537,36 @@ mod tests {
         assert!(
             error.to_string().contains("DATABASE_URL is set"),
             "error must explain the database startup contract, got: {error}"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn startup_migration_mode_defaults_to_run() {
+        let _guard = EnvGuard::unset("WELTGEWEBE_API_STARTUP_MIGRATIONS");
+        let mode = StartupMigrationMode::load().expect("default mode should load");
+        assert_eq!(mode, StartupMigrationMode::Run);
+    }
+
+    #[test]
+    #[serial]
+    fn startup_migration_mode_accepts_verify_applied() {
+        let _guard = EnvGuard::set("WELTGEWEBE_API_STARTUP_MIGRATIONS", "verify-applied");
+        let mode = StartupMigrationMode::load().expect("verify-applied mode should load");
+        assert_eq!(mode, StartupMigrationMode::VerifyApplied);
+    }
+
+    #[test]
+    #[serial]
+    fn startup_migration_mode_rejects_unknown_values() {
+        let _guard = EnvGuard::set("WELTGEWEBE_API_STARTUP_MIGRATIONS", "skip");
+        let error =
+            StartupMigrationMode::load().expect_err("unknown migration mode must fail closed");
+        assert!(
+            error
+                .to_string()
+                .contains("expected `run` or `verify-applied`"),
+            "error must name the accepted values, got: {error}"
         );
     }
 }
