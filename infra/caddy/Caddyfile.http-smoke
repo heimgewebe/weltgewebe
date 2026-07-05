@@ -1,7 +1,8 @@
 # DNS-free HTTP-only smoke configuration.
-# No TLS site blocks. Pre-cutover Host-header smoke only.
+# Explicit http:// host block keeps automatic HTTPS/ACME off.
+# Pre-cutover Host-header smoke only.
 
-:80 {
+http://weltgewebe.net {
 	handle /health/proxy {
 		respond 200
 	}
