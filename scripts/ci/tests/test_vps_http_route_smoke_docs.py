@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+import re
 import unittest
 
 
@@ -12,6 +13,16 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
         self.doc = self.repo / "docs" / "deploy" / "vps-http-route-smoke.md"
         self.risks = self.repo / "docs" / "deploy" / "vps-http-route-smoke-risks.md"
         self.caddyfile = self.repo / "infra" / "caddy" / "Caddyfile.http-smoke"
+        self.compose_override = self.repo / "infra" / "compose" / "compose.vps.override.yml"
+
+    def _caddyfile_volume_source(self, compose_text: str) -> str:
+        matches = re.findall(
+            r"^\s*-\s+([^\n]+):/etc/caddy/Caddyfile:ro\s*$",
+            compose_text,
+            flags=re.MULTILINE,
+        )
+        self.assertEqual(matches, ["${WELTGEWEBE_CADDYFILE:-../caddy/Caddyfile.vps}"])
+        return matches[0]
 
     def test_route_smoke_doc_preserves_no_migration_boundary(self) -> None:
         text = self.doc.read_text(encoding="utf-8")
@@ -90,6 +101,30 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
         ]:
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, text)
+
+    def test_compose_override_keeps_explicit_caddyfile_selection_hook(self) -> None:
+        doc_text = self.doc.read_text(encoding="utf-8")
+        compose_text = self.compose_override.read_text(encoding="utf-8")
+
+        required_doc_phrases = [
+            "infra/compose/compose.vps.override.yml",
+            "WELTGEWEBE_CADDYFILE=../caddy/Caddyfile.http-smoke",
+            "the smoke path, not the default production Caddyfile, was selected",
+        ]
+        for phrase in required_doc_phrases:
+            with self.subTest(doc_phrase=phrase):
+                self.assertIn(phrase, doc_text)
+
+        caddyfile_source = self._caddyfile_volume_source(compose_text)
+        self.assertIn("WELTGEWEBE_CADDYFILE", caddyfile_source)
+
+    def test_vps_compose_default_does_not_silently_select_http_smoke_file(self) -> None:
+        compose_text = self.compose_override.read_text(encoding="utf-8")
+        caddyfile_source = self._caddyfile_volume_source(compose_text)
+
+        default = caddyfile_source.removeprefix("${WELTGEWEBE_CADDYFILE:-").removesuffix("}")
+        self.assertEqual(default, "../caddy/Caddyfile.vps")
+        self.assertNotEqual(default, "../caddy/Caddyfile.http-smoke")
 
 
 if __name__ == "__main__":
