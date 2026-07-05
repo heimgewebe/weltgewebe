@@ -26,6 +26,8 @@ The VPS target keeps `infra/caddy/Caddyfile.vps` as the production default. For 
 
 The smoke file intentionally exposes only an HTTP listener and contains no TLS site blocks. This keeps the first
 pre-cutover test away from automatic certificate issuance while still allowing local Host-header checks through Caddy.
+It uses an explicit `http://weltgewebe.net` site address so the static CSP preflight validates the same host target
+as the VPS deploy wrapper without enabling automatic HTTPS.
 
 ## Scope
 
