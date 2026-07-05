@@ -429,12 +429,30 @@ async fn verify_startup_migrations_applied(
         let checksum: Vec<u8> = row
             .try_get("checksum")
             .context("_sqlx_migrations.checksum must be readable")?;
-        applied.insert(version, AppliedStartupMigration { success, checksum });
+        record_applied_startup_migration(
+            &mut applied,
+            version,
+            AppliedStartupMigration { success, checksum },
+        )?;
     }
 
     validate_applied_startup_migrations(&applied, migrator)?;
 
     tracing::info!("startup migrations verified as already applied; no migration SQL executed");
+    Ok(())
+}
+
+fn record_applied_startup_migration(
+    applied: &mut HashMap<i64, AppliedStartupMigration>,
+    version: i64,
+    migration: AppliedStartupMigration,
+) -> anyhow::Result<()> {
+    if applied.insert(version, migration).is_some() {
+        return Err(anyhow!(
+            "duplicate startup migration version {version} in _sqlx_migrations; refusing to start in verify-applied mode"
+        ));
+    }
+
     Ok(())
 }
 
@@ -550,8 +568,8 @@ async fn initialise_nats_client() -> (Option<NatsClient>, bool) {
 #[cfg(test)]
 mod tests {
     use super::{
-        initialise_database_pool, validate_applied_startup_migrations, AppliedStartupMigration,
-        StartupMigrationMode,
+        initialise_database_pool, record_applied_startup_migration,
+        validate_applied_startup_migrations, AppliedStartupMigration, StartupMigrationMode,
     };
     use crate::test_helpers::EnvGuard;
     use serial_test::serial;
@@ -622,10 +640,11 @@ mod tests {
         );
     }
 
-    fn applied_from_embedded_migrator(
+    fn applied_from_migrator(
+        migrator: &sqlx::migrate::Migrator,
         success: bool,
     ) -> std::collections::HashMap<i64, AppliedStartupMigration> {
-        sqlx::migrate!("./migrations")
+        migrator
             .iter()
             .filter(|migration| !migration.migration_type.is_down_migration())
             .map(|migration| {
@@ -641,9 +660,40 @@ mod tests {
     }
 
     #[test]
+    fn record_applied_startup_migration_rejects_duplicate_version() {
+        let mut applied = std::collections::HashMap::new();
+        record_applied_startup_migration(
+            &mut applied,
+            1,
+            AppliedStartupMigration {
+                success: true,
+                checksum: vec![1],
+            },
+        )
+        .expect("first migration record should be accepted");
+
+        let error = record_applied_startup_migration(
+            &mut applied,
+            1,
+            AppliedStartupMigration {
+                success: true,
+                checksum: vec![2],
+            },
+        )
+        .expect_err("duplicate migration version must fail closed");
+
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate startup migration version"),
+            "error must describe duplicate migration version, got: {error}"
+        );
+    }
+
+    #[test]
     fn validate_applied_startup_migrations_accepts_complete_history() {
         let migrator = sqlx::migrate!("./migrations");
-        let applied = applied_from_embedded_migrator(true);
+        let applied = applied_from_migrator(&migrator, true);
 
         validate_applied_startup_migrations(&applied, &migrator)
             .expect("complete applied migration history must pass");
@@ -652,7 +702,7 @@ mod tests {
     #[test]
     fn validate_applied_startup_migrations_rejects_pending_migration() {
         let migrator = sqlx::migrate!("./migrations");
-        let mut applied = applied_from_embedded_migrator(true);
+        let mut applied = applied_from_migrator(&migrator, true);
         let pending_version = migrator
             .iter()
             .find(|migration| !migration.migration_type.is_down_migration())
@@ -672,7 +722,7 @@ mod tests {
     #[test]
     fn validate_applied_startup_migrations_rejects_checksum_mismatch() {
         let migrator = sqlx::migrate!("./migrations");
-        let mut applied = applied_from_embedded_migrator(true);
+        let mut applied = applied_from_migrator(&migrator, true);
         let mismatch_version = migrator
             .iter()
             .find(|migration| !migration.migration_type.is_down_migration())
@@ -696,7 +746,7 @@ mod tests {
     #[test]
     fn validate_applied_startup_migrations_rejects_failed_migration() {
         let migrator = sqlx::migrate!("./migrations");
-        let mut applied = applied_from_embedded_migrator(true);
+        let mut applied = applied_from_migrator(&migrator, true);
         let failed_version = migrator
             .iter()
             .find(|migration| !migration.migration_type.is_down_migration())
@@ -719,7 +769,7 @@ mod tests {
     #[test]
     fn validate_applied_startup_migrations_rejects_extra_migration() {
         let migrator = sqlx::migrate!("./migrations");
-        let mut applied = applied_from_embedded_migrator(true);
+        let mut applied = applied_from_migrator(&migrator, true);
         let extra_version = migrator
             .iter()
             .filter(|migration| !migration.migration_type.is_down_migration())

@@ -77,7 +77,7 @@ For a route-only compose render, the Caddyfile selection must be explicit, for e
 
 If a dynamic harness is added later, it must use a synthetic upstream or no upstream at all unless an explicit migration-safe API mode exists. A synthetic upstream may prove Caddy path forwarding mechanics; it must not prove real API readiness and must be reported as synthetic route evidence only.
 
-A run that starts the real API process is no longer route-only. Under a no-migration boundary, that separate migration-safe runtime smoke must use `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied` or a separately approved migration window. It verifies that embedded SQLx migrations are already recorded as successful in `_sqlx_migrations` and refuses to start on pending, failed, missing, or checksum-mismatched migrations. It does not apply migration SQL and it still does not prove frontend, DNS, ACME, mail, SMTP, or public cutover readiness.
+A run that starts the real API process is no longer route-only. Under a no-migration boundary, that separate migration-safe runtime smoke must use `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied` or a separately approved migration window. It verifies that embedded SQLx migrations are already recorded as successful in `_sqlx_migrations` and refuses to start on pending, failed, extra, missing, or checksum-mismatched migrations. It does not apply migration SQL and it still does not prove frontend, DNS, ACME, mail, SMTP, or public cutover readiness.
 
 ## Success definition and exit criteria
 
@@ -94,7 +94,7 @@ A route-only smoke succeeds only if all of these conditions hold:
 Exit as failed or blocked if any of these conditions appears:
 
 - the selected config is the normal production Caddyfile rather than the HTTP smoke Caddyfile
-- proving routes would require starting the production API with a configured database connection outside `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied` or a separately approved migration window
+- proving routes would require starting the production API; that belongs to migration-safe runtime smoke, not route-only evidence
 - Caddy route validation would require secrets, DNS changes, ACME, HTTPS, mail, SMTP, or production env output
 - a synthetic upstream result is being treated as `/api/health/ready` from the real API
 - bind/port conflicts or host-header mismatches make the route result ambiguous
