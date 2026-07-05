@@ -49,3 +49,7 @@ During this preflight:
 - do not treat the HTTP smoke file as production configuration
 
 After DNS cutover is explicitly approved, the production VPS Caddyfile remains the canonical public HTTPS path.
+
+## Migration-safe API startup boundary
+
+If this smoke starts the real API while database migrations are outside scope, the API must use verify-applied mode or the operation must stop. The rendered compose config must prove the effective value without printing secrets. This is runtime evidence, not route-only evidence.

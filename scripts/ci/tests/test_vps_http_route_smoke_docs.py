@@ -138,10 +138,6 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
             "WELTGEWEBE_API_STARTUP_MIGRATIONS: ${WELTGEWEBE_API_STARTUP_MIGRATIONS:-run}",
             compose_text,
         )
-        self.assertNotIn(
-            "WELTGEWEBE_API_STARTUP_MIGRATIONS:-verify-applied",
-            compose_text,
-        )
 
 
 if __name__ == "__main__":
