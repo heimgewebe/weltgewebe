@@ -70,9 +70,42 @@ Acceptable checks include:
 - validating that the smoke Caddyfile contains no TLS site block
 - validating that the smoke Caddyfile does not serve the frontend app
 - validating the expected `/health/proxy`, `/api/*`, and `/health/*` route declarations
+- verifying that `infra/compose/compose.vps.override.yml` still exposes `WELTGEWEBE_CADDYFILE` as the Caddyfile selection point
 - optionally adapting or validating the Caddy config without loading production secrets
 
-If a dynamic harness is added later, it must use a synthetic upstream or no upstream at all unless an explicit migration-safe API mode exists. A synthetic upstream may prove Caddy path forwarding mechanics; it still does not prove real API readiness.
+For a route-only compose render, the Caddyfile selection must be explicit, for example `WELTGEWEBE_CADDYFILE=../caddy/Caddyfile.http-smoke`. The default VPS override may remain production-oriented; the route-only receipt must show that the smoke path, not the default production Caddyfile, was selected.
+
+If a dynamic harness is added later, it must use a synthetic upstream or no upstream at all unless an explicit migration-safe API mode exists. A synthetic upstream may prove Caddy path forwarding mechanics; it must not prove real API readiness and must be reported as synthetic route evidence only.
+
+## Success definition and exit criteria
+
+A route-only smoke succeeds only if all of these conditions hold:
+
+- the selected Caddyfile is `infra/caddy/Caddyfile.http-smoke`
+- the compose/config surface selects that file explicitly through `WELTGEWEBE_CADDYFILE=../caddy/Caddyfile.http-smoke` or an equivalent non-secret path override
+- the Caddyfile keeps an explicit `http://weltgewebe.net` site address
+- `/health/proxy`, `/api/*`, and `/health/*` have the expected route declarations
+- the Caddyfile contains no TLS, HTTPS, ACME, frontend `file_server`, or SPA fallback surface
+- no production API process is started and no production `.env` is loaded just to prove routes
+- the receipt uses the required route-only language below
+
+Exit as failed or blocked if any of these conditions appears:
+
+- the selected config is the normal production Caddyfile rather than the HTTP smoke Caddyfile
+- proving routes would require starting the production API with a configured database connection
+- Caddy route validation would require secrets, DNS changes, ACME, HTTPS, mail, SMTP, or production env output
+- a synthetic upstream result is being treated as `/api/health/ready` from the real API
+- bind/port conflicts or host-header mismatches make the route result ambiguous
+
+## Pass/fail decision table
+
+| Observation | Meaning | Next action |
+| --- | --- | --- |
+| Static route checks pass and the receipt is route-only. | Route/config drift is less likely. Real runtime readiness is still unproven. | Keep #1348 open and choose a separate runtime path. |
+| Caddyfile or compose selection differs from this runbook. | Route-only proof is ambiguous or stale. | Stop and repair the docs/config boundary before any VPS retry. |
+| A synthetic upstream returns 200. | Caddy forwarding mechanics may work. The Rust API was not proven. | Record as synthetic-only evidence; do not close a live-API gate. |
+| The normal API would be started with `DATABASE_URL`. | The operation can run migrations and leaves the no-migration boundary. | Do not run it without a separate runtime/migration approval. |
+| Any DNS, INWX, ACME, HTTPS, mail, SMTP, secret, or env-file action is needed. | The operation has left route-only scope. | Stop and create a new explicitly approved operation. |
 
 ## Required receipt language
 
