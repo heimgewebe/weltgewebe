@@ -132,10 +132,8 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
         full_smoke_text = self.full_smoke_doc.read_text(encoding="utf-8")
         compose_text = self.compose_override.read_text(encoding="utf-8")
 
-        self.assertIn(
-            "WELTGEWEBE_API_STARTUP_MIGRATIONS: ${WELTGEWEBE_API_STARTUP_MIGRATIONS:-run}",
-            compose_text,
-        )
+        self.assertIn("env_file", compose_text)
+        self.assertNotIn("WELTGEWEBE_API_STARTUP_MIGRATIONS:", compose_text)
         self.assertIn("WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied", route_text)
         self.assertIn("Migration-safe API startup boundary", full_smoke_text)
         self.assertIn("WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied", full_smoke_text)

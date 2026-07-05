@@ -52,4 +52,4 @@ After DNS cutover is explicitly approved, the production VPS Caddyfile remains t
 
 ## Migration-safe API startup boundary
 
-If this smoke starts the real API while database migrations are outside scope, the API must use `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied` or the operation must stop. The rendered compose config must prove the effective value without printing secrets. This is runtime evidence, not route-only evidence.
+If this smoke starts the real API while database migrations are outside scope, the API must use `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied` or the operation must stop. The rendered compose config must prove the effective value from the selected env file without printing secrets. The VPS override must not set this variable in the service `environment`, because that would override `env_file` values. This is runtime evidence, not route-only evidence.

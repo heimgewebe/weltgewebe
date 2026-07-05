@@ -14,7 +14,6 @@ services:
       AUTH_RL_IP_PER_HOUR: "30"
       AUTH_RL_EMAIL_PER_MIN: "2"
       AUTH_RL_EMAIL_PER_HOUR: "10"
-      WELTGEWEBE_API_STARTUP_MIGRATIONS: ${WELTGEWEBE_API_STARTUP_MIGRATIONS:-run}
     volumes:
       - type: bind
         source: ${REPO_DIR:-/opt/weltgewebe}/policies/limits.yaml
