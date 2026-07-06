@@ -54,101 +54,56 @@ class BoundaryCheckError(RuntimeError):
     """Raised when the migration-safe runtime-smoke boundary is not proven."""
 
 
+@dataclass(frozen=True)
+class MappingEntry:
+    index: int
+    indent: int
+    key: str
+    value: str
+
+
+_ENVIRONMENT_MAP_KEY_RE = re.compile(
+    r"^(?:([A-Za-z_][A-Za-z0-9_]*)|'([A-Za-z_][A-Za-z0-9_]*)'|\"([A-Za-z_][A-Za-z0-9_]*)\")\s*:"
+)
+_YAML_FRAGMENT_TOKEN_RE = re.compile(
+    r"(^|\s)(<<\s*:|&[A-Za-z0-9_-]+|\*[A-Za-z0-9_-]+)($|\s)"
+)
+_COMPOSE_EXPR_RE = re.compile(r"\$\{([^}]*)\}")
+_COMPOSE_SUPPORTED_EXPR_RE = re.compile(
+    r"^([A-Za-z_][A-Za-z0-9_]*)(?:(:-|-)([^{}$]*))?$"
+)
+_DOTENV_KEY_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)(?:\s*(=|:)\s*(.*))?$")
+_DOTENV_EXPORT_RE = re.compile(r"^export\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s*(=|:)\s*(.*))?$")
+
+
 def _leading_spaces(line: str) -> int:
     return len(line) - len(line.lstrip(" "))
 
 
-def _without_comment(line: str) -> str:
-    stripped = line.lstrip()
-    if stripped.startswith("#"):
-        return ""
-    return line.rstrip("\n")
-
-
-def _yaml_key_pattern(key: str) -> str:
-    escaped = re.escape(key)
-    return rf"(?:{escaped}|'{escaped}'|\"{escaped}\")"
-
-
-def _match_yaml_mapping_key(line: str, key: str) -> re.Match[str] | None:
-    pattern = re.compile(rf"^(\s*){_yaml_key_pattern(key)}\s*:\s*(.*?)\s*(?:#.*)?$")
-    return pattern.match(line)
-
-
-def _first_direct_child_indent(
-    lines: list[str],
-    *,
-    start: int = 0,
-    min_indent: int = 0,
-    parent_indent: int | None = None,
-) -> int | None:
-    for line in lines[start:]:
-        text = _without_comment(line)
-        if not text.strip():
-            continue
-
-        indent = _leading_spaces(text)
-        if parent_indent is not None and indent <= parent_indent:
-            continue
-        if indent < min_indent:
-            continue
-        return indent
-    return None
-
-
-def _find_mapping_block(
-    lines: list[str],
-    key: str,
-    min_indent: int = 0,
-) -> tuple[int, int, int] | None:
-    target_indent = _first_direct_child_indent(lines, min_indent=min_indent)
-    if target_indent is None:
-        return None
-
-    for index, line in enumerate(lines):
-        text = _without_comment(line)
-        if not text.strip():
-            continue
-
-        indent = _leading_spaces(text)
-        if indent < min_indent:
-            continue
-        if indent != target_indent:
-            continue
-
-        if not _match_yaml_mapping_key(text, key):
-            continue
-
-        end = len(lines)
-        for later_index in range(index + 1, len(lines)):
-            later = _without_comment(lines[later_index])
-            if not later.strip():
+def _find_unquoted_colon(text: str) -> int | None:
+    in_quote: str | None = None
+    escaped = False
+    for index, char in enumerate(text):
+        if in_quote:
+            if in_quote == '"' and escaped:
+                escaped = False
                 continue
-            if _leading_spaces(later) <= indent:
-                end = later_index
-                break
-        return index, end, indent
+            if in_quote == '"' and char == "\\":
+                escaped = True
+                continue
+            if char == in_quote:
+                in_quote = None
+            continue
+        if char in {"'", '"'}:
+            in_quote = char
+            continue
+        if char == ":":
+            return index
+    if in_quote:
+        raise BoundaryCheckError(
+            "unterminated quoted compose scalar; cannot prove migration-mode absence"
+        )
     return None
-
-
-def _find_service_block(compose_text: str, service: str) -> list[str]:
-    lines = compose_text.splitlines()
-    services_block = _find_mapping_block(lines, "services")
-    if services_block is None:
-        raise BoundaryCheckError("compose source does not contain a top-level services block")
-
-    services_start, services_end, services_indent = services_block
-    service_block = _find_mapping_block(
-        lines[services_start + 1 : services_end],
-        service,
-        min_indent=services_indent + 1,
-    )
-    if service_block is None:
-        raise BoundaryCheckError(f"compose source does not contain service {service!r}")
-
-    service_start, service_end, _ = service_block
-    offset = services_start + 1
-    return lines[offset + service_start : offset + service_end]
 
 
 def _strip_optional_quotes(value: str) -> str:
@@ -168,7 +123,6 @@ def _strip_yaml_inline_comment(value: str) -> str:
 
     in_quote: str | None = None
     escaped = False
-
     for index, char in enumerate(value):
         if in_quote:
             if in_quote == '"' and escaped:
@@ -180,40 +134,119 @@ def _strip_yaml_inline_comment(value: str) -> str:
             if char == in_quote:
                 in_quote = None
             continue
-
         if char in {"'", '"'}:
             in_quote = char
             continue
-
         if char == "#" and (index == 0 or value[index - 1].isspace()):
             return value[:index].rstrip()
-
     if in_quote:
         raise BoundaryCheckError(
             "unterminated quoted compose scalar; cannot prove migration-mode absence"
         )
-
     return value.rstrip()
 
 
-def _flow_items(value: str) -> list[str]:
-    text = value.strip()
-    if not text:
-        return []
-    if text.startswith("[") and text.endswith("]"):
-        inner = text[1:-1].strip()
-        if not inner:
-            return []
-        return [_strip_optional_quotes(_strip_yaml_inline_comment(part)) for part in inner.split(",")]
-    raise BoundaryCheckError(
-        "unsupported flow-style compose value; use block list/map syntax for this guard"
-    )
+def _without_comment(line: str) -> str:
+    stripped = line.lstrip()
+    if stripped.startswith("#"):
+        return ""
+    return line.rstrip("\n")
 
 
-def _find_child_entry(service_lines: list[str], key: str) -> tuple[int, int, int, str] | None:
-    if not service_lines:
+def _parse_mapping_entry(line: str, index: int) -> MappingEntry | None:
+    raw = _without_comment(line)
+    if not raw.strip():
+        return None
+    indent = _leading_spaces(raw)
+    body = raw[indent:]
+    if body.startswith("-"):
+        return None
+    colon = _find_unquoted_colon(body)
+    if colon is None:
+        return None
+    key = _strip_optional_quotes(body[:colon].strip())
+    if not key:
+        return None
+    value = _strip_yaml_inline_comment(body[colon + 1 :].strip()).strip()
+    return MappingEntry(index=index, indent=indent, key=key, value=value)
+
+
+def _first_direct_child_indent(
+    lines: list[str],
+    *,
+    start: int = 0,
+    min_indent: int = 0,
+    parent_indent: int | None = None,
+) -> int | None:
+    for line in lines[start:]:
+        text = _without_comment(line)
+        if not text.strip():
+            continue
+        indent = _leading_spaces(text)
+        if parent_indent is not None and indent <= parent_indent:
+            continue
+        if indent < min_indent:
+            continue
+        return indent
+    return None
+
+
+def _block_end(lines: list[str], start: int, indent: int) -> int:
+    end = len(lines)
+    for later_index in range(start + 1, len(lines)):
+        later = _without_comment(lines[later_index])
+        if not later.strip():
+            continue
+        if _leading_spaces(later) <= indent:
+            end = later_index
+            break
+    return end
+
+
+def _find_mapping_block(
+    lines: list[str],
+    key: str,
+    min_indent: int = 0,
+) -> tuple[int, int, int, str] | None:
+    target_indent = _first_direct_child_indent(lines, min_indent=min_indent)
+    if target_indent is None:
         return None
 
+    for index, line in enumerate(lines):
+        entry = _parse_mapping_entry(line, index)
+        if entry is None:
+            continue
+        if entry.indent < min_indent or entry.indent != target_indent:
+            continue
+        if entry.key != key:
+            continue
+        return index, _block_end(lines, index, entry.indent), entry.indent, entry.value
+    return None
+
+
+def _find_service_block(compose_text: str, service: str) -> list[str]:
+    lines = compose_text.splitlines()
+    services_block = _find_mapping_block(lines, "services")
+    if services_block is None:
+        raise BoundaryCheckError("compose source does not contain a top-level services block")
+
+    services_start, services_end, services_indent, _ = services_block
+    service_block = _find_mapping_block(
+        lines[services_start + 1 : services_end],
+        service,
+        min_indent=services_indent + 1,
+    )
+    if service_block is None:
+        raise BoundaryCheckError(f"compose source does not contain service {service!r}")
+
+    service_start, service_end, _indent, _value = service_block
+    offset = services_start + 1
+    return lines[offset + service_start : offset + service_end]
+
+
+def _direct_service_child_entries(service_lines: list[str]) -> list[tuple[int, int, int, str, str]]:
+    if not service_lines:
+        return []
     parent = _without_comment(service_lines[0])
     parent_indent = _leading_spaces(parent)
     target_indent = _first_direct_child_indent(
@@ -223,37 +256,27 @@ def _find_child_entry(service_lines: list[str], key: str) -> tuple[int, int, int
         parent_indent=parent_indent,
     )
     if target_indent is None:
-        return None
+        return []
 
-    matches: list[tuple[int, int, int, str]] = []
+    entries: list[tuple[int, int, int, str, str]] = []
     for index in range(1, len(service_lines)):
-        text = _without_comment(service_lines[index])
-        if not text.strip():
+        entry = _parse_mapping_entry(service_lines[index], index)
+        if entry is None:
             continue
-
-        indent = _leading_spaces(text)
-        if indent <= parent_indent:
+        if entry.indent <= parent_indent or entry.indent != target_indent:
             continue
-        if indent != target_indent:
-            continue
+        entries.append((index, _block_end(service_lines, index, entry.indent), entry.indent, entry.key, entry.value))
+    return entries
 
-        match = _match_yaml_mapping_key(text, key)
-        if match is None:
-            continue
 
-        end = len(service_lines)
-        for later_index in range(index + 1, len(service_lines)):
-            later = _without_comment(service_lines[later_index])
-            if not later.strip():
-                continue
-            if _leading_spaces(later) <= indent:
-                end = later_index
-                break
-        matches.append((index, end, indent, match.group(2).strip()))
-
+def _find_child_entry(service_lines: list[str], key: str) -> tuple[int, int, int, str] | None:
+    matches = [entry for entry in _direct_service_child_entries(service_lines) if entry[3] == key]
     if len(matches) > 1:
         raise BoundaryCheckError(f"service declares {key!r} more than once; refusing ambiguity")
-    return matches[0] if matches else None
+    if not matches:
+        return None
+    start, end, indent, _key, value = matches[0]
+    return start, end, indent, value
 
 
 def _service_has_env_file_hook(service_lines: list[str]) -> bool:
@@ -280,16 +303,37 @@ def _environment_item_sets_key(item: str) -> bool:
     return False
 
 
-_ENVIRONMENT_MAP_KEY_RE = re.compile(
-    r"^(?:([A-Za-z_][A-Za-z0-9_]*)|'([A-Za-z_][A-Za-z0-9_]*)'|\"([A-Za-z_][A-Za-z0-9_]*)\")\s*:"
-)
-_YAML_FRAGMENT_TOKEN_RE = re.compile(
-    r"(^|\s)(<<\s*:|&[A-Za-z0-9_-]+|\*[A-Za-z0-9_-]+)($|\s)"
-)
+def _unquoted_fragment_scan_text(value: str) -> str:
+    in_quote: str | None = None
+    escaped = False
+    output: list[str] = []
+    for char in value:
+        if in_quote:
+            output.append(" ")
+            if in_quote == '"' and escaped:
+                escaped = False
+                continue
+            if in_quote == '"' and char == "\\":
+                escaped = True
+                continue
+            if char == in_quote:
+                in_quote = None
+            continue
+        if char in {"'", '"'}:
+            in_quote = char
+            output.append(" ")
+            continue
+        output.append(char)
+    if in_quote:
+        raise BoundaryCheckError(
+            "unterminated quoted compose scalar; cannot prove migration-mode absence"
+        )
+    return "".join(output)
 
 
 def _has_yaml_fragment_token(value: str) -> bool:
-    return _YAML_FRAGMENT_TOKEN_RE.search(_strip_yaml_inline_comment(value)) is not None
+    text = _strip_yaml_inline_comment(value)
+    return _YAML_FRAGMENT_TOKEN_RE.search(_unquoted_fragment_scan_text(text)) is not None
 
 
 def _raise_service_yaml_fragment_error() -> None:
@@ -298,37 +342,24 @@ def _raise_service_yaml_fragment_error() -> None:
     )
 
 
-def _reject_unsupported_service_yaml_fragments(service_lines: list[str]) -> None:
-    """Reject service-level YAML fragments that can hide an environment override."""
+def _reject_unsupported_service_constructs(service_lines: list[str]) -> None:
+    """Reject service-level constructs that can hide a migration-mode override."""
 
     if not service_lines:
         return
 
-    parent = _without_comment(service_lines[0])
-    parent_inline = parent.split(":", 1)[1] if ":" in parent else ""
-    if _has_yaml_fragment_token(parent_inline):
+    parent = _parse_mapping_entry(service_lines[0], 0)
+    if parent is not None and parent.value and _has_yaml_fragment_token(parent.value):
         _raise_service_yaml_fragment_error()
 
-    parent_indent = _leading_spaces(parent)
-    target_indent = _first_direct_child_indent(
-        service_lines,
-        start=1,
-        min_indent=parent_indent + 1,
-        parent_indent=parent_indent,
-    )
-    if target_indent is None:
-        return
-
-    for raw_line in service_lines[1:]:
-        text = _without_comment(raw_line)
-        if not text.strip():
-            continue
-        indent = _leading_spaces(text)
-        if indent <= parent_indent:
-            continue
-        if indent != target_indent:
-            continue
-        if _has_yaml_fragment_token(text.strip()):
+    for _start, _end, _indent, key, value in _direct_service_child_entries(service_lines):
+        if key == "<<":
+            _raise_service_yaml_fragment_error()
+        if key == "extends":
+            raise BoundaryCheckError(
+                "unsupported service-level extends; cannot prove migration-mode absence"
+            )
+        if key in {"environment", "env_file"} and value and _has_yaml_fragment_token(value):
             _raise_service_yaml_fragment_error()
 
 
@@ -362,10 +393,13 @@ def _service_has_migration_override(service_lines: list[str]) -> bool:
                 return True
             continue
 
-        key_match = _ENVIRONMENT_MAP_KEY_RE.match(stripped)
-        if key_match:
-            key = next(group for group in key_match.groups() if group is not None)
-            if key == MIGRATION_MODE_KEY:
+        parsed = _parse_mapping_entry(raw_line, 0)
+        if parsed is not None:
+            if parsed.key == "<<" or _has_yaml_fragment_token(parsed.value):
+                raise BoundaryCheckError(
+                    "unsupported YAML merge/anchor in service environment; cannot prove migration-mode absence"
+                )
+            if parsed.key == MIGRATION_MODE_KEY:
                 return True
             continue
 
@@ -381,6 +415,91 @@ def _service_has_migration_override(service_lines: list[str]) -> bool:
     return False
 
 
+def _split_flow_items(inner: str) -> list[str]:
+    items: list[str] = []
+    current: list[str] = []
+    in_quote: str | None = None
+    escaped = False
+    depth = 0
+    for char in inner:
+        if in_quote:
+            current.append(char)
+            if in_quote == '"' and escaped:
+                escaped = False
+                continue
+            if in_quote == '"' and char == "\\":
+                escaped = True
+                continue
+            if char == in_quote:
+                in_quote = None
+            continue
+        if char in {"'", '"'}:
+            in_quote = char
+            current.append(char)
+            continue
+        if char in "[{":
+            depth += 1
+        elif char in "]}":
+            depth -= 1
+            if depth < 0:
+                raise BoundaryCheckError(
+                    "unsupported flow-style compose value; use block list/map syntax for this guard"
+                )
+        if char == "," and depth == 0:
+            items.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    if in_quote:
+        raise BoundaryCheckError(
+            "unterminated quoted compose scalar; cannot prove migration-mode absence"
+        )
+    if depth:
+        raise BoundaryCheckError(
+            "unsupported flow-style compose value; use block list/map syntax for this guard"
+        )
+    if current or inner.strip():
+        items.append("".join(current).strip())
+    return items
+
+
+def _flow_items(value: str) -> list[str]:
+    text = value.strip()
+    if not text:
+        return []
+    if not (text.startswith("[") and text.endswith("]")):
+        raise BoundaryCheckError(
+            "unsupported flow-style compose value; use block list/map syntax for this guard"
+        )
+    inner = text[1:-1].strip()
+    if not inner:
+        return []
+    entries: list[str] = []
+    for part in _split_flow_items(inner):
+        item = _strip_optional_quotes(_strip_yaml_inline_comment(part).strip())
+        if item.startswith("{"):
+            raise BoundaryCheckError(
+                "unsupported structured env_file entry; use string path entries for this guard"
+            )
+        entries.append(item)
+    return entries
+
+
+def _normalise_env_file_entry(item: str) -> str:
+    text = _strip_yaml_inline_comment(item).strip()
+    if not text:
+        raise BoundaryCheckError("empty env_file entry; refusing ambiguity")
+    if text.startswith("{"):
+        raise BoundaryCheckError(
+            "unsupported structured env_file entry; use string path entries for this guard"
+        )
+    if re.match(r"^[A-Za-z_][A-Za-z0-9_-]*\s*:", text):
+        raise BoundaryCheckError(
+            "unsupported structured env_file entry; use string path entries for this guard"
+        )
+    return _strip_optional_quotes(text)
+
+
 def _extract_env_file_entries(service_lines: list[str]) -> list[str]:
     entry = _find_child_entry(service_lines, "env_file")
     if entry is None:
@@ -391,8 +510,8 @@ def _extract_env_file_entries(service_lines: list[str]) -> list[str]:
         if inline_value.startswith("["):
             entries = _flow_items(inline_value)
         else:
-            entries = [_strip_optional_quotes(_strip_yaml_inline_comment(inline_value))]
-        return [entry for entry in entries if entry]
+            entries = [_normalise_env_file_entry(inline_value)]
+        return [item for item in entries if item]
 
     entries: list[str] = []
     for raw_line in service_lines[start + 1 : end]:
@@ -404,49 +523,45 @@ def _extract_env_file_entries(service_lines: list[str]) -> list[str]:
             raise BoundaryCheckError(
                 "unsupported env_file entry; use string entries for this guard"
             )
-
-        item = _strip_yaml_inline_comment(stripped[1:].strip()).strip()
-        if not item:
-            raise BoundaryCheckError("empty env_file entry; refusing ambiguity")
-        if item.startswith("{") or re.match(r"^[A-Za-z_][A-Za-z0-9_-]*\s*:", item):
-            raise BoundaryCheckError(
-                "unsupported structured env_file entry; use string path entries for this guard"
-            )
-        entries.append(_strip_optional_quotes(item))
-
+        entries.append(_normalise_env_file_entry(stripped[1:].strip()))
     return entries
 
 
-_COMPOSE_VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:-|-)([^}]*))?\}")
-
-
 def _resolve_compose_vars(value: str, compose_env: Mapping[str, str]) -> str:
-    def replace(match: re.Match[str]) -> str:
-        name = match.group(1)
-        op = match.group(2)
-        default = match.group(3)
-        current = compose_env.get(name)
-
-        if op == ":-":
-            return current if current else default
-        if op == "-":
-            return current if current is not None else default
-        if op is None:
-            if current is None:
-                raise BoundaryCheckError(
-                    f"compose env_file entry references unset variable {name!r}"
-                )
-            return current
-
-        raise BoundaryCheckError(
-            f"unsupported compose variable operator in env_file entry for {name!r}"
-        )
-
     if "$" in value and "${" not in value:
         raise BoundaryCheckError(
             "unsupported compose env_file variable syntax; use ${VAR:-default}"
         )
-    return _COMPOSE_VAR_RE.sub(replace, value)
+
+    def replace(match: re.Match[str]) -> str:
+        expression = match.group(1)
+        parsed = _COMPOSE_SUPPORTED_EXPR_RE.fullmatch(expression)
+        if parsed is None:
+            raise BoundaryCheckError(
+                "unsupported compose env_file variable syntax; use ${VAR}, ${VAR:-default}, or ${VAR-default}"
+            )
+        name, op, default = parsed.groups()
+        current = compose_env.get(name)
+        if op == ":-":
+            return current if current else (default or "")
+        if op == "-":
+            return current if current is not None else (default or "")
+        if current is None:
+            raise BoundaryCheckError(
+                f"compose env_file entry references unset variable {name!r}"
+            )
+        return current
+
+    resolved = _COMPOSE_EXPR_RE.sub(replace, value)
+    if "$" in resolved:
+        raise BoundaryCheckError(
+            "unsupported compose env_file variable syntax; use ${VAR:-default}"
+        )
+    if "}" in resolved or "${" in resolved:
+        raise BoundaryCheckError(
+            "unsupported compose env_file variable syntax; use ${VAR:-default}"
+        )
+    return resolved
 
 
 def _normalise_path(path: Path) -> Path:
@@ -464,12 +579,10 @@ def _resolve_env_file_entries(
         resolved_entry = _resolve_compose_vars(entry, compose_env).strip()
         if not resolved_entry:
             raise BoundaryCheckError("env_file entry resolved to an empty path")
-
         path = Path(resolved_entry).expanduser()
         if not path.is_absolute():
             path = compose_source.parent / path
         resolved.append(_normalise_path(path))
-
     if not resolved:
         raise BoundaryCheckError("service env_file resolves to an empty list")
     return resolved
@@ -479,7 +592,6 @@ def _is_unclosed_quoted_dotenv_value(raw: str) -> bool:
     value = raw.strip()
     if not value or value[0] not in {"'", '"'}:
         return False
-
     quote = value[0]
     escaped = False
     for char in value[1:]:
@@ -498,7 +610,6 @@ def _parse_dotenv_value(raw: str, *, key: str) -> str:
     value = raw.strip()
     if not value:
         return ""
-
     if value[0] in {"'", '"'}:
         quote = value[0]
         escaped = False
@@ -519,9 +630,7 @@ def _parse_dotenv_value(raw: str, *, key: str) -> str:
                     )
                 return "".join(chars)
             chars.append(char)
-
         raise BoundaryCheckError(f"unterminated quoted value for {key}")
-
     if " #" in value:
         value = value.split(" #", 1)[0].rstrip()
     return value
@@ -537,19 +646,17 @@ def _normalise_dotenv_parse_error(error: BoundaryCheckError) -> BoundaryCheckErr
 
 def _read_dotenv_key(env_file: Path, key: str) -> tuple[bool, str | None]:
     try:
-        lines = env_file.read_text(encoding="utf-8").splitlines()
+        lines = env_file.read_text(encoding="utf-8-sig").splitlines()
     except OSError as error:
         raise BoundaryCheckError(f"could not read selected env file {env_file}: {error}") from error
 
     values: list[str | None] = []
-    pattern = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)(?:\s*(=|:)\s*(.*))?$")
-    export_pattern = re.compile(r"^export\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s*(=|:)\s*(.*))?$")
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
 
-        export_match = export_pattern.match(stripped)
+        export_match = _DOTENV_EXPORT_RE.match(stripped)
         if export_match is not None:
             name, separator, raw_value = export_match.groups()
             raw_value = raw_value or ""
@@ -564,14 +671,14 @@ def _read_dotenv_key(env_file: Path, key: str) -> tuple[bool, str | None]:
                 )
             continue
 
-        match = pattern.match(stripped)
+        match = _DOTENV_KEY_RE.match(stripped)
         if match is None:
             try:
                 commentless = _strip_yaml_inline_comment(stripped).strip()
             except BoundaryCheckError as error:
                 raise _normalise_dotenv_parse_error(error) from error
             if commentless != stripped:
-                match = pattern.match(commentless)
+                match = _DOTENV_KEY_RE.match(commentless)
         if match is None:
             continue
 
@@ -599,13 +706,11 @@ def _read_dotenv_key(env_file: Path, key: str) -> tuple[bool, str | None]:
 def _read_effective_dotenv_key(env_files: Iterable[Path], key: str) -> tuple[Path, str]:
     selected_path: Path | None = None
     selected_value: str | None = None
-
     for env_file in env_files:
         found, value = _read_dotenv_key(env_file, key)
         if found:
             selected_path = env_file
             selected_value = value
-
     if selected_path is None:
         raise BoundaryCheckError(
             f"effective env_file set does not set {key}; refusing migration-safe runtime smoke"
@@ -615,7 +720,6 @@ def _read_effective_dotenv_key(env_files: Iterable[Path], key: str) -> tuple[Pat
             f"effective env_file source {selected_path} unsets {key}; "
             "refusing migration-safe runtime smoke"
         )
-
     return selected_path, selected_value
 
 
@@ -633,7 +737,7 @@ def validate_boundary(
         raise BoundaryCheckError(f"could not read compose source {compose_source}: {error}") from error
 
     service_lines = _find_service_block(compose_text, service)
-    _reject_unsupported_service_yaml_fragments(service_lines)
+    _reject_unsupported_service_constructs(service_lines)
     has_env_file_hook = _service_has_env_file_hook(service_lines)
     if not has_env_file_hook:
         raise BoundaryCheckError(
@@ -687,7 +791,6 @@ def _parse_compose_env(values: list[str]) -> dict[str, str]:
     compose_env: dict[str, str] = {}
     if COMPOSE_ENV_FILE_KEY in os.environ:
         compose_env[COMPOSE_ENV_FILE_KEY] = os.environ[COMPOSE_ENV_FILE_KEY]
-
     for value in values:
         if "=" not in value:
             raise BoundaryCheckError(
@@ -698,7 +801,6 @@ def _parse_compose_env(values: list[str]) -> dict[str, str]:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
             raise BoundaryCheckError(f"invalid compose env variable name {name!r}")
         compose_env[name] = raw
-
     return compose_env
 
 
@@ -748,7 +850,6 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
-
     try:
         result = validate_boundary(
             compose_source=args.compose_source,
