@@ -418,7 +418,7 @@ def _resolve_env_file_entries(
         if not resolved_entry:
             raise BoundaryCheckError("env_file entry resolved to an empty path")
 
-        path = Path(resolved_entry)
+        path = Path(resolved_entry).expanduser()
         if not path.is_absolute():
             path = compose_source.parent / path
         resolved.append(_normalise_path(path))
@@ -426,6 +426,25 @@ def _resolve_env_file_entries(
     if not resolved:
         raise BoundaryCheckError("service env_file resolves to an empty list")
     return resolved
+
+
+def _is_unclosed_quoted_dotenv_value(raw: str) -> bool:
+    value = raw.strip()
+    if not value or value[0] not in {"'", '"'}:
+        return False
+
+    quote = value[0]
+    escaped = False
+    for char in value[1:]:
+        if quote == '"' and escaped:
+            escaped = False
+            continue
+        if quote == '"' and char == "\\":
+            escaped = True
+            continue
+        if char == quote:
+            return False
+    return True
 
 
 def _parse_dotenv_value(raw: str, *, key: str) -> str:
@@ -468,17 +487,36 @@ def _read_dotenv_key(env_file: Path, key: str) -> str | None:
         raise BoundaryCheckError(f"could not read selected env file {env_file}: {error}") from error
 
     values: list[str] = []
-    pattern = re.compile(
-        r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*(=|:)\s*(.*)$"
-    )
+    pattern = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*(=|:)\s*(.*)$")
+    export_pattern = re.compile(r"^export\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:(=|:)\s*(.*))?$")
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
+
+        export_match = export_pattern.match(stripped)
+        if export_match is not None:
+            name, separator, raw_value = export_match.groups()
+            raw_value = raw_value or ""
+            if separator and _is_unclosed_quoted_dotenv_value(raw_value):
+                raise BoundaryCheckError(
+                    "unterminated quoted dotenv value; cannot prove migration-mode boundary"
+                )
+            if name == key:
+                raise BoundaryCheckError(
+                    f"selected env file {env_file} uses shell-style export for {key}; "
+                    "compose env_file syntax must set the key directly"
+                )
+            continue
+
         match = pattern.match(stripped)
         if match is None:
             continue
         name, _separator, raw_value = match.groups()
+        if _is_unclosed_quoted_dotenv_value(raw_value):
+            raise BoundaryCheckError(
+                "unterminated quoted dotenv value; cannot prove migration-mode boundary"
+            )
         if name == key:
             values.append(_parse_dotenv_value(raw_value, key=key))
 
