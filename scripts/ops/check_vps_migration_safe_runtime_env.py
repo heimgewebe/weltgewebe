@@ -283,6 +283,53 @@ def _environment_item_sets_key(item: str) -> bool:
 _ENVIRONMENT_MAP_KEY_RE = re.compile(
     r"^(?:([A-Za-z_][A-Za-z0-9_]*)|'([A-Za-z_][A-Za-z0-9_]*)'|\"([A-Za-z_][A-Za-z0-9_]*)\")\s*:"
 )
+_YAML_FRAGMENT_TOKEN_RE = re.compile(
+    r"(^|\s)(<<\s*:|&[A-Za-z0-9_-]+|\*[A-Za-z0-9_-]+)($|\s)"
+)
+
+
+def _has_yaml_fragment_token(value: str) -> bool:
+    return _YAML_FRAGMENT_TOKEN_RE.search(_strip_yaml_inline_comment(value)) is not None
+
+
+def _raise_service_yaml_fragment_error() -> None:
+    raise BoundaryCheckError(
+        "unsupported service-level YAML merge/anchor/alias; cannot prove migration-mode absence"
+    )
+
+
+def _reject_unsupported_service_yaml_fragments(service_lines: list[str]) -> None:
+    """Reject service-level YAML fragments that can hide an environment override."""
+
+    if not service_lines:
+        return
+
+    parent = _without_comment(service_lines[0])
+    parent_inline = parent.split(":", 1)[1] if ":" in parent else ""
+    if _has_yaml_fragment_token(parent_inline):
+        _raise_service_yaml_fragment_error()
+
+    parent_indent = _leading_spaces(parent)
+    target_indent = _first_direct_child_indent(
+        service_lines,
+        start=1,
+        min_indent=parent_indent + 1,
+        parent_indent=parent_indent,
+    )
+    if target_indent is None:
+        return
+
+    for raw_line in service_lines[1:]:
+        text = _without_comment(raw_line)
+        if not text.strip():
+            continue
+        indent = _leading_spaces(text)
+        if indent <= parent_indent:
+            continue
+        if indent != target_indent:
+            continue
+        if _has_yaml_fragment_token(text.strip()):
+            _raise_service_yaml_fragment_error()
 
 
 def _service_has_migration_override(service_lines: list[str]) -> bool:
@@ -480,15 +527,23 @@ def _parse_dotenv_value(raw: str, *, key: str) -> str:
     return value
 
 
-def _read_dotenv_key(env_file: Path, key: str) -> str | None:
+def _normalise_dotenv_parse_error(error: BoundaryCheckError) -> BoundaryCheckError:
+    if "unterminated quoted" in str(error):
+        return BoundaryCheckError(
+            "unterminated quoted dotenv value; cannot prove migration-mode boundary"
+        )
+    return error
+
+
+def _read_dotenv_key(env_file: Path, key: str) -> tuple[bool, str | None]:
     try:
         lines = env_file.read_text(encoding="utf-8").splitlines()
     except OSError as error:
         raise BoundaryCheckError(f"could not read selected env file {env_file}: {error}") from error
 
-    values: list[str] = []
-    pattern = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*(=|:)\s*(.*)$")
-    export_pattern = re.compile(r"^export\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:(=|:)\s*(.*))?$")
+    values: list[str | None] = []
+    pattern = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)(?:\s*(=|:)\s*(.*))?$")
+    export_pattern = re.compile(r"^export\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s*(=|:)\s*(.*))?$")
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
@@ -511,22 +566,34 @@ def _read_dotenv_key(env_file: Path, key: str) -> str | None:
 
         match = pattern.match(stripped)
         if match is None:
+            try:
+                commentless = _strip_yaml_inline_comment(stripped).strip()
+            except BoundaryCheckError as error:
+                raise _normalise_dotenv_parse_error(error) from error
+            if commentless != stripped:
+                match = pattern.match(commentless)
+        if match is None:
             continue
-        name, _separator, raw_value = match.groups()
-        if _is_unclosed_quoted_dotenv_value(raw_value):
+
+        name, separator, raw_value = match.groups()
+        raw_value = raw_value or ""
+        if separator and _is_unclosed_quoted_dotenv_value(raw_value):
             raise BoundaryCheckError(
                 "unterminated quoted dotenv value; cannot prove migration-mode boundary"
             )
         if name == key:
-            values.append(_parse_dotenv_value(raw_value, key=key))
+            if separator is None:
+                values.append(None)
+            else:
+                values.append(_parse_dotenv_value(raw_value, key=key))
 
     if len(values) > 1:
         raise BoundaryCheckError(
             f"selected env file {env_file} sets {key} more than once; refusing ambiguous migration mode"
         )
     if not values:
-        return None
-    return values[0].strip()
+        return False, None
+    return True, values[0]
 
 
 def _read_effective_dotenv_key(env_files: Iterable[Path], key: str) -> tuple[Path, str]:
@@ -534,14 +601,19 @@ def _read_effective_dotenv_key(env_files: Iterable[Path], key: str) -> tuple[Pat
     selected_value: str | None = None
 
     for env_file in env_files:
-        value = _read_dotenv_key(env_file, key)
-        if value is not None:
+        found, value = _read_dotenv_key(env_file, key)
+        if found:
             selected_path = env_file
             selected_value = value
 
-    if selected_path is None or selected_value is None:
+    if selected_path is None:
         raise BoundaryCheckError(
             f"effective env_file set does not set {key}; refusing migration-safe runtime smoke"
+        )
+    if selected_value is None:
+        raise BoundaryCheckError(
+            f"effective env_file source {selected_path} unsets {key}; "
+            "refusing migration-safe runtime smoke"
         )
 
     return selected_path, selected_value
@@ -561,6 +633,7 @@ def validate_boundary(
         raise BoundaryCheckError(f"could not read compose source {compose_source}: {error}") from error
 
     service_lines = _find_service_block(compose_text, service)
+    _reject_unsupported_service_yaml_fragments(service_lines)
     has_env_file_hook = _service_has_env_file_hook(service_lines)
     if not has_env_file_hook:
         raise BoundaryCheckError(
