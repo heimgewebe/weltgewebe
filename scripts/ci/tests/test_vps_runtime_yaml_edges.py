@@ -134,3 +134,51 @@ def test_ignores_nested_environment_name(tmp_path: pathlib.Path) -> None:
 
     result = module.validate_boundary(compose_source=compose, env_file=selected)
     assert result.observed_mode == "verify-applied"
+
+
+def test_accepts_star_and_ampersand_in_quoted_command_and_labels(
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _load_module()
+    services, env_file_key, _environment = _kv()
+    mode_key = module.MIGRATION_MODE_KEY
+    selected = _write(tmp_path / "selected.cfg", f"{mode_key}=verify-applied\n")
+    compose = _write(
+        tmp_path / "compose.yml",
+        f"""
+        {services}:
+          api:
+            command: "echo 0 * * * * && echo ok"
+            labels:
+              example.label: "a & b"
+            {env_file_key}:
+              - {selected}
+        """,
+    )
+
+    result = module.validate_boundary(compose_source=compose, env_file=selected)
+    assert result.observed_mode == "verify-applied"
+
+
+def test_accepts_star_and_ampersand_in_quoted_list_values(
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _load_module()
+    services, env_file_key, _environment = _kv()
+    mode_key = module.MIGRATION_MODE_KEY
+    selected = _write(tmp_path / "selected.cfg", f"{mode_key}=verify-applied\n")
+    compose = _write(
+        tmp_path / "compose.yml",
+        f"""
+        {services}:
+          api:
+            command:
+              - "echo 0 * * * *"
+              - "echo a & b"
+            {env_file_key}:
+              - {selected}
+        """,
+    )
+
+    result = module.validate_boundary(compose_source=compose, env_file=selected)
+    assert result.observed_mode == "verify-applied"
