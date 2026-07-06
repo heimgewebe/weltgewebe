@@ -124,6 +124,10 @@ receipt. It verifies that the selected env source is bound to the compose
 `env_file` declaration and that no service-level migration-mode override is
 present in the checked compose source.
 
+The helper checks only the compose source named by `--compose-source`. If the
+runtime command uses multiple compose sources, pair this source check with a
+separate redacted effective-render review before starting the runtime smoke.
+
 The final receipt may mention that compose was rendered successfully, but it
 must not paste raw rendered config or runtime env source contents. Instead record
 sanitized facts:
