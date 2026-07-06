@@ -14,9 +14,9 @@ import json
 import os
 import re
 import sys
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Mapping
 
 MIGRATION_MODE_KEY = "WELTGEWEBE_API_STARTUP_MIGRATIONS"
 COMPOSE_ENV_FILE_KEY = "WELTGEWEBE_ENV_FILE"
@@ -65,19 +65,60 @@ def _without_comment(line: str) -> str:
     return line.rstrip("\n")
 
 
+def _yaml_key_pattern(key: str) -> str:
+    escaped = re.escape(key)
+    return rf"(?:{escaped}|'{escaped}'|\"{escaped}\")"
+
+
+def _match_yaml_mapping_key(line: str, key: str) -> re.Match[str] | None:
+    pattern = re.compile(rf"^(\s*){_yaml_key_pattern(key)}\s*:\s*(.*?)\s*(?:#.*)?$")
+    return pattern.match(line)
+
+
+def _first_direct_child_indent(
+    lines: list[str],
+    *,
+    start: int = 0,
+    min_indent: int = 0,
+    parent_indent: int | None = None,
+) -> int | None:
+    for line in lines[start:]:
+        text = _without_comment(line)
+        if not text.strip():
+            continue
+
+        indent = _leading_spaces(text)
+        if parent_indent is not None and indent <= parent_indent:
+            continue
+        if indent < min_indent:
+            continue
+        return indent
+    return None
+
+
 def _find_mapping_block(
     lines: list[str],
     key: str,
     min_indent: int = 0,
 ) -> tuple[int, int, int] | None:
-    pattern = re.compile(rf"^(\s*){re.escape(key)}\s*:\s*(?:#.*)?$")
+    target_indent = _first_direct_child_indent(lines, min_indent=min_indent)
+    if target_indent is None:
+        return None
+
     for index, line in enumerate(lines):
-        if _leading_spaces(line) < min_indent:
-            continue
-        if not pattern.match(_without_comment(line)):
+        text = _without_comment(line)
+        if not text.strip():
             continue
 
-        indent = _leading_spaces(line)
+        indent = _leading_spaces(text)
+        if indent < min_indent:
+            continue
+        if indent != target_indent:
+            continue
+
+        if not _match_yaml_mapping_key(text, key):
+            continue
+
         end = len(lines)
         for later_index in range(index + 1, len(lines)):
             later = _without_comment(lines[later_index])
@@ -170,14 +211,36 @@ def _flow_items(value: str) -> list[str]:
 
 
 def _find_child_entry(service_lines: list[str], key: str) -> tuple[int, int, int, str] | None:
-    pattern = re.compile(rf"^(\s*){re.escape(key)}\s*:\s*(.*?)\s*(?:#.*)?$")
+    if not service_lines:
+        return None
+
+    parent = _without_comment(service_lines[0])
+    parent_indent = _leading_spaces(parent)
+    target_indent = _first_direct_child_indent(
+        service_lines,
+        start=1,
+        min_indent=parent_indent + 1,
+        parent_indent=parent_indent,
+    )
+    if target_indent is None:
+        return None
+
     matches: list[tuple[int, int, int, str]] = []
-    for index, line in enumerate(service_lines):
-        match = pattern.match(_without_comment(line))
+    for index in range(1, len(service_lines)):
+        text = _without_comment(service_lines[index])
+        if not text.strip():
+            continue
+
+        indent = _leading_spaces(text)
+        if indent <= parent_indent:
+            continue
+        if indent != target_indent:
+            continue
+
+        match = _match_yaml_mapping_key(text, key)
         if match is None:
             continue
 
-        indent = len(match.group(1))
         end = len(service_lines)
         for later_index in range(index + 1, len(service_lines)):
             later = _without_comment(service_lines[later_index])
@@ -217,6 +280,11 @@ def _environment_item_sets_key(item: str) -> bool:
     return False
 
 
+_ENVIRONMENT_MAP_KEY_RE = re.compile(
+    r"^(?:([A-Za-z_][A-Za-z0-9_]*)|'([A-Za-z_][A-Za-z0-9_]*)'|\"([A-Za-z_][A-Za-z0-9_]*)\")\s*:"
+)
+
+
 def _service_has_migration_override(service_lines: list[str]) -> bool:
     entry = _find_child_entry(service_lines, "environment")
     if entry is None:
@@ -247,9 +315,10 @@ def _service_has_migration_override(service_lines: list[str]) -> bool:
                 return True
             continue
 
-        key_match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\s*:", stripped)
+        key_match = _ENVIRONMENT_MAP_KEY_RE.match(stripped)
         if key_match:
-            if key_match.group(1) == MIGRATION_MODE_KEY:
+            key = next(group for group in key_match.groups() if group is not None)
+            if key == MIGRATION_MODE_KEY:
                 return True
             continue
 
