@@ -152,6 +152,60 @@ def test_rejects_service_environment_override_array_bare_key(tmp_path: pathlib.P
         raise AssertionError("bare array-form migration override must fail closed")
 
 
+def test_rejects_quoted_array_assignment_with_inline_comment(tmp_path: pathlib.Path) -> None:
+    module = _load_module()
+    env_file = _write(
+        tmp_path / ".env",
+        "WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied\n",
+    )
+    compose = _compose_with_env_file(
+        tmp_path,
+        env_file,
+        """
+        environment:
+          - "WELTGEWEBE_API_STARTUP_MIGRATIONS=run" # documented override
+        """,
+    )
+
+    try:
+        module.validate_boundary(
+            compose_source=compose,
+            env_file=env_file,
+            compose_env={"WELTGEWEBE_ENV_FILE": str(env_file)},
+        )
+    except module.BoundaryCheckError as error:
+        assert "override env_file" in str(error)
+    else:
+        raise AssertionError("quoted array-form override with comment must fail closed")
+
+
+def test_rejects_bare_array_key_with_inline_comment(tmp_path: pathlib.Path) -> None:
+    module = _load_module()
+    env_file = _write(
+        tmp_path / ".env",
+        "WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied\n",
+    )
+    compose = _compose_with_env_file(
+        tmp_path,
+        env_file,
+        """
+        environment:
+          - WELTGEWEBE_API_STARTUP_MIGRATIONS # inherited from shell
+        """,
+    )
+
+    try:
+        module.validate_boundary(
+            compose_source=compose,
+            env_file=env_file,
+            compose_env={"WELTGEWEBE_ENV_FILE": str(env_file)},
+        )
+    except module.BoundaryCheckError as error:
+        assert "override env_file" in str(error)
+    else:
+        raise AssertionError("bare array-form override with comment must fail closed")
+
+
 def test_rejects_missing_effective_env_file_key(tmp_path: pathlib.Path) -> None:
     module = _load_module()
     env_file = _write(tmp_path / ".env", "APP_BASE_URL=https://weltgewebe.net\n")
