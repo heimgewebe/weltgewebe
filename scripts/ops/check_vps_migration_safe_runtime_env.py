@@ -209,6 +209,7 @@ def _find_mapping_block(
     if target_indent is None:
         return None
 
+    matches: list[tuple[int, int, int, str]] = []
     for index, line in enumerate(lines):
         entry = _parse_mapping_entry(line, index)
         if entry is None:
@@ -217,8 +218,13 @@ def _find_mapping_block(
             continue
         if entry.key != key:
             continue
-        return index, _block_end(lines, index, entry.indent), entry.indent, entry.value
-    return None
+        matches.append((index, _block_end(lines, index, entry.indent), entry.indent, entry.value))
+
+    if len(matches) > 1:
+        raise BoundaryCheckError(f"mapping declares {key!r} more than once; refusing ambiguity")
+    if not matches:
+        return None
+    return matches[0]
 
 
 def _find_service_block(compose_text: str, service: str) -> list[str]:

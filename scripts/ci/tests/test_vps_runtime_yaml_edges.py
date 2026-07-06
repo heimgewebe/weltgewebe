@@ -182,3 +182,61 @@ def test_accepts_star_and_ampersand_in_quoted_list_values(
 
     result = module.validate_boundary(compose_source=compose, env_file=selected)
     assert result.observed_mode == "verify-applied"
+
+def test_rejects_duplicate_top_level_services_block(tmp_path: pathlib.Path) -> None:
+    module = _load_module()
+    services, env_file_key, environment = _kv()
+    mode_key = module.MIGRATION_MODE_KEY
+    selected = _write(tmp_path / "selected.cfg", f"{mode_key}=verify-applied\n")
+    compose = _write(
+        tmp_path / "compose.yml",
+        f"""
+        {services}:
+          api:
+            {env_file_key}:
+              - {selected}
+        {services}:
+          api:
+            {environment}:
+              {mode_key}: run
+            {env_file_key}:
+              - {selected}
+        """,
+    )
+
+    try:
+        module.validate_boundary(compose_source=compose, env_file=selected)
+    except module.BoundaryCheckError as error:
+        assert "services" in str(error)
+        assert "more than once" in str(error) or "ambiguity" in str(error)
+    else:
+        raise AssertionError("duplicate top-level services block must fail closed")
+
+
+def test_rejects_duplicate_direct_api_service_block(tmp_path: pathlib.Path) -> None:
+    module = _load_module()
+    services, env_file_key, environment = _kv()
+    mode_key = module.MIGRATION_MODE_KEY
+    selected = _write(tmp_path / "selected.cfg", f"{mode_key}=verify-applied\n")
+    compose = _write(
+        tmp_path / "compose.yml",
+        f"""
+        {services}:
+          api:
+            {env_file_key}:
+              - {selected}
+          api:
+            {environment}:
+              {mode_key}: run
+            {env_file_key}:
+              - {selected}
+        """,
+    )
+
+    try:
+        module.validate_boundary(compose_source=compose, env_file=selected)
+    except module.BoundaryCheckError as error:
+        assert "api" in str(error)
+        assert "more than once" in str(error) or "ambiguity" in str(error)
+    else:
+        raise AssertionError("duplicate direct api service block must fail closed")

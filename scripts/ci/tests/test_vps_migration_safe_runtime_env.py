@@ -393,7 +393,7 @@ def test_multiple_env_files_later_value_wins(tmp_path: pathlib.Path) -> None:
     assert pathlib.Path(result.env_file) == selected_env.resolve()
 
 
-def test_multiple_env_files_requires_selected_effective_source(tmp_path: pathlib.Path) -> None:
+def test_rejects_selected_env_file_when_later_env_file_wins(tmp_path: pathlib.Path) -> None:
     module = _load_module()
     selected_env = _write(
         tmp_path / "selected.env",
