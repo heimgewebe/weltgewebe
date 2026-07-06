@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 153 |
-| Dokumente mit ausgehenden Relationen | 152 |
-| Dokumente als Ziel referenziert | 115 |
-| Relationen gesamt | 515 |
+| Dokumente gesamt | 157 |
+| Dokumente mit ausgehenden Relationen | 156 |
+| Dokumente als Ziel referenziert | 120 |
+| Relationen gesamt | 531 |
 | — depends_on | 20 |
-| — relates_to | 492 |
+| — relates_to | 508 |
 | — supersedes | 3 |
 | Isolierte Dokumente | 0 |
 | depends_on Zyklen | 0 |
@@ -74,4 +74,3 @@ _Keine Zyklen gefunden._
 > Dokumente ohne eingehende und ausgehende Relationen (index.md/README.md ausgenommen).
 
 _Keine isolierten Dokumente._
-
