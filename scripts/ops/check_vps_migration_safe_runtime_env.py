@@ -117,6 +117,44 @@ def _strip_optional_quotes(value: str) -> str:
     return text
 
 
+def _strip_yaml_inline_comment(value: str) -> str:
+    """Strip a YAML-style inline comment outside quotes.
+
+    YAML treats ``#`` as a comment delimiter only when it starts the scalar or is
+    preceded by whitespace. This helper intentionally implements only the narrow
+    scalar shapes accepted by this guard; unterminated quotes fail closed.
+    """
+
+    in_quote: str | None = None
+    escaped = False
+
+    for index, char in enumerate(value):
+        if in_quote:
+            if in_quote == '"' and escaped:
+                escaped = False
+                continue
+            if in_quote == '"' and char == "\\":
+                escaped = True
+                continue
+            if char == in_quote:
+                in_quote = None
+            continue
+
+        if char in {"'", '"'}:
+            in_quote = char
+            continue
+
+        if char == "#" and (index == 0 or value[index - 1].isspace()):
+            return value[:index].rstrip()
+
+    if in_quote:
+        raise BoundaryCheckError(
+            "unterminated quoted compose scalar; cannot prove migration-mode absence"
+        )
+
+    return value.rstrip()
+
+
 def _flow_items(value: str) -> list[str]:
     text = value.strip()
     if not text:
@@ -125,7 +163,7 @@ def _flow_items(value: str) -> list[str]:
         inner = text[1:-1].strip()
         if not inner:
             return []
-        return [_strip_optional_quotes(part) for part in inner.split(",")]
+        return [_strip_optional_quotes(_strip_yaml_inline_comment(part)) for part in inner.split(",")]
     raise BoundaryCheckError(
         "unsupported flow-style compose value; use block list/map syntax for this guard"
     )
@@ -160,7 +198,7 @@ def _service_has_env_file_hook(service_lines: list[str]) -> bool:
 
 
 def _normalise_env_key_token(token: str) -> str:
-    text = token.strip()
+    text = _strip_yaml_inline_comment(token).strip()
     if not text:
         return text
     if text[0] in {"'", '"'} and len(text) >= 2:
@@ -237,7 +275,7 @@ def _extract_env_file_entries(service_lines: list[str]) -> list[str]:
         if inline_value.startswith("["):
             entries = _flow_items(inline_value)
         else:
-            entries = [_strip_optional_quotes(inline_value)]
+            entries = [_strip_optional_quotes(_strip_yaml_inline_comment(inline_value))]
         return [entry for entry in entries if entry]
 
     entries: list[str] = []
@@ -251,7 +289,7 @@ def _extract_env_file_entries(service_lines: list[str]) -> list[str]:
                 "unsupported env_file entry; use string entries for this guard"
             )
 
-        item = stripped[1:].strip()
+        item = _strip_yaml_inline_comment(stripped[1:].strip()).strip()
         if not item:
             raise BoundaryCheckError("empty env_file entry; refusing ambiguity")
         if item.startswith("{") or re.match(r"^[A-Za-z_][A-Za-z0-9_-]*\s*:", item):
