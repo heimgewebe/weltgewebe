@@ -13,6 +13,8 @@ relations:
     target: infra/caddy/Caddyfile.http-smoke
   - type: relates_to
     target: infra/compose/compose.vps.override.yml
+  - type: relates_to
+    target: docs/deploy/vps-migration-safe-runtime-smoke.md
 ---
 # VPS HTTP Smoke Preflight
 
@@ -45,11 +47,13 @@ During this preflight:
 
 - do not change DNS or INWX records
 - do not start mail or SMTP paths
-- do not print `.env` contents or secrets
+- do not print runtime configuration contents or confidential values
 - do not treat the HTTP smoke file as production configuration
 
 After DNS cutover is explicitly approved, the production VPS Caddyfile remains the canonical public HTTPS path.
 
 ## Migration-safe API startup boundary
 
-If this smoke starts the real API while database migrations are outside scope, the API must use `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied` or the operation must stop. The rendered compose config must prove the effective value from the selected env file without printing secrets. The VPS override must not set this variable in the service `environment`, because that would override `env_file` values. This is runtime evidence, not route-only evidence.
+If this smoke starts the real API while database migrations are outside scope, the API must use `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied` or the operation must stop. The rendered compose config must prove the effective value from the selected env source without printing confidential values. The VPS override must not set this variable in the service `environment`, because that would override `env_file` values. This is runtime evidence, not route-only evidence.
+
+Use `docs/deploy/vps-migration-safe-runtime-smoke.md` for that separate runtime path. The redacted source-level preflight helper is `scripts/ops/check_vps_migration_safe_runtime_env.py`; it checks only the allowed migration-mode key and the non-confidential compose source. It does not replace a separately reviewed runtime receipt, and raw rendered compose config or runtime env source contents must not be pasted as evidence.
