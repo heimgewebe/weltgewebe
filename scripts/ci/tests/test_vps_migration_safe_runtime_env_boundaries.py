@@ -91,3 +91,36 @@ def test_rejects_multiline_quoted_dotenv_value_before_checked_key(
         assert "unterminated quoted dotenv value" in str(error)
     else:
         raise AssertionError("multi-line dotenv values must fail closed before key scanning")
+
+def test_rejects_unparsable_dotenv_line_containing_migration_key(
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _load_module()
+    selected = _write(
+        tmp_path / ".env",
+        '"WELTGEWEBE_API_STARTUP_MIGRATIONS"=run\n',
+    )
+    compose = _compose_with_env_file(tmp_path, str(selected))
+
+    try:
+        module.validate_boundary(compose_source=compose, env_file=selected)
+    except module.BoundaryCheckError as error:
+        assert "protected key" in str(error) or "ambiguous" in str(error)
+    else:
+        raise AssertionError("unparsable protected-key dotenv line must fail closed")
+
+
+def test_ignores_unparsable_dotenv_line_without_migration_key(
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _load_module()
+    selected = _write(
+        tmp_path / ".env",
+        "UNRELATED BROKEN LINE\n"
+        "WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied\n",
+    )
+    compose = _compose_with_env_file(tmp_path, str(selected))
+
+    result = module.validate_boundary(compose_source=compose, env_file=selected)
+
+    assert result.observed_mode == "verify-applied"

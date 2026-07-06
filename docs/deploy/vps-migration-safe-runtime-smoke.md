@@ -184,6 +184,8 @@ If a separately approved runtime smoke is performed later, the receipt must stat
 | --- | --- | --- |
 | Env key missing or duplicated in the effective source. | Effective migration mode is ambiguous. | Stop. |
 | Env key is not `verify-applied`. | Normal startup may run SQLx migrations. | Stop. |
+| Env key uses shell-style `export`. | Compose `env_file` syntax is intentionally restricted here. | Stop. |
+| Env source contains an unparsable line with the migration-mode key. | The effective migration mode is ambiguous. | Stop. |
 | Compose service environment sets the key. | It may override the selected env source. | Stop. |
 | Compose service uses `extends` or guard-relevant YAML merge/anchor/alias constructs. | The source probe cannot prove the effective service model without a render. | Stop. |
 | `env_file` uses unsupported interpolation. | The source probe cannot prove which env source Compose will select. | Stop. |

@@ -683,6 +683,11 @@ def _read_dotenv_key(env_file: Path, key: str) -> tuple[bool, str | None]:
             if commentless != stripped:
                 match = _DOTENV_KEY_RE.match(commentless)
         if match is None:
+            if key in stripped:
+                raise BoundaryCheckError(
+                    f"unparsable line in selected env file contains protected key {key!r}; "
+                    "refusing ambiguous migration mode"
+                )
             continue
 
         name, separator, raw_value = match.groups()
