@@ -37,7 +37,8 @@ Use this runbook only when all of the following are true:
 - the selected repo commit is explicit
 - starting the real API is necessary for the evidence
 - database migrations are outside scope
-- the selected runtime env source sets
+- the selected runtime env source resolves through `services.api.env_file`
+- the effective env source sets
   `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied`
 - the VPS compose override does not set that variable in
   `services.api.environment`
@@ -70,13 +71,13 @@ Do not:
 - use the normal API startup mode under a no-migration boundary
 - close #1348 on config-only, route-only, or synthetic-upstream evidence
 
-The recurring mistake is to treat route shape as app readiness. That is how maps
-become territory and then, with some confidence, a small administrative bonfire.
+The recurring mistake is to treat route shape as app readiness. This runbook keeps
+those evidence classes separate.
 
-## Redacted preflight
+## Source-level preflight
 
-Before any runtime start, run the narrow env/compose boundary probe from the
-selected checkout:
+Before any runtime start, run the narrow env/compose source-boundary probe from
+the selected checkout:
 
 ```bash
 python3 scripts/ops/check_vps_migration_safe_runtime_env.py \
@@ -85,26 +86,43 @@ python3 scripts/ops/check_vps_migration_safe_runtime_env.py \
   --expected-mode verify-applied
 ```
 
-The helper checks only the whitelisted migration-mode key in the selected env
-source and the non-confidential compose source. It does not invoke Docker, start
+If the compose file relies on `WELTGEWEBE_ENV_FILE` interpolation, either export
+that variable in the operator shell or pass it explicitly without exposing
+confidential values:
+
+```bash
+python3 scripts/ops/check_vps_migration_safe_runtime_env.py \
+  --compose-source infra/compose/compose.vps.override.yml \
+  --env-file <selected-runtime-env-file> \
+  --compose-env WELTGEWEBE_ENV_FILE=<selected-runtime-env-file> \
+  --expected-mode verify-applied
+```
+
+The helper checks only the allowed migration-mode key in the effective env source
+and the non-confidential compose source. It does not invoke Docker, start
 containers, render the full compose model, or print arbitrary runtime config.
 
 Expected redacted shape:
 
 ```text
-PASS: migration-safe runtime-smoke env boundary is proven
+PASS: migration-safe runtime-smoke source boundary is proven
 - checked key: WELTGEWEBE_API_STARTUP_MIGRATIONS
 - observed mode: verify-applied
 - service-level migration override: absent
-- secrets printed: no
-- runtime started: no
+- helper printed confidential values: no
+- helper started runtime: no
 ```
 
-If the selected env source is missing the key, sets it more than once, sets a
+If the effective env source is missing the key, sets it more than once, sets a
 value other than `verify-applied`, or the API service sets the key in
 `environment`, stop.
 
 ## Compose evidence discipline
+
+The source-level helper is not a replacement for a separately reviewed runtime
+receipt. It verifies that the selected env source is bound to the compose
+`env_file` declaration and that no service-level migration-mode override is
+present in the checked compose source.
 
 The final receipt may mention that compose was rendered successfully, but it
 must not paste raw rendered config or runtime env source contents. Instead record
@@ -113,10 +131,10 @@ sanitized facts:
 - selected compose files
 - selected Caddyfile path
 - selected env source path
-- whether the redacted boundary probe passed
+- whether the source-level boundary probe passed
 - whether the API service has no service-level
   `WELTGEWEBE_API_STARTUP_MIGRATIONS` override
-- whether the selected env source sets exactly
+- whether the effective env source sets exactly
   `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied`
 
 This deliberately orders evidence by safety. A sanitized key proof is weaker than
@@ -144,9 +162,10 @@ If a separately approved runtime smoke is performed later, the receipt must stat
 
 | Observation | Meaning | Decision |
 | --- | --- | --- |
-| Env key missing or duplicated. | Effective migration mode is ambiguous. | Stop. |
+| Env key missing or duplicated in the effective source. | Effective migration mode is ambiguous. | Stop. |
 | Env key is not `verify-applied`. | Normal startup may run SQLx migrations. | Stop. |
 | Compose service environment sets the key. | It may override the selected env source. | Stop. |
+| `--env-file` is not the effective env source for the key. | The helper would be checking the wrong file. | Stop. |
 | API refuses startup on pending, failed, extra, missing, duplicate, or checksum-mismatched migration history. | `verify-applied` did its job. | Record blocked runtime evidence; do not retry with `run`. |
 | Health checks pass under `verify-applied`. | Bounded runtime smoke passed. | Keep #1348 open until the receipt is reviewed against its full acceptance criteria. |
 | DNS/ACME/HTTPS/mail/SMTP/confidential-value work becomes necessary. | The operation left this scope. | Stop and create a new approved operation. |
