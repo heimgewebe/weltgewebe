@@ -102,6 +102,22 @@ The helper checks only the allowed migration-mode key in the effective env sourc
 and the non-confidential compose source. It does not invoke Docker, start
 containers, render the full compose model, or print arbitrary runtime config.
 
+The helper intentionally supports only a narrow, source-level Compose subset that
+can be proven without rendering the full model:
+
+- the checked API service must not use `extends`
+- the checked API service must not use YAML merge, anchors, or aliases to define
+  or import `environment` or `env_file`
+- `env_file` interpolation is limited to `${VAR}`, `${VAR:-default}`, and
+  `${VAR-default}`
+- required, alternative, nested, or other Compose interpolation forms must be
+  replaced by explicit simple paths or by explicit `--compose-env NAME=VALUE`
+  inputs before the preflight
+
+These are guard boundaries, not general Compose style rules. If a legitimate
+runtime command needs broader Compose features, stop and add a separately reviewed
+redacted effective-render check rather than weakening this source probe.
+
 Expected redacted shape:
 
 ```text
@@ -169,6 +185,8 @@ If a separately approved runtime smoke is performed later, the receipt must stat
 | Env key missing or duplicated in the effective source. | Effective migration mode is ambiguous. | Stop. |
 | Env key is not `verify-applied`. | Normal startup may run SQLx migrations. | Stop. |
 | Compose service environment sets the key. | It may override the selected env source. | Stop. |
+| Compose service uses `extends` or guard-relevant YAML merge/anchor/alias constructs. | The source probe cannot prove the effective service model without a render. | Stop. |
+| `env_file` uses unsupported interpolation. | The source probe cannot prove which env source Compose will select. | Stop. |
 | `--env-file` is not the effective env source for the key. | The helper would be checking the wrong file. | Stop. |
 | API refuses startup on pending, failed, extra, missing, duplicate, or checksum-mismatched migration history. | `verify-applied` did its job. | Record blocked runtime evidence; do not retry with `run`. |
 | Health checks pass under `verify-applied`. | Bounded runtime smoke passed. | Keep #1348 open until the receipt is reviewed against its full acceptance criteria. |
