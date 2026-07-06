@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 515 |
+| Relationen gesamt | 531 |
 | — depends_on | 20 |
-| — relates_to | 492 |
+| — relates_to | 508 |
 | — supersedes | 3 |
 | relates_to Anteil | 96% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (197 Dokumente):
+**Cluster 1** (204 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -97,6 +97,10 @@ _Keine Lücken erkannt._
 - `docs/deploy/public-app-base-url.md`
 - `docs/deploy/secondary-domain-web-surfaces.md`
 - `docs/deploy/security.md`
+- `docs/deploy/vps-http-route-smoke-risks.md`
+- `docs/deploy/vps-http-route-smoke.md`
+- `docs/deploy/vps-http-smoke.md`
+- `docs/deploy/vps-migration-safe-runtime-smoke.md`
 - `docs/deploy/vps.md`
 - `docs/deploy/weltgewebe.naming.md`
 - `docs/deployment.md`
@@ -203,7 +207,9 @@ _Keine Lücken erkannt._
 - `docs/vision.md`
 - `docs/weltgewebe-agenten-manifest.md`
 - `docs/zusammenstellung.md`
+- `infra/caddy/Caddyfile.http-smoke`
 - `infra/compose/compose.prod.override.yml`
+- `infra/compose/compose.vps.override.yml`
 - `repo.meta.yaml`
 - `scripts/agent/check_non_ideal_task.py`
 - `scripts/agent/json_contract.py`
@@ -227,6 +233,7 @@ _Keine Lücken erkannt._
 - `scripts/docmeta/validate_report_lifecycle.py`
 - `scripts/guard/basemap-runtime-proof.sh`
 - `scripts/guard/domain-single-instance-guard.sh`
+- `scripts/ops/check_vps_migration_safe_runtime_env.py`
 - `scripts/tests/test_domain_single_instance_guard.sh`
 - `tests/fixtures/agent/handoff-valid.json`
 
