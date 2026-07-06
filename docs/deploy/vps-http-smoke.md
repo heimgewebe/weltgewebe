@@ -13,6 +13,8 @@ relations:
     target: infra/caddy/Caddyfile.http-smoke
   - type: relates_to
     target: infra/compose/compose.vps.override.yml
+  - type: relates_to
+    target: docs/deploy/vps-migration-safe-runtime-smoke.md
 ---
 # VPS HTTP Smoke Preflight
 
@@ -53,3 +55,5 @@ After DNS cutover is explicitly approved, the production VPS Caddyfile remains t
 ## Migration-safe API startup boundary
 
 If this smoke starts the real API while database migrations are outside scope, the API must use `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied` or the operation must stop. The rendered compose config must prove the effective value from the selected env file without printing secrets. The VPS override must not set this variable in the service `environment`, because that would override `env_file` values. This is runtime evidence, not route-only evidence.
+
+Use `docs/deploy/vps-migration-safe-runtime-smoke.md` for that separate runtime path. The redacted preflight helper is `scripts/ops/check_vps_migration_safe_runtime_env.py`; it checks only the whitelisted migration-mode key and the non-secret compose source. Do not paste raw rendered compose config or `.env` contents as evidence.
