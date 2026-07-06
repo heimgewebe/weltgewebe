@@ -11,7 +11,13 @@ pub mod utils;
 #[doc(hidden)]
 pub mod test_helpers;
 
-use std::{env, io::ErrorKind, net::SocketAddr, sync::Arc};
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    env,
+    io::ErrorKind,
+    net::SocketAddr,
+    sync::Arc,
+};
 
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
@@ -23,7 +29,7 @@ use config::{
 use middleware::auth::auth_middleware;
 use middleware::csrf::require_csrf;
 use routes::{api_router, health::health_routes, meta::meta_routes};
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{migrate::Migrator, postgres::PgPoolOptions, PgPool, Row};
 use state::ApiState;
 use telemetry::{metrics_handler, BuildInfo, Metrics, MetricsLayer};
 use tokio::net::TcpListener;
@@ -55,12 +61,7 @@ pub async fn run() -> anyhow::Result<()> {
     let (db_pool, db_pool_configured) = initialise_database_pool().await?;
     let (nats_client, nats_configured) = initialise_nats_client().await;
 
-    if let (true, Some(pool)) = (db_pool_configured, db_pool.as_ref()) {
-        sqlx::migrate!("./migrations")
-            .run(pool)
-            .await
-            .context("database migration failed")?;
-    }
+    handle_startup_migrations(db_pool_configured, db_pool.as_ref()).await?;
 
     // OPT-ARC-001 Phase E-A: account-create write-path gate.
     //
@@ -336,6 +337,176 @@ fn init_tracing() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StartupMigrationMode {
+    Run,
+    VerifyApplied,
+}
+
+impl StartupMigrationMode {
+    fn load() -> anyhow::Result<Self> {
+        let raw = match env::var("WELTGEWEBE_API_STARTUP_MIGRATIONS") {
+            Ok(value) => value,
+            Err(env::VarError::NotPresent) => return Ok(Self::Run),
+            Err(error) => {
+                return Err(anyhow!(error)).context(
+                    "failed to read WELTGEWEBE_API_STARTUP_MIGRATIONS from the environment",
+                );
+            }
+        };
+
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "" | "run" => Ok(Self::Run),
+            "verify-applied" => Ok(Self::VerifyApplied),
+            _ => Err(anyhow!(
+                "invalid WELTGEWEBE_API_STARTUP_MIGRATIONS value {raw:?}; expected `run` or `verify-applied`"
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct AppliedStartupMigration {
+    success: bool,
+    checksum: Vec<u8>,
+}
+
+async fn handle_startup_migrations(
+    db_pool_configured: bool,
+    db_pool: Option<&PgPool>,
+) -> anyhow::Result<()> {
+    let pool = match (db_pool_configured, db_pool) {
+        (false, None) => return Ok(()),
+        (true, Some(pool)) => pool,
+        (true, None) => {
+            return Err(anyhow!(
+                "database configured but PostgreSQL pool is missing; refusing startup migration handling"
+            ));
+        }
+        (false, Some(_)) => {
+            return Err(anyhow!(
+                "PostgreSQL pool is present but db_pool_configured=false; refusing ambiguous startup migration handling"
+            ));
+        }
+    };
+
+    let migrator = sqlx::migrate!("./migrations");
+
+    match StartupMigrationMode::load()? {
+        StartupMigrationMode::Run => {
+            migrator
+                .run(pool)
+                .await
+                .context("database migration failed")?;
+        }
+        StartupMigrationMode::VerifyApplied => {
+            verify_startup_migrations_applied(pool, &migrator).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn verify_startup_migrations_applied(
+    pool: &PgPool,
+    migrator: &Migrator,
+) -> anyhow::Result<()> {
+    let rows = sqlx::query("SELECT version, success, checksum FROM _sqlx_migrations")
+        .fetch_all(pool)
+        .await
+        .context(
+            "WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied could not read _sqlx_migrations; refusing to start in verify-applied mode",
+        )?;
+
+    let mut applied: HashMap<i64, AppliedStartupMigration> = HashMap::new();
+    for row in rows {
+        let version: i64 = row
+            .try_get("version")
+            .context("_sqlx_migrations.version must be readable")?;
+        let success: bool = row
+            .try_get("success")
+            .context("_sqlx_migrations.success must be readable")?;
+        let checksum: Vec<u8> = row
+            .try_get("checksum")
+            .context("_sqlx_migrations.checksum must be readable")?;
+        record_applied_startup_migration(
+            &mut applied,
+            version,
+            AppliedStartupMigration { success, checksum },
+        )?;
+    }
+
+    validate_applied_startup_migrations(&applied, migrator)?;
+
+    tracing::info!("startup migrations verified as already applied; no migration SQL executed");
+    Ok(())
+}
+
+fn record_applied_startup_migration(
+    applied: &mut HashMap<i64, AppliedStartupMigration>,
+    version: i64,
+    migration: AppliedStartupMigration,
+) -> anyhow::Result<()> {
+    match applied.entry(version) {
+        Entry::Vacant(slot) => {
+            slot.insert(migration);
+            Ok(())
+        }
+        Entry::Occupied(_) => Err(anyhow!(
+            "duplicate startup migration version {version} in _sqlx_migrations; refusing to start in verify-applied mode"
+        )),
+    }
+}
+
+fn validate_applied_startup_migrations(
+    applied: &HashMap<i64, AppliedStartupMigration>,
+    migrator: &Migrator,
+) -> anyhow::Result<()> {
+    let expected_versions: HashSet<i64> = migrator
+        .iter()
+        .filter(|migration| !migration.migration_type.is_down_migration())
+        .map(|migration| migration.version)
+        .collect();
+
+    for (version, migration) in applied {
+        if !migration.success {
+            return Err(anyhow!(
+                "startup migration {version} is not marked successful; refusing to start in verify-applied mode"
+            ));
+        }
+
+        if !expected_versions.contains(version) {
+            return Err(anyhow!(
+                "applied startup migration {version} is not embedded in this binary; refusing to start in verify-applied mode"
+            ));
+        }
+    }
+
+    for migration in migrator.iter() {
+        if migration.migration_type.is_down_migration() {
+            continue;
+        }
+
+        let Some(applied_migration) = applied.get(&migration.version) else {
+            return Err(anyhow!(
+                "pending startup migration {} ({}) under WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied; refusing to start in verify-applied mode",
+                migration.version,
+                migration.description
+            ));
+        };
+
+        if applied_migration.checksum.as_slice() != migration.checksum.as_ref() {
+            return Err(anyhow!(
+                "startup migration {} ({}) checksum differs from the embedded migration; refusing to start in verify-applied mode",
+                migration.version,
+                migration.description
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 /// Initialise the PostgreSQL pool from `DATABASE_URL`.
 ///
 /// Startup contract (fail-fast). Per ADR-0007 the production auth/session and
@@ -398,7 +569,10 @@ async fn initialise_nats_client() -> (Option<NatsClient>, bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::initialise_database_pool;
+    use super::{
+        initialise_database_pool, record_applied_startup_migration,
+        validate_applied_startup_migrations, AppliedStartupMigration, StartupMigrationMode,
+    };
     use crate::test_helpers::EnvGuard;
     use serial_test::serial;
 
@@ -435,6 +609,190 @@ mod tests {
         assert!(
             error.to_string().contains("DATABASE_URL is set"),
             "error must explain the database startup contract, got: {error}"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn startup_migration_mode_defaults_to_run() {
+        let _guard = EnvGuard::unset("WELTGEWEBE_API_STARTUP_MIGRATIONS");
+        let mode = StartupMigrationMode::load().expect("default mode should load");
+        assert_eq!(mode, StartupMigrationMode::Run);
+    }
+
+    #[test]
+    #[serial]
+    fn startup_migration_mode_accepts_verify_applied() {
+        let _guard = EnvGuard::set("WELTGEWEBE_API_STARTUP_MIGRATIONS", "verify-applied");
+        let mode = StartupMigrationMode::load().expect("verify-applied mode should load");
+        assert_eq!(mode, StartupMigrationMode::VerifyApplied);
+    }
+
+    #[test]
+    #[serial]
+    fn startup_migration_mode_rejects_unknown_values() {
+        let _guard = EnvGuard::set("WELTGEWEBE_API_STARTUP_MIGRATIONS", "skip");
+        let error =
+            StartupMigrationMode::load().expect_err("unknown migration mode must fail closed");
+        assert!(
+            error
+                .to_string()
+                .contains("expected `run` or `verify-applied`"),
+            "error must name the accepted values, got: {error}"
+        );
+    }
+
+    fn applied_from_migrator(
+        migrator: &sqlx::migrate::Migrator,
+        success: bool,
+    ) -> std::collections::HashMap<i64, AppliedStartupMigration> {
+        migrator
+            .iter()
+            .filter(|migration| !migration.migration_type.is_down_migration())
+            .map(|migration| {
+                (
+                    migration.version,
+                    AppliedStartupMigration {
+                        success,
+                        checksum: migration.checksum.as_ref().to_vec(),
+                    },
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn record_applied_startup_migration_rejects_duplicate_version() {
+        let mut applied = std::collections::HashMap::new();
+        record_applied_startup_migration(
+            &mut applied,
+            1,
+            AppliedStartupMigration {
+                success: true,
+                checksum: vec![1],
+            },
+        )
+        .expect("first migration record should be accepted");
+
+        let error = record_applied_startup_migration(
+            &mut applied,
+            1,
+            AppliedStartupMigration {
+                success: true,
+                checksum: vec![2],
+            },
+        )
+        .expect_err("duplicate migration version must fail closed");
+
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate startup migration version"),
+            "error must describe duplicate migration version, got: {error}"
+        );
+    }
+
+    #[test]
+    fn validate_applied_startup_migrations_accepts_complete_history() {
+        let migrator = sqlx::migrate!("./migrations");
+        let applied = applied_from_migrator(&migrator, true);
+
+        validate_applied_startup_migrations(&applied, &migrator)
+            .expect("complete applied migration history must pass");
+    }
+
+    #[test]
+    fn validate_applied_startup_migrations_rejects_pending_migration() {
+        let migrator = sqlx::migrate!("./migrations");
+        let mut applied = applied_from_migrator(&migrator, true);
+        let pending_version = migrator
+            .iter()
+            .find(|migration| !migration.migration_type.is_down_migration())
+            .expect("embedded migrator must contain at least one up migration")
+            .version;
+        applied.remove(&pending_version);
+
+        let error = validate_applied_startup_migrations(&applied, &migrator)
+            .expect_err("pending migration must fail closed");
+
+        assert!(
+            error.to_string().contains("pending startup migration"),
+            "error must describe pending migration, got: {error}"
+        );
+    }
+
+    #[test]
+    fn validate_applied_startup_migrations_rejects_checksum_mismatch() {
+        let migrator = sqlx::migrate!("./migrations");
+        let mut applied = applied_from_migrator(&migrator, true);
+        let mismatch_version = migrator
+            .iter()
+            .find(|migration| !migration.migration_type.is_down_migration())
+            .expect("embedded migrator must contain at least one up migration")
+            .version;
+        applied
+            .get_mut(&mismatch_version)
+            .expect("test migration should be present")
+            .checksum
+            .push(0);
+
+        let error = validate_applied_startup_migrations(&applied, &migrator)
+            .expect_err("checksum mismatch must fail closed");
+
+        assert!(
+            error.to_string().contains("checksum differs"),
+            "error must describe checksum mismatch, got: {error}"
+        );
+    }
+
+    #[test]
+    fn validate_applied_startup_migrations_rejects_failed_migration() {
+        let migrator = sqlx::migrate!("./migrations");
+        let mut applied = applied_from_migrator(&migrator, true);
+        let failed_version = migrator
+            .iter()
+            .find(|migration| !migration.migration_type.is_down_migration())
+            .expect("embedded migrator must contain at least one up migration")
+            .version;
+        applied
+            .get_mut(&failed_version)
+            .expect("test migration should be present")
+            .success = false;
+
+        let error = validate_applied_startup_migrations(&applied, &migrator)
+            .expect_err("failed migration must fail closed");
+
+        assert!(
+            error.to_string().contains("not marked successful"),
+            "error must describe failed migration, got: {error}"
+        );
+    }
+
+    #[test]
+    fn validate_applied_startup_migrations_rejects_extra_migration() {
+        let migrator = sqlx::migrate!("./migrations");
+        let mut applied = applied_from_migrator(&migrator, true);
+        let extra_version = migrator
+            .iter()
+            .filter(|migration| !migration.migration_type.is_down_migration())
+            .map(|migration| migration.version)
+            .max()
+            .expect("embedded migrator must contain at least one up migration")
+            + 1;
+        applied.insert(
+            extra_version,
+            AppliedStartupMigration {
+                success: true,
+                checksum: vec![0],
+            },
+        );
+
+        let error = validate_applied_startup_migrations(&applied, &migrator)
+            .expect_err("extra migration must fail closed");
+
+        assert!(
+            error.to_string().contains("not embedded in this binary"),
+            "error must describe extra migration, got: {error}"
         );
     }
 }

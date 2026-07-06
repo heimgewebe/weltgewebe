@@ -11,6 +11,7 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
     def setUp(self) -> None:
         self.repo = pathlib.Path(__file__).resolve().parents[3]
         self.doc = self.repo / "docs" / "deploy" / "vps-http-route-smoke.md"
+        self.full_smoke_doc = self.repo / "docs" / "deploy" / "vps-http-smoke.md"
         self.risks = self.repo / "docs" / "deploy" / "vps-http-route-smoke-risks.md"
         self.caddyfile = self.repo / "infra" / "caddy" / "Caddyfile.http-smoke"
         self.compose_override = self.repo / "infra" / "compose" / "compose.vps.override.yml"
@@ -125,6 +126,17 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
         default = caddyfile_source.removeprefix("${WELTGEWEBE_CADDYFILE:-").removesuffix("}")
         self.assertEqual(default, "../caddy/Caddyfile.vps")
         self.assertNotEqual(default, "../caddy/Caddyfile.http-smoke")
+
+    def test_vps_api_startup_migration_hook_defaults_to_run(self) -> None:
+        route_text = self.doc.read_text(encoding="utf-8")
+        full_smoke_text = self.full_smoke_doc.read_text(encoding="utf-8")
+        compose_text = self.compose_override.read_text(encoding="utf-8")
+
+        self.assertIn("env_file", compose_text)
+        self.assertNotIn("WELTGEWEBE_API_STARTUP_MIGRATIONS:", compose_text)
+        self.assertIn("WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied", route_text)
+        self.assertIn("Migration-safe API startup boundary", full_smoke_text)
+        self.assertIn("WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied", full_smoke_text)
 
 
 if __name__ == "__main__":
