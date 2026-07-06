@@ -88,7 +88,7 @@ jobs:
       # Skip cleanly when no artefact is present; real script regressions still fail the job.
       BASEMAP_PROOF_MODE: skip
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Check guard script is executable
         run: test -x scripts/guard/basemap-runtime-proof.sh
@@ -157,7 +157,7 @@ jobs:
       BASEMAP_CADDY_URL: http://localhost:8081
       ARTEFACT_NAME: proof-range-delivery.pmtiles
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Verify Docker availability
         run: |
@@ -326,7 +326,7 @@ jobs:
       BASEMAP_CADDY_URL: http://localhost:8081
       SOURCE_DATE_EPOCH: "1704067200"
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Verify Docker availability
         run: |
@@ -506,7 +506,7 @@ jobs:
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Install pnpm
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
