@@ -62,9 +62,6 @@ class MappingEntry:
     value: str
 
 
-_ENVIRONMENT_MAP_KEY_RE = re.compile(
-    r"^(?:([A-Za-z_][A-Za-z0-9_]*)|'([A-Za-z_][A-Za-z0-9_]*)'|\"([A-Za-z_][A-Za-z0-9_]*)\")\s*:"
-)
 _YAML_FRAGMENT_TOKEN_RE = re.compile(
     r"(^|\s)(<<\s*:|&[A-Za-z0-9_-]+|\*[A-Za-z0-9_-]+)($|\s)"
 )
