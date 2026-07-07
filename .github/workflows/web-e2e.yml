@@ -30,7 +30,7 @@ jobs:
       GEWEBE_API_BASE: "http://127.0.0.1:8080"
       PUBLIC_GEWEBE_API_BASE: "http://127.0.0.1:8080"
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
       - name: Setup pnpm
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
         with:

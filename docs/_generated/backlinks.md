@@ -314,6 +314,7 @@ Generated automatically. Do not edit.
 ## docs/deploy/DRIFT_POLICY.md
 
 - [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
+- [relates_to] docs/deploy/vps-http-smoke.md
 
 ## docs/deploy/README.md
 
@@ -372,6 +373,30 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/README.md
 - [relates_to] docs/deployment.md
 - [relates_to] docs/runbooks/incident-response.md
+
+## docs/deploy/vps-http-route-smoke-risks.md
+
+- [relates_to] docs/deploy/vps-http-route-smoke.md
+- [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md
+
+## docs/deploy/vps-http-route-smoke.md
+
+- [relates_to] docs/deploy/vps-http-route-smoke-risks.md
+- [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md
+
+## docs/deploy/vps-http-smoke.md
+
+- [relates_to] docs/deploy/vps-http-route-smoke-risks.md
+- [relates_to] docs/deploy/vps-http-route-smoke.md
+- [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md
+
+## docs/deploy/vps-migration-safe-runtime-smoke.md
+
+- [relates_to] docs/deploy/vps-http-smoke.md
+
+## docs/deploy/vps.md
+
+- [relates_to] docs/deploy/vps-http-smoke.md
 
 ## docs/deployment.md
 
@@ -908,9 +933,20 @@ Generated automatically. Do not edit.
 - [relates_to] docs/overview/zusammenstellung.md
 - [relates_to] docs/vision.md
 
+## infra/caddy/Caddyfile.http-smoke
+
+- [relates_to] docs/deploy/vps-http-route-smoke.md
+- [relates_to] docs/deploy/vps-http-smoke.md
+
 ## infra/compose/compose.prod.override.yml
 
 - [relates_to] docs/deploy/public-app-base-url.md
+
+## infra/compose/compose.vps.override.yml
+
+- [relates_to] docs/deploy/vps-http-route-smoke.md
+- [relates_to] docs/deploy/vps-http-smoke.md
+- [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md
 
 ## repo.meta.yaml
 
@@ -1009,6 +1045,10 @@ Generated automatically. Do not edit.
 ## scripts/guard/domain-single-instance-guard.sh
 
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
+
+## scripts/ops/check_vps_migration_safe_runtime_env.py
+
+- [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md
 
 ## scripts/tests/test_domain_single_instance_guard.sh
 
