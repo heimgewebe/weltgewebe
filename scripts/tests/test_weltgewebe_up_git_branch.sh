@@ -36,6 +36,7 @@ new_repo() {
 
   mkdir -p "$root"
   git init --bare "$origin" > /dev/null
+  git -C "$origin" symbolic-ref HEAD refs/heads/main
   git clone "$origin" "$repo" > /dev/null 2>&1
 
   (
@@ -75,13 +76,13 @@ EOF
     git add .
     git commit -m "test: initial main" > /dev/null
     git branch -M main
-    git push -u origin main > /dev/null
+    git -c core.hooksPath=/dev/null push -u origin HEAD:refs/heads/main > /dev/null
 
     git checkout -b feat/x > /dev/null
     echo "feature" > feature.txt
     git add feature.txt
     git commit -m "feat: x" > /dev/null
-    git push -u origin feat/x > /dev/null
+    git -c core.hooksPath=/dev/null push -u origin feat/x > /dev/null
   )
 
   echo "$repo"
@@ -101,7 +102,7 @@ advance_remote_branch() {
     printf '%s\n' "remote-${RANDOM}" >> remote.txt
     git add remote.txt
     git commit -m "chore: advance $branch" > /dev/null
-    git push origin "$branch" > /dev/null
+    git -c core.hooksPath=/dev/null push origin "$branch" > /dev/null
   )
   rm -rf "$tmp_clone"
 }

@@ -299,7 +299,6 @@ def write_output(edges, all_docs, stats, cycles, warnings, out_file=None):
                 f.write(f"- `{doc}`\n")
         else:
             f.write("_Keine isolierten Dokumente._\n")
-        f.write("\n")
 
     return out_file
 

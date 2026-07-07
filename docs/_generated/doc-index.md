@@ -44,6 +44,10 @@ Generated automatically. Do not edit.
 | deploy.secondary-domain-web-surfaces | Sekundäre Domain-Webflächen | reference | active | docs/deploy/secondary-domain-web-surfaces.md |
 | deploy.security | Deploy Security | architecture | active | docs/deploy/security.md |
 | deploy.vps | VPS-Deployment | reference | active | docs/deploy/vps.md |
+| deploy.vps-http-route-smoke | VPS HTTP Route Smoke | runbook | draft | docs/deploy/vps-http-route-smoke.md |
+| deploy.vps-http-route-smoke-risks | VPS HTTP Route Smoke Risks | note | draft | docs/deploy/vps-http-route-smoke-risks.md |
+| deploy.vps-http-smoke | VPS HTTP Smoke Preflight | runbook | draft | docs/deploy/vps-http-smoke.md |
+| deploy.vps-migration-safe-runtime-smoke | VPS Migration-Safe Runtime Smoke | runbook | draft | docs/deploy/vps-migration-safe-runtime-smoke.md |
 | deploy.weltgewebe.naming | Weltgewebe Naming | reference | active | docs/deploy/weltgewebe.naming.md |
 | deployment-contract | Deployment Contract and Preflight Guard | guide | active | docs/deployment.md |
 | deployment_governance | Deployment Governance | reference | active | docs/deployment_governance.md |
