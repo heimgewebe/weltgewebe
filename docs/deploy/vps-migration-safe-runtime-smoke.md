@@ -133,6 +133,41 @@ If the effective env source is missing the key, sets it more than once, sets a
 value other than `verify-applied`, or the API service sets the key in
 `environment`, stop.
 
+## DB migration-history preflight
+
+Before any further bounded runtime attempt on `wg-prod-1`, run the DB history
+shape preflight against the already-running PostgreSQL container:
+
+```bash
+python3 scripts/ops/check_vps_db_migration_history_shape.py --json
+```
+
+This helper is intentionally narrower than a runtime retry:
+
+- it reads PostgreSQL catalog shape through the selected DB container
+- it does not start the API
+- it does not start or restart Compose services
+- it does not apply migrations
+- it does not read runtime env files
+- it does not print confidential values
+
+A `blocked` result is a hard stop for #1348 runtime work. In particular, stop
+when `public._sqlx_migrations` is absent, when the app schema appears empty,
+when migration history is empty, when failed history rows exist, or when duplicate
+migration versions exist. Do not retry the API in normal `run` mode to get past
+that condition, because normal startup may apply SQLx migrations.
+
+If this preflight blocks, the next path must be one of two explicitly reviewed
+operations:
+
+1. an approved DB initialization or repair window, outside this no-migration smoke
+   boundary; or
+2. a genuinely DB-free route smoke that does not claim API/database readiness.
+
+The runtime receipt must include the preflight status and must not report #1348
+as passed unless later loopback/runtime checks actually succeed under
+`WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied`.
+
 ## Compose evidence discipline
 
 The source-level helper is not a replacement for a separately reviewed runtime
