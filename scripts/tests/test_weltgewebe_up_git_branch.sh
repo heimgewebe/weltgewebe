@@ -65,6 +65,14 @@ services:
     image: busybox
 EOF
 
+    cat > infra/compose/compose.vps.override.yml << 'EOF'
+services:
+  api:
+    image: busybox
+  caddy:
+    image: busybox
+EOF
+
     cat > apps/web/build/index.html << 'EOF'
 <!doctype html><html><body><script src="/_app/immutable/test.js"></script></body></html>
 EOF
@@ -446,14 +454,14 @@ assert_contains "$out_nonff" "Git pull failed (fast-forward only)"
 
 echo "PASS: non-fast-forward pull aborts"
 
-# 9) Failure bundle contains deploy-branch metadata fields
+# 9) Legacy heimserver failure bundle contains deploy-branch metadata fields
 repo_bundle="$(new_repo failure-bundle)"
 (
   cd "$repo_bundle"
   git checkout feat/x > /dev/null
 )
 set +e
-out_bundle="$(MOCK_FAIL_CONFIG_GUARD=1 run_up "$repo_bundle" "$WORKDIR_ROOT/failure-bundle.git.log" 2>&1)"
+out_bundle="$(DEPLOY_TARGET=heimserver MOCK_FAIL_CONFIG_GUARD=1 run_up "$repo_bundle" "$WORKDIR_ROOT/failure-bundle.git.log" 2>&1)"
 rc_bundle=$?
 set -e
 [[ "$rc_bundle" -ne 0 ]] || fail "failure-bundle case must fail"
@@ -472,6 +480,6 @@ assert_contains "$bundle_state" "remote deploy branch:"
 assert_contains "$bundle_state" "branch switch attempted:"
 assert_contains "$bundle_state" "branch switch result:"
 
-echo "PASS: failure bundle contains deploy branch metadata"
+echo "PASS: legacy heimserver failure bundle contains deploy branch metadata"
 
 echo "test_weltgewebe_up_git_branch: OK"

@@ -2,8 +2,8 @@
 id: deploy.heimserver.deployment
 title: Heimserver Deployment
 doc_type: reference
-status: active
-summary: Deployment-Runbook für Weltgewebe auf dem Heimserver.
+status: deprecated
+summary: Historisches Heimserver-Deployment-Runbook; nicht mehr Produktionsziel.
 relations:
   - type: relates_to
     target: docs/deploy/README.md
@@ -12,6 +12,12 @@ relations:
   - type: relates_to
     target: docs/deployment.md
 ---
+
+> [!WARNING]
+> Der Heimserver ist kein aktives Produktionsziel mehr. Kanonische Produktion
+> ist `wg-prod-1` über den Public-VPS-Pfad. Dieses Dokument bleibt nur als
+> historischer/Legacy-Kontext erhalten.
+
 # Weltgewebe – Deployment Runbook (Heimserver)
 
 ## Architektur (Ist)

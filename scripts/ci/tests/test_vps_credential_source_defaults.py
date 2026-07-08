@@ -18,10 +18,18 @@ def test_vps_compose_prefers_host_managed_credential_source() -> None:
     assert "${WELTGEWEBE_ENV_FILE:-/opt/weltgewebe/.env}" not in text
 
 
-def test_heimserver_compose_keeps_legacy_host_local_env_source() -> None:
+def test_heimserver_compose_keeps_legacy_host_local_env_source_when_explicitly_selected() -> None:
     text = HEIMSERVER_OVERRIDE.read_text(encoding="utf-8")
 
     assert "${WELTGEWEBE_ENV_FILE:-/opt/weltgewebe/.env}" in text
+
+
+def test_weltgewebe_up_defaults_to_vps_and_keeps_heimserver_legacy_target_explicit() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert 'DEPLOY_TARGET="${DEPLOY_TARGET:-vps}"' in text
+    assert 'vps | heimserver) ;;' in text
+    assert "vps (default) or heimserver (legacy)" in text
 
 
 def test_weltgewebe_up_selects_vps_credential_source_only_when_unset() -> None:
@@ -43,7 +51,7 @@ def test_weltgewebe_up_selects_vps_credential_source_only_when_unset() -> None:
     vps_default = text.index(
         'VPS_DEFAULT_ENV_FILE="${VPS_DEFAULT_ENV_FILE:-/etc/weltgewebe/weltgewebe.env}"'
     )
-    deploy_target = text.index('DEPLOY_TARGET="${DEPLOY_TARGET:-heimserver}"')
+    deploy_target = text.index('DEPLOY_TARGET="${DEPLOY_TARGET:-vps}"')
     switch_default = text.index('ENV_FILE="$VPS_DEFAULT_ENV_FILE"')
     env_check = text.index('if [[ ! -f "$ENV_FILE" ]]')
 

@@ -10,9 +10,7 @@ relations:
   - type: relates_to
     target: docs/deployment_governance.md
   - type: relates_to
-    target: docs/deploy/heimserver.deployment.md
-  - type: relates_to
-    target: docs/deploy/heimserver.integration.md
+    target: docs/deploy/vps.md
   - type: relates_to
     target: docs/deploy/security.md
   - type: relates_to
@@ -25,9 +23,13 @@ relations:
 Dieses Dokument beschreibt den **kanonischen Deployment-Stand** von Weltgewebe.
 Es ist normativ. Abweichungen davon gelten als Drift.
 
+**Aktuelle Produktion:** `wg-prod-1` über den Public-VPS-Pfad. Der historische
+Heimserver-Pfad ist retired/deprecated und kein Produktionsziel mehr.
+
 **Weitere Dokumente:**
 
-- [Domain-/Providerarchitektur und DDNS-Handoff](domain-mail-migration-ionos-to-inwx-mailbox-brevo.md) – aktueller Providerstand, Implementierungsbesitz und Runtime-Beweisgrenze
+- [VPS-Deployment](vps.md) – kanonisches Produktionsrunbook für `wg-prod-1`
+- [Domain-/Providerarchitektur und DDNS-Handoff](domain-mail-migration-ionos-to-inwx-mailbox-brevo.md) – historischer Providerstand, Implementierungsbesitz und Runtime-Beweisgrenze
 - [Sekundäre Domain-Webflächen](secondary-domain-web-surfaces.md) – Artefakt- und Handoff-Vertrag für die Weltweberei-Informationsfläche und den späteren Heimserver-Edge (keine öffentliche Einsatzbereitschaft)
 - [Deployment-Änderungsprotokoll](./CHANGELOG.md) – Infrastrukturänderungen und deren Auswirkungen
 - [Drift-Taxonomie & Guard-Policy](./DRIFT_POLICY.md) – Klassifizierung und Handling von Drift
