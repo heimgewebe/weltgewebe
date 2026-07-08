@@ -6,11 +6,15 @@ name: VPS DB history preflight
     branches: [main]
     paths:
       - "docs/deploy/vps-db-initialization-boundary.md"
+      - "docs/deploy/vps.md"
       - "docs/deploy/vps-migration-safe-runtime-smoke.md"
+      - "infra/compose/compose.vps.override.yml"
+      - "scripts/weltgewebe-up"
       - "scripts/ops/check_vps_db_migration_history_shape.py"
       - "scripts/ci/tests/test_vps_db_history_preflight_docs.py"
       - "scripts/ci/tests/test_vps_db_initialization_boundary_docs.py"
       - "scripts/ci/tests/test_vps_db_migration_history_shape.py"
+      - "scripts/ci/tests/test_vps_credential_source_defaults.py"
       - "scripts/ci/tests/test_vps_migration_safe_runtime_env.py"
       - "scripts/ci/tests/test_vps_migration_safe_runtime_env_boundaries.py"
       - "scripts/ci/tests/test_vps_migration_safe_runtime_env_compose_semantics.py"
@@ -20,11 +24,15 @@ name: VPS DB history preflight
     branches: [main]
     paths:
       - "docs/deploy/vps-db-initialization-boundary.md"
+      - "docs/deploy/vps.md"
       - "docs/deploy/vps-migration-safe-runtime-smoke.md"
+      - "infra/compose/compose.vps.override.yml"
+      - "scripts/weltgewebe-up"
       - "scripts/ops/check_vps_db_migration_history_shape.py"
       - "scripts/ci/tests/test_vps_db_history_preflight_docs.py"
       - "scripts/ci/tests/test_vps_db_initialization_boundary_docs.py"
       - "scripts/ci/tests/test_vps_db_migration_history_shape.py"
+      - "scripts/ci/tests/test_vps_credential_source_defaults.py"
       - "scripts/ci/tests/test_vps_migration_safe_runtime_env.py"
       - "scripts/ci/tests/test_vps_migration_safe_runtime_env_boundaries.py"
       - "scripts/ci/tests/test_vps_migration_safe_runtime_env_compose_semantics.py"
@@ -64,6 +72,7 @@ jobs:
             scripts/ci/tests/test_vps_db_migration_history_shape.py \
             scripts/ci/tests/test_vps_db_history_preflight_docs.py \
             scripts/ci/tests/test_vps_db_initialization_boundary_docs.py \
+            scripts/ci/tests/test_vps_credential_source_defaults.py \
             scripts/ci/tests/test_vps_migration_safe_runtime_env.py \
             scripts/ci/tests/test_vps_migration_safe_runtime_env_boundaries.py \
             scripts/ci/tests/test_vps_migration_safe_runtime_env_compose_semantics.py \

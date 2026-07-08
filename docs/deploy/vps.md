@@ -53,26 +53,39 @@ sudo usermod -aG docker $USER
 
 Kopiere das Repository auf den VPS (z.B. nach `/opt/weltgewebe` oder `~/weltgewebe`).
 
-### B. Umgebungsvariablen (.env) & Secrets
+### B. Umgebungsvariablen und Secrets
 
-Erstelle eine `.env` Datei im Root-Verzeichnis (neben `infra/`), basierend auf `.env.prod.example`.
+Für den Public-VPS-Pfad liegt die Runtime-Secret-Quelle außerhalb des
+Git-Checkouts:
+
+```text
+/etc/weltgewebe/weltgewebe.env
+owner: root
+mode: 0600
+```
+
+Initial kann diese Datei aus `.env.prod.example` aufgebaut werden:
 
 ```bash
-cp .env.prod.example .env
-nano .env
+sudo install -d -m 700 -o root -g root /etc/weltgewebe
+sudo install -m 600 -o root -g root .env.prod.example /etc/weltgewebe/weltgewebe.env
+sudoedit /etc/weltgewebe/weltgewebe.env
 ```
 
 **WICHTIG (Secrets):**
 
-* Die `.env` Datei enthält sensible Daten (Passwörter). Sie darf **niemals** ins Git-Repository committet werden.
-* Auf dem VPS liegt sie nur lokal vor.
+* Die Runtime-Datei enthält sensible Daten. Sie darf **niemals** ins Git-Repository committet werden.
+* Secret-Werte gehören nicht in GitHub-Kommentare, Logs oder Chat.
+* `/opt/weltgewebe/.env` kann als Legacy-/Rollback-Quelle existieren.
 
 Anpassungen:
 
-* **Datenbank**: Wähle ein starkes Passwort für `POSTGRES_PASSWORD` und passe `DATABASE_URL` entsprechend an.
+* **Datenbank**: Wähle ein starkes Passwort für `POSTGRES_PASSWORD` und passe
+  `DATABASE_URL` entsprechend an.
 * **Web Upstream**: Konfiguriere den Host und die URL deines Frontends (Vercel oder Cloudflare).
   * `WEB_UPSTREAM_HOST`: **Nur die Domain** ohne Schema (z.B. `leitstand.pages.dev`).
-  * `WEB_UPSTREAM_URL`: Die volle Origin **ohne Pfad**, muss mit `https://` beginnen (z.B. `https://leitstand.pages.dev`).
+  * `WEB_UPSTREAM_URL`: Die volle Origin **ohne Pfad**, muss mit `https://` beginnen
+    (z.B. `https://leitstand.pages.dev`).
 
 ### C. Starten
 
@@ -137,7 +150,16 @@ Deploy-Wrapper. Der Zieltyp wird explizit gesetzt:
 
 ```bash
 cd /opt/weltgewebe
-DEPLOY_TARGET=vps ENV_FILE=/opt/weltgewebe/.env ./scripts/weltgewebe-up --branch main
+DEPLOY_TARGET=vps ./scripts/weltgewebe-up --branch main
+```
+
+Wenn `ENV_FILE` nicht gesetzt ist, bevorzugt der VPS-Zieltyp
+`/etc/weltgewebe/weltgewebe.env`, sofern die Datei existiert. Für Tests,
+Rollback oder abweichende Installationen kann die Quelle bewusst überschrieben
+werden:
+
+```bash
+DEPLOY_TARGET=vps ENV_FILE=/path/to/runtime.env ./scripts/weltgewebe-up --branch main
 ```
 
 Der VPS-Zieltyp unterscheidet sich vom historischen Heimserver-Ziel:
@@ -197,4 +219,7 @@ Der Check liest keine Runtime-Secrets und verändert keinen Serverzustand. Er
 prüft DNS-A-Records, HTTP-zu-HTTPS-Redirect, Root-/`www`-HTTPS, `/map`,
 `api.weltgewebe.net/health/ready`, `/_app/version.json`, lokale Basemap-Style-,
 Glyph- und PMTiles-Auslieferung. Ein PASS ist ein Public-HTTP(S)-/Basemap-Receipt,
-aber kein Beweis für IPv6, Mail/SMTP, Public Login oder Credential-Cutover.
+aber kein Beweis für IPv6, Mail/SMTP oder Public Login. Der
+Credential-Source-Cutover wird über den ausgewählten `ENV_FILE`-Pfad und die
+Dateimetadaten der Runtime-Secret-Quelle belegt, nicht über den HTTP(S)-Check
+allein.

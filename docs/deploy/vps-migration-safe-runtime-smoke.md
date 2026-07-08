@@ -82,6 +82,18 @@ The VPS compose override is intentionally smoke-safe by default after the initia
 setup deploy for public login: `AUTH_PUBLIC_LOGIN` defaults to `0`, and related
 auth delivery/provisioning values remain explicit runtime-env choices.
 
+After the Public-VPS credential-source cutover, the preferred selected runtime
+env source is:
+
+```text
+/etc/weltgewebe/weltgewebe.env
+```
+
+`scripts/weltgewebe-up` uses that file for `DEPLOY_TARGET=vps` when no explicit
+`ENV_FILE` is set and the file exists. An explicit `ENV_FILE=/path/to/runtime.env`
+still takes precedence. The legacy `/opt/weltgewebe/.env` path may exist as a
+rollback source, but it is not the preferred Public-VPS target path.
+
 The startup migration mode is different: it must remain in the selected runtime
 env source, not in `services.api.environment`. The source-level helper rejects a
 service-level `WELTGEWEBE_API_STARTUP_MIGRATIONS` key because it can override the
