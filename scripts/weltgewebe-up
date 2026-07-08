@@ -501,6 +501,8 @@ else
   GIT_PULL_SKIPPED_REASON="--no-pull"
   DEPLOY_BRANCH_RESOLVED="$DEPLOY_BRANCH"
   BRANCH_SWITCH_RESULT="skipped_no_pull"
+  CURRENT_BRANCH_AFTER=$(git symbolic-ref -q --short HEAD 2> /dev/null || echo "DETACHED")
+  HEAD_AFTER=$(git rev-parse --short HEAD 2> /dev/null || echo "unknown")
 fi
 
 echo
