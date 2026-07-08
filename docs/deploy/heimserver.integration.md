@@ -2,8 +2,8 @@
 id: deploy.heimserver.integration
 title: Heimserver Integration
 doc_type: reference
-status: active
-summary: API-Integrationsdokumentation für das Heimserver-Deployment.
+status: deprecated
+summary: Historischer Heimserver-Integrationsvertrag; nicht mehr Produktionsziel.
 relations:
   - type: relates_to
     target: docs/deploy/README.md
@@ -12,6 +12,12 @@ relations:
   - type: relates_to
     target: docs/deployment.md
 ---
+
+> [!WARNING]
+> Der Heimserver ist kein aktives Produktionsziel mehr. Kanonische Produktion
+> ist `wg-prod-1` über den Public-VPS-Pfad. Dieses Dokument bleibt nur als
+> historischer/Legacy-Kontext erhalten.
+
 # Weltgewebe API – Heimserver Integration
 
 ## 0. Zweck

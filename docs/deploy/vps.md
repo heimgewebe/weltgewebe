@@ -12,8 +12,8 @@ relations:
 ---
 # VPS Deployment Runbook
 
-Dieses Runbook beschreibt den aktuellen Public-VPS-Pfad für `weltgewebe.net`.
-Der VPS stellt API, Datenbank, NATS und den Caddy-Frontdoor bereit. Das
+Dieses Runbook beschreibt den kanonischen Public-Produktionspfad für `weltgewebe.net`.
+Der VPS `wg-prod-1` stellt API, Datenbank, NATS und den Caddy-Frontdoor bereit. Das
 Frontend wird im VPS-Checkout gebaut und vom Stack-internen Caddy unter der
 Domain ausgeliefert.
 
@@ -145,11 +145,17 @@ Richte einen Cronjob ein, um regelmäßig Dumps der Datenbank zu erstellen und a
 
 ## 4. Aktueller Zielpfad: VPS als Public Runtime
 
-Für den neuen Public-VPS-Pfad ist `scripts/weltgewebe-up` der bevorzugte
-Deploy-Wrapper. Der Zieltyp wird explizit gesetzt:
+Für den Public-VPS-Pfad ist `scripts/weltgewebe-up` der bevorzugte
+Deploy-Wrapper. `vps` ist der Default-Zieltyp:
 
 ```bash
 cd /opt/weltgewebe
+./scripts/weltgewebe-up --branch main
+```
+
+Der Zieltyp kann weiterhin explizit gesetzt werden:
+
+```bash
 DEPLOY_TARGET=vps ./scripts/weltgewebe-up --branch main
 ```
 

@@ -16,10 +16,10 @@ VPS_DEFAULT_ENV_FILE="${VPS_DEFAULT_ENV_FILE:-/etc/weltgewebe/weltgewebe.env}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-weltgewebe}"
 REMOTE="${REMOTE:-origin}"
 WELTGEWEBE_COMPOSE_BAKE="${WELTGEWEBE_COMPOSE_BAKE:-auto}"
-DEPLOY_TARGET="${DEPLOY_TARGET:-heimserver}"
+DEPLOY_TARGET="${DEPLOY_TARGET:-vps}"
 
 case "$DEPLOY_TARGET" in
-  heimserver | vps) ;;
+  vps | heimserver) ;;
   *)
     echo "ERROR: Invalid DEPLOY_TARGET '$DEPLOY_TARGET'. Expected: heimserver|vps." >&2
     exit 1
@@ -63,7 +63,7 @@ usage() {
   echo
   echo "Options:"
   echo "  --with-caddy            Start the 'caddy' service (default: disabled/scale=0; vps target enables it)"
-  echo "  DEPLOY_TARGET=TARGET    Select runtime target: heimserver (default) or vps"
+  echo "  DEPLOY_TARGET=TARGET    Select runtime target: vps (default) or heimserver (legacy)"
   echo "  --no-pull               Skip git sync/branch operations (no fetch, switch, pull)"
   echo "  --branch BRANCH         Deploy explicit branch name (default: main, no origin/ prefix)"
   echo "  --current-branch        Deploy the currently checked-out branch intentionally"
