@@ -516,6 +516,17 @@ echo "   Branch switch: $([[ "$BRANCH_SWITCH_ATTEMPTED" == "yes" ]] && echo "yes
 echo "   Previous HEAD: $HEAD_BEFORE"
 echo "   Target HEAD after pull: $HEAD_AFTER"
 
+if [[ "$HEAD_AFTER" == "unknown" ]]; then
+  echo "ERROR: Cannot resolve deploy HEAD; refusing to select an API image tag." >&2
+  exit 1
+fi
+
+# Keep the API image tag bound to the selected checkout. This intentionally
+# overrides stale API_VERSION values from the runtime env file for Compose
+# interpolation, while still leaving container runtime env values untouched.
+export API_VERSION="$HEAD_AFTER"
+echo "   API image tag: $API_VERSION"
+
 # 3. Preflight: Docker Compose Config (Strict)
 # Run AFTER pull to validate new config
 echo
