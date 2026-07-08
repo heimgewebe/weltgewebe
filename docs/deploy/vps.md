@@ -7,15 +7,15 @@ summary: Dokumentation zum VPS-basierten Deployment.
 relations:
   - type: relates_to
     target: docs/deploy/README.md
+  - type: relates_to
+    target: scripts/ops/check_public_live_readiness.py
 ---
-# VPS Deployment Runbook (Alternatives Modell)
+# VPS Deployment Runbook
 
-> [!NOTE]
-> Dieses Runbook beschreibt ein **alternatives** Deployment-Modell auf einem klassischen VPS mit fester IP. Die aktuelle Weltgewebe-Produktion nutzt stattdessen ein Heimserver-Setup mit dynamischer IP (DDNS).
-
-Dieses Runbook beschreibt die Schritte zur Bereitstellung der Weltgewebe-Infrastruktur (API, Datenbank, Proxy)
-auf einem VPS. Das Frontend wird weiterhin über einen externen Provider (z.B. Vercel oder Cloudflare Pages) ausgeliefert,
-aber über den Caddy-Proxy auf dem VPS unter der Domain eingebunden.
+Dieses Runbook beschreibt den aktuellen Public-VPS-Pfad für `weltgewebe.net`.
+Der VPS stellt API, Datenbank, NATS und den Caddy-Frontdoor bereit. Das
+Frontend wird im VPS-Checkout gebaut und vom Stack-internen Caddy unter der
+Domain ausgeliefert.
 
 ## Voraussetzungen
 
@@ -28,10 +28,12 @@ aber über den Caddy-Proxy auf dem VPS unter der Domain eingebunden.
 Richte folgende DNS-Records ein, damit die Domain auf deinen VPS zeigt:
 
 * **A-Record**: `weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
-* **AAAA-Record** (falls IPv6 verfügbar): `weltgewebe.net` -> `<VPS_IPV6_ADRESSE>`
+* **A-Record**: `www.weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
+* **A-Record**: `api.weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
+* **AAAA-Record** (nur falls IPv6 geprüft und freigegeben ist): entsprechende Hostnamen -> `<VPS_IPV6_ADRESSE>`
 
-Die Subdomain `api.weltgewebe.net` ist **nicht** erforderlich, da die API unter `weltgewebe.net/api`
-erreichbar sein wird.
+Die Subdomain `api.weltgewebe.net` ist Teil des aktuellen Public-VPS-Zielbilds
+und muss auf dieselbe VPS-IPv4 zeigen wie Root und `www`.
 
 ## 2. Server Vorbereitung
 
@@ -160,3 +162,24 @@ Nach dem DNS-Cutover sind zusätzlich die öffentlichen HTTPS-Pfade zu prüfen:
 curl -fsS https://weltgewebe.net/api/health/ready
 curl -fsS https://api.weltgewebe.net/health/ready
 ```
+
+### Public live readiness receipt
+
+Nach einem Public-Cutover kann der öffentliche Zustand mit einem read-only
+Operator-Check reproduzierbar geprüft werden:
+
+```bash
+python3 scripts/ops/check_public_live_readiness.py \
+  --expected-ip 94.16.121.119 \
+  --expected-version "$(git rev-parse --short HEAD)" \
+  --expected-commit "$(git rev-parse HEAD)" \
+  --authoritative-server ns.inwx.de \
+  --authoritative-server ns2.inwx.de \
+  --authoritative-server ns3.inwx.eu
+```
+
+Der Check liest keine Runtime-Secrets und verändert keinen Serverzustand. Er
+prüft DNS-A-Records, HTTP-zu-HTTPS-Redirect, Root-/`www`-HTTPS, `/map`,
+`api.weltgewebe.net/health/ready`, `/_app/version.json`, lokale Basemap-Style-,
+Glyph- und PMTiles-Auslieferung. Ein PASS ist ein Public-HTTP(S)-/Basemap-Receipt,
+aber kein Beweis für IPv6, Mail/SMTP, Public Login oder Credential-Cutover.
