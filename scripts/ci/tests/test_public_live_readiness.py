@@ -5,7 +5,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Mapping
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -30,7 +30,7 @@ class FakeWorld:
         self.commit = "51d8061a6920e4bf1dd6dda9784c4fc928f43bb9"
         self.requests: list[tuple[str, Mapping[str, str] | None]] = []
 
-    def resolver(self, host: str, _servers: Sequence[str]) -> set[str]:
+    def resolver(self, host: str) -> set[str]:
         return {self.ip}
 
     def fetcher(
@@ -38,7 +38,6 @@ class FakeWorld:
         url: str,
         headers: Mapping[str, str] | None,
         _timeout: float,
-        _max_bytes: int,
     ):
         self.requests.append((url, headers))
         FetchResult = self.module.FetchResult
@@ -122,11 +121,11 @@ class PublicLiveReadinessTest(unittest.TestCase):
     def test_api_ready_requires_database_nats_and_policy(self) -> None:
         fake = FakeWorld()
 
-        def bad_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float, max_bytes: int):
+        def bad_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float):
             if url == "https://api.weltgewebe.net/health/ready":
                 body = {"status": "ok", "checks": {"database": True, "nats": False, "policy": True}}
                 return fake.module.FetchResult(url, 200, {}, json.dumps(body).encode())
-            return fake.fetcher(url, headers, timeout, max_bytes)
+            return fake.fetcher(url, headers, timeout)
 
         checker = fake.module.PublicLiveChecker(resolver=fake.resolver, fetcher=bad_fetcher)
         api_result = [result for result in checker.run() if result.name == "api-ready"][0]
@@ -137,10 +136,10 @@ class PublicLiveReadinessTest(unittest.TestCase):
     def test_pmtiles_header_must_start_with_pmtiles_signature(self) -> None:
         fake = FakeWorld()
 
-        def bad_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float, max_bytes: int):
+        def bad_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float):
             if url.endswith(".pmtiles"):
                 return fake.module.FetchResult(url, 200, {}, b"not-pmtiles")
-            return fake.fetcher(url, headers, timeout, max_bytes)
+            return fake.fetcher(url, headers, timeout)
 
         checker = fake.module.PublicLiveChecker(resolver=fake.resolver, fetcher=bad_fetcher)
         pmtiles_result = [result for result in checker.run() if result.name == "pmtiles-header"][0]

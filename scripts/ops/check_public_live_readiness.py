@@ -13,7 +13,6 @@ import json
 import socket
 import ssl
 import subprocess
-import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -62,17 +61,15 @@ class PublicLiveCheckError(RuntimeError):
     pass
 
 
-Resolver = Callable[[str, Sequence[str]], set[str]]
-Fetcher = Callable[[str, Mapping[str, str] | None, float, int], FetchResult]
+Resolver = Callable[[str], set[str]]
+Fetcher = Callable[[str, Mapping[str, str] | None, float], FetchResult]
 
 
 def _lower_headers(headers: Mapping[str, str]) -> dict[str, str]:
     return {key.lower(): value for key, value in headers.items()}
 
 
-def socket_resolve_ipv4(host: str, authoritative_servers: Sequence[str] = ()) -> set[str]:
-    if authoritative_servers:
-        return dig_resolve_ipv4(host, authoritative_servers)
+def socket_resolve_ipv4(host: str) -> set[str]:
     answers = socket.getaddrinfo(host, None, family=socket.AF_INET, type=socket.SOCK_STREAM)
     return {item[4][0] for item in answers}
 
@@ -175,7 +172,7 @@ class PublicLiveChecker:
         results: list[CheckResult] = []
         for host in (self.domain, self.www_domain, self.api_domain):
             try:
-                observed = sorted(self.resolver(host, self.authoritative_servers))
+                observed = sorted(self.resolve_host(host))
             except Exception as exc:
                 results.append(fail_result(f"dns:{host}", str(exc)))
                 continue
@@ -192,10 +189,15 @@ class PublicLiveChecker:
                 )
         return results
 
+    def resolve_host(self, host: str) -> set[str]:
+        if self.authoritative_servers:
+            return dig_resolve_ipv4(host, self.authoritative_servers)
+        return self.resolver(host)
+
     def check_http_redirect(self) -> CheckResult:
         url = f"http://{self.domain}/"
         try:
-            result = self.fetcher(url, None, self.timeout, 8_192)
+            result = self.fetcher(url, None, self.timeout)
         except Exception as exc:
             return fail_result("http-redirect", str(exc), url=url)
         location = _lower_headers(result.headers).get("location", "")
@@ -206,7 +208,7 @@ class PublicLiveChecker:
     def check_https_root(self, host: str) -> CheckResult:
         url = f"https://{host}/"
         try:
-            result = self.fetcher(url, None, self.timeout, 64_000)
+            result = self.fetcher(url, None, self.timeout)
         except Exception as exc:
             return fail_result(f"https-root:{host}", str(exc), url=url)
         if result.status == 200 and b"_app/" in result.body:
@@ -216,7 +218,7 @@ class PublicLiveChecker:
     def check_map_route(self) -> CheckResult:
         url = f"https://{self.domain}/map"
         try:
-            result = self.fetcher(url, None, self.timeout, 64_000)
+            result = self.fetcher(url, None, self.timeout)
         except Exception as exc:
             return fail_result("map-route", str(exc), url=url)
         if result.status == 200 and b"_app/" in result.body:
@@ -226,7 +228,7 @@ class PublicLiveChecker:
     def check_api_ready(self) -> CheckResult:
         url = f"https://{self.api_domain}/health/ready"
         try:
-            result = self.fetcher(url, None, self.timeout, 64_000)
+            result = self.fetcher(url, None, self.timeout)
             payload = json.loads(result.body.decode("utf-8"))
         except Exception as exc:
             return fail_result("api-ready", str(exc), url=url)
@@ -241,7 +243,7 @@ class PublicLiveChecker:
     def check_version_json(self) -> CheckResult:
         url = f"https://{self.domain}/_app/version.json"
         try:
-            result = self.fetcher(url, None, self.timeout, 64_000)
+            result = self.fetcher(url, None, self.timeout)
             payload = json.loads(result.body.decode("utf-8"))
         except Exception as exc:
             return fail_result("version-json", str(exc), url=url)
@@ -260,7 +262,7 @@ class PublicLiveChecker:
     def check_basemap_style(self) -> CheckResult:
         url = f"https://{self.domain}/local-basemap/style.json"
         try:
-            result = self.fetcher(url, None, self.timeout, 128_000)
+            result = self.fetcher(url, None, self.timeout)
             payload = json.loads(result.body.decode("utf-8"))
         except Exception as exc:
             return fail_result("basemap-style", str(exc), url=url)
@@ -272,7 +274,7 @@ class PublicLiveChecker:
     def check_glyph_range(self) -> CheckResult:
         url = f"https://{self.domain}{self.glyph_path}"
         try:
-            result = self.fetcher(url, None, self.timeout, 128_000)
+            result = self.fetcher(url, None, self.timeout)
         except Exception as exc:
             return fail_result("glyph-range", str(exc), url=url)
         if result.status == 200 and len(result.body) > 0:
@@ -282,7 +284,7 @@ class PublicLiveChecker:
     def check_pmtiles_header(self) -> CheckResult:
         url = f"https://{self.domain}{self.pmtiles_path}"
         try:
-            result = self.fetcher(url, {"Range": "bytes=0-15"}, self.timeout, 32)
+            result = self.fetcher(url, {"Range": "bytes=0-15"}, self.timeout)
         except Exception as exc:
             return fail_result("pmtiles-header", str(exc), url=url)
         if result.status in {200, 206} and result.body.startswith(b"PMTiles"):
