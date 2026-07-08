@@ -12,6 +12,8 @@ relations:
   - type: relates_to
     target: docs/deploy/vps-http-route-smoke-risks.md
   - type: relates_to
+    target: docs/deploy/vps-db-initialization-boundary.md
+  - type: relates_to
     target: infra/compose/compose.vps.override.yml
   - type: relates_to
     target: scripts/ops/check_vps_migration_safe_runtime_env.py
@@ -163,6 +165,10 @@ operations:
 1. an approved DB initialization or repair window, outside this no-migration smoke
    boundary; or
 2. a genuinely DB-free route smoke that does not claim API/database readiness.
+
+See `docs/deploy/vps-db-initialization-boundary.md` before selecting DB
+initialization or repair. DB initialization or repair must not be treated as part
+of the no-migration #1348 smoke.
 
 The runtime receipt must include the preflight status and must not report #1348
 as passed unless later loopback/runtime checks actually succeed under
