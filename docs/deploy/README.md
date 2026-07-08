@@ -259,26 +259,42 @@ Detaillierte Klassifizierung: [Drift-Taxonomie & Guard-Policy](./DRIFT_POLICY.md
 
 ## 9. Feature Flags (Public Login)
 
-Das System unterstützt einen öffentlichen "Magic Link" Login.
-Standardmäßig ist dieser **deaktiviert**.
+Das System unterstützt öffentlichen Magic-Link-Login. Standardmäßig bleibt dieser
+**deaktiviert**. Für den Public-VPS-Produktionspfad wird Public Login erst nach
+einem separaten SMTP-Delivery-Receipt aktiviert.
 
-### Aktivierung
-
-Um den Public Login zu aktivieren, müssen folgende Variablen in der `.env` gesetzt werden:
+### Produktionskonfiguration
 
 ```bash
 AUTH_PUBLIC_LOGIN=1
-APP_BASE_URL=https://mein-weltgewebe.de
-# Optional: Trusted Proxies konfigurieren (wichtig für Sicherheit hinter Caddy/Proxy)
-# Hinweis: wird aktuell nur konfiguriert (plumbing); Auswertung/Enforcement folgt in PR3 (Client-IP trust + Rate-Limit).
-AUTH_TRUSTED_PROXIES=172.16.0.0/12,127.0.0.1
+AUTH_LOG_MAGIC_TOKEN=0
+APP_BASE_URL=https://weltgewebe.net
+SMTP_HOST=<provider-host>
+SMTP_PORT=587
+SMTP_AUTH=on
+SMTP_USER=<secret>
+SMTP_PASS=<secret>
+SMTP_FROM=noreply@weltgewebe.net
 ```
 
-**Wichtig:**
+Vor einem Rollout wird die vorbereitete Runtime-Secret-Quelle read-only geprüft:
+
+```bash
+python3 scripts/ops/check_public_login_smtp_readiness.py \
+  --env-file /etc/weltgewebe/weltgewebe.env \
+  --production-public-login
+```
+
+Der Check gibt nur Status- und Presence-Metadaten aus, keine SMTP-Werte.
+
+### Regeln
 
 - Wenn `AUTH_PUBLIC_LOGIN=1` gesetzt ist, **muss** `APP_BASE_URL` gesetzt sein.
-  Andernfalls startet der API-Service nicht (Validierungsfehler beim Startup).
-- `APP_BASE_URL` wird verwendet, um korrekte Links in E-Mails/Logs zu generieren.
+- `APP_BASE_URL` muss `https://weltgewebe.net` sein.
+- Ohne SMTP ist Magic Link Login nicht zustellbar.
+- `AUTH_LOG_MAGIC_TOKEN=1` ist ausschließlich Debug/Development und kein Produktionsmodus.
+- `SMTP_AUTH=off` ist für den Public-VPS-Rollout nicht zulässig, außer ein bewusst
+  dokumentierter lokaler Relay-Sonderfall wird separat freigegeben.
 
 ---
 
