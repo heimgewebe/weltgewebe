@@ -6,10 +6,10 @@ services:
     environment:
       POLICY_LIMITS_PATH: /app/policies/limits.yaml
       APP_BASE_URL: https://weltgewebe.net
-      AUTH_PUBLIC_LOGIN: '1'
-      AUTH_LOG_MAGIC_TOKEN: '0'
-      AUTH_AUTO_PROVISION: '1'
-      AUTH_ALLOW_EMAILS: ""
+      AUTH_PUBLIC_LOGIN: ${AUTH_PUBLIC_LOGIN:-0}
+      AUTH_LOG_MAGIC_TOKEN: ${AUTH_LOG_MAGIC_TOKEN:-0}
+      AUTH_AUTO_PROVISION: ${AUTH_AUTO_PROVISION:-1}
+      AUTH_ALLOW_EMAILS: ${AUTH_ALLOW_EMAILS:-}
       AUTH_RL_IP_PER_MIN: "5"
       AUTH_RL_IP_PER_HOUR: "30"
       AUTH_RL_EMAIL_PER_MIN: "2"

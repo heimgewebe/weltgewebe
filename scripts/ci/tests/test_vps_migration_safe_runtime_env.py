@@ -71,6 +71,30 @@ def test_accepts_verify_applied_from_selected_env_file(tmp_path: pathlib.Path) -
     assert pathlib.Path(result.env_file) == env_file.resolve()
 
 
+def test_repo_vps_override_accepts_selected_env_file_without_service_migration_override(tmp_path: pathlib.Path) -> None:
+    module = _load_module()
+    repo = pathlib.Path(__file__).resolve().parents[3]
+    compose = repo / "infra" / "compose" / "compose.vps.override.yml"
+    env_file = _write(
+        tmp_path / ".env",
+        """
+        WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied
+        APP_BASE_URL=https://weltgewebe.net
+        """,
+    )
+
+    result = module.validate_boundary(
+        compose_source=compose,
+        env_file=env_file,
+        compose_env={"WELTGEWEBE_ENV_FILE": str(env_file)},
+    )
+
+    assert result.observed_mode == "verify-applied"
+    assert result.has_env_file_hook is True
+    assert result.has_service_environment_override is False
+    assert pathlib.Path(result.env_file) == env_file.resolve()
+
+
 def test_rejects_service_environment_override_map_syntax(tmp_path: pathlib.Path) -> None:
     module = _load_module()
     env_file = _write(

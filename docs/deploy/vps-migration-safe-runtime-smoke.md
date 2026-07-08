@@ -76,6 +76,26 @@ Do not:
 The recurring mistake is to treat route shape as app readiness. This runbook keeps
 those evidence classes separate.
 
+## VPS runtime defaults
+
+The VPS compose override is intentionally smoke-safe by default after the initial
+setup deploy for public login: `AUTH_PUBLIC_LOGIN` defaults to `0`, and related
+auth delivery/provisioning values remain explicit runtime-env choices.
+
+The startup migration mode is different: it must remain in the selected runtime
+env source, not in `services.api.environment`. The source-level helper rejects a
+service-level `WELTGEWEBE_API_STARTUP_MIGRATIONS` key because it can override the
+selected `env_file` and hide the effective startup mode.
+
+Public login may be enabled later, but only with an explicit token-delivery
+mechanism such as SMTP or another reviewed delivery path. Do not use the VPS
+smoke default as a claim that production auth readiness is complete.
+
+For a one-time empty-database setup, an operator may deliberately run an approved
+DB initialization path. After that window, return the selected runtime env source
+to `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied` so normal restarts verify
+migration history instead of applying migrations.
+
 ## Source-level preflight
 
 Before any runtime start, run the narrow env/compose source-boundary probe from
