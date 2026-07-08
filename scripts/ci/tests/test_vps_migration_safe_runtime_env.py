@@ -33,7 +33,7 @@ def _compose_with_env_file(
         "services:",
         "  api:",
         "    env_file:",
-        "      - ${WELTGEWEBE_ENV_FILE:-/opt/weltgewebe/.env}",
+        "      - ${WELTGEWEBE_ENV_FILE:-/etc/weltgewebe/weltgewebe.env}",
     ]
     extra = textwrap.dedent(environment).strip()
     if extra:

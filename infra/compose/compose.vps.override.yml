@@ -2,7 +2,7 @@
 services:
   api:
     env_file:
-      - ${WELTGEWEBE_ENV_FILE:-/opt/weltgewebe/.env}
+      - ${WELTGEWEBE_ENV_FILE:-/etc/weltgewebe/weltgewebe.env}
     environment:
       POLICY_LIMITS_PATH: /app/policies/limits.yaml
       APP_BASE_URL: https://weltgewebe.net

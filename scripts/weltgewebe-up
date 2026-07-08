@@ -10,7 +10,9 @@ set -euo pipefail
 #   weltgewebe-up [--with-caddy] [--no-pull] [--build-mode auto|force|no] [--branch BRANCH|--current-branch]
 
 # REPO_DIR defaults are handled in resolution logic below
+ENV_FILE_WAS_SET="${ENV_FILE+x}"
 ENV_FILE="${ENV_FILE:-/opt/weltgewebe/.env}"
+VPS_DEFAULT_ENV_FILE="${VPS_DEFAULT_ENV_FILE:-/etc/weltgewebe/weltgewebe.env}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-weltgewebe}"
 REMOTE="${REMOTE:-origin}"
 WELTGEWEBE_COMPOSE_BAKE="${WELTGEWEBE_COMPOSE_BAKE:-auto}"
@@ -23,6 +25,10 @@ case "$DEPLOY_TARGET" in
     exit 1
     ;;
 esac
+
+if [[ "$DEPLOY_TARGET" == "vps" && -z "$ENV_FILE_WAS_SET" && -f "$VPS_DEFAULT_ENV_FILE" ]]; then
+  ENV_FILE="$VPS_DEFAULT_ENV_FILE"
+fi
 
 # Base Compose File (always required)
 BASE_COMPOSE_FILE="infra/compose/compose.prod.yml"
