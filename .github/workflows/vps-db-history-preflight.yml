@@ -5,9 +5,11 @@ name: VPS DB history preflight
   pull_request:
     branches: [main]
     paths:
+      - "docs/deploy/vps-db-initialization-boundary.md"
       - "docs/deploy/vps-migration-safe-runtime-smoke.md"
       - "scripts/ops/check_vps_db_migration_history_shape.py"
       - "scripts/ci/tests/test_vps_db_history_preflight_docs.py"
+      - "scripts/ci/tests/test_vps_db_initialization_boundary_docs.py"
       - "scripts/ci/tests/test_vps_db_migration_history_shape.py"
       - "scripts/ci/tests/test_vps_migration_safe_runtime_env.py"
       - "scripts/ci/tests/test_vps_migration_safe_runtime_env_boundaries.py"
@@ -17,9 +19,11 @@ name: VPS DB history preflight
   push:
     branches: [main]
     paths:
+      - "docs/deploy/vps-db-initialization-boundary.md"
       - "docs/deploy/vps-migration-safe-runtime-smoke.md"
       - "scripts/ops/check_vps_db_migration_history_shape.py"
       - "scripts/ci/tests/test_vps_db_history_preflight_docs.py"
+      - "scripts/ci/tests/test_vps_db_initialization_boundary_docs.py"
       - "scripts/ci/tests/test_vps_db_migration_history_shape.py"
       - "scripts/ci/tests/test_vps_migration_safe_runtime_env.py"
       - "scripts/ci/tests/test_vps_migration_safe_runtime_env_boundaries.py"
@@ -59,6 +63,7 @@ jobs:
           python -m pytest \
             scripts/ci/tests/test_vps_db_migration_history_shape.py \
             scripts/ci/tests/test_vps_db_history_preflight_docs.py \
+            scripts/ci/tests/test_vps_db_initialization_boundary_docs.py \
             scripts/ci/tests/test_vps_migration_safe_runtime_env.py \
             scripts/ci/tests/test_vps_migration_safe_runtime_env_boundaries.py \
             scripts/ci/tests/test_vps_migration_safe_runtime_env_compose_semantics.py \
