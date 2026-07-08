@@ -169,14 +169,22 @@ Nach einem Public-Cutover kann der öffentliche Zustand mit einem read-only
 Operator-Check reproduzierbar geprüft werden:
 
 ```bash
+DEPLOY_COMMIT="<ausgelieferter-commit-sha>"
+
 python3 scripts/ops/check_public_live_readiness.py \
   --expected-ip 94.16.121.119 \
-  --expected-version "$(git rev-parse --short HEAD)" \
-  --expected-commit "$(git rev-parse HEAD)" \
+  --expected-version "${DEPLOY_COMMIT:0:8}" \
+  --expected-commit "${DEPLOY_COMMIT}" \
   --authoritative-server ns.inwx.de \
   --authoritative-server ns2.inwx.de \
   --authoritative-server ns3.inwx.eu
 ```
+
+`DEPLOY_COMMIT` ist der Commit, dessen Frontend/API tatsächlich ausgeliefert
+werden soll. Das ist nicht automatisch der aktuelle lokale `HEAD`: reine
+Doku-/Tooling-PRs können `main` vor den live ausgelieferten App-Build setzen. Für
+einen reinen Oberflächen-Receipt ohne Versionsbindung können `--expected-version`
+und `--expected-commit` weggelassen werden.
 
 Der Check liest keine Runtime-Secrets und verändert keinen Serverzustand. Er
 prüft DNS-A-Records, HTTP-zu-HTTPS-Redirect, Root-/`www`-HTTPS, `/map`,
