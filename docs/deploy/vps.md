@@ -186,6 +186,13 @@ Doku-/Tooling-PRs können `main` vor den live ausgelieferten App-Build setzen. F
 einen reinen Oberflächen-Receipt ohne Versionsbindung können `--expected-version`
 und `--expected-commit` weggelassen werden.
 
+Wenn IPv6 freigegeben und die AAAA-Records gesetzt sind, wird zusätzlich die
+IPv6-DNS-Erwartung geprüft:
+
+```bash
+  --expected-ipv6 2a03:4000:21:c74:b47a:7bff:fee6:70d
+```
+
 Der Check liest keine Runtime-Secrets und verändert keinen Serverzustand. Er
 prüft DNS-A-Records, HTTP-zu-HTTPS-Redirect, Root-/`www`-HTTPS, `/map`,
 `api.weltgewebe.net/health/ready`, `/_app/version.json`, lokale Basemap-Style-,

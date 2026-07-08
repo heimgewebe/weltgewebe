@@ -148,5 +148,50 @@ class PublicLiveReadinessTest(unittest.TestCase):
         self.assertIn("missing", pmtiles_result.detail)
 
 
+class PublicLiveReadinessIPv6Test(unittest.TestCase):
+    def test_ipv6_aaaa_checks_are_optional(self) -> None:
+        fake = FakeWorld()
+        results = fake.checker().run()
+
+        self.assertFalse(any(result.name.startswith("dns-aaaa:") for result in results))
+
+    def test_expected_ipv6_requires_matching_authoritative_aaaa_records(self) -> None:
+        fake = FakeWorld()
+        original = fake.module.dig_resolve_ipv6
+        try:
+            fake.module.dig_resolve_ipv6 = lambda host, servers: {"2a03:4000:21:c74:b47a:7bff:fee6:70d"}
+            checker = fake.module.PublicLiveChecker(
+                expected_ipv6="2a03:4000:21:c74:b47a:7bff:fee6:70d",
+                authoritative_servers=("ns.inwx.de",),
+                resolver=fake.resolver,
+                fetcher=fake.fetcher,
+            )
+            results = checker.run()
+        finally:
+            fake.module.dig_resolve_ipv6 = original
+
+        ipv6_results = [result for result in results if result.name.startswith("dns-aaaa:")]
+        self.assertEqual(len(ipv6_results), 3)
+        self.assertTrue(all(result.ok for result in ipv6_results))
+
+    def test_wrong_ipv6_aaaa_fails(self) -> None:
+        fake = FakeWorld()
+        original = fake.module.dig_resolve_ipv6
+        try:
+            fake.module.dig_resolve_ipv6 = lambda host, servers: {"2001:db8::1"}
+            checker = fake.module.PublicLiveChecker(
+                expected_ipv6="2a03:4000:21:c74:b47a:7bff:fee6:70d",
+                authoritative_servers=("ns.inwx.de",),
+                resolver=fake.resolver,
+                fetcher=fake.fetcher,
+            )
+            results = checker.run()
+        finally:
+            fake.module.dig_resolve_ipv6 = original
+
+        ipv6_results = [result for result in results if result.name.startswith("dns-aaaa:")]
+        self.assertEqual(len(ipv6_results), 3)
+        self.assertTrue(all(not result.ok for result in ipv6_results))
+
 if __name__ == "__main__":
     unittest.main()

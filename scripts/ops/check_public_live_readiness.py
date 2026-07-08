@@ -74,11 +74,11 @@ def socket_resolve_ipv4(host: str) -> set[str]:
     return {item[4][0] for item in answers}
 
 
-def dig_resolve_ipv4(host: str, authoritative_servers: Sequence[str]) -> set[str]:
+def dig_resolve_record(host: str, authoritative_servers: Sequence[str], record_type: str) -> set[str]:
     answers: set[str] = set()
     for server in authoritative_servers:
         proc = subprocess.run(
-            ["dig", "+short", f"@{server}", host, "A"],
+            ["dig", "+short", f"@{server}", host, record_type],
             check=False,
             text=True,
             stdout=subprocess.PIPE,
@@ -86,13 +86,25 @@ def dig_resolve_ipv4(host: str, authoritative_servers: Sequence[str]) -> set[str
         )
         if proc.returncode != 0:
             raise PublicLiveCheckError(
-                f"dig failed for {host} via {server}: {(proc.stderr or proc.stdout).strip()}"
+                f"dig failed for {host} {record_type} via {server}: {(proc.stderr or proc.stdout).strip()}"
             )
         for line in proc.stdout.splitlines():
             value = line.strip()
-            if value and all(part.isdigit() for part in value.split(".")):
+            if value:
                 answers.add(value)
     return answers
+
+
+def dig_resolve_ipv4(host: str, authoritative_servers: Sequence[str]) -> set[str]:
+    return {
+        value
+        for value in dig_resolve_record(host, authoritative_servers, "A")
+        if all(part.isdigit() for part in value.split("."))
+    }
+
+
+def dig_resolve_ipv6(host: str, authoritative_servers: Sequence[str]) -> set[str]:
+    return {value for value in dig_resolve_record(host, authoritative_servers, "AAAA") if ":" in value}
 
 
 def fetch_url(
@@ -144,6 +156,7 @@ class PublicLiveChecker:
     www_domain: str = DEFAULT_WWW_DOMAIN
     api_domain: str = DEFAULT_API_DOMAIN
     expected_ip: str = DEFAULT_EXPECTED_IP
+    expected_ipv6: str | None = None
     expected_version: str | None = None
     expected_commit: str | None = None
     authoritative_servers: Sequence[str] = ()
@@ -156,6 +169,7 @@ class PublicLiveChecker:
     def run(self) -> list[CheckResult]:
         checks = [
             *self.check_dns(),
+            *self.check_dns_ipv6(),
             self.check_http_redirect(),
             self.check_https_root(self.domain),
             self.check_https_root(self.www_domain),
@@ -185,6 +199,29 @@ class PublicLiveChecker:
                         "A record does not match expected VPS IPv4",
                         observed=observed,
                         expected=[self.expected_ip],
+                    )
+                )
+        return results
+
+    def check_dns_ipv6(self) -> list[CheckResult]:
+        if not self.expected_ipv6:
+            return []
+        results: list[CheckResult] = []
+        for host in (self.domain, self.www_domain, self.api_domain):
+            try:
+                observed = sorted(dig_resolve_ipv6(host, self.authoritative_servers))
+            except Exception as exc:
+                results.append(fail_result(f"dns-aaaa:{host}", str(exc)))
+                continue
+            if observed == [self.expected_ipv6]:
+                results.append(pass_result(f"dns-aaaa:{host}", "AAAA record matches expected VPS IPv6", observed=observed))
+            else:
+                results.append(
+                    fail_result(
+                        f"dns-aaaa:{host}",
+                        "AAAA record does not match expected VPS IPv6",
+                        observed=observed,
+                        expected=[self.expected_ipv6],
                     )
                 )
         return results
@@ -298,6 +335,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--www-domain", default=DEFAULT_WWW_DOMAIN)
     parser.add_argument("--api-domain", default=DEFAULT_API_DOMAIN)
     parser.add_argument("--expected-ip", default=DEFAULT_EXPECTED_IP)
+    parser.add_argument("--expected-ipv6")
     parser.add_argument("--expected-version")
     parser.add_argument("--expected-commit")
     parser.add_argument("--authoritative-server", action="append", default=[])
@@ -313,6 +351,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         www_domain=args.www_domain,
         api_domain=args.api_domain,
         expected_ip=args.expected_ip,
+        expected_ipv6=args.expected_ipv6,
         expected_version=args.expected_version,
         expected_commit=args.expected_commit,
         authoritative_servers=tuple(args.authoritative_server),

@@ -21,6 +21,9 @@ services:
         read_only: true
 
   caddy:
+    ports:
+      - "${CADDY_IPV6_BIND:-[::]}:80:80"
+      - "${CADDY_IPV6_BIND:-[::]}:443:443"
     volumes:
       - ${WELTGEWEBE_CADDYFILE:-../caddy/Caddyfile.vps}:/etc/caddy/Caddyfile:ro
       - ../../build/basemap:/srv/weltgewebe-basemap:ro
