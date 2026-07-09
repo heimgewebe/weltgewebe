@@ -58,12 +58,13 @@ relations:
 - Wöchentliche Veröffentlichung eines **Transparency-Anchors** (Root-Hash der Woche).
 - Öffentliche Statistik: Anzahl Tombstones, Takedown-Holds, mediane Löschzeit.
 
-## 7. Identität & Verortung
+## 7. Garnrolle, Verortung & Sichtbarkeit
 
-- Der Contract trägt nur die basale Kernunterscheidung (keine Vertrauenswerte oder komplexe Zwischenstufen):
-  - **Modus (`mode`)**: Eine Garnrolle ist entweder "verortet" (hat eine genaue Adresse) oder der "ron" (Rolle ohne Namen) zugeordnet.
-  - **Ungenauigkeitsradius (`radius_m`)**: Steuert ausschließlich die öffentliche Anzeige von verorteten Garnrollen.
-  - **Interne Verortung**: Nur "verortete" Garnrollen besitzen eine `location`.
+- Der Contract trägt das Zielmodell einer einzigen Garnrolle pro Account:
+  - **Garnrolle**: Der handelnde Account-Ursprung im Gewebe.
+  - **Location**: Optionaler realer Ort der Garnrolle.
+  - **Sichtbarkeit**: Keine öffentliche Position, exakt sichtbar oder im Umkreis sichtbar.
+  - **Interne Verortung**: Exakte Adresse und Koordinate bleiben getrennt von der öffentlichen Projektion, sofern keine exakte Sichtbarkeit gewählt wurde.
 
 ---
 

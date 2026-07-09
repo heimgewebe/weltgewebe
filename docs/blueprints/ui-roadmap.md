@@ -9,6 +9,8 @@ relations:
     target: docs/blueprints/ui-blaupause.md
   - type: relates_to
     target: docs/blueprints/ui-state-machine.md
+  - type: relates_to
+    target: docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 ---
 
 # Weltgewebe UI Roadmap
@@ -134,7 +136,40 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 ⸻
 
-## Phase 5 — Später / optional: Doku- und Strukturpflege
+## Phase 5 — Jetzt: Organisches Erstweben
+
+Der nächste produktive Hebel ist nicht mehr Kartentechnik, sondern der
+organische Eintritt ins Gewebe: Login → eigene Garnrolle → Garnrolle auf Karte
+setzen → ersten Knoten weben → Faden entsteht.
+
+Diese Phase folgt ADR-0009. Es gibt keine separate Nutzerkategorie neben der Garnrolle. Die UI spricht von einer Garnrolle, die beschrieben, auf die Karte gesetzt und zum Weben genutzt wird.
+
+### [ ] Roadmap PR 9 — Meine Garnrolle
+
+- [ ] Nach Login die eigene Garnrolle eindeutig anzeigen
+- [ ] Garnrolle ohne Kartenposition als "noch nicht auf der Karte" formulieren
+- [ ] Formular für Anzeigename, Kurzbeschreibung, Güter, Kompetenzen und Tags
+- [ ] Handlung "Garnrolle auf Karte setzen" anbieten
+- [ ] Sichtbarkeitsauswahl anbieten: exakt sichtbar, ungefähr sichtbar, noch nicht anzeigen
+- [ ] Exakte Sichtbarkeit als normalen positiven Fall behandeln
+
+### [ ] Roadmap PR 10 — Ersten Knoten weben
+
+- [ ] Knotenformular aus der eigenen Garnrolle heraus öffnen
+- [ ] Knotenart, Titel, Beschreibung, Status und exakte Position erfassen
+- [ ] Fairschenkbox Caspar-Voght-Straße als erster realer Webfluss abbilden
+- [ ] Nach Speichern den Knoten auf der Karte sichtbar machen
+
+### [ ] Roadmap PR 11 — Gestaltungsfaden automatisch erzeugen
+
+- [ ] Beim Weben eines Knotens automatisch einen Faden von Garnrolle zu Knoten erzeugen
+- [ ] UI spricht von Fäden
+- [ ] Fadenart für den ersten Fluss als Gestaltungsfaden modellieren
+- [ ] Detailpanel zeigt: wer hat den Knoten gewoben, welcher Faden besteht
+
+⸻
+
+## Phase 6 — Später / optional: Doku- und Strukturpflege
 
 Diese Punkte sind keine Blocker für den produktiven Fortschritt, aber wichtig für die langfristige Gesundheit.
 

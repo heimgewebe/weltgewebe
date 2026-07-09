@@ -119,7 +119,7 @@ Generated automatically. Do not edit.
 
 ## docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md
 
-- [relates_to] docs/konzepte/garnrolle-und-verortung.md
+- [supersedes] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 
 ## docs/adr/ADR-0005-auth.md
 
@@ -164,6 +164,15 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 - [relates_to] docs/runbooks/domain-mail-cutover.md
+
+## docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
+
+- [relates_to] docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md
+- [relates_to] docs/blueprints/ui-roadmap.md
+- [relates_to] docs/konzepte/garnrolle-und-verortung.md
+- [relates_to] docs/reference/glossar.md
+- [relates_to] docs/specs/privacy-api.md
+- [relates_to] docs/specs/privacy-ui.md
 
 ## docs/architekturstruktur.md
 
@@ -281,6 +290,7 @@ Generated automatically. Do not edit.
 
 ## docs/blueprints/ui-roadmap.md
 
+- [relates_to] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 - [relates_to] docs/blueprints/ui-blaupause.md
 - [relates_to] docs/blueprints/ui-interaction-doctrine.md
 - [relates_to] docs/blueprints/ui-state-machine.md
@@ -353,7 +363,6 @@ Generated automatically. Do not edit.
 
 ## docs/deploy/heimserver.deployment.md
 
-- [relates_to] docs/deploy/README.md
 - [relates_to] docs/deploy/heim-first-phase0.md
 - [relates_to] docs/deploy/heimserver.integration.md
 - [relates_to] docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
@@ -361,7 +370,6 @@ Generated automatically. Do not edit.
 
 ## docs/deploy/heimserver.integration.md
 
-- [relates_to] docs/deploy/README.md
 - [relates_to] docs/deploy/heimserver.deployment.md
 
 ## docs/deploy/secondary-domain-web-surfaces.md
@@ -373,6 +381,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/README.md
 - [relates_to] docs/deployment.md
 - [relates_to] docs/runbooks/incident-response.md
+
+## docs/deploy/vps-db-initialization-boundary.md
+
+- [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md
 
 ## docs/deploy/vps-http-route-smoke-risks.md
 
@@ -392,10 +404,12 @@ Generated automatically. Do not edit.
 
 ## docs/deploy/vps-migration-safe-runtime-smoke.md
 
+- [relates_to] docs/deploy/vps-db-initialization-boundary.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 
 ## docs/deploy/vps.md
 
+- [relates_to] docs/deploy/README.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 
 ## docs/deployment.md
@@ -446,6 +460,7 @@ Generated automatically. Do not edit.
 ## docs/konzepte/garnrolle-und-verortung.md
 
 - [relates_to] docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md
+- [relates_to] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 - [relates_to] docs/konzepte/garnrolle.md
 - [relates_to] docs/policies/architecture-critique.md
 - [relates_to] docs/specs/privacy-api.md
@@ -844,10 +859,12 @@ Generated automatically. Do not edit.
 
 ## docs/specs/privacy-api.md
 
+- [relates_to] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 - [relates_to] docs/specs/privacy-ui.md
 
 ## docs/specs/privacy-ui.md
 
+- [relates_to] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 - [relates_to] docs/specs/privacy-api.md
 
 ## docs/tasks/README.md
@@ -1045,6 +1062,14 @@ Generated automatically. Do not edit.
 ## scripts/guard/domain-single-instance-guard.sh
 
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
+
+## scripts/ops/check_public_live_readiness.py
+
+- [relates_to] docs/deploy/vps.md
+
+## scripts/ops/check_vps_db_migration_history_shape.py
+
+- [relates_to] docs/deploy/vps-db-initialization-boundary.md
 
 ## scripts/ops/check_vps_migration_safe_runtime_env.py
 

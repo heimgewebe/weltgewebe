@@ -66,24 +66,23 @@ Inhalte (Knoten, Fäden, Garn)
 - Webrat: Der Ort für Governance, Anträge und die Übersicht über Delegationen. Alle Abstimmungen sind hier ebenso
   einsehbar und man kann daran teilnehmen.
 - Nähstübchen: Ein ortsunabhängiger Raum für die allgemeine Kommunikation.
-- RoN-Platzhalter: Ein spezieller Knoten, an dem anonymisierte Inhalte nach 84 Tagen gesammelt werden.
+- Archiv-/Tombstone-Knoten: Ein spezieller Knoten, an dem gelöschte oder anonymisierte Inhalte ohne Rückbindung an eine sichtbare Garnrolle gesammelt werden.
 
 III. Zeitlichkeit, Sichtbarkeit und Pseudonymisierung
 
 - 7-Sekunden-Rotation: Nach jeder Aktion dreht sich die Garnrolle des Nutzers für 7 Sekunden sichtbar auf der Karte.
 - 7-Tage-Verblassen: Fäden, die nicht zu Garn verzwirnt werden, verblassen innerhalb von 7 Tagen sukzessive. Knoten, zu
   denen 7 Tage lang kein neuer Faden führt, lösen sich ebenfalls in diesem Zeitraum sukzessive auf.
-- Pseudonymisierung (RoN-System):
-  - Nutzer können per Opt-in festlegen, dass ihre Beiträge nach x Tagen automatisch anonymisiert werden. Der
-    Autorenname wird dann durch "RoN" (Rolle ohne Namen) ersetzt.
-  - Die anonymisierten Fäden führen dann nicht mehr zur ursprünglichen Garnrolle, sondern zum zentralen
-    RoN-Platzhalter. Das Wissen bleibt so im Gewebe erhalten.
-- Ausstiegsprozess: Wenn ein Nutzer die Plattform verlässt, durchlaufen alle seine Daten den RoN-Prozess.
+- Pseudonymisierung und Tombstone-Prozess:
+  - Nutzer können per Opt-in festlegen, dass ihre Beiträge nach x Tagen automatisch anonymisiert werden. Die
+    sichtbare Rückbindung an die Garnrolle wird dann entfernt.
+  - Die anonymisierten Fäden führen dann nicht mehr zur ursprünglichen Garnrolle, sondern zu einem
+    Archiv- oder Tombstone-Kontext. Das Wissen bleibt so im Gewebe erhalten.
+- Ausstiegsprozess: Wenn ein Nutzer die Plattform verlässt, durchlaufen alle seine Daten den Tombstone- oder Anonymisierungsprozess.
   Beiträge, die jünger als x Tage sind, bleiben so lange namentlich sichtbar, bis diese Frist erreicht ist.
   Am Ende wird die Garnrolle des Nutzers gelöscht.
 - Eigene Beiträge und Aktionen können per Tombstone + Key-Erase uneinsehbar gemacht werden.
-- Per Opt-in kann man die Verortung der eigenen Garnrolle ungenauer machen.
-  Der Ungenauigkeitsradius ist individuell einstellbar.
+- Per Opt-in kann man die eigene Garnrolle im Umkreis sichtbar machen. Der Radius ist individuell einstellbar.
 
 IV. Governance und Demokratische Prozesse
 
@@ -147,9 +146,9 @@ VI. Organisation und Technische Architektur
   /archive/YYYY-MM) sind hingegen als index, follow markiert und setzen ein rel="canonical"-Tag, um die
   Nachvollziehbarkeit zu gewährleisten.
 - Monitoring, Alarme und Betriebspläne:
-  - Metriken: Es werden Governance-Metriken (z.B. Teilnahmequote), RoN-Metriken (z.B. Transferrate) und Kosten-Metriken
+  - Metriken: Es werden Governance-Metriken (z.B. Teilnahmequote), Anonymisierungs-/Tombstone-Metriken (z.B. Transferrate) und Kosten-Metriken
     (z.B. €/aktiver Nutzer) überwacht. Es gibt Alarm-Regeln, z.B. bei Latenzen über 1000 ms oder wenn die Kosten in
     Phase A 200 € übersteigen.
   - Betriebspläne (Cronjobs): Governance-Timer laufen minütlich; Delegations-Prüfungen täglich um 01:00 Uhr;
-    RoN-Prozesse um 02:00 Uhr und Kosten-Analysen um 03:00 Uhr. Für die Systemgesundheit gibt es die Endpunkte
+    Anonymisierungs-/Tombstone-Prozesse um 02:00 Uhr und Kosten-Analysen um 03:00 Uhr. Für die Systemgesundheit gibt es die Endpunkte
     /health/live und /health/ready.

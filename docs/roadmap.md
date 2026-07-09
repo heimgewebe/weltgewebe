@@ -123,7 +123,8 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
 - [x] Phase 2 — Zustandsdurchsetzung härten · [ui-roadmap Phase 2](blueprints/ui-roadmap.md)
 - [x] Phase 3 — Fokus-Panels (Node/Account/Edge) · [ui-roadmap Phase 3](blueprints/ui-roadmap.md)
 - [x] Phase 4 — Suche, Filter, A11y · [ui-roadmap Phase 4](blueprints/ui-roadmap.md)
-- [x] Phase 5 — Doku-/Strukturpflege · [ui-roadmap Phase 5](blueprints/ui-roadmap.md)
+- [~] Phase 5 — Organisches Erstweben: eigene Garnrolle, Garnrolle auf Karte setzen, ersten Knoten weben und Gestaltungsfaden erzeugen · [ui-roadmap Phase 5](blueprints/ui-roadmap.md), [ADR-0009](adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md)
+- [x] Phase 6 — Doku-/Strukturpflege · [ui-roadmap Phase 6](blueprints/ui-roadmap.md)
 - [~] Auth-UI-Integration: Step-up-Consume + Passkey-Eintragspunkt · Step-up-Consume ist als eigener Pfad unter `/auth/step-up/consume` belegt; Passkey-Eintragspunkt ist als deaktivierter Stub in der `/settings`-Account-Sektion sichtbar. Aktivierung folgt aus Auth-Phase 4 · siehe [auth-roadmap §9](blueprints/auth-roadmap.md)
 
 ## Strang Karte (Basemap + Kartenklarheit)

@@ -214,9 +214,9 @@ Achsen E und F: konditioniert — wenn inaktiv, explizit als „nicht anwendbar"
 
 → Pflichtstruktur §7 / Punkt 5 (Architekturkritik) + Punkt 8 (Alternative Sinnachse)
 
-### F. Identitätssystem *(aktiv nur bei: Garnrolle, RoN, Verortung, Auth-Identität, Sichtbarkeitslogik)*
+### F. Garnrollen- und Sichtbarkeitssystem *(aktiv nur bei: Garnrolle, Verortung, Auth-Identität, Sichtbarkeitslogik)*
 
-- Garnrolle-Modi konsistent (verortet vs. RoN)?
+- Garnrollen-Sichtbarkeit konsistent (nicht auf Karte, exakt sichtbar, im Umkreis sichtbar)?
 - Vertrauen als Systemwert modelliert? (im Weltgewebe verboten)
 
 → Pflichtstruktur §7 / Punkt 5 (Architekturkritik) + Punkt 8 (Alternative Sinnachse)

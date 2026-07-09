@@ -95,7 +95,7 @@ Diese Artefakte liefern reale Nachweise des implementierten Zustands:
 - Session ist der primäre Alltagszustand.
 - Passkey ist optionaler Komfort- und Sicherheitsgewinn, nicht Pflicht.
 - Step-up Auth ist aktionsgebunden und session-neutral.
-- Auth ist strikt getrennt vom Identitätsmodus (RoN vs. verortet).
+- Auth ist strikt getrennt von Garnrollen-Verortung und öffentlicher Sichtbarkeit.
 - Keine Architekturentscheidung ohne Runtime-Beleg oder explizite Offen-Markierung.
 - Kein Feature-Ausbau auf unstabiler Session-Basis.
 - Drift-Sichtbarkeit geht vor Vollständigkeitsrhetorik.

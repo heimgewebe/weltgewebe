@@ -4,7 +4,7 @@ set -euo pipefail
 # Bootstrap the first real account with a public map position.
 #
 # The bootstrap account is always a verortete Garnrolle: the whole point is a
-# visible account with a public position on the map. (RoN accounts have no
+# visible account with a public position on the map. Accounts without
 # public_pos by contract and are therefore not produced by this path.)
 #
 # Reads account data from environment variables. See usage() below.

@@ -247,7 +247,7 @@ ausdrücklich als veraltet markiert werden. Die Desktop-Ausprägung „rechte
 Seitenleiste" bleibt erlaubt, aber nur als Layoutform des Fokuspanels.
 
 Nicht betroffen sind fachlich legitime Slider, die nichts mit Drawer-Layout zu
-tun haben, etwa der Ungenauigkeitsradius-Slider (Privacy, ADR-0003) oder ein
+tun haben, etwa die Sichtbarkeitsauswahl der Garnrolle (ADR-0009) oder ein
 historischer Zeit-Slider in Fahrplänen.
 
 ## Nicht-Ziele

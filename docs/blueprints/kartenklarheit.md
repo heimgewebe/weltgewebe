@@ -251,8 +251,7 @@ Später als diskriminierte Union:
 type MapEntityViewModel =
   | { type: "node"; ... }
   | { type: "account"; ... }
-  | { type: "garnrolle"; ... }
-  | { type: "ron"; ... };
+  | { type: "garnrolle"; mapState: "not_on_map" | "exact" | "radius"; ... };
 ```
 
 ---
@@ -344,7 +343,6 @@ Ersetzen oder parallel einführen:
 - `node`
 - `account`
 - `garnrolle`
-- `ron`
 
 **5.10 Marker-Kategorisierung umstellen:**
 `nodes.ts` und verwandte Logik sollen nicht mehr Strings vermischen, sondern auf echte Varianten reagieren.
