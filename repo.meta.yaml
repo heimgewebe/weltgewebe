@@ -4,7 +4,7 @@ repo_type: service
 role: weltgewebe-stack
 status: active
 summary: >
-  Mobile-first Webprojekt mit SvelteKit (Web), Rust/Axum (API), Postgres+Outbox, JetStream und Caddy.
+  Aktives Karteninterface mit SvelteKit, Rust/Axum, JSONL-/PostgreSQL-Cutoverpfaden, NATS und Caddy.
 
 owners:
   - heimgewebe

@@ -3,147 +3,152 @@ id: datenmodell
 title: Datenmodell
 doc_type: reference
 status: active
-summary: Dokumentation des PostgreSQL-Datenmodells mit Kernentitäten, Beziehungen und Lese-Modellen.
+summary: Aktuelles physisches Datenmodell, Quellenumschaltung und noch nicht implementiertes Zielmodell.
 relations:
   - type: relates_to
-    target: docs/architekturstruktur.md
+    target: architecture/overview.md
   - type: relates_to
     target: docs/domain/vocabulary.md
   - type: relates_to
     target: docs/techstack.md
+  - type: relates_to
+    target: docs/deploy/README.md
 ---
+
 # Datenmodell
 
-Dieses Dokument beschreibt das Datenmodell der Weltgewebe-Anwendung, das auf PostgreSQL aufbaut.
-Es dient als Referenz für Entwickler, um die Kernentitäten, ihre Beziehungen und die daraus
-abgeleiteten Lese-Modelle zu verstehen.
+## Wichtigste Aussage
 
-## Grundprinzipien
+PostgreSQL ist **nicht** pauschal die alleinige Quelle der Wahrheit. Für
+Domänendaten bleibt JSONL der Standard. PostgreSQL kann als Lesequelle und für
+einzelne Schreibpfade ausdrücklich aktiviert werden. Auth-Sitzungen und
+Passkey-Credentials besitzen eigene Persistenzentscheidungen.
 
-- **Source of Truth:** PostgreSQL ist die alleinige Quelle der Wahrheit.
-- **Transaktionaler Outbox:** Alle Zustandsänderungen werden transaktional in die `outbox`-Tabelle
-  geschrieben, um eine konsistente Event-Verteilung an nachgelagerte Systeme (z.B. via NATS
-  JetStream) zu garantieren.
-- **Normalisierung:** Das Schreib-Modell ist normalisiert, um Datenintegrität zu gewährleisten.
-  Lese-Modelle (Projektionen/Views) sind für spezifische Anwendungsfälle denormalisiert und
-  optimiert.
-- **UUIDs:** Alle Primärschlüssel sind UUIDs (`v4`), um eine verteilte Generierung zu
-  ermöglichen und Abhängigkeiten von sequenziellen IDs zu vermeiden.
+## Quellenmatrix
 
----
+| Domäne | Standard lesen | Standard schreiben | PostgreSQL-Option |
+|---|---|---|---|
+| Accounts/Garnrollen | JSONL | JSONL-Append | `domain_accounts`; Account-Create opt-in |
+| Knoten | JSONL | JSONL-Rewrite | `domain_nodes`; Patch opt-in |
+| Fäden | JSONL | JSONL-Append | `domain_edges`; Create opt-in |
+| Sitzungen | In-Memory ohne DB | gleicher Store | `sessions` bei konfiguriertem DB-Store |
+| Passkeys | In-Memory | In-Memory | `passkey_credentials` opt-in |
+| Gespräche/Nachrichten | kein vollständiger produktiver Pfad | kein vollständiger produktiver Pfad | nur Contracts, keine Tabellen |
 
-## Tabellen (Schreib-Modell)
+PostgreSQL-Schreiben verlangt PostgreSQL-Lesen. Die API verweigert ungültige
+Mischzustände, damit Änderungen nach einem Neustart nicht unsichtbar werden.
+Es gibt keinen allgemeinen Dual-Write.
 
-### `nodes`
+## Physische PostgreSQL-Tabellen
 
-Speichert geografische oder logische Knotenpunkte, die als Anker für Gesprächsräume dienen.
+Die folgende Übersicht wird aus den aktuellen Migrationen abgeleitet.
 
-|Spalte|Typ|Beschreibung|
+### `sessions`
+
+| Spalte | Typ | Bedeutung |
 |---|---|---|
-|`id`|`uuid` (PK)|Eindeutiger Identifikator des Knotens.|
-|`location`|`geography(Point, 4326)`|Geografischer Standort (Längen- und Breitengrad).|
-|`h3_index`|`bigint`|H3-Index für schnelle geografische Abfragen.|
-|`title`|`text`|Anzeigename des Knotens.|
-|`summary`|`text`|Kurze Zusammenfassung. Ein längeres `description`-Feld ist für später reserviert.|
-|`created_at`|`timestamptz`|Zeitstempel der Erstellung.|
-|`updated_at`|`timestamptz`|Zeitstempel der letzten Änderung.|
+| `id` | `TEXT` PK | serverseitige Session-ID |
+| `account_id` | `TEXT` | zugehöriger Account |
+| `device_id` | `TEXT` | Browser-/Gerätebezug |
+| `created_at` | `TIMESTAMPTZ` | Erstellung |
+| `last_active` | `TIMESTAMPTZ` | letzte Aktivität |
+| `expires_at` | `TIMESTAMPTZ` | serverseitiger Ablauf |
 
-### `roles`
+Derzeit besteht kein Foreign Key auf `domain_accounts`, weil Accounts weiterhin
+aus JSONL gelesen werden können.
 
-Verwaltet Benutzer- oder Systemrollen, die Berechtigungen steuern.
+### `domain_accounts`
 
-|Spalte|Typ|Beschreibung|
+| Gruppe | Spalten |
+|---|---|
+| Identität | `id`, `kind`, `title`, `mode` |
+| Sichtbarkeit/Ort | `radius_m`, `location_lat`, `location_lon` |
+| Betrieb/Auth | `disabled`, `role`, `email`, `webauthn_user_id` |
+| Zeit | `created_at`, `updated_at` |
+| Restfelder | `public_payload`, `private_payload` |
+
+E-Mail-Adressen besitzen einen trim-/case-normalisierten partiellen Unique-Index.
+`public_pos` wird nicht gespeichert, sondern aus privater Position, Radius und
+ID deterministisch abgeleitet.
+
+`kind` und `mode` verwenden noch Legacy-Defaults `ron`. Diese Defaults sind kein
+bestätigtes Zielmodell. Ihre Ablösung braucht eine Datenmigration und kann nicht
+nur dokumentarisch erfolgen.
+
+### `domain_nodes`
+
+| Spalte | Typ | Bedeutung |
 |---|---|---|
-|`id`|`uuid` (PK)|Eindeutiger Identifikator der Rolle.|
-|`user_id`|`uuid` (FK)|Referenz zum Benutzer (externes System).|
-|`permissions`|`jsonb`|Berechtigungen der Rolle als JSON-Objekt.|
-|`created_at`|`timestamptz`|Zeitstempel der Erstellung.|
+| `id` | `TEXT` PK | Knoten-ID |
+| `kind` | `TEXT` | Knotentyp |
+| `title` | `TEXT` | Titel |
+| `lat`, `lon` | `DOUBLE PRECISION` | optionale Position |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | Zeitangaben |
+| `payload` | `JSONB` | übrige JSONL-Felder |
 
-### `edges`
+Es gibt derzeit keine PostGIS-Geometrie. Der Geoindex ist ein einfacher
+B-Tree auf `(lat, lon)`.
 
-Definiert Beziehungen zwischen Knoten und Rollen (z.B. Mitgliedschaften, Zuständigkeiten).
+### `domain_edges`
 
-|Spalte|Typ|Beschreibung|
+| Spalte | Typ | Bedeutung |
 |---|---|---|
-|`id`|`uuid` (PK)|Eindeutiger Identifikator der Kante.|
-|`source_type`|`text`|Typ des Ursprungs (`role`, `node`).|
-|`source_id`|`uuid`|ID des Ursprungsobjekts.|
-|`target_type`|`text`|Typ des Ziels (`role`, `node`).|
-|`target_id`|`uuid`|ID des Zielobjekts.|
-|`edge_kind`|`text`|Art der Beziehung (`delegation`, `membership`, `ownership`, `reference`).|
-|`note`|`text`|Optionale Notiz zur Beziehung.|
-|`created_at`|`timestamptz`|Zeitstempel der Erstellung.|
-|`expires_at`|`timestamptz`|Optionaler Ablaufzeitpunkt.|
+| `id` | `TEXT` PK | Faden-ID |
+| `source_id`, `target_id` | `TEXT` | Endpunkte |
+| `edge_kind` | `TEXT` | Beziehungsart |
+| `created_at` | `TIMESTAMPTZ` | Erstellung |
+| `payload` | `JSONB` | Typinformationen, Notiz und Restfelder |
 
-### `conversations`
+Foreign Keys sind bewusst noch nicht gesetzt. Vor einer FK-Entscheidung ist ein
+Orphan- und Referenzaudit erforderlich; bestehende Fäden dürfen nicht
+stillschweigend verworfen werden.
 
-Repräsentiert die Gesprächsräume ("conversations"), die mit unterschiedlichen Subjekten
-(z.B. Knoten, Gremien) verknüpft sein können.
+### `passkey_credentials`
 
-|Spalte|Typ|Beschreibung|
+| Spalte | Typ | Bedeutung |
 |---|---|---|
-|`id`|`uuid` (PK)|Eindeutiger Identifikator des Gesprächsraums.|
-|`conversation_type`|`text`|Typ des Gesprächsraums (z.B. `node`, `webrat`, `naehstuebchen`, `private`).|
-|`subject_id`|`uuid`|Zugehöriges Subjekt (z.B. `nodes.id`). Kann `NULL` sein.|
-|`author_role_id`|`uuid` (FK, `roles.id`)|Rolle, die den Gesprächsraum eröffnet hat.|
-|`title`|`text`|Titel des Gesprächsraums.|
-|`created_at`|`timestamptz`|Zeitstempel der Erstellung.|
-|`updated_at`|`timestamptz`|Zeitstempel der letzten Änderung.|
+| `credential_id` | `TEXT` PK | hexkodierte WebAuthn-Credential-ID |
+| `account_id` | `TEXT` | zugehöriger Account |
+| `webauthn_user_id` | `UUID` | stabiler WebAuthn-User-Handle |
+| `credential` | `JSONB` | öffentlicher Credential-Datensatz und Counter |
+| Zeitfelder | `TIMESTAMPTZ` | Erstellung, Änderung, letzte Nutzung |
 
-### `messages`
+Die Tabelle speichert keine privaten Passkey-Schlüssel. Ein Foreign Key zu
+`domain_accounts` ist bis zum vollständigen PostgreSQL-Accountcutover bewusst
+ausgesetzt.
 
-Speichert einzelne Beiträge innerhalb eines Gesprächsraums.
+## JSONL-Modell
 
-|Spalte|Typ|Beschreibung|
-|---|---|---|
-|`id`|`uuid` (PK)|Eindeutiger Identifikator der Nachricht.|
-|`conversation_id`|`uuid` (FK, `conversations.id`)|Zugehöriger Gesprächsraum.|
-|`author_role_id`|`uuid` (FK, `roles.id`)|Rolle, die die Nachricht verfasst hat.|
-|`content`|`text`|Inhalt der Nachricht.|
-|`created_at`|`timestamptz`|Zeitstempel der Erstellung.|
+JSONL-Datensätze folgen den JSON-Schemas in `contracts/domain`. Die API lädt sie
+beim Start in begrenzte In-Memory-Stores. Schreibpfade serialisieren
+check-and-write innerhalb eines Prozesses und verwenden `fsync`; sie sind kein
+Ersatz für eine transaktionale Mehrprozessdatenbank.
 
-### `outbox`
+## Contracts ohne produktive Tabellen
 
-Implementiert das Transactional Outbox Pattern für zuverlässige Event-Publikation.
+`conversation.schema.json`, `message.schema.json` und `role.schema.json`
+beschreiben fachliche beziehungsweise geplante Objekte. Die aktuelle
+Migrationshistorie enthält keine `conversations`, `messages`, `roles`, `outbox`
+oder Projektionsviews. Dokumente dürfen diese Objekte daher nicht als bereits
+persistierte PostgreSQL-Fläche darstellen.
 
-|Spalte|Typ|Beschreibung|
-|---|---|---|
-|`id`|`uuid` (PK)|Eindeutiger Identifikator des Events.|
-|`aggregate_type`|`text`|Typ des Aggregats (z.B. "conversation", "message").|
-|`aggregate_id`|`uuid`|ID des betroffenen Aggregats.|
-|`event_type`|`text`|Typ des Events (z.B. "conversation.created", "message.posted").|
-|`payload`|`jsonb`|Event-Daten.|
-|`created_at`|`timestamptz`|Zeitstempel der Erstellung.|
+## Cutover-Regeln
 
----
+Ein vollständiger PostgreSQL-Cutover ist erst belegt, wenn:
 
-## Projektionen (Lese-Modelle)
+1. Backfill und Orphan-Audit grün sind,
+2. die betroffene Lesequelle PostgreSQL ist,
+3. alle benötigten Mutationen PostgreSQL schreiben,
+4. kein restart-unsichtbarer JSONL-Pfad verbleibt,
+5. Rollback und Wiederherstellung definiert sind,
+6. DB- und Browser-Ende-zu-Ende-Beweise grün sind,
+7. die Produktionsruntime die Schalter frisch belegt.
 
-Diese Views sind für die Lese-Performance optimiert und fassen Daten aus mehreren Tabellen zusammen.
-Sie werden von den Workern (Projektoren) asynchron aktualisiert.
+## Logisches Zielmodell
 
-### `public_role_view`
-
-Eine denormalisierte Sicht auf Rollen, die nur öffentlich sichtbare Informationen enthält.
-
-|Spalte|Typ|Beschreibung|
-|---|---|---|
-|`role_id`|`uuid`|Identifikator der Rolle.|
-|`display_name`|`text`|Öffentlich sichtbarer Name (ggf. aus einem externen User-Service).|
-|`avatar_url`|`text`|URL zu einem Avatar-Bild.|
-
-### `conversation_view`
-
-Eine zusammengefasste Ansicht von Gesprächsräumen für die schnelle Darstellung in der
-Benutzeroberfläche.
-
-|Spalte|Typ|Beschreibung|
-|---|---|---|
-|`conversation_id`|`uuid`|Identifikator des Gesprächsraums.|
-|`node_id`|`uuid`|Zugehöriger Knoten.|
-|`node_name`|`text`|Name des zugehörigen Knotens.|
-|`author_display_name`|`text`|Anzeigename des Autors.|
-|`title`|`text`|Titel des Gesprächsraums.|
-|`comment_count`|`integer`|Anzahl der Kommentare (wird vom Projektor berechnet).|
-|`last_activity_at`|`timestamptz`|Zeitstempel der letzten Aktivität.|
-|`created_at`|`timestamptz`|Zeitstempel der Erstellung.|
+Das angestrebte Produktmodell besteht aus einer Garnrolle je Account,
+Eigenschaften für Sichtbarkeit und Verortung, Knoten als Kollektivgüter oder
+Orte sowie Fäden als Beziehungen. Dieses Zielmodell ist noch nicht vollständig
+mit den Legacyfeldern `kind`, `mode`, `role` und `ron` versöhnt. Bis zur
+Migration gelten die physischen Contracts und Datenintegritätsregeln vor einer
+vereinfachenden Produktbeschreibung.

@@ -3,525 +3,182 @@ id: docs.runbook
 title: Runbook
 doc_type: runbook
 status: active
-summary: >
-  Allgemeines operatives Runbook.
+summary: Aktuelle lokale, diagnostische und wiederherstellungsbezogene Betriebsabläufe.
 relations:
+  - type: relates_to
+    target: runbooks/README.md
   - type: relates_to
     target: docs/runbook.observability.md
   - type: relates_to
-    target: docs/deployment.md
-  - type: relates_to
     target: docs/deploy/README.md
 ---
-## Runbook
 
-Dieses Dokument enthält praxisorientierte Anleitungen für den Betrieb, die
-Wartung und das Onboarding im Weltgewebe-Projekt.
+# Allgemeines Runbook
 
-## 1. Onboarding (Woche 1-2)
+Dieses Dokument enthält nur Abläufe, die mit der aktuellen Repositorystruktur
+vereinbar sind. Für öffentliche Deployments, Migrationen und Mailbetrieb gelten
+die spezialisierten Runbooks unter [`docs/deploy/`](deploy/README.md).
 
-Ziel dieses Runbooks ist es, neuen Teammitgliedern einen strukturierten und
-schnellen Einstieg zu ermöglichen.
+## 1. Lokales Onboarding
 
-### Woche 1: Systemüberblick & lokales Setup
+### Voraussetzungen
 
-- **Tag 1: Willkommen & Einführung**
-  - **Kennenlernen:** Team und Ansprechpartner.
-  - **Projekt-Kontext:** Lektüre von [README.md](../README.md),
-    [docs/overview/inhalt.md](overview/inhalt.md) und
-    [docs/geist-und-plan.md](geist-und-plan.md).
-  - **Architektur:** `docs/architekturstruktur.md` und `docs/techstack.md` durcharbeiten, um die
-    Komponenten und ihre Zusammenspiel zu verstehen.
-  - **Zugänge:** Accounts für GitHub, Docker Hub, etc. beantragen.
+- Git
+- Docker mit Compose
+- `just`
+- Node.js und pnpm gemäß den versionierten Repositorymetadaten
+- Rust nur für direkte API-Entwicklung außerhalb des Containerpfads
 
-- **Tag 2-3: Lokales Setup**
-  - **Voraussetzungen:** Git, Docker, Docker Compose, `just` und Rust (stable) installieren.
-  - **Codespaces (Zero-Install):** GitHub Codespaces öffnen, das Devcontainer-Setup starten und im
-    Terminal `npm run dev -- --host` ausführen. So lassen sich Frontend und API ohne lokale
-    Installation testen – ideal auch auf iPad.
-  - **Repository klonen:** `git clone <repo-url>`
-  - **`.env`-Datei erstellen:** `cp .env.example .env`.
-  - **Core-Stack starten:** `just up` (bevorzugt) oder `make up` als Fallback. Überprüfen, ob alle
-    Container (`web`, `api`, `db`, `caddy`) laufen: `docker ps`.
-  - **Web-Frontend aufrufen:** `http://localhost:5173` (SvelteKit-Devserver) oder – falls der Caddy
-    Reverse-Proxy aktiv ist – `http://localhost:3000` im Browser öffnen.
-  - **API-Healthcheck:** API-Endpunkt `/health` aufrufen, um eine positive Antwort zu sehen.
-
-- **Tag 4-5: Erster kleiner Beitrag**
-  - **Hygiene-Checks:** `just check` ausführen und sicherstellen, dass alle Linter, Formatierer und
-    Tests erfolgreich durchlaufen.
-  - **"Good first issue" suchen:** Ein kleines, abgeschlossenes Ticket (z.B.
-    eine Textänderung in der UI oder eine Doku-Ergänzung) auswählen.
-  - **Workflow üben:** Branch erstellen, Änderung implementieren, Commit mit
-    passendem Präfix (`docs: ...` oder `feat(web): ...`) erstellen und einen Pull
-    Request zur Review stellen.
-
-### Woche 2: Vertiefung & erste produktive Aufgaben
-
-- **Monitoring & Observability:**
-  - **Monitoring-Stack starten:** `docker compose -f infra/compose/compose.observ.yml up -d`.
-  - **Dashboards erkunden:** Grafana (`http://localhost:3001`) öffnen und die Dashboards für
-    Web-Vitals, API-Latenzen und Systemmetriken ansehen.
-- **Datenbank & Events:**
-  - **Event-Streaming-Stack starten:** `docker compose -f infra/compose/compose.stream.yml up -d`.
-  - **Datenbank-Migrationen:** Verzeichnis `apps/api/migrations/` ansehen, um die
-    Schema-Entwicklung nachzuvollziehen.
-- **Produktiv werden:**
-  - **Erstes Feature-Ticket:** Eine überschaubare User-Story oder einen Bug bearbeiten, der alle
-    Schichten (Web, API) betrifft.
-  - **Pair-Programming:** Eine Session mit einem erfahrenen Teammitglied planen, um komplexere Teile
-    der Codebase kennenzulernen.
-
----
-
-## 2. Disaster Recovery Drill
-
-Dieses Runbook beschreibt die Schritte zur Simulation eines Totalausfalls und der Wiederherstellung
-des Systems. Der Drill sollte quartalsweise durchgeführt werden, um die Betriebsbereitschaft
-sicherzustellen.
-
-> **Eigenständige Runbooks:** Dieser Abschnitt ist der **Probelauf**. Der
-> reale Vorfallprozess steht in [Incident Response](runbooks/incident-response.md),
-> der detaillierte Datenwiederherstellungs-Ablauf in
-> [DB Recovery](runbooks/db-recovery.md).
-
-**Szenario:** Das primäre Rechenzentrum ist vollständig ausgefallen. Das System muss aus Backups in
-einer sauberen Umgebung wiederhergestellt werden.
-
-**Ziele (RTO/RPO):**
-
-- **Recovery Time Objective (RTO):** < 4 Stunden
-- **Recovery Point Objective (RPO):** < 5 Minuten
-
-### Vorbereitung
-
-1. **Backup-Verfügbarkeit prüfen:** Sicherstellen, dass die letzten WAL-Archive der
-   PostgreSQL-Datenbank an einem sicheren, externen Ort (z.B. S3-Bucket) verfügbar sind –
-   verschlüsselt (z.B. S3 SSE-KMS) und mittels Object Lock unveränderbar abgelegt.
-2. **Infrastruktur-Code:** Sicherstellen, dass der `infra/`-Ordner den aktuellen Stand der
-   produktiven Infrastruktur abbildet.
-3. **Team informieren:** Alle Beteiligten über den Beginn des Drills in Kenntnis setzen.
-
-### Durchführung
-
-1. **Saubere Umgebung bereitstellen:** Eine neue VM- oder Kubernetes-Umgebung ohne bestehende Daten
-   oder Konfigurationen hochfahren.
-2. **Infrastruktur aufbauen:**
-    - Das Repository auf die neue Umgebung klonen.
-    - Die Basis-Infrastruktur über die Compose-Files oder Nomad-Jobs starten
-      (`infra/compose/compose.core.yml` etc.). Die Container starten, bleiben aber ggf. im
-      Wartezustand, da die Datenbank noch nicht bereit ist.
-3. **Datenbank-Wiederherstellung (Point-in-Time Recovery):**
-    - Eine neue PostgreSQL-Instanz starten.
-    - Das letzte Basis-Backup einspielen.
-    - Die WAL-Archive aus dem Backup-Speicher bis zum letzten verfügbaren Zeitpunkt vor
-      dem "Ausfall" wiederherstellen.
-4. **Systemstart & Event-Replay:**
-    - Die Applikations-Container (API, Worker) neu starten, damit sie sich mit der
-      wiederhergestellten Datenbank verbinden.
-    - Den `outbox`-Relay-Prozess starten. Dieser beginnt, die noch nicht verarbeiteten
-      Events aus der `outbox`-Tabelle an NATS JetStream zu senden.
-    - Die Worker (Projektoren) starten. Sie konsumieren die Events von JetStream
-      und bauen die Lese-Modelle (`faden_view` etc.) neu auf.
-5. **Verifikation & Abschluss:**
-    - **Datenkonsistenz prüfen:** Stichprobenartige Überprüfung der wiederhergestellten Daten in den
-      Lese-Modellen.
-    - **Funktionstests:** Manuelle oder automatisierte Smoke-Tests durchführen (z.B. Login, Gesprächsraum
-      erstellen).
-    - **Zeitmessung:** Die benötigte Zeit für die Wiederherstellung stoppen und mit dem RTO
-      vergleichen.
-    - **Datenverlust bewerten:** Den Zeitpunkt des letzten wiederhergestellten
-      WAL-Segments mit dem Zeitpunkt des "Ausfalls" vergleichen, um den
-      Datenverlust zu ermitteln (sollte RPO nicht überschreiten).
-6. **Drill beenden:** Die Testumgebung herunterfahren und die Ergebnisse
-   dokumentieren.
-
-| Startzeit | Endzeit | RTO erreicht?     | RPO erreicht?     |
-|-----------|---------|-------------------|-------------------|
-|           |         | [ ] Ja / [ ] Nein | [ ] Ja / [ ] Nein |
-
-### Nachbereitung
-
-- **Lessons Learned:** Ein kurzes Meeting abhalten, um Probleme oder
-  Verbesserungspotenziale zu besprechen.
-- **Runbook aktualisieren:** Dieses Runbook bei Bedarf mit den gewonnenen Erkenntnissen anpassen.
-- **Automatisierung nutzen:** `just drill` ausführen, um den Drill reproduzierbar zu starten und
-  Smoke-Tests anzustoßen.
-
----
-
-## 3. Public Login Configuration
-
-The system supports a Magic Link-based public login flow. This feature is
-gated by environment variables and requires specific infrastructure
-configuration for security.
-
-### Enable Public Login
-
-To enable public login, set the following environment variables in your `.env` file (or deployment configuration):
+### Start
 
 ```bash
-# Enable the public login feature
-AUTH_PUBLIC_LOGIN=1
-
-# The base URL of the application (required for generating magic links)
-APP_BASE_URL=https://weltgewebe.net
-
-# Trusted proxies
-# CRITICAL: In production, set this to the actual IP/CIDR of your reverse proxy (e.g. Caddy).
-# See "How to Determine Trusted Proxies CIDR" below.
-AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12
-
-# Rate Limiting (Application Level)
-# Keyed by IP and Email. Defaults are infinite if unset.
-AUTH_RL_IP_PER_MIN=5
-AUTH_RL_IP_PER_HOUR=100
-AUTH_RL_EMAIL_PER_MIN=3
-AUTH_RL_EMAIL_PER_HOUR=10
-
-# SMTP Configuration (Required for Magic Links)
-# If unset, magic links are NOT deliverable. They are only logged if AUTH_LOG_MAGIC_TOKEN=1 (Dev).
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=apikey
-SMTP_PASS=secret
-SMTP_FROM=noreply@weltgewebe.net
-
-# Development / Debugging
-# If true, the magic link token is logged to stdout. DO NOT ENABLE IN PROD.
-AUTH_LOG_MAGIC_TOKEN=0
+git clone <repo-url>
+cd weltgewebe
+cp .env.example .env
+just up
 ```
 
-### How to Determine Trusted Proxies CIDR
-
-Correct configuration of trusted proxies is vital for security (IP rate limiting)
-and audit logs. There are two layers:
-
-1. **Caddy (Edge):** Needs to know the IP of any upstream Load Balancer or Proxy to extract the client IP.
-2. **App (Backend):** Needs to know the IP of Caddy (or the Docker network) to trust the headers sent by Caddy.
-
-#### Step-by-Step: Finding the Docker Network CIDR
-
-If Caddy and the App run in the same Docker Compose stack, the App sees requests coming from the Docker network
-gateway or Caddy's container IP. You must trust the entire Docker subnet. Only do this if your reverse proxy
-container is the direct upstream of the app container in the same Docker network; otherwise trust only the real
-proxy IPs.
-
-1. **Find the Network Subnet:**
-
-   Run this command to inspect the default bridge network (usually `infra_default`) and extract the Subnet:
-
-   ```bash
-   # Replace 'infra_default' if your network is named differently
-   docker network inspect infra_default --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
-   # Output example: 172.18.0.0/16
-   ```
-
-2. **Configure `.env`:**
-   Add this CIDR to `AUTH_TRUSTED_PROXIES` alongside localhost.
-
-   ```bash
-   AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.18.0.0/16
-   ```
-
-### Rate Limiting (Backend Enforcement)
-
-To protect the authentication endpoints from abuse, rate limiting is primarily enforced by the backend API.
-The Edge Proxy (Caddy) passes the client IP to the backend.
-
-> **Warning:** Rate limits rely on accurate client IP resolution. Ensure your Edge Proxy
-> configuration correctly sets headers (e.g., `X-Forwarded-For`) and the API backend
-> trusts the correct proxy IPs (`AUTH_TRUSTED_PROXIES`), especially if behind another proxy.
-> Otherwise, you risk rate-limiting the proxy itself because all requests appear to come from the proxy IP.
-
-#### Check Client IP Visibility
-
-Before enforcing strict limits, verify that the API sees the correct client IP:
-
-1. **Check Access Logs:** Inspect the API logs to confirm the remote IP matches the client, not the Edge proxy.
-
-   ```bash
-   # Check the Weltgewebe stack API logs
-   docker compose -f infra/compose/compose.prod.yml logs -n 200 api
-
-   # Alternatively, check the Heimserver Edge-Caddy logs (outside this repository)
-   # e.g., cd /opt/heimgewebe/edge && docker compose logs -n 200 edge-caddy
-   ```
-
-2. **Verify Proxy Visibility:**
-   > **Critical Warning:** If the API is behind an Edge Proxy or Load Balancer, it will likely
-   > receive the proxy's IP instead of the user's if trust is misconfigured. This causes **all users**
-   > to share the same rate limit bucket.
-
-   **Mitigation:**
-   - **Edge-Caddy:** If running behind a secondary Edge/LB, you **must** configure `trusted_proxies` in your Edge Caddyfile.
-     Ensure you properly pass down the real IP:
-
-     ```caddy
-     {
-         # Uncomment and add your LB/CDN CIDRs here:
-         # servers {
-         #     trusted_proxies static 10.0.0.0/8 172.16.0.0/12 ...
-         # }
-     }
-     ```
-
-   - **App:** Check `AUTH_TRUSTED_PROXIES` in `.env` for application-level IP resolution (rate limits and
-     audit logs). The API must trust the IP of the Edge-Caddy to parse the forwarded headers.
-   - **Do not blindly trust headers** if the API is directly exposed to the internet
-     (which violates the proxy-first contract).
-
-3. **Practical Test (Device Isolation):**
-   - **Step A:** Connect Device A (e.g., WiFi) and trigger 10 requests -> Expect `429 Too Many Requests`.
-   - **Step B:** Connect Device B (e.g., Mobile Data) and trigger 1 request -> Expect `200 OK`.
-   - **Result:**
-     - If Device B gets `200 OK`: Rate limiting is correctly keyed by Client IP.
-     - If Device B gets `429`: The API sees the upstream Proxy IP. **Action required:**
-       Fix `AUTH_TRUSTED_PROXIES` and Edge-Caddy headers.
-
-#### Request Endpoint (`login_limit`)
-
-- **Rate:** 5 requests per minute (per IP)
-- **Window:** 1 minute
-- **Endpoint:** `POST /api/auth/magic-link/request`
-
-#### Consume Endpoint (`login_consume_limit`)
-
-- **Rate:** 30 requests per minute (per IP)
-- **Window:** 1 minute
-- **Endpoint:** `POST /api/auth/magic-link/consume`
-- **Note:** The consume endpoint is typically called once per flow. Frequent
-  429s here indicate abuse or incorrect client IP resolution.
-
-This configuration is defined in `infra/caddy/Caddyfile.prod`.
-
-**Tuning Limits:**
-To adjust the rate limits, modify `infra/caddy/Caddyfile.prod`:
-
-```caddy
-rate_limit {
-    zone login_limit {
-        key {remote_host}
-        events 10   # Increase to 10 requests
-        window 1m
-    }
-}
-```
-
-**Verification:**
-To verify rate limiting is active, use a loop to trigger the limit. Using `curl`
-with output suppression (`-sS`) and write-out (`-w`) makes it easier to spot
-the `429` status code.
-
-> **Note:** The verification loop must send a valid JSON body. A `400 Bad Request` or `422 Unprocessable Entity`
-> response indicates an invalid payload, not a failure of the rate limit.
+Prüfen:
 
 ```bash
-# Expect 5x 200, then 429
-for i in {1..10}; do \
-  curl -sS -o /dev/null -w "%{http_code}\n" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -d '{"email":"test@example.com"}' \
-    https://weltgewebe.net/api/auth/magic-link/request; \
-done
+curl -fsS http://127.0.0.1:8081/api/health/live
+curl -fsS http://127.0.0.1:8081/api/health/ready
 ```
 
-### Required Env for Caddy
+Die Web-/Caddy-Frontdoor liegt im Standard-Core-Profil auf Port `8081`. Der
+SvelteKit-Devserver kann für direkte Webentwicklung separat gestartet werden;
+er ist nicht mit dem Compose-Frontdoor gleichzusetzen.
 
-The production Caddy configuration (`infra/compose/compose.prod.yml`) enforces the presence of specific environment
-variables to prevent silent failures or misconfiguration loops. If these are missing, `docker compose config` (and
-deployment) will fail fast.
-
-- `WEB_UPSTREAM_URL`: The full URL of the upstream web application (e.g., `https://weltgewebe-web.pages.dev`).
-- `WEB_UPSTREAM_HOST`: The hostname of the upstream web application (e.g., `weltgewebe-web.pages.dev`), used
-  for `Host` header forwarding.
-
-Ensure these are set in your `.env` file or deployment secrets.
-
-## 4. Account Creation v0 (Hauptpfad) & Erst-Admin-Bootstrap
-
-Es gibt zwei klar getrennte Wege, einen Account anzulegen:
-
-- **Account Creation v0 (Hauptpfad):** Ein eingeloggter **Admin** legt Accounts
-  über `POST /api/accounts` an. Der Account wird dauerhaft gespeichert
-  (JSONL-Append + In-Memory-Store) und ist sofort über `GET /api/accounts` und
-  die Karte sichtbar. Keine öffentliche Registrierung, kein Self-Signup.
-- **Bootstrap (Init-/Not-/Dev-Pfad):** legt den **ersten Admin** an (Henne-Ei:
-  der erste Admin kann nicht per API entstehen) bzw. seedet beim Container-Start.
-  Ausdrücklich **nicht** der normale Erstellungsprozess.
-
-Die Datenebene ist JSONL-gespeist (`GEWEBE_IN_DIR`, Standard `.gewebe/in`); der
-In-Memory-Store ist die Lesequelle und wird beim Start aus dem JSONL geladen.
-
-### Account Creation v0: `POST /api/accounts`
-
-- **Authz:** nur **Admin** (eigene `require_admin`-Prüfung, strenger als das
-  generische `require_write` für Weber+Admin). Weber dürfen in v0 **keine**
-  Accounts anlegen.
-- **Typ:** immer verortete Garnrolle (`type=garnrolle`, `mode=verortet`).
-- **Position:** Request nimmt eine interne `location` entgegen; `public_pos` wird
-  daraus abgeleitet. Bei `radius_m=0` ist `public_pos == location` (exakt). Bei
-  `radius_m>0` wird `public_pos` deterministisch auf Basis der Account-ID
-  innerhalb eines ±`radius_m`-Meter-Quadrats verschoben (kein Zufallswert, kein
-  Sprung bei erneutem Laden). Die Verschiebung ist garantiert nicht null.
-- **Rollenvergabe:** Der `role`-Parameter erlaubt `"weber"` (Default) oder
-  `"admin"`. Ein Admin darf in v0 auch Admin-Accounts anlegen — dies ist
-  **bewusste Machtweitergabe** und ermöglicht kontrollierten Auf- und Abbau der
-  Betreiberstruktur. Nur der **erste Admin** muss per Bootstrap erzeugt werden
-  (Henne-Ei: kein API-Zugang vor dem ersten Admin); alle weiteren Admins legt
-  ein bestehender Admin über diesen Endpunkt an.
-
-**Request-Body:**
-
-| Feld | Pflicht | Bedeutung |
-|---|---|---|
-| `title` | ja | Anzeigename (nicht leer) |
-| `location.lat` | ja | Breitengrad, Zahl in `[-90, 90]` |
-| `location.lon` | ja | Längengrad, Zahl in `[-180, 180]` |
-| `radius_m` | nein | Unschärferadius in Metern (Default `0` ⇒ exakte `public_pos`; `>0` ⇒ deterministische ID-basierte Verschiebung) |
-| `summary` | nein | Kurzbeschreibung (leer ⇒ weggelassen) |
-| `role` | nein | `weber` oder `admin` (Allowlist, Default `weber`) |
-| `tags` | nein | Liste von Strings |
-| `id` | nein | UUID (sonst serverseitig generiert) |
-| `email` | nein | operatives Feld (nicht Teil des Domain-Contracts) |
-
-**Antworten:** `201 Created` (Account-JSON) · `400` ungültige Felder/Koordinaten ·
-`401` nicht eingeloggt · `403` eingeloggt, aber nicht Admin · `409` ID/E-Mail-Konflikt.
-
-**Beispiel (lokal, Admin-Session via Dev-Login):**
+### Qualitätsprüfung
 
 ```bash
-# Admin-Session holen (AUTH_DEV_LOGIN=1 vorausgesetzt), Cookie speichern:
-curl -fsS -c cookies.txt -X POST http://127.0.0.1:8081/api/auth/dev/login \
-  -H 'Content-Type: application/json' -H 'Origin: http://127.0.0.1:8081' \
-  -d '{"account_id":"<ADMIN_UUID>"}'
-
-# Account anlegen (Cookie + Origin nötig wegen CSRF):
-curl -fsS -b cookies.txt -X POST http://127.0.0.1:8081/api/accounts \
-  -H 'Content-Type: application/json' -H 'Origin: http://127.0.0.1:8081' \
-  -d '{"title":"Alice","location":{"lat":53.5503,"lon":9.9932},"tags":["real"]}'
+just check
+just ci
 ```
 
-**Smoke (POST → GET, zusätzlich /map bei Web/Caddy-Origin):**
+`just ci` ist der breitere lokale Spiegel. Datenbank-, Browser- und
+Deploybeweise besitzen zusätzliche Workflows und können externe Dienste oder
+Container benötigen.
+
+## 2. Diagnose
+
+### Vor jeder Änderung
+
+1. Git-Head, Branch und Dirty-State prüfen.
+2. laufende Compose-Projekte und Zielprofile prüfen.
+3. effektive Env nur redigiert beziehungsweise als Vorhandenseinsmetadaten
+   lesen.
+4. Datenquellschalter und Migrationsmodus prüfen.
+5. erst danach einen Reparaturpfad wählen.
+
+### Health und Logs
 
 ```bash
-just smoke-account-create   # liest Admin-ID aus bootstrap-first-account.env
+docker compose -f infra/compose/compose.core.yml ps
+curl -fsS http://127.0.0.1:8081/api/health/live
+curl -fsS http://127.0.0.1:8081/api/health/ready
+docker compose -f infra/compose/compose.core.yml logs --tail=200 api caddy
 ```
 
-> **Hinweis:** `smoke-account-create.sh` prüft `/map` nur, wenn gegen die Web/Caddy-Origin geprüft wird.
-> Im Direct-API-Modus (`API_PREFIX=`) wird `/map` bewusst übersprungen, da die Rust-API keine `/map`-Route hat.
->
-> **UI:** Ein Minimalformular „Account erstellen" ist bewusst **nicht** Teil
-> dieses PR und folgt als expliziter Folge-PR. v0 ist API + Smoke + Tests.
+Logs dürfen nicht unredigiert weitergegeben werden, wenn Token-, Mail- oder
+Secretwerte enthalten sein könnten.
 
-### Erst-Admin & Initialisierung: Bootstrap (Not-/Dev-Pfad)
+### Typische Fehlerklassen
 
-Der Bootstrap-Account ist immer eine **verortete Garnrolle** (`type=garnrolle`,
-`mode=verortet`, `radius_m=0`). Für den **ersten Admin** `ACCOUNT_ROLE=admin`
-setzen — danach legt dieser Admin alle weiteren Accounts über die API an.
+| Symptom | zuerst prüfen |
+|---|---|
+| `502` oder leere Frontdoor | Caddy-Upstream, Compose-Netz, TLS-/Hostvertrag |
+| Loginmail fehlt | Public-Login-Schalter, SMTP-Bereitschaft, Absender und redigierte Logs |
+| Login gilt nur scheinbar lokal | Cookie-Scope, Sessionstore, `/auth/me`, Browserprofil |
+| Änderung verschwindet nach Neustart | Domain-Lese- und Schreibquelle |
+| API startet nicht | Konfigurationsvalidierung, Proxyentscheidung, Migrationsmodus |
+| Karte bleibt leer | Web-Build, Basemap-Konfiguration, PMTiles-Range und API-Daten getrennt |
 
-`scripts/dev/bootstrap-first-account.sh` legt genau einen Account an und
-schreibt die Metadaten (Account-ID, Titel, Position) nach
-`.gewebe/in/bootstrap-first-account.env`.
+## 3. Datenquellen und Migrationen
 
-**Pflichtfelder (per Umgebungsvariable):**
+JSONL ist der Standardpfad für Domänendaten. PostgreSQL ist ein explizites
+Opt-in pro Lese- und Schreibfläche. Vor einer Umschaltung:
 
-| Variable | Bedeutung | Validierung |
-|---|---|---|
-| `ACCOUNT_TITLE` | Anzeigename des Accounts | nicht leer |
-| `PUBLIC_LAT` | Breitengrad der öffentlichen Kartenposition | Zahl in `[-90, 90]` |
-| `PUBLIC_LON` | Längengrad der öffentlichen Kartenposition | Zahl in `[-180, 180]` |
+1. Backfill-/Orphan-Belege lesen,
+2. PostgreSQL-Lesequelle aktivieren,
+3. nur kompatible Schreibquellen aktivieren,
+4. Migrationen separat autorisieren,
+5. Restart- und Readback-Verhalten prüfen.
 
-**Optionale Felder:**
+Ein Health-Smoke, Compose-Start oder erfolgreicher Build erteilt keine
+Migrationsfreigabe. Siehe
+[`docs/deploy/vps-db-initialization-boundary.md`](deploy/vps-db-initialization-boundary.md).
 
-| Variable | Bedeutung | Standard |
-|---|---|---|
-| `ACCOUNT_ID` | UUID (sonst automatisch generiert) | auto |
-| `ACCOUNT_SUMMARY` | Kurzbeschreibung (leer ⇒ weggelassen) | leer |
-| `ACCOUNT_ROLE` | `weber` oder `admin` (Allowlist) | `admin` |
-| `ACCOUNT_TAGS` | Kommagetrennte Tags | `real` |
-| `ACCOUNT_EMAIL` | E-Mail-Adresse (operatives Feld) | leer |
+## 4. Wiederherstellung
 
-Der Account-Typ ist fix `garnrolle`/`verortet` und nicht konfigurierbar.
-Werte werden scriptintern JSON-sicher escaped; der Bootstrap-Pfad benötigt kein `jq`. `jq` wird nur für Smoke-/Dev-Auswertung verwendet.
+### Heute belegbarer Rahmen
 
-**Flags:**
+Das Repository enthält PostgreSQL-Migrationen und Compose-Profile, aber keinen
+allgemein belegten WAL-/PITR-, Outbox-Replay- oder Projector-Rebuild-Vertrag.
+RTO/RPO-Werte dürfen deshalb nicht als erfüllt behauptet werden.
 
-- `--round-location` — Koordinaten auf 3 Dezimalstellen runden (~111 m Unschärfe)
-- `--clean-demo` — Bekannte Demo-IDs aus dem Datensatz entfernen
-- `--force` — Neu anlegen, auch wenn Metadatei bereits existiert
+Ein sicherer Wiederherstellungstest muss in einer entbehrlichen Umgebung:
 
-**Idempotenz:** Dieser Pfad ist für die Initialisierung des ersten Admins gedacht.
-Die Idempotenz wird über die Metadatei `.gewebe/in/bootstrap-first-account.env`
-gesteuert: Wenn diese Datei existiert, wird das Skript ohne Fehler beendet und
-gibt die bereits gespeicherte Account-ID aus. Mit `--force` kann ein neuer Account
-angelegt werden, auch wenn die Metadatei bereits existiert.
+1. den exakten Repository-/Image-Stand festhalten,
+2. eine vorhandene, dokumentierte Sicherung nach deren eigenem Vertrag
+   wiederherstellen,
+3. Migrationen im passenden Modus prüfen,
+4. die effektiven Domainquellen dokumentieren,
+5. API-Readiness, Auth-Sitzung und repräsentative Domänenlesevorgänge testen,
+6. Ergebnis, Dauer, Datenstand und Restlücken festhalten.
 
-**Hinweis zur Position:** `PUBLIC_LAT`/`PUBLIC_LON` werden als `public_pos` über
-`/api/accounts` öffentlich sichtbar. Bewusste Entscheidung — die Position ist
-auf der Karte sichtbar. `--round-location` reduziert die Präzision (~111 m).
-`.gewebe/in/` ist git-ignored; keine echten Koordinaten werden ins Repo geschrieben.
+Ohne registrierte Sicherungsquelle wird kein hypothetisches S3-, WAL-, Nomad-,
+Outbox- oder JetStream-Verfahren erfunden.
 
-### Lokal (dev): Erst-Admin bootstrappen, dann per API erstellen
+### Noch nötig für einen belastbaren DR-Vertrag
+
+- kanonische Sicherungsquelle und Retention,
+- automatisierter Restore-Beweis,
+- definierte RTO/RPO-Ziele,
+- Umgang mit JSONL und PostgreSQL während des Cutovers,
+- redigierter Wiederherstellungsbeleg,
+- regelmäßiger, tatsächlich ausgeführter Drill.
+
+## 5. Public Login und SMTP
+
+Der aktuelle Produktionsablauf steht in
+[`docs/deploy/vps.md`](deploy/vps.md) und im Mail-Migrationsrunbook. Mindestregeln:
+
+- `AUTH_PUBLIC_LOGIN` erst nach grünem SMTP-Readiness-Preflight aktivieren,
+- `AUTH_LOG_MAGIC_TOKEN` in Produktion deaktiviert halten,
+- `AUTH_TRUSTED_PROXIES` ausdrücklich setzen,
+- Secretwerte nicht ausgeben,
+- nach Änderung API-Readiness und reale Mailzustellung prüfen.
+
+Die API erzwingt IP- und E-Mail-basierte Ratelimits. Caddy bereinigt fremde
+Forwardingheader und setzt die beobachtete Remote-Adresse neu. Ein alternativer
+Proxy muss denselben Vertrag erfüllen.
+
+## 6. Account- und Produkt-Smokes
+
+Der erste Admin kann über den ausdrücklich aktivierten Bootstrap-Pfad erzeugt
+werden. Weitere Accounts entstehen über den administrativen API-Pfad. Die
+konkreten Befehle und Variablen stehen in den Dev-/Deployskripten; echte Namen,
+Adressen und E-Mail-Adressen gehören nicht in Repositorybeispiele oder Logs.
+
+Der wichtigste noch ausstehende Produkt-Smoke ist eine durchgängige persistente
+Kette:
+
+1. anmelden,
+2. Garnrolle bearbeiten und verorten,
+3. Knoten anlegen,
+4. nach Neuladen wiederfinden,
+5. Faden anlegen und wieder lesen.
+
+Bis dieser Test grün ist, sind einzelne Account-, Knoten- oder Fadenbeweise kein
+Nachweis eines vollständig nutzbaren Produktflusses.
+
+## 7. Stoppen und Aufräumen
 
 ```bash
-# 1. Ersten Admin bootstrappen (ACCOUNT_ROLE=admin!):
-ACCOUNT_ROLE="admin" ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.5503" PUBLIC_LON="9.9932" \
-  just bootstrap-first-account
-
-# 2. Dev-Stack mit Dev-Login starten:
-AUTH_DEV_LOGIN=1 just up
-
-# 3. Smoke: Bootstrap-Account sichtbar?
-just smoke-seed
-
-# 4. Account Creation v0: Admin legt weitere Accounts per API an.
-just smoke-account-create
+just down
 ```
 
-Dev-Login (kein Public-Login nötig): `AUTH_DEV_LOGIN=1` setzen, dann
-`POST /api/auth/dev/login` mit der `account_id` aus der Metadatei.
-Magic-Link/Public-Login bleibt bewusst außerhalb dieses Pfads (siehe Abschnitt 3).
-
-### Produktion / `weltgewebe-up`
-
-Der API-Container-Entrypoint führt den Bootstrap beim Start aus, wenn aktiviert.
-In der `.env` (oder deployment secrets):
-
-```bash
-GEWEBE_SEED_REAL=true
-GEWEBE_SEED_DEMO=false
-
-# Pflichtfelder für GEWEBE_SEED_REAL=true:
-ACCOUNT_TITLE=Alice
-PUBLIC_LAT=53.5503
-PUBLIC_LON=9.9932
-
-# Optional:
-# ACCOUNT_SUMMARY=Gründerin
-# ACCOUNT_ROLE=admin      # first real bootstrap account should be admin; later accounts via API
-# ACCOUNT_TAGS=real
-# ACCOUNT_EMAIL=alice@example.com
-```
-
-`GEWEBE_SEED_REAL=true` und `GEWEBE_SEED_DEMO=true` gleichzeitig sind verboten:
-Der Entrypoint bricht mit Fehler ab (kein Mischbetrieb aus realem Erstaccount
-und Demo-Daten).
-
-Danach deployen und gegen den Caddy-Origin smoken:
-
-```bash
-scripts/weltgewebe-up --with-caddy
-BASE_URL=https://<deine-domain> just smoke-seed
-```
-
-Dieser Pfad ist für die Initialisierung des ersten Admins gedacht; technisch wird
-Idempotenz über `bootstrap-first-account.env` gesteuert (Entrypoint überspringt
-den Lauf, wenn diese Metadatei auf dem Volume `/data` bereits existiert).
-
-Bei realem Bootstrap muss `GEWEBE_SEED_DEMO=false` gesetzt sein. Wenn
-`GEWEBE_SEED_REAL=true` und `GEWEBE_SEED_DEMO=true` gleichzeitig gesetzt sind,
-bricht der Entrypoint bewusst ab; es gibt keinen Mischbetrieb aus Real- und
-Demo-Seeding.
-
+Volumes, Daten, fremde Compose-Projekte oder Runtime-Secrets werden nicht als
+Routine-Aufräumaktion gelöscht. Solche Eingriffe brauchen einen eigenen
+Wiederherstellungs- und Autorisierungsbeleg.

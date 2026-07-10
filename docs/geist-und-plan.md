@@ -212,14 +212,14 @@ Extraktion: Plan der Weltweberei
 4. Organisation
    - Lokale Ortswebereien mit eigenen Konten.
    - Föderation mehrerer Ortswebereien möglich.
-5. Technik
-   - Frontend: SvelteKit, MapLibre, PWA.
-   - Backend: Rust (Axum), PostgreSQL + PostGIS + h3, Event-Outbox, NATS JetStream.
-   - Suche: Typesense / MeiliSearch.
-   - Infrastruktur: Nomad, Caddy (HTTP/3), PgBouncer.
-   - Observability: Prometheus, Grafana, Loki, Tempo.
-   - Security: SBOM, Signaturen, DSGVO-Forget-Pipeline, Key-Rotation.
-   - Kostenkontrolle: FinOps-KPIs (€/Session, €/GB Traffic).
+5. Technische Zielskizze aus dem historischen Ausgangstext (keine Ist-Architektur)
+   - Frontend-Ziel: SvelteKit, MapLibre, PWA.
+   - Backend-Ziel: Rust (Axum), PostgreSQL/PostGIS, mögliche Event- und NATS-Flächen.
+   - Mögliche spätere Suche: Typesense oder MeiliSearch nur nach Bedarfsbeleg.
+   - Mögliche spätere Infrastruktur: zusätzliche Orchestrierung erst nach Skalierungsbeleg; aktuell Compose und Caddy.
+   - Observability-Ziel: Metriken, Logs und Traces; aktuell nur Teilflächen vorhanden.
+   - Security-Ziele: SBOM, Signaturen, Forget-Pipeline und Rotation jeweils nur mit eigenem Betriebsbeleg.
+   - Kostenkontrolle bleibt ein Zielmodell, nicht ein aktuell gemessener SLO.
 
 ⸻
 
@@ -227,7 +227,7 @@ Essenz-Kristall
 
 👉 Die Weltweberei ist eine kartenbasierte Demokratie-Engine: Jede Handlung wird als Faden sichtbar,
 jeder Knoten ist Raum für Aktionen oder Ressourcen, alle Prozesse laufen transparent, freiwillig,
-temporär und verhandelbar – technisch abgesichert durch Event-Sourcing, föderierbar in Ortsgeweben
+temporär und verhandelbar – mit einer noch auszubauenden, auditierbaren Technik und föderierbaren Ortsgeweben
 und getragen von einem klaren DSGVO-Privacy-by-Design.
 
 ⸻

@@ -1,54 +1,70 @@
-<!-- "Docs-only" ist ein formaler Gate-Status (ADR-0001). Das Repo ENTHÄLT operativen Code in apps/ und infra/. Diese Runtime-Artefakte sind Teil der Wahrheitsschicht und müssen gemäß dem definierten Truth Model (repo.meta.yaml) berücksichtigt werden. -->
-<!-- Docs-only (ADR-0001 Clean-Slate) • Re-Entry via Gates A–D -->
-
 # Weltgewebe
 
-Mobile-first Webprojekt mit SvelteKit (Web), Rust/Axum (API), Postgres + Outbox, NATS JetStream und Caddy.
+Weltgewebe ist ein aktives, im Aufbau befindliches Karteninterface für
+Kollektivgüter, lokale Beziehungen und gemeinschaftliche Koordination. Das
+Repository enthält die Webanwendung, die Rust-API, Datenverträge,
+Datenbankmigrationen, Compose-Profile, Caddy-Konfiguration und Betriebswerkzeuge.
 
-## Status des Repos
+## Aktueller Zustand
 
-- Weltgewebe ist ein **eigenständiges Projekt**. Repositories wie `heimgewebe/contracts`, `wgx` oder `hauski` sind optionale Quellen und Werkzeuge, keine monolithische Codebasis.
-- Formaler **Docs-only/Clean-Slate**-Status nach ADR-0001. Gleichzeitig enthält das Repo operative Artefakte unter `apps/` und `infra/`, die Teil der Wahrheitsschicht sind.
-- Code-Re-Entry erfolgt über die **Gates A–D**; siehe [`docs/process/fahrplan.md`](docs/process/fahrplan.md).
-- Wahrheit und Konfliktauflösung folgen strikt [`repo.meta.yaml`](repo.meta.yaml) und dem [Agent Reading Protocol](docs/policies/agent-reading-protocol.md). `docs/index.md` ist Navigation, keine Wahrheitsschicht. `docs/_generated/*` ist Diagnose, nicht Ursprung.
+- **Web:** SvelteKit, TypeScript, MapLibre GL und PMTiles.
+- **API:** Rust, Axum und Tokio.
+- **Authentifizierung:** Magic Links, Passkeys und profilweit persistente
+  HTTP-only-Sitzungscookies.
+- **Domänendaten:** JSONL ist weiterhin der Standard-Lese- und Schreibpfad.
+  PostgreSQL-Pfade für Accounts, Knoten und Fäden sind einzeln opt-in und noch
+  kein allgemeiner Produktions-Cutover.
+- **Betrieb:** Docker Compose und Caddy; der öffentliche Produktionspfad ist
+  `wg-prod-1`.
+- **Ausbaulücke:** Der durchgängige Produktweg von der Garnrolle über einen
+  gespeicherten Knoten bis zu einem Faden ist noch nicht vollständig als ein
+  Produktionsfluss abgeschlossen.
 
-## Start Here
+Historische ADRs und Berichte bleiben als Entscheidungs- und
+Entwicklungsgeschichte erhalten. Sie dürfen den aktuellen Code, die Migrationen
+oder die hier verlinkten kanonischen Ist-Dokumente nicht überstimmen.
 
-- **Constitution / Repo Truth Model:** [`repo.meta.yaml`](repo.meta.yaml)
-- **System Map:** [`docs/_generated/system-map.md`](docs/_generated/system-map.md)
-- **Runtime:** [`runtime/README.md`](runtime/README.md)
-- **Operations:** [`runbooks/README.md`](runbooks/README.md)
-- **Architecture Overview:** [`architecture/overview.md`](architecture/overview.md)
+`docs/_generated/*` enthält ausschließlich abgeleitete Diagnose-, Index- und
+Navigationsartefakte. Diese Dateien werden über registrierte Generatoren
+aktualisiert und sind keine eigenständige Wahrheits- oder Entscheidungsschicht.
 
-## Schnellzugriff
+## Start hier
 
-- [Dokumentationsindex](docs/index.md)
-- [Repo-Architektur](docs/architekturstruktur.md)
-- [Agenten-Leitfaden](AGENTS.md)
-- [Beitragen](CONTRIBUTING.md)
-- [Master-Roadmap](docs/roadmap.md)
-- [Optimierungsstatus](docs/reports/optimierungsstatus.md)
-- [Task-Control-Blaupause](docs/blueprints/doc-structure-task-control.md)
-- [Task-Control-Roadmap](docs/blueprints/doc-structure-task-control-roadmap.md)
-- [Deployment-Übersicht](docs/deploy/README.md)
-- [Gate-Fahrplan](docs/process/fahrplan.md)
+| Frage | Wahrheitsort |
+|---|---|
+| Was läuft heute? | [`runtime/README.md`](runtime/README.md) |
+| Wie sind die Komponenten verbunden? | [`architecture/overview.md`](architecture/overview.md) |
+| Welche Sicherheitsgrenzen gelten? | [`architecture/security.md`](architecture/security.md) |
+| Wie wird betrieben oder diagnostiziert? | [`runbooks/README.md`](runbooks/README.md) |
+| Welche Daten liegen wo? | [`docs/datenmodell.md`](docs/datenmodell.md) |
+| Welche Technik ist real, optional oder geplant? | [`docs/techstack.md`](docs/techstack.md) |
+| Welche Dokumente und Wissensbereiche existieren? | [`docs/index.md`](docs/index.md) |
+| Wie wird deployt? | [`docs/deploy/README.md`](docs/deploy/README.md) |
+| Welche Begriffe gelten fachlich? | [`docs/domain/vocabulary.md`](docs/domain/vocabulary.md) |
+| Welche Quellen haben Vorrang? | [`repo.meta.yaml`](repo.meta.yaml) |
 
 ## Für Agents
 
-Verbindliche Leseordnung vor jedem Patch:
+Vor Änderungen gilt diese Leseordnung:
 
 1. [`repo.meta.yaml`](repo.meta.yaml)
 2. [`AGENTS.md`](AGENTS.md)
 3. [`agent-policy.yaml`](agent-policy.yaml)
 4. [`docs/policies/agent-reading-protocol.md`](docs/policies/agent-reading-protocol.md)
-5. [`docs/index.md`](docs/index.md) — nur Navigation
-6. betroffene Blueprint-, Report-, Spec- oder Codepfade
+5. [`docs/index.md`](docs/index.md) als Navigation, nicht als Wahrheitsquelle
+6. die betroffenen Contracts, Migrationen, Runtime-Konfigurationen und Tests
+7. erst danach Planungsdokumente und historische Berichte
 
-Interpolation ist verboten. Bei nicht auflösbaren Widersprüchen oder fehlenden Zielnachweisen MUSS abgebrochen werden.
+Bei einem Widerspruch zwischen Statusdokument und ausführbarem Vertrag wird
+nicht interpoliert. Der Widerspruch wird benannt und aufgelöst.
 
 ## Lokal starten
 
-Voraussetzungen: Docker, Docker Compose und `just` (alternativ `make`).
+Voraussetzungen:
+
+- Docker mit Compose
+- `just`
+- für Webentwicklung Node.js und pnpm gemäß den versionierten Metadaten
 
 ```bash
 cp .env.example .env
@@ -57,8 +73,9 @@ just up
 
 Prüfen:
 
-- Frontend: <http://localhost:8081>
-- API Healthcheck: <http://localhost:8081/api/health/live>
+- Web/Frontdoor: <http://localhost:8081>
+- API-Liveness: <http://localhost:8081/api/health/live>
+- API-Readiness: <http://localhost:8081/api/health/ready>
 
 Stoppen:
 
@@ -66,74 +83,73 @@ Stoppen:
 just down
 ```
 
-> ⚙️ Der vollständig betriebsbereite Dev-Stack ist Teil von **Gate C** (Infra-light). Für Detailschritte siehe [`docs/quickstart-gate-c.md`](docs/quickstart-gate-c.md). Im VS-Code-Devcontainer richtet `.devcontainer/post-create.sh` Tools wie `just`, `uv` und `vale` automatisch ein.
+Die lokale Beispielkonfiguration ist nicht automatisch eine
+Produktionskonfiguration. Öffentlicher Login, SMTP, Proxy-Vertrauen,
+Datenbankmigrationen und Secrets besitzen zusätzliche fail-closed
+Vorprüfungen.
 
 ## Entwicklung und Qualität
 
-- Beitragsregeln und Routing: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Schneller lokaler Hygiene-Check: `just check` (Rust/API-Grundchecks, Demo-Daten, Domain-Contracts, `cargo deny`)
-- Breiterer CI-Spiegel bei Web/API-Änderungen: `just ci`
-- Frontend-/Gate-A-Prototyp: [`apps/web/README.md`](apps/web/README.md)
-- Web-E2E (Playwright): siehe Workflow [`.github/workflows/web-e2e.yml`](.github/workflows/web-e2e.yml); lokal in `apps/web/` mit `pnpm test:setup` (einmalig) und `pnpm test`.
-- Performance-Budgets: [`ci/budget.json`](ci/budget.json); Soft-Limits in [`policies/`](policies/).
-- Doku- und Relations-Checks: Skripte unter `scripts/docmeta/` plus CI-Workflow `docs-guard.yml`.
-- Domain-Contracts lokal validieren: `just contracts-domain-check`.
-
-### Build- und Konfigurationsdetails
-
-- Die API liefert `/version` mit Build-Metadaten:
-  - `version` kommt aus `env!("CARGO_PKG_VERSION")` (Cargo-Paketmetadaten; **kein Fallback** auf `"unknown"`).
-  - `GIT_COMMIT_SHA` und `BUILD_TIMESTAMP` sind optional; sie fallen über `option_env!(...).unwrap_or("unknown")` auf `"unknown"` zurück, wenn nicht vom CI gesetzt.
-  - Diese Werte werden **nicht** in `.env` gepflegt.
-- Defaults: [`configs/app.defaults.yml`](configs/app.defaults.yml). Overrides via Env-Variablen `HA_FADE_DAYS`, `HA_RON_DAYS`, `HA_ANONYMIZE_OPT_IN`, `HA_DELEGATION_EXPIRE_DAYS` oder `APP_CONFIG_PATH`.
-- Policies-Pfad-Override: `POLICY_LIMITS_PATH=/pfad/zur/limits.yaml`.
-
-## Deployment und Betrieb
-
-- Übersicht: [`docs/deploy/README.md`](docs/deploy/README.md)
-- Heimserver als Referenz-Integration: [`docs/deploy/heimserver.integration.md`](docs/deploy/heimserver.integration.md)
-- Security: [`docs/deploy/security.md`](docs/deploy/security.md)
-- Drift-Policy: [`docs/deploy/DRIFT_POLICY.md`](docs/deploy/DRIFT_POLICY.md)
-- Runbook: [`docs/runbook.md`](docs/runbook.md); Observability: [`docs/runbook.observability.md`](docs/runbook.observability.md)
-
-> **Hinweis:** Das Heimserver-Deployment ist Referenz-Implementierung des Integration-Contracts. Die langfristige Produktionsumgebung kann abweichen, der Contract bleibt gültig.
-
-## Roadmap und offene Arbeit
-
-- [Master-Roadmap](docs/roadmap.md)
-- [Optimierungsstatus](docs/reports/optimierungsstatus.md)
-- [Task-Control-Roadmap](docs/blueprints/doc-structure-task-control-roadmap.md)
-
-Task-Control Phase 2 ist eingeführt. Die Arbeitssteuerung liegt jetzt unter `docs/tasks/`; der maschinenlesbare Optimierungsstatus liegt unter `docs/reports/optimierungsstatus.json`.
-
-Task-Index-Check-Modus (`generate_task_index.py --check`) und CI-Guard (`.github/workflows/task-index.yml`) sind vorhanden.
-
-Offen bleiben ein echter Schreibgenerator bzw. Bot-PRs (bewusst spätere Entscheidung) und der Implementierungs-Mapping-Ausbau.
-
-GitHub Issue Forms, PR-Template und Release-Konfiguration sind bewusst zurückgestellt. Sie werden erst wieder aufgenommen, wenn ihr Nutzen gegenüber kontextgenauen PR-Bodies belegt ist oder externe Beitragende bzw. ein stabilisierter Release-Prozess sie erforderlich machen.
-
-## Semantik (ausgesetzt)
-
-Die ursprünglich geplante `semantAH`-Integration (ADR-0042) ist ausgesetzt; Contracts und CI-Jobs wurden entfernt. Eine Reaktivierung würde eine neue ADR erfordern.
-
-## Task-Control
-
-Die operative Arbeitssteuerung liegt in `docs/tasks/`:
-
-| Datei | Zweck |
-|---|---|
-| `docs/tasks/board.md` | Menschliche Arbeitskarte (aktive Prioritäten, Blocker) |
-| `docs/tasks/index.json` | Maschinenlesbarer Task-Index (Phase-2-Seed: manuell) |
-| `docs/tasks/schema.json` | Validierungsvertrag |
-| `docs/reports/optimierungsstatus.md` | Maßgebliche Statusmatrix (Wahrheitsquelle für OPT-* Einträge) |
-| `docs/reports/optimierungsstatus.json` | Maschinenlesbarer Zwilling der Statusmatrix |
-
-Nächste Priorität ist der CI-Lauf-Nachweis für `TASK-CTL-003`; Check-Modus und CI-Guard laufen bereits. GitHub Issue Forms und PR-Template bleiben zurückgestellt.
-
 ```bash
-python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
+just check   # schneller Repository- und Contract-Check
+just ci      # breiter lokaler Spiegel für Web, API und Abhängigkeiten
 ```
 
-## Beiträge & Docs
+Weitere wichtige Prüfpfade:
 
-Stilprüfung via Vale läuft automatisch bei Doku-PRs; lokal `vale docs/` für Hinweise.
+- Domain-Contracts: `just contracts-domain-check`
+- Web-E2E: siehe [`apps/web/README.md`](apps/web/README.md)
+- Datenbankbeweise: `.github/workflows/db-*.yml`
+- Proxy- und Deployvertrag: `.github/workflows/proxy-trust-preflight.yml`
+- Dokumentwahrheit: `.github/workflows/docs-guard.yml`
+
+## Produktbegriffe und technische Namen
+
+| Produktbegriff | Technische Namen im Bestand | Bedeutung |
+|---|---|---|
+| Garnrolle | Account, teilweise historisch Role | persönlicher Ausgangspunkt im Gewebe |
+| Knoten | Node | Ort, Ressource, Vorhaben oder anderer gemeinschaftlicher Bezugspunkt |
+| Faden | Edge | Beziehung zwischen Garnrollen und/oder Knoten |
+| Gespräch | Conversation/Message | geplant und vertraglich beschrieben, aber noch kein vollständiger produktiver Persistenzpfad |
+
+`RoN` ist derzeit noch in Contracts, Daten und Migrationen als Legacy-Modus
+vorhanden. Das steht im Widerspruch zum angestrebten Modell „eine Garnrolle je
+Account; Sichtbarkeit und Verortung als Eigenschaften“ und wird in einem
+eigenen, migrationsgebundenen Cutover bereinigt. Neue Produkttexte sollen RoN
+nicht als zweiten Kontotyp festschreiben.
+
+## Daten- und Datenschutzgrenze
+
+Weltgewebe verwendet notwendige, sichere Sitzungscookies für Anmeldung und
+Sitzungserhalt. Der Datenschutzvertrag erlaubt diese Cookies, schließt aber
+Werbe- und Trackingcookies sowie verdeckte Profilbildung aus. Öffentliche und
+private Accountfelder werden getrennt behandelt; reale Privatpositionen dürfen
+nicht als öffentliche Kartenkoordinaten ausgegeben werden.
+
+## Deployment
+
+Der kanonische öffentliche Pfad ist in
+[`docs/deploy/vps.md`](docs/deploy/vps.md) beschrieben. Das Repository behauptet
+keinen Livezustand allein aufgrund eingecheckter Konfiguration. Runtime- und
+Deploybelege müssen frisch erhoben werden.
+
+Statische Web-Builds werden unter anderem durch Cloudflare- und Vercel-
+Integrationen geprüft. Diese Vorschauen sind zusätzliche Plattformbelege; die
+öffentliche Routingwahrheit liegt im VPS-/Caddy-Vertrag und dessen konfiguriertem
+Web-Upstream.
+
+## Planung und Status
+
+- [`docs/tasks/board.md`](docs/tasks/board.md) ist eine repositoryinterne
+  Arbeitskarte.
+- [`docs/tasks/index.json`](docs/tasks/index.json) ist der maschinenlesbare
+  Quellindex dieser Planung.
+- GitHub-Issues bilden nur ausgewählte öffentliche oder operative Einzelthemen
+  ab.
+- Statusbehauptungen aus Berichten müssen gegen Code, Contracts, Migrationen,
+  CI und Runtimebelege geprüft werden.
+
+## Lizenz
+
+Weltgewebe steht unter der
+[GNU Affero General Public License 3.0 oder später](LICENSE).

@@ -165,7 +165,7 @@ Aktuell benutze ich WhatsApp und Signal
 **Verantwortlicher:** Alexander Mohr, Huskoppelallee 13, 23795 Klein Rönnau
 
 **Datenschutz:** Das Weltgewebe ist so konzipiert, dass keine Daten erhoben werden, ohne dass du sie selbst
-einträgst. Es gibt kein Tracking, keine versteckten Cookies, keine automatische Profilbildung. Sichtbar
+einträgst. Es gibt kein Werbetracking und keine versteckte Profilbildung. Notwendige HTTP-only-Sitzungscookies werden für Anmeldung und Sitzungserhalt verwendet. Sichtbar
 wird nur das, was du freiwillig sichtbar machst: Name, Wohnort, Verbindungen im Gewebe. Deine persönlichen
 Daten kannst du jederzeit verändern oder zurückziehen. Die Verarbeitung deiner Daten erfolgt auf Grundlage
 von Artikel 6 Absatz 1 lit. a und f der Datenschutzgrundverordnung – also: Einverständnis & legitimes
