@@ -1377,11 +1377,13 @@ async fn consume_login_fails_bad_token_binding() -> Result<()> {
     state.config.app_base_url = Some("http://localhost".to_string());
 
     let token = state.tokens.create("u1@example.com".to_string());
-    let other_token = state.tokens.create("u1@example.com".to_string());
     let app = app(state.clone());
 
     let nonce = "nonce1";
-    let token_hash = hash_token(&other_token); // Hash of WRONG token
+    // A fabricated token is sufficient to prove the cookie/form binding mismatch.
+    // Creating a second real token for the same address would intentionally
+    // invalidate `token`, because the newest sign-in request is authoritative.
+    let token_hash = hash_token("different-token");
     let cookie_val = format!("{}.{}", token_hash, nonce);
     let body_str = format!("token={}&nonce={}", token, nonce); // Correct token in form
 
