@@ -232,8 +232,7 @@ keine Secret-Werte aus. Der ausgegebene `plan_sha256` bindet Quell-, Ziel- und
 Backup-Pfad, Geräte- und Inode-Identitäten, Eigentümer, Modi, vollständigen
 Quelltext, bisherigen Zielinhalt und geplanten Zielinhalt. Dadurch kann die
 Vorschau weder auf eine andere Datei noch auf ein ausgetauschtes
-gleichlautendes File angewendet
-werden. Einzelne Wert-Hashes werden nicht ausgegeben. Ein bereits gehaltener
+gleichlautendes File angewendet werden. Einzelne Wert-Hashes werden nicht ausgegeben. Ein bereits gehaltener
 Reconcile-Lock führt nach spätestens 15 Sekunden zu einem Fehler statt zu
 unbegrenztem Warten.
 
