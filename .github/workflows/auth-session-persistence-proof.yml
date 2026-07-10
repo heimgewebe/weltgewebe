@@ -99,17 +99,23 @@ jobs:
       - name: Check Rust format and capture patch
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           PROOF_DIR="build/proofs/auth-session-persistence"
           mkdir -p "${PROOF_DIR}"
-          if ! cargo fmt --all -- --check; then
-            cargo fmt --all
+          cargo fmt --all -- --check > "${PROOF_DIR}/rustfmt-check.log" 2>&1
+          check_status=$?
+          if [ "${check_status}" -ne 0 ]; then
+            cargo fmt --all > "${PROOF_DIR}/rustfmt-apply.log" 2>&1
+            apply_status=$?
             git diff -- \
               apps/api/src/auth/session.rs \
               apps/api/src/auth/session_db.rs \
               apps/api/src/middleware/auth.rs \
               apps/api/tests/db_session_store_persistence.rs \
               > "${PROOF_DIR}/rustfmt.patch"
+            printf 'check_status=%s\napply_status=%s\n' \
+              "${check_status}" "${apply_status}" \
+              > "${PROOF_DIR}/rustfmt-status.txt"
             exit 1
           fi
 
