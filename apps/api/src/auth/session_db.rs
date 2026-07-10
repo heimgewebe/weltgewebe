@@ -6,6 +6,9 @@ use super::session::{
     Session, SessionBackendError, SessionLifetime, SessionOps, SessionResult, SESSION_TTL_ENV,
 };
 
+// Trusted static SQL fragment shared by the session queries below. It must
+// never contain configuration or request data; all external values remain
+// parameter-bound through sqlx.
 const SESSION_COLUMNS_WITH_REMAINING_LIFETIME: &str =
     "id, account_id, device_id, created_at, last_active, expires_at, \
      GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (expires_at - NOW()))))::BIGINT \
@@ -85,7 +88,9 @@ impl SessionOps for DbSessionStore {
              )
              SELECT {SESSION_COLUMNS_WITH_REMAINING_LIFETIME}
              FROM sessions
-             WHERE id = $1 AND expires_at > NOW()"
+             WHERE id = $1
+               AND expires_at > NOW()
+               AND NOT EXISTS (SELECT 1 FROM expired)"
         );
         let row = sqlx::query(&query)
             .bind(session_id)
