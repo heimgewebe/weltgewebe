@@ -155,6 +155,16 @@ def _checked_regular_absolute(path: Path, *, label: str) -> Path:
     return resolved
 
 
+def _validate_root_owned_runtime_file(path: Path, *, label: str) -> None:
+    path_stat = path.stat()
+    if path_stat.st_uid != 0:
+        raise ReconcileError(f"{label} must be root-owned for --apply")
+    if stat.S_IMODE(path_stat.st_mode) & (stat.S_IWGRP | stat.S_IWOTH):
+        raise ReconcileError(
+            f"{label} must not be writable by group or others for --apply"
+        )
+
+
 def _write_file_exclusive(path: Path, content: bytes, *, uid: int, gid: int) -> None:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     try:
@@ -200,6 +210,9 @@ def reconcile(
         return {**base_result, "status": "planned", "applied": False}
     if require_root and os.geteuid() != 0:
         raise ReconcileError("--apply requires root")
+    if require_root:
+        _validate_root_owned_runtime_file(source, label="source")
+        _validate_root_owned_runtime_file(destination, label="destination")
 
     if backup_dir.is_symlink():
         raise ReconcileError("backup directory must not be a symlink")
@@ -262,9 +275,11 @@ def reconcile(
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(current_content)
                 handle.flush()
+                os.fchown(
+                    handle.fileno(), destination_stat.st_uid, destination_stat.st_gid
+                )
+                os.fchmod(handle.fileno(), 0o600)
                 os.fsync(handle.fileno())
-            os.chown(tmp, destination_stat.st_uid, destination_stat.st_gid)
-            os.chmod(tmp, 0o600)
             os.replace(tmp, destination)
             dir_fd = os.open(destination.parent, os.O_DIRECTORY)
             try:

@@ -194,7 +194,6 @@ Nach erfolgreicher Vorschau wird dieselbe, gebundene Operation mit `--apply`
 ausgeführt. Sie übernimmt ausschließlich die dokumentierten Auth-/SMTP-Schlüssel,
 legt vor dem atomischen Austausch ein `0600`-Backup an und gibt keine Werte aus.
 
-
 Der VPS-Zieltyp unterscheidet sich vom historischen Heimserver-Ziel:
 
 * er nutzt `infra/compose/compose.vps.override.yml`,

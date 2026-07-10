@@ -338,6 +338,9 @@ def test_root_apply_rejects_non_root_owned_backup_directory(
 
     monkeypatch.setattr(module.Path, "stat", fake_stat)
     monkeypatch.setattr(module.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(
+        module, "_validate_root_owned_runtime_file", lambda path, label: None
+    )
 
     with pytest.raises(module.ReconcileError, match="root-owned"):
         module.reconcile(
@@ -346,3 +349,41 @@ def test_root_apply_rejects_non_root_owned_backup_directory(
             backup_dir=backup_dir,
             apply=True,
         )
+
+
+def test_root_apply_rejects_untrusted_source_owner(tmp_path: Path, monkeypatch) -> None:
+    module = load_module()
+    source = tmp_path / "legacy.env"
+    destination = tmp_path / "canonical.env"
+    source.write_text(valid_source(), encoding="utf-8")
+    destination.write_text("DATABASE_URL=postgres://preserve\n", encoding="utf-8")
+    monkeypatch.setattr(module.os, "geteuid", lambda: 0)
+
+    with pytest.raises(module.ReconcileError, match="source must be root-owned"):
+        module.reconcile(
+            source_path=source,
+            destination_path=destination,
+            backup_dir=tmp_path / "backups",
+            apply=True,
+        )
+
+
+def test_apply_file_guard_rejects_group_writable_file(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = load_module()
+    path = tmp_path / "runtime.env"
+    path.write_text("KEY=value\n", encoding="utf-8")
+    real_stat = module.Path.stat
+
+    def fake_stat(candidate, *args, **kwargs):
+        result = real_stat(candidate, *args, **kwargs)
+        values = list(result)
+        values[0] = result.st_mode | stat.S_IWGRP
+        values[4] = 0
+        return module.os.stat_result(values)
+
+    monkeypatch.setattr(module.Path, "stat", fake_stat)
+
+    with pytest.raises(module.ReconcileError, match="group or others"):
+        module._validate_root_owned_runtime_file(path, label="source")
