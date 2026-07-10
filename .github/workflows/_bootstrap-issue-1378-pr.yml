@@ -81,10 +81,26 @@ jobs:
 
       - name: Format and validate API
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          cargo fmt --all
           cargo fmt --all --check
-          cargo test --locked -p weltgewebe-api
+          set +e
+          cargo test --locked -p weltgewebe-api > /tmp/issue-1378-rust.log 2>&1
+          rust_rc=$?
+          set -e
+          if [ "${rust_rc}" -ne 0 ]; then
+            {
+              printf '## Rust-Diagnose\n\n'
+              printf 'Formatierung ist angewendet; Compiler oder Tests melden:\n\n```text\n'
+              tail -n 80 /tmp/issue-1378-rust.log
+              printf '\n```\n'
+            } > /tmp/issue-1378-rust-comment.md
+            gh pr comment 1386 --body-file /tmp/issue-1378-rust-comment.md
+            exit "${rust_rc}"
+          fi
 
       - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
         with:
