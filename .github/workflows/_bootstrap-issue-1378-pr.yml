@@ -72,17 +72,26 @@ jobs:
           )
           updated_files = []
           updated_initializers = 0
+          tests_root = Path('apps/api/tests')
           for target in Path('apps/api').rglob('*.rs'):
               text = target.read_text()
               if 'AppConfig {' not in text:
                   continue
+              try:
+                  target.relative_to(tests_root)
+                  constant_path = (
+                      'weltgewebe_api::config::DEFAULT_AUTH_SESSION_TTL_SECONDS'
+                  )
+              except ValueError:
+                  constant_path = (
+                      'crate::config::DEFAULT_AUTH_SESSION_TTL_SECONDS'
+                  )
 
               def add_ttl(match: re.Match[str]) -> str:
                   indent = match.group('indent')
                   return (
                       f'{indent}auth_trusted_proxies: None,\n'
-                      f'{indent}auth_session_ttl_seconds: '
-                      'crate::config::DEFAULT_AUTH_SESSION_TTL_SECONDS,\n'
+                      f'{indent}auth_session_ttl_seconds: {constant_path},\n'
                   )
 
               revised, count = pattern.subn(add_ttl, text)
