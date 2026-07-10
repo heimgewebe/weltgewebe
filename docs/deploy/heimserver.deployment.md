@@ -168,6 +168,14 @@ Supported with strict rate limits (mandatory):
 - `AUTH_RL_EMAIL_PER_MIN=2`
 - `AUTH_RL_EMAIL_PER_HOUR=10`
 
+Die Per-IP-Limits sind nur wirksam, wenn die API die echte Client-IP auflösen
+kann. Hinter Caddy verlangt das eine Proxy-Deklaration; ohne sie verweigert die
+API den Start:
+
+- `AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12` (Docker-Bridge-Netz)
+
+`compose.prod.override.yml` setzt diesen Wert bereits als Default.
+
 **Konsequenz:**
 
 - Jeder kann Magic-Link anfordern.
