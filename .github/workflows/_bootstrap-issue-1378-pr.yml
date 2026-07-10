@@ -199,11 +199,36 @@ jobs:
       - name: Check web and browser proof
         shell: bash
         working-directory: apps/web
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          pnpm check:ci
-          pnpm exec playwright install --with-deps chromium
-          pnpm test:proof:auth-session-browser
+
+          run_stage() {
+            local stage="$1"
+            shift
+            local slug
+            slug="$(printf '%s' "${stage}" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9-')"
+            local log="/tmp/issue-1378-${slug}.log"
+            set +e
+            "$@" >"${log}" 2>&1
+            local rc=$?
+            set -e
+            if [ "${rc}" -ne 0 ]; then
+              {
+                printf '## Browser-Proof-Diagnose\n\n'
+                printf '**Fehlgeschlagene Stufe:** `%s`\n\n```text\n' "${stage}"
+                tail -n 120 "${log}"
+                printf '\n```\n'
+              } > /tmp/issue-1378-browser-comment.md
+              gh pr comment 1386 --body-file /tmp/issue-1378-browser-comment.md
+              return "${rc}"
+            fi
+          }
+
+          run_stage "web-check" pnpm check:ci
+          run_stage "chromium-install" pnpm exec playwright install --with-deps chromium
+          run_stage "browser-proof" pnpm test:proof:auth-session-browser
 
       - name: Commit implementation
         shell: bash
