@@ -17,7 +17,7 @@ relations:
 
 Status: aktiv
 Zweck: Verifikation der Auth-Architektur gegen ADR-0006 + Specs
-Letzte Aktualisierung: manuell gepflegt
+Letzte Aktualisierung: 2026-07-10 (Issue #1378, persistente Browser-Sessions)
 Pflegeregel: Diese Matrix ist bei jedem Auth-bezogenen PR zu aktualisieren, der Zielrahmen, Runtime-Verhalten oder Sicherheitsinvarianten verändert.
 
 > Diese Matrix dient als Diagnoseartefakt zur Roadmap.
@@ -70,9 +70,9 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
 | Magic Link            | vorhanden   | Ziel-Contract migriert, Legacy-Alias aktiv, Runtime-Beleg offen | Teil   | mittel  |
-| Session               | required    | API aktiv, DbSessionStore (Phase 5) implementiert — DB-Persistenz aktiv wenn `DATABASE_URL` gesetzt, sonst In-Memory-Fallback; Phase 6: Cookie-Attribut-Proof (httpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓) und API-level Magic-Link-consume-CI-Proof belegt (Run `26455010837` / Job `77886363989`, `2 passed; 0 failed`) | Teil   | mittel  |
+| Session               | required    | PostgreSQL-/In-Memory-Sessionvertrag mit konfigurierbarer TTL; persistentes Cookie wird aus der gespeicherten Server-Expiry abgeleitet; Chromium-Profil-, Neustart-, Isolations- und Logout-Proof auf Head `2efc5226` grün | Teil   | niedrig bis mittel |
 | Session Refresh       | required    | Route aktiv, Session-Rotation belegt, Token-Split offen | Teil   | mittel  |
-| Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
+| Logout                | required    | Route und Server-Löschung belegt; Chromium-Proof zeigt Cookie-Löschung und Wirkung auf bereits offene Seiten desselben Profils | Teil   | niedrig bis mittel |
 | Logout All            | required    | Challenge belegt, Consume implementiert (LogoutAll-Intent via Step-up-Consume), kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Devices               | required    | API aktiv (Liste, Self-Delete), RemoveDevice-Intent via Step-up-Consume implementiert, kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Step-up Auth          | required    | Challenge-Store, Request, Consume für Magic-Link implementiert; `BeginPasskeyRegistration`-Consume erzeugt jetzt `registration_grant_id` (TTL 5 Min, single-use, account/device-gebunden); Handoff vollständig | Teil   | mittel  |
@@ -96,12 +96,16 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.2 Session
 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), belastbares Persistenzmodell.
-**Ist:** `GET /auth/session` ist implementiert (inkl. `expires_at` und `device_id`) und durch API-Tests belegt. Phase 5 (PR #1072): `DbSessionStore` implementiert — direkte PostgreSQL-Persistenz über `DATABASE_URL` gemäß ADR-0007; In-Memory-`SessionStore` bleibt aktiv wenn `DATABASE_URL` nicht gesetzt. Harte Fehlermeldung bei Fehlkonfiguration (gesetztes `DATABASE_URL`, aber Pool-Fehler). Query-Layer-Expiry-Filterung (`WHERE expires_at > NOW()`), 5-Minuten-Debounce auf `touch()`. ADR-0007: direkter PostgreSQL-Zugriff als Produktionspfad, PgBouncer kein Produktions-Gate. Cookie-Transport aktiv; `httpOnly` und `SameSite=Lax` bedingungslos gesetzt; `Secure` standardmäßig aktiv, konfigurierbar über `AUTH_COOKIE_SECURE`. Phase 6 (PR #1081): API-level Magic-Link consume proof with seeded token + Cookie-Attribut-Proof (HttpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓), Test mit `AUTH_COOKIE_SECURE=0` für Dev-Modus. Authentifizierter Request mit Session-Cookie gegen `/auth/session` lokal belegt.
+**Ist:** `GET /auth/session` ist implementiert (inkl. `expires_at` und `device_id`). `AUTH_SESSION_TTL_SECONDS` definiert einen gemeinsamen, fail-closed validierten Ablaufvertrag für In-Memory- und PostgreSQL-Sessions (Standard 30 Tage, zulässig 1 Stunde bis 90 Tage). Positive `gewebe_session`-Cookies erhalten `Max-Age` und `Expires` aus der tatsächlich gespeicherten `session.expires_at`; Löschcookies verwenden denselben Scope (`Path=/`, `HttpOnly`, `SameSite=Lax`, `Secure` gemäß Konfiguration). Abgelaufene Sessions werden beim Lesen physisch entfernt. Die Auth-Middleware entfernt stale Cookies sowie Sessions fehlender oder deaktivierter Accounts und normalisiert Session-Cookies nach dem Route-Handler, ohne weitere `Set-Cookie`-Header zu verlieren.
+
+Der Chromium-Proof auf Head `2efc5226ed669234eec522c796fdfc9f30c573ee` belegt eine gemeinsame Anmeldung auf einer zweiten Seite desselben Browserprofils, Wiederherstellung nach Browser-Neustart, Trennung eines separaten Profils und privaten Kontexts sowie profilweite Cookie-Löschung und serverseitige Session-Ungültigkeit nach Logout. Er prüft außerdem `HttpOnly`, `SameSite=Lax`, `Path=/` und eine persistente Ablaufzeit. Im lokalen HTTP-Proof ist `Secure` bewusst deaktiviert; der produktive `Secure`-Vertrag ist separat durch Rust-Tests belegt.
 **Dokumentationsbelege:** `docs/adr/ADR-0007__auth-persistence-production-db-path.md`, `docs/blueprints/auth-roadmap.md` (Persistenzentscheidung), `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/src/middleware/auth.rs`, `apps/api/src/middleware/authz.rs`, `apps/api/tests/api_auth.rs` (inkl. Phase 6 Tests: `session_cookie_has_secure_attributes_on_magic_link_consume`, `session_cookie_insecure_when_auth_cookie_secure_disabled`), `apps/api/src/auth/session.rs`, `apps/api/src/auth/session_db.rs`, `apps/api/tests/db_session_store_persistence.rs`
 **CI-Gate:** `.github/workflows/api.yml` Job `db-session-persistence-proof` — führt `apps/api/tests/db_session_store_persistence.rs` verbindlich gegen direkten PostgreSQL-Service (Port `5432`) aus. Phase 5 CI-Gate: **PROVEN** — Run-ID [`26394569642`](https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642), Job-ID [`77692063785`](https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642/job/77692063785), Commit `00a43a009c53c546355a14c08086131bd84cf8ad` (Branch `main`); direkter PostgreSQL-Port `5432` (nicht PgBouncer `6432`); `test db_session_store_persistence ... ok`, `6 passed; 0 failed`. Phase 6 Cookie-Proof-CI: **PROVEN** — Workflow `api`, Event `pull_request`, Branch `chore/auth-phase6-cookie-proof-ci`, Run-ID [`26455010837`](https://github.com/heimgewebe/weltgewebe/actions/runs/26455010837), Job `cookie session proof (phase 6)`/Job-ID [`77886363989`](https://github.com/heimgewebe/weltgewebe/actions/runs/26455010837/job/77886363989), headSha `20c7e30136fc5872e286ab17738a64b0d03aec56`; `CARGO_TERM_COLOR=never`; `cargo test --locked -p weltgewebe-api --test api_auth session_cookie_ -- --test-threads=1 --color never`; `running 2 tests`; `session_cookie_has_secure_attributes_on_magic_link_consume ... ok`; `session_cookie_insecure_when_auth_cookie_secure_disabled ... ok`; `test result: ok. 2 passed; 0 failed`; `PROVEN: cookie/session proof tests passed (phase 6)`. Scope: nur Cookie/session proof, kein vollständiger Browser-E2E-/Auth-Verify-/Passkey-Proof.
-**Statusformulierung:** Phase 5 DbSessionStore CI proof PROVEN; Phase 6 Cookie-Proof CI PROVEN; weitere Auth-/Browser-/Passkey-Nachweise sind, soweit zutreffend, noch offen.
-**Fehlende Belege:** Session-Rotation/Leak-Tests, Cookie-Refresh-Beweise bei Session-Refresh-Flow, vollständiger Browser-/Mailer-End-to-End-Nachweis des Magic-Link-Flows.
+
+**Issue-#1378-Evidence auf dem aktuellen Code-Head:** Workflow `Auth Session Persistence Proof`, Run-ID [`29097949850`](https://github.com/heimgewebe/weltgewebe/actions/runs/29097949850), Job `auth session persistence browser proof`/Job-ID [`86379167956`](https://github.com/heimgewebe/weltgewebe/actions/runs/29097949850/job/86379167956), headSha `2efc5226ed669234eec522c796fdfc9f30c573ee`, Ergebnis `success`. Derselbe Head bestand im Workflow `api` den Job `db session persistence proof (direct postgres)` (Run-ID [`29097949557`](https://github.com/heimgewebe/weltgewebe/actions/runs/29097949557), Job-ID [`86379166927`](https://github.com/heimgewebe/weltgewebe/actions/runs/29097949557/job/86379166927)) sowie `cookie session proof (phase 6)` (Job-ID [`86379167132`](https://github.com/heimgewebe/weltgewebe/actions/runs/29097949557/job/86379167132)). Beweisgrenze: Der Browser-Proof verwendet einen Integrationstest-Bootstrap gegen eine lokale HTTP-API; er beweist keine reale Mailzustellung, kein produktives TLS-Terminal und keinen manuellen Login über einen externen Mailclient.
+**Statusformulierung:** DbSessionStore-, Cookie- und Issue-#1378-Chromium-Proof sind PROVEN; reale Mailzustellung, produktiver Browser-Live-Test und der weitergehende Token-Split bleiben offen.
+**Fehlende Belege:** Reale Mailzustellung und produktiver Browser-Live-Test über den externen Mailclient; ein vollständiger Access-/Refresh-Token-Split bleibt außerhalb dieses Session-Cookie-Vertrags offen. Session-Rotation, Cookie-Refresh, Logout, Self-Device-Removal sowie mehrere `Set-Cookie`-Header sind API-seitig getestet; Profil-/Neustart-/Isolationsverhalten ist im Chromium-Proof belegt.
 **Status:** Teil
 **Risiko:** mittel
 
@@ -118,12 +122,12 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.4 Logout
 
 **Soll:** POST `/auth/logout`
-**Ist:** Ein Logout-Codepfad ist im aktuellen Code vorhanden (`/auth/logout`) und durch API-Tests verifiziert. Ein belastbarer End-to-End-Nachweis gegen den neuen Zielrahmen fehlt jedoch noch.
+**Ist:** `POST /auth/logout` löscht die serverseitige Session und sendet ein sofort abgelaufenes Cookie mit identischem Scope. Der Chromium-Proof aus Issue #1378 belegt, dass der Logout das Cookie profilweit entfernt und eine bereits offene zweite Seite desselben Profils beim nächsten Session-Check nicht mehr authentifiziert ist.
 **Dokumentationsbelege:** `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`
-**Fehlende Belege:** End-to-End-Test
+**Fehlende Belege:** Produktiver Live-Test über den realen Login-/Mailpfad; der CI-Browser-Proof verwendet den Integrationstest-Bootstrap.
 **Status:** Teil
-**Risiko:** mittel
+**Risiko:** niedrig bis mittel
 
 ### 2.5 Logout All
 
