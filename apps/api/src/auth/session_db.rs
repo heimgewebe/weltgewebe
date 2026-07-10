@@ -1,19 +1,29 @@
 use async_trait::async_trait;
+use chrono::Utc;
 use sqlx::{postgres::PgRow, PgPool, Row};
 use uuid::Uuid;
 
-use super::session::{Session, SessionBackendError, SessionOps, SessionResult};
+use super::session::{
+    Session, SessionBackendError, SessionLifetime, SessionOps, SessionResult, SESSION_TTL_ENV,
+};
 
 /// Database-backed session store for direct PostgreSQL persistence.
 /// Sessions created here survive across server restarts.
 #[derive(Clone)]
 pub struct DbSessionStore {
     pool: PgPool,
+    lifetime: SessionLifetime,
 }
 
 impl DbSessionStore {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        let lifetime = SessionLifetime::from_env()
+            .unwrap_or_else(|error| panic!("invalid {}: {}", SESSION_TTL_ENV, error));
+        Self::with_lifetime(pool, lifetime)
+    }
+
+    pub fn with_lifetime(pool: PgPool, lifetime: SessionLifetime) -> Self {
+        Self { pool, lifetime }
     }
 
     fn session_from_row(row: PgRow) -> Result<Session, sqlx::Error> {
@@ -37,14 +47,18 @@ impl SessionOps for DbSessionStore {
     ) -> SessionResult<Session> {
         let session_id = Uuid::new_v4().to_string();
         let device_id = existing_device_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let now = Utc::now();
+        let expires_at = now + self.lifetime.duration();
         let row = sqlx::query(
             "INSERT INTO sessions (id, account_id, device_id, created_at, last_active, expires_at)
-             VALUES ($1, $2, $3, NOW(), NOW(), NOW() + INTERVAL '1 day')
+             VALUES ($1, $2, $3, $4, $4, $5)
              RETURNING id, account_id, device_id, created_at, last_active, expires_at",
         )
         .bind(&session_id)
         .bind(&account_id)
         .bind(&device_id)
+        .bind(now)
+        .bind(expires_at)
         .fetch_one(&self.pool)
         .await
         .map_err(|_| SessionBackendError::Unavailable)?;
@@ -54,7 +68,12 @@ impl SessionOps for DbSessionStore {
 
     async fn get(&self, session_id: &str) -> SessionResult<Option<Session>> {
         let row = sqlx::query(
-            "SELECT id, account_id, device_id, created_at, last_active, expires_at
+            "WITH expired AS (
+                 DELETE FROM sessions
+                 WHERE id = $1 AND expires_at <= NOW()
+                 RETURNING id
+             )
+             SELECT id, account_id, device_id, created_at, last_active, expires_at
              FROM sessions
              WHERE id = $1 AND expires_at > NOW()",
         )
