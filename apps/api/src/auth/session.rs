@@ -39,9 +39,7 @@ pub enum SessionLifetimeError {
     Empty,
     #[error("AUTH_SESSION_TTL_SECONDS must be an integer number of seconds: {0}")]
     Invalid(String),
-    #[error(
-        "AUTH_SESSION_TTL_SECONDS must be between {min} and {max} seconds, got {value}"
-    )]
+    #[error("AUTH_SESSION_TTL_SECONDS must be between {min} and {max} seconds, got {value}")]
     OutOfRange { value: i64, min: i64, max: i64 },
 }
 
