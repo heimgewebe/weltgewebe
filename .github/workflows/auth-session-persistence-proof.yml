@@ -2,13 +2,13 @@
 # Persistent browser-session proof (CI)
 #
 # Proves the browser-facing contract from issue #1378 with real Chromium
-# profiles and the real API session backend:
+# profiles and the PostgreSQL-backed API session backend:
 #
 # - a second page in the same profile is authenticated immediately;
 # - a persisted profile remains authenticated after browser restart;
-# - a separate profile and a private context remain unauthenticated;
-# - logout removes the server session and propagates through the shared profile;
-# - the session cookie is persistent and keeps the required security attributes.
+# - a separate profile and a private context receive independent sessions;
+# - logout propagates through the shared profile and invalidates the old server session;
+# - the session cookie is persistent, conservatively bounded, and keeps the required security attributes.
 name: Auth Session Persistence Proof
 
 "on":
@@ -17,9 +17,15 @@ name: Auth Session Persistence Proof
     paths:
       - "apps/api/src/auth/session.rs"
       - "apps/api/src/auth/session_db.rs"
+      - "apps/api/src/auth/mod.rs"
       - "apps/api/src/lib.rs"
       - "apps/api/src/middleware/auth.rs"
+      - "apps/api/src/middleware/mod.rs"
+      - "apps/api/src/middleware/authz.rs"
+      - "apps/api/src/middleware/csrf.rs"
       - "apps/api/src/routes/auth.rs"
+      - "apps/api/src/routes/mod.rs"
+      - "apps/api/src/state.rs"
       - "apps/api/tests/api_auth.rs"
       - "apps/api/tests/db_session_store_persistence.rs"
       - "apps/web/package.json"
@@ -36,9 +42,15 @@ name: Auth Session Persistence Proof
     paths:
       - "apps/api/src/auth/session.rs"
       - "apps/api/src/auth/session_db.rs"
+      - "apps/api/src/auth/mod.rs"
       - "apps/api/src/lib.rs"
       - "apps/api/src/middleware/auth.rs"
+      - "apps/api/src/middleware/mod.rs"
+      - "apps/api/src/middleware/authz.rs"
+      - "apps/api/src/middleware/csrf.rs"
       - "apps/api/src/routes/auth.rs"
+      - "apps/api/src/routes/mod.rs"
+      - "apps/api/src/state.rs"
       - "apps/api/tests/api_auth.rs"
       - "apps/api/tests/db_session_store_persistence.rs"
       - "apps/web/package.json"
@@ -67,6 +79,20 @@ jobs:
     name: auth session persistence browser proof
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: weltgewebe
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d weltgewebe"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       CARGO_TERM_COLOR: always
       NPM_CONFIG_AUDIT: "false"
@@ -75,6 +101,7 @@ jobs:
       PLAYWRIGHT_HTML_REPORT_OPEN: never
       PLAYWRIGHT_HTML_REPORT: playwright-report-session
       PLAYWRIGHT_JUNIT_OUTPUT_NAME: session-results.xml
+      AUTH_SESSION_PROOF_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # tag: v4
@@ -93,36 +120,16 @@ jobs:
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
           components: rustfmt
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
 
-      - name: Check Rust format and capture patch
-        shell: bash
-        run: |
-          set -uo pipefail
-          PROOF_DIR="build/proofs/auth-session-persistence"
-          mkdir -p "${PROOF_DIR}"
-          cargo fmt --all -- --check > "${PROOF_DIR}/rustfmt-check.log" 2>&1
-          check_status=$?
-          if [ "${check_status}" -ne 0 ]; then
-            cargo fmt --all > "${PROOF_DIR}/rustfmt-apply.log" 2>&1
-            apply_status=$?
-            git diff -- \
-              apps/api/src/auth/session.rs \
-              apps/api/src/auth/session_db.rs \
-              apps/api/src/middleware/auth.rs \
-              apps/api/tests/db_session_store_persistence.rs \
-              > "${PROOF_DIR}/rustfmt.patch"
-            printf 'check_status=%s\napply_status=%s\n' \
-              "${check_status}" "${apply_status}" \
-              > "${PROOF_DIR}/rustfmt-status.txt"
-            exit 1
-          fi
+      - name: Check Rust format
+        run: cargo fmt --all -- --check
 
       - name: Install pnpm
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6

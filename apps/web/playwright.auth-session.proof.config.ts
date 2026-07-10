@@ -4,6 +4,9 @@ import { resolve } from "node:path";
 const isCI = /^(1|true)$/i.test(process.env.CI ?? "");
 const apiPort = Number(process.env.AUTH_SESSION_PROOF_API_PORT ?? 18081);
 const apiOrigin = `http://127.0.0.1:${apiPort}`;
+const proofDatabaseUrl = process.env.AUTH_SESSION_PROOF_DATABASE_URL;
+const inheritedEnv = { ...process.env };
+delete inheritedEnv.DATABASE_URL;
 const htmlReportDir = resolve(
   process.cwd(),
   process.env.PLAYWRIGHT_HTML_REPORT ?? "playwright-report-session",
@@ -37,13 +40,15 @@ export default defineConfig({
     name: "API",
     url: `${apiOrigin}/health/ready`,
     timeout: 120_000,
-    reuseExistingServer: !isCI,
+    reuseExistingServer: false,
     env: {
-      ...process.env,
+      ...inheritedEnv,
+      ...(proofDatabaseUrl ? { DATABASE_URL: proofDatabaseUrl } : {}),
       API_BIND: `127.0.0.1:${apiPort}`,
       AUTH_COOKIE_SECURE: "0",
       AUTH_SESSION_TTL_SECONDS: "2592000",
       CSRF_ALLOWED_ORIGINS: apiOrigin,
+      WELTGEWEBE_API_STARTUP_MIGRATIONS: "run",
     },
   },
 });

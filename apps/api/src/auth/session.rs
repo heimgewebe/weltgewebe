@@ -15,11 +15,25 @@ pub struct Session {
     pub created_at: DateTime<Utc>,
     pub last_active: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    #[serde(skip, default)]
+    pub(crate) cookie_max_age_seconds: i64,
 }
 
 impl Session {
     pub fn is_expired(&self) -> bool {
         Utc::now() > self.expires_at
+    }
+
+    pub fn cookie_max_age_seconds(&self) -> i64 {
+        self.cookie_max_age_seconds.max(0)
+    }
+
+    pub(crate) fn refresh_cookie_max_age(&mut self, now: DateTime<Utc>) {
+        self.cookie_max_age_seconds = self
+            .expires_at
+            .signed_duration_since(now)
+            .num_seconds()
+            .max(0);
     }
 }
 
@@ -220,6 +234,7 @@ impl SessionStore {
             created_at: now,
             last_active: now,
             expires_at,
+            cookie_max_age_seconds: self.lifetime.seconds(),
         };
 
         let mut store = self.store.write_recover();
@@ -235,7 +250,10 @@ impl SessionStore {
         };
 
         match session {
-            Some(session) if !session.is_expired() => Some(session),
+            Some(mut session) if !session.is_expired() => {
+                session.refresh_cookie_max_age(Utc::now());
+                Some(session)
+            }
             Some(_) => {
                 let mut store = self.store.write_recover();
                 store.remove(session_id);
@@ -279,6 +297,10 @@ impl SessionStore {
             .values()
             .filter(|s| s.account_id == account_id && s.expires_at > now)
             .cloned()
+            .map(|mut session| {
+                session.refresh_cookie_max_age(now);
+                session
+            })
             .collect()
     }
 
@@ -496,6 +518,7 @@ mod tests {
                 created_at: now - Duration::hours(2),
                 last_active: now - Duration::hours(2),
                 expires_at: now - Duration::hours(1),
+                cookie_max_age_seconds: 0,
             },
         );
 

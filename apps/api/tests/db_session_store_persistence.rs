@@ -10,7 +10,6 @@
 
 use std::{path::PathBuf, str::FromStr};
 
-use chrono::{Duration, Utc};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use uuid::Uuid;
 
@@ -165,15 +164,34 @@ async fn db_session_store_uses_configured_lifetime() {
 
     cleanup_account(&pool, &account_id).await;
 
-    let before = Utc::now();
+    let database_before: chrono::DateTime<chrono::Utc> = sqlx::query_scalar("SELECT NOW()")
+        .fetch_one(&pool)
+        .await
+        .expect("read database clock before create failed");
     let created = store
         .create(account_id.clone(), None)
         .await
         .expect("create failed");
-    let after = Utc::now();
+    let database_after: chrono::DateTime<chrono::Utc> = sqlx::query_scalar("SELECT NOW()")
+        .fetch_one(&pool)
+        .await
+        .expect("read database clock after create failed");
 
-    assert!(created.expires_at >= before + Duration::seconds(7_200));
-    assert!(created.expires_at <= after + Duration::seconds(7_200));
+    assert!(created.created_at >= database_before);
+    assert!(created.created_at <= database_after);
+    assert_eq!(
+        created
+            .expires_at
+            .signed_duration_since(created.created_at)
+            .num_seconds(),
+        7_200,
+        "PostgreSQL must derive expiry from the same statement clock as creation"
+    );
+    assert_eq!(
+        created.cookie_max_age_seconds(),
+        7_200,
+        "PostgreSQL must return the configured remaining lifetime from its own clock"
+    );
 
     cleanup_account(&pool, &account_id).await;
     pool.close().await;

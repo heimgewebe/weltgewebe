@@ -2828,10 +2828,7 @@ pub async fn passkey_testing_bootstrap_session(
 
     let session = match state
         .sessions
-        .create(
-            PASSKEY_PROOF_ACCOUNT_ID.to_string(),
-            Some("proof-passkey-device".to_string()),
-        )
+        .create(PASSKEY_PROOF_ACCOUNT_ID.to_string(), None)
         .await
     {
         Ok(session) => session,
