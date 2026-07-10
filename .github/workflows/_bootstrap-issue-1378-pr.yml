@@ -37,8 +37,13 @@ jobs:
           start = next(i for i, line in enumerate(source) if "python3 <<'PY'" in line) + 1
           end = next(i for i in range(start, len(source)) if source[i].strip() == 'PY')
           script_lines = source[start:end]
-          indent = min(len(line) - len(line.lstrip()) for line in script_lines if line.strip())
-          script = '\n'.join(line[indent:] for line in script_lines) + '\n'
+          first_code_line = next(line for line in script_lines if line.strip())
+          indent = len(first_code_line) - len(first_code_line.lstrip())
+          prefix = ' ' * indent
+          script = '\n'.join(
+              line[indent:] if line.startswith(prefix) else line
+              for line in script_lines
+          ) + '\n'
           Path('/tmp/apply_issue_1378.py').write_text(script)
           PY
 
