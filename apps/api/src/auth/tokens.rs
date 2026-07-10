@@ -169,8 +169,14 @@ mod tests {
         let first_user = store.create("first@example.com".to_string());
         let second_user = store.create("second@example.com".to_string());
 
-        assert_eq!(store.consume(&first_user), Some("first@example.com".to_string()));
-        assert_eq!(store.consume(&second_user), Some("second@example.com".to_string()));
+        assert_eq!(
+            store.consume(&first_user),
+            Some("first@example.com".to_string())
+        );
+        assert_eq!(
+            store.consume(&second_user),
+            Some("second@example.com".to_string())
+        );
     }
 
     #[test]
@@ -182,10 +188,8 @@ mod tests {
     #[test]
     fn expired_token_returns_none_for_peek_and_consume() {
         let store = TokenStore::new();
-        let token = store.create_with_expiry(
-            "user@example.com".to_string(),
-            Duration::milliseconds(1),
-        );
+        let token =
+            store.create_with_expiry("user@example.com".to_string(), Duration::milliseconds(1));
         std::thread::sleep(std::time::Duration::from_millis(50));
         assert_eq!(store.peek(&token), None);
         assert_eq!(store.consume(&token), None);
