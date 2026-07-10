@@ -28,6 +28,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/github-actions-node24-readiness.md
 - [relates_to] docs/reports/proof-matrix-generalization-decision.md
 
+## .github/workflows/public-login-smtp-readiness.yml
+
+- [relates_to] docs/deploy/vps.md
+
 ## AGENTS.md
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
@@ -1022,6 +1026,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/github-action-ref-pinning-audit.md
 
+## scripts/ci/tests/test_reconcile_public_login_smtp_env.py
+
+- [relates_to] docs/deploy/vps.md
+
 ## scripts/docmeta/audit_account_email_uniqueness.py
 
 - [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
@@ -1074,6 +1082,10 @@ Generated automatically. Do not edit.
 ## scripts/ops/check_vps_migration_safe_runtime_env.py
 
 - [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md
+
+## scripts/ops/reconcile_public_login_smtp_env.py
+
+- [relates_to] docs/deploy/vps.md
 
 ## scripts/tests/test_domain_single_instance_guard.sh
 
