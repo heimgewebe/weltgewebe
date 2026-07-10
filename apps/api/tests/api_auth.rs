@@ -2,9 +2,11 @@ use anyhow::{Context, Result};
 use axum::{
     body,
     extract::connect_info::MockConnectInfo,
-    http::{HeaderMap, Request, StatusCode},
+    http::{header::SET_COOKIE, HeaderMap, HeaderValue, Request, StatusCode},
+    response::IntoResponse,
     Router,
 };
+use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use serial_test::serial;
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, sync::Arc};
@@ -76,6 +78,8 @@ fn test_state() -> Result<ApiState> {
         domain_edge_write_source: weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
         passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
         auth_public_login: false,
+        auth_cookie_secure: weltgewebe_api::config::auth_cookie_secure_env_override()
+            .unwrap_or(true),
         app_base_url: None,
         auth_trusted_proxies: None,
         auth_allow_emails: None,
@@ -993,6 +997,95 @@ fn has_cookie_samesite_lax(cookie_header: &str) -> bool {
         })
 }
 
+fn cookie_attribute_value<'a>(cookie_header: &'a str, name: &str) -> Option<&'a str> {
+    cookie_header
+        .split(';')
+        .skip(1)
+        .map(str::trim)
+        .filter_map(|attribute| attribute.split_once('='))
+        .find_map(|(key, value)| {
+            key.trim()
+                .eq_ignore_ascii_case(name)
+                .then_some(value.trim())
+        })
+}
+
+const SESSION_COOKIE_EXPIRY_SAFETY_SECONDS: i64 = 5 * 60;
+
+fn assert_persistent_session_cookie(cookie_header: &str, expect_secure: bool) {
+    assert_session_cookie_secure(cookie_header, expect_secure);
+    assert_eq!(
+        cookie_attribute_value(cookie_header, "path"),
+        Some("/"),
+        "Session cookie must use profile-wide Path=/; got: {}",
+        cookie_header
+    );
+    let max_age = cookie_attribute_value(cookie_header, "max-age")
+        .and_then(|value| value.parse::<i64>().ok())
+        .expect("persistent session cookie must contain an integer Max-Age");
+    assert!(
+        max_age > 0,
+        "persistent session cookie Max-Age must be positive; got: {}",
+        cookie_header
+    );
+    assert!(
+        cookie_attribute_value(cookie_header, "expires").is_some(),
+        "persistent session cookie must contain Expires; got: {}",
+        cookie_header
+    );
+}
+
+fn assert_removal_session_cookie(cookie_header: &str, expect_secure: bool) {
+    assert_session_cookie_secure(cookie_header, expect_secure);
+    let cookie =
+        Cookie::parse(cookie_header.to_string()).expect("removal Set-Cookie header must parse");
+    assert_eq!(cookie.name(), SESSION_COOKIE_NAME);
+    assert_eq!(cookie.value(), "");
+    assert_eq!(cookie.path(), Some("/"));
+    assert!(
+        cookie.max_age().is_some_and(|age| age.whole_seconds() <= 0),
+        "removal session cookie must have Max-Age=0; got: {cookie_header}"
+    );
+    assert!(
+        cookie
+            .expires_datetime()
+            .is_some_and(|expires| expires <= time::OffsetDateTime::UNIX_EPOCH),
+        "removal session cookie must be expired; got: {cookie_header}"
+    );
+}
+
+fn assert_persistent_cookie_matches_stored_session(
+    cookie_header: &str,
+    expect_secure: bool,
+    session: &weltgewebe_api::auth::session::Session,
+    response_started: chrono::DateTime<chrono::Utc>,
+    response_finished: chrono::DateTime<chrono::Utc>,
+) {
+    assert_persistent_session_cookie(cookie_header, expect_secure);
+    let cookie =
+        Cookie::parse(cookie_header.to_string()).expect("persistent Set-Cookie header must parse");
+    let cookie_expires = cookie
+        .expires_datetime()
+        .expect("persistent session cookie must have Expires")
+        .unix_timestamp();
+    assert_eq!(
+        cookie_expires,
+        session.expires_at.timestamp() - SESSION_COOKIE_EXPIRY_SAFETY_SECONDS,
+        "cookie Expires must be derived from the stored server-session expiry"
+    );
+
+    let max_age = cookie
+        .max_age()
+        .expect("persistent session cookie must have Max-Age")
+        .whole_seconds();
+    let lower_bound = cookie_expires - response_finished.timestamp() - 1;
+    let upper_bound = cookie_expires - response_started.timestamp() + 1;
+    assert!(
+        max_age >= lower_bound && max_age <= upper_bound,
+        "cookie Max-Age must describe the same conservative expiry window;          max_age={max_age}, expected_range={lower_bound}..={upper_bound}"
+    );
+}
+
 /// Verify that Session Cookie attributes match security requirements.
 fn assert_session_cookie_secure(cookie_header: &str, expect_secure: bool) {
     // Must have httponly
@@ -1079,6 +1172,18 @@ async fn magic_link_consume_origin_null_succeeds_through_security_middleware() -
 
     assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
     assert_eq!(res_post.headers().get("location").unwrap(), "/");
+
+    let session_cookie = extract_set_cookie_header(res_post.headers(), SESSION_COOKIE_NAME)
+        .context("valid magic-link consume must create a session cookie")?;
+    assert_persistent_session_cookie(&session_cookie, true);
+
+    let nonce_cleanup = extract_set_cookie_header(res_post.headers(), NONCE_COOKIE_NAME)
+        .context("session-cookie normalization must preserve nonce cleanup")?;
+    assert_eq!(
+        cookie_attribute_value(&nonce_cleanup, "max-age"),
+        Some("0"),
+        "nonce cleanup must remain an immediate deletion cookie"
+    );
 
     let session_id = extract_cookie_value(res_post.headers(), SESSION_COOKIE_NAME)
         .context("valid magic-link consume must create a session cookie")?;
@@ -4843,6 +4948,226 @@ async fn passkey_register_verify_deleted_account_returns_401_and_does_not_consum
     Ok(())
 }
 
+#[tokio::test]
+#[serial]
+async fn session_middleware_removes_unknown_cookie() -> Result<()> {
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "0");
+    let state = test_state_with_accounts()?;
+    let app = app_with_auth(state);
+
+    let req = Request::get("/auth/session")
+        .header("Cookie", format!("{}=unknown-session", SESSION_COOKIE_NAME))
+        .body(body::Body::empty())?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let removal = extract_set_cookie_header(res.headers(), SESSION_COOKIE_NAME)
+        .context("stale session cookie must be removed")?;
+    assert_removal_session_cookie(&removal, false);
+
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+    assert_eq!(body_json["authenticated"], false);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn session_middleware_deletes_disabled_account_session() -> Result<()> {
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "0");
+    let state = test_state_with_accounts()?;
+    let session = create_session(&state, "u1", None).await;
+    {
+        let mut accounts = state.accounts.write().await;
+        let mut account = accounts.get("u1").cloned().context("u1 missing")?;
+        account.public.disabled = true;
+        accounts.insert(account);
+    }
+
+    let req = Request::get("/auth/session")
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
+        .body(body::Body::empty())?;
+    let res = app_with_auth(state.clone()).oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let removal = extract_set_cookie_header(res.headers(), SESSION_COOKIE_NAME)
+        .context("disabled-account session cookie must be removed")?;
+    assert_removal_session_cookie(&removal, false);
+    assert!(
+        get_session(&state, &session.id).await.is_none(),
+        "disabled-account session must be deleted server-side"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn session_middleware_deletes_session_for_missing_account() -> Result<()> {
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "0");
+    let state = test_state_with_accounts()?;
+    let session = create_session(&state, "missing-account", None).await;
+
+    let req = Request::get("/auth/session")
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
+        .body(body::Body::empty())?;
+    let res = app_with_auth(state.clone()).oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let removal = extract_set_cookie_header(res.headers(), SESSION_COOKIE_NAME)
+        .context("missing-account session cookie must be removed")?;
+    assert_removal_session_cookie(&removal, false);
+    assert!(
+        get_session(&state, &session.id).await.is_none(),
+        "missing-account session must be deleted server-side"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn session_cookie_normalization_failure_preserves_other_cookies() -> Result<()> {
+    async fn invalid_cookie_handler(jar: CookieJar) -> axum::response::Response {
+        let session_cookie = Cookie::build((SESSION_COOKIE_NAME, "missing-session"))
+            .path("/")
+            .http_only(true)
+            .same_site(SameSite::Lax)
+            .secure(false)
+            .build();
+        let auxiliary_cookie = Cookie::build(("proof_aux", "kept"))
+            .path("/")
+            .http_only(true)
+            .build();
+        (
+            jar.add(session_cookie).add(auxiliary_cookie),
+            (StatusCode::OK, "must be cleared"),
+        )
+            .into_response()
+    }
+
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "0");
+    let state = test_state_with_accounts()?;
+    let app = Router::new()
+        .route(
+            "/test/invalid-session-cookie",
+            axum::routing::get(invalid_cookie_handler),
+        )
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state);
+
+    let req = Request::get("/test/invalid-session-cookie").body(body::Body::empty())?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let removal = extract_set_cookie_header(res.headers(), SESSION_COOKIE_NAME)
+        .context("invalid response session cookie must be removed")?;
+    assert_removal_session_cookie(&removal, false);
+    assert_eq!(
+        extract_cookie_value(res.headers(), "proof_aux").as_deref(),
+        Some("kept"),
+        "non-session Set-Cookie headers must survive normalization failure"
+    );
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    assert!(
+        body_bytes.is_empty(),
+        "failed response body must be cleared"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn duplicate_response_session_cookies_fail_closed_to_one_removal() -> Result<()> {
+    async fn duplicate_cookie_handler() -> axum::response::Response {
+        let mut response = (StatusCode::OK, "must be cleared").into_response();
+        let removal = HeaderValue::from_static(
+            "gewebe_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0;              Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+        );
+        response.headers_mut().append(SET_COOKIE, removal.clone());
+        response.headers_mut().append(SET_COOKIE, removal);
+        response.headers_mut().append(
+            SET_COOKIE,
+            HeaderValue::from_static("proof_aux=kept; HttpOnly; Path=/"),
+        );
+        response
+    }
+
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "0");
+    let state = test_state_with_accounts()?;
+    let app = Router::new()
+        .route(
+            "/test/duplicate-session-cookies",
+            axum::routing::get(duplicate_cookie_handler),
+        )
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state);
+
+    let res = app
+        .oneshot(Request::get("/test/duplicate-session-cookies").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let session_headers = res
+        .headers()
+        .get_all(SET_COOKIE)
+        .iter()
+        .filter(|header| header.as_bytes().starts_with(b"gewebe_session="))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        session_headers.len(),
+        1,
+        "fail-closed normalization must emit exactly one session removal cookie"
+    );
+    assert_removal_session_cookie(session_headers[0].to_str()?, false);
+    assert_eq!(
+        extract_cookie_value(res.headers(), "proof_aux").as_deref(),
+        Some("kept"),
+        "unrelated cookies must survive duplicate-session rejection"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn malformed_response_session_cookie_is_replaced_with_removal() -> Result<()> {
+    async fn malformed_cookie_handler() -> axum::response::Response {
+        let mut response = (StatusCode::OK, "must be cleared").into_response();
+        response.headers_mut().append(
+            SET_COOKIE,
+            HeaderValue::from_bytes(b"gewebe_session=\xff; Path=/")
+                .expect("obs-text header value must be constructible"),
+        );
+        response
+    }
+
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "0");
+    let state = test_state_with_accounts()?;
+    let app = Router::new()
+        .route(
+            "/test/malformed-session-cookie",
+            axum::routing::get(malformed_cookie_handler),
+        )
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state);
+
+    let res = app
+        .oneshot(Request::get("/test/malformed-session-cookie").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let session_headers = res
+        .headers()
+        .get_all(SET_COOKIE)
+        .iter()
+        .filter(|header| header.as_bytes().starts_with(b"gewebe_session="))
+        .collect::<Vec<_>>();
+    assert_eq!(session_headers.len(), 1);
+    assert_removal_session_cookie(session_headers[0].to_str()?, false);
+    Ok(())
+}
+
 // Phase 6 API-level Proof: Session Cookie Security Attributes
 //
 // This test proves that:
@@ -4860,7 +5185,7 @@ async fn session_cookie_has_secure_attributes_on_magic_link_consume() -> Result<
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
 
-    let app = app(state.clone());
+    let app = app_with_auth(state.clone());
 
     // Step 1: Seed a valid token directly (consume-path API proof, no mailer/browser E2E)
     let token = state.tokens.create("u1@example.com".to_string());
@@ -4883,32 +5208,36 @@ async fn session_cookie_has_secure_attributes_on_magic_link_consume() -> Result<
         .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
         .body(body::Body::from(body_str))?;
 
+    let response_started = chrono::Utc::now();
     let res_post = app.clone().oneshot(req_post).await?;
+    let response_finished = chrono::Utc::now();
     assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
 
     // Step 4: Verify Session Cookie Attributes (PROOF)
     let session_cookie_header = extract_set_cookie_header(res_post.headers(), SESSION_COOKIE_NAME)
         .context("Session cookie not set in response")?;
 
-    assert_session_cookie_secure(&session_cookie_header, true);
-
-    // Step 5: Verify cookie authenticates a real API request (/auth/session)
+    // Step 5: Verify the emitted Cookie attributes are derived from the
+    // actually stored session, not only from a pure helper function.
     let session_id = extract_cookie_value(res_post.headers(), SESSION_COOKIE_NAME)
         .context("session id not in set-cookie")?;
+    let stored_session = get_session(&state, &session_id)
+        .await
+        .context("server session must exist after magic-link consume")?;
+    assert_persistent_cookie_matches_stored_session(
+        &session_cookie_header,
+        true,
+        &stored_session,
+        response_started,
+        response_finished,
+    );
 
-    let app_with_auth = Router::new()
-        .merge(weltgewebe_api::routes::api_router())
-        .route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            weltgewebe_api::middleware::auth::auth_middleware,
-        ))
-        .with_state(state.clone());
-
+    // Step 6: Verify cookie authenticates a real API request (/auth/session)
     let req_session = Request::get("/auth/session")
         .header("Host", "localhost")
         .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session_id))
         .body(body::Body::empty())?;
-    let res_session = app_with_auth.oneshot(req_session).await?;
+    let res_session = app.oneshot(req_session).await?;
     assert_eq!(res_session.status(), StatusCode::OK);
 
     let body_bytes = body::to_bytes(res_session.into_body(), usize::MAX).await?;
@@ -4932,7 +5261,11 @@ async fn session_cookie_insecure_when_auth_cookie_secure_disabled() -> Result<()
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
+    assert!(!state.config.auth_cookie_secure);
 
+    // Runtime environment changes after state construction must not change the
+    // cookie scope mid-flight. All auth paths use the captured config value.
+    let _runtime_flip = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
     let app = app(state.clone());
 
     // Seed token directly for consume-path proof.
@@ -4943,8 +5276,11 @@ async fn session_cookie_insecure_when_auth_cookie_secure_disabled() -> Result<()
     let req_get = Request::get(&uri).body(body::Body::empty())?;
     let res_get = app.clone().oneshot(req_get).await?;
 
-    let nonce_val = extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME)
+    let nonce_header = extract_set_cookie_header(res_get.headers(), NONCE_COOKIE_NAME)
         .context("nonce cookie not set")?;
+    assert_session_cookie_secure(&nonce_header, false);
+    let nonce_val = extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME)
+        .context("nonce cookie value not set")?;
     let (_, nonce) = nonce_val.split_once('.').context("invalid nonce format")?;
 
     // POST consume

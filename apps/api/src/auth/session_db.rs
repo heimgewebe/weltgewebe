@@ -2,18 +2,41 @@ use async_trait::async_trait;
 use sqlx::{postgres::PgRow, PgPool, Row};
 use uuid::Uuid;
 
-use super::session::{Session, SessionBackendError, SessionOps, SessionResult};
+use super::session::{
+    Session, SessionBackendError, SessionLifetime, SessionOps, SessionResult, SESSION_TTL_ENV,
+};
+
+// Trusted static SQL fragment shared by the session queries below. It must
+// never contain configuration or request data; all external values remain
+// parameter-bound through sqlx.
+const SESSION_COLUMNS_WITH_REMAINING_LIFETIME: &str =
+    "id, account_id, device_id, created_at, last_active, expires_at, \
+     GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (expires_at - NOW()))))::BIGINT \
+     AS cookie_max_age_seconds";
 
 /// Database-backed session store for direct PostgreSQL persistence.
 /// Sessions created here survive across server restarts.
+///
+/// PostgreSQL is the sole clock authority for persisted sessions. Creation,
+/// expiry checks, and the remaining browser-cookie lifetime are therefore all
+/// calculated from the same `NOW()` value inside each statement. This keeps a
+/// database-backed browser cookie from outliving its server-side session even
+/// when the API and database hosts have slightly different wall clocks.
 #[derive(Clone)]
 pub struct DbSessionStore {
     pool: PgPool,
+    lifetime: SessionLifetime,
 }
 
 impl DbSessionStore {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        let lifetime = SessionLifetime::from_env()
+            .unwrap_or_else(|error| panic!("invalid {}: {}", SESSION_TTL_ENV, error));
+        Self::with_lifetime(pool, lifetime)
+    }
+
+    pub fn with_lifetime(pool: PgPool, lifetime: SessionLifetime) -> Self {
+        Self { pool, lifetime }
     }
 
     fn session_from_row(row: PgRow) -> Result<Session, sqlx::Error> {
@@ -24,6 +47,7 @@ impl DbSessionStore {
             created_at: row.try_get("created_at")?,
             last_active: row.try_get("last_active")?,
             expires_at: row.try_get("expires_at")?,
+            cookie_max_age_seconds: row.try_get("cookie_max_age_seconds")?,
         })
     }
 }
@@ -37,31 +61,50 @@ impl SessionOps for DbSessionStore {
     ) -> SessionResult<Session> {
         let session_id = Uuid::new_v4().to_string();
         let device_id = existing_device_id.unwrap_or_else(|| Uuid::new_v4().to_string());
-        let row = sqlx::query(
+        // SAFETY: the only interpolated fragment is the trusted module constant;
+        // all account/session values remain parameter-bound below.
+        let query = format!(
             "INSERT INTO sessions (id, account_id, device_id, created_at, last_active, expires_at)
-             VALUES ($1, $2, $3, NOW(), NOW(), NOW() + INTERVAL '1 day')
-             RETURNING id, account_id, device_id, created_at, last_active, expires_at",
-        )
-        .bind(&session_id)
-        .bind(&account_id)
-        .bind(&device_id)
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|_| SessionBackendError::Unavailable)?;
+             VALUES ($1, $2, $3, NOW(), NOW(),
+                     NOW() + ($4::DOUBLE PRECISION * INTERVAL '1 second'))
+             RETURNING {SESSION_COLUMNS_WITH_REMAINING_LIFETIME}"
+        );
+        let row = sqlx::query(&query)
+            .bind(&session_id)
+            .bind(&account_id)
+            .bind(&device_id)
+            .bind(self.lifetime.seconds())
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|_| SessionBackendError::Unavailable)?;
 
         Self::session_from_row(row).map_err(|_| SessionBackendError::Unavailable)
     }
 
     async fn get(&self, session_id: &str) -> SessionResult<Option<Session>> {
-        let row = sqlx::query(
-            "SELECT id, account_id, device_id, created_at, last_active, expires_at
+        // PostgreSQL executes the data-modifying CTE exactly once. Referencing
+        // it from the SELECT makes that side effect explicit; concurrent readers
+        // remain safe under MVCC because a losing DELETE yields an empty CTE and
+        // the expiry predicate still prevents the stale row from being returned.
+        // SAFETY: the only interpolated fragment is the trusted module constant;
+        // the session id remains parameter-bound below.
+        let query = format!(
+            "WITH expired AS (
+                 DELETE FROM sessions
+                 WHERE id = $1 AND expires_at <= NOW()
+                 RETURNING id
+             )
+             SELECT {SESSION_COLUMNS_WITH_REMAINING_LIFETIME}
              FROM sessions
-             WHERE id = $1 AND expires_at > NOW()",
-        )
-        .bind(session_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|_| SessionBackendError::Unavailable)?;
+             WHERE id = $1
+               AND expires_at > NOW()
+               AND NOT EXISTS (SELECT 1 FROM expired)"
+        );
+        let row = sqlx::query(&query)
+            .bind(session_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|_| SessionBackendError::Unavailable)?;
 
         row.map(Self::session_from_row)
             .transpose()
@@ -95,16 +138,19 @@ impl SessionOps for DbSessionStore {
     }
 
     async fn list_by_account(&self, account_id: &str) -> SessionResult<Vec<Session>> {
-        let rows = sqlx::query(
-            "SELECT id, account_id, device_id, created_at, last_active, expires_at
+        // SAFETY: the only interpolated fragment is the trusted module constant;
+        // the account id remains parameter-bound below.
+        let query = format!(
+            "SELECT {SESSION_COLUMNS_WITH_REMAINING_LIFETIME}
              FROM sessions
              WHERE account_id = $1 AND expires_at > NOW()
-             ORDER BY created_at DESC",
-        )
-        .bind(account_id)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|_| SessionBackendError::Unavailable)?;
+             ORDER BY created_at DESC"
+        );
+        let rows = sqlx::query(&query)
+            .bind(account_id)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|_| SessionBackendError::Unavailable)?;
 
         rows.into_iter()
             .map(Self::session_from_row)

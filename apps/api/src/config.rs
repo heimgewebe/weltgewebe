@@ -23,6 +23,20 @@ macro_rules! apply_env_override {
     };
 }
 
+fn default_auth_cookie_secure() -> bool {
+    true
+}
+
+/// Read the optional startup override for the browser-cookie security scope.
+/// Callers should capture this once while constructing configuration/state;
+/// request handlers must use the stored configuration value.
+pub fn auth_cookie_secure_env_override() -> Option<bool> {
+    env::var("AUTH_COOKIE_SECURE").ok().map(|value| {
+        let value = value.trim();
+        value != "0" && !value.eq_ignore_ascii_case("false")
+    })
+}
+
 macro_rules! apply_env_override_option {
     ($self:ident, $field:ident, $type:ty, $env_var:literal) => {
         if let Ok(value) = env::var($env_var) {
@@ -230,6 +244,10 @@ pub struct AppConfig {
     // Public Login Configuration
     #[serde(default)]
     pub auth_public_login: bool,
+    /// Whether auth cookies carry the Secure attribute. Captured once at
+    /// configuration load so all auth routes and middleware share one scope.
+    #[serde(default = "default_auth_cookie_secure")]
+    pub auth_cookie_secure: bool,
     #[serde(default)]
     pub app_base_url: Option<String>,
     #[serde(default)]
@@ -358,6 +376,9 @@ impl AppConfig {
         if let Ok(val) = env::var("AUTH_PUBLIC_LOGIN") {
             let val = val.trim();
             self.auth_public_login = val == "1" || val.eq_ignore_ascii_case("true");
+        }
+        if let Some(value) = auth_cookie_secure_env_override() {
+            self.auth_cookie_secure = value;
         }
         if let Ok(val) = env::var("APP_BASE_URL") {
             let val = val.trim();
@@ -700,12 +721,14 @@ delegation_expire_days: 28
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
         let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
+        let _cookie_secure = EnvGuard::unset("AUTH_COOKIE_SECURE");
 
         let cfg = AppConfig::load_from_path(file.path())?;
         assert_eq!(cfg.fade_days, 7);
         assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
+        assert!(cfg.auth_cookie_secure);
 
         Ok(())
     }
@@ -748,12 +771,14 @@ delegation_expire_days: 28
         let _ron = EnvGuard::set("HA_RON_DAYS", "90");
         let _anonymize = EnvGuard::set("HA_ANONYMIZE_OPT_IN", "false");
         let _delegation = EnvGuard::set("HA_DELEGATION_EXPIRE_DAYS", "14");
+        let _cookie_secure = EnvGuard::set("AUTH_COOKIE_SECURE", "false");
 
         let cfg = AppConfig::load_from_path(file.path())?;
         assert_eq!(cfg.fade_days, 10);
         assert_eq!(cfg.ron_days, 90);
         assert!(!cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 14);
+        assert!(!cfg.auth_cookie_secure);
 
         Ok(())
     }

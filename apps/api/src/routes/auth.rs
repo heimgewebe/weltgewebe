@@ -54,12 +54,11 @@ fn get_request_id(headers: &HeaderMap) -> String {
         .to_string()
 }
 
-fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'static> {
-    // Default to secure, but allow override via env for local dev (http)
-    let secure_cookies = std::env::var("AUTH_COOKIE_SECURE")
-        .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
-        .unwrap_or(true);
-
+fn build_session_cookie(
+    value: String,
+    max_age: Option<Duration>,
+    secure_cookies: bool,
+) -> Cookie<'static> {
     let mut builder = Cookie::build((SESSION_COOKIE_NAME, value))
         .path("/")
         .http_only(true)
@@ -400,7 +399,7 @@ pub async fn dev_login(
         Err(error) => return session_backend_status_response("dev_login.create", &error),
     };
 
-    let cookie = build_session_cookie(session.id, None);
+    let cookie = build_session_cookie(session.id, None, state.config.auth_cookie_secure);
 
     (jar.add(cookie), StatusCode::OK).into_response()
 }
@@ -800,16 +799,11 @@ pub async fn consume_login_get(
     let token_hash = TokenStore::hash_token(&params.token);
     let cookie_value = format!("{}.{}", token_hash, nonce);
 
-    // Respect AUTH_COOKIE_SECURE like the session cookie
-    let secure_cookies = std::env::var("AUTH_COOKIE_SECURE")
-        .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
-        .unwrap_or(true);
-
     let cookie = Cookie::build((NONCE_COOKIE_NAME, cookie_value))
         .path("/api/auth/magic-link/consume")
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(secure_cookies)
+        .secure(state.config.auth_cookie_secure)
         .max_age(Duration::minutes(5)) // Short lived
         .build();
 
@@ -927,19 +921,15 @@ pub async fn consume_login_post(
                     return session_backend_status_response("consume_login_post.create", &error);
                 }
             };
-            let cookie = build_session_cookie(session.id, None);
+            let cookie = build_session_cookie(session.id, None, state.config.auth_cookie_secure);
 
-            // Clear the nonce cookie
-            // Respect AUTH_COOKIE_SECURE
-            let secure_cookies = std::env::var("AUTH_COOKIE_SECURE")
-                .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
-                .unwrap_or(true);
-
+            // Clear the nonce cookie with the same startup-captured scope
+            // that was used when it was created.
             let nonce_cleanup = Cookie::build((NONCE_COOKIE_NAME, ""))
                 .path("/api/auth/magic-link/consume")
                 .http_only(true)
                 .same_site(SameSite::Lax)
-                .secure(secure_cookies)
+                .secure(state.config.auth_cookie_secure)
                 .max_age(Duration::seconds(0))
                 .expires(time::OffsetDateTime::UNIX_EPOCH)
                 .build();
@@ -979,7 +969,11 @@ pub async fn logout(State(state): State<ApiState>, jar: CookieJar) -> impl IntoR
         }
     }
 
-    let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
+    let cookie = build_session_cookie(
+        "".to_string(),
+        Some(Duration::seconds(0)),
+        state.config.auth_cookie_secure,
+    );
 
     (jar.add(cookie), StatusCode::OK).into_response()
 }
@@ -1180,7 +1174,11 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
                     "Session refresh failed: Account disabled or deleted"
                 );
 
-                let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
+                let cookie = build_session_cookie(
+                    "".to_string(),
+                    Some(Duration::seconds(0)),
+                    state.config.auth_cookie_secure,
+                );
                 let err_payload = serde_json::json!({"error": "SESSION_EXPIRED"});
                 return (
                     axum::http::StatusCode::UNAUTHORIZED,
@@ -1217,7 +1215,8 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
                 return session_backend_json_response("session_refresh.delete", &error);
             }
 
-            let new_cookie = build_session_cookie(new_session.id, None);
+            let new_cookie =
+                build_session_cookie(new_session.id, None, state.config.auth_cookie_secure);
 
             let status = SessionStatus {
                 authenticated: true,
@@ -1362,7 +1361,11 @@ pub async fn remove_device(
                 jar,
             );
         }
-        let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
+        let cookie = build_session_cookie(
+            "".to_string(),
+            Some(Duration::seconds(0)),
+            state.config.auth_cookie_secure,
+        );
         return (axum::http::StatusCode::NO_CONTENT, jar.add(cookie)).into_response();
     }
 
@@ -1674,7 +1677,11 @@ pub async fn consume_step_up(
                 );
             }
             // Empty value + zero max-age clears the session cookie in the client
-            let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
+            let cookie = build_session_cookie(
+                "".to_string(),
+                Some(Duration::seconds(0)),
+                state.config.auth_cookie_secure,
+            );
             (StatusCode::NO_CONTENT, jar.add(cookie)).into_response()
         }
         ChallengeIntent::RemoveDevice { target_device_id } => {
@@ -2738,7 +2745,7 @@ pub async fn passkey_auth_verify(
         "Passkey login verified; session established"
     );
 
-    let cookie = build_session_cookie(session.id, None);
+    let cookie = build_session_cookie(session.id, None, state.config.auth_cookie_secure);
     let body = serde_json::json!({"ok": true, "account_id": account_id});
     (StatusCode::OK, jar.add(cookie), Json(body)).into_response()
 }
@@ -2828,10 +2835,7 @@ pub async fn passkey_testing_bootstrap_session(
 
     let session = match state
         .sessions
-        .create(
-            PASSKEY_PROOF_ACCOUNT_ID.to_string(),
-            Some("proof-passkey-device".to_string()),
-        )
+        .create(PASSKEY_PROOF_ACCOUNT_ID.to_string(), None)
         .await
     {
         Ok(session) => session,
@@ -2852,7 +2856,7 @@ pub async fn passkey_testing_bootstrap_session(
         "Bootstrapped integration-testing session for passkey proof"
     );
 
-    let cookie = build_session_cookie(session.id, None);
+    let cookie = build_session_cookie(session.id, None, state.config.auth_cookie_secure);
     let body = serde_json::json!({
         "account_id": session.account_id,
         "device_id": session.device_id,

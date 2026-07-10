@@ -45,6 +45,8 @@ async fn test_state() -> Result<ApiState> {
         domain_edge_write_source: weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
         passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
         auth_public_login: false,
+        auth_cookie_secure: weltgewebe_api::config::auth_cookie_secure_env_override()
+            .unwrap_or(true),
         app_base_url: None,
         auth_trusted_proxies: None,
         auth_allow_emails: None,

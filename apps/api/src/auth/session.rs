@@ -15,11 +15,90 @@ pub struct Session {
     pub created_at: DateTime<Utc>,
     pub last_active: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    #[serde(skip, default)]
+    pub(crate) cookie_max_age_seconds: i64,
 }
 
 impl Session {
     pub fn is_expired(&self) -> bool {
         Utc::now() > self.expires_at
+    }
+
+    pub fn cookie_max_age_seconds(&self) -> i64 {
+        self.cookie_max_age_seconds.max(0)
+    }
+
+    pub(crate) fn refresh_cookie_max_age(&mut self, now: DateTime<Utc>) {
+        self.cookie_max_age_seconds = self
+            .expires_at
+            .signed_duration_since(now)
+            .num_seconds()
+            .max(0);
+    }
+}
+
+pub const SESSION_TTL_ENV: &str = "AUTH_SESSION_TTL_SECONDS";
+pub const DEFAULT_SESSION_TTL_SECONDS: i64 = 30 * 24 * 60 * 60;
+pub const MIN_SESSION_TTL_SECONDS: i64 = 60 * 60;
+pub const MAX_SESSION_TTL_SECONDS: i64 = 90 * 24 * 60 * 60;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SessionLifetime(Duration);
+
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum SessionLifetimeError {
+    #[error("AUTH_SESSION_TTL_SECONDS must contain UTF-8 text")]
+    NonUnicode,
+    #[error("AUTH_SESSION_TTL_SECONDS must not be empty")]
+    Empty,
+    #[error("AUTH_SESSION_TTL_SECONDS must be an integer number of seconds: {0}")]
+    Invalid(String),
+    #[error("AUTH_SESSION_TTL_SECONDS must be between {min} and {max} seconds, got {value}")]
+    OutOfRange { value: i64, min: i64, max: i64 },
+}
+
+impl SessionLifetime {
+    pub fn from_seconds(seconds: i64) -> Result<Self, SessionLifetimeError> {
+        if !(MIN_SESSION_TTL_SECONDS..=MAX_SESSION_TTL_SECONDS).contains(&seconds) {
+            return Err(SessionLifetimeError::OutOfRange {
+                value: seconds,
+                min: MIN_SESSION_TTL_SECONDS,
+                max: MAX_SESSION_TTL_SECONDS,
+            });
+        }
+        Ok(Self(Duration::seconds(seconds)))
+    }
+
+    pub fn from_env() -> Result<Self, SessionLifetimeError> {
+        match std::env::var(SESSION_TTL_ENV) {
+            Ok(raw) => {
+                let value = raw.trim();
+                if value.is_empty() {
+                    return Err(SessionLifetimeError::Empty);
+                }
+                let seconds = value
+                    .parse::<i64>()
+                    .map_err(|_| SessionLifetimeError::Invalid(raw))?;
+                Self::from_seconds(seconds)
+            }
+            Err(std::env::VarError::NotPresent) => Self::from_seconds(DEFAULT_SESSION_TTL_SECONDS),
+            Err(std::env::VarError::NotUnicode(_)) => Err(SessionLifetimeError::NonUnicode),
+        }
+    }
+
+    pub fn duration(self) -> Duration {
+        self.0
+    }
+
+    pub fn seconds(self) -> i64 {
+        self.0.num_seconds()
+    }
+}
+
+impl Default for SessionLifetime {
+    fn default() -> Self {
+        Self::from_seconds(DEFAULT_SESSION_TTL_SECONDS)
+            .expect("default session lifetime must remain inside configured bounds")
     }
 }
 
@@ -31,9 +110,10 @@ pub enum SessionBackendError {
 
 pub type SessionResult<T> = Result<T, SessionBackendError>;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct SessionStore {
     store: Arc<RwLock<HashMap<String, Session>>>,
+    lifetime: SessionLifetime,
 }
 
 #[async_trait]
@@ -76,6 +156,10 @@ impl SessionBackend {
         Self::new(SessionStore::new())
     }
 
+    pub fn new_in_memory_with_lifetime(lifetime: SessionLifetime) -> Self {
+        Self::new(SessionStore::with_lifetime(lifetime))
+    }
+
     pub async fn create(
         &self,
         account_id: String,
@@ -109,10 +193,23 @@ impl SessionBackend {
     }
 }
 
+impl Default for SessionStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SessionStore {
     pub fn new() -> Self {
+        let lifetime = SessionLifetime::from_env()
+            .unwrap_or_else(|error| panic!("invalid {}: {}", SESSION_TTL_ENV, error));
+        Self::with_lifetime(lifetime)
+    }
+
+    pub fn with_lifetime(lifetime: SessionLifetime) -> Self {
         Self {
             store: Arc::new(RwLock::new(HashMap::new())),
+            lifetime,
         }
     }
 
@@ -128,7 +225,7 @@ impl SessionStore {
         let session_id = Uuid::new_v4().to_string();
         let device_id = existing_device_id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let now = Utc::now();
-        let expires_at = now + Duration::days(1);
+        let expires_at = now + self.lifetime.duration();
 
         let session = Session {
             id: session_id.clone(),
@@ -137,6 +234,7 @@ impl SessionStore {
             created_at: now,
             last_active: now,
             expires_at,
+            cookie_max_age_seconds: self.lifetime.seconds(),
         };
 
         let mut store = self.store.write_recover();
@@ -146,13 +244,23 @@ impl SessionStore {
     }
 
     pub fn get(&self, session_id: &str) -> Option<Session> {
-        let store = self.store.read_recover();
-        if let Some(session) = store.get(session_id) {
-            if !session.is_expired() {
-                return Some(session.clone());
+        let session = {
+            let store = self.store.read_recover();
+            store.get(session_id).cloned()
+        };
+
+        match session {
+            Some(mut session) if !session.is_expired() => {
+                session.refresh_cookie_max_age(Utc::now());
+                Some(session)
             }
+            Some(_) => {
+                let mut store = self.store.write_recover();
+                store.remove(session_id);
+                None
+            }
+            None => None,
         }
-        None
     }
 
     pub fn delete(&self, session_id: &str) {
@@ -189,6 +297,10 @@ impl SessionStore {
             .values()
             .filter(|s| s.account_id == account_id && s.expires_at > now)
             .cloned()
+            .map(|mut session| {
+                session.refresh_cookie_max_age(now);
+                session
+            })
             .collect()
     }
 
@@ -331,17 +443,87 @@ mod tests {
     }
 
     #[test]
-    fn session_expires_at_is_approximately_one_day() {
-        let store = SessionStore::new();
+    fn session_expires_at_uses_default_lifetime() {
+        let store = SessionStore::with_lifetime(SessionLifetime::default());
         let before = Utc::now();
         let session = store.create("account-1".to_string(), None);
         let after = Utc::now();
 
-        let expected_min = before + Duration::days(1);
-        let expected_max = after + Duration::days(1);
+        let expected_min = before + Duration::seconds(DEFAULT_SESSION_TTL_SECONDS);
+        let expected_max = after + Duration::seconds(DEFAULT_SESSION_TTL_SECONDS);
 
         assert!(session.expires_at >= expected_min);
         assert!(session.expires_at <= expected_max);
+    }
+
+    #[test]
+    fn configured_session_lifetime_is_used() {
+        let lifetime = SessionLifetime::from_seconds(7_200).unwrap();
+        let store = SessionStore::with_lifetime(lifetime);
+        let before = Utc::now();
+        let session = store.create("account-1".to_string(), None);
+        let after = Utc::now();
+
+        assert!(session.expires_at >= before + Duration::seconds(7_200));
+        assert!(session.expires_at <= after + Duration::seconds(7_200));
+    }
+
+    #[test]
+    fn session_lifetime_accepts_documented_bounds() {
+        assert_eq!(
+            SessionLifetime::from_seconds(MIN_SESSION_TTL_SECONDS)
+                .unwrap()
+                .seconds(),
+            MIN_SESSION_TTL_SECONDS
+        );
+        assert_eq!(
+            SessionLifetime::from_seconds(MAX_SESSION_TTL_SECONDS)
+                .unwrap()
+                .seconds(),
+            MAX_SESSION_TTL_SECONDS
+        );
+    }
+
+    #[test]
+    fn session_lifetime_rejects_values_outside_bounds() {
+        assert_eq!(
+            SessionLifetime::from_seconds(MIN_SESSION_TTL_SECONDS - 1),
+            Err(SessionLifetimeError::OutOfRange {
+                value: MIN_SESSION_TTL_SECONDS - 1,
+                min: MIN_SESSION_TTL_SECONDS,
+                max: MAX_SESSION_TTL_SECONDS,
+            })
+        );
+        assert_eq!(
+            SessionLifetime::from_seconds(MAX_SESSION_TTL_SECONDS + 1),
+            Err(SessionLifetimeError::OutOfRange {
+                value: MAX_SESSION_TTL_SECONDS + 1,
+                min: MIN_SESSION_TTL_SECONDS,
+                max: MAX_SESSION_TTL_SECONDS,
+            })
+        );
+    }
+
+    #[test]
+    fn get_removes_expired_session_from_store() {
+        let store = SessionStore::with_lifetime(SessionLifetime::default());
+        let session_id = "expired-session".to_string();
+        let now = Utc::now();
+        store.store.write_recover().insert(
+            session_id.clone(),
+            Session {
+                id: session_id.clone(),
+                account_id: "account-1".to_string(),
+                device_id: "device-1".to_string(),
+                created_at: now - Duration::hours(2),
+                last_active: now - Duration::hours(2),
+                expires_at: now - Duration::hours(1),
+                cookie_max_age_seconds: 0,
+            },
+        );
+
+        assert!(store.get(&session_id).is_none());
+        assert!(!store.store.read_recover().contains_key(&session_id));
     }
 
     #[test]

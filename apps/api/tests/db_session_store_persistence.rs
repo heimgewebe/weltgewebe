@@ -13,7 +13,7 @@ use std::{path::PathBuf, str::FromStr};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use uuid::Uuid;
 
-use weltgewebe_api::auth::session::SessionOps;
+use weltgewebe_api::auth::session::{SessionLifetime, SessionOps};
 use weltgewebe_api::auth::session_db::DbSessionStore;
 
 fn direct_database_url() -> String {
@@ -132,6 +132,66 @@ async fn db_session_store_expiry_filter() {
 
     assert_eq!(sessions.len(), 1, "expired sessions must be excluded");
     assert_eq!(sessions[0].id, live.id);
+    assert!(
+        store
+            .get(&expired_id)
+            .await
+            .expect("get expired session failed")
+            .is_none(),
+        "expired sessions must not authenticate"
+    );
+    let expired_row_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE id = $1")
+        .bind(&expired_id)
+        .fetch_one(&pool)
+        .await
+        .expect("count expired session failed");
+    assert_eq!(
+        expired_row_count, 0,
+        "reading an expired session must physically remove it"
+    );
+
+    cleanup_account(&pool, &account_id).await;
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn db_session_store_uses_configured_lifetime() {
+    let pool = connect_pool().await;
+    let account_id = unique_account_id("configured-lifetime");
+    let lifetime = SessionLifetime::from_seconds(7_200).expect("valid test lifetime");
+    let store = DbSessionStore::with_lifetime(pool.clone(), lifetime);
+
+    cleanup_account(&pool, &account_id).await;
+
+    let database_before: chrono::DateTime<chrono::Utc> = sqlx::query_scalar("SELECT NOW()")
+        .fetch_one(&pool)
+        .await
+        .expect("read database clock before create failed");
+    let created = store
+        .create(account_id.clone(), None)
+        .await
+        .expect("create failed");
+    let database_after: chrono::DateTime<chrono::Utc> = sqlx::query_scalar("SELECT NOW()")
+        .fetch_one(&pool)
+        .await
+        .expect("read database clock after create failed");
+
+    assert!(created.created_at >= database_before);
+    assert!(created.created_at <= database_after);
+    assert_eq!(
+        created
+            .expires_at
+            .signed_duration_since(created.created_at)
+            .num_seconds(),
+        7_200,
+        "PostgreSQL must derive expiry from the same statement clock as creation"
+    );
+    assert_eq!(
+        created.cookie_max_age_seconds(),
+        7_200,
+        "PostgreSQL must return the configured remaining lifetime from its own clock"
+    );
 
     cleanup_account(&pool, &account_id).await;
     pool.close().await;

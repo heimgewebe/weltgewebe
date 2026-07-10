@@ -86,6 +86,8 @@ fn build_state() -> Result<ApiState> {
         domain_edge_write_source: weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
         passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
         auth_public_login: true,
+        auth_cookie_secure: weltgewebe_api::config::auth_cookie_secure_env_override()
+            .unwrap_or(true),
         app_base_url: Some("http://localhost".to_string()),
         auth_trusted_proxies: None,
         auth_allow_emails: None,

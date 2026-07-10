@@ -152,6 +152,8 @@ async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, 
         domain_edge_write_source: DomainEdgeWriteSource::Jsonl,
         passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
         auth_public_login: false,
+        auth_cookie_secure: weltgewebe_api::config::auth_cookie_secure_env_override()
+            .unwrap_or(true),
         app_base_url: None,
         auth_trusted_proxies: None,
         auth_allow_emails: None,
@@ -378,6 +380,8 @@ async fn postgres_read_jsonl_node_write_is_blocked() -> Result<()> {
         domain_edge_write_source: DomainEdgeWriteSource::Jsonl,
         passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
         auth_public_login: false,
+        auth_cookie_secure: weltgewebe_api::config::auth_cookie_secure_env_override()
+            .unwrap_or(true),
         app_base_url: None,
         auth_trusted_proxies: None,
         auth_allow_emails: None,
@@ -548,6 +552,8 @@ async fn jsonl_default_node_patch_compiles_and_routes_correctly() -> Result<()> 
         domain_edge_write_source: DomainEdgeWriteSource::Jsonl,
         passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
         auth_public_login: false,
+        auth_cookie_secure: weltgewebe_api::config::auth_cookie_secure_env_override()
+            .unwrap_or(true),
         app_base_url: None,
         auth_trusted_proxies: None,
         auth_allow_emails: None,

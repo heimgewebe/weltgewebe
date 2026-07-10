@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 544 |
+| Relationen gesamt | 547 |
 | — depends_on | 20 |
-| — relates_to | 520 |
+| — relates_to | 523 |
 | — supersedes | 4 |
 | relates_to Anteil | 96% |
 
@@ -30,11 +30,12 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (208 Dokumente):
+**Cluster 1** (211 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
 - `.github/workflows/opt-arc-001-db-proof-matrix.yml`
+- `.github/workflows/public-login-smtp-readiness.yml`
 - `AGENTS.md`
 - `agent-policy.yaml`
 - `apps/api/migrations/20260531000002_create_domain_edges.up.sql`
@@ -225,6 +226,7 @@ _Keine Lücken erkannt._
 - `scripts/ci/check_github_action_pinning.py`
 - `scripts/ci/tests/test_check_actions_node24_readiness.py`
 - `scripts/ci/tests/test_check_github_action_pinning.py`
+- `scripts/ci/tests/test_reconcile_public_login_smtp_env.py`
 - `scripts/docmeta/audit_account_email_uniqueness.py`
 - `scripts/docmeta/audit_domain_edge_references.py`
 - `scripts/docmeta/check_planning_registration.py`
@@ -238,6 +240,7 @@ _Keine Lücken erkannt._
 - `scripts/ops/check_public_live_readiness.py`
 - `scripts/ops/check_vps_db_migration_history_shape.py`
 - `scripts/ops/check_vps_migration_safe_runtime_env.py`
+- `scripts/ops/reconcile_public_login_smtp_env.py`
 - `scripts/tests/test_domain_single_instance_guard.sh`
 - `tests/fixtures/agent/handoff-valid.json`
 
