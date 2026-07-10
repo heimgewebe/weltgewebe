@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use axum::{
     body,
     extract::connect_info::MockConnectInfo,
-    http::{HeaderMap, Request, StatusCode},
+    http::{header::SET_COOKIE, HeaderMap, HeaderValue, Request, StatusCode},
     response::IntoResponse,
     Router,
 };
@@ -5068,6 +5068,101 @@ async fn session_cookie_normalization_failure_preserves_other_cookies() -> Resul
         body_bytes.is_empty(),
         "failed response body must be cleared"
     );
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn duplicate_response_session_cookies_fail_closed_to_one_removal() -> Result<()> {
+    async fn duplicate_cookie_handler() -> axum::response::Response {
+        let mut response = (StatusCode::OK, "must be cleared").into_response();
+        let removal = HeaderValue::from_static(
+            "gewebe_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0;              Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+        );
+        response.headers_mut().append(SET_COOKIE, removal.clone());
+        response.headers_mut().append(SET_COOKIE, removal);
+        response.headers_mut().append(
+            SET_COOKIE,
+            HeaderValue::from_static("proof_aux=kept; HttpOnly; Path=/"),
+        );
+        response
+    }
+
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "0");
+    let state = test_state_with_accounts()?;
+    let app = Router::new()
+        .route(
+            "/test/duplicate-session-cookies",
+            axum::routing::get(duplicate_cookie_handler),
+        )
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state);
+
+    let res = app
+        .oneshot(Request::get("/test/duplicate-session-cookies").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let session_headers = res
+        .headers()
+        .get_all(SET_COOKIE)
+        .iter()
+        .filter(|header| header.as_bytes().starts_with(b"gewebe_session="))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        session_headers.len(),
+        1,
+        "fail-closed normalization must emit exactly one session removal cookie"
+    );
+    assert_removal_session_cookie(session_headers[0].to_str()?, false);
+    assert_eq!(
+        extract_cookie_value(res.headers(), "proof_aux").as_deref(),
+        Some("kept"),
+        "unrelated cookies must survive duplicate-session rejection"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn malformed_response_session_cookie_is_replaced_with_removal() -> Result<()> {
+    async fn malformed_cookie_handler() -> axum::response::Response {
+        let mut response = (StatusCode::OK, "must be cleared").into_response();
+        response.headers_mut().append(
+            SET_COOKIE,
+            HeaderValue::from_bytes(b"gewebe_session=\xff; Path=/")
+                .expect("obs-text header value must be constructible"),
+        );
+        response
+    }
+
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "0");
+    let state = test_state_with_accounts()?;
+    let app = Router::new()
+        .route(
+            "/test/malformed-session-cookie",
+            axum::routing::get(malformed_cookie_handler),
+        )
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state);
+
+    let res = app
+        .oneshot(Request::get("/test/malformed-session-cookie").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let session_headers = res
+        .headers()
+        .get_all(SET_COOKIE)
+        .iter()
+        .filter(|header| header.as_bytes().starts_with(b"gewebe_session="))
+        .collect::<Vec<_>>();
+    assert_eq!(session_headers.len(), 1);
+    assert_removal_session_cookie(session_headers[0].to_str()?, false);
     Ok(())
 }
 

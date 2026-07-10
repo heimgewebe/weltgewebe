@@ -106,15 +106,18 @@ enum SessionCookieNormalizationFailure {
     MissingServerSession,
     BackendUnavailable,
     UnsupportedCookieScope,
+    DuplicateSessionCookies,
+    MalformedSessionCookie,
 }
 
 impl SessionCookieNormalizationFailure {
     fn status(self) -> StatusCode {
         match self {
             Self::BackendUnavailable => StatusCode::SERVICE_UNAVAILABLE,
-            Self::MissingServerSession | Self::UnsupportedCookieScope => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            Self::MissingServerSession
+            | Self::UnsupportedCookieScope
+            | Self::DuplicateSessionCookies
+            | Self::MalformedSessionCookie => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -136,17 +139,38 @@ async fn normalize_session_cookie_headers(
     response.headers_mut().remove(SET_COOKIE);
     let secure = secure_session_cookies();
     let mut saw_session_cookie = false;
+    let mut session_cookie_count = 0_u8;
+    let mut normalized_session_cookie = None;
     let mut failure = None;
 
     for header in existing {
-        let parsed = header
-            .to_str()
-            .ok()
+        let raw_pair = header
+            .as_bytes()
+            .split(|byte| *byte == b';')
+            .next()
+            .unwrap_or_default();
+        let raw_pair = raw_pair.trim_ascii();
+        let session_name = SESSION_COOKIE_NAME.as_bytes();
+        let raw_is_session_cookie = raw_pair == session_name
+            || raw_pair
+                .strip_prefix(session_name)
+                .is_some_and(|suffix| suffix.starts_with(b"="));
+        let raw = header.to_str().ok();
+        let parsed = raw
             .and_then(|value| Cookie::parse(value.to_owned()).ok())
             .map(|cookie| cookie.into_owned());
 
         let Some(cookie) = parsed else {
-            response.headers_mut().append(SET_COOKIE, header);
+            if raw_is_session_cookie {
+                saw_session_cookie = true;
+                tracing::error!(
+                    event = "auth.middleware.malformed_session_cookie",
+                    "Refusing to emit a malformed session cookie"
+                );
+                failure.get_or_insert(SessionCookieNormalizationFailure::MalformedSessionCookie);
+            } else {
+                response.headers_mut().append(SET_COOKIE, header);
+            }
             continue;
         };
 
@@ -156,31 +180,39 @@ async fn normalize_session_cookie_headers(
         }
 
         saw_session_cookie = true;
+        session_cookie_count = session_cookie_count.saturating_add(1);
+        if session_cookie_count > 1 {
+            tracing::error!(
+                event = "auth.middleware.duplicate_session_cookies",
+                "Refusing to emit multiple session cookies in one response"
+            );
+            failure.get_or_insert(SessionCookieNormalizationFailure::DuplicateSessionCookies);
+            continue;
+        }
+
         if !has_supported_session_cookie_scope(&cookie, secure) {
             tracing::error!(
                 event = "auth.middleware.unsupported_session_cookie_scope",
                 "Refusing to emit a session cookie with a non-canonical scope"
             );
-            append_cookie(response, removal_session_cookie(secure));
             failure.get_or_insert(SessionCookieNormalizationFailure::UnsupportedCookieScope);
             continue;
         }
 
         if is_removal_cookie(&cookie) || cookie.value().is_empty() {
-            append_cookie(response, removal_session_cookie(secure));
+            normalized_session_cookie = Some(removal_session_cookie(secure));
             continue;
         }
 
         match state.sessions.get(cookie.value()).await {
             Ok(Some(session)) => {
-                append_cookie(response, persistent_session_cookie(&session, secure));
+                normalized_session_cookie = Some(persistent_session_cookie(&session, secure));
             }
             Ok(None) => {
                 tracing::error!(
                     event = "auth.middleware.session_cookie_without_session",
                     "Refusing to emit a session cookie without a matching server session"
                 );
-                append_cookie(response, removal_session_cookie(secure));
                 failure.get_or_insert(SessionCookieNormalizationFailure::MissingServerSession);
             }
             Err(error) => {
@@ -190,10 +222,15 @@ async fn normalize_session_cookie_headers(
                     error = %error,
                     "Session backend operation failed while normalizing a response cookie"
                 );
-                append_cookie(response, removal_session_cookie(secure));
                 failure = Some(SessionCookieNormalizationFailure::BackendUnavailable);
             }
         }
+    }
+
+    if failure.is_some() {
+        append_cookie(response, removal_session_cookie(secure));
+    } else if let Some(cookie) = normalized_session_cookie {
+        append_cookie(response, cookie);
     }
 
     match failure {
