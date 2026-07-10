@@ -103,7 +103,12 @@ impl Mailer {
             anyhow::bail!("invalid from address: {}", from);
         }
 
-        let transport = match smtp_security_for_port(port) {
+        let smtp_security = smtp_security_for_port(port);
+        if smtp_security == SmtpSecurity::Plaintext && creds.is_some() {
+            anyhow::bail!("refusing SMTP authentication without TLS on port {port}");
+        }
+
+        let transport = match smtp_security {
             SmtpSecurity::ImplicitTls => {
                 let mut builder = AsyncSmtpTransport::<Tokio1Executor>::relay(host)
                     .context("failed to init SMTP relay (implicit TLS, port 465)")?
@@ -239,6 +244,49 @@ mod tests {
         assert!(body.contains("Button not working?"));
         assert!(body.contains("&amp;next=&lt;home&gt;"));
         assert!(!body.contains("&next=<home>"));
+    }
+
+    #[test]
+    #[serial]
+    fn mailer_rejects_credentials_on_plaintext_port() {
+        let _smtp_auth = crate::test_helpers::EnvGuard::set("SMTP_AUTH", "on");
+        let config = AppConfig {
+            fade_days: 7,
+            ron_days: 84,
+            anonymize_opt_in: true,
+            delegation_expire_days: 28,
+            domain_read_source: crate::config::DomainReadSource::Jsonl,
+            domain_account_write_source: crate::config::DomainAccountWriteSource::Jsonl,
+            domain_node_write_source: crate::config::DomainNodeWriteSource::Jsonl,
+            domain_edge_write_source: crate::config::DomainEdgeWriteSource::Jsonl,
+            passkey_credential_source: crate::config::PasskeyCredentialSource::InMemory,
+            auth_public_login: false,
+            app_base_url: None,
+            auth_trusted_proxies: None,
+            auth_allow_emails: None,
+            auth_allow_email_domains: None,
+            auth_auto_provision: false,
+            auth_rl_ip_per_min: None,
+            auth_rl_ip_per_hour: None,
+            auth_rl_email_per_min: None,
+            auth_rl_email_per_hour: None,
+            smtp_host: Some("127.0.0.1".to_string()),
+            smtp_port: Some(1025),
+            smtp_user: Some("user".to_string()),
+            smtp_pass: Some("pass".to_string()),
+            smtp_from: Some("noreply@example.com".to_string()),
+            auth_log_magic_token: false,
+            webauthn_rp_id: None,
+            webauthn_rp_origin: None,
+            webauthn_rp_name: None,
+        };
+
+        let result = Mailer::new(&config);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("refusing SMTP authentication without TLS on port 1025"));
     }
 
     #[test]
