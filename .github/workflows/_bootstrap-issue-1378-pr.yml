@@ -113,6 +113,7 @@ jobs:
 
           python3 <<'PY'
           from pathlib import Path
+          import re
 
           def replace_once(path: Path, old: str, new: str) -> None:
               text = path.read_text()
@@ -132,53 +133,39 @@ jobs:
               'import { chromium, expect, test, type BrowserContext, type Page } '
               'from "@playwright/test";\n',
           )
-          replace_once(
-              proof_path,
-              '''async function loginWithDevAccount(page: Page): Promise<string> {
-  return page.evaluate(async () => {
-    const accountsResponse = await fetch("/api/auth/dev/accounts", {
-      credentials: "include",
-    });
-    if (!accountsResponse.ok) {
-      throw new Error(`dev accounts failed: ${accountsResponse.status}`);
-    }
-    const accounts = (await accountsResponse.json()) as Array<{ id: string }>;
-    const accountId = accounts[0]?.id;
-    if (!accountId) throw new Error("no dev account available for session proof");
-
-    const loginResponse = await fetch("/api/auth/dev/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ account_id: accountId }),
-      credentials: "include",
-    });
-    if (!loginResponse.ok) {
-      throw new Error(`dev login failed: ${loginResponse.status}`);
-    }
-    return accountId;
-  });
-}
-''',
-              '''async function loginWithProofSession(
-  context: BrowserContext,
-  baseURL: string,
-): Promise<string> {
-  const response = await context.request.post(
-    `${baseURL}/api/auth/testing/passkeys/bootstrap-session`,
-  );
-  if (!response.ok()) {
-    throw new Error(
-      `proof session bootstrap failed: ${response.status()} ${await response.text()}`,
-    );
-  }
-  const body = (await response.json()) as { account_id?: string };
-  if (!body.account_id) {
-    throw new Error("proof session bootstrap returned no account_id");
-  }
-  return body.account_id;
-}
-''',
+          proof_text = proof_path.read_text()
+          login_pattern = re.compile(
+              r'async function loginWithDevAccount\(page: Page\): Promise<string> '
+              r'\{.*?\n\}\n\n(?=test\()',
+              re.DOTALL,
           )
+          login_replacement = (
+              'async function loginWithProofSession(\n'
+              '  context: BrowserContext,\n'
+              '  baseURL: string,\n'
+              '): Promise<string> {\n'
+              '  const response = await context.request.post(\n'
+              '    `${baseURL}/api/auth/testing/passkeys/bootstrap-session`,\n'
+              '  );\n'
+              '  if (!response.ok()) {\n'
+              '    throw new Error(\n'
+              '      `proof session bootstrap failed: ${response.status()} '
+              '${await response.text()}`,\n'
+              '    );\n'
+              '  }\n'
+              '  const body = (await response.json()) as { account_id?: string };\n'
+              '  if (!body.account_id) {\n'
+              '    throw new Error("proof session bootstrap returned no account_id");\n'
+              '  }\n'
+              '  return body.account_id;\n'
+              '}\n\n'
+          )
+          proof_text, count = login_pattern.subn(login_replacement, proof_text)
+          if count != 1:
+              raise SystemExit(
+                  f'{proof_path}: expected one dev-login helper, found {count}'
+              )
+          proof_path.write_text(proof_text)
           replace_once(
               proof_path,
               '    const accountId = await loginWithDevAccount(firstPage);\n',
