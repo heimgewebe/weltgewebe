@@ -1,6 +1,7 @@
-use std::{env, fs, path::Path};
+use std::{env, fs, net::IpAddr, path::Path};
 
 use anyhow::{Context, Result};
+use ipnet::IpNet;
 use serde::Deserialize;
 
 macro_rules! apply_env_override {
@@ -72,6 +73,33 @@ pub const DEFAULT_TRUSTED_PROXIES: &str = "127.0.0.1,::1";
 /// API that runs public login, so "no proxy in front" is an operator decision
 /// on the record rather than an accident of an absent variable.
 pub const TRUSTED_PROXIES_NONE: &str = "none";
+
+fn validate_trusted_proxy_declaration(value: &str) -> Result<()> {
+    let value = value.trim();
+    if value.eq_ignore_ascii_case(TRUSTED_PROXIES_NONE) {
+        return Ok(());
+    }
+
+    let entries: Vec<_> = value
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .collect();
+    if entries.is_empty() {
+        anyhow::bail!(
+            "AUTH_TRUSTED_PROXIES must contain IP addresses/CIDRs or the explicit value `{TRUSTED_PROXIES_NONE}`"
+        );
+    }
+
+    for entry in entries {
+        if entry.parse::<IpNet>().is_err() && entry.parse::<IpAddr>().is_err() {
+            anyhow::bail!(
+                "AUTH_TRUSTED_PROXIES contains invalid entry `{entry}`; expected an IP address, CIDR, or `{TRUSTED_PROXIES_NONE}`"
+            );
+        }
+    }
+    Ok(())
+}
 
 /// Selects where domain data is read from at startup.
 ///
@@ -613,29 +641,22 @@ impl AppConfig {
             anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but APP_BASE_URL is not set. Please set APP_BASE_URL (e.g. https://mein-weltgewebe.de)");
         }
 
-        // Per-IP rate limits are only meaningful if the API can resolve the real
-        // client IP. Behind a reverse proxy it resolves `X-Forwarded-For` only
-        // for a *trusted* peer; with `auth_trusted_proxies` unset the allowlist
-        // falls back to loopback, the containerised proxy is never trusted, and
-        // every client on earth collapses into a single per-IP bucket. That turns
-        // a login rate limit into a site-wide login outage an attacker can trigger
-        // for the cost of a handful of requests.
-        //
-        // The condition cannot be detected at runtime, so it is refused at config
-        // load. A directly exposed API must say so with `AUTH_TRUSTED_PROXIES=none`.
-        if self.auth_public_login
-            && self.has_ip_rate_limits()
-            && self.auth_trusted_proxies.is_none()
-        {
+        // Any configured per-IP limiter needs an explicit client-IP trust
+        // decision, regardless of whether registration is public. Otherwise a
+        // containerised reverse proxy collapses every client into its own peer
+        // address and turns the limiter into a shared outage switch.
+        if self.has_ip_rate_limits() && self.auth_trusted_proxies.is_none() {
             anyhow::bail!(
-                "AUTH_PUBLIC_LOGIN is enabled with per-IP rate limits (AUTH_RL_IP_PER_MIN / \
-                 AUTH_RL_IP_PER_HOUR) but AUTH_TRUSTED_PROXIES is not set. Without it the \
-                 allowlist defaults to `{DEFAULT_TRUSTED_PROXIES}`, so a reverse proxy is never \
-                 trusted and every client shares one rate-limit bucket. Set AUTH_TRUSTED_PROXIES \
-                 to the proxy's IP or CIDR (e.g. `127.0.0.1,::1,172.16.0.0/12` for Docker \
-                 bridge networks), or to `{TRUSTED_PROXIES_NONE}` if the API is exposed directly \
-                 with no proxy in front."
+                "Per-IP rate limits (AUTH_RL_IP_PER_MIN / AUTH_RL_IP_PER_HOUR) are enabled but \
+                 AUTH_TRUSTED_PROXIES is not set. Without it the allowlist defaults to \
+                 `{DEFAULT_TRUSTED_PROXIES}`, so a reverse proxy may be untrusted and every \
+                 client may share one rate-limit bucket. Set AUTH_TRUSTED_PROXIES to the \
+                 proxy's IP or CIDR (e.g. `127.0.0.1,::1,172.16.0.0/12` for Docker bridge \
+                 networks), or to `{TRUSTED_PROXIES_NONE}` if the API is exposed directly."
             );
+        }
+        if let Some(proxies) = self.auth_trusted_proxies.as_deref() {
+            validate_trusted_proxy_declaration(proxies)?;
         }
 
         if self.auth_auto_provision {
@@ -1107,6 +1128,7 @@ delegation_expire_days: 28
         // Set mandatory rate limits
         let _rl_ip_min = EnvGuard::set("AUTH_RL_IP_PER_MIN", "5");
         let _rl_ip_hour = EnvGuard::set("AUTH_RL_IP_PER_HOUR", "30");
+        let _proxies = EnvGuard::set("AUTH_TRUSTED_PROXIES", "none");
         let _rl_email_min = EnvGuard::set("AUTH_RL_EMAIL_PER_MIN", "2");
         let _rl_email_hour = EnvGuard::set("AUTH_RL_EMAIL_PER_HOUR", "10");
 
@@ -1234,10 +1256,49 @@ delegation_expire_days: 28
             "error must name the missing variable, got: {message}"
         );
         assert!(
-            message.contains("shares one rate-limit bucket"),
+            message.contains("rate-limit bucket"),
             "error must explain the collapse into a single bucket, got: {message}"
         );
 
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_rejects_ip_rate_limits_without_proxy_decision_when_login_is_private() -> Result<()>
+    {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "0");
+        let _rl_ip_min = EnvGuard::set("AUTH_RL_IP_PER_MIN", "5");
+        let _rl_ip_hour = EnvGuard::unset("AUTH_RL_IP_PER_HOUR");
+        let _proxies = EnvGuard::unset("AUTH_TRUSTED_PROXIES");
+
+        let error = AppConfig::load_from_path(file.path())
+            .expect_err("every active per-IP limiter needs an explicit proxy decision");
+        assert!(error
+            .to_string()
+            .contains("AUTH_TRUSTED_PROXIES is not set"));
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_rejects_invalid_proxy_entries_instead_of_silently_dropping_them() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _guards = public_login_with_ip_rate_limit_guards();
+        let _proxies = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1,not-an-ip,172.16.0.0/12");
+
+        let error = AppConfig::load_from_path(file.path())
+            .expect_err("a malformed allowlist entry must abort startup");
+        let message = error.to_string();
+        assert!(
+            message.contains("invalid entry `not-an-ip`"),
+            "got: {message}"
+        );
         Ok(())
     }
 

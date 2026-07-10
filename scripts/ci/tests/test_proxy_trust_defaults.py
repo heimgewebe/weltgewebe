@@ -24,6 +24,8 @@ COMPOSE_DIR = REPO / "infra" / "compose"
 
 VPS_OVERRIDE = COMPOSE_DIR / "compose.vps.override.yml"
 HEIMSERVER_OVERRIDE = COMPOSE_DIR / "compose.prod.override.yml"
+CADDY_VPS = REPO / "infra" / "caddy" / "Caddyfile.vps"
+CADDY_HEIM = REPO / "infra" / "caddy" / "Caddyfile.heim"
 
 IP_RATE_LIMIT_KEYS = ("AUTH_RL_IP_PER_MIN", "AUTH_RL_IP_PER_HOUR")
 TRUSTED_PROXIES_KEY = "AUTH_TRUSTED_PROXIES"
@@ -105,7 +107,36 @@ def test_api_refuses_undeclared_proxy_trust_under_ip_rate_limits() -> None:
 
     assert "fn has_ip_rate_limits" in normalized
     assert (
-        "self.auth_public_login && self.has_ip_rate_limits() "
-        "&& self.auth_trusted_proxies.is_none()" in normalized
+        "self.has_ip_rate_limits() && self.auth_trusted_proxies.is_none()"
+        in normalized
     )
+    assert "validate_trusted_proxy_declaration(proxies)?" in normalized
     assert "AUTH_TRUSTED_PROXIES is not set" in normalized
+    assert "contains invalid entry" in normalized
+
+
+@pytest.mark.parametrize("caddyfile", (CADDY_VPS, CADDY_HEIM), ids=lambda path: path.name)
+def test_trusted_caddy_hops_strip_client_supplied_forwarded(caddyfile: Path) -> None:
+    text = caddyfile.read_text(encoding="utf-8")
+    upstream_count = text.count("reverse_proxy api:8080")
+    removal_count = text.count("header_up -Forwarded")
+
+    assert upstream_count > 0
+    assert removal_count == upstream_count, (
+        f"{caddyfile.name} has {upstream_count} API proxy hops but only "
+        f"{removal_count} Forwarded removals; a public client could spoof the "
+        "effective IP at an unsanitized trusted hop"
+    )
+
+
+def test_deploy_vps_shim_keeps_vps_caddy_and_upstream_guards() -> None:
+    shim = (REPO / "scripts" / "deploy_vps.sh").read_text(encoding="utf-8")
+    entrypoint = (REPO / "scripts" / "weltgewebe-up").read_text(encoding="utf-8")
+    base_compose = (COMPOSE_DIR / "compose.prod.yml").read_text(encoding="utf-8")
+
+    assert 'DEPLOY_TARGET="${DEPLOY_TARGET:-vps}"' in shim
+    assert '"${SCRIPT_DIR}/weltgewebe-up" "$@"' in shim
+    assert '[[ "$DEPLOY_TARGET" == "vps" && "$WITH_CADDY" == "0" ]]' in entrypoint
+    assert "WITH_CADDY=1" in entrypoint
+    assert "${WEB_UPSTREAM_URL:?WEB_UPSTREAM_URL must be set" in base_compose
+    assert "${WEB_UPSTREAM_HOST:?WEB_UPSTREAM_HOST must be set" in base_compose

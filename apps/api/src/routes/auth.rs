@@ -291,9 +291,20 @@ fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
         return peer.ip();
     }
 
-    // Check Forwarded header (RFC 7239)
+    // Caddy rewrites X-Forwarded-For for the upstream request, while a generic
+    // Forwarded header may have originated at the public client unless the
+    // proxy explicitly removes it. Prefer the proxy-owned chain and retain
+    // RFC 7239 only as a fallback for trusted proxies that emit no XFF.
+    if let Some(xff_val) = headers.get("X-Forwarded-For").and_then(|v| v.to_str().ok()) {
+        if let Some(first) = xff_val.split(',').next() {
+            if let Ok(addr) = first.trim().parse::<IpAddr>() {
+                return addr;
+            }
+        }
+    }
+
+    // Fallback: Forwarded header (RFC 7239).
     // Format: Forwarded: for=1.2.3.4, for=5.6.7.8;proto=http
-    // We only trust the first (left-most) element as the client IP.
     if let Some(forwarded_val) = headers.get("Forwarded").and_then(|v| v.to_str().ok()) {
         if let Some(first_element) = forwarded_val.split(',').next() {
             for part in first_element.split(';') {
@@ -302,17 +313,12 @@ fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
                     let val = part["for=".len()..].trim();
                     let val = val.trim_matches('"');
 
-                    // Try parsing as SocketAddr first (handles [ipv6]:port)
                     if let Ok(addr) = val.parse::<SocketAddr>() {
                         return addr.ip();
                     }
-
-                    // Try parsing as IpAddr (handles ipv4, ipv6)
                     if let Ok(addr) = val.parse::<IpAddr>() {
                         return addr;
                     }
-
-                    // Handle [ipv6] without port (strip brackets)
                     if val.starts_with('[') && val.ends_with(']') {
                         let inner = &val[1..val.len() - 1];
                         if let Ok(addr) = inner.parse::<IpAddr>() {
@@ -320,15 +326,6 @@ fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    // Fallback: X-Forwarded-For
-    if let Some(xff_val) = headers.get("X-Forwarded-For").and_then(|v| v.to_str().ok()) {
-        if let Some(first) = xff_val.split(',').next() {
-            if let Ok(addr) = first.trim().parse::<IpAddr>() {
-                return addr;
             }
         }
     }
@@ -3132,6 +3129,27 @@ mod tests {
 
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
         // Default trusts localhost -> Reads XFF -> Sees 1.2.3.4 -> Rejected
+        assert_eq!(
+            check_dev_login_guard(&headers, addr),
+            Err(StatusCode::FORBIDDEN)
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn trusted_proxy_prefers_proxy_owned_xff_over_spoofable_forwarded() {
+        let _guard = EnvGuard::set("AUTH_DEV_LOGIN", "1");
+        let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Forwarded-For", "203.0.113.7".parse().unwrap());
+        headers.insert("Forwarded", "for=127.0.0.1".parse().unwrap());
+
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        assert_eq!(
+            effective_client_ip(addr, &headers),
+            "203.0.113.7".parse::<IpAddr>().unwrap()
+        );
         assert_eq!(
             check_dev_login_guard(&headers, addr),
             Err(StatusCode::FORBIDDEN)
