@@ -17,11 +17,11 @@ const makeAccount = (overrides: Partial<Account> = {}): Account =>
   ({
     id: "acc-1",
     type: "garnrolle",
-    mode: "verortet",
     title: "Test Account",
     created_at: "2025-01-01T00:00:00Z",
     tags: [],
     radius_m: 0,
+    map_state: "exact",
     public_pos: { lat: 53.56, lon: 10.06 },
     ...overrides,
   }) as Account;
@@ -84,18 +84,16 @@ describe("buildMapScene", () => {
     expect(scene.entities[0].lon).toBe(10.06);
   });
 
-  it("excludes accounts without public_pos (e.g. RoN)", () => {
-    const ronAccount = makeAccount({
-      id: "ron-1",
-      type: "ron",
-      mode: "ron",
-    } as any);
-    // Remove public_pos to simulate RoN account
-    delete (ronAccount as any).public_pos;
+  it("excludes Garnrollen without a public position", () => {
+    const account = makeAccount({
+      id: "account-without-position",
+      map_state: "not_on_map",
+    });
+    delete account.public_pos;
 
     const scene = buildMapScene({
       nodes: [],
-      accounts: [ronAccount],
+      accounts: [account],
       edges: [],
       loadState: "ok",
       resourceStatus: [],

@@ -1,13 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { get } from "svelte/store";
 import { buildMapScene, type MapSceneModel } from "$lib/map/scene";
-import type {
-  Account,
-  AccountVerortet,
-  Edge,
-  MapEntityViewModel,
-  Node,
-} from "$lib/map/types";
+import type { Account, Edge, MapEntityViewModel, Node } from "$lib/map/types";
 import {
   deriveFailedResourceLabels,
   deriveMarkerCounts,
@@ -33,16 +27,14 @@ const makeNode = (overrides: Partial<Node> = {}): Node => ({
   ...overrides,
 });
 
-const makeAccount = (
-  overrides: Partial<AccountVerortet> = {},
-): AccountVerortet => ({
+const makeAccount = (overrides: Partial<Account> = {}): Account => ({
   id: "acc-1",
   type: "garnrolle",
-  mode: "verortet",
   title: "Eine Garnrolle",
   created_at: "2025-01-01T00:00:00Z",
   tags: [],
   radius_m: 0,
+  map_state: "exact",
   public_pos: { lat: 53.56, lon: 10.06 },
   ...overrides,
 });
