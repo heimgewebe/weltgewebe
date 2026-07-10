@@ -155,14 +155,38 @@ def _checked_regular_absolute(path: Path, *, label: str) -> Path:
     return resolved
 
 
-def _validate_root_owned_runtime_file(path: Path, *, label: str) -> None:
-    path_stat = path.stat()
-    if path_stat.st_uid != 0:
+def _validate_root_owned_runtime_stat(file_stat: os.stat_result, *, label: str) -> None:
+    if file_stat.st_uid != 0:
         raise ReconcileError(f"{label} must be root-owned for --apply")
-    if stat.S_IMODE(path_stat.st_mode) & (stat.S_IWGRP | stat.S_IWOTH):
+    if stat.S_IMODE(file_stat.st_mode) & (stat.S_IWGRP | stat.S_IWOTH):
         raise ReconcileError(
             f"{label} must not be writable by group or others for --apply"
         )
+
+
+def _read_regular_no_follow(path: Path, *, label: str) -> tuple[str, os.stat_result]:
+    flags = os.O_RDONLY | os.O_NOFOLLOW
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise ReconcileError(f"unable to open {label} safely: {path}") from exc
+    try:
+        file_stat = os.fstat(fd)
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise ReconcileError(f"{label} is not a regular file: {path}")
+        with os.fdopen(fd, "r", encoding="utf-8", closefd=False) as handle:
+            text = handle.read()
+        return text, file_stat
+    except UnicodeDecodeError as exc:
+        raise ReconcileError(f"{label} is not valid UTF-8: {path}") from exc
+    finally:
+        os.close(fd)
+
+
+def _same_file(left: os.stat_result, right: os.stat_result) -> bool:
+    return left.st_dev == right.st_dev and left.st_ino == right.st_ino
 
 
 def _write_file_exclusive(path: Path, content: bytes, *, uid: int, gid: int) -> None:
@@ -189,13 +213,21 @@ def reconcile(
 ) -> dict[str, object]:
     source = _checked_regular_absolute(source_path, label="source")
     destination = _checked_regular_absolute(destination_path, label="destination")
-    if os.path.samefile(source, destination):
-        raise ReconcileError("source and destination must be different files")
     if not backup_dir.is_absolute():
         raise ReconcileError("backup directory path must be absolute")
+    if apply and require_root and os.geteuid() != 0:
+        raise ReconcileError("--apply requires root")
 
-    source_text = source.read_text(encoding="utf-8")
-    destination_text = destination.read_text(encoding="utf-8")
+    source_text, source_stat = _read_regular_no_follow(source, label="source")
+    destination_text, destination_stat = _read_regular_no_follow(
+        destination, label="destination"
+    )
+    if _same_file(source_stat, destination_stat):
+        raise ReconcileError("source and destination must be different files")
+    if apply and require_root:
+        _validate_root_owned_runtime_stat(source_stat, label="source")
+        _validate_root_owned_runtime_stat(destination_stat, label="destination")
+
     selected = validate_source(parse_env(source_text, label="source").values)
     planned_content = build_reconciled_content(destination_text, selected)
 
@@ -208,12 +240,6 @@ def reconcile(
         return {**base_result, "status": "already_reconciled", "applied": False}
     if not apply:
         return {**base_result, "status": "planned", "applied": False}
-    if require_root and os.geteuid() != 0:
-        raise ReconcileError("--apply requires root")
-    if require_root:
-        _validate_root_owned_runtime_file(source, label="source")
-        _validate_root_owned_runtime_file(destination, label="destination")
-
     if backup_dir.is_symlink():
         raise ReconcileError("backup directory must not be a symlink")
     backup_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -240,19 +266,34 @@ def reconcile(
             raise ReconcileError("source path changed during reconciliation")
         if current_destination != destination:
             raise ReconcileError("destination path changed during reconciliation")
-        if os.path.samefile(current_source, current_destination):
+        current_source_text, current_source_stat = _read_regular_no_follow(
+            current_source, label="source"
+        )
+        current_text, current_destination_stat = _read_regular_no_follow(
+            current_destination, label="destination"
+        )
+        if not _same_file(source_stat, current_source_stat):
+            raise ReconcileError("source file identity changed during reconciliation")
+        if not _same_file(destination_stat, current_destination_stat):
+            raise ReconcileError(
+                "destination file identity changed during reconciliation"
+            )
+        if _same_file(current_source_stat, current_destination_stat):
             raise ReconcileError("source and destination must be different files")
+        if require_root:
+            _validate_root_owned_runtime_stat(current_source_stat, label="source")
+            _validate_root_owned_runtime_stat(
+                current_destination_stat, label="destination"
+            )
 
-        current_source_text = current_source.read_text(encoding="utf-8")
         selected = validate_source(
             parse_env(current_source_text, label="source").values
         )
-        current_text = current_destination.read_text(encoding="utf-8")
         current_content = build_reconciled_content(current_text, selected)
         if current_content == current_text:
             return {**base_result, "status": "already_reconciled", "applied": False}
 
-        destination_stat = destination.stat()
+        destination_stat = current_destination_stat
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
         backup = backup_dir / f"{destination.name}.bak-{timestamp}-{os.getpid()}"
         _write_file_exclusive(

@@ -339,7 +339,7 @@ def test_root_apply_rejects_non_root_owned_backup_directory(
     monkeypatch.setattr(module.Path, "stat", fake_stat)
     monkeypatch.setattr(module.os, "geteuid", lambda: 0)
     monkeypatch.setattr(
-        module, "_validate_root_owned_runtime_file", lambda path, label: None
+        module, "_validate_root_owned_runtime_stat", lambda file_stat, label: None
     )
 
     with pytest.raises(module.ReconcileError, match="root-owned"):
@@ -386,4 +386,71 @@ def test_apply_file_guard_rejects_group_writable_file(
     monkeypatch.setattr(module.Path, "stat", fake_stat)
 
     with pytest.raises(module.ReconcileError, match="group or others"):
-        module._validate_root_owned_runtime_file(path, label="source")
+        module._validate_root_owned_runtime_stat(path.stat(), label="source")
+
+
+def test_secure_reader_rejects_symlink_swapped_after_path_check(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = load_module()
+    real_source = tmp_path / "real.env"
+    source = tmp_path / "legacy.env"
+    destination = tmp_path / "canonical.env"
+    real_source.write_text(valid_source(), encoding="utf-8")
+    source.write_text(valid_source(), encoding="utf-8")
+    destination.write_text("DATABASE_URL=postgres://preserve\n", encoding="utf-8")
+
+    original_checked = module._checked_regular_absolute
+    call_count = 0
+
+    def swap_after_check(path, *, label):
+        nonlocal call_count
+        checked = original_checked(path, label=label)
+        call_count += 1
+        if label == "source" and call_count == 1:
+            source.unlink()
+            source.symlink_to(real_source)
+        return checked
+
+    monkeypatch.setattr(module, "_checked_regular_absolute", swap_after_check)
+
+    with pytest.raises(module.ReconcileError, match="unable to open source safely"):
+        module.reconcile(
+            source_path=source,
+            destination_path=destination,
+            backup_dir=tmp_path / "backups",
+            apply=False,
+            require_root=False,
+        )
+
+
+def test_apply_rejects_source_inode_replacement_after_lock(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = load_module()
+    source = tmp_path / "legacy.env"
+    destination = tmp_path / "canonical.env"
+    replacement = tmp_path / "replacement.env"
+    source.write_text(valid_source(), encoding="utf-8")
+    replacement.write_text(valid_source(), encoding="utf-8")
+    destination.write_text("DATABASE_URL=postgres://preserve\n", encoding="utf-8")
+    original = destination.read_text(encoding="utf-8")
+
+    original_flock = module.fcntl.flock
+
+    def replace_source_after_lock(fd, operation):
+        original_flock(fd, operation)
+        replacement.replace(source)
+
+    monkeypatch.setattr(module.fcntl, "flock", replace_source_after_lock)
+
+    with pytest.raises(module.ReconcileError, match="source file identity changed"):
+        module.reconcile(
+            source_path=source,
+            destination_path=destination,
+            backup_dir=tmp_path / "backups",
+            apply=True,
+            require_root=False,
+        )
+
+    assert destination.read_text(encoding="utf-8") == original
