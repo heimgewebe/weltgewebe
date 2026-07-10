@@ -58,6 +58,12 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     let app_config = AppConfig::load().context("failed to load API configuration")?;
+
+    // Install the proxy allowlist before the first request can be served, so the
+    // request path resolves client IPs from the validated config rather than
+    // re-reading the environment behind the config's back.
+    routes::auth::init_trusted_proxies(&app_config);
+
     let (db_pool, db_pool_configured) = initialise_database_pool().await?;
     let (nats_client, nats_configured) = initialise_nats_client().await;
 

@@ -59,6 +59,20 @@ macro_rules! apply_env_override_option {
     };
 }
 
+/// Proxy allowlist applied when `auth_trusted_proxies` is unset or empty.
+///
+/// Loopback only. A reverse proxy that reaches the API over a container bridge
+/// network never presents a loopback peer address, so this default deliberately
+/// trusts no real proxy.
+pub const DEFAULT_TRUSTED_PROXIES: &str = "127.0.0.1,::1";
+
+/// Explicit `auth_trusted_proxies` value declaring that no proxy is trusted.
+///
+/// Required (instead of simply leaving the value unset) for a directly exposed
+/// API that runs public login, so "no proxy in front" is an operator decision
+/// on the record rather than an accident of an absent variable.
+pub const TRUSTED_PROXIES_NONE: &str = "none";
+
 /// Selects where domain data is read from at startup.
 ///
 /// JSONL remains the default read source and write truth. PostgreSQL is
@@ -506,7 +520,27 @@ impl AppConfig {
             };
         }
 
+        // A blank `auth_trusted_proxies` is "unset", not "an empty allowlist".
+        // Collapsing it here means `validate()` sees the same `None` whether the
+        // value was omitted or written as an empty string in a config file.
+        if let Some(proxies) = self.auth_trusted_proxies {
+            let trimmed = proxies.trim().to_string();
+            self.auth_trusted_proxies = if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            };
+        }
+
         self
+    }
+
+    /// True when at least one per-IP rate limit is configured and effective.
+    ///
+    /// A limit of `0` is treated as absent: `AuthRateLimiter::new` maps it to
+    /// `NonZeroU32::new(0) == None` and installs no limiter for that window.
+    fn has_ip_rate_limits(&self) -> bool {
+        self.auth_rl_ip_per_min.unwrap_or(0) > 0 || self.auth_rl_ip_per_hour.unwrap_or(0) > 0
     }
 
     pub fn is_open_registration(&self) -> bool {
@@ -577,6 +611,31 @@ impl AppConfig {
 
         if self.auth_public_login && self.app_base_url.is_none() {
             anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but APP_BASE_URL is not set. Please set APP_BASE_URL (e.g. https://mein-weltgewebe.de)");
+        }
+
+        // Per-IP rate limits are only meaningful if the API can resolve the real
+        // client IP. Behind a reverse proxy it resolves `X-Forwarded-For` only
+        // for a *trusted* peer; with `auth_trusted_proxies` unset the allowlist
+        // falls back to loopback, the containerised proxy is never trusted, and
+        // every client on earth collapses into a single per-IP bucket. That turns
+        // a login rate limit into a site-wide login outage an attacker can trigger
+        // for the cost of a handful of requests.
+        //
+        // The condition cannot be detected at runtime, so it is refused at config
+        // load. A directly exposed API must say so with `AUTH_TRUSTED_PROXIES=none`.
+        if self.auth_public_login
+            && self.has_ip_rate_limits()
+            && self.auth_trusted_proxies.is_none()
+        {
+            anyhow::bail!(
+                "AUTH_PUBLIC_LOGIN is enabled with per-IP rate limits (AUTH_RL_IP_PER_MIN / \
+                 AUTH_RL_IP_PER_HOUR) but AUTH_TRUSTED_PROXIES is not set. Without it the \
+                 allowlist defaults to `{DEFAULT_TRUSTED_PROXIES}`, so a reverse proxy is never \
+                 trusted and every client shares one rate-limit bucket. Set AUTH_TRUSTED_PROXIES \
+                 to the proxy's IP or CIDR (e.g. `127.0.0.1,::1,172.16.0.0/12` for Docker \
+                 bridge networks), or to `{TRUSTED_PROXIES_NONE}` if the API is exposed directly \
+                 with no proxy in front."
+            );
         }
 
         if self.auth_auto_provision {
@@ -1143,6 +1202,143 @@ delegation_expire_days: 28
         Ok(())
     }
 
+    /// Set up a config that is valid apart from the proxy-trust declaration:
+    /// public login on, a delivery path, and one per-IP rate limit.
+    fn public_login_with_ip_rate_limit_guards() -> Vec<EnvGuard> {
+        vec![
+            EnvGuard::set("AUTH_PUBLIC_LOGIN", "1"),
+            EnvGuard::set("APP_BASE_URL", "https://example.com"),
+            EnvGuard::set("AUTH_LOG_MAGIC_TOKEN", "1"),
+            EnvGuard::set("AUTH_RL_IP_PER_MIN", "5"),
+            EnvGuard::unset("AUTH_RL_IP_PER_HOUR"),
+            EnvGuard::unset("AUTH_AUTO_PROVISION"),
+        ]
+    }
+
+    #[test]
+    #[serial]
+    fn validation_rejects_public_login_with_ip_rate_limits_and_undeclared_proxy_trust() -> Result<()>
+    {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _guards = public_login_with_ip_rate_limit_guards();
+        let _proxies = EnvGuard::unset("AUTH_TRUSTED_PROXIES");
+
+        let error = AppConfig::load_from_path(file.path())
+            .expect_err("undeclared proxy trust must abort startup under per-IP rate limits");
+        let message = error.to_string();
+
+        assert!(
+            message.contains("AUTH_TRUSTED_PROXIES is not set"),
+            "error must name the missing variable, got: {message}"
+        );
+        assert!(
+            message.contains("shares one rate-limit bucket"),
+            "error must explain the collapse into a single bucket, got: {message}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_accepts_explicit_none_proxy_trust_for_direct_exposure() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _guards = public_login_with_ip_rate_limit_guards();
+        let _proxies = EnvGuard::set("AUTH_TRUSTED_PROXIES", "none");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert_eq!(cfg.auth_trusted_proxies.as_deref(), Some("none"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_accepts_declared_proxy_cidr() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _guards = public_login_with_ip_rate_limit_guards();
+        let _proxies = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1,::1,172.16.0.0/12");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert_eq!(
+            cfg.auth_trusted_proxies.as_deref(),
+            Some("127.0.0.1,::1,172.16.0.0/12")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_treats_blank_proxy_trust_as_undeclared() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        // A config file may spell the value as an empty string. That is "unset",
+        // not "an allowlist that happens to be empty".
+        let yaml = format!("{YAML}auth_trusted_proxies: \"   \"\n");
+        std::fs::write(file.path(), yaml)?;
+
+        let _guards = public_login_with_ip_rate_limit_guards();
+        let _proxies = EnvGuard::unset("AUTH_TRUSTED_PROXIES");
+
+        let error = AppConfig::load_from_path(file.path())
+            .expect_err("a blank declaration must be treated as undeclared");
+        assert!(error
+            .to_string()
+            .contains("AUTH_TRUSTED_PROXIES is not set"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_allows_undeclared_proxy_trust_without_ip_rate_limits() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // No per-IP limiter is installed, so the client-IP resolution cannot
+        // silently degrade a defence that does not exist. Local dev stays easy.
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
+        let _url = EnvGuard::set("APP_BASE_URL", "http://localhost");
+        let _log = EnvGuard::set("AUTH_LOG_MAGIC_TOKEN", "1");
+        let _rl_ip_min = EnvGuard::unset("AUTH_RL_IP_PER_MIN");
+        let _rl_ip_hour = EnvGuard::unset("AUTH_RL_IP_PER_HOUR");
+        let _auto = EnvGuard::unset("AUTH_AUTO_PROVISION");
+        let _proxies = EnvGuard::unset("AUTH_TRUSTED_PROXIES");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.auth_trusted_proxies.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_ignores_zero_ip_rate_limits_when_checking_proxy_trust() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // `AuthRateLimiter::new` maps a limit of 0 to "no limiter", so 0 must not
+        // trip the proxy-trust requirement either.
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
+        let _url = EnvGuard::set("APP_BASE_URL", "http://localhost");
+        let _log = EnvGuard::set("AUTH_LOG_MAGIC_TOKEN", "1");
+        let _rl_ip_min = EnvGuard::set("AUTH_RL_IP_PER_MIN", "0");
+        let _rl_ip_hour = EnvGuard::set("AUTH_RL_IP_PER_HOUR", "0");
+        let _auto = EnvGuard::unset("AUTH_AUTO_PROVISION");
+        let _proxies = EnvGuard::unset("AUTH_TRUSTED_PROXIES");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.auth_trusted_proxies.is_none());
+
+        Ok(())
+    }
+
     #[test]
     #[serial]
     fn validation_succeeds_if_public_login_with_auth_log_magic_token() -> Result<()> {
@@ -1185,6 +1381,9 @@ delegation_expire_days: 28
         let _rl_email_min = EnvGuard::set("AUTH_RL_EMAIL_PER_MIN", "2");
         let _rl_email_hour = EnvGuard::set("AUTH_RL_EMAIL_PER_HOUR", "10");
         let _log = EnvGuard::set("AUTH_LOG_MAGIC_TOKEN", "1");
+        // Per-IP limits plus public login now require an explicit proxy-trust
+        // declaration (see `trusted_proxies_*` tests below).
+        let _proxies = EnvGuard::set("AUTH_TRUSTED_PROXIES", "none");
 
         let cfg = AppConfig::load_from_path(file.path())?;
         assert!(cfg.is_open_registration());

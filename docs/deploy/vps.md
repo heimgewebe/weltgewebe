@@ -95,30 +95,55 @@ Anpassungen:
 
 ### C. Starten
 
-Verwende das bereitgestellte Skript oder Docker Compose direkt:
+`scripts/weltgewebe-up` ist der einzige unterstützte Deploy-Einstiegspunkt:
 
 ```bash
-# Mit Skript (baut oder pullt Container)
-./scripts/deploy_vps.sh
+# Baut bzw. pullt Container und startet den Stack
+./scripts/weltgewebe-up --with-caddy
 
 # Optional: Mit Image-Cleanup (Vorsicht!)
 PRUNE_IMAGES=1 ./scripts/deploy_vps.sh
+```
 
-# Oder manuell
-docker compose -f infra/compose/compose.prod.yml up -d --build
+`scripts/deploy_vps.sh` ist nur noch ein deprecateter Shim, der an
+`weltgewebe-up` delegiert.
+
+Ein manueller Aufruf **muss** die VPS-Override-Datei mitgeben. Ohne sie fehlen
+`Caddyfile.vps`, `APP_BASE_URL`, `POLICY_LIMITS_PATH`, die IPv6-Bindings sowie
+`AUTH_TRUSTED_PROXIES` und die `AUTH_RL_*`-Rate-Limits — Caddy bliebe an
+`127.0.0.1` gebunden und der Host wäre nicht öffentlich erreichbar:
+
+```bash
+docker compose \
+  --env-file /etc/weltgewebe/weltgewebe.env \
+  -f infra/compose/compose.prod.yml \
+  -f infra/compose/compose.vps.override.yml \
+  up -d --build
 ```
 
 **Troubleshooting:**
 
+Alle Compose-Aufrufe brauchen dieselbe Datei- und Projektauswahl wie der Deploy,
+sonst sprechen sie einen anders zusammengesetzten Stack an. Der Kürze halber:
+
+```bash
+alias wg-compose='docker compose --env-file /etc/weltgewebe/weltgewebe.env -p weltgewebe \
+  -f infra/compose/compose.prod.yml -f infra/compose/compose.vps.override.yml'
+```
+
 Wenn API-Healthchecks fehlschlagen, prüfe im Container:
 
 ```bash
-docker compose -f infra/compose/compose.prod.yml logs api
+wg-compose logs api
 # Teste im Container
-docker compose -f infra/compose/compose.prod.yml exec api wget -qO- http://localhost:8080/health/ready
+wg-compose exec api wget -qO- http://localhost:8080/health/ready
 # Oder Fallback
-docker compose -f infra/compose/compose.prod.yml exec api wget -qO- http://localhost:8080/health/live
+wg-compose exec api wget -qO- http://localhost:8080/health/live
 ```
+
+Startet die API gar nicht und meldet `AUTH_TRUSTED_PROXIES is not set`, dann
+läuft der Stack ohne `compose.vps.override.yml` (siehe oben) oder die
+Runtime-Env-Datei überschreibt den Default mit einem leeren Wert.
 
 ### D. Backup (Strategie)
 
@@ -145,9 +170,9 @@ Richte einen Cronjob ein, um regelmäßig Dumps der Datenbank zu erstellen und a
 
 ## Wartung
 
-* **Logs ansehen**: `docker compose -f infra/compose/compose.prod.yml logs -f`
-* **Neustart**: `docker compose -f infra/compose/compose.prod.yml restart`
-* **Updates**: Repository aktualisieren (`git pull`), dann `./scripts/deploy_vps.sh` ausführen.
+* **Logs ansehen**: `wg-compose logs -f` (Alias siehe Troubleshooting oben)
+* **Neustart**: `wg-compose restart`
+* **Updates**: Repository aktualisieren (`git pull`), dann `./scripts/weltgewebe-up` ausführen.
 
 ## 4. Aktueller Zielpfad: VPS als Public Runtime
 
