@@ -141,12 +141,11 @@ async fn db_session_store_expiry_filter() {
             .is_none(),
         "expired sessions must not authenticate"
     );
-    let expired_row_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE id = $1")
-            .bind(&expired_id)
-            .fetch_one(&pool)
-            .await
-            .expect("count expired session failed");
+    let expired_row_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE id = $1")
+        .bind(&expired_id)
+        .fetch_one(&pool)
+        .await
+        .expect("count expired session failed");
     assert_eq!(
         expired_row_count, 0,
         "reading an expired session must physically remove it"
