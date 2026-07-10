@@ -27,7 +27,7 @@ use crate::{
     auth::session::SessionBackendError,
     auth::step_up_tokens::ConsumeMatchResult,
     auth::{role::Role, tokens::TokenStore},
-    config::DomainAccountWriteSource,
+    config::{DomainAccountWriteSource, DEFAULT_TRUSTED_PROXIES, TRUSTED_PROXIES_NONE},
     domain_db::{update_account_email_in_postgres, AccountEmailUpdateError},
     middleware::auth::AuthContext,
     routes::accounts::{AccountInternal, AccountPublic},
@@ -195,17 +195,32 @@ impl TrustedProxyRule {
     }
 }
 
-fn parse_trusted_proxies(env_val: String) -> Vec<TrustedProxyRule> {
-    // Default to localhost if unset or empty (Strategy A: Secure defaults for dev)
-    let config = if env_val.trim().is_empty() {
-        "127.0.0.1,::1"
+/// Parse the `auth_trusted_proxies` declaration into matching rules.
+///
+/// - `None` (unset) → loopback only (`127.0.0.1`, `::1`). Safe dev default:
+///   a reverse proxy on a container bridge network is never loopback, so an
+///   unset value trusts nothing that matters. `AppConfig::validate` refuses to
+///   pair this default with public login plus per-IP rate limits, because in
+///   that combination it silently collapses every client into one bucket.
+/// - `AUTH_TRUSTED_PROXIES_NONE` (`"none"`, case-insensitive) → no rule at all.
+///   The explicit declaration for a directly exposed API with no proxy in front.
+/// - anything else → comma-separated IPs and CIDRs.
+fn parse_trusted_proxies(declaration: Option<&str>) -> Vec<TrustedProxyRule> {
+    let declared = declaration.map(str::trim).unwrap_or("");
+
+    if declared.eq_ignore_ascii_case(TRUSTED_PROXIES_NONE) {
+        return Vec::new();
+    }
+
+    let rules = if declared.is_empty() {
+        DEFAULT_TRUSTED_PROXIES
     } else {
-        &env_val
+        declared
     };
 
-    config
+    rules
         .split(',')
-        .map(|s| s.trim())
+        .map(str::trim)
         .filter(|s| !s.is_empty())
         .filter_map(|s| {
             if let Ok(net) = s.parse::<IpNet>() {
@@ -220,20 +235,49 @@ fn parse_trusted_proxies(env_val: String) -> Vec<TrustedProxyRule> {
         .collect()
 }
 
+/// Install the trusted-proxy allowlist from the validated [`AppConfig`].
+///
+/// Called once from `run()` before the server starts serving. Making the
+/// config the source closes the gap where `auth_trusted_proxies` set in a
+/// config file was parsed, validated, and then silently ignored because the
+/// request path read `AUTH_TRUSTED_PROXIES` straight from the environment.
+///
+/// Idempotent: a second call is a no-op, so a harness that already installed
+/// an allowlist keeps it. Under `cfg(test)` the allowlist is re-read per call
+/// (see [`get_trusted_proxies`]) and this function is inert.
+pub fn init_trusted_proxies(config: &crate::config::AppConfig) {
+    #[cfg(not(test))]
+    {
+        let _ = TRUSTED_PROXIES.set(parse_trusted_proxies(
+            config.auth_trusted_proxies.as_deref(),
+        ));
+    }
+    #[cfg(test)]
+    {
+        let _ = config;
+    }
+}
+
+#[cfg(not(test))]
+static TRUSTED_PROXIES: OnceLock<Vec<TrustedProxyRule>> = OnceLock::new();
+
 fn get_trusted_proxies() -> &'static [TrustedProxyRule] {
     #[cfg(not(test))]
     {
-        static TRUSTED_PROXIES: OnceLock<Vec<TrustedProxyRule>> = OnceLock::new();
+        // Integration harnesses build the router without `run()`, so they never
+        // reach `init_trusted_proxies`. Fall back to the environment for them —
+        // in production `run()` has always installed the config-derived rules
+        // before the first request arrives.
         TRUSTED_PROXIES.get_or_init(|| {
-            let env_val = std::env::var("AUTH_TRUSTED_PROXIES").unwrap_or_default();
-            parse_trusted_proxies(env_val)
+            parse_trusted_proxies(std::env::var("AUTH_TRUSTED_PROXIES").ok().as_deref())
         })
     }
     #[cfg(test)]
     {
-        // Leak memory to return a static reference in tests (acceptable for test suite execution)
-        let env_val = std::env::var("AUTH_TRUSTED_PROXIES").unwrap_or_default();
-        let rules = parse_trusted_proxies(env_val);
+        // Unit tests flip AUTH_TRUSTED_PROXIES per case via EnvGuard, so the
+        // allowlist must be re-read rather than cached. Leaking a short rule
+        // list per call is acceptable for the test binary.
+        let rules = parse_trusted_proxies(std::env::var("AUTH_TRUSTED_PROXIES").ok().as_deref());
         Box::leak(rules.into_boxed_slice())
     }
 }
@@ -247,9 +291,20 @@ fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
         return peer.ip();
     }
 
-    // Check Forwarded header (RFC 7239)
+    // The production Caddyfiles overwrite X-Forwarded-For with the public
+    // peer address and remove any client-supplied Forwarded header before the
+    // request reaches this trusted proxy boundary. Prefer that proxy-owned XFF
+    // value and retain RFC 7239 only as a fallback for other trusted proxies.
+    if let Some(xff_val) = headers.get("X-Forwarded-For").and_then(|v| v.to_str().ok()) {
+        if let Some(first) = xff_val.split(',').next() {
+            if let Ok(addr) = first.trim().parse::<IpAddr>() {
+                return addr;
+            }
+        }
+    }
+
+    // Fallback: Forwarded header (RFC 7239).
     // Format: Forwarded: for=1.2.3.4, for=5.6.7.8;proto=http
-    // We only trust the first (left-most) element as the client IP.
     if let Some(forwarded_val) = headers.get("Forwarded").and_then(|v| v.to_str().ok()) {
         if let Some(first_element) = forwarded_val.split(',').next() {
             for part in first_element.split(';') {
@@ -258,17 +313,12 @@ fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
                     let val = part["for=".len()..].trim();
                     let val = val.trim_matches('"');
 
-                    // Try parsing as SocketAddr first (handles [ipv6]:port)
                     if let Ok(addr) = val.parse::<SocketAddr>() {
                         return addr.ip();
                     }
-
-                    // Try parsing as IpAddr (handles ipv4, ipv6)
                     if let Ok(addr) = val.parse::<IpAddr>() {
                         return addr;
                     }
-
-                    // Handle [ipv6] without port (strip brackets)
                     if val.starts_with('[') && val.ends_with(']') {
                         let inner = &val[1..val.len() - 1];
                         if let Ok(addr) = inner.parse::<IpAddr>() {
@@ -276,15 +326,6 @@ fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    // Fallback: X-Forwarded-For
-    if let Some(xff_val) = headers.get("X-Forwarded-For").and_then(|v| v.to_str().ok()) {
-        if let Some(first) = xff_val.split(',').next() {
-            if let Ok(addr) = first.trim().parse::<IpAddr>() {
-                return addr;
             }
         }
     }
@@ -3096,6 +3137,27 @@ mod tests {
 
     #[test]
     #[serial]
+    fn trusted_proxy_prefers_proxy_owned_xff_over_spoofable_forwarded() {
+        let _guard = EnvGuard::set("AUTH_DEV_LOGIN", "1");
+        let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Forwarded-For", "203.0.113.7".parse().unwrap());
+        headers.insert("Forwarded", "for=127.0.0.1".parse().unwrap());
+
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        assert_eq!(
+            effective_client_ip(addr, &headers),
+            "203.0.113.7".parse::<IpAddr>().unwrap()
+        );
+        assert_eq!(
+            check_dev_login_guard(&headers, addr),
+            Err(StatusCode::FORBIDDEN)
+        );
+    }
+
+    #[test]
+    #[serial]
     fn test_forwarded_header_parsing() {
         let _guard = EnvGuard::set("AUTH_DEV_LOGIN", "1");
         let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
@@ -3116,6 +3178,79 @@ mod tests {
             "Forwarded".parse::<axum::http::HeaderName>().unwrap(),
             "for=1.2.3.4".parse().unwrap(),
         );
+        assert_eq!(
+            check_dev_login_guard(&headers, addr),
+            Err(StatusCode::FORBIDDEN)
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn trusted_proxies_default_to_loopback_when_undeclared() {
+        assert!(is_trusted_rule_set(None, "127.0.0.1"));
+        assert!(is_trusted_rule_set(None, "::1"));
+        assert!(!is_trusted_rule_set(None, "172.18.0.5"));
+    }
+
+    #[test]
+    #[serial]
+    fn trusted_proxies_none_trusts_nothing_including_loopback() {
+        // `none` is the explicit "directly exposed, no proxy" declaration. It must
+        // not silently retain the loopback default, otherwise a local attacker
+        // could still spoof X-Forwarded-For.
+        for declaration in ["none", "NONE", "  None  "] {
+            assert!(
+                !is_trusted_rule_set(Some(declaration), "127.0.0.1"),
+                "{declaration:?} must not trust loopback"
+            );
+            assert!(!is_trusted_rule_set(Some(declaration), "::1"));
+            assert!(!is_trusted_rule_set(Some(declaration), "172.18.0.5"));
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn trusted_proxies_accept_docker_bridge_cidr() {
+        // The deployment shape that motivated the config gate: Caddy reaches the
+        // API from the compose bridge network, never from loopback.
+        let declaration = Some("127.0.0.1,::1,172.16.0.0/12");
+        assert!(is_trusted_rule_set(declaration, "172.18.0.5"));
+        assert!(is_trusted_rule_set(declaration, "127.0.0.1"));
+        assert!(!is_trusted_rule_set(declaration, "8.8.8.8"));
+    }
+
+    #[test]
+    #[serial]
+    fn trusted_proxies_skip_unparseable_rules_but_keep_the_rest() {
+        let declaration = Some("not-an-ip, 10.0.0.1 , ,10.1.0.0/16");
+        assert!(is_trusted_rule_set(declaration, "10.0.0.1"));
+        assert!(is_trusted_rule_set(declaration, "10.1.2.3"));
+        assert!(!is_trusted_rule_set(declaration, "10.2.0.1"));
+    }
+
+    /// Resolve `declaration` into rules and test `ip` against them, bypassing the
+    /// process-wide env lookup so each case stays independent.
+    fn is_trusted_rule_set(declaration: Option<&str>, ip: &str) -> bool {
+        let rules = parse_trusted_proxies(declaration);
+        let ip: IpAddr = ip.parse().expect("test ip must parse");
+        rules.iter().any(|rule| rule.matches(ip))
+    }
+
+    #[test]
+    #[serial]
+    fn dev_login_guard_rejects_forwarded_localhost_when_proxy_trust_is_none() {
+        let _guard = EnvGuard::set("AUTH_DEV_LOGIN", "1");
+        let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "none");
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "X-Forwarded-For".parse::<axum::http::HeaderName>().unwrap(),
+            "127.0.0.1".parse().unwrap(),
+        );
+
+        // Peer is a container-bridge address; with `none` nothing is trusted, so
+        // the spoofed XFF is ignored and the real peer decides.
+        let addr: SocketAddr = "172.18.0.5:8080".parse().unwrap();
         assert_eq!(
             check_dev_login_guard(&headers, addr),
             Err(StatusCode::FORBIDDEN)

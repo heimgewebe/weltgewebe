@@ -289,6 +289,16 @@
 
   onMount(() => {
     let maplibreModule: any = null;
+    // onMount returns its cleanup synchronously while the initialiser below is
+    // still suspended on `await import('maplibre-gl')`. If the component is
+    // destroyed in that window the cleanup finds `map`/`nodesOverlay` still
+    // undefined and tears down nothing, and the initialiser would then go on to
+    // build a map, bind listeners and register protocols that nobody ever
+    // removes. Every await in the initialiser therefore re-checks this flag.
+    let destroyed = false;
+    // Hoisted so the cleanup can clear it; otherwise a component destroyed
+    // before the style loads leaves a 10s timer pointing at dead state.
+    let loadingTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
     const handleMarkerClick = (e: Event) => {
       const target = e.target as HTMLElement;
       const markerBtn = target.closest('.map-marker') as HTMLButtonElement | null;
@@ -306,12 +316,11 @@
 
     (async () => {
       const maplibregl = await import('maplibre-gl');
-      maplibreModule = maplibregl;
+      if (destroyed) return;
       const container = mapContainer;
       if (!container) {
         return;
       }
-      container.addEventListener('click', handleMarkerClick);
 
       let transformRequestFn: ((url: string, resourceType?: any) => { url: string }) | undefined = undefined;
 
@@ -321,6 +330,7 @@
       // activation cost and does NOT claim that 'local-sovereign' is already working end-to-end.
       if (currentBasemap.mode === 'local-sovereign') {
         const pmtiles = await import('pmtiles');
+        if (destroyed) return;
         try {
           maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
         } catch (e: any) {
@@ -333,6 +343,13 @@
           return { url: rewritePmtilesUrl(url, window.location.origin) };
         };
       }
+
+      // Past the last await boundary: from here on the cleanup below observes
+      // every resource this initialiser creates. `maplibreModule` gates the
+      // pmtiles protocol removal, so it must not be published before the
+      // protocol is actually registered.
+      maplibreModule = maplibregl;
+      container.addEventListener('click', handleMarkerClick);
 
       map = new maplibregl.Map({
         container,
@@ -356,7 +373,7 @@
       unsubscribeSysState = systemState.subscribe(val => { sysStateStr = val; });
       cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
 
-      const loadingTimeout = setTimeout(() => {
+      loadingTimeout = setTimeout(() => {
         isLoading = false;
       }, 10000);
 
@@ -399,6 +416,13 @@
     })();
 
     return () => {
+      // Signals the async initialiser to stop at its next await boundary, so a
+      // component destroyed mid-import never finishes building a map.
+      destroyed = true;
+      if (loadingTimeout !== undefined) {
+        clearTimeout(loadingTimeout);
+        loadingTimeout = undefined;
+      }
       if (filterTooltipTimeout !== null) {
         window.clearTimeout(filterTooltipTimeout);
         filterTooltipTimeout = null;

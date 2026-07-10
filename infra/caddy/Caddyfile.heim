@@ -33,7 +33,12 @@ weltgewebe.home.arpa {
   }
 
   handle_path /api/* {
-    reverse_proxy api:8080
+    reverse_proxy api:8080 {
+      # Caddy owns the client-IP chain. Never pass a public client's
+      # RFC 7239 header to an API that trusts this proxy peer.
+      header_up -Forwarded
+      header_up X-Forwarded-For {remote_host}
+    }
   }
 
   # Phase B: Immutable Assets (aggressive caching)

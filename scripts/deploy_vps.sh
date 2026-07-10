@@ -1,62 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Load environment variables robustly
-if [ -f .env ]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
-fi
+# Deprecated compatibility shim.
+#
+# This script used to run `docker compose -f infra/compose/compose.prod.yml up`
+# directly. That deployed the base compose file *without*
+# `infra/compose/compose.vps.override.yml`, which silently dropped every
+# VPS-specific setting: the Caddyfile.vps mount, APP_BASE_URL, POLICY_LIMITS_PATH,
+# the IPv6 port bindings, the AUTH_RL_* rate limits and AUTH_TRUSTED_PROXIES.
+# It also left Caddy bound to 127.0.0.1 (compose.prod.yml's CADDY_BIND default),
+# so the host was not publicly reachable.
+#
+# `scripts/weltgewebe-up` is the real VPS entrypoint. It selects the override
+# file, resolves the runtime env file, and runs the deploy preflights. This shim
+# delegates to it so existing runbooks and muscle memory keep working.
 
-echo "Deploying to VPS..."
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-# --- Validation ---
+echo "WARNING: scripts/deploy_vps.sh is deprecated." >&2
+echo "         Use scripts/weltgewebe-up instead; delegating to it now." >&2
 
-if [ ! -f "infra/compose/compose.prod.yml" ]; then
-  echo "Error: infra/compose/compose.prod.yml not found."
-  exit 1
-fi
+PRUNE_IMAGES="${PRUNE_IMAGES:-0}"
 
-if [ -z "${WEB_UPSTREAM_HOST:-}" ]; then
-  echo "Error: WEB_UPSTREAM_HOST is not set in .env or environment."
-  exit 1
-fi
+DEPLOY_TARGET="${DEPLOY_TARGET:-vps}" "${SCRIPT_DIR}/weltgewebe-up" "$@"
 
-if [[ "${WEB_UPSTREAM_HOST:-}" =~ ^https?:// ]]; then
-  echo "Error: WEB_UPSTREAM_HOST should not contain http:// or https:// (just the domain)."
-  exit 1
-fi
-
-if [[ ! "${WEB_UPSTREAM_URL:-}" =~ ^https:// ]]; then
-  echo "Error: WEB_UPSTREAM_URL is not set or does not start with 'https://'."
-  exit 1
-fi
-
-# --- Deployment ---
-
-# Generate robust API version tag (fallback to date if git fails or no .git)
-API_VERSION=$(git rev-parse --short HEAD 2> /dev/null || date +%F-%s)
-export API_VERSION
-echo "Deploying with API_VERSION=${API_VERSION}"
-
-# Try to pull latest images (if registry is configured)
-# If pull fails (e.g. no registry auth or local build intended), we continue to build
-echo "Pulling images..."
-docker compose -f infra/compose/compose.prod.yml pull || echo "Pull failed or images not found, proceeding to build..."
-
-# Start services (build if missing or forced by changes)
-echo "Starting services..."
-docker compose -f infra/compose/compose.prod.yml up -d --build
-
-# Cleanup unused images (Optional)
-PRUNE_IMAGES=${PRUNE_IMAGES:-0}
-
+# Preserve the one capability weltgewebe-up does not offer.
 if [ "$PRUNE_IMAGES" -eq 1 ]; then
   echo "Pruning unused images..."
   docker image prune -f
 else
   echo "Skipping image prune (set PRUNE_IMAGES=1 to enable)."
 fi
-
-echo "Deployment complete."

@@ -236,9 +236,11 @@ async fn csrf_blocks_all_mutating_endpoints_without_origin() -> Result<()> {
         .to_string();
 
     // All currently listed CSRF-relevant mutating endpoints reachable under the
-    // CSRF layer. `/auth/login` and `/auth/logout` are intentionally exempt;
-    // the magic-link request/consume entry points carry no session cookie and
-    // are therefore not listed here.
+    // CSRF layer. `/auth/logout` is intentionally exempt via a path arm in
+    // `require_csrf`; the magic-link and passkey login entry points carry no
+    // session cookie and are therefore not listed here. (There is no
+    // `/auth/login` route — the login entry points are `/auth/dev/login` and
+    // `/auth/magic-link/request`.)
     let mutating_endpoints: &[(Method, &str)] = &[
         (Method::POST, "/auth/session/refresh"),
         (Method::POST, "/auth/logout-all"),

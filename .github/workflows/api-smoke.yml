@@ -103,6 +103,10 @@ jobs:
           AUTH_RL_EMAIL_PER_HOUR: "1000"
           AUTH_RL_IP_PER_MIN: "100"
           AUTH_RL_IP_PER_HOUR: "1000"
+          # The smoke target is reached directly on loopback, with no proxy in
+          # front, so no forwarded client IP may ever be trusted. Required
+          # because per-IP rate limits are configured above.
+          AUTH_TRUSTED_PROXIES: "none"
           AUTH_LOG_MAGIC_TOKEN: "false"
           AUTH_AUTO_PROVISION: "false"
           SMTP_HOST: "127.0.0.1"

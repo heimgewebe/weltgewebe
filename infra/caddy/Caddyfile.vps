@@ -2,7 +2,12 @@
 	encode zstd gzip
 
 	handle_path /api/* {
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			# Caddy owns the client-IP chain. Never pass a public client's
+			# RFC 7239 header to an API that trusts this proxy peer.
+			header_up -Forwarded
+			header_up X-Forwarded-For {remote_host}
+		}
 	}
 
 	handle /health/proxy {
@@ -10,7 +15,12 @@
 	}
 
 	handle /health/* {
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			# Caddy owns the client-IP chain. Never pass a public client's
+			# RFC 7239 header to an API that trusts this proxy peer.
+			header_up -Forwarded
+			header_up X-Forwarded-For {remote_host}
+		}
 	}
 
 	handle_path /local-basemap/* {
@@ -73,7 +83,12 @@
 	handle /health/proxy {
 		respond 200
 	}
-	reverse_proxy api:8080
+	reverse_proxy api:8080 {
+		# Caddy owns the client-IP chain. Never pass a public client's
+		# RFC 7239 header to an API that trusts this proxy peer.
+		header_up -Forwarded
+		header_up X-Forwarded-For {remote_host}
+	}
 	header {
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
@@ -89,7 +104,12 @@ http://weltgewebe.net, http://www.weltgewebe.net {
 	}
 
 	handle_path /api/* {
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			# Caddy owns the client-IP chain. Never pass a public client's
+			# RFC 7239 header to an API that trusts this proxy peer.
+			header_up -Forwarded
+			header_up X-Forwarded-For {remote_host}
+		}
 	}
 
 	redir https://{host}{uri} 308
@@ -101,7 +121,12 @@ http://api.weltgewebe.net {
 	}
 
 	handle /health/* {
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			# Caddy owns the client-IP chain. Never pass a public client's
+			# RFC 7239 header to an API that trusts this proxy peer.
+			header_up -Forwarded
+			header_up X-Forwarded-For {remote_host}
+		}
 	}
 
 	redir https://{host}{uri} 308

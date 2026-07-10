@@ -88,7 +88,9 @@ export function ensureInertPolyfill() {
   };
   syncAll();
 
-  // Fokus-, Click- & Tastatur-Blocker
+  // Fokus-, Click- & Tastatur-Blocker.
+  // Diese Listener werden bewusst nie entfernt: Das Polyfill wird einmal pro
+  // Dokument installiert und muss für dessen gesamte Lebensdauer greifen.
   document.addEventListener(
     "focusin",
     (e) => {

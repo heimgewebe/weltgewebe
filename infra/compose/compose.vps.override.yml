@@ -10,6 +10,13 @@ services:
       AUTH_LOG_MAGIC_TOKEN: ${AUTH_LOG_MAGIC_TOKEN:-0}
       AUTH_AUTO_PROVISION: ${AUTH_AUTO_PROVISION:-1}
       AUTH_ALLOW_EMAILS: ${AUTH_ALLOW_EMAILS:-}
+      # Caddy reaches the API over the compose bridge network, so its peer address
+      # is never loopback. Without this the allowlist falls back to loopback only,
+      # X-Forwarded-For is discarded, and every client collapses into the single
+      # per-IP bucket below — a site-wide login outage for the cost of 5 requests.
+      # The API refuses to start on the unset combination; keep this next to the
+      # rate limits it makes meaningful.
+      AUTH_TRUSTED_PROXIES: ${AUTH_TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12}
       AUTH_RL_IP_PER_MIN: "5"
       AUTH_RL_IP_PER_HOUR: "30"
       AUTH_RL_EMAIL_PER_MIN: "2"

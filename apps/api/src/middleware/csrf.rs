@@ -35,7 +35,12 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         return next.run(req).await;
     }
 
-    if path.ends_with("/auth/login") || path.ends_with("/auth/logout") {
+    // Logout is deliberately exempt (see CSRF_EXEMPT_MUTATING_ROUTES in
+    // apps/api/tests/auth_security_invariants.rs): sign-out must stay reachable
+    // without the Origin/Referer path. There is no `/auth/login` route — the
+    // login entry points are `/auth/dev/login` and `/auth/magic-link/request`,
+    // and both are already covered by the no-session-cookie skip below.
+    if path.ends_with("/auth/logout") {
         return next.run(req).await;
     }
 
@@ -242,15 +247,53 @@ mod tests {
         assert_eq!(parse_host_header("[::1]"), ("[::1]".to_string(), None));
     }
 
-    #[tokio::test]
-    async fn test_exemption_logic() {
-        use axum::http::Request;
-        let req = Request::builder()
-            .uri("/auth/login")
-            .method("POST")
-            .body(Body::empty())
-            .unwrap();
-        assert!(req.uri().path().ends_with("/auth/login"));
+    /// Mirrors the exemption arm in `require_csrf`. Kept next to it so the two
+    /// cannot drift; the router-level classification is enforced separately by
+    /// `csrf_mutating_route_drift_guard_matches_router_declarations`.
+    fn is_exempt_path(path: &str) -> bool {
+        path.ends_with("/auth/logout")
+    }
+
+    #[test]
+    fn logout_is_exempt_under_both_mount_points() {
+        assert!(is_exempt_path("/auth/logout"));
+        assert!(is_exempt_path("/api/auth/logout"));
+    }
+
+    #[test]
+    fn logout_all_is_not_exempt() {
+        // `logout-all` escalates to a step-up challenge and must stay behind the
+        // Origin/Referer check. A sloppy `ends_with` must not swallow it.
+        assert!(!is_exempt_path("/auth/logout-all"));
+        assert!(!is_exempt_path("/api/auth/logout-all"));
+    }
+
+    #[test]
+    fn login_entry_points_are_not_matched_by_the_exemption_arm() {
+        // There is no `/auth/login` route. The real entry points rely on the
+        // no-session-cookie skip, not on a path exemption.
+        assert!(!is_exempt_path("/auth/dev/login"));
+        assert!(!is_exempt_path("/auth/magic-link/request"));
+    }
+
+    #[test]
+    fn magic_link_consume_post_is_exempt_only_for_post() {
+        assert!(is_magic_link_consume_post(
+            &Method::POST,
+            "/auth/magic-link/consume"
+        ));
+        assert!(is_magic_link_consume_post(
+            &Method::POST,
+            "/api/auth/magic-link/consume"
+        ));
+        assert!(!is_magic_link_consume_post(
+            &Method::PUT,
+            "/auth/magic-link/consume"
+        ));
+        assert!(!is_magic_link_consume_post(
+            &Method::POST,
+            "/auth/magic-link/consume/extra"
+        ));
     }
 
     #[test]

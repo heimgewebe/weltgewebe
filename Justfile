@@ -55,8 +55,10 @@ fmt:       # format all
 clippy:    # lint all (deny warnings)
 	cargo clippy --all-targets --all-features -- -D warnings
 
-test:      # run tests
+test:      # run tests (PostgreSQL-backed tests are skipped; see note below)
 	cargo test --all --quiet
+	@echo "note: DB-backed tests (#[ignore]) were skipped — they need a live PostgreSQL."
+	@echo "      CI runs them with --include-ignored (.github/workflows/api.yml)."
 
 check:     # quick hygiene check
 	just fmt
