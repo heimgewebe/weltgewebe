@@ -194,6 +194,30 @@ def test_validate_source_rejects_missing_required_key_without_secret_output() ->
     assert SECRET_SENTINEL not in str(exc_info.value)
 
 
+@pytest.mark.parametrize("separator", ["\x0b", "\u2028"])
+def test_source_rejects_unsupported_line_separator_without_secret_output(
+    separator: str,
+) -> None:
+    module = load_module()
+    source = valid_source(password=f"prefix{separator}{SECRET_SENTINEL}")
+
+    with pytest.raises(
+        module.ReconcileError, match="unsupported line separator"
+    ) as exc_info:
+        module.parse_env(source, label="source")
+
+    assert SECRET_SENTINEL not in str(exc_info.value)
+
+
+@pytest.mark.parametrize("separator", ["\x0b", "\u2028"])
+def test_destination_rejects_unsupported_line_separator(separator: str) -> None:
+    module = load_module()
+    destination = f"DATABASE_URL=postgres://user:pass{separator}host/db\n"
+
+    with pytest.raises(module.ReconcileError, match="unsupported line separator"):
+        module.parse_env(destination, label="destination")
+
+
 def test_validate_source_rejects_quoted_whitespace_secret() -> None:
     module = load_module()
     values = module.parse_env(valid_source(password='"   "'), label="source").values
@@ -523,6 +547,57 @@ def test_apply_is_idempotent_and_creates_no_second_backup(tmp_path: Path) -> Non
     assert len(list(backup_dir.iterdir())) == 1
 
 
+def test_read_regular_at_preserves_raw_bytes_and_rejects_no_newline_translation(
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    path = tmp_path / "raw.env"
+    original = b"KEY=one\r\nOTHER=two\r"
+    path.write_bytes(original)
+    directory_fd = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        opened = module._read_regular_at(
+            directory_fd, path.name, label="raw", require_root=False
+        )
+    finally:
+        os.close(directory_fd)
+
+    assert opened.raw_bytes == original
+    assert opened.text == original.decode("utf-8")
+
+
+def test_destination_parent_open_failure_does_not_leak_source_directory_fd(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = load_module()
+    source, destination, backup_dir = create_runtime_files(tmp_path)
+    original_open = module._open_trusted_directory
+    opened_source_fd: int | None = None
+
+    def fail_destination(path, *, label, require_root, exact_mode=None):
+        nonlocal opened_source_fd
+        if label == "source parent directory":
+            opened_source_fd = original_open(
+                path, label=label, require_root=require_root, exact_mode=exact_mode
+            )
+            return opened_source_fd
+        if label == "destination parent directory":
+            raise module.ReconcileError("injected destination parent failure")
+        return original_open(
+            path, label=label, require_root=require_root, exact_mode=exact_mode
+        )
+
+    monkeypatch.setattr(module, "_open_trusted_directory", fail_destination)
+    with pytest.raises(
+        module.ReconcileError, match="injected destination parent failure"
+    ):
+        preview(module, source, destination, backup_dir)
+
+    assert opened_source_fd is not None
+    with pytest.raises(OSError):
+        os.fstat(opened_source_fd)
+
+
 @pytest.mark.parametrize("target", ["source", "destination"])
 def test_final_file_symlink_is_rejected(tmp_path: Path, target: str) -> None:
     module = load_module()
@@ -661,7 +736,9 @@ def test_apply_revalidates_root_trust_after_lock(tmp_path: Path, monkeypatch) ->
         fake_stat = stat_with(opened.file_stat, uid=fake_uid, gid=0)
         if require_root:
             module._validate_root_owned_stat(fake_stat, label=label)
-        return module.OpenedEnv(text=opened.text, file_stat=fake_stat)
+        return module.OpenedEnv(
+            raw_bytes=opened.raw_bytes, text=opened.text, file_stat=fake_stat
+        )
 
     original_open_dir = module._open_trusted_directory
 
@@ -805,7 +882,9 @@ def test_backup_is_read_back_before_destination_replace(
         opened = original_read(parent_fd, name, label=label, require_root=require_root)
         if label == "backup":
             return module.OpenedEnv(
-                text=opened.text + "# corrupt\n", file_stat=opened.file_stat
+                raw_bytes=opened.raw_bytes + b"# corrupt\n",
+                text=opened.text + "# corrupt\n",
+                file_stat=opened.file_stat,
             )
         return opened
 

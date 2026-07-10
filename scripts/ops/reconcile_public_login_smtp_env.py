@@ -55,6 +55,7 @@ RECONCILE_MARKER = (
 PLAN_DOMAIN = b"weltgewebe-public-login-smtp-env-plan-v1\0"
 PLAN_SHA256_RE = re.compile(r"[0-9a-f]{64}")
 ASCII_PORT_RE = re.compile(r"[0-9]{1,5}")
+INVALID_LINE_CHARS = frozenset("\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029")
 TEMP_PREFIX_TEMPLATE = ".{name}.reconcile-"
 LOCK_TIMEOUT_SECONDS = 15.0
 LOCK_RETRY_SECONDS = 0.05
@@ -72,6 +73,7 @@ class EnvDocument:
 
 @dataclass(frozen=True)
 class OpenedEnv:
+    raw_bytes: bytes
     text: str
     file_stat: os.stat_result
 
@@ -92,7 +94,9 @@ def _key_from_line(raw: str) -> str | None:
 
 
 def parse_env(text: str, *, label: str) -> EnvDocument:
-    lines = tuple(text.splitlines())
+    if any(character in text for character in INVALID_LINE_CHARS):
+        raise ReconcileError(f"{label} contains an unsupported line separator")
+    lines = tuple(text.split("\n"))
     values: dict[str, str] = {}
     for raw in lines:
         key = _key_from_line(raw)
@@ -323,9 +327,10 @@ def _read_regular_at(
             raise ReconcileError(f"{label} is not a regular file")
         if require_root:
             _validate_root_owned_stat(file_stat, label=label)
-        with os.fdopen(fd, "r", encoding="utf-8", closefd=False) as handle:
-            text = handle.read()
-        return OpenedEnv(text=text, file_stat=file_stat)
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            raw_bytes = handle.read()
+        text = raw_bytes.decode("utf-8", errors="strict")
+        return OpenedEnv(raw_bytes=raw_bytes, text=text, file_stat=file_stat)
     except UnicodeDecodeError as exc:
         raise ReconcileError(f"{label} is not valid UTF-8") from exc
     finally:
@@ -442,17 +447,19 @@ def reconcile(
     if require_root and os.geteuid() != 0:
         raise ReconcileError("dry-run and apply require root")
 
-    source_dir_fd = _open_trusted_directory(
-        source.parent, label="source parent directory", require_root=require_root
-    )
-    destination_dir_fd = _open_trusted_directory(
-        destination.parent,
-        label="destination parent directory",
-        require_root=require_root,
-    )
+    source_dir_fd: int | None = None
+    destination_dir_fd: int | None = None
     backup_dir_fd: int | None = None
     lock_fd: int | None = None
     try:
+        source_dir_fd = _open_trusted_directory(
+            source.parent, label="source parent directory", require_root=require_root
+        )
+        destination_dir_fd = _open_trusted_directory(
+            destination.parent,
+            label="destination parent directory",
+            require_root=require_root,
+        )
         initial_source = _read_regular_at(
             source_dir_fd, source.name, label="source", require_root=require_root
         )
@@ -574,7 +581,7 @@ def reconcile(
         _write_file_exclusive_at(
             backup_dir_fd,
             backup_name,
-            current_destination.text.encode("utf-8"),
+            current_destination.raw_bytes,
             uid=destination_stat.st_uid,
             gid=destination_stat.st_gid,
         )
@@ -588,7 +595,7 @@ def reconcile(
             )
             backup_mode = stat.S_IMODE(verified_backup.file_stat.st_mode)
             if (
-                verified_backup.text != current_destination.text
+                verified_backup.raw_bytes != current_destination.raw_bytes
                 or verified_backup.file_stat.st_uid != destination_stat.st_uid
                 or verified_backup.file_stat.st_gid != destination_stat.st_gid
                 or backup_mode != 0o600
@@ -661,8 +668,10 @@ def reconcile(
             os.close(lock_fd)
         if backup_dir_fd is not None:
             os.close(backup_dir_fd)
-        os.close(destination_dir_fd)
-        os.close(source_dir_fd)
+        if destination_dir_fd is not None:
+            os.close(destination_dir_fd)
+        if source_dir_fd is not None:
+            os.close(source_dir_fd)
 
 
 def build_parser() -> argparse.ArgumentParser:
