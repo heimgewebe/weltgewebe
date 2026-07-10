@@ -77,7 +77,8 @@ class OpenedEnv:
 
 
 class DigestWriter(Protocol):
-    def update(self, data: bytes) -> None: ...
+    def update(self, data: bytes) -> None:
+        """Add bytes to the digest state."""
 
 
 def _key_from_line(raw: str) -> str | None:
@@ -192,7 +193,9 @@ def _update_plan_field(digest: DigestWriter, label: str, value: bytes) -> None:
     digest.update(value)
 
 
-def _stat_plan_fields(prefix: str, file_stat: os.stat_result) -> tuple[tuple[str, bytes], ...]:
+def _stat_plan_fields(
+    prefix: str, file_stat: os.stat_result
+) -> tuple[tuple[str, bytes], ...]:
     return tuple(
         (f"{prefix}_{name}", str(value).encode("ascii"))
         for name, value in (
@@ -358,6 +361,7 @@ def _write_file_exclusive_at(
             os.unlink(name, dir_fd=directory_fd)
             os.fsync(directory_fd)
         except FileNotFoundError:
+            # The entry was already absent, so no partial secret file remains.
             pass
         raise
     finally:
@@ -405,7 +409,9 @@ def _acquire_exclusive_lock(lock_fd: int) -> None:
         except BlockingIOError as exc:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise ReconcileError("timed out waiting for reconciliation lock") from exc
+                raise ReconcileError(
+                    "timed out waiting for reconciliation lock"
+                ) from exc
             time.sleep(min(LOCK_RETRY_SECONDS, remaining))
 
 
@@ -587,12 +593,15 @@ def reconcile(
                 or verified_backup.file_stat.st_gid != destination_stat.st_gid
                 or backup_mode != 0o600
             ):
-                raise ReconcileError("backup verification failed before destination replace")
+                raise ReconcileError(
+                    "backup verification failed before destination replace"
+                )
         except BaseException:
             try:
                 os.unlink(backup_name, dir_fd=backup_dir_fd)
                 os.fsync(backup_dir_fd)
             except FileNotFoundError:
+                # The backup is already absent, so rollback cleanup is complete.
                 pass
             raise
 

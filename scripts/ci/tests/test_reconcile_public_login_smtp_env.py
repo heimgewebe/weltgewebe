@@ -368,7 +368,9 @@ def test_plan_hash_binds_all_effect_paths(tmp_path: Path) -> None:
     )
     planned = module.build_reconciled_content(destination_text, selected)
 
-    def digest(source_path=source, destination_path=destination, backup_path=backup_dir):
+    def digest(
+        source_path=source, destination_path=destination, backup_path=backup_dir
+    ):
         return module.plan_sha256(
             source_path=source_path,
             destination_path=destination_path,
@@ -800,9 +802,7 @@ def test_backup_is_read_back_before_destination_replace(
     original_read = module._read_regular_at
 
     def corrupt_backup(parent_fd, name, *, label, require_root):
-        opened = original_read(
-            parent_fd, name, label=label, require_root=require_root
-        )
+        opened = original_read(parent_fd, name, label=label, require_root=require_root)
         if label == "backup":
             return module.OpenedEnv(
                 text=opened.text + "# corrupt\n", file_stat=opened.file_stat
