@@ -10,10 +10,11 @@
 
 use std::{path::PathBuf, str::FromStr};
 
+use chrono::{Duration, Utc};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use uuid::Uuid;
 
-use weltgewebe_api::auth::session::SessionOps;
+use weltgewebe_api::auth::session::{SessionLifetime, SessionOps};
 use weltgewebe_api::auth::session_db::DbSessionStore;
 
 fn direct_database_url() -> String {
@@ -132,6 +133,48 @@ async fn db_session_store_expiry_filter() {
 
     assert_eq!(sessions.len(), 1, "expired sessions must be excluded");
     assert_eq!(sessions[0].id, live.id);
+    assert!(
+        store
+            .get(&expired_id)
+            .await
+            .expect("get expired session failed")
+            .is_none(),
+        "expired sessions must not authenticate"
+    );
+    let expired_row_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE id = $1")
+            .bind(&expired_id)
+            .fetch_one(&pool)
+            .await
+            .expect("count expired session failed");
+    assert_eq!(
+        expired_row_count, 0,
+        "reading an expired session must physically remove it"
+    );
+
+    cleanup_account(&pool, &account_id).await;
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn db_session_store_uses_configured_lifetime() {
+    let pool = connect_pool().await;
+    let account_id = unique_account_id("configured-lifetime");
+    let lifetime = SessionLifetime::from_seconds(7_200).expect("valid test lifetime");
+    let store = DbSessionStore::with_lifetime(pool.clone(), lifetime);
+
+    cleanup_account(&pool, &account_id).await;
+
+    let before = Utc::now();
+    let created = store
+        .create(account_id.clone(), None)
+        .await
+        .expect("create failed");
+    let after = Utc::now();
+
+    assert!(created.expires_at >= before + Duration::seconds(7_200));
+    assert!(created.expires_at <= after + Duration::seconds(7_200));
 
     cleanup_account(&pool, &account_id).await;
     pool.close().await;
