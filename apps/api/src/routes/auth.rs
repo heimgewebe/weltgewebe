@@ -291,10 +291,10 @@ fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
         return peer.ip();
     }
 
-    // Caddy rewrites X-Forwarded-For for the upstream request, while a generic
-    // Forwarded header may have originated at the public client unless the
-    // proxy explicitly removes it. Prefer the proxy-owned chain and retain
-    // RFC 7239 only as a fallback for trusted proxies that emit no XFF.
+    // The production Caddyfiles overwrite X-Forwarded-For with the public
+    // peer address and remove any client-supplied Forwarded header before the
+    // request reaches this trusted proxy boundary. Prefer that proxy-owned XFF
+    // value and retain RFC 7239 only as a fallback for other trusted proxies.
     if let Some(xff_val) = headers.get("X-Forwarded-For").and_then(|v| v.to_str().ok()) {
         if let Some(first) = xff_val.split(',').next() {
             if let Ok(addr) = first.trim().parse::<IpAddr>() {

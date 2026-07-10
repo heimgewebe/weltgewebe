@@ -6,6 +6,7 @@
 			# Caddy owns the client-IP chain. Never pass a public client's
 			# RFC 7239 header to an API that trusts this proxy peer.
 			header_up -Forwarded
+			header_up X-Forwarded-For {remote_host}
 		}
 	}
 
@@ -18,6 +19,7 @@
 			# Caddy owns the client-IP chain. Never pass a public client's
 			# RFC 7239 header to an API that trusts this proxy peer.
 			header_up -Forwarded
+			header_up X-Forwarded-For {remote_host}
 		}
 	}
 
@@ -85,6 +87,7 @@
 		# Caddy owns the client-IP chain. Never pass a public client's
 		# RFC 7239 header to an API that trusts this proxy peer.
 		header_up -Forwarded
+		header_up X-Forwarded-For {remote_host}
 	}
 	header {
 		X-Frame-Options "DENY"
@@ -105,6 +108,7 @@ http://weltgewebe.net, http://www.weltgewebe.net {
 			# Caddy owns the client-IP chain. Never pass a public client's
 			# RFC 7239 header to an API that trusts this proxy peer.
 			header_up -Forwarded
+			header_up X-Forwarded-For {remote_host}
 		}
 	}
 
@@ -121,6 +125,7 @@ http://api.weltgewebe.net {
 			# Caddy owns the client-IP chain. Never pass a public client's
 			# RFC 7239 header to an API that trusts this proxy peer.
 			header_up -Forwarded
+			header_up X-Forwarded-For {remote_host}
 		}
 	}
 

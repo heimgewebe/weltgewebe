@@ -116,16 +116,21 @@ def test_api_refuses_undeclared_proxy_trust_under_ip_rate_limits() -> None:
 
 
 @pytest.mark.parametrize("caddyfile", (CADDY_VPS, CADDY_HEIM), ids=lambda path: path.name)
-def test_trusted_caddy_hops_strip_client_supplied_forwarded(caddyfile: Path) -> None:
+def test_trusted_caddy_hops_overwrite_client_ip_headers(caddyfile: Path) -> None:
     text = caddyfile.read_text(encoding="utf-8")
     upstream_count = text.count("reverse_proxy api:8080")
-    removal_count = text.count("header_up -Forwarded")
+    forwarded_removal_count = text.count("header_up -Forwarded")
+    xff_overwrite_count = text.count("header_up X-Forwarded-For {remote_host}")
 
     assert upstream_count > 0
-    assert removal_count == upstream_count, (
+    assert forwarded_removal_count == upstream_count, (
         f"{caddyfile.name} has {upstream_count} API proxy hops but only "
-        f"{removal_count} Forwarded removals; a public client could spoof the "
-        "effective IP at an unsanitized trusted hop"
+        f"{forwarded_removal_count} Forwarded removals"
+    )
+    assert xff_overwrite_count == upstream_count, (
+        f"{caddyfile.name} has {upstream_count} API proxy hops but only "
+        f"{xff_overwrite_count} X-Forwarded-For overwrites; Caddy would append "
+        "the real peer to a client-supplied chain and leave the left-most value spoofable"
     )
 
 
