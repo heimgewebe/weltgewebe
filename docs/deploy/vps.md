@@ -177,6 +177,24 @@ TLS, die Submission-Ports `587` und `2525` erzwingen STARTTLS. Auf anderen
 Ports verweigert die API SMTP-Authentifizierung, statt Zugangsdaten im Klartext
 zu senden.
 
+Eine bestehende Repo-lokale Runtime-Datei darf nicht vollständig über die
+kanonische Datei kopiert werden. Für die einmalige, selektive Übernahme der
+Public-Login- und SMTP-Schlüssel dient der wertredigierende Reconciler. Ohne
+`--apply` prüft er nur und verändert nichts:
+
+```bash
+sudo -n python3 scripts/ops/reconcile_public_login_smtp_env.py \
+  --source /opt/weltgewebe/.env \
+  --destination /etc/weltgewebe/weltgewebe.env \
+  --backup-dir /var/backups/weltgewebe/env \
+  --json
+```
+
+Nach erfolgreicher Vorschau wird dieselbe, gebundene Operation mit `--apply`
+ausgeführt. Sie übernimmt ausschließlich die dokumentierten Auth-/SMTP-Schlüssel,
+legt vor dem atomischen Austausch ein `0600`-Backup an und gibt keine Werte aus.
+
+
 Der VPS-Zieltyp unterscheidet sich vom historischen Heimserver-Ziel:
 
 * er nutzt `infra/compose/compose.vps.override.yml`,
