@@ -32,8 +32,9 @@ Anträge, die innerhalb der Gemeinschaft gestellt werden, sind sieben Tage lang 
 dieser aus, treten sie in Kraft. Jede Handlung ist ein Event, das öffentlich einsehbar und kryptografisch
 unveränderlich gespeichert wird ￼.
 • Freiwilligkeit & Datenschutz:
-Es werden keine Daten gesammelt, außer die, die die Teilnehmenden selbst eintragen. Keine Cookies,
-kein Tracking, keine Profilbildung. Sichtbar ist nur, was bewusst geteilt wird ￼.
+Es werden keine Werbe- oder Trackingprofile aufgebaut. Für Anmeldung und
+Sitzungserhalt verwendet das System notwendige, sichere HTTP-only-Sitzungscookies.
+Sichtbar ist nur, was bewusst geteilt wird ￼.
 • Währung = Engagement:
 Es gibt keine künstliche Währung. Das eigene - sichtbar gemachte - Engagement wirkt sich aber begünstigend
 auf die Durchbringung eigener Anträge aus.

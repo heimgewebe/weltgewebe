@@ -28,8 +28,8 @@ I. Grundprinzipien und Philosophie
 - Radikale Transparenz: Grundsätzlich sind alle Aktionen öffentlich sichtbar. Ausgenommen sind private Informationen
   im Nutzerkonto und private Nachrichten zwischen Nutzern.
 - Freiwilligkeit: Die Teilnahme am Weltgewebe erfolgt ausschließlich nach informierter Zustimmung.
-- Datenschutz (Privacy by Design): Es findet keine verdeckte Datensammlung statt, also keine Cookies, kein
-  Tracking und keine automatische Profilbildung. Sichtbar ist nur, was Nutzer bewusst eintragen, wie Name, Wohnort
+- Datenschutz (Privacy by Design): Es findet keine verdeckte Datensammlung, kein Werbetracking und keine
+  automatische Profilbildung statt. Notwendige HTTP-only-Sitzungscookies dienen ausschließlich Anmeldung und Sitzungserhalt. Sichtbar ist nur, was Nutzer bewusst eintragen, wie Name, Wohnort
   und Verbindungen. Die rechtliche Grundlage für die Datenverarbeitung bilden die
   Datenschutzgrundverordnung-Artikel 6 Abs. 1 lit. a und f.
 - Währungskonzept: Es gibt keine künstlichen Credits oder Alternativwährungen. Die eigentliche "Währung" ist

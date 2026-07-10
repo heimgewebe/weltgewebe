@@ -55,7 +55,7 @@ Es beschreibt:
   - Operative Konsequenz: Ortswebereien mit eigenem Konto + föderalen Hooks.
 - **Privacy by Design**
   - Bedeutung: Sichtbar nur freiwillig Eingetragenes.
-  - Operative Konsequenz: Keine Cookies/Tracking; Sichtbarkeit nur durch bewusst gesetzte Garnrollen-Verortung.
+  - Operative Konsequenz: Keine Werbe- oder Trackingcookies; notwendige sichere Sitzungscookies; Sichtbarkeit nur durch bewusst gesetzte Garnrollen-Verortung.
 
 ---
 
@@ -127,14 +127,14 @@ Es beschreibt:
 
 ---
 
-## 6 · Technische Leitplanken (aus techstack.md)
+## 6 · Technische Leitplanken
 
-- **Architektur:** Rust API (Axum) + SvelteKit Frontend + PostgreSQL / NATS JetStream
-  (Event-Sourcing).
-- **Monitoring:** Prometheus + Grafana + Loki + Tempo.
-- **Security:** SBOM + cosign + Key-Rotation + DSGVO-Forget-Pipeline.
-- **HA & Cost Control:** Nomad Cluster · PgBouncer · Opex-KPIs < €1 / Session.
-- **Garnrollen-Sichtbarkeit (ADR-0009):** Garnrolle auf Karte setzen + Sichtbarkeitsauswahl (ab Phase C).
+- **Aktueller Kern:** Rust/Axum-API, statisches SvelteKit-Web, Docker Compose und Caddy.
+- **Datenwahrheit:** JSONL bleibt Standard; PostgreSQL-Pfade werden einzeln und beweisgebunden umgestellt.
+- **Events und Beobachtung:** NATS sowie Prometheus-/Grafana-/Loki-/Tempo-Konfigurationen sind vorhanden, aber kein vollständiges Event-Sourcing- oder Observability-System ist allgemein produktiv belegt.
+- **Security:** sichere Sitzungen, Proxygrenze, CI-/Contract-Checks und secret-sichere Betriebsabläufe sind reale Leitplanken; SBOM, Signaturen, automatische Rotation und Forget-Pipeline bleiben gesondert nachzuweisende Ziele.
+- **Skalierung:** Compose ist der aktuelle Standard. Nomad, Kubernetes, HA-Cluster und FinOps-Ziele sind keine heutige Betriebswahrheit.
+- **Garnrollen-Sichtbarkeit:** Sichtbarkeit und Verortung sollen Eigenschaften einer Garnrolle sein; der Legacy-Modus `ron` wird separat migriert.
 
 ---
 

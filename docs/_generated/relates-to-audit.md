@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 547 |
+| Relationen gesamt | 549 |
 | — depends_on | 20 |
-| — relates_to | 523 |
+| — relates_to | 525 |
 | — supersedes | 4 |
 | relates_to Anteil | 96% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (211 Dokumente):
+**Cluster 1** (213 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -47,6 +47,7 @@ _Keine Lücken erkannt._
 - `apps/api/src/state.rs`
 - `apps/api/tests/db_domain_account_write_path.rs`
 - `apps/api/tests/db_domain_backfill.rs`
+- `architecture/overview.md`
 - `audit/impl-registry.yaml`
 - `contracts/agent/handoff.schema.json`
 - `contracts/agent/run-result.schema.json`
@@ -214,6 +215,7 @@ _Keine Lücken erkannt._
 - `infra/compose/compose.prod.override.yml`
 - `infra/compose/compose.vps.override.yml`
 - `repo.meta.yaml`
+- `runbooks/README.md`
 - `scripts/agent/check_non_ideal_task.py`
 - `scripts/agent/json_contract.py`
 - `scripts/agent/run_task.py`

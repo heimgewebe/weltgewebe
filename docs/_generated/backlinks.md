@@ -84,6 +84,12 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-backfill-proof.md
 
+## architecture/overview.md
+
+- [relates_to] docs/architekturstruktur.md
+- [relates_to] docs/datenmodell.md
+- [relates_to] docs/techstack.md
+
 ## audit/impl-registry.yaml
 
 - [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
@@ -181,7 +187,6 @@ Generated automatically. Do not edit.
 ## docs/architekturstruktur.md
 
 - [relates_to] docs/adr/ADR-0001__clean-slate-docs-monorepo.md
-- [relates_to] docs/datenmodell.md
 - [relates_to] docs/techstack.md
 - [relates_to] docs/vision.md
 - [relates_to] docs/zusammenstellung.md
@@ -333,6 +338,7 @@ Generated automatically. Do not edit.
 ## docs/deploy/README.md
 
 - [relates_to] docs/blueprints/weltgewebe.deploy.plan.md
+- [relates_to] docs/datenmodell.md
 - [relates_to] docs/deploy/CHANGELOG.md
 - [relates_to] docs/deploy/DRIFT_POLICY.md
 - [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
@@ -428,7 +434,6 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/heimserver.integration.md
 - [relates_to] docs/deploy/security.md
 - [relates_to] docs/deployment_governance.md
-- [relates_to] docs/runbook.md
 - [relates_to] docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
 
 ## docs/deployment_governance.md
@@ -926,7 +931,6 @@ Generated automatically. Do not edit.
 
 ## docs/vision.md
 
-- [relates_to] docs/architekturstruktur.md
 - [relates_to] docs/geist-und-plan.md
 - [relates_to] docs/inhalt.md
 - [relates_to] docs/overview/inhalt.md
@@ -974,6 +978,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
 - [relates_to] docs/policies/agent-reading-protocol.md
 - [relates_to] docs/policies/architecture-critique.md
+
+## runbooks/README.md
+
+- [relates_to] docs/runbook.md
 
 ## scripts/agent/check_non_ideal_task.py
 

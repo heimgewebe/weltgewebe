@@ -27,11 +27,12 @@ einen klaren Einstieg in die inhaltliche Stoßrichtung des Projekts.
 - **Transparenz herstellen:** Dokumentation, Policies und öffentlich nachvollziehbare Entscheidungen
   haben Vorrang vor reinem Feature-Output.
 
-## Projektumfang (Docs-only, Gate-Strategie)
+## Projektumfang (aktiver Aufbau)
 
-Das Repository befindet sich in Phase ADR-0001 „Docs-only“. Technische Re-Entry-Pfade sind über
-Gates A–D definiert. So bleiben Experimente nachvollziehbar und können schrittweise in den
-Produktionskontext überführt werden.
+Das Repository enthält aktive Web-, API-, Auth-, Datenbank-, Karten-, CI- und
+Deploymentpfade. Die historischen Gates A–D bleiben als Entwicklungsgeschichte
+nützlich, sind aber kein aktuelles „Docs-only“-Statuslabel. Produktreife wird pro
+vertikalem Nutzerweg und durch aktuelle Code-, CI- und Runtimebelege bewertet.
 
 ## Domänensprache
 
@@ -47,6 +48,6 @@ Die Kernelemente sind in `docs/domain/vocabulary.md` definiert und durch
 - **Fahrplan & Prozesse:** `docs/process/fahrplan.md` beschreibt Freigaben, Gates und
   Quality-Gates.
 
-> _Stand:_ Docs-only, Fokus auf Ethik, UX und transparente Entscheidungsprozesse.
+> _Stand:_ Aktiver Aufbau; Ethik, UX und transparente Entscheidungen bleiben Leitplanken.
 > Mit dem Startpunkt hier und der Systematik im Schwesterdokument erhalten Außenstehende in
 > zwei Klicks den vollständigen Projektkontext.
