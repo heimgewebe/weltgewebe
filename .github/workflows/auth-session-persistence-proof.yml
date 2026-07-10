@@ -17,8 +17,10 @@ name: Auth Session Persistence Proof
     paths:
       - "apps/api/src/auth/session.rs"
       - "apps/api/src/auth/session_db.rs"
+      - "apps/api/src/lib.rs"
       - "apps/api/src/middleware/auth.rs"
       - "apps/api/src/routes/auth.rs"
+      - "apps/api/tests/api_auth.rs"
       - "apps/api/tests/db_session_store_persistence.rs"
       - "apps/web/package.json"
       - "apps/web/pnpm-lock.yaml"
@@ -34,8 +36,10 @@ name: Auth Session Persistence Proof
     paths:
       - "apps/api/src/auth/session.rs"
       - "apps/api/src/auth/session_db.rs"
+      - "apps/api/src/lib.rs"
       - "apps/api/src/middleware/auth.rs"
       - "apps/api/src/routes/auth.rs"
+      - "apps/api/tests/api_auth.rs"
       - "apps/api/tests/db_session_store_persistence.rs"
       - "apps/web/package.json"
       - "apps/web/pnpm-lock.yaml"

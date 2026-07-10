@@ -50,7 +50,10 @@ async function openApiPage(page: Page, apiOrigin: string): Promise<void> {
   expect(response?.status(), "API readiness page must load").toBe(200);
 }
 
-async function readSession(page: Page, apiOrigin: string): Promise<SessionStatus> {
+async function readSession(
+  page: Page,
+  apiOrigin: string,
+): Promise<SessionStatus> {
   const result = await fetchInPage<SessionStatus>(
     page,
     `${apiOrigin}/auth/session`,
@@ -64,7 +67,9 @@ test.describe("Persistent Browser Session Proof", () => {
   test(
     "proves shared-profile persistence, isolation, restart, and logout propagation",
     { tag: "@proof" },
-    async ({}, testInfo) => {
+    async ({ browserName }, testInfo) => {
+      expect(browserName, "proof must execute in Chromium").toBe("chromium");
+
       const apiOrigin = testInfo.project.use.baseURL;
       if (typeof apiOrigin !== "string") {
         throw new Error("baseURL must be configured for the session proof");

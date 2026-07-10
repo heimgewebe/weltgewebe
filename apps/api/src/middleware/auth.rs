@@ -120,7 +120,6 @@ async fn normalize_session_cookie_headers(
             None => {
                 tracing::error!(
                     event = "auth.middleware.session_cookie_without_session",
-                    session_id = %cookie.value(),
                     "Refusing to emit a session cookie without a matching server session"
                 );
                 append_cookie(response, removal_session_cookie(secure));

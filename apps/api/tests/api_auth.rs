@@ -993,6 +993,42 @@ fn has_cookie_samesite_lax(cookie_header: &str) -> bool {
         })
 }
 
+fn cookie_attribute_value<'a>(cookie_header: &'a str, name: &str) -> Option<&'a str> {
+    cookie_header
+        .split(';')
+        .skip(1)
+        .map(str::trim)
+        .filter_map(|attribute| attribute.split_once('='))
+        .find_map(|(key, value)| {
+            key.trim()
+                .eq_ignore_ascii_case(name)
+                .then_some(value.trim())
+        })
+}
+
+fn assert_persistent_session_cookie(cookie_header: &str, expect_secure: bool) {
+    assert_session_cookie_secure(cookie_header, expect_secure);
+    assert_eq!(
+        cookie_attribute_value(cookie_header, "path"),
+        Some("/"),
+        "Session cookie must use profile-wide Path=/; got: {}",
+        cookie_header
+    );
+    let max_age = cookie_attribute_value(cookie_header, "max-age")
+        .and_then(|value| value.parse::<i64>().ok())
+        .expect("persistent session cookie must contain an integer Max-Age");
+    assert!(
+        max_age > 0,
+        "persistent session cookie Max-Age must be positive; got: {}",
+        cookie_header
+    );
+    assert!(
+        cookie_attribute_value(cookie_header, "expires").is_some(),
+        "persistent session cookie must contain Expires; got: {}",
+        cookie_header
+    );
+}
+
 /// Verify that Session Cookie attributes match security requirements.
 fn assert_session_cookie_secure(cookie_header: &str, expect_secure: bool) {
     // Must have httponly
@@ -1079,6 +1115,18 @@ async fn magic_link_consume_origin_null_succeeds_through_security_middleware() -
 
     assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
     assert_eq!(res_post.headers().get("location").unwrap(), "/");
+
+    let session_cookie = extract_set_cookie_header(res_post.headers(), SESSION_COOKIE_NAME)
+        .context("valid magic-link consume must create a session cookie")?;
+    assert_persistent_session_cookie(&session_cookie, true);
+
+    let nonce_cleanup = extract_set_cookie_header(res_post.headers(), NONCE_COOKIE_NAME)
+        .context("session-cookie normalization must preserve nonce cleanup")?;
+    assert_eq!(
+        cookie_attribute_value(&nonce_cleanup, "max-age"),
+        Some("0"),
+        "nonce cleanup must remain an immediate deletion cookie"
+    );
 
     let session_id = extract_cookie_value(res_post.headers(), SESSION_COOKIE_NAME)
         .context("valid magic-link consume must create a session cookie")?;
