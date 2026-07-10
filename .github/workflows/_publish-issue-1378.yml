@@ -1,0 +1,123 @@
+---
+name: Publish Issue 1378 Product Changes
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/_publish-issue-1378.yml"
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+        with:
+          ref: feat/auth-persistent-browser-sessions-1378
+          fetch-depth: 1
+
+      - name: Recreate tested product tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          lines = Path(
+              '.github/workflows/_bootstrap-issue-1378-pr.yml'
+          ).read_text().splitlines()
+          step_index = next(
+              i for i, line in enumerate(lines)
+              if line.strip() == '- name: Extract and apply implementation'
+          )
+          run_index = next(
+              i for i in range(step_index + 1, len(lines))
+              if lines[i].strip() == 'run: |'
+          )
+          block = []
+          for line in lines[run_index + 1:]:
+              if line.startswith('      - '):
+                  break
+              block.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/recreate-issue-1378.sh').write_text(
+              '\n'.join(block) + '\n'
+          )
+          PY
+          bash /tmp/recreate-issue-1378.sh
+
+      - name: Read Rust version
+        id: rust-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
+          test -n "${RUST_VERSION}"
+          printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ steps.rust-version.outputs.rust_version }}
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Validate Rust product changes
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          cargo fmt --all --check
+          cargo test --locked -p weltgewebe-api
+
+      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
+        with:
+          version: 9.11.0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: ".node-version"
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install web dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+
+      - name: Validate web and browser behavior
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          pnpm check:ci
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:proof:auth-session-browser
+
+      - name: Commit only tested product files
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git reset -- \
+            .github/workflows/_bootstrap-issue-1378.yml \
+            .github/workflows/_bootstrap-issue-1378-pr.yml \
+            .github/workflows/auth-session-browser-proof.yml \
+            build/proofs/auth-session-browser \
+            apps/web/playwright-report \
+            apps/web/test-results || true
+          git diff --cached --check
+          git diff --cached --quiet && {
+            echo "No product changes were staged" >&2
+            exit 1
+          }
+          git commit -m "feat(auth): persist browser sessions across restarts (#1378)"
+          git push origin HEAD:feat/auth-persistent-browser-sessions-1378
