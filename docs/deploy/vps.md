@@ -9,6 +9,12 @@ relations:
     target: docs/deploy/README.md
   - type: relates_to
     target: scripts/ops/check_public_live_readiness.py
+  - type: relates_to
+    target: scripts/ops/reconcile_public_login_smtp_env.py
+  - type: relates_to
+    target: scripts/ci/tests/test_reconcile_public_login_smtp_env.py
+  - type: relates_to
+    target: .github/workflows/public-login-smtp-readiness.yml
 ---
 # VPS Deployment Runbook
 
@@ -176,6 +182,77 @@ SMTP-Zugangsdaten werden nur über TLS übertragen: Port `465` nutzt implizites
 TLS, die Submission-Ports `587` und `2525` erzwingen STARTTLS. Auf anderen
 Ports verweigert die API SMTP-Authentifizierung, statt Zugangsdaten im Klartext
 zu senden.
+
+Eine bestehende Repo-lokale Runtime-Datei darf nicht vollständig über die
+kanonische Datei kopiert werden. Für die einmalige, selektive Übernahme der
+Public-Login- und SMTP-Schlüssel dient der wertredigierende Reconciler.
+Quelle, Ziel und ihre Verzeichnisse müssen root-eigen und nicht gruppen- oder
+weltbeschreibbar sein. Das Backup-Verzeichnis wird einmalig als `0700`
+vorbereitet:
+
+```bash
+sudo -n install -d -m 0700 -o root -g root /var/backups/weltgewebe/env
+```
+
+Die Vorschau läuft ebenfalls als `root` und führt dieselben Pfad-, Eigentümer-,
+Modus-, Symlink- und Inhaltsprüfungen wie der Schreibvorgang aus. Sie verändert
+keine Runtime-Datei und gibt keine Werte aus:
+
+```bash
+cd /opt/weltgewebe
+PREVIEW="$(sudo -n python3 scripts/ops/reconcile_public_login_smtp_env.py \
+  --source /opt/weltgewebe/.env \
+  --destination /etc/weltgewebe/weltgewebe.env \
+  --backup-dir /var/backups/weltgewebe/env \
+  --json)"
+printf '%s\n' "$PREVIEW"
+PLAN_SHA256="$(printf '%s\n' "$PREVIEW" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["plan_sha256"])')"
+```
+
+`--apply` akzeptiert ausschließlich den Hash dieser Vorschau. Ändert sich
+Quelle oder Ziel zwischen beiden Schritten, bricht der Vorgang vor Backup und
+Mutation ab:
+
+```bash
+sudo -n python3 scripts/ops/reconcile_public_login_smtp_env.py \
+  --source /opt/weltgewebe/.env \
+  --destination /etc/weltgewebe/weltgewebe.env \
+  --backup-dir /var/backups/weltgewebe/env \
+  --apply \
+  --expected-plan-sha256 "$PLAN_SHA256" \
+  --json
+```
+
+Die Operation übernimmt ausschließlich die dokumentierten Auth-/SMTP-Schlüssel,
+kanonisiert die Runtime-Schalter auf die von API und Mailer tatsächlich
+verstandenen Werte, legt vor dem atomischen Austausch ein bytegenaues
+`0600`-Backup an, liest dieses vor dem Austausch bytegenau zurück und gibt
+keine Secret-Werte aus. Der ausgegebene `plan_sha256` bindet Quell-, Ziel- und
+Backup-Pfad, Geräte- und Inode-Identitäten, Eigentümer, Modi, vollständigen
+Quelltext, bisherigen Zielinhalt und geplanten Zielinhalt. Dadurch kann die
+Vorschau weder auf eine andere Datei noch auf ein ausgetauschtes
+gleichlautendes File angewendet werden. Einzelne Wert-Hashes werden nicht ausgegeben. Ein bereits gehaltener
+Reconcile-Lock führt nach spätestens 15 Sekunden zu einem Fehler statt zu
+unbegrenztem Warten.
+
+### Restore der kanonischen Env-Datei
+
+Der JSON-Receipt des Apply-Schritts nennt den erzeugten Backup-Pfad. Vor einem
+Restore wird die laufende fehlerhafte Konfiguration nicht editiert, sondern das
+Backup als neue `0600`-Datei vorbereitet und atomisch eingesetzt:
+
+```bash
+BACKUP=/var/backups/weltgewebe/env/weltgewebe.env.bak-<receipt-suffix>
+sudo -n install -m 0600 -o root -g root \
+  "$BACKUP" /etc/weltgewebe/.weltgewebe.env.restore
+sudo -n mv -f \
+  /etc/weltgewebe/.weltgewebe.env.restore \
+  /etc/weltgewebe/weltgewebe.env
+```
+
+Danach wird derselbe kanonische Deploy-Pfad erneut ausgeführt und die
+Readiness geprüft. Das Backup bleibt bis zum erfolgreichen Live-Smoke erhalten.
 
 Der VPS-Zieltyp unterscheidet sich vom historischen Heimserver-Ziel:
 
