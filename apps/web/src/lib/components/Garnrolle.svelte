@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-  import { ICONS, MARKER_SIZES } from '$lib/ui/icons';
-  import { authStore } from '$lib/auth/store';
-  import { browser } from '$app/environment';
+  import { createEventDispatcher } from "svelte";
+  import { ICONS, MARKER_SIZES } from "$lib/ui/icons";
+  import { authStore } from "$lib/auth/store";
+  import { browser } from "$app/environment";
 
-  export let label = 'Kontoeinstellungen';
+  export let label = "Kontoeinstellungen";
 
   const dispatch = createEventDispatcher<{ requestZoomToOwnGarnrolle: void }>();
   let menuOpen = false;
 
   function handleZoomToOwnGarnrolle() {
     menuOpen = false;
-    dispatch('requestZoomToOwnGarnrolle');
+    dispatch("requestZoomToOwnGarnrolle");
   }
 
   function toggleMenu() {
@@ -21,7 +21,7 @@
   function closeMenu(event: MouseEvent) {
     if (!menuOpen) return;
     const target = event.target as HTMLElement;
-    if (!target.closest('.garnrolle-container')) {
+    if (!target.closest(".garnrolle-container")) {
       menuOpen = false;
     }
   }
@@ -32,7 +32,7 @@
   // event.defaultPrevented and skips its own close logic accordingly.
   function handleKeydown(event: KeyboardEvent) {
     if (!menuOpen) return;
-    if (event.key === 'Escape') {
+    if (event.key === "Escape") {
       event.preventDefault();
       menuOpen = false;
     }
@@ -62,25 +62,46 @@
     <div class="menu">
       {#if $authStore.authenticated}
         <div class="menu-header">
-          <span class="role-badge" class:admin={$authStore.role === 'admin'} class:weber={$authStore.role === 'weber'} class:gast={$authStore.role === 'gast'}>
+          <span
+            class="role-badge"
+            class:admin={$authStore.role === "admin"}
+            class:weber={$authStore.role === "weber"}
+            class:gast={$authStore.role === "gast"}
+          >
             {$authStore.role}
           </span>
         </div>
-        <button class="menu-item" on:click={handleZoomToOwnGarnrolle}>Meine Garnrolle auf Karte zeigen</button>
-        <a href="/settings" class="menu-item" on:click={() => menuOpen = false}>Einstellungen</a>
+        <button class="menu-item" on:click={handleZoomToOwnGarnrolle}
+          >Meine Garnrolle auf Karte zeigen</button
+        >
+        <a
+          href="/settings#meine-garnrolle"
+          class="menu-item"
+          on:click={() => (menuOpen = false)}>Meine Garnrolle</a
+        >
+        <a
+          href="/settings"
+          class="menu-item"
+          on:click={() => (menuOpen = false)}>Konto & Sicherheit</a
+        >
         <button class="menu-item logout-btn" on:click={logout}>Logout</button>
       {:else}
         <div class="menu-header">
           <span class="role-badge gast">gast</span>
         </div>
-        <a href="/login" class="menu-item" on:click={() => menuOpen = false}>Login</a>
+        <a href="/login" class="menu-item" on:click={() => (menuOpen = false)}
+          >Login</a
+        >
       {/if}
     </div>
   {/if}
 </div>
 
 <style>
-  .wrap { position: relative; display: inline-block; }
+  .wrap {
+    position: relative;
+    display: inline-block;
+  }
   .wrap-btn {
     background: none;
     border: none;
@@ -91,7 +112,10 @@
     outline: none;
     appearance: none;
   }
-  .wrap-btn:focus-visible { outline: 2px solid var(--primary); border-radius: 4px; }
+  .wrap-btn:focus-visible {
+    outline: 2px solid var(--primary);
+    border-radius: 4px;
+  }
 
   .roll {
     display: block;
@@ -104,7 +128,9 @@
     object-fit: contain;
     display: block;
   }
-  .roll:active { transform: scale(0.95); }
+  .roll:active {
+    transform: scale(0.95);
+  }
 
   .menu {
     position: absolute;
@@ -113,7 +139,7 @@
     background: var(--panel);
     border: 1px solid var(--panel-border);
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     min-width: 150px;
     z-index: 50;
     display: flex;
@@ -137,9 +163,18 @@
     font-size: 0.7rem;
     display: inline-block;
   }
-  .role-badge.admin { background: var(--accent); color: var(--panel); }
-  .role-badge.weber { background: #54e1a6; color: var(--panel); }
-  .role-badge.gast { background: var(--muted); color: var(--bg); }
+  .role-badge.admin {
+    background: var(--accent);
+    color: var(--panel);
+  }
+  .role-badge.weber {
+    background: #54e1a6;
+    color: var(--panel);
+  }
+  .role-badge.gast {
+    background: var(--muted);
+    color: var(--bg);
+  }
 
   .menu-item {
     display: block;

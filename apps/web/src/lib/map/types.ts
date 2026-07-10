@@ -32,23 +32,15 @@ export interface AccountBase {
   modules?: Module[];
 }
 
-export interface AccountVerortet extends AccountBase {
+export type GarnrolleMapState = "not_on_map" | "exact" | "radius";
+
+export interface Account extends AccountBase {
   type: "garnrolle";
-  mode: "verortet";
-  location?: Location; // internal (omitted in public API responses)
-  public_pos?: Location; // projected
-  radius_m: number;
+  location?: Location; // internal when available to trusted/local code
+  public_pos?: Location; // public projection used by the map
+  radius_m?: number;
+  map_state?: GarnrolleMapState;
 }
-
-export interface AccountRon extends AccountBase {
-  type: "ron";
-  mode: "ron";
-  location?: never;
-  public_pos?: never;
-  radius_m: number;
-}
-
-export type Account = AccountVerortet | AccountRon;
 
 /**
  * @deprecated MapPoint uses lat/lng (inconsistent with domain's lat/lon).
@@ -89,7 +81,7 @@ export interface MapEntityNode {
   weight?: number;
 }
 
-/** A garnrolle (located account) entity rendered on the map. */
+/** A Garnrolle entity rendered on the map when it has a public position. */
 export interface MapEntityGarnrolle {
   type: "garnrolle";
   id: string;
@@ -106,7 +98,7 @@ export interface MapEntityGarnrolle {
 /**
  * Discriminated union of all map-renderable entities.
  * The `type` field is the discriminant – it is always present and determines the variant.
- * Ron accounts are excluded because they have no position.
+ * Garnrollen without a public position are excluded from map rendering.
  */
 export type MapEntityViewModel = MapEntityNode | MapEntityGarnrolle;
 

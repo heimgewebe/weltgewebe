@@ -41,7 +41,7 @@ export const demoAccounts = [
     type: "garnrolle",
     title: "weltgewebeknoten1",
     summary: "Lokale Garnrolle / Account",
-    // Public view: Internal location is hidden. Only public_pos is exposed.
+    // Public view: only public_pos is used by the map.
     location: {
       lat: 53.5604148,
       lon: 10.0629844,
@@ -50,8 +50,8 @@ export const demoAccounts = [
       lat: 53.5604148,
       lon: 10.0629844,
     },
-    mode: "verortet" as const,
     radius_m: 0,
+    map_state: "exact" as const,
     created_at: "2025-01-01T12:00:00Z",
     tags: ["account", "garnrolle", "demo"],
     modules: [
@@ -75,7 +75,7 @@ export const demoAccounts = [
     type: "garnrolle",
     title: "PrivateSpinner (Fuzzed)",
     summary: "Account with fuzziness enabled",
-    // Public view: internal location would be different, but here we only show the projected public_pos
+    // Public view: only the projected public_pos is shown.
     location: {
       lat: 53.561,
       lon: 10.063,
@@ -84,21 +84,20 @@ export const demoAccounts = [
       lat: 53.561,
       lon: 10.063,
     },
-    mode: "verortet" as const,
     radius_m: 250,
+    map_state: "radius" as const,
     created_at: "2025-01-01T12:00:00Z",
     tags: ["account", "garnrolle", "demo", "fuzzed"],
     modules: [],
   },
   {
     id: "00000000-0000-0000-0000-000000000003",
-    type: "ron",
-    title: "Rolle ohne Namen",
-    summary: "Ein Account ohne individuelle Verortung",
-    mode: "ron" as const,
-    radius_m: 0,
+    type: "garnrolle",
+    title: "Garnrolle noch nicht auf der Karte",
+    summary: "Ein Account mit Garnrolle, aber ohne öffentliche Kartenposition.",
+    map_state: "not_on_map" as const,
     created_at: "2025-01-01T12:00:00Z",
-    tags: ["account", "ron", "demo"],
+    tags: ["account", "garnrolle", "not-on-map", "demo"],
     modules: [],
   },
 ];
