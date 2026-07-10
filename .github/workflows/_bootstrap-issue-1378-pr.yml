@@ -83,6 +83,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          CARGO_TERM_COLOR: never
         run: |
           set +e
           {
@@ -93,13 +94,41 @@ jobs:
           rust_rc=$?
           set -e
           if [ "${rust_rc}" -ne 0 ]; then
-            {
-              printf '## Rust-Diagnose\n\n'
-              printf 'Parser, Compiler oder Tests melden:\n\n```text\n'
-              tail -n 100 /tmp/issue-1378-rust.log
-              printf '\n```\n'
-            } > /tmp/issue-1378-rust-comment.md
-            gh pr comment 1386 --body-file /tmp/issue-1378-rust-comment.md
+            python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          text = Path('/tmp/issue-1378-rust.log').read_text(errors='replace')
+          text = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', text)
+          lines = text.splitlines()
+          markers = re.compile(
+              r'(^error(?:\[|:)|panicked at|\bFAILED\b|^failures:|could not compile|test result: FAILED)',
+              re.IGNORECASE,
+          )
+          hits = [i for i, line in enumerate(lines) if markers.search(line)]
+          if hits:
+              chosen = []
+              seen = set()
+              for hit in hits[-6:]:
+                  for idx in range(max(0, hit - 4), min(len(lines), hit + 14)):
+                      if idx not in seen:
+                          seen.add(idx)
+                          chosen.append((idx, lines[idx]))
+              chosen.sort()
+              excerpt = '\n'.join(line for _, line in chosen[-100:])
+          else:
+              excerpt = '\n'.join(lines[-80:])
+          body = (
+              '## Rust-Diagnose\n\n'
+              'Parser, Compiler oder Tests melden kompakt:\n\n```text\n'
+              f'{excerpt}\n'
+              '```\n'
+          )
+          Path('/tmp/issue-1378-rust-comment.md').write_text(body)
+          PY
+            gh api repos/heimgewebe/weltgewebe/issues/comments/4933719203 \
+              --method PATCH \
+              --raw-field body="$(cat /tmp/issue-1378-rust-comment.md)" >/dev/null
             exit "${rust_rc}"
           fi
 
