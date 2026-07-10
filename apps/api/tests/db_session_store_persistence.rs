@@ -10,6 +10,7 @@
 
 use std::{path::PathBuf, str::FromStr};
 
+use chrono::{Duration, Utc};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use uuid::Uuid;
 
@@ -306,6 +307,29 @@ async fn db_session_store_touch() {
         after_debounce.last_active > baseline_from_db.last_active,
         "touch after debounce window must advance last_active"
     );
+
+    cleanup_account(&pool, &account_id).await;
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn db_session_store_honors_configured_ttl() {
+    let pool = connect_pool().await;
+    let account_id = unique_account_id("configured-ttl");
+    let ttl_seconds = 2 * 60 * 60;
+    let store = DbSessionStore::with_ttl_seconds(pool.clone(), ttl_seconds);
+
+    cleanup_account(&pool, &account_id).await;
+    let before = Utc::now();
+    let created = store
+        .create(account_id.clone(), None)
+        .await
+        .expect("create failed");
+    let after = Utc::now();
+
+    assert!(created.expires_at >= before + Duration::seconds(ttl_seconds));
+    assert!(created.expires_at <= after + Duration::seconds(ttl_seconds));
 
     cleanup_account(&pool, &account_id).await;
     pool.close().await;

@@ -204,6 +204,7 @@ mod tests {
             auth_public_login: false,
             app_base_url: None,
             auth_trusted_proxies: None,
+            auth_session_ttl_seconds: crate::config::DEFAULT_AUTH_SESSION_TTL_SECONDS,
             auth_allow_emails: None,
             auth_allow_email_domains: None,
             auth_auto_provision: false,

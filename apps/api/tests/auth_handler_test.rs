@@ -45,6 +45,7 @@ mod tests {
             auth_public_login: true, // Enabled
             app_base_url: Some("http://localhost".to_string()),
             auth_trusted_proxies: None,
+            auth_session_ttl_seconds: weltgewebe_api::config::DEFAULT_AUTH_SESSION_TTL_SECONDS,
             auth_allow_emails: None,
             auth_allow_email_domains: None,
             auth_auto_provision: false,

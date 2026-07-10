@@ -169,9 +169,12 @@ pub async fn run() -> anyhow::Result<()> {
     let sessions = match (db_pool_configured, db_pool.as_ref()) {
         (true, Some(pool)) => {
             tracing::info!("Session store backed by PostgreSQL database");
-            crate::auth::session::SessionBackend::new(crate::auth::session_db::DbSessionStore::new(
-                pool.clone(),
-            ))
+            crate::auth::session::SessionBackend::new(
+                crate::auth::session_db::DbSessionStore::with_ttl_seconds(
+                    pool.clone(),
+                    app_config.auth_session_ttl_seconds,
+                ),
+            )
         }
         (true, None) => {
             return Err(anyhow!(
@@ -180,7 +183,9 @@ pub async fn run() -> anyhow::Result<()> {
         }
         (false, _) => {
             tracing::info!("Session store in-memory (database not configured)");
-            crate::auth::session::SessionBackend::new_in_memory()
+            crate::auth::session::SessionBackend::new_in_memory_with_ttl_seconds(
+                app_config.auth_session_ttl_seconds,
+            )
         }
     };
     let challenges = crate::auth::challenges::ChallengeStore::new();

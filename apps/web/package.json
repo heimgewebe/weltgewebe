@@ -56,7 +56,8 @@
     "preci": "pnpm run generate:basemap-config",
     "ci": "node ../../ci/scripts/assert-web-budget.mjs && pnpm lint && pnpm check:ci",
     "dev:cs": "node scripts/generate-version.js --client && pnpm run generate:basemap-config && vite dev --host 0.0.0.0 --port 5173",
-    "preview:cs": "vite preview --host 0.0.0.0 --port 4173"
+    "preview:cs": "vite preview --host 0.0.0.0 --port 4173",
+    "test:proof:auth-session-browser": "playwright test --config=playwright.session.proof.config.ts --reporter=dot,html,junit"
   },
   "devDependencies": {
     "@opentelemetry/api": "^1.9.1",

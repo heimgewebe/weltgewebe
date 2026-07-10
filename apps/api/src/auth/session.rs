@@ -1,4 +1,4 @@
-use crate::auth::lock::RwLockRecover;
+use crate::{auth::lock::RwLockRecover, config::DEFAULT_AUTH_SESSION_TTL_SECONDS};
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -31,9 +31,16 @@ pub enum SessionBackendError {
 
 pub type SessionResult<T> = Result<T, SessionBackendError>;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct SessionStore {
     store: Arc<RwLock<HashMap<String, Session>>>,
+    ttl: Duration,
+}
+
+impl Default for SessionStore {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait]
@@ -76,6 +83,10 @@ impl SessionBackend {
         Self::new(SessionStore::new())
     }
 
+    pub fn new_in_memory_with_ttl_seconds(ttl_seconds: i64) -> Self {
+        Self::new(SessionStore::with_ttl_seconds(ttl_seconds))
+    }
+
     pub async fn create(
         &self,
         account_id: String,
@@ -111,8 +122,14 @@ impl SessionBackend {
 
 impl SessionStore {
     pub fn new() -> Self {
+        Self::with_ttl_seconds(DEFAULT_AUTH_SESSION_TTL_SECONDS)
+    }
+
+    pub fn with_ttl_seconds(ttl_seconds: i64) -> Self {
+        assert!(ttl_seconds > 0, "session TTL must be positive");
         Self {
             store: Arc::new(RwLock::new(HashMap::new())),
+            ttl: Duration::seconds(ttl_seconds),
         }
     }
 
@@ -128,7 +145,7 @@ impl SessionStore {
         let session_id = Uuid::new_v4().to_string();
         let device_id = existing_device_id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let now = Utc::now();
-        let expires_at = now + Duration::days(1);
+        let expires_at = now + self.ttl;
 
         let session = Session {
             id: session_id.clone(),
@@ -331,17 +348,28 @@ mod tests {
     }
 
     #[test]
-    fn session_expires_at_is_approximately_one_day() {
+    fn session_expires_at_uses_default_persistent_lifetime() {
         let store = SessionStore::new();
         let before = Utc::now();
         let session = store.create("account-1".to_string(), None);
         let after = Utc::now();
 
-        let expected_min = before + Duration::days(1);
-        let expected_max = after + Duration::days(1);
+        let expected_min = before + Duration::seconds(DEFAULT_AUTH_SESSION_TTL_SECONDS);
+        let expected_max = after + Duration::seconds(DEFAULT_AUTH_SESSION_TTL_SECONDS);
 
         assert!(session.expires_at >= expected_min);
         assert!(session.expires_at <= expected_max);
+    }
+
+    #[test]
+    fn session_expires_at_honors_configured_lifetime() {
+        let store = SessionStore::with_ttl_seconds(2 * 60 * 60);
+        let before = Utc::now();
+        let session = store.create("account-1".to_string(), None);
+        let after = Utc::now();
+
+        assert!(session.expires_at >= before + Duration::hours(2));
+        assert!(session.expires_at <= after + Duration::hours(2));
     }
 
     #[test]

@@ -195,6 +195,14 @@ impl PasskeyCredentialSource {
     }
 }
 
+pub const DEFAULT_AUTH_SESSION_TTL_SECONDS: i64 = 30 * 24 * 60 * 60;
+pub const MIN_AUTH_SESSION_TTL_SECONDS: i64 = 60 * 60;
+pub const MAX_AUTH_SESSION_TTL_SECONDS: i64 = 90 * 24 * 60 * 60;
+
+fn default_auth_session_ttl_seconds() -> i64 {
+    DEFAULT_AUTH_SESSION_TTL_SECONDS
+}
+
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
     pub fade_days: u32,
@@ -234,6 +242,10 @@ pub struct AppConfig {
     pub app_base_url: Option<String>,
     #[serde(default)]
     pub auth_trusted_proxies: Option<String>,
+    /// Lifetime of an authenticated browser session. The same value drives
+    /// server-side expiry; the cookie is derived from the concrete session.
+    #[serde(default = "default_auth_session_ttl_seconds")]
+    pub auth_session_ttl_seconds: i64,
 
     // Entry Policy Configuration
     #[serde(default)]
@@ -371,6 +383,14 @@ impl AppConfig {
                 self.auth_trusted_proxies = Some(val.to_string());
             }
         }
+        if let Ok(val) = env::var("AUTH_SESSION_TTL_SECONDS") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.auth_session_ttl_seconds = val.parse::<i64>().with_context(|| {
+                    format!("AUTH_SESSION_TTL_SECONDS must be an integer, got '{val}'")
+                })?;
+            }
+        }
 
         // Entry Policy Overrides
         if let Ok(val) = env::var("AUTH_ALLOW_EMAILS") {
@@ -500,6 +520,17 @@ impl AppConfig {
     }
 
     fn validate(self) -> Result<Self> {
+        if !(MIN_AUTH_SESSION_TTL_SECONDS..=MAX_AUTH_SESSION_TTL_SECONDS)
+            .contains(&self.auth_session_ttl_seconds)
+        {
+            anyhow::bail!(
+                "AUTH_SESSION_TTL_SECONDS must be between {} and {} seconds, got {}",
+                MIN_AUTH_SESSION_TTL_SECONDS,
+                MAX_AUTH_SESSION_TTL_SECONDS,
+                self.auth_session_ttl_seconds
+            );
+        }
+
         // OPT-ARC-001 Phase E-A: PostgreSQL account-create writes require the
         // PostgreSQL read source. Writing account creates to PostgreSQL while
         // reading accounts from JSONL would persist writes that are invisible
@@ -1825,5 +1856,36 @@ passkey_credential_source: postgres
             .to_string()
             .contains("passkey_credential_source=postgres requires domain_read_source=postgres"));
         Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_session_ttl_defaults_to_thirty_days() -> Result<()> {
+        let _ttl = EnvGuard::unset("AUTH_SESSION_TTL_SECONDS");
+        let cfg = AppConfig::load_from_str(YAML)?;
+        assert_eq!(cfg.auth_session_ttl_seconds, 30 * 24 * 60 * 60);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_session_ttl_env_override_is_applied() -> Result<()> {
+        let _ttl = EnvGuard::set("AUTH_SESSION_TTL_SECONDS", "7200");
+        let cfg = AppConfig::load_from_str(YAML)?;
+        assert_eq!(cfg.auth_session_ttl_seconds, 7200);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_session_ttl_rejects_invalid_or_out_of_range_values() {
+        let _ttl = EnvGuard::set("AUTH_SESSION_TTL_SECONDS", "not-a-number");
+        let err = AppConfig::load_from_str(YAML).expect_err("invalid TTL must fail closed");
+        assert!(err.to_string().contains("must be an integer"));
+        drop(_ttl);
+
+        let _ttl = EnvGuard::set("AUTH_SESSION_TTL_SECONDS", "3599");
+        let err = AppConfig::load_from_str(YAML).expect_err("too-short TTL must fail closed");
+        assert!(err.to_string().contains("must be between"));
     }
 }

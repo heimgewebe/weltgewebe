@@ -3,17 +3,24 @@ use sqlx::{postgres::PgRow, PgPool, Row};
 use uuid::Uuid;
 
 use super::session::{Session, SessionBackendError, SessionOps, SessionResult};
+use crate::config::DEFAULT_AUTH_SESSION_TTL_SECONDS;
 
 /// Database-backed session store for direct PostgreSQL persistence.
 /// Sessions created here survive across server restarts.
 #[derive(Clone)]
 pub struct DbSessionStore {
     pool: PgPool,
+    ttl_seconds: i64,
 }
 
 impl DbSessionStore {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self::with_ttl_seconds(pool, DEFAULT_AUTH_SESSION_TTL_SECONDS)
+    }
+
+    pub fn with_ttl_seconds(pool: PgPool, ttl_seconds: i64) -> Self {
+        assert!(ttl_seconds > 0, "session TTL must be positive");
+        Self { pool, ttl_seconds }
     }
 
     fn session_from_row(row: PgRow) -> Result<Session, sqlx::Error> {
@@ -39,12 +46,13 @@ impl SessionOps for DbSessionStore {
         let device_id = existing_device_id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let row = sqlx::query(
             "INSERT INTO sessions (id, account_id, device_id, created_at, last_active, expires_at)
-             VALUES ($1, $2, $3, NOW(), NOW(), NOW() + INTERVAL '1 day')
+             VALUES ($1, $2, $3, NOW(), NOW(), NOW() + make_interval(secs => $4))
              RETURNING id, account_id, device_id, created_at, last_active, expires_at",
         )
         .bind(&session_id)
         .bind(&account_id)
         .bind(&device_id)
+        .bind(self.ttl_seconds as f64)
         .fetch_one(&self.pool)
         .await
         .map_err(|_| SessionBackendError::Unavailable)?;
