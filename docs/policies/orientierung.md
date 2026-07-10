@@ -55,7 +55,7 @@ Es beschreibt:
   - Operative Konsequenz: Ortswebereien mit eigenem Konto + föderalen Hooks.
 - **Privacy by Design**
   - Bedeutung: Sichtbar nur freiwillig Eingetragenes.
-  - Operative Konsequenz: Keine Cookies/Tracking; RoN-System für Anonymität.
+  - Operative Konsequenz: Keine Cookies/Tracking; Sichtbarkeit nur durch bewusst gesetzte Garnrollen-Verortung.
 
 ---
 
@@ -78,7 +78,7 @@ Es beschreibt:
 - **7-Tage-Verblassen** → nicht verzwirnte Fäden/Knoten lösen sich auf.
 - **7 + 7-Tage-Modell** → Anträge: Einspruch → Abstimmung.
 - **Delegation (Liquid Democracy)** → verfällt nach 4 Wochen Inaktivität.
-- **RoN-System** → anonymisierte Beiträge nach gewählter Frist.
+- **Tombstone-/Anonymisierungsprozess** → Beiträge verlieren nach gewählter Frist die sichtbare Rückbindung an die Garnrolle.
 
 ---
 
@@ -87,7 +87,7 @@ Es beschreibt:
 - Sichtbarkeit (`fade_days`)
   - Richtwert: 7 Tage laut zusammenstellung.md.
   - Herkunft: Funktionsbeschreibung, nicht Code.
-- Identität (`ron_alias_valid_days`)
+- Anonymisierung (`anonymization_valid_days`)
   - Richtwert: 28 Tage (Delegations-Analogon).
   - Herkunft: Geist & Plan-Ableitung.
 - Anonymisierung (`default_anonymized`)
@@ -120,9 +120,9 @@ Es beschreibt:
   - Dauer: 24 h.
   - Sichtbarkeit: eingeklappt.
   - Trigger: Moderations-Vote.
-- RoN-Anonymisierung
+- Tombstone-/Anonymisierungsprozess
   - Dauer: variable x Tage.
-  - Sichtbarkeit: „Rolle ohne Namen“.
+  - Sichtbarkeit: ohne sichtbare Rückbindung an die ursprüngliche Garnrolle.
   - Trigger: User-Opt-in.
 
 ---
@@ -134,7 +134,7 @@ Es beschreibt:
 - **Monitoring:** Prometheus + Grafana + Loki + Tempo.
 - **Security:** SBOM + cosign + Key-Rotation + DSGVO-Forget-Pipeline.
 - **HA & Cost Control:** Nomad Cluster · PgBouncer · Opex-KPIs < €1 / Session.
-- **Privacy UI (ADR-0003):** RoN-Toggle + Ungenauigkeitsradius-Slider (ab Phase C).
+- **Garnrollen-Sichtbarkeit (ADR-0009):** Garnrolle auf Karte setzen + Sichtbarkeitsauswahl (ab Phase C).
 
 ---
 
@@ -144,8 +144,8 @@ Es beschreibt:
 2. **Partizipative Interface-Metaphern:** Rollen drehen, Fäden fließen – Verantwortung wird
    sichtbar.
 3. **Reversible Aktionen:** Alles ist änder- oder verzwirnbar, aber nicht heimlich.
-4. **Privacy Controls Front and Center:** Slider / Toggles direkt im Profil.
-5. **Lokale Sichtbarkeit:** Zoom ≈ Vertraulichkeit; Ungenauigkeit nimmt mit Distanz zu.
+4. **Sichtbarkeitskontrollen direkt im Profil:** Noch nicht auf Karte, exakt sichtbar, im Umkreis sichtbar.
+5. **Lokale Sichtbarkeit:** Sichtbarkeit wird bewusst gewählt; Distanz- und Umkreislogik bleibt nachvollziehbar.
 6. **Keine versteckte Gamification:** Engagement wird nicht bewertet, nur sichtbar gemacht.
 
 ---

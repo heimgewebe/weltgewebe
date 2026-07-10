@@ -17,12 +17,13 @@ Generated automatically. Do not edit.
 | adr.0043-edge-vs-conversation | ADR-0043 — Edge vs. Conversation | reference | active | docs/adr/0043-edge-vs-conversation.md |
 | adr.ADR-0001__clean-slate-docs-monorepo | ADR-0001 — Clean Slate und Docs-Monorepo | reference | active | docs/adr/ADR-0001__clean-slate-docs-monorepo.md |
 | adr.ADR-0002__reentry-kriterien | ADR-0002 — Reentry-Kriterien | reference | active | docs/adr/ADR-0002__reentry-kriterien.md |
-| adr.ADR-0003__privacy-ungenauigkeitsradius-ron | ADR-0003 — Privacy-Ungenauigkeitsradius und RoN | reference | active | docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md |
+| adr.ADR-0003__privacy-ungenauigkeitsradius-ron | ADR-0003 — Historisches Privacy- und Startzustandsmodell | reference | superseded | docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md |
 | adr.ADR-0004__fahrplan-verweis | ADR-0004 — Fahrplan-Verweis | reference | active | docs/adr/ADR-0004__fahrplan-verweis.md |
 | adr.ADR-0005-auth | ADR-0005 — Auth (Cookie-basierte Sessions) | reference | active | docs/adr/ADR-0005-auth.md |
 | adr.ADR-0006-auth-magic-link-session-passkey | ADR-0006 — Auth: Magic Link, Session und optionaler Passkey | reference | active | docs/adr/ADR-0006__auth-magic-link-session-passkey.md |
 | adr.ADR-0007-auth-persistence-production-db-path | ADR-0007 — Auth-Persistenz Produktionspfad: Direkter PostgreSQL-Zugriff statt PgBouncer | reference | accepted | docs/adr/ADR-0007__auth-persistence-production-db-path.md |
 | adr.ADR-0008-domain-mail-provider-boundaries | ADR-0008 — Domain-, Mail- und SMTP-Providergrenzen | reference | accepted | docs/adr/ADR-0008__domain-mail-provider-boundaries.md |
+| adr.ADR-0009__garnrolle-verortung-sichtbarkeit | ADR-0009 — Garnrolle, Verortung und Sichtbarkeit | reference | active | docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md |
 | blueprint-doc-structure-task-control | Weltgewebe Dokumentationsstruktur und Task-Steuerung | blueprint | draft | docs/blueprints/doc-structure-task-control.md |
 | blueprint-doc-structure-task-control-examples | Dokumentationsstruktur und Task-Steuerung Beispiele | reference | draft | docs/blueprints/doc-structure-task-control-examples.md |
 | blueprint-doc-structure-task-control-roadmap | Dokumentationsstruktur und Task-Steuerung Roadmap | roadmap | draft | docs/blueprints/doc-structure-task-control-roadmap.md |
@@ -38,12 +39,13 @@ Generated automatically. Do not edit.
 | deploy.README | Deployment-Übersicht | reference | active | docs/deploy/README.md |
 | deploy.domain-mail-migration-ionos-inwx-mailbox-brevo | Architektur & Historie: Domain-/Mail-Migration IONOS zu INWX | reference | active | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md |
 | deploy.heim-first-phase0 | Heim-First Phase 0 | reference | active | docs/deploy/heim-first-phase0.md |
-| deploy.heimserver.deployment | Heimserver Deployment | reference | active | docs/deploy/heimserver.deployment.md |
-| deploy.heimserver.integration | Heimserver Integration | reference | active | docs/deploy/heimserver.integration.md |
+| deploy.heimserver.deployment | Heimserver Deployment | reference | deprecated | docs/deploy/heimserver.deployment.md |
+| deploy.heimserver.integration | Heimserver Integration | reference | deprecated | docs/deploy/heimserver.integration.md |
 | deploy.public-app-base-url | Public APP_BASE_URL Contract | reference | active | docs/deploy/public-app-base-url.md |
 | deploy.secondary-domain-web-surfaces | Sekundäre Domain-Webflächen | reference | active | docs/deploy/secondary-domain-web-surfaces.md |
 | deploy.security | Deploy Security | architecture | active | docs/deploy/security.md |
 | deploy.vps | VPS-Deployment | reference | active | docs/deploy/vps.md |
+| deploy.vps-db-initialization-boundary | VPS DB Initialization Boundary | runbook | active | docs/deploy/vps-db-initialization-boundary.md |
 | deploy.vps-http-route-smoke | VPS HTTP Route Smoke | runbook | draft | docs/deploy/vps-http-route-smoke.md |
 | deploy.vps-http-route-smoke-risks | VPS HTTP Route Smoke Risks | note | draft | docs/deploy/vps-http-route-smoke-risks.md |
 | deploy.vps-http-smoke | VPS HTTP Smoke Preflight | runbook | draft | docs/deploy/vps-http-smoke.md |
@@ -81,8 +83,8 @@ Generated automatically. Do not edit.
 | edge.systemd.README | Edge Systemd | reference | active | docs/edge/systemd/README.md |
 | geist-und-plan | Geist und Plan | reference | active | docs/geist-und-plan.md |
 | inhalt | Inhalt | reference | active | docs/inhalt.md |
-| konzepte.garnrolle | Garnrolle | reference | deprecated | docs/konzepte/garnrolle.md |
-| konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen | concept | active | docs/konzepte/garnrolle-und-verortung.md |
+| konzepte.garnrolle | Garnrolle | concept | superseded | docs/konzepte/garnrolle.md |
+| konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Verortung und Sichtbarkeit | concept | active | docs/konzepte/garnrolle-und-verortung.md |
 | map-architekturkritik | Architekturkritik Map-Implementierung | report | active | docs/reports/map-architekturkritik.md |
 | map-basemap-proof-gap-reconciliation | MAP-PROOF-001 — Basemap Proof Gap Reconciliation | report | active | docs/reports/map-basemap-proof-gap-reconciliation.md |
 | map-blaupause | Basemap-Architektur-Blaupause | blueprint | active | docs/blueprints/map-blaupause.md |
@@ -155,8 +157,8 @@ Generated automatically. Do not edit.
 | specs.auth-ui | Auth UI Spec | reference | active | docs/specs/auth-ui.md |
 | specs.contract | Datenvertrag | reference | active | docs/specs/contract.md |
 | specs.list-pagination-api | List Pagination API Spec | reference | active | docs/specs/list-pagination-api.md |
-| specs.privacy-api | Privacy API | reference | active | docs/specs/privacy-api.md |
-| specs.privacy-ui | Privacy UI | reference | active | docs/specs/privacy-ui.md |
+| specs.privacy-api | Garnrollen-Sichtbarkeit API | reference | active | docs/specs/privacy-api.md |
+| specs.privacy-ui | Garnrollen-Sichtbarkeit UI | reference | active | docs/specs/privacy-ui.md |
 | tasks.board | Weltgewebe Task Board | task-board | active | docs/tasks/board.md |
 | tasks.readme | Task-Control – Einstieg | guide | active | docs/tasks/README.md |
 | ui-blaupause | Weltgewebe UI-Blaupause | blueprint | canonical | docs/blueprints/ui-blaupause.md |

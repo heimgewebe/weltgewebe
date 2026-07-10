@@ -1,18 +1,100 @@
 ---
 id: specs.privacy-api
-title: Privacy API
+title: Garnrollen-Sichtbarkeit API
 doc_type: reference
 status: active
-summary: API-Spezifikation für datenschutzrelevante Endpunkte.
+summary: API-Zielbild für Verortung und öffentliche Sichtbarkeit einer Garnrolle.
 relations:
   - type: relates_to
     target: docs/specs/privacy-ui.md
   - type: relates_to
     target: docs/konzepte/garnrolle-und-verortung.md
+  - type: relates_to
+    target: docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 ---
-# Privacy API (ADR-0003)
 
-GET/PUT /me/visibility { radius_m } für verortete Garnrollen.
-Das Modell nutzt `mode: "verortet" | "ron"` als basalen Identitätsmodus anstelle eines nachträglichen RoN-Toggles oder visibility-Flags (`private`/`approximate`/`public`).
-View: public_role_view (id, public_pos, mode, radius_m).
-Bei `mode=ron` bleibt `public_pos` im individuellen Account leer (None); die spätere öffentliche Wirksamkeit/Projektion erfolgt kollektiv über die Rolle ohne Namen des Stadtteils.
+# Garnrollen-Sichtbarkeit API
+
+Diese Spezifikation beschreibt das Zielbild für die API rund um Verortung und
+öffentliche Sichtbarkeit einer Garnrolle.
+
+Der Pfadname bleibt vorerst aus Kompatibilitätsgründen bestehen. Fachlich geht
+es nicht um einen Privacy-Modus, sondern um eine klare Sichtbarkeitsentscheidung
+für eine Garnrolle.
+
+## Zielzustand
+
+Ein Account hat genau eine Garnrolle. Diese Garnrolle kann ohne öffentliche
+Position existieren oder auf die Karte gesetzt werden.
+
+Zielstruktur:
+
+```text
+garnrolle.location = null
+```
+
+oder:
+
+```text
+garnrolle.location = {
+  address,
+  coordinates,
+  public_visibility: "exact" | "radius",
+  radius_m
+}
+```
+
+## Öffentliche Projektion
+
+Die öffentliche Ansicht darf nur die gewählte Sichtbarkeit zeigen:
+
+| Sichtbarkeit | Öffentliche Projektion |
+|---|---|
+| keine Position | keine `public_pos` |
+| exakt sichtbar | `public_pos = coordinates` |
+| im Umkreis sichtbar | `public_pos` aus Radius-Projektion |
+
+Die interne Adresse und die exakten Koordinaten bleiben getrennt von der
+öffentlichen Projektion, sofern nicht exakt sichtbare Anzeige gewählt wurde.
+
+## Zielendpunkte
+
+Die endgültigen Namen sind noch offen. Semantisch braucht das System:
+
+```text
+GET /me/garnrolle
+PUT /me/garnrolle/profile
+PUT /me/garnrolle/location
+DELETE /me/garnrolle/location
+```
+
+`PUT /me/garnrolle/location` setzt die Garnrolle auf die Karte oder ändert ihre
+Sichtbarkeit.
+
+Beispiel exakt sichtbar:
+
+```json
+{
+  "address": "Poelsweg 2, Hamburg",
+  "coordinates": { "lat": 53.558..., "lon": 10.060... },
+  "public_visibility": "exact"
+}
+```
+
+Beispiel im Umkreis sichtbar:
+
+```json
+{
+  "address": "Poelsweg 2, Hamburg",
+  "coordinates": { "lat": 53.558..., "lon": 10.060... },
+  "public_visibility": "radius",
+  "radius_m": 250
+}
+```
+
+## Übergangsnotiz
+
+Bestehende technische Felder in API, Datenbank oder Fixtures dürfen bis zur
+Migration weiter gelesen werden. Neue Zielsemantik darf daraus aber keine
+zweite Accountart ableiten. Sie projiziert die Daten in eine Garnrolle mit
+Sichtbarkeitszustand.

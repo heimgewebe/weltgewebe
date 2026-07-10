@@ -29,7 +29,7 @@ Weltgewebe benötigt ein Authentifizierungsmodell, das:
 - wiederkehrende Nutzung ohne Reibung erlaubt
 - sichere Recovery garantiert
 - nicht auf Passwörtern basiert
-- mit dem RoN-Startmodus kompatibel ist
+- mit einer noch nicht auf der Karte stehenden Garnrolle kompatibel ist
 
 Das bisher implizite Modell (Magic Link) ist als alleinige Lösung für den Alltag nicht ausreichend.
 Es zwingt zu wiederholter Interaktion und erzeugt Reibung.
@@ -64,7 +64,7 @@ Zweck:
 ## Prinzipien
 
 - Kein Passwort als primärer Auth-Faktor
-- Authentifizierung ist getrennt vom Identitätsmodus (RoN vs. verortet)
+- Authentifizierung ist getrennt von Garnrollen-Verortung und öffentlicher Sichtbarkeit
 - Recovery muss immer möglich bleiben
 - Sicherheit wird kontextuell erhöht (Step-up Auth)
 
@@ -77,7 +77,7 @@ Zweck:
 - Jede sensitive Aktion erfordert zwingend Step-up Auth.
   Ein Step-up-Magic-Link ist strikt aktionsgebunden und session-neutral.
 - Auth (Wie komme ich rein?) ist strikt getrennt vom Identitätsmodus.
-  Der Identitätsmodus beantwortet die Frage, ob ein Nutzer RoN oder verortet ist.
+  Die Garnrollen-Sichtbarkeit beantwortet die Frage, ob und wie eine Garnrolle auf der Karte sichtbar ist.
 
 ## Zustandsmodell
 
@@ -131,9 +131,9 @@ Das System basiert auf folgenden expliziten Zuständen:
   - Mailänderung
   - sicherheitskritischen Aktionen
 
-## Zusammenhang mit RoN
+## Zusammenhang mit Garnrollen-Sichtbarkeit
 
-RoN ist ein Identitätsmodus, kein Authentifizierungsmechanismus.
+Garnrollen-Sichtbarkeit ist kein Authentifizierungsmechanismus.
 
 Das Auth-System beeinflusst nicht:
 

@@ -1,22 +1,29 @@
 ---
 id: konzepte.garnrolle
 title: Garnrolle
-doc_type: reference
-status: deprecated
-summary: Veraltetes Dokument. Bitte docs/konzepte/garnrolle-und-verortung.md nutzen.
+status: superseded
+doc_type: concept
+summary: >
+  Historisches Kurzkonzept zur Garnrolle. Das aktive Zielmodell steht in
+  docs/konzepte/garnrolle-und-verortung.md.
 relations:
   - type: relates_to
     target: docs/konzepte/garnrolle-und-verortung.md
 ---
-# Garnrolle (Veraltet)
 
-> **Hinweis:** Dieses Dokument ist **veraltet**. Das Modell wurde grundlegend vereinfacht.
-> Bitte konsumiere ausschließlich das neue kanonische Konzept unter:
-> [Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen](./garnrolle-und-verortung.md)
+# Garnrolle
 
-Die alte Logik von `visibility` (public/private/approximate) und dem nachträglichen `ron_flag` (Rolle ohne Namen als Toggle) wurde durch ein striktes Zwei-Modi-Modell abgelöst:
+Dieses Kurzkonzept ist als Zielmodell abgelöst.
 
-- **Verortete Garnrolle** (mit exakter interner Adresse und einem Ungenauigkeitsradius für die öffentliche Anzeige)
-- **Rolle ohne Namen (RoN)** (kanonischer Einstiegsmodus ohne Personenangaben und ohne individuelle Verortung/`location`)
+Das aktive Zielmodell steht in:
 
-Für die aktuellen technischen Schnittstellen und Entscheidungen siehe [ADR-0003](../adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md).
+> [Weltgewebe – Garnrolle, Verortung und Sichtbarkeit](./garnrolle-und-verortung.md)
+
+Kanonisch gilt jetzt:
+
+- Jeder Account hat genau eine Garnrolle.
+- Eine Garnrolle kann beschrieben werden.
+- Eine Garnrolle kann auf die Karte gesetzt werden.
+- Eine Garnrolle kann exakt sichtbar oder im Umkreis sichtbar sein.
+- Aus einer Garnrolle heraus werden Knoten gewoben.
+- Zwischen Garnrollen und Knoten entstehen Fäden.

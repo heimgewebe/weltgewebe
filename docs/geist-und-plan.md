@@ -190,7 +190,7 @@ Extraktion: Geist der Weltweberei
   offene Abstimmungen.
 - Freiheit plus Absicherung: Jeder kann Ressourcen freigeben oder Aktionen starten, Anträge werden
   nur blockiert, wenn Widerspruch entsteht.
-- Datenschutz: Privacy by Design, RoN-System für Anonymisierung, Ungenauigkeitsradien für Ortsdaten.
+- Sichtbarkeit: Privacy by Design, freiwillige Garnrollen-Verortung und klare Auswahl zwischen exakt sichtbar, im Umkreis sichtbar oder noch nicht auf der Karte.
 
 ⸻
 
@@ -204,7 +204,7 @@ Extraktion: Plan der Weltweberei
    - Gewebekonto: Finanzverwaltung, sichtbar als Goldfäden.
    - Webrat: Governance-Ort für Anträge, Abstimmungen, Delegationen.
    - Nähstübchen: Allgemeine Kommunikation.
-   - RoN-Platzhalter: Sammelstelle für anonymisierte Inhalte.
+   - Archiv-/Tombstone-Knoten: Sammelstelle für gelöschte oder anonymisierte Inhalte ohne Rückbindung an eine sichtbare Garnrolle.
 3. Zeitlichkeit und Prozesse
    - Sieben-Sekunden-Sichtbarkeit bei Aktionen.
    - Sieben-Tage-Timer für Fäden, Knoten, Anträge.

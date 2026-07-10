@@ -34,4 +34,4 @@ stabile, versionierte Referenz auf diesen kanonischen Speicherort und vermeidet 
 
 ## Siehe auch
 
-- [ADR-0003 — Privacy: Ungenauigkeitsradius & RoN-Platzhalterrolle (v1)](ADR-0003__privacy-ungenauigkeitsradius-ron.md)
+- [ADR-0009 — Garnrolle, Verortung und Sichtbarkeit](ADR-0009__garnrolle-verortung-sichtbarkeit.md)

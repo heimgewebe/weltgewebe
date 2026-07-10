@@ -1,46 +1,96 @@
 ---
 id: specs.privacy-ui
-title: Privacy UI
+title: Garnrollen-Sichtbarkeit UI
 doc_type: reference
 status: active
-summary: UI-Spezifikation für datenschutzrelevante Oberflächen und Interaktionen.
+summary: UI-Zielbild für Profil, Verortung und öffentliche Sichtbarkeit der eigenen Garnrolle.
 relations:
   - type: relates_to
     target: docs/specs/privacy-api.md
   - type: relates_to
     target: docs/konzepte/garnrolle-und-verortung.md
+  - type: relates_to
+    target: docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 ---
-# Privacy UI (ADR-0003)
 
-Slider (r Meter) für verortete Garnrollen.
+# Garnrollen-Sichtbarkeit UI
 
-## Startzustand
+Diese UI-Spezifikation ersetzt die frühere Privacy-Modus-Sprache durch eine
+Garnrollen-Handlung:
 
-Beim ersten Einstieg (Onboarding neuer Accounts) befindet sich der Nutzer im RoN-Startmodus.
+> Garnrolle auf die Karte setzen.
 
-Die UI muss sichtbar machen:
+## Start nach Login
 
-- aktuellen Zustand (RoN)
-- Bedeutung dieses Zustands
-- Möglichkeit zur Verortung
+Nach dem Login sieht der Nutzer seine Garnrolle.
 
-## Übergang
+Empfohlener Text:
 
-Die Verortung wird angeboten als:
+```text
+Deine Garnrolle ist angelegt.
+Sie steht noch nicht auf der Karte.
+```
 
-→ „Verortete Garnrolle erstellen“
+Primäre Aktionen:
 
-Dabei wird erklärt:
+- Garnrolle beschreiben
+- Garnrolle auf Karte setzen
+- später: ersten Knoten weben
 
-- welche Daten benötigt werden
-- wie der Ungenauigkeitsradius wirkt
-- dass die interne Verortung exakt bleibt
+## Garnrolle beschreiben
+
+Felder:
+
+- Anzeigename
+- Kurzbeschreibung
+- Fähigkeiten
+- Güter
+- Interessen
+- Tags
+
+Die Beschreibung ist zuerst ein Profilakt, keine Kartenentscheidung.
+
+## Garnrolle auf Karte setzen
+
+Die UI fragt nach:
+
+- Adresse
+- Koordinate oder Adressauflösung
+- Sichtbarkeit
+
+Sichtbarkeitsauswahl:
+
+```text
+[ ] Noch nicht auf der Karte
+[x] Exakt sichtbar
+[ ] Im Umkreis sichtbar
+```
+
+Nur bei "Im Umkreis sichtbar" wird ein Radiusfeld angezeigt.
+
+## Exakte Sichtbarkeit
+
+Exakte Sichtbarkeit ist positiv zu formulieren:
+
+```text
+Deine Garnrolle wird an dieser Adresse sichtbar. Menschen in der Nähe können
+sehen, wo du im Gewebe ansprechbar bist.
+```
+
+Nicht als Warntext formulieren.
 
 ## Nicht erlaubt
 
-- versteckte Defaults ohne Anzeige
-- nachträglicher RoN-Toggle
-- Vermischung von Identität und Sichtbarkeit
+- Identitätsmodus-Auswahl im Onboarding
+- Privacy-Toggle als Accountart
+- technische Feldnamen in der Haupt-UI
+- Standardwarnung gegen exakte Sichtbarkeit
+- Kanten- oder Edge-Sprache in Nutzertexten
 
-Texte: Sicherer Einstieg im RoN-Startzustand ist Standard; Verortung ist optional und bewusst.
-Vorschau public_pos.
+## Nächster Schritt
+
+Nach einer gesetzten Garnrolle wird der erste produktive Call-to-Action:
+
+```text
+Ersten Knoten weben
+```

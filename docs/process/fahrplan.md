@@ -16,7 +16,7 @@ relations:
 
 - ADR-0001 (Clean Slate & Monorepo)
 - ADR-0002 (Re-Entry-Kriterien)
-- ADR-0003 (Privacy: Ungenauigkeitsradius & RoN)
+- ADR-0009 (Garnrolle, Verortung und Sichtbarkeit)
 
 ## Prinzipien: mobile-first, audit-ready, klein schneiden, Metriken vor Features
 
@@ -215,11 +215,11 @@ relations:
 
 ---
 
-## Phase C (Woche 5–6): **Privacy-UI (ADR-0003) & 7-Tage-Verblassen**
+## Phase C (Woche 5–6): **Garnrollen-Sichtbarkeit (ADR-0009) & 7-Tage-Verblassen**
 
-- UI: **Ungenauigkeitsradius-Slider** + **RoN-Toggle** (Profil-State; Fake-Persist).
+- UI: **Garnrolle auf Karte setzen** + Sichtbarkeitsauswahl (noch nicht auf der Karte, exakt sichtbar, im Umkreis sichtbar; Fake-Persist).
 - Zeitleiste wirkt auf Sichtbarkeit (Fäden/Knoten blenden weich aus; Client-seitig).
-- `public_pos` im View-Modell (Fake-Backend oder Local-Derivation).
+- `public_pos` als öffentliche Projektion der gewählten Garnrollen-Sichtbarkeit (Fake-Backend oder Local-Derivation).
 
 **Akzeptanz:** Vorschau der öffentlichen Position reagiert; Zeitleiste verhält sich wie
 spezifiziert.
@@ -230,7 +230,7 @@ spezifiziert.
 
 - API: echte Writes für Rolle/Faden in PG; Outbox-Write (noch ohne NATS-Relay).
 - Worker-Stub: CLI liest Outbox und füllt Read-Model `public_role_view`.
-- Web: liest Read-Model, zeigt `public_pos`, respektiert RoN-Flag.
+- Web: liest Read-Model, zeigt `public_pos` gemäß Garnrollen-Sichtbarkeit.
 
 **Akzeptanz:** Neustart-fest; nach Write→Read-Model erscheint korrekte `public_pos`.
 

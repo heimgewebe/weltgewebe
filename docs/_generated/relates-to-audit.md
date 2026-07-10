@@ -14,10 +14,10 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 531 |
+| Relationen gesamt | 544 |
 | — depends_on | 20 |
-| — relates_to | 508 |
-| — supersedes | 3 |
+| — relates_to | 520 |
+| — supersedes | 4 |
 | relates_to Anteil | 96% |
 
 ### Mögliche supersedes-Lücken
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (204 Dokumente):
+**Cluster 1** (208 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -62,6 +62,7 @@ _Keine Lücken erkannt._
 - `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
 - `docs/adr/ADR-0007__auth-persistence-production-db-path.md`
 - `docs/adr/ADR-0008__domain-mail-provider-boundaries.md`
+- `docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md`
 - `docs/architekturstruktur.md`
 - `docs/blueprints/agent-operability-blaupause.md`
 - `docs/blueprints/auth-persistence-runtime-proof.md`
@@ -97,6 +98,7 @@ _Keine Lücken erkannt._
 - `docs/deploy/public-app-base-url.md`
 - `docs/deploy/secondary-domain-web-surfaces.md`
 - `docs/deploy/security.md`
+- `docs/deploy/vps-db-initialization-boundary.md`
 - `docs/deploy/vps-http-route-smoke-risks.md`
 - `docs/deploy/vps-http-route-smoke.md`
 - `docs/deploy/vps-http-smoke.md`
@@ -233,6 +235,8 @@ _Keine Lücken erkannt._
 - `scripts/docmeta/validate_report_lifecycle.py`
 - `scripts/guard/basemap-runtime-proof.sh`
 - `scripts/guard/domain-single-instance-guard.sh`
+- `scripts/ops/check_public_live_readiness.py`
+- `scripts/ops/check_vps_db_migration_history_shape.py`
 - `scripts/ops/check_vps_migration_safe_runtime_env.py`
 - `scripts/tests/test_domain_single_instance_guard.sh`
 - `tests/fixtures/agent/handoff-valid.json`
