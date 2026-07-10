@@ -61,6 +61,8 @@ impl SessionOps for DbSessionStore {
     ) -> SessionResult<Session> {
         let session_id = Uuid::new_v4().to_string();
         let device_id = existing_device_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        // SAFETY: the only interpolated fragment is the trusted module constant;
+        // all account/session values remain parameter-bound below.
         let query = format!(
             "INSERT INTO sessions (id, account_id, device_id, created_at, last_active, expires_at)
              VALUES ($1, $2, $3, NOW(), NOW(),
@@ -80,6 +82,12 @@ impl SessionOps for DbSessionStore {
     }
 
     async fn get(&self, session_id: &str) -> SessionResult<Option<Session>> {
+        // PostgreSQL executes the data-modifying CTE exactly once. Referencing
+        // it from the SELECT makes that side effect explicit; concurrent readers
+        // remain safe under MVCC because a losing DELETE yields an empty CTE and
+        // the expiry predicate still prevents the stale row from being returned.
+        // SAFETY: the only interpolated fragment is the trusted module constant;
+        // the session id remains parameter-bound below.
         let query = format!(
             "WITH expired AS (
                  DELETE FROM sessions
@@ -130,6 +138,8 @@ impl SessionOps for DbSessionStore {
     }
 
     async fn list_by_account(&self, account_id: &str) -> SessionResult<Vec<Session>> {
+        // SAFETY: the only interpolated fragment is the trusted module constant;
+        // the account id remains parameter-bound below.
         let query = format!(
             "SELECT {SESSION_COLUMNS_WITH_REMAINING_LIFETIME}
              FROM sessions

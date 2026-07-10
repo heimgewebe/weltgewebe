@@ -78,6 +78,8 @@ fn test_state() -> Result<ApiState> {
         domain_edge_write_source: weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
         passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
         auth_public_login: false,
+        auth_cookie_secure: weltgewebe_api::config::auth_cookie_secure_env_override()
+            .unwrap_or(true),
         app_base_url: None,
         auth_trusted_proxies: None,
         auth_allow_emails: None,
@@ -5259,7 +5261,11 @@ async fn session_cookie_insecure_when_auth_cookie_secure_disabled() -> Result<()
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
+    assert!(!state.config.auth_cookie_secure);
 
+    // Runtime environment changes after state construction must not change the
+    // cookie scope mid-flight. All auth paths use the captured config value.
+    let _runtime_flip = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
     let app = app(state.clone());
 
     // Seed token directly for consume-path proof.
@@ -5270,8 +5276,11 @@ async fn session_cookie_insecure_when_auth_cookie_secure_disabled() -> Result<()
     let req_get = Request::get(&uri).body(body::Body::empty())?;
     let res_get = app.clone().oneshot(req_get).await?;
 
-    let nonce_val = extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME)
+    let nonce_header = extract_set_cookie_header(res_get.headers(), NONCE_COOKIE_NAME)
         .context("nonce cookie not set")?;
+    assert_session_cookie_secure(&nonce_header, false);
+    let nonce_val = extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME)
+        .context("nonce cookie value not set")?;
     let (_, nonce) = nonce_val.split_once('.').context("invalid nonce format")?;
 
     // POST consume

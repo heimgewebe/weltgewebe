@@ -42,6 +42,8 @@ fn test_state_open_reg() -> Result<ApiState> {
         passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
 
         auth_public_login: true,
+        auth_cookie_secure: weltgewebe_api::config::auth_cookie_secure_env_override()
+            .unwrap_or(true),
         app_base_url: Some("http://localhost".to_string()),
         auth_trusted_proxies: None,
 

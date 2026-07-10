@@ -29,17 +29,13 @@ pub struct AuthContext {
     pub expires_at: Option<DateTime<Utc>>,
 }
 
-fn secure_session_cookies() -> bool {
-    std::env::var("AUTH_COOKIE_SECURE")
-        .map(|value| value != "0" && !value.eq_ignore_ascii_case("false"))
-        .unwrap_or(true)
-}
-
 fn persistent_session_cookie(session: &Session, secure: bool) -> Cookie<'static> {
     // Max-Age starts when the browser receives the response, while the database
     // expiry clock has already advanced. Expire the browser cookie five minutes
     // earlier so normal request/proxy latency cannot let it outlive the server
-    // session. Both attributes remain derived from the stored expires_at value.
+    // session. A session in its final five minutes therefore receives a removal
+    // cookie intentionally: the browser contract expires conservatively before
+    // the server contract. Both attributes derive from the stored expires_at.
     let remaining_seconds = session
         .cookie_max_age_seconds()
         .saturating_sub(SESSION_COOKIE_EXPIRY_SAFETY_SECONDS)
@@ -137,7 +133,7 @@ async fn normalize_session_cookie_headers(
     }
 
     response.headers_mut().remove(SET_COOKIE);
-    let secure = secure_session_cookies();
+    let secure = state.config.auth_cookie_secure;
     let mut saw_session_cookie = false;
     let mut session_cookie_count = 0_u8;
     let mut normalized_session_cookie = None;
@@ -340,7 +336,7 @@ pub async fn auth_middleware(
     if clear_session_cookie && !saw_session_cookie {
         append_cookie(
             &mut response,
-            removal_session_cookie(secure_session_cookies()),
+            removal_session_cookie(state.config.auth_cookie_secure),
         );
     }
 
