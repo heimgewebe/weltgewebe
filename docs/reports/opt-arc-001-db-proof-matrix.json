@@ -73,9 +73,9 @@
       "test": "apps/api/tests/db_domain_account_write_path.rs",
       "report": "docs/reports/domain-account-write-path-proof.md",
       "ci_evidence": {
-        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/29108586744",
-        "run_id": 29108586744,
-        "commit": "55372ef4f461ea3bfa353e687239e0d3d7bddb26",
+        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/29113201426",
+        "run_id": 29113201426,
+        "commit": "494abe72e59c8061955f7657fe1899c50122d7d3",
         "job": "db-domain-account-write-path-proof"
       },
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_account_write_path -- --include-ignored --test-threads=1"
@@ -90,9 +90,9 @@
       "test": "apps/api/tests/db_domain_node_write_path.rs",
       "report": "docs/reports/domain-node-write-path-proof.md",
       "ci_evidence": {
-        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/29108586744",
-        "run_id": 29108586744,
-        "commit": "55372ef4f461ea3bfa353e687239e0d3d7bddb26",
+        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/29113201426",
+        "run_id": 29113201426,
+        "commit": "494abe72e59c8061955f7657fe1899c50122d7d3",
         "job": "db-domain-node-write-path-proof"
       },
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1"
@@ -107,9 +107,9 @@
       "test": "apps/api/tests/db_domain_edge_write_path.rs",
       "report": "docs/reports/domain-edge-write-path-proof.md",
       "ci_evidence": {
-        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/29108586744",
-        "run_id": 29108586744,
-        "commit": "55372ef4f461ea3bfa353e687239e0d3d7bddb26",
+        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/29113201426",
+        "run_id": 29113201426,
+        "commit": "494abe72e59c8061955f7657fe1899c50122d7d3",
         "job": "db-domain-edge-write-path-proof"
       },
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_edge_write_path -- --include-ignored --test-threads=1"
