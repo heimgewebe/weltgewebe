@@ -1,0 +1,816 @@
+---
+name: Bootstrap Issue 1378
+
+"on":
+  push:
+    branches:
+      - feat/auth-persistent-browser-sessions-1378
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+        with:
+          ref: feat/auth-persistent-browser-sessions-1378
+
+      - name: Apply implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import json
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one occurrence, found {count}: {old[:100]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          def replace_all_checked(path: str, old: str, new: str, expected: int) -> None:
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(f"{path}: expected {expected} occurrences, found {count}: {old!r}")
+              p.write_text(text.replace(old, new))
+
+          # Central, startup-validated session lifetime.
+          replace_once(
+              "apps/api/src/config.rs",
+              "#[derive(Debug, Clone, Deserialize, PartialEq)]\npub struct AppConfig {",
+              "pub const DEFAULT_AUTH_SESSION_TTL_SECONDS: i64 = 30 * 24 * 60 * 60;\n"
+              "pub const MIN_AUTH_SESSION_TTL_SECONDS: i64 = 60 * 60;\n"
+              "pub const MAX_AUTH_SESSION_TTL_SECONDS: i64 = 90 * 24 * 60 * 60;\n\n"
+              "fn default_auth_session_ttl_seconds() -> i64 {\n"
+              "    DEFAULT_AUTH_SESSION_TTL_SECONDS\n"
+              "}\n\n"
+              "#[derive(Debug, Clone, Deserialize, PartialEq)]\n"
+              "pub struct AppConfig {",
+          )
+          replace_once(
+              "apps/api/src/config.rs",
+              "    #[serde(default)]\n    pub auth_trusted_proxies: Option<String>,\n",
+              "    #[serde(default)]\n    pub auth_trusted_proxies: Option<String>,\n"
+              "    /// Lifetime of an authenticated browser session. The same value drives\n"
+              "    /// server-side expiry; the cookie is derived from the concrete session.\n"
+              "    #[serde(default = \"default_auth_session_ttl_seconds\")]\n"
+              "    pub auth_session_ttl_seconds: i64,\n",
+          )
+          replace_once(
+              "apps/api/src/config.rs",
+              "        if let Ok(val) = env::var(\"AUTH_TRUSTED_PROXIES\") {\n"
+              "            let val = val.trim();\n"
+              "            if !val.is_empty() {\n"
+              "                self.auth_trusted_proxies = Some(val.to_string());\n"
+              "            }\n"
+              "        }\n",
+              "        if let Ok(val) = env::var(\"AUTH_TRUSTED_PROXIES\") {\n"
+              "            let val = val.trim();\n"
+              "            if !val.is_empty() {\n"
+              "                self.auth_trusted_proxies = Some(val.to_string());\n"
+              "            }\n"
+              "        }\n"
+              "        if let Ok(val) = env::var(\"AUTH_SESSION_TTL_SECONDS\") {\n"
+              "            let val = val.trim();\n"
+              "            if !val.is_empty() {\n"
+              "                self.auth_session_ttl_seconds = val.parse::<i64>().with_context(|| {\n"
+              "                    format!(\"AUTH_SESSION_TTL_SECONDS must be an integer, got '{val}'\")\n"
+              "                })?;\n"
+              "            }\n"
+              "        }\n",
+          )
+          replace_once(
+              "apps/api/src/config.rs",
+              "    fn validate(self) -> Result<Self> {\n",
+              "    fn validate(self) -> Result<Self> {\n"
+              "        if !(MIN_AUTH_SESSION_TTL_SECONDS..=MAX_AUTH_SESSION_TTL_SECONDS)\n"
+              "            .contains(&self.auth_session_ttl_seconds)\n"
+              "        {\n"
+              "            anyhow::bail!(\n"
+              "                \"AUTH_SESSION_TTL_SECONDS must be between {} and {} seconds, got {}\",\n"
+              "                MIN_AUTH_SESSION_TTL_SECONDS,\n"
+              "                MAX_AUTH_SESSION_TTL_SECONDS,\n"
+              "                self.auth_session_ttl_seconds\n"
+              "            );\n"
+              "        }\n\n",
+          )
+
+          replace_once(
+              "configs/app.defaults.yml",
+              "delegation_expire_days: 28\n",
+              "delegation_expire_days: 28\nauth_session_ttl_seconds: 2592000\n",
+          )
+          replace_once(
+              ".env.example",
+              "# Cookie security (set to 0 only if accessing via HTTP locally)\nAUTH_COOKIE_SECURE=1\n",
+              "# Cookie security (set to 0 only if accessing via HTTP locally)\nAUTH_COOKIE_SECURE=1\n"
+              "# Persistent browser session lifetime: 30 days (bounded to 1 hour..90 days)\n"
+              "AUTH_SESSION_TTL_SECONDS=2592000\n",
+          )
+          replace_once(
+              "infra/compose/compose.core.yml",
+              "      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-1}\n",
+              "      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-1}\n"
+              "      AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-2592000}\n",
+          )
+
+          # In-memory sessions use the configured lifetime.
+          replace_once(
+              "apps/api/src/auth/session.rs",
+              "use crate::auth::lock::RwLockRecover;\n",
+              "use crate::{\n"
+              "    auth::lock::RwLockRecover,\n"
+              "    config::DEFAULT_AUTH_SESSION_TTL_SECONDS,\n"
+              "};\n",
+          )
+          replace_once(
+              "apps/api/src/auth/session.rs",
+              "#[derive(Clone, Default)]\npub struct SessionStore {\n    store: Arc<RwLock<HashMap<String, Session>>>,\n}\n",
+              "#[derive(Clone)]\n"
+              "pub struct SessionStore {\n"
+              "    store: Arc<RwLock<HashMap<String, Session>>>,\n"
+              "    ttl: Duration,\n"
+              "}\n\n"
+              "impl Default for SessionStore {\n"
+              "    fn default() -> Self {\n"
+              "        Self::new()\n"
+              "    }\n"
+              "}\n",
+          )
+          replace_once(
+              "apps/api/src/auth/session.rs",
+              "    pub fn new() -> Self {\n"
+              "        Self {\n"
+              "            store: Arc::new(RwLock::new(HashMap::new())),\n"
+              "        }\n"
+              "    }\n",
+              "    pub fn new() -> Self {\n"
+              "        Self::with_ttl_seconds(DEFAULT_AUTH_SESSION_TTL_SECONDS)\n"
+              "    }\n\n"
+              "    pub fn with_ttl_seconds(ttl_seconds: i64) -> Self {\n"
+              "        assert!(ttl_seconds > 0, \"session TTL must be positive\");\n"
+              "        Self {\n"
+              "            store: Arc::new(RwLock::new(HashMap::new())),\n"
+              "            ttl: Duration::seconds(ttl_seconds),\n"
+              "        }\n"
+              "    }\n",
+          )
+          replace_once(
+              "apps/api/src/auth/session.rs",
+              "        let expires_at = now + Duration::days(1);\n",
+              "        let expires_at = now + self.ttl;\n",
+          )
+          replace_once(
+              "apps/api/src/auth/session.rs",
+              "    pub fn new_in_memory() -> Self {\n"
+              "        Self::new(SessionStore::new())\n"
+              "    }\n",
+              "    pub fn new_in_memory() -> Self {\n"
+              "        Self::new(SessionStore::new())\n"
+              "    }\n\n"
+              "    pub fn new_in_memory_with_ttl_seconds(ttl_seconds: i64) -> Self {\n"
+              "        Self::new(SessionStore::with_ttl_seconds(ttl_seconds))\n"
+              "    }\n",
+          )
+          replace_once(
+              "apps/api/src/auth/session.rs",
+              "    fn session_expires_at_is_approximately_one_day() {\n"
+              "        let store = SessionStore::new();\n"
+              "        let before = Utc::now();\n"
+              "        let session = store.create(\"account-1\".to_string(), None);\n"
+              "        let after = Utc::now();\n\n"
+              "        let expected_min = before + Duration::days(1);\n"
+              "        let expected_max = after + Duration::days(1);\n\n"
+              "        assert!(session.expires_at >= expected_min);\n"
+              "        assert!(session.expires_at <= expected_max);\n"
+              "    }\n",
+              "    fn session_expires_at_uses_default_persistent_lifetime() {\n"
+              "        let store = SessionStore::new();\n"
+              "        let before = Utc::now();\n"
+              "        let session = store.create(\"account-1\".to_string(), None);\n"
+              "        let after = Utc::now();\n\n"
+              "        let expected_min = before + Duration::seconds(DEFAULT_AUTH_SESSION_TTL_SECONDS);\n"
+              "        let expected_max = after + Duration::seconds(DEFAULT_AUTH_SESSION_TTL_SECONDS);\n\n"
+              "        assert!(session.expires_at >= expected_min);\n"
+              "        assert!(session.expires_at <= expected_max);\n"
+              "    }\n\n"
+              "    #[test]\n"
+              "    fn session_expires_at_honors_configured_lifetime() {\n"
+              "        let store = SessionStore::with_ttl_seconds(2 * 60 * 60);\n"
+              "        let before = Utc::now();\n"
+              "        let session = store.create(\"account-1\".to_string(), None);\n"
+              "        let after = Utc::now();\n\n"
+              "        assert!(session.expires_at >= before + Duration::hours(2));\n"
+              "        assert!(session.expires_at <= after + Duration::hours(2));\n"
+              "    }\n",
+          )
+
+          # PostgreSQL sessions use the same configured lifetime.
+          replace_once(
+              "apps/api/src/auth/session_db.rs",
+              "use super::session::{Session, SessionBackendError, SessionOps, SessionResult};\n",
+              "use super::session::{Session, SessionBackendError, SessionOps, SessionResult};\n"
+              "use crate::config::DEFAULT_AUTH_SESSION_TTL_SECONDS;\n",
+          )
+          replace_once(
+              "apps/api/src/auth/session_db.rs",
+              "pub struct DbSessionStore {\n    pool: PgPool,\n}\n",
+              "pub struct DbSessionStore {\n"
+              "    pool: PgPool,\n"
+              "    ttl_seconds: i64,\n"
+              "}\n",
+          )
+          replace_once(
+              "apps/api/src/auth/session_db.rs",
+              "    pub fn new(pool: PgPool) -> Self {\n"
+              "        Self { pool }\n"
+              "    }\n",
+              "    pub fn new(pool: PgPool) -> Self {\n"
+              "        Self::with_ttl_seconds(pool, DEFAULT_AUTH_SESSION_TTL_SECONDS)\n"
+              "    }\n\n"
+              "    pub fn with_ttl_seconds(pool: PgPool, ttl_seconds: i64) -> Self {\n"
+              "        assert!(ttl_seconds > 0, \"session TTL must be positive\");\n"
+              "        Self { pool, ttl_seconds }\n"
+              "    }\n",
+          )
+          replace_once(
+              "apps/api/src/auth/session_db.rs",
+              "             VALUES ($1, $2, $3, NOW(), NOW(), NOW() + INTERVAL '1 day')\n",
+              "             VALUES ($1, $2, $3, NOW(), NOW(), NOW() + make_interval(secs => $4))\n",
+          )
+          replace_once(
+              "apps/api/src/auth/session_db.rs",
+              "        .bind(&device_id)\n        .fetch_one(&self.pool)\n",
+              "        .bind(&device_id)\n"
+              "        .bind(self.ttl_seconds as f64)\n"
+              "        .fetch_one(&self.pool)\n",
+          )
+
+          # Runtime wiring passes the validated value to both backends.
+          replace_once(
+              "apps/api/src/lib.rs",
+              "            crate::auth::session::SessionBackend::new(crate::auth::session_db::DbSessionStore::new(\n"
+              "                pool.clone(),\n"
+              "            ))\n",
+              "            crate::auth::session::SessionBackend::new(\n"
+              "                crate::auth::session_db::DbSessionStore::with_ttl_seconds(\n"
+              "                    pool.clone(),\n"
+              "                    app_config.auth_session_ttl_seconds,\n"
+              "                ),\n"
+              "            )\n",
+          )
+          replace_once(
+              "apps/api/src/lib.rs",
+              "            crate::auth::session::SessionBackend::new_in_memory()\n",
+              "            crate::auth::session::SessionBackend::new_in_memory_with_ttl_seconds(\n"
+              "                app_config.auth_session_ttl_seconds,\n"
+              "            )\n",
+          )
+
+          # Session cookies derive Max-Age and Expires from the real server-side expiry.
+          replace_once(
+              "apps/api/src/routes/auth.rs",
+              "use time::Duration;\n",
+              "use time::{Duration, OffsetDateTime};\n",
+          )
+          replace_once(
+              "apps/api/src/routes/auth.rs",
+              "    if let Some(age) = max_age {\n"
+              "        builder = builder.max_age(age);\n"
+              "    }\n\n"
+              "    builder.build()\n"
+              "}\n",
+              "    if let Some(age) = max_age {\n"
+              "        builder = builder\n"
+              "            .max_age(age)\n"
+              "            .expires(OffsetDateTime::now_utc() + age);\n"
+              "    }\n\n"
+              "    builder.build()\n"
+              "}\n\n"
+              "fn build_persistent_session_cookie(\n"
+              "    session: &crate::auth::session::Session,\n"
+              ") -> Cookie<'static> {\n"
+              "    // Whole-second cookie precision can otherwise leave the cookie alive a\n"
+              "    // fraction longer than the server session. One-second headroom keeps the\n"
+              "    // browser credential strictly inside the authoritative server expiry.\n"
+              "    let remaining_seconds = session\n"
+              "        .expires_at\n"
+              "        .signed_duration_since(chrono::Utc::now())\n"
+              "        .num_seconds()\n"
+              "        .saturating_sub(1)\n"
+              "        .max(0);\n"
+              "    build_session_cookie(\n"
+              "        session.id.clone(),\n"
+              "        Some(Duration::seconds(remaining_seconds)),\n"
+              "    )\n"
+              "}\n",
+          )
+          replace_all_checked(
+              "apps/api/src/routes/auth.rs",
+              "build_session_cookie(session.id, None)",
+              "build_persistent_session_cookie(&session)",
+              4,
+          )
+          replace_once(
+              "apps/api/src/routes/auth.rs",
+              "build_session_cookie(new_session.id, None)",
+              "build_persistent_session_cookie(&new_session)",
+          )
+
+          # API-level cookie assertions.
+          replace_once(
+              "apps/api/tests/api_auth.rs",
+              "    assert!(cookie.contains(\"SameSite=Lax\"));\n\n    Ok(())\n}\n",
+              "    assert!(cookie.contains(\"SameSite=Lax\"));\n"
+              "    assert!(cookie.contains(\"Max-Age=\"));\n"
+              "    assert!(cookie.contains(\"Expires=\"));\n\n"
+              "    Ok(())\n"
+              "}\n",
+          )
+
+          # Config tests are appended inside the existing tests module.
+          p = Path("apps/api/src/config.rs")
+          text = p.read_text()
+          insert_at = text.rfind("\n}")
+          if insert_at < 0:
+              raise SystemExit("config.rs: final module brace not found")
+          tests = r'''
+
+    #[test]
+    #[serial]
+    fn auth_session_ttl_defaults_to_thirty_days() -> Result<()> {
+        let _ttl = EnvGuard::unset("AUTH_SESSION_TTL_SECONDS");
+        let cfg = AppConfig::load_from_str(YAML)?;
+        assert_eq!(cfg.auth_session_ttl_seconds, 30 * 24 * 60 * 60);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_session_ttl_env_override_is_applied() -> Result<()> {
+        let _ttl = EnvGuard::set("AUTH_SESSION_TTL_SECONDS", "7200");
+        let cfg = AppConfig::load_from_str(YAML)?;
+        assert_eq!(cfg.auth_session_ttl_seconds, 7200);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_session_ttl_rejects_invalid_or_out_of_range_values() {
+        let _ttl = EnvGuard::set("AUTH_SESSION_TTL_SECONDS", "not-a-number");
+        let err = AppConfig::load_from_str(YAML).expect_err("invalid TTL must fail closed");
+        assert!(err.to_string().contains("must be an integer"));
+        drop(_ttl);
+
+        let _ttl = EnvGuard::set("AUTH_SESSION_TTL_SECONDS", "3599");
+        let err = AppConfig::load_from_str(YAML).expect_err("too-short TTL must fail closed");
+        assert!(err.to_string().contains("must be between"));
+    }
+'''
+          p.write_text(text[:insert_at] + tests + text[insert_at:])
+
+          # PostgreSQL proof for the configured TTL.
+          p = Path("apps/api/tests/db_session_store_persistence.rs")
+          text = p.read_text()
+          text = text.replace("use sqlx::postgres::{PgConnectOptions, PgPoolOptions};\n", "use chrono::{Duration, Utc};\nuse sqlx::postgres::{PgConnectOptions, PgPoolOptions};\n", 1)
+          db_test = r'''
+
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn db_session_store_honors_configured_ttl() {
+    let pool = connect_pool().await;
+    let account_id = unique_account_id("configured-ttl");
+    let ttl_seconds = 2 * 60 * 60;
+    let store = DbSessionStore::with_ttl_seconds(pool.clone(), ttl_seconds);
+
+    cleanup_account(&pool, &account_id).await;
+    let before = Utc::now();
+    let created = store
+        .create(account_id.clone(), None)
+        .await
+        .expect("create failed");
+    let after = Utc::now();
+
+    assert!(created.expires_at >= before + Duration::seconds(ttl_seconds));
+    assert!(created.expires_at <= after + Duration::seconds(ttl_seconds));
+
+    cleanup_account(&pool, &account_id).await;
+    pool.close().await;
+}
+'''
+          p.write_text(text + db_test)
+
+          # Browser proof and dedicated Playwright configuration.
+          Path("apps/web/playwright.session.proof.config.ts").write_text(r'''import { defineConfig, type ReporterDescription } from "@playwright/test";
+import { resolve } from "node:path";
+
+const isCI = /^(1|true)$/i.test(process.env.CI ?? "");
+const PORT = Number(process.env.PORT ?? (isCI ? 5173 : 4173));
+const htmlReportDir = resolve(
+  process.cwd(),
+  process.env.PLAYWRIGHT_HTML_REPORT ?? "playwright-report",
+);
+const reporter: ReporterDescription[] = [
+  [isCI ? "dot" : "line"],
+  ["html", { open: "never", outputFolder: htmlReportDir }],
+  [
+    "junit",
+    {
+      outputFile: resolve(
+        htmlReportDir,
+        process.env.PLAYWRIGHT_JUNIT_OUTPUT_NAME ?? "results.xml",
+      ),
+    },
+  ],
+];
+
+export default defineConfig({
+  testDir: "tests/proofs",
+  testMatch: "**/persistent-browser-session.proof.ts",
+  timeout: 120_000,
+  retries: isCI ? 1 : 0,
+  workers: 1,
+  use: {
+    baseURL: `http://localhost:${PORT}`,
+    trace: "on-first-retry",
+  },
+  reporter,
+  webServer: [
+    {
+      command: "cargo run --locked --features integration-testing",
+      cwd: resolve(process.cwd(), "../api"),
+      name: "API",
+      url: "http://127.0.0.1:8080/health/ready",
+      timeout: 120_000,
+      reuseExistingServer: !isCI,
+      env: {
+        ...process.env,
+        API_BIND: "127.0.0.1:8080",
+        AUTH_COOKIE_SECURE: "0",
+        AUTH_DEV_LOGIN: "1",
+        AUTH_SESSION_TTL_SECONDS: "2592000",
+        CSRF_ALLOWED_ORIGINS: `http://localhost:${PORT}`,
+      },
+    },
+    {
+      command: `pnpm run build:e2e && pnpm preview --host 0.0.0.0 --port ${PORT}`,
+      cwd: process.cwd(),
+      name: "Web",
+      url: `http://127.0.0.1:${PORT}`,
+      timeout: 120_000,
+      reuseExistingServer: !isCI,
+      env: {
+        ...process.env,
+        PORT: String(PORT),
+        AUTH_PASSKEY_PROOF_PROXY: "1",
+      },
+    },
+  ],
+});
+''')
+
+          Path("apps/web/tests/proofs/persistent-browser-session.proof.ts").write_text(r'''import { chromium, expect, test, type Page } from "@playwright/test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+interface AuthStatus {
+  authenticated: boolean;
+  account_id?: string;
+  role: string;
+}
+
+async function getAuthStatus(page: Page): Promise<AuthStatus> {
+  return page.evaluate(async () => {
+    const response = await fetch("/api/auth/me", { credentials: "include" });
+    if (!response.ok) throw new Error(`auth status failed: ${response.status}`);
+    return response.json();
+  });
+}
+
+async function loginWithDevAccount(page: Page): Promise<string> {
+  return page.evaluate(async () => {
+    const accountsResponse = await fetch("/api/auth/dev/accounts", {
+      credentials: "include",
+    });
+    if (!accountsResponse.ok) {
+      throw new Error(`dev accounts failed: ${accountsResponse.status}`);
+    }
+    const accounts = (await accountsResponse.json()) as Array<{ id: string }>;
+    const accountId = accounts[0]?.id;
+    if (!accountId) throw new Error("no dev account available for session proof");
+
+    const loginResponse = await fetch("/api/auth/dev/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ account_id: accountId }),
+      credentials: "include",
+    });
+    if (!loginResponse.ok) {
+      throw new Error(`dev login failed: ${loginResponse.status}`);
+    }
+    return accountId;
+  });
+}
+
+test("session is shared by normal windows, survives restart, and stays profile-local", async ({
+  baseURL,
+}) => {
+  if (!baseURL) throw new Error("baseURL is required");
+
+  const profileDir = await mkdtemp(join(tmpdir(), "weltgewebe-session-proof-"));
+  let persistentContext = await chromium.launchPersistentContext(profileDir);
+  let isolatedBrowser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+
+  const proof = {
+    same_profile_second_window: false,
+    browser_restart: false,
+    isolated_profile: false,
+    persistent_cookie: false,
+    logout_propagation: false,
+  };
+
+  try {
+    const firstPage = persistentContext.pages()[0] ?? (await persistentContext.newPage());
+    await firstPage.goto(baseURL);
+    const accountId = await loginWithDevAccount(firstPage);
+    await expect.poll(() => getAuthStatus(firstPage)).toMatchObject({
+      authenticated: true,
+      account_id: accountId,
+    });
+
+    const sessionCookie = (await persistentContext.cookies()).find(
+      (cookie) => cookie.name === "gewebe_session",
+    );
+    expect(sessionCookie).toBeDefined();
+    expect(sessionCookie?.httpOnly).toBe(true);
+    expect(sessionCookie?.sameSite).toBe("Lax");
+    expect(sessionCookie?.expires ?? -1).toBeGreaterThan(
+      Math.floor(Date.now() / 1000) + 29 * 24 * 60 * 60,
+    );
+    proof.persistent_cookie = true;
+
+    const secondPage = await persistentContext.newPage();
+    await secondPage.goto(baseURL);
+    await expect.poll(() => getAuthStatus(secondPage)).toMatchObject({
+      authenticated: true,
+      account_id: accountId,
+    });
+    proof.same_profile_second_window = true;
+
+    await persistentContext.close();
+    persistentContext = await chromium.launchPersistentContext(profileDir);
+    const reopenedPage = persistentContext.pages()[0] ?? (await persistentContext.newPage());
+    await reopenedPage.goto(baseURL);
+    await expect.poll(() => getAuthStatus(reopenedPage)).toMatchObject({
+      authenticated: true,
+      account_id: accountId,
+    });
+    proof.browser_restart = true;
+
+    isolatedBrowser = await chromium.launch();
+    const isolatedContext = await isolatedBrowser.newContext();
+    const isolatedPage = await isolatedContext.newPage();
+    await isolatedPage.goto(baseURL);
+    await expect.poll(() => getAuthStatus(isolatedPage)).toMatchObject({
+      authenticated: false,
+    });
+    proof.isolated_profile = true;
+    await isolatedContext.close();
+
+    const reopenedSecondPage = await persistentContext.newPage();
+    await reopenedSecondPage.goto(baseURL);
+    const logoutStatus = await reopenedPage.evaluate(async () => {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      return response.status;
+    });
+    expect(logoutStatus).toBe(200);
+    await expect.poll(() => getAuthStatus(reopenedSecondPage)).toMatchObject({
+      authenticated: false,
+    });
+    proof.logout_propagation = true;
+
+    const proofDir = resolve(
+      process.cwd(),
+      "../../build/proofs/auth-session-browser",
+    );
+    await mkdir(proofDir, { recursive: true });
+    await writeFile(
+      join(proofDir, "proof-summary.json"),
+      `${JSON.stringify(proof, null, 2)}\n`,
+      "utf8",
+    );
+  } finally {
+    await persistentContext.close().catch(() => undefined);
+    await isolatedBrowser?.close().catch(() => undefined);
+    await rm(profileDir, { recursive: true, force: true });
+  }
+});
+''')
+
+          package_path = Path("apps/web/package.json")
+          package = json.loads(package_path.read_text())
+          package["scripts"]["test:proof:auth-session-browser"] = (
+              "playwright test --config=playwright.session.proof.config.ts --reporter=dot,html,junit"
+          )
+          package_path.write_text(json.dumps(package, indent=2) + "\n")
+
+          Path(".github/workflows/auth-session-browser-proof.yml").write_text(r'''---
+name: Auth Session Browser Proof
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/api/src/auth/session.rs"
+      - "apps/api/src/auth/session_db.rs"
+      - "apps/api/src/config.rs"
+      - "apps/api/src/lib.rs"
+      - "apps/api/src/routes/auth.rs"
+      - "apps/api/tests/api_auth.rs"
+      - "apps/api/tests/db_session_store_persistence.rs"
+      - "apps/web/package.json"
+      - "apps/web/playwright.session.proof.config.ts"
+      - "apps/web/tests/proofs/persistent-browser-session.proof.ts"
+      - "apps/web/vite.config.ts"
+      - "configs/app.defaults.yml"
+      - ".github/workflows/auth-session-browser-proof.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/src/auth/session.rs"
+      - "apps/api/src/auth/session_db.rs"
+      - "apps/api/src/config.rs"
+      - "apps/api/src/lib.rs"
+      - "apps/api/src/routes/auth.rs"
+      - "apps/api/tests/api_auth.rs"
+      - "apps/api/tests/db_session_store_persistence.rs"
+      - "apps/web/package.json"
+      - "apps/web/playwright.session.proof.config.ts"
+      - "apps/web/tests/proofs/persistent-browser-session.proof.ts"
+      - "apps/web/vite.config.ts"
+      - "configs/app.defaults.yml"
+      - ".github/workflows/auth-session-browser-proof.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auth-session-browser-proof:
+    name: persistent multi-window browser session proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      CARGO_TERM_COLOR: always
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+      PLAYWRIGHT_HTML_REPORT_OPEN: never
+      PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+
+      - name: Read Rust version
+        id: rust-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
+          test -n "${RUST_VERSION}"
+          printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ steps.rust-version.outputs.rust_version }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
+        with:
+          version: 9.11.0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: ".node-version"
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install web dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+
+      - name: Build API proof binary
+        run: cargo build --locked --features integration-testing
+        working-directory: apps/api
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: apps/web
+
+      - name: Run browser-session proof
+        run: pnpm test:proof:auth-session-browser
+        working-directory: apps/web
+
+      - name: Upload proof summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        with:
+          name: auth-session-browser-proof-summary
+          path: build/proofs/auth-session-browser/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        with:
+          name: auth-session-browser-proof-report
+          path: apps/web/playwright-report/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload traces
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        with:
+          name: auth-session-browser-proof-traces
+          path: apps/web/test-results/
+          if-no-files-found: warn
+          retention-days: 14
+''')
+
+          # Status matrix: implementation exists, CI evidence is not claimed early.
+          replace_once(
+              "docs/reports/auth-status-matrix.md",
+              "**Ist:** `GET /auth/session` ist implementiert",
+              "**Ist:** Der persistente Browser-Session-Vertrag aus Issue #1378 ist implementiert: "
+              "serverseitige Laufzeit und Cookie-Ablauf sind gekoppelt, normale Fenster desselben "
+              "Browserprofils teilen den HttpOnly-Cookie, und ein dedizierter Playwright-Proof deckt "
+              "Mehrfenster-, Neustart-, Profiltrennungs- und Logout-Verhalten ab. Ein grüner CI-Lauf "
+              "dieses neuen Proofs steht bis zur PR-Ausführung noch aus. `GET /auth/session` ist implementiert",
+          )
+
+          # The bootstrap workflow is deliberately absent from the resulting implementation commit.
+          Path(".github/workflows/_bootstrap-issue-1378.yml").unlink()
+          PY
+
+      - name: Format and validate API
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all --check
+          cargo test --locked -p weltgewebe-api
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
+        with:
+          version: 9.11.0
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: ".node-version"
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install web dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+
+      - name: Check web
+        shell: bash
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          pnpm check:ci
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:proof:auth-session-browser
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat(auth): persist browser sessions across restarts (#1378)"
+          git push origin HEAD:feat/auth-persistent-browser-sessions-1378
