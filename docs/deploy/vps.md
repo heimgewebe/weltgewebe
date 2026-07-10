@@ -176,6 +176,18 @@ Der VPS-Zieltyp unterscheidet sich vom historischen Heimserver-Ziel:
 * er erzwingt keine `*.home.arpa`-DNS-Guards,
 * er verlangt kein `/opt/heimgewebe/edge` und kein `edge-ca.crt`.
 
+`Caddyfile.vps` dient den statischen SvelteKit-Build aus `apps/web/build`.
+Für vorgerenderte HTML-Routen muss der Catch-all neben exakten Dateien auch
+`{path}.html` versuchen, bevor er auf `/index.html` fällt. Andernfalls würde ein
+Pfad wie `/settings` den generischen App-Shell-Fallback statt `settings.html`
+ausliefern und könnte eine falsche oder veraltete Route initialisieren.
+
+Erwartete Reihenfolge:
+
+```caddy
+try_files {path} {path}.html /index.html
+```
+
 Vor dem INWX-DNS-Cutover darf der Stack lokal auf dem VPS über den HTTP-Host-Header
 geprüft werden, ohne öffentliche DNS-Records umzubiegen:
 

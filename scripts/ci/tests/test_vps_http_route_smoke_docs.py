@@ -98,7 +98,7 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
             "tls ",
             "file_server",
             "root * /srv/weltgewebe-web",
-            "try_files {path} /index.html",
+            "try_files {path} {path}.html /index.html",
         ]:
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, text)
