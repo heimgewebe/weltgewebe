@@ -1,0 +1,28 @@
+name: One-off live sign-in request smoke
+
+on:
+  push:
+    branches:
+      - ops/live-signin-smoke-20260710
+
+permissions:
+  contents: read
+
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Request two sign-in links
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2; do
+            status="$(curl --silent --show-error --output /tmp/response --write-out '%{http_code}' \
+              --header 'Content-Type: application/json' \
+              --data '{"email":"alexdermohr@gmail.com"}' \
+              https://weltgewebe.net/api/auth/magic-link/request)"
+            echo "request_${attempt}_status=${status}"
+            test "${status}" = "200"
+            if [ "${attempt}" = "1" ]; then sleep 2; fi
+          done
