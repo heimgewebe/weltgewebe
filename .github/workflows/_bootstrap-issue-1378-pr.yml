@@ -64,27 +64,42 @@ jobs:
 
           python3 <<'PY'
           from pathlib import Path
+          import re
 
-          paths = [
-              'apps/api/src/mailer.rs',
-              'apps/api/src/routes/domain_write_guard.rs',
-              'apps/api/src/routes/health.rs',
-          ]
-          old = '            auth_trusted_proxies: None,\n'
-          new = (
-              '            auth_trusted_proxies: None,\n'
-              '            auth_session_ttl_seconds: '
-              'crate::config::DEFAULT_AUTH_SESSION_TTL_SECONDS,\n'
+          pattern = re.compile(
+              r'(?m)^(?P<indent>[ \t]*)auth_trusted_proxies: None,\n'
+              r'(?![ \t]*auth_session_ttl_seconds:)'
           )
-          for path in paths:
-              target = Path(path)
+          updated_files = []
+          updated_initializers = 0
+          for target in Path('apps/api').rglob('*.rs'):
               text = target.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(
-                      f'{path}: expected one AppConfig fixture anchor, found {count}'
+              if 'AppConfig {' not in text:
+                  continue
+
+              def add_ttl(match: re.Match[str]) -> str:
+                  indent = match.group('indent')
+                  return (
+                      f'{indent}auth_trusted_proxies: None,\n'
+                      f'{indent}auth_session_ttl_seconds: '
+                      'crate::config::DEFAULT_AUTH_SESSION_TTL_SECONDS,\n'
                   )
-              target.write_text(text.replace(old, new, 1))
+
+              revised, count = pattern.subn(add_ttl, text)
+              if count:
+                  target.write_text(revised)
+                  updated_files.append(str(target))
+                  updated_initializers += count
+
+          if updated_initializers < 4:
+              raise SystemExit(
+                  'expected several explicit AppConfig fixtures, updated only '
+                  f'{updated_initializers}: {updated_files}'
+              )
+          print(
+              f'updated {updated_initializers} AppConfig initializers in '
+              f'{len(updated_files)} files'
+          )
           PY
           rm -f .github/workflows/_bootstrap-issue-1378-pr.yml
 
