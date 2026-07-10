@@ -6,6 +6,21 @@ use lettre::{
     AsyncTransport, Message, Tokio1Executor,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SmtpSecurity {
+    ImplicitTls,
+    StartTls,
+    Plaintext,
+}
+
+fn smtp_security_for_port(port: u16) -> SmtpSecurity {
+    match port {
+        465 => SmtpSecurity::ImplicitTls,
+        587 | 2525 => SmtpSecurity::StartTls,
+        _ => SmtpSecurity::Plaintext,
+    }
+}
+
 #[derive(Debug)]
 pub struct Mailer {
     transport: AsyncSmtpTransport<Tokio1Executor>,
@@ -88,29 +103,33 @@ impl Mailer {
             anyhow::bail!("invalid from address: {}", from);
         }
 
-        let transport = if port == 465 {
-            let mut builder = AsyncSmtpTransport::<Tokio1Executor>::relay(host)
-                .context("failed to init SMTP relay (implicit TLS, port 465)")?
-                .port(port);
-            if let Some(creds) = creds.as_ref() {
-                builder = builder.credentials(creds.clone());
+        let transport = match smtp_security_for_port(port) {
+            SmtpSecurity::ImplicitTls => {
+                let mut builder = AsyncSmtpTransport::<Tokio1Executor>::relay(host)
+                    .context("failed to init SMTP relay (implicit TLS, port 465)")?
+                    .port(port);
+                if let Some(creds) = creds.as_ref() {
+                    builder = builder.credentials(creds.clone());
+                }
+                builder.build()
             }
-            builder.build()
-        } else if port == 587 {
-            let mut builder = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
-                .context("failed to init SMTP relay (STARTTLS, port 587)")?
-                .port(port);
-            if let Some(creds) = creds.as_ref() {
-                builder = builder.credentials(creds.clone());
+            SmtpSecurity::StartTls => {
+                let mut builder = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
+                    .with_context(|| format!("failed to init SMTP relay (STARTTLS, port {port})"))?
+                    .port(port);
+                if let Some(creds) = creds.as_ref() {
+                    builder = builder.credentials(creds.clone());
+                }
+                builder.build()
             }
-            builder.build()
-        } else {
-            let mut builder =
-                AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host).port(port);
-            if let Some(creds) = creds.as_ref() {
-                builder = builder.credentials(creds.clone());
+            SmtpSecurity::Plaintext => {
+                let mut builder =
+                    AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host).port(port);
+                if let Some(creds) = creds.as_ref() {
+                    builder = builder.credentials(creds.clone());
+                }
+                builder.build()
             }
-            builder.build()
         };
 
         Ok(Self {
@@ -199,6 +218,14 @@ mod tests {
     use crate::config::AppConfig;
     use chrono::TimeZone;
     use serial_test::serial;
+
+    #[test]
+    fn smtp_submission_ports_use_expected_tls_modes() {
+        assert_eq!(smtp_security_for_port(465), SmtpSecurity::ImplicitTls);
+        assert_eq!(smtp_security_for_port(587), SmtpSecurity::StartTls);
+        assert_eq!(smtp_security_for_port(2525), SmtpSecurity::StartTls);
+        assert_eq!(smtp_security_for_port(1025), SmtpSecurity::Plaintext);
+    }
 
     #[test]
     fn repeated_login_email_has_request_identity_and_fallback_link() {

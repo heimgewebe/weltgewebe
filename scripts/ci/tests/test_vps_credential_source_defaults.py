@@ -32,7 +32,7 @@ def test_weltgewebe_up_defaults_to_vps_and_keeps_heimserver_legacy_target_explic
     assert "vps (default) or heimserver (legacy)" in text
 
 
-def test_weltgewebe_up_selects_vps_credential_source_only_when_unset() -> None:
+def test_weltgewebe_up_selects_canonical_vps_credential_source_when_unset() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
 
     assert 'ENV_FILE_WAS_SET="${ENV_FILE+x}"' in text
@@ -40,11 +40,8 @@ def test_weltgewebe_up_selects_vps_credential_source_only_when_unset() -> None:
         'VPS_DEFAULT_ENV_FILE="${VPS_DEFAULT_ENV_FILE:-/etc/weltgewebe/weltgewebe.env}"'
         in text
     )
-    assert (
-        '[[ "$DEPLOY_TARGET" == "vps" && -z "$ENV_FILE_WAS_SET" '
-        '&& -f "$VPS_DEFAULT_ENV_FILE" ]]'
-        in text
-    )
+    assert '[[ "$DEPLOY_TARGET" == "vps" && -z "$ENV_FILE_WAS_SET" ]]' in text
+    assert '&& -f "$VPS_DEFAULT_ENV_FILE"' not in text
     assert 'ENV_FILE="$VPS_DEFAULT_ENV_FILE"' in text
 
     explicit_default = text.index('ENV_FILE="${ENV_FILE:-/opt/weltgewebe/.env}"')

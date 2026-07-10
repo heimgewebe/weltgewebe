@@ -26,7 +26,10 @@ case "$DEPLOY_TARGET" in
     ;;
 esac
 
-if [[ "$DEPLOY_TARGET" == "vps" && -z "$ENV_FILE_WAS_SET" && -f "$VPS_DEFAULT_ENV_FILE" ]]; then
+if [[ "$DEPLOY_TARGET" == "vps" && -z "$ENV_FILE_WAS_SET" ]]; then
+  # Select the canonical VPS credential source unconditionally. Whether the
+  # invoking user can read it is validated below; silently falling back to the
+  # repo-local legacy file would make deploy behaviour depend on user identity.
   ENV_FILE="$VPS_DEFAULT_ENV_FILE"
 fi
 
