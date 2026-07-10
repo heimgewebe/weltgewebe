@@ -10,7 +10,7 @@ set -euo pipefail
 #   weltgewebe-up [--with-caddy] [--no-pull] [--build-mode auto|force|no] [--branch BRANCH|--current-branch]
 
 # REPO_DIR defaults are handled in resolution logic below
-ENV_FILE_WAS_SET="${ENV_FILE+x}"
+ENV_FILE_WAS_SET="${ENV_FILE:+x}"
 ENV_FILE="${ENV_FILE:-/opt/weltgewebe/.env}"
 VPS_DEFAULT_ENV_FILE="${VPS_DEFAULT_ENV_FILE:-/etc/weltgewebe/weltgewebe.env}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-weltgewebe}"
@@ -26,7 +26,10 @@ case "$DEPLOY_TARGET" in
     ;;
 esac
 
-if [[ "$DEPLOY_TARGET" == "vps" && -z "$ENV_FILE_WAS_SET" && -f "$VPS_DEFAULT_ENV_FILE" ]]; then
+if [[ "$DEPLOY_TARGET" == "vps" && -z "$ENV_FILE_WAS_SET" ]]; then
+  # Select the canonical VPS credential source unconditionally. Readability
+  # is validated below; silently falling back to the repo-local legacy file
+  # would make deploy behaviour depend on user identity.
   ENV_FILE="$VPS_DEFAULT_ENV_FILE"
 fi
 
@@ -251,6 +254,32 @@ fi
 
 export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
 
+# 1. Environment Check
+# Normalize ENV_FILE before checking it so relative overrides resolve against
+# the selected repository root rather than the caller's working directory.
+if [[ "$ENV_FILE" != /* ]]; then
+  ENV_FILE="${REPO_DIR}/${ENV_FILE}"
+fi
+
+if [[ ! -r "$ENV_FILE" ]]; then
+  echo
+  echo "ERROR: ENV_FILE is missing or not readable: $ENV_FILE"
+  if [[ "$DEPLOY_TARGET" == "vps" && "$ENV_FILE" == "$VPS_DEFAULT_ENV_FILE" ]]; then
+    echo "The canonical VPS env is root-managed; run the deploy through the documented privileged operator path."
+  else
+    echo "Create a readable runtime env file or set ENV_FILE=/path/to/runtime.env explicitly."
+  fi
+  exit 2
+fi
+
+if [[ "$DEPLOY_TARGET" == "vps" ]]; then
+  # Keep Compose interpolation and the container env_file mount bound to the
+  # same explicitly selected source. Use ENV_FILE for intentional overrides.
+  export WELTGEWEBE_ENV_FILE="$ENV_FILE"
+else
+  export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
+fi
+
 # --- Bake Configuration ---
 # If running in 'auto' mode and /apps is missing, we disable bake to prevent
 # "resolve : lstat /apps: no such file or directory" errors in environments
@@ -347,21 +376,6 @@ echo "Repo:    $(pwd)"
 echo "Target:  $DEPLOY_TARGET"
 echo "Project: $COMPOSE_PROJECT"
 echo "Env:     $ENV_FILE"
-
-# 1. Environment Check
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo
-  echo "ERROR: ENV_FILE not found: $ENV_FILE"
-  echo "Please create it (e.g. from .env.example) or set ENV_FILE=/path/to/.env"
-  exit 2
-fi
-
-# Normalize ENV_FILE to absolute path
-if [[ "$ENV_FILE" != /* ]]; then
-  ENV_FILE="${REPO_DIR}/${ENV_FILE}"
-fi
-
-export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
 
 # Git State Tracking Variables
 GIT_FETCH_ATTEMPTED="no"

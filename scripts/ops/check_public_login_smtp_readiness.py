@@ -137,7 +137,7 @@ def check_smtp_port(env: Mapping[str, str]) -> CheckResult:
         port = int(raw)
     except ValueError:
         return fail_result("smtp-port", "SMTP_PORT is not a number", status="invalid")
-    if port in {465, 587}:
+    if port in {465, 587, 2525}:
         return pass_result("smtp-port", "SMTP_PORT is a production TLS port", port=port)
     if port == 25:
         return fail_result("smtp-port", "SMTP_PORT 25 is not accepted for public-login rollout", port=port)
