@@ -61,6 +61,31 @@ jobs:
             gh pr comment 1386 --body-file /tmp/issue-1378-comment.md
             exit "${apply_rc}"
           fi
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          paths = [
+              'apps/api/src/mailer.rs',
+              'apps/api/src/routes/domain_write_guard.rs',
+              'apps/api/src/routes/health.rs',
+          ]
+          old = '            auth_trusted_proxies: None,\n'
+          new = (
+              '            auth_trusted_proxies: None,\n'
+              '            auth_session_ttl_seconds: '
+              'crate::config::DEFAULT_AUTH_SESSION_TTL_SECONDS,\n'
+          )
+          for path in paths:
+              target = Path(path)
+              text = target.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(
+                      f'{path}: expected one AppConfig fixture anchor, found {count}'
+                  )
+              target.write_text(text.replace(old, new, 1))
+          PY
           rm -f .github/workflows/_bootstrap-issue-1378-pr.yml
 
       - name: Read Rust version
@@ -76,6 +101,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
+          components: rustfmt
 
       - uses: Swatinem/rust-cache@v2
 
