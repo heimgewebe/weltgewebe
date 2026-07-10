@@ -96,6 +96,23 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+      - name: Check Rust format and capture patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROOF_DIR="build/proofs/auth-session-persistence"
+          mkdir -p "${PROOF_DIR}"
+          if ! cargo fmt --all -- --check; then
+            cargo fmt --all
+            git diff -- \
+              apps/api/src/auth/session.rs \
+              apps/api/src/auth/session_db.rs \
+              apps/api/src/middleware/auth.rs \
+              apps/api/tests/db_session_store_persistence.rs \
+              > "${PROOF_DIR}/rustfmt.patch"
+            exit 1
+          fi
+
       - name: Install pnpm
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
         with:
