@@ -280,3 +280,69 @@ def test_quoted_whitespace_secret_is_rejected() -> None:
 
     with pytest.raises(module.ReconcileError, match="SMTP_PASS is empty"):
         module.validate_source(values)
+
+
+def test_apply_revalidates_source_after_lock(tmp_path: Path, monkeypatch) -> None:
+    module = load_module()
+    source = tmp_path / "legacy.env"
+    destination = tmp_path / "canonical.env"
+    backup_dir = tmp_path / "backups"
+    source.write_text(valid_source(), encoding="utf-8")
+    original = "DATABASE_URL=postgres://preserve\n"
+    destination.write_text(original, encoding="utf-8")
+
+    original_flock = module.fcntl.flock
+
+    def mutate_source_after_lock(fd, operation):
+        original_flock(fd, operation)
+        source.write_text(
+            valid_source().replace("AUTH_PUBLIC_LOGIN=1", "AUTH_PUBLIC_LOGIN=0"),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(module.fcntl, "flock", mutate_source_after_lock)
+
+    with pytest.raises(module.ReconcileError, match="not enabled"):
+        module.reconcile(
+            source_path=source,
+            destination_path=destination,
+            backup_dir=backup_dir,
+            apply=True,
+            require_root=False,
+        )
+
+    assert destination.read_text(encoding="utf-8") == original
+    assert not backup_dir.exists() or list(backup_dir.iterdir()) == []
+
+
+def test_root_apply_rejects_non_root_owned_backup_directory(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = load_module()
+    source = tmp_path / "legacy.env"
+    destination = tmp_path / "canonical.env"
+    backup_dir = tmp_path / "backups"
+    source.write_text(valid_source(), encoding="utf-8")
+    destination.write_text("DATABASE_URL=postgres://preserve\n", encoding="utf-8")
+    backup_dir.mkdir()
+
+    real_stat = module.Path.stat
+
+    def fake_stat(path, *args, **kwargs):
+        result = real_stat(path, *args, **kwargs)
+        if path == backup_dir:
+            values = list(result)
+            values[4] = 1000
+            return module.os.stat_result(values)
+        return result
+
+    monkeypatch.setattr(module.Path, "stat", fake_stat)
+    monkeypatch.setattr(module.os, "geteuid", lambda: 0)
+
+    with pytest.raises(module.ReconcileError, match="root-owned"):
+        module.reconcile(
+            source_path=source,
+            destination_path=destination,
+            backup_dir=backup_dir,
+            apply=True,
+        )

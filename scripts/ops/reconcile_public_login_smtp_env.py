@@ -164,6 +164,7 @@ def _write_file_exclusive(path: Path, content: bytes, *, uid: int, gid: int) -> 
             os.fsync(handle.fileno())
         os.fchown(fd, uid, gid)
         os.fchmod(fd, 0o600)
+        os.fsync(fd)
     finally:
         os.close(fd)
 
@@ -205,6 +206,9 @@ def reconcile(
     backup_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     if backup_dir.is_symlink() or not backup_dir.is_dir():
         raise ReconcileError("backup directory is not a regular directory")
+    backup_dir_stat = backup_dir.stat()
+    if require_root and backup_dir_stat.st_uid != 0:
+        raise ReconcileError("backup directory must be root-owned")
     os.chmod(backup_dir, 0o700)
 
     lock_path = destination.parent / f".{destination.name}.reconcile.lock"
@@ -212,9 +216,25 @@ def reconcile(
     try:
         fcntl.flock(lock_fd, fcntl.LOCK_EX)
 
-        # Re-read after acquiring the lock so the write cannot silently erase a
-        # concurrent operator change made after the initial dry validation.
-        current_text = destination.read_text(encoding="utf-8")
+        # Re-resolve and re-read both files after acquiring the lock. This keeps
+        # an apply operation from using stale source values or silently replacing
+        # a destination path that another root operator changed after dry-run.
+        current_source = _checked_regular_absolute(source_path, label="source")
+        current_destination = _checked_regular_absolute(
+            destination_path, label="destination"
+        )
+        if current_source != source:
+            raise ReconcileError("source path changed during reconciliation")
+        if current_destination != destination:
+            raise ReconcileError("destination path changed during reconciliation")
+        if os.path.samefile(current_source, current_destination):
+            raise ReconcileError("source and destination must be different files")
+
+        current_source_text = current_source.read_text(encoding="utf-8")
+        selected = validate_source(
+            parse_env(current_source_text, label="source").values
+        )
+        current_text = current_destination.read_text(encoding="utf-8")
         current_content = build_reconciled_content(current_text, selected)
         if current_content == current_text:
             return {**base_result, "status": "already_reconciled", "applied": False}
