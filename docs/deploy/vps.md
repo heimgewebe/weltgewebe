@@ -150,23 +150,32 @@ Deploy-Wrapper. `vps` ist der Default-Zieltyp:
 
 ```bash
 cd /opt/weltgewebe
-./scripts/weltgewebe-up --branch main
+sudo -n env \
+  GIT_CONFIG_COUNT=1 \
+  GIT_CONFIG_KEY_0=safe.directory \
+  GIT_CONFIG_VALUE_0=/opt/weltgewebe \
+  DEPLOY_TARGET=vps \
+  ./scripts/weltgewebe-up --branch main
 ```
 
-Der Zieltyp kann weiterhin explizit gesetzt werden:
+Der privilegierte Operatorpfad ist beabsichtigt: Die kanonische Runtime-Datei
+liegt in einem nur für `root` zugänglichen Verzeichnis. Ein unprivilegierter
+Aufruf bricht deshalb klar und ohne Legacy-Fallback ab.
 
-```bash
-DEPLOY_TARGET=vps ./scripts/weltgewebe-up --branch main
-```
-
-Wenn `ENV_FILE` nicht gesetzt ist, bevorzugt der VPS-Zieltyp
-`/etc/weltgewebe/weltgewebe.env`, sofern die Datei existiert. Für Tests,
-Rollback oder abweichende Installationen kann die Quelle bewusst überschrieben
-werden:
+Wenn `ENV_FILE` nicht oder leer gesetzt ist, wählt der VPS-Zieltyp immer
+`/etc/weltgewebe/weltgewebe.env`. Fehlt diese Datei oder ist sie für den
+aufrufenden Operator nicht lesbar, endet der Deploy fail-closed. Für Tests,
+Rollback oder abweichende Installationen kann eine andere, ausdrücklich
+gewählte Quelle verwendet werden:
 
 ```bash
 DEPLOY_TARGET=vps ENV_FILE=/path/to/runtime.env ./scripts/weltgewebe-up --branch main
 ```
+
+SMTP-Zugangsdaten werden nur über TLS übertragen: Port `465` nutzt implizites
+TLS, die Submission-Ports `587` und `2525` erzwingen STARTTLS. Auf anderen
+Ports verweigert die API SMTP-Authentifizierung, statt Zugangsdaten im Klartext
+zu senden.
 
 Der VPS-Zieltyp unterscheidet sich vom historischen Heimserver-Ziel:
 

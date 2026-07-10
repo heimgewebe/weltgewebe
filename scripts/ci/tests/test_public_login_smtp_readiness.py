@@ -50,6 +50,59 @@ def test_production_public_login_passes_with_authenticated_smtp(tmp_path: Path) 
     assert all(result.ok for result in results), [result.payload() for result in results]
 
 
+def test_production_public_login_accepts_authenticated_starttls_on_port_2525() -> None:
+    module = load_module()
+    env = {
+        "AUTH_PUBLIC_LOGIN": "1",
+        "AUTH_LOG_MAGIC_TOKEN": "0",
+        "APP_BASE_URL": "https://weltgewebe.net",
+        "SMTP_HOST": "smtp.example.test",
+        "SMTP_PORT": "2525",
+        "SMTP_AUTH": "on",
+        "SMTP_USER": "user-secret",
+        "SMTP_PASS": "pass-secret",
+        "SMTP_FROM": "noreply@weltgewebe.net",
+    }
+
+    results = module.run_checks(
+        env,
+        production_public_login=True,
+        expected_app_base_url="https://weltgewebe.net",
+        allow_unauthenticated_smtp=False,
+    )
+
+    assert all(result.ok for result in results), [result.payload() for result in results]
+
+
+def test_production_public_login_rejects_plaintext_smtp_ports() -> None:
+    module = load_module()
+
+    for port in (25, 2526):
+        env = {
+            "AUTH_PUBLIC_LOGIN": "1",
+            "AUTH_LOG_MAGIC_TOKEN": "0",
+            "APP_BASE_URL": "https://weltgewebe.net",
+            "SMTP_HOST": "smtp.example.test",
+            "SMTP_PORT": str(port),
+            "SMTP_AUTH": "on",
+            "SMTP_USER": "user-secret",
+            "SMTP_PASS": "pass-secret",
+            "SMTP_FROM": "noreply@weltgewebe.net",
+        }
+        smtp_port = [
+            item
+            for item in module.run_checks(
+                env,
+                production_public_login=True,
+                expected_app_base_url="https://weltgewebe.net",
+                allow_unauthenticated_smtp=False,
+            )
+            if item.name == "smtp-port"
+        ][0]
+
+        assert not smtp_port.ok
+
+
 def test_production_public_login_rejects_magic_token_logging(tmp_path: Path) -> None:
     module = load_module()
     env = {

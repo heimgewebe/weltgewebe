@@ -6,6 +6,21 @@ use lettre::{
     AsyncTransport, Message, Tokio1Executor,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SmtpSecurity {
+    ImplicitTls,
+    StartTls,
+    Plaintext,
+}
+
+fn smtp_security_for_port(port: u16) -> SmtpSecurity {
+    match port {
+        465 => SmtpSecurity::ImplicitTls,
+        587 | 2525 => SmtpSecurity::StartTls,
+        _ => SmtpSecurity::Plaintext,
+    }
+}
+
 #[derive(Debug)]
 pub struct Mailer {
     transport: AsyncSmtpTransport<Tokio1Executor>,
@@ -88,29 +103,38 @@ impl Mailer {
             anyhow::bail!("invalid from address: {}", from);
         }
 
-        let transport = if port == 465 {
-            let mut builder = AsyncSmtpTransport::<Tokio1Executor>::relay(host)
-                .context("failed to init SMTP relay (implicit TLS, port 465)")?
-                .port(port);
-            if let Some(creds) = creds.as_ref() {
-                builder = builder.credentials(creds.clone());
+        let smtp_security = smtp_security_for_port(port);
+        if smtp_security == SmtpSecurity::Plaintext && creds.is_some() {
+            anyhow::bail!("refusing SMTP authentication without TLS on port {port}");
+        }
+
+        let transport = match smtp_security {
+            SmtpSecurity::ImplicitTls => {
+                let mut builder = AsyncSmtpTransport::<Tokio1Executor>::relay(host)
+                    .context("failed to init SMTP relay (implicit TLS, port 465)")?
+                    .port(port);
+                if let Some(creds) = creds.as_ref() {
+                    builder = builder.credentials(creds.clone());
+                }
+                builder.build()
             }
-            builder.build()
-        } else if port == 587 {
-            let mut builder = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
-                .context("failed to init SMTP relay (STARTTLS, port 587)")?
-                .port(port);
-            if let Some(creds) = creds.as_ref() {
-                builder = builder.credentials(creds.clone());
+            SmtpSecurity::StartTls => {
+                let mut builder = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
+                    .with_context(|| format!("failed to init SMTP relay (STARTTLS, port {port})"))?
+                    .port(port);
+                if let Some(creds) = creds.as_ref() {
+                    builder = builder.credentials(creds.clone());
+                }
+                builder.build()
             }
-            builder.build()
-        } else {
-            let mut builder =
-                AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host).port(port);
-            if let Some(creds) = creds.as_ref() {
-                builder = builder.credentials(creds.clone());
+            SmtpSecurity::Plaintext => {
+                let mut builder =
+                    AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host).port(port);
+                if let Some(creds) = creds.as_ref() {
+                    builder = builder.credentials(creds.clone());
+                }
+                builder.build()
             }
-            builder.build()
         };
 
         Ok(Self {
@@ -201,6 +225,14 @@ mod tests {
     use serial_test::serial;
 
     #[test]
+    fn smtp_submission_ports_use_expected_tls_modes() {
+        assert_eq!(smtp_security_for_port(465), SmtpSecurity::ImplicitTls);
+        assert_eq!(smtp_security_for_port(587), SmtpSecurity::StartTls);
+        assert_eq!(smtp_security_for_port(2525), SmtpSecurity::StartTls);
+        assert_eq!(smtp_security_for_port(1025), SmtpSecurity::Plaintext);
+    }
+
+    #[test]
     fn repeated_login_email_has_request_identity_and_fallback_link() {
         let requested_at = Utc.with_ymd_and_hms(2026, 7, 10, 6, 42, 43).unwrap();
         let link = "https://weltgewebe.net/api/auth/magic-link/consume?token=a&next=<home>";
@@ -212,6 +244,49 @@ mod tests {
         assert!(body.contains("Button not working?"));
         assert!(body.contains("&amp;next=&lt;home&gt;"));
         assert!(!body.contains("&next=<home>"));
+    }
+
+    #[test]
+    #[serial]
+    fn mailer_rejects_credentials_on_plaintext_port() {
+        let _smtp_auth = crate::test_helpers::EnvGuard::set("SMTP_AUTH", "on");
+        let config = AppConfig {
+            fade_days: 7,
+            ron_days: 84,
+            anonymize_opt_in: true,
+            delegation_expire_days: 28,
+            domain_read_source: crate::config::DomainReadSource::Jsonl,
+            domain_account_write_source: crate::config::DomainAccountWriteSource::Jsonl,
+            domain_node_write_source: crate::config::DomainNodeWriteSource::Jsonl,
+            domain_edge_write_source: crate::config::DomainEdgeWriteSource::Jsonl,
+            passkey_credential_source: crate::config::PasskeyCredentialSource::InMemory,
+            auth_public_login: false,
+            app_base_url: None,
+            auth_trusted_proxies: None,
+            auth_allow_emails: None,
+            auth_allow_email_domains: None,
+            auth_auto_provision: false,
+            auth_rl_ip_per_min: None,
+            auth_rl_ip_per_hour: None,
+            auth_rl_email_per_min: None,
+            auth_rl_email_per_hour: None,
+            smtp_host: Some("127.0.0.1".to_string()),
+            smtp_port: Some(1025),
+            smtp_user: Some("user".to_string()),
+            smtp_pass: Some("pass".to_string()),
+            smtp_from: Some("noreply@example.com".to_string()),
+            auth_log_magic_token: false,
+            webauthn_rp_id: None,
+            webauthn_rp_origin: None,
+            webauthn_rp_name: None,
+        };
+
+        let result = Mailer::new(&config);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("refusing SMTP authentication without TLS on port 1025"));
     }
 
     #[test]
