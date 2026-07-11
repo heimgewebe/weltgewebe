@@ -641,8 +641,8 @@ async fn domain_backfill_edges_deterministic_and_idempotent() {
     pool.close().await;
 }
 
-/// Proves that 2 account fixtures (one verortet, one ron) import with correct
-/// field mapping, and re-import is idempotent.
+/// Proves that two legacy account fixtures normalize to canonical Garnrollen
+/// with correct map states and re-import idempotently.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn domain_backfill_accounts_deterministic_and_idempotent() {
@@ -666,8 +666,8 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
         "no duplicate emails in clean fixture"
     );
 
-    // Field mapping: kind, mode, role, email, location_lat/lon (verortet account)
-    let (kind, mode, map_state, role, email, loc_lat, loc_lon): (
+    // Field mapping for a legacy approximate account.
+    type AccountProjectionRow = (
         String,
         Option<String>,
         String,
@@ -675,14 +675,16 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
         Option<String>,
         Option<f64>,
         Option<f64>,
-    ) = sqlx::query_as(
-        "SELECT kind, mode, map_state, role, email, location_lat, location_lon
-         FROM domain_accounts WHERE id = $1",
-    )
-    .bind("backfill-proof-account-alpha")
-    .fetch_one(&pool)
-    .await
-    .expect("account alpha must exist after import");
+    );
+    let (kind, mode, map_state, role, email, loc_lat, loc_lon): AccountProjectionRow =
+        sqlx::query_as(
+            "SELECT kind, mode, map_state, role, email, location_lat, location_lon
+             FROM domain_accounts WHERE id = $1",
+        )
+        .bind("backfill-proof-account-alpha")
+        .fetch_one(&pool)
+        .await
+        .expect("account alpha must exist after import");
 
     assert_eq!(kind, "garnrolle");
     assert_eq!(mode, None);
@@ -698,7 +700,7 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
         "location_lon must map correctly"
     );
 
-    // ron account: no location
+    // Legacy hidden account: no location
     let (beta_lat, beta_lon): (Option<f64>, Option<f64>) =
         sqlx::query_as("SELECT location_lat, location_lon FROM domain_accounts WHERE id = $1")
             .bind("backfill-proof-account-beta")
@@ -707,11 +709,11 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
             .expect("account beta must exist");
     assert!(
         beta_lat.is_none(),
-        "ron account must have NULL location_lat"
+        "hidden account must have NULL location_lat"
     );
     assert!(
         beta_lon.is_none(),
-        "ron account must have NULL location_lon"
+        "hidden account must have NULL location_lon"
     );
 
     // radius_m type: stored as BIGINT, bound as i64
