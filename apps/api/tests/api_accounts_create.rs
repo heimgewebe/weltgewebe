@@ -22,7 +22,7 @@ use weltgewebe_api::{
     },
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
-        accounts::{AccountInternal, AccountMode, AccountPublic},
+        accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
     },
     state::ApiState,
@@ -109,7 +109,7 @@ fn operator(id: &str, role: Role) -> AccountInternal {
             title: format!("Operator {id}"),
             summary: None,
             public_pos: None,
-            mode: AccountMode::Verortet,
+            map_state: GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],

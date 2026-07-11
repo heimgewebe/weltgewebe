@@ -1,0 +1,74 @@
+"""Regression tests for the one-Garnrolle ontology cutover."""
+
+from __future__ import annotations
+
+import json
+import re
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+class GarnrolleOntologyContractTests(unittest.TestCase):
+    def test_account_contract_has_one_identity_and_explicit_map_state(self) -> None:
+        schema = json.loads((ROOT / "contracts/domain/account.schema.json").read_text())
+        self.assertEqual(schema["properties"]["type"], {"const": "garnrolle"})
+        self.assertEqual(
+            schema["properties"]["map_state"]["enum"],
+            ["not_on_map", "exact", "radius"],
+        )
+        self.assertNotIn("mode", schema["properties"])
+        self.assertIn("map_state", schema["required"])
+
+    def test_new_data_producers_do_not_emit_legacy_identity_fields(self) -> None:
+        paths = (
+            "scripts/dev/gewebe-demo-server.mjs",
+            "scripts/dev/bootstrap-first-account.sh",
+            "apps/web/src/lib/demo/demoData.ts",
+            "apps/web/tests/map-url-state.spec.ts",
+            "contracts/domain/examples/account.example.json",
+        )
+        forbidden = re.compile(r'(?i)(["\']mode["\']\s*:|["\']type["\']\s*:\s*["\']ron["\']|ron_flag)')
+        for relative in paths:
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            self.assertIsNone(forbidden.search(text), relative)
+            self.assertIn("map_state", text, relative)
+
+    def test_migration_retains_only_nullable_rollback_bridge(self) -> None:
+        up = (ROOT / "apps/api/migrations/20260711000001_garnrolle_map_state_cutover.up.sql").read_text()
+        self.assertIn("ADD COLUMN map_state TEXT", up)
+        self.assertIn("UPDATE domain_accounts SET kind = 'garnrolle'", up)
+        self.assertIn("ALTER COLUMN mode DROP NOT NULL", up)
+        self.assertIn("ALTER COLUMN mode DROP DEFAULT", up)
+        self.assertIn("CHECK (kind = 'garnrolle')", up)
+        self.assertIn("map_state IN ('not_on_map', 'exact', 'radius')", up)
+        down = (ROOT / "apps/api/migrations/20260711000001_garnrolle_map_state_cutover.down.sql").read_text()
+        self.assertIn("COALESCE(mode", down)
+        self.assertIn("DROP COLUMN map_state", down)
+
+    def test_public_api_type_no_longer_contains_account_mode(self) -> None:
+        source = (ROOT / "apps/api/src/routes/accounts.rs").read_text()
+        self.assertNotIn("pub enum AccountMode", source)
+        self.assertIn("pub enum GarnrolleMapState", source)
+        self.assertIn("pub map_state: GarnrolleMapState", source)
+        self.assertNotRegex(source, r"pub\s+mode:\s+AccountMode")
+
+    def test_canonical_docs_describe_legacy_as_read_only(self) -> None:
+        combined = "\n".join(
+            (ROOT / path).read_text(encoding="utf-8")
+            for path in (
+                "README.md",
+                "architecture/overview.md",
+                "architecture/security.md",
+                "docs/datenmodell.md",
+                "docs/domain/vocabulary.md",
+            )
+        )
+        self.assertIn("not_on_map", combined)
+        self.assertIn("Rollbackbrücke", combined)
+        self.assertNotIn("Legacy-Modell `ron` widerspricht", combined)
+
+
+if __name__ == "__main__":
+    unittest.main()

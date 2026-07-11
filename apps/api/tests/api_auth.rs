@@ -144,7 +144,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
             title: "User One".to_string(),
             summary: Some("Summary 1".to_string()),
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
 
             disabled: false,
@@ -163,7 +163,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
             title: "Admin One".to_string(),
             summary: None,
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
 
             disabled: false,
@@ -350,7 +350,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
             title: "User".to_string(),
             summary: None,
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
 
             disabled: false,
@@ -718,7 +718,7 @@ async fn request_login_overlong_known_email_skips_token_creation() -> Result<()>
             title: "Long Email User".to_string(),
             summary: None,
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],
@@ -837,7 +837,7 @@ async fn request_login_accepts_boundary_254_byte_email_for_known_account() -> Re
             title: "Boundary 254 User".to_string(),
             summary: None,
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],
@@ -899,7 +899,7 @@ async fn request_login_rejects_boundary_255_byte_email_for_known_account() -> Re
             title: "Boundary 255 User".to_string(),
             summary: None,
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],
@@ -1566,11 +1566,11 @@ async fn request_login_provisioning_enabled_success() -> Result<()> {
         let acc = found.unwrap();
         assert_eq!(acc.role, Role::Gast);
         // Verify auto-provisioning privacy invariants
-        assert_eq!(acc.public.title, "Rolle ohne Namen");
-        assert_eq!(acc.public.kind, "ron");
+        assert_eq!(acc.public.title, "Garnrolle");
+        assert_eq!(acc.public.kind, "garnrolle");
         assert_eq!(
-            acc.public.mode,
-            weltgewebe_api::routes::accounts::AccountMode::Ron
+            acc.public.map_state,
+            weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap
         );
         assert!(acc.public.public_pos.is_none());
     }
@@ -1786,7 +1786,7 @@ async fn request_login_mixed_case_stored_email_no_duplicate() -> Result<()> {
                 title: "Mixed Case Legacy".to_string(),
                 summary: None,
                 public_pos: None,
-                mode: weltgewebe_api::routes::accounts::AccountMode::Ron,
+                map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
                 radius_m: 0,
                 disabled: false,
                 tags: vec![],
@@ -1934,7 +1934,7 @@ async fn test_session_refresh_success() -> Result<()> {
             title: "User".to_string(),
             summary: None,
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],
@@ -2097,7 +2097,7 @@ async fn test_session_refresh_csrf_rejected() -> Result<()> {
             title: "User".to_string(),
             summary: None,
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],
@@ -2161,7 +2161,7 @@ async fn test_session_refresh_account_disabled() -> Result<()> {
             title: "User".to_string(),
             summary: None,
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],
@@ -2236,7 +2236,7 @@ async fn test_logout() -> Result<()> {
             title: "User".to_string(),
             summary: None,
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],
@@ -2324,7 +2324,7 @@ async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()>
             title: "User".to_string(),
             summary: None,
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],
@@ -2490,7 +2490,7 @@ async fn test_device_management() -> Result<()> {
             title: "User".to_string(),
             summary: None,
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],
@@ -2857,7 +2857,7 @@ async fn test_step_up_magic_link_request_binding_mismatch() -> Result<()> {
                 title: "u2".to_string(),
                 summary: None,
                 public_pos: None,
-                mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+                map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
                 radius_m: 0,
                 disabled: false,
                 tags: vec![],
@@ -2930,7 +2930,7 @@ async fn test_step_up_magic_link_request_account_invalid() -> Result<()> {
                 title: "u2".to_string(),
                 summary: None,
                 public_pos: None,
-                mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+                map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
                 radius_m: 0,
                 disabled: false,
                 tags: vec![],
@@ -3913,7 +3913,7 @@ async fn test_update_email_conflict_with_existing_account() -> Result<()> {
                 title: "User Two".to_string(),
                 summary: None,
                 public_pos: None,
-                mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+                map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
                 radius_m: 0,
                 disabled: false,
                 tags: vec![],
@@ -5729,7 +5729,7 @@ fn disabled_account(id: &str, email: &str) -> AccountInternal {
             title: "Disabled User".to_string(),
             summary: None,
             public_pos: None,
-            mode: weltgewebe_api::routes::accounts::AccountMode::Ron,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: true,
             tags: vec![],

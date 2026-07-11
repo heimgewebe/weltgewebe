@@ -98,7 +98,9 @@ auditierte Vorgänge.
 
 ## Offene Risiken
 
-- Das Legacy-Identitätsmodell `ron` muss ohne Datenverlust migriert werden.
+- Legacy-RoN-Daten werden privacy-sicher zu `not_on_map` normalisiert. Vor der
+  späteren Entfernung der nullable Rollbackspalte `mode` ist ein Produktions-
+  und Rückrollbeleg nötig.
 - Der vollständige PostgreSQL-Cutover ist nicht abgeschlossen.
 - Branch-/Ruleset-Schutz muss nach Stabilisierung der Pflichtcheckliste aktiv
   und minimal gehalten werden.

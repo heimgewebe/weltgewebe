@@ -134,7 +134,7 @@ Es beschreibt:
 - **Events und Beobachtung:** NATS sowie Prometheus-/Grafana-/Loki-/Tempo-Konfigurationen sind vorhanden, aber kein vollständiges Event-Sourcing- oder Observability-System ist allgemein produktiv belegt.
 - **Security:** sichere Sitzungen, Proxygrenze, CI-/Contract-Checks und secret-sichere Betriebsabläufe sind reale Leitplanken; SBOM, Signaturen, automatische Rotation und Forget-Pipeline bleiben gesondert nachzuweisende Ziele.
 - **Skalierung:** Compose ist der aktuelle Standard. Nomad, Kubernetes, HA-Cluster und FinOps-Ziele sind keine heutige Betriebswahrheit.
-- **Garnrollen-Sichtbarkeit:** Sichtbarkeit und Verortung sollen Eigenschaften einer Garnrolle sein; der Legacy-Modus `ron` wird separat migriert.
+- **Garnrollen-Sichtbarkeit:** Sichtbarkeit und Verortung sind Eigenschaften einer Garnrolle (`not_on_map`, `exact`, `radius`); Legacy-RoN wird nur lesend privacy-sicher normalisiert.
 
 ---
 

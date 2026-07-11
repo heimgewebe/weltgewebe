@@ -72,7 +72,7 @@ Wiederherstellungsplan:
 - DNS-/Provideränderungen,
 - Volume- oder Datenlöschung,
 - Zwangsentfernung fremder Compose-Projekte,
-- irreversible Identitäts- oder RoN-Migration.
+- irreversible Entfernung der Legacy-`mode`-Rollbackbrücke.
 
 ## Veraltete Runbooks
 

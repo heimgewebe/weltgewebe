@@ -33,7 +33,7 @@ use weltgewebe_api::{
     },
     config::AppConfig,
     routes::{
-        accounts::{AccountInternal, AccountMode, AccountPublic},
+        accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
         auth::GENERIC_LOGIN_MSG,
     },
@@ -53,7 +53,7 @@ fn account(id: &str, title: &str, role: Role, email: &str) -> AccountInternal {
             title: title.to_string(),
             summary: None,
             public_pos: None,
-            mode: AccountMode::Verortet,
+            map_state: GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],

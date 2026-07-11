@@ -60,7 +60,7 @@ use weltgewebe_api::{
     },
     domain_db::load_accounts_from_postgres,
     routes::{
-        accounts::{AccountInternal, AccountMode, AccountPublic},
+        accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         auth::{passkey_auth_options, PasskeyAuthOptionsPayload, SESSION_COOKIE_NAME},
     },
     state::{ApiState, OrderedCache},
@@ -556,7 +556,7 @@ async fn passkey_auth_options_route_reads_postgres_runtime_facade() {
                 title: "Runtime Facade User".to_string(),
                 summary: None,
                 public_pos: None,
-                mode: AccountMode::Verortet,
+                map_state: GarnrolleMapState::NotOnMap,
                 radius_m: 0,
                 disabled: false,
                 tags: vec![],
@@ -984,9 +984,9 @@ async fn passkey_register_reload_auth_route_proof() {
     let webauthn_user_id = Uuid::new_v4();
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, radius_m, disabled, role, email, webauthn_user_id, public_payload, private_payload) \
+            (id, kind, title, mode, map_state, radius_m, disabled, role, email, webauthn_user_id, public_payload, private_payload) \
          VALUES \
-            ($1, 'garnrolle', 'Route Reload Proof User', 'ron', 0, false, 'weber', $2, $3::uuid, '{}'::jsonb, '{}'::jsonb)",
+            ($1, 'garnrolle', 'Route Reload Proof User', NULL, 'not_on_map', 0, false, 'weber', $2, $3::uuid, '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(&account_id)
     .bind(&email)

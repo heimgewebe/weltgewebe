@@ -112,11 +112,11 @@ Weitere wichtige Prüfpfade:
 | Faden | Edge | Beziehung zwischen Garnrollen und/oder Knoten |
 | Gespräch | Conversation/Message | geplant und vertraglich beschrieben, aber noch kein vollständiger produktiver Persistenzpfad |
 
-`RoN` ist derzeit noch in Contracts, Daten und Migrationen als Legacy-Modus
-vorhanden. Das steht im Widerspruch zum angestrebten Modell „eine Garnrolle je
-Account; Sichtbarkeit und Verortung als Eigenschaften“ und wird in einem
-eigenen, migrationsgebundenen Cutover bereinigt. Neue Produkttexte sollen RoN
-nicht als zweiten Kontotyp festschreiben.
+Neue und öffentlich ausgegebene Accounts sind ausschließlich Garnrollen. Die
+Kartenwirkung wird über `map_state=not_on_map|exact|radius` beschrieben. Alte
+`ron`-/`mode`-Datensätze werden lesend privacy-sicher normalisiert; die nullable
+Datenbankspalte `mode` bleibt vorerst nur als Rollbackbrücke und wird erst nach
+einem belegten Produktionscutover entfernt.
 
 ## Daten- und Datenschutzgrenze
 

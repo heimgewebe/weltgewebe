@@ -75,7 +75,7 @@ mod tests {
                 title: "User".to_string(),
                 summary: None,
                 public_pos: None,
-                mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+                map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
                 radius_m: 0,
 
                 disabled: false,

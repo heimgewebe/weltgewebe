@@ -71,9 +71,9 @@ E-Mail-Adressen besitzen einen trim-/case-normalisierten partiellen Unique-Index
 `public_pos` wird nicht gespeichert, sondern aus privater Position, Radius und
 ID deterministisch abgeleitet.
 
-`kind` und `mode` verwenden noch Legacy-Defaults `ron`. Diese Defaults sind kein
-bestätigtes Zielmodell. Ihre Ablösung braucht eine Datenmigration und kann nicht
-nur dokumentarisch erfolgen.
+`kind` ist auf `garnrolle` begrenzt. `map_state` enthält `not_on_map`, `exact`
+oder `radius`. Die frühere Spalte `mode` ist nullable, besitzt keinen Default und
+dient nur noch als Rollbackbrücke für den stufenweisen Produktionscutover.
 
 ### `domain_nodes`
 
@@ -146,9 +146,8 @@ Ein vollständiger PostgreSQL-Cutover ist erst belegt, wenn:
 
 ## Logisches Zielmodell
 
-Das angestrebte Produktmodell besteht aus einer Garnrolle je Account,
-Eigenschaften für Sichtbarkeit und Verortung, Knoten als Kollektivgüter oder
-Orte sowie Fäden als Beziehungen. Dieses Zielmodell ist noch nicht vollständig
-mit den Legacyfeldern `kind`, `mode`, `role` und `ron` versöhnt. Bis zur
-Migration gelten die physischen Contracts und Datenintegritätsregeln vor einer
-vereinfachenden Produktbeschreibung.
+Das Produktmodell besteht aus einer Garnrolle je Account, `map_state` für
+Sichtbarkeit und Verortung, Knoten als Kollektivgüter oder Orte sowie Fäden als
+Beziehungen. Legacyfelder werden nur noch lesend normalisiert. Die spätere
+Entfernung der nullable Spalte `mode` bleibt an einen Produktions- und
+Rollbackbeleg gebunden.

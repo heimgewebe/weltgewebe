@@ -63,7 +63,7 @@ test.describe("Map URL addressing", () => {
             title: "URL Deep-Link Garnrolle",
             summary: "A garnrolle reachable via focus deep link.",
             public_pos: { lat: 53.55, lon: 10.05 },
-            mode: "verortet",
+            map_state: "exact",
             radius_m: 0,
             tags: [],
             modules: [],
