@@ -216,9 +216,10 @@ Testfälle:
 
 DB-Suiten für lokalen PostgreSQL-Proof sind vorbereitet (`db_domain_schema_migrations`,
 `db_domain_backfill`, `db_domain_read_path`, `db_domain_account_write_path`).
-Der neue Eigenprofil-Test wurde lokal gegen PostgreSQL 16 ausgeführt. Der
-frische PR-CI-Beleg für den geänderten vollständigen Harness steht aus
-(Job `db-domain-account-write-path-proof` in `.github/workflows/api.yml`).
+Der neue Eigenprofil-Test wurde lokal gegen PostgreSQL 16 ausgeführt und ist
+zusätzlich durch GitHub Actions Run `29149078893`, Job
+`db-domain-account-write-path-proof` (`86535506561`), auf Commit
+`83eeced1f1235687f3ccc99cf4300a133b8686ef` erfolgreich gebunden.
 
 `suppress_public_pos` wird von `POST /accounts` nicht akzeptiert; Phase E-A
 erhält Datenschutz über `visibility=private` und bestehende Loader-Semantik
