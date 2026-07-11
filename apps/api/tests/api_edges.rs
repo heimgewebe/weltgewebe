@@ -19,7 +19,7 @@ use weltgewebe_api::{
     config::{AppConfig, DomainReadSource},
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
-        accounts::{AccountInternal, AccountMode, AccountPublic},
+        accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
     },
     state::ApiState,
@@ -409,7 +409,7 @@ fn writer_account(id: &str, role: Role) -> AccountInternal {
             title: format!("Writer {id}"),
             summary: None,
             public_pos: None,
-            mode: AccountMode::Verortet,
+            map_state: GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],

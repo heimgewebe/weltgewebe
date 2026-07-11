@@ -18,6 +18,7 @@
 
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::{path::PathBuf, str::FromStr};
+use weltgewebe_api::domain_db::NewDomainAccountRow;
 
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL").expect(
@@ -322,108 +323,14 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
             }
         };
 
-        // JSONL serialises AccountPublic.kind as "type" (serde rename)
-        let kind = v
-            .get("type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("garnrolle")
-            .to_string();
-        let title = v
-            .get("title")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Untitled")
-            .to_string();
-
-        let ron_flag = v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false);
-        let visibility = v.get("visibility").and_then(|v| v.as_str());
-        let explicit_mode = v.get("mode").and_then(|v| v.as_str());
-
-        let disabled: bool = v.get("disabled").and_then(|v| v.as_bool()).unwrap_or(false);
-
-        let location_lat = v
-            .get("location")
-            .and_then(|l| l.get("lat"))
-            .and_then(f64_from_value);
-        let location_lon = v
-            .get("location")
-            .and_then(|l| l.get("lon"))
-            .and_then(f64_from_value);
-
-        let role = v
-            .get("role")
-            .and_then(|v| v.as_str())
-            .unwrap_or("gast")
-            .to_string();
-
-        // Normalize like from_jsonl_record / the API create path: trim, then
-        // treat an after-trim-empty value as "no email" (None), matching the
-        // unique index and the not-empty-after-trim check constraint.
-        let email: Option<String> = v
-            .get("email")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string());
-
-        // Validate webauthn_user_id as UUID before sending to PostgreSQL
-        let webauthn_user_id: Option<String> = v
-            .get("webauthn_user_id")
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.is_empty())
-            .filter(|s| uuid::Uuid::parse_str(s).is_ok())
-            .map(|s| s.to_string());
-
-        let created_at = v.get("created_at").map(parse_ts).unwrap_or(None);
-        let updated_at = v.get("updated_at").map(parse_ts).unwrap_or(None);
-
-        // Legacy mapping for mode
-        let mode = if let Some(m) = explicit_mode {
-            m.to_string()
-        } else if kind == "ron" || ron_flag {
-            "ron".to_string()
-        } else if visibility.is_some() || (location_lat.is_some() && location_lon.is_some()) {
-            "verortet".to_string()
-        } else {
-            "ron".to_string()
-        };
-
-        let mut radius_m: i64 = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
-
-        if visibility == Some("approximate") && radius_m == 0 {
-            radius_m = 250;
-        }
-
-        let public_payload = payload_str(&["summary", "tags"], &v);
-
-        // Construct private_payload preserving legacy fields
-        let mut priv_map = serde_json::Map::new();
-        if let Some(vis) = visibility {
-            priv_map.insert(
-                "visibility".to_string(),
-                serde_json::Value::String(vis.to_string()),
-            );
-            if vis == "private" {
-                priv_map.insert(
-                    "suppress_public_pos".to_string(),
-                    serde_json::Value::Bool(true),
-                );
+        let row = match NewDomainAccountRow::from_jsonl_record(&v) {
+            Ok(row) => row,
+            Err(_) => {
+                report.skipped_records += 1;
+                continue;
             }
-        }
-        if ron_flag {
-            priv_map.insert("ron_flag".to_string(), serde_json::Value::Bool(ron_flag));
-        }
-        if let Some(em) = explicit_mode {
-            priv_map.insert(
-                "mode".to_string(),
-                serde_json::Value::String(em.to_string()),
-            );
-        }
-
-        let private_payload = if priv_map.is_empty() {
-            "{}".to_string()
-        } else {
-            serde_json::to_string(&serde_json::Value::Object(priv_map)).unwrap()
         };
+        let email = row.email.clone();
 
         // Audit duplicate emails using the SAME normalization as the unique
         // index (lower(btrim(email))) and skip the duplicate BEFORE inserting,
@@ -460,21 +367,22 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
 
         let upsert_result = sqlx::query(
             "INSERT INTO domain_accounts
-                 (id, kind, title, mode, radius_m, disabled,
+                 (id, kind, title, mode, map_state, radius_m, disabled,
                   location_lat, location_lon,
                   role, email, webauthn_user_id,
                   created_at, updated_at,
                   public_payload, private_payload)
              VALUES
-                 ($1, $2, $3, $4, $5, $6,
-                  $7, $8,
-                  $9, $10, $11::uuid,
-                  $12, $13,
-                  $14::jsonb, $15::jsonb)
+                 ($1, $2, $3, $4, $5, $6, $7,
+                  $8, $9,
+                  $10, $11, $12::uuid,
+                  $13, $14,
+                  $15::jsonb, $16::jsonb)
              ON CONFLICT (id) DO UPDATE SET
                  kind             = EXCLUDED.kind,
                  title            = EXCLUDED.title,
                  mode             = EXCLUDED.mode,
+                 map_state        = EXCLUDED.map_state,
                  radius_m         = EXCLUDED.radius_m,
                  disabled         = EXCLUDED.disabled,
                  location_lat     = EXCLUDED.location_lat,
@@ -488,20 +396,21 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
                  private_payload  = EXCLUDED.private_payload",
         )
         .bind(&id)
-        .bind(&kind)
-        .bind(&title)
-        .bind(&mode)
-        .bind(radius_m)
-        .bind(disabled)
-        .bind(location_lat)
-        .bind(location_lon)
-        .bind(&role)
-        .bind(email.as_deref())
-        .bind(webauthn_user_id.as_deref())
-        .bind(created_at)
-        .bind(updated_at)
-        .bind(&public_payload)
-        .bind(&private_payload)
+        .bind(&row.kind)
+        .bind(&row.title)
+        .bind(row.legacy_mode.as_deref())
+        .bind(&row.map_state)
+        .bind(row.radius_m)
+        .bind(row.disabled)
+        .bind(row.location_lat)
+        .bind(row.location_lon)
+        .bind(&row.role)
+        .bind(row.email.as_deref())
+        .bind(row.webauthn_user_id.as_deref())
+        .bind(row.created_at)
+        .bind(row.updated_at)
+        .bind(&row.public_payload)
+        .bind(&row.private_payload)
         .execute(pool)
         .await;
 
@@ -732,8 +641,8 @@ async fn domain_backfill_edges_deterministic_and_idempotent() {
     pool.close().await;
 }
 
-/// Proves that 2 account fixtures (one verortet, one ron) import with correct
-/// field mapping, and re-import is idempotent.
+/// Proves that two legacy account fixtures normalize to canonical Garnrollen
+/// with correct map states and re-import idempotently.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn domain_backfill_accounts_deterministic_and_idempotent() {
@@ -757,25 +666,29 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
         "no duplicate emails in clean fixture"
     );
 
-    // Field mapping: kind, mode, role, email, location_lat/lon (verortet account)
-    let (kind, mode, role, email, loc_lat, loc_lon): (
+    // Field mapping for a legacy approximate account.
+    type AccountProjectionRow = (
         String,
+        Option<String>,
         String,
         String,
         Option<String>,
         Option<f64>,
         Option<f64>,
-    ) = sqlx::query_as(
-        "SELECT kind, mode, role, email, location_lat, location_lon
-         FROM domain_accounts WHERE id = $1",
-    )
-    .bind("backfill-proof-account-alpha")
-    .fetch_one(&pool)
-    .await
-    .expect("account alpha must exist after import");
+    );
+    let (kind, mode, map_state, role, email, loc_lat, loc_lon): AccountProjectionRow =
+        sqlx::query_as(
+            "SELECT kind, mode, map_state, role, email, location_lat, location_lon
+             FROM domain_accounts WHERE id = $1",
+        )
+        .bind("backfill-proof-account-alpha")
+        .fetch_one(&pool)
+        .await
+        .expect("account alpha must exist after import");
 
     assert_eq!(kind, "garnrolle");
-    assert_eq!(mode, "verortet");
+    assert_eq!(mode, None);
+    assert_eq!(map_state, "radius");
     assert_eq!(role, "weber");
     assert_eq!(email.as_deref(), Some("alpha@proof.example"));
     assert!(
@@ -787,7 +700,7 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
         "location_lon must map correctly"
     );
 
-    // ron account: no location
+    // Legacy hidden account: no location
     let (beta_lat, beta_lon): (Option<f64>, Option<f64>) =
         sqlx::query_as("SELECT location_lat, location_lon FROM domain_accounts WHERE id = $1")
             .bind("backfill-proof-account-beta")
@@ -796,11 +709,11 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
             .expect("account beta must exist");
     assert!(
         beta_lat.is_none(),
-        "ron account must have NULL location_lat"
+        "hidden account must have NULL location_lat"
     );
     assert!(
         beta_lon.is_none(),
-        "ron account must have NULL location_lon"
+        "hidden account must have NULL location_lon"
     );
 
     // radius_m type: stored as BIGINT, bound as i64
@@ -1025,8 +938,9 @@ async fn domain_backfill_legacy_account_semantics() {
     // legacy-private: visibility: "private" + location.
     // Compile-safety: use SQL scalar extraction (private_payload->>'key')
     // to read JSONB as TEXT, avoiding the sqlx/json feature dependency.
-    let (kind, mode, visibility, suppress_public_pos): (
+    let (kind, mode, map_state, visibility, suppress_public_pos): (
         String,
+        Option<String>,
         String,
         Option<String>,
         Option<String>,
@@ -1034,6 +948,7 @@ async fn domain_backfill_legacy_account_semantics() {
         "SELECT
              kind,
              mode,
+             map_state,
              private_payload->>'visibility',
              private_payload->>'suppress_public_pos'
          FROM domain_accounts
@@ -1044,7 +959,8 @@ async fn domain_backfill_legacy_account_semantics() {
     .await
     .expect("legacy-private must exist");
     assert_eq!(kind, "garnrolle", "missing type defaults to garnrolle");
-    assert_eq!(mode, "verortet", "location presence infers verortet");
+    assert_eq!(mode, None);
+    assert_eq!(map_state, "not_on_map");
     assert_eq!(
         visibility.as_deref(),
         Some("private"),
@@ -1057,30 +973,35 @@ async fn domain_backfill_legacy_account_semantics() {
     );
 
     // legacy-missing-type: missing type + location
-    let (kind, mode): (String, String) =
-        sqlx::query_as("SELECT kind, mode FROM domain_accounts WHERE id = 'legacy-missing-type'")
-            .fetch_one(&pool)
-            .await
-            .expect("legacy-missing-type must exist");
+    let (kind, mode, map_state): (String, Option<String>, String) = sqlx::query_as(
+        "SELECT kind, mode, map_state FROM domain_accounts WHERE id = 'legacy-missing-type'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("legacy-missing-type must exist");
     assert_eq!(kind, "garnrolle");
-    assert_eq!(mode, "verortet");
+    assert_eq!(mode, None);
+    assert_eq!(map_state, "exact");
 
     // legacy-missing-mode-ron-flag: missing mode + ron_flag: true
-    let (mode,): (String,) = sqlx::query_as(
-        "SELECT mode FROM domain_accounts WHERE id = 'legacy-missing-mode-ron-flag'",
+    let (mode, map_state): (Option<String>, String) = sqlx::query_as(
+        "SELECT mode, map_state FROM domain_accounts WHERE id = 'legacy-missing-mode-ron-flag'",
     )
     .fetch_one(&pool)
     .await
     .expect("legacy-missing-mode-ron-flag must exist");
-    assert_eq!(mode, "ron");
+    assert_eq!(mode, None);
+    assert_eq!(map_state, "not_on_map");
 
     // legacy-approximate: visibility: "approximate" + zero radius
-    let (radius_m,): (i64,) =
-        sqlx::query_as("SELECT radius_m FROM domain_accounts WHERE id = 'legacy-approximate'")
-            .fetch_one(&pool)
-            .await
-            .expect("legacy-approximate must exist");
+    let (radius_m, map_state): (i64, String) = sqlx::query_as(
+        "SELECT radius_m, map_state FROM domain_accounts WHERE id = 'legacy-approximate'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("legacy-approximate must exist");
     assert_eq!(radius_m, 250);
+    assert_eq!(map_state, "radius");
 
     sqlx::query("DELETE FROM domain_accounts WHERE id LIKE 'legacy-%'")
         .execute(&pool)

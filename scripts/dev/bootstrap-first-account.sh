@@ -3,9 +3,9 @@ set -euo pipefail
 
 # Bootstrap the first real account with a public map position.
 #
-# The bootstrap account is always a verortete Garnrolle: the whole point is a
-# visible account with a public position on the map. Accounts without
-# public_pos by contract and are therefore not produced by this path.)
+# The bootstrap account is always an exactly mapped Garnrolle: the whole point
+# is a visible account with a public position on the map. Accounts without a
+# public position are therefore not produced by this path.
 #
 # Reads account data from environment variables. See usage() below.
 #
@@ -35,7 +35,7 @@ Flags:
   --force           Re-run even if the bootstrap metadata file exists
   -h, --help        Show this help
 
-The created account is type=garnrolle, mode=verortet, radius_m=0 (exact
+The created account is type=garnrolle, map_state=exact, radius_m=0 (exact
 public_pos). The TARGET_DIR positional arg defaults to .gewebe/in. On success
 the metadata file <TARGET_DIR>/bootstrap-first-account.env is written.
 
@@ -314,13 +314,13 @@ tags_to_json_array() {
 }
 
 # --- Build account JSON (pure shell; no jq required) ---
-# Always type=garnrolle / mode=verortet with location + radius_m=0 so the API
+# Always type=garnrolle / map_state=exact with location + radius_m=0 so the API
 # computes an exact public_pos. summary/email are omitted when empty
 # (contract requires summary minLength 1; additionalProperties is projected out
 # by verify-demo-data.ts so operational fields role/email are allowed in JSONL).
 TAGS_JSON="$(tags_to_json_array "$ACCOUNT_TAGS")"
 TITLE_ESC="$(json_escape "$ACCOUNT_TITLE")"
-ACCOUNT_JSON="{\"id\":\"${ACCOUNT_ID}\",\"type\":\"garnrolle\",\"mode\":\"verortet\""
+ACCOUNT_JSON="{\"id\":\"${ACCOUNT_ID}\",\"type\":\"garnrolle\",\"map_state\":\"exact\""
 ACCOUNT_JSON="${ACCOUNT_JSON},\"title\":\"${TITLE_ESC}\",\"tags\":${TAGS_JSON}"
 ACCOUNT_JSON="${ACCOUNT_JSON},\"role\":\"${ACCOUNT_ROLE}\""
 ACCOUNT_JSON="${ACCOUNT_JSON},\"location\":{\"lat\":${LAT},\"lon\":${LON}}"

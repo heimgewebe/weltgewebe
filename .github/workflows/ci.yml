@@ -126,6 +126,9 @@ jobs:
       - name: Validate canonical truth contract
         run: python3 -m unittest scripts.ci.tests.test_canonical_truth_contract -v
 
+      - name: Validate Garnrolle ontology contract
+        run: python3 -m unittest scripts.ci.tests.test_garnrolle_ontology_contract -v
+
   ci:
     needs: docs-changes
     runs-on: ubuntu-latest

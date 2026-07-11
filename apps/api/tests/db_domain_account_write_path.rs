@@ -46,7 +46,7 @@ use weltgewebe_api::{
     },
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
-        accounts::{AccountInternal, AccountMode, AccountPublic},
+        accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
     },
     state::ApiState,
@@ -113,7 +113,7 @@ fn admin_operator(id: &str) -> AccountInternal {
             title: format!("Operator {id}"),
             summary: None,
             public_pos: None,
-            mode: AccountMode::Verortet,
+            map_state: GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],
@@ -260,7 +260,8 @@ async fn account_create_persists_stable_webauthn_user_id_across_reload() -> Resu
     assert_eq!(created["id"], id);
     assert_eq!(created["title"], "Write Path");
     assert_eq!(created["type"], "garnrolle");
-    assert_eq!(created["mode"], "verortet");
+    assert_eq!(created["map_state"], "exact");
+    assert!(created.get("mode").is_none());
     // radius_m=0 => public_pos equals the submitted location exactly.
     assert_eq!(created["public_pos"]["lat"], 53.55);
     assert_eq!(created["public_pos"]["lon"], 9.99);
@@ -268,15 +269,16 @@ async fn account_create_persists_stable_webauthn_user_id_across_reload() -> Resu
     assert!(created.get("location").is_none());
 
     // domain_accounts row: explicit columns.
-    let (kind, mode, role, title, lat, lon): (
+    let (kind, mode, map_state, role, title, lat, lon): (
         String,
+        Option<String>,
         String,
         String,
         String,
         Option<f64>,
         Option<f64>,
     ) = sqlx::query_as(
-        "SELECT kind, mode, role, title, location_lat, location_lon \
+        "SELECT kind, mode, map_state, role, title, location_lat, location_lon \
          FROM domain_accounts WHERE id = $1",
     )
     .bind(id)
@@ -284,7 +286,8 @@ async fn account_create_persists_stable_webauthn_user_id_across_reload() -> Resu
     .await
     .expect("account row must exist after create");
     assert_eq!(kind, "garnrolle");
-    assert_eq!(mode, "verortet");
+    assert_eq!(mode, None);
+    assert_eq!(map_state, "exact");
     assert_eq!(role, "weber");
     assert_eq!(title, "Write Path");
     assert!((lat.unwrap() - 53.55).abs() < 1e-9);
@@ -317,10 +320,7 @@ async fn account_create_persists_stable_webauthn_user_id_across_reload() -> Resu
         public.get("tags").and_then(|v| v.as_array()).map(Vec::len),
         Some(2)
     );
-    assert_eq!(
-        private.get("mode").and_then(|v| v.as_str()),
-        Some("verortet")
-    );
+    assert!(private.get("mode").is_none());
     assert!(private.get("visibility").is_none());
 
     // JSONL must NOT be appended in PostgreSQL write mode.
@@ -335,7 +335,7 @@ async fn account_create_persists_stable_webauthn_user_id_across_reload() -> Resu
         let accounts = state.accounts.read().await;
         let internal = accounts.get(id).expect("created account present in cache");
         assert_eq!(internal.public.title, "Write Path");
-        assert_eq!(internal.public.mode, AccountMode::Verortet);
+        assert_eq!(internal.public.map_state, GarnrolleMapState::Exact);
         assert_eq!(internal.role, Role::Weber);
         assert_eq!(internal.webauthn_user_id, db_uuid);
     }
@@ -346,7 +346,7 @@ async fn account_create_persists_stable_webauthn_user_id_across_reload() -> Resu
         .expect("reload accounts from postgres");
     let internal = reloaded.get(id).expect("account reloaded from postgres");
     assert_eq!(internal.public.title, "Write Path");
-    assert_eq!(internal.public.mode, AccountMode::Verortet);
+    assert_eq!(internal.public.map_state, GarnrolleMapState::Exact);
     assert_eq!(internal.public.radius_m, 0);
     assert_eq!(internal.public.summary.as_deref(), Some("Hello"));
     assert_eq!(internal.webauthn_user_id, db_uuid);
@@ -459,8 +459,8 @@ async fn postgres_account_create_duplicate_id_conflicts_without_side_effects() -
     let id = DUP_ID;
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, radius_m, role, public_payload, private_payload) \
-         VALUES ($1, 'garnrolle', 'Existing', 'verortet', 0, 'weber', '{}'::jsonb, '{}'::jsonb)",
+            (id, kind, title, mode, map_state, radius_m, role, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', 'Existing', NULL, 'not_on_map', 0, 'weber', '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(id)
     .execute(&pool)
@@ -606,8 +606,8 @@ async fn route_maps_db_email_conflict_to_409_without_side_effects() -> Result<()
     // Seed a row directly in PostgreSQL (deliberately absent from the cache).
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, radius_m, role, email, public_payload, private_payload) \
-         VALUES ($1, 'garnrolle', 'Existing', 'verortet', 0, 'weber', $2, '{}'::jsonb, '{}'::jsonb)",
+            (id, kind, title, mode, map_state, radius_m, role, email, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', 'Existing', NULL, 'not_on_map', 0, 'weber', $2, '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(&existing_id)
     .bind(EMAIL_ALPHA)
@@ -674,10 +674,10 @@ async fn update_account_email_helper_persists_and_classifies_duplicate() -> Resu
 
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, radius_m, role, email, public_payload, private_payload) \
+            (id, kind, title, mode, map_state, radius_m, role, email, public_payload, private_payload) \
          VALUES \
-            ($1, 'ron', 'Step Up Account', 'ron', 0, 'weber', $2, '{}'::jsonb, '{}'::jsonb), \
-            ($3, 'ron', 'Other Account', 'ron', 0, 'weber', $4, '{}'::jsonb, '{}'::jsonb)",
+            ($1, 'garnrolle', 'Step Up Account', NULL, 'not_on_map', 0, 'weber', $2, '{}'::jsonb, '{}'::jsonb), \
+            ($3, 'garnrolle', 'Other Account', NULL, 'not_on_map', 0, 'weber', $4, '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(STEP_UP_EMAIL_ID)
     .bind("old-step-up@example.invalid")
@@ -758,8 +758,8 @@ async fn step_up_update_email_persists_to_postgres_and_reloads() -> Result<()> {
 
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, radius_m, role, email, public_payload, private_payload) \
-         VALUES ($1, 'ron', 'Step Up Account', 'ron', 0, 'admin', $2, '{}'::jsonb, '{}'::jsonb)",
+            (id, kind, title, mode, map_state, radius_m, role, email, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', 'Step Up Account', NULL, 'not_on_map', 0, 'admin', $2, '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(STEP_UP_EMAIL_ID)
     .bind("old-route-step-up@example.invalid")

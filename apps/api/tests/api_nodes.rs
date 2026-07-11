@@ -236,7 +236,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         title: "Weber".to_string(),
         summary: None,
         public_pos: None,
-        mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+        map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
         radius_m: 0,
 
         disabled: false,
@@ -340,7 +340,7 @@ async fn postgres_read_source_blocks_node_patch_without_persisting() -> anyhow::
         title: "Weber".to_string(),
         summary: None,
         public_pos: None,
-        mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+        map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
         radius_m: 0,
         disabled: false,
         tags: vec![],
@@ -487,7 +487,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
         title: "Weber".to_string(),
         summary: None,
         public_pos: None,
-        mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+        map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
         radius_m: 0,
 
         disabled: false,

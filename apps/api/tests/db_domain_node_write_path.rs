@@ -41,7 +41,7 @@ use weltgewebe_api::{
     domain_db::{load_nodes_from_postgres, patch_node_in_postgres, NodePatchInput},
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
-        accounts::{AccountInternal, AccountMode, AccountPublic},
+        accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
     },
     state::ApiState,
@@ -122,7 +122,7 @@ fn admin_operator(id: &str) -> AccountInternal {
             title: format!("Operator {id}"),
             summary: None,
             public_pos: None,
-            mode: AccountMode::Verortet,
+            map_state: GarnrolleMapState::NotOnMap,
             radius_m: 0,
             disabled: false,
             tags: vec![],

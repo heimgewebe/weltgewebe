@@ -44,6 +44,7 @@ type AccountRow = (
     String,
     String,
     String,
+    Option<String>,
     String,
     i64,
     bool,
@@ -314,7 +315,7 @@ pub async fn audit_auth_user_id_backfill_readiness(
 
 pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> {
     let rows: Vec<AccountRow> = sqlx::query_as(
-        "SELECT id, kind, title, mode, radius_m, disabled, \
+        "SELECT id, kind, title, mode, map_state, radius_m, disabled, \
          location_lat, location_lon, role, email, \
          webauthn_user_id::text, public_payload::text, private_payload::text \
          FROM domain_accounts ORDER BY id ASC",
@@ -329,7 +330,8 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
         id,
         kind,
         title,
-        db_mode,
+        legacy_mode,
+        db_map_state,
         radius_m,
         disabled,
         location_lat,
@@ -348,22 +350,37 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
         let visibility = private_payload.get("visibility").and_then(|v| v.as_str());
-        let effective_mode = if kind == "ron" || ron_flag {
-            "ron".to_string()
+        let suppress_public_pos = private_payload
+            .get("suppress_public_pos")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let legacy_not_on_map = kind == "ron"
+            || ron_flag
+            || legacy_mode.as_deref() == Some("ron")
+            || visibility == Some("private")
+            || suppress_public_pos;
+        let effective_map_state = if legacy_not_on_map
+            || db_map_state == "not_on_map"
+            || location_lat.is_none()
+            || location_lon.is_none()
+        {
+            "not_on_map"
+        } else if db_map_state == "radius" || visibility == Some("approximate") || radius_m > 0 {
+            "radius"
         } else {
-            db_mode
+            "exact"
         };
-        let effective_radius_m = if visibility == Some("approximate") && radius_m == 0 {
-            250
-        } else {
-            radius_m
+        let effective_radius_m = match effective_map_state {
+            "radius" if radius_m == 0 => 250,
+            "radius" => radius_m,
+            _ => 0,
         };
 
         let mut record = Map::new();
         record.insert("id".to_string(), json!(id));
-        record.insert("type".to_string(), json!(kind));
+        record.insert("type".to_string(), json!("garnrolle"));
         record.insert("title".to_string(), json!(title));
-        record.insert("mode".to_string(), json!(effective_mode));
+        record.insert("map_state".to_string(), json!(effective_map_state));
         if let Some(summary) = public_payload.get("summary").and_then(|v| v.as_str()) {
             record.insert("summary".to_string(), json!(summary));
         }
@@ -380,15 +397,9 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
             json!(effective_radius_m.max(0) as u64),
         );
         record.insert("disabled".to_string(), json!(disabled));
-        if let Some(vis) = visibility {
-            record.insert("visibility".to_string(), json!(vis));
-        }
-        if ron_flag {
-            record.insert("ron_flag".to_string(), json!(true));
-        }
 
         let value = Value::Object(record);
-        let mut public = match map_json_to_public_account(&value) {
+        let public = match map_json_to_public_account(&value) {
             Some(public) => public,
             None => {
                 tracing::warn!(account_id = %id, "skipping domain account that failed projection");
@@ -396,13 +407,6 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
                 continue;
             }
         };
-        let suppress_public_pos = private_payload
-            .get("suppress_public_pos")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        if suppress_public_pos {
-            public.public_pos = None;
-        }
         let role = Role::from_str_lossy(&role);
         let webauthn_user_id = webauthn_text
             .as_deref()
@@ -631,7 +635,8 @@ pub struct NewDomainAccountRow {
     pub id: String,
     pub kind: String,
     pub title: String,
-    pub mode: String,
+    pub legacy_mode: Option<String>,
+    pub map_state: String,
     pub radius_m: i64,
     pub disabled: bool,
     pub location_lat: Option<f64>,
@@ -652,13 +657,15 @@ impl NewDomainAccountRow {
     /// This mirrors the Phase C backfill mapping exactly so the Phase D loader
     /// reconstructs the same public projection. In particular:
     /// - `kind` ← `type` (default `garnrolle`)
-    /// - `mode` ← explicit `mode`, else `ron` when `type == "ron"` or `ron_flag`,
-    ///   else `verortet` when visibility or coordinates are present, else `ron`
+    /// - `kind` is canonicalised to `garnrolle`
+    /// - `map_state` is `not_on_map`, `exact`, or `radius`; legacy `ron` fields
+    ///   only force the privacy-safe `not_on_map` state
+    /// - the deprecated database `mode` column receives NULL for new writes
     /// - `radius_m` is bumped to 250 when `visibility == "approximate"` and 0
     ///   (idempotent with the loader, which only adjusts when the stored radius
     ///   is still 0)
-    /// - `private_payload` preserves `visibility`, `suppress_public_pos` (for
-    ///   private visibility), `ron_flag`, and the explicit `mode`. Phase E-A
+    /// - `private_payload` preserves only `visibility` and
+    ///   `suppress_public_pos` where needed for compatibility. Phase E-A
     ///   `POST /accounts` does not accept `suppress_public_pos` in the request
     ///   payload; privacy on create uses `visibility=private` (or loader defaults).
     /// - `created_at` / `updated_at` are taken from the record if present, else
@@ -674,11 +681,11 @@ impl NewDomainAccountRow {
             .map(|s| s.to_string())
             .context("account record is missing a non-empty id")?;
 
-        let kind = v
+        let legacy_kind = v
             .get("type")
             .and_then(|v| v.as_str())
-            .unwrap_or("garnrolle")
-            .to_string();
+            .unwrap_or("garnrolle");
+        let kind = "garnrolle".to_string();
         let title = v
             .get("title")
             .and_then(|v| v.as_str())
@@ -727,20 +734,39 @@ impl NewDomainAccountRow {
         let created_at = v.get("created_at").and_then(parse_ts);
         let updated_at = v.get("updated_at").and_then(parse_ts);
 
-        let mode = if let Some(m) = explicit_mode {
-            m.to_string()
-        } else if kind == "ron" || ron_flag {
-            "ron".to_string()
-        } else if visibility.is_some() || (location_lat.is_some() && location_lon.is_some()) {
-            "verortet".to_string()
-        } else {
-            "ron".to_string()
-        };
-
+        let legacy_not_on_map = legacy_kind == "ron"
+            || ron_flag
+            || explicit_mode == Some("ron")
+            || visibility == Some("private")
+            || v.get("suppress_public_pos")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false);
         let mut radius_m: i64 = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
-        if visibility == Some("approximate") && radius_m == 0 {
-            radius_m = 250;
+        let explicit_map_state = v.get("map_state").and_then(|v| v.as_str());
+        if let Some(state) = explicit_map_state {
+            if !matches!(state, "not_on_map" | "exact" | "radius") {
+                anyhow::bail!("invalid account map_state: {state}");
+            }
         }
+        let map_state = if legacy_not_on_map
+            || explicit_map_state == Some("not_on_map")
+            || location_lat.is_none()
+            || location_lon.is_none()
+        {
+            radius_m = 0;
+            "not_on_map".to_string()
+        } else if explicit_map_state == Some("radius")
+            || visibility == Some("approximate")
+            || radius_m > 0
+        {
+            if radius_m == 0 {
+                radius_m = 250;
+            }
+            "radius".to_string()
+        } else {
+            radius_m = 0;
+            "exact".to_string()
+        };
 
         let public_payload = payload_from_keys(&["summary", "tags"], v);
 
@@ -750,12 +776,6 @@ impl NewDomainAccountRow {
             if vis == "private" {
                 priv_map.insert("suppress_public_pos".to_string(), Value::Bool(true));
             }
-        }
-        if ron_flag {
-            priv_map.insert("ron_flag".to_string(), Value::Bool(true));
-        }
-        if let Some(em) = explicit_mode {
-            priv_map.insert("mode".to_string(), Value::String(em.to_string()));
         }
         let private_payload = if priv_map.is_empty() {
             "{}".to_string()
@@ -768,7 +788,8 @@ impl NewDomainAccountRow {
             id,
             kind,
             title,
-            mode,
+            legacy_mode: None,
+            map_state,
             radius_m,
             disabled,
             location_lat,
@@ -832,22 +853,23 @@ pub async fn insert_account_from_jsonl_record(
 
     let result = sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, radius_m, disabled, \
+            (id, kind, title, mode, map_state, radius_m, disabled, \
              location_lat, location_lon, \
              role, email, webauthn_user_id, \
              created_at, updated_at, \
              public_payload, private_payload) \
          VALUES \
-            ($1, $2, $3, $4, $5, $6, \
-             $7, $8, \
-             $9, $10, $11::uuid, \
-             $12, $13, \
-             $14::jsonb, $15::jsonb)",
+            ($1, $2, $3, $4, $5, $6, $7, \
+             $8, $9, \
+             $10, $11, $12::uuid, \
+             $13, $14, \
+             $15::jsonb, $16::jsonb)",
     )
     .bind(&row.id)
     .bind(&row.kind)
     .bind(&row.title)
-    .bind(&row.mode)
+    .bind(row.legacy_mode.as_deref())
+    .bind(&row.map_state)
     .bind(row.radius_m)
     .bind(row.disabled)
     .bind(row.location_lat)
@@ -1204,7 +1226,7 @@ mod write_path_tests {
         json!({
             "id": "writepath-unit-1",
             "type": "garnrolle",
-            "mode": "verortet",
+            "map_state": "radius",
             "title": "Unit",
             "summary": "A summary",
             "tags": ["x", "y"],
@@ -1221,7 +1243,8 @@ mod write_path_tests {
         assert_eq!(row.id, "writepath-unit-1");
         assert_eq!(row.kind, "garnrolle");
         assert_eq!(row.title, "Unit");
-        assert_eq!(row.mode, "verortet");
+        assert_eq!(row.legacy_mode, None);
+        assert_eq!(row.map_state, "radius");
         assert_eq!(row.radius_m, 250);
         assert!(!row.disabled);
         assert_eq!(row.location_lat, Some(53.5));
@@ -1239,12 +1262,9 @@ mod write_path_tests {
             Some("A summary")
         );
         assert!(public.get("tags").and_then(|v| v.as_array()).is_some());
-        // private_payload preserves the explicit mode (mirrors backfill)
+        // New writes do not persist the legacy identity mode.
         let private: Value = serde_json::from_str(&row.private_payload).expect("private json");
-        assert_eq!(
-            private.get("mode").and_then(|v| v.as_str()),
-            Some("verortet")
-        );
+        assert!(private.get("mode").is_none());
         assert!(private.get("visibility").is_none());
         assert!(private.get("ron_flag").is_none());
     }
@@ -1268,6 +1288,38 @@ mod write_path_tests {
             private.get("suppress_public_pos").and_then(|v| v.as_bool()),
             Some(true)
         );
+    }
+
+    #[test]
+    fn invalid_explicit_map_state_is_rejected() {
+        let record = json!({
+            "id": "writepath-unit-invalid-state",
+            "type": "garnrolle",
+            "title": "Invalid state",
+            "map_state": "public-ish",
+            "location": { "lat": 53.5, "lon": 10.0 }
+        });
+        let error = NewDomainAccountRow::from_jsonl_record(&record)
+            .expect_err("unknown map_state must not be repaired implicitly");
+        assert!(error.to_string().contains("invalid account map_state"));
+    }
+
+    #[test]
+    fn explicit_not_on_map_keeps_internal_location_private() {
+        let record = json!({
+            "id": "writepath-unit-hidden-location",
+            "type": "garnrolle",
+            "title": "Hidden location",
+            "map_state": "not_on_map",
+            "location": { "lat": 53.5, "lon": 10.0 },
+            "radius_m": 500
+        });
+        let row = NewDomainAccountRow::from_jsonl_record(&record).expect("map");
+        assert_eq!(row.map_state, "not_on_map");
+        assert_eq!(row.radius_m, 0);
+        assert_eq!(row.location_lat, Some(53.5));
+        assert_eq!(row.location_lon, Some(10.0));
+        assert_eq!(row.legacy_mode, None);
     }
 
     #[test]
@@ -1318,7 +1370,7 @@ mod write_path_tests {
     }
 
     #[test]
-    fn ron_flag_forces_ron_mode() {
+    fn ron_flag_normalizes_to_not_on_map() {
         let record = json!({
             "id": "writepath-unit-ron",
             "type": "garnrolle",
@@ -1326,12 +1378,10 @@ mod write_path_tests {
             "ron_flag": true
         });
         let row = NewDomainAccountRow::from_jsonl_record(&record).expect("map");
-        assert_eq!(row.mode, "ron");
+        assert_eq!(row.legacy_mode, None);
+        assert_eq!(row.map_state, "not_on_map");
         let private: Value = serde_json::from_str(&row.private_payload).expect("private json");
-        assert_eq!(
-            private.get("ron_flag").and_then(|v| v.as_bool()),
-            Some(true)
-        );
+        assert!(private.get("ron_flag").is_none());
     }
 
     #[test]

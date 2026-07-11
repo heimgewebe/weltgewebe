@@ -98,8 +98,9 @@ darstellen.
 ## Bewusste Ausbaugrenzen
 
 - JSONL ist noch nicht vollständig durch PostgreSQL abgelöst.
-- Das Legacy-Modell `ron` widerspricht dem angestrebten einheitlichen
-  Garnrollenmodell und braucht einen migrationsgebundenen Cutover.
+- Neue Accounts und öffentliche Projektionen verwenden nur noch Garnrolle plus
+  `map_state`. Legacy-RoN wird lesend auf `not_on_map` normalisiert; die nullable
+  DB-Spalte `mode` bleibt bis zum belegten Produktionscutover als Rollbackbrücke.
 - Gesprächs- und Nachrichtencontracts bedeuten noch keine produktive
   Persistenzfläche.
 - NATS im Stack bedeutet noch keinen belegten Transactional-Outbox-Betrieb.

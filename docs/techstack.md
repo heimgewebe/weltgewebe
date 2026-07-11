@@ -85,7 +85,7 @@ Für diese Punkte ist jeweils ein eigener Runtime- oder Ende-zu-Ende-Beleg nöti
 ## Geplant oder noch unvollständig
 
 - vollständiger JSONL-zu-PostgreSQL-Cutover
-- einheitliches Garnrollenmodell ohne RoN-Kontotyp
+- Entfernung der nullable Legacy-`mode`-Rollbackspalte nach belegtem Produktionscutover
 - durchgängiger Garnrolle–Knoten–Faden-Produktfluss
 - Gespräche und Nachrichten
 - föderale Governance und Gewebekonten

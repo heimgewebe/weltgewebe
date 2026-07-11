@@ -167,11 +167,11 @@ mod tests {
         AccountInternal {
             public: AccountPublic {
                 id: id.to_string(),
-                kind: "ron".to_string(),
+                kind: "garnrolle".to_string(),
                 title: "Dummy".to_string(),
                 summary: None,
                 public_pos: None,
-                mode: crate::routes::accounts::AccountMode::Ron,
+                map_state: crate::routes::accounts::GarnrolleMapState::NotOnMap,
                 radius_m: 0,
                 disabled: false,
                 tags: vec![],
