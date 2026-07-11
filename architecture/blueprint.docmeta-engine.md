@@ -2,9 +2,13 @@
 id: blueprint.docmeta-engine
 title: Docmeta Engine Blueprint
 summary: Blaupause zur schrittweisen Umsetzung einer selbsterhaltenden Dokumentationsarchitektur.
-role: norm
-organ: governance
-status: canonical
+role: action
+organ: docmeta
+status: active
+canonicality: supporting
+lifecycle_state: active
+owner: docmeta
+review_after: 2026-10-11
 last_reviewed: 2026-06-09
 depends_on: []
 relations: []

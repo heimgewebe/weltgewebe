@@ -2,7 +2,7 @@
 id: ui-state-machine
 title: Weltgewebe UI State Machine
 doc_type: blueprint
-status: canonical
+status: deprecated
 summary: Kanonische Zustandsmaschine der Weltgewebe-UI und verbindliche Implementierungsregeln.
 relations:
   - type: relates_to
@@ -12,6 +12,8 @@ relations:
   - type: relates_to
     target: docs/roadmap.md
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/specs/ui-state-machine.md`.
+
 
 # Weltgewebe UI State Machine
 

@@ -2,7 +2,7 @@
 id: ui-interaction-doctrine
 title: Weltgewebe UI Interaction Doctrine
 doc_type: blueprint
-status: canonical
+status: deprecated
 summary: Kanonischer Interaktionscontract für das Fokuspanel-Modell der Weltgewebe-UI (Karte, Fokuspanel, Aktionsleiste, Kartenlinsen, Komposition, URL-Adressierung).
 relations:
   - type: relates_to
@@ -16,6 +16,8 @@ relations:
   - type: relates_to
     target: docs/roadmap.md
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/specs/ui-interaction.md`.
+
 
 # Weltgewebe UI Interaction Doctrine
 

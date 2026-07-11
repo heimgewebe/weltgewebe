@@ -2,7 +2,7 @@
 id: overview.zusammenstellung
 title: Zusammenstellung (Übersicht)
 doc_type: reference
-status: active
+status: deprecated
 summary: Systematische Zusammenfassung aus der Übersichtsperspektive.
 relations:
   - type: relates_to
@@ -10,6 +10,8 @@ relations:
   - type: relates_to
     target: docs/overview/inhalt.md
 ---
+> **Historische Übersicht:** Der aktuelle Einstieg steht in `docs/index.md`.
+
 # Systematik & Strukturüberblick
 
 Diese Zusammenstellung führt durch die zentralen Orientierungspunkte der Weltgewebe-Dokumentation.

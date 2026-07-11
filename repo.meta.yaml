@@ -30,10 +30,15 @@ cognitive_modules:
 
 canonical_sources:
   - repo.meta.yaml
+  - manifest/repo-index.yaml
   - AGENTS.md
   - agent-policy.yaml
   - docs/policies/agent-reading-protocol.md
   - docs/policies/architecture-critique.md
+  - docs/specs/map-experience.md
+  - docs/specs/ui-interaction.md
+  - docs/specs/ui-state-machine.md
+  - docs/specs/garnrolle-knoten-faden.md
 
 discovery_roots:
   - .github/workflows/
@@ -126,9 +131,11 @@ truth_model:
     - class: runtime_configs_and_code
       paths: ["infra/compose/*.yml", "apps/api/src/*", "apps/web/src/*", ".github/workflows/*.yml"]
     - class: normative_specifications
-      paths: ["docs/specs/*", "docs/adr/*", "docs/blueprints/*"]
+      paths: ["docs/specs/*", "docs/adr/*"]
     - class: diagnostic_reports
-      paths: ["docs/reports/*"]
+      paths: ["docs/reports/*", "docs/proofs/*"]
+    - class: planning_material
+      paths: ["docs/blueprints/*", "docs/roadmap.md", "docs/tasks/*"]
     - class: navigational_indices
       paths: ["docs/index.md"]
     - class: generated_diagnostics

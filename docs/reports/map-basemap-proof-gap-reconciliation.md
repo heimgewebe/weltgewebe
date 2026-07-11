@@ -2,8 +2,8 @@
 id: map-basemap-proof-gap-reconciliation
 title: MAP-PROOF-001 — Basemap Proof Gap Reconciliation
 doc_type: report
-status: active
-lifecycle_state: active
+status: deprecated
+lifecycle_state: archived
 lifecycle: audit
 owner_task: DOCMETA-REPORT-LIFECYCLE-001
 review_after: 2026-09-29
@@ -22,6 +22,8 @@ relations:
   - type: relates_to
     target: .github/workflows/basemap-runtime-proof.yml
 ---
+> **Archivierter Diagnosebeleg:** Nicht als aktuelle Produkt- oder Runtimewahrheit verwenden. Aktuelle UX-Regeln stehen in `docs/specs/map-experience.md`; aktueller Implementierungsstand ist frisch aus Code und CI abzuleiten.
+
 
 # MAP-PROOF-001 — Basemap Proof Gap Reconciliation
 

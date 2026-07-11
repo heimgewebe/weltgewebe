@@ -3,10 +3,16 @@ id: docs.policies.architecture-critique
 title: "Architekturkritik-Skill: weltgewebe.architecture.critique"
 doc_type: policy
 status: canonical
-summary: >
-  Kognitives Protokoll für strukturelle Architekturkritik im Weltgewebe-Kontext.
-  Definiert Analysesequenz, Prüfachsen, Evidenz- und Ableitungsdisziplin und Pflichtstruktur
-  für Agenten-gestützte Architekturreviews.
+verifies_with: []
+depends_on: []
+review_after: 2026-10-11
+last_reviewed: 2026-07-11
+owner: governance
+organ: governance
+role: norm
+lifecycle_state: active
+canonicality: normative
+summary: Kognitives Protokoll für strukturelle Architekturkritik, Evidenzdisziplin und Architekturreviews.
 relations:
   - type: relates_to
     target: docs/policies/agent-reading-protocol.md
@@ -15,7 +21,7 @@ relations:
   - type: relates_to
     target: docs/weltgewebe-agenten-manifest.md
   - type: relates_to
-    target: docs/konzepte/garnrolle-und-verortung.md
+    target: docs/specs/garnrolle-knoten-faden.md
 ---
 
 # weltgewebe.architecture.critique

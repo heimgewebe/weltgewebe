@@ -30,7 +30,7 @@ Generated automatically. Do not edit.
 | blueprints.auth-persistence-runtime-proof | Auth-Persistenz — Runtime-Proof-Blaupause | blueprint | active | docs/blueprints/auth-persistence-runtime-proof.md |
 | blueprints.auth-roadmap | Auth Roadmap | roadmap | active | docs/blueprints/auth-roadmap.md |
 | blueprints.domain-data-postgres-cutover | Domain Data PostgreSQL Cutover | blueprint | active | docs/blueprints/domain-data-postgres-cutover.md |
-| blueprints.weltgewebe.auth-and-ui-routing | Auth und UI-Routing | reference | active | docs/blueprints/weltgewebe.auth-and-ui-routing.md |
+| blueprints.weltgewebe.auth-and-ui-routing | Auth und UI-Routing | reference | deprecated | docs/blueprints/weltgewebe.auth-and-ui-routing.md |
 | blueprints.weltgewebe.config.diff | Config Diff | reference | deprecated | docs/blueprints/weltgewebe.config.diff.md |
 | blueprints.weltgewebe.deploy.plan | Deploy-Plan | reference | deprecated | docs/blueprints/weltgewebe.deploy.plan.md |
 | datenmodell | Datenmodell | reference | active | docs/datenmodell.md |
@@ -57,9 +57,9 @@ Generated automatically. Do not edit.
 | docs.architecture.overview | Architekturüberblick | architecture | active | docs/architekturstruktur.md |
 | docs.blueprints.agent-operability | Minimaler Agent-Operability-Kern | blueprint | draft | docs/blueprints/agent-operability-blaupause.md |
 | docs.blueprints.agent-safety-control-layer | Blueprint — Agent Safety Control Layer | blueprint | draft | docs/blueprints/blueprint-agent-safety-control-layer.md |
-| docs.blueprints.kartenklarheit | Blaupause zur Optimierung der Karte | blueprint | active | docs/blueprints/kartenklarheit.md |
-| docs.blueprints.kartenklarheit-phase6 | Kartenklarheit Phase 6: Der Wahrheitsbeweis | blueprint | in progress | docs/blueprints/kartenklarheit-phase6.md |
-| docs.blueprints.kartenklarheit-roadmap | Roadmap - Kartenklarheit | roadmap | active | docs/blueprints/kartenklarheit-roadmap.md |
+| docs.blueprints.kartenklarheit | Blaupause zur Optimierung der Karte | blueprint | deprecated | docs/blueprints/kartenklarheit.md |
+| docs.blueprints.kartenklarheit-phase6 | Kartenklarheit Phase 6: Der Wahrheitsbeweis | blueprint | deprecated | docs/blueprints/kartenklarheit-phase6.md |
+| docs.blueprints.kartenklarheit-roadmap | Roadmap - Kartenklarheit | roadmap | deprecated | docs/blueprints/kartenklarheit-roadmap.md |
 | docs.claims.readme | Claim-Registry | reference | active | docs/claims/README.md |
 | docs.index | Weltgewebe - Doku-Index | index | active | docs/index.md |
 | docs.policies.agent-reading-protocol | Agent Reading Protocol | policy | canonical | docs/policies/agent-reading-protocol.md |
@@ -77,22 +77,22 @@ Generated automatically. Do not edit.
 | docs.runbook.observability | Observability Runbook | runbook | active | docs/runbook.observability.md |
 | docs.security.agent-write-scope-baseline | Agent Write Scope Baseline | security | active | docs/security/agent-write-scope-baseline.md |
 | docs.techstack | Techstack | architecture | active | docs/techstack.md |
-| docs.vision | Vision | reference | active | docs/vision.md |
+| docs.vision | Vision | vision | active | docs/vision.md |
 | domain.modules | Modul-IDs | reference | active | docs/domain/modules.md |
 | domain.vocabulary | Domänenvokabular | reference | active | docs/domain/vocabulary.md |
 | edge.systemd.README | Edge Systemd | reference | active | docs/edge/systemd/README.md |
-| geist-und-plan | Geist und Plan | reference | active | docs/geist-und-plan.md |
-| inhalt | Inhalt | reference | active | docs/inhalt.md |
+| geist-und-plan | Geist und Plan | reference | deprecated | docs/geist-und-plan.md |
+| inhalt | Inhalt | reference | deprecated | docs/inhalt.md |
 | konzepte.garnrolle | Garnrolle | concept | superseded | docs/konzepte/garnrolle.md |
-| konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Verortung und Sichtbarkeit | concept | active | docs/konzepte/garnrolle-und-verortung.md |
-| map-architekturkritik | Architekturkritik Map-Implementierung | report | active | docs/reports/map-architekturkritik.md |
-| map-basemap-proof-gap-reconciliation | MAP-PROOF-001 — Basemap Proof Gap Reconciliation | report | active | docs/reports/map-basemap-proof-gap-reconciliation.md |
+| konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Verortung und Sichtbarkeit | concept | deprecated | docs/konzepte/garnrolle-und-verortung.md |
+| map-architekturkritik | Architekturkritik Map-Implementierung | report | deprecated | docs/reports/map-architekturkritik.md |
+| map-basemap-proof-gap-reconciliation | MAP-PROOF-001 — Basemap Proof Gap Reconciliation | report | deprecated | docs/reports/map-basemap-proof-gap-reconciliation.md |
 | map-blaupause | Basemap-Architektur-Blaupause | blueprint | active | docs/blueprints/map-blaupause.md |
-| map-roadmap | Basemap-Umsetzungsroadmap | roadmap | draft | docs/blueprints/map-roadmap.md |
-| map-status-matrix | Map Status Matrix | status-matrix | active | docs/reports/map-status-matrix.md |
-| overview.inhalt | Inhalt (Übersicht) | reference | active | docs/overview/inhalt.md |
-| overview.zusammenstellung | Zusammenstellung (Übersicht) | reference | active | docs/overview/zusammenstellung.md |
-| policies.orientierung | Orientierung | reference | active | docs/policies/orientierung.md |
+| map-roadmap | Basemap-Umsetzungsroadmap | roadmap | deprecated | docs/blueprints/map-roadmap.md |
+| map-status-matrix | Map Status Matrix | status-matrix | deprecated | docs/reports/map-status-matrix.md |
+| overview.inhalt | Inhalt (Übersicht) | reference | deprecated | docs/overview/inhalt.md |
+| overview.zusammenstellung | Zusammenstellung (Übersicht) | reference | deprecated | docs/overview/zusammenstellung.md |
+| policies.orientierung | Orientierung | reference | deprecated | docs/policies/orientierung.md |
 | process.README | Prozess-Übersicht | reference | active | docs/process/README.md |
 | process.bash-tooling-guidelines | Bash Tooling Guidelines | reference | active | docs/process/bash-tooling-guidelines.md |
 | process.fahrplan | Fahrplan | reference | active | docs/process/fahrplan.md |
@@ -136,6 +136,7 @@ Generated automatically. Do not edit.
 | reports.github-action-ref-pinning-audit | GitHub Action Reference Pinning Audit — OPT-INF-002 | report | active | docs/reports/github-action-ref-pinning-audit.md |
 | reports.github-actions-node24-readiness | GitHub Actions Node-24 Runtime Readiness — OPT-CI-005 | report | active | docs/reports/github-actions-node24-readiness.md |
 | reports.inwx-zone-reconciliation-plan | INWX Zone Reconciliation Plan | report | deprecated | docs/reports/inwx-zone-reconciliation-plan.md |
+| reports.map-status | Kartenstatus | report | active | docs/reports/map-status.md |
 | reports.optimierungsbericht | Optimierungsbericht Weltgewebe | report | active | docs/reports/optimierungsbericht.md |
 | reports.optimierungsstatus | Optimierungsstatus Weltgewebe | status-matrix | active | docs/reports/optimierungsstatus.md |
 | reports.passkey-register-verify-prep | Passkey Register-Verify – Vorbereitungsbericht | report | deprecated | docs/reports/passkey-register-verify-prep.md |
@@ -156,18 +157,22 @@ Generated automatically. Do not edit.
 | specs.auth-state-machine | Auth State Machine | reference | active | docs/specs/auth-state-machine.md |
 | specs.auth-ui | Auth UI Spec | reference | active | docs/specs/auth-ui.md |
 | specs.contract | Datenvertrag | reference | active | docs/specs/contract.md |
+| specs.garnrolle-knoten-faden | Garnrolle, Knoten und Faden | specification | canonical | docs/specs/garnrolle-knoten-faden.md |
 | specs.list-pagination-api | List Pagination API Spec | reference | active | docs/specs/list-pagination-api.md |
+| specs.map-experience | Kartenerlebnis | specification | canonical | docs/specs/map-experience.md |
 | specs.privacy-api | Garnrollen-Sichtbarkeit API | reference | active | docs/specs/privacy-api.md |
-| specs.privacy-ui | Garnrollen-Sichtbarkeit UI | reference | active | docs/specs/privacy-ui.md |
+| specs.privacy-ui | Garnrollen-Sichtbarkeit UI | reference | deprecated | docs/specs/privacy-ui.md |
+| specs.ui-interaction | UI-Interaktionsvertrag | specification | canonical | docs/specs/ui-interaction.md |
+| specs.ui-state-machine | UI-Zustandsmaschine | specification | canonical | docs/specs/ui-state-machine.md |
 | tasks.board | Weltgewebe Task Board | task-board | active | docs/tasks/board.md |
 | tasks.readme | Task-Control – Einstieg | guide | active | docs/tasks/README.md |
-| ui-blaupause | Weltgewebe UI-Blaupause | blueprint | canonical | docs/blueprints/ui-blaupause.md |
-| ui-interaction-doctrine | Weltgewebe UI Interaction Doctrine | blueprint | canonical | docs/blueprints/ui-interaction-doctrine.md |
-| ui-roadmap | Weltgewebe UI Roadmap | blueprint | canonical | docs/blueprints/ui-roadmap.md |
-| ui-state-machine | Weltgewebe UI State Machine | blueprint | canonical | docs/blueprints/ui-state-machine.md |
+| ui-blaupause | Weltgewebe UI-Blaupause | blueprint | deprecated | docs/blueprints/ui-blaupause.md |
+| ui-interaction-doctrine | Weltgewebe UI Interaction Doctrine | blueprint | deprecated | docs/blueprints/ui-interaction-doctrine.md |
+| ui-roadmap | Weltgewebe UI Roadmap | blueprint | deprecated | docs/blueprints/ui-roadmap.md |
+| ui-state-machine | Weltgewebe UI State Machine | blueprint | deprecated | docs/blueprints/ui-state-machine.md |
 | versionierungs-blaupause | Weltgewebe Deploy-Versionierung und Browser-Aktualität | blueprint | draft | docs/blueprints/versionierungs-blaupause.md |
 | versionierungs-statusgrundlage | Weltgewebe – Versionierungs-Statusgrundlage | blueprint | active | docs/blueprints/versionierungs-statusgrundlage.md |
 | weltgewebe-agenten-manifest | Weltgewebe Agenten Manifest | reference | active | docs/weltgewebe-agenten-manifest.md |
 | x-repo.peers-learnings | Peers Learnings | reference | active | docs/x-repo/peers-learnings.md |
 | x-repo.semantAH | SemanticAH | reference | active | docs/x-repo/semantAH.md |
-| zusammenstellung | Zusammenstellung | reference | active | docs/zusammenstellung.md |
+| zusammenstellung | Zusammenstellung | reference | deprecated | docs/zusammenstellung.md |

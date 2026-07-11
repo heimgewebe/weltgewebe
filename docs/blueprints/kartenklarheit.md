@@ -2,7 +2,7 @@
 id: docs.blueprints.kartenklarheit
 title: Blaupause zur Optimierung der Karte
 doc_type: blueprint
-status: active
+status: deprecated
 relations:
   - type: relates_to
     target: docs/reports/map-architekturkritik.md
@@ -16,6 +16,8 @@ relations:
     target: docs/roadmap.md
 summary: Blaupause zur Optimierung der Kartenarchitektur von stiller Leere zu expliziter Szene.
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/specs/map-experience.md`.
+
 # Blaupause zur Optimierung der Karte
 
 > Status: Aktive Arbeitsblaupause für Kartenklarheit und UI-/Map-Optimierung.

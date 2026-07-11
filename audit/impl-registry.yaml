@@ -58,8 +58,8 @@ implementations:
     evidence_level: ci
     documented_by:
       - apps/web/README.md
-      - docs/blueprints/ui-blaupause.md
-      - docs/blueprints/ui-roadmap.md
+      - docs/specs/ui-interaction.md
+      - docs/specs/ui-state-machine.md
       - docs/deploy/secondary-domain-web-surfaces.md
     verified_by:
       - .github/workflows/web.yml
@@ -121,7 +121,7 @@ implementations:
     evidence_level: guard
     documented_by:
       - docs/blueprints/map-blaupause.md
-      - docs/blueprints/map-roadmap.md
+      - docs/specs/map-experience.md
     verified_by:
       - scripts/guard/caddy-basemap-route-guard.sh
 
@@ -156,10 +156,8 @@ implementations:
     criticality: medium
     evidence_level: ci
     documented_by:
-      - docs/blueprints/kartenklarheit-roadmap.md
-      - docs/blueprints/kartenklarheit-phase6.md
-      - docs/reports/map-status-matrix.md
-      - docs/reports/map-architekturkritik.md
+      - docs/specs/map-experience.md
+      - docs/reports/map-status.md
     verified_by:
       - .github/workflows/basemap-runtime-proof.yml
 

@@ -2,7 +2,7 @@
 id: docs.blueprints.kartenklarheit-roadmap
 title: Roadmap - Kartenklarheit
 doc_type: roadmap
-status: active
+status: deprecated
 relations:
   - type: relates_to
     target: docs/reports/map-architekturkritik.md
@@ -10,6 +10,8 @@ relations:
     target: docs/reports/map-status-matrix.md
 summary: Roadmap fuer den Uebergang von der aktuellen Demo-Karte zu einer belastbaren, nachvollziehbaren Kartenarchitektur.
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/roadmap.md`.
+
 
 Statuslegende: `[ ] offen`, `[~] in Arbeit`, `[x] erledigt`
 

@@ -2,7 +2,7 @@
 id: ui-roadmap
 title: Weltgewebe UI Roadmap
 doc_type: blueprint
-status: canonical
+status: deprecated
 summary: Konkrete Priorisierung und Meilensteinplanung für den Ausbau der Weltgewebe UI.
 relations:
   - type: relates_to
@@ -12,6 +12,8 @@ relations:
   - type: relates_to
     target: docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/roadmap.md`.
+
 
 # Weltgewebe UI Roadmap
 

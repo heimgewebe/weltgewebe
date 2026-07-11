@@ -3,7 +3,7 @@ Relations Guard — validates the structural and semantic integrity of relations
 
 Checks:
 1. Structure: relations is a list of objects with required keys (type, target)
-2. Allowed types: relates_to, depends_on, supersedes
+2. Allowed types: relates_to, depends_on, supersedes, implements, verifies, derived_from, contradicts
 3. Target validity: target must be a repo-root-relative path to an existing file
 4. No duplicates: identical (type, target) pairs are rejected
 5. No self-references: a document must not point to itself
@@ -17,7 +17,7 @@ import sys
 from scripts.docmeta.docmeta import REPO_ROOT
 from scripts.docmeta.relations_parser import extract_relations_from_content
 
-ALLOWED_TYPES = {"relates_to", "depends_on", "supersedes"}
+ALLOWED_TYPES = {"relates_to", "depends_on", "supersedes", "implements", "verifies", "derived_from", "contradicts"}
 
 
 def validate_relations(file_path, frontmatter):
@@ -107,43 +107,9 @@ def validate_relations(file_path, frontmatter):
     return errors
 
 
-ZONE_DIRS = ["architecture", "runtime", "runbooks"]
-
-
-def emit_zone_relations_notice(zone_files_with_relations):
-    """
-    Emit a non-blocking NOTICE when zone files produce non-empty parser output.
-
-    This is a pure output function — it does not scan or parse files itself.
-    The caller is responsible for collecting the list of zone file paths
-    whose mini-parser output was non-empty.
-
-    The trigger is parser-based, not semantic: even malformed entries
-    (e.g. inline mappings misinterpreted as garbage-key dicts) will fire it.
-
-    Args:
-        zone_files_with_relations: list of repo-root-relative paths
-    """
-    if not zone_files_with_relations:
-        return
-
-    print(
-        "\n  NOTICE: Parser decision gate triggered — mini-parser detected "
-        "non-empty relations output in zone files.",
-        file=sys.stderr,
-    )
-    print(
-        "  Consider re-evaluating the mini-parser decision "
-        "(see architecture/docmeta.schema.md § Decision).",
-        file=sys.stderr,
-    )
-    for zf in zone_files_with_relations:
-        print(f"    → {zf}", file=sys.stderr)
-
 
 def main():
     errors = []
-    zone_files_with_relations = []
 
     # Validate all directories that carry relations: in their frontmatter.
     # This matches the repo-wide relations model documented in
@@ -173,21 +139,10 @@ def main():
 
                 relations = extract_relations_from_content(content)
 
-                # Collect zone files with non-empty parser output (decision
-                # gate trigger — see architecture/docmeta.schema.md § Decision).
-                if relations and scan_dir in ZONE_DIRS:
-                    zone_files_with_relations.append(rel_path)
-
                 # Build a frontmatter-like dict for validation
                 fm = {"relations": relations}
                 file_errors = validate_relations(rel_path, fm)
                 errors.extend(file_errors)
-
-    # Non-blocking notice: detect when zone files produce non-empty parser
-    # output — signals that the parser decision gate should be reviewed.
-    # Emitted before error reporting so the trigger is always visible,
-    # regardless of whether validation errors also exist.
-    emit_zone_relations_notice(zone_files_with_relations)
 
     if errors:
         print(f"\n--- Relations validation errors ({len(errors)}) ---", file=sys.stderr)

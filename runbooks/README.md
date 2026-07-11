@@ -5,6 +5,10 @@ summary: Einstieg in die operativen Runbooks und die Reihenfolge sicherer Diagno
 role: runbooks
 organ: ops
 status: canonical
+canonicality: operational
+lifecycle_state: active
+owner: ops
+review_after: 2026-10-11
 last_reviewed: 2026-07-11
 depends_on: []
 relations:

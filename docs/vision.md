@@ -1,69 +1,46 @@
 ---
 id: docs.vision
 title: Vision
-doc_type: reference
+summary: Dauerhafte Leitidee des Weltgewebes ohne Behauptungen über aktuellen Implementierungs- oder Betriebsstand.
+doc_type: vision
 status: active
-summary: >
-  Vision und Ziele des Projekts.
+canonicality: supporting
+lifecycle_state: active
+owner: product
+review_after: 2026-10-11
 relations:
   - type: relates_to
-    target: docs/inhalt.md
+    target: docs/specs/garnrolle-knoten-faden.md
   - type: relates_to
-    target: docs/zusammenstellung.md
+    target: docs/specs/ui-interaction.md
   - type: relates_to
-    target: docs/architekturstruktur.md
+    target: docs/specs/map-experience.md
 ---
-Das Weltgewebe ist als soziale, technologische und ethische Infrastruktur konzipiert – ein digitales
-Gemeinwesen, das Nachbarschaften, Engagement und demokratische Aushandlung sichtbar und nachvollziehbar macht.
+# Vision
 
-⸻
+Weltgewebe ist eine kartenbasierte Infrastruktur für Commons, Kooperation und kollektive Verantwortung. Es soll sichtbar machen, wo Menschen, Initiativen, Ressourcen, Bedürfnisse und Vorhaben miteinander verbunden sind.
 
-∴ Zweck und Leitidee
-• Sichtbare Kooperation:
-Weltgewebe.net ist eine interaktive Karte, auf der die Aktionen, Wünsche und Verantwortungsübernahmen
-der Teilnehmenden („Weber“) als Fäden und Knoten erscheinen – ein lebendiges, sich ständig veränderndes
-Geflecht gemeinschaftlichen Handelns ￼.
-• Räume kollektiver Verantwortung:
-Jeder registrierte Mensch erhält eine Garnrolle auf seinem Wohnsitz. Damit kann er Knoten (Ideen, Vorhaben,
-Angebote, Fragen) knüpfen, sich verbinden oder Mittel an ein Ortsgewebekonto spenden – das lokale
-Gemeinschaftskonto ￼.
-• Demokratische Selbstorganisation:
-Anträge, die innerhalb der Gemeinschaft gestellt werden, sind sieben Tage lang offen für Einspruch. Bleibt
-dieser aus, treten sie in Kraft. Jede Handlung ist ein Event, das öffentlich einsehbar und kryptografisch
-unveränderlich gespeichert wird ￼.
-• Freiwilligkeit & Datenschutz:
-Es werden keine Werbe- oder Trackingprofile aufgebaut. Für Anmeldung und
-Sitzungserhalt verwendet das System notwendige, sichere HTTP-only-Sitzungscookies.
-Sichtbar ist nur, was bewusst geteilt wird ￼.
-• Währung = Engagement:
-Es gibt keine künstliche Währung. Das eigene - sichtbar gemachte - Engagement wirkt sich aber begünstigend
-auf die Durchbringung eigener Anträge aus.
+## Leitidee
 
-⸻
+Das Internet wird nicht als Marktplatz der Aufmerksamkeit verstanden, sondern als gemeinsamer Raum für nachvollziehbares Handeln. Die Karte zeigt kein abstraktes soziales Ranking, sondern konkrete Orte, Knoten, Beziehungen und Verantwortungsübernahmen.
 
-∴ Funktion und Ziel
+## Grundsätze
 
-Das Weltgewebe soll:
+- **Freiwilligkeit:** Teilnahme und öffentliche Sichtbarkeit beruhen auf bewussten Handlungen.
+- **Commons-Orientierung:** Ressourcen, Wissen und Verantwortung werden gemeinsam auffindbar und gestaltbar.
+- **Transparenz:** Öffentliche Handlungen sollen nachvollziehbar sein, ohne private Daten unnötig offenzulegen.
+- **Datensparsamkeit:** Kein Werbetracking und keine verdeckte Profilbildung.
+- **Lokale Anschlussfähigkeit:** Nachbarschaften und Ortsgewebe bilden den praktischen Ausgangspunkt.
+- **Föderierbarkeit:** Lokale Selbstorganisation soll sich verbinden können, ohne ihre Eigenständigkeit zu verlieren.
+- **Veränderbarkeit:** Regeln und Strukturen bleiben grundsätzlich kollektiv überprüfbar.
 
-1. Transparenz und Vertrauen im lokalen und föderalen Miteinander schaffen.
-2. Engagement und Verantwortungsübernahme, sowie Gemeinschaftsoptionen sichtbar machen – nicht abstrakt,
-   sondern kartografisch.
-3. Demokratische Teilhabe dezentralisieren – jede Ortsweberei kann eigene Entscheidungsräume bilden und
-   doch mit anderen föderiert sein.
-4. Digitale Selbstbestimmung ermöglichen – Datenschutz und Mitbestimmung sind strukturell verankert.
+## Symbolischer Kern
 
-⸻
+- Die Garnrolle ist der verantwortete Ausgangspunkt.
+- Knoten bündeln Orte, Commons, Ressourcen, Vorhaben oder Fragen.
+- Fäden zeigen Beziehungen und Handlungen.
+- Das Gewebe ist das sichtbare Ergebnis gemeinsamer Praxis.
 
-∴ Symbolischer Kern
+## Abgrenzung
 
-„Weltweberei“ steht für das Flechten menschlicher Beziehungen:
-Jeder Faden ist eine Handlung, jede Rolle eine Person, jeder Knoten ein Ort der Bedeutung.
-Das Netz selbst ist das Gemeinwesen.
-
-⸻
-
-Kurz gesagt:
-
-Das Weltgewebe ist ein Versuch, das Internet vom „Marktplatz der Aufmerksamkeit“ zurück in einen
-Marktplatz des Vertrauens zu verwandeln – wo jede sichtbare Verbindung eine gelebte Verantwortung
-ausdrückt.
+Dieses Dokument beschreibt den dauerhaften Sinnhorizont. Es legt keine aktuelle Runtime, keine fertige Governance, keine feste Speichertechnik und keinen konkreten Projektstatus fest. Dafür gelten Verträge, Code, Runtimebelege und Roadmaps.

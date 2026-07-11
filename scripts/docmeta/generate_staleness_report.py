@@ -4,29 +4,61 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from scripts.docmeta.docmeta import REPO_ROOT
+from pathlib import Path
+
+from scripts.docmeta.docmeta import REPO_ROOT, parse_frontmatter
 from scripts.docmeta.generated_check import write_or_check
 
 OUT_FILE = os.path.join(REPO_ROOT, "docs", "_generated", "staleness-report.md")
+SCAN_DIRS = ("docs", "architecture", "runtime", "runbooks")
+
+
+def collect_stale(repo_root: str = REPO_ROOT) -> list[tuple[str, str, str]]:
+    rows: list[tuple[str, str, str]] = []
+    for directory in SCAN_DIRS:
+        base = Path(repo_root) / directory
+        if not base.exists():
+            continue
+        for path in sorted(base.rglob("*.md")):
+            if "_generated" in path.parts:
+                continue
+            fm = parse_frontmatter(str(path)) or {}
+            status = str(fm.get("status", ""))
+            lifecycle = str(fm.get("lifecycle_state", ""))
+            if status in {"deprecated", "superseded"} or lifecycle in {"superseded", "archived"}:
+                rows.append((path.relative_to(repo_root).as_posix(), status or "—", lifecycle or "—"))
+    return rows
 
 
 def render() -> str:
-    return """---
-id: docs.generated.staleness-report
-title: Staleness Report
-doc_type: generated
-status: active
-summary: Markiert veraltete oder abgelöste Dokumente.
----
-
-## Weltgewebe Staleness Report
-
-Generated automatically. Do not edit.
-
-> (Heuristic placeholder: scanning frontmatter for deprecated/superseded labels)
-
-- **No stale documents found.**
-"""
+    rows = collect_stale()
+    lines = [
+        "---",
+        "id: docs.generated.staleness-report",
+        "title: Staleness Report",
+        "doc_type: generated",
+        "status: active",
+        "summary: Listet explizit abgelöste, veraltete oder archivierte Dokumente aus ihren Metadaten.",
+        "---",
+        "",
+        "## Weltgewebe Staleness Report",
+        "",
+        "Generated automatically. Do not edit.",
+        "",
+        "> This report is metadata-based. It does not infer semantic staleness from prose.",
+        "",
+    ]
+    if not rows:
+        lines.append("_No explicitly stale documents found._")
+    else:
+        lines.extend([
+            f"Explicitly stale documents: **{len(rows)}**",
+            "",
+            "| Document | status | lifecycle_state |",
+            "| --- | --- | --- |",
+        ])
+        lines.extend(f"| `{path}` | {status} | {lifecycle} |" for path, status, lifecycle in rows)
+    return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:

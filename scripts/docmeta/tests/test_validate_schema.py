@@ -4,7 +4,12 @@ import tempfile
 import unittest
 
 from scripts.docmeta.docmeta import REPO_ROOT, parse_frontmatter
-from scripts.docmeta.validate_schema import validate_data_against_schema
+from scripts.docmeta.validate_schema import (
+    parser_parity_errors,
+    parse_frontmatter_with_pyyaml,
+    validate_canonical_semantics,
+    validate_data_against_schema,
+)
 
 
 class TestValidateDataAgainstSchema(unittest.TestCase):
@@ -180,11 +185,32 @@ class TestCanonicalDocmetaSchema(unittest.TestCase):
             "title": "Test Document",
             "summary": "A non-empty test summary.",
             "status": "canonical",
+            "role": "norm",
+            "organ": "product-ui",
+            "last_reviewed": "2026-07-11",
+            "canonicality": "normative",
+            "lifecycle_state": "active",
+            "owner": "product-ui",
+            "review_after": "2026-10-11",
             "depends_on": [],
             "verifies_with": [],
         }
         fm.update(overrides)
         return fm
+
+
+    def test_manifest_canonicality_rejects_supporting(self):
+        fm = self._valid_frontmatter(canonicality="supporting")
+        errors = validate_canonical_semantics(fm)
+        self.assertTrue(any("canonicality" in error for error in errors), errors)
+
+    def test_manifest_lifecycle_must_be_active(self):
+        fm = self._valid_frontmatter(lifecycle_state="archived")
+        errors = validate_canonical_semantics(fm)
+        self.assertTrue(any("lifecycle_state" in error for error in errors), errors)
+
+    def test_manifest_semantics_accept_normative_active(self):
+        self.assertEqual(validate_canonical_semantics(self._valid_frontmatter()), [])
 
     def test_depends_on_is_a_declared_property(self):
         self.assertIn("depends_on", self.schema.get("properties", {}))
@@ -261,6 +287,13 @@ class TestMarkdownToSchemaIntegration(unittest.TestCase):
         "title: Test Document\n"
         "status: canonical\n"
         "summary: A non-empty test summary.\n"
+        "role: norm\n"
+        "organ: product-ui\n"
+        "last_reviewed: 2026-07-11\n"
+        "canonicality: normative\n"
+        "lifecycle_state: active\n"
+        "owner: product-ui\n"
+        "review_after: 2026-10-11\n"
     )
 
     def test_empty_lists_pass(self):
@@ -291,6 +324,38 @@ class TestMarkdownToSchemaIntegration(unittest.TestCase):
         self.assertTrue(
             any("depends_on" in e and "expected array" in e for e in errors), errors
         )
+
+
+class TestParserParity(unittest.TestCase):
+    def _temp_markdown(self, frontmatter):
+        handle = tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".md", encoding="utf-8"
+        )
+        handle.write(f"---\n{frontmatter}\n---\n")
+        handle.close()
+        self.addCleanup(lambda: os.path.exists(handle.name) and os.remove(handle.name))
+        return handle.name
+
+    def test_supported_subset_matches_pyyaml(self):
+        path = self._temp_markdown(
+            "id: doc.test\n"
+            "title: Test\n"
+            "status: canonical\n"
+            "depends_on:\n  - other.doc\n"
+            "relations:\n  - type: relates_to\n    target: docs/other.md\n"
+            "verifies_with: []"
+        )
+        mini = parse_frontmatter(path)
+        self.assertEqual(parser_parity_errors(path, mini), [])
+        self.assertEqual(parse_frontmatter_with_pyyaml(path), mini)
+
+    def test_unsupported_folded_scalar_is_detected(self):
+        path = self._temp_markdown(
+            "id: doc.test\nsummary: >\n  folded text"
+        )
+        mini = parse_frontmatter(path)
+        errors = parser_parity_errors(path, mini)
+        self.assertTrue(any("summary" in error for error in errors), errors)
 
 
 if __name__ == '__main__':

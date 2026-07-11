@@ -2,8 +2,8 @@
 id: map-architekturkritik
 title: Architekturkritik Map-Implementierung
 doc_type: report
-status: active
-lifecycle_state: active
+status: deprecated
+lifecycle_state: archived
 lifecycle: audit
 owner_task: DOCMETA-REPORT-LIFECYCLE-001
 review_after: 2026-09-29
@@ -14,6 +14,8 @@ relations:
   - type: relates_to
     target: docs/reports/map-status-matrix.md
 ---
+> **Archivierter Diagnosebeleg:** Nicht als aktuelle Produkt- oder Runtimewahrheit verwenden. Aktuelle UX-Regeln stehen in `docs/specs/map-experience.md`; aktueller Implementierungsstand ist frisch aus Code und CI abzuleiten.
+
 
 Dieses Dokument bewertet die aktuelle Kartenimplementierung so, wie sie im Repo
 heute vorliegt. Massgeblich sind dabei vor allem

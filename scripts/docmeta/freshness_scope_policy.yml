@@ -20,3 +20,35 @@ families:
     mirror_mode: exact
     require_live_check: true
     status: active
+
+  - id: ui-state
+    claim_id_prefix: CLAIM-UI-STATE-
+    entry_id_prefix: claim-ui-state-
+    registry_doc: docs/claims/registry.yml
+    mirror_mode: exact
+    require_live_check: true
+    status: active
+
+  - id: ui-surface
+    claim_id_prefix: CLAIM-UI-SURFACE-
+    entry_id_prefix: claim-ui-surface-
+    registry_doc: docs/claims/registry.yml
+    mirror_mode: exact
+    require_live_check: true
+    status: active
+
+  - id: domain-garnrolle
+    claim_id_prefix: CLAIM-DOMAIN-GARNROLLE-
+    entry_id_prefix: claim-domain-garnrolle-
+    registry_doc: docs/claims/registry.yml
+    mirror_mode: exact
+    require_live_check: true
+    status: active
+
+  - id: map-truth
+    claim_id_prefix: CLAIM-MAP-TRUTH-
+    entry_id_prefix: claim-map-truth-
+    registry_doc: docs/claims/registry.yml
+    mirror_mode: exact
+    require_live_check: true
+    status: active

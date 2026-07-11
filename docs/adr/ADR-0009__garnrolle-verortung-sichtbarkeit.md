@@ -11,13 +11,11 @@ relations:
   - type: supersedes
     target: docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md
   - type: relates_to
-    target: docs/konzepte/garnrolle-und-verortung.md
+    target: docs/specs/garnrolle-knoten-faden.md
   - type: relates_to
     target: docs/specs/privacy-api.md
   - type: relates_to
-    target: docs/specs/privacy-ui.md
-  - type: relates_to
-    target: docs/blueprints/ui-roadmap.md
+    target: docs/specs/ui-interaction.md
 ---
 
 # ADR-0009 — Garnrolle, Verortung und Sichtbarkeit

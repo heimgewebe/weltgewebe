@@ -2,7 +2,7 @@
 id: zusammenstellung
 title: Zusammenstellung
 doc_type: reference
-status: active
+status: deprecated
 summary: Systematische Zusammenfassung von Prinzipien, Domänenmodell, Governance und UI-Architektur.
 relations:
   - type: relates_to
@@ -12,6 +12,8 @@ relations:
   - type: relates_to
     target: docs/architekturstruktur.md
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/vision.md`.
+
 # Zusammenstellung (MANDATORISCH)
 
 Das Weltgewebe: Eine Systematische Zusammenfassung

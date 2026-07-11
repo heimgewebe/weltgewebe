@@ -4,6 +4,38 @@ import json
 
 from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field, extract_depends_on
 
+SCAN_DIRS = ("docs", "architecture", "runtime", "runbooks")
+
+
+def registered_canonical_paths(repo_index):
+    paths = set()
+    for zone in repo_index.get("zones", {}).values():
+        base = zone.get("path", "")
+        for name in zone.get("canonical_docs", []):
+            paths.add(os.path.normpath(os.path.join(base, name)))
+    return paths
+
+
+def find_unregistered_canonical_docs(repo_index, repo_root=REPO_ROOT):
+    registered = registered_canonical_paths(repo_index)
+    found = []
+    for directory in SCAN_DIRS:
+        base = os.path.join(repo_root, directory)
+        if not os.path.isdir(base):
+            continue
+        for current, dirs, files in os.walk(base):
+            dirs[:] = [d for d in dirs if d != "_generated"]
+            for filename in files:
+                if not filename.endswith(".md"):
+                    continue
+                path = os.path.join(current, filename)
+                frontmatter = parse_frontmatter(path) or {}
+                if frontmatter.get("status") == "canonical":
+                    relative = os.path.normpath(os.path.relpath(path, repo_root))
+                    if relative not in registered:
+                        found.append(relative)
+    return sorted(found)
+
 def main():
     try:
         policy = parse_review_policy()
@@ -74,6 +106,11 @@ def main():
             if doc_id:
                 dependencies[doc_id] = depends_on
                 verifications[doc_id] = verifies_with
+
+    for rel_path in find_unregistered_canonical_docs(repo_index):
+        errors.append(
+            f"Document '{rel_path}' declares status canonical but is not registered in manifest/repo-index.yaml."
+        )
 
     for doc_id, deps in dependencies.items():
         for dep in deps:

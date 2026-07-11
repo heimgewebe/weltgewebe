@@ -2,7 +2,7 @@
 id: map-roadmap
 title: Basemap-Umsetzungsroadmap
 doc_type: roadmap
-status: draft
+status: deprecated
 summary: >
   Roadmap zur schrittweisen operativen Umsetzung der souveränen Basemap-Architektur.
 relations:
@@ -11,6 +11,8 @@ relations:
   - type: relates_to
     target: docs/blueprints/map-blaupause.md
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/roadmap.md`.
+
 
 # Basemap-Umsetzungsroadmap
 

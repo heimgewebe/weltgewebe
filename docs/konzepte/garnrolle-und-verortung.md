@@ -2,7 +2,7 @@
 id: konzepte.garnrolle-und-verortung
 title: "Weltgewebe – Garnrolle, Verortung und Sichtbarkeit"
 doc_type: concept
-status: active
+status: deprecated
 summary: >
   Kanonisches Konzept für Garnrolle, Verortung, öffentliche Sichtbarkeit,
   Knotenweben und Fäden im Weltgewebe.
@@ -14,6 +14,8 @@ relations:
   - type: supersedes
     target: docs/konzepte/garnrolle.md
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/specs/garnrolle-knoten-faden.md`.
+
 
 # Weltgewebe – Garnrolle, Verortung und Sichtbarkeit
 

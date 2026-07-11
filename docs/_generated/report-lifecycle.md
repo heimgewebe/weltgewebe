@@ -16,10 +16,10 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Metric | Count |
 | --- | ---: |
-| files_scanned | 45 |
-| reports_checked | 41 |
+| files_scanned | 46 |
+| reports_checked | 42 |
 | reports_ignored_non_report | 4 |
-| reports_with_lifecycle_state | 41 |
+| reports_with_lifecycle_state | 42 |
 | reports_missing_lifecycle_state | 0 |
 | findings_total | 0 |
 
@@ -27,10 +27,10 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | lifecycle_state | Count |
 | --- | ---: |
-| active | 32 |
+| active | 31 |
 | deferred | 0 |
 | superseded | 5 |
-| archived | 4 |
+| archived | 6 |
 | missing | 0 |
 
 ## Finding Summary
@@ -70,8 +70,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/domain-runtime-data-source-reconciliation.md | active | audit | DB-PROOF-001 | 2026-07-18 |  |
 | docs/reports/github-action-ref-pinning-audit.md | active | audit | OPT-INF-002 | 2026-09-30 |  |
 | docs/reports/github-actions-node24-readiness.md | active | audit | OPT-CI-005 | 2026-09-29 |  |
-| docs/reports/map-architekturkritik.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
-| docs/reports/map-basemap-proof-gap-reconciliation.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
+| docs/reports/map-status.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-08-11 |  |
 | docs/reports/optimierungsbericht.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
 | docs/reports/proof-matrix-generalization-decision.md | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  |
 | docs/reports/repo-audit-2026-07-02.md | active | audit | REPO-AUDIT-001 | 2026-10-31 |  |
@@ -97,6 +96,8 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
 | docs/reports/inwx-zone-reconciliation-plan.md | deprecated | planning | DEPLOY-DNS-001 |  |  |
+| docs/reports/map-architekturkritik.md | deprecated | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
+| docs/reports/map-basemap-proof-gap-reconciliation.md | deprecated | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
 | docs/reports/passkey-register-verify-prep.md | deprecated | decision-prep | AUTH-PG-002 |  |  |
 | docs/reports/planning-registration-findings.md | deprecated | audit | TASK-CTL-005 |  |  |
 | docs/reports/report-lifecycle-restbestand-triage.md | deprecated | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  |
@@ -127,5 +128,5 @@ Fields required by the currently implemented validator rules that are absent, in
 | --- | --- | --- |
 | docs/reports/agent-readiness-audit.md | documentation | active |
 | docs/reports/auth-status-matrix.md | reference | active |
-| docs/reports/map-status-matrix.md | status-matrix | active |
+| docs/reports/map-status-matrix.md | status-matrix | deprecated |
 | docs/reports/optimierungsstatus.md | status-matrix | active |

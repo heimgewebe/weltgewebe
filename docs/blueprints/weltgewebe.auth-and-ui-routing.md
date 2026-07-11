@@ -2,7 +2,7 @@
 id: blueprints.weltgewebe.auth-and-ui-routing
 title: Auth und UI-Routing
 doc_type: reference
-status: active
+status: deprecated
 summary: Blaupause für Auth-Integration und UI-Routing im Weltgewebe.
 relations:
   - type: relates_to
@@ -12,6 +12,8 @@ relations:
   - type: relates_to
     target: docs/roadmap.md
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `runtime/README.md`.
+
 # Blueprint: Heim-first Auth & UI Routing
 
 > **Hinweis:** Dieser Blueprint dient primär als Routing-/Diagnose-Werkzeug zur

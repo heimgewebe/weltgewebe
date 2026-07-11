@@ -181,6 +181,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/ui-roadmap.md
 - [relates_to] docs/konzepte/garnrolle-und-verortung.md
 - [relates_to] docs/reference/glossar.md
+- [relates_to] docs/specs/garnrolle-knoten-faden.md
 - [relates_to] docs/specs/privacy-api.md
 - [relates_to] docs/specs/privacy-ui.md
 
@@ -188,7 +189,6 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/adr/ADR-0001__clean-slate-docs-monorepo.md
 - [relates_to] docs/techstack.md
-- [relates_to] docs/vision.md
 - [relates_to] docs/zusammenstellung.md
 
 ## docs/blueprints/agent-operability-blaupause.md
@@ -260,7 +260,6 @@ Generated automatically. Do not edit.
 ## docs/blueprints/kartenklarheit-phase6.md
 
 - [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
-- [depends_on] docs/roadmap.md
 
 ## docs/blueprints/kartenklarheit-roadmap.md
 
@@ -269,22 +268,22 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/map-architekturkritik.md
 - [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
 - [relates_to] docs/reports/map-status-matrix.md
-- [depends_on] docs/roadmap.md
 
 ## docs/blueprints/kartenklarheit.md
 
 - [relates_to] docs/blueprints/kartenklarheit-phase6.md
+- [supersedes] docs/specs/map-experience.md
 
 ## docs/blueprints/map-blaupause.md
 
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-roadmap.md
+- [depends_on] docs/roadmap.md
+- [relates_to] docs/specs/map-experience.md
 
 ## docs/blueprints/map-roadmap.md
 
 - [relates_to] docs/blueprints/kartenklarheit.md
-- [relates_to] docs/blueprints/map-blaupause.md
-- [depends_on] docs/roadmap.md
 
 ## docs/blueprints/ui-blaupause.md
 
@@ -292,24 +291,25 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/ui-roadmap.md
 - [relates_to] docs/blueprints/ui-state-machine.md
 - [relates_to] docs/blueprints/weltgewebe.auth-and-ui-routing.md
+- [supersedes] docs/specs/ui-interaction.md
 
 ## docs/blueprints/ui-interaction-doctrine.md
 
 - [relates_to] docs/reports/map-status-matrix.md
+- [supersedes] docs/specs/ui-interaction.md
 
 ## docs/blueprints/ui-roadmap.md
 
-- [relates_to] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 - [relates_to] docs/blueprints/ui-blaupause.md
 - [relates_to] docs/blueprints/ui-interaction-doctrine.md
 - [relates_to] docs/blueprints/ui-state-machine.md
-- [depends_on] docs/roadmap.md
 
 ## docs/blueprints/ui-state-machine.md
 
 - [relates_to] docs/blueprints/ui-blaupause.md
 - [relates_to] docs/blueprints/ui-interaction-doctrine.md
 - [relates_to] docs/blueprints/ui-roadmap.md
+- [supersedes] docs/specs/ui-state-machine.md
 
 ## docs/blueprints/versionierungs-blaupause.md
 
@@ -458,21 +458,19 @@ Generated automatically. Do not edit.
 - [relates_to] docs/domain/modules.md
 - [relates_to] docs/reference/glossar.md
 - [relates_to] docs/specs/contract.md
+- [relates_to] docs/specs/garnrolle-knoten-faden.md
 
 ## docs/inhalt.md
 
 - [relates_to] docs/geist-und-plan.md
 - [relates_to] docs/overview/inhalt.md
-- [relates_to] docs/vision.md
 - [relates_to] docs/zusammenstellung.md
 
 ## docs/konzepte/garnrolle-und-verortung.md
 
 - [relates_to] docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md
-- [relates_to] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 - [relates_to] docs/konzepte/garnrolle.md
-- [relates_to] docs/policies/architecture-critique.md
-- [relates_to] docs/specs/privacy-api.md
+- [supersedes] docs/specs/garnrolle-knoten-faden.md
 - [relates_to] docs/specs/privacy-ui.md
 
 ## docs/konzepte/garnrolle.md
@@ -725,6 +723,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/map-roadmap.md
 - [relates_to] docs/reports/map-architekturkritik.md
 - [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
+- [supersedes] docs/reports/map-status.md
+
+## docs/reports/map-status.md
+
 - [depends_on] docs/roadmap.md
 
 ## docs/reports/opt-arc-001-db-proof-matrix.json
@@ -862,9 +864,23 @@ Generated automatically. Do not edit.
 - [relates_to] docs/domain/vocabulary.md
 - [relates_to] docs/specs/list-pagination-api.md
 
+## docs/specs/garnrolle-knoten-faden.md
+
+- [relates_to] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
+- [relates_to] docs/policies/architecture-critique.md
+- [relates_to] docs/specs/privacy-api.md
+- [relates_to] docs/vision.md
+
 ## docs/specs/list-pagination-api.md
 
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+
+## docs/specs/map-experience.md
+
+- [relates_to] docs/blueprints/map-blaupause.md
+- [verifies] docs/reports/map-status.md
+- [depends_on] docs/roadmap.md
+- [relates_to] docs/vision.md
 
 ## docs/specs/privacy-api.md
 
@@ -873,8 +889,17 @@ Generated automatically. Do not edit.
 
 ## docs/specs/privacy-ui.md
 
+- [supersedes] docs/specs/garnrolle-knoten-faden.md
+
+## docs/specs/ui-interaction.md
+
 - [relates_to] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
-- [relates_to] docs/specs/privacy-api.md
+- [depends_on] docs/roadmap.md
+- [relates_to] docs/vision.md
+
+## docs/specs/ui-state-machine.md
+
+- [depends_on] docs/roadmap.md
 
 ## docs/tasks/README.md
 
@@ -956,7 +981,6 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/inhalt.md
 - [relates_to] docs/overview/zusammenstellung.md
-- [relates_to] docs/vision.md
 
 ## infra/caddy/Caddyfile.http-smoke
 
