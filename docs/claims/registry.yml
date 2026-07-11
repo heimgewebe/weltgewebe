@@ -280,7 +280,7 @@
       "id": "CLAIM-UI-STATE-001",
       "status": "established",
       "subject": "UI-STATE",
-      "statement": "Die Weltgewebe-UI besitzt genau die drei globalen Zustände navigation, fokus und komposition und erzwingt deren Invarianten.",
+      "statement": "Die UI erzwingt die drei globalen Zustände navigation, fokus und komposition.",
       "evidence": [
         {
           "path": "docs/specs/ui-state-machine.md",
@@ -309,7 +309,7 @@
       "id": "CLAIM-UI-SURFACE-001",
       "status": "established",
       "subject": "UI-SURFACE",
-      "statement": "Karte, Fokuspanel und Aktionsleiste bilden die Hauptflächen; Suche und Filter sind gegenseitig ausschließende lokale Kartenlinsen.",
+      "statement": "Karte, Fokuspanel und Aktionsleiste sind Hauptflächen; Suche und Filter sind lokale Kartenlinsen.",
       "evidence": [
         {
           "path": "docs/specs/ui-interaction.md",
@@ -342,7 +342,7 @@
       "id": "CLAIM-DOMAIN-GARNROLLE-001",
       "status": "established",
       "subject": "DOMAIN-GARNROLLE",
-      "statement": "Jeder Account wird als Garnrolle geführt; ihre öffentliche Kartenprojektion verwendet not_on_map, exact oder radius.",
+      "statement": "Jeder Account ist eine Garnrolle mit Kartenstatus not_on_map, exact oder radius.",
       "evidence": [
         {
           "path": "docs/specs/garnrolle-knoten-faden.md",
@@ -372,7 +372,7 @@
       "id": "CLAIM-MAP-TRUTH-001",
       "status": "established",
       "subject": "MAP-TRUTH",
-      "statement": "Die Kartenroute unterscheidet erfolgreiche, teilweise und fehlgeschlagene Datenladung und baut daraus ein explizites Szenenmodell.",
+      "statement": "Die Kartenroute trennt erfolgreiche, teilweise und fehlgeschlagene Datenladung im Szenenmodell.",
       "evidence": [
         {
           "path": "docs/specs/map-experience.md",

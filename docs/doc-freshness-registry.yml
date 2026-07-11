@@ -174,8 +174,8 @@ entries:
     doc: docs/claims/registry.yml
     locator: claims[id=CLAIM-UI-STATE-001]
     claim: >-
-      Die Weltgewebe-UI besitzt genau die drei globalen Zustände navigation,
-      fokus und komposition und erzwingt deren Invarianten.
+      Die UI erzwingt die drei globalen Zustände navigation, fokus und
+      komposition.
     status: partial
     owner: product-ui
     last_verified: "2026-07-11"
@@ -193,8 +193,8 @@ entries:
     doc: docs/claims/registry.yml
     locator: claims[id=CLAIM-UI-SURFACE-001]
     claim: >-
-      Karte, Fokuspanel und Aktionsleiste bilden die Hauptflächen; Suche und
-      Filter sind gegenseitig ausschließende lokale Kartenlinsen.
+      Karte, Fokuspanel und Aktionsleiste sind Hauptflächen; Suche und Filter
+      sind lokale Kartenlinsen.
     status: partial
     owner: product-ui
     last_verified: "2026-07-11"
@@ -214,8 +214,8 @@ entries:
     doc: docs/claims/registry.yml
     locator: claims[id=CLAIM-DOMAIN-GARNROLLE-001]
     claim: >-
-      Jeder Account wird als Garnrolle geführt; ihre öffentliche
-      Kartenprojektion verwendet not_on_map, exact oder radius.
+      Jeder Account ist eine Garnrolle mit Kartenstatus not_on_map, exact oder
+      radius.
     status: partial
     owner: product-domain
     last_verified: "2026-07-11"
@@ -233,8 +233,8 @@ entries:
     doc: docs/claims/registry.yml
     locator: claims[id=CLAIM-MAP-TRUTH-001]
     claim: >-
-      Die Kartenroute unterscheidet erfolgreiche, teilweise und fehlgeschlagene
-      Datenladung und baut daraus ein explizites Szenenmodell.
+      Die Kartenroute trennt erfolgreiche, teilweise und fehlgeschlagene
+      Datenladung im Szenenmodell.
     status: partial
     owner: product-map
     last_verified: "2026-07-11"
