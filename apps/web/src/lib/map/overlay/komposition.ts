@@ -4,7 +4,7 @@ import type {
   MapTouchEvent,
 } from "maplibre-gl";
 import { get } from "svelte/store";
-import { enterKomposition } from "$lib/stores/uiView";
+import { enterKomposition, kompositionDraft } from "$lib/stores/uiView";
 import { authStore } from "$lib/auth/store";
 
 /**
@@ -12,7 +12,7 @@ import { authStore } from "$lib/auth/store";
  * must not open an apparently-functional composition panel — it silently
  * does nothing, exactly like the (hidden) "Neuer Knoten" action-bar button.
  */
-function canCreateNode(): boolean {
+function canComposeOnMap(): boolean {
   const role = get(authStore).role;
   return role === "weber" || role === "admin";
 }
@@ -35,13 +35,16 @@ export function setupKompositionInteraction(map: MapLibreMap) {
       e.originalEvent.target instanceof HTMLElement &&
       e.originalEvent.target.closest(".map-marker");
     if (markerClicked) return;
-    if (!canCreateNode()) return;
+    if (!canComposeOnMap()) return;
 
     longPressStartX = e.point.x;
     longPressStartY = e.point.y;
     longPressTimer = setTimeout(() => {
       enterKomposition({
-        mode: "new-knoten",
+        mode:
+          get(kompositionDraft)?.mode === "place-garnrolle"
+            ? "place-garnrolle"
+            : "new-knoten",
         lngLat: [e.lngLat.lng, e.lngLat.lat],
         source: "map-longpress",
       });
@@ -65,13 +68,16 @@ export function setupKompositionInteraction(map: MapLibreMap) {
       e.originalEvent.target instanceof HTMLElement &&
       e.originalEvent.target.closest(".map-marker");
     if (markerClicked) return;
-    if (!canCreateNode()) return;
+    if (!canComposeOnMap()) return;
 
     longPressStartX = e.point.x;
     longPressStartY = e.point.y;
     longPressTimer = setTimeout(() => {
       enterKomposition({
-        mode: "new-knoten",
+        mode:
+          get(kompositionDraft)?.mode === "place-garnrolle"
+            ? "place-garnrolle"
+            : "new-knoten",
         lngLat: [e.lngLat.lng, e.lngLat.lat],
         source: "map-longpress",
       });

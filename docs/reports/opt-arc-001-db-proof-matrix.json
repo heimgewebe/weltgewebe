@@ -71,18 +71,13 @@
     {
       "id": "db-domain-account-write-path-proof",
       "phase": "E-A",
-      "claim": "Optional PostgreSQL account write path covers POST /accounts, auth auto-provisioning and step-up email persistence behind explicit write gates.",
-      "state": "ci_proven",
+      "claim": "Optional PostgreSQL account write path covers POST /accounts, own Garnrolle profile updates, auth auto-provisioning and step-up email persistence behind explicit write gates.",
+      "state": "prepared",
       "workflow": ".github/workflows/api.yml",
       "workflow_job": "db-domain-account-write-path-proof",
       "test": "apps/api/tests/db_domain_account_write_path.rs",
       "report": "docs/reports/domain-account-write-path-proof.md",
-      "ci_evidence": {
-        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/29140838304",
-        "run_id": 29140838304,
-        "commit": "b3ce2f130f1a2edaa01f2e239336a96c944d1b16",
-        "job": "db-domain-account-write-path-proof"
-      },
+      "ci_evidence": null,
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_account_write_path -- --include-ignored --test-threads=1"
     },
     {

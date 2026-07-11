@@ -13,7 +13,9 @@ use uuid::Uuid;
 
 use crate::auth::accounts::AccountStore;
 use crate::auth::role::Role;
-use crate::routes::accounts::{map_json_to_public_account, AccountInternal};
+use crate::routes::accounts::{
+    map_json_to_public_account, AccountInternal, Location as AccountLocation,
+};
 use crate::routes::auth::MAX_EMAIL_LEN;
 use crate::routes::edges::Edge;
 use crate::routes::nodes::{Location, Node};
@@ -902,6 +904,14 @@ impl NewDomainAccountRow {
         let public_payload = payload_from_keys(&["summary", "tags"], v);
 
         let mut priv_map = Map::new();
+        if let Some(address) = v
+            .get("address")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            priv_map.insert("address".to_string(), Value::String(address.to_string()));
+        }
         if let Some(vis) = visibility {
             priv_map.insert("visibility".to_string(), Value::String(vis.to_string()));
             if vis == "private" {
@@ -1037,6 +1047,151 @@ pub async fn insert_account_from_jsonl_record(
 }
 
 /// Name of the check constraint that rejects after-trim empty persisted emails.
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AccountProfileUpdate {
+    pub title: String,
+    pub summary: Option<String>,
+    pub tags: Vec<String>,
+    pub address: Option<String>,
+    pub map_state: String,
+    pub radius_m: i64,
+    pub location: Option<AccountLocation>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredAccountProfile {
+    pub account: AccountInternal,
+    pub address: Option<String>,
+    pub location: Option<AccountLocation>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum AccountProfileUpdateError {
+    #[error("account not found")]
+    NotFound,
+    #[error("a map location is required for this visibility")]
+    MissingLocation,
+    #[error("failed to serialise account profile: {0}")]
+    Serialization(#[source] serde_json::Error),
+    #[error("failed to map updated account")]
+    Mapping,
+    #[error("failed to update account profile in domain_accounts: {0}")]
+    Database(#[source] sqlx::Error),
+}
+
+pub async fn load_account_profile_from_postgres(
+    pool: &PgPool,
+    account_id: &str,
+) -> Result<Option<(Option<String>, Option<AccountLocation>)>, sqlx::Error> {
+    let row: Option<(Option<String>, Option<f64>, Option<f64>)> = sqlx::query_as(
+        "SELECT private_payload->>'address', location_lat, location_lon \
+         FROM domain_accounts WHERE id = $1",
+    )
+    .bind(account_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(|(address, lat, lon)| {
+        let location = match (lat, lon) {
+            (Some(lat), Some(lon)) => Some(AccountLocation { lat, lon }),
+            _ => None,
+        };
+        (address, location)
+    }))
+}
+
+pub async fn update_account_profile_in_postgres(
+    pool: &PgPool,
+    account_id: &str,
+    update: &AccountProfileUpdate,
+) -> Result<StoredAccountProfile, AccountProfileUpdateError> {
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(AccountProfileUpdateError::Database)?;
+    let existing: Option<(Option<f64>, Option<f64>)> = sqlx::query_as(
+        "SELECT location_lat, location_lon FROM domain_accounts WHERE id = $1 FOR UPDATE",
+    )
+    .bind(account_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(AccountProfileUpdateError::Database)?;
+    let Some((existing_lat, existing_lon)) = existing else {
+        return Err(AccountProfileUpdateError::NotFound);
+    };
+
+    let effective_location = update
+        .location
+        .clone()
+        .or(match (existing_lat, existing_lon) {
+            (Some(lat), Some(lon)) => Some(AccountLocation { lat, lon }),
+            _ => None,
+        });
+    if update.map_state != "not_on_map" && effective_location.is_none() {
+        return Err(AccountProfileUpdateError::MissingLocation);
+    }
+
+    let mut public_map = Map::new();
+    if let Some(summary) = &update.summary {
+        public_map.insert("summary".to_string(), Value::String(summary.clone()));
+    }
+    if !update.tags.is_empty() {
+        public_map.insert("tags".to_string(), json!(update.tags));
+    }
+    let public_payload = serde_json::to_string(&Value::Object(public_map))
+        .map_err(AccountProfileUpdateError::Serialization)?;
+
+    let mut private_map = Map::new();
+    if let Some(address) = &update.address {
+        private_map.insert("address".to_string(), Value::String(address.clone()));
+    }
+    let private_payload = serde_json::to_string(&Value::Object(private_map))
+        .map_err(AccountProfileUpdateError::Serialization)?;
+
+    let (new_lat, new_lon) = match &update.location {
+        Some(location) => (Some(location.lat), Some(location.lon)),
+        None => (None, None),
+    };
+
+    let row: AccountRow = sqlx::query_as(
+        "UPDATE domain_accounts SET \
+           title = $2, \
+           map_state = $3, \
+           radius_m = $4, \
+           location_lat = COALESCE($5, location_lat), \
+           location_lon = COALESCE($6, location_lon), \
+           public_payload = (public_payload - 'summary' - 'tags') || $7::jsonb, \
+           private_payload = (private_payload - 'address' - 'visibility' - 'suppress_public_pos' - 'ron_flag') || $8::jsonb, \
+           updated_at = now() \
+         WHERE id = $1 \
+         RETURNING id, kind, title, mode, map_state, radius_m, disabled, \
+           location_lat, location_lon, role, email, webauthn_user_id::text, \
+           public_payload::text, private_payload::text",
+    )
+    .bind(account_id)
+    .bind(&update.title)
+    .bind(&update.map_state)
+    .bind(update.radius_m)
+    .bind(new_lat)
+    .bind(new_lon)
+    .bind(&public_payload)
+    .bind(&private_payload)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(AccountProfileUpdateError::Database)?;
+
+    tx.commit()
+        .await
+        .map_err(AccountProfileUpdateError::Database)?;
+    let account = account_row_to_internal(row).ok_or(AccountProfileUpdateError::Mapping)?;
+    Ok(StoredAccountProfile {
+        account,
+        address: update.address.clone(),
+        location: effective_location,
+    })
+}
+
 pub const ACCOUNT_EMAIL_NOT_EMPTY_CONSTRAINT: &str = "domain_accounts_email_not_empty_after_trim";
 
 /// Error from the account email update write path.

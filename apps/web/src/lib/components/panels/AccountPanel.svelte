@@ -34,6 +34,35 @@
 
   $: accountDetails = $accountDetailsStore;
   $: isLoadingDetails = $isLoadingDetailsStore;
+  $: profileTags = (accountDetails?.tags || $selection?.data?.tags || []) as string[];
+  $: skills = categoryValues(profileTags, 'skill:', true);
+  $: goods = categoryValues(profileTags, 'good:');
+  $: interests = categoryValues(profileTags, 'interest:');
+  $: otherTags = profileTags.filter(
+    (tag) =>
+      tag.includes(':') &&
+      !tag.startsWith('skill:') &&
+      !tag.startsWith('good:') &&
+      !tag.startsWith('interest:')
+  );
+
+  function categoryValues(tags: string[], prefix: string, includeLegacy = false): string[] {
+    const values = tags
+      .filter((tag) => tag.startsWith(prefix))
+      .map((tag) => tag.slice(prefix.length))
+      .filter(Boolean);
+    if (includeLegacy) {
+      values.push(
+        ...tags.filter(
+          (tag) =>
+            tag !== 'account' &&
+            tag !== 'garnrolle' &&
+            !tag.includes(':')
+        )
+      );
+    }
+    return values.filter((value, index, all) => all.indexOf(value) === index);
+  }
 
   const tabs = ['profil', 'aktivitaet', 'knoten'];
 
@@ -120,12 +149,18 @@
           <p><strong>Art:</strong> {accountDetails?.type || $selection?.data?.type}</p>
         {/if}
 
-        {#if (accountDetails?.tags || $selection?.data?.tags)?.length > 0}
-          <p><strong>Tags:</strong> {(accountDetails?.tags || $selection?.data?.tags).join(', ')}</p>
+        {#if skills.length > 0}
+          <p><strong>Fähigkeiten:</strong> {skills.join(', ')}</p>
         {/if}
-
-        <p><strong>Kompetenzen:</strong> Noch nicht hinterlegt.</p>
-        <p><strong>Vergemeinschaftete Güter:</strong> Noch nicht hinterlegt.</p>
+        {#if goods.length > 0}
+          <p><strong>Güter:</strong> {goods.join(', ')}</p>
+        {/if}
+        {#if interests.length > 0}
+          <p><strong>Interessen:</strong> {interests.join(', ')}</p>
+        {/if}
+        {#if otherTags.length > 0}
+          <p><strong>Weitere Tags:</strong> {otherTags.join(', ')}</p>
+        {/if}
       </div>
 
     {:else if activeTab === 'aktivitaet'}

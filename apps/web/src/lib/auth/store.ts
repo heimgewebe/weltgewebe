@@ -15,9 +15,40 @@ const initialUser: AuthStatus = {
   account_id: undefined,
 };
 
+const SENSITIVE_GARNROLLE_SESSION_PREFIXES = [
+  "weltgewebe:garnrolle-draft:",
+  "weltgewebe:garnrolle-return-location:",
+] as const;
+
+function clearSensitiveGarnrolleSessionData(keepAccountId?: string) {
+  if (!browser) return;
+  const keysToRemove: string[] = [];
+  for (let index = 0; index < sessionStorage.length; index += 1) {
+    const key = sessionStorage.key(index);
+    if (!key) continue;
+    const prefix = SENSITIVE_GARNROLLE_SESSION_PREFIXES.find((candidate) =>
+      key.startsWith(candidate),
+    );
+    const keepKey =
+      prefix && keepAccountId ? `${prefix}${keepAccountId}` : null;
+    if (prefix && key !== keepKey) {
+      keysToRemove.push(key);
+    }
+  }
+  for (const key of keysToRemove) {
+    sessionStorage.removeItem(key);
+  }
+}
+
 const createAuthStore = () => {
   const store = writable<AuthStatus>(initialUser);
   const { subscribe, set } = store;
+  function applyAuthState(next: AuthStatus) {
+    clearSensitiveGarnrolleSessionData(
+      next.authenticated ? next.account_id : undefined,
+    );
+    set(next);
+  }
 
   // Helper to fetch current status
   const checkAuth = async () => {
@@ -38,18 +69,18 @@ const createAuthStore = () => {
             account_id:
               typeof data.account_id === "string" ? data.account_id : undefined,
           };
-          set(validated);
+          applyAuthState(validated);
           return validated;
         } else {
           console.warn("Invalid auth payload:", data);
         }
       }
       // Fallback
-      set(initialUser);
+      applyAuthState(initialUser);
       return initialUser;
     } catch (e) {
       console.warn("Auth check failed:", e);
-      set(initialUser);
+      applyAuthState(initialUser);
       return initialUser;
     }
   };
@@ -116,7 +147,7 @@ const createAuthStore = () => {
       } catch (e) {
         console.error("Logout error:", e);
         // Even if network fails, we should clear local state
-        set(initialUser);
+        applyAuthState(initialUser);
       }
     },
   };

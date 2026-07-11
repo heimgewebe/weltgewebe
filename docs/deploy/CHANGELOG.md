@@ -10,6 +10,40 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-07-11 - Eigene Garnrolle dauerhaft beschreiben und verorten
+
+**Geänderte Bereiche:**
+
+- privates Eigenprofil `GET/PATCH /accounts/me/profile`
+- PostgreSQL- und JSONL-Account-Schreibpfad
+- Einstellungen „Meine Garnrolle“
+- nutzergesteuerte Kartenpunktwahl über `compose=garnrolle`
+
+**Beschreibung:**
+
+Ein angemeldeter Weber oder Admin kann ausschließlich die eigene Garnrolle
+beschreiben und deren Kartensichtbarkeit speichern. Für `exact` und `radius`
+wird kein Ort aus der Adresse geraten: Der Nutzer wählt den Punkt selbst durch
+einen langen Druck auf die Karte und bestätigt ihn anschließend im
+Einstellungsformular. Der ungespeicherte Entwurf und die einmalig übergebene
+Koordinate bleiben im sitzungsgebundenen Browserspeicher; Koordinaten erscheinen
+nicht in der URL. Abmeldung, Sitzungsverlust oder Kontowechsel entfernen diese
+sensiblen Entwurfsdaten. `not_on_map` entfernt die öffentliche Projektion,
+bewahrt aber die private interne Koordinate. Lokale Fokuspanels verwenden nun
+die tatsächlich angebotenen pluralen Detailrouten (`/nodes`, `/accounts`,
+`/edges`) und zeigen die gespeicherten Kategorien ohne technische Präfixe.
+
+Im PostgreSQL-Modus wird zuerst `domain_accounts` aktualisiert und erst danach
+der In-Memory-Cache. E-Mail, Rolle und WebAuthn-Identität sind nicht Teil des
+PATCH-Schemas und bleiben unverändert. Die öffentliche Account-Antwort enthält
+weiterhin weder Adresse noch interne Koordinate.
+
+**Produktionswirkung:**
+
+Nach Deployment wird der bisher deaktivierte Speicherbutton funktionsfähig.
+Eine Garnrollen- oder Webungsaktion wird dadurch nicht automatisch ausgeführt;
+der Nutzer löst Kartenwahl und Speicherung selbst aus.
+
 ## 2026-07-11 - Dev-Compose-Verträge für PgBouncer und Caddy korrigiert
 
 **Geänderte Dateien:**

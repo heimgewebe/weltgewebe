@@ -90,6 +90,18 @@ const WEBAUTHN_STABLE_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000004";
 const STEP_UP_EMAIL_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000030";
 const STEP_UP_EMAIL_DUP_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000031";
 
+type PersistedProfileRow = (
+    String,
+    String,
+    i64,
+    Option<f64>,
+    Option<f64>,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+);
+
 async fn clean(pool: &PgPool) {
     pool.execute("DELETE FROM domain_accounts WHERE id LIKE 'aaaaaaaa-aaaa-4aaa-8aaa-%'")
         .await
@@ -820,6 +832,174 @@ async fn step_up_update_email_persists_to_postgres_and_reloads() -> Result<()> {
         !in_dir.join("demo.accounts.jsonl").exists(),
         "PostgreSQL write mode must not append JSONL"
     );
+
+    clean(&pool).await;
+    Ok(())
+}
+
+fn patch_own_profile(cookie: &str, json_body: &str) -> Request<body::Body> {
+    Request::patch("/accounts/me/profile")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .header("Cookie", cookie)
+        .body(body::Body::from(json_body.to_string()))
+        .expect("profile request")
+}
+
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() -> Result<()> {
+    const PROFILE_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000032";
+    const WEBAUTHN_ID: &str = "139d028d-56dd-4dd2-90b0-f5e6ca285bbb";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+    insert_account_from_jsonl_record(
+        &pool,
+        &serde_json::json!({
+            "id": PROFILE_ID,
+            "type": "garnrolle",
+            "title": "Unverortete Garnrolle",
+            "role": "admin",
+            "email": "profile-owner@example.test",
+            "webauthn_user_id": WEBAUTHN_ID,
+            "map_state": "not_on_map",
+            "radius_m": 0
+        }),
+    )
+    .await
+    .expect("insert profile fixture");
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, state) = postgres_write_app(pool.clone(), PROFILE_ID).await?;
+
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(
+            &cookie,
+            r#"{
+              "title":"Meine PostgreSQL Garnrolle",
+              "summary":"Dauerhaft gespeichert",
+              "tags":["skill:Kochen","interest:Commons"],
+              "address":"Poelsweg 2, Hamburg",
+              "map_state":"radius",
+              "radius_m":300,
+              "location":{"lat":53.5604,"lon":10.0630}
+            }"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let profile: serde_json::Value = serde_json::from_slice(&response_body)?;
+    assert_eq!(profile["id"], PROFILE_ID);
+    assert_eq!(profile["title"], "Meine PostgreSQL Garnrolle");
+    assert_eq!(profile["address"], "Poelsweg 2, Hamburg");
+    assert_eq!(profile["location"]["lat"], 53.5604);
+    assert_eq!(profile["map_state"], "radius");
+    assert_eq!(profile["radius_m"], 300);
+    assert!(profile.get("email").is_none());
+    assert!(profile.get("role").is_none());
+    assert!(profile.get("webauthn_user_id").is_none());
+
+    let row: PersistedProfileRow = sqlx::query_as(
+        "SELECT title, map_state, radius_m, location_lat, location_lon, \
+           public_payload::text, private_payload::text, email, webauthn_user_id::text \
+         FROM domain_accounts WHERE id = $1",
+    )
+    .bind(PROFILE_ID)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(row.0, "Meine PostgreSQL Garnrolle");
+    assert_eq!(row.1, "radius");
+    assert_eq!(row.2, 300);
+    assert!((row.3.expect("lat") - 53.5604).abs() < 1e-9);
+    assert!((row.4.expect("lon") - 10.0630).abs() < 1e-9);
+    let public_payload: serde_json::Value = serde_json::from_str(&row.5)?;
+    let private_payload: serde_json::Value = serde_json::from_str(&row.6)?;
+    assert_eq!(public_payload["summary"], "Dauerhaft gespeichert");
+    assert_eq!(public_payload["tags"][0], "skill:Kochen");
+    assert_eq!(private_payload["address"], "Poelsweg 2, Hamburg");
+    assert_eq!(row.7.as_deref(), Some("profile-owner@example.test"));
+    assert_eq!(row.8.as_deref(), Some(WEBAUTHN_ID));
+
+    // The durable row, not a parallel JSONL write, is the source of truth.
+    assert!(!in_dir.join("demo.accounts.jsonl").exists());
+    let reloaded = load_accounts_from_postgres(&pool).await?;
+    let reloaded_account = reloaded.get(PROFILE_ID).context("reloaded account")?;
+    assert_eq!(reloaded_account.public.title, "Meine PostgreSQL Garnrolle");
+    assert_eq!(reloaded_account.public.map_state, GarnrolleMapState::Radius);
+    assert_eq!(reloaded_account.public.radius_m, 300);
+    assert_eq!(
+        reloaded_account.email.as_deref(),
+        Some("profile-owner@example.test")
+    );
+    assert_eq!(reloaded_account.webauthn_user_id.to_string(), WEBAUTHN_ID);
+
+    let cached = state.accounts.read().await;
+    let cached_account = cached.get(PROFILE_ID).context("cached account")?;
+    assert_eq!(cached_account.public.title, "Meine PostgreSQL Garnrolle");
+    assert_eq!(
+        cached_account.email.as_deref(),
+        Some("profile-owner@example.test")
+    );
+    drop(cached);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get("/accounts/me/profile")
+                .header("Cookie", &cookie)
+                .body(body::Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let reloaded_profile: serde_json::Value = serde_json::from_slice(&response_body)?;
+    assert_eq!(reloaded_profile["address"], "Poelsweg 2, Hamburg");
+    assert_eq!(reloaded_profile["location"]["lon"], 10.0630);
+
+    // Hiding the Garnrolle removes only the public projection. The internal
+    // coordinate remains available for a later, user-controlled reactivation.
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(
+            &cookie,
+            r#"{
+              "title":"Meine PostgreSQL Garnrolle",
+              "summary":"Dauerhaft gespeichert",
+              "tags":["skill:Kochen","interest:Commons"],
+              "address":"Poelsweg 2, Hamburg",
+              "map_state":"not_on_map"
+            }"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let hidden_profile: serde_json::Value = serde_json::from_slice(&response_body)?;
+    assert_eq!(hidden_profile["map_state"], "not_on_map");
+    assert_eq!(hidden_profile["location"]["lat"], 53.5604);
+
+    let (map_state, radius_m, lat, lon): (String, i64, Option<f64>, Option<f64>) =
+        sqlx::query_as(
+            "SELECT map_state, radius_m, location_lat, location_lon              FROM domain_accounts WHERE id = $1",
+        )
+        .bind(PROFILE_ID)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(map_state, "not_on_map");
+    assert_eq!(radius_m, 0);
+    assert!((lat.expect("internal lat") - 53.5604).abs() < 1e-9);
+    assert!((lon.expect("internal lon") - 10.0630).abs() < 1e-9);
+    let hidden_reload = load_accounts_from_postgres(&pool).await?;
+    let hidden_account = hidden_reload.get(PROFILE_ID).context("hidden account")?;
+    assert_eq!(hidden_account.public.map_state, GarnrolleMapState::NotOnMap);
+    assert!(hidden_account.public.public_pos.is_none());
 
     clean(&pool).await;
     Ok(())

@@ -90,6 +90,7 @@ function mapAccountsToEntities(accounts: Account[]): MapEntityGarnrolle[] {
         lat: a.public_pos.lat,
         lon: a.public_pos.lon,
         summary: a.summary,
+        tags: a.tags,
         modules: a.modules,
         created_at: a.created_at,
       });

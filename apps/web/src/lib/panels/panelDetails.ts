@@ -117,8 +117,9 @@ export function buildPanelEndpoint(
   apiBase?: string,
 ): string {
   const base = apiBase ?? import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "";
+  const resourcePath = `${resource}s`;
   if (base) {
-    return `${base}/api/${resource}s/${id}`;
+    return `${base}/api/${resourcePath}/${id}`;
   }
-  return `/api/${resource}/${id}`;
+  return `/api/${resourcePath}/${id}`;
 }
