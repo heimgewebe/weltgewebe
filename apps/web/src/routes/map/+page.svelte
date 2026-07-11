@@ -480,8 +480,15 @@
   #map :global(canvas){ filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95); }
 
   #map :global(.map-marker){
+    appearance:none;
+    -webkit-appearance:none;
     width:24px;
     height:24px;
+    min-width:0;
+    min-height:0;
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
     border-radius:999px;
     border:2px solid var(--panel-border);
     background:var(--accent, #ff8c42);
@@ -494,19 +501,23 @@
   }
 
   #map :global(.marker-account) {
-    background-image: var(--marker-icon);
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
+    width:44px;
+    height:44px;
+    background:transparent;
+    border:none;
+    box-shadow:none;
+    transform:none;
+    border-radius:0;
+  }
 
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-
-    width: var(--marker-size, 34px);
-    height: var(--marker-size, 34px);
-    transform: none;
-    border-radius: 0;
+  #map :global(.marker-account__icon) {
+    display:block;
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    pointer-events:none;
+    user-select:none;
+    -webkit-user-drag:none;
   }
 
   @media (hover: hover) and (pointer: fine) {
