@@ -142,6 +142,10 @@ describe("parseMapUrlState", () => {
     expect(parse("compose=node").compose).toBe("node");
   });
 
+  it("accepts compose=garnrolle", () => {
+    expect(parse("compose=garnrolle").compose).toBe("garnrolle");
+  });
+
   it("records compose=edge as invalid", () => {
     const result = parse("compose=edge");
     expect(result.compose).toBeNull();

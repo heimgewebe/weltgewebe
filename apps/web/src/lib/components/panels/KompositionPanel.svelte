@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { invalidateAll } from '$app/navigation';
+  import { browser } from '$app/environment';
+  import { goto, invalidateAll } from '$app/navigation';
   import { kompositionDraft, lastCreatedNodeId, leaveToNavigation, systemState } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
   import { createEdge, createNode, ApiRequestError } from '$lib/api/domainWrites';
@@ -22,9 +23,27 @@
   let edgeError: string | null = null;
 
   $: canWrite = $authStore.role === 'weber' || $authStore.role === 'admin';
+  $: placingGarnrolle = $kompositionDraft?.mode === 'place-garnrolle';
   $: canSubmit = !!$kompositionDraft?.lngLat && !!title.trim() && !!address.trim();
 
+  async function returnToGarnrolleSettings(withLocation: boolean) {
+    const location = withLocation ? $kompositionDraft?.lngLat : undefined;
+    const accountId = $authStore.account_id;
+    if (browser && location && accountId) {
+      sessionStorage.setItem(
+        `weltgewebe:garnrolle-return-location:${accountId}`,
+        JSON.stringify({ lat: location[1], lon: location[0] })
+      );
+    }
+    leaveToNavigation();
+    await goto('/settings#meine-garnrolle');
+  }
+
   function handleCancel() {
+    if (placingGarnrolle) {
+      void returnToGarnrolleSettings(false);
+      return;
+    }
     if (createdNodeId) {
       // The node already exists — closing the panel must not hide that.
       void finalizeSuccess(createdNodeId);
@@ -143,6 +162,48 @@
     </div>
     <div class="actions">
       <button type="button" class="btn btn-secondary" on:click={handleCancel}>Schließen</button>
+    </div>
+  {:else if placingGarnrolle}
+    <div data-testid="garnrolle-placement">
+      {#if $kompositionDraft?.lngLat}
+        <div class="state-set">
+          <p><strong>Kartenpunkt gewählt</strong></p>
+          <p>
+            {$kompositionDraft.lngLat[1].toFixed(5)},
+            {$kompositionDraft.lngLat[0].toFixed(5)}
+          </p>
+          <p class="ghost">
+            Prüfe, ob dieser Punkt zu deiner Adresse passt. Erst in den
+            Einstellungen wird die Garnrolle gespeichert.
+          </p>
+        </div>
+      {:else}
+        <div class="state-pending">
+          <p><strong>Kartenpunkt ausstehend</strong></p>
+          <p>
+            Drücke etwa eine Sekunde auf den gewünschten Ort der Karte. Du
+            kannst den Punkt danach bestätigen oder erneut setzen.
+          </p>
+        </div>
+      {/if}
+      <div class="actions">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          on:click={() => returnToGarnrolleSettings(false)}
+        >
+          Abbrechen
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          disabled={!$kompositionDraft?.lngLat}
+          on:click={() => returnToGarnrolleSettings(true)}
+          data-testid="confirm-garnrolle-location"
+        >
+          Diesen Punkt übernehmen
+        </button>
+      </div>
     </div>
   {:else if createdNodeId && edgeError}
     <div class="state-set">

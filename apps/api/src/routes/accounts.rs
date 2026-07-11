@@ -7,7 +7,11 @@ use super::{
 };
 use crate::auth::{accounts::AccountStore, role::Role};
 use crate::config::DomainAccountWriteSource;
-use crate::domain_db::{insert_account_from_jsonl_record, AccountWriteError};
+use crate::domain_db::{
+    insert_account_from_jsonl_record, load_account_profile_from_postgres,
+    update_account_profile_in_postgres, AccountProfileUpdate, AccountProfileUpdateError,
+    AccountWriteError,
+};
 use crate::middleware::auth::AuthContext;
 use crate::state::ApiState;
 use axum::{
@@ -37,7 +41,7 @@ fn accounts_path() -> PathBuf {
     in_dir().join("demo.accounts.jsonl")
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Location {
     pub lat: f64,
     pub lon: f64,
@@ -75,6 +79,38 @@ pub struct AccountPublic {
     pub disabled: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct OwnGarnrolleProfile {
+    pub id: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    pub tags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<Location>,
+    pub map_state: GarnrolleMapState,
+    pub radius_m: u32,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateOwnGarnrolleRequest {
+    pub title: String,
+    #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub address: Option<String>,
+    pub map_state: GarnrolleMapState,
+    #[serde(default)]
+    pub radius_m: Option<u32>,
+    #[serde(default)]
+    pub location: Option<Location>,
 }
 
 #[derive(Clone, Debug)]
@@ -399,6 +435,382 @@ pub(crate) async fn append_account_line(record: &Value) -> std::io::Result<()> {
     file.flush().await?;
     file.sync_all().await?;
     Ok(())
+}
+
+const MAX_PROFILE_TITLE_LEN: usize = 160;
+const MAX_PROFILE_SUMMARY_LEN: usize = 2_000;
+const MAX_PROFILE_ADDRESS_LEN: usize = 500;
+const MAX_PROFILE_TAGS: usize = 64;
+const MAX_PROFILE_TAG_LEN: usize = 80;
+
+fn profile_response(
+    account: &AccountInternal,
+    address: Option<String>,
+    location: Option<Location>,
+) -> OwnGarnrolleProfile {
+    OwnGarnrolleProfile {
+        id: account.public.id.clone(),
+        title: account.public.title.clone(),
+        summary: account.public.summary.clone(),
+        tags: account.public.tags.clone(),
+        address,
+        location,
+        map_state: account.public.map_state,
+        radius_m: account.public.radius_m,
+    }
+}
+
+async fn latest_jsonl_account_record(account_id: &str) -> std::io::Result<Option<Value>> {
+    let file = match File::open(accounts_path()).await {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let mut lines = BufReader::new(file).lines();
+    let mut latest = None;
+    while let Some(line) = lines.next_line().await? {
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if value.get("id").and_then(Value::as_str) == Some(account_id) {
+            latest = Some(value);
+        }
+    }
+    Ok(latest)
+}
+
+fn private_profile_from_record(record: &Value) -> (Option<String>, Option<Location>) {
+    let address = record
+        .get("address")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let location = record.get("location").and_then(|location| {
+        let lat = location.get("lat").and_then(json_f64)?;
+        let lon = location.get("lon").and_then(json_f64)?;
+        Some(Location { lat, lon })
+    });
+    (address, location)
+}
+
+fn validate_profile_update(
+    payload: UpdateOwnGarnrolleRequest,
+) -> Result<AccountProfileUpdate, (StatusCode, String)> {
+    let bad = |message: &str| (StatusCode::BAD_REQUEST, message.to_string());
+    let title = payload.title.trim().to_string();
+    if title.is_empty() || title.len() > MAX_PROFILE_TITLE_LEN {
+        return Err(bad("title must be between 1 and 160 bytes"));
+    }
+    let summary = payload
+        .summary
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    if summary
+        .as_ref()
+        .is_some_and(|value| value.len() > MAX_PROFILE_SUMMARY_LEN)
+    {
+        return Err(bad("summary is too long"));
+    }
+    let address = payload
+        .address
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    if address
+        .as_ref()
+        .is_some_and(|value| value.len() > MAX_PROFILE_ADDRESS_LEN)
+    {
+        return Err(bad("address is too long"));
+    }
+
+    let mut tags = Vec::new();
+    for raw in payload.tags {
+        let tag = raw.trim();
+        if tag.is_empty() {
+            continue;
+        }
+        if tag.len() > MAX_PROFILE_TAG_LEN {
+            return Err(bad("a tag is too long"));
+        }
+        if !tags.iter().any(|existing| existing == tag) {
+            tags.push(tag.to_string());
+        }
+    }
+    for required in ["account", "garnrolle"] {
+        if !tags.iter().any(|tag| tag == required) {
+            tags.push(required.to_string());
+        }
+    }
+    if tags.len() > MAX_PROFILE_TAGS {
+        return Err(bad("too many tags"));
+    }
+
+    if let Some(location) = &payload.location {
+        if !location.lat.is_finite()
+            || !location.lon.is_finite()
+            || !(-90.0..=90.0).contains(&location.lat)
+            || !(-180.0..=180.0).contains(&location.lon)
+        {
+            return Err(bad(
+                "location is outside the valid latitude/longitude range",
+            ));
+        }
+    }
+
+    let (radius_m, map_state) = match payload.map_state {
+        GarnrolleMapState::NotOnMap => (0_i64, "not_on_map".to_string()),
+        GarnrolleMapState::Exact => {
+            if address.is_none() {
+                return Err(bad("address is required for a mapped Garnrolle"));
+            }
+            (0_i64, "exact".to_string())
+        }
+        GarnrolleMapState::Radius => {
+            if address.is_none() {
+                return Err(bad("address is required for a mapped Garnrolle"));
+            }
+            let radius = payload.radius_m.unwrap_or(250);
+            if !(50..=5_000).contains(&radius) {
+                return Err(bad("radius_m must be between 50 and 5000"));
+            }
+            (i64::from(radius), "radius".to_string())
+        }
+    };
+
+    Ok(AccountProfileUpdate {
+        title,
+        summary,
+        tags,
+        address,
+        map_state,
+        radius_m,
+        location: payload.location,
+    })
+}
+
+fn update_jsonl_profile_record(
+    mut record: Value,
+    update: &AccountProfileUpdate,
+) -> Result<(Value, Option<Location>), (StatusCode, String)> {
+    let object = record.as_object_mut().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "stored account record is invalid".to_string(),
+        )
+    })?;
+    let existing_location = object.get("location").and_then(|value| {
+        let lat = value.get("lat").and_then(json_f64)?;
+        let lon = value.get("lon").and_then(json_f64)?;
+        Some(Location { lat, lon })
+    });
+    let effective_location = update.location.clone().or(existing_location);
+    if update.map_state != "not_on_map" && effective_location.is_none() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "a map location is required for this visibility".to_string(),
+        ));
+    }
+
+    object.insert("type".to_string(), json!("garnrolle"));
+    object.insert("title".to_string(), json!(update.title));
+    object.insert("map_state".to_string(), json!(update.map_state));
+    object.insert("radius_m".to_string(), json!(update.radius_m));
+    object.remove("mode");
+    object.remove("ron_flag");
+    object.remove("visibility");
+    object.remove("suppress_public_pos");
+    match &update.summary {
+        Some(summary) => {
+            object.insert("summary".to_string(), json!(summary));
+        }
+        None => {
+            object.remove("summary");
+        }
+    }
+    if update.tags.is_empty() {
+        object.remove("tags");
+    } else {
+        object.insert("tags".to_string(), json!(update.tags));
+    }
+    match &update.address {
+        Some(address) => {
+            object.insert("address".to_string(), json!(address));
+        }
+        None => {
+            object.remove("address");
+        }
+    }
+    if let Some(location) = &update.location {
+        object.insert(
+            "location".to_string(),
+            json!({ "lat": location.lat, "lon": location.lon }),
+        );
+    }
+    Ok((record, effective_location))
+}
+
+pub async fn get_own_garnrolle_profile(
+    State(state): State<ApiState>,
+    Extension(ctx): Extension<AuthContext>,
+) -> Result<Json<OwnGarnrolleProfile>, (StatusCode, String)> {
+    let account_id = ctx
+        .account_id
+        .as_deref()
+        .filter(|_| ctx.authenticated)
+        .ok_or((
+            StatusCode::UNAUTHORIZED,
+            "authentication required".to_string(),
+        ))?;
+    let _persist_guard = state.accounts_persist.lock().await;
+    let account = state
+        .accounts
+        .read()
+        .await
+        .get(account_id)
+        .cloned()
+        .ok_or((StatusCode::NOT_FOUND, "account not found".to_string()))?;
+
+    let (address, location) = match state.config.domain_account_write_source {
+        DomainAccountWriteSource::Jsonl => {
+            let record = latest_jsonl_account_record(account_id)
+                .await
+                .map_err(|error| {
+                    tracing::error!(%error, "failed to read own JSONL account profile");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to load account profile".to_string(),
+                    )
+                })?
+                .ok_or((
+                    StatusCode::NOT_FOUND,
+                    "account profile not found".to_string(),
+                ))?;
+            private_profile_from_record(&record)
+        }
+        DomainAccountWriteSource::Postgres => {
+            let pool = state.db_pool.as_ref().ok_or((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "PostgreSQL pool unavailable for account profile".to_string(),
+            ))?;
+            load_account_profile_from_postgres(pool, account_id)
+                .await
+                .map_err(|error| {
+                    tracing::error!(%error, "failed to read own PostgreSQL account profile");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to load account profile".to_string(),
+                    )
+                })?
+                .ok_or((
+                    StatusCode::NOT_FOUND,
+                    "account profile not found".to_string(),
+                ))?
+        }
+    };
+
+    Ok(Json(profile_response(&account, address, location)))
+}
+
+pub async fn update_own_garnrolle_profile(
+    State(state): State<ApiState>,
+    Extension(ctx): Extension<AuthContext>,
+    Json(payload): Json<UpdateOwnGarnrolleRequest>,
+) -> Result<Json<OwnGarnrolleProfile>, (StatusCode, String)> {
+    let account_id = ctx
+        .account_id
+        .clone()
+        .filter(|_| ctx.authenticated)
+        .ok_or((
+            StatusCode::UNAUTHORIZED,
+            "authentication required".to_string(),
+        ))?;
+    let update = validate_profile_update(payload)?;
+    let _persist_guard = state.accounts_persist.lock().await;
+    let existing = state
+        .accounts
+        .read()
+        .await
+        .get(&account_id)
+        .cloned()
+        .ok_or((StatusCode::NOT_FOUND, "account not found".to_string()))?;
+
+    let stored = match state.config.domain_account_write_source {
+        DomainAccountWriteSource::Jsonl => {
+            let record = latest_jsonl_account_record(&account_id)
+                .await
+                .map_err(|error| {
+                    tracing::error!(%error, "failed to read JSONL account before profile update");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to update account profile".to_string(),
+                    )
+                })?
+                .ok_or((
+                    StatusCode::NOT_FOUND,
+                    "account profile not found".to_string(),
+                ))?;
+            let (record, location) = update_jsonl_profile_record(record, &update)?;
+            let public = map_json_to_public_account(&record).ok_or((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to project updated account".to_string(),
+            ))?;
+            append_account_line(&record).await.map_err(|error| {
+                tracing::error!(%error, "failed to append JSONL account profile update");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "failed to persist account profile".to_string(),
+                )
+            })?;
+            let mut account = existing;
+            account.public = public;
+            crate::domain_db::StoredAccountProfile {
+                account,
+                address: update.address.clone(),
+                location,
+            }
+        }
+        DomainAccountWriteSource::Postgres => {
+            let pool = state.db_pool.as_ref().ok_or((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "PostgreSQL pool unavailable for account profile".to_string(),
+            ))?;
+            update_account_profile_in_postgres(pool, &account_id, &update)
+                .await
+                .map_err(|error| match error {
+                    AccountProfileUpdateError::NotFound => {
+                        (StatusCode::NOT_FOUND, "account not found".to_string())
+                    }
+                    AccountProfileUpdateError::MissingLocation => (
+                        StatusCode::BAD_REQUEST,
+                        "a map location is required for this visibility".to_string(),
+                    ),
+                    other => {
+                        tracing::error!(error = %other, "failed to update PostgreSQL account profile");
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "failed to persist account profile".to_string(),
+                        )
+                    }
+                })?
+        }
+    };
+
+    {
+        let mut accounts = state.accounts.write().await;
+        accounts.insert(stored.account.clone());
+    }
+    tracing::info!(
+        event = "account.profile.updated",
+        account_id = %account_id,
+        map_state = %update.map_state,
+        write_source = ?state.config.domain_account_write_source,
+        "Account updated its own Garnrolle profile"
+    );
+    Ok(Json(profile_response(
+        &stored.account,
+        stored.address,
+        stored.location,
+    )))
 }
 
 /// Create the first/next account as an operator (Admin-only; gated by
@@ -968,5 +1380,137 @@ mod additional_tests {
         let account = map_json_to_public_account(&input).expect("Mapping failed");
         assert_eq!(account.map_state, GarnrolleMapState::NotOnMap);
         assert!(account.public_pos.is_none());
+    }
+}
+
+#[cfg(test)]
+mod profile_update_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn request(
+        map_state: GarnrolleMapState,
+        address: Option<&str>,
+        location: Option<Location>,
+    ) -> UpdateOwnGarnrolleRequest {
+        UpdateOwnGarnrolleRequest {
+            title: "  Meine Garnrolle  ".to_string(),
+            summary: Some("  Gemeinsame Dinge  ".to_string()),
+            tags: vec![
+                "skill:Kochen".to_string(),
+                "skill:Kochen".to_string(),
+                "interest:Commons".to_string(),
+            ],
+            address: address.map(str::to_string),
+            map_state,
+            radius_m: Some(250),
+            location,
+        }
+    }
+
+    #[test]
+    fn exact_profile_requires_address_and_valid_location() {
+        let missing_address = validate_profile_update(request(
+            GarnrolleMapState::Exact,
+            None,
+            Some(Location {
+                lat: 53.5,
+                lon: 10.0,
+            }),
+        ));
+        assert_eq!(missing_address.unwrap_err().0, StatusCode::BAD_REQUEST);
+
+        let invalid_location = validate_profile_update(request(
+            GarnrolleMapState::Exact,
+            Some("Poelsweg 2, Hamburg"),
+            Some(Location {
+                lat: 91.0,
+                lon: 10.0,
+            }),
+        ));
+        assert_eq!(invalid_location.unwrap_err().0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn profile_validation_normalises_fields_and_keeps_required_tags() {
+        let update = validate_profile_update(request(
+            GarnrolleMapState::Radius,
+            Some("  Poelsweg 2, Hamburg  "),
+            Some(Location {
+                lat: 53.5,
+                lon: 10.0,
+            }),
+        ))
+        .expect("valid profile");
+
+        assert_eq!(update.title, "Meine Garnrolle");
+        assert_eq!(update.summary.as_deref(), Some("Gemeinsame Dinge"));
+        assert_eq!(update.address.as_deref(), Some("Poelsweg 2, Hamburg"));
+        assert_eq!(update.map_state, "radius");
+        assert_eq!(update.radius_m, 250);
+        assert_eq!(
+            update.tags,
+            vec!["skill:Kochen", "interest:Commons", "account", "garnrolle"]
+        );
+    }
+
+    #[test]
+    fn jsonl_update_preserves_operational_identity_and_existing_location() {
+        let record = json!({
+            "id": "own-account",
+            "type": "garnrolle",
+            "title": "Alt",
+            "role": "weber",
+            "email": "private@example.test",
+            "webauthn_user_id": "79e8d447-c7b3-46ff-bcc9-55a0d843f780",
+            "map_state": "exact",
+            "radius_m": 0,
+            "location": {"lat": 53.5, "lon": 10.0},
+            "address": "Alte Adresse"
+        });
+        let update = validate_profile_update(UpdateOwnGarnrolleRequest {
+            title: "Neu".to_string(),
+            summary: None,
+            tags: vec![],
+            address: Some("Neue Adresse".to_string()),
+            map_state: GarnrolleMapState::Exact,
+            radius_m: None,
+            location: None,
+        })
+        .expect("valid profile");
+
+        let (updated, effective_location) =
+            update_jsonl_profile_record(record, &update).expect("update record");
+        assert_eq!(updated["id"], "own-account");
+        assert_eq!(updated["role"], "weber");
+        assert_eq!(updated["email"], "private@example.test");
+        assert_eq!(
+            updated["webauthn_user_id"],
+            "79e8d447-c7b3-46ff-bcc9-55a0d843f780"
+        );
+        assert_eq!(updated["title"], "Neu");
+        assert_eq!(updated["address"], "Neue Adresse");
+        assert_eq!(effective_location.unwrap().lat, 53.5);
+        assert_eq!(updated["location"]["lat"], 53.5);
+    }
+
+    #[test]
+    fn not_on_map_keeps_internal_location_but_has_no_public_projection() {
+        let record = json!({
+            "id": "own-account",
+            "type": "garnrolle",
+            "title": "Alt",
+            "role": "weber",
+            "map_state": "exact",
+            "radius_m": 0,
+            "location": {"lat": 53.5, "lon": 10.0}
+        });
+        let update = validate_profile_update(request(GarnrolleMapState::NotOnMap, None, None))
+            .expect("not-on-map profile");
+        let (updated, _) = update_jsonl_profile_record(record, &update).expect("update record");
+        let public = map_json_to_public_account(&updated).expect("public account");
+        assert_eq!(public.map_state, GarnrolleMapState::NotOnMap);
+        assert!(public.public_pos.is_none());
+        assert_eq!(updated["location"]["lat"], 53.5);
     }
 }

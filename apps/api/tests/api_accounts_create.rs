@@ -631,3 +631,209 @@ async fn radius_m_positive_public_pos_is_deterministic() -> Result<()> {
     );
     Ok(())
 }
+
+fn patch_own_profile(cookie: Option<&str>, json_body: &str) -> Request<body::Body> {
+    let mut builder = Request::patch("/accounts/me/profile")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost");
+    if let Some(cookie) = cookie {
+        builder = builder.header("Cookie", cookie);
+    }
+    builder
+        .body(body::Body::from(json_body.to_string()))
+        .expect("profile request")
+}
+
+#[tokio::test]
+#[serial]
+async fn weber_updates_only_own_jsonl_garnrolle_and_reads_private_profile() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let own_id = "weber-profile-1";
+    let other_id = "other-profile-1";
+    std::fs::write(
+        in_dir.join("demo.accounts.jsonl"),
+        format!(
+            "{}\n{}\n",
+            serde_json::json!({
+                "id": own_id,
+                "type": "garnrolle",
+                "title": "Eigene Garnrolle",
+                "role": "weber",
+                "map_state": "not_on_map",
+                "radius_m": 0
+            }),
+            serde_json::json!({
+                "id": other_id,
+                "type": "garnrolle",
+                "title": "Fremde Garnrolle",
+                "role": "weber",
+                "map_state": "not_on_map",
+                "radius_m": 0
+            })
+        ),
+    )?;
+
+    let (app, cookie, state) = app_with_operator(&in_dir, own_id, Role::Weber).await?;
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(
+            Some(&cookie),
+            r#"{
+              "title":"Meine gesetzte Garnrolle",
+              "summary":"Selbst gespeichert",
+              "tags":["skill:Kochen","interest:Commons"],
+              "address":"Poelsweg 2, Hamburg",
+              "map_state":"exact",
+              "location":{"lat":53.5604,"lon":10.0630}
+            }"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let profile: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(profile["id"], own_id);
+    assert_eq!(profile["title"], "Meine gesetzte Garnrolle");
+    assert_eq!(profile["address"], "Poelsweg 2, Hamburg");
+    assert_eq!(profile["location"]["lat"], 53.5604);
+    assert_eq!(profile["map_state"], "exact");
+    assert!(profile.get("email").is_none());
+    assert!(profile.get("role").is_none());
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get("/accounts/me/profile")
+                .header("Cookie", &cookie)
+                .body(body::Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let reloaded: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(reloaded["address"], "Poelsweg 2, Hamburg");
+    assert_eq!(reloaded["location"]["lon"], 10.0630);
+
+    let contents = std::fs::read_to_string(in_dir.join("demo.accounts.jsonl"))?;
+    let records: Vec<serde_json::Value> = contents
+        .lines()
+        .map(serde_json::from_str)
+        .collect::<Result<_, _>>()?;
+    let latest_own = records
+        .iter()
+        .rev()
+        .find(|record| record["id"] == own_id)
+        .context("latest own record")?;
+    assert_eq!(latest_own["title"], "Meine gesetzte Garnrolle");
+    let other_records = records
+        .iter()
+        .filter(|record| record["id"] == other_id)
+        .count();
+    assert_eq!(other_records, 1, "foreign Garnrolle must not be written");
+
+    let cache = state.accounts.read().await;
+    let own = cache.get(own_id).context("own account in cache")?;
+    assert_eq!(own.public.title, "Meine gesetzte Garnrolle");
+    assert_eq!(own.public.map_state, GarnrolleMapState::Exact);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn gast_reads_own_private_profile_but_cannot_update_it() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let account_id = "gast-profile-1";
+    std::fs::write(
+        in_dir.join("demo.accounts.jsonl"),
+        serde_json::json!({
+            "id": account_id,
+            "type": "garnrolle",
+            "title": "Gast Garnrolle",
+            "role": "gast",
+            "map_state": "not_on_map",
+            "radius_m": 0,
+            "address": "Private Testadresse"
+        })
+        .to_string()
+            + "
+",
+    )?;
+    let (app, cookie, _state) = app_with_operator(&in_dir, account_id, Role::Gast).await?;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get("/accounts/me/profile")
+                .header("Cookie", &cookie)
+                .body(body::Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let profile: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(profile["id"], account_id);
+    assert_eq!(profile["address"], "Private Testadresse");
+    assert!(profile.get("role").is_none());
+
+    let response = app
+        .oneshot(patch_own_profile(
+            Some(&cookie),
+            r#"{"title":"Nicht erlaubt","tags":[],"map_state":"not_on_map"}"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn own_profile_update_requires_authentication_and_rejects_identity_fields() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    std::fs::write(
+        in_dir.join("demo.accounts.jsonl"),
+        serde_json::json!({
+            "id": "weber-profile-2",
+            "type": "garnrolle",
+            "title": "Eigene Garnrolle",
+            "role": "weber",
+            "map_state": "not_on_map",
+            "radius_m": 0
+        })
+        .to_string()
+            + "\n",
+    )?;
+    let (app, cookie, _state) = app_with_operator(&in_dir, "weber-profile-2", Role::Weber).await?;
+
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(
+            None,
+            r#"{"title":"X","tags":[],"map_state":"not_on_map"}"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let response = app
+        .oneshot(patch_own_profile(
+            Some(&cookie),
+            r#"{
+              "id":"other-profile",
+              "role":"admin",
+              "title":"X",
+              "tags":[],
+              "map_state":"not_on_map"
+            }"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    Ok(())
+}

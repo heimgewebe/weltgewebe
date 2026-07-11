@@ -1,6 +1,14 @@
 <script lang="ts">
+  import { browser } from "$app/environment";
+  import { goto, invalidateAll } from "$app/navigation";
   import { authStore } from "$lib/auth/store";
-  import type { Account } from "$lib/map/types";
+  import {
+    ApiRequestError,
+    getOwnGarnrolleProfile,
+    updateOwnGarnrolle,
+    type OwnGarnrolleProfile,
+  } from "$lib/api/domainWrites";
+  import type { Account, GarnrolleMapState, Location } from "$lib/map/types";
   import {
     describeGarnrolleVisibility,
     findOwnGarnrolle,
@@ -9,41 +17,299 @@
   export let accounts: Account[] = [];
   export let accountsLoadError: string | null = null;
 
-  let draftKey = "";
+  type GarnrolleDraft = {
+    displayName: string;
+    summary: string;
+    skills: string;
+    goods: string;
+    interests: string;
+    address: string;
+    visibilityChoice: GarnrolleMapState;
+    radiusM: number;
+    selectedLocation: Location | null;
+  };
+
+  let profileKey = "";
   let displayName = "";
   let summary = "";
   let skills = "";
   let goods = "";
   let interests = "";
   let address = "";
-  let visibilityChoice: "not_on_map" | "exact" | "radius" = "not_on_map";
+  let visibilityChoice: GarnrolleMapState = "not_on_map";
   let radiusM = 250;
+  let selectedLocation: Location | null = null;
+  let isLoadingProfile = false;
+  let isSaving = false;
+  let profileError: string | null = null;
+  let saveMessage: string | null = null;
 
   $: ownGarnrolle = findOwnGarnrolle(accounts, $authStore.account_id);
   $: visibility = describeGarnrolleVisibility(ownGarnrolle);
-  $: currentKey = `${$authStore.account_id ?? "guest"}:${ownGarnrolle?.id ?? "unlisted"}`;
-
-  $: if (currentKey !== draftKey) {
-    draftKey = currentKey;
-    displayName = ownGarnrolle?.title ?? "Meine Garnrolle";
-    summary = ownGarnrolle?.summary ?? "";
-    skills =
-      ownGarnrolle?.tags
-        ?.filter((tag) => tag !== "account" && tag !== "garnrolle")
-        .join(", ") ?? "";
-    goods = "";
-    interests = "";
-    address = "";
-    visibilityChoice = visibility.state;
-    radiusM =
-      ownGarnrolle?.radius_m && ownGarnrolle.radius_m > 0
-        ? ownGarnrolle.radius_m
-        : 250;
-  }
-
+  $: activeAccountId =
+    $authStore.authenticated && $authStore.account_id
+      ? $authStore.account_id
+      : null;
+  $: canEdit = $authStore.role === "weber" || $authStore.role === "admin";
+  $: canSave =
+    canEdit &&
+    !!ownGarnrolle &&
+    !!displayName.trim() &&
+    !isLoadingProfile &&
+    !isSaving &&
+    (visibilityChoice === "not_on_map" ||
+      (!!address.trim() && selectedLocation !== null));
   $: mapHref = ownGarnrolle?.public_pos
     ? `/map?focus=garnrolle:${ownGarnrolle.id}`
     : "/map";
+
+  $: if (activeAccountId && activeAccountId !== profileKey) {
+    profileKey = activeAccountId;
+    void loadPrivateProfile(activeAccountId);
+  }
+  $: if (!activeAccountId && profileKey) {
+    profileKey = "";
+    resetDraft();
+  }
+
+  function splitList(value: string): string[] {
+    return value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter((entry, index, all) => entry && all.indexOf(entry) === index);
+  }
+
+  function categoryValues(tags: string[], prefix: string): string[] {
+    return tags
+      .filter((tag) => tag.startsWith(prefix))
+      .map((tag) => tag.slice(prefix.length))
+      .filter(Boolean);
+  }
+
+  function profileSkills(tags: string[]): string[] {
+    const prefixed = categoryValues(tags, "skill:");
+    const legacy = tags.filter(
+      (tag) =>
+        tag !== "account" &&
+        tag !== "garnrolle" &&
+        !tag.startsWith("skill:") &&
+        !tag.startsWith("good:") &&
+        !tag.startsWith("interest:"),
+    );
+    return [...prefixed, ...legacy].filter(
+      (entry, index, all) => all.indexOf(entry) === index,
+    );
+  }
+
+  function draftStorageKey(accountId: string): string {
+    return `weltgewebe:garnrolle-draft:${accountId}`;
+  }
+
+  function currentDraft(): GarnrolleDraft {
+    return {
+      displayName,
+      summary,
+      skills,
+      goods,
+      interests,
+      address,
+      visibilityChoice,
+      radiusM,
+      selectedLocation,
+    };
+  }
+
+  function applyDraft(draft: Partial<GarnrolleDraft>) {
+    if (typeof draft.displayName === "string") displayName = draft.displayName;
+    if (typeof draft.summary === "string") summary = draft.summary;
+    if (typeof draft.skills === "string") skills = draft.skills;
+    if (typeof draft.goods === "string") goods = draft.goods;
+    if (typeof draft.interests === "string") interests = draft.interests;
+    if (typeof draft.address === "string") address = draft.address;
+    if (
+      draft.visibilityChoice === "not_on_map" ||
+      draft.visibilityChoice === "exact" ||
+      draft.visibilityChoice === "radius"
+    ) {
+      visibilityChoice = draft.visibilityChoice;
+    }
+    if (typeof draft.radiusM === "number" && Number.isFinite(draft.radiusM)) {
+      radiusM = draft.radiusM;
+    }
+    if (
+      draft.selectedLocation === null ||
+      (typeof draft.selectedLocation?.lat === "number" &&
+        typeof draft.selectedLocation?.lon === "number")
+    ) {
+      selectedLocation = draft.selectedLocation ?? null;
+    }
+  }
+
+  function resetDraft() {
+    displayName = "";
+    summary = "";
+    skills = "";
+    goods = "";
+    interests = "";
+    address = "";
+    visibilityChoice = "not_on_map";
+    radiusM = 250;
+    selectedLocation = null;
+    profileError = null;
+    saveMessage = null;
+  }
+
+  function applyProfile(profile: OwnGarnrolleProfile) {
+    displayName = profile.title;
+    summary = profile.summary ?? "";
+    skills = profileSkills(profile.tags).join(", ");
+    goods = categoryValues(profile.tags, "good:").join(", ");
+    interests = categoryValues(profile.tags, "interest:").join(", ");
+    address = profile.address ?? "";
+    visibilityChoice = profile.map_state;
+    radiusM = profile.radius_m > 0 ? profile.radius_m : 250;
+    selectedLocation = profile.location ?? null;
+  }
+
+  function returnedMapLocation(accountId: string): Location | null {
+    if (!browser) return null;
+    const key = `weltgewebe:garnrolle-return-location:${accountId}`;
+    const stored = sessionStorage.getItem(key);
+    sessionStorage.removeItem(key);
+    if (!stored) return null;
+    try {
+      const value = JSON.parse(stored) as Partial<Location>;
+      const lat = value.lat;
+      const lon = value.lon;
+      if (
+        typeof lat !== "number" ||
+        typeof lon !== "number" ||
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon) ||
+        lat < -90 ||
+        lat > 90 ||
+        lon < -180 ||
+        lon > 180
+      ) {
+        return null;
+      }
+      return { lat, lon };
+    } catch {
+      return null;
+    }
+  }
+
+  async function loadPrivateProfile(accountId: string) {
+    isLoadingProfile = true;
+    profileError = null;
+    saveMessage = null;
+    try {
+      const profile = await getOwnGarnrolleProfile();
+      if (profile.id !== accountId) {
+        throw new Error("profile-account-mismatch");
+      }
+      applyProfile(profile);
+
+      if (browser) {
+        const stored = sessionStorage.getItem(draftStorageKey(accountId));
+        if (stored) {
+          try {
+            applyDraft(JSON.parse(stored) as Partial<GarnrolleDraft>);
+          } catch {
+            sessionStorage.removeItem(draftStorageKey(accountId));
+          }
+        }
+      }
+      const returned = returnedMapLocation(accountId);
+      if (returned) {
+        selectedLocation = returned;
+        saveMessage =
+          "Kartenpunkt übernommen. Prüfe Adresse und Sichtbarkeit und speichere anschließend.";
+      }
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 401) {
+        profileError =
+          "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.";
+      } else {
+        profileError =
+          "Deine Garnrolle konnte nicht vollständig geladen werden. Bitte lade die Seite neu.";
+      }
+    } finally {
+      isLoadingProfile = false;
+    }
+  }
+
+  function saveDraftForMap() {
+    if (!browser || !activeAccountId) return;
+    sessionStorage.setItem(
+      draftStorageKey(activeAccountId),
+      JSON.stringify(currentDraft()),
+    );
+  }
+
+  async function chooseMapLocation() {
+    saveMessage = null;
+    profileError = null;
+    saveDraftForMap();
+    await goto("/map?compose=garnrolle");
+  }
+
+  function profileTags(): string[] {
+    return [
+      ...splitList(skills).map((tag) => `skill:${tag}`),
+      ...splitList(goods).map((tag) => `good:${tag}`),
+      ...splitList(interests).map((tag) => `interest:${tag}`),
+    ];
+  }
+
+  function describeSaveError(error: unknown): string {
+    if (error instanceof ApiRequestError) {
+      if (error.status === 401) {
+        return "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.";
+      }
+      if (error.status === 403) {
+        return "Dein Konto darf die Garnrolle derzeit nicht bearbeiten.";
+      }
+      if (error.status === 400) {
+        return "Bitte prüfe Name, Adresse, Kartenpunkt und Sichtbarkeit.";
+      }
+    }
+    return "Die Garnrolle konnte nicht gespeichert werden. Bitte versuche es erneut.";
+  }
+
+  async function handleSave(event: SubmitEvent) {
+    event.preventDefault();
+    profileError = null;
+    saveMessage = null;
+    if (!canSave || !activeAccountId) return;
+
+    isSaving = true;
+    try {
+      await updateOwnGarnrolle({
+        title: displayName.trim(),
+        summary: summary.trim() || undefined,
+        tags: profileTags(),
+        address: address.trim() || undefined,
+        location: selectedLocation ?? undefined,
+        map_state: visibilityChoice,
+        radius_m: visibilityChoice === "radius" ? radiusM : undefined,
+      });
+      if (browser) {
+        sessionStorage.removeItem(draftStorageKey(activeAccountId));
+      }
+      await invalidateAll();
+      saveMessage = "Deine Garnrolle wurde gespeichert.";
+      await goto("/settings#meine-garnrolle", {
+        replaceState: true,
+        noScroll: true,
+        keepFocus: true,
+      });
+    } catch (error) {
+      profileError = describeSaveError(error);
+    } finally {
+      isSaving = false;
+    }
+  }
 </script>
 
 <section
@@ -78,10 +344,9 @@
             Garnrollen-Daten konnten nicht geladen werden: {accountsLoadError}
           </p>
         {:else if !ownGarnrolle}
-          <p class="muted">
-            Deine Sitzung ist aktiv. Es gibt noch keinen öffentlichen
-            Garnrollen-Datensatz für diesen Account. Produktsprachlich heißt
-            das: Die Garnrolle ist angelegt, aber noch nicht auf der Karte.
+          <p class="warn">
+            Deine Sitzung ist aktiv, aber der zugehörige Garnrollen-Datensatz
+            fehlt. Speichern ist deshalb gesperrt.
           </p>
         {/if}
       </div>
@@ -95,18 +360,28 @@
       </a>
     </div>
 
-    <form class="garnrolle-form" aria-describedby="my-garnrolle-save-note">
-      <fieldset>
+    <form
+      class="garnrolle-form"
+      aria-describedby="my-garnrolle-save-note"
+      on:submit={handleSave}
+    >
+      <fieldset disabled={isLoadingProfile || isSaving}>
         <legend>Garnrolle beschreiben</legend>
         <label>
           Anzeigename
-          <input bind:value={displayName} placeholder="Meine Garnrolle" />
+          <input
+            bind:value={displayName}
+            placeholder="Meine Garnrolle"
+            maxlength="160"
+            required
+          />
         </label>
         <label>
           Kurzbeschreibung
           <textarea
             bind:value={summary}
             rows="3"
+            maxlength="2000"
             placeholder="Was bringst du ins Gewebe ein?"></textarea>
         </label>
         <label>
@@ -132,11 +407,15 @@
         </label>
       </fieldset>
 
-      <fieldset>
+      <fieldset disabled={isLoadingProfile || isSaving}>
         <legend>Garnrolle auf Karte setzen</legend>
         <label>
           Adresse
-          <input bind:value={address} placeholder="Poelsweg 2, Hamburg" />
+          <input
+            bind:value={address}
+            maxlength="500"
+            placeholder="Straße, Hausnummer, Ort"
+          />
         </label>
 
         <div class="radio-group" role="radiogroup" aria-label="Sichtbarkeit">
@@ -155,20 +434,53 @@
             <input type="radio" bind:group={visibilityChoice} value="exact" />
             <span>
               <strong>Exakt sichtbar</strong>
-              <small
-                >Die angegebene Position wird sichtbar. Das ist ein regulärer
-                positiver Fall.</small
-              >
+              <small>Der von dir gewählte Kartenpunkt wird öffentlich.</small>
             </span>
           </label>
           <label class="radio-card">
             <input type="radio" bind:group={visibilityChoice} value="radius" />
             <span>
               <strong>Im Umkreis sichtbar</strong>
-              <small>Die Garnrolle erscheint nur ungefähr.</small>
+              <small>
+                Die öffentliche Position wird innerhalb des gewählten Umkreises
+                versetzt.
+              </small>
             </span>
           </label>
         </div>
+
+        {#if visibilityChoice !== "not_on_map"}
+          <div class="location-card" data-testid="garnrolle-location-state">
+            {#if selectedLocation}
+              <div>
+                <strong>Kartenpunkt gewählt</strong>
+                <small>
+                  {selectedLocation.lat.toFixed(5)},
+                  {selectedLocation.lon.toFixed(5)}
+                </small>
+              </div>
+              <button type="button" class="btn" on:click={chooseMapLocation}>
+                Kartenpunkt ändern
+              </button>
+            {:else}
+              <div>
+                <strong>Noch kein Kartenpunkt gewählt</strong>
+                <small>
+                  Die Adresse wird nicht automatisch in eine Position
+                  umgewandelt. Wähle den passenden Punkt selbst auf der Karte.
+                </small>
+              </div>
+              <button
+                type="button"
+                class="btn btn-primary"
+                on:click={chooseMapLocation}
+                data-testid="choose-garnrolle-location"
+              >
+                Ort auf Karte wählen
+              </button>
+            {/if}
+          </div>
+        {/if}
 
         {#if visibilityChoice === "radius"}
           <label>
@@ -184,14 +496,53 @@
         {/if}
       </fieldset>
 
-      <div class="actions">
-        <button type="button" class="btn btn-primary" disabled>Speichern</button
+      {#if !canEdit}
+        <p
+          class="form-message error"
+          role="alert"
+          data-testid="garnrolle-role-warning"
         >
+          Dein Konto besitzt noch keine Weber-Berechtigung. Die Garnrolle kann
+          deshalb nicht gespeichert werden.
+        </p>
+      {/if}
+
+      {#if profileError}
+        <p
+          class="form-message error"
+          role="alert"
+          data-testid="garnrolle-error"
+        >
+          {profileError}
+        </p>
+      {/if}
+      {#if saveMessage}
+        <p
+          class="form-message success"
+          role="status"
+          data-testid="garnrolle-success"
+        >
+          {saveMessage}
+        </p>
+      {/if}
+
+      <div class="actions">
+        <button
+          type="submit"
+          class="btn btn-primary"
+          disabled={!canSave}
+          data-testid="save-garnrolle"
+        >
+          {isSaving ? "Wird gespeichert…" : "Speichern"}
+        </button>
         <a class="btn" href="/map?compose=node">Ersten Knoten weben</a>
       </div>
       <p id="my-garnrolle-save-note" class="muted">
-        Dieser Schnitt baut die Oberfläche und Semantik. Persistenz für Profil
-        und Verortung folgt im nächsten API-Schnitt.
+        Öffentlich sind Anzeigename, Kurzbeschreibung, Fähigkeiten, Güter und
+        Interessen. Deine Adresse bleibt privat. Bei „Exakt sichtbar“ ist der
+        gewählte Kartenpunkt öffentlich; bei „Im Umkreis sichtbar“ nur eine
+        versetzte Näherung; bei „Noch nicht auf der Karte“ keine Position.
+        Adresse und Kartenpunkt werden nicht automatisch abgeglichen.
       </p>
     </form>
   {/if}
@@ -244,7 +595,8 @@
   }
 
   .status-card,
-  .empty-card {
+  .empty-card,
+  .location-card {
     border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.08));
     border-radius: 12px;
     display: flex;
@@ -256,6 +608,18 @@
   .status-card p,
   .empty-card p {
     margin: 0.35rem 0 0;
+  }
+
+  .location-card {
+    align-items: center;
+  }
+
+  .location-card small {
+    color: var(--muted, #9aa4b2);
+    display: block;
+    font-weight: 400;
+    margin-top: 0.25rem;
+    max-width: 34rem;
   }
 
   .warn {
@@ -324,6 +688,22 @@
     margin-top: 0.25rem;
   }
 
+  .form-message {
+    border-radius: 8px;
+    margin: 0;
+    padding: 0.8rem 1rem;
+  }
+
+  .form-message.error {
+    background: rgba(255, 107, 107, 0.12);
+    border: 1px solid #ff6b6b;
+  }
+
+  .form-message.success {
+    background: rgba(84, 225, 166, 0.12);
+    border: 1px solid rgba(84, 225, 166, 0.7);
+  }
+
   .actions {
     display: flex;
     flex-wrap: wrap;
@@ -359,7 +739,8 @@
   @media (max-width: 640px) {
     .section-head,
     .status-card,
-    .empty-card {
+    .empty-card,
+    .location-card {
       display: grid;
     }
   }

@@ -73,6 +73,16 @@ export async function mockApiResponses(
   // mirroring the real API's persist-then-cache-then-readable contract.
   const createdNodes: Record<string, unknown>[] = [];
   const createdEdges: Record<string, unknown>[] = [];
+  const mockAccounts = demoAccounts.map((account) => ({ ...account }));
+  const privateProfiles = new Map(
+    mockAccounts.map((account) => [
+      account.id,
+      {
+        address: "",
+        location: account.location ? { ...account.location } : null,
+      },
+    ]),
+  );
   let nextNodeId = 1;
   let nextEdgeId = 1;
 
@@ -135,11 +145,102 @@ export async function mockApiResponses(
       });
     }
 
+    if (url.endsWith("/api/accounts/me/profile")) {
+      if (!isAuthenticated || !currentAccountId) {
+        return route.fulfill({ status: 401 });
+      }
+      const account = mockAccounts.find((item) => item.id === currentAccountId);
+      if (!account) {
+        return route.fulfill({ status: 404 });
+      }
+      const privateProfile = privateProfiles.get(currentAccountId) ?? {
+        address: "",
+        location: null,
+      };
+      if (method === "PATCH") {
+        const payload = route.request().postDataJSON() as Record<
+          string,
+          unknown
+        >;
+        const mapState = payload.map_state;
+        const location = payload.location as
+          | { lat?: unknown; lon?: unknown }
+          | undefined;
+        if (
+          typeof payload.title !== "string" ||
+          !payload.title.trim() ||
+          (mapState !== "not_on_map" &&
+            mapState !== "exact" &&
+            mapState !== "radius") ||
+          (mapState !== "not_on_map" &&
+            (typeof location?.lat !== "number" ||
+              typeof location?.lon !== "number"))
+        ) {
+          return route.fulfill({ status: 400 });
+        }
+        account.title = payload.title.trim();
+        account.summary =
+          typeof payload.summary === "string" ? payload.summary : "";
+        account.tags = Array.isArray(payload.tags)
+          ? payload.tags.filter((tag): tag is string => typeof tag === "string")
+          : [];
+        account.map_state = mapState;
+        account.radius_m =
+          mapState === "radius" && typeof payload.radius_m === "number"
+            ? payload.radius_m
+            : 0;
+        if (location) {
+          privateProfile.location = {
+            lat: location.lat as number,
+            lon: location.lon as number,
+          };
+        }
+        privateProfile.address =
+          typeof payload.address === "string" ? payload.address : "";
+        if (mapState === "not_on_map") {
+          delete account.public_pos;
+        } else if (privateProfile.location) {
+          account.public_pos = { ...privateProfile.location };
+        }
+        privateProfiles.set(currentAccountId, privateProfile);
+      } else if (method !== "GET") {
+        return route.fulfill({ status: 405 });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: account.id,
+          title: account.title,
+          summary: account.summary,
+          tags: account.tags,
+          address: privateProfile.address || undefined,
+          location: privateProfile.location || undefined,
+          map_state: account.map_state ?? "not_on_map",
+          radius_m: account.radius_m ?? 0,
+        }),
+      });
+    }
+
+    const accountDetailMatch = new URL(url).pathname.match(
+      /^\/api\/accounts\/([^/]+)$/,
+    );
+    if (accountDetailMatch && method === "GET") {
+      const account = mockAccounts.find(
+        (item) => item.id === decodeURIComponent(accountDetailMatch[1]),
+      );
+      return route.fulfill({
+        status: account ? 200 : 404,
+        contentType: "application/json",
+        body: JSON.stringify(account ?? { error: "account not found" }),
+      });
+    }
+
     if (url.endsWith("/api/accounts")) {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(demoAccounts),
+        body: JSON.stringify(mockAccounts),
       });
     }
 

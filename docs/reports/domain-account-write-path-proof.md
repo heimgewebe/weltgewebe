@@ -12,8 +12,9 @@ created: 2026-06-04
 lang: de
 summary: >
   Proof-Bericht für OPT-ARC-001 Phase E-A: optionaler PostgreSQL-Schreibpfad für
-  die Account-Erzeugung (`POST /accounts`) und – über dasselbe enge Write-Gate –
-  die Step-up-E-Mail-Aktualisierung (AUTH-PG-001, `UpdateEmail`-Intent). JSONL
+  Account-Erzeugung (`POST /accounts`), das private Eigenprofil der Garnrolle
+  (`GET/PATCH /accounts/me/profile`) und die Step-up-E-Mail-Aktualisierung
+  (AUTH-PG-001, `UpdateEmail`-Intent). JSONL
   bleibt Default; kein Dual-Write; Knoten-, Kanten- und WebAuthn-Credential-
   Persistenz bleiben unverändert.
 relations:
@@ -36,8 +37,9 @@ relations:
 ## Scope
 
 Dieser Proof dokumentiert OPT-ARC-001 **Phase E-A** als bewusst engen,
-opt-in PostgreSQL-Schreibpfad für die Account-Erzeugung (`POST /accounts`)
-sowie den unter **AUTH-PG-001** ergänzten, über dasselbe Write-Gate laufenden
+opt-in PostgreSQL-Schreibpfad für die Account-Erzeugung (`POST /accounts`),
+das private Eigenprofil (`GET/PATCH /accounts/me/profile`) sowie den unter
+**AUTH-PG-001** ergänzten, über dasselbe Write-Gate laufenden
 Step-up-E-Mail-Aktualisierungspfad (`UpdateEmail`-Intent beim Step-up-Consume).
 
 Geltende Grenzen:
@@ -48,7 +50,8 @@ Geltende Grenzen:
   `domain_account_write_source: postgres` aktiviert.
 - Der Account-Write-Gate ist getrennt vom Read-Gate
   (`WELTGEWEBE_DOMAIN_READ_SOURCE`). Es ist **kein** breiter
-  `WELTGEWEBE_DOMAIN_WRITE_SOURCE`, weil nur Account-Create implementiert ist.
+  `WELTGEWEBE_DOMAIN_WRITE_SOURCE`; alle Account-Mutationen bleiben an den
+  spezifischen Account-Schreibschalter gebunden.
 - PostgreSQL-Account-Write **erfordert** den PostgreSQL-Read-Source und einen
   konfigurierten Pool. Andernfalls bricht Config-Load bzw. Startup hart ab
   (kein stiller JSONL-Fallback).
@@ -86,7 +89,9 @@ Geltende Grenzen:
 | Ungültiger Wert | harter Config-Fehler (kein Fallback) |
 | Harte Kopplung | `postgres` erfordert `domain_read_source=postgres` (Config-Load) **und** einen Pool (Startup) |
 
-## Route-Verhalten (`POST /accounts`)
+## Route-Verhalten
+
+### `POST /accounts`
 
 | Read-Source | Account-Write-Source | Verhalten |
 |---|---|---|
@@ -98,6 +103,24 @@ Geltende Grenzen:
 `PATCH /nodes` bleibt im Postgres-Read-Modus unverändert blockiert
 (`reject_if_postgres_read_source`).
 
+### `GET/PATCH /accounts/me/profile`
+
+- `GET` verlangt eine gültige Sitzung und liefert nur das private Profil des
+  aktiven Accounts: Titel, Beschreibung, Kategorien, Adresse, interne
+  Koordinate, `map_state` und Radius. E-Mail, Rolle und WebAuthn-Identität
+  werden nie serialisiert.
+- `PATCH` akzeptiert keine Account-ID und verwendet ausschließlich die
+  `account_id` der Sitzung. Unbekannte Felder wie `id` oder `role` werden
+  abgewiesen.
+- `PATCH` ist für Weber und Admin erlaubt, für Gäste verboten.
+- `exact` und `radius` verlangen eine Adresse und eine gültige vorhandene oder
+  neu übermittelte Koordinate. `not_on_map` setzt Radius 0 und entfernt jede
+  öffentliche Position, ohne die private Koordinate zu löschen.
+- PostgreSQL-Modus: Transaktion und Zeilensperre, DB-Update vor Cache-Update,
+  kein JSONL-Write. JSONL-Modus: Append eines vollständigen neuen Snapshots,
+  danach Cache-Update. Kein Dual-Write.
+
+
 ## Implementierte Belege
 
 - `apps/api/src/config.rs`: `DomainAccountWriteSource` (Default `Jsonl`),
@@ -106,7 +129,10 @@ Geltende Grenzen:
   Postgres+Postgres-Read-Accept.
 - `apps/api/src/lib.rs`: Startup-Gate — `Postgres` verlangt einen Pool, sonst
   harter Startfehler; klares Logging „account-create write source“.
-- `apps/api/src/domain_db.rs`: `NewDomainAccountRow::from_jsonl_record`
+- `apps/api/src/domain_db.rs`: `NewDomainAccountRow::from_jsonl_record`,
+  `load_account_profile_from_postgres` und
+  `update_account_profile_in_postgres` (Transaktion, Zeilensperre,
+  DB-vor-Cache-Vertrag, Erhalt der operativen Identität);
   (gleiches semantisches Mapping wie der Phase-C-Backfill) und
   `insert_account_from_jsonl_record` (eine Zeile, plain `INSERT` ohne
   `ON CONFLICT`; UUID/JSONB via `::uuid`/`::jsonb`-Casts, weil der sqlx-Build
@@ -116,7 +142,8 @@ Geltende Grenzen:
 - `apps/api/src/routes/domain_write_guard.rs`:
   `reject_account_create_unless_writable` (Account-Create-Gate) neben dem
   unveränderten `reject_if_postgres_read_source` (Node-Writes).
-- `apps/api/src/routes/accounts.rs::create_account`: gemeinsame
+- `apps/api/src/routes/accounts.rs`: `create_account` sowie strikt auf den
+  aktiven Session-Account gebundene Eigenprofil-Handler; gemeinsame
   Validierung/Record-Bau/Public-Projektion/Duplikatprüfung; Verzweigung nur am
   Persistenzschritt; Cache-Update erst nach erfolgreichem Write; DB-Insert-Fehler
   mappt `DuplicateId` → `409 CONFLICT`, sonst `500`.
@@ -170,6 +197,10 @@ DATABASE_URL=postgres://welt:gewebe@localhost:5432/weltgewebe \
 
 Testfälle:
 
+- `own_garnrolle_profile_persists_privately_and_reloads_from_postgres`:
+  PATCH des eigenen Profils, private Adresse/Koordinate, Erhalt von E-Mail,
+  Rolle und WebAuthn-Identität, kein JSONL-Write, Reload aus PostgreSQL sowie
+  Wechsel zu `not_on_map` ohne öffentliche Projektion.
 - `account_create_persists_stable_webauthn_user_id_across_reload`:
   Erfolg (201), korrekte Spalten/Payloads, Cache enthält den Account sofort,
   kein JSONL-Append; DB, Cache und `load_accounts_from_postgres` verwenden
@@ -185,8 +216,10 @@ Testfälle:
 
 DB-Suiten für lokalen PostgreSQL-Proof sind vorbereitet (`db_domain_schema_migrations`,
 `db_domain_backfill`, `db_domain_read_path`, `db_domain_account_write_path`).
-Lokaler PostgreSQL-Proof in dieser Umgebung nicht ausgeführt. PR-CI ist maßgeblich; der PR-CI-Beleg steht aus
-(Job `db-domain-account-write-path-proof` in `.github/workflows/api.yml`).
+Der neue Eigenprofil-Test wurde lokal gegen PostgreSQL 16 ausgeführt und ist
+zusätzlich durch GitHub Actions Run `29149078893`, Job
+`db-domain-account-write-path-proof` (`86535506561`), auf Commit
+`83eeced1f1235687f3ccc99cf4300a133b8686ef` erfolgreich gebunden.
 
 `suppress_public_pos` wird von `POST /accounts` nicht akzeptiert; Phase E-A
 erhält Datenschutz über `visibility=private` und bestehende Loader-Semantik

@@ -70,7 +70,7 @@ describe("buildMapScene", () => {
   it("transforms accounts with public_pos into entities", () => {
     const scene = buildMapScene({
       nodes: [],
-      accounts: [makeAccount()],
+      accounts: [makeAccount({ tags: ["skill:Kochen", "interest:Commons"] })],
       edges: [],
       loadState: "ok",
       resourceStatus: [{ resource: "accounts", status: "ok" }],
@@ -82,6 +82,10 @@ describe("buildMapScene", () => {
     expect(scene.entities[0].type).toBe("garnrolle");
     expect(scene.entities[0].lat).toBe(53.56);
     expect(scene.entities[0].lon).toBe(10.06);
+    expect(scene.entities[0].tags).toEqual([
+      "skill:Kochen",
+      "interest:Commons",
+    ]);
   });
 
   it("excludes Garnrollen without a public position", () => {

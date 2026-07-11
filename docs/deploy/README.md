@@ -195,7 +195,8 @@ Das ist **keine Validierung**, sondern eine **sichtbare Beobachtung**.
   PostgreSQL-Domänentabellen.
 - **WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE**: Default `jsonl`.
   `postgres` persistiert Account-Erzeugung einschließlich Auth-
-  Autoprovisionierung in `domain_accounts`.
+  Autoprovisionierung sowie `PATCH /accounts/me/profile` für die eigene
+  Garnrolle in `domain_accounts`.
 - **WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE**: Default `jsonl`.
   `postgres` persistiert `POST /nodes` und `PATCH /nodes/{id}` in
   `domain_nodes`.

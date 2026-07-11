@@ -17,7 +17,10 @@ use crate::middleware::authz::{require_admin, require_write};
 use crate::state::ApiState;
 
 use self::{
-    accounts::{create_account, get_account, list_accounts},
+    accounts::{
+        create_account, get_account, get_own_garnrolle_profile, list_accounts,
+        update_own_garnrolle_profile,
+    },
     auth::{
         consume_login_get, consume_login_post, consume_step_up, dev_login, list_dev_accounts,
         list_devices, logout, logout_all, me, passkey_auth_options, passkey_auth_verify,
@@ -52,6 +55,12 @@ pub fn api_router() -> Router<ApiState> {
             get(list_accounts)
                 .post(create_account)
                 .route_layer(from_fn(require_admin)),
+        )
+        .route(
+            "/accounts/me/profile",
+            get(get_own_garnrolle_profile)
+                .patch(update_own_garnrolle_profile)
+                .route_layer(from_fn(require_write)),
         )
         .route("/accounts/{id}", get(get_account))
         .route("/auth/dev/accounts", get(list_dev_accounts))

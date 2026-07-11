@@ -393,6 +393,7 @@ const CSRF_COVERED_MUTATING_ROUTES: &[(&str, &str)] = &[
     ("POST", "/nodes"),
     ("POST", "/edges"),
     ("POST", "/accounts"),
+    ("PATCH", "/accounts/me/profile"),
 ];
 
 const CSRF_EXEMPT_MUTATING_ROUTES: &[(&str, &str)] = &[

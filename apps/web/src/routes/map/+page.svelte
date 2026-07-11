@@ -152,10 +152,13 @@
   }
 
   function applyImmediateMapUrlAddressing(parsed: ParsedMapUrlState) {
-    if (parsed.compose === 'node') {
+    if (parsed.compose) {
       closeSearch();
       closeFilter();
-      enterKomposition({ mode: 'new-knoten', source: 'action-bar' });
+      enterKomposition({
+        mode: parsed.compose === 'garnrolle' ? 'place-garnrolle' : 'new-knoten',
+        source: 'action-bar'
+      });
       return;
     }
     // A valid focus takes precedence: leave stale focus/composition and close
@@ -213,7 +216,7 @@
       applyImmediateMapUrlAddressing(parsed);
       // compose is final; without a valid focus there is nothing for the focus
       // pass to do. Either way the focus lock is satisfied for this query.
-      if (parsed.compose === 'node' || !parsed.focus) {
+      if (parsed.compose || !parsed.focus) {
         lastResolvedFocusUrlSearch = search;
       }
     }

@@ -19,6 +19,7 @@
  *  - `focus=account:<id>`     → alias for `garnrolle:<id>`
  *  - `lens=filter|search`     → open a filter/search lens
  *  - `compose=node`           → enter node composition
+ *  - `compose=garnrolle`      → choose the own Garnrolle map point
  *  - `tab=<tab>`              → tolerated parser-side only (not wired to UI tabs)
  */
 
@@ -33,8 +34,8 @@ export type MapUrlFocus = {
 /** Lenses that can be opened from the URL. */
 export type MapUrlLens = "filter" | "search";
 
-/** Composition modes addressable via the URL (first slice: node only). */
-export type MapUrlCompose = "node";
+/** Composition modes addressable via the URL. */
+export type MapUrlCompose = "node" | "garnrolle";
 
 export type ParsedMapUrlState = {
   focus: MapUrlFocus | null;
@@ -93,11 +94,11 @@ export function isSupportedLens(value: string | null): value is MapUrlLens {
   return value === "filter" || value === "search";
 }
 
-/** Type guard: is the value a supported composition mode (`node`)? */
+/** Type guard: is the value a supported composition mode? */
 export function isSupportedCompose(
   value: string | null,
 ): value is MapUrlCompose {
-  return value === "node";
+  return value === "node" || value === "garnrolle";
 }
 
 /** Records a known key as invalid at most once (order of first sighting). */

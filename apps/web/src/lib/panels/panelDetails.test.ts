@@ -57,10 +57,10 @@ async function flushMicrotasks() {
 }
 
 describe("buildPanelEndpoint", () => {
-  it("returns the singular local endpoint when no apiBase is given", () => {
-    expect(buildPanelEndpoint("node", "abc", "")).toBe("/api/node/abc");
-    expect(buildPanelEndpoint("account", "x", "")).toBe("/api/account/x");
-    expect(buildPanelEndpoint("edge", "1", "")).toBe("/api/edge/1");
+  it("returns the plural local endpoint exposed by the API router", () => {
+    expect(buildPanelEndpoint("node", "abc", "")).toBe("/api/nodes/abc");
+    expect(buildPanelEndpoint("account", "x", "")).toBe("/api/accounts/x");
+    expect(buildPanelEndpoint("edge", "1", "")).toBe("/api/edges/1");
   });
 
   it("returns the plural remote endpoint when apiBase is set", () => {
