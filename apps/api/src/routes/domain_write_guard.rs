@@ -9,7 +9,7 @@ use crate::{
 
 pub(super) const DOMAIN_READ_SOURCE_READ_ONLY: &str = "DOMAIN_READ_SOURCE_READ_ONLY";
 pub(super) const DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE: &str =
-    "Domain mutations are disabled while WELTGEWEBE_DOMAIN_READ_SOURCE=postgres is active; Phase E write-path cutover is not implemented for this endpoint.";
+    "Domain mutation is blocked because WELTGEWEBE_DOMAIN_READ_SOURCE=postgres but the matching write source is not postgres; align the read and write source before retrying.";
 
 pub(super) const INVALID_DOMAIN_WRITE_CONFIG: &str = "INVALID_DOMAIN_WRITE_CONFIG";
 const INVALID_DOMAIN_WRITE_CONFIG_MESSAGE: &str =
@@ -65,7 +65,7 @@ pub(super) fn reject_edge_create_unless_writable(
     Ok(())
 }
 
-/// Node-patch write gate (OPT-ARC-001 Phase E-B).
+/// Node write gate for create and patch operations.
 ///
 /// Behaviour matrix:
 /// - JSONL read + JSONL node write: allow (JSONL rewrite path).
@@ -96,6 +96,17 @@ pub(super) fn reject_node_patch_unless_writable(
     }
 
     Ok(())
+}
+
+/// Node-create write gate (`POST /nodes`).
+///
+/// Shares the deliberately narrow node-write config surface with node-patch:
+/// PostgreSQL node mutations are allowed only when both `domain_read_source`
+/// and `domain_node_write_source` are PostgreSQL.
+pub(super) fn reject_node_create_unless_writable(
+    state: &ApiState,
+) -> Result<(), (StatusCode, String)> {
+    reject_node_patch_unless_writable(state)
 }
 
 /// Account-create write gate (OPT-ARC-001 Phase E-A).
@@ -208,6 +219,7 @@ mod tests {
             auth_allow_emails: None,
             auth_allow_email_domains: None,
             auth_auto_provision: false,
+            auth_auto_provision_role: crate::config::AutoProvisionRole::Gast,
             auth_rl_ip_per_min: None,
             auth_rl_ip_per_hour: None,
             auth_rl_email_per_min: None,

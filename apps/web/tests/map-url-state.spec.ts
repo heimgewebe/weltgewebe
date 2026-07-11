@@ -16,7 +16,9 @@ import { mockApiResponses } from "./fixtures/mockApi";
  */
 test.describe("Map URL addressing", () => {
   test.beforeEach(async ({ page }) => {
-    await mockApiResponses(page);
+    await mockApiResponses(page, {
+      auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
+    });
 
     // mockApiResponses mocks the local-sovereign style (/local-basemap/style.json,
     // the active mode in the e2e build). This extra route is a defensive mock for

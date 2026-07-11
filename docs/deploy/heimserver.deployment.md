@@ -158,8 +158,14 @@ Supported with strict rate limits (mandatory):
 
 - `AUTH_PUBLIC_LOGIN=1`
 - `AUTH_AUTO_PROVISION=1`
+- `AUTH_AUTO_PROVISION_ROLE=gast`
 - `AUTH_ALLOW_EMAILS` unset or empty (triggers Open Registration mode)
 - `AUTH_LOG_MAGIC_TOKEN=0` (Security mandatory for Production)
+
+`AUTH_AUTO_PROVISION_ROLE=weber` ist nur für eine geschlossene Zulassung mit
+konkretem `AUTH_ALLOW_EMAILS` oder `AUTH_ALLOW_EMAIL_DOMAINS` erlaubt. Offene
+Registrierung mit `weber` sowie jede Autoprovisionierung als `admin` führen zu
+einem harten Startfehler.
 
 **Required Rate Limits (Environment Variables):**
 

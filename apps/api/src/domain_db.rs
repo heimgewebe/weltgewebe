@@ -1,7 +1,8 @@
-//! Read-only PostgreSQL loaders for domain data (OPT-ARC-001 Phase D).
+//! PostgreSQL loaders and mutation helpers for domain data (OPT-ARC-001).
 //!
-//! JSONL remains the default read source and write truth. These loaders are
-//! only used when `DomainReadSource::Postgres` is explicitly selected.
+//! JSONL remains the default source. PostgreSQL is used only when the matching
+//! read/write source is explicitly selected; route and startup guards prohibit
+//! mixed-source writes and silent fallback.
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -128,6 +129,7 @@ pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node
             summary: payload_string(&payload, "summary"),
             info: payload_string(&payload, "info"),
             tags: payload_string_array(&payload, "tags"),
+            address: payload_string(&payload, "address"),
             location: Location { lat, lon },
         };
         cache.insert(id, node);
@@ -313,20 +315,12 @@ pub async fn audit_auth_user_id_backfill_readiness(
     })
 }
 
-pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> {
-    let rows: Vec<AccountRow> = sqlx::query_as(
-        "SELECT id, kind, title, mode, map_state, radius_m, disabled, \
-         location_lat, location_lon, role, email, \
-         webauthn_user_id::text, public_payload::text, private_payload::text \
-         FROM domain_accounts ORDER BY id ASC",
-    )
-    .fetch_all(pool)
-    .await
-    .context("failed to load accounts from domain_accounts")?;
-
-    let mut store = AccountStore::new();
-    let mut skipped = 0usize;
-    for (
+/// Project one raw `domain_accounts` row into an `AccountInternal`, applying
+/// the same legacy-field normalization (`ron`/`mode`/`visibility`) as the bulk
+/// loader. Returns `None` (with a warning logged) when the row fails
+/// projection — the caller decides what "no account" means in its context.
+fn account_row_to_internal(row: AccountRow) -> Option<AccountInternal> {
+    let (
         id,
         kind,
         title,
@@ -341,84 +335,105 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
         webauthn_text,
         public_text,
         private_text,
-    ) in rows
+    ) = row;
+
+    let public_payload = parse_payload(&public_text);
+    let private_payload = parse_payload(&private_text);
+    let ron_flag = private_payload
+        .get("ron_flag")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let visibility = private_payload.get("visibility").and_then(|v| v.as_str());
+    let suppress_public_pos = private_payload
+        .get("suppress_public_pos")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let legacy_not_on_map = kind == "ron"
+        || ron_flag
+        || legacy_mode.as_deref() == Some("ron")
+        || visibility == Some("private")
+        || suppress_public_pos;
+    let effective_map_state = if legacy_not_on_map
+        || db_map_state == "not_on_map"
+        || location_lat.is_none()
+        || location_lon.is_none()
     {
-        let public_payload = parse_payload(&public_text);
-        let private_payload = parse_payload(&private_text);
-        let ron_flag = private_payload
-            .get("ron_flag")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        let visibility = private_payload.get("visibility").and_then(|v| v.as_str());
-        let suppress_public_pos = private_payload
-            .get("suppress_public_pos")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        let legacy_not_on_map = kind == "ron"
-            || ron_flag
-            || legacy_mode.as_deref() == Some("ron")
-            || visibility == Some("private")
-            || suppress_public_pos;
-        let effective_map_state = if legacy_not_on_map
-            || db_map_state == "not_on_map"
-            || location_lat.is_none()
-            || location_lon.is_none()
-        {
-            "not_on_map"
-        } else if db_map_state == "radius" || visibility == Some("approximate") || radius_m > 0 {
-            "radius"
-        } else {
-            "exact"
-        };
-        let effective_radius_m = match effective_map_state {
-            "radius" if radius_m == 0 => 250,
-            "radius" => radius_m,
-            _ => 0,
-        };
+        "not_on_map"
+    } else if db_map_state == "radius" || visibility == Some("approximate") || radius_m > 0 {
+        "radius"
+    } else {
+        "exact"
+    };
+    let effective_radius_m = match effective_map_state {
+        "radius" if radius_m == 0 => 250,
+        "radius" => radius_m,
+        _ => 0,
+    };
 
-        let mut record = Map::new();
-        record.insert("id".to_string(), json!(id));
-        record.insert("type".to_string(), json!("garnrolle"));
-        record.insert("title".to_string(), json!(title));
-        record.insert("map_state".to_string(), json!(effective_map_state));
-        if let Some(summary) = public_payload.get("summary").and_then(|v| v.as_str()) {
-            record.insert("summary".to_string(), json!(summary));
-        }
-        if let Some(tags) = public_payload.get("tags") {
-            if tags.is_array() {
-                record.insert("tags".to_string(), tags.clone());
-            }
-        }
-        if let (Some(lat), Some(lon)) = (location_lat, location_lon) {
-            record.insert("location".to_string(), json!({ "lat": lat, "lon": lon }));
-        }
-        record.insert(
-            "radius_m".to_string(),
-            json!(effective_radius_m.max(0) as u64),
-        );
-        record.insert("disabled".to_string(), json!(disabled));
-
-        let value = Value::Object(record);
-        let public = match map_json_to_public_account(&value) {
-            Some(public) => public,
-            None => {
-                tracing::warn!(account_id = %id, "skipping domain account that failed projection");
-                skipped += 1;
-                continue;
-            }
-        };
-        let role = Role::from_str_lossy(&role);
-        let webauthn_user_id = webauthn_text
-            .as_deref()
-            .and_then(|s| Uuid::parse_str(s).ok())
-            .unwrap_or_else(Uuid::new_v4);
-        store.insert_unindexed(AccountInternal {
-            public,
-            role,
-            email,
-            webauthn_user_id,
-        });
+    let mut record = Map::new();
+    record.insert("id".to_string(), json!(id));
+    record.insert("type".to_string(), json!("garnrolle"));
+    record.insert("title".to_string(), json!(title));
+    record.insert("map_state".to_string(), json!(effective_map_state));
+    if let Some(summary) = public_payload.get("summary").and_then(|v| v.as_str()) {
+        record.insert("summary".to_string(), json!(summary));
     }
+    if let Some(tags) = public_payload.get("tags") {
+        if tags.is_array() {
+            record.insert("tags".to_string(), tags.clone());
+        }
+    }
+    if let (Some(lat), Some(lon)) = (location_lat, location_lon) {
+        record.insert("location".to_string(), json!({ "lat": lat, "lon": lon }));
+    }
+    record.insert(
+        "radius_m".to_string(),
+        json!(effective_radius_m.max(0) as u64),
+    );
+    record.insert("disabled".to_string(), json!(disabled));
+
+    let value = Value::Object(record);
+    let public = match map_json_to_public_account(&value) {
+        Some(public) => public,
+        None => {
+            tracing::warn!(account_id = %id, "skipping domain account that failed projection");
+            return None;
+        }
+    };
+    let role = Role::from_str_lossy(&role);
+    let webauthn_user_id = webauthn_text
+        .as_deref()
+        .and_then(|s| Uuid::parse_str(s).ok())
+        .unwrap_or_else(Uuid::new_v4);
+    Some(AccountInternal {
+        public,
+        role,
+        email,
+        webauthn_user_id,
+    })
+}
+
+pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> {
+    let rows: Vec<AccountRow> = sqlx::query_as(
+        "SELECT id, kind, title, mode, map_state, radius_m, disabled, \
+         location_lat, location_lon, role, email, \
+         webauthn_user_id::text, public_payload::text, private_payload::text \
+         FROM domain_accounts ORDER BY id ASC",
+    )
+    .fetch_all(pool)
+    .await
+    .context("failed to load accounts from domain_accounts")?;
+
+    let mut store = AccountStore::new();
+    let mut skipped = 0usize;
+    let total = rows.len();
+    for row in rows {
+        match account_row_to_internal(row) {
+            Some(account) => store.insert_unindexed(account),
+            None => skipped += 1,
+        }
+    }
+    debug_assert!(skipped <= total);
     store.rebuild_email_index();
     tracing::info!(
         count = store.len(),
@@ -426,6 +441,32 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
         "Loaded accounts from PostgreSQL"
     );
     Ok(store)
+}
+
+/// Look up exactly one account by its normalized, non-empty email
+/// (`lower(btrim(email))`), mirroring the partial unique index
+/// [`ACCOUNT_EMAIL_UNIQUE_CONSTRAINT`].
+///
+/// Used by the auth auto-provisioning race path: when a concurrent insert (a
+/// different process, or a prior run) wins the unique-email race, this
+/// resolves the account that actually persisted instead of fabricating a
+/// second, divergent one.
+pub async fn find_account_by_normalized_email(
+    pool: &PgPool,
+    email_norm: &str,
+) -> Result<Option<AccountInternal>> {
+    let row: Option<AccountRow> = sqlx::query_as(
+        "SELECT id, kind, title, mode, map_state, radius_m, disabled, \
+         location_lat, location_lon, role, email, \
+         webauthn_user_id::text, public_payload::text, private_payload::text \
+         FROM domain_accounts WHERE lower(btrim(email)) = $1",
+    )
+    .bind(email_norm)
+    .fetch_optional(pool)
+    .await
+    .context("failed to look up account by normalized email")?;
+
+    Ok(row.and_then(account_row_to_internal))
 }
 
 // ── OPT-ARC-001 Phase E-B: node-patch write path ────────────────────────────
@@ -438,8 +479,8 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
 // does NOT touch in-memory caches and does NOT write JSONL — the caller owns
 // cache updates.
 //
-// Out of scope (unchanged): account writes, edge writes, step-up email
-// persistence, WebAuthn user-id writeback.
+// This helper owns only node patches; account, node-create and edge writes
+// use their dedicated helpers below.
 
 /// Subset of node payload fields modified by `PATCH /nodes`.
 #[derive(Debug, Clone, PartialEq)]
@@ -478,6 +519,7 @@ fn node_from_row(row: NodeRow) -> Result<Node, anyhow::Error> {
         summary: payload_string(&payload, "summary"),
         info: payload_string(&payload, "info"),
         tags: payload_string_array(&payload, "tags"),
+        address: payload_string(&payload, "address"),
         location: Location { lat, lon },
     })
 }
@@ -591,6 +633,95 @@ pub async fn patch_node_in_postgres(
     Ok(final_node)
 }
 
+// ── node-create write path ──────────────────────────────────────────────────
+//
+// Narrow PostgreSQL write helper for `POST /nodes` only. Maps the validated
+// `Node` the create route already builds (server-owned id/timestamps) into a
+// `domain_nodes` row inside a transaction. Payload keys mirror
+// `load_nodes_from_postgres` (summary, info, tags, address) — no new key
+// names. It does NOT touch in-memory caches and does NOT write JSONL — the
+// caller owns cache updates.
+
+/// Error from the node-create write path.
+#[derive(Debug, thiserror::Error)]
+pub enum NodeCreateError {
+    #[error("node id already exists")]
+    DuplicateId,
+    #[error("failed to serialize node payload: {0}")]
+    Serialization(#[source] serde_json::Error),
+    #[error("invalid server-generated node timestamp: {0}")]
+    InvalidTimestamp(#[source] chrono::ParseError),
+    #[error("failed to persist node to domain_nodes: {0}")]
+    Database(#[source] sqlx::Error),
+}
+
+/// Insert exactly one node row into `domain_nodes` (`POST /nodes`).
+///
+/// Runs inside a transaction and relies on the primary-key constraint for
+/// race-safe duplicate detection. Node ids are server-generated UUIDv4s, so a
+/// table-wide lock and a separate precheck would only serialize unrelated
+/// writers without adding correctness.
+///
+/// This function performs no in-memory mutation and writes no JSONL.
+pub async fn insert_domain_node(pool: &PgPool, node: &Node) -> Result<(), NodeCreateError> {
+    let mut payload_map = Map::new();
+    if let Some(summary) = &node.summary {
+        payload_map.insert("summary".to_string(), json!(summary));
+    }
+    if let Some(info) = &node.info {
+        payload_map.insert("info".to_string(), json!(info));
+    }
+    if !node.tags.is_empty() {
+        payload_map.insert("tags".to_string(), json!(node.tags));
+    }
+    if let Some(address) = &node.address {
+        payload_map.insert("address".to_string(), json!(address));
+    }
+    let payload = serde_json::to_string(&Value::Object(payload_map))
+        .map_err(NodeCreateError::Serialization)?;
+
+    // These values are generated by the server. A parse failure therefore
+    // signals an internal contract violation and must fail before any write.
+    let created_at = DateTime::parse_from_rfc3339(&node.created_at)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(NodeCreateError::InvalidTimestamp)?;
+    let updated_at = DateTime::parse_from_rfc3339(&node.updated_at)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(NodeCreateError::InvalidTimestamp)?;
+
+    let mut tx = pool.begin().await.map_err(NodeCreateError::Database)?;
+
+    let result = sqlx::query(
+        "INSERT INTO domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)",
+    )
+    .bind(&node.id)
+    .bind(&node.kind)
+    .bind(&node.title)
+    .bind(node.location.lat)
+    .bind(node.location.lon)
+    .bind(created_at)
+    .bind(updated_at)
+    .bind(&payload)
+    .execute(&mut *tx)
+    .await;
+
+    match result {
+        Ok(_) => {
+            tx.commit().await.map_err(NodeCreateError::Database)?;
+            Ok(())
+        }
+        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+            tx.rollback().await.ok();
+            Err(NodeCreateError::DuplicateId)
+        }
+        Err(e) => {
+            tx.rollback().await.ok();
+            Err(NodeCreateError::Database(e))
+        }
+    }
+}
+
 // ── OPT-ARC-001 Phase E-A: account-create write path ────────────────────────
 //
 // Narrow PostgreSQL write helper for `POST /accounts` only. It maps the same
@@ -600,8 +731,8 @@ pub async fn patch_node_in_postgres(
 // indistinguishable from "JSONL create + Phase C backfill". It does NOT touch
 // in-memory caches and does NOT write JSONL — the caller owns cache updates.
 //
-// Out of scope (unchanged): node writes, edge writes,
-// WebAuthn user-id writeback persistence.
+// This helper owns account insertion only; node and edge writes use their
+// dedicated helpers.
 
 fn json_f64(v: &Value) -> Option<f64> {
     v.as_f64()
@@ -979,8 +1110,8 @@ pub async fn update_account_email_in_postgres(
 // note) — no new key names. It does NOT touch in-memory caches and does NOT
 // write JSONL — the caller owns cache updates.
 //
-// Out of scope (unchanged): account writes, node writes, step-up email
-// persistence, WebAuthn user-id writeback persistence.
+// This helper owns edge insertion only; account and node writes use their
+// dedicated helpers.
 
 /// A single row destined for `domain_edges`, built from the validated `Edge`
 /// the create route already uses for cache and response. `payload` is carried

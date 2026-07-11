@@ -1,4 +1,6 @@
-use super::domain_write_guard::reject_account_email_update_unless_writable;
+use super::domain_write_guard::{
+    reject_account_create_unless_writable, reject_account_email_update_unless_writable,
+};
 
 use axum::{
     extract::Path as AxumPath,
@@ -10,6 +12,7 @@ use axum::{
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::net::{IpAddr, SocketAddr};
 #[cfg(not(test))]
@@ -17,6 +20,8 @@ use std::sync::OnceLock;
 use time::Duration;
 use uuid::Uuid;
 
+#[cfg(feature = "integration-testing")]
+use crate::routes::accounts::AccountPublic;
 use crate::{
     auth::challenges::ChallengeIntent,
     auth::passkeys::{
@@ -28,9 +33,12 @@ use crate::{
     auth::step_up_tokens::ConsumeMatchResult,
     auth::{role::Role, tokens::TokenStore},
     config::{DomainAccountWriteSource, DEFAULT_TRUSTED_PROXIES, TRUSTED_PROXIES_NONE},
-    domain_db::{update_account_email_in_postgres, AccountEmailUpdateError},
+    domain_db::{
+        find_account_by_normalized_email, insert_account_from_jsonl_record,
+        update_account_email_in_postgres, AccountEmailUpdateError, AccountWriteError,
+    },
     middleware::auth::AuthContext,
-    routes::accounts::{AccountInternal, AccountPublic},
+    routes::accounts::{append_account_line, map_json_to_public_account, AccountInternal},
     state::ApiState,
 };
 use webauthn_rs::prelude::{PublicKeyCredential, RegisterPublicKeyCredential};
@@ -454,55 +462,204 @@ struct ProvisionContext<'a> {
     email_hash: &'a str,
 }
 
+/// Outcome of an auto-provisioning attempt.
+///
+/// `Failed` covers every persistence failure (JSONL append error, PostgreSQL
+/// insert error, missing pool, unresolvable duplicate-email race, domain
+/// write-gate rejection, record-projection failure). Callers MUST treat
+/// `Failed` as "no account, no magic link" — auto-provisioning must never
+/// leave a phantom cache-only account nor send a login link for one.
+enum ProvisionOutcome {
+    Ready(String),
+    Failed,
+}
+
+/// Auto-provision a new account for `email_norm`, or resolve to an existing
+/// one when a concurrent request/process already won the race.
+///
+/// DB-before-cache: the account is durably persisted (JSONL append with
+/// fsync, or a PostgreSQL insert) via the exact same write helpers as the
+/// operator-facing `POST /accounts` path — no second, divergent writer, no
+/// dual-write. Only after that persistence succeeds is the in-memory
+/// `AccountStore` updated, and only then does the caller send a magic link.
+/// A persistence failure returns [`ProvisionOutcome::Failed`] without
+/// touching the cache, so a restart always reloads the same accounts this
+/// process would otherwise have cached.
 async fn provision_account(
     state: &ApiState,
     email_norm: &str,
     ctx: &ProvisionContext<'_>,
-) -> Option<String> {
+) -> ProvisionOutcome {
+    if let Err((status, message)) = reject_account_create_unless_writable(state) {
+        tracing::error!(
+            event = "login.provision_failed",
+            request_id = %ctx.request_id,
+            email_hash = %ctx.email_hash,
+            %status,
+            %message,
+            "Auto-provision failed: domain accounts are not writable"
+        );
+        return ProvisionOutcome::Failed;
+    }
+
+    let role_str = state.config.auth_auto_provision_role.as_role_str();
     let new_id = Uuid::new_v4().to_string();
-    let new_account = AccountInternal {
-        public: AccountPublic {
-            id: new_id.clone(),
-            kind: "garnrolle".to_string(),
-            title: "Garnrolle".to_string(),
-            summary: None,
-            public_pos: None,
-            map_state: crate::routes::accounts::GarnrolleMapState::NotOnMap,
-            radius_m: 0,
-            disabled: false,
-            tags: vec![],
-        },
-        role: Role::Gast,
-        email: Some(email_norm.to_string()),
-        webauthn_user_id: Uuid::new_v4(),
+    let webauthn_user_id = Uuid::new_v4();
+
+    // Canonical JSONL-shaped record — the same shape `create_account` builds —
+    // so JSONL append, PostgreSQL insert, and the public-account projection
+    // all agree on one representation.
+    let mut record = serde_json::Map::new();
+    record.insert("id".into(), json!(new_id));
+    record.insert("type".into(), json!("garnrolle"));
+    record.insert("title".into(), json!("Garnrolle"));
+    record.insert("role".into(), json!(role_str));
+    record.insert("map_state".into(), json!("not_on_map"));
+    record.insert("radius_m".into(), json!(0));
+    record.insert("email".into(), json!(email_norm));
+    record.insert(
+        "webauthn_user_id".into(),
+        json!(webauthn_user_id.to_string()),
+    );
+    let record = serde_json::Value::Object(record);
+
+    let public = match map_json_to_public_account(&record) {
+        Some(public) => public,
+        None => {
+            tracing::error!(
+                event = "login.provision_failed",
+                request_id = %ctx.request_id,
+                email_hash = %ctx.email_hash,
+                "Auto-provision failed: generated account record failed projection"
+            );
+            return ProvisionOutcome::Failed;
+        }
     };
 
-    {
-        let mut accounts = state.accounts.write().await;
-        // Double-checked locking to avoid race condition
-        let collision_id = accounts
-            .get_by_email(email_norm)
-            .map(|acc| acc.public.id.clone());
+    // Serialize provisioning against `POST /accounts` and concurrent
+    // provisioning attempts: same mutex, same check-then-persist-then-cache
+    // discipline as `create_account`.
+    let _persist_guard = state.accounts_persist.lock().await;
 
-        if let Some(id) = collision_id {
-            // Another request provisioned it in the meantime
-            Some(id)
-        } else {
-            let id = new_account.public.id.clone();
-            accounts.insert(new_account);
-            tracing::info!(
-                event = "login.provisioned",
-                request_id = %ctx.request_id,
-                client_ip = %ctx.client_ip,
-                remote_ip = %ctx.remote_ip,
-                proxy_trusted = ctx.proxy_trusted,
-                account_id = %id,
-                email_hash = %ctx.email_hash,
-                "Auto-provisioned new account"
-            );
-            Some(id)
+    // Double-checked: another request may have provisioned (or an admin may
+    // have created) this email while we were building the record.
+    {
+        let accounts = state.accounts.read().await;
+        if let Some(acc) = accounts.get_by_email(email_norm) {
+            if acc.public.disabled {
+                tracing::warn!(
+                    event = "login.provision_race_disabled",
+                    request_id = %ctx.request_id,
+                    email_hash = %ctx.email_hash,
+                    account_id = %acc.public.id,
+                    "Auto-provision race resolved to a disabled account; refusing magic link"
+                );
+                return ProvisionOutcome::Failed;
+            }
+            return ProvisionOutcome::Ready(acc.public.id.clone());
         }
     }
+
+    match state.config.domain_account_write_source {
+        DomainAccountWriteSource::Jsonl => {
+            if let Err(e) = append_account_line(&record).await {
+                tracing::error!(
+                    event = "login.provision_failed",
+                    request_id = %ctx.request_id,
+                    email_hash = %ctx.email_hash,
+                    error = %e,
+                    "Auto-provision failed: JSONL append failed"
+                );
+                return ProvisionOutcome::Failed;
+            }
+        }
+        DomainAccountWriteSource::Postgres => {
+            let pool = match state.db_pool.as_ref() {
+                Some(pool) => pool,
+                None => {
+                    tracing::error!(
+                        event = "login.provision_failed",
+                        request_id = %ctx.request_id,
+                        email_hash = %ctx.email_hash,
+                        "Auto-provision failed: PostgreSQL pool unavailable"
+                    );
+                    return ProvisionOutcome::Failed;
+                }
+            };
+            match insert_account_from_jsonl_record(pool, &record).await {
+                Ok(()) => {}
+                Err(AccountWriteError::DuplicateEmail) => {
+                    // Cross-process/instance race: another writer already
+                    // persisted this email between our double-check and the
+                    // insert. Resolve the account that actually won instead
+                    // of fabricating a phantom second one.
+                    match find_account_by_normalized_email(pool, email_norm).await {
+                        Ok(Some(existing)) => {
+                            if existing.public.disabled {
+                                tracing::warn!(
+                                    event = "login.provision_race_disabled",
+                                    request_id = %ctx.request_id,
+                                    email_hash = %ctx.email_hash,
+                                    account_id = %existing.public.id,
+                                    "Auto-provision database race resolved to a disabled account; refusing magic link"
+                                );
+                                return ProvisionOutcome::Failed;
+                            }
+                            let id = existing.public.id.clone();
+                            let mut accounts = state.accounts.write().await;
+                            accounts.insert(existing);
+                            return ProvisionOutcome::Ready(id);
+                        }
+                        Ok(None) | Err(_) => {
+                            tracing::error!(
+                                event = "login.provision_failed",
+                                request_id = %ctx.request_id,
+                                email_hash = %ctx.email_hash,
+                                "Auto-provision failed: duplicate-email race could not be resolved"
+                            );
+                            return ProvisionOutcome::Failed;
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(
+                        event = "login.provision_failed",
+                        request_id = %ctx.request_id,
+                        email_hash = %ctx.email_hash,
+                        error = %e,
+                        "Auto-provision failed: PostgreSQL insert failed"
+                    );
+                    return ProvisionOutcome::Failed;
+                }
+            }
+        }
+    }
+
+    let id = public.id.clone();
+    {
+        let mut accounts = state.accounts.write().await;
+        accounts.insert(AccountInternal {
+            public,
+            role: Role::from_str_lossy(role_str),
+            email: Some(email_norm.to_string()),
+            webauthn_user_id,
+        });
+    }
+
+    tracing::info!(
+        event = "login.provisioned",
+        request_id = %ctx.request_id,
+        client_ip = %ctx.client_ip,
+        remote_ip = %ctx.remote_ip,
+        proxy_trusted = ctx.proxy_trusted,
+        account_id = %id,
+        email_hash = %ctx.email_hash,
+        role = %role_str,
+        write_source = ?state.config.domain_account_write_source,
+        "Auto-provisioned new account"
+    );
+
+    ProvisionOutcome::Ready(id)
 }
 
 async fn process_magic_link_delivery(
@@ -708,6 +865,7 @@ pub async fn request_login(
         email_hash,
     };
 
+    let mut provision_failed = false;
     let account_id = if let Some((id, disabled)) = existing_account_info {
         if disabled {
             tracing::info!(
@@ -757,7 +915,13 @@ pub async fn request_login(
 
         if allowed {
             // Provision new account
-            provision_account(&state, &email_norm, &ctx).await
+            match provision_account(&state, &email_norm, &ctx).await {
+                ProvisionOutcome::Ready(id) => Some(id),
+                ProvisionOutcome::Failed => {
+                    provision_failed = true;
+                    None
+                }
+            }
         } else {
             None
         }
@@ -767,22 +931,50 @@ pub async fn request_login(
         if let Err(status) = process_magic_link_delivery(&state, &id, &email_norm, &ctx).await {
             return status.into_response();
         }
+    } else if provision_failed {
+        // Persistence failed: no phantom cache-only account, no magic link.
+        // Anti-enumeration: the HTTP response below stays identical to the
+        // generic success path regardless of this branch.
+        tracing::warn!(
+            event = "login.requested_provision_failed",
+            request_id = %request_id,
+            client_ip = %client_ip,
+            remote_ip = %addr.ip(),
+            proxy_trusted = proxy_trusted,
+            email_hash = %email_hash,
+            "Login requested but auto-provisioning failed to persist; no account created, no magic link sent"
+        );
     } else if state.config.is_open_registration() {
-        if let Some(id) = provision_account(&state, &email_norm, &ctx).await {
-            if let Err(status) = process_magic_link_delivery(&state, &id, &email_norm, &ctx).await {
-                return status.into_response();
-            }
+        match provision_account(&state, &email_norm, &ctx).await {
+            ProvisionOutcome::Ready(id) => {
+                if let Err(status) =
+                    process_magic_link_delivery(&state, &id, &email_norm, &ctx).await
+                {
+                    return status.into_response();
+                }
 
-            tracing::info!(
-                event = "login.requested_auto_provision",
-                request_id = %request_id,
-                client_ip = %client_ip,
-                remote_ip = %addr.ip(),
-                proxy_trusted = proxy_trusted,
-                account_id = %id,
-                email_hash = %email_hash,
-                "Auto-provisioned account and sent Magic Link"
-            );
+                tracing::info!(
+                    event = "login.requested_auto_provision",
+                    request_id = %request_id,
+                    client_ip = %client_ip,
+                    remote_ip = %addr.ip(),
+                    proxy_trusted = proxy_trusted,
+                    account_id = %id,
+                    email_hash = %email_hash,
+                    "Auto-provisioned account and sent Magic Link"
+                );
+            }
+            ProvisionOutcome::Failed => {
+                tracing::warn!(
+                    event = "login.requested_provision_failed",
+                    request_id = %request_id,
+                    client_ip = %client_ip,
+                    remote_ip = %addr.ip(),
+                    proxy_trusted = proxy_trusted,
+                    email_hash = %email_hash,
+                    "Open-registration login requested but auto-provisioning failed to persist; no account created, no magic link sent"
+                );
+            }
         }
     } else {
         tracing::info!(

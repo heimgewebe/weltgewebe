@@ -38,11 +38,15 @@ use weltgewebe_api::{
         AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
         DomainReadSource,
     },
-    domain_db::{load_nodes_from_postgres, patch_node_in_postgres, NodePatchInput},
+    domain_db::{
+        insert_domain_node, load_nodes_from_postgres, patch_node_in_postgres, NodeCreateError,
+        NodePatchInput,
+    },
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
+        nodes::{Location, Node},
     },
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
@@ -85,6 +89,14 @@ async fn clean(pool: &PgPool) {
     pool.execute("DELETE FROM domain_nodes WHERE id LIKE 'writepath-node-%'")
         .await
         .expect("clean domain_nodes fixtures");
+}
+
+/// Node-create tests generate server-owned UUID ids (no `writepath-node-`
+/// prefix), so their cleanup must not rely on the prefix-scoped `clean`.
+async fn clean_all_nodes(pool: &PgPool) {
+    pool.execute("DELETE FROM domain_nodes")
+        .await
+        .expect("clean all domain_nodes rows");
 }
 
 async fn seed_node(pool: &PgPool, id: &str, info: Option<&str>, steckbrief: Option<&str>) {
@@ -159,6 +171,7 @@ async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, 
         auth_allow_emails: None,
         auth_allow_email_domains: None,
         auth_auto_provision: false,
+        auth_auto_provision_role: weltgewebe_api::config::AutoProvisionRole::Gast,
         auth_rl_ip_per_min: None,
         auth_rl_ip_per_hour: None,
         auth_rl_email_per_min: None,
@@ -387,6 +400,7 @@ async fn postgres_read_jsonl_node_write_is_blocked() -> Result<()> {
         auth_allow_emails: None,
         auth_allow_email_domains: None,
         auth_auto_provision: false,
+        auth_auto_provision_role: weltgewebe_api::config::AutoProvisionRole::Gast,
         auth_rl_ip_per_min: None,
         auth_rl_ip_per_hour: None,
         auth_rl_email_per_min: None,
@@ -559,6 +573,7 @@ async fn jsonl_default_node_patch_compiles_and_routes_correctly() -> Result<()> 
         auth_allow_emails: None,
         auth_allow_email_domains: None,
         auth_auto_provision: false,
+        auth_auto_provision_role: weltgewebe_api::config::AutoProvisionRole::Gast,
         auth_rl_ip_per_min: None,
         auth_rl_ip_per_hour: None,
         auth_rl_email_per_min: None,
@@ -749,5 +764,229 @@ async fn postgres_node_patch_non_object_payload_is_rejected_without_commit() -> 
     );
 
     clean(&pool).await;
+    Ok(())
+}
+
+// ── POST /nodes PostgreSQL write path ───────────────────────────────────────
+
+fn post_node_req(cookie: &str, json_body: &str) -> Request<body::Body> {
+    Request::post("/nodes")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .header("Cookie", cookie)
+        .body(body::Body::from(json_body.to_string()))
+        .unwrap()
+}
+
+/// I. `POST /nodes` persists a transactional insert, updates the cache after
+/// persistence, never appends JSONL, and `load_nodes_from_postgres`
+/// reconstructs the same node (including the new `address` field) after a
+/// simulated restart.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_create_persists_and_reload_sees_it() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = postgres_write_app(pool.clone(), "writepath-node-admin-3").await?;
+
+    let body = r#"{"title":"New Node","kind":"Werkstatt","address":"Musterstraße 1, 12345 Musterstadt","location":{"lat":53.55,"lon":9.99},"summary":"Short summary","tags":["a","b"]}"#;
+    let res = app.clone().oneshot(post_node_req(&cookie, body)).await?;
+    assert_eq!(res.status(), StatusCode::CREATED);
+
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let created: serde_json::Value = serde_json::from_slice(&bytes)?;
+    let id = created["id"].as_str().context("id present")?.to_string();
+    assert!(
+        uuid::Uuid::parse_str(&id).is_ok(),
+        "server must generate a UUID id"
+    );
+    assert_eq!(created["title"], "New Node");
+    assert_eq!(created["kind"], "Werkstatt");
+    assert_eq!(created["address"], "Musterstraße 1, 12345 Musterstadt");
+    assert_eq!(created["location"]["lat"], 53.55);
+    assert_eq!(created["location"]["lon"], 9.99);
+    assert!(created["created_at"].as_str().is_some());
+    assert_eq!(created["created_at"], created["updated_at"]);
+
+    // DB row: explicit columns plus JSONB payload (summary, tags, address).
+    let (kind, title, lat, lon): (String, String, Option<f64>, Option<f64>) =
+        sqlx::query_as("SELECT kind, title, lat, lon FROM domain_nodes WHERE id = $1")
+            .bind(&id)
+            .fetch_one(&pool)
+            .await
+            .expect("node row must exist after create");
+    assert_eq!(kind, "Werkstatt");
+    assert_eq!(title, "New Node");
+    assert!((lat.unwrap() - 53.55).abs() < 1e-9);
+    assert!((lon.unwrap() - 9.99).abs() < 1e-9);
+
+    let (payload_text,): (String,) =
+        sqlx::query_as("SELECT payload::text FROM domain_nodes WHERE id = $1")
+            .bind(&id)
+            .fetch_one(&pool)
+            .await
+            .expect("payload readable");
+    let payload: serde_json::Value = serde_json::from_str(&payload_text)?;
+    assert_eq!(
+        payload.get("address").and_then(|v| v.as_str()),
+        Some("Musterstraße 1, 12345 Musterstadt")
+    );
+    assert_eq!(
+        payload.get("summary").and_then(|v| v.as_str()),
+        Some("Short summary")
+    );
+    assert_eq!(
+        payload.get("tags").and_then(|v| v.as_array()).map(Vec::len),
+        Some(2)
+    );
+
+    // JSONL must NOT be appended in PostgreSQL write mode.
+    let nodes_file = in_dir.join("demo.nodes.jsonl");
+    assert!(
+        !nodes_file.exists(),
+        "PostgreSQL write mode must not create or write the JSONL nodes file"
+    );
+
+    // In-memory cache contains the node immediately (read-your-writes).
+    {
+        let nodes = state.nodes.read().await;
+        let node = nodes.get(&id).expect("created node present in cache");
+        assert_eq!(node.title, "New Node");
+        assert_eq!(
+            node.address.as_deref(),
+            Some("Musterstraße 1, 12345 Musterstadt")
+        );
+    }
+
+    // Simulated restart: reload from PostgreSQL alone reconstructs the node.
+    let reloaded = load_nodes_from_postgres(&pool)
+        .await
+        .expect("reload nodes from postgres");
+    let node = reloaded.get(&id).expect("node reloaded from postgres");
+    assert_eq!(node.title, "New Node");
+    assert_eq!(node.kind, "Werkstatt");
+    assert_eq!(
+        node.address.as_deref(),
+        Some("Musterstraße 1, 12345 Musterstadt")
+    );
+    assert_eq!(node.summary.as_deref(), Some("Short summary"));
+    assert_eq!(node.tags, vec!["a".to_string(), "b".to_string()]);
+    assert!((node.location.lat - 53.55).abs() < 1e-9);
+    assert!((node.location.lon - 9.99).abs() < 1e-9);
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// J. Invalid create payloads (missing required fields, out-of-bounds
+/// coordinates) return a stable 400 and never touch the database.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_create_rejects_invalid_payload_without_side_effects() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = postgres_write_app(pool.clone(), "writepath-node-admin-4").await?;
+
+    // Missing required `address`.
+    let res = app
+        .clone()
+        .oneshot(post_node_req(
+            &cookie,
+            r#"{"title":"No Address","kind":"Werkstatt","location":{"lat":53.5,"lon":10.0}}"#,
+        ))
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    // Out-of-bounds latitude.
+    let res = app
+        .clone()
+        .oneshot(post_node_req(
+            &cookie,
+            r#"{"title":"Bad Coords","kind":"Werkstatt","address":"Somewhere","location":{"lat":999.0,"lon":10.0}}"#,
+        ))
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    let (count,): (i64,) = sqlx::query_as("SELECT count(*) FROM domain_nodes")
+        .fetch_one(&pool)
+        .await
+        .expect("count domain_nodes rows");
+    assert_eq!(count, 0, "invalid create requests must not persist a row");
+    assert!(
+        state.nodes.read().await.is_empty(),
+        "invalid create requests must not populate the cache"
+    );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// K. Direct write-path proof: a primary-key collision at the database level
+/// is classified as `DuplicateId` and leaves the existing row untouched.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn insert_domain_node_classifies_duplicate_id() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let id = "writepath-node-dup-id";
+    let make_node = |title: &str| Node {
+        id: id.to_string(),
+        kind: "Werkstatt".to_string(),
+        title: title.to_string(),
+        created_at: "2026-06-12T10:00:00+00:00".to_string(),
+        updated_at: "2026-06-12T10:00:00+00:00".to_string(),
+        summary: None,
+        info: None,
+        tags: vec![],
+        address: Some("Somewhere 1".to_string()),
+        location: Location {
+            lat: 53.5,
+            lon: 10.0,
+        },
+    };
+
+    insert_domain_node(&pool, &make_node("First"))
+        .await
+        .expect("first insert must succeed");
+
+    let err = insert_domain_node(&pool, &make_node("Second"))
+        .await
+        .expect_err("duplicate id insert must fail");
+    assert!(
+        matches!(err, NodeCreateError::DuplicateId),
+        "expected DuplicateId, got {err:?}"
+    );
+
+    let (title,): (String,) = sqlx::query_as("SELECT title FROM domain_nodes WHERE id = $1")
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .expect("existing row still present");
+    assert_eq!(
+        title, "First",
+        "duplicate insert must not overwrite the existing row"
+    );
+
+    clean_all_nodes(&pool).await;
     Ok(())
 }

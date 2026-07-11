@@ -1,45 +1,134 @@
 <script lang="ts">
-  import { kompositionDraft, leaveToNavigation, systemState } from '$lib/stores/uiView';
+  import { invalidateAll } from '$app/navigation';
+  import { kompositionDraft, lastCreatedNodeId, leaveToNavigation, systemState } from '$lib/stores/uiView';
+  import { authStore } from '$lib/auth/store';
+  import { createEdge, createNode, ApiRequestError } from '$lib/api/domainWrites';
 
   let title = '';
   let description = '';
+  let address = '';
   let nodeType = 'standard';
   let isSubmitting = false;
 
   let titleError = false;
+  let addressError = false;
+  let formError: string | null = null;
+
+  // Set once the node itself is durably created. While set (and edgeError is
+  // set alongside it), the panel shows the partial-success/retry state
+  // instead of the create form — the node exists, the account->node Faden
+  // does not yet, and the UI must say so rather than imply one atomic step.
+  let createdNodeId: string | null = null;
+  let edgeError: string | null = null;
+
+  $: canWrite = $authStore.role === 'weber' || $authStore.role === 'admin';
+  $: canSubmit = !!$kompositionDraft?.lngLat && !!title.trim() && !!address.trim();
 
   function handleCancel() {
+    if (createdNodeId) {
+      // The node already exists — closing the panel must not hide that.
+      void finalizeSuccess(createdNodeId);
+      return;
+    }
     leaveToNavigation();
+  }
+
+  function describeCreateNodeError(err: unknown): string {
+    if (err instanceof ApiRequestError) {
+      if (err.status === 401 || err.status === 403) {
+        return 'Du hast keine Berechtigung, einen Knoten anzulegen.';
+      }
+      if (err.status === 400) {
+        return 'Bitte prüfe deine Eingaben: Name, Art, Adresse und Ort müssen ausgefüllt sein.';
+      }
+      if (err.status === 409) {
+        return 'Dieser Knoten existiert bereits.';
+      }
+    }
+    return 'Der Knoten konnte nicht gespeichert werden. Bitte versuche es später erneut.';
+  }
+
+  async function finalizeSuccess(nodeId: string) {
+    await invalidateAll();
+    lastCreatedNodeId.set(nodeId);
+    leaveToNavigation();
+  }
+
+  async function attemptCreateEdge(nodeId: string) {
+    edgeError = null;
+    const accountId = $authStore.account_id;
+    if (!accountId) {
+      edgeError =
+        'Der Knoten wurde gespeichert, aber die Verknüpfung zu deiner Garnrolle konnte nicht hergestellt werden (keine aktive Sitzung). Du kannst es erneut versuchen.';
+      return;
+    }
+    try {
+      await createEdge({
+        source_id: accountId,
+        source_type: 'account',
+        target_id: nodeId,
+        target_type: 'node',
+        edge_kind: 'reference',
+      });
+      await finalizeSuccess(nodeId);
+    } catch (e) {
+      edgeError =
+        'Der Knoten wurde gespeichert, aber die Verknüpfung zu deiner Garnrolle konnte nicht hergestellt werden. Du kannst es erneut versuchen oder ohne Verknüpfung fortfahren.';
+    }
+  }
+
+  async function retryEdge() {
+    if (!createdNodeId || isSubmitting) return;
+    isSubmitting = true;
+    try {
+      await attemptCreateEdge(createdNodeId);
+    } finally {
+      isSubmitting = false;
+    }
+  }
+
+  async function continueWithoutEdge() {
+    if (!createdNodeId || isSubmitting) return;
+    isSubmitting = true;
+    try {
+      await finalizeSuccess(createdNodeId);
+    } finally {
+      isSubmitting = false;
+    }
   }
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
-    titleError = false;
+    formError = null;
+    titleError = !title.trim();
+    addressError = !address.trim();
 
-    if (!title.trim()) {
-      titleError = true;
-      return;
-    }
-
-    if (!$kompositionDraft?.lngLat) {
+    if (titleError || addressError || !$kompositionDraft?.lngLat || !canWrite) {
       return;
     }
 
     isSubmitting = true;
-
     try {
       // Create a local snapshot to guard against stale state transitions
       const submitDraft = $kompositionDraft;
+      const [lon, lat] = submitDraft.lngLat!;
 
-      // Simulate network request
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const node = await createNode({
+        title: title.trim(),
+        kind: nodeType,
+        address: address.trim(),
+        location: { lat, lon },
+        summary: description.trim() || undefined,
+      });
 
-      // Guard: only execute success path if we are still in komposition state
-      // and the draft hasn't been maliciously replaced
+      // Guard: only proceed if we are still in komposition state and the
+      // draft hasn't been replaced in the meantime.
       if ($systemState === 'komposition' && $kompositionDraft === submitDraft) {
-        // For now, success path Option A (komposition -> navigation)
-        leaveToNavigation();
+        createdNodeId = node.id;
+        await attemptCreateEdge(node.id);
       }
+    } catch (err) {
+      formError = describeCreateNodeError(err);
     } finally {
       isSubmitting = false;
     }
@@ -47,72 +136,118 @@
 </script>
 
 <div class="komposition-mode">
-  <form on:submit={handleSubmit} class="komposition-form">
-    {#if $kompositionDraft?.lngLat}
-      <div class="state-set">
-        <p><strong>Ort gesetzt:</strong> {$kompositionDraft.lngLat[1].toFixed(5)}, {$kompositionDraft.lngLat[0].toFixed(5)}</p>
-        <p class="ghost">Du kannst den Ort ändern, indem du einen anderen Punkt auf der Karte lange drückst.</p>
-      </div>
-    {:else}
-      <div class="state-pending">
-        <p><strong>Ort ausstehend</strong></p>
-        <p>Bitte wähle den Startpunkt für den neuen Knoten, indem du lange auf die Karte tippst (Longpress).</p>
-      </div>
-    {/if}
-
-    <div class="form-group">
-      <label for="nodeType">Typ</label>
-      <select id="nodeType" bind:value={nodeType} class="input" disabled={isSubmitting}>
-        <option value="standard">Standard</option>
-        <option value="event">Event</option>
-        <option value="resource">Ressource</option>
-      </select>
+  {#if !canWrite}
+    <div class="state-pending">
+      <p><strong>Kein Zugriff</strong></p>
+      <p>Nur Weber und Admins können neue Knoten anlegen.</p>
     </div>
-
-    <div class="form-group">
-      <label for="title">Titel *</label>
-      <input
-        type="text"
-        id="title"
-        bind:value={title}
-        class="input"
-        class:error={titleError}
-        placeholder="Name des Knotens"
-        disabled={isSubmitting}
-        required
-        aria-invalid={titleError}
-        aria-describedby={titleError ? 'title-error' : undefined}
-      />
-      {#if titleError}
-        <span id="title-error" class="error-msg">Titel ist erforderlich</span>
-      {/if}
-    </div>
-
-    <div class="form-group">
-      <label for="description">Beschreibung</label>
-      <textarea
-        id="description"
-        bind:value={description}
-        class="input"
-        placeholder="Worum geht es hier?"
-        rows="4"
-        disabled={isSubmitting}
-      ></textarea>
-    </div>
-
     <div class="actions">
-      <button type="button" class="btn btn-secondary" on:click={handleCancel} disabled={isSubmitting}>
-        Abbrechen
+      <button type="button" class="btn btn-secondary" on:click={handleCancel}>Schließen</button>
+    </div>
+  {:else if createdNodeId && edgeError}
+    <div class="state-set">
+      <p><strong>Knoten gespeichert</strong></p>
+      <p>{edgeError}</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn btn-secondary" on:click={continueWithoutEdge} disabled={isSubmitting}>
+        Ohne Verknüpfung fortfahren
       </button>
-      <button
-        type="submit"
-        class="btn btn-primary"
-        disabled={isSubmitting || !$kompositionDraft?.lngLat || !title.trim()}
-      >
-        {isSubmitting ? 'Wird erstellt...' : 'Erstellen'}
+      <button type="button" class="btn btn-primary" on:click={retryEdge} disabled={isSubmitting}>
+        {isSubmitting ? 'Versuche erneut…' : 'Erneut verknüpfen'}
       </button>
     </div>
-  </form>
+  {:else}
+    <form on:submit={handleSubmit} class="komposition-form">
+      {#if $kompositionDraft?.lngLat}
+        <div class="state-set">
+          <p><strong>Ort gesetzt:</strong> {$kompositionDraft.lngLat[1].toFixed(5)}, {$kompositionDraft.lngLat[0].toFixed(5)}</p>
+          <p class="ghost">Du kannst den Ort ändern, indem du einen anderen Punkt auf der Karte lange drückst.</p>
+        </div>
+      {:else}
+        <div class="state-pending">
+          <p><strong>Ort ausstehend</strong></p>
+          <p>Bitte wähle den Startpunkt für den neuen Knoten, indem du lange auf die Karte tippst (Longpress).</p>
+        </div>
+      {/if}
+
+      {#if formError}
+        <div class="form-error" role="alert">{formError}</div>
+      {/if}
+
+      <div class="form-group">
+        <label for="nodeType">Art</label>
+        <select id="nodeType" bind:value={nodeType} class="input" disabled={isSubmitting}>
+          <option value="standard">Standard</option>
+          <option value="event">Event</option>
+          <option value="resource">Ressource</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="title">Name *</label>
+        <input
+          type="text"
+          id="title"
+          bind:value={title}
+          class="input"
+          class:error={titleError}
+          placeholder="Name des Knotens"
+          disabled={isSubmitting}
+          required
+          aria-invalid={titleError}
+          aria-describedby={titleError ? 'title-error' : undefined}
+        />
+        {#if titleError}
+          <span id="title-error" class="error-msg">Name ist erforderlich</span>
+        {/if}
+      </div>
+
+      <div class="form-group">
+        <label for="address">Adresse *</label>
+        <input
+          type="text"
+          id="address"
+          bind:value={address}
+          class="input"
+          class:error={addressError}
+          placeholder="Straße, Hausnummer, Ort"
+          disabled={isSubmitting}
+          required
+          aria-invalid={addressError}
+          aria-describedby={addressError ? 'address-error' : undefined}
+        />
+        {#if addressError}
+          <span id="address-error" class="error-msg">Adresse ist erforderlich</span>
+        {/if}
+      </div>
+
+      <div class="form-group">
+        <label for="description">Kurze Beschreibung</label>
+        <textarea
+          id="description"
+          bind:value={description}
+          class="input"
+          placeholder="Worum geht es hier?"
+          rows="4"
+          disabled={isSubmitting}
+        ></textarea>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" on:click={handleCancel} disabled={isSubmitting}>
+          Abbrechen
+        </button>
+        <button
+          type="submit"
+          class="btn btn-primary"
+          disabled={isSubmitting || !canSubmit}
+        >
+          {isSubmitting ? 'Wird erstellt...' : 'Erstellen'}
+        </button>
+      </div>
+    </form>
+  {/if}
 </div>
 
 <style>
@@ -138,6 +273,16 @@
     color: var(--muted, #9aa4b2);
     font-size: 0.85rem;
     margin-top: 0.5rem;
+  }
+
+  .form-error {
+    background: rgba(255, 107, 107, 0.12);
+    border: 1px solid #ff6b6b;
+    border-radius: var(--radius, 8px);
+    color: var(--text, #e9eef5);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+    font-size: 0.9rem;
   }
 
   .form-group {

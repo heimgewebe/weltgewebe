@@ -7,6 +7,7 @@
   "summary": "Der zentrale Platz der Altstadt mit historischem Rathaus und Brunnen.",
   "info": "Hier finden regelmäßig **Wochenmärkte** statt.",
   "tags": ["geschichte", "architektur", "sehenswürdigkeit"],
+  "address": "Marktplatz 1, 80331 München",
   "location": {
     "lat": 48.137154,
     "lon": 11.576124

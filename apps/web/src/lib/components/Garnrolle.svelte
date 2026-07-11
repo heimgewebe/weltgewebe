@@ -3,11 +3,23 @@
   import { ICONS, MARKER_SIZES } from "$lib/ui/icons";
   import { authStore } from "$lib/auth/store";
   import { browser } from "$app/environment";
+  import type { Account } from "$lib/map/types";
+  import {
+    describeGarnrolleVisibility,
+    findOwnGarnrolle,
+  } from "$lib/garnrolle/visibility";
 
   export let label = "Kontoeinstellungen";
+  export let accounts: Account[] = [];
 
   const dispatch = createEventDispatcher<{ requestZoomToOwnGarnrolle: void }>();
   let menuOpen = false;
+
+  // Own Garnrolle must stay discoverable even when it has no public map
+  // position — never invent one, just point at the existing settings surface
+  // instead of silently no-opping the "auf Karte zeigen" action.
+  $: ownGarnrolle = findOwnGarnrolle(accounts, $authStore.account_id);
+  $: visibility = describeGarnrolleVisibility(ownGarnrolle);
 
   function handleZoomToOwnGarnrolle() {
     menuOpen = false;
@@ -71,13 +83,18 @@
             {$authStore.role}
           </span>
         </div>
-        <button class="menu-item" on:click={handleZoomToOwnGarnrolle}
-          >Meine Garnrolle auf Karte zeigen</button
-        >
+        {#if visibility.canZoomToMap}
+          <button class="menu-item" on:click={handleZoomToOwnGarnrolle}
+            >Meine Garnrolle auf Karte zeigen</button
+          >
+        {/if}
         <a
           href="/settings#meine-garnrolle"
           class="menu-item"
-          on:click={() => (menuOpen = false)}>Meine Garnrolle</a
+          on:click={() => (menuOpen = false)}
+          >{visibility.canZoomToMap
+            ? "Meine Garnrolle"
+            : "Meine Garnrolle (noch nicht auf der Karte)"}</a
         >
         <a
           href="/settings"

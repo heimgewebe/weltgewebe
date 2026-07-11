@@ -69,15 +69,9 @@ pub async fn run() -> anyhow::Result<()> {
 
     handle_startup_migrations(db_pool_configured, db_pool.as_ref()).await?;
 
-    // OPT-ARC-001 Phase E-A: account-create write-path gate.
-    //
-    // The read/write-source coupling (PostgreSQL account-write requires the
-    // PostgreSQL read source) is already enforced at config load. Here we
-    // additionally require a live pool when the account-create write source is
-    // PostgreSQL, and refuse to start otherwise — no silent downgrade to JSONL.
-    // This gate is intentionally narrow: it implements `POST /accounts` only;
-    // node writes, edge writes, step-up email persistence and WebAuthn user-id
-    // writeback persistence remain unchanged and are NOT a PostgreSQL cutover.
+    // Domain write-source startup gates. Config loading already enforces that
+    // every PostgreSQL write source is paired with PostgreSQL reads. Here we
+    // additionally require a live pool and refuse silent fallback to JSONL.
     match app_config.domain_account_write_source {
         DomainAccountWriteSource::Postgres => {
             if db_pool.is_none() {
@@ -86,24 +80,14 @@ pub async fn run() -> anyhow::Result<()> {
                 ));
             }
             tracing::info!(
-                "Account-create write source: PostgreSQL (OPT-ARC-001 Phase E-A opt-in). \
-                 Only POST /accounts writes to domain_accounts; node/edge/auth writes are unchanged."
+                "Account-domain write source: PostgreSQL (POST /accounts, auth auto-provisioning, step-up email updates)."
             );
         }
         DomainAccountWriteSource::Jsonl => {
-            tracing::info!("Account-create write source: JSONL (default).");
+            tracing::info!("Account-domain write source: JSONL (default).");
         }
     }
 
-    // OPT-ARC-001 Phase E-B: node-patch write-path gate.
-    //
-    // The read/write-source coupling (PostgreSQL node-write requires the
-    // PostgreSQL read source) is already enforced at config load. Here we
-    // additionally require a live pool when the node-patch write source is
-    // PostgreSQL, and refuse to start otherwise — no silent downgrade to JSONL.
-    // This gate is intentionally narrow: it implements `PATCH /nodes` only;
-    // account writes, edge writes, step-up email persistence and WebAuthn
-    // user-id writeback persistence remain unchanged.
     match app_config.domain_node_write_source {
         DomainNodeWriteSource::Postgres => {
             if db_pool.is_none() {
@@ -111,25 +95,13 @@ pub async fn run() -> anyhow::Result<()> {
                     "domain_node_write_source=postgres requires DATABASE_URL and an available PostgreSQL pool; refusing to start"
                 ));
             }
-            tracing::info!(
-                "Node patch write source: PostgreSQL (OPT-ARC-001 Phase E-B opt-in). \
-                 Only PATCH /nodes writes to domain_nodes; account/edge/auth writes are unchanged."
-            );
+            tracing::info!("Node write source: PostgreSQL (POST /nodes and PATCH on a node id).");
         }
         DomainNodeWriteSource::Jsonl => {
-            tracing::info!("Node patch write source: JSONL (default).");
+            tracing::info!("Node write source: JSONL (default).");
         }
     }
 
-    // OPT-ARC-001 Phase E-C: edge-create write-path gate.
-    //
-    // The read/write-source coupling (PostgreSQL edge-write requires the
-    // PostgreSQL read source) is already enforced at config load. Here we
-    // additionally require a live pool when the edge-create write source is
-    // PostgreSQL, and refuse to start otherwise — no silent downgrade to JSONL.
-    // This gate is intentionally narrow: it implements `POST /edges` only;
-    // account writes, node writes, step-up email persistence and WebAuthn
-    // user-id writeback persistence remain unchanged.
     match app_config.domain_edge_write_source {
         DomainEdgeWriteSource::Postgres => {
             if db_pool.is_none() {
@@ -137,13 +109,10 @@ pub async fn run() -> anyhow::Result<()> {
                     "domain_edge_write_source=postgres requires DATABASE_URL and an available PostgreSQL pool; refusing to start"
                 ));
             }
-            tracing::info!(
-                "Edge-create write source: PostgreSQL (OPT-ARC-001 Phase E-C opt-in). \
-                 Only POST /edges writes to domain_edges; account/node/auth writes are unchanged."
-            );
+            tracing::info!("Edge write source: PostgreSQL (POST /edges).");
         }
         DomainEdgeWriteSource::Jsonl => {
-            tracing::info!("Edge-create write source: JSONL (default).");
+            tracing::info!("Edge write source: JSONL (default).");
         }
     }
 

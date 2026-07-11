@@ -172,28 +172,30 @@ Das ist **keine Validierung**, sondern eine **sichtbare Beobachtung**.
 - **MAX_EDGES_CACHE**: Obergrenze der beim Start geladenen Edges (Default `500000`).
   Bei Erreichen wird die Datei nicht weiter gelesen und eine Warnung geloggt.
 - **WELTGEWEBE_DOMAIN_READ_SOURCE**: Default `jsonl`.
-  `postgres` aktiviert den OPT-ARC-001 Phase-D PostgreSQL-Read-Path beim API-Startup.
-  Dieser Pfad ist read-only und opt-in. In Phase D werden mutierende Domänen-
-  Endpunkte mit `409 CONFLICT` und `DOMAIN_READ_SOURCE_READ_ONLY` blockiert,
-  solange `postgres` aktiv ist, um restart-sichtbare JSONL/PostgreSQL-Divergenz
-  zu verhindern. Bis Phase E existiert kein PostgreSQL-Write-Path und kein
-  Dual-Write; im Default-/JSONL-Modus bleibt JSONL die Write-Truth. Nicht als
-  Produktions-Cutover verstehen; OPT-ARC-001 bleibt dadurch nicht erledigt.
-- **WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE**: Default `jsonl` (OPT-ARC-001
-  Phase E-A). `postgres` aktiviert einen **engen** PostgreSQL-Schreibpfad
-  **ausschließlich** für die Account-Erzeugung (`POST /accounts`); der Account
-  wird dann in `domain_accounts` geschrieben und das In-Memory-`AccountStore`
-  erst nach erfolgreichem DB-Write aktualisiert (kein Dual-Write, kein
-  JSONL-Append).
-  - **Erfordert** `WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` und eine
-    konfigurierte `DATABASE_URL`/Pool. `postgres` mit JSONL-Read-Source oder
-    ohne Pool ist ein **harter Config-/Startfehler** (kein stiller Fallback) —
-    sonst entstünden nach einem Neustart unsichtbare, persistierte Writes.
-  - **Nur Account-Create** ist implementiert. Andere Domänen-Mutationen
-    (`PATCH /nodes`, Edge-Writes, Step-up-E-Mail-Persistenz,
-    WebAuthn-User-ID-Writeback) bleiben blockiert bzw. JSONL-only.
-  - Nur einsetzen, wenn die DB-Proof-Jobs grün sind. Nicht als Produktions-
-    Cutover verstehen; OPT-ARC-001 bleibt `partial`.
+  `postgres` lädt Accounts, Knoten und Fäden beim API-Start aus den
+  PostgreSQL-Domänentabellen.
+- **WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE**: Default `jsonl`.
+  `postgres` persistiert Account-Erzeugung einschließlich Auth-
+  Autoprovisionierung in `domain_accounts`.
+- **WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE**: Default `jsonl`.
+  `postgres` persistiert `POST /nodes` und `PATCH /nodes/{id}` in
+  `domain_nodes`.
+- **WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE**: Default `jsonl`.
+  `postgres` persistiert `POST /edges` in `domain_edges`.
+
+Für einen PostgreSQL-Cutover müssen **Read-Quelle und alle tatsächlich
+verwendeten Schreibquellen gemeinsam** auf `postgres` stehen. PostgreSQL-
+Schreiben bei JSONL-Lesen oder fehlendem Pool ist verboten; die API bricht beim
+Start ab oder der enge Routenschutz blockiert den Write. Es gibt keinen
+stillen JSONL-Fallback und kein Dual-Write. Die Reihenfolge lautet immer:
+Datenbank schreiben, danach In-Memory-Cache aktualisieren.
+
+- **AUTH_AUTO_PROVISION_ROLE**: Default `gast`; zulässig sind `gast` und
+  `weber`. `weber` verlangt eine konkrete `AUTH_ALLOW_EMAILS`- oder
+  `AUTH_ALLOW_EMAIL_DOMAINS`-Liste und ist bei offener Registrierung verboten.
+  `admin` wird abgelehnt. Ein Magic Link wird erst erzeugt, nachdem die neue
+  Garnrolle dauerhaft gespeichert wurde.
+
 
 ---
 

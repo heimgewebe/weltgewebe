@@ -4,6 +4,11 @@
   import { isFilterOpen, closeFilter } from '$lib/stores/filterStore';
   import { toggleSearchExclusive, toggleFilterExclusive } from '$lib/stores/overlayManager';
   import { setRestoreTarget, suppressNextRestore } from '$lib/utils/focusManager';
+  import { authStore } from '$lib/auth/store';
+
+  // Only weber/admin can create nodes. Gäste/Anonyme must not see an
+  // apparently-functional write path — the button is hidden, not disabled.
+  $: canCreateNode = $authStore.role === 'weber' || $authStore.role === 'admin';
 
   function onNewNode() {
     if ($isSearchOpen) suppressNextRestore('search');
@@ -28,7 +33,9 @@
 </script>
 
 <nav class="action-bar" class:panel-open={$contextPanelOpen} aria-label="Aktionsleiste">
-  <button class="action-btn" class:active={$systemState === 'komposition'} on:click={onNewNode} aria-label="Neuer Knoten">Neuer Knoten</button>
+  {#if canCreateNode}
+    <button class="action-btn" class:active={$systemState === 'komposition'} on:click={onNewNode} aria-label="Neuer Knoten">Neuer Knoten</button>
+  {/if}
   <button bind:this={searchBtnEl} class="action-btn" on:click={onToggleSearch} class:active={$isSearchOpen} aria-label="Suche">Suche</button>
   <button bind:this={filterBtnEl} class="action-btn" class:active={$isFilterOpen} on:click={onToggleFilter} aria-label="Filter">Filter</button>
 </nav>

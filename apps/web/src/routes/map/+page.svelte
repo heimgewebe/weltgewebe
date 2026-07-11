@@ -14,7 +14,7 @@
 
   import { page } from '$app/stores';
 
-  import { view, selection, systemState, enterKomposition, leaveToNavigation } from '$lib/stores/uiView';
+  import { view, selection, systemState, enterKomposition, leaveToNavigation, lastCreatedNodeId } from '$lib/stores/uiView';
   import { activeFilters, closeFilter } from '$lib/stores/filterStore';
   import { isSearchOpen, searchQuery, closeSearch } from '$lib/stores/searchStore';
   import { openSearchExclusive, openFilterExclusive } from '$lib/stores/overlayManager';
@@ -117,6 +117,18 @@
 
   function handleSearchSelect(event: CustomEvent<MapEntityViewModel>) {
     focusAndFlyToPoint(event.detail);
+  }
+
+  // After KompositionPanel creates a node (+ its account->node edge) and
+  // reloads route data, focus/fly-to it once it shows up in the freshly
+  // rebuilt scene. Retries on later markersData updates while unresolved
+  // (e.g. the reload is still in flight when this first runs).
+  $: if ($lastCreatedNodeId) {
+    const created = markersData.find((m) => m.id === $lastCreatedNodeId && m.type === 'node');
+    if (created) {
+      focusAndFlyToPoint(created);
+      lastCreatedNodeId.set(null);
+    }
   }
 
   // --- URL addressing (UI Interaction Doctrine, first slice) -----------------
@@ -645,7 +657,7 @@
       </button>
     </div>
   {/if}
-  <TopBar on:zoomToOwnGarnrolle={handleZoomToOwnGarnrolle} />
+  <TopBar accounts={data.accounts || []} on:zoomToOwnGarnrolle={handleZoomToOwnGarnrolle} />
   <div id="map" bind:this={mapContainer}></div>
   {#if isLoading}
     <div class="loading-overlay">

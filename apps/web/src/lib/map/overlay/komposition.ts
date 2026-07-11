@@ -3,7 +3,19 @@ import type {
   MapMouseEvent,
   MapTouchEvent,
 } from "maplibre-gl";
+import { get } from "svelte/store";
 import { enterKomposition } from "$lib/stores/uiView";
+import { authStore } from "$lib/auth/store";
+
+/**
+ * Only weber/admin may create nodes. A longpress by a gast/anonymous user
+ * must not open an apparently-functional composition panel — it silently
+ * does nothing, exactly like the (hidden) "Neuer Knoten" action-bar button.
+ */
+function canCreateNode(): boolean {
+  const role = get(authStore).role;
+  return role === "weber" || role === "admin";
+}
 
 export function setupKompositionInteraction(map: MapLibreMap) {
   let longPressTimer: ReturnType<typeof setTimeout> | undefined;
@@ -23,6 +35,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
       e.originalEvent.target instanceof HTMLElement &&
       e.originalEvent.target.closest(".map-marker");
     if (markerClicked) return;
+    if (!canCreateNode()) return;
 
     longPressStartX = e.point.x;
     longPressStartY = e.point.y;
@@ -52,6 +65,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
       e.originalEvent.target instanceof HTMLElement &&
       e.originalEvent.target.closest(".map-marker");
     if (markerClicked) return;
+    if (!canCreateNode()) return;
 
     longPressStartX = e.point.x;
     longPressStartY = e.point.y;

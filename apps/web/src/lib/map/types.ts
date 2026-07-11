@@ -19,6 +19,8 @@ export interface Node {
   summary?: string | null;
   info?: string | null;
   tags: string[];
+  /** Human-readable address. Optional for nodes persisted before this field existed. */
+  address?: string | null;
   location: Location;
   modules?: Module[];
 }
@@ -58,7 +60,9 @@ export interface MapPoint {
 export interface Edge {
   id: string;
   source_id: string;
+  source_type?: string;
   target_id: string;
+  target_type?: string;
   edge_kind: string;
 }
 

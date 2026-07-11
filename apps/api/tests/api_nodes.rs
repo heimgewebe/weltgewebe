@@ -70,6 +70,7 @@ async fn test_state() -> Result<ApiState> {
         auth_allow_emails: None,
         auth_allow_email_domains: None,
         auth_auto_provision: false,
+        auth_auto_provision_role: weltgewebe_api::config::AutoProvisionRole::Gast,
         auth_rl_ip_per_min: None,
         auth_rl_ip_per_hour: None,
         auth_rl_email_per_min: None,
@@ -868,6 +869,272 @@ async fn nodes_cursor_limit_zero_is_bad_request() -> anyhow::Result<()> {
         .oneshot(Request::get("/nodes?pagination=cursor&limit=0").body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
+
+// ── POST /nodes ──────────────────────────────────────────────────────────
+
+fn weber_account(id: &str) -> AccountInternal {
+    AccountInternal {
+        public: AccountPublic {
+            id: id.to_string(),
+            kind: "garnrolle".to_string(),
+            title: "Weber".to_string(),
+            summary: None,
+            public_pos: None,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
+            radius_m: 0,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Weber,
+        email: Some(format!("{id}@example.com")),
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    }
+}
+
+fn gast_account(id: &str) -> AccountInternal {
+    let mut account = weber_account(id);
+    account.role = Role::Gast;
+    account
+}
+
+async fn app_with_account(
+    in_dir: &std::path::Path,
+    account: AccountInternal,
+) -> (Router, String, ApiState, EnvGuard) {
+    let env = set_gewebe_in_dir(in_dir);
+    let id = account.public.id.clone();
+
+    let mut account_map = AccountStore::new();
+    account_map.insert(account);
+
+    let mut state = test_state().await.unwrap();
+    state.accounts = Arc::new(RwLock::new(account_map));
+
+    let session = create_session(&state, &id, None).await;
+    let cookie = format!("gewebe_session={}", session.id);
+
+    let app = Router::new()
+        .merge(api_router())
+        .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .layer(axum::middleware::from_fn(require_csrf))
+        .with_state(state.clone());
+
+    (app, cookie, state, env)
+}
+
+fn post_node_req(cookie: Option<&str>, json_body: &str) -> Request<body::Body> {
+    let mut builder = Request::post("/nodes")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost");
+    if let Some(c) = cookie {
+        builder = builder.header("Cookie", c);
+    }
+    builder
+        .body(body::Body::from(json_body.to_string()))
+        .unwrap()
+}
+
+#[tokio::test]
+#[serial]
+async fn nodes_post_creates_persists_and_reloads() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+
+    let (app, cookie, state, _env) = app_with_account(&in_dir, weber_account("weber1")).await;
+
+    let body = r#"{"title":"New Node","kind":"Werkstatt","address":"Musterstraße 1, 12345 Musterstadt","location":{"lat":53.55,"lon":9.99},"summary":"Short summary","tags":["a","b"]}"#;
+    let res = app
+        .clone()
+        .oneshot(post_node_req(Some(&cookie), body))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CREATED);
+
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let created: serde_json::Value = serde_json::from_slice(&bytes)?;
+    let id = created["id"].as_str().context("id present")?.to_string();
+    assert!(
+        uuid::Uuid::parse_str(&id).is_ok(),
+        "server must generate a UUID id"
+    );
+    assert_eq!(created["title"], "New Node");
+    assert_eq!(created["kind"], "Werkstatt");
+    assert_eq!(created["address"], "Musterstraße 1, 12345 Musterstadt");
+    assert_eq!(created["location"]["lat"], 53.55);
+    assert_eq!(created["location"]["lon"], 9.99);
+    assert_eq!(created["created_at"], created["updated_at"]);
+
+    // JSONL durably appended.
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    let contents = fs::read_to_string(&nodes_path)?;
+    assert_eq!(contents.lines().count(), 1);
+    let record: serde_json::Value = serde_json::from_str(contents.lines().next().unwrap())?;
+    assert_eq!(record["address"], "Musterstraße 1, 12345 Musterstadt");
+
+    // Cache updated (read-your-writes).
+    {
+        let nodes = state.nodes.read().await;
+        let node = nodes.get(&id).expect("created node present in cache");
+        assert_eq!(node.title, "New Node");
+        assert_eq!(
+            node.address.as_deref(),
+            Some("Musterstraße 1, 12345 Musterstadt")
+        );
+    }
+
+    // Simulated restart: reload from JSONL alone reconstructs the node.
+    let reloaded = weltgewebe_api::routes::nodes::load_nodes().await;
+    let node = reloaded.get(&id).expect("node must reload after restart");
+    assert_eq!(node.title, "New Node");
+    assert_eq!(
+        node.address.as_deref(),
+        Some("Musterstraße 1, 12345 Musterstadt")
+    );
+    assert_eq!(node.tags, vec!["a".to_string(), "b".to_string()]);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn nodes_post_requires_authentication() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let state = test_state().await?;
+    let app = Router::new()
+        .merge(api_router())
+        .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .layer(axum::middleware::from_fn(require_csrf))
+        .with_state(state);
+
+    let body = r#"{"title":"New Node","kind":"Werkstatt","address":"Somewhere","location":{"lat":53.55,"lon":9.99}}"#;
+    let res = app.oneshot(post_node_req(None, body)).await?;
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn nodes_post_forbidden_for_gast() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+
+    let (app, cookie, state, _env) = app_with_account(&in_dir, gast_account("gast1")).await;
+
+    let body = r#"{"title":"New Node","kind":"Werkstatt","address":"Somewhere","location":{"lat":53.55,"lon":9.99}}"#;
+    let res = app.oneshot(post_node_req(Some(&cookie), body)).await?;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    assert!(
+        state.nodes.read().await.is_empty(),
+        "a forbidden request must not create a node"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn nodes_post_without_origin_fails() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let env = set_gewebe_in_dir(&in_dir);
+
+    let mut account_map = AccountStore::new();
+    account_map.insert(weber_account("weber1"));
+    let mut state = test_state().await?;
+    state.accounts = Arc::new(RwLock::new(account_map));
+    let session = create_session(&state, "weber1", None).await;
+    let cookie_val = format!("gewebe_session={}", session.id);
+
+    let app = Router::new()
+        .merge(api_router())
+        .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .layer(axum::middleware::from_fn(require_csrf))
+        .with_state(state);
+
+    let req = Request::post("/nodes")
+        .header("Content-Type", "application/json")
+        .header("Cookie", &cookie_val)
+        .header("Host", "localhost")
+        // No Origin, No Referer.
+        .body(body::Body::from(
+            r#"{"title":"New Node","kind":"Werkstatt","address":"Somewhere","location":{"lat":53.55,"lon":9.99}}"#,
+        ))?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    drop(env);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn nodes_post_rejects_invalid_payloads_with_stable_400() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+
+    let (app, cookie, state, _env) = app_with_account(&in_dir, weber_account("weber1")).await;
+
+    let cases = [
+        // Missing required address.
+        r#"{"title":"No Address","kind":"Werkstatt","location":{"lat":53.5,"lon":10.0}}"#,
+        // Missing required title.
+        r#"{"kind":"Werkstatt","address":"Somewhere","location":{"lat":53.5,"lon":10.0}}"#,
+        // Missing required kind.
+        r#"{"title":"No Kind","address":"Somewhere","location":{"lat":53.5,"lon":10.0}}"#,
+        // Missing required location.
+        r#"{"title":"No Location","kind":"Werkstatt","address":"Somewhere"}"#,
+        // Blank title after trim.
+        r#"{"title":"   ","kind":"Werkstatt","address":"Somewhere","location":{"lat":53.5,"lon":10.0}}"#,
+        // Out-of-bounds latitude.
+        r#"{"title":"Bad Lat","kind":"Werkstatt","address":"Somewhere","location":{"lat":999.0,"lon":10.0}}"#,
+        // Non-finite longitude.
+        r#"{"title":"Bad Lon","kind":"Werkstatt","address":"Somewhere","location":{"lat":10.0,"lon":1e400}}"#,
+        // Unknown top-level field.
+        r#"{"title":"Extra","kind":"Werkstatt","address":"Somewhere","location":{"lat":10.0,"lon":10.0},"wat":true}"#,
+        // Server-owned id supplied by client.
+        r#"{"id":"00000000-0000-0000-0000-000000000001","title":"Client Id","kind":"Werkstatt","address":"Somewhere","location":{"lat":10.0,"lon":10.0}}"#,
+        // Too many tags.
+        &format!(
+            r#"{{"title":"Too Many Tags","kind":"Werkstatt","address":"Somewhere","location":{{"lat":10.0,"lon":10.0}},"tags":[{}]}}"#,
+            (0..40)
+                .map(|i| format!("\"t{i}\""))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+    ];
+
+    for body in cases {
+        let res = app
+            .clone()
+            .oneshot(post_node_req(Some(&cookie), body))
+            .await?;
+        assert_eq!(
+            res.status(),
+            StatusCode::BAD_REQUEST,
+            "expected 400 for payload: {body}"
+        );
+    }
+
+    assert!(
+        state.nodes.read().await.is_empty(),
+        "invalid create requests must not create a node"
+    );
+    assert!(
+        !in_dir.join("demo.nodes.jsonl").exists(),
+        "invalid create requests must not write JSONL"
+    );
 
     Ok(())
 }

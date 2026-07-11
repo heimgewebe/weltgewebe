@@ -3,7 +3,9 @@ import { mockApiResponses } from "./fixtures/mockApi";
 
 test.describe("Map Interaction & Context Panel", () => {
   test.beforeEach(async ({ page }) => {
-    await mockApiResponses(page);
+    await mockApiResponses(page, {
+      auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
+    });
     await page.goto("/map");
   });
 
