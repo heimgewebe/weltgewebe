@@ -10,6 +10,32 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-07-11 - Dev-Compose-Verträge für PgBouncer und Caddy korrigiert
+
+**Geänderte Dateien:**
+
+- `infra/compose/compose.core.yml`
+- `infra/caddy/Caddyfile`
+- `infra/caddy/Caddyfile.dev`
+- `docs/deploy/README.md`
+
+**Beschreibung:**
+
+Der auf PgBouncer 1.25.2 aktualisierte Dev-Stack verwendet den tatsächlichen
+Container-Listener `5432`, veröffentlicht ihn optional als Hostport `6432` und
+authentifiziert PostgreSQL-16-SCRAM-Passwörter mit `scram-sha-256`. Der alte
+`trust`/MD5-Mischvertrag führte zu `wrong password type` und wird nicht mehr
+verwendet. Gleichzeitig wurden von Caddy 2.7 nicht mehr akzeptierte globale
+`experimental_http3`-Serveroptionen aus den repo-internen Dev-Caddyfiles
+entfernt. Der vollständige isolierte Stack wurde mit gesunder API über
+SQLx → PgBouncer → PostgreSQL sowie laufendem Web- und Caddy-Service geprüft.
+
+**Produktionswirkung:**
+
+Keine direkte. Produktion auf `wg-prod-1` nutzt weiterhin den kanonischen
+direkten PostgreSQL-Pfad und `Caddyfile.vps`; die Änderung repariert den
+Dev-/CI-Compose-Smoke und verhindert falsche Rückschlüsse aus einem roten Main.
+
 ## 2026-05-24 - Account-Erstellung v0: compose.prod.yml reicht Bootstrap-Variablen durch
 
 **Geänderte Dateien:**

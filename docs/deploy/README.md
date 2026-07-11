@@ -107,6 +107,19 @@ OCI-Manifest-Digest gepinnt. Bei Aktualisierungen müssen Registry-Existenz,
 `linux/amd64` und `linux/arm64` sowie der vollständige Compose-Smoke erneut
 belegt werden; `latest` ist dafür nicht zulässig.
 
+Der Container lauscht intern auf Port `5432`; deshalb verbindet sich die API im
+Compose-Netz über `pgbouncer:5432`. Nur die optionale Veröffentlichung auf dem
+Entwicklungsrechner bleibt `6432:5432`, damit PgBouncer nicht mit dem direkten
+PostgreSQL-Port verwechselt wird. PostgreSQL 16 verwendet SCRAM-Passwörter;
+der Dev-Pooler muss daher `AUTH_TYPE=scram-sha-256` verwenden. `trust` oder ein
+MD5-generiertes Userlist-Passwort sind mit diesem Pfad nicht zulässig.
+
+Die repo-internen Caddy-Dateien `Caddyfile` und `Caddyfile.dev` müssen direkt
+mit dem in `compose.core.yml` gepinnten Caddy-Image validierbar sein. Veraltete
+globale Optionen wie `experimental_http3` dürfen nicht wieder eingeführt
+werden; HTTP/3 wird von aktuellen Caddy-Versionen ohne diesen historischen
+Schalter verwaltet.
+
 ---
 
 ## 3. Services & Netzwerk
