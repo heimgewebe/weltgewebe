@@ -1,7 +1,7 @@
 use super::{
     domain_write_guard::{
-        reject_node_patch_unless_writable, DOMAIN_READ_SOURCE_READ_ONLY,
-        DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE,
+        reject_node_create_unless_writable, reject_node_patch_unless_writable,
+        DOMAIN_READ_SOURCE_READ_ONLY, DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE,
     },
     query::{
         cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
@@ -9,7 +9,9 @@ use super::{
     },
 };
 use crate::config::DomainNodeWriteSource;
-use crate::domain_db::{patch_node_in_postgres, NodePatchInput, NodeWriteError};
+use crate::domain_db::{
+    insert_domain_node, patch_node_in_postgres, NodeCreateError, NodePatchInput, NodeWriteError,
+};
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::nodes_path;
 use axum::{
@@ -19,11 +21,13 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use tokio::{
     fs::{File, OpenOptions},
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
+    io::{
+        AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, BufWriter, SeekFrom,
+    },
 };
 use uuid::Uuid;
 
@@ -75,6 +79,10 @@ pub struct Node {
     pub info: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+    /// Human-readable address. Optional for backward compatibility with
+    /// records persisted before this field existed; `POST /nodes` requires it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
     pub location: Location,
 }
 
@@ -130,6 +138,8 @@ struct NodeDto {
     info: Option<String>,
     #[serde(default, deserialize_with = "deserialize_tags_loose")]
     tags: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
+    address: Option<String>,
     location: LocationDto,
 }
 
@@ -226,6 +236,7 @@ impl From<NodeDto> for Node {
             summary: dto.summary,
             info: dto.info,
             tags: dto.tags,
+            address: dto.address,
             location: Location {
                 lat: dto.location.lat,
                 lon: dto.location.lon,
@@ -316,6 +327,11 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
         })
         .unwrap_or_default();
 
+    let address = v
+        .get("address")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
     Some(Node {
         id,
         kind,
@@ -325,6 +341,7 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
         summary,
         info,
         tags,
+        address,
         location: Location { lat, lon },
     })
 }
@@ -409,6 +426,700 @@ pub async fn get_node(
         .cloned()
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
+}
+
+/// Append a single node record as a JSONL line. Durability via fsync.
+/// Callers MUST hold `state.nodes_persist` to serialize writes.
+///
+/// If the existing file does not end with a newline (e.g. a hand-written or
+/// truncated fixture), a separator newline is written first so the previous
+/// record and the new record are never glued into one unparseable line.
+async fn append_node_line(record: &Value) -> std::io::Result<()> {
+    let path = nodes_path();
+    if let Some(parent) = path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    let line = serde_json::to_string(record)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .read(true)
+        .open(&path)
+        .await?;
+
+    let len = file.metadata().await?.len();
+    if len > 0 {
+        file.seek(SeekFrom::Start(len - 1)).await?;
+        let mut last = [0_u8; 1];
+        file.read_exact(&mut last).await?;
+        if last[0] != b'\n' {
+            file.write_all(b"\n").await?;
+        }
+    }
+
+    file.write_all(line.as_bytes()).await?;
+    file.write_all(b"\n").await?;
+    file.flush().await?;
+    file.sync_all().await?;
+    Ok(())
+}
+
+/// Build the in-memory `Node` and its canonical JSONL record from a validated
+/// create request plus the server-owned `id` and timestamp.
+fn build_node_record(
+    validated: node_create::ValidatedCreateNode,
+    id: String,
+    now: String,
+) -> (Node, Value) {
+    let node = Node {
+        id,
+        kind: validated.kind,
+        title: validated.title,
+        created_at: now.clone(),
+        updated_at: now,
+        summary: validated.summary,
+        info: validated.info,
+        tags: validated.tags,
+        address: Some(validated.address),
+        location: Location {
+            lat: validated.lat,
+            lon: validated.lon,
+        },
+    };
+
+    let mut record = serde_json::Map::new();
+    record.insert("id".into(), json!(node.id));
+    record.insert("kind".into(), json!(node.kind));
+    record.insert("title".into(), json!(node.title));
+    record.insert("created_at".into(), json!(node.created_at));
+    record.insert("updated_at".into(), json!(node.updated_at));
+    if let Some(summary) = &node.summary {
+        record.insert("summary".into(), json!(summary));
+    }
+    if let Some(info) = &node.info {
+        record.insert("info".into(), json!(info));
+    }
+    if !node.tags.is_empty() {
+        record.insert("tags".into(), json!(node.tags));
+    }
+    if let Some(address) = &node.address {
+        record.insert("address".into(), json!(address));
+    }
+    record.insert(
+        "location".into(),
+        json!({ "lat": node.location.lat, "lon": node.location.lon }),
+    );
+
+    (node, Value::Object(record))
+}
+
+/// Map a `NodeCreateValidationError` onto a stable message for the 400 body.
+fn node_create_error_message(err: &node_create::NodeCreateValidationError) -> String {
+    use node_create::NodeCreateValidationError as E;
+    match err {
+        E::MissingOrEmptyField(field) => format!("missing or empty field: {field}"),
+        E::FieldTooLong { field, max } => format!("{field} exceeds the maximum length of {max}"),
+        E::InvalidCoordinate { field } => {
+            format!("{field} must be a finite number within world bounds")
+        }
+        E::TooManyTags { max } => format!("tags exceeds the maximum count of {max}"),
+    }
+}
+
+/// Create a node.
+///
+/// Write path: write gate ([`reject_node_create_unless_writable`]) -> contract
+/// validation -> server-generated `id` / `created_at` / `updated_at` ->
+/// persistence via the configured node write source -> cache insert -> 201.
+/// The cache is only mutated after a successful durable persistence step, so
+/// a failed write never leaves a phantom node in memory.
+///
+/// JSONL (default): durable JSONL append (fsync), serialized against
+/// concurrent node persistence via `state.nodes_persist`.
+/// PostgreSQL (opt-in via `WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE=postgres`,
+/// requires the PostgreSQL read source): a serialized transaction with a
+/// table-level lock, duplicate precheck, and final INSERT. No dual-write:
+/// JSONL mode never touches PostgreSQL, PostgreSQL mode never appends JSONL.
+pub async fn create_node(
+    State(state): State<ApiState>,
+    Json(payload): Json<Value>,
+) -> Result<(StatusCode, Json<Node>), (StatusCode, String)> {
+    reject_node_create_unless_writable(&state)?;
+
+    // Deserialize manually (instead of extracting Json<CreateNodeRequest>) so
+    // contract violations (unknown fields, missing required fields, explicit
+    // nulls on server-owned fields) map to a deterministic 400 rather than an
+    // extractor-shaped 422.
+    let request: node_create::CreateNodeRequest = serde_json::from_value(payload).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            format!("invalid node create request: {e}"),
+        )
+    })?;
+
+    let validated = request.validate().map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            format!(
+                "invalid node create request: {}",
+                node_create_error_message(&e)
+            ),
+        )
+    })?;
+
+    let id = Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+    let (node, record) = build_node_record(validated, id.clone(), now);
+
+    match state.config.domain_node_write_source {
+        DomainNodeWriteSource::Jsonl => {
+            // Serialize JSONL creates so cache/file mutation cannot interleave.
+            let _persist_guard = state.nodes_persist.lock().await;
+
+            // id is a freshly generated UUIDv4; a cache collision is
+            // astronomically unlikely but checked defensively, mirroring the
+            // account/edge create paths.
+            {
+                let nodes = state.nodes.read().await;
+                if nodes.get(&id).is_some() {
+                    return Err((StatusCode::CONFLICT, "node id already exists".to_string()));
+                }
+            }
+
+            if let Err(e) = append_node_line(&record).await {
+                tracing::error!(error = %e, "failed to append node to JSONL");
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "failed to persist node".to_string(),
+                ));
+            }
+
+            let mut nodes = state.nodes.write().await;
+            nodes.insert(id.clone(), node.clone());
+            state.metrics.set_nodes_cache_count(nodes.len() as i64);
+        }
+        DomainNodeWriteSource::Postgres => {
+            {
+                let nodes = state.nodes.read().await;
+                if nodes.get(&id).is_some() {
+                    return Err((StatusCode::CONFLICT, "node id already exists".to_string()));
+                }
+            }
+
+            let pool = state.db_pool.as_ref().ok_or_else(|| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "PostgreSQL pool unavailable for node write".to_string(),
+                )
+            })?;
+            match insert_domain_node(pool, &node).await {
+                Ok(()) => {}
+                Err(NodeCreateError::DuplicateId) => {
+                    return Err((StatusCode::CONFLICT, "node id already exists".to_string()));
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "failed to insert node into domain_nodes");
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to persist node".to_string(),
+                    ));
+                }
+            }
+
+            let mut nodes = state.nodes.write().await;
+            nodes.insert(id.clone(), node.clone());
+            state.metrics.set_nodes_cache_count(nodes.len() as i64);
+        }
+    }
+
+    tracing::info!(
+        event = "node.created",
+        node_id = %node.id,
+        write_source = ?state.config.domain_node_write_source,
+        "Node created"
+    );
+
+    Ok((StatusCode::CREATED, Json(node)))
+}
+
+/// Node-create request contract.
+///
+/// Locks the accepted shape and validation rules of a `POST /nodes` create
+/// request. `id`, `created_at`, `updated_at` are server-owned and therefore
+/// absent from the request type; combined with `deny_unknown_fields` a client
+/// that supplies them gets a deterministic 400 instead of a silently dropped
+/// field.
+mod node_create {
+    use serde::Deserialize;
+
+    /// Mirrors `contracts/domain/node.schema.json` (`title.maxLength`).
+    const NODE_TITLE_MAX_LEN: usize = 200;
+    /// Mirrors `contracts/domain/node.schema.json` (`kind.maxLength`).
+    const NODE_KIND_MAX_LEN: usize = 100;
+    /// Address is not yet part of the JSON Schema's `required` set (older
+    /// records may lack it), but `POST /nodes` requires it; 500 chars is a
+    /// generous bound for a real-world postal address.
+    const NODE_ADDRESS_MAX_LEN: usize = 500;
+    /// Mirrors `contracts/domain/node.schema.json` (`summary.maxLength`).
+    const NODE_SUMMARY_MAX_LEN: usize = 500;
+    /// Mirrors `contracts/domain/node.schema.json` (`info.maxLength`).
+    const NODE_INFO_MAX_LEN: usize = 20_000;
+    /// Mirrors `contracts/domain/node.schema.json` (`tags.items.maxLength`).
+    const NODE_TAG_MAX_LEN: usize = 64;
+    /// The domain contract does not cap the number of tags; this bound exists
+    /// only to keep a single create request bounded in size (well above any
+    /// realistic UI usage).
+    const NODE_TAGS_MAX_COUNT: usize = 32;
+
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub(super) struct CreateLocation {
+        lat: f64,
+        lon: f64,
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub(super) struct CreateNodeRequest {
+        title: String,
+        kind: String,
+        address: String,
+        location: CreateLocation,
+        #[serde(default)]
+        summary: Option<String>,
+        #[serde(default)]
+        info: Option<String>,
+        #[serde(default)]
+        tags: Option<Vec<String>>,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(super) struct ValidatedCreateNode {
+        pub(super) title: String,
+        pub(super) kind: String,
+        pub(super) address: String,
+        pub(super) lat: f64,
+        pub(super) lon: f64,
+        pub(super) summary: Option<String>,
+        pub(super) info: Option<String>,
+        pub(super) tags: Vec<String>,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(super) enum NodeCreateValidationError {
+        MissingOrEmptyField(&'static str),
+        FieldTooLong { field: &'static str, max: usize },
+        InvalidCoordinate { field: &'static str },
+        TooManyTags { max: usize },
+    }
+
+    fn require_non_blank(
+        field: &'static str,
+        value: &str,
+    ) -> Result<(), NodeCreateValidationError> {
+        if value.trim().is_empty() {
+            return Err(NodeCreateValidationError::MissingOrEmptyField(field));
+        }
+        Ok(())
+    }
+
+    fn require_max_len(
+        field: &'static str,
+        value: &str,
+        max: usize,
+    ) -> Result<(), NodeCreateValidationError> {
+        if value.chars().count() > max {
+            return Err(NodeCreateValidationError::FieldTooLong { field, max });
+        }
+        Ok(())
+    }
+
+    fn require_world_coordinate(
+        field: &'static str,
+        value: f64,
+        min: f64,
+        max: f64,
+    ) -> Result<(), NodeCreateValidationError> {
+        if !value.is_finite() || value < min || value > max {
+            return Err(NodeCreateValidationError::InvalidCoordinate { field });
+        }
+        Ok(())
+    }
+
+    impl CreateNodeRequest {
+        /// Validate into a `ValidatedCreateNode` without mutating values
+        /// beyond trimming required string fields. Order: (1) required fields
+        /// non-blank, (2) required field max lengths, (3) coordinates finite
+        /// and within world bounds, (4) optional fields (summary/info/tags)
+        /// when present.
+        pub(super) fn validate(self) -> Result<ValidatedCreateNode, NodeCreateValidationError> {
+            require_non_blank("title", &self.title)?;
+            require_non_blank("kind", &self.kind)?;
+            require_non_blank("address", &self.address)?;
+
+            let title = self.title.trim().to_string();
+            let kind = self.kind.trim().to_string();
+            let address = self.address.trim().to_string();
+
+            require_max_len("title", &title, NODE_TITLE_MAX_LEN)?;
+            require_max_len("kind", &kind, NODE_KIND_MAX_LEN)?;
+            require_max_len("address", &address, NODE_ADDRESS_MAX_LEN)?;
+
+            require_world_coordinate("location.lat", self.location.lat, -90.0, 90.0)?;
+            require_world_coordinate("location.lon", self.location.lon, -180.0, 180.0)?;
+
+            let summary = match self.summary {
+                Some(s) => {
+                    require_non_blank("summary", &s)?;
+                    let s = s.trim().to_string();
+                    require_max_len("summary", &s, NODE_SUMMARY_MAX_LEN)?;
+                    Some(s)
+                }
+                None => None,
+            };
+
+            let info = match self.info {
+                Some(s) => {
+                    require_max_len("info", &s, NODE_INFO_MAX_LEN)?;
+                    Some(s)
+                }
+                None => None,
+            };
+
+            let tags = self.tags.unwrap_or_default();
+            if tags.len() > NODE_TAGS_MAX_COUNT {
+                return Err(NodeCreateValidationError::TooManyTags {
+                    max: NODE_TAGS_MAX_COUNT,
+                });
+            }
+            let mut validated_tags = Vec::with_capacity(tags.len());
+            for tag in tags {
+                require_non_blank("tags[]", &tag)?;
+                let tag = tag.trim().to_string();
+                require_max_len("tags[]", &tag, NODE_TAG_MAX_LEN)?;
+                validated_tags.push(tag);
+            }
+
+            Ok(ValidatedCreateNode {
+                title,
+                kind,
+                address,
+                lat: self.location.lat,
+                lon: self.location.lon,
+                summary,
+                info,
+                tags: validated_tags,
+            })
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn valid_request() -> CreateNodeRequest {
+            CreateNodeRequest {
+                title: "A Node".to_string(),
+                kind: "Werkstatt".to_string(),
+                address: "Musterstraße 1, 12345 Musterstadt".to_string(),
+                location: CreateLocation {
+                    lat: 53.5,
+                    lon: 10.0,
+                },
+                summary: None,
+                info: None,
+                tags: None,
+            }
+        }
+
+        #[test]
+        fn accepts_minimal_payload() {
+            let json = r#"{"title":"A Node","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0}}"#;
+            let req = serde_json::from_str::<CreateNodeRequest>(json)
+                .expect("minimal request must deserialize");
+            let validated = req.validate().expect("minimal request must validate");
+            assert_eq!(validated.title, "A Node");
+            assert_eq!(validated.kind, "Werkstatt");
+            assert_eq!(validated.address, "Musterstraße 1");
+            assert_eq!(validated.lat, 53.5);
+            assert_eq!(validated.lon, 10.0);
+            assert_eq!(validated.summary, None);
+            assert_eq!(validated.info, None);
+            assert!(validated.tags.is_empty());
+        }
+
+        #[test]
+        fn accepts_full_payload() {
+            let json = r#"{"title":"A Node","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0},"summary":"Short","info":"Long text","tags":["a","b"]}"#;
+            let req = serde_json::from_str::<CreateNodeRequest>(json)
+                .expect("full request must deserialize");
+            let validated = req.validate().expect("full request must validate");
+            assert_eq!(validated.summary.as_deref(), Some("Short"));
+            assert_eq!(validated.info.as_deref(), Some("Long text"));
+            assert_eq!(validated.tags, vec!["a".to_string(), "b".to_string()]);
+        }
+
+        #[test]
+        fn trims_required_string_fields() {
+            let mut req = valid_request();
+            req.title = "  A Node  ".to_string();
+            req.kind = "  Werkstatt  ".to_string();
+            req.address = "  Musterstraße 1  ".to_string();
+            let validated = req.validate().expect("must validate");
+            assert_eq!(validated.title, "A Node");
+            assert_eq!(validated.kind, "Werkstatt");
+            assert_eq!(validated.address, "Musterstraße 1");
+        }
+
+        #[test]
+        fn rejects_missing_title() {
+            let json = r#"{"kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0}}"#;
+            assert!(serde_json::from_str::<CreateNodeRequest>(json).is_err());
+        }
+
+        #[test]
+        fn rejects_missing_kind() {
+            let json = r#"{"title":"A Node","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0}}"#;
+            assert!(serde_json::from_str::<CreateNodeRequest>(json).is_err());
+        }
+
+        #[test]
+        fn rejects_missing_address() {
+            let json =
+                r#"{"title":"A Node","kind":"Werkstatt","location":{"lat":53.5,"lon":10.0}}"#;
+            assert!(serde_json::from_str::<CreateNodeRequest>(json).is_err());
+        }
+
+        #[test]
+        fn rejects_missing_location() {
+            let json = r#"{"title":"A Node","kind":"Werkstatt","address":"Musterstraße 1"}"#;
+            assert!(serde_json::from_str::<CreateNodeRequest>(json).is_err());
+        }
+
+        #[test]
+        fn rejects_blank_title() {
+            let mut req = valid_request();
+            req.title = "   ".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(NodeCreateValidationError::MissingOrEmptyField("title"))
+            );
+        }
+
+        #[test]
+        fn rejects_blank_kind() {
+            let mut req = valid_request();
+            req.kind = "".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(NodeCreateValidationError::MissingOrEmptyField("kind"))
+            );
+        }
+
+        #[test]
+        fn rejects_blank_address() {
+            let mut req = valid_request();
+            req.address = "   ".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(NodeCreateValidationError::MissingOrEmptyField("address"))
+            );
+        }
+
+        #[test]
+        fn rejects_title_over_max_length() {
+            let mut req = valid_request();
+            req.title = "a".repeat(NODE_TITLE_MAX_LEN + 1);
+            assert_eq!(
+                req.validate(),
+                Err(NodeCreateValidationError::FieldTooLong {
+                    field: "title",
+                    max: NODE_TITLE_MAX_LEN
+                })
+            );
+        }
+
+        #[test]
+        fn accepts_title_at_max_length() {
+            let mut req = valid_request();
+            req.title = "a".repeat(NODE_TITLE_MAX_LEN);
+            assert!(req.validate().is_ok());
+        }
+
+        #[test]
+        fn rejects_address_over_max_length() {
+            let mut req = valid_request();
+            req.address = "a".repeat(NODE_ADDRESS_MAX_LEN + 1);
+            assert_eq!(
+                req.validate(),
+                Err(NodeCreateValidationError::FieldTooLong {
+                    field: "address",
+                    max: NODE_ADDRESS_MAX_LEN
+                })
+            );
+        }
+
+        #[test]
+        fn accepts_address_at_max_length() {
+            let mut req = valid_request();
+            req.address = "a".repeat(NODE_ADDRESS_MAX_LEN);
+            assert!(req.validate().is_ok());
+        }
+
+        #[test]
+        fn rejects_non_finite_and_out_of_bounds_coordinates() {
+            for (lat, lon) in [
+                (f64::NAN, 10.0),
+                (f64::INFINITY, 10.0),
+                (f64::NEG_INFINITY, 10.0),
+                (91.0, 10.0),
+                (-91.0, 10.0),
+            ] {
+                let mut req = valid_request();
+                req.location = CreateLocation { lat, lon };
+                assert_eq!(
+                    req.validate(),
+                    Err(NodeCreateValidationError::InvalidCoordinate {
+                        field: "location.lat"
+                    })
+                );
+            }
+
+            for (lat, lon) in [
+                (10.0, f64::NAN),
+                (10.0, f64::INFINITY),
+                (10.0, f64::NEG_INFINITY),
+                (10.0, 181.0),
+                (10.0, -181.0),
+            ] {
+                let mut req = valid_request();
+                req.location = CreateLocation { lat, lon };
+                assert_eq!(
+                    req.validate(),
+                    Err(NodeCreateValidationError::InvalidCoordinate {
+                        field: "location.lon"
+                    })
+                );
+            }
+        }
+
+        #[test]
+        fn accepts_world_bound_edges() {
+            for (lat, lon) in [(90.0, 180.0), (-90.0, -180.0), (0.0, 0.0)] {
+                let mut req = valid_request();
+                req.location = CreateLocation { lat, lon };
+                assert!(req.validate().is_ok());
+            }
+        }
+
+        #[test]
+        fn rejects_blank_summary_when_present() {
+            let mut req = valid_request();
+            req.summary = Some("   ".to_string());
+            assert_eq!(
+                req.validate(),
+                Err(NodeCreateValidationError::MissingOrEmptyField("summary"))
+            );
+        }
+
+        #[test]
+        fn rejects_summary_over_max_length() {
+            let mut req = valid_request();
+            req.summary = Some("a".repeat(NODE_SUMMARY_MAX_LEN + 1));
+            assert_eq!(
+                req.validate(),
+                Err(NodeCreateValidationError::FieldTooLong {
+                    field: "summary",
+                    max: NODE_SUMMARY_MAX_LEN
+                })
+            );
+        }
+
+        #[test]
+        fn rejects_info_over_max_length() {
+            let mut req = valid_request();
+            req.info = Some("a".repeat(NODE_INFO_MAX_LEN + 1));
+            assert_eq!(
+                req.validate(),
+                Err(NodeCreateValidationError::FieldTooLong {
+                    field: "info",
+                    max: NODE_INFO_MAX_LEN
+                })
+            );
+        }
+
+        #[test]
+        fn rejects_blank_tag() {
+            let mut req = valid_request();
+            req.tags = Some(vec!["ok".to_string(), "   ".to_string()]);
+            assert_eq!(
+                req.validate(),
+                Err(NodeCreateValidationError::MissingOrEmptyField("tags[]"))
+            );
+        }
+
+        #[test]
+        fn rejects_tag_over_max_length() {
+            let mut req = valid_request();
+            req.tags = Some(vec!["a".repeat(NODE_TAG_MAX_LEN + 1)]);
+            assert_eq!(
+                req.validate(),
+                Err(NodeCreateValidationError::FieldTooLong {
+                    field: "tags[]",
+                    max: NODE_TAG_MAX_LEN
+                })
+            );
+        }
+
+        #[test]
+        fn rejects_too_many_tags() {
+            let mut req = valid_request();
+            req.tags = Some(
+                (0..NODE_TAGS_MAX_COUNT + 1)
+                    .map(|i| i.to_string())
+                    .collect(),
+            );
+            assert_eq!(
+                req.validate(),
+                Err(NodeCreateValidationError::TooManyTags {
+                    max: NODE_TAGS_MAX_COUNT
+                })
+            );
+        }
+
+        #[test]
+        fn accepts_max_tag_count() {
+            let mut req = valid_request();
+            req.tags = Some((0..NODE_TAGS_MAX_COUNT).map(|i| i.to_string()).collect());
+            assert!(req.validate().is_ok());
+        }
+
+        #[test]
+        fn rejects_unknown_fields() {
+            let json = r#"{"title":"A Node","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0},"wat":true}"#;
+            assert!(serde_json::from_str::<CreateNodeRequest>(json).is_err());
+        }
+
+        #[test]
+        fn rejects_id_field_because_server_owns_it() {
+            let json = r#"{"id":"00000000-0000-0000-0000-000000000001","title":"A Node","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0}}"#;
+            assert!(serde_json::from_str::<CreateNodeRequest>(json).is_err());
+        }
+
+        #[test]
+        fn rejects_created_at_because_server_owns_timestamps() {
+            let json = r#"{"title":"A Node","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z"}"#;
+            assert!(serde_json::from_str::<CreateNodeRequest>(json).is_err());
+        }
+
+        #[test]
+        fn rejects_unknown_location_fields() {
+            let json = r#"{"title":"A Node","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0,"alt":5.0}}"#;
+            assert!(serde_json::from_str::<CreateNodeRequest>(json).is_err());
+        }
+    }
 }
 
 pub async fn patch_node(

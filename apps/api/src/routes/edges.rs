@@ -3,14 +3,16 @@ use super::query::{
     cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
     MAX_PAGE_SIZE,
 };
+use crate::auth::role::Role;
 use crate::config::DomainEdgeWriteSource;
 use crate::domain_db::{insert_domain_edge, EdgeWriteError};
+use crate::middleware::auth::AuthContext;
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::edges_path;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    Json,
+    Extension, Json,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -426,6 +428,7 @@ fn edge_create_error_message(err: &edge_create::EdgeCreateValidationError) -> St
 /// PostgreSQL mode never appends JSONL and never falls back to JSONL.
 pub async fn create_edge(
     State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
     Json(payload): Json<Value>,
 ) -> Result<(StatusCode, Json<Edge>), (StatusCode, String)> {
     reject_edge_create_unless_writable(&state)?;
@@ -450,6 +453,27 @@ pub async fn create_edge(
             ),
         )
     })?;
+
+    // Account-originating Fäden represent an action by a concrete Garnrolle.
+    // A Weber may therefore only name the authenticated account as source;
+    // otherwise a crafted request could make another Garnrolle appear to have
+    // woven the Faden. Admins retain the explicit operator path for repairs and
+    // controlled imports. `require_write` already guarantees authentication,
+    // but the missing-account branch stays fail-closed for defense in depth.
+    if validated.source_type == "account" && auth.role != Role::Admin {
+        let own_account_id = auth.account_id.as_deref().ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                "authenticated account context missing".to_string(),
+            )
+        })?;
+        if validated.source_id != own_account_id {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "account source must match the authenticated Garnrolle".to_string(),
+            ));
+        }
+    }
 
     // Server-owned values: generate `id` when the client omitted it and stamp
     // `created_at` (clients can never supply it — see CreateEdgeRequest).

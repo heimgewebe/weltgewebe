@@ -17,6 +17,9 @@ use weltgewebe_api::{
     telemetry::{BuildInfo, Metrics},
 };
 
+mod helpers;
+use helpers::set_gewebe_in_dir;
+
 fn test_state_open_reg() -> Result<ApiState> {
     let metrics = Metrics::try_new(BuildInfo {
         version: "test",
@@ -50,6 +53,7 @@ fn test_state_open_reg() -> Result<ApiState> {
         auth_allow_emails: None,        // Essential for Option C
         auth_allow_email_domains: None, // Essential for Option C
         auth_auto_provision: true,      // Essential for Option C
+        auth_auto_provision_role: weltgewebe_api::config::AutoProvisionRole::Gast,
 
         // Mandatory Rate Limits for Option C
         auth_rl_ip_per_min: Some(100),
@@ -111,6 +115,9 @@ fn app(state: ApiState) -> Router {
 #[tokio::test]
 #[serial]
 async fn test_open_registration_flow_auto_provisions_unknown_email() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let _env = set_gewebe_in_dir(tmp.path());
+
     let state = test_state_open_reg()?;
     let app = app(state.clone());
 

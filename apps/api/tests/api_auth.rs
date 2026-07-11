@@ -85,6 +85,7 @@ fn test_state() -> Result<ApiState> {
         auth_allow_emails: None,
         auth_allow_email_domains: None,
         auth_auto_provision: false,
+        auth_auto_provision_role: weltgewebe_api::config::AutoProvisionRole::Gast,
         auth_rl_ip_per_min: None,
         auth_rl_ip_per_hour: None,
         auth_rl_email_per_min: None,
@@ -1540,6 +1541,12 @@ async fn request_login_provisioning_disabled_for_unknown() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn request_login_provisioning_enabled_success() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let _env = weltgewebe_api::test_helpers::EnvGuard::set(
+        "GEWEBE_IN_DIR",
+        tmp.path().to_str().expect("tempdir path is valid utf-8"),
+    );
+
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
@@ -1619,6 +1626,12 @@ async fn request_login_provisioning_enabled_denied() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn request_login_provisioning_enabled_domain_allowlist() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let _env = weltgewebe_api::test_helpers::EnvGuard::set(
+        "GEWEBE_IN_DIR",
+        tmp.path().to_str().expect("tempdir path is valid utf-8"),
+    );
+
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
@@ -1722,6 +1735,12 @@ async fn request_login_provisioning_empty_domain_rejected() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn request_login_provisioning_email_normalization_works() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let _env = weltgewebe_api::test_helpers::EnvGuard::set(
+        "GEWEBE_IN_DIR",
+        tmp.path().to_str().expect("tempdir path is valid utf-8"),
+    );
+
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());

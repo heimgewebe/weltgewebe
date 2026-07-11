@@ -1,0 +1,257 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2012
+set -euo pipefail
+
+# Regression test: when the deploy target's frontend mode requires the
+# frontend (REQUIRE_FRONTEND=1) and the build artifact is missing/stale, a
+# missing `node`/`pnpm` toolchain must hard-abort the deploy instead of only
+# warning. When the frontend is NOT required (REQUIRE_FRONTEND=0), the same
+# missing toolchain must only warn and let the deploy continue.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
+REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+SCRIPT_SOURCE="$REPO_ROOT/scripts/weltgewebe-up"
+
+WORKDIR_ROOT="$(mktemp -d)"
+EDGE_CA_FIXTURE="$WORKDIR_ROOT/edge-ca.crt"
+printf 'test-ca\n' > "$EDGE_CA_FIXTURE"
+cleanup() {
+  rm -rf "$WORKDIR_ROOT"
+}
+trap cleanup EXIT
+
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
+
+assert_contains() {
+  local haystack="$1"
+  local needle="$2"
+  if ! grep -Fq "$needle" <<< "$haystack"; then
+    fail "expected output to contain: $needle"
+  fi
+}
+
+assert_not_contains() {
+  local haystack="$1"
+  local needle="$2"
+  if grep -Fq "$needle" <<< "$haystack"; then
+    fail "expected output to NOT contain: $needle"
+  fi
+}
+
+# A minimal repo: no remote needed since every run below uses --no-pull, but
+# weltgewebe-up still resolves HEAD via git even in that mode.
+new_repo() {
+  local name="$1"
+  local repo="$WORKDIR_ROOT/$name/repo"
+
+  mkdir -p "$repo"
+  (
+    cd "$repo"
+    git init -q
+    git config user.name "Weltgewebe Test"
+    git config user.email "tests@weltgewebe.local"
+
+    mkdir -p infra/compose scripts apps/web
+    cp "$SCRIPT_SOURCE" scripts/weltgewebe-up
+    chmod +x scripts/weltgewebe-up
+
+    cat > .env << 'EOF'
+WEB_UPSTREAM_URL=https://example.com
+WEB_UPSTREAM_HOST=example.com
+EOF
+
+    cat > infra/compose/compose.prod.yml << 'EOF'
+services:
+  api:
+    image: busybox
+EOF
+
+    cat > infra/compose/compose.prod.override.yml << 'EOF'
+services:
+  api:
+    image: busybox
+EOF
+
+    git add .
+    git commit -q -m "test: initial checkout"
+  )
+
+  echo "$repo"
+}
+
+# Mocks: docker/curl/getent always behave successfully. `with_pnpm` controls
+# whether node/pnpm are present on PATH, so each scenario controls the exact
+# "missing toolchain" condition under test.
+setup_mocks() {
+  local with_pnpm="$1"
+  local mock_root
+  mock_root="$(mktemp -d "$WORKDIR_ROOT/mocks-XXXXXX")"
+  local mock_bin="$mock_root/mock-bin"
+  mkdir -p "$mock_bin"
+
+  cat > "$mock_bin/docker" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+ARGS="$*"
+if [[ "$1" == "ps" ]]; then
+  exit 0
+fi
+if [[ "$1" == "inspect" ]]; then
+  echo "{}"
+  exit 0
+fi
+if [[ "$1" == "compose" ]]; then
+  if [[ "$ARGS" == *" config --services"* ]]; then
+    echo "api"
+    exit 0
+  fi
+  if [[ "$ARGS" == *" config --format json"* ]]; then
+    echo '{"services":{"api":{"ports":[]}}}'
+    exit 0
+  fi
+  if [[ "$ARGS" == *" config"* ]]; then
+    echo "services: {}"
+    exit 0
+  fi
+  if [[ "$ARGS" == *" ps -q api"* ]]; then
+    echo "api_container_id"
+    exit 0
+  fi
+  if [[ "$ARGS" == *" ps --format"* ]]; then
+    echo "weltgewebe-api-1 running healthy"
+    exit 0
+  fi
+  if [[ "$ARGS" == *" port api"* ]]; then
+    echo "0.0.0.0:18080"
+    exit 0
+  fi
+  if [[ "$ARGS" == *" exec -T api wget -qO- http://localhost:8080/health/ready"* ]]; then
+    echo '{"status":"ok"}'
+    exit 0
+  fi
+  if [[ "$ARGS" == *" up -d"* ]]; then
+    exit 0
+  fi
+  exit 0
+fi
+exit 0
+EOF
+
+  cat > "$mock_bin/curl" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+ARGS="$*"
+if [[ "$ARGS" == *"-w"* ]]; then
+  echo "200"
+  exit 0
+fi
+if [[ "$ARGS" == *"-I"* || "$ARGS" == *"-SI"* ]]; then
+  printf 'HTTP/2 200\r\ncache-control: no-store\r\nx-weltgewebe-build: test-build\r\n\r\n'
+  exit 0
+fi
+if [[ "$ARGS" == *"/_app/version.json"* ]]; then
+  echo '{"version":"test-build","build_id":"test-build"}'
+  exit 0
+fi
+echo '{"status":"ok"}'
+exit 0
+EOF
+
+  cat > "$mock_bin/getent" << 'EOF'
+#!/usr/bin/env bash
+echo "127.0.0.1 localhost"
+exit 0
+EOF
+
+  chmod +x "$mock_bin/docker" "$mock_bin/curl" "$mock_bin/getent"
+
+  if [[ "$with_pnpm" == "1" ]]; then
+    cat > "$mock_bin/node" << 'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    cat > "$mock_bin/pnpm" << 'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$mock_bin/node" "$mock_bin/pnpm"
+  fi
+
+  echo "$mock_bin"
+}
+
+# Runs weltgewebe-up with a minimal PATH: only the mock bin dir plus the
+# handful of real system binaries the script needs for basic shell/git
+# plumbing (bash builtins aside). This guarantees node/pnpm are only found
+# when setup_mocks explicitly provided them.
+run_up() {
+  local repo="$1"
+  local require_frontend="$2"
+  local with_pnpm="$3"
+  shift 3
+
+  local mock_bin
+  mock_bin="$(setup_mocks "$with_pnpm")"
+
+  # A minimal real-tool PATH: git, coreutils, bash all typically live under
+  # /usr/bin:/bin. This keeps the mock bin dir authoritative for
+  # docker/curl/getent/node/pnpm while everything else still resolves.
+  (
+    cd "$repo"
+    PATH="$mock_bin:/usr/bin:/bin" \
+      REPO_DIR="$repo" \
+      ENV_FILE="$repo/.env" \
+      EDGE_CA="$EDGE_CA_FIXTURE" \
+      DEPLOY_TARGET=heimserver \
+      REQUIRE_FRONTEND="$require_frontend" \
+      WELTGEWEBE_STATE_DIR="$repo/.ops" \
+      bash scripts/weltgewebe-up --no-pull "$@"
+  )
+}
+
+# 1) REQUIRE_FRONTEND=1, build artifact missing, node/pnpm missing:
+#    must hard-abort before attempting anything else.
+repo_required_missing_tool="$(new_repo required-missing-tool)"
+set +e
+out_required_missing_tool="$(run_up "$repo_required_missing_tool" 1 0 2>&1)"
+rc_required_missing_tool=$?
+set -e
+[[ "$rc_required_missing_tool" -ne 0 ]] || fail "REQUIRE_FRONTEND=1 with missing node/pnpm must abort"
+assert_contains "$out_required_missing_tool" "ERROR: Frontend build required for DEPLOY_FRONTEND_MODE"
+assert_not_contains "$out_required_missing_tool" "up -d"
+
+echo "PASS: REQUIRE_FRONTEND=1 + missing node/pnpm hard-aborts the deploy"
+
+# 2) REQUIRE_FRONTEND=1, build artifact missing, node+pnpm present: the
+#    frontend-build gate itself must not abort (it reaches "Building..."
+#    without a missing-tool error). The mocked deploy may still fail later at
+#    unrelated steps (e.g. the DNS-alias contract check) that this test does
+#    not mock in full — that is out of scope here; only the frontend-build
+#    gate is under test.
+repo_required_with_tool="$(new_repo required-with-tool)"
+set +e
+out_required_with_tool="$(run_up "$repo_required_with_tool" 1 1 2>&1)"
+set -e
+assert_not_contains "$out_required_with_tool" "ERROR: Frontend build required for DEPLOY_FRONTEND_MODE"
+assert_contains "$out_required_with_tool" ">> Frontend Build"
+assert_contains "$out_required_with_tool" "Building..."
+
+echo "PASS: REQUIRE_FRONTEND=1 + present node/pnpm builds without aborting"
+
+# 3) REQUIRE_FRONTEND=0, build artifact missing, node/pnpm missing:
+#    must only warn at the frontend-build gate, not abort there — other modes
+#    must not break unnecessarily. As in scenario 2, later unrelated deploy
+#    steps are not fully mocked and are out of scope for this assertion.
+repo_not_required_missing_tool="$(new_repo not-required-missing-tool)"
+set +e
+out_not_required_missing_tool="$(run_up "$repo_not_required_missing_tool" 0 0 2>&1)"
+set -e
+assert_contains "$out_not_required_missing_tool" "WARNING: Frontend artifact missing but frontend delivery is not required for this deploy run."
+assert_not_contains "$out_not_required_missing_tool" "ERROR: Frontend build required for DEPLOY_FRONTEND_MODE"
+
+echo "PASS: REQUIRE_FRONTEND=0 + missing node/pnpm only warns and continues"
+
+echo "test_weltgewebe_up_frontend_required: OK"

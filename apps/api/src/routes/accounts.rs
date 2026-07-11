@@ -377,7 +377,11 @@ fn json_f64(v: &Value) -> Option<f64> {
 
 /// Append a single account record as a JSONL line. Durability via fsync.
 /// Callers MUST hold `state.accounts_persist` to serialize writes.
-async fn append_account_line(record: &Value) -> std::io::Result<()> {
+///
+/// `pub(crate)` so the auth auto-provisioning path (`routes::auth`) can persist
+/// through the exact same durable append used by the operator-facing
+/// `POST /accounts` create path — no second, divergent JSONL writer.
+pub(crate) async fn append_account_line(record: &Value) -> std::io::Result<()> {
     let path = accounts_path();
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;

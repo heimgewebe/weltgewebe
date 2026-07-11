@@ -71,6 +71,15 @@ export type KompositionDraft = {
 
 export const kompositionDraft = writable<KompositionDraft>(null);
 
+/**
+ * Set by KompositionPanel right after a node create (+ its account->node
+ * edge) succeeds and the route data has been reloaded. `+page.svelte` watches
+ * this to focus/fly-to the new node once it appears in the reloaded scene,
+ * then clears it back to null. Kept separate from `selection` because the
+ * panel has already left to navigation by the time the map can focus it.
+ */
+export const lastCreatedNodeId = writable<string | null>(null);
+
 export function enterFokus(newSelection: NonNullable<Selection>) {
   kompositionDraft.set(null);
   selection.set(newSelection);

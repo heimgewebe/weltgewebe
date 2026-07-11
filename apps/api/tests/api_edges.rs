@@ -52,6 +52,7 @@ async fn test_state() -> Result<ApiState> {
         auth_allow_emails: None,
         auth_allow_email_domains: None,
         auth_auto_provision: false,
+        auth_auto_provision_role: weltgewebe_api::config::AutoProvisionRole::Gast,
         auth_rl_ip_per_min: None,
         auth_rl_ip_per_hour: None,
         auth_rl_email_per_min: None,
@@ -443,8 +444,23 @@ async fn app_with_session_and_edge_write(
     domain_read_source: DomainReadSource,
     domain_edge_write_source: weltgewebe_api::config::DomainEdgeWriteSource,
 ) -> Result<(Router, String, ApiState)> {
+    app_with_session_for_account(
+        "writer1",
+        role,
+        domain_read_source,
+        domain_edge_write_source,
+    )
+    .await
+}
+
+async fn app_with_session_for_account(
+    account_id: &str,
+    role: Role,
+    domain_read_source: DomainReadSource,
+    domain_edge_write_source: weltgewebe_api::config::DomainEdgeWriteSource,
+) -> Result<(Router, String, ApiState)> {
     let mut accounts = AccountStore::new();
-    accounts.insert(writer_account("writer1", role));
+    accounts.insert(writer_account(account_id, role));
 
     let mut state = test_state().await?;
     state.config.domain_read_source = domain_read_source;
@@ -453,7 +469,7 @@ async fn app_with_session_and_edge_write(
 
     let session = state
         .sessions
-        .create("writer1".to_string(), None)
+        .create(account_id.to_string(), None)
         .await
         .expect("session create");
     let cookie = format!("gewebe_session={}", session.id);
@@ -504,6 +520,79 @@ async fn read_json_body(res: axum::response::Response) -> Result<serde_json::Val
 async fn read_text_body(res: axum::response::Response) -> Result<String> {
     let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+#[tokio::test]
+#[serial]
+async fn post_edges_binds_account_source_to_authenticated_weber() -> Result<()> {
+    const OWN_ACCOUNT_ID: &str = "00000000-0000-0000-0000-00000000000d";
+    const FOREIGN_ACCOUNT_ID: &str = "00000000-0000-0000-0000-00000000000e";
+
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    fs::create_dir_all(&in_dir)?;
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = app_with_session_for_account(
+        OWN_ACCOUNT_ID,
+        Role::Weber,
+        DomainReadSource::Jsonl,
+        weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
+    )
+    .await?;
+
+    let foreign_body = format!(
+        r#"{{"source_id":"{FOREIGN_ACCOUNT_ID}","source_type":"account","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference"}}"#
+    );
+    let res = app
+        .clone()
+        .oneshot(post_edges(Some(&cookie), &foreign_body))
+        .await?;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    assert!(
+        !edges_path.exists(),
+        "foreign account source must be rejected before persistence"
+    );
+    assert!(state.edges.read().await.is_empty());
+
+    let own_body = format!(
+        r#"{{"source_id":"{OWN_ACCOUNT_ID}","source_type":"account","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference"}}"#
+    );
+    let res = app.oneshot(post_edges(Some(&cookie), &own_body)).await?;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let persisted = jsonl_lines(&edges_path);
+    assert_eq!(persisted.len(), 1);
+    assert_eq!(persisted[0]["source_id"], OWN_ACCOUNT_ID);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn post_edges_admin_retains_foreign_account_operator_path() -> Result<()> {
+    const ADMIN_ID: &str = "00000000-0000-0000-0000-00000000000f";
+    const FOREIGN_ACCOUNT_ID: &str = "00000000-0000-0000-0000-000000000010";
+
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, _) = app_with_session_for_account(
+        ADMIN_ID,
+        Role::Admin,
+        DomainReadSource::Jsonl,
+        weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
+    )
+    .await?;
+    let body = format!(
+        r#"{{"source_id":"{FOREIGN_ACCOUNT_ID}","source_type":"account","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference"}}"#
+    );
+    let res = app.oneshot(post_edges(Some(&cookie), &body)).await?;
+    assert_eq!(res.status(), StatusCode::CREATED);
+
+    Ok(())
 }
 
 #[tokio::test]

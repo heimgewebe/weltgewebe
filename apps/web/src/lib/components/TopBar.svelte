@@ -2,6 +2,9 @@
   import { createEventDispatcher } from 'svelte';
   import Garnrolle from './Garnrolle.svelte';
   import { contextPanelOpen } from '$lib/stores/uiView';
+  import type { Account } from '$lib/map/types';
+
+  export let accounts: Account[] = [];
 
   const dispatch = createEventDispatcher<{ zoomToOwnGarnrolle: void }>();
 </script>
@@ -37,6 +40,6 @@
 <div class="topbar" class:panel-open={$contextPanelOpen} role="toolbar" aria-label="Navigation">
   <div class="spacer"></div>
   <div class="actions">
-    <Garnrolle on:requestZoomToOwnGarnrolle={() => dispatch('zoomToOwnGarnrolle')} />
+    <Garnrolle {accounts} on:requestZoomToOwnGarnrolle={() => dispatch('zoomToOwnGarnrolle')} />
   </div>
 </div>

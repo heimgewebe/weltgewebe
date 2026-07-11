@@ -1009,7 +1009,26 @@ if [[ -d "apps/web" && ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") ]
     echo
     echo ">> Frontend Build ($WEB_MSG)"
 
-    if command -v pnpm > /dev/null; then
+    MISSING_WEB_TOOL=""
+    if ! command -v node > /dev/null; then
+      MISSING_WEB_TOOL="node"
+    elif ! command -v pnpm > /dev/null; then
+      MISSING_WEB_TOOL="pnpm"
+    fi
+
+    if [[ -n "$MISSING_WEB_TOOL" ]]; then
+      if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
+        echo "ERROR: Frontend build required for DEPLOY_FRONTEND_MODE=$DEPLOY_FRONTEND_MODE but '$MISSING_WEB_TOOL' was not found." >&2
+        echo "       Install $MISSING_WEB_TOOL, or set DEPLOY_FRONTEND_MODE=off / REQUIRE_FRONTEND=0 to skip frontend delivery for this run." >&2
+        exit 1
+      fi
+      echo "WARNING: Frontend build required but '$MISSING_WEB_TOOL' not found."
+      echo "         UI may be stale or broken."
+      if [[ "$BUILD_WEB" == "force" ]]; then
+        echo "ERROR: --build-web requested but $MISSING_WEB_TOOL missing."
+        exit 1
+      fi
+    else
       # Check node_modules
       if [[ ! -d "apps/web/node_modules" ]]; then
         echo "   Installing dependencies..."
@@ -1018,13 +1037,6 @@ if [[ -d "apps/web" && ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") ]
       echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
       echo "   Building..."
       pnpm -C apps/web build
-    else
-      echo "WARNING: Frontend build required but 'pnpm' not found."
-      echo "         UI may be stale or broken."
-      if [[ "$BUILD_WEB" == "force" ]]; then
-        echo "ERROR: --build-web requested but pnpm missing."
-        exit 1
-      fi
     fi
   fi
 elif [[ "$REQUIRE_FRONTEND" == "0" && -d "apps/web" && ! -f "apps/web/build/index.html" ]]; then

@@ -251,6 +251,40 @@ impl PasskeyCredentialSource {
     }
 }
 
+/// Role assigned to accounts created by auth auto-provisioning
+/// (`AUTH_AUTO_PROVISION`). Deliberately narrow: only `gast` and `weber` are
+/// valid targets. `admin` (and any other value) is refused at config load —
+/// auto-provisioning must never be able to mint a privileged account. Default
+/// is `gast`; `weber` requires a concrete email or domain allowlist (see
+/// `AppConfig::validate`), so open registration can never provision `weber`.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AutoProvisionRole {
+    #[default]
+    Gast,
+    Weber,
+}
+
+impl AutoProvisionRole {
+    fn parse_env_value(value: &str) -> Result<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "gast" => Ok(Self::Gast),
+            "weber" => Ok(Self::Weber),
+            other => anyhow::bail!(
+                "invalid AUTH_AUTO_PROVISION_ROLE value '{other}'; expected one of: gast, weber \
+                 (admin is never allowed for auto-provisioning)"
+            ),
+        }
+    }
+
+    pub fn as_role_str(self) -> &'static str {
+        match self {
+            Self::Gast => "gast",
+            Self::Weber => "weber",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
     pub fade_days: u32,
@@ -262,14 +296,14 @@ pub struct AppConfig {
     #[serde(default)]
     pub domain_read_source: DomainReadSource,
 
-    /// Narrow account write source (JSONL default, PostgreSQL opt-in).
-    /// OPT-ARC-001 Phase E-A plus AUTH-PG-001: governs `POST /accounts` and
-    /// step-up `UpdateEmail` only.
+    /// Account-domain write source (JSONL default, PostgreSQL opt-in).
+    /// Governs `POST /accounts`, auth auto-provisioning and step-up
+    /// `UpdateEmail` persistence.
     #[serde(default)]
     pub domain_account_write_source: DomainAccountWriteSource,
 
-    /// Node-patch write source (JSONL default, PostgreSQL opt-in).
-    /// OPT-ARC-001 Phase E-B: governs `PATCH /nodes` only.
+    /// Node write source (JSONL default, PostgreSQL opt-in).
+    /// Governs `POST /nodes` and `PATCH /nodes/{id}`.
     #[serde(default)]
     pub domain_node_write_source: DomainNodeWriteSource,
 
@@ -302,6 +336,10 @@ pub struct AppConfig {
     pub auth_allow_email_domains: Option<Vec<String>>,
     #[serde(default)]
     pub auth_auto_provision: bool,
+    /// Role assigned to accounts created by auto-provisioning. Default `gast`;
+    /// `weber` requires a concrete allowlist (see `validate`).
+    #[serde(default)]
+    pub auth_auto_provision_role: AutoProvisionRole,
 
     // Rate Limiting Configuration
     #[serde(default)]
@@ -459,6 +497,11 @@ impl AppConfig {
         if let Ok(val) = env::var("AUTH_AUTO_PROVISION") {
             let val = val.trim();
             self.auth_auto_provision = val == "1" || val.eq_ignore_ascii_case("true");
+        }
+        if let Ok(val) = env::var("AUTH_AUTO_PROVISION_ROLE") {
+            if !val.trim().is_empty() {
+                self.auth_auto_provision_role = AutoProvisionRole::parse_env_value(&val)?;
+            }
         }
 
         // Rate Limit Overrides
@@ -684,6 +727,16 @@ impl AppConfig {
                 } else {
                     tracing::info!("Starting with Open Registration (No Allowlist) and Strict Rate Limits active.");
                 }
+
+                // Open registration must never auto-provision a privileged role:
+                // anyone reachable by rate limits alone would otherwise become weber.
+                if self.auth_auto_provision_role == AutoProvisionRole::Weber {
+                    anyhow::bail!(
+                        "AUTH_AUTO_PROVISION_ROLE=weber requires a concrete AUTH_ALLOW_EMAILS or \
+                         AUTH_ALLOW_EMAIL_DOMAINS allowlist. Open registration (no allowlist) must \
+                         never auto-provision weber accounts."
+                    );
+                }
             } else {
                 tracing::info!("Starting with Allowlist-restricted Registration.");
             }
@@ -776,8 +829,8 @@ impl AppConfig {
 #[cfg(test)]
 mod tests {
     use super::{
-        AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
-        DomainReadSource, PasskeyCredentialSource,
+        AppConfig, AutoProvisionRole, DomainAccountWriteSource, DomainEdgeWriteSource,
+        DomainNodeWriteSource, DomainReadSource, PasskeyCredentialSource,
     };
     use crate::test_helpers::{DirGuard, EnvGuard};
     use anyhow::Result;
@@ -1170,6 +1223,116 @@ delegation_expire_days: 28
         let cfg = AppConfig::load_from_path(file.path())?;
         assert!(cfg.auth_auto_provision);
         assert_eq!(cfg.auth_allow_email_domains.unwrap().len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_auto_provision_role_defaults_to_gast() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _role = EnvGuard::unset("AUTH_AUTO_PROVISION_ROLE");
+        let _auto = EnvGuard::unset("AUTH_AUTO_PROVISION");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert_eq!(cfg.auth_auto_provision_role, AutoProvisionRole::Gast);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_auto_provision_role_rejects_admin() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _role = EnvGuard::set("AUTH_AUTO_PROVISION_ROLE", "admin");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        let msg = res.unwrap_err().to_string();
+        assert!(msg.contains("invalid AUTH_AUTO_PROVISION_ROLE value"));
+        assert!(msg.contains("admin is never allowed"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_auto_provision_role_rejects_unknown_value() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _role = EnvGuard::set("AUTH_AUTO_PROVISION_ROLE", "superuser");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("invalid AUTH_AUTO_PROVISION_ROLE value"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_auto_provision_role_weber_rejected_in_open_registration() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _role = EnvGuard::set("AUTH_AUTO_PROVISION_ROLE", "weber");
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::unset("AUTH_ALLOW_EMAILS");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+        let _rl_ip_min = EnvGuard::set("AUTH_RL_IP_PER_MIN", "5");
+        let _rl_ip_hour = EnvGuard::set("AUTH_RL_IP_PER_HOUR", "30");
+        let _proxies = EnvGuard::set("AUTH_TRUSTED_PROXIES", "none");
+        let _rl_email_min = EnvGuard::set("AUTH_RL_EMAIL_PER_MIN", "2");
+        let _rl_email_hour = EnvGuard::set("AUTH_RL_EMAIL_PER_HOUR", "10");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("Open registration (no allowlist) must never auto-provision weber"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_auto_provision_role_weber_accepted_with_email_allowlist() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _role = EnvGuard::set("AUTH_AUTO_PROVISION_ROLE", "weber");
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::set("AUTH_ALLOW_EMAILS", "weber@example.com");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert_eq!(cfg.auth_auto_provision_role, AutoProvisionRole::Weber);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_auto_provision_role_weber_accepted_with_domain_allowlist() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _role = EnvGuard::set("AUTH_AUTO_PROVISION_ROLE", "weber");
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::unset("AUTH_ALLOW_EMAILS");
+        let _domains = EnvGuard::set("AUTH_ALLOW_EMAIL_DOMAINS", "example.com");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert_eq!(cfg.auth_auto_provision_role, AutoProvisionRole::Weber);
 
         Ok(())
     }

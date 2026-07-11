@@ -3,7 +3,9 @@ import { mockApiResponses } from "./fixtures/mockApi";
 
 test.describe("ActionBar Layout", () => {
   test.beforeEach(async ({ page }) => {
-    await mockApiResponses(page);
+    await mockApiResponses(page, {
+      auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
+    });
     await page.goto("/map");
     await page.waitForSelector(".action-bar", { timeout: 10000 });
   });

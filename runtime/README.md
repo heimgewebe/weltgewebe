@@ -82,6 +82,17 @@ die API einen In-Memory-Store. Passkey-Credentials besitzen einen opt-in
 PostgreSQL-Pfad. Die effektive Quelle muss aus Konfiguration und Startlogs
 redigiert beobachtet werden.
 
+| Schalter | Standard | Bedeutung |
+|---|---|---|
+| `AUTH_AUTO_PROVISION` | `false` | unbekannte, zugelassene E-Mail-Adressen beim Magic-Link-Login als Garnrolle anlegen |
+| `AUTH_AUTO_PROVISION_ROLE` | `gast` | Rolle neuer Garnrollen: `gast` oder `weber` |
+
+`AUTH_AUTO_PROVISION_ROLE=weber` ist nur mit einer konkreten
+`AUTH_ALLOW_EMAILS`- oder `AUTH_ALLOW_EMAIL_DOMAINS`-Liste zulässig. Offene
+Registrierung darf ausschließlich `gast` provisionieren; `admin` ist für diese
+Variable grundsätzlich ungültig. Persistiert wird vor Cache-Aktualisierung und
+vor Versand des Magic Links.
+
 ## Migrationen
 
 `WELTGEWEBE_API_STARTUP_MIGRATIONS` besitzt drei unterschiedliche Bedeutungen:

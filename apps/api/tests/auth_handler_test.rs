@@ -50,6 +50,7 @@ mod tests {
             auth_allow_emails: None,
             auth_allow_email_domains: None,
             auth_auto_provision: false,
+            auth_auto_provision_role: weltgewebe_api::config::AutoProvisionRole::Gast,
             auth_rl_ip_per_min: None,
             auth_rl_ip_per_hour: None,
             auth_rl_email_per_min: None,
