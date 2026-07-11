@@ -1,6 +1,4 @@
 ---
-version: "3.9"
-
 services:
   web:
     profiles: ["dev"]
@@ -39,7 +37,7 @@ services:
     command: ["cargo", "run", "--manifest-path", "apps/api/Cargo.toml", "--bin", "weltgewebe-api"]
     environment:
       API_BIND: ${API_BIND:-0.0.0.0:8080}
-      DATABASE_URL: postgres://welt:gewebe@pgbouncer:6432/weltgewebe
+      DATABASE_URL: postgres://welt:gewebe@pgbouncer:5432/weltgewebe
       RUST_LOG: ${RUST_LOG:-info}
       AUTH_DEV_LOGIN: ${AUTH_DEV_LOGIN:-0}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-1}
@@ -91,12 +89,14 @@ services:
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 200
       DEFAULT_POOL_SIZE: 10
-      AUTH_TYPE: trust
+      AUTH_TYPE: scram-sha-256
     depends_on:
       db:
         condition: service_healthy
+    # Containers use PgBouncer's actual listener 5432. The host keeps the
+    # conventional development port 6432 to distinguish it from PostgreSQL.
     ports:
-      - "6432:6432"
+      - "6432:5432"
 
   caddy:
     profiles: ["dev"]

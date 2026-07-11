@@ -1,13 +1,5 @@
 {
   auto_https off
-  servers :8081 {
-    protocol {
-      experimental_http3
-    }
-    logs {
-      level INFO
-    }
-  }
 }
 
 :8081 {
