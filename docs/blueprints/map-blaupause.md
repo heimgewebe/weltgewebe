@@ -9,7 +9,7 @@ summary: >
   für Weltgewebe-Overlays.
 relations:
   - type: relates_to
-    target: docs/blueprints/map-roadmap.md
+    target: docs/specs/map-experience.md
   - type: relates_to
     target: docs/roadmap.md
 ---
@@ -17,7 +17,7 @@ relations:
 # Basemap-Architektur-Blaupause
 
 > Status: Aktives Architektur-Leitdokument für die Karten-/Basemap-Schicht.
-> Der exekutive Inkrementpfad dazu befindet sich in der [Basemap-Umsetzungsroadmap](map-roadmap.md). Blueprint und Roadmap sind als Paket zu verstehen.
+> Dauerhafte UX-Regeln stehen in [`docs/specs/map-experience.md`](../specs/map-experience.md); offene Umsetzungsschritte werden in der Master-Roadmap geführt.
 
 ## Kontext
 

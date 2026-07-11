@@ -2,7 +2,7 @@
 id: inhalt
 title: Inhalt
 doc_type: reference
-status: active
+status: deprecated
 summary: Konzeptuelle Beschreibung des Weltgewebe – Funktionsweise, UI, Organisation.
 relations:
   - type: relates_to
@@ -10,6 +10,8 @@ relations:
   - type: relates_to
     target: docs/zusammenstellung.md
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/vision.md`.
+
 # Inhalt (MANDATORISCH)
 
 ## Was bedeutet Weltweberei?

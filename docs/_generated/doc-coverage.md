@@ -1,16 +1,16 @@
 ---
 id: docs.generated.doc-coverage
-title: Doc Coverage
+title: Registered Implementation Documentation Coverage
 doc_type: generated
 status: active
-summary: Automatisch generierter Report über die Dokumentationsabdeckung.
+summary: Abdeckung der in audit/impl-registry.yaml registrierten kritischen Implementierungen.
 ---
 
-## Weltgewebe Doc Coverage
+## Registered Implementation Documentation Coverage
 
 Generated automatically. Do not edit.
 
-> **Note:** Coverage is calculated based on `audit/impl-registry.yaml` and the verified existence of documents referenced in `documented_by`.
+> **Scope:** This is not repository-wide documentation coverage. It measures only entries registered in `audit/impl-registry.yaml` and the existence of their `documented_by` targets.
 
 | Component Type | Coverage | Total | Documented |
 | --- | --- | --- | --- |

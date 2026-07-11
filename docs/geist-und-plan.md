@@ -2,7 +2,7 @@
 id: geist-und-plan
 title: Geist und Plan
 doc_type: reference
-status: active
+status: deprecated
 summary: Philosophie-Extraktion und Planaufschlüsselung für das Weltgewebe-Projekt.
 relations:
   - type: relates_to
@@ -10,6 +10,8 @@ relations:
   - type: relates_to
     target: docs/inhalt.md
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/vision.md`.
+
 Hier ist eine (meinerseits strukturierte) Analyse und Extraktion des „Geistes und Plans“ der
 Weltweberei basierend auf der Website weltweberei.org.
 Ich ziehe aus den öffentlich verfügbaren Texten, sortiere nach Themen und ziehe Schlussfolgerungen —

@@ -6,9 +6,7 @@ status: active
 summary: API-Zielbild für Verortung und öffentliche Sichtbarkeit einer Garnrolle.
 relations:
   - type: relates_to
-    target: docs/specs/privacy-ui.md
-  - type: relates_to
-    target: docs/konzepte/garnrolle-und-verortung.md
+    target: docs/specs/garnrolle-knoten-faden.md
   - type: relates_to
     target: docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 ---

@@ -5,10 +5,7 @@ doc_type: roadmap
 status: active
 created: 2026-05-08
 lang: de
-summary: >
-  Koordinations-Roadmap, die alle thematischen Sub-Roadmaps (Auth, UI, Map,
-  Agent-Operability, Versionierung) ordnet und Meilensteine abhakbar macht.
-  Sie ersetzt keine Sub-Roadmap und keinen Statusbericht, sondern verknüpft sie.
+summary: Koordiniert aktive Umsetzungsstränge gegen kanonische Verträge, Statusberichte und Tasks.
 relations:
   - type: depends_on
     target: docs/process/fahrplan.md
@@ -17,13 +14,13 @@ relations:
   - type: depends_on
     target: docs/blueprints/auth-persistence-runtime-proof.md
   - type: depends_on
-    target: docs/blueprints/ui-roadmap.md
+    target: docs/specs/ui-interaction.md
   - type: depends_on
-    target: docs/blueprints/map-roadmap.md
+    target: docs/blueprints/map-blaupause.md
   - type: depends_on
-    target: docs/blueprints/kartenklarheit-roadmap.md
+    target: docs/specs/map-experience.md
   - type: depends_on
-    target: docs/blueprints/kartenklarheit-phase6.md
+    target: docs/specs/ui-state-machine.md
   - type: depends_on
     target: docs/blueprints/agent-operability-blaupause.md
   - type: depends_on
@@ -35,15 +32,15 @@ relations:
   - type: depends_on
     target: docs/reports/auth-status-matrix.md
   - type: depends_on
-    target: docs/reports/map-status-matrix.md
+    target: docs/reports/map-status.md
 ---
 
 # Weltgewebe — Master-Umsetzungsroadmap
 
 > **Zweck.** Diese Roadmap ist der **Koordinations-Index** über alle
-> thematischen Sub-Roadmaps. Sie ordnet, verknüpft und macht Meilensteine
-> abhakbar — sie ist **keine** neue Architekturentscheidung und **kein**
-> neuer Plan.
+> aktiven Umsetzungsstränge. Sie ordnet Verträge, Belege und offene Arbeit,
+> ist aber **keine** neue Architekturentscheidung und **kein** eigener
+> Produktvertrag.
 >
 > **Abgrenzung.** `docs/process/fahrplan.md` ordnet die infrastrukturellen
 > Gates A–D. Diese Datei ordnet die thematischen Stränge.
@@ -85,10 +82,8 @@ Status- oder Reihenfolgequelle für die Master-Roadmap dient.
 |---|---|---|
 | Auth | [auth-roadmap.md](blueprints/auth-roadmap.md) | [auth-status-matrix.md](reports/auth-status-matrix.md) |
 | Auth-Persistenz (Runtime-Proof) | [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md) | [auth-persistence-readiness.md](reports/auth-persistence-readiness.md), [auth-persistence-next-step.md](reports/auth-persistence-next-step.md) |
-| UI | [ui-roadmap.md](blueprints/ui-roadmap.md) | (UI-State-Machine-Tests) |
-| Basemap | [map-roadmap.md](blueprints/map-roadmap.md) | [map-status-matrix.md](reports/map-status-matrix.md) |
-| Kartenklarheit | [kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md) | [map-architekturkritik.md](reports/map-architekturkritik.md) |
-| Kartenklarheit Phase 6 (Wahrheitsbeweis) | [kartenklarheit-phase6.md](blueprints/kartenklarheit-phase6.md) | [map-status-matrix.md](reports/map-status-matrix.md) |
+| UI | [UI-Interaktionsvertrag](specs/ui-interaction.md), [Zustandsmaschine](specs/ui-state-machine.md) | [Kartenstatus](reports/map-status.md) |
+| Karte und Basemap | [Kartenerlebnis](specs/map-experience.md), [Basemap-Blaupause](blueprints/map-blaupause.md) | [Kartenstatus](reports/map-status.md) |
 | Agent-Operability | [agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md) | [agent-readiness-audit.md](reports/agent-readiness-audit.md) |
 | Agent Safety Control Layer | [blueprint-agent-safety-control-layer.md](blueprints/blueprint-agent-safety-control-layer.md) | Blueprint gemergt; Umsetzung erfolgt in der Task-Control-Schicht: [board.md](tasks/board.md), [index.json](tasks/index.json) (`AGENT-SAFE-001` bis `AGENT-SAFE-008`, `TASK-CTL-004`). `AGENT-SAFE-006` und `AGENT-SAFE-007` sind auf `main`; `AGENT-SAFE-008` setzt den minimalen Generated-Artifact-Kontrollvertrag um. Keine Aussage, dass alle Blueprint-PRs bereits umgesetzt seien. |
 | Dokumentationsstruktur & Task-Steuerung | [doc-structure-task-control-roadmap.md](blueprints/doc-structure-task-control-roadmap.md), [Blueprint](blueprints/doc-structure-task-control.md) | Beleg in der Task-Control-Schicht: [tasks/README.md](tasks/README.md), [board.md](tasks/board.md), [index.json](tasks/index.json), Drift-Guard `.github/workflows/task-index.yml`. Phase 2 vorhanden; Phase 4 Check-Modus + CI-Guard vorhanden (CI-Lauf-Nachweis offen, `TASK-CTL-003`); Schreibgenerator/Bot-PRs und Implementierungs-Mapping offen. Kein gesonderter OPT-Eintrag in `reports/optimierungsstatus.md` — Task-Control-Phasen laufen über `docs/tasks/`. |
@@ -119,26 +114,29 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
 
 ## Strang UI
 
-- [x] Phase 1 — Kompositionseditor vollenden · [ui-roadmap Phase 1](blueprints/ui-roadmap.md)
-- [x] Phase 2 — Zustandsdurchsetzung härten · [ui-roadmap Phase 2](blueprints/ui-roadmap.md)
-- [x] Phase 3 — Fokus-Panels (Node/Account/Edge) · [ui-roadmap Phase 3](blueprints/ui-roadmap.md)
-- [x] Phase 4 — Suche, Filter, A11y · [ui-roadmap Phase 4](blueprints/ui-roadmap.md)
-- [~] Phase 5 — Organisches Erstweben: eigene Garnrolle, Garnrolle auf Karte setzen, ersten Knoten weben und Gestaltungsfaden erzeugen · [ui-roadmap Phase 5](blueprints/ui-roadmap.md), [ADR-0009](adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md)
-- [x] Phase 6 — Doku-/Strukturpflege · [ui-roadmap Phase 6](blueprints/ui-roadmap.md)
-- [~] Auth-UI-Integration: Step-up-Consume + Passkey-Eintragspunkt · Step-up-Consume ist als eigener Pfad unter `/auth/step-up/consume` belegt; Passkey-Eintragspunkt ist als deaktivierter Stub in der `/settings`-Account-Sektion sichtbar. Aktivierung folgt aus Auth-Phase 4 · siehe [auth-roadmap §9](blueprints/auth-roadmap.md)
+Dauerhafte Regeln stehen in [UI-Interaktionsvertrag](specs/ui-interaction.md), [UI-Zustandsmaschine](specs/ui-state-machine.md) und [Garnrolle, Knoten und Faden](specs/garnrolle-knoten-faden.md).
 
-## Strang Karte (Basemap + Kartenklarheit)
+- [x] Drei globale Zustände `navigation`, `fokus`, `komposition` mit geprüften Invarianten.
+- [x] Ein Fokuspanel als Detail- und Handlungsraum; mobil Bottom Sheet, auf breiten Ansichten Seitenpanel.
+- [x] Suche und Filter als gegenseitig ausschließende Kartenlinsen.
+- [x] URL-Einstieg für `focus`, `lens` und `compose`; Panel-Tabs bleiben lokal.
+- [x] Eigene Garnrolle beschreiben und über `not_on_map`, `exact` oder `radius` verorten.
+- [x] Knoten weben und zugehörigen Faden im Browserpfad erzeugen.
+- [~] Den vollständigen, dauerhaften Produktionsfluss Anmeldung → Garnrolle → Knoten → Faden nach Neuladen belegen.
+- [~] Auth-UI-Integration: Step-up und Passkey-Flächen entlang der Auth-Roadmap vervollständigen.
 
-Reihenfolge: Daten-/Szenenklarheit → Souveräne Basemap-Pipeline → Runtime-Proof.
+## Strang Karte (Basemap und Kartenwahrheit)
 
-- [x] Kartenklarheit Phasen 0–3 — Ist sichern, Datenquelle, Szenengrenzen · [kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md)
-- [~] Kartenklarheit Phase 4 — Regressionen teilweise; Keyboard-/Query-Parameter-Navigation offen · [kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md)
-- [~] Kartenklarheit Phase 5 — Souveräne Basemap-Infrastruktur · [kartenklarheit-roadmap §155](blueprints/kartenklarheit-roadmap.md)
-- [~] Basemap-Roadmap Phasen 1–3 — Pipeline, Style, Runtime-Integration · [map-roadmap.md](blueprints/map-roadmap.md)
-- [~] Hamburg-PMTiles-Artefakt lokal auf heimserver erzeugt; PMTiles-Magic/SHA256/Guard-Scope pmtiles-content PROVEN; Range-Delivery PROVEN; tiefe Strukturvalidierung + visuelle Abnahme offen · [docs/proofs/basemap-hamburg-artifact-proof.md](proofs/basemap-hamburg-artifact-proof.md)
-- [ ] Basemap-Roadmap Phase 4 — Betrieb & Versionierung
-- [ ] Basemap-Roadmap Phase 5 — Ausbau (Faden-Dichte)
-- [ ] Kartenklarheit Phase 6 — Wahrheitsbeweis (Runtime, E2E, visuelle Abnahme, CI) · [kartenklarheit-phase6.md](blueprints/kartenklarheit-phase6.md)
+Dauerhafte UX-Regeln stehen in [Kartenerlebnis](specs/map-experience.md); die Basemap-Zielarchitektur in [map-blaupause.md](blueprints/map-blaupause.md). Der aktuelle, zeitgebundene Befund steht im [Kartenstatus](reports/map-status.md).
+
+- [x] Explizite Ladezustände und Ressourcendiagnostik statt stiller Leere.
+- [x] Szenenmodell zwischen API-Rohdaten und Rendering.
+- [x] Typisierte Kartenentitäten, Fokus, Suche, Filter und degradierte Zustände testseitig belegt.
+- [x] PMTiles-Protokoll, lokaler Style und Caddy-Range-Beweise in getrennten Beweisstufen vorhanden.
+- [~] Produktiven Basemap-Modus verbindlich entscheiden und gegen die reale Zielruntime prüfen.
+- [ ] Echte Vector-Tile-Payload-Lieferung im produktionsnahen Pfad belegen.
+- [ ] Visuelle Korrektheit auf repräsentativen Geräten und Zoomstufen prüfen.
+- [ ] Kartenleistung mit real wachsendem Gewebe messen; erst danach zusätzliche Verdichtungsmechanismen erwägen.
 
 ## Strang Agent-Operability
 

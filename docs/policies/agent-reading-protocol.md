@@ -3,6 +3,15 @@ id: docs.policies.agent-reading-protocol
 title: Agent Reading Protocol
 doc_type: policy
 status: canonical
+verifies_with: []
+depends_on: []
+review_after: 2026-10-11
+last_reviewed: 2026-07-11
+owner: governance
+organ: governance
+role: norm
+lifecycle_state: active
+canonicality: normative
 relations:
   - type: relates_to
     target: repo.meta.yaml
@@ -35,7 +44,7 @@ Agenten MÜSSEN in dieser Reihenfolge lesen:
 1. `repo.meta.yaml`
 2. `AGENTS.md`
 3. `agent-policy.yaml`
-4. Policies / Contracts / explizit kanonische Dokumente
+4. die in `manifest/repo-index.yaml` registrierten kanonischen Dokumente sowie einschlägige Contracts und ADRs
 5. `docs/index.md` (nur Navigation)
 6. `docs/_generated/*` (nur Diagnose)
 

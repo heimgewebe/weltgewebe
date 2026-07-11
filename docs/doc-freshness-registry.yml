@@ -169,3 +169,83 @@ entries:
         target: .github/workflows/docs-guard.yml
       - kind: file
         target: docs/reference/generated-artifact-control.md
+
+  - id: claim-ui-state-001
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-UI-STATE-001]
+    claim: >-
+      Die Weltgewebe-UI besitzt genau die drei globalen Zustände navigation,
+      fokus und komposition und erzwingt deren Invarianten.
+    status: partial
+    owner: product-ui
+    last_verified: "2026-07-11"
+    evidence:
+      - kind: file
+        target: docs/specs/ui-state-machine.md
+      - kind: file
+        target: apps/web/src/lib/stores/uiView.ts
+      - kind: file
+        target: apps/web/src/lib/stores/uiInvariants.ts
+      - kind: test
+        target: apps/web/src/lib/stores/uiInvariants.test.ts
+
+  - id: claim-ui-surface-001
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-UI-SURFACE-001]
+    claim: >-
+      Karte, Fokuspanel und Aktionsleiste bilden die Hauptflächen; Suche und
+      Filter sind gegenseitig ausschließende lokale Kartenlinsen.
+    status: partial
+    owner: product-ui
+    last_verified: "2026-07-11"
+    evidence:
+      - kind: file
+        target: docs/specs/ui-interaction.md
+      - kind: file
+        target: apps/web/src/lib/components/ContextPanel.svelte
+      - kind: file
+        target: apps/web/src/lib/stores/overlayManager.ts
+      - kind: test
+        target: apps/web/tests/ui-filter.spec.ts
+      - kind: test
+        target: apps/web/tests/map-interaction.spec.ts
+
+  - id: claim-domain-garnrolle-001
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-DOMAIN-GARNROLLE-001]
+    claim: >-
+      Jeder Account wird als Garnrolle geführt; ihre öffentliche
+      Kartenprojektion verwendet not_on_map, exact oder radius.
+    status: partial
+    owner: product-domain
+    last_verified: "2026-07-11"
+    evidence:
+      - kind: file
+        target: docs/specs/garnrolle-knoten-faden.md
+      - kind: file
+        target: contracts/domain/account.schema.json
+      - kind: file
+        target: apps/api/src/routes/accounts.rs
+      - kind: test
+        target: apps/web/tests/garnrolle-self-service.spec.ts
+
+  - id: claim-map-truth-001
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-MAP-TRUTH-001]
+    claim: >-
+      Die Kartenroute unterscheidet erfolgreiche, teilweise und fehlgeschlagene
+      Datenladung und baut daraus ein explizites Szenenmodell.
+    status: partial
+    owner: product-map
+    last_verified: "2026-07-11"
+    evidence:
+      - kind: file
+        target: docs/specs/map-experience.md
+      - kind: file
+        target: apps/web/src/routes/map/+page.ts
+      - kind: file
+        target: apps/web/src/lib/map/scene.ts
+      - kind: test
+        target: apps/web/src/lib/map/scene.test.ts
+      - kind: test
+        target: apps/web/tests/map-load-fallback.spec.ts

@@ -22,7 +22,7 @@ relations:
 - **Governance-Logik messbar machen:** Domänenregeln (**7-Tage** Verblassen,
   **84-Tage** RoN-Anonymisierung, Delegationsabläufe) über konkrete Metriken,
   Dashboards und Alerts operationalisieren.
-  → vgl. `docs/zusammenstellung.md`
+  → vgl. `docs/vision.md` und `docs/specs/garnrolle-knoten-faden.md`
 - **WGX-Profil als Task-SSoT:** Ein zentrales Profil `.wgx/profile.yml` definiert Env-Prioritäten &
   Standard-Tasks (`up/lint/test/build/smoke`) und vermeidet Drift zwischen lokal & CI.
 - **Health/Readiness mit Policies koppeln:** Die bestehenden `/health/live` und `/health/ready` um

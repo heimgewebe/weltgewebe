@@ -2,7 +2,7 @@
 id: ui-blaupause
 title: Weltgewebe UI-Blaupause
 doc_type: blueprint
-status: canonical
+status: deprecated
 summary: Defines the core principles, layout, and interaction model for the Weltgewebe mobile-first UI.
 relations:
   - type: relates_to
@@ -12,6 +12,8 @@ relations:
   - type: relates_to
     target: docs/roadmap.md
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/specs/ui-interaction.md`.
+
 
 # Weltgewebe – UI-Blaupause
 

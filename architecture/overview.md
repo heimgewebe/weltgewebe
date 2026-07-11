@@ -5,6 +5,10 @@ summary: Aktuelle Komponenten, Datenflüsse, Wahrheitsorte und Ausbaugrenzen des
 role: norm
 organ: governance
 status: canonical
+canonicality: normative
+lifecycle_state: active
+owner: governance
+review_after: 2026-10-11
 last_reviewed: 2026-07-11
 depends_on: []
 relations:

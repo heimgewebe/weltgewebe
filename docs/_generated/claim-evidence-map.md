@@ -19,6 +19,10 @@ Generated automatically. Do not edit.
 | claim-agent-safe-006 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-006] | partial | docs-mechanik | 2026-06-26 | 7 items |
 | claim-agent-safe-007 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-007] | partial | docs-mechanik | 2026-06-27 | 10 items |
 | claim-agent-safe-008 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-008] | partial | docs-mechanik | 2026-06-27 | 7 items |
+| claim-domain-garnrolle-001 | docs/claims/registry.yml | claims[id=CLAIM-DOMAIN-GARNROLLE-001] | partial | product-domain | 2026-07-11 | 4 items |
+| claim-map-truth-001 | docs/claims/registry.yml | claims[id=CLAIM-MAP-TRUTH-001] | partial | product-map | 2026-07-11 | 5 items |
+| claim-ui-state-001 | docs/claims/registry.yml | claims[id=CLAIM-UI-STATE-001] | partial | product-ui | 2026-07-11 | 4 items |
+| claim-ui-surface-001 | docs/claims/registry.yml | claims[id=CLAIM-UI-SURFACE-001] | partial | product-ui | 2026-07-11 | 5 items |
 
 ## Details
 
@@ -179,6 +183,92 @@ Evidence:
 | `file` | `scripts/docmeta/generated-files-guard.sh` |
 | `file` | `.github/workflows/docs-guard.yml` |
 | `file` | `docs/reference/generated-artifact-control.md` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
+
+### CLAIM-DOMAIN-GARNROLLE-001
+
+- Entry: `claim-domain-garnrolle-001`
+- Locator: `claims[id=CLAIM-DOMAIN-GARNROLLE-001]`
+- Status: `partial`
+- Owner: `product-domain`
+- Last verified: `2026-07-11`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `docs/specs/garnrolle-knoten-faden.md` |
+| `file` | `contracts/domain/account.schema.json` |
+| `file` | `apps/api/src/routes/accounts.rs` |
+| `test` | `apps/web/tests/garnrolle-self-service.spec.ts` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
+
+### CLAIM-MAP-TRUTH-001
+
+- Entry: `claim-map-truth-001`
+- Locator: `claims[id=CLAIM-MAP-TRUTH-001]`
+- Status: `partial`
+- Owner: `product-map`
+- Last verified: `2026-07-11`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `docs/specs/map-experience.md` |
+| `file` | `apps/web/src/routes/map/+page.ts` |
+| `file` | `apps/web/src/lib/map/scene.ts` |
+| `test` | `apps/web/src/lib/map/scene.test.ts` |
+| `test` | `apps/web/tests/map-load-fallback.spec.ts` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
+
+### CLAIM-UI-STATE-001
+
+- Entry: `claim-ui-state-001`
+- Locator: `claims[id=CLAIM-UI-STATE-001]`
+- Status: `partial`
+- Owner: `product-ui`
+- Last verified: `2026-07-11`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `docs/specs/ui-state-machine.md` |
+| `file` | `apps/web/src/lib/stores/uiView.ts` |
+| `file` | `apps/web/src/lib/stores/uiInvariants.ts` |
+| `test` | `apps/web/src/lib/stores/uiInvariants.test.ts` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
+
+### CLAIM-UI-SURFACE-001
+
+- Entry: `claim-ui-surface-001`
+- Locator: `claims[id=CLAIM-UI-SURFACE-001]`
+- Status: `partial`
+- Owner: `product-ui`
+- Last verified: `2026-07-11`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `docs/specs/ui-interaction.md` |
+| `file` | `apps/web/src/lib/components/ContextPanel.svelte` |
+| `file` | `apps/web/src/lib/stores/overlayManager.ts` |
+| `test` | `apps/web/tests/ui-filter.spec.ts` |
+| `test` | `apps/web/tests/map-interaction.spec.ts` |
 
 Does not prove:
 

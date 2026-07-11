@@ -36,11 +36,10 @@
  *  - Map runtime state (center, zoom, bearing, pitch, selection, systemState,
  *    active filters, search query) is ephemeral and lives in stores / MapLibre.
  *    It is intentionally NOT mirrored into the URL.
- *  - The deep-link contract `l` / `r` / `t` (left drawer, right drawer, active
- *    tab) is a *separate*, URL-owned layer. It is documented in
- *    `docs/reports/map-status-matrix.md`. Its actual wiring remains Phase 4 and
- *    is deliberately kept out of this module so map runtime state and URL state
- *    never blur into each other.
+ *  - The semantic deep-link contract (`focus`, `tab`, `lens`, `compose`) is a
+ *    separate, URL-owned layer documented in `docs/specs/ui-interaction.md`.
+ *    It is deliberately kept out of this module so map runtime state and URL
+ *    state never blur into each other.
  */
 import type { MapSceneModel } from "$lib/map/scene";
 import type { Edge, MapEntityViewModel } from "$lib/map/types";

@@ -2,7 +2,7 @@
 id: docs.blueprints.kartenklarheit-phase6
 title: Kartenklarheit Phase 6: Der Wahrheitsbeweis
 summary: Der Abschlussplan für Phase 6 der Kartenklarheit, definiert als Wahrheits-Upgrade und Beweis-Framework.
-status: "in progress"
+status: deprecated
 doc_type: blueprint
 relations:
   - type: relates_to
@@ -14,6 +14,8 @@ relations:
   - type: relates_to
     target: docs/reports/map-status-matrix.md
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/specs/map-experience.md`.
+
 
 # Kartenklarheit Phase 6: Der Wahrheitsbeweis
 

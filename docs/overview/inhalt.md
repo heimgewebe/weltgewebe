@@ -2,7 +2,7 @@
 id: overview.inhalt
 title: Inhalt (Übersicht)
 doc_type: reference
-status: active
+status: deprecated
 summary: Überblicksdarstellung des Weltgewebe-Inhalts und der Projektstruktur.
 relations:
   - type: relates_to
@@ -10,6 +10,8 @@ relations:
   - type: relates_to
     target: docs/vision.md
 ---
+> **Historische Übersicht:** Der aktuelle Einstieg steht in `docs/vision.md`.
+
 # Einführung: Ethik- & UX-First-Startpunkt
 
 Die Weltgewebe-Initiative stellt Menschen und ihre Lebensrealität in den Mittelpunkt. Die technische

@@ -6,7 +6,18 @@ zones:
       - overview.md
       - security.md
       - docmeta.schema.md
-      - blueprint.docmeta-engine.md
+  policy:
+    path: docs/policies/
+    canonical_docs:
+      - agent-reading-protocol.md
+      - architecture-critique.md
+  product:
+    path: docs/specs/
+    canonical_docs:
+      - ui-state-machine.md
+      - garnrolle-knoten-faden.md
+      - ui-interaction.md
+      - map-experience.md
   reality:
     path: runtime/
     canonical_docs:

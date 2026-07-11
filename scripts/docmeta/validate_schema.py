@@ -3,7 +3,54 @@ import sys
 import json
 import re
 
+import yaml
+
 from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy
+
+FRONTMATTER_RE = re.compile(r"^---\r?\n(.*?)(?:\r?\n---\r?\n|\r?\n---$)", re.DOTALL)
+CANONICAL_CANONICALITIES = {"normative", "reality", "operational"}
+
+
+def validate_canonical_semantics(frontmatter):
+    errors = []
+    if frontmatter.get("status") != "canonical":
+        errors.append("status must be canonical for a manifest-registered document")
+    if frontmatter.get("canonicality") not in CANONICAL_CANONICALITIES:
+        errors.append(
+            "canonicality must be one of: normative, operational, reality for a manifest-registered document"
+        )
+    if frontmatter.get("lifecycle_state") != "active":
+        errors.append("lifecycle_state must be active for a manifest-registered document")
+    return errors
+
+
+
+
+def parse_frontmatter_with_pyyaml(file_path):
+    with open(file_path, "r", encoding="utf-8") as handle:
+        content = handle.read()
+    match = FRONTMATTER_RE.match(content)
+    if not match:
+        return None
+    parsed = yaml.load(match.group(1), Loader=yaml.BaseLoader)
+    return parsed if isinstance(parsed, dict) else None
+
+
+def parser_parity_errors(file_path, mini_parsed):
+    yaml_parsed = parse_frontmatter_with_pyyaml(file_path)
+    if yaml_parsed is None:
+        return ["PyYAML BaseLoader found no object frontmatter"]
+    if mini_parsed == yaml_parsed:
+        return []
+    errors = []
+    keys = sorted(set(mini_parsed) | set(yaml_parsed))
+    for key in keys:
+        if mini_parsed.get(key) != yaml_parsed.get(key):
+            errors.append(
+                f"parser mismatch at {key}: mini={mini_parsed.get(key)!r}, yaml={yaml_parsed.get(key)!r}"
+            )
+    return errors or ["frontmatter parser mismatch"]
+
 
 def validate_data_against_schema(data, schema, path="root"):
     errors = []
@@ -84,6 +131,12 @@ def main():
             if frontmatter is None:
                 errors.append(f"No valid frontmatter found in '{rel_file_path}'.")
                 continue
+
+            for parity_error in parser_parity_errors(file_path, frontmatter):
+                errors.append(f"Parser parity violation in '{rel_file_path}': {parity_error}")
+
+            for semantic_error in validate_canonical_semantics(frontmatter):
+                errors.append(f"Canonical semantics violation in '{rel_file_path}': {semantic_error}")
 
             # ensure arrays are properly formatted lists if possible.
             # `relations` and `verifies_with` could be string parsed as strings by the basic yaml parser

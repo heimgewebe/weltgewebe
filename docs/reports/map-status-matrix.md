@@ -2,7 +2,8 @@
 id: map-status-matrix
 title: Map Status Matrix
 doc_type: status-matrix
-status: active
+status: deprecated
+lifecycle_state: archived
 summary: Repo-wahre Statusmatrix fuer die aktuelle Kartenimplementierung.
 relations:
   - type: relates_to
@@ -12,6 +13,8 @@ relations:
   - type: relates_to
     target: docs/blueprints/ui-interaction-doctrine.md
 ---
+> **Archivierter Statusbeleg:** Die kurze aktuelle Diagnose steht in `docs/reports/map-status.md`; dauerhafte UX-Regeln stehen in `docs/specs/map-experience.md`.
+
 
 Dieses Dokument beschreibt den belegbaren Ist-Zustand der aktuellen
 Kartenimplementierung. Massgeblich sind nur Dateien, die im aktuellen

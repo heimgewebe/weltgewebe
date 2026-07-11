@@ -3,147 +3,89 @@ id: docs.index
 title: Weltgewebe - Doku-Index
 doc_type: index
 status: active
-summary: >
-  Kanonischer Doku-Index für das Projekt Weltgewebe.
+canonicality: navigation
+lifecycle_state: active
+summary: Navigationsindex zu den aktuellen Verträgen, Betriebsdokumenten, Arbeitsplänen und historischen Belegen.
 ---
 # Weltgewebe – Doku-Index
 
-## Canonical Knowledge
+> Dieser Index ist Navigation, keine eigenständige Wahrheit. Bei Konflikten gilt die Rangfolge aus `repo.meta.yaml`. Kanonische Dokumente sind ausschließlich die in `manifest/repo-index.yaml` registrierten Dateien.
 
-> Dieser Index ist kanonische Navigation, keine eigenständige Wahrheitsschicht.
-> Bei Konflikten führen Spezifikationen, ADRs, Policies, Statusmatrizen und
-> Code gemäß `repo.meta.yaml`.
+## In fünf Minuten
 
-<!--
-NOTE:
-Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
--->
+1. [Vision](vision.md) – wozu das Weltgewebe dient.
+2. [Architektur](../architecture/overview.md) – was heute im System existiert.
+3. [Garnrolle, Knoten und Faden](specs/garnrolle-knoten-faden.md) – Produktdomäne.
+4. [UI-Interaktionsvertrag](specs/ui-interaction.md) und [Zustandsmaschine](specs/ui-state-machine.md) – Bedienlogik.
+5. [Kartenerlebnis](specs/map-experience.md) – Kartenwahrheit und Darstellung.
+6. [Runtime](../runtime/README.md) und [Runbooks](../runbooks/README.md) – Betrieb.
 
-### Master-Umsetzungsroadmap
+## Kanonische Produktverträge
 
-– **Master-Roadmap:** [roadmap.md](roadmap.md) (Koordinations-Index über alle thematischen Sub-Roadmaps)
+- [Garnrolle, Knoten und Faden](specs/garnrolle-knoten-faden.md)
+- [UI-Interaktionsvertrag](specs/ui-interaction.md)
+- [UI-Zustandsmaschine](specs/ui-state-machine.md)
+- [Kartenerlebnis](specs/map-experience.md)
 
-### System
+## Weitere aktive Spezifikationen
 
-– **Start:** [architekturstruktur.md](architekturstruktur.md)
-– **Vertrauen & Garnrolle:** [konzepte/garnrolle-und-verortung.md](konzepte/garnrolle-und-verortung.md)
-– **UI State Machine:** [blueprints/ui-state-machine.md](blueprints/ui-state-machine.md)
-– **Techstack:** [techstack.md](techstack.md)
-– **Datenmodell:** [datenmodell.md](datenmodell.md)
-– **Vision:** [vision.md](vision.md)
+Diese Dokumente präzisieren Teilbereiche, sind aber nicht als eigene kanonische Zone im Manifest registriert.
 
-### Agenten & Arbeitssteuerung
+- [Auth UI](specs/auth-ui.md)
+- [Auth API](specs/auth-api.md)
+- [Garnrollen-Sichtbarkeit API](specs/privacy-api.md)
+- [Domänenvokabular](domain/vocabulary.md)
 
-– **Agent Operability:** [blueprints/agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md) (Blueprint)
-– **Agent Safety Control Layer:** [blueprints/blueprint-agent-safety-control-layer.md](blueprints/blueprint-agent-safety-control-layer.md) (Blueprint)
-– **Dokumentationsstruktur & Task-Steuerung:** [blueprints/doc-structure-task-control.md](blueprints/doc-structure-task-control.md) (Blueprint)
-– **Task-Control Roadmap:** [blueprints/doc-structure-task-control-roadmap.md](blueprints/doc-structure-task-control-roadmap.md) (Roadmap)
-– **Task-Control Beispiele:** [blueprints/doc-structure-task-control-examples.md](blueprints/doc-structure-task-control-examples.md) (Referenz)
+## Architektur und Daten
 
-### Domäne
+- [Architecture Overview](../architecture/overview.md)
+- [Security Architecture](../architecture/security.md)
+- [Techstack](techstack.md)
+- [Datenmodell](datenmodell.md)
+- [Repositorystruktur](architekturstruktur.md)
+- [ADRs](adr/)
 
-– **Vokabular:** [domain/vocabulary.md](domain/vocabulary.md)
-– **Module:** [domain/modules.md](domain/modules.md)
-– **Datenvertrag:** [specs/contract.md](specs/contract.md)
-– **Listen-Paginierung (API):** [specs/list-pagination-api.md](specs/list-pagination-api.md)
+## Planung und Umsetzung
 
-### UI-System
+Roadmaps und Blaupausen beschreiben Arbeit oder mögliche Zielbilder. Sie sind nicht automatisch aktuelle Produktwahrheit.
 
-– **UI Interaction Doctrine:** [blueprints/ui-interaction-doctrine.md](blueprints/ui-interaction-doctrine.md) (Kanonischer Interaktionscontract für Fokuspanel, Kartenlinsen, Komposition und spätere URL-Adressierung)
-– **UI-Blaupause:** [blueprints/ui-blaupause.md](blueprints/ui-blaupause.md) (Modell)
-– **UI State Machine:** [blueprints/ui-state-machine.md](blueprints/ui-state-machine.md) (Regelwerk)
-– **UI Roadmap:** [blueprints/ui-roadmap.md](blueprints/ui-roadmap.md) (Planung)
+- [Master-Roadmap](roadmap.md)
+- [Auth-Roadmap](blueprints/auth-roadmap.md)
+- [Domain-PostgreSQL-Cutover](blueprints/domain-data-postgres-cutover.md)
+- [Basemap-Architektur](blueprints/map-blaupause.md)
+- [Versionierung](blueprints/versionierungs-blaupause.md)
+- [Task-Control](tasks/README.md)
+- [Task Board](tasks/board.md)
 
-### Karten-Architektur
+## Betrieb
 
-– **Kartenklarheit:** [blueprints/kartenklarheit.md](blueprints/kartenklarheit.md) — aktive Arbeitsblaupause zur Optimierung der Kartenklarheit.
-– **Roadmap Kartenklarheit:** [blueprints/kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md) (Umsetzung)
-– **Basemap-Blaupause:** [blueprints/map-blaupause.md](blueprints/map-blaupause.md) — aktives Architektur-Leitdokument der Karten-/Basemap-Schicht.
-– **Basemap-Roadmap:** [blueprints/map-roadmap.md](blueprints/map-roadmap.md) (Umsetzung)
-– **Kartenklarheit Phase 6:** [blueprints/kartenklarheit-phase6.md](blueprints/kartenklarheit-phase6.md) (Der Wahrheitsbeweis)
+- [Runtime Reality](../runtime/README.md)
+- [Runbooks](../runbooks/README.md)
+- [VPS-Deployment](deploy/vps.md)
+- [Deploymentübersicht](deploy/README.md)
+- [Incident Response](runbooks/incident-response.md)
+- [DB Recovery](runbooks/db-recovery.md)
 
-### Auth-Architektur (Kanonisch)
+## Belege und Diagnosen
 
-– **ADR-0006:** [adr/ADR-0006__auth-magic-link-session-passkey.md](adr/ADR-0006__auth-magic-link-session-passkey.md) (Führendes Zielbild)
-– **ADR-0007:** [adr/ADR-0007__auth-persistence-production-db-path.md](adr/ADR-0007__auth-persistence-production-db-path.md) (Auth-Persistenz Produktionspfad: direkter PostgreSQL-Zugriff)
-– **Auth Roadmap:** [blueprints/auth-roadmap.md](blueprints/auth-roadmap.md) (Umsetzungspfad)
-– **Auth-Persistenz Runtime-Proof:** [blueprints/auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md) (Blaupause)
-– **Auth Status Matrix:** [reports/auth-status-matrix.md](reports/auth-status-matrix.md) (Aktueller Repo-Beweis)
-– **Agent Readiness Audit:** [reports/agent-readiness-audit.md](reports/agent-readiness-audit.md) (Diagnose)
-– **Auth Specs:** [specs/auth-api.md](specs/auth-api.md), [specs/auth-ui.md](specs/auth-ui.md), [specs/auth-state-machine.md](specs/auth-state-machine.md)
+Berichte und Proofs belegen einen bestimmten Stand und dürfen aktuelle Verträge oder Livebeobachtung nicht überstimmen.
 
-### Deployment & Betrieb
+- [Kartenstatus](reports/map-status.md)
+- [Auth Status Matrix](reports/auth-status-matrix.md)
+- [Optimierungsstatus](reports/optimierungsstatus.md)
+- [Proofs](proofs/)
+- [Reports](reports/)
 
-– **Deployment Contract:** [deployment.md](deployment.md)
-– **Deployment Governance:** [deployment_governance.md](deployment_governance.md)
-– **Deploy-Übersicht:** [deploy/README.md](deploy/README.md)
-– **Security:** [deploy/security.md](deploy/security.md)
-– **Heimserver:** [deploy/heimserver.deployment.md](deploy/heimserver.deployment.md), [deploy/heimserver.integration.md](deploy/heimserver.integration.md)
-– **Runbook:** [runbook.md](runbook.md)
-– **Observability:** [runbook.observability.md](runbook.observability.md)
-– **Incident Response:** [runbooks/incident-response.md](runbooks/incident-response.md)
-– **DB Recovery:** [runbooks/db-recovery.md](runbooks/db-recovery.md)
+## Dokumentationssystem
 
-### Task-Control
+- [Docmeta-Vertrag](../architecture/docmeta.schema.md)
+- [Agent Reading Protocol](policies/agent-reading-protocol.md)
+- [Report Lifecycle](process/report-lifecycle.md)
+- [Generierte Systemkarte](_generated/system-map.md)
+- [Dokumentenindex](_generated/doc-index.md)
+- [Ablösungskarte](_generated/supersession-map.md)
+- [Staleness-Report](_generated/staleness-report.md)
 
-– **Task-Control Einstieg:** [tasks/README.md](tasks/README.md) (Rollenklärung und Phase-Stand)
-– **Task Board:** [tasks/board.md](tasks/board.md) (Menschliche Arbeitskarte – aktive Prioritäten, Blocker, nächste PR-Kandidaten)
-– **Task Index:** [tasks/index.json](tasks/index.json) (Maschinenlesbarer Task-Index – Phase-2-Seed, manuell gepflegt)
-– **Optimierungsstatus JSON:** [reports/optimierungsstatus.json](reports/optimierungsstatus.json) (Maschinenlesbarer Zwilling der OPT-Statusmatrix)
+## Historische Produkttexte
 
-### Berichte & Audits
-
-– **Repo-Komplettaudit 2026-07-02:** [reports/repo-audit-2026-07-02.md](reports/repo-audit-2026-07-02.md) (Systemweites Hygiene-/Konsistenzaudit; Restarbeiten unter REPO-AUDIT-001)
-– **Optimierungsbericht:** [reports/optimierungsbericht.md](reports/optimierungsbericht.md) (Schichtenanalyse mit Handlungsempfehlungen)
-– **Optimierungsstatus:** [reports/optimierungsstatus.md](reports/optimierungsstatus.md) (Operative Statusmatrix mit Nachweisen – Wahrheitsquelle für OPT-* Einträge)
-– **Auth-Persistenzbereitschaft:** [reports/auth-persistence-readiness.md](reports/auth-persistence-readiness.md) (Diagnose zu OPT-API-002)
-– **Auth-Persistenz Zielarchitektur-Abgleich:** [reports/auth-persistence-runtime-target-reconciliation.md](reports/auth-persistence-runtime-target-reconciliation.md) (ADR-0007: Produktion direkter Postgres; PgBouncer Dev-/Spezialpfad)
-– **Passkey Register-Verify Vorbereitung:** [reports/passkey-register-verify-prep.md](reports/passkey-register-verify-prep.md) (Diagnose und Folge-PR-Entscheidung)
-– **Domain Runtime Data Source Reconciliation:** [reports/domain-runtime-data-source-reconciliation.md](reports/domain-runtime-data-source-reconciliation.md) (Diagnose zu DB-PROOF-001: Runtime-/JSONL-Domain-Datenquelle derzeit nicht auditfähig)
-– **Cost Report:** [reports/cost-report.md](reports/cost-report.md)
-
-### Prozess
-
-– **Prozess & Fahrplan:** [process/README.md](process/README.md), [process/fahrplan.md](process/fahrplan.md)
-– **ADRs:** [adr/](adr/)
-– **Runbooks:** [runbooks/README.md](runbooks/README.md)
-– **Glossar:** [reference/glossar.md](reference/glossar.md)
-– **Sprache:** [process/sprache.md](process/sprache.md)
-– **Bash-Richtlinien:** [process/bash-tooling-guidelines.md](process/bash-tooling-guidelines.md)
-– **Inhalt/Story:** [inhalt.md](inhalt.md), [zusammenstellung.md](zusammenstellung.md)
-– **Vision & Geist:** [geist-und-plan.md](geist-und-plan.md)
-– **X-Repo Learnings:** [x-repo/peers-learnings.md](x-repo/peers-learnings.md), [x-repo/semantAH.md](x-repo/semantAH.md)
-– **Beitragen:** [../CONTRIBUTING.md](../CONTRIBUTING.md)
-
-### Policies & Orientierung
-
-– **Orientierung:** [policies/orientierung.md](policies/orientierung.md)
-– **Agent Reading Protocol:** [policies/agent-reading-protocol.md](policies/agent-reading-protocol.md) (Bindend)
-– **Architekturkritik-Skill:** [policies/architecture-critique.md](policies/architecture-critique.md) (Kognitives Protokoll)
-– **Agenten-Manifest:** [weltgewebe-agenten-manifest.md](weltgewebe-agenten-manifest.md)
-– **Privacy:** [specs/privacy-api.md](specs/privacy-api.md), [specs/privacy-ui.md](specs/privacy-ui.md)
-
-### Entwicklung
-
-– **Quickstart Gate C:** [quickstart-gate-c.md](quickstart-gate-c.md)
-– **Codespaces:** [dev/codespaces.md](dev/codespaces.md)
-– **Codespaces Recovery:** [runbooks/codespaces-recovery.md](runbooks/codespaces-recovery.md)
-
-## Generated Knowledge Maps
-
-- [Doc Index](_generated/doc-index.md)
-- [System Map](_generated/system-map.md)
-- [Backlinks](_generated/backlinks.md)
-- [Implementation Index](_generated/impl-index.md)
-- [Orphans](_generated/orphans.md)
-- [Supersession Map](_generated/supersession-map.md)
-
-## Repo Observatorium
-
-- [Architecture Drift](_generated/architecture-drift.md)
-- [Doc Coverage](_generated/doc-coverage.md)
-- [Knowledge Gaps](_generated/knowledge-gaps.md)
-- [Implicit Dependencies](_generated/implicit-dependencies.md)
-- [Change Resonance](_generated/change-resonance.md)
-- [Staleness Report](_generated/staleness-report.md)
-- [Agent Readiness](_generated/agent-readiness.md)
+`docs/inhalt.md`, `docs/zusammenstellung.md`, `docs/geist-und-plan.md` sowie abgelöste UI- und Kartenblaupausen bleiben als Entstehungs- und Entscheidungsbelege erhalten. Sie sind mit `status: deprecated` markiert und nicht Teil der aktiven Lesereihenfolge.

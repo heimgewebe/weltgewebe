@@ -5,6 +5,10 @@ summary: Kanonischer Vertrag für Laufzeitprofile, beobachtbare Wahrheit und Kon
 role: reality
 organ: runtime
 status: canonical
+canonicality: reality
+lifecycle_state: active
+owner: runtime
+review_after: 2026-10-11
 last_reviewed: 2026-07-11
 depends_on: []
 relations:

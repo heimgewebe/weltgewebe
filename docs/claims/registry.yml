@@ -275,6 +275,132 @@
       ],
       "owner": "unknown",
       "updated": "2026-06-29"
+    },
+    {
+      "id": "CLAIM-UI-STATE-001",
+      "status": "established",
+      "subject": "UI-STATE",
+      "statement": "Die Weltgewebe-UI besitzt genau die drei globalen Zustände navigation, fokus und komposition und erzwingt deren Invarianten.",
+      "evidence": [
+        {
+          "path": "docs/specs/ui-state-machine.md",
+          "kind": "documentation"
+        },
+        {
+          "path": "apps/web/src/lib/stores/uiView.ts",
+          "kind": "implementation"
+        },
+        {
+          "path": "apps/web/src/lib/stores/uiInvariants.ts",
+          "kind": "implementation"
+        },
+        {
+          "path": "apps/web/src/lib/stores/uiInvariants.test.ts",
+          "kind": "test"
+        }
+      ],
+      "validation": [
+        "cd apps/web && pnpm exec vitest run src/lib/stores/uiInvariants.test.ts"
+      ],
+      "owner": "product-ui",
+      "updated": "2026-07-11"
+    },
+    {
+      "id": "CLAIM-UI-SURFACE-001",
+      "status": "established",
+      "subject": "UI-SURFACE",
+      "statement": "Karte, Fokuspanel und Aktionsleiste bilden die Hauptflächen; Suche und Filter sind gegenseitig ausschließende lokale Kartenlinsen.",
+      "evidence": [
+        {
+          "path": "docs/specs/ui-interaction.md",
+          "kind": "documentation"
+        },
+        {
+          "path": "apps/web/src/lib/components/ContextPanel.svelte",
+          "kind": "implementation"
+        },
+        {
+          "path": "apps/web/src/lib/stores/overlayManager.ts",
+          "kind": "implementation"
+        },
+        {
+          "path": "apps/web/tests/ui-filter.spec.ts",
+          "kind": "test"
+        },
+        {
+          "path": "apps/web/tests/map-interaction.spec.ts",
+          "kind": "test"
+        }
+      ],
+      "validation": [
+        "cd apps/web && pnpm exec playwright test tests/ui-filter.spec.ts tests/map-interaction.spec.ts"
+      ],
+      "owner": "product-ui",
+      "updated": "2026-07-11"
+    },
+    {
+      "id": "CLAIM-DOMAIN-GARNROLLE-001",
+      "status": "established",
+      "subject": "DOMAIN-GARNROLLE",
+      "statement": "Jeder Account wird als Garnrolle geführt; ihre öffentliche Kartenprojektion verwendet not_on_map, exact oder radius.",
+      "evidence": [
+        {
+          "path": "docs/specs/garnrolle-knoten-faden.md",
+          "kind": "documentation"
+        },
+        {
+          "path": "contracts/domain/account.schema.json",
+          "kind": "implementation"
+        },
+        {
+          "path": "apps/api/src/routes/accounts.rs",
+          "kind": "implementation"
+        },
+        {
+          "path": "apps/web/tests/garnrolle-self-service.spec.ts",
+          "kind": "test"
+        }
+      ],
+      "validation": [
+        "cargo test --manifest-path apps/api/Cargo.toml routes::accounts",
+        "cd apps/web && pnpm exec playwright test tests/garnrolle-self-service.spec.ts"
+      ],
+      "owner": "product-domain",
+      "updated": "2026-07-11"
+    },
+    {
+      "id": "CLAIM-MAP-TRUTH-001",
+      "status": "established",
+      "subject": "MAP-TRUTH",
+      "statement": "Die Kartenroute unterscheidet erfolgreiche, teilweise und fehlgeschlagene Datenladung und baut daraus ein explizites Szenenmodell.",
+      "evidence": [
+        {
+          "path": "docs/specs/map-experience.md",
+          "kind": "documentation"
+        },
+        {
+          "path": "apps/web/src/routes/map/+page.ts",
+          "kind": "implementation"
+        },
+        {
+          "path": "apps/web/src/lib/map/scene.ts",
+          "kind": "implementation"
+        },
+        {
+          "path": "apps/web/src/lib/map/scene.test.ts",
+          "kind": "test"
+        },
+        {
+          "path": "apps/web/tests/map-load-fallback.spec.ts",
+          "kind": "test"
+        }
+      ],
+      "validation": [
+        "cd apps/web && pnpm exec vitest run src/lib/map/scene.test.ts",
+        "cd apps/web && pnpm exec playwright test tests/map-load-fallback.spec.ts"
+      ],
+      "owner": "product-map",
+      "updated": "2026-07-11"
     }
   ]
 }

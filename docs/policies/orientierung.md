@@ -2,7 +2,7 @@
 id: policies.orientierung
 title: Orientierung
 doc_type: reference
-status: active
+status: deprecated
 summary: Governance-Orientierung und Leitprinzipien für das Weltgewebe-Projekt.
 relations:
   - type: relates_to
@@ -10,6 +10,8 @@ relations:
   - type: relates_to
     target: docs/weltgewebe-agenten-manifest.md
 ---
+> **Historischer Orientierungsstand:** Dieser Text vermischt Vision, abgeleitete Governancewerte und frühere technische Zielbilder. Maßgeblich sind heute `docs/vision.md`, `docs/specs/garnrolle-knoten-faden.md`, `docs/specs/ui-interaction.md`, `docs/specs/ui-state-machine.md` und `docs/specs/map-experience.md`.
+
 # Leitfaden · Ethik & Systemdesign (Weltgewebe)
 
 **Stand:** 2025-10-06

@@ -5,6 +5,10 @@ summary: Schema-Definition und Konventionen für Frontmatter-Metadaten in kanoni
 role: norm
 organ: docmeta
 status: canonical
+canonicality: normative
+lifecycle_state: active
+owner: governance
+review_after: 2026-10-11
 last_reviewed: 2026-06-09
 depends_on: []
 relations: []
@@ -17,22 +21,41 @@ verifies_with:
 
 # Docmeta Schema
 
-Dieses Dokument definiert das Schema für Frontmatter-Metadaten in den kanonischen Entry-Docs.
+Dieses Dokument definiert das Frontmatter-Schema für alle in `manifest/repo-index.yaml` registrierten kanonischen Dokumente. Nur dort registrierte Dateien dürfen `status: canonical` tragen.
 
-> **Hinweis:** Das Frontmatter wird bewusst durch einen eingeschränkten, deterministischen
-> Mini-Parser gelesen. Strukturierte YAML-Blocklisten werden ausdrücklich nur für die
-> Felder `relations`, `depends_on`, `verifies_with` und `audit_gaps` garantiert.
+> **Hinweis:** Das Frontmatter wird durch einen eingeschränkten, deterministischen Mini-Parser gelesen. Für jedes kanonische Dokument vergleicht der Guard dessen Ergebnis blockierend mit PyYAML `BaseLoader`. Damit bleibt das erlaubte Format klein, ohne stille Fehlinterpretationen zuzulassen.
 
-## Pflichtfelder (alle Dokumente)
+## Pflichtfelder kanonischer Dokumente
 
-* **id**: Eindeutiger Identifier des Dokuments.
-* **title**: Menschenlesbarer Titel.
-* **status**: Status (canonical | active | deprecated | draft).
-* **summary**: Nicht-leere Zusammenfassung (Platzhalter werden abgelehnt).
+* **id**: stabiler, eindeutiger Identifier.
+* **title**: menschenlesbarer Titel.
+* **summary**: nicht-leere Zusammenfassung.
+* **status**: für registrierte Dokumente immer `canonical`.
+* **role**: Wahrheitsrolle (`norm`, `reality`, `runbooks`, `action`).
+* **organ**: verantworteter System- oder Produktbereich.
+* **canonicality**: Art der Geltung (`normative`, `reality`, `operational`, `supporting`, `diagnostic`, `navigation`, `generated`).
+  Für manifestregistrierte kanonische Dokumente sind ausschließlich `normative`, `reality` und `operational` zulässig.
+* **lifecycle_state**: Lebenszyklus (`active`, `superseded`, `archived`).
+* **owner**: verantwortlicher Repo-Bereich.
+* **last_reviewed**: Datum der letzten tatsächlichen Prüfung.
+* **review_after**: spätester Termin der nächsten Prüfung.
+* **depends_on** und **verifies_with**: Listen, auch wenn sie leer sind.
 
-## Optionales Feld
+## Getrennte Achsen
 
-* **doc_type**: Dokumenttyp (z.B. blueprint, reference, concept, runbook, generated).
+`doc_type`, `canonicality` und `lifecycle_state` beantworten verschiedene Fragen:
+
+- `doc_type`: Was für ein Dokument ist es?
+- `canonicality`: Welche epistemische Rolle besitzt es?
+- `lifecycle_state`: Ist es aktuell, abgelöst oder archiviert?
+
+Ein Blueprint kann deshalb `doc_type: blueprint`, `canonicality: supporting` und `lifecycle_state: active` tragen, ohne kanonische Produktwahrheit zu beanspruchen.
+
+## Optionale Felder
+
+* **doc_type**: Dokumentart, etwa `specification`, `policy`, `runbook`, `blueprint` oder `report`.
+* **relations** und **audit_gaps**: typisierte Beziehungen beziehungsweise bekannte Lücken.
+* **scope** und **description**: zusätzliche Policy-Beschreibung, soweit nötig.
 
 ## Abhängigkeiten (`depends_on`)
 
@@ -55,14 +78,14 @@ Abhängigkeiten einheitlich über `extract_depends_on()` in `scripts/docmeta/doc
 
 ## Relationen (`relations`)
 
-Kanonischer Mechanismus für typisierte Relationen (`relates_to`, `supersedes`). Für Abhängigkeiten
+Kanonischer Mechanismus für typisierte Relationen (`relates_to`, `supersedes`, `implements`, `verifies`, `derived_from`, `contradicts`). Für Abhängigkeiten
 ist das direkte Feld `depends_on` kanonisch (siehe oben); `relations[type=depends_on]` bleibt nur als
 Legacy-Fallback erhalten. Jede Relation ist ein Objekt mit `type` und `target`.
 
 ```yaml
 relations:
   - type: relates_to
-    target: docs/blueprints/ui-state-machine.md
+    target: docs/specs/ui-state-machine.md
   - type: supersedes
     target: docs/konzepte/garnrolle.md
 ```
@@ -74,6 +97,10 @@ relations:
 | `relates_to` | Allgemeine thematische Querverbindung | backlinks, orphan-guard |
 | `depends_on` | Dieses Dokument setzt das Zieldokument voraus | backlinks, orphan-guard |
 | `supersedes` | Dieses Dokument löst das Zieldokument ab | backlinks, orphan-guard, supersession-map |
+| `implements` | Das Dokument oder Artefakt setzt den Zielvertrag um | backlinks, impact |
+| `verifies` | Das Dokument oder Artefakt belegt den Zielvertrag | backlinks, evidence |
+| `derived_from` | Das Dokument ist aus dem Ziel abgeleitet | backlinks |
+| `contradicts` | Bewusst sichtbarer, noch nicht aufgelöster Widerspruch | conflict review |
 
 Andere Typen sind **nicht erlaubt** und werden vom Guard abgelehnt.
 
@@ -119,7 +146,7 @@ Dieses Dokument ersetzt das Zieldokument vollständig.
 
 ### Referenzformat (PATH-Policy)
 
-Targets verwenden **repo-root-relative Pfade** (z.B. `docs/blueprints/ui-state-machine.md`).
+Targets verwenden **repo-root-relative Pfade** (z.B. `docs/specs/ui-state-machine.md`).
 
 **Regeln:**
 
@@ -150,10 +177,10 @@ Ein repo-weites `grep -r 'target: docs/alter-pfad.md'` hilft beim Auffinden.
 | Keine Duplikate | `duplicate relation` |
 | Keine Extra-Keys | `unexpected keys` |
 
-## Zone-spezifische Felder (architecture/, runtime/, runbooks/)
+## Kanonische Rollenfelder
 
 * **role**: Rolle des Dokuments (norm | reality | runbooks | action).
-* **organ**: (Optional) Architektonisches Ownership-Feld für maschinelles Routing
+* **organ**: Architektonisches Ownership-Feld für maschinelles Routing
   (z.B. governance, runtime, contracts, docmeta, deploy).
 * **last_reviewed**: Datum der letzten Überprüfung im Format YYYY-MM-DD.
 * **verifies_with**: Liste von Checks/Scripts, die dieses Dokument verifizieren.
@@ -200,36 +227,15 @@ relations:
 | Nested structures | Deeper than one key-value level | Not parsed |
 | Anchors / aliases | `*ref`, `&anchor` | Not supported |
 
-### Decision: Mini-Parser vs. Migration
+### Entscheidung: eingeschränkter Parser mit blockierender YAML-Parität
 
-**Decision: Mini-Parser is sufficient for now** (as of 2026-06).
+**Entscheidung vom 11.07.2026:** Der Mini-Parser bleibt als deterministische Standardbibliotheks-Komponente erhalten. Er gilt jedoch nicht mehr allein als ausreichender Beleg.
 
-This decision applies to the current, documented subset. It is **not** a
-claim that the parser question is resolved for all future usage patterns.
+Für jedes im Manifest registrierte kanonische Dokument führt `validate_schema.py` zusätzlich PyYAML mit `BaseLoader` aus und verlangt identische Datenstrukturen. Eine Abweichung ist ein CI-Fehler. Dadurch gilt:
 
-Rationale:
+1. Der zulässige YAML-Teil bleibt absichtlich klein und dokumentiert.
+2. Mehrzeilige Skalare, verschachtelte Sonderformen oder andere vom Mini-Parser nicht verstandene Konstrukte werden nicht still akzeptiert.
+3. Der frühere nicht-blockierende NOTICE-Mechanismus ist abgelöst.
+4. Eine spätere vollständige Migration auf einen YAML-Parser bleibt möglich, ist aber für den heutigen Vertrag nicht erforderlich.
 
-* The supported subset covers 100 % of the current parser-counted relations in
-  the repository — all use `type:` + `target:` block list format without quotes,
-  comments, or inline mappings.
-* No silent misinterpretation risks for the currently used format.
-* The parser behavior is deterministic and fully tested.
-
-**Epistemic gap:** Zone files (architecture/, runtime/, runbooks/) currently
-all use `relations: []`. The real stress test — non-trivial, semantically
-meaningful relation blocks in zone documents — has not yet occurred. The
-decision above holds under the current simple usage.
-
-**Operational CI trigger:** `validate_relations.py` emits a non-blocking
-`NOTICE` to stderr whenever the mini-parser produces non-empty output for a
-zone file — regardless of whether the entries are semantically valid.  This
-is a parser-based signal, not a semantic-validity check.  Even malformed
-entries (e.g. inline mappings misinterpreted as garbage-key dicts) will fire
-it.  The trigger makes drift operationally visible before it becomes silent.
-
-**Stronger re-evaluation reasons** (beyond the operational trigger):
-
-* Zone files begin using non-empty, semantically meaningful relations.
-* Inline mappings or nested structures appear in real documents.
-* A YAML library is already required as a dependency for other reasons.
-
+PyYAML ist deshalb eine verpflichtende Abhängigkeit des Docs-Guard. Der Laufzeitcode des Produkts bleibt davon unberührt.

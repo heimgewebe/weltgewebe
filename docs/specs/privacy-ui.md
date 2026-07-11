@@ -2,7 +2,7 @@
 id: specs.privacy-ui
 title: Garnrollen-Sichtbarkeit UI
 doc_type: reference
-status: active
+status: deprecated
 summary: UI-Zielbild für Profil, Verortung und öffentliche Sichtbarkeit der eigenen Garnrolle.
 relations:
   - type: relates_to
@@ -12,6 +12,8 @@ relations:
   - type: relates_to
     target: docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 ---
+> **Historischer Stand:** Dieses Dokument ist nicht mehr normativ. Maßgeblich ist `docs/specs/garnrolle-knoten-faden.md`.
+
 
 # Garnrollen-Sichtbarkeit UI
 

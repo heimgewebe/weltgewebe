@@ -3,7 +3,7 @@ id: domain.vocabulary
 title: Domänenvokabular
 doc_type: reference
 status: active
-summary: Kanonische Zuordnung der Produktbegriffe Garnrolle, Knoten und Faden zu den vorhandenen API- und Datenbegriffen.
+summary: Aktuelle Zuordnung der Produktbegriffe Garnrolle, Knoten und Faden zu den vorhandenen API- und Datenbegriffen.
 relations:
   - type: relates_to
     target: docs/domain/modules.md
