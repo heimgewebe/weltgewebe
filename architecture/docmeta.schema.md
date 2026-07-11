@@ -45,9 +45,9 @@ Dieses Dokument definiert das Frontmatter-Schema für alle in `manifest/repo-ind
 
 `doc_type`, `canonicality` und `lifecycle_state` beantworten verschiedene Fragen:
 
-- `doc_type`: Was für ein Dokument ist es?
-- `canonicality`: Welche epistemische Rolle besitzt es?
-- `lifecycle_state`: Ist es aktuell, abgelöst oder archiviert?
+* `doc_type`: Was für ein Dokument ist es?
+* `canonicality`: Welche epistemische Rolle besitzt es?
+* `lifecycle_state`: Ist es aktuell, abgelöst oder archiviert?
 
 Ein Blueprint kann deshalb `doc_type: blueprint`, `canonicality: supporting` und `lifecycle_state: active` tragen, ohne kanonische Produktwahrheit zu beanspruchen.
 
