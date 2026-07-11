@@ -85,7 +85,7 @@ services:
 
   pgbouncer:
     profiles: ["dev"]
-    image: edoburu/pgbouncer:1.20
+    image: edoburu/pgbouncer:v1.25.2-p0@sha256:7d7a27d9e90985cab5cf42256f5c13a3120baa4b055b69df37beb272b89b2340
     environment:
       DATABASE_URL: postgres://welt:gewebe@db:5432/weltgewebe
       POOL_MODE: transaction

@@ -101,6 +101,12 @@ Der Guard listet alle blockierenden Container mit Name, Projekt-Label und Config
   - `compose.observ.yml` – Observability / Zusatzdienste
   - `compose.ops.override.yml` – Lokale Entwicklungs-/Ops-Umgebung (NATS + API-Port-Mapping für Debugging)
 
+Der nur im `dev`-Profil verwendete PgBouncer-Container ist in
+`compose.core.yml` sowohl auf eine veröffentlichte Version als auch auf den
+OCI-Manifest-Digest gepinnt. Bei Aktualisierungen müssen Registry-Existenz,
+`linux/amd64` und `linux/arm64` sowie der vollständige Compose-Smoke erneut
+belegt werden; `latest` ist dafür nicht zulässig.
+
 ---
 
 ## 3. Services & Netzwerk
