@@ -1,6 +1,6 @@
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 import type { MapEntityViewModel } from "$lib/map/types";
-import { ICONS, MARKER_SIZES } from "$lib/ui/icons";
+import { ICONS } from "$lib/ui/icons";
 
 function hasRenderablePosition(item: MapEntityViewModel): boolean {
   return (
@@ -121,14 +121,13 @@ export class NodesOverlay {
         element.dataset.testid = `marker-${item.type}-${item.id}`;
 
         if (markerCategory === "account") {
-          element.style.setProperty(
-            "--marker-icon",
-            `url('${ICONS.garnrolle}')`,
-          );
-          element.style.setProperty(
-            "--marker-size",
-            `${MARKER_SIZES.account}px`,
-          );
+          const icon = document.createElement("img");
+          icon.className = "marker-account__icon";
+          icon.src = ICONS.garnrolle;
+          icon.alt = "";
+          icon.setAttribute("aria-hidden", "true");
+          icon.draggable = false;
+          element.append(icon);
         }
 
         element.setAttribute("aria-label", item.title);
