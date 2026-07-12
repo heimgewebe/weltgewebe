@@ -38,7 +38,7 @@ jobs:
       CARGO_TERM_COLOR: always  # keep cargo output colorized in CI logs
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       # Optional: Validates that a default app config is parseable (if present)
       - name: Install PyYAML for config validation
@@ -75,13 +75,13 @@ jobs:
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
           components: rustfmt, clippy
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
 
       # fmt & clippy at repo root: covers all crates/workspaces
       - name: Format check (workspace)
@@ -101,7 +101,7 @@ jobs:
       CARGO_TERM_COLOR: never
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Read Rust version
         id: rust-version
@@ -121,12 +121,12 @@ jobs:
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
 
       - name: Run phase 6 cookie/session proof tests
         shell: bash
@@ -167,7 +167,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Read Rust version
         id: rust-version
@@ -187,12 +187,12 @@ jobs:
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
 
       - name: Wait for PostgreSQL
         run: |
@@ -236,7 +236,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Read Rust version
         id: rust-version
@@ -256,12 +256,12 @@ jobs:
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
 
       - name: Run db passkey proof suite
         run: |
@@ -299,7 +299,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Read Rust version
         id: rust-version
@@ -319,12 +319,12 @@ jobs:
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
 
       - name: Wait for PostgreSQL
         run: |
@@ -371,7 +371,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Read Rust version
         id: rust-version
@@ -391,12 +391,12 @@ jobs:
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
 
       - name: Wait for PostgreSQL
         run: |
@@ -443,7 +443,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Read Rust version
         id: rust-version
@@ -463,12 +463,12 @@ jobs:
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
 
       - name: Wait for PostgreSQL
         run: |
@@ -515,7 +515,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Read Rust version
         id: rust-version
@@ -535,12 +535,12 @@ jobs:
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
 
       - name: Wait for PostgreSQL
         run: |
@@ -587,7 +587,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Read Rust version
         id: rust-version
@@ -607,12 +607,12 @@ jobs:
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
 
       - name: Wait for PostgreSQL
         run: |
@@ -659,7 +659,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Read Rust version
         id: rust-version
@@ -679,12 +679,12 @@ jobs:
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
 
       - name: Wait for PostgreSQL
         run: |
@@ -714,7 +714,7 @@ jobs:
       CARGO_TERM_COLOR: never
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
       - name: Read Rust version
         id: rust-version
@@ -734,12 +734,12 @@ jobs:
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
 
       - name: Run magic-link flow proof
         shell: bash
@@ -767,7 +767,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'security'))
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
       - name: Read Rust version
         id: rust-version
         shell: bash
@@ -785,7 +785,7 @@ jobs:
           fi
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
       - name: Install cargo-audit

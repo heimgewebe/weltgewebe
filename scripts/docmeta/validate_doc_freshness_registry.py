@@ -53,7 +53,7 @@ VALID_LENSKIT_EVIDENCE_KINDS = {
 EVIDENCE_KINDS_CHECK_PATH = {"file", "test", "proof"}
 
 VALID_STATUSES = {"none", "partial", "done", "stale", "historical"}
-SLICE_STATUS = "partial"
+SLICE_STATUSES = {"partial", "stale"}
 
 # The freshness scope is no longer hard-coded here. It is derived from the
 # claim registry plus the declarative policy in
@@ -1048,12 +1048,12 @@ def validate_registry_data(
                     f"'status' must be one of: {', '.join(sorted(VALID_STATUSES))}",
                 )
             )
-        elif status != SLICE_STATUS:
+        elif status not in SLICE_STATUSES:
             findings.append(
                 _finding(
                     "STATUS_NOT_PARTIAL",
                     entry_id,
-                    f"'status' must be '{SLICE_STATUS}' in this slice",
+                    "'status' must be 'partial' or 'stale' in this slice",
                 )
             )
 

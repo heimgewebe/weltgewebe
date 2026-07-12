@@ -22,7 +22,7 @@ class CanonicalTruthContractTests(unittest.TestCase):
         self.assertEqual(data["schema_version"], 1)
         self.assertEqual(
             data["required_checks"],
-            ["Detect docs updates", "Core Guard Tests"],
+            ["Required merge gate"],
         )
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         for name in data["required_checks"]:
@@ -64,7 +64,8 @@ class CanonicalTruthContractTests(unittest.TestCase):
         orientation = (ROOT / "docs/policies/orientierung.md").read_text(encoding="utf-8")
         self.assertIn("keinen produktiven Outbox-Relay", architecture)
         self.assertNotIn("Outbox/JetStream-Eventing", architecture)
-        self.assertIn("allgemein belegten WAL-/PITR-", runbook)
+        self.assertRegex(runbook, r"keinen\s+implementierten WAL-/PITR-")
+        self.assertNotIn("WAL-Archivierung aktiv", runbook)
         self.assertNotIn("den `outbox`-Relay-Prozess starten", runbook)
         self.assertIn("Compose ist der aktuelle Standard", orientation)
 

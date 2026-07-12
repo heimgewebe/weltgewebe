@@ -9,7 +9,16 @@ lifecycle_state: active
 lifecycle: audit
 owner: product-map
 owner_task: DOCMETA-REPORT-LIFECYCLE-001
-review_after: 2026-08-11
+last_reviewed: 2026-07-12
+review_after: 2026-08-12
+evidence_required_for_live_claims:
+  - exact Git commit and image tag on wg-prod-1
+  - rendered Compose/env source
+  - API health/readiness
+  - PostgreSQL domain source flags
+  - migration status
+  - representative authenticated readback
+  - backup and restore-proof status
 relations:
   - type: supersedes
     target: docs/reports/map-status-matrix.md
@@ -18,7 +27,9 @@ relations:
 ---
 # Kartenstatus
 
-Stand: 11.07.2026. Dieses Dokument ist ein zeitgebundener Diagnosebericht. Der dauerhafte Produktvertrag steht in [`docs/specs/map-experience.md`](../specs/map-experience.md).
+Stand: 12.07.2026. Dieses Dokument ist ein zeitgebundener Diagnosebericht. Der
+dauerhafte Produktvertrag steht in
+[`docs/specs/map-experience.md`](../specs/map-experience.md).
 
 ## Belegt im Repository
 
@@ -32,26 +43,43 @@ Stand: 11.07.2026. Dieses Dokument ist ein zeitgebundener Diagnosebericht. Der d
 | URL-Einstieg | `focus`, `lens` und `compose` werden typisiert ausgewertet | `urlState.ts`, `map-url-state.spec.ts` |
 | Garnrolle | `not_on_map`, `exact` und `radius` sind im Browserpfad vorhanden | `garnrolle-self-service.spec.ts` |
 | Knoten und Faden | Komposition erzeugt Knoten und den zugehörigen Faden | `KompositionPanel.svelte`, `komposition.spec.ts` |
+| Produktionsvertrag | PostgreSQL ist für Accounts/Garnrollen, Knoten und Fäden die Produktionswahrheit | `.env.prod.example`, `runtime/README.md`, Compose- und API-Verträge |
 
-## Bewusst nicht als vollständig bewiesen geführt
+## Datierter Livebeleg
 
-- produktiver Persistenzpfad des gesamten Flusses Anmeldung → Garnrolle → Knoten → Faden;
-- endgültiger produktiver Basemap-Modus;
-- echte Vector-Tile-Payload-Lieferung im produktionsnahen Caddy-Pfad;
-- visuelle Korrektheit über repräsentative Zoomstufen und Geräte;
+Der Runtime-Audit vom 11./12.07.2026 belegte für `wg-prod-1` vor dieser
+Remediation:
+
+- Commit und API-Image `ee4efbf5…`;
+- gesunde API-, PostgreSQL-, NATS- und Caddy-Container;
+- `WELTGEWEBE_DOMAIN_*_SOURCE=postgres` für Lesen und alle drei Schreibpfade;
+- `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied`;
+- keine fehlgeschlagene Migration, letzte registrierte Migration
+  `20260711000001`;
+- je eine persistierte Garnrolle, ein Knoten und ein Faden;
+- Anmeldung, Garnrollenbearbeitung, Knoten-/Fadenerzeugung, Neuladen und
+  Neustartpersistenz im realen Browserpfad.
+
+Das ist ein datierter Beleg, keine zeitlose Hostwahrheit. Nach jedem Deploy oder
+relevanten Runtimewechsel muss er neu erhoben werden.
+
+## Bewusst nicht als dauerhaft bewiesen geführt
+
+- repräsentatives Verhalten bei wachsendem Datenbestand;
+- Edge-Referenzintegrität über einen größeren realen Graphen;
+- visuelle Korrektheit über repräsentative Zoomstufen, Browser und Geräte;
 - URL-Bindung lokaler Panel-Tabs;
-- dauerhaft gemessene Kartenleistung mit real wachsendem Gewebe.
+- dauerhaft gemessene Kartenleistung;
+- ein aktueller Backup-/Restore- und Off-Host-Beleg nach jeder Änderung.
 
-## Betriebsgrenze
+## Nächste Beweise
 
-Grüne Unit- und Browsertests belegen die Repository- und Testumgebung. Sie belegen weder den aktuellen Zustand von `wg-prod-1` noch die dort aktive Datenquelle, Migration oder Basemap. Dafür ist eine frische Runtimeprüfung nötig.
+Der erste vertikale Persistenzschnitt ist abgeschlossen. Die nächsten sinnvollen
+Beweise sind:
 
-## Nächster Beweis
-
-Der nächste fachliche Integrationsbeweis ist der dauerhafte vertikale Schnitt:
-
-1. anmelden;
-2. Garnrolle beschreiben und verorten;
-3. Knoten weben;
-4. automatisch erzeugten Faden lesen;
-5. nach Neuladen alle drei Objekte wiederfinden.
+1. Backup, Restore-Proof und Off-Host-Kopie nach dem Remediation-Deploy;
+2. wiederholte Geräteabnahme auf iPad und Desktop;
+3. Edge-Orphan-/Referenzaudit mit repräsentativen Daten;
+4. Last- und Darstellungsprüfung bei wachsendem Gewebe;
+5. Entfernung der Legacy-`mode`-Rollbackspalte erst nach eigenem Daten- und
+   Rückfallbeleg.

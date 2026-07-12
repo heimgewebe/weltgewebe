@@ -494,6 +494,14 @@ entries:
         output, exit_code = self._run()
         self.assertEqual(exit_code, 0, output["findings"])
 
+    def test_status_stale_passes(self):
+        self._write_claims()
+        entries = self._entries()
+        entries[0]["status"] = "stale"
+        self._write_registry(entries)
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 0, output["findings"])
+
     def test_invalid_status_string_fails(self):
         self._write_claims()
         entries = self._entries()

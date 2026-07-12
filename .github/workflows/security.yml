@@ -59,11 +59,11 @@ jobs:
           fi
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked --force
       - name: Run cargo audit (JSON report)
@@ -104,11 +104,11 @@ jobs:
           fi
           printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
         with:
           toolchain: ${{ steps.rust-version.outputs.rust_version }}
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked --force
       - name: Run cargo deny (JSON report)
@@ -133,7 +133,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
       - name: Generate SBOM with Syft
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # tag: v0
         with:
           path: .
           format: spdx-json

@@ -60,17 +60,21 @@
       "priority": "high",
       "risk": "high",
       "effort": "low",
-      "evidence_status": "doc-only",
+      "evidence_status": "code+test",
       "evidence": [
         "docs/runbooks/incident-response.md",
         "docs/runbooks/db-recovery.md",
         "docs/runbooks/README.md",
         "docs/index.md",
-        "docs/runbook.md"
+        "docs/runbook.md",
+        "scripts/ops/postgres-backup.sh",
+        "scripts/ops/postgres-restore-latest-proof.sh",
+        "scripts/ops/pull-production-postgres-backup.sh",
+        "scripts/tests/test_postgres_backup_restore_contract.sh"
       ],
       "missing_evidence": [],
-      "next_action": "keine – eigenständige Runbooks erstellt und über Doku-Hygiene-Guards (validate_relations, docs-relations-guard, generate_task_index --check) verifiziert",
-      "updated_at": "2026-05-30"
+      "next_action": "Automatische Backup-, Restore- und Off-Host-Belege nach Deployment regelmäßig auswerten.",
+      "updated_at": "2026-07-12"
     },
     {
       "id": "OPT-CI-001",
@@ -209,11 +213,11 @@
       "id": "OPT-ARC-001",
       "area": "Architektur",
       "title": "JSONL → PostgreSQL",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "risk": "high",
       "effort": "high",
-      "evidence_status": "code+test",
+      "evidence_status": "runtime",
       "evidence": [
         "docs/blueprints/domain-data-postgres-cutover.md",
         "apps/api/migrations/20260531000001_create_domain_nodes.up.sql",
@@ -250,15 +254,14 @@
         "docs/reports/opt-arc-001-db-proof-matrix.json",
         "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py",
         "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): historische DB-Domain-Proof-Evidence; Schema- und Backfill-Proof bleiben belegt, der Read-Path-Proof-Harness wurde später durch den List-Order-Gap-Diagnostic erweitert und wartet auf frische PR-CI-Evidence",
-        "PR-CI-Lauf 27441828545 (pull_request, PR #1188, Commit 75ad1ebbaecbc41353d2fb0b39c2d6a9d90434ff): db-domain-edge-write-path-proof grün"
+        "PR-CI-Lauf 27441828545 (pull_request, PR #1188, Commit 75ad1ebbaecbc41353d2fb0b39c2d6a9d90434ff): db-domain-edge-write-path-proof grün",
+        "runtime/README.md",
+        "docs/reports/map-status.md",
+        "scripts/ci/run-postgres-integration-proofs.sh"
       ],
-      "missing_evidence": [
-        "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover; kein Dual-Write",
-        "Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend",
-        "Read-Path-Proof-Harness nach List-Order-Gap-Diagnostic wieder prepared; frische PR-CI-Evidence ausstehend",
-        "Legacy-Order-Preservation für /nodes und /edges bleibt Cutover-Blocker vor PostgreSQL-Read-Cutover"
-      ],
-      "updated_at": "2026-06-12"
+      "missing_evidence": [],
+      "updated_at": "2026-07-12",
+      "next_action": "Cutover abgeschlossen; Edge-Referenzpolitik, Legacy-mode und JSONL-Codeabbau sind getrennte Folgearbeiten."
     },
     {
       "id": "OPT-API-004",
@@ -353,11 +356,13 @@
         ".github/workflows/ci.yml",
         ".github/workflows/python-tooling.yml",
         ".github/workflows/api-smoke.yml",
-        ".github/workflows/security.yml"
+        ".github/workflows/security.yml",
+        "scripts/ci/check_github_action_pinning.py",
+        "scripts/guard/run.sh"
       ],
       "missing_evidence": [],
-      "next_action": "keine; Rust-Action-Refs sind vereinheitlicht und uv-Version wird zentral aus toolchain.versions.yml gelesen",
-      "updated_at": "2026-06-29"
+      "next_action": "Keine; externe Action-Refs sind Commit-SHA-gebunden und blockierend geprüft.",
+      "updated_at": "2026-07-12"
     },
     {
       "id": "OPT-CI-004",
@@ -401,24 +406,21 @@
       "id": "OPT-INF-002",
       "area": "Infrastruktur",
       "title": "Third-Party-Actions per Commit-SHA pinnen",
-      "status": "partial",
+      "status": "done",
       "priority": "medium",
       "risk": "medium",
       "effort": "low",
-      "evidence_status": "partial",
+      "evidence_status": "ci",
       "evidence": [
         "scripts/ci/check_github_action_pinning.py",
         "scripts/ci/tests/test_check_github_action_pinning.py",
         "docs/reports/github-action-ref-pinning-audit.md",
-        ".github/workflows/"
+        ".github/workflows/",
+        "scripts/guard/run.sh"
       ],
-      "missing_evidence": [
-        "49 direkte GitHub Action uses bleiben named refs; vollständiges SHA-Pinning erfolgt in ratcheted Folge-Slices.",
-        "12 actions/checkout uses in .github/workflows/api.yml bleiben bis zu einem separaten OPT-ARC-001-Proof-Refresh-Schnitt unpinned.",
-        "Ursprungstag und Ziel-SHA müssen pro verbleibender Action-Familie dokumentiert werden."
-      ],
-      "next_action": "Nächsten Pinning-Slice für actions/cache prüfen; api.yml separat behandeln.",
-      "updated_at": "2026-07-03"
+      "missing_evidence": [],
+      "next_action": "Dependabot aktualisiert die lesbaren Tagbezüge; SHA-Änderungen bleiben reviewpflichtig.",
+      "updated_at": "2026-07-12"
     },
     {
       "id": "OPT-FE-003",

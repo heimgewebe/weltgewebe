@@ -75,12 +75,18 @@ const createAuthStore = () => {
           console.warn("Invalid auth payload:", data);
         }
       }
-      // Fallback
-      applyAuthState(initialUser);
+      // Only an authoritative unauthenticated response may clear account-bound
+      // drafts. A transient server error or navigation-aborted request must not
+      // destroy unsaved private input.
+      if (res.status === 401 || res.status === 403) {
+        applyAuthState(initialUser);
+      } else {
+        set(initialUser);
+      }
       return initialUser;
     } catch (e) {
       console.warn("Auth check failed:", e);
-      applyAuthState(initialUser);
+      set(initialUser);
       return initialUser;
     }
   };
@@ -137,6 +143,7 @@ const createAuthStore = () => {
     },
     logout: async () => {
       if (!browser) return;
+      clearSensitiveGarnrolleSessionData();
       try {
         await fetch("/api/auth/logout", {
           method: "POST",

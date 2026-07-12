@@ -2,7 +2,7 @@
 services:
   web:
     profiles: ["dev"]
-    image: node:20.19.0-alpine
+    image: node:20.19.0-alpine@sha256:8bda036ddd59ea51a23bc1a1035d3b5c614e72c01366d989f4120e8adca196d4
     working_dir: /workspace
     command:
       - sh
@@ -32,7 +32,7 @@ services:
 
   api:
     profiles: ["dev"]
-    image: rust:1.89.0-bookworm
+    image: rust:1.89.0-bookworm@sha256:948f9b08a66e7fe01b03a98ef1c7568292e07ec2e4fe90d88c07bb14563c84ff
     working_dir: /workspace
     command: ["cargo", "run", "--manifest-path", "apps/api/Cargo.toml", "--bin", "weltgewebe-api"]
     environment:
@@ -64,7 +64,7 @@ services:
 
   db:
     profiles: ["dev"]
-    image: postgres:16
+    image: postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-welt}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gewebe}
@@ -100,7 +100,7 @@ services:
 
   caddy:
     profiles: ["dev"]
-    image: caddy:2.7
+    image: caddy:2.7@sha256:236c6a30ccb84fa412a5360ca8b586d804faba0621ea182fb45902608cd8a563
     ports:
       - "${CADDY_BIND:-127.0.0.1}:8081:8081"
     volumes:

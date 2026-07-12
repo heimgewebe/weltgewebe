@@ -85,7 +85,6 @@ guarded_write_paths:
   - docs/
   - infra/
   - scripts/
-  - src/
 
 forbidden_write_paths:
   - docs/_generated/

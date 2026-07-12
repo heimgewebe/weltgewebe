@@ -53,8 +53,9 @@ jobs:
       - uses: actions/checkout@v4
 """
         )
-        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("policy.named-ref=1", result.stdout)
+        self.assertIn("must be pinned to 40-character commit SHAs", result.stdout)
 
     def test_reusable_default_branch_is_classified(self) -> None:
         result = self.run_checker(
@@ -66,7 +67,7 @@ jobs:
     uses: owner/repo/.github/workflows/reusable.yml@main
 """
         )
-        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("kind.reusable-workflow=1", result.stdout)
         self.assertIn("policy.mutable-default-branch=1", result.stdout)
 
@@ -85,6 +86,37 @@ jobs:
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("kind.local-action=1", result.stdout)
         self.assertIn("policy.local=1", result.stdout)
+
+    def test_docker_image_action_is_not_sha_pinning_scope(self) -> None:
+        result = self.run_checker(
+            """
+name: docker
+on: workflow_dispatch
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://alpine:3.20
+"""
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("kind.docker-image=1", result.stdout)
+        self.assertIn("policy.docker-ref=1", result.stdout)
+
+    def test_missing_external_ref_is_blocking(self) -> None:
+        result = self.run_checker(
+            """
+name: missing
+on: workflow_dispatch
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout
+"""
+        )
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("policy.missing-ref=1", result.stdout)
 
     def test_inline_comment_is_ignored_for_sha_ref(self) -> None:
         result = self.run_checker(

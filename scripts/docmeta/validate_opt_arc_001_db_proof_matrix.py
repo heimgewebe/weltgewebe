@@ -2,8 +2,8 @@
 validate_opt_arc_001_db_proof_matrix.py — Blocking truth guard for OPT-ARC-001.
 
 OPT-ARC-001 (JSONL → PostgreSQL) has six DB proof jobs in
-.github/workflows/api.yml. This validator pins that truth machine-readably and
-blocks stale evidence or drift toward false completion claims:
+.github/workflows/api.yml. V1 preserves the historic pre-cutover proof contract;
+V2 validates the completed production-cutover truth and its active status twins.
 
   - docs/reports/opt-arc-001-db-proof-matrix.json must describe exactly the
     six expected proofs, no cutover, JSONL as default domain read and write
@@ -1185,6 +1185,140 @@ def _validate_status_json(repo_root, errors):
     _validate_task_control_entry(item, STATUS_JSON_PATH, errors)
 
 
+
+
+# ---------------------------------------------------------------------------
+# V2: post-cutover truth contract
+# ---------------------------------------------------------------------------
+
+CUTOVER_V2_SCHEMA = "weltgewebe.opt_arc_001_db_proof_matrix.v2"
+CUTOVER_V2_STATUS = "done"
+CUTOVER_V2_CUTOVER = "production_cutover"
+CUTOVER_V2_TRUTH = "postgres"
+CUTOVER_V2_NON_GOALS = {
+    "legacy_webauthn_user_id_backfill",
+    "webauthn_user_id_not_null",
+    "jsonl_removal",
+    "dual_write",
+}
+CUTOVER_V2_REQUIRED_EVIDENCE = {
+    MATRIX_PATH,
+    VALIDATOR_PATH,
+    "runtime/README.md",
+    "docs/reports/map-status.md",
+    "scripts/ci/run-postgres-integration-proofs.sh",
+}
+
+
+def _single_status_row(text, rel_path, expected_status, errors):
+    rows = _annotated_task_rows(text)
+    status_rows = [(line, cells, col) for line, cells, col in rows if col is not None]
+    if len(status_rows) != 1:
+        errors.append(
+            f"{rel_path}: expected exactly one active {TASK_ID} status row, "
+            f"found {len(status_rows)}"
+        )
+        return None
+    line, cells, status_col = status_rows[0]
+    if len(cells) <= status_col or cells[status_col] != expected_status:
+        actual = cells[status_col] if len(cells) > status_col else "<missing>"
+        errors.append(
+            f"{rel_path}: {TASK_ID} status must be '{expected_status}', got '{actual}'"
+        )
+    return line, cells
+
+
+def _validate_cutover_v2(repo_root):
+    errors = []
+    matrix = _load_json_object(repo_root, MATRIX_PATH)
+    required_top = MATRIX_REQUIRED_FIELDS
+    if set(matrix) != required_top:
+        missing = sorted(required_top - set(matrix))
+        extra = sorted(set(matrix) - required_top)
+        if missing:
+            errors.append(f"{MATRIX_PATH}: missing fields: {missing}")
+        if extra:
+            errors.append(f"{MATRIX_PATH}: unexpected fields: {extra}")
+    expected = {
+        "schema": CUTOVER_V2_SCHEMA,
+        "task": TASK_ID,
+        "status_source": STATUS_MD_PATH,
+        "overall_status": CUTOVER_V2_STATUS,
+        "cutover_status": CUTOVER_V2_CUTOVER,
+        "default_domain_read_truth": CUTOVER_V2_TRUTH,
+        "default_domain_write_truth": CUTOVER_V2_TRUTH,
+        "ci_evidence_policy": EXPECTED_CI_POLICY,
+    }
+    for key, value in expected.items():
+        if matrix.get(key) != value:
+            errors.append(
+                f"{MATRIX_PATH}: {key} must be {value!r}, got {matrix.get(key)!r}"
+            )
+    non_goals = matrix.get("non_goals")
+    if not isinstance(non_goals, list):
+        errors.append(f"{MATRIX_PATH}: non_goals must be an array")
+    else:
+        missing = sorted(CUTOVER_V2_NON_GOALS - set(non_goals))
+        if missing:
+            errors.append(f"{MATRIX_PATH}: missing post-cutover non-goals: {missing}")
+        forbidden = {"production_cutover", "step_up_email_persistence", "webauthn_credential_writeback"}
+        present = sorted(forbidden & set(non_goals))
+        if present:
+            errors.append(f"{MATRIX_PATH}: completed goals remain listed as non-goals: {present}")
+
+    proofs = matrix.get("proofs")
+    if not isinstance(proofs, list):
+        errors.append(f"{MATRIX_PATH}: proofs must be an array")
+    else:
+        ids = [proof.get("id") for proof in proofs if isinstance(proof, dict)]
+        if ids != list(EXPECTED_PROOFS):
+            errors.append(f"{MATRIX_PATH}: proof ids/order do not match canonical set")
+        for proof in proofs:
+            if isinstance(proof, dict) and proof.get("id") in EXPECTED_PROOFS:
+                _validate_proof(proof, repo_root, errors)
+
+    _validate_workflow(repo_root, errors)
+
+    status_text = _read_text(repo_root, STATUS_MD_PATH)
+    status_row = _single_status_row(status_text, STATUS_MD_PATH, CUTOVER_V2_STATUS, errors)
+    task_date = _get_task_updated_at(repo_root)
+    if status_row and task_date and status_row[1][-1] != task_date:
+        errors.append(
+            f"{STATUS_MD_PATH}: {TASK_ID} date must match task index {task_date!r}"
+        )
+
+    board_text = _read_text(repo_root, BOARD_PATH)
+    board_row = _single_status_row(board_text, BOARD_PATH, CUTOVER_V2_STATUS, errors)
+    if board_row:
+        for evidence in CUTOVER_V2_REQUIRED_EVIDENCE:
+            if evidence not in board_row[0]:
+                errors.append(f"{BOARD_PATH}: active {TASK_ID} row must reference '{evidence}'")
+
+    for rel_path, collection_key in ((TASK_INDEX_PATH, "tasks"), (STATUS_JSON_PATH, "items")):
+        payload = _load_json_object(repo_root, rel_path)
+        entries = payload.get(collection_key)
+        if not isinstance(entries, list):
+            raise BrokenInputError(f"{rel_path}: {collection_key} must be an array")
+        entry = _find_entry(entries)
+        if entry is None:
+            errors.append(f"{rel_path}: {TASK_ID} not found")
+            continue
+        if entry.get("status") != CUTOVER_V2_STATUS:
+            errors.append(
+                f"{rel_path}: {TASK_ID} status must be '{CUTOVER_V2_STATUS}'"
+            )
+        evidence = set(entry.get("evidence") or [])
+        for required in CUTOVER_V2_REQUIRED_EVIDENCE:
+            if required not in evidence:
+                errors.append(f"{rel_path}: {TASK_ID} evidence must contain '{required}'")
+        if entry.get("missing_evidence") not in ([], None):
+            errors.append(f"{rel_path}: completed {TASK_ID} must not keep missing_evidence")
+        if rel_path == TASK_INDEX_PATH:
+            links = entry.get("links") or {}
+            if MATRIX_PATH not in (links.get("docs") or []):
+                errors.append(f"{rel_path}: links.docs must contain '{MATRIX_PATH}'")
+    return errors
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -1197,6 +1331,10 @@ def validate(repo_root=REPO_ROOT):
     Raises BrokenInputError for unreadable mandatory files, invalid JSON,
     or unexpected top-level structure. Does not write any files.
     """
+    matrix = _load_json_object(repo_root, MATRIX_PATH)
+    if matrix.get("schema") == CUTOVER_V2_SCHEMA:
+        return _validate_cutover_v2(repo_root)
+
     errors = []
     _validate_matrix(repo_root, errors)
     _validate_workflow(repo_root, errors)

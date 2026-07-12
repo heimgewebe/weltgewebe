@@ -845,9 +845,9 @@
     },
     {
       "id": "OPT-ARC-001",
-      "title": "JSONL-Datenquelle zu PostgreSQL migrieren",
+      "title": "PostgreSQL-Produktionscutover abschließen",
       "area": "api",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "XL",
       "risk": "high",
@@ -888,17 +888,16 @@
         "docs/reports/opt-arc-001-db-proof-matrix.json",
         "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py",
         "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): fünf DB-Domain-Proof-Jobs grün (historisch; Schema-, Backfill- und Read-Path-Proof weiter gültig)",
-        "PR-CI-Lauf 27441828545 (pull_request, PR #1188, Commit 75ad1ebbaecbc41353d2fb0b39c2d6a9d90434ff): db-domain-edge-write-path-proof grün"
+        "PR-CI-Lauf 27441828545 (pull_request, PR #1188, Commit 75ad1ebbaecbc41353d2fb0b39c2d6a9d90434ff): db-domain-edge-write-path-proof grün",
+        "runtime/README.md",
+        "docs/reports/map-status.md",
+        "scripts/ci/run-postgres-integration-proofs.sh"
       ],
-      "missing_evidence": [
-        "Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend",
-        "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover; kein Dual-Write",
-        "Phase D (read-only), Phase E-A, E-B und E-C sind opt-in belegt; kein Produktions-Cutover"
-      ],
+      "missing_evidence": [],
       "acceptance": [
-        "PostgreSQL-Pfad für alle Domänen-Endpunkte (nodes, accounts, edges) aktiv",
-        "Migrations-SQL vorhanden und per CI belegt",
-        "Phase E Write-Path-Cutover belegt; JSONL nicht mehr versteckte Runtime-Wahrheit"
+        "PostgreSQL ist produktive Lese- und Schreibwahrheit für Accounts/Garnrollen, Knoten und Fäden",
+        "Migrations- und PostgreSQL-Integrationsbeweise sind automatisiert",
+        "Vertikaler Garnrolle–Knoten–Faden-Persistenzpfad ist im Produktionsbetrieb belegt"
       ],
       "links": {
         "issues": [],
@@ -911,10 +910,13 @@
           "docs/reports/domain-account-write-path-proof.md",
           "docs/reports/domain-node-write-path-proof.md",
           "docs/reports/opt-arc-001-db-proof-matrix.json",
-          "docs/reports/domain-edge-write-path-proof.md"
+          "docs/reports/domain-edge-write-path-proof.md",
+          "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py",
+          "runtime/README.md",
+          "docs/reports/map-status.md"
         ]
       },
-      "updated_at": "2026-06-12"
+      "updated_at": "2026-07-12"
     },
     {
       "id": "DOCMETA-START-HERE-001",
@@ -1437,7 +1439,7 @@
       "id": "OPT-INF-002",
       "title": "Third-Party-Actions per Commit-SHA pinnen",
       "area": "infra",
-      "status": "partial",
+      "status": "done",
       "priority": "medium",
       "effort": "S",
       "risk": "medium",
@@ -1446,18 +1448,13 @@
         "scripts/ci/check_github_action_pinning.py",
         "scripts/ci/tests/test_check_github_action_pinning.py",
         "docs/reports/github-action-ref-pinning-audit.md",
-        ".github/workflows/"
+        ".github/workflows/",
+        "scripts/guard/run.sh"
       ],
-      "missing_evidence": [
-        "49 direkte GitHub Action uses bleiben named refs; vollständiges SHA-Pinning erfolgt in ratcheted Folge-Slices.",
-        "12 actions/checkout uses in .github/workflows/api.yml bleiben bis zu einem separaten OPT-ARC-001-Proof-Refresh-Schnitt unpinned.",
-        "Ursprungstag und Ziel-SHA müssen pro verbleibender Action-Familie dokumentiert werden."
-      ],
+      "missing_evidence": [],
       "acceptance": [
-        "Ein reproduzierbarer Scanner klassifiziert alle GitHub-Workflow-uses-Referenzen nach Kind, Ref-Typ und Pinning-Policy.",
-        "Der Audit-Report dokumentiert aktuelle Counts, verbleibende unique named refs und Pinning-Slices.",
-        "Reusable Workflows, upload-artifact, pnpm/action-setup, setup-python und actions-cache sind SHA-gepinnt; checkout ist außerhalb der OPT-ARC-001-DB-Proof-Harness-Datei auf einen geprüften SHA gepinnt.",
-        "CI-/Update-Pfad bleibt nachvollziehbar; kein repo-weites Blind-Pinning ohne Action-Familien-Slice."
+        "Alle externen GitHub-Actions und reusable workflows sind auf Commit-SHAs gebunden",
+        "Named oder fehlende externe Refs blockieren CI"
       ],
       "links": {
         "issues": [],
@@ -1468,7 +1465,7 @@
           "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-07-03"
+      "updated_at": "2026-07-12"
     },
     {
       "id": "DOCMETA-REPORT-LIFECYCLE-001",

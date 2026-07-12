@@ -52,3 +52,19 @@ families:
     mirror_mode: exact
     require_live_check: true
     status: active
+
+  - id: runtime-prod-postgres
+    claim_id_prefix: CLAIM-RUNTIME-PROD-POSTGRES-
+    entry_id_prefix: claim-runtime-prod-postgres-
+    registry_doc: docs/claims/registry.yml
+    mirror_mode: exact
+    require_live_check: true
+    status: active
+
+  - id: runtime-live-prod
+    claim_id_prefix: CLAIM-RUNTIME-LIVE-PROD-
+    entry_id_prefix: claim-runtime-live-prod-
+    registry_doc: docs/claims/registry.yml
+    mirror_mode: exact
+    require_live_check: true
+    status: active

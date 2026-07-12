@@ -16,6 +16,7 @@ USES_RE = re.compile(r"^\s*-?\s*uses\s*:\s*(?P<uses>[^#\s]+)")
 JOB_RE = re.compile(r"^  (?P<job>[A-Za-z0-9_-]+)\s*:\s*(?:#.*)?$")
 HEX40_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 MUTABLE_DEFAULT_BRANCHES = {"main", "master", "trunk"}
+BLOCKING_POLICIES = {"named-ref", "mutable-default-branch", "missing-ref"}
 
 
 @dataclass(frozen=True)
@@ -140,6 +141,19 @@ def print_report(refs: list[ActionRef]) -> None:
 def main() -> int:
     refs = scan(Path(".github/workflows"))
     print_report(refs)
+    blocked = [
+        ref
+        for ref in refs
+        if ref.kind in {"github-action", "reusable-workflow"}
+        and ref.policy in BLOCKING_POLICIES
+    ]
+    if blocked:
+        print()
+        print("ERROR: external GitHub Actions and reusable workflows must be pinned to 40-character commit SHAs.")
+        print("Allowed without a GitHub SHA: local actions (./ or ../) and docker:// image actions.")
+        for ref in blocked:
+            print(f"- {ref.workflow} {ref.job}: {ref.uses} policy={ref.policy}")
+        return 1
     return 0
 
 

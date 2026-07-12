@@ -45,10 +45,11 @@ werden.
 
 ### Datenhaltung
 
-- JSONL als Standardquelle für Domänendaten
-- PostgreSQL-Tabellen für Sitzungen, Accounts, Knoten, Fäden und
-  Passkey-Credentials
-- getrennte opt-in Lese- und Schreibschalter für den PostgreSQL-Cutover
+- PostgreSQL als Produktionswahrheit für Accounts/Garnrollen, Knoten, Fäden,
+  Sitzungen, Passkey-Credentials und Migrationen
+- JSONL als lokaler, Legacy-, Import-/Export- und expliziter Rollbackpfad
+- fail-closed Lese- und Schreibschalter, damit keine versteckte Doppelwahrheit
+  entsteht
 - kein allgemeiner Transactional-Outbox-Pfad
 - kein vollständig belegtes PostGIS-Modell; Koordinaten liegen derzeit als
   `DOUBLE PRECISION` vor
@@ -58,16 +59,22 @@ werden.
 - Docker und Docker Compose
 - Caddy als Frontdoor und Reverse Proxy
 - VPS-Ziel `wg-prod-1`
-- statischer Web-Upstream über eine extern konfigurierte Hostingplattform
+- statische interne Caddy-Auslieferung von `apps/web/build`
 - Cloudflare- und Vercel-Status als zusätzliche Build-/Vorschaubelege
 
 ### Qualität und Sicherheit
 
 - GitHub Actions mit Rust-, Web-, Datenbank-, Auth-, Proxy-, Basemap- und
   CodeQL-Prüfungen
+- externe GitHub Actions und reusable Workflows sind auf 40-stellige Commit-SHAs
+  gepinnt; lokale Actions und `docker://` folgen der im Guard dokumentierten
+  Ausnahmepolicy
 - `cargo deny`
 - Domain-Contract-Validierung
+- Security-Header-Policy in `policies/security.yml`, statisch geprüft gegen
+  produktionsrelevante Caddyfiles
 - Caddy-Adaptions- und Compose-Vorprüfungen
+- logische PostgreSQL-Backups und Restore-Proofs über `scripts/ops/`
 - risikogewichtetes, head- und diffgebundenes Selbstreview vor Merge
 
 ## Im Repository vorhanden, aber nicht allgemein produktiv belegt
@@ -75,8 +82,6 @@ werden.
 - NATS im Produktions-Compose und API-Verbindungsfläche
 - PgBouncer im Core-Profil
 - Prometheus-Konfiguration und optionale Observability-Profile
-- PostgreSQL-Domainlese- und einzelne Schreibpfade
-- PostgreSQL-Passkeypersistenz
 - PWA-/Offline-nahe Webbestandteile
 - Gesprächs-, Nachrichten- und Rollencontracts
 
@@ -84,15 +89,14 @@ Für diese Punkte ist jeweils ein eigener Runtime- oder Ende-zu-Ende-Beleg nöti
 
 ## Geplant oder noch unvollständig
 
-- vollständiger JSONL-zu-PostgreSQL-Cutover
-- Entfernung der nullable Legacy-`mode`-Rollbackspalte nach belegtem Produktionscutover
-- durchgängiger Garnrolle–Knoten–Faden-Produktfluss
+- Entfernung der nullable Legacy-`mode`-Rollbackspalte nach eigenem Post-Cutover-Beleg
 - Gespräche und Nachrichten
 - föderale Governance und Gewebekonten
 - normalisierte Geoabfragen beziehungsweise PostGIS
 - verlässliche Eventprojektionen und Outbox
 - konsolidierte Observability mit definierten SLOs
-- automatisierte Restore- und Disaster-Recovery-Beweise
+- WAL-/PITR- oder Object-Lock-Backupstrategie, falls sie betrieblich benötigt
+  wird
 
 ## Nicht aktueller Standard
 

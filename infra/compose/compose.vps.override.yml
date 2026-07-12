@@ -39,5 +39,4 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     environment:
-      WEB_UPSTREAM_URL: https://weltgewebe.net
-      WEB_UPSTREAM_HOST: weltgewebe.net
+      WELTGEWEBE_BUILD: ${WELTGEWEBE_BUILD:?WELTGEWEBE_BUILD must be set}

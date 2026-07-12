@@ -6,9 +6,9 @@ status: active
 lang: de
 canonicality: planning
 summary: >
-  Planungs- und Cutover-Blaupause für OPT-ARC-001: kontrollierte Migration
-  der Domänendaten von JSONL/In-Memory nach PostgreSQL ohne versteckte
-  Doppelwahrheit.
+  Status- und Rückfallvertrag für OPT-ARC-001: PostgreSQL ist im
+  Produktionsvertrag die Domänenwahrheit; JSONL bleibt lokaler,
+  Legacy- und Rollbackpfad ohne versteckte Doppelwahrheit.
 relations:
   - type: relates_to
     target: docs/tasks/board.md
@@ -43,15 +43,21 @@ relations:
 ## Problemstellung
 
 OPT-ARC-001 ist nicht einfach „PostgreSQL verwenden“. Es geht um einen
-kontrollierten Persistenz-Cutover für die Domänendaten `nodes`, `edges` und
+kontrollierten Persistenzvertrag für die Domänendaten `nodes`, `edges` und
 `accounts`.
 
-Der belegte Ist-Zustand nach Phase E-C / PR #1196:
+Der belegte Repository- und Produktionsvertrag nach der Remediation vom
+2026-07-12:
 
 - PostgreSQL-Domain-Tabellen und Migrationen für nodes, edges und accounts existieren.
-- JSONL bleibt weiterhin Default-Wahrheit, solange kein expliziter Cutover erfolgt.
-- PostgreSQL-Read-Path existiert opt-in hinter Domain-Read-Konfiguration.
-- PostgreSQL-Write-Paths existieren opt-in für:
+- `wg-prod-1` ist in Compose, Runtime-Dokumentation und `.env.prod.example`
+  auf PostgreSQL als Lese- und Schreibwahrheit für Accounts/Garnrollen,
+  Knoten und Fäden ausgerichtet.
+- JSONL bleibt lokaler Default für Rückwärtskompatibilität und ein
+  expliziter Legacy-, Import-/Export- oder Rollbackpfad. Es ist keine offene
+  Produktions-Cutover-Wahrheit mehr.
+- PostgreSQL-Read-Path existiert hinter Domain-Read-Konfiguration.
+- PostgreSQL-Write-Paths existieren für:
   - `POST /accounts`
   - `PATCH /nodes`
   - `POST /edges`
@@ -60,19 +66,22 @@ Der belegte Ist-Zustand nach Phase E-C / PR #1196:
 - Neue PostgreSQL-Account-Create-Zeilen persistieren eine stabile
   `webauthn_user_id`; Cache und Reload erhalten dieselbe UUID.
 - Lokale Runtime-Caches bestehen weiter.
-- Produktions-Cutover ist nicht erfolgt.
+- Sessions und Passkey-Credentials gehören im Produktionspfad ebenfalls zur
+  PostgreSQL-Datensicherung und Restore-Prüfung.
+- Frische Liveaussagen über `wg-prod-1` brauchen weiterhin Runtime-Evidence
+  mit Datum; diese Blaupause schreibt keine Runtimewerte zeitlos fest.
 
-Diese Blaupause ordnet deshalb den verbleibenden Cutover-Pfad, die Prüfregeln
-und die Rückfalllogik, bevor PostgreSQL als primäre Domain-Wahrheit aktiviert
-wird.
+Diese Blaupause ordnet deshalb nicht mehr einen offenen Produktions-Cutover,
+sondern die verbleibenden Belege, Prüfregeln und Rückfalllogik um den
+PostgreSQL-Produktionsvertrag.
 
 ## Verifizierter Ist-Zustand
 
-| Domain | Default | PostgreSQL opt-in | Status |
+| Domain | Lokaler Default | Produktionsvertrag | Status |
 |---|---|---|---|
-| nodes | JSONL read/write | Read-Path + `PATCH /nodes` | Nicht Default |
-| edges | JSONL read/legacy | Read-Path + `POST /edges` | Nicht Default |
-| accounts | JSONL read/create | Read-Path + `POST /accounts` | Nicht Default |
+| nodes | JSONL read/write | PostgreSQL Read + `PATCH /nodes` | Produktionswahrheit laut Repo-Vertrag; Livebeleg separat |
+| edges | JSONL read/legacy | PostgreSQL Read + `POST /edges` | Produktionswahrheit laut Repo-Vertrag; Edge-Referenzpolitik offen |
+| accounts | JSONL read/create | PostgreSQL Read + `POST /accounts` | Produktionswahrheit laut Repo-Vertrag; weitere Auth-Mutationen offen |
 
 Zusatzdetails:
 
@@ -86,22 +95,23 @@ Zusatzdetails:
 Zusatzbefund:
 
 - `ApiState` hält weiterhin prozesslokale In-Memory-Caches.
-- PostgreSQL ist für Domain-Daten opt-in verfügbar, aber nicht Default-Wahrheit.
+- PostgreSQL ist im Produktionsvertrag Domain-Wahrheit; lokale Defaults bleiben
+  aus Rückwärtskompatibilität JSONL.
 - Config-Gates müssen explizit gesetzt werden; fehlerhafte `APP_CONFIG_PATH`-Konfigurationen fail-closed.
 - PostgreSQL-Write-Slices sind getrennt implementiert:
   - E-A Account-Create
   - E-B Node-Patch
   - E-C Edge-Create
-- Offene Account-Mutationen bleiben:
-  - Step-up-E-Mail-Persistenz
-  - WebAuthn-Credential-Writeback / Passkey-Cutover
-  - Legacy-Backfill und späteres `NOT NULL` für die WebAuthn-UUID-Spalte
-  - E-Mail-Eindeutigkeit
+- Account-Create, Step-up-E-Mail, normalisierte E-Mail-Eindeutigkeit und der
+  PostgreSQL-Passkey-Store sind implementiert und datenbankgetestet.
+- Offen bleiben der Legacy-Backfill und ein späteres `NOT NULL` für
+  `webauthn_user_id`, Management-UI sowie ein echter Plattform-Passkey-Beleg.
 
 ## Zielzustand
 
-Dieser Zielzustand ist noch nicht erreicht. Er definiert einen klaren, einzigen primären Truth-Layer für
-Domänendaten:
+Der Produktionsvertrag erreicht den zentralen Zielzustand eines klaren
+primären Truth-Layers für Domänendaten. Vollständig erledigt ist OPT-ARC-001
+erst nach den unten genannten Live-, Referenz- und Legacy-Belegen:
 
 - PostgreSQL ist die primäre Persistenzschicht für `nodes`, `edges` und
   `accounts`.
@@ -184,10 +194,9 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
 - Schreibpfad-Abdeckung: Der Cutover muss nicht nur Account-Erzeugung,
   sondern auch spätere Account-Mutationen abdecken, insbesondere
   Step-up-E-Mail-Änderungen und WebAuthn-Credential-Writeback. Die Spalte
-  `webauthn_user_id` wird bei neuen PostgreSQL-Account-Create-Zeilen persistiert.
-  Legacy-Fälle ohne diese UUID bleiben vorerst erhalten.
-  Backfill/Audit und späteres `NOT NULL` bleiben offen.
-  Auch WebAuthn-Credential-Writeback bleibt offen.
+  `webauthn_user_id` wird bei neuen PostgreSQL-Account-Zeilen persistiert.
+  Legacy-Fälle ohne diese UUID bleiben vorerst erhalten; Backfill/Audit und
+  späteres `NOT NULL` bleiben ein eigener Post-Cutover-Schnitt.
 - Indexe: Primärschlüssel auf `id`, eindeutiger Index auf `email` oder
   `lower(email)`, falls E-Mail-Login oder Lookup das benötigen.
 - Eindeutigkeitsregeln: öffentliche und private Sicht müssen getrennt bleiben;
@@ -199,24 +208,23 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
 
 | Phase | Inhalt | Ergebnis / aktueller Stand |
 |---|---|---|
-| A | Blueprint und Statusabgleich | vorhanden; dieser PR aktualisiert den Blueprint auf Phase E-C + PR #1196 |
+| A | Blueprint und Statusabgleich | abgeschlossen; aktive Wahrheitsdokumente auf Produktionsstand gebracht |
 | B | SQL-Schema-Entwurf und Migrationstests | implementiert; Edge-FK-/Orphan-Gate offen |
 | C | Backfill-/Import-Pfad | implementiert und proof-geführt |
-| D | Read-Path hinter Config | implementiert opt-in; JSONL bleibt Default |
-| E-A | Account-Create-Write-Path | implementiert opt-in; neue PostgreSQL-Creates persistieren stabile `webauthn_user_id` |
-| E-B | Node-Patch-Write-Path | implementiert opt-in |
-| E-C | Edge-Create-Write-Path | implementiert opt-in |
-| E-Rest | Weitere Account-/Integritätsblocker | offen: Step-up-E-Mail, WebAuthn-Credential-Writeback, E-Mail-Unique, Legacy-Backfill/NOT NULL |
-| F | Runtime-Smoke und Betriebsentscheidung | offen |
-| G | JSONL-Demontage | offen |
+| D | Read-Path hinter Config | implementiert; Produktion setzt PostgreSQL, lokaler Legacy-Default bleibt JSONL |
+| E-A | Account-Create-Write-Path | implementiert; Produktion schreibt PostgreSQL |
+| E-B | Node-Schreibpfad | implementiert; Produktion schreibt PostgreSQL |
+| E-C | Edge-Create-Write-Path | implementiert; Produktion schreibt PostgreSQL |
+| E-Rest | Weitere Account-/Integritätsbelege | Step-up-E-Mail, E-Mail-Unique und Passkey-Store implementiert; Legacy-Backfill/NOT NULL und Edge-Referenzpolitik separat offen |
+| F | Runtime-Smoke und Betriebsentscheidung | Produktionscutover und vertikaler Garnrolle–Knoten–Faden-Smoke am 11./12.07.2026 belegt; nach Deploys neu zu erheben |
+| G | JSONL-Demontage | Legacy-/Rollback-Aufräumung offen |
 
-## Offene Cutover-Blocker nach Phase E-C
+## Offene Folgebelege nach Phase E-C
 
-- Produktions-Cutover nicht erfolgt; JSONL bleibt Default-Wahrheit.
-- PostgreSQL-vs-JSONL-Listenparität ist offen: Legacy-`offset`/`limit`
-  und Cursor-Paginierung müssen vor dem Cutover gegen den bestehenden
-  API-Vertrag geprüft werden.
-- Edge-Orphan-/Referenz-Audit ist offen: Vor Produktions-Cutover muss
+- PostgreSQL-vs-JSONL-Listenparität bleibt als Kompatibilitätsbeleg relevant:
+  Legacy-`offset`/`limit` und Cursor-Paginierung müssen gegen den bestehenden
+  API-Vertrag prüfbar bleiben.
+- Edge-Orphan-/Referenz-Audit ist offen: Vor einer strikten FK-Migration muss
   entschieden werden, ob `domain_edges.source_id`/`target_id` strikte
   Foreign Keys auf `domain_nodes(id)` erhalten oder ob eine lose
   Referenzsemantik mit Guard/Quarantäne-Report bewusst akzeptiert wird.
@@ -224,15 +232,15 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
   prozesslokale Caches sind nicht instanzübergreifend kohärent; horizontale
   API-Skalierung bleibt bis zu einer getesteten Kohärenzlösung ausgeschlossen.
   Siehe `docs/reports/domain-postgres-instance-coherence-decision.md`.
-- E-Mail-Eindeutigkeit ist PostgreSQL-seitig noch nicht abgesichert.
-- Step-up-E-Mail-Persistenz nach PostgreSQL ist offen.
-- WebAuthn-Credential-Writeback und Passkey-Cutover sind offen.
+- E-Mail-Eindeutigkeit, Step-up-E-Mail-Persistenz und PostgreSQL-Passkey-Store
+  sind implementiert; Plattform-Passkey-E2E und Managementpfade bleiben offen.
 - Legacy-Accounts ohne persistierte WebAuthn-UUID brauchen Backfill/Audit
   vor späterem `NOT NULL` auf der Spalte.
 - Edge-Create funktioniert opt-in, aber Lock-/Limit-Strategie ist
   nicht performance-optimiert.
-- Runtime-Smoke für vollständigen PostgreSQL-Domain-Betrieb ist offen.
-- JSONL-Demontage ist offen.
+- Der Runtime-Smoke vom 11./12.07.2026 ist belegt; jede aktuelle Liveaussage
+  braucht nach einem Deploy eine neue datierte Evidence.
+- JSONL-Legacy-/Rollback-Aufräumung ist offen.
 
 ## Instance Coherence Boundary
 
@@ -263,7 +271,7 @@ Der statische Guard
 `scripts/tests/test_domain_single_instance_guard.sh` sichern diese klar
 erkennbaren Konfigurationsflächen ab. Parsergrenzen und Nicht-Beweise sind im
 Decision-Report dokumentiert. Die Grenze entsperrt weder `DOMAIN-PG-001` noch
-`DB-PROOF-001`, `AUTH-PG-001`, `AUTH-PG-002` oder den PostgreSQL-Cutover.
+`DB-PROOF-001`, `AUTH-PG-001`, `AUTH-PG-002` oder horizontale Skalierung.
 
 ## Regeln für die Datenmigration
 
@@ -287,10 +295,12 @@ Decision-Report dokumentiert. Die Grenze entsperrt weder `DOMAIN-PG-001` noch
 - Wenn Phase B fehlschlägt, wird die Migration verworfen.
 - Wenn der Backfill fehlschlägt, dürfen Tabellen in Dev/Test neu aufgebaut
   werden; Produktion braucht dafür eine explizite Backup-/Restore-Strategie.
-- Wenn die Read-Parität fehlschlägt, bleibt der Runtime-Pfad auf JSONL.
-- Wenn der Write-Cutover fehlschlägt, wird nur dann auf JSONL zurückgeschaltet,
-  wenn JSONL noch die autoritative Wahrheit ist; bei Dual-Write ist eine
-  Reconciliation-Regel Pflicht.
+- Wenn Read-Parität fehlschlägt, darf die betroffene Änderung nicht promoted
+  werden; Produktion wird nicht still auf JSONL umgedeutet.
+- JSONL darf als Rollbackquelle nur genutzt werden, wenn ein konkreter,
+  zeitlich passender Export/Backfill als bewusstes Rückfallartefakt
+  dokumentiert ist. Andernfalls ist Restore aus geprüftem PostgreSQL-Backup
+  der maßgebliche Pfad.
 - Split-Brain zwischen JSONL und PostgreSQL ist zu vermeiden, nicht zu
   kaschieren.
 
@@ -316,18 +326,19 @@ Weiter erforderlich:
     sortieren.
 - Edge-Orphan-/Referenz-Audit-Proof vor der finalen Entscheidung zwischen
   Foreign Keys und bewusst loser Referenzsemantik.
-- Runtime-Smoke für vollständigen PostgreSQL-Domain-Betrieb
+- Runtime-Smoke für vollständigen PostgreSQL-Domain-Betrieb auf `wg-prod-1`
 - Multi-Instance-/Cache-Kohärenz-Proof, falls horizontale Skalierung
   erlaubt werden soll
 - E-Mail-Unique-Proof
 - Step-up-E-Mail-Persistenz-Proof
 - WebAuthn-Credential-Writeback-Proof
-- JSONL-Demontage-Proof
+- Legacy-/Rollback-Aufräumungs-Proof für JSONL
 
 ## Akzeptanzkriterien für OPT-ARC-001
 
-OPT-ARC-001 darf erst dann als erledigt gelten, wenn alles Folgende nachweisbar
-ist:
+OPT-ARC-001 bleibt im Board `partial`, solange die Folgebelege nicht komplett
+vorliegen. Der Produktionsvertrag selbst ist auf PostgreSQL ausgerichtet.
+Erledigt ist die Aufgabe erst, wenn alles Folgende nachweisbar ist:
 
 - PostgreSQL-Migrationen existieren für `nodes`, `edges` und `accounts`.
 - Der Runtime-Pfad kann PostgreSQL als primäre Quelle verwenden.
