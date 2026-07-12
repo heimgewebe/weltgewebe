@@ -86,6 +86,8 @@ export interface CreateNodePayload {
   address: string;
   location: Location;
   summary?: string;
+  /** Stable UUID for retrying one user action after an uncertain response. */
+  operation_id?: string;
 }
 
 /** POST /api/nodes — create a node. Server owns `id`/`created_at`/`updated_at`. */
@@ -99,6 +101,8 @@ export interface CreateEdgePayload {
   target_id: string;
   target_type: string;
   edge_kind: string;
+  /** Stable UUID for retrying one user action after an uncertain response. */
+  operation_id?: string;
 }
 
 /** POST /api/edges — create an edge. Server owns `id`/`created_at`. */

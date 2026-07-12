@@ -70,6 +70,7 @@ These paths are unchanged. JSONL is the active runtime truth until Phase D/E.
 | `created_at` | `created_at` (TIMESTAMPTZ) | Parsed as RFC 3339; NULL if absent or unparseable |
 | `updated_at` | `updated_at` (TIMESTAMPTZ) | Parsed as RFC 3339; NULL if absent or unparseable |
 | `summary`, `info`, `tags` | `payload` (JSONB) | Remaining fields; absent/null keys omitted |
+| `_create_actor_id`, `_create_operation_id` | `create_actor_id`, `create_operation_id` | Optional internal pair; never copied into public payload |
 
 ### domain_edges
 
@@ -81,6 +82,7 @@ These paths are unchanged. JSONL is the active runtime truth until Phase D/E.
 | `edge_kind` / `kind` / `edgeKind` | `edge_kind` | serde aliases preserved; default `""` |
 | `created_at` | `created_at` (TIMESTAMPTZ) | Optional |
 | `source_type`, `target_type`, `note` | `payload` (JSONB) | Participant type hints and free text |
+| `_create_actor_id`, `_create_operation_id` | `create_actor_id`, `create_operation_id` | Optional internal pair; never copied into public payload |
 
 ### domain_accounts
 
@@ -125,6 +127,7 @@ path. The final row contains the last-seen values in file order.
 | Invalid JSON | `malformed_json_lines` incremented; line not imported |
 | Missing `id` | `skipped_records` incremented; line not imported |
 | Missing `source_id` / `target_id` (edges) | `skipped_records` incremented; line not imported |
+| Half-populated or invalid create-operation metadata | `skipped_records` incremented; line not imported |
 | Unparseable timestamp | `NULL` stored in TIMESTAMPTZ column |
 | Invalid `webauthn_user_id` UUID | `NULL` stored; original string discarded |
 

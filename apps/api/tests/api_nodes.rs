@@ -1001,6 +1001,89 @@ async fn nodes_post_creates_persists_and_reloads() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn nodes_post_replays_same_operation_without_second_write() -> anyhow::Result<()> {
+    const OPERATION_ID: &str = "10000000-0000-0000-0000-000000000001";
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+
+    let (app, cookie, _initial_state, _env) =
+        app_with_account(&in_dir, weber_account("weber1")).await;
+    let request_body = format!(
+        r#"{{"title":"Retry Safe Node","kind":"Werkstatt","address":"Musterstraße 1","location":{{"lat":53.55,"lon":9.99}},"summary":"Same action","operation_id":"{OPERATION_ID}"}}"#
+    );
+
+    let first_attempt = app
+        .clone()
+        .oneshot(post_node_req(Some(&cookie), &request_body));
+    let second_attempt = app
+        .clone()
+        .oneshot(post_node_req(Some(&cookie), &request_body));
+    let (first, second) = tokio::join!(first_attempt, second_attempt);
+    let first = first?;
+    let second = second?;
+    let first_status = first.status();
+    let second_status = second.status();
+    assert!(
+        (first_status == StatusCode::CREATED && second_status == StatusCode::OK)
+            || (first_status == StatusCode::OK && second_status == StatusCode::CREATED),
+        "parallel retries must produce one 201 and one 200, got {first_status} and {second_status}"
+    );
+    let first_body = body::to_bytes(first.into_body(), usize::MAX).await?;
+    let second_body = body::to_bytes(second.into_body(), usize::MAX).await?;
+    let first_node: serde_json::Value = serde_json::from_slice(&first_body)?;
+    let second_node: serde_json::Value = serde_json::from_slice(&second_body)?;
+    assert_eq!(first_node["id"], second_node["id"]);
+
+    // Build a fresh API/cache/session state to simulate a restart after the
+    // server committed but the first response was lost.
+    let (restarted_app, restarted_cookie, restarted_state, _restart_env) =
+        app_with_account(&in_dir, weber_account("weber1")).await;
+    let replay = restarted_app
+        .clone()
+        .oneshot(post_node_req(Some(&restarted_cookie), &request_body))
+        .await?;
+    assert_eq!(replay.status(), StatusCode::OK);
+    let replay_body = body::to_bytes(replay.into_body(), usize::MAX).await?;
+    let replay_node: serde_json::Value = serde_json::from_slice(&replay_body)?;
+    assert_eq!(replay_node["id"], first_node["id"]);
+    assert!(replay_node.get("operation_id").is_none());
+    assert!(replay_node.get("_create_operation_id").is_none());
+
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    let contents = fs::read_to_string(&nodes_path)?;
+    assert_eq!(contents.lines().count(), 1);
+    let record: serde_json::Value = serde_json::from_str(contents.lines().next().unwrap())?;
+    assert_eq!(record["_create_actor_id"], "weber1");
+    assert_eq!(record["_create_operation_id"], OPERATION_ID);
+    assert_eq!(restarted_state.nodes.read().await.len(), 1);
+
+    // The key identifies one semantic action. Reusing it for changed data is a
+    // conflict and must still leave exactly one durable node.
+    let changed_body = format!(
+        r#"{{"title":"Different Node","kind":"Werkstatt","address":"Musterstraße 1","location":{{"lat":53.55,"lon":9.99}},"summary":"Same action","operation_id":"{OPERATION_ID}"}}"#
+    );
+    let conflict = restarted_app
+        .oneshot(post_node_req(Some(&restarted_cookie), &changed_body))
+        .await?;
+    assert_eq!(conflict.status(), StatusCode::CONFLICT);
+    assert_eq!(fs::read_to_string(&nodes_path)?.lines().count(), 1);
+
+    // The same UUID belongs to the account/action pair, not globally to all
+    // users. Another account may independently use it for a different node.
+    let (other_app, other_cookie, _other_state, _other_env) =
+        app_with_account(&in_dir, weber_account("weber2")).await;
+    let other = other_app
+        .oneshot(post_node_req(Some(&other_cookie), &changed_body))
+        .await?;
+    assert_eq!(other.status(), StatusCode::CREATED);
+    assert_eq!(fs::read_to_string(nodes_path)?.lines().count(), 2);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn nodes_post_requires_authentication() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
@@ -1105,6 +1188,10 @@ async fn nodes_post_rejects_invalid_payloads_with_stable_400() -> anyhow::Result
         r#"{"title":"Extra","kind":"Werkstatt","address":"Somewhere","location":{"lat":10.0,"lon":10.0},"wat":true}"#,
         // Server-owned id supplied by client.
         r#"{"id":"00000000-0000-0000-0000-000000000001","title":"Client Id","kind":"Werkstatt","address":"Somewhere","location":{"lat":10.0,"lon":10.0}}"#,
+        // Client operation id must be a UUID.
+        r#"{"title":"Bad Operation","kind":"Werkstatt","address":"Somewhere","location":{"lat":10.0,"lon":10.0},"operation_id":"not-a-uuid"}"#,
+        // Explicit null is not the same as omitting the optional operation id.
+        r#"{"title":"Null Operation","kind":"Werkstatt","address":"Somewhere","location":{"lat":10.0,"lon":10.0},"operation_id":null}"#,
         // Too many tags.
         &format!(
             r#"{{"title":"Too Many Tags","kind":"Werkstatt","address":"Somewhere","location":{{"lat":10.0,"lon":10.0}},"tags":[{}]}}"#,

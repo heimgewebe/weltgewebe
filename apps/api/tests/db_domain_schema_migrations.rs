@@ -89,6 +89,46 @@ async fn index_exists(pool: &sqlx::PgPool, index_name: &str) -> bool {
     row.0
 }
 
+async fn column_exists(pool: &sqlx::PgPool, table_name: &str, column_name: &str) -> bool {
+    let row: (bool,) = sqlx::query_as(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = $1
+              AND column_name = $2
+        )
+        "#,
+    )
+    .bind(table_name)
+    .bind(column_name)
+    .fetch_one(pool)
+    .await
+    .expect("failed to query information_schema.columns");
+
+    row.0
+}
+
+async fn constraint_exists(pool: &sqlx::PgPool, constraint_name: &str) -> bool {
+    let row: (bool,) = sqlx::query_as(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE connamespace = 'public'::regnamespace
+              AND conname = $1
+        )
+        "#,
+    )
+    .bind(constraint_name)
+    .fetch_one(pool)
+    .await
+    .expect("failed to query pg_constraint");
+
+    row.0
+}
+
 /// Verifies that running all migrations creates the domain tables and
 /// expected indexes for nodes, edges, and accounts.
 ///
@@ -113,6 +153,22 @@ async fn domain_schema_tables_exist_after_migration() {
         index_exists(&pool, "domain_nodes_lat_lon").await,
         "domain_nodes_lat_lon index must exist"
     );
+    assert!(
+        column_exists(&pool, "domain_nodes", "create_actor_id").await,
+        "domain_nodes.create_actor_id must exist"
+    );
+    assert!(
+        column_exists(&pool, "domain_nodes", "create_operation_id").await,
+        "domain_nodes.create_operation_id must exist"
+    );
+    assert!(
+        index_exists(&pool, "domain_nodes_create_operation_unique").await,
+        "domain_nodes create-operation unique index must exist"
+    );
+    assert!(
+        constraint_exists(&pool, "domain_nodes_create_operation_pair").await,
+        "domain_nodes create-operation pair check must exist"
+    );
 
     // --- domain_edges ---
     assert!(
@@ -130,6 +186,22 @@ async fn domain_schema_tables_exist_after_migration() {
     assert!(
         index_exists(&pool, "domain_edges_source_target").await,
         "domain_edges_source_target index must exist"
+    );
+    assert!(
+        column_exists(&pool, "domain_edges", "create_actor_id").await,
+        "domain_edges.create_actor_id must exist"
+    );
+    assert!(
+        column_exists(&pool, "domain_edges", "create_operation_id").await,
+        "domain_edges.create_operation_id must exist"
+    );
+    assert!(
+        index_exists(&pool, "domain_edges_create_operation_unique").await,
+        "domain_edges create-operation unique index must exist"
+    );
+    assert!(
+        constraint_exists(&pool, "domain_edges_create_operation_pair").await,
+        "domain_edges create-operation pair check must exist"
     );
 
     // --- domain_accounts ---
@@ -246,6 +318,204 @@ async fn domain_schema_basic_insert_and_read() {
         .execute(&pool)
         .await
         .expect("failed to clean up domain_accounts probe row");
+
+    pool.close().await;
+}
+
+/// Verifies the create-operation schema contract directly: legacy NULL/NULL
+/// rows remain valid, one account cannot reuse one operation id for a second
+/// row, another account may use the same UUID independently, and half-populated
+/// operation metadata is rejected by the pair check.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn domain_create_operation_constraints_are_enforced() {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+
+    sqlx::query("DELETE FROM domain_edges WHERE id LIKE 'test-operation-edge-%'")
+        .execute(&pool)
+        .await
+        .expect("failed to clean edge create-operation probe rows");
+    sqlx::query("DELETE FROM domain_nodes WHERE id LIKE 'test-operation-node-%'")
+        .execute(&pool)
+        .await
+        .expect("failed to clean node create-operation probe rows");
+
+    sqlx::query(
+        "INSERT INTO domain_nodes \
+            (id, kind, title, lat, lon, payload, create_actor_id, create_operation_id) \
+         VALUES \
+            ('test-operation-node-a', 'test', 'A', 1, 1, '{}', 'actor-a', \
+             '50000000-0000-0000-0000-000000000001')",
+    )
+    .execute(&pool)
+    .await
+    .expect("first node operation row must insert");
+
+    let node_duplicate = sqlx::query(
+        "INSERT INTO domain_nodes \
+            (id, kind, title, lat, lon, payload, create_actor_id, create_operation_id) \
+         VALUES \
+            ('test-operation-node-b', 'test', 'B', 1, 1, '{}', 'actor-a', \
+             '50000000-0000-0000-0000-000000000001')",
+    )
+    .execute(&pool)
+    .await
+    .expect_err("same actor and node operation must be unique");
+    assert!(node_duplicate
+        .as_database_error()
+        .is_some_and(|error| error.is_unique_violation()));
+
+    sqlx::query(
+        "INSERT INTO domain_nodes \
+            (id, kind, title, lat, lon, payload, create_actor_id, create_operation_id) \
+         VALUES \
+            ('test-operation-node-c', 'test', 'C', 1, 1, '{}', 'actor-b', \
+             '50000000-0000-0000-0000-000000000001')",
+    )
+    .execute(&pool)
+    .await
+    .expect("same node operation UUID must remain independent across accounts");
+
+    let node_half_pair = sqlx::query(
+        "INSERT INTO domain_nodes \
+            (id, kind, title, lat, lon, payload, create_actor_id) \
+         VALUES ('test-operation-node-half', 'test', 'half', 1, 1, '{}', 'actor-a')",
+    )
+    .execute(&pool)
+    .await
+    .expect_err("half-populated node operation metadata must fail");
+    assert_eq!(
+        node_half_pair
+            .as_database_error()
+            .and_then(|error| error.code())
+            .as_deref(),
+        Some("23514")
+    );
+
+    for (id, actor, operation) in [
+        (
+            "test-operation-node-blank-actor",
+            "   ",
+            "50000000-0000-0000-0000-000000000002",
+        ),
+        ("test-operation-node-invalid-uuid", "actor-a", "NOT-A-UUID"),
+    ] {
+        let error = sqlx::query(
+            "INSERT INTO domain_nodes \
+                (id, kind, title, lat, lon, payload, create_actor_id, create_operation_id) \
+             VALUES ($1, 'test', 'invalid metadata', 1, 1, '{}', $2, $3)",
+        )
+        .bind(id)
+        .bind(actor)
+        .bind(operation)
+        .execute(&pool)
+        .await
+        .expect_err("invalid node operation metadata must fail");
+        assert_eq!(
+            error
+                .as_database_error()
+                .and_then(|error| error.code())
+                .as_deref(),
+            Some("23514")
+        );
+    }
+
+    sqlx::query(
+        "INSERT INTO domain_edges \
+            (id, source_id, target_id, edge_kind, payload, create_actor_id, create_operation_id) \
+         VALUES \
+            ('test-operation-edge-a', 'src', 'dst', 'reference', '{}', 'actor-a', \
+             '60000000-0000-0000-0000-000000000001')",
+    )
+    .execute(&pool)
+    .await
+    .expect("first edge operation row must insert");
+
+    let edge_duplicate = sqlx::query(
+        "INSERT INTO domain_edges \
+            (id, source_id, target_id, edge_kind, payload, create_actor_id, create_operation_id) \
+         VALUES \
+            ('test-operation-edge-b', 'src', 'dst', 'reference', '{}', 'actor-a', \
+             '60000000-0000-0000-0000-000000000001')",
+    )
+    .execute(&pool)
+    .await
+    .expect_err("same actor and edge operation must be unique");
+    assert!(edge_duplicate
+        .as_database_error()
+        .is_some_and(|error| error.is_unique_violation()));
+
+    sqlx::query(
+        "INSERT INTO domain_edges \
+            (id, source_id, target_id, edge_kind, payload, create_actor_id, create_operation_id) \
+         VALUES \
+            ('test-operation-edge-c', 'src', 'dst', 'reference', '{}', 'actor-b', \
+             '60000000-0000-0000-0000-000000000001')",
+    )
+    .execute(&pool)
+    .await
+    .expect("same edge operation UUID must remain independent across accounts");
+
+    let edge_half_pair = sqlx::query(
+        "INSERT INTO domain_edges \
+            (id, source_id, target_id, edge_kind, payload, create_operation_id) \
+         VALUES \
+            ('test-operation-edge-half', 'src', 'dst', 'reference', '{}', \
+             '60000000-0000-0000-0000-000000000002')",
+    )
+    .execute(&pool)
+    .await
+    .expect_err("half-populated edge operation metadata must fail");
+    assert_eq!(
+        edge_half_pair
+            .as_database_error()
+            .and_then(|error| error.code())
+            .as_deref(),
+        Some("23514")
+    );
+
+    for (id, actor, operation) in [
+        (
+            "test-operation-edge-blank-actor",
+            "",
+            "60000000-0000-0000-0000-000000000003",
+        ),
+        (
+            "test-operation-edge-invalid-uuid",
+            "actor-a",
+            "60000000-INVALID",
+        ),
+    ] {
+        let error = sqlx::query(
+            "INSERT INTO domain_edges \
+                (id, source_id, target_id, edge_kind, payload, \
+                 create_actor_id, create_operation_id) \
+             VALUES ($1, 'src', 'dst', 'reference', '{}', $2, $3)",
+        )
+        .bind(id)
+        .bind(actor)
+        .bind(operation)
+        .execute(&pool)
+        .await
+        .expect_err("invalid edge operation metadata must fail");
+        assert_eq!(
+            error
+                .as_database_error()
+                .and_then(|error| error.code())
+                .as_deref(),
+            Some("23514")
+        );
+    }
+
+    sqlx::query("DELETE FROM domain_edges WHERE id LIKE 'test-operation-edge-%'")
+        .execute(&pool)
+        .await
+        .expect("failed to clean edge create-operation probe rows");
+    sqlx::query("DELETE FROM domain_nodes WHERE id LIKE 'test-operation-node-%'")
+        .execute(&pool)
+        .await
+        .expect("failed to clean node create-operation probe rows");
 
     pool.close().await;
 }

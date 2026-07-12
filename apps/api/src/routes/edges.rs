@@ -5,7 +5,9 @@ use super::query::{
 };
 use crate::auth::role::Role;
 use crate::config::DomainEdgeWriteSource;
-use crate::domain_db::{insert_domain_edge, EdgeWriteError};
+use crate::domain_db::{
+    insert_domain_edge, CreateOperationKey, CreateWriteOutcome, EdgeWriteError,
+};
 use crate::middleware::auth::AuthContext;
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::edges_path;
@@ -295,8 +297,41 @@ async fn append_edge_line(record: &Value) -> std::io::Result<()> {
     Ok(())
 }
 
+const CREATE_ACTOR_KEY: &str = "_create_actor_id";
+const CREATE_OPERATION_KEY: &str = "_create_operation_id";
+
+fn add_create_operation_metadata(record: &mut Value, operation: Option<&CreateOperationKey>) {
+    let Some(operation) = operation else {
+        return;
+    };
+    let object = record
+        .as_object_mut()
+        .expect("canonical edge create record must be an object");
+    object.insert(
+        CREATE_ACTOR_KEY.to_string(),
+        Value::String(operation.actor_id.clone()),
+    );
+    object.insert(
+        CREATE_OPERATION_KEY.to_string(),
+        Value::String(operation.operation_id.clone()),
+    );
+}
+
+fn edge_matches_create(edge: &Edge, expected: &edge_create::ValidatedCreateEdge) -> bool {
+    expected
+        .id
+        .as_ref()
+        .is_none_or(|expected_id| edge.id == *expected_id)
+        && edge.source_id == expected.source_id
+        && edge.source_type.as_deref() == Some(expected.source_type.as_str())
+        && edge.target_id == expected.target_id
+        && edge.target_type.as_deref() == Some(expected.target_type.as_str())
+        && edge.edge_kind == expected.edge_kind
+        && edge.note == expected.note
+}
+
 /// Outcome of inspecting the persisted edges file before a create.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 struct EdgePersistenceStatus {
     /// The file already holds at least `max_edges_cache_limit()` lines, so an
     /// appended record would land on a line index [`load_edges`] never
@@ -307,55 +342,84 @@ struct EdgePersistenceStatus {
     /// it is not in the in-memory cache (e.g. in a suffix the loader
     /// truncated away).
     duplicate_id: bool,
+    /// Durable result of the same account-scoped operation, when present.
+    existing_operation: Option<Edge>,
 }
 
-/// Scan the persisted edges file before an append, mirroring [`load_edges`]
-/// semantics: every line counts toward the cache limit, unparseable lines are
-/// skipped, and a final unterminated line is still read. The whole file is
-/// scanned — also beyond the limit — so a duplicate id in the unmaterialized
-/// suffix is detected. A missing file means an empty persistence source.
-/// Callers MUST hold the `edge_create_persist_lock`.
-async fn inspect_edge_persistence_for_create(id: &str) -> std::io::Result<EdgePersistenceStatus> {
+/// Scan the persisted edges file once before an append, mirroring
+/// [`load_edges`] semantics: every line counts toward the cache limit,
+/// unparseable lines are skipped, and a final unterminated line is still read.
+/// The whole file is scanned — also beyond the limit — so duplicate ids and an
+/// earlier operation result in an unmaterialized suffix remain detectable. A
+/// missing file means an empty persistence source. Callers MUST hold the
+/// `edge_create_persist_lock`.
+async fn inspect_edge_persistence_for_create(
+    id: &str,
+    operation: Option<&CreateOperationKey>,
+) -> std::io::Result<EdgePersistenceStatus> {
     let path = edges_path();
     let max_edges = max_edges_cache_limit();
     let file = match File::open(&path).await {
-        Ok(f) => f,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            // A missing file is only writable when the loader would materialize
-            // at least one appended line after restart.
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(EdgePersistenceStatus {
                 cache_limit_reached: max_edges == 0,
                 duplicate_id: false,
+                existing_operation: None,
             });
         }
-        Err(e) => return Err(e),
+        Err(error) => return Err(error),
     };
 
     let mut lines = BufReader::new(file).lines();
-    let mut lines_read: usize = 0;
+    let mut lines_read = 0usize;
+    let mut duplicate_id = false;
+    let mut existing_operation = None;
 
     while let Some(line) = lines.next_line().await? {
         lines_read += 1;
-        let edge: Edge = match serde_json::from_str(&line) {
-            Ok(v) => v,
+        let value: Value = match serde_json::from_str(&line) {
+            Ok(value) => value,
             // The loader skips unparseable lines; mirror that instead of
             // introducing a harder failure mode here.
             Err(_) => continue,
         };
+
+        let operation_matches = operation.is_some_and(|operation| {
+            value.get(CREATE_ACTOR_KEY).and_then(Value::as_str) == Some(operation.actor_id.as_str())
+                && value.get(CREATE_OPERATION_KEY).and_then(Value::as_str)
+                    == Some(operation.operation_id.as_str())
+        });
+        let edge: Edge = match serde_json::from_value(value) {
+            Ok(edge) => edge,
+            Err(error) if operation_matches => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("idempotent edge record cannot be projected: {error}"),
+                ));
+            }
+            // Preserve the loader's historical tolerance for malformed lines.
+            Err(_) => continue,
+        };
+
         if edge.id == id {
-            // Duplicate is terminal: create_edge returns 409 before consulting
-            // the limit, so scanning the remaining file would only extend the
-            // exclusive persist lock.
-            return Ok(EdgePersistenceStatus {
-                cache_limit_reached: false,
-                duplicate_id: true,
-            });
+            duplicate_id = true;
+        }
+        if operation_matches {
+            if existing_operation.is_some() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "duplicate edge create operation metadata",
+                ));
+            }
+            existing_operation = Some(edge);
         }
     }
 
     Ok(EdgePersistenceStatus {
         cache_limit_reached: lines_read >= max_edges,
-        duplicate_id: false,
+        duplicate_id,
+        existing_operation,
     })
 }
 
@@ -414,18 +478,16 @@ fn edge_create_error_message(err: &edge_create::EdgeCreateValidationError) -> St
 ///
 /// Write path: write gate ([`reject_edge_create_unless_writable`]) -> contract
 /// validation (PR-1 semantics) -> server-generated `id` / `created_at` ->
-/// persistence via the configured edge-create write source -> cache insert ->
-/// 201. The cache is only mutated after a successful durable persistence step,
-/// so a failed write never leaves a phantom edge in memory.
+/// persistence via the configured edge-create write source -> cache insert. A
+/// new durable write returns 201; an identical operation replay returns the
+/// existing edge with 200. Failed writes never leave a phantom cache entry.
 ///
-/// JSONL (default): persistence safety checks (file-level duplicate id,
-/// cache-limit materializability) followed by a durable JSONL append (fsync).
+/// JSONL (default): one serialized file scan checks operation replay,
+/// duplicate id and cache-limit materializability before a durable append.
 /// PostgreSQL (opt-in via `WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE=postgres`,
-/// requires the PostgreSQL read source): PostgreSQL mode uses `insert_domain_edge`: a serialized transaction with a
-/// table-level lock, duplicate precheck, cache-limit count check, and final
-/// INSERT. Duplicate ids still map to 409; a unique violation remains a
-/// defensive fallback. No dual-write: JSONL mode never touches PostgreSQL,
-/// PostgreSQL mode never appends JSONL and never falls back to JSONL.
+/// requires the PostgreSQL read source): `insert_domain_edge` retains the
+/// serialized table-lock transaction, operation lookup, duplicate precheck,
+/// cache-limit count and final INSERT. No dual-write or fallback exists.
 pub async fn create_edge(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
@@ -433,10 +495,8 @@ pub async fn create_edge(
 ) -> Result<(StatusCode, Json<Edge>), (StatusCode, String)> {
     reject_edge_create_unless_writable(&state)?;
 
-    // Deserialize manually (instead of extracting Json<CreateEdgeRequest>) so
-    // contract violations — unknown fields like `expires_at`, missing required
-    // fields, explicit nulls — map to a deterministic 400 rather than an
-    // extractor-shaped 422.
+    // Manual deserialization keeps unknown fields, missing required fields and
+    // explicit nulls on one deterministic 400 contract.
     let request: edge_create::CreateEdgeRequest = serde_json::from_value(payload).map_err(|e| {
         (
             StatusCode::BAD_REQUEST,
@@ -453,13 +513,13 @@ pub async fn create_edge(
             ),
         )
     })?;
+    let semantic_request = validated.clone();
 
     // Account-originating Fäden represent an action by a concrete Garnrolle.
     // A Weber may therefore only name the authenticated account as source;
     // otherwise a crafted request could make another Garnrolle appear to have
     // woven the Faden. Admins retain the explicit operator path for repairs and
-    // controlled imports. `require_write` already guarantees authentication,
-    // but the missing-account branch stays fail-closed for defense in depth.
+    // controlled imports. The missing-account branch stays fail-closed.
     if validated.source_type == "account" && auth.role != Role::Admin {
         let own_account_id = auth.account_id.as_deref().ok_or_else(|| {
             (
@@ -475,32 +535,44 @@ pub async fn create_edge(
         }
     }
 
+    let operation = match validated.operation_id.as_ref() {
+        Some(operation_id) => {
+            let actor_id = auth.account_id.clone().ok_or_else(|| {
+                (
+                    StatusCode::UNAUTHORIZED,
+                    "authenticated account context missing".to_string(),
+                )
+            })?;
+            Some(CreateOperationKey {
+                actor_id,
+                operation_id: operation_id.clone(),
+            })
+        }
+        None => None,
+    };
+
     // Server-owned values: generate `id` when the client omitted it and stamp
-    // `created_at` (clients can never supply it — see CreateEdgeRequest).
+    // `created_at`. The operation id identifies only a retry and never becomes
+    // the resource id.
     let id = validated
         .id
         .clone()
         .unwrap_or_else(|| Uuid::new_v4().to_string());
     let created_at = chrono::Utc::now().to_rfc3339();
-    let (edge, record) = build_edge_record(validated, id, created_at);
+    let (edge, mut record) = build_edge_record(validated, id, created_at);
+    add_create_operation_metadata(&mut record, operation.as_ref());
 
-    // --- Persist ---
-    // Persist to the configured edge-create write source. Only after a
-    // successful durable write is the cache mutated, and the two write sources
-    // are mutually exclusive (no dual-write): JSONL mode never touches
-    // PostgreSQL, PostgreSQL mode never appends JSONL.
+    // Exactly one configured persistence source is used; there is no
+    // JSONL/PostgreSQL dual-write or fallback.
     match state.config.domain_edge_write_source {
         DomainEdgeWriteSource::Jsonl => {
-            // Serialize JSONL creates so check-then-write is atomic
+            // One lock covers operation lookup, duplicate/limit inspection and
+            // append, so concurrent retries cannot both write.
             let _persist_guard = edge_create_persist_lock().lock().await;
 
-            // Inspect the persistence source itself, not only the cache: when
-            // `max_edges_cache_limit()` truncated the load, the cache holds only a
-            // prefix of the file. A duplicate id hiding in the unmaterialized suffix
-            // and a write that could never be materialized after a restart must both
-            // be rejected here. Duplicate wins over the limit so the client gets the
-            // more precise cause.
-            let persistence = inspect_edge_persistence_for_create(&edge.id)
+            // The existing full-file safety scan now also finds an earlier
+            // operation result, avoiding a second pass over large JSONL files.
+            let persistence = inspect_edge_persistence_for_create(&edge.id, operation.as_ref())
                 .await
                 .map_err(|e| {
                     tracing::error!(error = %e, "failed to inspect edges JSONL before create");
@@ -509,6 +581,17 @@ pub async fn create_edge(
                         "failed to persist edge".to_string(),
                     )
                 })?;
+            if let Some(existing) = persistence.existing_operation {
+                if !edge_matches_create(&existing, &semantic_request) {
+                    return Err((
+                        StatusCode::CONFLICT,
+                        "edge operation id was already used for different data".to_string(),
+                    ));
+                }
+                let mut edges = state.edges.write().await;
+                edges.insert(existing.id.clone(), existing.clone());
+                return Ok((StatusCode::OK, Json(existing)));
+            }
             if persistence.duplicate_id {
                 return Err((StatusCode::CONFLICT, "edge id already exists".to_string()));
             }
@@ -516,9 +599,6 @@ pub async fn create_edge(
                 return Err((StatusCode::CONFLICT, "edge cache limit reached".to_string()));
             }
 
-            // The cache-level duplicate check stays: tests may seed the cache
-            // directly, and it guards the exceptional case of cache/persistence
-            // divergence.
             {
                 let edges = state.edges.read().await;
                 if edges.get(&edge.id).is_some() {
@@ -526,8 +606,8 @@ pub async fn create_edge(
                 }
             }
 
-            // Only after a successful durable append is the cache mutated. A failed
-            // write must never leave a phantom edge in memory.
+            // Cache mutation follows durable append; failed writes never
+            // leave a phantom Faden in memory.
             if let Err(e) = append_edge_line(&record).await {
                 tracing::error!(error = %e, "failed to append edge to JSONL");
                 return Err((
@@ -536,19 +616,12 @@ pub async fn create_edge(
                 ));
             }
 
-            {
-                let mut edges = state.edges.write().await;
-                edges.insert(edge.id.clone(), edge.clone());
-            }
+            let mut edges = state.edges.write().await;
+            edges.insert(edge.id.clone(), edge.clone());
         }
         DomainEdgeWriteSource::Postgres => {
-            // No JSONL inspection and no JSONL append in this mode. `insert_domain_edge`
-            // serializes the DB write with a table-level lock, duplicate precheck,
-            // cache-limit count check, and final INSERT; unique violation remains only a
-            // defensive fallback.
-            //
-            // The cache-level duplicate check stays for parity with the JSONL
-            // arm: tests may seed the cache directly.
+            // PostgreSQL mode never inspects or appends JSONL. The existing
+            // serialized transaction also owns the idempotency lookup.
             {
                 let edges = state.edges.read().await;
                 if edges.get(&edge.id).is_some() {
@@ -556,17 +629,27 @@ pub async fn create_edge(
                 }
             }
 
-            // Startup validation guarantees a pool exists in this mode; treat a
-            // missing pool as an internal error rather than silently degrading
-            // to JSONL.
+            // Missing pool state is an internal error, never permission to
+            // degrade silently to the JSONL write path.
             let pool = state.db_pool.as_ref().ok_or_else(|| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "PostgreSQL pool unavailable for edge write".to_string(),
                 )
             })?;
-            match insert_domain_edge(pool, &edge).await {
-                Ok(()) => {}
+            match insert_domain_edge(pool, &edge, operation.as_ref()).await {
+                Ok(CreateWriteOutcome::Created) => {}
+                Ok(CreateWriteOutcome::Existing(existing)) => {
+                    if !edge_matches_create(&existing, &semantic_request) {
+                        return Err((
+                            StatusCode::CONFLICT,
+                            "edge operation id was already used for different data".to_string(),
+                        ));
+                    }
+                    let mut edges = state.edges.write().await;
+                    edges.insert(existing.id.clone(), existing.clone());
+                    return Ok((StatusCode::OK, Json(existing)));
+                }
                 Err(EdgeWriteError::DuplicateId) => {
                     return Err((StatusCode::CONFLICT, "edge id already exists".to_string()));
                 }
@@ -582,10 +665,8 @@ pub async fn create_edge(
                 }
             }
 
-            {
-                let mut edges = state.edges.write().await;
-                edges.insert(edge.id.clone(), edge.clone());
-            }
+            let mut edges = state.edges.write().await;
+            edges.insert(edge.id.clone(), edge.clone());
         }
     }
 
@@ -593,6 +674,7 @@ pub async fn create_edge(
         event = "edge.created",
         edge_id = %edge.id,
         write_source = ?state.config.domain_edge_write_source,
+        operation_bound = operation.is_some(),
         "Edge created"
     );
 
@@ -619,6 +701,8 @@ pub async fn create_edge(
 /// - `source_id` / `target_id` are required, non-blank, and UUID-formatted.
 /// - `id` is optional but, when present, must be non-blank and UUID-formatted.
 /// - `note` is optional but, when present, must be non-blank and ≤ 1000 chars.
+/// - `operation_id` is optional but, when present, must be a non-null UUID and
+///   identifies only one account-scoped create action.
 ///
 /// `deny_unknown_fields` is applied **only** to `CreateEdgeRequest`, never to the
 /// read-side `Edge` model, so existing JSONL/read semantics stay untouched.
@@ -708,6 +792,8 @@ mod edge_create {
         target_type: String,
         #[serde(default, deserialize_with = "deserialize_optional_non_null_string")]
         note: Option<String>,
+        #[serde(default, deserialize_with = "deserialize_optional_non_null_string")]
+        operation_id: Option<String>,
     }
 
     /// Validated form of a `CreateEdgeRequest`.
@@ -725,6 +811,7 @@ mod edge_create {
         pub(super) source_type: String,
         pub(super) target_type: String,
         pub(super) note: Option<String>,
+        pub(super) operation_id: Option<String>,
     }
 
     /// Why a `CreateEdgeRequest` failed validation.
@@ -830,6 +917,20 @@ mod edge_create {
                 }
             }
 
+            let operation_id = match self.operation_id {
+                Some(value) => {
+                    require_non_blank("operation_id", &value)?;
+                    let parsed = Uuid::parse_str(&value).map_err(|_| {
+                        EdgeCreateValidationError::InvalidUuid {
+                            field: "operation_id",
+                            value: value.clone(),
+                        }
+                    })?;
+                    Some(parsed.to_string())
+                }
+                None => None,
+            };
+
             Ok(ValidatedCreateEdge {
                 id: self.id,
                 source_id: self.source_id,
@@ -838,6 +939,7 @@ mod edge_create {
                 source_type: self.source_type,
                 target_type: self.target_type,
                 note: self.note,
+                operation_id,
             })
         }
     }
@@ -861,6 +963,7 @@ mod edge_create {
                 source_type: "node".to_string(),
                 target_type: "account".to_string(),
                 note: None,
+                operation_id: None,
             }
         }
 
@@ -884,6 +987,7 @@ mod edge_create {
                     source_type: "node".to_string(),
                     target_type: "account".to_string(),
                     note: None,
+                    operation_id: None,
                 })
             );
         }
@@ -905,6 +1009,7 @@ mod edge_create {
                     source_type: "node".to_string(),
                     target_type: "account".to_string(),
                     note: Some("a note".to_string()),
+                    operation_id: None,
                 })
             );
         }

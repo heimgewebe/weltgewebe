@@ -401,7 +401,94 @@ async fn postgres_edge_create_persists_row_cache_and_loader_roundtrip() -> Resul
     Ok(())
 }
 
-/// B. Absent note stays absent: the payload carries no `note` key (never
+/// B. An account-scoped operation survives a simulated API restart and returns
+/// the same server-owned edge id. Reusing the key for different semantic data
+/// is rejected without a second row.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_edge_create_operation_replays_after_restart() -> Result<()> {
+    const ACTOR_ID: &str = "writepath-edge-idempotency-actor";
+    const OPERATION_ID: &str = "40000000-0000-0000-0000-000000000001";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let request_body = format!(
+        r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","note":"durable","operation_id":"{OPERATION_ID}"}}"#
+    );
+
+    let (first_app, first_cookie, _) = edge_write_app(
+        pool.clone(),
+        ACTOR_ID,
+        DomainReadSource::Postgres,
+        DomainEdgeWriteSource::Postgres,
+    )
+    .await?;
+    let first_attempt = first_app
+        .clone()
+        .oneshot(post_edges_req(&first_cookie, &request_body));
+    let second_attempt = first_app
+        .clone()
+        .oneshot(post_edges_req(&first_cookie, &request_body));
+    let (first, second) = tokio::join!(first_attempt, second_attempt);
+    let first = first?;
+    let second = second?;
+    let first_status = first.status();
+    let second_status = second.status();
+    assert!(
+        (first_status == StatusCode::CREATED && second_status == StatusCode::OK)
+            || (first_status == StatusCode::OK && second_status == StatusCode::CREATED),
+        "parallel PostgreSQL retries must produce one 201 and one 200, got {first_status} and {second_status}"
+    );
+    let first_edge = read_json_body(first).await?;
+    let second_edge = read_json_body(second).await?;
+    assert_eq!(first_edge["id"], second_edge["id"]);
+    let first_id = first_edge["id"].as_str().context("created edge id")?;
+
+    let (restarted_app, restarted_cookie, restarted_state) = edge_write_app(
+        pool.clone(),
+        ACTOR_ID,
+        DomainReadSource::Postgres,
+        DomainEdgeWriteSource::Postgres,
+    )
+    .await?;
+    let replay = restarted_app
+        .clone()
+        .oneshot(post_edges_req(&restarted_cookie, &request_body))
+        .await?;
+    assert_eq!(replay.status(), StatusCode::OK);
+    let replay_edge = read_json_body(replay).await?;
+    assert_eq!(replay_edge["id"], first_id);
+    assert_eq!(restarted_state.edges.read().await.len(), 1);
+
+    let changed_body = format!(
+        r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","note":"changed","operation_id":"{OPERATION_ID}"}}"#
+    );
+    let conflict = restarted_app
+        .oneshot(post_edges_req(&restarted_cookie, &changed_body))
+        .await?;
+    assert_eq!(conflict.status(), StatusCode::CONFLICT);
+
+    let (count, actor, operation): (i64, Option<String>, Option<String>) = sqlx::query_as(
+        "SELECT count(*), min(create_actor_id), min(create_operation_id) FROM domain_edges",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(count, 1);
+    assert_eq!(actor.as_deref(), Some(ACTOR_ID));
+    assert_eq!(operation.as_deref(), Some(OPERATION_ID));
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// C. Absent note stays absent: the payload carries no `note` key (never
 /// `note: null`), and the loader reconstructs `note = None`.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
@@ -459,7 +546,7 @@ async fn postgres_edge_create_omits_note_key_when_absent() -> Result<()> {
     Ok(())
 }
 
-/// C. Duplicate id from the database surfaces as 409 (plain INSERT, no
+/// D. Duplicate id from the database surfaces as 409 (plain INSERT, no
 /// ON CONFLICT): the second create leaves exactly one row and no extra cache
 /// entry.
 #[tokio::test]
@@ -522,7 +609,7 @@ async fn postgres_edge_create_duplicate_id_returns_409() -> Result<()> {
     Ok(())
 }
 
-/// D. Postgres read + JSONL edge write is blocked with 409 and writes nothing.
+/// E. Postgres read + JSONL edge write is blocked with 409 and writes nothing.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
@@ -566,7 +653,7 @@ async fn postgres_read_jsonl_edge_write_is_blocked() -> Result<()> {
     Ok(())
 }
 
-/// E. Defensive invalid-config state (JSONL read + Postgres edge write, which
+/// F. Defensive invalid-config state (JSONL read + Postgres edge write, which
 /// config load forbids) is rejected with 500 and writes nothing.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
@@ -631,7 +718,7 @@ impl Drop for EnvVarGuard {
     }
 }
 
-/// F. PostgreSQL create rejects when domain_edges is already at MAX_EDGES_CACHE.
+/// G. PostgreSQL create rejects when domain_edges is already at MAX_EDGES_CACHE.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
