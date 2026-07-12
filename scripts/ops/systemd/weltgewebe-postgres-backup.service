@@ -13,6 +13,7 @@ Environment=POSTGRES_CONTAINER=weltgewebe-db-1
 Environment=BACKUP_DIR=/var/backups/weltgewebe/postgres
 Environment=BACKUP_RETENTION_DAYS=14
 Environment=GIT_REPO_DIR=/opt/weltgewebe
+ExecStartPre=/usr/bin/install -d -o root -g root -m 0700 /var/backups/weltgewebe/postgres
 ExecStart=/opt/weltgewebe/scripts/ops/postgres-backup.sh
 UMask=0077
 NoNewPrivileges=true
@@ -24,7 +25,7 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
-ReadWritePaths=/var/backups/weltgewebe/postgres
+ReadWritePaths=/var/backups
 
 [Install]
 WantedBy=multi-user.target

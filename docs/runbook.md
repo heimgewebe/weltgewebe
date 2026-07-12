@@ -94,6 +94,16 @@ Secretwerte enthalten sein könnten.
 | API startet nicht | Konfigurationsvalidierung, Proxyentscheidung, Migrationsmodus |
 | Karte bleibt leer | Web-Build, Basemap-Konfiguration, PMTiles-Range und API-Daten getrennt |
 
+### Atomarer Webartefakt-Readback
+
+`scripts/ops/install-web-artifact.sh` validiert Archiv, Version und Commit,
+schaltet den Webroot per Symlink um und wartet danach begrenzt auf einen
+konsistenten öffentlichen Readback. Die Prüfung akzeptiert die bei HTTP/2
+üblichen kleingeschriebenen Headernamen, verlangt `Cache-Control: no-store`
+und bindet `X-Weltgewebe-Build`, Version und Commit gemeinsam. Erst nach Ablauf
+aller Versuche wird zurückgerollt. `apps/web/releases/` ist versioniert als
+Laufzeitzustand ignoriert und darf den Produktionscheckout nicht verschmutzen.
+
 ## 3. Datenquellen und Migrationen
 
 Im belegten Produktionspfad `wg-prod-1` ist PostgreSQL die Lese- und
