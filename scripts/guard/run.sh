@@ -21,6 +21,21 @@ echo "== guard: token leak =="
 echo "== guard: metrics ref consistency =="
 "${REPO_ROOT}/scripts/guard/metrics-ref-guard.sh"
 
+echo "== guard: GitHub Action pinning =="
+python3 "${REPO_ROOT}/scripts/ci/check_github_action_pinning.py"
+
+echo "== guard: security headers =="
+"${REPO_ROOT}/scripts/guard/security-headers-guard.sh"
+
+echo "== guard: lockfile contract =="
+"${REPO_ROOT}/scripts/guard/lockfile-guard.sh"
+
+echo "== guard: compose image contract =="
+"${REPO_ROOT}/scripts/guard/compose-image-guard.sh"
+
+echo "== guard: Caddy build header contract =="
+"${REPO_ROOT}/scripts/guard/caddy-build-header-guard.sh"
+
 echo "== guard: caddy basemap route contract =="
 "${REPO_ROOT}/scripts/guard/caddy-basemap-route-guard.sh"
 

@@ -96,12 +96,15 @@ Secretwerte enthalten sein könnten.
 
 ## 3. Datenquellen und Migrationen
 
-JSONL ist der Standardpfad für Domänendaten. PostgreSQL ist ein explizites
-Opt-in pro Lese- und Schreibfläche. Vor einer Umschaltung:
+Im belegten Produktionspfad `wg-prod-1` ist PostgreSQL die Lese- und
+Schreibwahrheit für Accounts/Garnrollen, Knoten und Fäden. JSONL bleibt für
+lokale Entwicklung, Legacy-Daten, Import/Export und explizite Rollbacks
+erhalten, ist aber keine offene Produktions-Cutover-Behauptung mehr. Vor jeder
+Änderung an Datenquellen:
 
 1. Backfill-/Orphan-Belege lesen,
-2. PostgreSQL-Lesequelle aktivieren,
-3. nur kompatible Schreibquellen aktivieren,
+2. PostgreSQL-Lese- und Schreibquellen gemeinsam prüfen,
+3. JSONL nur als bewusst dokumentierten Legacy-/Rollbackpfad verwenden,
 4. Migrationen separat autorisieren,
 5. Restart- und Readback-Verhalten prüfen.
 
@@ -113,31 +116,37 @@ Migrationsfreigabe. Siehe
 
 ### Heute belegbarer Rahmen
 
-Das Repository enthält PostgreSQL-Migrationen und Compose-Profile, aber keinen
-allgemein belegten WAL-/PITR-, Outbox-Replay- oder Projector-Rebuild-Vertrag.
-RTO/RPO-Werte dürfen deshalb nicht als erfüllt behauptet werden.
+Das Repository enthält jetzt einen kanonischen logischen PostgreSQL-Backup- und
+Restore-Proof-Vertrag unter `scripts/ops/`. Es enthält weiterhin keinen
+implementierten WAL-/PITR-, Object-Lock-, Outbox-Replay- oder
+Projector-Rebuild-Vertrag. RTO/RPO-Werte dürfen deshalb nur für den tatsächlich
+betriebenen logischen Backup-Pfad behauptet werden.
 
 Ein sicherer Wiederherstellungstest muss in einer entbehrlichen Umgebung:
 
 1. den exakten Repository-/Image-Stand festhalten,
-2. eine vorhandene, dokumentierte Sicherung nach deren eigenem Vertrag
-   wiederherstellen,
-3. Migrationen im passenden Modus prüfen,
-4. die effektiven Domainquellen dokumentieren,
-5. API-Readiness, Auth-Sitzung und repräsentative Domänenlesevorgänge testen,
-6. Ergebnis, Dauer, Datenstand und Restlücken festhalten.
+2. `scripts/ops/postgres-backup.sh` mit Retention, Gzip-Test und
+   SHA256-Manifest ausführen,
+3. `scripts/ops/postgres-restore-latest-proof.sh` einen netzlosen
+   PostgreSQL-Wegwerfcontainer erstellen und wieder entfernen lassen,
+4. Migrationen über `_sqlx_migrations` und den konfigurierten
+   `WELTGEWEBE_API_STARTUP_MIGRATIONS`-Modus prüfen,
+5. die effektiven Domainquellen dokumentieren,
+6. den Off-Host-Pull nach `~/merges/weltgewebe-production-backups` und den
+   nachfolgenden Restic-Snapshot belegen,
+7. API-Readiness, Auth-Sitzung, Passkey-Credential-Store und repräsentative
+   Domänenlesevorgänge testen,
+8. Ergebnis, Dauer, Datenstand und Restlücken festhalten.
 
 Ohne registrierte Sicherungsquelle wird kein hypothetisches S3-, WAL-, Nomad-,
 Outbox- oder JetStream-Verfahren erfunden.
 
-### Noch nötig für einen belastbaren DR-Vertrag
+### Noch nötig für weitergehende Wiederherstellungsziele
 
-- kanonische Sicherungsquelle und Retention,
-- automatisierter Restore-Beweis,
-- definierte RTO/RPO-Ziele,
-- Umgang mit JSONL und PostgreSQL während des Cutovers,
-- redigierter Wiederherstellungsbeleg,
-- regelmäßiger, tatsächlich ausgeführter Drill.
+- ausdrücklich beschlossene RTO/RPO-Ziele;
+- WAL-/PITR nur bei einem belegten Bedarf an feinerem RPO;
+- regelmäßige Auswertung von Timer-, Pull- und Restic-Belegen;
+- wiederholte Drills nach Änderungen am Schema oder Betriebsweg.
 
 ## 5. Public Login und SMTP
 
@@ -161,17 +170,11 @@ werden. Weitere Accounts entstehen über den administrativen API-Pfad. Die
 konkreten Befehle und Variablen stehen in den Dev-/Deployskripten; echte Namen,
 Adressen und E-Mail-Adressen gehören nicht in Repositorybeispiele oder Logs.
 
-Der wichtigste noch ausstehende Produkt-Smoke ist eine durchgängige persistente
-Kette:
-
-1. anmelden,
-2. Garnrolle bearbeiten und verorten,
-3. Knoten anlegen,
-4. nach Neuladen wiederfinden,
-5. Faden anlegen und wieder lesen.
-
-Bis dieser Test grün ist, sind einzelne Account-, Knoten- oder Fadenbeweise kein
-Nachweis eines vollständig nutzbaren Produktflusses.
+Der erste durchgängige persistente Produkt-Smoke ist belegt: Anmeldung,
+Garnrolle, Knoten, Faden, Neuladen und API-Neustart erhalten denselben
+PostgreSQL-Stand. Nach relevanten Deploys wird dieser Pfad erneut geprüft.
+Weitere Produkt-Smokes betreffen repräsentative Datenmengen, Geräteparität,
+Edge-Referenzintegrität und zusätzliche Produktbereiche.
 
 ## 7. Stoppen und Aufräumen
 

@@ -1115,6 +1115,22 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md
 
+## scripts/ops/postgres-backup.sh
+
+- [relates_to] docs/runbooks/db-recovery.md
+
+## scripts/ops/postgres-restore-latest-proof.sh
+
+- [relates_to] docs/runbooks/db-recovery.md
+
+## scripts/ops/postgres-restore-proof.sh
+
+- [relates_to] docs/runbooks/db-recovery.md
+
+## scripts/ops/pull-production-postgres-backup.sh
+
+- [relates_to] docs/runbooks/db-recovery.md
+
 ## scripts/ops/reconcile_public_login_smtp_env.py
 
 - [relates_to] docs/deploy/vps.md

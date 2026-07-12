@@ -11,14 +11,15 @@ Datenbankmigrationen, Compose-Profile, Caddy-Konfiguration und Betriebswerkzeuge
 - **API:** Rust, Axum und Tokio.
 - **Authentifizierung:** Magic Links, Passkeys und profilweit persistente
   HTTP-only-Sitzungscookies.
-- **Domänendaten:** JSONL ist weiterhin der Standard-Lese- und Schreibpfad.
-  PostgreSQL-Pfade für Accounts, Knoten und Fäden sind einzeln opt-in und noch
-  kein allgemeiner Produktions-Cutover.
+- **Domänendaten:** Im belegten Produktionspfad `wg-prod-1` ist PostgreSQL die
+  Lese- und Schreibwahrheit für Accounts/Garnrollen, Knoten und Fäden. JSONL
+  bleibt nur lokaler, Legacy- oder expliziter Rollback-/Importpfad.
 - **Betrieb:** Docker Compose und Caddy; der öffentliche Produktionspfad ist
-  `wg-prod-1`.
-- **Ausbaulücke:** Der durchgängige Produktweg von der Garnrolle über einen
-  gespeicherten Knoten bis zu einem Faden ist noch nicht vollständig als ein
-  Produktionsfluss abgeschlossen.
+  `wg-prod-1` mit statischer interner Caddy-Auslieferung des Web-Builds.
+- **Produktfluss:** Anmeldung, persistente Garnrolle, Knoten und zugehöriger
+  Faden sind als PostgreSQL-Produktionsfluss belegt. Offene Arbeit betrifft
+  Skalierung, Referenzintegrität, wiederholte Geräteabnahme und weitere
+  Produktbereiche, nicht mehr den ersten vertikalen Persistenzschnitt.
 
 Historische ADRs und Berichte bleiben als Entscheidungs- und
 Entwicklungsgeschichte erhalten. Sie dürfen den aktuellen Code, die Migrationen
@@ -115,8 +116,8 @@ Weitere wichtige Prüfpfade:
 Neue und öffentlich ausgegebene Accounts sind ausschließlich Garnrollen. Die
 Kartenwirkung wird über `map_state=not_on_map|exact|radius` beschrieben. Alte
 `ron`-/`mode`-Datensätze werden lesend privacy-sicher normalisiert; die nullable
-Datenbankspalte `mode` bleibt vorerst nur als Rollbackbrücke und wird erst nach
-einem belegten Produktionscutover entfernt.
+Datenbankspalte `mode` bleibt vorerst nur als Rollbackbrücke. Ihre Entfernung
+braucht einen eigenen Post-Cutover-Beobachtungs-, Daten- und Rückfallbeleg.
 
 ## Daten- und Datenschutzgrenze
 
@@ -135,8 +136,9 @@ Deploybelege müssen frisch erhoben werden.
 
 Statische Web-Builds werden unter anderem durch Cloudflare- und Vercel-
 Integrationen geprüft. Diese Vorschauen sind zusätzliche Plattformbelege; die
-öffentliche Routingwahrheit liegt im VPS-/Caddy-Vertrag und dessen konfiguriertem
-Web-Upstream.
+öffentliche Routingwahrheit liegt im VPS-/Caddy-Vertrag. Der kanonische
+Produktionspfad liefert den lokalen `apps/web/build`-Artefaktstand aus und
+belegt ihn über `/_app/version.json` sowie den `X-Weltgewebe-Build`-Header.
 
 ## Planung und Status
 

@@ -12,7 +12,7 @@ services:
       - ./policies:/app/policies:ro
 
   nats:
-    image: nats:2
+    image: nats:2@sha256:7ff2e641c33dbdb0dd13a943ba0b70d841b71275c607baa53ef9b8661f0b2d8c
     command: ["-js"]
     restart: unless-stopped
     ports:

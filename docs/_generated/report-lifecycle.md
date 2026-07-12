@@ -70,7 +70,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/domain-runtime-data-source-reconciliation.md | active | audit | DB-PROOF-001 | 2026-07-18 |  |
 | docs/reports/github-action-ref-pinning-audit.md | active | audit | OPT-INF-002 | 2026-09-30 |  |
 | docs/reports/github-actions-node24-readiness.md | active | audit | OPT-CI-005 | 2026-09-29 |  |
-| docs/reports/map-status.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-08-11 |  |
+| docs/reports/map-status.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-08-12 |  |
 | docs/reports/optimierungsbericht.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
 | docs/reports/proof-matrix-generalization-decision.md | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  |
 | docs/reports/repo-audit-2026-07-02.md | active | audit | REPO-AUDIT-001 | 2026-10-31 |  |

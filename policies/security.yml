@@ -1,15 +1,33 @@
 ---
 content_security_policy:
   default-src: "'self'"
-  img-src: "'self' data:"
+  img-src: "'self' data: blob:"
   script-src: "'self' 'unsafe-inline'"
+  style-src: "'self' 'unsafe-inline'"
   connect-src:
     - "'self'"
-    - https://api.weltgewebe.internal
+  worker-src: "'self' blob:"
+  object-src: "'none'"
+csp_exceptions:
+  - directive: "script-src 'unsafe-inline'"
+    status: accepted_residual_risk
+    reason: >
+      The current static Svelte build contract still permits inline bootstrap
+      script execution. Removal requires a proven static build without inline
+      scripts. scripts/preflight/csp_contract_static.sh and
+      scripts/guard/security-headers-guard.sh keep this exception explicit.
 allowed_origins:
-  - https://app.weltgewebe.example
-  - https://console.weltgewebe.example
+  - https://weltgewebe.net
+  - https://www.weltgewebe.net
 strict_transport_security:
-  max_age_seconds: 63072000
+  max_age_seconds: 31536000
   include_subdomains: true
-  preload: true
+  preload: false
+effective_caddy_contract:
+  production_https_caddyfiles:
+    - infra/caddy/Caddyfile.vps
+    - infra/caddy/Caddyfile.heim
+    - infra/caddy/Caddyfile.prod
+  static_app_caddyfiles:
+    - infra/caddy/Caddyfile.vps
+    - infra/caddy/Caddyfile.heim

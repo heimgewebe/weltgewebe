@@ -42,6 +42,9 @@ test.describe("Eigene Garnrolle speichern", () => {
       },
     });
     await page.goto("/settings#meine-garnrolle");
+    await expect(
+      page.locator('[data-testid="account-section-status"]'),
+    ).toBeVisible();
     await page.evaluate((accountId) => {
       sessionStorage.setItem(
         `weltgewebe:garnrolle-draft:${accountId}`,

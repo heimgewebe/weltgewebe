@@ -401,6 +401,72 @@
       ],
       "owner": "product-map",
       "updated": "2026-07-11"
+    },
+    {
+      "id": "CLAIM-RUNTIME-PROD-POSTGRES-001",
+      "status": "established",
+      "subject": "RUNTIME-PROD-POSTGRES",
+      "statement": "wg-prod-1 nutzt PostgreSQL als Datenwahrheit; Liveaussagen brauchen datierte Runtime-Evidence.",
+      "evidence": [
+        {
+          "path": "README.md",
+          "kind": "documentation"
+        },
+        {
+          "path": "runtime/README.md",
+          "kind": "documentation"
+        },
+        {
+          "path": "infra/compose/compose.prod.yml",
+          "kind": "implementation"
+        },
+        {
+          "path": ".env.prod.example",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/guard/compose-image-guard.sh",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/tests/test_repo_contract_guards.sh",
+          "kind": "test"
+        }
+      ],
+      "validation": [
+        "bash scripts/tests/test_repo_contract_guards.sh"
+      ],
+      "owner": "runtime",
+      "updated": "2026-07-12"
+    },
+    {
+      "id": "CLAIM-RUNTIME-LIVE-PROD-001",
+      "status": "established",
+      "subject": "RUNTIME-LIVE-PROD",
+      "statement": "Liveaussagen zu wg-prod-1 brauchen datierte Runtime-Evidence und veralten sonst.",
+      "evidence": [
+        {
+          "path": "docs/reports/map-status.md",
+          "kind": "documentation"
+        },
+        {
+          "path": "runtime/README.md",
+          "kind": "documentation"
+        },
+        {
+          "path": "scripts/docmeta/validate_doc_freshness_registry.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/docmeta/freshness_scope_policy.yml",
+          "kind": "implementation"
+        }
+      ],
+      "validation": [
+        "python3 -m scripts.docmeta.validate_doc_freshness_registry"
+      ],
+      "owner": "runtime",
+      "updated": "2026-07-12"
     }
   ]
 }

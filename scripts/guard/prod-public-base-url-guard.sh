@@ -41,6 +41,8 @@ trap cleanup EXIT
 
 cat > "$TMP_ENV" << 'EOF_ENV'
 DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy
+API_VERSION=test-commit
+WELTGEWEBE_BUILD=test-commit
 POSTGRES_USER=dummy
 POSTGRES_PASSWORD=dummy
 POSTGRES_DB=dummy
@@ -111,14 +113,6 @@ expected = {
         api_env.get("WEB_UPSTREAM_URL"),
         "https://weltgewebe.home.arpa",
     ),
-    "services.caddy.environment.WEB_UPSTREAM_HOST": (
-        caddy_env.get("WEB_UPSTREAM_HOST"),
-        "weltgewebe.home.arpa",
-    ),
-    "services.caddy.environment.WEB_UPSTREAM_URL": (
-        caddy_env.get("WEB_UPSTREAM_URL"),
-        "https://weltgewebe.home.arpa",
-    ),
 }
 
 errors = [
@@ -126,6 +120,11 @@ errors = [
     for label, (actual, wanted) in expected.items()
     if actual != wanted
 ]
+for key in ("WEB_UPSTREAM_HOST", "WEB_UPSTREAM_URL"):
+    if key in caddy_env:
+        errors.append(
+            f"services.caddy.environment.{key} must be absent for static web delivery"
+        )
 
 if errors:
     for error in errors:

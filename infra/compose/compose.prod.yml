@@ -1,7 +1,7 @@
 ---
 services:
   api:
-    image: weltgewebe-api:${API_VERSION:-latest}
+    image: weltgewebe-api:${API_VERSION:?API_VERSION must be set}
     build:
       context: ../..
       dockerfile: apps/api/Dockerfile
@@ -22,13 +22,19 @@ services:
       ACCOUNT_TITLE: ${ACCOUNT_TITLE:-}
       PUBLIC_LAT: ${PUBLIC_LAT:-}
       PUBLIC_LON: ${PUBLIC_LON:-}
-      # Optional bootstrap fields (account is always garnrolle/verortet):
+      # Optional bootstrap fields (account is always a Garnrolle; map_state controls visibility):
       ACCOUNT_ID: ${ACCOUNT_ID:-}
       ACCOUNT_SUMMARY: ${ACCOUNT_SUMMARY:-}
       ACCOUNT_ROLE: ${ACCOUNT_ROLE:-admin}
       ACCOUNT_TAGS: ${ACCOUNT_TAGS:-real}
       ACCOUNT_EMAIL: ${ACCOUNT_EMAIL:-}
       DATABASE_URL: ${DATABASE_URL}
+      WELTGEWEBE_DOMAIN_READ_SOURCE: ${WELTGEWEBE_DOMAIN_READ_SOURCE:-postgres}
+      WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE: ${WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE:-postgres}
+      WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE: ${WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE:-postgres}
+      WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE: ${WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE:-postgres}
+      WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE: ${WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE:-postgres}
+      WELTGEWEBE_API_STARTUP_MIGRATIONS: ${WELTGEWEBE_API_STARTUP_MIGRATIONS:-verify-applied}
       RUST_LOG: ${RUST_LOG:-info}
       # Auth
       AUTH_PUBLIC_LOGIN: ${AUTH_PUBLIC_LOGIN:-0}
@@ -56,7 +62,7 @@ services:
           - weltgewebe-api
 
   db:
-    image: postgres:16
+    image: postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c
     restart: always
     volumes:
       - pg_data_prod:/var/lib/postgresql/data
@@ -71,7 +77,7 @@ services:
       retries: 5
 
   nats:
-    image: nats:2.10-alpine
+    image: nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927
     command:
       - -js
       - -sd
@@ -102,8 +108,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     environment:
-      WEB_UPSTREAM_URL: ${WEB_UPSTREAM_URL:?WEB_UPSTREAM_URL must be set (e.g. https://weltgewebe-web.pages.dev)}
-      WEB_UPSTREAM_HOST: ${WEB_UPSTREAM_HOST:?WEB_UPSTREAM_HOST must be set (e.g. weltgewebe-web.pages.dev)}
+      WELTGEWEBE_BUILD: ${WELTGEWEBE_BUILD:?WELTGEWEBE_BUILD must be set}
     depends_on:
       api:
         condition: service_healthy

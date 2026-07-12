@@ -1,0 +1,29 @@
+[Unit]
+Description=Weltgewebe PostgreSQL restore proof in disposable container
+Documentation=file:/opt/weltgewebe/docs/runbooks/db-recovery.md
+Requires=docker.service
+After=docker.service weltgewebe-postgres-backup.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/weltgewebe
+Environment=BACKUP_DIR=/var/backups/weltgewebe/postgres
+Environment=RESTORE_PROOF_DIR=/var/backups/weltgewebe/postgres/proofs
+Environment=RESTORE_POSTGRES_IMAGE=postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c
+ExecStart=/opt/weltgewebe/scripts/ops/postgres-restore-latest-proof.sh
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/backups/weltgewebe/postgres
+
+[Install]
+WantedBy=multi-user.target

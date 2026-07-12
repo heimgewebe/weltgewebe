@@ -17,10 +17,10 @@ relations:
 
 | Produktbegriff | Technik/API | Bedeutung | Aktueller Status |
 |---|---|---|---|
-| Garnrolle | Account, `/accounts` | genau ein persönlicher Ausgangspunkt je Account | Code und Migration implementiert; Produktionscutover offen |
-| Kartenstatus | `map_state` | `not_on_map`, `exact` oder `radius`; Eigenschaft der Garnrolle, kein Kontotyp | Code und Migration implementiert; Produktionscutover offen |
-| Knoten | Node, `/nodes` | Ort, Kollektivgut, Ressource oder Vorhaben | API implementiert; Browserpfad offen |
-| Faden | Edge, `/edges` | Beziehung zwischen Garnrollen und/oder Knoten | API implementiert; Browserpfad offen |
+| Garnrolle | Account, `/accounts` | genau ein persönlicher Ausgangspunkt je Account | produktiver PostgreSQL-Pfad belegt |
+| Kartenstatus | `map_state` | `not_on_map`, `exact` oder `radius`; Eigenschaft der Garnrolle, kein Kontotyp | produktiv migriert; Legacy-`mode` bleibt Rollbackbrücke |
+| Knoten | Node, `/nodes` | Ort, Kollektivgut, Ressource oder Vorhaben | API- und Browser-Schreibpfad produktiv belegt |
+| Faden | Edge, `/edges` | Beziehung zwischen Garnrollen und/oder Knoten | API- und Browser-Schreibpfad produktiv belegt |
 | Gesprächsraum | Conversation, `/conversations` | Diskussions- oder Entscheidungsraum | Contract vorhanden, kein vollständiger Produktpfad |
 | Beitrag | Message, `/conversations/{id}/messages` | Inhalt in einem Gesprächsraum | Contract vorhanden, kein vollständiger Produktpfad |
 | Berechtigungsrolle | `role` (`gast`, `weber`, `admin`) | technische Autorisierung, nicht die Identität der Person | implementiert |
@@ -33,7 +33,7 @@ Jede RoN-Markierung ergibt privacy-sicher `map_state=not_on_map`. Neue Contracts
 API-Antworten und Schreibpfade erzeugen diese Felder nicht mehr.
 
 Die nullable PostgreSQL-Spalte `mode` bleibt vorübergehend als Rollbackbrücke.
-Sie darf erst nach einem belegten Produktionscutover entfernt werden.
+Sie darf erst nach einem eigenen Post-Cutover-Daten- und Rückfallbeleg entfernt werden.
 
 `role` bedeutet nur Berechtigungsrolle. Historische Dokumente, die `role` als
 Identitätsobjekt verwenden, sind nicht die aktuelle Fachsprache.

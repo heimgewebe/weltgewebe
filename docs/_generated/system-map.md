@@ -39,7 +39,7 @@ Source: scripts/docmeta/generate_system_map.py
 
 |id|path|role|organ|status|last_reviewed|depends_on|verifies_with|missing_scripts|
 |---|---|---|---|---|---|---|---|---|
-|runtime.readme|runtime/README.md|reality|runtime|canonical|2026-07-11||||
+|runtime.readme|runtime/README.md|reality|runtime|canonical|2026-07-12||||
 
 ## Zone: runbooks
 

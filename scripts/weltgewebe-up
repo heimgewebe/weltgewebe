@@ -548,6 +548,8 @@ fi
 # interpolation, while still leaving container runtime env values untouched.
 export API_VERSION="$HEAD_AFTER"
 echo "   API image tag: $API_VERSION"
+export WELTGEWEBE_BUILD="$HEAD_AFTER"
+echo "   Caddy build header: $WELTGEWEBE_BUILD"
 
 # 3. Preflight: Docker Compose Config (Strict)
 # Run AFTER pull to validate new config

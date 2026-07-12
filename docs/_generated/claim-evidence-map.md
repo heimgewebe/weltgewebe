@@ -21,6 +21,8 @@ Generated automatically. Do not edit.
 | claim-agent-safe-008 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-008] | partial | docs-mechanik | 2026-06-27 | 7 items |
 | claim-domain-garnrolle-001 | docs/claims/registry.yml | claims[id=CLAIM-DOMAIN-GARNROLLE-001] | partial | product-domain | 2026-07-11 | 4 items |
 | claim-map-truth-001 | docs/claims/registry.yml | claims[id=CLAIM-MAP-TRUTH-001] | partial | product-map | 2026-07-11 | 5 items |
+| claim-runtime-live-prod-001 | docs/claims/registry.yml | claims[id=CLAIM-RUNTIME-LIVE-PROD-001] | stale | runtime | 2026-07-12 | 4 items |
+| claim-runtime-prod-postgres-001 | docs/claims/registry.yml | claims[id=CLAIM-RUNTIME-PROD-POSTGRES-001] | partial | runtime | 2026-07-12 | 6 items |
 | claim-ui-state-001 | docs/claims/registry.yml | claims[id=CLAIM-UI-STATE-001] | partial | product-ui | 2026-07-11 | 4 items |
 | claim-ui-surface-001 | docs/claims/registry.yml | claims[id=CLAIM-UI-SURFACE-001] | partial | product-ui | 2026-07-11 | 5 items |
 
@@ -226,6 +228,50 @@ Evidence:
 | `file` | `apps/web/src/lib/map/scene.ts` |
 | `test` | `apps/web/src/lib/map/scene.test.ts` |
 | `test` | `apps/web/tests/map-load-fallback.spec.ts` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
+
+### CLAIM-RUNTIME-LIVE-PROD-001
+
+- Entry: `claim-runtime-live-prod-001`
+- Locator: `claims[id=CLAIM-RUNTIME-LIVE-PROD-001]`
+- Status: `stale`
+- Owner: `runtime`
+- Last verified: `2026-07-12`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `docs/reports/map-status.md` |
+| `file` | `runtime/README.md` |
+| `file` | `scripts/docmeta/validate_doc_freshness_registry.py` |
+| `file` | `scripts/docmeta/freshness_scope_policy.yml` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
+
+### CLAIM-RUNTIME-PROD-POSTGRES-001
+
+- Entry: `claim-runtime-prod-postgres-001`
+- Locator: `claims[id=CLAIM-RUNTIME-PROD-POSTGRES-001]`
+- Status: `partial`
+- Owner: `runtime`
+- Last verified: `2026-07-12`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `README.md` |
+| `file` | `runtime/README.md` |
+| `file` | `infra/compose/compose.prod.yml` |
+| `file` | `.env.prod.example` |
+| `file` | `scripts/guard/compose-image-guard.sh` |
+| `test` | `scripts/tests/test_repo_contract_guards.sh` |
 
 Does not prove:
 

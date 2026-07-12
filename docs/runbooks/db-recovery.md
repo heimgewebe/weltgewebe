@@ -1,12 +1,12 @@
 ---
 id: runbooks.db-recovery
 title: DB Recovery Runbook
-doc_type: reference
+doc_type: runbook
 status: active
 summary: >
-  Eigenständiger Datenbank-Wiederherstellungsablauf für Weltgewebe: PostgreSQL-PITR
-  und JSONL-Domänendaten, Backup-Annahmen, Recovery-Ablauf, Integritätsprüfung,
-  Rollback-/Fallback-Pfad, Risiken und Verifikation nach Recovery.
+  Wiederherstellungsablauf für die produktive PostgreSQL-Wahrheit von
+  Weltgewebe: logische Backups, isolierter Restore-Proof, Off-Host-Kopie,
+  Integritätsprüfung und kontrollierte Promotion.
 relations:
   - type: relates_to
     target: docs/runbooks/README.md
@@ -18,186 +18,174 @@ relations:
     target: docs/adr/ADR-0007__auth-persistence-production-db-path.md
   - type: relates_to
     target: docs/datenmodell.md
+  - type: relates_to
+    target: scripts/ops/postgres-backup.sh
+  - type: relates_to
+    target: scripts/ops/postgres-restore-proof.sh
+  - type: relates_to
+    target: scripts/ops/postgres-restore-latest-proof.sh
+  - type: relates_to
+    target: scripts/ops/pull-production-postgres-backup.sh
 ---
 # DB Recovery Runbook
 
-Eigenständiger Ablauf zur Wiederherstellung der persistenten Daten von Weltgewebe
-nach Korruption, versehentlicher Löschung, fehlgeschlagener Migration oder
-Hostverlust. Der übergeordnete Vorfallprozess steht in
-[Incident Response](incident-response.md); der quartalsweise Probelauf in
-[`docs/runbook.md` §2](../runbook.md) übt genau dieses Runbook ein.
+Dieses Runbook beschreibt nur den implementierten Vertrag. Es behauptet weder
+WAL/PITR noch einen aktuellen Timer- oder Backupzustand ohne frischen
+Runtimebeleg.
 
-## 1. Ziel und Anwendungsbereich
+## 1. Datenwahrheit
 
-Ziel ist ein reproduzierbarer Recovery-Ablauf mit klarer Integritäts- und
-Rollback-Logik. Maßgeblich ist die **gespaltene Datenebene** im aktuellen
-Architekturstand:
+Im Produktionspfad liegt die primäre Wahrheit in PostgreSQL:
 
-- **PostgreSQL** hält heute **Auth-/Session-Daten** (`sessions`-Tabelle;
-  Migrationen aus `apps/api/migrations/`; direkter Zugriff über `DATABASE_URL`,
-  Port `5432`, gemäß
-  [ADR-0007](../adr/ADR-0007__auth-persistence-production-db-path.md)).
-- **JSONL** hält die **Domänendaten** (Nodes, Accounts, Edges) unter
-  `GEWEBE_IN_DIR` (Standard `.gewebe/in`). Der In-Memory-Store wird beim
-  API-Start aus dem JSONL geladen. Die Migration nach PostgreSQL ist offen
-  (Optimierungsticket `OPT-ARC-001`).
+- `domain_accounts` – Accounts/Garnrollen;
+- `domain_nodes` – Knoten;
+- `domain_edges` – Fäden;
+- `sessions` – Browsersitzungen;
+- `passkey_credentials` – Passkeys;
+- `_sqlx_migrations` – Migrationsverlauf.
 
-Diese Trennung ist entscheidend: **Domänen-Recovery ≠ Session-Recovery**.
-Sessionverlust ist tolerierbar (Nutzer melden sich neu an); Domänendatenverlust
-ist es nicht.
+JSONL ist nur lokaler, historischer, Import-/Export- oder ausdrücklich
+freigegebener Rückfallpfad. Ein JSONL-Export ersetzt kein aktuelles
+PostgreSQL-Backup.
 
-Zielwerte aus dem DR-Drill ([`docs/runbook.md` §2](../runbook.md)):
+## 2. Automatischer Backupvertrag auf `wg-prod-1`
 
-- **RTO:** < 4 Stunden
-- **RPO:** < 5 Minuten
+Kanonisches Skript:
 
-## 2. Datenquellen
-
-| Datenklasse | Speicher | Restore-Quelle |
-|---|---|---|
-| Sessions / Auth | PostgreSQL `sessions` | Base-Backup + WAL (PITR); Migrationen `apps/api/migrations/` |
-| Nodes / Accounts / Edges (Domäne) | JSONL unter `GEWEBE_IN_DIR` (`.gewebe/in`) | Backup der JSONL-Dateien; In-Memory-Store lädt beim Start neu |
-| Outbox / Events (Gate C) | PostgreSQL `outbox` → NATS JetStream | **Nur falls Gate C / Outbox im Deployment aktiv und schema-seitig vorhanden.** Base-Backup + WAL; Replay über Outbox-Relay + Projektoren. Ist Gate C nicht aktiv, entfällt diese Zeile vollständig. |
-| Lese-Modelle (`faden_view` etc.) | abgeleitet — **nur falls Gate C aktiv** | Rebuild durch Projektoren aus Events — **keine** primäre Quelle; nur anwendbar, wenn Outbox/Event-Pfad im Deployment vorhanden ist |
-
-Lese-Modelle sind abgeleitet und werden neu aufgebaut, niemals als Wahrheitsquelle
-restauriert. Sie existieren als Recovery-Ziel nur, wenn Gate C / Outbox im jeweiligen
-Deployment aktiv ist. Das Domänenmodell beschreibt
-[`docs/datenmodell.md`](../datenmodell.md).
-
-## 3. Backup-/Restore-Annahmen
-
-- **PostgreSQL:** WAL-Archivierung aktiv; Base-Backups und WAL liegen extern
-  (z. B. S3), verschlüsselt (z. B. SSE-KMS) und via Object Lock unveränderbar
-  (siehe [`docs/runbook.md` §2 Vorbereitung](../runbook.md)).
-- **JSONL:** wird **separat** gesichert. `.gewebe/in/` ist git-ignored und daher
-  **nicht** Teil des Repos — ein eigener Backup-Job ist Voraussetzung. Fehlt er,
-  ist der Domänen-RPO der letzte manuelle Export (siehe [§7 Risiken](#7-risiken)).
-- **Zielpfad:** Produktion nutzt direkten PostgreSQL-Zugriff (`5432`,
-  [ADR-0007](../adr/ADR-0007__auth-persistence-production-db-path.md)). PgBouncer
-  (`6432`) ist Dev-/Spezialpfad und **kein** Restore-Ziel-Gate.
-- **Forensik vor Promotion:** Wenn die Integrität fraglich ist, zuerst in eine
-  **saubere, quarantänisierte** Instanz restaurieren; das korrupte Primary erst
-  nach Evidenzsicherung überschreiben (siehe
-  [Incident Response §8](incident-response.md)).
-
-## 4. Recovery-Ablauf
-
-1. **Vorfall sichern:** Evidenz nach [Incident Response §8](incident-response.md)
-   ziehen. **Niemals `just down`** (entfernt Volumes).
-2. **Schreiber stoppen:** API in Wartung nehmen (API-Container anhalten), damit
-   während des Restores keine neuen Schreibvorgänge laufen.
-3. **Saubere PostgreSQL-Instanz bereitstellen** (neues Volume, keine Altdaten).
-4. **PITR durchführen:** Base-Backup einspielen, dann WAL bis zum Zielzeitpunkt
-   **kurz vor** dem Vorfall nachfahren. Die konkreten Kommandos hängen vom
-   Backup-Tooling ab und sind hier als Platzhalter zu verstehen:
-
-   ```bash
-   # Beispiel/Platzhalter — abhängig vom eingesetzten Backup-Tooling.
-   # Recovery-Zielzeit (recovery_target_time) bewusst vor den Vorfall legen.
-   # restore_base_backup <basis-backup>
-   # configure_recovery_target_time "<JJJJ-MM-TT HH:MM:SS>"
-   # start_postgres_in_recovery
-   ```
-
-5. **Migrationen anwenden:** Schemastand gegen den Code sicherstellen.
-
-   ```bash
-   just db-wait
-   just db-migrate
-   ```
-
-   Die API führt `sqlx::migrate!("./migrations")` zusätzlich beim Start aus.
-6. **JSONL-Domänendaten zurückspielen:** Gesichertes JSONL nach `GEWEBE_IN_DIR`
-   (`.gewebe/in`) legen.
-7. **API starten:** Der In-Memory-Store lädt die Domänendaten aus dem JSONL;
-   Sessions kommen aus PostgreSQL.
-8. **Event-Pfad neu starten (nur falls Gate C / Outbox im Deployment aktiv und
-   schema-seitig vorhanden):** Outbox-Relay starten, dann Projektoren — diese
-   bauen die Lese-Modelle (`faden_view` etc.) neu auf. **Falls Gate C nicht
-   aktiv: diesen Schritt überspringen und als „nicht anwendbar“ in der Incident-
-   Timeline dokumentieren.**
-9. **Service freigeben:** Edge/Caddy wieder auf den Stack zeigen lassen.
-
-## 5. Integritätsprüfung
-
-**PostgreSQL:**
-
-```bash
-just db-wait
+```text
+scripts/ops/postgres-backup.sh
 ```
 
-- Migrationsstand prüfen (Tabelle `_sqlx_migrations` vollständig angewendet).
-- Zeilenzahlen in `sessions` plausibilisieren.
-- **Nur falls Gate C / Outbox aktiv:** `outbox` auf unverarbeiteten Backlog
-  prüfen (relevant für [§4 Schritt 8](#4-recovery-ablauf)). Ist Gate C nicht
-  aktiv, entfällt dieser Schritt.
+Die produktive Systemd-Unit verwendet den laufenden Container
+`weltgewebe-db-1`. Dadurch muss kein zusätzliches Datenbankpasswort in einer
+zweiten Datei gepflegt werden.
 
-**JSONL-Domänendaten:**
+Der Vertrag prüft vor dem Dump:
 
-- Jede Zeile ist valides JSON; Datensätze entsprechen
-  `contracts/domain/*.schema.json`.
-- Schema-Härtung selbst prüfen: `just contracts-domain-check`.
-- Keine doppelten IDs; `public_pos` aus `location`/`radius_m` ableitbar.
-- Stichprobe bekannter Accounts gegen den letzten guten Stand.
+- Erreichbarkeit mit `select 1`;
+- Vorhandensein aller sechs Pflichtstrukturen;
+- konkrete Container- oder Datenbankverbindung.
 
-**Querschnitt:**
+Danach entstehen unter `/var/backups/weltgewebe/postgres`:
 
-- Zeilen-/Datensatzzahlen gegen Last-Known-Good vergleichen.
-- **Nur falls Gate C / Outbox aktiv:** Lese-Modelle gegen replayed Events
-  prüfen. Ist Gate C nicht aktiv, entfällt dieser Schritt.
+- `weltgewebe-postgres-<UTC>.sql.gz`;
+- `weltgewebe-postgres-<UTC>.sha256.manifest`.
 
-## 6. Rollback-/Fallback-Pfad
+Beide Dateien werden mit Modus `0600` geschrieben. Gzip-Integrität, SHA256,
+Größe, Erstellungszeit, Tabellenumfang und – soweit verfügbar – Git-Commit
+stehen im Manifest. Unvollständige temporäre Dateien werden nicht sichtbar.
+Die Standard-Retention beträgt 14 Tage.
 
-Schlägt der Restore oder die Integritätsprüfung fehl, die restaurierte Instanz
-**nicht** in Produktion promoten. Optionen:
+Systemd:
 
-1. **Früheren/anderen Zielzeitpunkt wählen** und PITR erneut fahren.
-2. **Domänendaten aus letztem guten JSONL-Export** wiederherstellen und einen
-   etwaigen **Sessionverlust akzeptieren** (Nutzer melden sich neu an —
-   Sessions sind regenerierbar).
-3. **Degradierter Betrieb:** Service read-only/eingeschränkt zurückbringen, bis
-   ein sauberer Restore vorliegt.
+- `weltgewebe-postgres-backup.service`;
+- `weltgewebe-postgres-backup.timer` – täglich gegen 02:15 Uhr mit begrenzter
+  Zufallsverzögerung.
 
-Das fehlgeschlagene Restore-Artefakt zur Analyse aufbewahren. Leitlinie:
-Sessionverlust ist tolerierbar, Domänendatenverlust nicht — bei Konflikt hat die
-Integrität der Domänendaten Vorrang.
+## 3. Isolierter Restore-Proof
 
-## 7. Risiken
+Der Wochenlauf
 
-- **Einzige Domänenquelle ist JSONL:** Fehlt oder veraltet das JSONL-Backup, ist
-  der Domänen-RPO schlecht (offenes Ticket `OPT-ARC-001`).
-- **`.gewebe/in/` ist git-ignored:** leicht aus dem Backup-Scope zu vergessen.
-- **`just down` entfernt Volumes:** im Incident destruktiv — nicht verwenden.
-- **Port-Verwechslung:** Restore-Ziel ist direktes PostgreSQL (`5432`), nicht
-  PgBouncer (`6432`) — siehe
-  [ADR-0007](../adr/ADR-0007__auth-persistence-production-db-path.md).
-- **DSGVO:** Backups und Restores enthalten personenbezogene Daten (E-Mails,
-  Koordinaten, Token). Restore nur in eine zugriffsbeschränkte Umgebung; keine
-  Produktionsdaten in Dev-/geteilte/Ticket-Kontexte kopieren (siehe
-  [Incident Response §8](incident-response.md)).
-- **PITR-Zielwahl:** zu spätes Ziel holt die Korruption zurück, zu frühes
-  verliert Daten.
-- **Migrations-Drift:** Ein alter DB-Stand mit neuerem Code setzt
-  vorwärtskompatible Migrationen voraus (`apps/api/migrations/`).
+```text
+scripts/ops/postgres-restore-latest-proof.sh
+```
 
-## 8. Verifikation nach Recovery
+startet einen Wegwerfcontainer mit:
 
-- **Health:** `curl -fsS https://<domain>/api/health/live` (lokal
-  `http://localhost:8081/api/health/live`).
-- **Smoke:** Bootstrap-Account und Account-Erstellung gegen den wiederhergestellten Stand (siehe [`docs/runbook.md` §4](../runbook.md)):
+- dem digestgebundenen PostgreSQL-16-Image;
+- `--network none`;
+- flüchtigem `tmpfs`-Datenverzeichnis;
+- eindeutigem Restore-/Proof-Namen.
 
-  ```bash
-  just smoke-seed
-  just smoke-account-create
-  ```
+`postgres-restore-proof.sh` prüft Manifest und Gzip, verlangt ein leeres Ziel,
+spielt den Dump ein und verifiziert danach alle Pflichtstrukturen. Das
+Proof-Artefakt endet nur bei Erfolg mit `result=ok` und liegt mit Modus `0600`
+unter `postgres/proofs/`. Der Wegwerfcontainer wird in jedem Ausgang entfernt.
 
-- **Funktionspfad:** Login (Magic-Link oder Dev-Login) funktioniert; Karte zeigt
-  Accounts.
-- **Event-Pfad (nur falls Gate C / Outbox aktiv):** kein unverarbeiteter
-  `outbox`-Backlog; Projektoren aufgeschlossen. Falls Gate C nicht aktiv:
-  als „nicht anwendbar“ in der Incident-Timeline notieren.
-- **Zielwerte:** Wiederherstellzeit gegen **RTO < 4 h** und Datenverlust gegen
-  **RPO < 5 min** prüfen. War dies ein Drill, die Ergebnistabelle in
-  [`docs/runbook.md` §2](../runbook.md) ausfüllen.
-- **Dokumentation:** Ergebnis in der Incident-Timeline festhalten.
+Systemd:
+
+- `weltgewebe-postgres-restore-proof.service`;
+- `weltgewebe-postgres-restore-proof.timer` – wöchentlich sonntags gegen
+  03:15 Uhr.
+
+Ein manueller Restore in eine externe Wegwerfdatenbank bleibt möglich. Dabei
+muss `RESTORE_DATABASE_URL` sichtbar auf `restore`, `proof`, `tmp` oder `test`
+zeigen und darf niemals der produktiven `DATABASE_URL` entsprechen.
+
+## 4. Off-Host-Kette
+
+Ein lokaler Dump auf dem VPS schützt nicht vor Hostverlust. Deshalb holt
+`heim-pc` den neuesten Dump und das Manifest täglich über SSH ab:
+
+```text
+scripts/ops/pull-production-postgres-backup.sh
+```
+
+Ziel:
+
+```text
+~/merges/weltgewebe-production-backups
+```
+
+Der Pull läuft fail-closed, validiert den Dateinamen und den SHA256-Wert und
+schreibt eine `latest-pull.receipt`. Ein vorhandener Wochen-Restore-Proof wird
+mitgenommen. Der bestehende Restic-Lauf auf `heim-pc` sichert `~/merges`
+anschließend in das entfernte Restic-Repository und liest einen Sentinel aus
+dem exakten Snapshot zurück.
+
+Systemd auf `heim-pc`:
+
+- `weltgewebe-postgres-offhost-pull.service`;
+- `weltgewebe-postgres-offhost-pull.timer` – täglich gegen 04:15 Uhr.
+
+Diese Kette ist ein täglicher Off-Host-Vertrag. Sie ist kein RPO-von-fünf-Minuten
+und kein Ersatz für WAL/PITR.
+
+## 5. Vorfall und Wiederherstellung
+
+1. Vorfall und betroffenen Commit/Image-Stand sichern.
+2. Schreibzugriffe stoppen; keine Volumes löschen und kein `just down` als
+   Routine verwenden.
+3. Backup, Manifest und möglichst zugehörigen Restore-Proof auswählen.
+4. Den Dump zuerst in einer neuen, isolierten PostgreSQL-Instanz prüfen.
+5. SHA, Tabellen, Migrationen und repräsentative Datensätze kontrollieren.
+6. Erst dann eine neue produktive Datenbank aus dem geprüften Dump aufbauen.
+7. API zunächst mit `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied`
+   starten, sofern keine Migration ausdrücklich freigegeben wurde.
+8. Health, Anmeldung, Sessionpersistenz, Garnrolle, Knoten, Faden und – sofern
+   eingerichtet – Passkeypfad prüfen.
+9. Promotion erst nach vollständigem Readback; sonst Quarantäne und früheres
+   Backup verwenden.
+
+## 6. Minimaler Integritätscheck
+
+```sql
+select version, success from _sqlx_migrations order by version;
+select count(*) from domain_accounts;
+select count(*) from domain_nodes;
+select count(*) from domain_edges;
+select count(*) from sessions;
+select count(*) from passkey_credentials;
+```
+
+Zusätzlich müssen bekannte, nicht sensible Stichproben über die API lesbar sein.
+Private E-Mail-, Adress-, Token- oder Positionsdaten gehören nicht in Tickets
+oder geteilte Testumgebungen.
+
+## 7. Grenzen und Evidenz
+
+Nicht implementiert:
+
+- WAL-Archivierung und Point-in-Time-Recovery;
+- Object Lock;
+- automatisches Multi-Region-Failover;
+- Outbox-/Projektor-Replay als Recoveryquelle.
+
+Eine aktuelle Backupaussage braucht mindestens:
+
+- Timer- und Servicezustand;
+- neuesten Dump und Manifest;
+- erfolgreichen Restore-Proof;
+- Off-Host-Pull-Receipt;
+- Snapshotbeleg des bestehenden Restic-Laufs;
+- Datum, Commit/Image und offene Lücken.

@@ -33,8 +33,14 @@ validate-guards: check-system-map-drift
 
 validate-shell-tests:
 	bash scripts/tests/test_weltgewebe_up_git_branch.sh
+	bash scripts/tests/test_weltgewebe_up_frontend_required.sh
 	bash scripts/tests/test_version_guard.sh
 	bash scripts/tests/test_basemap_mode_guard.sh
+	bash scripts/tests/test_security_headers_guard.sh
+	bash scripts/tests/test_repo_contract_guards.sh
+	bash scripts/tests/test_postgres_backup_restore_contract.sh
+	bash scripts/tests/test_offhost_backup_pull_contract.sh
+	bash scripts/tests/test_web_artifact_install_contract.sh
 
 validate: validate-tests validate-core validate-guards validate-shell-tests
 

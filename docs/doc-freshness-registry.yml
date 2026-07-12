@@ -249,3 +249,45 @@ entries:
         target: apps/web/src/lib/map/scene.test.ts
       - kind: test
         target: apps/web/tests/map-load-fallback.spec.ts
+
+  - id: claim-runtime-prod-postgres-001
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-RUNTIME-PROD-POSTGRES-001]
+    claim: >-
+      wg-prod-1 nutzt PostgreSQL als Datenwahrheit; Liveaussagen brauchen
+      datierte Runtime-Evidence.
+    status: partial
+    owner: runtime
+    last_verified: "2026-07-12"
+    evidence:
+      - kind: file
+        target: README.md
+      - kind: file
+        target: runtime/README.md
+      - kind: file
+        target: infra/compose/compose.prod.yml
+      - kind: file
+        target: .env.prod.example
+      - kind: file
+        target: scripts/guard/compose-image-guard.sh
+      - kind: test
+        target: scripts/tests/test_repo_contract_guards.sh
+
+  - id: claim-runtime-live-prod-001
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-RUNTIME-LIVE-PROD-001]
+    claim: >-
+      Liveaussagen zu wg-prod-1 brauchen datierte Runtime-Evidence und
+      veralten sonst.
+    status: stale
+    owner: runtime
+    last_verified: "2026-07-12"
+    evidence:
+      - kind: file
+        target: docs/reports/map-status.md
+      - kind: file
+        target: runtime/README.md
+      - kind: file
+        target: scripts/docmeta/validate_doc_freshness_registry.py
+      - kind: file
+        target: scripts/docmeta/freshness_scope_policy.yml

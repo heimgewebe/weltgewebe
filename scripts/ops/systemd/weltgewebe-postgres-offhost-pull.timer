@@ -1,0 +1,11 @@
+[Unit]
+Description=Pull latest Weltgewebe PostgreSQL backup off the VPS daily
+
+[Timer]
+OnCalendar=*-*-* 04:15:00
+RandomizedDelaySec=10m
+Persistent=true
+Unit=weltgewebe-postgres-offhost-pull.service
+
+[Install]
+WantedBy=timers.target

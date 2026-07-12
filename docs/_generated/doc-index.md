@@ -146,7 +146,7 @@ Generated automatically. Do not edit.
 | reports.report-lifecycle-restbestand-triage | Report Lifecycle Restbestand Triage | report | deprecated | docs/reports/report-lifecycle-restbestand-triage.md |
 | runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |
 | runbooks.codespaces-recovery | Codespaces Recovery | reference | active | docs/runbooks/codespaces-recovery.md |
-| runbooks.db-recovery | DB Recovery Runbook | reference | active | docs/runbooks/db-recovery.md |
+| runbooks.db-recovery | DB Recovery Runbook | runbook | active | docs/runbooks/db-recovery.md |
 | runbooks.domain-mail-cutover | Runbook — Domain-, Mail- und SMTP-Cutover | runbook | deprecated | docs/runbooks/domain-mail-cutover.md |
 | runbooks.incident-response | Incident Response Runbook | reference | active | docs/runbooks/incident-response.md |
 | runbooks.ops.runbook.weltgewebe-selfhost-deploy | Selfhost-Deploy Runbook | reference | deprecated | docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md |

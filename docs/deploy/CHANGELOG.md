@@ -10,6 +10,48 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-07-12 - Audit-Remediation für reproduzierbare und wiederherstellbare Deployments
+
+**Geänderte Bereiche:**
+
+- alle produktionsrelevanten Compose- und Caddy-Verträge;
+- `scripts/weltgewebe-up` und der neue Webartefakt-Installer;
+- PostgreSQL-Backup, isolierter Restore-Proof und Off-Host-Kopie;
+- GitHub-Actions-, Containerimage-, Securityheader- und Buildheader-Guards.
+
+**Beschreibung:**
+
+Externe Compose-Images sind nun mit lesbarem Tag und Multiarch-SHA256-Digest
+gebunden. Das eigene API-Image verlangt eine konkrete `API_VERSION`; ein
+`latest`-Fallback ist nicht mehr zulässig. Der Deploywrapper exportiert die
+aktuelle Commitkennung zusätzlich als `WELTGEWEBE_BUILD`, sodass Caddy den
+beobachtbaren Header `X-Weltgewebe-Build` nicht mehr leer ausliefert.
+
+Die HTTPS-Caddyfiles liefern HSTS mit einem Jahr Laufzeit und
+`includeSubDomains`, bewusst noch ohne Preload. Die bestehende CSP-Ausnahme
+`script-src 'unsafe-inline'` bleibt dokumentiert und wird nicht stillschweigend
+als behoben ausgegeben.
+
+Für VPS ohne Node/pnpm steht ein commit-, versions- und hashgebundener Installer
+für lokal vorgebaute Webartefakte bereit. Er prüft das Archiv, installiert über
+ein Staging-Verzeichnis, validiert und erneuert Caddy, liest die öffentliche
+Version samt Buildheader zurück und stellt bei Abweichung das vorherige reale
+Buildverzeichnis wieder her.
+
+PostgreSQL erhält einen täglichen logischen Backupvertrag mit Gzip- und
+SHA256-Prüfung, einen wöchentlichen Restore-Proof in einem netzlosen
+Wegwerfcontainer sowie eine täglich verifizierte Off-Host-Kopie nach `heim-pc`.
+Der bestehende Restic-Pfad nimmt diese Kopie anschließend in das entfernte
+Repository auf. WAL/PITR und Object Lock werden ausdrücklich nicht behauptet.
+
+**Produktionswirkung:**
+
+Beim Rollout müssen die neuen digestgebundenen Images kontrolliert gezogen und
+die Backup-/Restore-Timer separat installiert werden. Vor dem ersten Deploy
+wird ein frischer Datenbank- und Webstand gesichert. Nach dem Deploy müssen
+Commit, API-Image, `/_app/version.json`, `X-Weltgewebe-Build`, HSTS, Health,
+Migrationen und Domänenzähler übereinstimmend zurückgelesen werden.
+
 ## 2026-07-11 - Eigene Garnrolle dauerhaft beschreiben und verorten
 
 **Geänderte Bereiche:**

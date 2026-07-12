@@ -8,8 +8,8 @@ status: canonical
 canonicality: reality
 lifecycle_state: active
 owner: runtime
-review_after: 2026-10-11
-last_reviewed: 2026-07-11
+review_after: 2026-08-12
+last_reviewed: 2026-07-12
 depends_on: []
 relations:
   - type: relates_to
@@ -61,30 +61,34 @@ Compose-Modell, nicht aus dieser Tabelle allein.
 ## Webbereitstellung
 
 Die Webanwendung ist ein statischer SvelteKit-Build. Caddy kann zu einem
-konfigurierten HTTPS-Web-Upstream routen. Cloudflare Pages und Vercel liefern
-zusätzliche Build-/Vorschauzustände; keine der beiden Plattformen ist allein die
-kanonische Produktionsruntime. Maßgeblich sind der Caddy-Vertrag und der
-effektive `WEB_UPSTREAM`.
+lokalen Build-Artefakt unter `/srv/weltgewebe-web` routen. Für `wg-prod-1` ist
+dieser statische interne Caddy-Pfad der kanonische Produktionspfad; externe
+Web-Upstreams sind Vorschau-/Legacy-Flächen und keine Produktionswahrheit.
+Der Deployvertrag verlangt eine konkrete Buildkennung über
+`WELTGEWEBE_BUILD`, `X-Weltgewebe-Build` und `/_app/version.json`.
 
 ## Domänenquellen
 
-| Schalter | Standard | Bedeutung |
+| Schalter | lokaler Default | Produktionswert `wg-prod-1` | Bedeutung |
 |---|---|---|
-| `WELTGEWEBE_DOMAIN_READ_SOURCE` | `jsonl` | Quelle für Accounts, Knoten und Fäden |
-| `WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE` | `jsonl` | Account-Erzeugung |
-| `WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE` | `jsonl` | Knotenänderungen |
-| `WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE` | `jsonl` | Fadenerzeugung |
+| `WELTGEWEBE_DOMAIN_READ_SOURCE` | `jsonl` | `postgres` | Quelle für Accounts/Garnrollen, Knoten und Fäden |
+| `WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE` | `jsonl` | `postgres` | Account-/Garnrollen-Erzeugung und Account-Mutationen |
+| `WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE` | `jsonl` | `postgres` | Knotenänderungen |
+| `WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE` | `jsonl` | `postgres` | Fadenerzeugung |
 
-`postgres` ist jeweils ein explizites Opt-in. Jeder PostgreSQL-Schreibpfad
-verlangt auch `domain_read_source=postgres` und einen verfügbaren Pool. Ungültige
-Kombinationen führen zu einem Konfigurations- oder Startfehler.
+Die lokalen Defaults bleiben aus Rückwärtskompatibilität JSONL. In Produktion
+ist PostgreSQL jedoch die Lese- und Schreibwahrheit; JSONL ist dort kein offener
+Cutover-Blocker, sondern nur Legacy-/Rollback-/Importmaterial. Jeder
+PostgreSQL-Schreibpfad verlangt auch `domain_read_source=postgres` und einen
+verfügbaren Pool. Ungültige Kombinationen führen zu einem Konfigurations- oder
+Startfehler.
 
 ## Auth- und Sessionpersistenz
 
-Sitzungen können in PostgreSQL persistiert werden; ohne Datenbankpfad verwendet
-die API einen In-Memory-Store. Passkey-Credentials besitzen einen opt-in
-PostgreSQL-Pfad. Die effektive Quelle muss aus Konfiguration und Startlogs
-redigiert beobachtet werden.
+Sitzungen und Passkey-Credentials laufen im Produktionspfad über PostgreSQL
+(`sessions`, `passkey_credentials`). Ohne Datenbankpfad verwendet die API lokale
+Entwicklungs-/Fallback-Stores; diese sind kein Produktionsvertrag. Die effektive
+Quelle muss aus Konfiguration und Startlogs redigiert beobachtet werden.
 
 | Schalter | Standard | Bedeutung |
 |---|---|---|
@@ -126,4 +130,6 @@ Für eine belastbare Runtimeaussage sind mindestens nötig:
 4. `/health/live` und `/health/ready`,
 5. Migrationsmodus und Datenquellschalter,
 6. redigierte Secret-Quellen beziehungsweise Vorhandenseinsbelege,
-7. Logs ohne Token- oder Secretlecks.
+7. Backup-/Restore-Proof-Status für `scripts/ops/postgres-backup.sh` und
+   `scripts/ops/postgres-restore-proof.sh`,
+8. Logs ohne Token- oder Secretlecks.
