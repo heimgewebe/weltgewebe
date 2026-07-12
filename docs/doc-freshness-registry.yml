@@ -254,10 +254,8 @@ entries:
     doc: docs/claims/registry.yml
     locator: claims[id=CLAIM-RUNTIME-PROD-POSTGRES-001]
     claim: >-
-      Der Repository-Vertrag fuer wg-prod-1 setzt PostgreSQL als Lese- und
-      Schreibwahrheit fuer Accounts/Garnrollen, Knoten und Faeden; JSONL ist
-      nur lokaler, Legacy-, Import-/Export- oder Rollbackpfad, und frische
-      Liveaussagen brauchen datierte Runtime-Evidence.
+      wg-prod-1 nutzt PostgreSQL als Datenwahrheit; Liveaussagen brauchen
+      datierte Runtime-Evidence.
     status: partial
     owner: runtime
     last_verified: "2026-07-12"
@@ -279,9 +277,8 @@ entries:
     doc: docs/claims/registry.yml
     locator: claims[id=CLAIM-RUNTIME-LIVE-PROD-001]
     claim: >-
-      Liveabhaengige Statusaussagen zu wg-prod-1 gelten ohne datierte
-      Runtime-Evidence als stale und duerfen nicht als zeitlose Wahrheit
-      behandelt werden.
+      Liveaussagen zu wg-prod-1 brauchen datierte Runtime-Evidence und
+      veralten sonst.
     status: stale
     owner: runtime
     last_verified: "2026-07-12"

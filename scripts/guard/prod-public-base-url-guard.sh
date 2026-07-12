@@ -41,6 +41,8 @@ trap cleanup EXIT
 
 cat > "$TMP_ENV" << 'EOF_ENV'
 DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy
+API_VERSION=test-commit
+WELTGEWEBE_BUILD=test-commit
 POSTGRES_USER=dummy
 POSTGRES_PASSWORD=dummy
 POSTGRES_DB=dummy

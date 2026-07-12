@@ -134,21 +134,26 @@ def test_trusted_caddy_hops_overwrite_client_ip_headers(caddyfile: Path) -> None
     )
 
 
-def test_deploy_vps_shim_keeps_vps_caddy_and_upstream_guards() -> None:
+def test_deploy_vps_shim_keeps_vps_caddy_and_static_web_guards() -> None:
     shim = (REPO / "scripts" / "deploy_vps.sh").read_text(encoding="utf-8")
     entrypoint = (REPO / "scripts" / "weltgewebe-up").read_text(encoding="utf-8")
     base_compose = (COMPOSE_DIR / "compose.prod.yml").read_text(encoding="utf-8")
+    vps_override = VPS_OVERRIDE.read_text(encoding="utf-8")
+    caddy_vps = CADDY_VPS.read_text(encoding="utf-8")
 
     assert 'DEPLOY_TARGET="${DEPLOY_TARGET:-vps}"' in shim
     assert '"${SCRIPT_DIR}/weltgewebe-up" "$@"' in shim
     assert '[[ "$DEPLOY_TARGET" == "vps" && "$WITH_CADDY" == "0" ]]' in entrypoint
     assert "WITH_CADDY=1" in entrypoint
     assert 'export API_VERSION="$HEAD_AFTER"' in entrypoint
-    assert "${WEB_UPSTREAM_URL:?WEB_UPSTREAM_URL must be set" in base_compose
-    assert "${WEB_UPSTREAM_HOST:?WEB_UPSTREAM_HOST must be set" in base_compose
+    assert 'export WELTGEWEBE_BUILD="$HEAD_AFTER"' in entrypoint
+    assert "${API_VERSION:?API_VERSION must be set}" in base_compose
+    assert "${WELTGEWEBE_BUILD:?WELTGEWEBE_BUILD must be set}" in base_compose
 
-    vps_override = VPS_OVERRIDE.read_text(encoding="utf-8")
-    assert "WEB_UPSTREAM_HOST: weltgewebe.net" in vps_override
-    assert "WEB_UPSTREAM_URL: https://weltgewebe.net" in vps_override
-    assert "WEB_UPSTREAM_HOST: http://" not in vps_override
-    assert "WEB_UPSTREAM_HOST: https://" not in vps_override
+    static_mount = "../../apps/web/build:/srv/weltgewebe-web:ro"
+    assert static_mount in base_compose
+    assert static_mount in vps_override
+    assert "WEB_UPSTREAM_HOST" not in vps_override
+    assert "WEB_UPSTREAM_URL" not in vps_override
+    assert "root * /srv/weltgewebe-web" in caddy_vps
+    assert 'X-Weltgewebe-Build "{$WELTGEWEBE_BUILD}"' in caddy_vps

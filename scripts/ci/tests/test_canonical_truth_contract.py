@@ -11,9 +11,11 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class CanonicalTruthContractTests(unittest.TestCase):
-    def test_docs_guard_installs_all_discovered_ci_test_dependencies(self) -> None:
-        workflow = (ROOT / ".github/workflows/docs-guard.yml").read_text(encoding="utf-8")
-        self.assertIn("pytest==8.3.4 pyyaml==6.0.2", workflow)
+    def test_docmeta_ci_jobs_install_the_pinned_yaml_dependency(self) -> None:
+        docs_workflow = (ROOT / ".github/workflows/docs-guard.yml").read_text(encoding="utf-8")
+        main_workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("pytest==8.3.4 pyyaml==6.0.2", docs_workflow)
+        self.assertIn("pyyaml==6.0.2", main_workflow)
 
     def test_required_check_catalog_is_strict_and_matches_universal_jobs(self) -> None:
         path = ROOT / ".github/grabowski-required-checks.json"
