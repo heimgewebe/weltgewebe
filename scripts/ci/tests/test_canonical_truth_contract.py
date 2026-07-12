@@ -15,7 +15,7 @@ class CanonicalTruthContractTests(unittest.TestCase):
         docs_workflow = (ROOT / ".github/workflows/docs-guard.yml").read_text(encoding="utf-8")
         main_workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("pytest==8.3.4 pyyaml==6.0.2", docs_workflow)
-        self.assertIn("pyyaml==6.0.2", main_workflow)
+        self.assertIn("pytest==8.3.4 pyyaml==6.0.2", main_workflow)
 
     def test_required_check_catalog_is_strict_and_matches_universal_jobs(self) -> None:
         path = ROOT / ".github/grabowski-required-checks.json"
