@@ -29,8 +29,8 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | files_missing_owner_task | 4 |
 | files_with_review_after | 33 |
 | files_missing_review_after | 13 |
-| files_primary_referenced | 43 |
-| files_primary_unreferenced | 3 |
+| files_primary_referenced | 41 |
+| files_primary_unreferenced | 5 |
 | files_with_derived_references | 46 |
 | files_with_relations | 46 |
 | files_with_missing_supersession_target | 0 |
@@ -54,39 +54,39 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/auth-persistence-readiness.md | report | deprecated | superseded | decision-prep | OPT-API-002 |  | docs/reports/auth-persistence-next-step.md | 4 | 6 | 3 | review_after |  |
 | docs/reports/auth-persistence-runtime-proof.md | report | deprecated | superseded | proof | OPT-API-002 |  | docs/reports/optimierungsstatus.md | 4 | 5 | 6 | review_after |  |
 | docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active | active | audit | OPT-API-002 | 2026-07-17 |  | 1 | 4 | 5 |  |  |
-| docs/reports/auth-pg-002-controlled-preflight.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 2 | 4 | 2 |  |  |
-| docs/reports/auth-pg-002-cutover-plan.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 8 | 4 | 4 |  |  |
+| docs/reports/auth-pg-002-controlled-preflight.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 1 | 4 | 2 |  |  |
+| docs/reports/auth-pg-002-cutover-plan.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 7 | 4 | 4 |  |  |
 | docs/reports/auth-pg-002-passkey-db-store.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 3 | 4 | 3 |  |  |
-| docs/reports/auth-pg-002-passkey-fk-readiness-audit.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 3 | 4 | 4 |  |  |
-| docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 3 | 4 | 4 |  |  |
-| docs/reports/auth-pg-002-passkey-runtime-audit-plan.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 3 | 4 | 3 |  |  |
-| docs/reports/auth-pg-002-passkey-runtime-facade.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 5 | 4 | 3 |  |  |
-| docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 5 | 4 | 4 |  |  |
-| docs/reports/auth-pg-002-schema-preflight-ci.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 1 | 4 | 4 |  |  |
+| docs/reports/auth-pg-002-passkey-fk-readiness-audit.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 2 | 4 | 4 |  |  |
+| docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 2 | 4 | 4 |  |  |
+| docs/reports/auth-pg-002-passkey-runtime-audit-plan.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 2 | 4 | 3 |  |  |
+| docs/reports/auth-pg-002-passkey-runtime-facade.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 4 | 4 | 3 |  |  |
+| docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 4 | 4 | 4 |  |  |
+| docs/reports/auth-pg-002-schema-preflight-ci.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 0 | 4 | 4 |  |  |
 | docs/reports/auth-pg-003-backfill-readiness.md | report | active | active | proof | AUTH-PG-003 | 2026-09-30 |  | 3 | 4 | 4 |  |  |
 | docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md | report | active | active | proof | AUTH-PG-003 | 2026-09-30 |  | 1 | 4 | 4 |  |  |
 | docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md | report | active | active | proof | AUTH-PG-003 | 2026-09-30 |  | 1 | 4 | 2 |  |  |
 | docs/reports/auth-status-matrix.md | reference | active |  |  |  |  |  | 15 | 5 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/cost-report.md | report | active | active | generated | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 1 | 4 | 3 |  |  |
-| docs/reports/domain-account-email-uniqueness-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-13 |  | 2 | 4 | 4 |  |  |
-| docs/reports/domain-account-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 7 | 4 | 6 |  |  |
-| docs/reports/domain-backfill-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 4 |  |  |
+| docs/reports/domain-account-email-uniqueness-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-13 |  | 1 | 4 | 4 |  |  |
+| docs/reports/domain-account-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 6 |  |  |
+| docs/reports/domain-backfill-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 1 | 4 | 4 |  |  |
 | docs/reports/domain-edge-cache-limit-design.md | report | active | active | decision-prep | DOMAIN-PG-003 | 2026-09-29 |  | 0 | 4 | 5 |  |  |
 | docs/reports/domain-edge-create-semantics-preflight.md | report | deprecated | superseded | decision-prep | OPT-ARC-001 |  | docs/reports/domain-edge-write-path-proof.md | 1 | 6 | 7 | review_after |  |
 | docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 2 | 4 | 6 |  |  |
-| docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 6 | 8 |  |  |
-| docs/reports/domain-node-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 6 |  |  |
+| docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 1 | 6 | 8 |  |  |
+| docs/reports/domain-node-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 6 |  |  |
 | docs/reports/domain-postgres-instance-coherence-decision.md | report | active | active | audit | DOMAIN-PG-002 | 2026-12-18 |  | 2 | 5 | 6 |  |  |
 | docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | 4 | 4 | 3 |  |  |
-| docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 5 |  |  |
+| docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 4 | 4 | 5 |  |  |
 | docs/reports/domain-runtime-data-source-reconciliation.md | report | active | active | audit | DB-PROOF-001 | 2026-07-18 |  | 1 | 4 | 5 |  |  |
-| docs/reports/github-action-ref-pinning-audit.md | report | active | active | audit | OPT-INF-002 | 2026-09-30 |  | 2 | 4 | 4 |  |  |
+| docs/reports/github-action-ref-pinning-audit.md | report | active | active | audit | OPT-INF-002 | 2026-09-30 |  | 0 | 4 | 4 |  |  |
 | docs/reports/github-actions-node24-readiness.md | report | active | active | audit | OPT-CI-005 | 2026-09-29 |  | 2 | 4 | 5 |  |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | deprecated | archived | planning | DEPLOY-DNS-001 |  |  | 1 | 5 | 4 | review_after |  |
 | docs/reports/map-architekturkritik.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 4 | 5 | 2 |  |  |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 2 | 5 | 6 |  |  |
 | docs/reports/map-status-matrix.md | status-matrix | deprecated | archived |  |  |  |  | 8 | 6 | 3 | lifecycle, owner_task, review_after |  |
-| docs/reports/map-status.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-08-11 |  | 2 | 5 | 2 |  |  |
+| docs/reports/map-status.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-08-12 |  | 4 | 6 | 2 |  |  |
 | docs/reports/optimierungsbericht.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 2 | 4 | 4 |  |  |
 | docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 23 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/passkey-register-verify-prep.md | report | deprecated | archived | decision-prep | AUTH-PG-002 |  |  | 1 | 5 | 4 | review_after |  |
@@ -195,7 +195,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/auth-pg-002-controlled-preflight.md`
   - `docs/reports/auth-pg-002-schema-preflight-ci.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/auth-pg-002-cutover-plan.md`
   - `docs/reports/auth-pg-002-passkey-fk-readiness-audit.md`
@@ -205,7 +204,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md`
   - `docs/reports/auth-pg-002-schema-preflight-ci.md`
   - `docs/reports/auth-pg-003-backfill-readiness.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/auth-pg-002-passkey-db-store.md`
   - `docs/reports/auth-pg-002-cutover-plan.md`
@@ -215,34 +213,26 @@ Primary references are exact path matches in canonical documentation surfaces. D
 - `docs/reports/auth-pg-002-passkey-fk-readiness-audit.md`
   - `docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md`
   - `docs/reports/auth-pg-002-passkey-runtime-audit-plan.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md`
   - `docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md`
   - `docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/auth-pg-002-passkey-runtime-audit-plan.md`
   - `docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md`
   - `docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/auth-pg-002-passkey-runtime-facade.md`
   - `docs/reports/auth-pg-002-cutover-plan.md`
   - `docs/reports/auth-pg-002-passkey-db-store.md`
   - `docs/reports/auth-pg-002-passkey-fk-readiness-audit.md`
   - `docs/reports/auth-pg-003-backfill-readiness.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md`
   - `docs/reports/auth-pg-002-controlled-preflight.md`
   - `docs/reports/auth-pg-002-schema-preflight-ci.md`
   - `docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md`
   - `docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md`
-  - `docs/tasks/board.md`
-
-- `docs/reports/auth-pg-002-schema-preflight-ci.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/auth-pg-003-backfill-readiness.md`
   - `docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md`
@@ -277,7 +267,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/domain-account-email-uniqueness-audit.md`
   - `docs/reports/domain-backfill-proof.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/domain-account-write-path-proof.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
@@ -285,13 +274,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/reports/domain-edge-write-path-proof.md`
   - `docs/reports/domain-node-write-path-proof.md`
   - `docs/reports/domain-read-path-proof.md`
-  - `docs/reports/optimierungsstatus.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/domain-backfill-proof.md`
   - `docs/reports/domain-read-path-proof.md`
-  - `docs/reports/optimierungsstatus.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/domain-edge-create-semantics-preflight.md`
   - `docs/reports/domain-edge-write-path-proof.md`
@@ -302,15 +287,11 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/domain-edge-write-path-proof.md`
   - `docs/reports/domain-edge-create-semantics-preflight.md`
-  - `docs/reports/optimierungsstatus.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/domain-node-write-path-proof.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
   - `docs/reports/domain-edge-create-semantics-preflight.md`
   - `docs/reports/domain-edge-write-path-proof.md`
-  - `docs/reports/optimierungsstatus.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/domain-postgres-instance-coherence-decision.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
@@ -327,13 +308,8 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/reports/domain-edge-write-path-proof.md`
   - `docs/reports/domain-node-write-path-proof.md`
   - `docs/reports/optimierungsstatus.md`
-  - `docs/tasks/board.md`
 
 - `docs/reports/domain-runtime-data-source-reconciliation.md`
-  - `docs/tasks/board.md`
-
-- `docs/reports/github-action-ref-pinning-audit.md`
-  - `docs/reports/optimierungsstatus.md`
   - `docs/tasks/board.md`
 
 - `docs/reports/github-actions-node24-readiness.md`
@@ -365,7 +341,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/map-status.md`
   - `docs/reports/map-status-matrix.md`
+  - `docs/reports/optimierungsstatus.md`
   - `docs/roadmap.md`
+  - `docs/tasks/board.md`
 
 - `docs/reports/optimierungsbericht.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
@@ -657,6 +635,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/map-status.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/claim-evidence-map.md`
   - `docs/_generated/doc-index.md`
   - `docs/_generated/impl-index.md`
   - `docs/_generated/report-lifecycle.md`
@@ -711,7 +690,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
 ## Primary Unreferenced Reports
 
 - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
+- `docs/reports/auth-pg-002-schema-preflight-ci.md`
 - `docs/reports/domain-edge-cache-limit-design.md`
+- `docs/reports/github-action-ref-pinning-audit.md`
 - `docs/reports/report-lifecycle-restbestand-triage.md`
 
 ## Supersession Target Diagnostics

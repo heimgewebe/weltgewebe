@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 558 |
+| Relationen gesamt | 562 |
 | — depends_on | 20 |
-| — relates_to | 526 |
+| — relates_to | 530 |
 | — supersedes | 11 |
 | — verifies | 1 |
 | relates_to Anteil | 94% |
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (216 Dokumente):
+**Cluster 1** (220 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -246,6 +246,10 @@ _Keine Lücken erkannt._
 - `scripts/ops/check_public_live_readiness.py`
 - `scripts/ops/check_vps_db_migration_history_shape.py`
 - `scripts/ops/check_vps_migration_safe_runtime_env.py`
+- `scripts/ops/postgres-backup.sh`
+- `scripts/ops/postgres-restore-latest-proof.sh`
+- `scripts/ops/postgres-restore-proof.sh`
+- `scripts/ops/pull-production-postgres-backup.sh`
 - `scripts/ops/reconcile_public_login_smtp_env.py`
 - `scripts/tests/test_domain_single_instance_guard.sh`
 - `tests/fixtures/agent/handoff-valid.json`
@@ -295,16 +299,17 @@ _Keine Lücken erkannt._
 - relates_to → `docs/tasks/index.json`
 - relates_to → `repo.meta.yaml`
 
-**`docs/reference/agent-operability-fixture-matrix.md`**:
+**`docs/runbooks/db-recovery.md`**:
 
-- relates_to → `contracts/agent/handoff.schema.json`
-- relates_to → `contracts/agent/task.schema.json`
-- relates_to → `scripts/agent/check_non_ideal_task.py`
-- relates_to → `scripts/agent/run_task.py`
-- relates_to → `scripts/agent/tests/test_check_non_ideal_task.py`
-- relates_to → `scripts/agent/tests/test_run_task.py`
-- relates_to → `scripts/agent/tests/test_validate_handoff.py`
-- relates_to → `scripts/agent/validate_handoff.py`
+- relates_to → `docs/adr/ADR-0007__auth-persistence-production-db-path.md`
+- relates_to → `docs/datenmodell.md`
+- relates_to → `docs/runbook.md`
+- relates_to → `docs/runbooks/README.md`
+- relates_to → `docs/runbooks/incident-response.md`
+- relates_to → `scripts/ops/postgres-backup.sh`
+- relates_to → `scripts/ops/postgres-restore-latest-proof.sh`
+- relates_to → `scripts/ops/postgres-restore-proof.sh`
+- relates_to → `scripts/ops/pull-production-postgres-backup.sh`
 
 ### Hinweise
 

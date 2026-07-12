@@ -15,7 +15,7 @@ Generated automatically. Do not edit.
 | Component Type | Coverage | Total | Documented |
 | --- | --- | --- | --- |
 | Config | 100% | 3 | 3 |
-| Guard | 100% | 4 | 4 |
+| Guard | 100% | 5 | 5 |
 | Schema | 100% | 1 | 1 |
 | Service | 100% | 3 | 3 |
-| Workflow | 100% | 2 | 2 |
+| Workflow | 100% | 4 | 4 |
