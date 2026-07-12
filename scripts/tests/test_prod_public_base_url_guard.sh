@@ -50,10 +50,16 @@ services:
       WEB_UPSTREAM_HOST: $api_web_host
       WEB_UPSTREAM_URL: $api_web_url
   caddy:
+EOF_OVERRIDE
+  if [[ "$caddy_web_host" == "__absent__" ]]; then
+    printf '    environment: {}\n' >> "$TEST_TMP/infra/compose/compose.prod.override.yml"
+  else
+    cat >> "$TEST_TMP/infra/compose/compose.prod.override.yml" << EOF_CADDY
     environment:
       WEB_UPSTREAM_HOST: $caddy_web_host
       WEB_UPSTREAM_URL: $caddy_web_url
-EOF_OVERRIDE
+EOF_CADDY
+  fi
 }
 
 run_guard() {
@@ -112,8 +118,8 @@ run_case \
   "https://weltgewebe.net" \
   "weltgewebe.home.arpa" \
   "https://weltgewebe.home.arpa" \
-  "weltgewebe.home.arpa" \
-  "https://weltgewebe.home.arpa" \
+  "__absent__" \
+  "__absent__" \
   "1" "0" \
   0 "prod-public-base-url guard passed"
 
@@ -122,8 +128,8 @@ run_case \
   "https://weltgewebe.home.arpa" \
   "weltgewebe.home.arpa" \
   "https://weltgewebe.home.arpa" \
-  "weltgewebe.home.arpa" \
-  "https://weltgewebe.home.arpa" \
+  "__absent__" \
+  "__absent__" \
   "1" "0" \
   1 "services.api.environment.APP_BASE_URL"
 
@@ -132,13 +138,13 @@ run_case \
   "https://weltgewebe.net" \
   "weltgewebe.home.arpa" \
   "https://weltgewebe.net" \
-  "weltgewebe.home.arpa" \
-  "https://weltgewebe.home.arpa" \
+  "__absent__" \
+  "__absent__" \
   "1" "0" \
   1 "services.api.environment.WEB_UPSTREAM_URL"
 
 run_case \
-  "public Caddy WEB_UPSTREAM_HOST is rejected" \
+  "legacy Caddy WEB_UPSTREAM_HOST is rejected" \
   "https://weltgewebe.net" \
   "weltgewebe.home.arpa" \
   "https://weltgewebe.home.arpa" \
@@ -148,7 +154,7 @@ run_case \
   1 "services.caddy.environment.WEB_UPSTREAM_HOST"
 
 run_case \
-  "public Caddy WEB_UPSTREAM_URL is rejected" \
+  "legacy Caddy WEB_UPSTREAM_URL is rejected" \
   "https://weltgewebe.net" \
   "weltgewebe.home.arpa" \
   "https://weltgewebe.home.arpa" \
@@ -162,8 +168,8 @@ run_case \
   "https://weltgewebe.net" \
   "weltgewebe.home.arpa" \
   "https://weltgewebe.home.arpa" \
-  "weltgewebe.home.arpa" \
-  "https://weltgewebe.home.arpa" \
+  "__absent__" \
+  "__absent__" \
   "0" "0" \
   1 "services.api.environment.AUTH_PUBLIC_LOGIN"
 
@@ -172,8 +178,8 @@ run_case \
   "https://weltgewebe.net" \
   "weltgewebe.home.arpa" \
   "https://weltgewebe.home.arpa" \
-  "weltgewebe.home.arpa" \
-  "https://weltgewebe.home.arpa" \
+  "__absent__" \
+  "__absent__" \
   "1" "1" \
   1 "services.api.environment.AUTH_LOG_MAGIC_TOKEN"
 
