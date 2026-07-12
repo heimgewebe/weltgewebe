@@ -40,7 +40,7 @@ case "$#" in
     ;;
 esac
 
-for cmd in git install mktemp cmp grep sed sha256sum awk; do require_cmd "$cmd"; done
+for cmd in git install mktemp cmp grep sed sha256sum awk date; do require_cmd "$cmd"; done
 
 REPO_DIR="${REPO_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." > /dev/null 2>&1 && pwd)}"
 TARGET_HOME="${TARGET_HOME:-${HOME:?HOME must be set}}"
@@ -110,6 +110,7 @@ fi
 receipt_tmp="$(mktemp "$release_dir/.install.receipt.XXXXXX")"
 {
   printf 'contract=weltgewebe-postgres-offhost-user-install-v1\n'
+  printf 'installed_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'git_commit=%s\n' "$expected_commit"
   printf 'pull_sha256=%s\n' "$(sha256_file "$pull_target")"
   printf 'service_sha256=%s\n' "$(sha256_file "$service_target")"

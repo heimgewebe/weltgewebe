@@ -6,13 +6,23 @@ REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 BACKUP_SCRIPT="$REPO_ROOT/scripts/ops/postgres-backup.sh"
 RESTORE_SCRIPT="$REPO_ROOT/scripts/ops/postgres-restore-proof.sh"
 BACKUP_UNIT="$REPO_ROOT/scripts/ops/systemd/weltgewebe-postgres-backup.service"
+PREPARE_UNIT="$REPO_ROOT/scripts/ops/systemd/weltgewebe-postgres-backup-prepare.service"
 
-grep -qxF 'ExecStartPre=/usr/bin/install -d -o root -g root -m 0700 /var/backups/weltgewebe/postgres' "$BACKUP_UNIT"
-grep -qxF 'ReadWritePaths=/var/backups' "$BACKUP_UNIT"
-if grep -qxF 'ReadWritePaths=/var/backups/weltgewebe/postgres' "$BACKUP_UNIT"; then
-  echo "backup unit must allow first-run creation before narrowing to the target" >&2
+grep -qxF 'Requires=docker.service weltgewebe-postgres-backup-prepare.service' "$BACKUP_UNIT"
+grep -qxF 'After=docker.service weltgewebe-postgres-backup-prepare.service' "$BACKUP_UNIT"
+grep -qxF 'ReadWritePaths=/var/backups/weltgewebe/postgres' "$BACKUP_UNIT"
+if grep -q '^ExecStartPre=' "$BACKUP_UNIT" || grep -qxF 'ReadWritePaths=/var/backups' "$BACKUP_UNIT"; then
+  echo "backup service must not prepare or write the broad backup parent" >&2
   exit 1
 fi
+grep -qxF 'Before=weltgewebe-postgres-backup.service' "$PREPARE_UNIT"
+grep -qxF 'AssertPathIsDirectory=/var/backups' "$PREPARE_UNIT"
+grep -qxF 'ExecStart=/usr/bin/install -d -o root -g root -m 0750 /var/backups/weltgewebe' "$PREPARE_UNIT"
+grep -qxF 'ExecStart=/usr/bin/install -d -o root -g root -m 0700 /var/backups/weltgewebe/postgres' "$PREPARE_UNIT"
+grep -qxF 'ProtectSystem=full' "$PREPARE_UNIT"
+grep -qxF 'ReadOnlyPaths=/var' "$PREPARE_UNIT"
+grep -qxF 'ReadWritePaths=/var/backups' "$PREPARE_UNIT"
+grep -qxF 'CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER' "$PREPARE_UNIT"
 
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
