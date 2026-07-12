@@ -78,11 +78,17 @@ Die Standard-Retention beträgt 14 Tage.
 
 Systemd:
 
-Die Backup-Unit gibt im strikten Dateisystem-Sandboxing nur `/var/backups`
-schreibbar und legt daraus vor dem eigentlichen Dump das engere Zielverzeichnis
-`/var/backups/weltgewebe/postgres` mit Modus `0700` an. Das verhindert einen
-Erststartfehler, wenn der Zielpfad noch nicht existiert.
+Eine getrennte, kurzlebige Vorbereitungs-Unit legt zunächst
+`/var/backups/weltgewebe` mit Modus `0750` und das engere PostgreSQL-Ziel mit
+Modus `0700` an. Sie führt ausschließlich feste `/usr/bin/install`-Befehle aus,
+hat eine begrenzte Capability-Menge und darf unter `/var` nur in
+`/var/backups` schreiben. Der eigentliche Dumpdienst startet erst danach und
+besitzt ausschließlich Schreibzugriff auf
+`/var/backups/weltgewebe/postgres`. Dadurch bleibt die Erststartfähigkeit
+erhalten, ohne den umfassenderen Schreibbereich während des Backupskripts zu
+öffnen.
 
+- `weltgewebe-postgres-backup-prepare.service`;
 - `weltgewebe-postgres-backup.service`;
 - `weltgewebe-postgres-backup.timer` – täglich gegen 02:15 Uhr mit begrenzter
   Zufallsverzögerung.
@@ -148,8 +154,8 @@ EXPECTED_COMMIT="$(git rev-parse HEAD)" \
   scripts/ops/install-postgres-offhost-pull-user-units.sh --enable-now
 ```
 
-Die Installation schreibt zusätzlich ein SHA256- und commitgebundenes
-`install.receipt`. Die eingecheckte Service-Datei ist eine Vorlage; ihr
+Die Installation schreibt zusätzlich ein zeitgestempeltes, SHA256- und
+commitgebundenes `install.receipt`. Die eingecheckte Service-Datei ist eine Vorlage; ihr
 `@WELTGEWEBE_COMMIT@`-Platzhalter darf nicht ungeprüft als aktive Unit kopiert
 werden. `ProtectKernelModules` wird in der User-Unit bewusst nicht verwendet,
 weil diese Kernel-Capability im User-Manager nicht portabel verfügbar ist. Alle

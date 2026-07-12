@@ -81,6 +81,7 @@ if grep -q '^ProtectKernelModules=' "$installed_service"; then
   exit 1
 fi
 grep -qxF 'contract=weltgewebe-postgres-offhost-user-install-v1' "$receipt"
+grep -Eq '^installed_at=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' "$receipt"
 grep -qxF "git_commit=$commit" "$receipt"
 [[ "$(stat -c %a "$receipt")" == 600 ]]
 [[ "$(stat -c %a "$install_home/merges/weltgewebe-production-backups")" == 700 ]]

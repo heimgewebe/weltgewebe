@@ -94,15 +94,25 @@ Secretwerte enthalten sein könnten.
 | API startet nicht | Konfigurationsvalidierung, Proxyentscheidung, Migrationsmodus |
 | Karte bleibt leer | Web-Build, Basemap-Konfiguration, PMTiles-Range und API-Daten getrennt |
 
-### Atomarer Webartefakt-Readback
+### Webartefakt-Umschaltung und verifizierter Readback
 
-`scripts/ops/install-web-artifact.sh` validiert Archiv, Version und Commit,
-schaltet den Webroot per Symlink um und wartet danach begrenzt auf einen
-konsistenten öffentlichen Readback. Die Prüfung akzeptiert die bei HTTP/2
-üblichen kleingeschriebenen Headernamen, verlangt `Cache-Control: no-store`
-und bindet `X-Weltgewebe-Build`, Version und Commit gemeinsam. Erst nach Ablauf
-aller Versuche wird zurückgerollt. `apps/web/releases/` ist versioniert als
-Laufzeitzustand ignoriert und darf den Produktionscheckout nicht verschmutzen.
+`scripts/ops/install-web-artifact.sh` validiert Archiv, Dateibaum, Version und
+Commit. Eine hostweite `flock`-Sperre serialisiert Umschaltung und Rollback. Ein
+bereits aktiver, bytegleich geprüfter Release kann idempotent erneut verifiziert
+werden, ohne Caddy neu zu erzeugen. Bei einem neuen Release wird der Webroot
+atomar per Symlink umgeschaltet und Caddy danach neu erzeugt. Der laufende alte
+Container hält bis dahin seinen bisherigen Bind-Mount; der öffentliche Readback
+kann deshalb sinnvoll erst nach der Neuerzeugung den neuen Stand prüfen.
+
+Der Readback akzeptiert kleingeschriebene HTTP/2-Headernamen, entfernt
+abschließenden Leerraum, verlangt `Cache-Control: no-store` und bindet
+`X-Weltgewebe-Build`, Version und Commit gemeinsam. Sowohl einzelne
+`curl`-Aufrufe als auch die gesamte Prüfschleife besitzen Zeitgrenzen; Anzahl,
+Dauer und letzter Fehlergrund werden ausgegeben. Ein Rollback löscht einen neuen
+Release nur, wenn derselbe Lauf ihn angelegt hat und seine Dateisystemidentität
+unverändert ist. Dies ist ein verifizierter Umschalt- und Rollbackvertrag, aber
+kein Blue-Green- oder allgemeiner Zero-Downtime-Vertrag. `apps/web/releases/`
+ist Laufzeitzustand und darf den Produktionscheckout nicht verschmutzen.
 
 ## 3. Datenquellen und Migrationen
 

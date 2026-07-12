@@ -1,0 +1,25 @@
+[Unit]
+Description=Prepare the restricted Weltgewebe PostgreSQL backup directory
+Documentation=file:/opt/weltgewebe/docs/runbooks/db-recovery.md
+Before=weltgewebe-postgres-backup.service
+AssertPathIsDirectory=/var/backups
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/install -d -o root -g root -m 0750 /var/backups/weltgewebe
+ExecStart=/usr/bin/install -d -o root -g root -m 0700 /var/backups/weltgewebe/postgres
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadOnlyPaths=/var
+ReadWritePaths=/var/backups
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER
