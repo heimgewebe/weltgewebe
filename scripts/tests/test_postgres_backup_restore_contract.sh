@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 BACKUP_SCRIPT="$REPO_ROOT/scripts/ops/postgres-backup.sh"
 RESTORE_SCRIPT="$REPO_ROOT/scripts/ops/postgres-restore-proof.sh"
@@ -12,7 +12,7 @@ trap 'rm -rf "$TEMP_DIR"' EXIT
 MOCK_BIN="$TEMP_DIR/bin"
 mkdir -p "$MOCK_BIN"
 
-cat >"$MOCK_BIN/psql" <<'SH'
+cat > "$MOCK_BIN/psql" << 'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 args="$*"
@@ -28,7 +28,7 @@ fi
 SH
 chmod +x "$MOCK_BIN/psql"
 
-cat >"$MOCK_BIN/pg_dump" <<'SH'
+cat > "$MOCK_BIN/pg_dump" << 'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 cat <<'SQL'
@@ -51,7 +51,7 @@ DATABASE_URL="postgres://welt:secret@db:5432/weltgewebe" \
   BACKUP_DIR="$BACKUP_DIR" \
   BACKUP_LABEL="fixture" \
   BACKUP_RETENTION_DAYS=1 \
-  bash "$BACKUP_SCRIPT" >/dev/null
+  bash "$BACKUP_SCRIPT" > /dev/null
 
 backup_file="$BACKUP_DIR/weltgewebe-postgres-fixture.sql.gz"
 manifest_file="$BACKUP_DIR/weltgewebe-postgres-fixture.sha256.manifest"
@@ -72,7 +72,7 @@ BACKUP_FILE="$backup_file" \
   BACKUP_MANIFEST="$manifest_file" \
   RESTORE_DATABASE_URL="postgres://welt:secret@db:5432/weltgewebe_restore_proof" \
   RESTORE_PROOF_DIR="$RESTORE_PROOF_DIR" \
-  bash "$RESTORE_SCRIPT" >/dev/null
+  bash "$RESTORE_SCRIPT" > /dev/null
 
 proof_file="$RESTORE_PROOF_DIR/weltgewebe-postgres-fixture.restore-proof"
 test -f "$proof_file"
@@ -89,7 +89,7 @@ if BACKUP_FILE="$backup_file" \
   BACKUP_MANIFEST="$manifest_file" \
   RESTORE_DATABASE_URL="postgres://welt:secret@db:5432/weltgewebe" \
   RESTORE_PROOF_DIR="$RESTORE_PROOF_DIR" \
-  bash "$RESTORE_SCRIPT" >/dev/null 2>&1; then
+  bash "$RESTORE_SCRIPT" > /dev/null 2>&1; then
   echo "restore proof should reject non-disposable target database" >&2
   exit 1
 fi

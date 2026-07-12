@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
-fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
-require_cmd() { command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"; }
-require_cmd docker; require_cmd gzip; require_cmd sha256sum
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 1
+}
+require_cmd() { command -v "$1" > /dev/null 2>&1 || fail "required command not found: $1"; }
+require_cmd docker
+require_cmd gzip
+require_cmd sha256sum
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/weltgewebe/postgres}"
 BACKUP_PREFIX="${BACKUP_PREFIX:-weltgewebe-postgres}"
 RESTORE_PROOF_DIR="${RESTORE_PROOF_DIR:-${BACKUP_DIR}/proofs}"
@@ -13,18 +18,18 @@ latest="$(find "$BACKUP_DIR" -maxdepth 1 -type f -name "${BACKUP_PREFIX}-*.sql.g
 [[ -n "$latest" ]] || fail "no backup files found in $BACKUP_DIR"
 latest="${BACKUP_DIR}/${latest}"
 container="weltgewebe-restore-proof-$(date -u +%Y%m%d%H%M%S)-$$"
-cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+cleanup() { docker rm -f "$container" > /dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 docker run -d --name "$container" --network none \
   --tmpfs /var/lib/postgresql/data:rw,nosuid,nodev,size=512m \
   -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=weltgewebe_restore_proof \
-  "$RESTORE_POSTGRES_IMAGE" >/dev/null
+  "$RESTORE_POSTGRES_IMAGE" > /dev/null
 for _ in $(seq 1 60); do
-  if docker exec "$container" pg_isready -U postgres -d weltgewebe_restore_proof >/dev/null 2>&1; then break; fi
+  if docker exec "$container" pg_isready -U postgres -d weltgewebe_restore_proof > /dev/null 2>&1; then break; fi
   sleep 1
 done
-docker exec "$container" pg_isready -U postgres -d weltgewebe_restore_proof >/dev/null || fail "disposable PostgreSQL did not become ready"
+docker exec "$container" pg_isready -U postgres -d weltgewebe_restore_proof > /dev/null || fail "disposable PostgreSQL did not become ready"
 export BACKUP_FILE="$latest"
 export BACKUP_MANIFEST="${latest%.sql.gz}.sha256.manifest"
 export RESTORE_POSTGRES_CONTAINER="$container"

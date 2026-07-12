@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." >/dev/null 2>&1 && pwd)}"
+REPO_ROOT="${REPO_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." > /dev/null 2>&1 && pwd)}"
 POLICY_FILE="${REPO_ROOT}/policies/security.yml"
 
 failures=0
@@ -34,6 +34,10 @@ fi
 
 expected_hsts="Strict-Transport-Security \"max-age=${max_age}; includeSubDomains\""
 
+# Caddy expands this placeholder at runtime; it is intentionally literal here.
+# shellcheck disable=SC2016
+expected_build_header='X-Weltgewebe-Build "{$WELTGEWEBE_BUILD}"'
+
 for caddy in \
   "${REPO_ROOT}/infra/caddy/Caddyfile.vps" \
   "${REPO_ROOT}/infra/caddy/Caddyfile.heim" \
@@ -50,7 +54,7 @@ for caddy in \
     'X-Frame-Options "DENY"' \
     'Referrer-Policy "no-referrer"' \
     'X-Content-Type-Options "nosniff"' \
-    'X-Weltgewebe-Build "{$WELTGEWEBE_BUILD}"'; do
+    "$expected_build_header"; do
     if ! grep -Fq "$header" "$caddy"; then
       fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing header: $header"
     fi

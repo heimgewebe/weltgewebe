@@ -6,7 +6,7 @@ export PG_DIRECT_URL="${PG_DIRECT_URL:-$DATABASE_URL}"
 export AUTH_PG_003_FIXTURE_MUTATION=1
 
 database_name() {
-  python3 - "$DATABASE_URL" <<'PY'
+  python3 - "$DATABASE_URL" << 'PY'
 import sys
 from urllib.parse import urlsplit
 name=urlsplit(sys.argv[1]).path.lstrip('/')
@@ -20,11 +20,11 @@ reset_database() {
   local database
   database="$(database_name)"
   if [[ -n "${POSTGRES_RESET_CONTAINER:-}" ]]; then
-    docker exec "$POSTGRES_RESET_CONTAINER" dropdb -U postgres --if-exists --force "$database" >/dev/null
+    docker exec "$POSTGRES_RESET_CONTAINER" dropdb -U postgres --if-exists --force "$database" > /dev/null
     docker exec "$POSTGRES_RESET_CONTAINER" createdb -U postgres "$database"
     return
   fi
-  python3 - "$DATABASE_URL" <<'PY'
+  python3 - "$DATABASE_URL" << 'PY'
 import os
 import subprocess
 import sys

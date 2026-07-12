@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 INSTALL_SCRIPT="$REPO_ROOT/scripts/ops/install-web-artifact.sh"
 
@@ -10,10 +10,10 @@ trap 'rm -rf "$TEMP_DIR"' EXIT
 
 artifact_src="$TEMP_DIR/artifact"
 mkdir -p "$artifact_src/_app"
-cat >"$artifact_src/index.html" <<'HTML'
+cat > "$artifact_src/index.html" << 'HTML'
 <!doctype html><html><body><script type="module" src="/_app/app.js"></script></body></html>
 HTML
-cat >"$artifact_src/_app/version.json" <<'JSON'
+cat > "$artifact_src/_app/version.json" << 'JSON'
 {"version":"abc1234","build_id":"abc1234-build","commit":"abc1234"}
 JSON
 
@@ -23,7 +23,7 @@ sha="$(sha256sum "$archive" | awk '{print $1}')"
 
 MOCK_BIN="$TEMP_DIR/bin"
 mkdir -p "$MOCK_BIN"
-cat >"$MOCK_BIN/curl" <<SH
+cat > "$MOCK_BIN/curl" << SH
 #!/usr/bin/env bash
 set -euo pipefail
 headers=""
@@ -66,21 +66,20 @@ PATH="$MOCK_BIN:$PATH" \
   PUBLIC_VERSION_URL="https://example.invalid/_app/version.json" \
   CADDY_VALIDATE_CMD="true" \
   CADDY_RELOAD_CMD="touch $reload_marker" \
-  bash "$INSTALL_SCRIPT" >/dev/null
+  bash "$INSTALL_SCRIPT" > /dev/null
 
 test -L "$web_root"
 test -f "$(readlink "$web_root")/index.html"
 test -f "$reload_marker"
 
-
 # A pre-existing real build directory must be preserved as the rollback source.
 rollback_root="$TEMP_DIR/rollback-current"
 rollback_releases="$TEMP_DIR/rollback-releases"
 mkdir -p "$rollback_root"
-printf 'old production build\n' >"$rollback_root/old-sentinel"
+printf 'old production build\n' > "$rollback_root/old-sentinel"
 BAD_BIN="$TEMP_DIR/bad-bin"
 mkdir -p "$BAD_BIN"
-cat >"$BAD_BIN/curl" <<SH
+cat > "$BAD_BIN/curl" << SH
 #!/usr/bin/env bash
 set -euo pipefail
 headers=""
@@ -108,7 +107,7 @@ if PATH="$BAD_BIN:$PATH" \
   PUBLIC_VERSION_URL="https://example.invalid/_app/version.json" \
   CADDY_VALIDATE_CMD="true" \
   CADDY_RELOAD_CMD="true" \
-  bash "$INSTALL_SCRIPT" >/dev/null 2>&1; then
+  bash "$INSTALL_SCRIPT" > /dev/null 2>&1; then
   echo "installer should fail on public readback mismatch" >&2
   exit 1
 fi
@@ -127,7 +126,7 @@ if PATH="$MOCK_BIN:$PATH" \
   PUBLIC_VERSION_URL="https://example.invalid/_app/version.json" \
   CADDY_VALIDATE_CMD="true" \
   CADDY_RELOAD_CMD="true" \
-  bash "$INSTALL_SCRIPT" >/dev/null 2>&1; then
+  bash "$INSTALL_SCRIPT" > /dev/null 2>&1; then
   echo "installer should fail on sha mismatch" >&2
   exit 1
 fi
