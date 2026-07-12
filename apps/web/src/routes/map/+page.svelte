@@ -479,6 +479,10 @@
   #map{ position:absolute; inset:0; }
   #map :global(canvas){ filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95); }
 
+  /*
+   * MapLibre owns the outer marker transform and updates it every render frame.
+   * Weltgewebe effects belong on the inner visual so markers stay map-locked.
+   */
   #map :global(.map-marker){
     appearance:none;
     -webkit-appearance:none;
@@ -489,24 +493,42 @@
     margin:0;
     padding:0;
     box-sizing:border-box;
+    border:0;
+    border-radius:0;
+    background:transparent;
+    display:grid;
+    place-items:center;
+    color:var(--bg);
+    cursor:pointer;
+    box-shadow:none;
+    transition:none;
+  }
+
+  #map :global(.map-marker__visual){
+    width:100%;
+    height:100%;
+    box-sizing:border-box;
     border-radius:999px;
     border:2px solid var(--panel-border);
     background:var(--accent, #ff8c42);
     display:grid;
     place-items:center;
     color:var(--bg);
-    cursor:pointer;
     box-shadow:0 0 0 2px rgba(0,0,0,0.25);
-    transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transform-origin:center;
+    transition:transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    pointer-events:none;
   }
 
   #map :global(.marker-account) {
     width:44px;
     height:44px;
+  }
+
+  #map :global(.marker-account__visual) {
     background:transparent;
     border:none;
     box-shadow:none;
-    transform:none;
     border-radius:0;
   }
 
@@ -521,12 +543,11 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    #map :global(.map-marker:hover){
-      transform: scale(1.2);
-      z-index: 10;
+    #map :global(.map-marker:hover .map-marker__visual){
+      transform:scale(1.2);
     }
-    #map :global(.marker-account:hover){
-      transform: scale(1.2);
+    #map :global(.map-marker:hover){
+      z-index:10;
     }
   }
 

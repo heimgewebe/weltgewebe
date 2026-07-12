@@ -120,6 +120,16 @@ export class NodesOverlay {
         // Robust testing selector based on domain semantics (and unique ID for stability)
         element.dataset.testid = `marker-${item.type}-${item.id}`;
 
+        // MapLibre owns the outer element's transform for geographic positioning.
+        // All Weltgewebe styling and interaction transforms therefore live on
+        // an inner visual element so map movement can never be CSS-interpolated.
+        const visual = document.createElement("span");
+        visual.className =
+          markerCategory === "account"
+            ? "map-marker__visual marker-account__visual"
+            : "map-marker__visual";
+        visual.setAttribute("aria-hidden", "true");
+
         if (markerCategory === "account") {
           const icon = document.createElement("img");
           icon.className = "marker-account__icon";
@@ -127,8 +137,10 @@ export class NodesOverlay {
           icon.alt = "";
           icon.setAttribute("aria-hidden", "true");
           icon.draggable = false;
-          element.append(icon);
+          visual.append(icon);
         }
+
+        element.append(visual);
 
         element.setAttribute("aria-label", item.title);
         element.title = item.title;
