@@ -5,7 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=%h/repos/weltgewebe/scripts/ops/pull-production-postgres-backup.sh
+# Installed by install-postgres-offhost-pull-user-units.sh, which substitutes the exact commit.
+ExecStart=%h/.local/libexec/weltgewebe/@WELTGEWEBE_COMMIT@/pull-production-postgres-backup.sh
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
@@ -13,7 +14,6 @@ ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=%h/merges/weltgewebe-production-backups
 ProtectKernelTunables=true
-ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true

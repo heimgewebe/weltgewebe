@@ -16,6 +16,7 @@ npm-debug.log*
 build/
 dist/
 .tmp/
+apps/web/releases/
 # Local lint/tool virtual environments
 .tmp-yamllint/
 target/

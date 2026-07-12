@@ -78,6 +78,11 @@ Die Standard-Retention beträgt 14 Tage.
 
 Systemd:
 
+Die Backup-Unit gibt im strikten Dateisystem-Sandboxing nur `/var/backups`
+schreibbar und legt daraus vor dem eigentlichen Dump das engere Zielverzeichnis
+`/var/backups/weltgewebe/postgres` mit Modus `0700` an. Das verhindert einen
+Erststartfehler, wenn der Zielpfad noch nicht existiert.
+
 - `weltgewebe-postgres-backup.service`;
 - `weltgewebe-postgres-backup.timer` – täglich gegen 02:15 Uhr mit begrenzter
   Zufallsverzögerung.
@@ -133,7 +138,22 @@ mitgenommen. Der bestehende Restic-Lauf auf `heim-pc` sichert `~/merges`
 anschließend in das entfernte Restic-Repository und liest einen Sentinel aus
 dem exakten Snapshot zurück.
 
-Systemd auf `heim-pc`:
+Systemd auf `heim-pc` wird nicht direkt aus einem beweglichen Checkout
+kopiert. Stattdessen installiert der folgende Befehl das Pullskript unter einem
+unveränderlichen, vollständigen Git-Commit, erzeugt daraus die User-Unit, legt
+den schreibbaren Zielpfad vor dem Sandboxstart an und aktiviert den Timer:
+
+```bash
+EXPECTED_COMMIT="$(git rev-parse HEAD)" \
+  scripts/ops/install-postgres-offhost-pull-user-units.sh --enable-now
+```
+
+Die Installation schreibt zusätzlich ein SHA256- und commitgebundenes
+`install.receipt`. Die eingecheckte Service-Datei ist eine Vorlage; ihr
+`@WELTGEWEBE_COMMIT@`-Platzhalter darf nicht ungeprüft als aktive Unit kopiert
+werden. `ProtectKernelModules` wird in der User-Unit bewusst nicht verwendet,
+weil diese Kernel-Capability im User-Manager nicht portabel verfügbar ist. Alle
+übrigen Sandboxgrenzen bleiben aktiv.
 
 - `weltgewebe-postgres-offhost-pull.service`;
 - `weltgewebe-postgres-offhost-pull.timer` – täglich gegen 04:15 Uhr.

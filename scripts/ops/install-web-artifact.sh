@@ -22,13 +22,17 @@ WEB_RELEASE_RETENTION="${WEB_RELEASE_RETENTION:-5}"
 PUBLIC_VERSION_URL="${PUBLIC_VERSION_URL:-}"
 CADDY_VALIDATE_CMD="${CADDY_VALIDATE_CMD:-}"
 CADDY_RELOAD_CMD="${CADDY_RELOAD_CMD:-}"
+PUBLIC_READBACK_ATTEMPTS="${PUBLIC_READBACK_ATTEMPTS:-30}"
+PUBLIC_READBACK_INTERVAL_SECONDS="${PUBLIC_READBACK_INTERVAL_SECONDS:-1}"
 
-for cmd in gzip tar awk curl python3; do require_cmd "$cmd"; done
+for cmd in gzip tar awk curl python3 sleep; do require_cmd "$cmd"; done
 [[ -n "$WEB_ARTIFACT_ARCHIVE" && -f "$WEB_ARTIFACT_ARCHIVE" ]] || fail "WEB_ARTIFACT_ARCHIVE must name an existing archive"
 [[ "$WEB_ARTIFACT_SHA256" =~ ^[0-9a-fA-F]{64}$ ]] || fail "WEB_ARTIFACT_SHA256 must be a 64-character digest"
 [[ -n "$WEB_ARTIFACT_VERSION" && -n "$WEB_ARTIFACT_COMMIT" ]] || fail "expected artifact version and commit are required"
 [[ -n "$PUBLIC_VERSION_URL" && -n "$CADDY_VALIDATE_CMD" && -n "$CADDY_RELOAD_CMD" ]] || fail "public readback, Caddy validation, and Caddy recreate commands are required"
 case "$WEB_RELEASE_RETENTION" in '' | *[!0-9]*) fail "WEB_RELEASE_RETENTION must be a non-negative integer" ;; esac
+case "$PUBLIC_READBACK_ATTEMPTS" in '' | *[!0-9]* | 0) fail "PUBLIC_READBACK_ATTEMPTS must be a positive integer" ;; esac
+case "$PUBLIC_READBACK_INTERVAL_SECONDS" in '' | *[!0-9]*) fail "PUBLIC_READBACK_INTERVAL_SECONDS must be a non-negative integer" ;; esac
 
 actual_sha="$(sha256_file "$WEB_ARTIFACT_ARCHIVE")"
 [[ "$actual_sha" == "$WEB_ARTIFACT_SHA256" ]] || fail "artifact sha256 mismatch"
@@ -53,7 +57,13 @@ tmp_link="${WEB_ROOT}.tmp.$$"
 previous_kind=absent
 previous_target=""
 previous_dir=""
-cleanup() { rm -rf "$stage_dir" "$tmp_link"; }
+readback=""
+headers=""
+cleanup() {
+  rm -rf "$stage_dir" "$tmp_link"
+  [[ -z "$readback" ]] || rm -f "$readback"
+  [[ -z "$headers" ]] || rm -f "$headers"
+}
 trap cleanup EXIT
 
 tar -xzf "$WEB_ARTIFACT_ARCHIVE" -C "$stage_dir" --no-same-owner --no-same-permissions
@@ -102,6 +112,8 @@ rollback() {
   esac
   # A bind mount follows the old inode until Caddy is recreated.
   run_cmd "$CADDY_RELOAD_CMD" > /dev/null 2>&1 || true
+  # The failed release was newly created by this run and must not block an exact retry.
+  rm -rf "$release_dir"
 }
 
 ln -s "$release_dir" "$tmp_link"
@@ -113,30 +125,43 @@ fi
 
 readback="$(mktemp)"
 headers="$(mktemp)"
-if ! curl -fsS -D "$headers" -o "$readback" "$PUBLIC_VERSION_URL"; then
+public_readback_matches() {
+  : > "$readback"
+  : > "$headers"
+  curl -fsS -D "$headers" -o "$readback" "$PUBLIC_VERSION_URL" || return 1
+  grep -iq '^Cache-Control:.*no-store' "$headers" || return 1
+  public_build="$(awk '
+    tolower($1) == "x-weltgewebe-build:" {
+      sub(/^[^:]+:[[:space:]]*/, "")
+      sub(/\r$/, "")
+      print
+      exit
+    }
+  ' "$headers")"
+  public_version="$(read_version_field "$readback" 1)" || return 1
+  public_commit="$(read_version_field "$readback" 3)" || return 1
+  [[ "$public_version" == "$WEB_ARTIFACT_VERSION" ]] || return 1
+  [[ "$public_commit" == "$WEB_ARTIFACT_COMMIT" ]] || return 1
+  [[ "$public_build" == "$WEB_ARTIFACT_VERSION" || "$public_build" == "$WEB_ARTIFACT_COMMIT" ]] || return 1
+}
+
+readback_ok=0
+for ((attempt = 1; attempt <= PUBLIC_READBACK_ATTEMPTS; attempt++)); do
+  if public_readback_matches; then
+    readback_ok=1
+    break
+  fi
+  if ((attempt < PUBLIC_READBACK_ATTEMPTS)); then
+    sleep "$PUBLIC_READBACK_INTERVAL_SECONDS"
+  fi
+done
+if ((readback_ok == 0)); then
   rollback
-  fail "public version readback failed; previous web release restored"
+  fail "public version readback did not converge after ${PUBLIC_READBACK_ATTEMPTS} attempts; previous web release restored"
 fi
-if ! grep -iq '^Cache-Control:.*no-store' "$headers"; then
-  rollback
-  fail "public version readback lacks no-store; previous web release restored"
-fi
-public_build="$(awk 'BEGIN{IGNORECASE=1} /^X-Weltgewebe-Build:/ {sub(/^[^:]+:[[:space:]]*/,""); sub(/\r$/,""); print; exit}' "$headers")"
-public_version="$(read_version_field "$readback" 1)"
-public_commit="$(read_version_field "$readback" 3)"
 rm -f "$readback" "$headers"
-[[ "$public_version" == "$WEB_ARTIFACT_VERSION" ]] || {
-  rollback
-  fail "public version mismatch; previous web release restored"
-}
-[[ -z "$public_commit" || "$public_commit" == "$WEB_ARTIFACT_COMMIT" ]] || {
-  rollback
-  fail "public commit mismatch; previous web release restored"
-}
-[[ "$public_build" == "$WEB_ARTIFACT_VERSION" || "$public_build" == "$WEB_ARTIFACT_COMMIT" ]] || {
-  rollback
-  fail "public build header mismatch; previous web release restored"
-}
+readback=""
+headers=""
 
 # Keep the current target and the newest older releases. Never follow or delete the active symlink target.
 if ((WEB_RELEASE_RETENTION > 0)); then

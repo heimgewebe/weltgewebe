@@ -5,6 +5,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 BACKUP_SCRIPT="$REPO_ROOT/scripts/ops/postgres-backup.sh"
 RESTORE_SCRIPT="$REPO_ROOT/scripts/ops/postgres-restore-proof.sh"
+BACKUP_UNIT="$REPO_ROOT/scripts/ops/systemd/weltgewebe-postgres-backup.service"
+
+grep -qxF 'ExecStartPre=/usr/bin/install -d -o root -g root -m 0700 /var/backups/weltgewebe/postgres' "$BACKUP_UNIT"
+grep -qxF 'ReadWritePaths=/var/backups' "$BACKUP_UNIT"
+if grep -qxF 'ReadWritePaths=/var/backups/weltgewebe/postgres' "$BACKUP_UNIT"; then
+  echo "backup unit must allow first-run creation before narrowing to the target" >&2
+  exit 1
+fi
 
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT

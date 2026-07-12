@@ -23,6 +23,7 @@ sha="$(sha256sum "$archive" | awk '{print $1}')"
 
 MOCK_BIN="$TEMP_DIR/bin"
 mkdir -p "$MOCK_BIN"
+curl_counter="$TEMP_DIR/curl-count"
 cat > "$MOCK_BIN/curl" << SH
 #!/usr/bin/env bash
 set -euo pipefail
@@ -46,8 +47,17 @@ while [ "\$#" -gt 0 ]; do
       ;;
   esac
 done
-printf 'HTTP/1.1 200 OK\r\nCache-Control: no-store\r\nX-Weltgewebe-Build: abc1234\r\n\r\n' > "\$headers"
-cat "$artifact_src/_app/version.json" > "\$out"
+count=0
+if [[ -f "$curl_counter" ]]; then read -r count < "$curl_counter"; fi
+count=\$((count + 1))
+printf '%s\n' "\$count" > "$curl_counter"
+if [[ "\$count" -eq 1 ]]; then
+  printf 'HTTP/2 200\r\ncache-control: no-store\r\nx-weltgewebe-build: old-build\r\n\r\n' > "\$headers"
+  printf '{"version":"old-build","commit":"old-build"}\n' > "\$out"
+else
+  printf 'HTTP/2 200\r\ncache-control: no-store\r\nx-weltgewebe-build: abc1234\r\n\r\n' > "\$headers"
+  cat "$artifact_src/_app/version.json" > "\$out"
+fi
 SH
 chmod +x "$MOCK_BIN/curl"
 
@@ -66,11 +76,14 @@ PATH="$MOCK_BIN:$PATH" \
   PUBLIC_VERSION_URL="https://example.invalid/_app/version.json" \
   CADDY_VALIDATE_CMD="true" \
   CADDY_RELOAD_CMD="touch $reload_marker" \
+  PUBLIC_READBACK_ATTEMPTS=3 \
+  PUBLIC_READBACK_INTERVAL_SECONDS=0 \
   bash "$INSTALL_SCRIPT" > /dev/null
 
 test -L "$web_root"
 test -f "$(readlink "$web_root")/index.html"
 test -f "$reload_marker"
+test "$(cat "$curl_counter")" -eq 2
 
 # A pre-existing real build directory must be preserved as the rollback source.
 rollback_root="$TEMP_DIR/rollback-current"
@@ -107,6 +120,8 @@ if PATH="$BAD_BIN:$PATH" \
   PUBLIC_VERSION_URL="https://example.invalid/_app/version.json" \
   CADDY_VALIDATE_CMD="true" \
   CADDY_RELOAD_CMD="true" \
+  PUBLIC_READBACK_ATTEMPTS=2 \
+  PUBLIC_READBACK_INTERVAL_SECONDS=0 \
   bash "$INSTALL_SCRIPT" > /dev/null 2>&1; then
   echo "installer should fail on public readback mismatch" >&2
   exit 1
@@ -114,6 +129,7 @@ fi
 test -d "$rollback_root"
 test ! -L "$rollback_root"
 test -f "$rollback_root/old-sentinel"
+test ! -d "$rollback_releases/abc1234-abc1234-build"
 
 if PATH="$MOCK_BIN:$PATH" \
   REPO_DIR="$REPO_ROOT" \
@@ -130,5 +146,7 @@ if PATH="$MOCK_BIN:$PATH" \
   echo "installer should fail on sha mismatch" >&2
   exit 1
 fi
+
+git -C "$REPO_ROOT" check-ignore -q apps/web/releases/runtime-release
 
 echo "PASS: web artifact install contract"
