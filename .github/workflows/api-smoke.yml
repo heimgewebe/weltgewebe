@@ -82,9 +82,18 @@ jobs:
             ${{ runner.os }}-cargo-target-
       - name: Build release (fast start)
         run: |
-          set -o pipefail
+          set -euo pipefail
           mkdir -p /tmp/build-logs
-          cargo build --locked --release --bin weltgewebe-api 2>&1 | tee /tmp/build-logs/cargo-build.log
+          commit="$(git rev-parse HEAD)"
+          build_timestamp="$(git show -s --format=%cI "$commit")"
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$build_timestamp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$ ]]
+          printf 'WELTGEWEBE_API_BUILD_COMMIT=%s\n' "$commit" >> "$GITHUB_ENV"
+          printf 'WELTGEWEBE_API_BUILD_TIMESTAMP=%s\n' "$build_timestamp" >> "$GITHUB_ENV"
+          GIT_COMMIT_SHA="$commit" \
+            BUILD_TIMESTAMP="$build_timestamp" \
+            cargo build --locked --release --bin weltgewebe-api \
+            2>&1 | tee /tmp/build-logs/cargo-build.log
       - name: Upload cargo build log
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
@@ -148,28 +157,37 @@ jobs:
       - name: Probe /version (startup)
         run: |
           set -euo pipefail
-          body="$(curl --max-time 10 --fail-with-body http://127.0.0.1:8787/version)"
+          headers="$(mktemp)"
+          trap 'rm -f "$headers"' EXIT
+          body="$(curl --max-time 10 --fail-with-body -D "$headers" http://127.0.0.1:8787/version)"
+          api_build="$(awk '
+            tolower($1) == "x-weltgewebe-api-build:" {
+              sub(/^[^:]+:[[:space:]]*/, "")
+              gsub(/[[:space:]]+$/, "")
+              print
+              exit
+            }
+          ' "$headers")"
           if ! echo "$body" | jq empty >/dev/null 2>&1; then
             echo "API did not return valid JSON: $body"
             exit 1
           fi
+          [[ "$api_build" == "$WELTGEWEBE_API_BUILD_COMMIT" ]]
           echo "::group::/version body"
           echo "$body"
+          echo "API build header: $api_build"
           echo "::endgroup::"
-          # Validate fields using jq (more robust than grep on strings)
-          echo "$body" | jq -e '
+          echo "$body" | jq -e \
+            --arg commit "$WELTGEWEBE_API_BUILD_COMMIT" \
+            --arg build_timestamp "$WELTGEWEBE_API_BUILD_TIMESTAMP" '
             type == "object" and
-            has("version") and
-            has("commit") and
-            has("build_timestamp")
+            (.version | (type == "string" and length > 0)) and
+            .commit == $commit and
+            .build_timestamp == $build_timestamp and
+            .commit != "unknown" and
+            .build_timestamp != "unknown"
           ' >/dev/null
 
-          # Optional: also assert types (string/string/number) — harmless if types differ.
-          # echo "$body" | jq -e '
-          #   (.version  | type == "string") and
-          #   (.commit   | type == "string") and
-          #   (.build_timestamp | type == "number")
-          # ' >/dev/null
       - name: Wait for API health endpoint
         run: |
           ok=0
@@ -191,7 +209,10 @@ jobs:
       - name: Probe /version (field presence)
         run: |
           set -euo pipefail
-          curl -fsS http://127.0.0.1:8787/version | jq -e '.version and .commit and .build_timestamp' >/dev/null
+          curl -fsS http://127.0.0.1:8787/version | jq -e \
+            --arg commit "$WELTGEWEBE_API_BUILD_COMMIT" \
+            --arg build_timestamp "$WELTGEWEBE_API_BUILD_TIMESTAMP" \
+            '.version and .commit == $commit and .build_timestamp == $build_timestamp' >/dev/null
       - name: Runtime smoke auth rate limiting
         run: |
           set -euo pipefail

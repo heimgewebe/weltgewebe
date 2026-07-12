@@ -5,6 +5,9 @@ services:
     build:
       context: ../..
       dockerfile: apps/api/Dockerfile
+      args:
+        GIT_COMMIT_SHA: ${GIT_COMMIT_SHA:?GIT_COMMIT_SHA must be set}
+        BUILD_TIMESTAMP: ${BUILD_TIMESTAMP:?BUILD_TIMESTAMP must be set}
     restart: always
     volumes:
       - gewebe_fs_data:/data

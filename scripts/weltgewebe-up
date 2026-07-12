@@ -637,13 +637,23 @@ if [[ ! "$HEAD_AFTER_FULL" =~ ^[0-9a-f]{40}$ || "$HEAD_AFTER" == "unknown" ]]; t
   exit 1
 fi
 
-# Keep the API image tag bound to the selected checkout. This intentionally
-# overrides stale API_VERSION values from the runtime env file for Compose
-# interpolation, while still leaving container runtime env values untouched.
+HEAD_COMMIT_TIMESTAMP="$(git show -s --format=%cI "$HEAD_AFTER_FULL" 2> /dev/null || true)"
+if [[ ! "$HEAD_COMMIT_TIMESTAMP" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$ ]]; then
+  echo "ERROR: Cannot resolve a deterministic RFC3339 timestamp for deploy commit $HEAD_AFTER_FULL." >&2
+  exit 1
+fi
+
+# Keep image selection, the public build header and the binary-internal build
+# identity bound to the same selected checkout. The timestamp is the immutable
+# Git committer timestamp, not the wall clock of the builder.
 export API_VERSION="$HEAD_AFTER"
 echo "   API image tag: $API_VERSION"
 export WELTGEWEBE_BUILD="$HEAD_AFTER"
 echo "   Caddy build header: $WELTGEWEBE_BUILD"
+export GIT_COMMIT_SHA="$HEAD_AFTER_FULL"
+echo "   API binary commit: $GIT_COMMIT_SHA"
+export BUILD_TIMESTAMP="$HEAD_COMMIT_TIMESTAMP"
+echo "   API binary timestamp: $BUILD_TIMESTAMP"
 
 case "$DEPLOY_SCOPE" in
   api)

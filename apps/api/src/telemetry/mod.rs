@@ -17,6 +17,28 @@ use tower::{Layer, Service};
 
 use crate::state::ApiState;
 
+#[cfg(debug_assertions)]
+const GIT_COMMIT_SHA: &str = match option_env!("GIT_COMMIT_SHA") {
+    Some(value) => value,
+    None => "unknown",
+};
+#[cfg(not(debug_assertions))]
+const GIT_COMMIT_SHA: &str = env!(
+    "GIT_COMMIT_SHA",
+    "release builds require GIT_COMMIT_SHA to bind the API binary to its source commit"
+);
+
+#[cfg(debug_assertions)]
+const BUILD_TIMESTAMP: &str = match option_env!("BUILD_TIMESTAMP") {
+    Some(value) => value,
+    None => "unknown",
+};
+#[cfg(not(debug_assertions))]
+const BUILD_TIMESTAMP: &str = env!(
+    "BUILD_TIMESTAMP",
+    "release builds require BUILD_TIMESTAMP to bind the API binary to a deterministic Git timestamp"
+);
+
 #[derive(Clone, Debug)]
 pub struct BuildInfo {
     pub version: &'static str,
@@ -28,8 +50,8 @@ impl BuildInfo {
     pub fn collect() -> Self {
         Self {
             version: env!("CARGO_PKG_VERSION"),
-            commit: option_env!("GIT_COMMIT_SHA").unwrap_or("unknown"),
-            build_timestamp: option_env!("BUILD_TIMESTAMP").unwrap_or("unknown"),
+            commit: GIT_COMMIT_SHA,
+            build_timestamp: BUILD_TIMESTAMP,
         }
     }
 }

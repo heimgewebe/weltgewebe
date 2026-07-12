@@ -42,6 +42,7 @@ Generated automatically. Do not edit.
 | Makefile (validate-shell-tests) | scripts/tests/test_postgres_backup_restore_contract.sh | `bash scripts/tests/test_postgres_backup_restore_contract.sh` | *unclear* |
 | Makefile (validate-shell-tests) | scripts/tests/test_offhost_backup_pull_contract.sh | `bash scripts/tests/test_offhost_backup_pull_contract.sh` | *unclear* |
 | Makefile (validate-shell-tests) | scripts/tests/test_web_artifact_install_contract.sh | `bash scripts/tests/test_web_artifact_install_contract.sh` | *unclear* |
+| Makefile (validate-shell-tests) | scripts/tests/test_api_release_identity_contract.sh | `bash scripts/tests/test_api_release_identity_contract.sh` | *unclear* |
 | Makefile (generate) | scripts/docmeta/generate-doc-index.sh | `bash scripts/docmeta/generate-doc-index.sh` | *unclear* |
 | Makefile (generate) | scripts.docmeta.generate_backlinks | `python3 -m scripts.docmeta.generate_backlinks` | *unclear* |
 | Makefile (generate) | scripts/docmeta/generate-impl-index.sh | `bash scripts/docmeta/generate-impl-index.sh` | *unclear* |
