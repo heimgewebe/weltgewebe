@@ -57,6 +57,10 @@ DO_PULL=1
 BUILD_MODE="auto"
 PURGE_ZOMBIES=0
 BUILD_WEB="auto"
+DEPLOY_SCOPE="${WELTGEWEBE_DEPLOY_SCOPE:-full}"
+PLAN_ONLY=0
+DEPLOY_PLAN_FILE="${WELTGEWEBE_DEPLOY_PLAN_FILE:-}"
+WITH_CADDY_EXPLICIT=0
 DEPLOY_BRANCH="${WELTGEWEBE_DEPLOY_BRANCH:-main}"
 DEPLOY_BRANCH_OVERRIDE=""
 USE_CURRENT_BRANCH=0
@@ -73,6 +77,9 @@ usage() {
   echo "  --build-mode MODE       Set build mode: auto (default), force, no"
   echo "  --no-build              Alias for --build-mode no"
   echo "  --force-build           Alias for --build-mode force"
+  echo "  --deploy-scope SCOPE    Deployment radius: full (default), api, or migration"
+  echo "  --plan-only             Write the scoped JSON plan and stop before container mutation"
+  echo "  --deploy-plan-file NAME Persist the plan as NAME inside the deploy state directory"
   echo
   echo "Safety & Frontend:"
   echo "  --purge-compose-leaks   Automatically remove detected 'zombie' containers (from wrong project)"
@@ -87,7 +94,10 @@ REFRESH_EDGE=0
 
 while [[ "$#" -gt 0 ]]; do
   case $1 in
-    --with-caddy) WITH_CADDY=1 ;;
+    --with-caddy)
+      WITH_CADDY=1
+      WITH_CADDY_EXPLICIT=1
+      ;;
     --no-pull) DO_PULL=0 ;;
     --branch)
       if [[ $# -lt 2 || -z "${2:-}" ]]; then
@@ -114,6 +124,23 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     --no-build) BUILD_MODE="no" ;;
     --force-build) BUILD_MODE="force" ;;
+    --deploy-scope)
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "ERROR: --deploy-scope requires an argument (full|api|migration)."
+        usage
+      fi
+      DEPLOY_SCOPE="$2"
+      shift
+      ;;
+    --plan-only) PLAN_ONLY=1 ;;
+    --deploy-plan-file)
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "ERROR: --deploy-plan-file requires a file name."
+        usage
+      fi
+      DEPLOY_PLAN_FILE="$2"
+      shift
+      ;;
     --purge-compose-leaks) PURGE_ZOMBIES=1 ;;
     --build-web) BUILD_WEB="force" ;;
     --no-build-web) BUILD_WEB="no" ;;
@@ -131,7 +158,46 @@ if [[ -n "$DEPLOY_BRANCH_OVERRIDE" ]]; then
   DEPLOY_BRANCH="$DEPLOY_BRANCH_OVERRIDE"
 fi
 
-if [[ "$DEPLOY_TARGET" == "vps" && "$WITH_CADDY" == "0" ]]; then
+case "$DEPLOY_SCOPE" in
+  full | api | migration) ;;
+  *)
+    echo "ERROR: Invalid deploy scope '$DEPLOY_SCOPE'. Expected: full|api|migration." >&2
+    exit 1
+    ;;
+esac
+
+if [[ "$PLAN_ONLY" == "1" && "$DEPLOY_SCOPE" == "full" ]]; then
+  echo "ERROR: --plan-only is currently supported only for bounded api or migration scopes." >&2
+  exit 1
+fi
+
+if [[ "$DEPLOY_SCOPE" != "full" ]]; then
+  if [[ "$WITH_CADDY_EXPLICIT" == "1" ]]; then
+    echo "ERROR: --with-caddy is incompatible with deploy scope '$DEPLOY_SCOPE'." >&2
+    exit 1
+  fi
+  if [[ "$REFRESH_EDGE" == "1" ]]; then
+    echo "ERROR: --refresh-edge is incompatible with deploy scope '$DEPLOY_SCOPE'." >&2
+    exit 1
+  fi
+  if [[ "$PURGE_ZOMBIES" == "1" ]]; then
+    echo "ERROR: --purge-compose-leaks is incompatible with bounded deploy scopes." >&2
+    exit 1
+  fi
+  if [[ -n "$DEPLOY_FRONTEND_MODE_WAS_SET" && "$DEPLOY_FRONTEND_MODE" != "off" ]]; then
+    echo "ERROR: deploy scope '$DEPLOY_SCOPE' requires DEPLOY_FRONTEND_MODE=off." >&2
+    exit 1
+  fi
+  if [[ -n "${REQUIRE_FRONTEND:-}" && "$REQUIRE_FRONTEND" != "0" ]]; then
+    echo "ERROR: deploy scope '$DEPLOY_SCOPE' requires REQUIRE_FRONTEND=0." >&2
+    exit 1
+  fi
+  DEPLOY_FRONTEND_MODE="off"
+  export REQUIRE_FRONTEND=0
+  WITH_CADDY=0
+fi
+
+if [[ "$DEPLOY_TARGET" == "vps" && "$WITH_CADDY" == "0" && "$DEPLOY_SCOPE" == "full" ]]; then
   WITH_CADDY=1
 fi
 
@@ -253,6 +319,31 @@ if [[ "$COMPOSE_PROJECT" == "compose" ]]; then
 fi
 
 export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
+
+if ! command -v flock > /dev/null 2>&1; then
+  echo "ERROR: flock is required to serialize deployment effects." >&2
+  exit 1
+fi
+if [[ -z "${WELTGEWEBE_DEPLOY_LOCK_FILE:-}" ]]; then
+  if [[ "$(id -u)" == "0" && -d /run/lock && -w /run/lock ]]; then
+    WELTGEWEBE_DEPLOY_LOCK_FILE="/run/lock/weltgewebe-${COMPOSE_PROJECT}.deploy.lock"
+  elif [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" && -w "$XDG_RUNTIME_DIR" ]]; then
+    WELTGEWEBE_DEPLOY_LOCK_FILE="$XDG_RUNTIME_DIR/weltgewebe-${COMPOSE_PROJECT}.deploy.lock"
+  else
+    WELTGEWEBE_DEPLOY_LOCK_FILE="${HOME:?HOME is required}/.local/state/weltgewebe/locks/${COMPOSE_PROJECT}.deploy.lock"
+    install -d -m 0700 "$(dirname "$WELTGEWEBE_DEPLOY_LOCK_FILE")"
+  fi
+fi
+DEPLOY_LOCK_FILE="$WELTGEWEBE_DEPLOY_LOCK_FILE"
+if [[ -L "$DEPLOY_LOCK_FILE" ]]; then
+  echo "ERROR: deployment lock file must not be a symlink: $DEPLOY_LOCK_FILE" >&2
+  exit 1
+fi
+exec {DEPLOY_LOCK_FD}>"$DEPLOY_LOCK_FILE"
+if ! flock -n "$DEPLOY_LOCK_FD"; then
+  echo "ERROR: another Weltgewebe deployment is already active for project $COMPOSE_PROJECT." >&2
+  exit 1
+fi
 
 # 1. Environment Check
 # Normalize ENV_FILE before checking it so relative overrides resolve against
@@ -386,6 +477,7 @@ CURRENT_BRANCH_BEFORE="unknown"
 CURRENT_BRANCH_AFTER="unknown"
 HEAD_BEFORE="unknown"
 HEAD_AFTER="unknown"
+HEAD_AFTER_FULL="unknown"
 REMOTE_DEPLOY_BRANCH_SHA="unknown"
 DETACHED_BEFORE_SWITCH="no"
 BRANCH_SWITCH_ATTEMPTED="no"
@@ -514,6 +606,7 @@ if [[ "$DO_PULL" == "1" ]]; then
   fi
 
   HEAD_AFTER=$(git rev-parse --short HEAD 2> /dev/null || echo "unknown")
+  HEAD_AFTER_FULL=$(git rev-parse HEAD 2> /dev/null || echo "unknown")
   REMOTE_DEPLOY_BRANCH_SHA=$(git rev-parse --short "refs/remotes/${REMOTE}/${DEPLOY_BRANCH_RESOLVED}" 2> /dev/null || echo "$REMOTE_DEPLOY_BRANCH_SHA")
 else
   echo
@@ -523,6 +616,7 @@ else
   BRANCH_SWITCH_RESULT="skipped_no_pull"
   CURRENT_BRANCH_AFTER=$(git symbolic-ref -q --short HEAD 2> /dev/null || echo "DETACHED")
   HEAD_AFTER=$(git rev-parse --short HEAD 2> /dev/null || echo "unknown")
+  HEAD_AFTER_FULL=$(git rev-parse HEAD 2> /dev/null || echo "unknown")
 fi
 
 echo
@@ -536,10 +630,10 @@ if [[ "$DO_PULL" != "1" ]]; then
 fi
 echo "   Branch switch: $([[ "$BRANCH_SWITCH_ATTEMPTED" == "yes" ]] && echo "yes" || echo "no")"
 echo "   Previous HEAD: $HEAD_BEFORE"
-echo "   Target HEAD after pull: $HEAD_AFTER"
+echo "   Target HEAD after pull: $HEAD_AFTER_FULL"
 
-if [[ "$HEAD_AFTER" == "unknown" ]]; then
-  echo "ERROR: Cannot resolve deploy HEAD; refusing to select an API image tag." >&2
+if [[ ! "$HEAD_AFTER_FULL" =~ ^[0-9a-f]{40}$ || "$HEAD_AFTER" == "unknown" ]]; then
+  echo "ERROR: Cannot resolve a full 40-character deploy commit; refusing deployment." >&2
   exit 1
 fi
 
@@ -550,6 +644,15 @@ export API_VERSION="$HEAD_AFTER"
 echo "   API image tag: $API_VERSION"
 export WELTGEWEBE_BUILD="$HEAD_AFTER"
 echo "   Caddy build header: $WELTGEWEBE_BUILD"
+
+case "$DEPLOY_SCOPE" in
+  api)
+    export WELTGEWEBE_API_STARTUP_MIGRATIONS="verify-applied"
+    ;;
+  migration)
+    export WELTGEWEBE_API_STARTUP_MIGRATIONS="run"
+    ;;
+esac
 
 # 3. Preflight: Docker Compose Config (Strict)
 # Run AFTER pull to validate new config
@@ -592,7 +695,7 @@ generate_failure_bundle() {
     echo "current branch before: $CURRENT_BRANCH_BEFORE"
     echo "current branch after: $CURRENT_BRANCH_AFTER"
     echo "head before: $HEAD_BEFORE"
-    echo "head after: $HEAD_AFTER"
+    echo "head after: $HEAD_AFTER_FULL"
     echo "remote deploy branch: $REMOTE_DEPLOY_BRANCH_SHA"
     echo "detached before switch: $DETACHED_BEFORE_SWITCH"
     echo "branch switch attempted: $BRANCH_SWITCH_ATTEMPTED"
@@ -823,22 +926,34 @@ ENABLE_CADDY=0
 
 echo
 echo ">> Service Plan:"
-if [[ "$HAS_CADDY" == "1" ]]; then
-  if [[ "$WITH_CADDY" == "1" ]]; then
-    if [[ "$DEPLOY_TARGET" == "vps" ]]; then
-      echo " - caddy: ENABLED (vps target)"
-    else
-      echo " - caddy: ENABLED (explicit request)"
-    fi
-    ENABLE_CADDY=1
+echo " - deploy scope: $DEPLOY_SCOPE"
+if [[ "$DEPLOY_SCOPE" != "full" ]]; then
+  echo " - api: TARGETED"
+  echo " - db: PROTECTED (identity must not change)"
+  echo " - nats: PROTECTED (identity must not change)"
+  if [[ "$HAS_CADDY" == "1" ]]; then
+    echo " - caddy: PROTECTED (identity must not change)"
   else
-    echo " - caddy: DISABLED (default)"
-    SCALE_ARGS=("--scale" "caddy=0")
+    echo " - caddy: NOT FOUND"
   fi
 else
-  echo " - caddy: NOT FOUND"
-  if [[ "$WITH_CADDY" == "1" ]]; then
-    echo "WARNING: --with-caddy requested but service 'caddy' not found."
+  if [[ "$HAS_CADDY" == "1" ]]; then
+    if [[ "$WITH_CADDY" == "1" ]]; then
+      if [[ "$DEPLOY_TARGET" == "vps" ]]; then
+        echo " - caddy: ENABLED (vps target)"
+      else
+        echo " - caddy: ENABLED (explicit request)"
+      fi
+      ENABLE_CADDY=1
+    else
+      echo " - caddy: DISABLED (default)"
+      SCALE_ARGS=("--scale" "caddy=0")
+    fi
+  else
+    echo " - caddy: NOT FOUND"
+    if [[ "$WITH_CADDY" == "1" ]]; then
+      echo "WARNING: --with-caddy requested but service 'caddy' not found."
+    fi
   fi
 fi
 
@@ -1140,6 +1255,8 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
   echo "[✓] Sovereign frontend build verified: no remote basemap references; local-basemap present."
 fi
 
+if [[ "$DEPLOY_SCOPE" == "full" ]]; then
+
 # 6c. Basemap Artifact Guard (best effort)
 # Try to ensure the PMTiles artifact exists for Heimserver Caddy to serve
 BASEMAP_DIR="build/basemap"
@@ -1249,6 +1366,12 @@ else
       echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable. 0 verified glyph set present."
     fi
   fi
+fi
+
+else
+  echo
+  echo ">> Basemap and Glyph Guards:"
+  echo "   Skipped (deploy scope $DEPLOY_SCOPE targets only the API)."
 fi
 
 # 6d. Static UI Runtime Guard & Edge Caddy Recreate
@@ -1417,58 +1540,358 @@ else
 fi
 
 echo ">> Deploying..."
-CMD_BASE=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--remove-orphans")
 
-if [[ "$DO_BUILD" == "1" ]]; then
-  CMD_BASE+=("--build")
-fi
+compose_service_id() {
+  local service="$1"
+  docker compose "${BASE_ARGS[@]}" ps -q "$service" 2> /dev/null || true
+}
 
-if [[ "$ENABLE_CADDY" == "1" ]]; then
-  # Try with Caddy enabled
-  echo "Running: ${CMD_BASE[*]}"
+join_command_for_plan() {
+  local separator=$'\x1f'
+  local joined=""
+  local arg
+  for arg in "$@"; do
+    if [[ "$arg" == *"$separator"* ]]; then
+      echo "ERROR: deployment command argument contains an unsupported control character." >&2
+      return 1
+    fi
+    if [[ -n "$joined" ]]; then
+      joined+="$separator"
+    fi
+    joined+="$arg"
+  done
+  printf '%s' "$joined"
+}
 
-  ERR_FILE=$(mktemp)
-  # Capture all output (stdout and stderr) to prevent log flooding, but retain it for the failure bundle
-  if ! "${CMD_BASE[@]}" > "$ERR_FILE" 2>&1; then
-    ERR_CONTENT=$(cat "$ERR_FILE")
+PROTECTED_SERVICES=(db nats caddy)
+declare -A PROTECTED_IDS_BEFORE=()
 
-    # Check for bind errors (port conflict)
-    if echo "$ERR_CONTENT" | grep -Eq "address already in use|port is already allocated|bind: address already in use"; then
-      echo
-      echo "WARNING: Port conflict detected (Caddy could not bind ports)."
-      echo "Retrying without Caddy (--scale caddy=0)..."
-      CMD_RETRY=("${CMD_BASE[@]}" "--scale" "caddy=0")
-      echo "Running: ${CMD_RETRY[*]}"
+snapshot_protected_services() {
+  local configured_services
+  configured_services="$(docker compose "${BASE_ARGS[@]}" config --services)"
+  local service
+  for service in "${PROTECTED_SERVICES[@]}"; do
+    if grep -qFx "$service" <<< "$configured_services"; then
+      PROTECTED_IDS_BEFORE["$service"]="$(compose_service_id "$service")"
+    else
+      PROTECTED_IDS_BEFORE["$service"]="__not_configured__"
+    fi
+  done
+}
 
-      RETRY_ERR_FILE=$(mktemp)
-      if ! "${CMD_RETRY[@]}" > "$RETRY_ERR_FILE" 2>&1; then
-        generate_failure_bundle "Container startup failed (retry without Caddy)." "$RETRY_ERR_FILE"
+verify_protected_services_unchanged() {
+  local phase="$1"
+  local service before after
+  for service in "${PROTECTED_SERVICES[@]}"; do
+    before="${PROTECTED_IDS_BEFORE[$service]}"
+    if [[ "$before" == "__not_configured__" ]]; then
+      continue
+    fi
+    after="$(compose_service_id "$service")"
+    if [[ "$after" != "$before" ]]; then
+      echo "ERROR: protected service '$service' changed identity during $phase." >&2
+      echo "       before=${before:-<absent>}" >&2
+      echo "       after=${after:-<absent>}" >&2
+      return 1
+    fi
+  done
+}
+
+wait_for_scoped_api_health() {
+  local timeout_seconds="${WELTGEWEBE_SCOPED_API_HEALTH_TIMEOUT_SECONDS:-120}"
+  case "$timeout_seconds" in
+    '' | *[!0-9]*)
+      echo "ERROR: WELTGEWEBE_SCOPED_API_HEALTH_TIMEOUT_SECONDS must be an integer." >&2
+      return 1
+      ;;
+  esac
+  if ((timeout_seconds < 1 || timeout_seconds > 600)); then
+    echo "ERROR: WELTGEWEBE_SCOPED_API_HEALTH_TIMEOUT_SECONDS must be between 1 and 600." >&2
+    return 1
+  fi
+
+  local deadline=$((SECONDS + timeout_seconds))
+  local cid status
+  while ((SECONDS < deadline)); do
+    cid="$(compose_service_id api)"
+    if [[ -n "$cid" ]]; then
+      status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2> /dev/null || true)"
+      case "$status" in
+        healthy | running) return 0 ;;
+        unhealthy | exited | dead) return 1 ;;
+      esac
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+restore_scoped_migration_mode() {
+  export WELTGEWEBE_API_STARTUP_MIGRATIONS="verify-applied"
+  echo "Running automatic migration-mode restore: ${SCOPED_RESTORE_CMD[*]}"
+  local restore_err_file
+  restore_err_file="$(mktemp)"
+  if ! "${SCOPED_RESTORE_CMD[@]}" > "$restore_err_file" 2>&1; then
+    echo "ERROR: failed to restore API startup mode to verify-applied." >&2
+    rm -f "$restore_err_file"
+    return 1
+  fi
+  rm -f "$restore_err_file"
+
+  if ! wait_for_scoped_api_health; then
+    echo "ERROR: API did not become healthy after restoring verify-applied mode." >&2
+    return 1
+  fi
+
+  local api_mode_cid
+  api_mode_cid="$(compose_service_id api)"
+  if [[ -z "$api_mode_cid" ]] || ! docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$api_mode_cid" 2> /dev/null | grep -Fxq 'WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied'; then
+    echo "ERROR: API container is not bound to verify-applied after migration window." >&2
+    return 1
+  fi
+  return 0
+}
+
+write_scoped_deploy_plan() {
+  local initial_command_joined restore_command_joined protected_lines=""
+  initial_command_joined="$(join_command_for_plan "${SCOPED_INITIAL_CMD[@]}")"
+  restore_command_joined=""
+  if ((${#SCOPED_RESTORE_CMD[@]} > 0)); then
+    restore_command_joined="$(join_command_for_plan "${SCOPED_RESTORE_CMD[@]}")"
+  fi
+
+  local service
+  for service in "${PROTECTED_SERVICES[@]}"; do
+    protected_lines+="${service}=${PROTECTED_IDS_BEFORE[$service]}"$'\n'
+  done
+
+  local plan_name
+  if [[ -z "$DEPLOY_PLAN_FILE" ]]; then
+    plan_name="deploy-plan-${DEPLOY_SCOPE}.json"
+  else
+    plan_name="$DEPLOY_PLAN_FILE"
+  fi
+  if [[ "$plan_name" == */* || "$plan_name" == "." || "$plan_name" == ".." || -z "$plan_name" ]]; then
+    echo "ERROR: deploy plan name must be one plain file name inside $WELTGEWEBE_STATE_DIR." >&2
+    return 1
+  fi
+
+  local canonical_state_dir
+  canonical_state_dir="$(realpath -e "$WELTGEWEBE_STATE_DIR")"
+  DEPLOY_PLAN_FILE="$canonical_state_dir/$plan_name"
+  if [[ -L "$DEPLOY_PLAN_FILE" ]]; then
+    echo "ERROR: deploy plan destination must not be a symlink: $DEPLOY_PLAN_FILE" >&2
+    return 1
+  fi
+
+  local plan_tmp
+  plan_tmp="$(mktemp "$canonical_state_dir/.${plan_name}.tmp.XXXXXX")"
+
+  PLAN_INITIAL_COMMAND="$initial_command_joined" \
+    PLAN_RESTORE_COMMAND="$restore_command_joined" \
+    PLAN_PROTECTED_IDS="$protected_lines" \
+    PLAN_PATH="$plan_tmp" \
+    PLAN_SCOPE="$DEPLOY_SCOPE" \
+    PLAN_PROJECT="$COMPOSE_PROJECT" \
+    PLAN_TARGET="$DEPLOY_TARGET" \
+    PLAN_REPO="$REPO_DIR" \
+    PLAN_HEAD="$HEAD_AFTER_FULL" \
+    PLAN_IMAGE_TAG="$API_VERSION" \
+    PLAN_BUILD="$DO_BUILD" \
+    PLAN_ONLY_VALUE="$PLAN_ONLY" \
+    PLAN_MIGRATION_MODE="$WELTGEWEBE_API_STARTUP_MIGRATIONS" \
+    python3 - << 'PY'
+import json
+import os
+from datetime import datetime, timezone
+
+separator = "\x1f"
+initial = os.environ["PLAN_INITIAL_COMMAND"].split(separator)
+restore_raw = os.environ.get("PLAN_RESTORE_COMMAND", "")
+commands = [initial]
+if restore_raw:
+    commands.append(restore_raw.split(separator))
+
+protected = {}
+for line in os.environ.get("PLAN_PROTECTED_IDS", "").splitlines():
+    service, value = line.split("=", 1)
+    protected[service] = None if value in ("", "__not_configured__") else value
+
+scope = os.environ["PLAN_SCOPE"]
+payload = {
+    "schema_version": 1,
+    "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    "scope": scope,
+    "target_services": ["api"],
+    "protected_services": ["db", "nats", "caddy"],
+    "protected_service_ids": protected,
+    "compose_project": os.environ["PLAN_PROJECT"],
+    "deploy_target": os.environ["PLAN_TARGET"],
+    "repository": os.environ["PLAN_REPO"],
+    "git_head": os.environ["PLAN_HEAD"],
+    "api_image_tag": os.environ["PLAN_IMAGE_TAG"],
+    "build_api_image": os.environ["PLAN_BUILD"] == "1",
+    "plan_only": os.environ["PLAN_ONLY_VALUE"] == "1",
+    "startup_migration_mode": os.environ["PLAN_MIGRATION_MODE"],
+    "automatic_restore_mode": "verify-applied" if scope == "migration" else None,
+    "no_deps": True,
+    "remove_orphans": False,
+    "commands": commands,
+    "command_environments": [
+        {"WELTGEWEBE_API_STARTUP_MIGRATIONS": os.environ["PLAN_MIGRATION_MODE"]},
+        *([{"WELTGEWEBE_API_STARTUP_MIGRATIONS": "verify-applied"}] if scope == "migration" else []),
+    ],
+    "authorization": {
+        "allowed_recreated_services": ["api"],
+        "forbidden_recreated_services": ["db", "nats", "caddy"],
+    },
+}
+with open(os.environ["PLAN_PATH"], "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+PY
+
+  chmod 0600 "$plan_tmp"
+  mv -fT -- "$plan_tmp" "$DEPLOY_PLAN_FILE"
+  echo ">> Scoped deployment plan: $DEPLOY_PLAN_FILE"
+  cat "$DEPLOY_PLAN_FILE"
+}
+
+if [[ "$DEPLOY_SCOPE" == "full" ]]; then
+  CMD_BASE=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--remove-orphans")
+
+  if [[ "$DO_BUILD" == "1" ]]; then
+    CMD_BASE+=("--build")
+  fi
+
+  if [[ "$ENABLE_CADDY" == "1" ]]; then
+    echo "Running: ${CMD_BASE[*]}"
+
+    ERR_FILE=$(mktemp)
+    if ! "${CMD_BASE[@]}" > "$ERR_FILE" 2>&1; then
+      ERR_CONTENT=$(cat "$ERR_FILE")
+
+      if echo "$ERR_CONTENT" | grep -Eq "address already in use|port is already allocated|bind: address already in use"; then
+        echo
+        echo "WARNING: Port conflict detected (Caddy could not bind ports)."
+        echo "Retrying without Caddy (--scale caddy=0)..."
+        CMD_RETRY=("${CMD_BASE[@]}" "--scale" "caddy=0")
+        echo "Running: ${CMD_RETRY[*]}"
+
+        RETRY_ERR_FILE=$(mktemp)
+        if ! "${CMD_RETRY[@]}" > "$RETRY_ERR_FILE" 2>&1; then
+          generate_failure_bundle "Container startup failed (retry without Caddy)." "$RETRY_ERR_FILE"
+          rm -f "$RETRY_ERR_FILE" "$ERR_FILE"
+          exit 1
+        fi
         rm -f "$RETRY_ERR_FILE" "$ERR_FILE"
+      else
+        generate_failure_bundle "Container startup failed." "$ERR_FILE"
+        rm -f "$ERR_FILE"
         exit 1
       fi
-      rm -f "$RETRY_ERR_FILE" "$ERR_FILE"
     else
-      # We don't want to spam stdout, so we just use the simple message
-      # The full log is safely stored in the bundle via $ERR_FILE
+      rm -f "$ERR_FILE"
+    fi
+  else
+    CMD=("${CMD_BASE[@]}" "${SCALE_ARGS[@]}")
+    echo "Running: ${CMD[*]}"
+
+    ERR_FILE=$(mktemp)
+    if ! "${CMD[@]}" > "$ERR_FILE" 2>&1; then
       generate_failure_bundle "Container startup failed." "$ERR_FILE"
       rm -f "$ERR_FILE"
       exit 1
+    else
+      rm -f "$ERR_FILE"
     fi
-  else
-    rm -f "$ERR_FILE"
   fi
 else
-  # Caddy disabled or not present
-  CMD=("${CMD_BASE[@]}" "${SCALE_ARGS[@]}")
-  echo "Running: ${CMD[*]}"
+  snapshot_protected_services
 
+  if [[ "$PLAN_ONLY" != "1" ]]; then
+    for required_service in db nats; do
+      if [[ -z "${PROTECTED_IDS_BEFORE[$required_service]}" || "${PROTECTED_IDS_BEFORE[$required_service]}" == "__not_configured__" ]]; then
+        echo "ERROR: bounded deploy scope '$DEPLOY_SCOPE' requires running protected service '$required_service'." >&2
+        exit 1
+      fi
+    done
+    if [[ "$DEPLOY_TARGET" == "vps" && ( -z "${PROTECTED_IDS_BEFORE[caddy]}" || "${PROTECTED_IDS_BEFORE[caddy]}" == "__not_configured__" ) ]]; then
+      echo "ERROR: bounded VPS deploy requires the protected caddy service to be running." >&2
+      exit 1
+    fi
+  fi
+
+  SCOPED_INITIAL_CMD=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--no-deps")
+  if [[ "$DO_BUILD" == "1" ]]; then
+    SCOPED_INITIAL_CMD+=("--build")
+  fi
+  SCOPED_INITIAL_CMD+=("api")
+
+  SCOPED_RESTORE_CMD=()
+  if [[ "$DEPLOY_SCOPE" == "migration" ]]; then
+    SCOPED_RESTORE_CMD=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--no-deps" "--force-recreate" "api")
+  fi
+
+  if [[ "${SCOPED_INITIAL_CMD[*]}" == *" --remove-orphans"* ]]; then
+    echo "ERROR: bounded deployment command unexpectedly includes --remove-orphans." >&2
+    exit 1
+  fi
+  for forbidden_target in db nats caddy; do
+    for arg in "${SCOPED_INITIAL_CMD[@]}"; do
+      if [[ "$arg" == "$forbidden_target" ]]; then
+        echo "ERROR: bounded deployment plan unexpectedly targets protected service '$forbidden_target'." >&2
+        exit 1
+      fi
+    done
+  done
+
+  write_scoped_deploy_plan
+  if [[ "$PLAN_ONLY" == "1" ]]; then
+    echo ">> Plan-only mode: no container mutation performed."
+    exit 0
+  fi
+
+  echo "Running scoped command: ${SCOPED_INITIAL_CMD[*]}"
   ERR_FILE=$(mktemp)
-  if ! "${CMD[@]}" > "$ERR_FILE" 2>&1; then
-    generate_failure_bundle "Container startup failed." "$ERR_FILE"
+  if ! "${SCOPED_INITIAL_CMD[@]}" > "$ERR_FILE" 2>&1; then
+    if [[ "$DEPLOY_SCOPE" == "migration" ]]; then
+      restore_scoped_migration_mode || true
+    fi
+    generate_failure_bundle "Scoped API container startup failed." "$ERR_FILE"
     rm -f "$ERR_FILE"
     exit 1
-  else
-    rm -f "$ERR_FILE"
+  fi
+  rm -f "$ERR_FILE"
+
+  if ! verify_protected_services_unchanged "initial scoped API deployment"; then
+    if [[ "$DEPLOY_SCOPE" == "migration" ]]; then
+      restore_scoped_migration_mode || true
+    fi
+    generate_failure_bundle "Protected service identity changed during scoped API deployment."
+    exit 1
+  fi
+
+  if [[ "$DEPLOY_SCOPE" == "migration" ]]; then
+    if ! wait_for_scoped_api_health; then
+      echo "ERROR: migration-mode API did not become healthy; attempting fail-closed restore to verify-applied." >&2
+      restore_scoped_migration_mode || true
+      generate_failure_bundle "Migration-mode API failed before verify-applied restoration."
+      exit 1
+    fi
+
+    if ! restore_scoped_migration_mode; then
+      generate_failure_bundle "Failed to restore API startup mode to verify-applied."
+      exit 1
+    fi
+
+    if ! verify_protected_services_unchanged "automatic verify-applied restoration"; then
+      generate_failure_bundle "Protected service identity changed during migration-mode restoration."
+      exit 1
+    fi
+  elif ! wait_for_scoped_api_health; then
+    generate_failure_bundle "Scoped API did not become healthy."
+    exit 1
   fi
 fi
 

@@ -34,6 +34,7 @@ Generated automatically. Do not edit.
 | Makefile (validate-guards) | scripts/docmeta/coverage-guard.sh | `bash scripts/docmeta/coverage-guard.sh` | *unclear* |
 | Makefile (validate-shell-tests) | scripts/tests/test_weltgewebe_up_git_branch.sh | `bash scripts/tests/test_weltgewebe_up_git_branch.sh` | *unclear* |
 | Makefile (validate-shell-tests) | scripts/tests/test_weltgewebe_up_frontend_required.sh | `bash scripts/tests/test_weltgewebe_up_frontend_required.sh` | *unclear* |
+| Makefile (validate-shell-tests) | scripts/tests/test_weltgewebe_up_deploy_scope.sh | `bash scripts/tests/test_weltgewebe_up_deploy_scope.sh` | *unclear* |
 | Makefile (validate-shell-tests) | scripts/tests/test_version_guard.sh | `bash scripts/tests/test_version_guard.sh` | *unclear* |
 | Makefile (validate-shell-tests) | scripts/tests/test_basemap_mode_guard.sh | `bash scripts/tests/test_basemap_mode_guard.sh` | *unclear* |
 | Makefile (validate-shell-tests) | scripts/tests/test_security_headers_guard.sh | `bash scripts/tests/test_security_headers_guard.sh` | *unclear* |

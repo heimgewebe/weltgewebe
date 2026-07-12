@@ -4,7 +4,7 @@ title: Deployment Contract and Preflight Guard
 doc_type: guide
 status: active
 summary: Anleitung und Dokumentation zum Deployment.
-last_reviewed: "2026-03-05"
+last_reviewed: "2026-07-12"
 relations:
   - type: relates_to
     target: docs/deploy/README.md
@@ -80,6 +80,46 @@ find build/basemap -maxdepth 1 -name "*.pmtiles" -print
 `scripts/weltgewebe-up` runs `scripts/preflight/runtime_contract.sh` before `docker compose up`.
 
 The guard validates required artifacts and aborts the deployment early if mandatory runtime contracts are violated.
+
+## Begrenzte API- und Migrationsrollouts
+
+Der normale Aufruf verwendet weiterhin `--deploy-scope full` und darf den gesamten Compose-Stack abgleichen.
+Für Änderungen, die nur die API betreffen, existieren zwei engere Wirkungsradien:
+
+```bash
+# API neu bauen oder aktualisieren, aber keine Migration anwenden.
+./scripts/weltgewebe-up --deploy-scope api
+
+# Migration ausschließlich durch einen API-Neustart anwenden und danach
+# automatisch wieder auf verify-applied zurückschalten.
+./scripts/weltgewebe-up --deploy-scope migration
+```
+
+Beide begrenzten Pfade:
+
+- setzen `DEPLOY_FRONTEND_MODE=off` und `REQUIRE_FRONTEND=0` voraus;
+- erzeugen vor jeder Containeränderung einen JSON-Plan unter
+  `.ops/deploy-plan-<scope>.json` oder unter dem mit `--deploy-plan-file`
+  gewählten Dateinamen innerhalb desselben Zustandsverzeichnisses;
+- rufen Compose ausschließlich mit `--no-deps ... api` auf;
+- verwenden bewusst kein `--remove-orphans`;
+- werden durch eine hostweite `flock`-Sperre gegen parallele Deployläufe geschützt;
+- behandeln `db`, `nats` und `caddy` als geschützte Dienste und brechen ab,
+  wenn sich deren Containeridentität während des Laufs ändert;
+- verweigern den Start, wenn PostgreSQL oder NATS nicht bereits laufen; auf dem
+  VPS muss zusätzlich Caddy bereits laufen.
+
+Mit `--plan-only` wird der JSON-Plan erzeugt, ohne einen Container zu verändern.
+Der Scope `api` erzwingt `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied`.
+Der Scope `migration` startet die API einmalig mit `run`, wartet auf einen gesunden
+Zustand und erzeugt anschließend ausschließlich die API erneut mit
+`verify-applied`. Schlägt das Migrationsfenster fehl, versucht der Pfad ebenfalls,
+den sicheren Prüfmodus wiederherzustellen und meldet den Lauf als fehlgeschlagen.
+
+Der JSON-Plan enthält Ziel- und Schutzdienste, die Containeridentitäten vor dem
+Lauf, den Git-Stand, die exakten Compose-Argumente und den erlaubten Wirkungsradius.
+Er ist ein Ausführungsbeleg, ersetzt aber weder Backup noch Restore-Proof vor einer
+produktiven Migration.
 
 ## CSP contract
 

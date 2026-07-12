@@ -108,6 +108,26 @@ PRUNE_IMAGES=1 ./scripts/deploy_vps.sh
 `scripts/deploy_vps.sh` ist nur noch ein deprecateter Shim, der an
 `weltgewebe-up` delegiert.
 
+Für einen reinen API-Rollout darf nicht der gesamte Stack neu abgeglichen werden:
+
+```bash
+sudo -n ./scripts/weltgewebe-up --deploy-scope api
+```
+
+Für ein kontrolliertes Migrationsfenster gilt:
+
+```bash
+sudo -n ./scripts/weltgewebe-up --deploy-scope migration
+```
+
+Der Migrationsscope startet nur `api` mit `--no-deps`, wendet die eingebetteten
+Migrationen an und setzt den API-Container anschließend automatisch wieder auf
+`WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied`. PostgreSQL, NATS und Caddy
+müssen bereits laufen und ihre Containeridentitäten müssen über den gesamten
+Lauf unverändert bleiben. Vor der Mutation wird ein maschinenlesbarer JSON-Plan
+unter `.ops/deploy-plan-migration.json` geschrieben. Mit `--plan-only` kann der
+Wirkungsplan ohne Containeränderung geprüft werden.
+
 Ein manueller Aufruf **muss** die VPS-Override-Datei mitgeben. Ohne sie fehlen
 `Caddyfile.vps`, `APP_BASE_URL`, `POLICY_LIMITS_PATH`, die IPv6-Bindings sowie
 `AUTH_TRUSTED_PROXIES` und die `AUTH_RL_*`-Rate-Limits — Caddy bliebe an
