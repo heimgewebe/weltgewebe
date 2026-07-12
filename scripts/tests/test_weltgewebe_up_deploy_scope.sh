@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 SCRIPT_SOURCE="$REPO_ROOT/scripts/weltgewebe-up"
 WORK_ROOT="$(mktemp -d)"
@@ -14,12 +14,12 @@ fail() {
 
 assert_contains() {
   local haystack="$1" needle="$2"
-  grep -Fq -- "$needle" <<<"$haystack" || fail "expected output to contain: $needle"
+  grep -Fq -- "$needle" <<< "$haystack" || fail "expected output to contain: $needle"
 }
 
 assert_not_contains() {
   local haystack="$1" needle="$2"
-  if grep -Fq -- "$needle" <<<"$haystack"; then
+  if grep -Fq -- "$needle" <<< "$haystack"; then
     fail "expected output not to contain: $needle"
   fi
 }
@@ -36,13 +36,13 @@ new_repo() {
     mkdir -p scripts infra/compose
     cp "$SCRIPT_SOURCE" scripts/weltgewebe-up
     chmod +x scripts/weltgewebe-up
-    cat > .env <<'ENV'
+    cat > .env << 'ENV'
 DATABASE_URL=postgres://example
 POSTGRES_USER=weltgewebe
 POSTGRES_PASSWORD=test
 POSTGRES_DB=weltgewebe
 ENV
-    cat > infra/compose/compose.prod.yml <<'YAML'
+    cat > infra/compose/compose.prod.yml << 'YAML'
 services:
   api:
     image: weltgewebe-api:${API_VERSION}
@@ -64,15 +64,15 @@ setup_mocks() {
   local state="$1"
   local mock_bin="$state/bin"
   mkdir -p "$mock_bin"
-  printf 'api-1\n' >"$state/api.id"
-  printf 'db-1\n' >"$state/db.id"
-  printf 'nats-1\n' >"$state/nats.id"
-  printf 'caddy-1\n' >"$state/caddy.id"
-  : >"$state/compose-up.log"
-  : >"$state/mutation.log"
-  printf 'verify-applied\n' >"$state/api.mode"
+  printf 'api-1\n' > "$state/api.id"
+  printf 'db-1\n' > "$state/db.id"
+  printf 'nats-1\n' > "$state/nats.id"
+  printf 'caddy-1\n' > "$state/caddy.id"
+  : > "$state/compose-up.log"
+  : > "$state/mutation.log"
+  printf 'verify-applied\n' > "$state/api.mode"
 
-  cat >"$mock_bin/docker" <<'MOCK'
+  cat > "$mock_bin/docker" << 'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
 args=("$@")
@@ -171,11 +171,11 @@ fi
 exit 0
 MOCK
 
-  cat >"$mock_bin/curl" <<'MOCK'
+  cat > "$mock_bin/curl" << 'MOCK'
 #!/usr/bin/env bash
 exit 0
 MOCK
-  cat >"$mock_bin/getent" <<'MOCK'
+  cat > "$mock_bin/getent" << 'MOCK'
 #!/usr/bin/env bash
 printf '127.0.0.1 localhost\n'
 MOCK
@@ -210,7 +210,7 @@ out_plan="$(run_up "$repo_plan" "$state_plan" --deploy-scope api --plan-only 2>&
 plan_path="$repo_plan/.ops/deploy-plan-api.json"
 [[ -f "$plan_path" ]] || fail "plan-only did not create $plan_path"
 [[ ! -s "$state_plan/mutation.log" ]] || fail "plan-only mutated compose"
-python3 - "$plan_path" <<'PY'
+python3 - "$plan_path" << 'PY'
 import json, sys
 p=json.load(open(sys.argv[1], encoding='utf-8'))
 assert p['scope']=='api'
@@ -234,7 +234,7 @@ repo_api="$(new_repo api)"
 state_api="$WORK_ROOT/api-state"
 mkdir -p "$state_api"
 out_api="$(run_up "$repo_api" "$state_api" --deploy-scope api 2>&1)"
-[[ "$(wc -l <"$state_api/compose-up.log")" -eq 1 ]] || fail "API scope should execute one compose up"
+[[ "$(wc -l < "$state_api/compose-up.log")" -eq 1 ]] || fail "API scope should execute one compose up"
 api_call="$(cat "$state_api/compose-up.log")"
 assert_contains "$api_call" "up -d --no-deps api"
 assert_not_contains "$api_call" "--remove-orphans"
@@ -250,13 +250,13 @@ repo_migration="$(new_repo migration)"
 state_migration="$WORK_ROOT/migration-state"
 mkdir -p "$state_migration"
 out_migration="$(run_up "$repo_migration" "$state_migration" --deploy-scope migration 2>&1)"
-[[ "$(wc -l <"$state_migration/compose-up.log")" -eq 2 ]] || fail "migration scope should execute exactly two compose up calls"
+[[ "$(wc -l < "$state_migration/compose-up.log")" -eq 2 ]] || fail "migration scope should execute exactly two compose up calls"
 first_call="$(sed -n '1p' "$state_migration/compose-up.log")"
 second_call="$(sed -n '2p' "$state_migration/compose-up.log")"
 assert_contains "$first_call" "up -d --no-deps api"
 assert_contains "$second_call" "up -d --no-deps --force-recreate api"
 [[ "$(cat "$state_migration/api.mode")" == "verify-applied" ]] || fail "migration scope did not restore verify-applied"
-python3 - "$repo_migration/.ops/deploy-plan-migration.json" <<'PY'
+python3 - "$repo_migration/.ops/deploy-plan-migration.json" << 'PY'
 import json, sys
 p=json.load(open(sys.argv[1], encoding='utf-8'))
 assert p['scope']=='migration'
@@ -281,7 +281,7 @@ out_migration_failure="$( (cd "$repo_migration_failure" && PATH="$mock_bin_migra
 rc_migration_failure=$?
 set -e
 [[ "$rc_migration_failure" -ne 0 ]] || fail "injected migration failure should fail the overall deploy"
-[[ "$(wc -l <"$state_migration_failure/compose-up.log")" -eq 2 ]] || fail "failed migration should trigger exactly one restore call"
+[[ "$(wc -l < "$state_migration_failure/compose-up.log")" -eq 2 ]] || fail "failed migration should trigger exactly one restore call"
 failed_initial_call="$(sed -n '1p' "$state_migration_failure/compose-up.log")"
 failed_restore_call="$(sed -n '2p' "$state_migration_failure/compose-up.log")"
 assert_contains "$failed_initial_call" "up -d --no-deps api"
@@ -337,7 +337,7 @@ repo_lock="$(new_repo lock)"
 state_lock="$WORK_ROOT/lock-state"
 mkdir -p "$state_lock"
 mock_bin_lock="$(setup_mocks "$state_lock")"
-exec {held_lock_fd}>"$state_lock/deploy.lock"
+exec {held_lock_fd}> "$state_lock/deploy.lock"
 flock -n "$held_lock_fd" || fail "could not acquire test deployment lock"
 set +e
 out_lock="$( (cd "$repo_lock" && PATH="$mock_bin_lock:/usr/bin:/bin" MOCK_STATE="$state_lock" WELTGEWEBE_DEPLOY_LOCK_FILE="$state_lock/deploy.lock" REPO_DIR="$repo_lock" ENV_FILE="$repo_lock/.env" DEPLOY_TARGET=vps WELTGEWEBE_STATE_DIR="$repo_lock/.ops" bash scripts/weltgewebe-up --no-pull --no-build --deploy-scope api) 2>&1)"

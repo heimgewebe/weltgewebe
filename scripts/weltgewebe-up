@@ -339,7 +339,7 @@ if [[ -L "$DEPLOY_LOCK_FILE" ]]; then
   echo "ERROR: deployment lock file must not be a symlink: $DEPLOY_LOCK_FILE" >&2
   exit 1
 fi
-exec {DEPLOY_LOCK_FD}>"$DEPLOY_LOCK_FILE"
+exec {DEPLOY_LOCK_FD}> "$DEPLOY_LOCK_FILE"
 if ! flock -n "$DEPLOY_LOCK_FD"; then
   echo "ERROR: another Weltgewebe deployment is already active for project $COMPOSE_PROJECT." >&2
   exit 1
@@ -1257,116 +1257,116 @@ fi
 
 if [[ "$DEPLOY_SCOPE" == "full" ]]; then
 
-# 6c. Basemap Artifact Guard (best effort)
-# Try to ensure the PMTiles artifact exists for Heimserver Caddy to serve
-BASEMAP_DIR="build/basemap"
-echo
-echo ">> Basemap Artifact Guard:"
+  # 6c. Basemap Artifact Guard (best effort)
+  # Try to ensure the PMTiles artifact exists for Heimserver Caddy to serve
+  BASEMAP_DIR="build/basemap"
+  echo
+  echo ">> Basemap Artifact Guard:"
 
-evaluate_basemap_state() {
-  local pmtiles_files=()
-  mapfile -t pmtiles_files < <(compgen -G "$BASEMAP_DIR/*.pmtiles" || true)
-  PMTILES_COUNT="${#pmtiles_files[@]}"
-  if ((PMTILES_COUNT > 0)); then
-    FIRST_PMTILES="${pmtiles_files[0]}"
-  else
-    FIRST_PMTILES=""
-  fi
-}
-
-evaluate_basemap_state
-if ((PMTILES_COUNT > 0)); then
-  echo "   [✓] Artifacts already present. Found ${PMTILES_COUNT} PMTiles artifact(s) in ${BASEMAP_DIR}."
-  echo "       -> e.g. ${FIRST_PMTILES}"
-else
-  echo "   [!] Basemap artifact missing. Attempting best-effort PMTiles build..."
-  if [[ -x "scripts/basemap/build-hamburg-pmtiles.sh" ]]; then
-    if bash scripts/basemap/build-hamburg-pmtiles.sh; then
-      evaluate_basemap_state
-      if ((PMTILES_COUNT > 0)); then
-        echo "   [✓] Basemap build succeeded. Generated ${PMTILES_COUNT} PMTiles artifact(s)."
-        echo "       -> e.g. ${FIRST_PMTILES}"
-      else
-        echo "   [X] WARNING: Basemap artifact still missing after build attempt. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
-      fi
-    else
-      evaluate_basemap_state
-      if ((PMTILES_COUNT > 0)); then
-        echo "   [X] WARNING: PMTiles build script failed, but ${PMTILES_COUNT} PMTiles artifact(s) are present. Continuing deployment (best effort)."
-        echo "       -> e.g. ${FIRST_PMTILES}"
-      else
-        echo "   [X] WARNING: PMTiles build script failed. Continuing deployment (best effort). 0 PMTiles artifacts present in ${BASEMAP_DIR}."
-      fi
-    fi
-  else
-    evaluate_basemap_state
+  evaluate_basemap_state() {
+    local pmtiles_files=()
+    mapfile -t pmtiles_files < <(compgen -G "$BASEMAP_DIR/*.pmtiles" || true)
+    PMTILES_COUNT="${#pmtiles_files[@]}"
     if ((PMTILES_COUNT > 0)); then
-      echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable, but ${PMTILES_COUNT} PMTiles artifact(s) are present in ${BASEMAP_DIR}."
-      echo "       -> e.g. ${FIRST_PMTILES}"
+      FIRST_PMTILES="${pmtiles_files[0]}"
     else
-      echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
+      FIRST_PMTILES=""
     fi
-  fi
-fi
-# 6c2. Basemap Glyphs Guard (best effort)
-# Try to ensure the local glyphs (fonts) exist for offline rendering
-GLYPHS_DIR="map-style/glyphs/Noto Sans Regular"
-EXPECTED_GLYPHS_HASH="d117316544b43a5dde7ee761b36e17701e9f85574e181d76a74814240fdbaf34"
-echo
-echo ">> Basemap Glyphs Guard:"
+  }
 
-evaluate_glyphs_state() {
-  GLYPHS_READY=0
-  GLYPHS_ACTUAL_COUNT=0
-  if [ -f "$GLYPHS_DIR/.complete" ]; then
-    local stored_hash
-    local stored_count
-    stored_hash="$(grep '^HASH=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
-    stored_count="$(grep '^COUNT=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
-
-    case "$stored_count" in
-      '' | *[!0-9]*) stored_count=-1 ;;
-    esac
-
-    if [ "$stored_hash" = "$EXPECTED_GLYPHS_HASH" ] && [ "$stored_count" -ge 0 ]; then
-      GLYPHS_ACTUAL_COUNT="$(find "$GLYPHS_DIR" -maxdepth 1 -name '*.pbf' | wc -l | tr -d '[:space:]')"
-      if [ "$GLYPHS_ACTUAL_COUNT" -eq "$stored_count" ]; then
-        GLYPHS_READY=1
-      fi
-    fi
-  fi
-}
-
-evaluate_glyphs_state
-if ((GLYPHS_READY == 1)); then
-  echo "   [✓] Artifacts already present. Found verified glyph set (${GLYPHS_ACTUAL_COUNT} files) in ${GLYPHS_DIR}."
-else
-  echo "   [!] Glyphs missing. Attempting best-effort download..."
-  if [[ -x "scripts/basemap/fetch-glyphs.sh" ]]; then
-    if bash scripts/basemap/fetch-glyphs.sh; then
-      evaluate_glyphs_state
-      if ((GLYPHS_READY == 1)); then
-        echo "   [✓] Glyph fetch succeeded. Found verified glyph set (${GLYPHS_ACTUAL_COUNT} files)."
-      else
-        echo "   [X] WARNING: Glyphs still missing after fetch attempt. 0 verified glyph set present."
-      fi
-    else
-      evaluate_glyphs_state
-      if ((GLYPHS_READY == 1)); then
-        echo "   [X] WARNING: Fetch script failed, but a verified glyph set is present. Continuing (best effort)."
-      else
-        echo "   [X] WARNING: Fetch script failed. Continuing deployment (best effort). 0 verified glyph set present."
-      fi
-    fi
+  evaluate_basemap_state
+  if ((PMTILES_COUNT > 0)); then
+    echo "   [✓] Artifacts already present. Found ${PMTILES_COUNT} PMTiles artifact(s) in ${BASEMAP_DIR}."
+    echo "       -> e.g. ${FIRST_PMTILES}"
   else
-    evaluate_glyphs_state
-    if ((GLYPHS_READY == 1)); then
-      echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable, but a verified glyph set is present."
+    echo "   [!] Basemap artifact missing. Attempting best-effort PMTiles build..."
+    if [[ -x "scripts/basemap/build-hamburg-pmtiles.sh" ]]; then
+      if bash scripts/basemap/build-hamburg-pmtiles.sh; then
+        evaluate_basemap_state
+        if ((PMTILES_COUNT > 0)); then
+          echo "   [✓] Basemap build succeeded. Generated ${PMTILES_COUNT} PMTiles artifact(s)."
+          echo "       -> e.g. ${FIRST_PMTILES}"
+        else
+          echo "   [X] WARNING: Basemap artifact still missing after build attempt. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
+        fi
+      else
+        evaluate_basemap_state
+        if ((PMTILES_COUNT > 0)); then
+          echo "   [X] WARNING: PMTiles build script failed, but ${PMTILES_COUNT} PMTiles artifact(s) are present. Continuing deployment (best effort)."
+          echo "       -> e.g. ${FIRST_PMTILES}"
+        else
+          echo "   [X] WARNING: PMTiles build script failed. Continuing deployment (best effort). 0 PMTiles artifacts present in ${BASEMAP_DIR}."
+        fi
+      fi
     else
-      echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable. 0 verified glyph set present."
+      evaluate_basemap_state
+      if ((PMTILES_COUNT > 0)); then
+        echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable, but ${PMTILES_COUNT} PMTiles artifact(s) are present in ${BASEMAP_DIR}."
+        echo "       -> e.g. ${FIRST_PMTILES}"
+      else
+        echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
+      fi
     fi
   fi
-fi
+  # 6c2. Basemap Glyphs Guard (best effort)
+  # Try to ensure the local glyphs (fonts) exist for offline rendering
+  GLYPHS_DIR="map-style/glyphs/Noto Sans Regular"
+  EXPECTED_GLYPHS_HASH="d117316544b43a5dde7ee761b36e17701e9f85574e181d76a74814240fdbaf34"
+  echo
+  echo ">> Basemap Glyphs Guard:"
+
+  evaluate_glyphs_state() {
+    GLYPHS_READY=0
+    GLYPHS_ACTUAL_COUNT=0
+    if [ -f "$GLYPHS_DIR/.complete" ]; then
+      local stored_hash
+      local stored_count
+      stored_hash="$(grep '^HASH=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
+      stored_count="$(grep '^COUNT=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
+
+      case "$stored_count" in
+        '' | *[!0-9]*) stored_count=-1 ;;
+      esac
+
+      if [ "$stored_hash" = "$EXPECTED_GLYPHS_HASH" ] && [ "$stored_count" -ge 0 ]; then
+        GLYPHS_ACTUAL_COUNT="$(find "$GLYPHS_DIR" -maxdepth 1 -name '*.pbf' | wc -l | tr -d '[:space:]')"
+        if [ "$GLYPHS_ACTUAL_COUNT" -eq "$stored_count" ]; then
+          GLYPHS_READY=1
+        fi
+      fi
+    fi
+  }
+
+  evaluate_glyphs_state
+  if ((GLYPHS_READY == 1)); then
+    echo "   [✓] Artifacts already present. Found verified glyph set (${GLYPHS_ACTUAL_COUNT} files) in ${GLYPHS_DIR}."
+  else
+    echo "   [!] Glyphs missing. Attempting best-effort download..."
+    if [[ -x "scripts/basemap/fetch-glyphs.sh" ]]; then
+      if bash scripts/basemap/fetch-glyphs.sh; then
+        evaluate_glyphs_state
+        if ((GLYPHS_READY == 1)); then
+          echo "   [✓] Glyph fetch succeeded. Found verified glyph set (${GLYPHS_ACTUAL_COUNT} files)."
+        else
+          echo "   [X] WARNING: Glyphs still missing after fetch attempt. 0 verified glyph set present."
+        fi
+      else
+        evaluate_glyphs_state
+        if ((GLYPHS_READY == 1)); then
+          echo "   [X] WARNING: Fetch script failed, but a verified glyph set is present. Continuing (best effort)."
+        else
+          echo "   [X] WARNING: Fetch script failed. Continuing deployment (best effort). 0 verified glyph set present."
+        fi
+      fi
+    else
+      evaluate_glyphs_state
+      if ((GLYPHS_READY == 1)); then
+        echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable, but a verified glyph set is present."
+      else
+        echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable. 0 verified glyph set present."
+      fi
+    fi
+  fi
 
 else
   echo
@@ -1816,7 +1816,7 @@ else
         exit 1
       fi
     done
-    if [[ "$DEPLOY_TARGET" == "vps" && ( -z "${PROTECTED_IDS_BEFORE[caddy]}" || "${PROTECTED_IDS_BEFORE[caddy]}" == "__not_configured__" ) ]]; then
+    if [[ "$DEPLOY_TARGET" == "vps" && (-z "${PROTECTED_IDS_BEFORE[caddy]}" || "${PROTECTED_IDS_BEFORE[caddy]}" == "__not_configured__") ]]; then
       echo "ERROR: bounded VPS deploy requires the protected caddy service to be running." >&2
       exit 1
     fi
