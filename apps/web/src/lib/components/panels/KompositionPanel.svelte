@@ -22,9 +22,36 @@
   let createdNodeId: string | null = null;
   let edgeError: string | null = null;
 
+  // One operation id identifies one semantic user action. A transport failure
+  // may hide a successful server write, so retries reuse the same id while the
+  // payload stays unchanged. Editing the form starts a new semantic action.
+  let nodeOperationId: string | null = null;
+  let nodeOperationSignature: string | null = null;
+  let edgeOperationId: string | null = null;
+
   $: canWrite = $authStore.role === 'weber' || $authStore.role === 'admin';
   $: placingGarnrolle = $kompositionDraft?.mode === 'place-garnrolle';
   $: canSubmit = !!$kompositionDraft?.lngLat && !!title.trim() && !!address.trim();
+
+  function operationIdForNode(payload: {
+    title: string;
+    kind: string;
+    address: string;
+    location: { lat: number; lon: number };
+    summary?: string;
+  }): string {
+    const signature = JSON.stringify(payload);
+    if (!nodeOperationId || nodeOperationSignature !== signature) {
+      nodeOperationId = crypto.randomUUID();
+      nodeOperationSignature = signature;
+    }
+    return nodeOperationId;
+  }
+
+  function operationIdForEdge(): string {
+    edgeOperationId ??= crypto.randomUUID();
+    return edgeOperationId;
+  }
 
   async function returnToGarnrolleSettings(withLocation: boolean) {
     const location = withLocation ? $kompositionDraft?.lngLat : undefined;
@@ -88,6 +115,7 @@
         target_id: nodeId,
         target_type: 'node',
         edge_kind: 'reference',
+        operation_id: operationIdForEdge(),
       });
       await finalizeSuccess(nodeId);
     } catch (e) {
@@ -132,12 +160,16 @@
       const submitDraft = $kompositionDraft;
       const [lon, lat] = submitDraft.lngLat!;
 
-      const node = await createNode({
+      const nodePayload = {
         title: title.trim(),
         kind: nodeType,
         address: address.trim(),
         location: { lat, lon },
         summary: description.trim() || undefined,
+      };
+      const node = await createNode({
+        ...nodePayload,
+        operation_id: operationIdForNode(nodePayload),
       });
 
       // Guard: only proceed if we are still in komposition state and the

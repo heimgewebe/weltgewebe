@@ -133,6 +133,9 @@ test.describe("Komposition Flow (weber)", () => {
     });
     expect(typeof nodePayload.location?.lat).toBe("number");
     expect(typeof nodePayload.location?.lon).toBe("number");
+    expect(nodePayload.operation_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
 
     // Edge links the current account to the new node.
     const edgeReq = await edgeRequest;
@@ -141,6 +144,9 @@ test.describe("Komposition Flow (weber)", () => {
     expect(edgePayload.source_type).toBe("account");
     expect(edgePayload.target_type).toBe("node");
     expect(edgePayload.edge_kind).toBe("reference");
+    expect(edgePayload.operation_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
 
     // Data reloaded: the debug badge's node count increases by one.
     const debugBadge = page.locator('[data-testid="debug-badge"]');
@@ -151,14 +157,30 @@ test.describe("Komposition Flow (weber)", () => {
     await expect(panel.locator("h2")).toContainText("Knoten");
   });
 
-  test("Edge creation failure shows a partial-success message with retry, not silent failure", async ({
+  test("Edge creation failure shows a partial-success message and reuses the operation id on retry", async ({
     page,
   }) => {
+    const operationIds: string[] = [];
+    let edgeAttempts = 0;
     await page.route("**/api/edges", async (route) => {
-      if (route.request().method() === "POST") {
+      if (route.request().method() !== "POST") {
+        return route.fallback();
+      }
+      const payload = route.request().postDataJSON();
+      operationIds.push(payload.operation_id);
+      edgeAttempts += 1;
+      if (edgeAttempts === 1) {
         return route.fulfill({ status: 500 });
       }
-      return route.continue();
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "mock-edge-replay",
+          ...payload,
+          created_at: new Date().toISOString(),
+        }),
+      });
     });
 
     await page.locator('button:has-text("Neuer Knoten")').click();
@@ -186,6 +208,54 @@ test.describe("Komposition Flow (weber)", () => {
     // The panel must not silently close — the user stays informed and in
     // control until they explicitly retry or accept the partial result.
     await expect(panel).toBeVisible();
+
+    await panel.locator('button:has-text("Erneut verknüpfen")').click();
+    await expect(panel.locator("h2")).toContainText("Knoten");
+    expect(operationIds).toHaveLength(2);
+    expect(operationIds[1]).toBe(operationIds[0]);
+  });
+
+  test("Node retry reuses its operation id while unchanged form data starts no second action", async ({
+    page,
+  }) => {
+    const operationIds: string[] = [];
+    let attempts = 0;
+    await page.route("**/api/nodes", async (route) => {
+      if (route.request().method() !== "POST") {
+        return route.fallback();
+      }
+      const payload = route.request().postDataJSON();
+      operationIds.push(payload.operation_id);
+      attempts += 1;
+      if (attempts === 1) {
+        return route.fulfill({ status: 500 });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "mock-node-replay",
+          ...payload,
+          tags: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }),
+      });
+    });
+
+    await page.locator('button:has-text("Neuer Knoten")').click();
+    const panel = page.locator('[data-testid="context-panel"]');
+    await longPressMapCenter(page);
+    await page.fill("#title", "Retry Node");
+    await page.fill("#address", "Retrystraße 1");
+
+    await panel.locator('button[type="submit"]').click();
+    await expect(panel.locator('[role="alert"]')).toBeVisible();
+    await panel.locator('button[type="submit"]').click();
+
+    await expect(panel.locator("h2")).toContainText("Knoten");
+    expect(operationIds).toHaveLength(2);
+    expect(operationIds[1]).toBe(operationIds[0]);
   });
 });
 

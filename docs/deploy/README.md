@@ -203,6 +203,24 @@ Das ist **keine Validierung**, sondern eine **sichtbare Beobachtung**.
 - **WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE**: Default `jsonl`.
   `postgres` persistiert `POST /edges` in `domain_edges`.
 
+`POST /nodes` und `POST /edges` akzeptieren optional eine UUID als
+`operation_id`. Sie wird vom Webclient einmal pro Nutzeraktion erzeugt und bei
+einem ungewissen Antwortausfall wiederverwendet. Der Server bindet sie an den
+authentifizierten Account und die jeweilige Ressourcenart:
+
+- erster erfolgreicher Schreibvorgang: `201 Created`;
+- identische Wiederholung: `200 OK` mit derselben serverseitigen Objekt-ID und
+  ohne zweite persistierte Zeile;
+- dieselbe Kennung mit anderen fachlichen Daten: `409 Conflict`;
+- fehlende `operation_id`: bisheriges Verhalten für ältere Clients.
+
+Der Vertrag gilt in JSONL- und PostgreSQL-Modus und über einen API-Neustart
+hinweg. Der ausführbare JSONL→PostgreSQL-Backfill-Beweis weist nach, dass
+reservierte Vorgangsmetadaten ausschließlich in die internen Spalten übernommen
+werden. Das Repository behauptet damit kein allgemeines Produktionskommando.
+Der Vertrag ersetzt keine fachliche Duplikatprüfung und führt unabhängig
+angelegte reale Knoten oder Fäden niemals automatisch zusammen.
+
 Für einen PostgreSQL-Cutover müssen **Read-Quelle und alle tatsächlich
 verwendeten Schreibquellen gemeinsam** auf `postgres` stehen. PostgreSQL-
 Schreiben bei JSONL-Lesen oder fehlendem Pool ist verboten; die API bricht beim

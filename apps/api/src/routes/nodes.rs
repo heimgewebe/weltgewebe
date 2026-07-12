@@ -10,15 +10,17 @@ use super::{
 };
 use crate::config::DomainNodeWriteSource;
 use crate::domain_db::{
-    insert_domain_node, patch_node_in_postgres, NodeCreateError, NodePatchInput, NodeWriteError,
+    insert_domain_node, patch_node_in_postgres, CreateOperationKey, CreateWriteOutcome,
+    NodeCreateError, NodePatchInput, NodeWriteError,
 };
+use crate::middleware::auth::AuthContext;
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::nodes_path;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
+    Extension, Json,
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{json, Value};
@@ -466,6 +468,77 @@ async fn append_node_line(record: &Value) -> std::io::Result<()> {
     Ok(())
 }
 
+const CREATE_ACTOR_KEY: &str = "_create_actor_id";
+const CREATE_OPERATION_KEY: &str = "_create_operation_id";
+
+fn add_create_operation_metadata(record: &mut Value, operation: Option<&CreateOperationKey>) {
+    let Some(operation) = operation else {
+        return;
+    };
+    let object = record
+        .as_object_mut()
+        .expect("canonical node create record must be an object");
+    object.insert(
+        CREATE_ACTOR_KEY.to_string(),
+        Value::String(operation.actor_id.clone()),
+    );
+    object.insert(
+        CREATE_OPERATION_KEY.to_string(),
+        Value::String(operation.operation_id.clone()),
+    );
+}
+
+/// Find an earlier durable JSONL result for one account-scoped operation.
+/// Unknown metadata remains invisible to the public `Node` projection.
+async fn find_node_by_operation(operation: &CreateOperationKey) -> std::io::Result<Option<Node>> {
+    let path = nodes_path();
+    let file = match File::open(&path).await {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let mut lines = BufReader::new(file).lines();
+    let mut found = None;
+    while let Some(line) = lines.next_line().await? {
+        let value: Value = match serde_json::from_str(&line) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        let actor_matches = value.get(CREATE_ACTOR_KEY).and_then(Value::as_str)
+            == Some(operation.actor_id.as_str());
+        let operation_matches = value.get(CREATE_OPERATION_KEY).and_then(Value::as_str)
+            == Some(operation.operation_id.as_str());
+        if !actor_matches || !operation_matches {
+            continue;
+        }
+        if found.is_some() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "duplicate node create operation metadata",
+            ));
+        }
+        let node = map_json_to_node(&value).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "idempotent node record cannot be projected",
+            )
+        })?;
+        found = Some(node);
+    }
+    Ok(found)
+}
+
+fn node_matches_create(node: &Node, expected: &node_create::ValidatedCreateNode) -> bool {
+    node.title == expected.title
+        && node.kind == expected.kind
+        && node.address.as_deref() == Some(expected.address.as_str())
+        && node.location.lat == expected.lat
+        && node.location.lon == expected.lon
+        && node.summary == expected.summary
+        && node.info == expected.info
+        && node.tags == expected.tags
+}
+
 /// Build the in-memory `Node` and its canonical JSONL record from a validated
 /// create request plus the server-owned `id` and timestamp.
 fn build_node_record(
@@ -524,6 +597,7 @@ fn node_create_error_message(err: &node_create::NodeCreateValidationError) -> St
         E::InvalidCoordinate { field } => {
             format!("{field} must be a finite number within world bounds")
         }
+        E::InvalidUuid { field, value } => format!("invalid UUID for {field}: {value}"),
         E::TooManyTags { max } => format!("tags exceeds the maximum count of {max}"),
     }
 }
@@ -532,26 +606,27 @@ fn node_create_error_message(err: &node_create::NodeCreateValidationError) -> St
 ///
 /// Write path: write gate ([`reject_node_create_unless_writable`]) -> contract
 /// validation -> server-generated `id` / `created_at` / `updated_at` ->
-/// persistence via the configured node write source -> cache insert -> 201.
-/// The cache is only mutated after a successful durable persistence step, so
-/// a failed write never leaves a phantom node in memory.
+/// persistence via the configured node write source -> cache insert. A new
+/// durable write returns 201; an identical durable operation replay returns the
+/// existing node with 200. Failed writes never leave a phantom cache entry.
 ///
 /// JSONL (default): durable JSONL append (fsync), serialized against
 /// concurrent node persistence via `state.nodes_persist`.
 /// PostgreSQL (opt-in via `WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE=postgres`,
-/// requires the PostgreSQL read source): a serialized transaction with a
-/// table-level lock, duplicate precheck, and final INSERT. No dual-write:
-/// JSONL mode never touches PostgreSQL, PostgreSQL mode never appends JSONL.
+/// requires the PostgreSQL read source): one transaction, a per-operation
+/// advisory lock when `operation_id` is present, an account-scoped partial
+/// unique index, and the final INSERT. No dual-write: JSONL mode never touches
+/// PostgreSQL, PostgreSQL mode never appends JSONL.
 pub async fn create_node(
     State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
     Json(payload): Json<Value>,
 ) -> Result<(StatusCode, Json<Node>), (StatusCode, String)> {
     reject_node_create_unless_writable(&state)?;
 
     // Deserialize manually (instead of extracting Json<CreateNodeRequest>) so
-    // contract violations (unknown fields, missing required fields, explicit
-    // nulls on server-owned fields) map to a deterministic 400 rather than an
-    // extractor-shaped 422.
+    // contract violations (unknown fields, missing required fields and explicit
+    // nulls) map to a deterministic 400 rather than an extractor-shaped 422.
     let request: node_create::CreateNodeRequest = serde_json::from_value(payload).map_err(|e| {
         (
             StatusCode::BAD_REQUEST,
@@ -568,19 +643,59 @@ pub async fn create_node(
             ),
         )
     })?;
+    let semantic_request = validated.clone();
+
+    let operation = match validated.operation_id.as_ref() {
+        Some(operation_id) => {
+            let actor_id = auth.account_id.clone().ok_or_else(|| {
+                (
+                    StatusCode::UNAUTHORIZED,
+                    "authenticated account context missing".to_string(),
+                )
+            })?;
+            Some(CreateOperationKey {
+                actor_id,
+                operation_id: operation_id.clone(),
+            })
+        }
+        None => None,
+    };
 
     let id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
-    let (node, record) = build_node_record(validated, id.clone(), now);
+    let (node, mut record) = build_node_record(validated, id.clone(), now);
+    add_create_operation_metadata(&mut record, operation.as_ref());
 
     match state.config.domain_node_write_source {
         DomainNodeWriteSource::Jsonl => {
-            // Serialize JSONL creates so cache/file mutation cannot interleave.
+            // Serialize operation lookup and append so two retries cannot both
+            // decide that the durable result is absent.
             let _persist_guard = state.nodes_persist.lock().await;
 
-            // id is a freshly generated UUIDv4; a cache collision is
-            // astronomically unlikely but checked defensively, mirroring the
-            // account/edge create paths.
+            if let Some(operation) = operation.as_ref() {
+                let existing = find_node_by_operation(operation).await.map_err(|error| {
+                    tracing::error!(%error, "failed to inspect node create operation");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to inspect node create operation".to_string(),
+                    )
+                })?;
+                if let Some(existing) = existing {
+                    if !node_matches_create(&existing, &semantic_request) {
+                        return Err((
+                            StatusCode::CONFLICT,
+                            "node operation id was already used for different data".to_string(),
+                        ));
+                    }
+                    let mut nodes = state.nodes.write().await;
+                    nodes.insert(existing.id.clone(), existing.clone());
+                    state.metrics.set_nodes_cache_count(nodes.len() as i64);
+                    return Ok((StatusCode::OK, Json(existing)));
+                }
+            }
+
+            // The id is server-generated, but keep the cache collision check
+            // as a fail-closed invariant and for directly seeded test states.
             {
                 let nodes = state.nodes.read().await;
                 if nodes.get(&id).is_some() {
@@ -588,6 +703,7 @@ pub async fn create_node(
                 }
             }
 
+            // Only a successful durable append may be reflected in cache.
             if let Err(e) = append_node_line(&record).await {
                 tracing::error!(error = %e, "failed to append node to JSONL");
                 return Err((
@@ -601,6 +717,8 @@ pub async fn create_node(
             state.metrics.set_nodes_cache_count(nodes.len() as i64);
         }
         DomainNodeWriteSource::Postgres => {
+            // PostgreSQL mode never appends JSONL. The helper performs the
+            // operation lookup and insert in one transaction.
             {
                 let nodes = state.nodes.read().await;
                 if nodes.get(&id).is_some() {
@@ -608,14 +726,28 @@ pub async fn create_node(
                 }
             }
 
+            // Startup validation normally guarantees this pool; missing
+            // state fails closed rather than falling back to JSONL.
             let pool = state.db_pool.as_ref().ok_or_else(|| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "PostgreSQL pool unavailable for node write".to_string(),
                 )
             })?;
-            match insert_domain_node(pool, &node).await {
-                Ok(()) => {}
+            match insert_domain_node(pool, &node, operation.as_ref()).await {
+                Ok(CreateWriteOutcome::Created) => {}
+                Ok(CreateWriteOutcome::Existing(existing)) => {
+                    if !node_matches_create(&existing, &semantic_request) {
+                        return Err((
+                            StatusCode::CONFLICT,
+                            "node operation id was already used for different data".to_string(),
+                        ));
+                    }
+                    let mut nodes = state.nodes.write().await;
+                    nodes.insert(existing.id.clone(), existing.clone());
+                    state.metrics.set_nodes_cache_count(nodes.len() as i64);
+                    return Ok((StatusCode::OK, Json(existing)));
+                }
                 Err(NodeCreateError::DuplicateId) => {
                     return Err((StatusCode::CONFLICT, "node id already exists".to_string()));
                 }
@@ -638,6 +770,7 @@ pub async fn create_node(
         event = "node.created",
         node_id = %node.id,
         write_source = ?state.config.domain_node_write_source,
+        operation_bound = operation.is_some(),
         "Node created"
     );
 
@@ -650,9 +783,22 @@ pub async fn create_node(
 /// request. `id`, `created_at`, `updated_at` are server-owned and therefore
 /// absent from the request type; combined with `deny_unknown_fields` a client
 /// that supplies them gets a deterministic 400 instead of a silently dropped
-/// field.
+/// field. `operation_id` may be omitted, but when present must be a non-null
+/// UUID and identifies only one account-scoped create action.
 mod node_create {
-    use serde::Deserialize;
+    use serde::{de, Deserialize, Deserializer};
+    use uuid::Uuid;
+
+    fn deserialize_optional_non_null_string<'de, D>(
+        deserializer: D,
+    ) -> Result<Option<String>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Option::<String>::deserialize(deserializer)?
+            .map(Some)
+            .ok_or_else(|| de::Error::custom("field must not be null"))
+    }
 
     /// Mirrors `contracts/domain/node.schema.json` (`title.maxLength`).
     const NODE_TITLE_MAX_LEN: usize = 200;
@@ -693,6 +839,8 @@ mod node_create {
         info: Option<String>,
         #[serde(default)]
         tags: Option<Vec<String>>,
+        #[serde(default, deserialize_with = "deserialize_optional_non_null_string")]
+        operation_id: Option<String>,
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -705,6 +853,7 @@ mod node_create {
         pub(super) summary: Option<String>,
         pub(super) info: Option<String>,
         pub(super) tags: Vec<String>,
+        pub(super) operation_id: Option<String>,
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -712,6 +861,7 @@ mod node_create {
         MissingOrEmptyField(&'static str),
         FieldTooLong { field: &'static str, max: usize },
         InvalidCoordinate { field: &'static str },
+        InvalidUuid { field: &'static str, value: String },
         TooManyTags { max: usize },
     }
 
@@ -802,6 +952,20 @@ mod node_create {
                 validated_tags.push(tag);
             }
 
+            let operation_id = match self.operation_id {
+                Some(value) => {
+                    require_non_blank("operation_id", &value)?;
+                    let parsed = Uuid::parse_str(&value).map_err(|_| {
+                        NodeCreateValidationError::InvalidUuid {
+                            field: "operation_id",
+                            value: value.clone(),
+                        }
+                    })?;
+                    Some(parsed.to_string())
+                }
+                None => None,
+            };
+
             Ok(ValidatedCreateNode {
                 title,
                 kind,
@@ -811,6 +975,7 @@ mod node_create {
                 summary,
                 info,
                 tags: validated_tags,
+                operation_id,
             })
         }
     }
@@ -831,6 +996,7 @@ mod node_create {
                 summary: None,
                 info: None,
                 tags: None,
+                operation_id: None,
             }
         }
 

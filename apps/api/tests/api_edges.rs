@@ -665,6 +665,84 @@ async fn post_edges_creates_edge_in_jsonl_mode() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn post_edges_replays_same_operation_without_second_write() -> Result<()> {
+    const OPERATION_ID: &str = "20000000-0000-0000-0000-000000000001";
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    fs::create_dir_all(&in_dir)?;
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, _initial_state) =
+        app_with_session(Role::Weber, DomainReadSource::Jsonl).await?;
+    let request_body = format!(
+        r#"{{"source_id":"{CREATE_SOURCE_ID}","source_type":"node","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference","operation_id":"{OPERATION_ID}"}}"#
+    );
+
+    let first_attempt = app
+        .clone()
+        .oneshot(post_edges(Some(&cookie), &request_body));
+    let second_attempt = app
+        .clone()
+        .oneshot(post_edges(Some(&cookie), &request_body));
+    let (first, second) = tokio::join!(first_attempt, second_attempt);
+    let first = first?;
+    let second = second?;
+    let first_status = first.status();
+    let second_status = second.status();
+    assert!(
+        (first_status == StatusCode::CREATED && second_status == StatusCode::OK)
+            || (first_status == StatusCode::OK && second_status == StatusCode::CREATED),
+        "parallel retries must produce one 201 and one 200, got {first_status} and {second_status}"
+    );
+    let first_edge = read_json_body(first).await?;
+    let second_edge = read_json_body(second).await?;
+    assert_eq!(first_edge["id"], second_edge["id"]);
+
+    let (restarted_app, restarted_cookie, restarted_state) =
+        app_with_session(Role::Weber, DomainReadSource::Jsonl).await?;
+    let replay = restarted_app
+        .clone()
+        .oneshot(post_edges(Some(&restarted_cookie), &request_body))
+        .await?;
+    assert_eq!(replay.status(), StatusCode::OK);
+    let replay_edge = read_json_body(replay).await?;
+    assert_eq!(replay_edge["id"], first_edge["id"]);
+    assert!(replay_edge.get("operation_id").is_none());
+    assert!(replay_edge.get("_create_operation_id").is_none());
+
+    let records = jsonl_lines(&edges_path);
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0]["_create_operation_id"], OPERATION_ID);
+    assert_eq!(restarted_state.edges.read().await.len(), 1);
+
+    let changed_body = format!(
+        r#"{{"source_id":"{CREATE_SOURCE_ID}","source_type":"node","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference","note":"different","operation_id":"{OPERATION_ID}"}}"#
+    );
+    let conflict = restarted_app
+        .oneshot(post_edges(Some(&restarted_cookie), &changed_body))
+        .await?;
+    assert_eq!(conflict.status(), StatusCode::CONFLICT);
+    assert_eq!(jsonl_lines(&edges_path).len(), 1);
+
+    let (other_app, other_cookie, _other_state) = app_with_session_for_account(
+        "writer2",
+        Role::Weber,
+        DomainReadSource::Jsonl,
+        weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
+    )
+    .await?;
+    let other = other_app
+        .oneshot(post_edges(Some(&other_cookie), &changed_body))
+        .await?;
+    assert_eq!(other.status(), StatusCode::CREATED);
+    assert_eq!(jsonl_lines(&edges_path).len(), 2);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn post_edges_accepts_client_uuid_id() -> Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
@@ -774,6 +852,23 @@ async fn post_edges_rejects_invalid_uuid() -> Result<()> {
     assert!(!edges_path.exists(), "rejected create must not write JSONL");
     assert_eq!(state.edges.read().await.len(), 0);
 
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn post_edges_rejects_invalid_operation_uuid() -> Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, state) = app_with_session(Role::Weber, DomainReadSource::Jsonl).await?;
+    let body_json = format!(
+        r#"{{"source_id":"{CREATE_SOURCE_ID}","source_type":"node","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference","operation_id":"not-a-uuid"}}"#
+    );
+    let res = app.oneshot(post_edges(Some(&cookie), &body_json)).await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(state.edges.read().await.is_empty());
     Ok(())
 }
 

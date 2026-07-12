@@ -88,6 +88,28 @@ fn payload_str(keys: &[&str], source: &serde_json::Value) -> String {
     serde_json::to_string(&serde_json::Value::Object(m)).unwrap_or_else(|_| "{}".to_string())
 }
 
+fn create_operation_metadata(
+    source: &serde_json::Value,
+) -> Result<(Option<String>, Option<String>), ()> {
+    let actor = source.get("_create_actor_id");
+    let operation = source.get("_create_operation_id");
+    match (actor, operation) {
+        (None, None) => Ok((None, None)),
+        (Some(actor), Some(operation)) => {
+            let actor = actor
+                .as_str()
+                .filter(|value| !value.trim().is_empty())
+                .ok_or(())?;
+            let operation = operation
+                .as_str()
+                .and_then(|value| uuid::Uuid::parse_str(value).ok())
+                .ok_or(())?;
+            Ok((Some(actor.to_string()), Some(operation.to_string())))
+        }
+        _ => Err(()),
+    }
+}
+
 // ── Import functions ──────────────────────────────────────────────────────────
 
 /// Import JSONL content into domain_nodes.
@@ -145,6 +167,13 @@ async fn import_nodes(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
         let created_at = v.get("created_at").map(parse_ts).unwrap_or(None);
         let updated_at = v.get("updated_at").map(parse_ts).unwrap_or(None);
         let payload = payload_str(&["summary", "info", "tags"], &v);
+        let (create_actor_id, create_operation_id) = match create_operation_metadata(&v) {
+            Ok(metadata) => metadata,
+            Err(()) => {
+                report.skipped_records += 1;
+                continue;
+            }
+        };
 
         let (already_exists,): (bool,) =
             sqlx::query_as("SELECT EXISTS(SELECT 1 FROM domain_nodes WHERE id = $1)")
@@ -155,16 +184,19 @@ async fn import_nodes(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
 
         sqlx::query(
             "INSERT INTO domain_nodes
-                 (id, kind, title, lat, lon, created_at, updated_at, payload)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+                 (id, kind, title, lat, lon, created_at, updated_at, payload,
+                  create_actor_id, create_operation_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
              ON CONFLICT (id) DO UPDATE SET
-                 kind       = EXCLUDED.kind,
-                 title      = EXCLUDED.title,
-                 lat        = EXCLUDED.lat,
-                 lon        = EXCLUDED.lon,
-                 created_at = EXCLUDED.created_at,
-                 updated_at = EXCLUDED.updated_at,
-                 payload    = EXCLUDED.payload",
+                 kind                = EXCLUDED.kind,
+                 title               = EXCLUDED.title,
+                 lat                 = EXCLUDED.lat,
+                 lon                 = EXCLUDED.lon,
+                 created_at          = EXCLUDED.created_at,
+                 updated_at          = EXCLUDED.updated_at,
+                 payload             = EXCLUDED.payload,
+                 create_actor_id     = EXCLUDED.create_actor_id,
+                 create_operation_id = EXCLUDED.create_operation_id",
         )
         .bind(&id)
         .bind(&kind)
@@ -174,6 +206,8 @@ async fn import_nodes(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
         .bind(created_at)
         .bind(updated_at)
         .bind(&payload)
+        .bind(create_actor_id.as_deref())
+        .bind(create_operation_id.as_deref())
         .execute(pool)
         .await
         .unwrap_or_else(|e| panic!("failed to upsert node {id}: {e}"));
@@ -248,6 +282,13 @@ async fn import_edges(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
 
         let created_at = v.get("created_at").map(parse_ts).unwrap_or(None);
         let payload = payload_str(&["source_type", "target_type", "note"], &v);
+        let (create_actor_id, create_operation_id) = match create_operation_metadata(&v) {
+            Ok(metadata) => metadata,
+            Err(()) => {
+                report.skipped_records += 1;
+                continue;
+            }
+        };
 
         let (already_exists,): (bool,) =
             sqlx::query_as("SELECT EXISTS(SELECT 1 FROM domain_edges WHERE id = $1)")
@@ -258,14 +299,17 @@ async fn import_edges(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
 
         sqlx::query(
             "INSERT INTO domain_edges
-                 (id, source_id, target_id, edge_kind, created_at, payload)
-             VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+                 (id, source_id, target_id, edge_kind, created_at, payload,
+                  create_actor_id, create_operation_id)
+             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
              ON CONFLICT (id) DO UPDATE SET
-                 source_id  = EXCLUDED.source_id,
-                 target_id  = EXCLUDED.target_id,
-                 edge_kind  = EXCLUDED.edge_kind,
-                 created_at = EXCLUDED.created_at,
-                 payload    = EXCLUDED.payload",
+                 source_id           = EXCLUDED.source_id,
+                 target_id           = EXCLUDED.target_id,
+                 edge_kind           = EXCLUDED.edge_kind,
+                 created_at          = EXCLUDED.created_at,
+                 payload             = EXCLUDED.payload,
+                 create_actor_id     = EXCLUDED.create_actor_id,
+                 create_operation_id = EXCLUDED.create_operation_id",
         )
         .bind(&id)
         .bind(&source_id)
@@ -273,6 +317,8 @@ async fn import_edges(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
         .bind(&edge_kind)
         .bind(created_at)
         .bind(&payload)
+        .bind(create_actor_id.as_deref())
+        .bind(create_operation_id.as_deref())
         .execute(pool)
         .await
         .unwrap_or_else(|e| panic!("failed to upsert edge {id}: {e}"));
@@ -446,13 +492,13 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const NODE_FIXTURE: &str = r#"
-{"id":"backfill-proof-node-alpha","kind":"Ort","title":"Alpha Node","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","location":{"lat":53.5,"lon":10.0},"summary":"Alpha summary","tags":["tag-a"]}
+{"id":"backfill-proof-node-alpha","kind":"Ort","title":"Alpha Node","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","location":{"lat":53.5,"lon":10.0},"summary":"Alpha summary","tags":["tag-a"],"_create_actor_id":"backfill-actor-node","_create_operation_id":"70000000-0000-0000-0000-000000000001"}
 {"id":"backfill-proof-node-beta","kind":"Person","title":"Beta Node","created_at":"2026-02-01T00:00:00Z","updated_at":"2026-02-02T00:00:00Z","location":{"lat":48.1,"lon":11.6},"info":"Beta info"}
 {"id":"backfill-proof-node-gamma","kind":"Unknown","title":"Gamma Node","location":{"lat":52.5,"lon":13.4}}
 "#;
 
 const EDGE_FIXTURE: &str = r#"
-{"id":"backfill-proof-edge-alpha","source_id":"backfill-proof-node-alpha","target_id":"backfill-proof-node-beta","edge_kind":"knows","created_at":"2026-01-15T00:00:00Z","note":"Test note"}
+{"id":"backfill-proof-edge-alpha","source_id":"backfill-proof-node-alpha","target_id":"backfill-proof-node-beta","edge_kind":"knows","created_at":"2026-01-15T00:00:00Z","note":"Test note","_create_actor_id":"backfill-actor-edge","_create_operation_id":"80000000-0000-0000-0000-000000000001"}
 {"id":"backfill-proof-edge-beta","source_id":"backfill-proof-node-beta","target_id":"backfill-proof-node-gamma","edge_kind":"related"}
 "#;
 
@@ -465,6 +511,7 @@ const MALFORMED_NODE_FIXTURE: &str = r#"
 {"id":"backfill-proof-node-valid-1","kind":"Test","title":"Valid One","location":{"lat":50.0,"lon":9.0}}
 not valid json at all {{{
 {"id":"backfill-proof-node-valid-2","kind":"Test","title":"Valid Two","location":{"lat":51.0,"lon":9.0}}
+{"id":"backfill-proof-node-invalid-operation","kind":"Test","title":"Invalid Operation","location":{"lat":51.5,"lon":9.5},"_create_actor_id":"actor-without-operation"}
 "#;
 
 const DUPLICATE_ID_NODE_FIXTURE: &str = r#"
@@ -519,6 +566,33 @@ async fn domain_backfill_nodes_deterministic_and_idempotent() {
             .expect("node alpha must exist after import");
     assert_eq!(kind, "Ort");
     assert_eq!(title, "Alpha Node");
+
+    let (actor, operation, payload_actor, payload_operation): (
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ) = sqlx::query_as(
+        r#"
+        SELECT create_actor_id,
+               create_operation_id,
+               payload->>'_create_actor_id',
+               payload->>'_create_operation_id'
+        FROM domain_nodes
+        WHERE id = $1
+        "#,
+    )
+    .bind("backfill-proof-node-alpha")
+    .fetch_one(&pool)
+    .await
+    .expect("node operation metadata must be readable");
+    assert_eq!(actor.as_deref(), Some("backfill-actor-node"));
+    assert_eq!(
+        operation.as_deref(),
+        Some("70000000-0000-0000-0000-000000000001")
+    );
+    assert!(payload_actor.is_none());
+    assert!(payload_operation.is_none());
 
     let (lat, lon): (Option<f64>, Option<f64>) =
         sqlx::query_as("SELECT lat, lon FROM domain_nodes WHERE id = $1")
@@ -616,6 +690,32 @@ async fn domain_backfill_edges_deterministic_and_idempotent() {
         Some("Test note"),
         "note must be preserved in payload jsonb"
     );
+    let (actor, operation, payload_actor, payload_operation): (
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ) = sqlx::query_as(
+        r#"
+        SELECT create_actor_id,
+               create_operation_id,
+               payload->>'_create_actor_id',
+               payload->>'_create_operation_id'
+        FROM domain_edges
+        WHERE id = $1
+        "#,
+    )
+    .bind("backfill-proof-edge-alpha")
+    .fetch_one(&pool)
+    .await
+    .expect("edge operation metadata must be readable");
+    assert_eq!(actor.as_deref(), Some("backfill-actor-edge"));
+    assert_eq!(
+        operation.as_deref(),
+        Some("80000000-0000-0000-0000-000000000001")
+    );
+    assert!(payload_actor.is_none());
+    assert!(payload_operation.is_none());
 
     // Second import (idempotency)
     let r2 = import_edges(&pool, EDGE_FIXTURE).await;
@@ -758,8 +858,14 @@ async fn domain_backfill_malformed_lines_quarantined() {
     run_migrations(&pool).await;
 
     sqlx::query(
-        "DELETE FROM domain_nodes WHERE id IN \
-         ('backfill-proof-node-valid-1', 'backfill-proof-node-valid-2')",
+        r#"
+        DELETE FROM domain_nodes
+        WHERE id IN (
+            'backfill-proof-node-valid-1',
+            'backfill-proof-node-valid-2',
+            'backfill-proof-node-invalid-operation'
+        )
+        "#,
     )
     .execute(&pool)
     .await
@@ -767,18 +873,19 @@ async fn domain_backfill_malformed_lines_quarantined() {
 
     let r = import_nodes(&pool, MALFORMED_NODE_FIXTURE).await;
 
-    // 3 non-empty lines total: 2 valid JSON, 1 malformed
-    assert_eq!(r.records_read, 3, "must count all non-empty lines");
+    // 4 non-empty lines: 2 valid records, 1 malformed JSON line and one
+    // structurally invalid half-populated operation pair.
+    assert_eq!(r.records_read, 4, "must count all non-empty lines");
     assert_eq!(
         r.malformed_json_lines, 1,
         "exactly one malformed line must be quarantined"
     );
     assert_eq!(r.records_inserted, 2, "two valid records must be imported");
-    assert_eq!(r.skipped_records, 0);
+    assert_eq!(r.skipped_records, 1);
 
     let (count,): (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM domain_nodes WHERE id IN \
-         ('backfill-proof-node-valid-1', 'backfill-proof-node-valid-2')",
+         ('backfill-proof-node-valid-1', 'backfill-proof-node-valid-2',           'backfill-proof-node-invalid-operation')",
     )
     .fetch_one(&pool)
     .await

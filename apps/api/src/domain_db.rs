@@ -23,6 +23,23 @@ use crate::state::OrderedCache;
 
 const DEFAULT_TIMESTAMP: &str = "1970-01-01T00:00:00Z";
 
+/// One client-generated create operation, scoped to the authenticated account.
+/// Resource ids and timestamps remain server-owned; this key only identifies a
+/// retry of the same user action.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateOperationKey {
+    pub actor_id: String,
+    pub operation_id: String,
+}
+
+/// Durable create result. `Existing` means the operation key was already
+/// committed; the route still verifies that the semantic request is identical.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CreateWriteOutcome<T> {
+    Created,
+    Existing(T),
+}
+
 type NodeRow = (
     String,
     String,
@@ -526,6 +543,21 @@ fn node_from_row(row: NodeRow) -> Result<Node, anyhow::Error> {
     })
 }
 
+fn edge_from_row(row: EdgeRow) -> Result<Edge, anyhow::Error> {
+    let (id, source_id, target_id, edge_kind, created_at, payload_text) = row;
+    let payload = parse_payload(&payload_text);
+    Ok(Edge {
+        id,
+        source_id,
+        source_type: payload_string(&payload, "source_type"),
+        target_id,
+        target_type: payload_string(&payload, "target_type"),
+        edge_kind,
+        note: payload_string(&payload, "note"),
+        created_at: created_at.map(|t| t.to_rfc3339()),
+    })
+}
+
 /// Apply a patch to one `domain_nodes` row inside a transaction.
 ///
 /// Semantics:
@@ -649,6 +681,8 @@ pub async fn patch_node_in_postgres(
 pub enum NodeCreateError {
     #[error("node id already exists")]
     DuplicateId,
+    #[error("failed to map existing node row: {0}")]
+    Mapping(#[source] anyhow::Error),
     #[error("failed to serialize node payload: {0}")]
     Serialization(#[source] serde_json::Error),
     #[error("invalid server-generated node timestamp: {0}")]
@@ -665,7 +699,11 @@ pub enum NodeCreateError {
 /// writers without adding correctness.
 ///
 /// This function performs no in-memory mutation and writes no JSONL.
-pub async fn insert_domain_node(pool: &PgPool, node: &Node) -> Result<(), NodeCreateError> {
+pub async fn insert_domain_node(
+    pool: &PgPool,
+    node: &Node,
+    operation: Option<&CreateOperationKey>,
+) -> Result<CreateWriteOutcome<Node>, NodeCreateError> {
     let mut payload_map = Map::new();
     if let Some(summary) = &node.summary {
         payload_map.insert("summary".to_string(), json!(summary));
@@ -693,9 +731,41 @@ pub async fn insert_domain_node(pool: &PgPool, node: &Node) -> Result<(), NodeCr
 
     let mut tx = pool.begin().await.map_err(NodeCreateError::Database)?;
 
+    if let Some(operation) = operation {
+        sqlx::query(
+            "SELECT pg_advisory_xact_lock(\
+                 hashtextextended($1, hashtextextended($2, 0))\
+             )",
+        )
+        .bind(&operation.actor_id)
+        .bind(&operation.operation_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(NodeCreateError::Database)?;
+
+        let existing: Option<NodeRow> = sqlx::query_as(
+            "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text \
+             FROM domain_nodes \
+             WHERE create_actor_id = $1 AND create_operation_id = $2",
+        )
+        .bind(&operation.actor_id)
+        .bind(&operation.operation_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(NodeCreateError::Database)?;
+
+        if let Some(row) = existing {
+            let existing = node_from_row(row).map_err(NodeCreateError::Mapping)?;
+            tx.commit().await.map_err(NodeCreateError::Database)?;
+            return Ok(CreateWriteOutcome::Existing(existing));
+        }
+    }
+
     let result = sqlx::query(
-        "INSERT INTO domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)",
+        "INSERT INTO domain_nodes \
+            (id, kind, title, lat, lon, created_at, updated_at, payload, \
+             create_actor_id, create_operation_id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)",
     )
     .bind(&node.id)
     .bind(&node.kind)
@@ -705,16 +775,35 @@ pub async fn insert_domain_node(pool: &PgPool, node: &Node) -> Result<(), NodeCr
     .bind(created_at)
     .bind(updated_at)
     .bind(&payload)
+    .bind(operation.map(|value| value.actor_id.as_str()))
+    .bind(operation.map(|value| value.operation_id.as_str()))
     .execute(&mut *tx)
     .await;
 
     match result {
         Ok(_) => {
             tx.commit().await.map_err(NodeCreateError::Database)?;
-            Ok(())
+            Ok(CreateWriteOutcome::Created)
         }
         Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
             tx.rollback().await.ok();
+            if let Some(operation) = operation {
+                let existing: Option<NodeRow> = sqlx::query_as(
+                    "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text \
+                     FROM domain_nodes \
+                     WHERE create_actor_id = $1 AND create_operation_id = $2",
+                )
+                .bind(&operation.actor_id)
+                .bind(&operation.operation_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(NodeCreateError::Database)?;
+                if let Some(row) = existing {
+                    return node_from_row(row)
+                        .map(CreateWriteOutcome::Existing)
+                        .map_err(NodeCreateError::Mapping);
+                }
+            }
             Err(NodeCreateError::DuplicateId)
         }
         Err(e) => {
@@ -1363,15 +1452,37 @@ pub enum EdgeWriteError {
 pub async fn insert_domain_edge(
     pool: &PgPool,
     edge: &crate::routes::edges::Edge,
-) -> Result<(), EdgeWriteError> {
+    operation: Option<&CreateOperationKey>,
+) -> Result<CreateWriteOutcome<Edge>, EdgeWriteError> {
     let row = NewDomainEdgeRow::from_edge(edge).map_err(EdgeWriteError::Mapping)?;
 
     let mut tx = pool.begin().await.map_err(EdgeWriteError::Database)?;
 
+    // The existing edge path already serializes creates for cache-limit and
+    // duplicate-id semantics. The operation lookup belongs inside the same
+    // transaction so a replay cannot race the first insert.
     sqlx::query("LOCK TABLE domain_edges IN EXCLUSIVE MODE")
         .execute(&mut *tx)
         .await
         .map_err(EdgeWriteError::Database)?;
+
+    if let Some(operation) = operation {
+        let existing: Option<EdgeRow> = sqlx::query_as(
+            "SELECT id, source_id, target_id, edge_kind, created_at, payload::text \
+             FROM domain_edges \
+             WHERE create_actor_id = $1 AND create_operation_id = $2",
+        )
+        .bind(&operation.actor_id)
+        .bind(&operation.operation_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(EdgeWriteError::Database)?;
+        if let Some(row) = existing {
+            let existing = edge_from_row(row).map_err(EdgeWriteError::Mapping)?;
+            tx.commit().await.map_err(EdgeWriteError::Database)?;
+            return Ok(CreateWriteOutcome::Existing(existing));
+        }
+    }
 
     let (exists,): (bool,) =
         sqlx::query_as("SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = $1)")
@@ -1401,9 +1512,10 @@ pub async fn insert_domain_edge(
 
     let result = sqlx::query(
         "INSERT INTO domain_edges \
-            (id, source_id, target_id, edge_kind, created_at, payload) \
+            (id, source_id, target_id, edge_kind, created_at, payload, \
+             create_actor_id, create_operation_id) \
          VALUES \
-            ($1, $2, $3, $4, $5, $6::jsonb)",
+            ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)",
     )
     .bind(&row.id)
     .bind(&row.source_id)
@@ -1411,16 +1523,35 @@ pub async fn insert_domain_edge(
     .bind(&row.edge_kind)
     .bind(row.created_at)
     .bind(&row.payload)
+    .bind(operation.map(|value| value.actor_id.as_str()))
+    .bind(operation.map(|value| value.operation_id.as_str()))
     .execute(&mut *tx)
     .await;
 
     match result {
         Ok(_) => {
             tx.commit().await.map_err(EdgeWriteError::Database)?;
-            Ok(())
+            Ok(CreateWriteOutcome::Created)
         }
         Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
             tx.rollback().await.ok();
+            if let Some(operation) = operation {
+                let existing: Option<EdgeRow> = sqlx::query_as(
+                    "SELECT id, source_id, target_id, edge_kind, created_at, payload::text \
+                     FROM domain_edges \
+                     WHERE create_actor_id = $1 AND create_operation_id = $2",
+                )
+                .bind(&operation.actor_id)
+                .bind(&operation.operation_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(EdgeWriteError::Database)?;
+                if let Some(row) = existing {
+                    return edge_from_row(row)
+                        .map(CreateWriteOutcome::Existing)
+                        .map_err(EdgeWriteError::Mapping);
+                }
+            }
             Err(EdgeWriteError::DuplicateId)
         }
         Err(e) => {

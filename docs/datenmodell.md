@@ -85,9 +85,17 @@ dient nur noch als Rollbackbrücke für den stufenweisen Produktionscutover.
 | `lat`, `lon` | `DOUBLE PRECISION` | optionale Position |
 | `created_at`, `updated_at` | `TIMESTAMPTZ` | Zeitangaben |
 | `payload` | `JSONB` | übrige JSONL-Felder |
+| `create_actor_id`, `create_operation_id` | `TEXT`, nullable | accountgebundene Wiederholungssicherheit für `POST /nodes` |
 
 Es gibt derzeit keine PostGIS-Geometrie. Der Geoindex ist ein einfacher
 B-Tree auf `(lat, lon)`.
+
+`create_actor_id` und `create_operation_id` sind entweder gemeinsam gesetzt
+oder gemeinsam `NULL`. Der Accountwert muss nichtleer und die Vorgangskennung
+eine kanonische UUID sein. Ein partieller Unique-Index erlaubt pro Account nur
+einen Knoten je Vorgangskennung. Die Vorgangskennung ist keine Knoten-ID und
+keine fachliche Duplikaterkennung nach Titel, Adresse oder Koordinaten. Sie
+identifiziert ausschließlich die Wiederholung desselben Speichervorgangs.
 
 ### `domain_edges`
 
@@ -98,10 +106,16 @@ B-Tree auf `(lat, lon)`.
 | `edge_kind` | `TEXT` | Beziehungsart |
 | `created_at` | `TIMESTAMPTZ` | Erstellung |
 | `payload` | `JSONB` | Typinformationen, Notiz und Restfelder |
+| `create_actor_id`, `create_operation_id` | `TEXT`, nullable | accountgebundene Wiederholungssicherheit für `POST /edges` |
 
 Foreign Keys sind bewusst noch nicht gesetzt. Vor einer FK-Entscheidung ist ein
 Orphan- und Referenzaudit erforderlich; bestehende Fäden dürfen nicht
 stillschweigend verworfen werden.
+
+Für Fäden gilt derselbe Vorgangsvertrag wie für Knoten: Account und
+Vorgangskennung sind gemeinsam eindeutig. Ein Wiederholungsversuch mit derselben
+fachlichen Anfrage liefert den bereits gespeicherten Faden; eine Wiederverwendung
+derselben Kennung für andere Daten wird als Konflikt abgewiesen.
 
 ### `passkey_credentials`
 

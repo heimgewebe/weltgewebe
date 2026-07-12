@@ -59,6 +59,7 @@ Der belegte Repository- und Produktionsvertrag nach der Remediation vom
 - PostgreSQL-Read-Path existiert hinter Domain-Read-Konfiguration.
 - PostgreSQL-Write-Paths existieren für:
   - `POST /accounts`
+  - `POST /nodes`
   - `PATCH /nodes`
   - `POST /edges`
 - `APP_CONFIG_PATH` ist fail-closed: eine explizit gesetzte,
@@ -79,14 +80,14 @@ PostgreSQL-Produktionsvertrag.
 
 | Domain | Lokaler Default | Produktionsvertrag | Status |
 |---|---|---|---|
-| nodes | JSONL read/write | PostgreSQL Read + `PATCH /nodes` | Produktionswahrheit laut Repo-Vertrag; Livebeleg separat |
+| nodes | JSONL read/write | PostgreSQL Read + `POST /nodes` + `PATCH /nodes/{id}` | Produktionswahrheit laut Repo-Vertrag; Livebeleg separat |
 | edges | JSONL read/legacy | PostgreSQL Read + `POST /edges` | Produktionswahrheit laut Repo-Vertrag; Edge-Referenzpolitik offen |
 | accounts | JSONL read/create | PostgreSQL Read + `POST /accounts` | Produktionswahrheit laut Repo-Vertrag; weitere Auth-Mutationen offen |
 
 Zusatzdetails:
 
-- `nodes`: Schema/Backfill/Read-Path proof-geführt; opt-in Node-Patch
-  vorhanden; nicht Default.
+- `nodes`: Schema/Backfill/Read-Path proof-geführt; opt-in Node-Create und
+  Node-Patch vorhanden; nicht Default.
 - `edges`: Schema/Backfill/Read-Path proof-geführt; opt-in Edge-Create
   vorhanden; nicht Default.
 - `accounts`: Schema/Backfill/Read-Path proof-geführt; opt-in Account-Create
@@ -100,7 +101,7 @@ Zusatzbefund:
 - Config-Gates müssen explizit gesetzt werden; fehlerhafte `APP_CONFIG_PATH`-Konfigurationen fail-closed.
 - PostgreSQL-Write-Slices sind getrennt implementiert:
   - E-A Account-Create
-  - E-B Node-Patch
+  - E-B Node-Create und Node-Patch
   - E-C Edge-Create
 - Account-Create, Step-up-E-Mail, normalisierte E-Mail-Eindeutigkeit und der
   PostgreSQL-Passkey-Store sind implementiert und datenbankgetestet.
