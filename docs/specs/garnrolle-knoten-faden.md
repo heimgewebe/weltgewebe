@@ -52,7 +52,7 @@ Die Garnrolle kann enthalten:
 - Fähigkeiten, Güter, Interessen und Tags;
 - optional eine interne reale Position;
 - optional eine öffentliche Kartenprojektion;
-- gewobene Knoten und ausgehende Fäden.
+- geknüpfte Knoten und ausgehende Fäden.
 
 Eine Berechtigungsrolle wie `gast`, `weber` oder `admin` regelt technische Rechte. Sie ist nicht die Identität der Person.
 
@@ -89,7 +89,7 @@ Ein Knoten ist ein fachlich fassbares Bündel. Er kann verortet oder ortsunabhä
 - Veranstaltung;
 - Idee, Frage oder Beschlussgegenstand.
 
-Knoten werden aus einer angemeldeten Garnrolle heraus gewoben. Seed- oder Demo-Inhalte dürfen den organischen Produktpfad nicht ersetzen.
+Knoten werden aus einer angemeldeten Garnrolle heraus geknüpft. Seed- oder Demo-Inhalte dürfen den organischen Produktpfad nicht ersetzen.
 
 ## Fäden
 
@@ -126,7 +126,7 @@ Ein Faden ist nicht automatisch ein Gespräch. Gespräche besitzen eigene Entit�
 2. Eigene Garnrolle sehen.
 3. Garnrolle beschreiben.
 4. Garnrolle optional auf die Karte setzen.
-5. Ersten Knoten weben.
+5. Ersten Knoten knüpfen.
 6. Beim Speichern einen passenden Faden erzeugen.
 7. Knoten und Faden nach Neuladen wiederfinden.
 
@@ -134,7 +134,7 @@ Dieser vertikale Schnitt ist der wichtigste Integrationsbeweis. Er muss ohne Dem
 
 ## Produktsprache
 
-Nutzertexte verwenden Garnrolle, Knoten, Faden, weben, Sichtbarkeit und Gesprächsraum. Interne Begriffe wie Account, Node, Edge, Credential, Token oder WebAuthn erscheinen nicht in der Hauptführung.
+Nutzertexte verwenden Garnrolle, Knoten, Faden, knüpfen, weben, Sichtbarkeit und Gesprächsraum. Interne Begriffe wie Account, Node, Edge, Credential, Token oder WebAuthn erscheinen nicht in der Hauptführung.
 
 ## Nicht-Ziele
 

@@ -99,7 +99,7 @@ test.describe("Filter mode", () => {
     );
   });
 
-  test("lists filtered Garnrollen as selectable map hits", async ({ page }) => {
+  test("lists selected Garnrollen as selectable map hits", async ({ page }) => {
     const filterBtn = page.getByRole("button", { name: "Filter", exact: true });
     await filterBtn.click();
 
@@ -147,8 +147,10 @@ test.describe("Filter mode", () => {
     const filterOverlay = page.getByTestId("filter-overlay");
     await expect(filterOverlay).toBeVisible();
 
-    // Filter to ONLY show "Event"
-    const eventLabel = page.locator("label.filter-item", { hasText: "Event" });
+    // Filter to ONLY show "Ereignis"
+    const eventLabel = page.locator("label.filter-item", {
+      hasText: "Ereignis",
+    });
     await eventLabel.click();
 
     // Marker count drops strictly to 1
@@ -166,14 +168,14 @@ test.describe("Filter mode", () => {
     await searchInput.fill("Test Node 2");
     await expect(page.locator(".result-item")).toHaveCount(0);
     await expect(page.getByRole("status")).toHaveText(
-      `Keine Treffer für "Test Node 2"`,
+      `Keine Treffer für „Test Node 2“`,
     );
 
     await searchInput.clear();
     await searchInput.fill("Test Account");
     await expect(page.locator(".result-item")).toHaveCount(0);
     await expect(page.getByRole("status")).toHaveText(
-      `Keine Treffer für "Test Account"`,
+      `Keine Treffer für „Test Account“`,
     );
 
     // Search for included item
@@ -186,7 +188,7 @@ test.describe("Filter mode", () => {
 
     // Case E: Clear Filters resets marker count
     await filterBtn.click();
-    const clearBtn = page.getByRole("button", { name: "Alle löschen" });
+    const clearBtn = page.getByRole("button", { name: "Auswahl zurücksetzen" });
     await clearBtn.click();
     await expect(clearBtn).not.toBeVisible();
     await expect(page.locator(markerSelector)).toHaveCount(3);

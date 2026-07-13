@@ -35,7 +35,7 @@ test.describe("Own Garnrolle discoverability when not_on_map", () => {
     await gotoMapAsAccount(page, NOT_ON_MAP_ACCOUNT_ID);
 
     await page.click(
-      '.garnrolle-container button[aria-label="Kontoeinstellungen"]',
+      '.garnrolle-container button[aria-label="Meine Garnrolle und Konto"]',
     );
     const menu = page.locator(".garnrolle-container .menu");
     await expect(menu).toBeVisible();
@@ -65,7 +65,7 @@ test.describe("Own Garnrolle discoverability when not_on_map", () => {
     await gotoMapAsAccount(page, EXACT_ACCOUNT_ID);
 
     await page.click(
-      '.garnrolle-container button[aria-label="Kontoeinstellungen"]',
+      '.garnrolle-container button[aria-label="Meine Garnrolle und Konto"]',
     );
     const menu = page.locator(".garnrolle-container .menu");
     await expect(menu).toBeVisible();

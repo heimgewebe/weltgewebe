@@ -434,7 +434,7 @@
             <input type="radio" bind:group={visibilityChoice} value="exact" />
             <span>
               <strong>Exakt sichtbar</strong>
-              <small>Der von dir gewählte Kartenpunkt wird öffentlich.</small>
+              <small>Der von dir gewählte Ort wird öffentlich sichtbar.</small>
             </span>
           </label>
           <label class="radio-card">
@@ -453,18 +453,15 @@
           <div class="location-card" data-testid="garnrolle-location-state">
             {#if selectedLocation}
               <div>
-                <strong>Kartenpunkt gewählt</strong>
-                <small>
-                  {selectedLocation.lat.toFixed(5)},
-                  {selectedLocation.lon.toFixed(5)}
-                </small>
+                <strong>Ort gewählt</strong>
+                <small>Die genaue Position ist auf der Karte gesetzt.</small>
               </div>
               <button type="button" class="btn" on:click={chooseMapLocation}>
-                Kartenpunkt ändern
+                Ort ändern
               </button>
             {:else}
               <div>
-                <strong>Noch kein Kartenpunkt gewählt</strong>
+                <strong>Noch kein Ort gewählt</strong>
                 <small>
                   Die Adresse wird nicht automatisch in eine Position
                   umgewandelt. Wähle den passenden Punkt selbst auf der Karte.

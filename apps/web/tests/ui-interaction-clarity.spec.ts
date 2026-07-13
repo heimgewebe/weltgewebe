@@ -16,8 +16,10 @@ test.describe("Interaction Clarity & State Feedback", () => {
     const searchOverlay = page.locator('[data-testid="search-overlay"]');
     await expect(searchOverlay).toBeVisible();
 
-    // Click "Neuer Knoten" while search is open
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    // Click "Knoten knüpfen" while search is open
+    await page
+      .locator('.action-bar button[aria-label="Knoten knüpfen"]')
+      .click();
 
     // Search overlay must be closed
     await expect(searchOverlay).toHaveCount(0);
@@ -25,7 +27,9 @@ test.describe("Interaction Clarity & State Feedback", () => {
     // Context panel must be open in komposition mode
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
-    await expect(panel.locator(".panel-header h2")).toHaveText("Neuer Knoten");
+    await expect(panel.locator(".panel-header h2")).toHaveText(
+      "Knoten knüpfen",
+    );
   });
 
   test("entering komposition closes open filter overlay", async ({ page }) => {
@@ -34,8 +38,10 @@ test.describe("Interaction Clarity & State Feedback", () => {
     const filterOverlay = page.locator('[data-testid="filter-overlay"]');
     await expect(filterOverlay).toBeVisible();
 
-    // Click "Neuer Knoten" while filter is open
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    // Click "Knoten knüpfen" while filter is open
+    await page
+      .locator('.action-bar button[aria-label="Knoten knüpfen"]')
+      .click();
 
     // Filter overlay must be closed
     await expect(filterOverlay).toHaveCount(0);
@@ -45,10 +51,12 @@ test.describe("Interaction Clarity & State Feedback", () => {
     await expect(panel).toBeVisible();
   });
 
-  test("'Neuer Knoten' button shows active state in komposition mode", async ({
+  test("'Knoten knüpfen' button shows active state in komposition mode", async ({
     page,
   }) => {
-    const newNodeBtn = page.locator('button:has-text("Neuer Knoten")');
+    const newNodeBtn = page.locator(
+      '.action-bar button[aria-label="Knoten knüpfen"]',
+    );
 
     // Initially, button should NOT have active class
     await expect(newNodeBtn).not.toHaveClass(/active/);
@@ -68,7 +76,7 @@ test.describe("Interaction Clarity & State Feedback", () => {
   test("Garnrolle menu closes on Escape", async ({ page }) => {
     // The Garnrolle button is in the TopBar
     const garnrolleBtn = page.locator(
-      '.garnrolle-container button[aria-label="Kontoeinstellungen"]',
+      '.garnrolle-container button[aria-label="Meine Garnrolle und Konto"]',
     );
     await expect(garnrolleBtn).toBeVisible();
 
@@ -92,13 +100,15 @@ test.describe("Interaction Clarity & State Feedback", () => {
     page,
   }) => {
     // Open context panel first (komposition mode)
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    await page
+      .locator('.action-bar button[aria-label="Knoten knüpfen"]')
+      .click();
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
 
     // Open Garnrolle menu
     const garnrolleBtn = page.locator(
-      '.garnrolle-container button[aria-label="Kontoeinstellungen"]',
+      '.garnrolle-container button[aria-label="Meine Garnrolle und Konto"]',
     );
     await garnrolleBtn.click();
     const menu = page.locator(".garnrolle-container .menu");
@@ -120,7 +130,7 @@ test.describe("Interaction Clarity & State Feedback", () => {
 
     // Open Garnrolle menu while search is open
     const garnrolleBtn = page.locator(
-      '.garnrolle-container button[aria-label="Kontoeinstellungen"]',
+      '.garnrolle-container button[aria-label="Meine Garnrolle und Konto"]',
     );
     await garnrolleBtn.click();
     const menu = page.locator(".garnrolle-container .menu");
@@ -142,7 +152,7 @@ test.describe("Interaction Clarity & State Feedback", () => {
 
     // Open Garnrolle menu while filter is open
     const garnrolleBtn = page.locator(
-      '.garnrolle-container button[aria-label="Kontoeinstellungen"]',
+      '.garnrolle-container button[aria-label="Meine Garnrolle und Konto"]',
     );
     await garnrolleBtn.click();
     const menu = page.locator(".garnrolle-container .menu");
@@ -164,8 +174,10 @@ test.describe("Interaction Clarity & State Feedback", () => {
     const searchOverlay = page.locator('[data-testid="search-overlay"]');
     await expect(searchOverlay).toBeVisible();
 
-    // Click "Neuer Knoten" — suppressNextRestore should prevent focus restore
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    // Click "Knoten knüpfen" — suppressNextRestore should prevent focus restore
+    await page
+      .locator('.action-bar button[aria-label="Knoten knüpfen"]')
+      .click();
     await expect(searchOverlay).toHaveCount(0);
 
     // Focus must NOT be on the Search button
@@ -182,8 +194,10 @@ test.describe("Interaction Clarity & State Feedback", () => {
     const filterOverlay = page.locator('[data-testid="filter-overlay"]');
     await expect(filterOverlay).toBeVisible();
 
-    // Click "Neuer Knoten" — suppressNextRestore should prevent focus restore
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    // Click "Knoten knüpfen" — suppressNextRestore should prevent focus restore
+    await page
+      .locator('.action-bar button[aria-label="Knoten knüpfen"]')
+      .click();
     await expect(filterOverlay).toHaveCount(0);
 
     // Focus must NOT be on the Filter button
