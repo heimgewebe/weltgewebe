@@ -73,95 +73,19 @@ test.describe("Interaction Clarity & State Feedback", () => {
     await expect(newNodeBtn).not.toHaveClass(/active/);
   });
 
-  test("Garnrolle menu closes on Escape", async ({ page }) => {
-    // The Garnrolle button is in the TopBar
-    const garnrolleBtn = page.locator(
-      '.garnrolle-container button[aria-label="Meine Garnrolle und Konto"]',
-    );
-    await expect(garnrolleBtn).toBeVisible();
-
-    // Open menu
-    await garnrolleBtn.click();
-    await expect(garnrolleBtn).toHaveAttribute("aria-expanded", "true");
-
-    // Verify menu is visible
-    const menu = page.locator(".garnrolle-container .menu");
-    await expect(menu).toBeVisible();
-
-    // Press Escape
-    await page.keyboard.press("Escape");
-
-    // Menu must be closed
-    await expect(menu).toHaveCount(0);
-    await expect(garnrolleBtn).toHaveAttribute("aria-expanded", "false");
-  });
-
-  test("Escape on Garnrolle menu does NOT close ContextPanel", async ({
+  test("Garnrolle führt ohne Zwischenmenü direkt zu ihren Einstellungen", async ({
     page,
   }) => {
-    // Open context panel first (komposition mode)
-    await page
-      .locator('.action-bar button[aria-label="Knoten knüpfen"]')
-      .click();
-    const panel = page.locator('[data-testid="context-panel"]');
-    await expect(panel).toBeVisible();
-
-    // Open Garnrolle menu
-    const garnrolleBtn = page.locator(
-      '.garnrolle-container button[aria-label="Meine Garnrolle und Konto"]',
+    const garnrolleLink = page.locator(
+      '.garnrolle-container a[aria-label="Meine Garnrolle einstellen"]',
     );
-    await garnrolleBtn.click();
-    const menu = page.locator(".garnrolle-container .menu");
-    await expect(menu).toBeVisible();
 
-    // Press Escape should close menu only, not the panel
-    await page.keyboard.press("Escape");
-    await expect(menu).toHaveCount(0);
-    await expect(panel).toBeVisible(); // panel must remain open
-  });
-
-  test("Escape on Garnrolle menu does NOT close SearchOverlay", async ({
-    page,
-  }) => {
-    // Open search overlay
-    await page.locator('.action-bar button[aria-label="Suche"]').click();
-    const searchOverlay = page.locator('[data-testid="search-overlay"]');
-    await expect(searchOverlay).toBeVisible();
-
-    // Open Garnrolle menu while search is open
-    const garnrolleBtn = page.locator(
-      '.garnrolle-container button[aria-label="Meine Garnrolle und Konto"]',
+    await expect(garnrolleLink).toBeVisible();
+    await expect(garnrolleLink).toHaveAttribute(
+      "href",
+      "/settings#meine-garnrolle",
     );
-    await garnrolleBtn.click();
-    const menu = page.locator(".garnrolle-container .menu");
-    await expect(menu).toBeVisible();
-
-    // Press Escape: Garnrolle menu closes, search stays open
-    await page.keyboard.press("Escape");
-    await expect(menu).toHaveCount(0);
-    await expect(searchOverlay).toBeVisible();
-  });
-
-  test("Escape on Garnrolle menu does NOT close FilterOverlay", async ({
-    page,
-  }) => {
-    // Open filter overlay
-    await page.locator('.action-bar button[aria-label="Filter"]').click();
-    const filterOverlay = page.locator('[data-testid="filter-overlay"]');
-    await expect(filterOverlay).toBeVisible();
-
-    // Open Garnrolle menu while filter is open
-    const garnrolleBtn = page.locator(
-      '.garnrolle-container button[aria-label="Meine Garnrolle und Konto"]',
-    );
-    await garnrolleBtn.click();
-    const menu = page.locator(".garnrolle-container .menu");
-    await expect(menu).toBeVisible();
-
-    // Press Escape: Garnrolle menu closes, filter stays open
-    await page.keyboard.press("Escape");
-    await expect(menu).toHaveCount(0);
-    await expect(filterOverlay).toBeVisible();
+    await expect(page.locator(".garnrolle-container .menu")).toHaveCount(0);
   });
 
   test("focus does not return to Search button when entering komposition", async ({
