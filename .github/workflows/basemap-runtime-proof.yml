@@ -577,13 +577,16 @@ jobs:
             /tmp/schleswig-holstein-proof.txt
             /tmp/schleswig-holstein-caddy.log
             /tmp/schleswig-holstein-magic.txt
+            build/basemap/basemap-schleswig-holstein-v0.1.0.pmtiles
             build/basemap/basemap-schleswig-holstein-v0.1.0.meta.json
           if-no-files-found: warn
           retention-days: 14
 
   basemap-visual-proof:
     name: basemap-visual-proof
-    needs: [basemap-pmtiles-content-proof]
+    needs:
+      - basemap-pmtiles-content-proof
+      - basemap-schleswig-holstein-content-proof
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -615,36 +618,48 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
         working-directory: apps/web
 
-      - name: Download reusable PMTiles artefact from content proof
+      - name: Download Hamburg PMTiles artefact from content proof
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # tag: v8
         with:
           name: basemap-visual-proof-input
-          path: /tmp/basemap-visual-proof-input
+          path: /tmp/basemap-visual-proof-input/hamburg
 
-      - name: Materialize PMTiles artefact for visual proof
+      - name: Download Schleswig-Holstein PMTiles artefact from content proof
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # tag: v8
+        with:
+          name: basemap-schleswig-holstein-content-proof-evidence
+          path: /tmp/basemap-visual-proof-input/schleswig-holstein
+
+      - name: Materialize regional PMTiles artefacts for visual proof
         run: |
           set -euo pipefail
           mkdir -p build/basemap
-          ARTEFACT_SRC="$(find /tmp/basemap-visual-proof-input -type f \
-            -name 'basemap-hamburg-v0.1.0.pmtiles' | head -n 1)"
-          META_SRC="$(find /tmp/basemap-visual-proof-input -type f \
-            -name 'basemap-hamburg-v0.1.0.meta.json' | head -n 1)"
-          test -n "${ARTEFACT_SRC}"
-          test -n "${META_SRC}"
-          cp "${ARTEFACT_SRC}" build/basemap/basemap-hamburg-v0.1.0.pmtiles
-          cp "${META_SRC}" build/basemap/basemap-hamburg-v0.1.0.meta.json
-          test -s build/basemap/basemap-hamburg-v0.1.0.pmtiles
-          test -s build/basemap/basemap-hamburg-v0.1.0.meta.json
+          for region in hamburg schleswig-holstein; do
+            artefact="basemap-${region}-v0.1.0.pmtiles"
+            metadata="basemap-${region}-v0.1.0.meta.json"
+            artefact_src="$(find /tmp/basemap-visual-proof-input -type f \
+              -name "${artefact}" | head -n 1)"
+            metadata_src="$(find /tmp/basemap-visual-proof-input -type f \
+              -name "${metadata}" | head -n 1)"
+            test -n "${artefact_src}"
+            test -n "${metadata_src}"
+            cp "${artefact_src}" "build/basemap/${artefact}"
+            cp "${metadata_src}" "build/basemap/${metadata}"
+            test -s "build/basemap/${artefact}"
+            test -s "build/basemap/${metadata}"
+          done
 
-      - name: Publish basemap (create stable alias basemap-hamburg.pmtiles)
+      - name: Publish regional basemaps with stable aliases
         run: |
           set -euo pipefail
-          bash scripts/basemap/publish-basemap.sh \
-            build/basemap/basemap-hamburg-v0.1.0.pmtiles \
-            build/basemap/basemap-hamburg-v0.1.0.meta.json \
-            build/basemap/
-          test -e build/basemap/basemap-hamburg.pmtiles
-          printf 'Alias verified: build/basemap/basemap-hamburg.pmtiles\n'
+          for region in hamburg schleswig-holstein; do
+            bash scripts/basemap/publish-basemap.sh \
+              "build/basemap/basemap-${region}-v0.1.0.pmtiles" \
+              "build/basemap/basemap-${region}-v0.1.0.meta.json" \
+              build/basemap/
+            test -e "build/basemap/basemap-${region}.pmtiles"
+            printf 'Alias verified: build/basemap/basemap-%s.pmtiles\n' "${region}"
+          done
           ls -la build/basemap/
 
       - name: Run Playwright visual basemap proof
@@ -700,7 +715,7 @@ jobs:
               _msg="${_msg} HTTP 206 Range delivery confirmed, zero remote violations"
               printf '%s\n\n' "${_msg}" >> "${GITHUB_STEP_SUMMARY}"
               printf '%s\n\n' \
-                'Chain: Browser → Vite middleware → basemap-hamburg.pmtiles → HTTP 206 → MapLibre rendered' \
+                'Chain: Browser → Vite → regional PMTiles → HTTP 206 → MapLibre rendered' \
                 >> "${GITHUB_STEP_SUMMARY}"
             else
               printf '%s\n\n' \

@@ -76,6 +76,31 @@ class RegionalBasemapStyleTest(unittest.TestCase):
         self.assertIn('"${META_PATH}"', workflow)
         self.assertNotIn('META_PATH="build/basemap/"', workflow)
 
+    def test_visual_proof_materializes_both_regional_sources(self) -> None:
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        visual_job = workflow[workflow.index("  basemap-visual-proof:") :]
+
+        self.assertIn(
+            "      - basemap-schleswig-holstein-content-proof",
+            visual_job,
+        )
+        self.assertIn(
+            "name: basemap-schleswig-holstein-content-proof-evidence",
+            visual_job,
+        )
+        self.assertIn(
+            "for region in hamburg schleswig-holstein; do",
+            visual_job,
+        )
+        self.assertIn(
+            '"build/basemap/basemap-${region}-v0.1.0.pmtiles"',
+            visual_job,
+        )
+        self.assertIn(
+            "build/basemap/basemap-schleswig-holstein-v0.1.0.pmtiles",
+            workflow[: workflow.index("  basemap-visual-proof:")],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
