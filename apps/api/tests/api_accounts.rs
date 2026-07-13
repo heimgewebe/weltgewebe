@@ -17,8 +17,10 @@ use weltgewebe_api::{
     routes::{
         accounts::{AccountInternal, AccountPublic},
         api_router,
+        edges::Edge,
+        nodes::{Location as NodeLocation, Node},
     },
-    state::ApiState,
+    state::{ApiState, OrderedCache},
     telemetry::{BuildInfo, Metrics},
 };
 
@@ -421,6 +423,93 @@ async fn accounts_cursor_limit_zero_is_bad_request() -> Result<()> {
     let req = Request::get("/accounts?pagination=cursor&limit=0").body(body::Body::empty())?;
     let res = app.oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn account_details_project_connected_nodes_and_activity() -> Result<()> {
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+    let mut account = seed_account("account-1");
+    account.public.title = "Alexander Mohr".to_string();
+    account.public.summary = Some("schaunmermal".to_string());
+    accounts.insert(account);
+    state.accounts = Arc::new(RwLock::new(accounts));
+
+    let mut nodes = OrderedCache::new();
+    nodes.insert(
+        "node-1".to_string(),
+        Node {
+            id: "node-1".to_string(),
+            kind: "resource".to_string(),
+            title: "fairschenkbox".to_string(),
+            created_at: "2026-07-11T11:11:50.289607+00:00".to_string(),
+            updated_at: "2026-07-11T11:11:50.289607+00:00".to_string(),
+            summary: Some("sharing is caring".to_string()),
+            info: None,
+            tags: vec![],
+            address: Some("Caspar-Voght-Straße 35".to_string()),
+            location: NodeLocation {
+                lat: 53.55899732464337,
+                lon: 10.060655662114556,
+            },
+        },
+    );
+    state.nodes = Arc::new(RwLock::new(nodes));
+
+    let mut edges = OrderedCache::new();
+    edges.insert(
+        "edge-1".to_string(),
+        Edge {
+            id: "edge-1".to_string(),
+            source_id: "account-1".to_string(),
+            source_type: Some("account".to_string()),
+            target_id: "node-1".to_string(),
+            target_type: Some("node".to_string()),
+            edge_kind: "reference".to_string(),
+            note: None,
+            created_at: Some("2026-07-11T11:11:50.322307+00:00".to_string()),
+        },
+    );
+    state.edges = Arc::new(RwLock::new(edges));
+
+    let app = Router::new().merge(api_router()).with_state(state);
+    let request = Request::get("/accounts/account-1").body(body::Body::empty())?;
+    let response = app.oneshot(request).await?;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let value: serde_json::Value = serde_json::from_slice(&body)?;
+
+    assert_eq!(value["id"], "account-1");
+    assert_eq!(value["title"], "Alexander Mohr");
+    assert_eq!(
+        value["nodes"]
+            .as_array()
+            .context("nodes must be array")?
+            .len(),
+        1
+    );
+    assert_eq!(value["nodes"][0]["node_id"], "node-1");
+    assert_eq!(value["nodes"][0]["node_title"], "fairschenkbox");
+    assert_eq!(value["nodes"][0]["node_kind"], "resource");
+    assert_eq!(value["nodes"][0]["edge_kind"], "reference");
+    assert_eq!(
+        value["activity"]
+            .as_array()
+            .context("activity must be array")?
+            .len(),
+        1
+    );
+    assert_eq!(
+        value["activity"][0]["date"],
+        "2026-07-11T11:11:50.322307+00:00"
+    );
+    assert_eq!(
+        value["activity"][0]["event"],
+        "Hat einen Faden zum Knoten \"fairschenkbox\" geknüpft."
+    );
 
     Ok(())
 }

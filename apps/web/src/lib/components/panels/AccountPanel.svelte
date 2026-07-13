@@ -64,6 +64,17 @@
     return values.filter((value, index, all) => all.indexOf(value) === index);
   }
 
+  function edgeKindLabel(edgeKind: string): string {
+    switch (edgeKind.toLowerCase()) {
+      case 'delegation':
+        return 'Delegationsfaden';
+      case 'participation':
+        return 'Beteiligungsfaden';
+      default:
+        return 'Faden';
+    }
+  }
+
   const tabs = ['profil', 'aktivitaet', 'knoten'];
 
   function handleKeydown(e: KeyboardEvent) {
@@ -190,7 +201,7 @@
             {#each accountDetails.nodes as node}
               <li>
                 <span class="node-title">{node.node_title || node.node_id}</span>
-                <span class="node-role">({node.edge_kind})</span>
+                <span class="node-role">({edgeKindLabel(node.edge_kind)})</span>
               </li>
             {/each}
           </ul>

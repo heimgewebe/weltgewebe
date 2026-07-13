@@ -1,10 +1,15 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { createEventDispatcher, tick } from 'svelte';
   import { isFilterOpen, activeFilters, closeFilter, toggleFilterType, clearFilters } from '$lib/stores/filterStore';
   import { contextPanelOpen } from '$lib/stores/uiView';
-  import { restoreTarget } from '$lib/utils/focusManager';
+  import { restoreTarget, suppressNextRestore } from '$lib/utils/focusManager';
+  import type { MapEntityViewModel } from '$lib/map/types';
 
   export let availableTypes: { id: string, label: string, count: number }[] = [];
+  export let filteredResults: MapEntityViewModel[] = [];
+
+  const dispatch = createEventDispatcher<{ select: MapEntityViewModel }>();
+  $: listedResults = filteredResults.slice(0, 50);
 
   let overlayEl: HTMLDivElement;
   let closeBtnEl: HTMLButtonElement;
@@ -31,6 +36,16 @@
         restoreTarget('filter');
       }
     }
+  }
+
+  function selectResult(result: MapEntityViewModel) {
+    suppressNextRestore('filter');
+    dispatch('select', result);
+    closeFilter();
+  }
+
+  function resultType(result: MapEntityViewModel): string {
+    return result.type === 'garnrolle' ? 'Garnrolle' : result.kind || 'Knoten';
   }
 
   function handleGlobalKeydown(e: KeyboardEvent) {
@@ -80,6 +95,37 @@
       {:else}
         <div class="no-filters" role="status">Keine filterbaren Elemente vorhanden</div>
       {/if}
+
+      <section class="filter-results" aria-labelledby="filter-results-heading">
+        <h4 id="filter-results-heading">Treffer ({filteredResults.length})</h4>
+        {#if listedResults.length > 0}
+          <ul class="filter-result-list">
+            {#each listedResults as result}
+              <li>
+                <button
+                  type="button"
+                  class="filter-result"
+                  data-testid={`filter-result-${result.type}-${result.id}`}
+                  on:click={() => selectResult(result)}
+                >
+                  <span class="filter-result-main">
+                    <span class="filter-result-title">{result.title}</span>
+                    {#if result.summary}
+                      <span class="filter-result-summary">{result.summary}</span>
+                    {/if}
+                  </span>
+                  <span class="filter-result-type">{resultType(result)}</span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+          {#if filteredResults.length > listedResults.length}
+            <p class="result-limit-note">Die ersten {listedResults.length} Treffer werden angezeigt.</p>
+          {/if}
+        {:else}
+          <p class="no-results" role="status">Keine Treffer für diese Filter.</p>
+        {/if}
+      </section>
     </div>
   </div>
 {/if}
@@ -200,6 +246,76 @@
     color: var(--muted, #666);
   }
 
+  .filter-results {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--panel-border, rgba(0,0,0,0.1));
+  }
+
+  .filter-results h4 {
+    margin: 0 0 0.5rem;
+    font-size: 0.9rem;
+    color: var(--muted, #666);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .filter-result-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .filter-result {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--panel-border, rgba(0,0,0,0.1));
+    border-radius: var(--radius, 6px);
+    background: var(--panel, #fff);
+    color: var(--text, #333);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .filter-result:hover,
+  .filter-result:focus-visible {
+    border-color: var(--primary, #005fcc);
+    outline: none;
+  }
+
+  .filter-result-main {
+    min-width: 0;
+    display: grid;
+    gap: 0.15rem;
+  }
+
+  .filter-result-title {
+    font-weight: 600;
+  }
+
+  .filter-result-summary {
+    overflow: hidden;
+    color: var(--muted, #666);
+    font-size: 0.85rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .filter-result-type {
+    flex: 0 0 auto;
+    color: var(--muted, #666);
+    font-size: 0.8rem;
+  }
+
+  .result-limit-note,
+  .no-results,
   .no-filters {
     padding: 1rem;
     text-align: center;

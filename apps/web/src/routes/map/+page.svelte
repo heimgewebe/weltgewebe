@@ -119,6 +119,10 @@
     focusAndFlyToPoint(event.detail);
   }
 
+  function handleFilterSelect(event: CustomEvent<MapEntityViewModel>) {
+    focusAndFlyToPoint(event.detail);
+  }
+
   // After KompositionPanel creates a node (+ its account->node edge) and
   // reloads route data, focus/fly-to it once it shows up in the freshly
   // rebuilt scene. Retries on later markersData updates while unresolved
@@ -676,7 +680,7 @@
 
   <ContextPanel />
   <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
-  <FilterOverlay availableTypes={availableTypes} />
+  <FilterOverlay availableTypes={availableTypes} filteredResults={filteredMarkersData} on:select={handleFilterSelect} />
   <ActionBar />
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
     <div class="debug-badge" data-testid="debug-badge">
