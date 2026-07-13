@@ -43,7 +43,10 @@ Für Fäden gilt unabhängig von der physischen Quelle: Freie `note`-Texte werde
 persistiert, gehören aber nicht zur öffentlichen Projektion von `GET /edges`,
 `GET /edges/{id}` oder `GET /accounts/{id}`. Bei regulären Weberhandlungen darf
 ein Account-Endpunkt nur beteiligt sein, wenn der Faden von der eigenen
-angemeldeten Garnrolle ausgeht. Eingehende Account-Fäden sind dem administrativen
+angemeldeten Garnrolle ausgeht. Bereits bekannte Account-IDs müssen als
+`account` typisiert sein; öffentliche Projektionen vertrauen niemals einer
+bloßen ID-Kollision mit einem als `node` deklarierten Endpunkt. Eingehende
+Account-Fäden sind dem administrativen
 Import-/Reparaturpfad vorbehalten und werden als eingehende Beziehung statt als
 Eigenhandlung projiziert.
 

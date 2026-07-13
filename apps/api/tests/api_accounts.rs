@@ -529,3 +529,44 @@ async fn account_details_attribute_incoming_admin_relation_neutrally() -> Result
 
     Ok(())
 }
+
+#[tokio::test]
+async fn account_details_ignore_node_typed_account_id_collision() -> Result<()> {
+    const ACCOUNT_ID: &str = "account-mistyped";
+    const NODE_ID: &str = "node-real";
+
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+    accounts.insert(seed_account(ACCOUNT_ID));
+    state.accounts = Arc::new(RwLock::new(accounts));
+
+    let mut nodes = OrderedCache::new();
+    nodes.insert(
+        NODE_ID.to_string(),
+        test_node(NODE_ID, "Echter Knoten", None),
+    );
+    state.nodes = Arc::new(RwLock::new(nodes));
+
+    let mut edges = OrderedCache::new();
+    edges.insert(
+        "edge-type-confused".to_string(),
+        Edge {
+            id: "edge-type-confused".to_string(),
+            source_id: ACCOUNT_ID.to_string(),
+            source_type: Some("node".to_string()),
+            target_id: NODE_ID.to_string(),
+            target_type: Some("node".to_string()),
+            edge_kind: "reference".to_string(),
+            note: None,
+            created_at: Some("2026-07-13T05:55:00+00:00".to_string()),
+        },
+    );
+    state.edges = Arc::new(RwLock::new(edges));
+
+    let app = Router::new().merge(api_router()).with_state(state);
+    let value = read_account_details(&app, ACCOUNT_ID).await?;
+    assert_eq!(value["nodes"].as_array().map(Vec::len), Some(0));
+    assert_eq!(value["activity"].as_array().map(Vec::len), Some(0));
+
+    Ok(())
+}

@@ -544,6 +544,25 @@ async fn post_edges_binds_account_source_to_authenticated_weber() -> Result<()> 
         weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
     )
     .await?;
+    state
+        .accounts
+        .write()
+        .await
+        .insert(writer_account(FOREIGN_ACCOUNT_ID, Role::Weber));
+
+    let disguised_foreign_body = format!(
+        r#"{{"source_id":"{FOREIGN_ACCOUNT_ID}","source_type":"node","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference"}}"#
+    );
+    let res = app
+        .clone()
+        .oneshot(post_edges(Some(&cookie), &disguised_foreign_body))
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(
+        !edges_path.exists(),
+        "known account ids disguised as nodes must be rejected before persistence"
+    );
+    assert!(state.edges.read().await.is_empty());
 
     let foreign_body = format!(
         r#"{{"source_id":"{FOREIGN_ACCOUNT_ID}","source_type":"account","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference"}}"#

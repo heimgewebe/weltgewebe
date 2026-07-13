@@ -310,13 +310,13 @@ async fn postgres_weber_cannot_create_node_to_account_edge() -> Result<()> {
         DomainEdgeWriteSource::Postgres,
     )
     .await?;
+    let disguised_account_body = format!(
+        r#"{{"id":"{EDGE_ID_A}","source_id":"{ACCOUNT_ID}","source_type":"node","target_id":"{NODE_ID}","target_type":"node","edge_kind":"reference","note":"must not persist"}}"#
+    );
     let response = app
-        .oneshot(post_edges_req(
-            &cookie,
-            &create_body(EDGE_ID_A, Some("must not persist")),
-        ))
+        .oneshot(post_edges_req(&cookie, &disguised_account_body))
         .await?;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     assert_eq!(fixture_row_count(&pool).await, 0);
     assert!(state.edges.read().await.get(EDGE_ID_A).is_none());
     assert!(!in_dir.join("demo.edges.jsonl").exists());

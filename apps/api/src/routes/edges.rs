@@ -542,6 +542,27 @@ pub async fn create_edge(
     })?;
     let semantic_request = validated.clone();
 
+    // Endpoint type labels are security-relevant: account detail projections
+    // must never be reachable by disguising a known account id as a node. Keep
+    // the check independent of role so administrative imports cannot persist a
+    // type-confused edge either. Unknown ids remain importable; their declared
+    // type is still enforced when a matching entity becomes visible on reads.
+    let (source_is_known_account, target_is_known_account) = {
+        let accounts = state.accounts.read().await;
+        (
+            accounts.get(&validated.source_id).is_some(),
+            accounts.get(&validated.target_id).is_some(),
+        )
+    };
+    if (source_is_known_account && validated.source_type != "account")
+        || (target_is_known_account && validated.target_type != "account")
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "edge endpoint type does not match the referenced account".to_string(),
+        ));
+    }
+
     // A non-admin may involve an account only through an outgoing action of
     // the authenticated Garnrolle. This rejects both source impersonation and
     // crafted node -> foreign-account edges that would otherwise make another
