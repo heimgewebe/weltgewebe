@@ -79,7 +79,7 @@ Die Aktionsleiste formuliert Absichten und bleibt knapp. Kernhandlungen:
 
 - Suche;
 - Filter;
-- etwas weben;
+- einen Knoten knüpfen;
 - Zugang zur eigenen Garnrolle und zu Kontoeinstellungen.
 
 Seltene oder noch nicht produktive Module gehören nicht als dauerhafte Hauptschaltflächen in die erste Ebene.
@@ -107,7 +107,7 @@ Komposition bedeutet, etwas ins Gewebe zu setzen. Sie läuft im Fokuspanel und b
 Primäre Kompositionen:
 
 - eigene Garnrolle auf die Karte setzen;
-- Knoten weben;
+- Knoten knüpfen;
 - passenden Faden erzeugen.
 
 ## URL-Adressierung

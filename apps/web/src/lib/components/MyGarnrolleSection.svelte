@@ -224,7 +224,7 @@
       if (returned) {
         selectedLocation = returned;
         saveMessage =
-          "Kartenpunkt übernommen. Prüfe Adresse und Sichtbarkeit und speichere anschließend.";
+          "Ort übernommen. Prüfe Adresse und Sichtbarkeit und speichere anschließend.";
       }
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 401) {
@@ -271,7 +271,7 @@
         return "Dein Konto darf die Garnrolle derzeit nicht bearbeiten.";
       }
       if (error.status === 400) {
-        return "Bitte prüfe Name, Adresse, Kartenpunkt und Sichtbarkeit.";
+        return "Bitte prüfe Name, Adresse, Ort und Sichtbarkeit.";
       }
     }
     return "Die Garnrolle konnte nicht gespeichert werden. Bitte versuche es erneut.";
@@ -434,7 +434,7 @@
             <input type="radio" bind:group={visibilityChoice} value="exact" />
             <span>
               <strong>Exakt sichtbar</strong>
-              <small>Der von dir gewählte Kartenpunkt wird öffentlich.</small>
+              <small>Der von dir gewählte Ort wird öffentlich sichtbar.</small>
             </span>
           </label>
           <label class="radio-card">
@@ -453,18 +453,15 @@
           <div class="location-card" data-testid="garnrolle-location-state">
             {#if selectedLocation}
               <div>
-                <strong>Kartenpunkt gewählt</strong>
-                <small>
-                  {selectedLocation.lat.toFixed(5)},
-                  {selectedLocation.lon.toFixed(5)}
-                </small>
+                <strong>Ort gewählt</strong>
+                <small>Die genaue Position ist auf der Karte gesetzt.</small>
               </div>
               <button type="button" class="btn" on:click={chooseMapLocation}>
-                Kartenpunkt ändern
+                Ort ändern
               </button>
             {:else}
               <div>
-                <strong>Noch kein Kartenpunkt gewählt</strong>
+                <strong>Noch kein Ort gewählt</strong>
                 <small>
                   Die Adresse wird nicht automatisch in eine Position
                   umgewandelt. Wähle den passenden Punkt selbst auf der Karte.
@@ -535,14 +532,14 @@
         >
           {isSaving ? "Wird gespeichert…" : "Speichern"}
         </button>
-        <a class="btn" href="/map?compose=node">Ersten Knoten weben</a>
+        <a class="btn" href="/map?compose=node">Ersten Knoten knüpfen</a>
       </div>
       <p id="my-garnrolle-save-note" class="muted">
         Öffentlich sind Anzeigename, Kurzbeschreibung, Fähigkeiten, Güter und
         Interessen. Deine Adresse bleibt privat. Bei „Exakt sichtbar“ ist der
-        gewählte Kartenpunkt öffentlich; bei „Im Umkreis sichtbar“ nur eine
+        gewählte Ort öffentlich; bei „Im Umkreis sichtbar“ nur eine
         versetzte Näherung; bei „Noch nicht auf der Karte“ keine Position.
-        Adresse und Kartenpunkt werden nicht automatisch abgeglichen.
+        Adresse und Ort werden nicht automatisch abgeglichen.
       </p>
     </form>
   {/if}

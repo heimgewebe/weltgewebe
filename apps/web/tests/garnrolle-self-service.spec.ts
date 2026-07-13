@@ -184,9 +184,9 @@ test.describe("Eigene Garnrolle speichern", () => {
 
     await expect(page).toHaveURL(/\/map\?compose=garnrolle/);
     const placement = page.locator('[data-testid="garnrolle-placement"]');
-    await expect(placement).toContainText("Kartenpunkt ausstehend");
+    await expect(placement).toContainText("Ort ausstehend");
     await longPressMapCenter(page);
-    await expect(placement).toContainText("Kartenpunkt gewählt");
+    await expect(placement).toContainText("Ort gewählt");
     await placement
       .locator('[data-testid="confirm-garnrolle-location"]')
       .click();
@@ -201,7 +201,7 @@ test.describe("Eigene Garnrolle speichern", () => {
     );
     await expect(
       returned.locator('[data-testid="garnrolle-location-state"]'),
-    ).toContainText("Kartenpunkt gewählt");
+    ).toContainText("Ort gewählt");
     await expect(
       returned.locator('[data-testid="save-garnrolle"]'),
     ).toBeEnabled();
@@ -245,7 +245,7 @@ test.describe("Garnrollen-Kartenpunkt per Touch", () => {
     });
     await page.goto("/map?compose=garnrolle");
     const placement = page.locator('[data-testid="garnrolle-placement"]');
-    await expect(placement).toContainText("Kartenpunkt ausstehend");
+    await expect(placement).toContainText("Ort ausstehend");
 
     const map = page.locator("#map canvas").first();
     const box = await map.boundingBox();
@@ -261,6 +261,6 @@ test.describe("Garnrollen-Kartenpunkt per Touch", () => {
       type: "touchEnd",
       touchPoints: [],
     });
-    await expect(placement).toContainText("Kartenpunkt gewählt");
+    await expect(placement).toContainText("Ort gewählt");
   });
 });

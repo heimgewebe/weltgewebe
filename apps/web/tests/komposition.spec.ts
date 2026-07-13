@@ -57,7 +57,7 @@ test.describe("Komposition Flow (weber)", () => {
   test("Komposition form requires location, name, and address to submit", async ({
     page,
   }) => {
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    await page.locator('button:has-text("Knoten knüpfen")').click();
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
 
@@ -75,7 +75,7 @@ test.describe("Komposition Flow (weber)", () => {
     await expect(submitBtn).toBeDisabled(); // still no location
 
     await longPressMapCenter(page);
-    await expect(panel.locator(".state-set")).toContainText("Ort gesetzt");
+    await expect(panel.locator(".state-set")).toContainText("Ort gewählt");
     await expect(submitBtn).toBeEnabled();
 
     await page.fill("#address", "");
@@ -88,7 +88,7 @@ test.describe("Komposition Flow (weber)", () => {
   });
 
   test("Cancel flow cleans up state and closes panel", async ({ page }) => {
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    await page.locator('button:has-text("Knoten knüpfen")').click();
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
 
@@ -107,11 +107,11 @@ test.describe("Komposition Flow (weber)", () => {
       (req) => req.url().endsWith("/api/edges") && req.method() === "POST",
     );
 
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    await page.locator('button:has-text("Knoten knüpfen")').click();
     const panel = page.locator('[data-testid="context-panel"]');
 
     await longPressMapCenter(page);
-    await expect(panel.locator(".state-set")).toContainText("Ort gesetzt");
+    await expect(panel.locator(".state-set")).toContainText("Ort gewählt");
 
     await page.fill("#title", "My Awesome Node");
     await page.fill("#address", "Musterstraße 1, 12345 Musterstadt");
@@ -183,11 +183,11 @@ test.describe("Komposition Flow (weber)", () => {
       });
     });
 
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    await page.locator('button:has-text("Knoten knüpfen")').click();
     const panel = page.locator('[data-testid="context-panel"]');
 
     await longPressMapCenter(page);
-    await expect(panel.locator(".state-set")).toContainText("Ort gesetzt");
+    await expect(panel.locator(".state-set")).toContainText("Ort gewählt");
 
     await page.fill("#title", "Partial Node");
     await page.fill("#address", "Somewhere 1");
@@ -197,19 +197,24 @@ test.describe("Komposition Flow (weber)", () => {
     // Clear, honest partial-success messaging — never a silent failure and
     // never a false claim that node+edge were created atomically.
     await expect(panel).toContainText("Knoten gespeichert");
-    await expect(panel).toContainText("Verknüpfung");
+    await expect(panel).toContainText("Faden");
     await expect(
-      panel.locator('button:has-text("Erneut verknüpfen")'),
+      panel.locator('button:has-text("Faden erneut knüpfen")'),
     ).toBeVisible();
     await expect(
-      panel.locator('button:has-text("Ohne Verknüpfung fortfahren")'),
+      panel.locator('button:has-text("Ohne Faden fortfahren")'),
     ).toBeVisible();
 
-    // The panel must not silently close — the user stays informed and in
-    // control until they explicitly retry or accept the partial result.
+    // Repeated header and Escape close attempts must not discard this
+    // partial-success state. The user must make an explicit decision.
+    const closeButton = panel.getByRole("button", { name: "Schließen" });
+    await closeButton.click();
+    await closeButton.click();
+    await page.keyboard.press("Escape");
     await expect(panel).toBeVisible();
+    await expect(panel).toContainText("Der Knoten ist bereits gespeichert");
 
-    await panel.locator('button:has-text("Erneut verknüpfen")').click();
+    await panel.locator('button:has-text("Faden erneut knüpfen")').click();
     await expect(panel.locator("h2")).toContainText("Knoten");
     expect(operationIds).toHaveLength(2);
     expect(operationIds[1]).toBe(operationIds[0]);
@@ -243,7 +248,7 @@ test.describe("Komposition Flow (weber)", () => {
       });
     });
 
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    await page.locator('button:has-text("Knoten knüpfen")').click();
     const panel = page.locator('[data-testid="context-panel"]');
     await longPressMapCenter(page);
     await page.fill("#title", "Retry Node");
@@ -265,7 +270,7 @@ test.describe("Komposition Flow (gast/anonymous)", () => {
   }) => {
     await gotoMapAs(page, { authenticated: false, role: "gast" });
 
-    await expect(page.locator('button:has-text("Neuer Knoten")')).toHaveCount(
+    await expect(page.locator('button:has-text("Knoten knüpfen")')).toHaveCount(
       0,
     );
 

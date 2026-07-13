@@ -1,24 +1,47 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
-  import type { PageData } from './$types';
-  import '$lib/styles/tokens.css';
-  import 'maplibre-gl/dist/maplibre-gl.css';
-  import type { Map as MapLibreMap } from 'maplibre-gl';
+  import { onMount, tick } from "svelte";
+  import type { PageData } from "./$types";
+  import "$lib/styles/tokens.css";
+  import "maplibre-gl/dist/maplibre-gl.css";
+  import type { Map as MapLibreMap } from "maplibre-gl";
 
-  import TopBar from '$lib/components/TopBar.svelte';
-  import ContextPanel from '$lib/components/ContextPanel.svelte';
-  import ActionBar from '$lib/components/ActionBar.svelte';
-  import SearchOverlay from '$lib/components/SearchOverlay.svelte';
-  import FilterOverlay from '$lib/components/FilterOverlay.svelte';
-  import type { MapEntityViewModel } from '$lib/map/types';
+  import TopBar from "$lib/components/TopBar.svelte";
+  import ContextPanel from "$lib/components/ContextPanel.svelte";
+  import ActionBar from "$lib/components/ActionBar.svelte";
+  import SearchOverlay from "$lib/components/SearchOverlay.svelte";
+  import FilterOverlay from "$lib/components/FilterOverlay.svelte";
+  import type { MapEntityViewModel } from "$lib/map/types";
 
-  import { page } from '$app/stores';
+  import { page } from "$app/stores";
 
-  import { view, selection, systemState, enterKomposition, leaveToNavigation, lastCreatedNodeId } from '$lib/stores/uiView';
-  import { activeFilters, closeFilter } from '$lib/stores/filterStore';
-  import { isSearchOpen, searchQuery, closeSearch } from '$lib/stores/searchStore';
-  import { openSearchExclusive, openFilterExclusive } from '$lib/stores/overlayManager';
-  import { parseMapUrlState, type MapUrlFocus, type ParsedMapUrlState } from '$lib/map/urlState';
+  import {
+    view,
+    selection,
+    systemState,
+    contextPanelOpen,
+    enterKomposition,
+    leaveToNavigation,
+    lastCreatedNodeId,
+  } from "$lib/stores/uiView";
+  import {
+    activeFilters,
+    isFilterOpen,
+    closeFilter,
+  } from "$lib/stores/filterStore";
+  import {
+    isSearchOpen,
+    searchQuery,
+    closeSearch,
+  } from "$lib/stores/searchStore";
+  import {
+    openSearchExclusive,
+    openFilterExclusive,
+  } from "$lib/stores/overlayManager";
+  import {
+    parseMapUrlState,
+    type MapUrlFocus,
+    type ParsedMapUrlState,
+  } from "$lib/map/urlState";
   import {
     deriveFailedResourceLabels,
     deriveMarkerCounts,
@@ -29,19 +52,22 @@
     deriveVisibleEdges,
     getFilterTypeKey,
     selectMapEntity,
-  } from '$lib/stores/mapView';
-  import { authStore } from '$lib/auth/store';
+  } from "$lib/stores/mapView";
+  import { authStore } from "$lib/auth/store";
 
-  import { get } from 'svelte/store';
+  import { get } from "svelte/store";
 
-  import { currentBasemap, HAMMER_PARK_CENTER } from '$lib/map/config/basemap.current';
-  import { resolveBasemapStyle, rewritePmtilesUrl } from '$lib/map/basemap';
-  import { buildMapScene } from '$lib/map/scene';
+  import {
+    currentBasemap,
+    HAMMER_PARK_CENTER,
+  } from "$lib/map/config/basemap.current";
+  import { resolveBasemapStyle, rewritePmtilesUrl } from "$lib/map/basemap";
+  import { buildMapScene } from "$lib/map/scene";
 
-  import { NodesOverlay } from '$lib/map/overlay/nodes';
-  import { updateEdges } from '$lib/map/overlay/edges';
-  import { setupKompositionInteraction } from '$lib/map/overlay/komposition';
-  import { setupFocusInteraction } from '$lib/map/overlay/focus';
+  import { NodesOverlay } from "$lib/map/overlay/nodes";
+  import { updateEdges } from "$lib/map/overlay/edges";
+  import { setupKompositionInteraction } from "$lib/map/overlay/komposition";
+  import { setupFocusInteraction } from "$lib/map/overlay/focus";
 
   export let data: PageData;
 
@@ -54,7 +80,7 @@
     nodes: data.nodes || [],
     accounts: data.accounts || [],
     edges: data.edges || [],
-    loadState: data.loadState ?? 'ok',
+    loadState: data.loadState ?? "ok",
     resourceStatus: data.resourceStatus ?? [],
     apiBase: import.meta.env.PUBLIC_GEWEBE_API_BASE,
     basemapMode: currentBasemap.mode,
@@ -70,8 +96,13 @@
   $: filteredMarkersData = deriveFilteredMarkers(markersData, $activeFilters);
   // Search is scoped to the currently visible markers (filtered set when a
   // filter is active, otherwise the full set) so it never reaches hidden ones.
-  $: searchBaseMarkers = $activeFilters.size === 0 ? markersData : filteredMarkersData;
-  $: filteredResults = deriveSearchResults(searchBaseMarkers, $searchQuery, $isSearchOpen);
+  $: searchBaseMarkers =
+    $activeFilters.size === 0 ? markersData : filteredMarkersData;
+  $: filteredResults = deriveSearchResults(
+    searchBaseMarkers,
+    $searchQuery,
+    $isSearchOpen,
+  );
   $: searchMatchIds = deriveSearchMatchIds(filteredResults);
   $: edgesData = deriveVisibleEdges(scene.edges, filteredMarkersData);
 
@@ -88,13 +119,17 @@
   // Reactive update for markers and search highlight strictly handled in overlay update
   $: if (nodesOverlay && filteredMarkersData && $view) {
     (async () => {
-      await nodesOverlay.update(filteredMarkersData, $view.showNodes, searchMatchIds);
+      await nodesOverlay.update(
+        filteredMarkersData,
+        $view.showNodes,
+        searchMatchIds,
+      );
     })();
   }
 
   // Reactive update for edges – only after map style is fully loaded
   $: if (map && mapStyleReady && edgesData && $view) {
-     updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
+    updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
   }
 
   function focusAndFlyToPoint(item: MapEntityViewModel) {
@@ -104,13 +139,19 @@
 
     const lat = item.lat;
     const lon = item.lon;
-    if (map && typeof lat === 'number' && typeof lon === 'number' && Number.isFinite(lat) && Number.isFinite(lon)) {
+    if (
+      map &&
+      typeof lat === "number" &&
+      typeof lon === "number" &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lon)
+    ) {
       const currentZoom = map.getZoom();
       map.flyTo({
         center: [lon, lat],
         zoom: Math.max(currentZoom, 14),
         speed: 0.8,
-        curve: 1
+        curve: 1,
       });
     }
   }
@@ -123,12 +164,23 @@
     focusAndFlyToPoint(event.detail);
   }
 
+  function handleRelatedSelect(
+    event: CustomEvent<{ type: "node" | "garnrolle"; id: string }>,
+  ) {
+    const related = markersData.find(
+      (item) => item.id === event.detail.id && item.type === event.detail.type,
+    );
+    if (related) focusAndFlyToPoint(related);
+  }
+
   // After KompositionPanel creates a node (+ its account->node edge) and
   // reloads route data, focus/fly-to it once it shows up in the freshly
   // rebuilt scene. Retries on later markersData updates while unresolved
   // (e.g. the reload is still in flight when this first runs).
   $: if ($lastCreatedNodeId) {
-    const created = markersData.find((m) => m.id === $lastCreatedNodeId && m.type === 'node');
+    const created = markersData.find(
+      (m) => m.id === $lastCreatedNodeId && m.type === "node",
+    );
     if (created) {
       focusAndFlyToPoint(created);
       lastCreatedNodeId.set(null);
@@ -152,7 +204,10 @@
     focus: MapUrlFocus,
     items: MapEntityViewModel[],
   ): MapEntityViewModel | null {
-    return items.find((item) => item.type === focus.type && item.id === focus.id) ?? null;
+    return (
+      items.find((item) => item.type === focus.type && item.id === focus.id) ??
+      null
+    );
   }
 
   function applyImmediateMapUrlAddressing(parsed: ParsedMapUrlState) {
@@ -160,8 +215,8 @@
       closeSearch();
       closeFilter();
       enterKomposition({
-        mode: parsed.compose === 'garnrolle' ? 'place-garnrolle' : 'new-knoten',
-        source: 'action-bar'
+        mode: parsed.compose === "garnrolle" ? "place-garnrolle" : "new-knoten",
+        source: "action-bar",
       });
       return;
     }
@@ -181,11 +236,11 @@
     // close stale lens overlays — this matters for same-route/popstate
     // transitions (e.g. /map?lens=filter -> /map) where stores are not reset.
     leaveToNavigation();
-    if (parsed.lens === 'filter') {
+    if (parsed.lens === "filter") {
       openFilterExclusive();
       return;
     }
-    if (parsed.lens === 'search') {
+    if (parsed.lens === "search") {
       openSearchExclusive();
       return;
     }
@@ -242,11 +297,14 @@
     if (!$authStore.authenticated || !$authStore.account_id) return;
     const accountId = $authStore.account_id;
     // Find the marker corresponding to the user's account
-    const userMarker = markersData.find(m => m.id === accountId && m.type === 'garnrolle');
+    const userMarker = markersData.find(
+      (m) => m.id === accountId && m.type === "garnrolle",
+    );
 
     if (userMarker) {
       const typeKey = getFilterTypeKey(userMarker);
-      const isFilteredOut = $activeFilters.size > 0 && !$activeFilters.has(typeKey);
+      const isFilteredOut =
+        $activeFilters.size > 0 && !$activeFilters.has(typeKey);
 
       // Do not override filters: if the user's marker is filtered out, inform the user instead of mutating filter state.
       if (isFilteredOut) {
@@ -270,7 +328,7 @@
   }
 
   // Restore focus when selection is closed or state becomes navigation
-  $: if (($systemState === 'navigation' || !$selection) && lastFocusedElement) {
+  $: if (($systemState === "navigation" || !$selection) && lastFocusedElement) {
     const elToFocus = lastFocusedElement;
     lastFocusedElement = null; // Clear immediately to prevent loop
 
@@ -292,7 +350,7 @@
       await authStore.logout();
     } else {
       try {
-        await authStore.devLogin('7d97a42e-3704-4a33-a61f-0e0a6b4d65d8');
+        await authStore.devLogin("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8");
       } catch (e: any) {
         // Simple UI feedback for dev login issues
         window.alert(`Login failed: ${e.message}\nCheck console for details.`);
@@ -304,7 +362,9 @@
   let cleanupFocus: (() => void) | undefined = undefined;
   let unsubscribeSysState: (() => void) | undefined = undefined;
 
-  const shouldExposeTestMap = import.meta.env.DEV || import.meta.env.VITE_PUBLIC_ENABLE_TEST_MAP === 'true';
+  const shouldExposeTestMap =
+    import.meta.env.DEV ||
+    import.meta.env.VITE_PUBLIC_ENABLE_TEST_MAP === "true";
 
   onMount(() => {
     let maplibreModule: any = null;
@@ -320,7 +380,9 @@
     let loadingTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
     const handleMarkerClick = (e: Event) => {
       const target = e.target as HTMLElement;
-      const markerBtn = target.closest('.map-marker') as HTMLButtonElement | null;
+      const markerBtn = target.closest(
+        ".map-marker",
+      ) as HTMLButtonElement | null;
       if (!markerBtn || !nodesOverlay) return;
 
       const id = markerBtn.dataset.id;
@@ -334,27 +396,29 @@
     };
 
     (async () => {
-      const maplibregl = await import('maplibre-gl');
+      const maplibregl = await import("maplibre-gl");
       if (destroyed) return;
       const container = mapContainer;
       if (!container) {
         return;
       }
 
-      let transformRequestFn: ((url: string, resourceType?: any) => { url: string }) | undefined = undefined;
+      let transformRequestFn:
+        | ((url: string, resourceType?: any) => { url: string })
+        | undefined = undefined;
 
       // PMTiles dev infrastructure is intentionally prepared now, including the runtime
       // dependency 'pmtiles'. The current runtime stays strictly on 'remote-style', since
       // real local artifact proof is still missing. This setup exists solely to reduce later
       // activation cost and does NOT claim that 'local-sovereign' is already working end-to-end.
-      if (currentBasemap.mode === 'local-sovereign') {
-        const pmtiles = await import('pmtiles');
+      if (currentBasemap.mode === "local-sovereign") {
+        const pmtiles = await import("pmtiles");
         if (destroyed) return;
         try {
-          maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+          maplibregl.addProtocol("pmtiles", new pmtiles.Protocol().tile);
         } catch (e: any) {
-          if (!e.message?.includes('already registered')) {
-            console.warn('Unexpected error registering PMTiles protocol:', e);
+          if (!e.message?.includes("already registered")) {
+            console.warn("Unexpected error registering PMTiles protocol:", e);
           }
         }
 
@@ -368,7 +432,7 @@
       // pmtiles protocol removal, so it must not be published before the
       // protocol is actually registered.
       maplibreModule = maplibregl;
-      container.addEventListener('click', handleMarkerClick);
+      container.addEventListener("click", handleMarkerClick);
 
       map = new maplibregl.Map({
         container,
@@ -382,14 +446,26 @@
         attributionControl: false,
         transformRequest: transformRequestFn,
       });
-      map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
-      map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }), 'bottom-right');
+      map.addControl(
+        new maplibregl.NavigationControl({ showZoom: true }),
+        "bottom-right",
+      );
+      map.addControl(
+        new maplibregl.AttributionControl({
+          compact: false,
+          customAttribution:
+            '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+        }),
+        "bottom-right",
+      );
 
       // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, etc.) carry domain meaning.
       nodesOverlay = new NodesOverlay(map);
       cleanupKomposition = setupKompositionInteraction(map);
-      let sysStateStr = '';
-      unsubscribeSysState = systemState.subscribe(val => { sysStateStr = val; });
+      let sysStateStr = "";
+      unsubscribeSysState = systemState.subscribe((val) => {
+        sysStateStr = val;
+      });
       cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
 
       loadingTimeout = setTimeout(() => {
@@ -411,19 +487,23 @@
         const pendingFocus =
           parseMapUrlState(get(page).url.searchParams).focus !== null;
 
-        if (!pendingFocus && !currentSelection && currentSystemState === 'navigation') {
+        if (
+          !pendingFocus &&
+          !currentSelection &&
+          currentSystemState === "navigation"
+        ) {
           const currentZoom = map?.getZoom() ?? 14;
           map?.flyTo({
             center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat],
             zoom: Math.max(currentZoom, 14),
             speed: 0.8,
-            curve: 1
+            curve: 1,
           });
         }
       };
 
-      map.once('load', finishLoading);
-      map.on('error', () => {
+      map.once("load", finishLoading);
+      map.on("error", () => {
         clearTimeout(loadingTimeout);
         isLoading = false;
       });
@@ -453,14 +533,14 @@
       cleanupFocus?.();
       unsubscribeSysState?.();
       nodesOverlay?.destroy();
-      if (map && typeof map.remove === 'function') map.remove();
-      mapContainer?.removeEventListener('click', handleMarkerClick);
-      if (currentBasemap.mode === 'local-sovereign' && maplibreModule) {
+      if (map && typeof map.remove === "function") map.remove();
+      mapContainer?.removeEventListener("click", handleMarkerClick);
+      if (currentBasemap.mode === "local-sovereign" && maplibreModule) {
         try {
-          maplibreModule.removeProtocol('pmtiles');
+          maplibreModule.removeProtocol("pmtiles");
         } catch (e: any) {
-          if (!e.message?.includes('not registered')) {
-            console.warn('Unexpected error removing PMTiles protocol:', e);
+          if (!e.message?.includes("not registered")) {
+            console.warn("Unexpected error removing PMTiles protocol:", e);
           }
         }
       }
@@ -468,115 +548,228 @@
   });
 </script>
 
+<main
+  class="shell"
+  class:panel-open={$contextPanelOpen}
+  class:search-open={$isSearchOpen}
+  class:filter-open={$isFilterOpen}
+>
+  {#if showFilterTooltip}
+    <div class="filter-tooltip" role="status" aria-live="polite">
+      Du hast Garnrollen per Filter ausgeblendet – auch deine eigene.
+    </div>
+  {/if}
+
+  {#if loadState === "partial"}
+    <div class="degraded-banner" role="alert" data-testid="load-state-partial">
+      Einige Kartendaten konnten nicht geladen werden ({failedLabels.join(
+        ", ",
+      )}).
+    </div>
+  {/if}
+  {#if loadState === "failed"}
+    <div
+      class="degraded-banner degraded-banner--failed"
+      role="alert"
+      data-testid="load-state-failed"
+    >
+      Kartendaten konnten nicht geladen werden.
+    </div>
+  {/if}
+
+  <ContextPanel on:selectRelated={handleRelatedSelect} />
+  <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
+  <FilterOverlay
+    {availableTypes}
+    filteredResults={filteredMarkersData}
+    on:select={handleFilterSelect}
+  />
+  <ActionBar />
+  {#if import.meta.env.DEV || import.meta.env.MODE === "test"}
+    <div class="debug-badge" data-testid="debug-badge">
+      Nodes: {markerCounts.nodes} / Accounts: {markerCounts.accounts} / Edges: {edgesData.length}
+      <br />
+      API: {diagnostics.apiMode} / Basemap: {diagnostics.basemapMode}
+      {#if diagnostics.degraded}
+        <br />⚠ Load: {loadState}
+      {/if}
+      <br />
+      <button
+        on:click={toggleLogin}
+        style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;"
+        data-testid="debug-logout"
+      >
+        {$authStore.authenticated ? "Logout" : "Login Demo"}
+      </button>
+    </div>
+  {/if}
+  <TopBar
+    accounts={data.accounts || []}
+    on:zoomToOwnGarnrolle={handleZoomToOwnGarnrolle}
+  />
+  <div
+    id="map"
+    class:panel-open={$contextPanelOpen}
+    class:search-open={$isSearchOpen}
+    class:filter-open={$isFilterOpen}
+    bind:this={mapContainer}
+  ></div>
+  {#if isLoading}
+    <div class="loading-overlay">
+      <div class="spinner"></div>
+    </div>
+  {/if}
+</main>
+
 <style>
-  .shell{
-    position:relative;
-    height:100dvh;
-    height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    width:100vw;
-    overflow:hidden;
-    background:var(--bg);
-    color:var(--text);
+  .shell {
+    position: relative;
+    height: 100dvh;
+    height: calc(
+      100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    );
+    width: 100vw;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
   }
-  #map{ position:absolute; inset:0; }
-  #map :global(canvas){ filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95); }
+  #map {
+    position: absolute;
+    inset: 0;
+  }
+  #map :global(canvas) {
+    filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95);
+  }
 
   /*
    * MapLibre owns the outer marker transform and updates it every render frame.
    * Weltgewebe effects belong on the inner visual so markers stay map-locked.
    */
-  #map :global(.map-marker){
-    appearance:none;
-    -webkit-appearance:none;
-    width:24px;
-    height:24px;
-    min-width:0;
-    min-height:0;
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    border:0;
-    border-radius:0;
-    background:transparent;
-    display:grid;
-    place-items:center;
-    color:var(--bg);
-    cursor:pointer;
-    box-shadow:none;
-    transition:none;
+  #map :global(.map-marker) {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 44px;
+    height: 44px;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    display: grid;
+    place-items: center;
+    color: var(--bg);
+    cursor: pointer;
+    box-shadow: none;
+    transition: none;
   }
 
-  #map :global(.map-marker__visual){
-    width:100%;
-    height:100%;
-    box-sizing:border-box;
-    border-radius:999px;
-    border:2px solid var(--panel-border);
-    background:var(--accent, #ff8c42);
-    display:grid;
-    place-items:center;
-    color:var(--bg);
-    box-shadow:0 0 0 2px rgba(0,0,0,0.25);
-    transform-origin:center;
-    transition:transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    pointer-events:none;
+  #map :global(.map-marker__visual) {
+    width: 24px;
+    height: 24px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    border: 2px solid var(--panel-border);
+    background: var(--accent, #ff8c42);
+    display: grid;
+    place-items: center;
+    color: var(--bg);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+    align-self: end;
+    justify-self: center;
+    transform-origin: center;
+    transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    pointer-events: none;
   }
 
   #map :global(.marker-account) {
-    width:44px;
-    height:44px;
+    width: 44px;
+    height: 44px;
   }
 
   #map :global(.marker-account__visual) {
-    background:transparent;
-    border:none;
-    box-shadow:none;
-    border-radius:0;
+    width: 44px;
+    height: 44px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
   }
 
   #map :global(.marker-account__icon) {
-    display:block;
-    width:100%;
-    height:100%;
-    object-fit:contain;
-    pointer-events:none;
-    user-select:none;
-    -webkit-user-drag:none;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
   }
 
   @media (hover: hover) and (pointer: fine) {
-    #map :global(.map-marker:hover .map-marker__visual){
-      transform:scale(1.2);
+    #map :global(.map-marker:hover .map-marker__visual) {
+      transform: scale(1.2);
     }
-    #map :global(.map-marker:hover){
-      z-index:10;
+    #map :global(.map-marker:hover) {
+      z-index: 10;
     }
   }
 
-  #map :global(.map-marker:focus-visible){
-    outline:2px solid var(--fg);
-    outline-offset:2px;
+  #map :global(.map-marker:focus-visible) {
+    outline: 2px solid var(--fg);
+    outline-offset: 2px;
     z-index: 10;
   }
 
   #map :global(.map-marker.search-highlight) {
     outline: 2px solid var(--primary, #005fcc);
     outline-offset: 2px;
-    box-shadow: 0 0 8px 2px var(--primary, rgba(0,95,204,0.6));
+    box-shadow: 0 0 8px 2px var(--primary, rgba(0, 95, 204, 0.6));
     z-index: 5;
   }
 
   #map :global(.marker-account.search-highlight) {
     outline: 2px solid var(--primary, #005fcc);
     outline-offset: 2px;
-    box-shadow: 0 0 8px 2px var(--primary, rgba(0,95,204,0.6));
+    box-shadow: 0 0 8px 2px var(--primary, rgba(0, 95, 204, 0.6));
   }
 
   #map :global(.marker-account:focus-visible) {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
+  }
+
+  #map :global(.maplibregl-ctrl-bottom-right) {
+    right: 12px !important;
+    bottom: calc(var(--map-bottom-ui-offset) + 12px) !important;
+  }
+
+  #map :global(.maplibregl-ctrl-group button) {
+    width: 44px;
+    height: 44px;
+  }
+
+  #map.search-open :global(.maplibregl-ctrl-bottom-right),
+  #map.filter-open :global(.maplibregl-ctrl-bottom-right) {
+    bottom: calc(50dvh + var(--map-bottom-ui-offset) + 12px) !important;
+  }
+
+  @media (min-width: 769px) {
+    #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
+      right: calc(var(--context-panel-width) + 12px) !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
+      top: calc(env(safe-area-inset-top) + 60px);
+      right: 10px !important;
+      bottom: auto !important;
+    }
   }
 
   .loading-overlay {
@@ -591,12 +784,16 @@
   .spinner {
     width: 40px;
     height: 40px;
-    border: 3px solid rgba(255,255,255,0.1);
+    border: 3px solid rgba(255, 255, 255, 0.1);
     border-top-color: var(--accent);
     border-radius: 50%;
     animation: spin 1s linear infinite;
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 
   .debug-badge {
     position: absolute;
@@ -622,7 +819,7 @@
     padding: 12px 16px;
     border-radius: 8px;
     border: 1px solid var(--panel-border);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     z-index: 1000;
     font-size: 0.9rem;
     font-weight: 500;
@@ -632,10 +829,22 @@
   }
 
   @keyframes fadeInOut {
-    0% { opacity: 0; transform: translate(-50%, -10px); }
-    10% { opacity: 1; transform: translate(-50%, 0); }
-    90% { opacity: 1; transform: translate(-50%, 0); }
-    100% { opacity: 0; transform: translate(-50%, -10px); }
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -10px);
+    }
+    10% {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    90% {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -10px);
+    }
   }
 
   .degraded-banner {
@@ -659,48 +868,3 @@
     background: rgba(180, 40, 40, 0.9);
   }
 </style>
-
-<main class="shell">
-  {#if showFilterTooltip}
-    <div class="filter-tooltip" role="status" aria-live="polite">
-      Du hast Garnrollen per Filter ausgeblendet – auch deine eigene.
-    </div>
-  {/if}
-
-  {#if loadState === 'partial'}
-    <div class="degraded-banner" role="alert" data-testid="load-state-partial">
-      Einige Kartendaten konnten nicht geladen werden ({failedLabels.join(', ')}).
-    </div>
-  {/if}
-  {#if loadState === 'failed'}
-    <div class="degraded-banner degraded-banner--failed" role="alert" data-testid="load-state-failed">
-      Kartendaten konnten nicht geladen werden.
-    </div>
-  {/if}
-
-  <ContextPanel />
-  <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
-  <FilterOverlay availableTypes={availableTypes} filteredResults={filteredMarkersData} on:select={handleFilterSelect} />
-  <ActionBar />
-  {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
-    <div class="debug-badge" data-testid="debug-badge">
-      Nodes: {markerCounts.nodes} / Accounts: {markerCounts.accounts} / Edges: {edgesData.length}
-      <br>
-      API: {diagnostics.apiMode} / Basemap: {diagnostics.basemapMode}
-      {#if diagnostics.degraded}
-        <br>⚠ Load: {loadState}
-      {/if}
-      <br>
-      <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;" data-testid="debug-logout">
-        {$authStore.authenticated ? 'Logout' : 'Login Demo'}
-      </button>
-    </div>
-  {/if}
-  <TopBar accounts={data.accounts || []} on:zoomToOwnGarnrolle={handleZoomToOwnGarnrolle} />
-  <div id="map" bind:this={mapContainer}></div>
-  {#if isLoading}
-    <div class="loading-overlay">
-      <div class="spinner"></div>
-    </div>
-  {/if}
-</main>
