@@ -294,7 +294,7 @@ jobs:
           echo "$DENY_DIR" >> "$GITHUB_PATH"
 
       - name: Setup Just
-        uses: extractions/setup-just@dd310ad5a97d8e7b41793f8ef055398d51ad4de6 # tag: v2
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # tag: v4.0.0
 
       - name: Show tool versions
         run: |
