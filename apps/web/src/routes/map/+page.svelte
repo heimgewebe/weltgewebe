@@ -57,7 +57,6 @@
     deriveSearchResults,
     deriveSearchMatchIds,
     deriveVisibleEdges,
-    getFilterTypeKey,
     selectMapEntity,
   } from "$lib/stores/mapView";
   import { authStore, type AuthStatus } from "$lib/auth/store";
@@ -114,8 +113,6 @@
   let mapStyleReady = false;
   let isLoading = true;
   let lastFocusedElement: HTMLElement | null = null;
-  let showFilterTooltip = false;
-  let filterTooltipTimeout: number | null = null;
 
   let nodesOverlay: NodesOverlay | null = null;
   let searchDirectionIndicators: SearchDirectionIndicator[] = [];
@@ -405,40 +402,6 @@
     }
   }
 
-  function handleZoomToOwnGarnrolle() {
-    if (!$authStore.authenticated || !$authStore.account_id) return;
-    const accountId = $authStore.account_id;
-    // Find the marker corresponding to the user's account
-    const userMarker = markersData.find(
-      (m) => m.id === accountId && m.type === "garnrolle",
-    );
-
-    if (userMarker) {
-      const typeKey = getFilterTypeKey(userMarker);
-      const isFilteredOut =
-        $activeFilters.size > 0 && !$activeFilters.has(typeKey);
-
-      // Do not override filters: if the user's marker is filtered out, inform the user instead of mutating filter state.
-      if (isFilteredOut) {
-        if (filterTooltipTimeout !== null) {
-          window.clearTimeout(filterTooltipTimeout);
-        }
-        showFilterTooltip = false; // brief reset for animation restart
-
-        tick().then(() => {
-          showFilterTooltip = true;
-          filterTooltipTimeout = window.setTimeout(() => {
-            showFilterTooltip = false;
-            filterTooltipTimeout = null;
-          }, 4000);
-        });
-      } else {
-        focusAndFlyToPoint(userMarker);
-      }
-    }
-    // Note: If no marker is found (e.g. not public/placed), this deliberately silently no-ops
-  }
-
   // Restore focus when selection is closed or state becomes navigation
   $: if (($systemState === "navigation" || !$selection) && lastFocusedElement) {
     const elToFocus = lastFocusedElement;
@@ -628,10 +591,6 @@
         clearTimeout(loadingTimeout);
         loadingTimeout = undefined;
       }
-      if (filterTooltipTimeout !== null) {
-        window.clearTimeout(filterTooltipTimeout);
-        filterTooltipTimeout = null;
-      }
       if (shouldExposeTestMap) {
         delete (window as any).__TEST_MAP__;
       }
@@ -669,12 +628,6 @@
   class:search-open={$isSearchOpen}
   class:filter-open={$isFilterOpen}
 >
-  {#if showFilterTooltip}
-    <div class="filter-tooltip" role="status" aria-live="polite">
-      Du hast Garnrollen per Filter ausgeblendet – auch deine eigene.
-    </div>
-  {/if}
-
   {#if loadState === "partial"}
     <div class="degraded-banner" role="alert" data-testid="load-state-partial">
       Einige Kartendaten konnten nicht geladen werden ({failedLabels.join(
@@ -722,10 +675,7 @@
       </button>
     </div>
   {/if}
-  <TopBar
-    accounts={data.accounts || []}
-    on:zoomToOwnGarnrolle={handleZoomToOwnGarnrolle}
-  />
+  <TopBar />
   <div
     id="map"
     class:panel-open={$contextPanelOpen}
@@ -928,60 +878,9 @@
     font-family: monospace;
   }
 
-  .filter-tooltip {
-    position: fixed;
-    top: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--bg);
-    color: var(--text);
-    padding: 12px 16px;
-    border-radius: 8px;
-    border: 1px solid var(--panel-border);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
-    font-size: 0.9rem;
-    font-weight: 500;
-    pointer-events: none;
-    text-align: center;
-    animation: fadeInOut 4s ease forwards;
-  }
 
-  @keyframes fadeInOut {
-    0% {
-      opacity: 0;
-      transform: translate(-50%, -10px);
-    }
-    10% {
-      opacity: 1;
-      transform: translate(-50%, 0);
-    }
-    90% {
-      opacity: 1;
-      transform: translate(-50%, 0);
-    }
-    100% {
-      opacity: 0;
-      transform: translate(-50%, -10px);
-    }
-  }
 
-  .degraded-banner {
-    position: absolute;
-    top: 60px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 30;
-    padding: 8px 16px;
-    background: rgba(180, 130, 0, 0.9);
-    color: #fff;
-    font-size: 0.85rem;
-    font-weight: 500;
-    border-radius: 6px;
-    pointer-events: none;
-    text-align: center;
-    white-space: nowrap;
-  }
+
 
   .degraded-banner--failed {
     background: rgba(180, 40, 40, 0.9);
