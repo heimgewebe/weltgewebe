@@ -197,6 +197,9 @@ test.describe("Basemap Real Schleswig-Holstein Visual Runtime Proof", () => {
       expect(directRangeResponse.headers()["content-range"] ?? "").toContain(
         "bytes 0-511/",
       );
+      expect(directRangeResponse.headers()["content-type"] ?? "").toContain(
+        "application/octet-stream",
+      );
       expect(
         Buffer.from(await directRangeResponse.body())
           .subarray(0, 7)
@@ -426,6 +429,8 @@ test.describe("Basemap Real Schleswig-Holstein Visual Runtime Proof", () => {
         direct_range_status: directRangeResponse.status(),
         direct_range_content_range:
           directRangeResponse.headers()["content-range"] ?? null,
+        direct_range_content_type:
+          directRangeResponse.headers()["content-type"] ?? null,
         pmtiles_range_requests_observed: targetRequests.filter((request) =>
           request.rangeHeader?.startsWith("bytes="),
         ).length,

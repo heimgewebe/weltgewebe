@@ -11,9 +11,11 @@
   # Route matches the public edge contract: /local-basemap/ (frontend, blueprint, Vite middleware)
   handle_path /local-basemap/* {
     root * /srv/weltgewebe-basemap
+    @pmtiles path_regexp \.pmtiles$
+    header @pmtiles Content-Type "application/octet-stream"
     header Access-Control-Allow-Origin "*"
     header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
-    header Access-Control-Expose-Headers "Content-Range, Accept-Ranges, Content-Length"
+    header Access-Control-Expose-Headers "Content-Type, Content-Range, Accept-Ranges, Content-Length"
     header Access-Control-Allow-Headers "Range, If-None-Match"
     # defensive CORS hardening for clients/browsers that do send preflight requests
     @options {

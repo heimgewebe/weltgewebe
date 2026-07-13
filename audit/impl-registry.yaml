@@ -144,10 +144,13 @@ implementations:
     evidence_level: guard
     documented_by:
       - docs/blueprints/map-blaupause.md
+      - docs/deployment.md
     verified_by:
       - scripts/guard/caddy-basemap-route-guard.sh
       - scripts/guard/domain-single-instance-guard.sh
       - scripts/tests/test_domain_single_instance_guard.sh
+      - scripts/ci/tests/test_regional_basemap_style.py
+      - scripts/ci/tests/test_public_live_readiness.py
 
   - id: impl.guard.basemap-runtime-proof
     path: scripts/guard/basemap-runtime-proof.sh
@@ -158,7 +161,23 @@ implementations:
     documented_by:
       - docs/specs/map-experience.md
       - docs/reports/map-status.md
+      - docs/deployment.md
     verified_by:
+      - .github/workflows/basemap-runtime-proof.yml
+      - scripts/ci/tests/test_regional_basemap_style.py
+      - scripts/ci/tests/test_public_live_readiness.py
+
+  - id: impl.guard.pmtiles-deep-validator
+    path: apps/web/scripts/validate-pmtiles.mjs
+    impl_type: guard
+    status: active
+    criticality: medium
+    evidence_level: ci
+    documented_by:
+      - docs/deployment.md
+      - docs/reports/map-basemap-proof-gap-reconciliation.md
+    verified_by:
+      - apps/web/scripts/validate-pmtiles.test.mjs
       - .github/workflows/basemap-runtime-proof.yml
 
   - id: impl.auth.db-session-store
