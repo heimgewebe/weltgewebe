@@ -13,31 +13,29 @@ name: Basemap Runtime Proof
 #      scope=range-delivery. The guard issues a Range request via curl and
 #      asserts HTTP 206 plus Accept-Ranges/Content-Range. Failure fails the job.
 #
-#   3. basemap-pmtiles-content-proof (Pfad 3 — echter Content-Proof, blockierend)
-#      Builds a real PMTiles artefact via scripts/basemap/build-hamburg-pmtiles.sh,
-#      serves it through Caddy, and runs the guard with scope=pmtiles-content.
-#      The guard verifies endpoint/range delivery (HTTP 206), the PMTiles magic
-#      bytes "PMTiles" and an optional SHA256 match from the generated metadata.
+#   3. basemap-pmtiles-content-proof (Pfad 3 — Hamburg Content-Proof, blockierend)
+#      Builds the pinned Hamburg PMTiles artifact, validates every reachable
+#      directory plus bounded deterministic real MVT samples, serves it through
+#      Caddy, and proves HTTP 200/206, Content-Type, Range headers, magic, and SHA.
 #
 #   4. basemap-schleswig-holstein-content-proof
-#      Builds and verifies the pinned Schleswig-Holstein PMTiles artifact independently.
+#      Applies the same independent structure, MVT, HTTP, and hash proof to the
+#      pinned Schleswig-Holstein artifact.
 #
 #   5. basemap-visual-proof  (Pfad 5 — visueller End-to-End-Proof, blockierend)
-#      Reuses the real Hamburg PMTiles artefact from Pfad 3, publishes the
-#      stable alias (basemap-hamburg.pmtiles), starts the Vite preview server
-#      with the local-basemap-serve middleware, and runs the Playwright visual proof
-#      (apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts) against it.
-#      Proves: Browser → Vite middleware → PMTiles alias → HTTP 206 Range delivery
-#      → MapLibre canvas visible + isStyleLoaded() → zero remote tile violations.
-#      Failure fails the job. Uploads screenshot, trace, and proof summary.
+#      Reuses both validated regional artifacts, publishes stable aliases, starts
+#      the Vite preview server, and runs the Hamburg and Schleswig-Holstein
+#      Playwright proofs. It proves explicit Content-Type and HTTP 206 delivery,
+#      decoded and rendered regional features, MapLibre readiness, and zero remote
+#      tile-provider violations. Failure fails the job.
 #
 # Scope distinction:
-#   Pfad 2 proves Caddy HTTP Range delivery against a .pmtiles file. It does
-#   NOT validate PMTiles content beyond the delivery chain. The pmtiles-content
-#   scope (when used against a real artefact) adds a 7-byte magic-byte prefix
-#   check only; tile-directory and structural PMTiles validation remain future work.
-#   Pfad 4 proves the browser-side visual pipeline using the Vite middleware (not
-#   Caddy); it is a different proof path from Pfad 2/3, not a substitute.
+#   Pfad 2 proves the Caddy representation contract against a synthetic file.
+#   Pfade 3/4 add real archive header/hash checks, complete reachable-directory
+#   traversal, metadata/style reconciliation, and a bounded payload sample. They
+#   do not scan every tile or establish cartographic completeness or source freshness.
+#   Pfad 5 proves the browser-side rendering path using the Vite middleware (not
+#   production Caddy); it complements rather than replaces Pfade 2-4.
 #
 # What is NOT a substitute for either proof:
 #   - basemap-client-integration.spec.ts (mocked MapLibre protocol handler)
@@ -54,6 +52,9 @@ name: Basemap Runtime Proof
       - "scripts/guard/basemap-runtime-proof.sh"
       - "apps/web/tests/proofs/**"
       - "apps/web/package.json"
+      - "apps/web/pnpm-lock.yaml"
+      - "apps/web/scripts/validate-pmtiles.mjs"
+      - "apps/web/scripts/validate-pmtiles.test.mjs"
       - "apps/web/playwright.proof.config.ts"
       - "apps/web/vite.config.ts"
       - "map-style/**"
@@ -68,6 +69,9 @@ name: Basemap Runtime Proof
       - "scripts/guard/basemap-runtime-proof.sh"
       - "apps/web/tests/proofs/**"
       - "apps/web/package.json"
+      - "apps/web/pnpm-lock.yaml"
+      - "apps/web/scripts/validate-pmtiles.mjs"
+      - "apps/web/scripts/validate-pmtiles.test.mjs"
       - "apps/web/playwright.proof.config.ts"
       - "apps/web/vite.config.ts"
       - "map-style/**"
@@ -333,6 +337,22 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
+      - name: Install pnpm for PMTiles validator
+        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
+        with:
+          version: 9.11.0
+
+      - name: Setup Node for PMTiles validator
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: ".node-version"
+          cache: "pnpm"
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install PMTiles validator dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+
       - name: Verify Docker availability
         run: |
           set -euo pipefail
@@ -369,6 +389,19 @@ jobs:
           printf 'META_PATH=%s\n' "${META_PATH}" >> "${GITHUB_ENV}"
           printf 'EXPECTED_SHA256=%s\n' "${EXPECTED_SHA256}" >> "${GITHUB_ENV}"
           printf 'ARTEFACT_SIZE=%s\n' "${FILE_SIZE}" >> "${GITHUB_ENV}"
+
+      - name: Run PMTiles validator corruption tests
+        run: pnpm test:pmtiles-validator
+        working-directory: apps/web
+
+      - name: Deep-validate Hamburg PMTiles structure and MVT samples
+        run: |
+          set -euo pipefail
+          pnpm validate:pmtiles -- \
+            --archive hamburg=../../build/basemap/basemap-hamburg-v0.1.0.pmtiles \
+            --style ../../map-style/style.json \
+            --output /tmp/hamburg-pmtiles-deep-validation.json
+        working-directory: apps/web
 
       - name: Start Caddy serving /local-basemap/ from artefact directory
         run: |
@@ -434,6 +467,7 @@ jobs:
             /tmp/proof-output.txt
             /tmp/magic-bytes.txt
             /tmp/response-headers.txt
+            /tmp/hamburg-pmtiles-deep-validation.json
             /tmp/caddy.log
             build/basemap/basemap-hamburg-v0.1.0.pmtiles
             build/basemap/basemap-hamburg-v0.1.0.meta.json
@@ -513,6 +547,22 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
+      - name: Install pnpm for PMTiles validator
+        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
+        with:
+          version: 9.11.0
+
+      - name: Setup Node for PMTiles validator
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: ".node-version"
+          cache: "pnpm"
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install PMTiles validator dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+
       - name: Verify Docker availability
         run: |
           set -euo pipefail
@@ -532,6 +582,15 @@ jobs:
               "${META_PATH}"
           )"
           printf 'EXPECTED_SHA256=%s\n' "${EXPECTED_SHA256}" >> "${GITHUB_ENV}"
+
+      - name: Deep-validate Schleswig-Holstein PMTiles structure and MVT samples
+        run: |
+          set -euo pipefail
+          pnpm validate:pmtiles -- \
+            --archive schleswig-holstein=../../build/basemap/basemap-schleswig-holstein-v0.1.0.pmtiles \
+            --style ../../map-style/style.json \
+            --output /tmp/schleswig-holstein-pmtiles-deep-validation.json
+        working-directory: apps/web
 
       - name: Start Caddy serving Schleswig-Holstein PMTiles
         run: |
@@ -577,6 +636,7 @@ jobs:
             /tmp/schleswig-holstein-proof.txt
             /tmp/schleswig-holstein-caddy.log
             /tmp/schleswig-holstein-magic.txt
+            /tmp/schleswig-holstein-pmtiles-deep-validation.json
             build/basemap/basemap-schleswig-holstein-v0.1.0.pmtiles
             build/basemap/basemap-schleswig-holstein-v0.1.0.meta.json
           if-no-files-found: warn

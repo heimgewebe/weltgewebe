@@ -4,7 +4,7 @@ title: Deployment Contract and Preflight Guard
 doc_type: guide
 status: active
 summary: Anleitung und Dokumentation zum Deployment.
-last_reviewed: "2026-07-12"
+last_reviewed: "2026-07-13"
 relations:
   - type: relates_to
     target: docs/deploy/README.md
@@ -58,6 +58,32 @@ _Note (Phase C Preparation): Future Evaluation: The current bind-mount model cou
 ### Basemap Artifact Deployment (Best Effort)
 
 The deployment script (`weltgewebe-up`) attempts to provide every regional PMTiles source required by `map-style/style.json` in the `build/basemap/` directory before stack initialization. Hamburg and Schleswig-Holstein are built and published independently. Each region has a versioned artifact plus stable `.pmtiles` and `.meta.json` aliases. The guard remains best effort, but it reports missing regions separately so one existing region cannot hide another missing one.
+
+#### PMTiles HTTP representation contract
+
+Every `.pmtiles` response under `/local-basemap/` uses the explicit media type `application/octet-stream`. The contract applies to versioned files and stable aliases and is identical for the development Caddyfile, the Heim reference, the VPS Caddyfile, and the isolated Caddy proof. A valid public representation must satisfy all of the following:
+
+- a full or HEAD representation returns HTTP 200, `Content-Type: application/octet-stream`, and `Accept-Ranges: bytes`;
+- `Range: bytes=0-15` returns HTTP 206 with the same `Content-Type` and a matching `Content-Range`;
+- the full GET and Range response bodies begin with the PMTiles signature; HEAD is used only for the 200/header contract.
+
+`scripts/ops/check_public_live_readiness.py` checks this contract for the stable and versioned Hamburg and Schleswig-Holstein paths after deployment.
+
+#### Bounded deep PMTiles validation
+
+`apps/web/scripts/validate-pmtiles.mjs` is the publication gate for regional archives. It uses the repository's pinned `pmtiles` reader to validate the v3 header and section boundaries, traverse every reachable root and leaf directory, reconcile directory counts with the header, read metadata, and decode a deterministic bounded sample of real MVT payloads. The sampled layers must agree with metadata and cover every source layer used by `map-style/style.json`.
+
+The two regional content-proof jobs run the validator on the exact artifacts they build and upload its JSON receipt. Unit tests also prove fail-closed behavior for a truncated archive, a corrupt root directory, and malformed MVT bytes. The gate is deliberately bounded: it does not scan every tile and does not establish cartographic completeness, OSM semantic correctness, or source freshness.
+
+Example for a locally available artifact:
+
+```bash
+cd apps/web
+pnpm validate:pmtiles -- \
+  --archive hamburg=../../build/basemap/basemap-hamburg-v0.1.0.pmtiles \
+  --style ../../map-style/style.json \
+  --output /tmp/hamburg-pmtiles-deep-validation.json
+```
 
 #### `PUBLIC_BASEMAP_MODE` Contract
 

@@ -9,9 +9,10 @@ weltgewebe.home.arpa {
     @pmtiles path_regexp \.pmtiles$
     handle @pmtiles {
       root * /srv/weltgewebe-basemap
+      header Content-Type "application/octet-stream"
       header Access-Control-Allow-Origin "*"
       header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
-      header Access-Control-Expose-Headers "Content-Range, Accept-Ranges, Content-Length"
+      header Access-Control-Expose-Headers "Content-Type, Content-Range, Accept-Ranges, Content-Length"
       header Access-Control-Allow-Headers "Range, If-None-Match"
       @options {
         method OPTIONS

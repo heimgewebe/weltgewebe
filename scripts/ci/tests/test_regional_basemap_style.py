@@ -9,6 +9,12 @@ REPO = Path(__file__).resolve().parents[3]
 STYLE_PATH = REPO / "map-style" / "style.json"
 UP_SCRIPT_PATH = REPO / "scripts" / "weltgewebe-up"
 WORKFLOW_PATH = REPO / ".github" / "workflows" / "basemap-runtime-proof.yml"
+CADDY_PATHS = (
+    REPO / "infra" / "caddy" / "Caddyfile",
+    REPO / "infra" / "caddy" / "Caddyfile.heim",
+    REPO / "infra" / "caddy" / "Caddyfile.vps",
+    REPO / "infra" / "caddy" / "Caddyfile.proof",
+)
 
 
 class RegionalBasemapStyleTest(unittest.TestCase):
@@ -75,6 +81,41 @@ class RegionalBasemapStyleTest(unittest.TestCase):
         )
         self.assertIn('"${META_PATH}"', workflow)
         self.assertNotIn('META_PATH="build/basemap/"', workflow)
+
+    def test_content_jobs_run_bounded_deep_validation(self) -> None:
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        content_jobs = workflow[
+            workflow.index("  basemap-pmtiles-content-proof:") :
+            workflow.index("  basemap-visual-proof:")
+        ]
+
+        self.assertIn("pnpm test:pmtiles-validator", content_jobs)
+        self.assertIn(
+            "--archive hamburg=../../build/basemap/"
+            "basemap-hamburg-v0.1.0.pmtiles",
+            content_jobs,
+        )
+        self.assertIn(
+            "--archive schleswig-holstein=../../build/basemap/"
+            "basemap-schleswig-holstein-v0.1.0.pmtiles",
+            content_jobs,
+        )
+        self.assertIn(
+            "/tmp/hamburg-pmtiles-deep-validation.json", content_jobs
+        )
+        self.assertIn(
+            "/tmp/schleswig-holstein-pmtiles-deep-validation.json",
+            content_jobs,
+        )
+
+    def test_all_caddy_surfaces_declare_pmtiles_content_type(self) -> None:
+        for caddy_path in CADDY_PATHS:
+            with self.subTest(caddyfile=caddy_path.name):
+                text = caddy_path.read_text(encoding="utf-8")
+                self.assertIn(
+                    'Content-Type "application/octet-stream"', text
+                )
+
 
     def test_visual_proof_materializes_both_regional_sources(self) -> None:
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")

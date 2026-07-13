@@ -250,6 +250,11 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         "Expected Content-Range header for PMTiles delivery",
       ).toContain("bytes 0-511/");
 
+      expect(
+        directRangeResponse.headers()["content-type"] ?? "",
+        "Expected explicit PMTiles Content-Type",
+      ).toContain("application/octet-stream");
+
       // === BROWSER/MAPLIBRE VISUAL CONTRACT ===
       // Map container must be visible
       await expect(page.locator("#map")).toBeVisible({ timeout: 20000 });
@@ -450,6 +455,8 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
           directRangeResponse.headers()["accept-ranges"] ?? null,
         direct_range_content_range:
           directRangeResponse.headers()["content-range"] ?? null,
+        direct_range_content_type:
+          directRangeResponse.headers()["content-type"] ?? null,
 
         // BROWSER/MAPLIBRE VISUAL CONTRACT - OBSERVED
         pmtiles_requests_total: pmtilesRequests.length,
@@ -525,6 +532,11 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         proofSummary.direct_range_accept_ranges,
         "Proof requires Accept-Ranges header",
       ).toContain("bytes");
+
+      expect(
+        proofSummary.direct_range_content_type,
+        "Proof requires explicit PMTiles Content-Type",
+      ).toContain("application/octet-stream");
 
       // Hard assertion: MapLibre must have requested at least one local PMTiles file
       expect(
