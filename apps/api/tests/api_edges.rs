@@ -21,6 +21,7 @@ use weltgewebe_api::{
     routes::{
         accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
+        nodes::{Location as NodeLocation, Node},
     },
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
@@ -564,6 +565,122 @@ async fn post_edges_binds_account_source_to_authenticated_weber() -> Result<()> 
     let persisted = jsonl_lines(&edges_path);
     assert_eq!(persisted.len(), 1);
     assert_eq!(persisted[0]["source_id"], OWN_ACCOUNT_ID);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn post_account_edge_projects_garnrolle_relation_and_survives_reload() -> Result<()> {
+    const ACCOUNT_ID: &str = "00000000-0000-0000-0000-000000000021";
+    const NODE_ID: &str = "00000000-0000-0000-0000-000000000022";
+
+    fn relation_node() -> Node {
+        Node {
+            id: NODE_ID.to_string(),
+            kind: "resource".to_string(),
+            title: "Vorwärtsnachweis".to_string(),
+            created_at: "2026-07-13T04:00:00Z".to_string(),
+            updated_at: "2026-07-13T04:00:00Z".to_string(),
+            summary: Some("Neu über den regulären Schreibpfad verknüpft".to_string()),
+            info: None,
+            tags: vec![],
+            address: None,
+            location: NodeLocation {
+                lat: 53.55,
+                lon: 10.0,
+            },
+        }
+    }
+
+    async fn read_account_details(app: &Router) -> Result<serde_json::Value> {
+        let uri = format!("/accounts/{ACCOUNT_ID}");
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(uri)
+                    .header("Host", "localhost")
+                    .body(body::Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        read_json_body(response).await
+    }
+
+    fn assert_relation(details: &serde_json::Value, created_at: &str) {
+        assert_eq!(details["id"], ACCOUNT_ID);
+        assert_eq!(details["nodes"].as_array().map(Vec::len), Some(1));
+        assert_eq!(details["nodes"][0]["node_id"], NODE_ID);
+        assert_eq!(details["nodes"][0]["node_title"], "Vorwärtsnachweis");
+        assert_eq!(details["nodes"][0]["edge_kind"], "reference");
+        assert_eq!(details["activity"].as_array().map(Vec::len), Some(1));
+        assert_eq!(details["activity"][0]["date"], created_at);
+        assert_eq!(
+            details["activity"][0]["event"],
+            "Hat einen Faden zum Knoten \"Vorwärtsnachweis\" geknüpft."
+        );
+    }
+
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    fs::create_dir_all(&in_dir)?;
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = app_with_session_for_account(
+        ACCOUNT_ID,
+        Role::Weber,
+        DomainReadSource::Jsonl,
+        weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
+    )
+    .await?;
+    state
+        .nodes
+        .write()
+        .await
+        .insert(NODE_ID.to_string(), relation_node());
+
+    let request_body = format!(
+        r#"{{"source_id":"{ACCOUNT_ID}","source_type":"account","target_id":"{NODE_ID}","target_type":"node","edge_kind":"reference"}}"#
+    );
+    let response = app
+        .clone()
+        .oneshot(post_edges(Some(&cookie), &request_body))
+        .await?;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let created = read_json_body(response).await?;
+    let created_at = created["created_at"]
+        .as_str()
+        .context("created edge must carry created_at")?
+        .to_string();
+    let created_id = created["id"]
+        .as_str()
+        .context("created edge must carry id")?;
+
+    let persisted = jsonl_lines(&edges_path);
+    assert_eq!(persisted.len(), 1);
+    assert_eq!(persisted[0]["id"], created_id);
+    assert_eq!(persisted[0]["source_id"], ACCOUNT_ID);
+    assert_eq!(persisted[0]["target_id"], NODE_ID);
+
+    let immediate_details = read_account_details(&app).await?;
+    assert_relation(&immediate_details, &created_at);
+
+    let (restarted_app, _restarted_cookie, restarted_state) = app_with_session_for_account(
+        ACCOUNT_ID,
+        Role::Weber,
+        DomainReadSource::Jsonl,
+        weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
+    )
+    .await?;
+    restarted_state
+        .nodes
+        .write()
+        .await
+        .insert(NODE_ID.to_string(), relation_node());
+
+    let restarted_details = read_account_details(&restarted_app).await?;
+    assert_relation(&restarted_details, &created_at);
 
     Ok(())
 }
