@@ -91,8 +91,6 @@ pub struct AccountNodeRelation {
     pub node_title: String,
     pub node_kind: String,
     pub edge_kind: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub note: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -454,7 +452,8 @@ pub async fn get_account(
     let mut activity = Vec::new();
 
     for edge in related_edges {
-        let related_id = if edge.source_id == id {
+        let account_is_source = edge.source_id == id;
+        let related_id = if account_is_source {
             edge.target_id.as_str()
         } else {
             edge.source_id.as_str()
@@ -469,15 +468,19 @@ pub async fn get_account(
                 node_title: node.title.clone(),
                 node_kind: node.kind.clone(),
                 edge_kind: edge.edge_kind.clone(),
-                note: edge.note.clone(),
             });
         }
 
         if let Some(date) = edge.created_at.clone() {
-            activity.push(AccountActivity {
-                date,
-                event: format!("Hat einen Faden zum Knoten \"{}\" geknüpft.", node.title),
-            });
+            let event = if account_is_source {
+                format!("Hat einen Faden zum Knoten \"{}\" geknüpft.", node.title)
+            } else {
+                format!(
+                    "Wurde über einen Faden mit dem Knoten \"{}\" verknüpft.",
+                    node.title
+                )
+            };
+            activity.push(AccountActivity { date, event });
         }
     }
 

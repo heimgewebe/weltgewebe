@@ -34,26 +34,25 @@ use std::{path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
-    auth::{
-        accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionBackend,
-    },
+    auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionBackend},
     config::{
         AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
         DomainReadSource,
     },
-    domain_db::load_edges_from_postgres,
-    middleware::{auth::auth_middleware, csrf::require_csrf},
-    routes::{
-        accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
-        api_router,
-        nodes::{Location as NodeLocation, Node},
+    domain_db::{
+        insert_domain_node, load_accounts_from_postgres, load_edges_from_postgres,
+        load_nodes_from_postgres,
     },
+    middleware::{auth::auth_middleware, csrf::require_csrf},
+    routes::api_router,
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
 };
 
 mod helpers;
-use helpers::set_gewebe_in_dir;
+use helpers::{
+    assert_account_has_single_node_relation, read_account_details, set_gewebe_in_dir, test_node,
+};
 
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL")
@@ -83,8 +82,8 @@ async fn run_migrations(pool: &PgPool) {
 // share the `edec0000-` hex prefix so cleanup can target them via LIKE.
 const EDGE_ID_A: &str = "edec0000-0000-4000-8000-0000000000a1";
 const EDGE_ID_DUP: &str = "edec0000-0000-4000-8000-0000000000d1";
-const SOURCE_ID: &str = "edec0000-0000-4000-8000-00000000005a";
-const TARGET_ID: &str = "edec0000-0000-4000-8000-00000000005b";
+const NODE_ID: &str = "edec0000-0000-4000-8000-00000000005a";
+const ACCOUNT_ID: &str = "edec0000-0000-4000-8000-00000000005b";
 
 async fn clean(pool: &PgPool) {
     sqlx::query(
@@ -93,11 +92,46 @@ async fn clean(pool: &PgPool) {
             OR source_id IN ($1, $2) \
             OR target_id IN ($1, $2)",
     )
-    .bind(SOURCE_ID)
-    .bind(TARGET_ID)
+    .bind(NODE_ID)
+    .bind(ACCOUNT_ID)
     .execute(pool)
     .await
     .expect("clean domain_edges fixtures");
+    sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
+        .bind(NODE_ID)
+        .execute(pool)
+        .await
+        .expect("clean domain_nodes fixture");
+    sqlx::query(
+        "DELETE FROM domain_accounts \
+         WHERE id = $1 OR id LIKE 'writepath-edge-%'",
+    )
+    .bind(ACCOUNT_ID)
+    .execute(pool)
+    .await
+    .expect("clean domain_accounts fixtures");
+}
+
+async fn ensure_operator_account(pool: &PgPool, id: &str, role: &Role) -> Result<()> {
+    let role_name = match role {
+        Role::Gast => "gast",
+        Role::Weber => "weber",
+        Role::Admin => "admin",
+    };
+    sqlx::query(
+        "INSERT INTO domain_accounts \
+            (id, kind, title, map_state, radius_m, disabled, role, webauthn_user_id, \
+             public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', $2, 'not_on_map', 0, false, $3, $4::uuid, '{}'::jsonb, '{}'::jsonb) \
+         ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role, title = EXCLUDED.title",
+    )
+    .bind(id)
+    .bind(format!("Writer {id}"))
+    .bind(role_name)
+    .bind(uuid::Uuid::new_v4().to_string())
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 async fn fixture_row_count(pool: &PgPool) -> i64 {
@@ -116,25 +150,6 @@ fn test_metrics() -> Metrics {
         build_timestamp: "test",
     })
     .expect("metrics")
-}
-
-fn writer_account(id: &str) -> AccountInternal {
-    AccountInternal {
-        public: AccountPublic {
-            id: id.to_string(),
-            kind: "garnrolle".to_string(),
-            title: format!("Writer {id}"),
-            summary: None,
-            public_pos: None,
-            map_state: GarnrolleMapState::NotOnMap,
-            radius_m: 0,
-            disabled: false,
-            tags: vec![],
-        },
-        role: Role::Weber,
-        email: None,
-        webauthn_user_id: uuid::Uuid::new_v4(),
-    }
 }
 
 fn write_path_config(
@@ -181,12 +196,17 @@ fn write_path_config(
 async fn edge_write_app(
     pool: PgPool,
     operator_id: &str,
+    operator_role: Role,
     domain_read_source: DomainReadSource,
     domain_edge_write_source: DomainEdgeWriteSource,
 ) -> Result<(Router, String, ApiState)> {
-    let mut accounts = AccountStore::new();
-    accounts.insert(writer_account(operator_id));
-
+    ensure_operator_account(&pool, operator_id, &operator_role).await?;
+    let accounts = load_accounts_from_postgres(&pool)
+        .await
+        .context("load accounts for test")?;
+    let nodes = load_nodes_from_postgres(&pool)
+        .await
+        .context("load nodes for test")?;
     let edges = load_edges_from_postgres(&pool)
         .await
         .context("load edges for test")?;
@@ -206,7 +226,7 @@ async fn edge_write_app(
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
         accounts: Arc::new(RwLock::new(accounts)),
-        nodes: Arc::new(RwLock::new(weltgewebe_api::state::OrderedCache::new())),
+        nodes: Arc::new(RwLock::new(nodes)),
         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
         accounts_persist: Arc::new(tokio::sync::Mutex::new(())),
         edges: Arc::new(RwLock::new(edges)),
@@ -257,76 +277,52 @@ async fn read_text_body(res: axum::response::Response) -> Result<String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-fn relation_node() -> Node {
-    Node {
-        id: SOURCE_ID.to_string(),
-        kind: "resource".to_string(),
-        title: "PostgreSQL Vorwärtsnachweis".to_string(),
-        created_at: "2026-07-13T04:00:00Z".to_string(),
-        updated_at: "2026-07-13T04:00:00Z".to_string(),
-        summary: Some("Persistente Garnrollen-Knotenbeziehung".to_string()),
-        info: None,
-        tags: vec![],
-        address: None,
-        location: NodeLocation {
-            lat: 53.55,
-            lon: 10.0,
-        },
-    }
-}
-
-async fn read_account_details(app: &Router, account_id: &str) -> Result<serde_json::Value> {
-    let uri = format!("/accounts/{account_id}");
-    let response = app
-        .clone()
-        .oneshot(
-            Request::get(uri)
-                .header("Host", "localhost")
-                .body(body::Body::empty())?,
-        )
-        .await?;
-    assert_eq!(response.status(), StatusCode::OK);
-    read_json_body(response).await
-}
-
-fn assert_account_relation(details: &serde_json::Value, created_at: &str) {
-    assert_eq!(details["id"], TARGET_ID);
-    assert_eq!(details["nodes"].as_array().map(Vec::len), Some(1));
-    assert_eq!(details["nodes"][0]["node_id"], SOURCE_ID);
-    assert_eq!(
-        details["nodes"][0]["node_title"],
-        "PostgreSQL Vorwärtsnachweis"
-    );
-    assert_eq!(details["nodes"][0]["edge_kind"], "reference");
-    assert_eq!(details["activity"].as_array().map(Vec::len), Some(1));
-    let projected_at = chrono::DateTime::parse_from_rfc3339(
-        details["activity"][0]["date"]
-            .as_str()
-            .expect("projected activity date must be a string"),
-    )
-    .expect("projected activity date must be RFC3339");
-    let expected_at = chrono::DateTime::parse_from_rfc3339(created_at)
-        .expect("created edge date must be RFC3339");
-    assert_eq!(
-        projected_at.timestamp_micros(),
-        expected_at.timestamp_micros(),
-        "PostgreSQL may normalize nanoseconds to microseconds, but the projected activity must preserve the same instant"
-    );
-    assert_eq!(
-        details["activity"][0]["event"],
-        "Hat einen Faden zum Knoten \"PostgreSQL Vorwärtsnachweis\" geknüpft."
-    );
-}
-
 fn create_body(id: &str, note: Option<&str>) -> String {
     match note {
         Some(note) => format!(
-            r#"{{"id":"{id}","source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","note":"{note}"}}"#
+            r#"{{"id":"{id}","source_id":"{NODE_ID}","source_type":"node","target_id":"{ACCOUNT_ID}","target_type":"account","edge_kind":"reference","note":"{note}"}}"#
         ),
         None => format!(
-            r#"{{"id":"{id}","source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference"}}"#
+            r#"{{"id":"{id}","source_id":"{NODE_ID}","source_type":"node","target_id":"{ACCOUNT_ID}","target_type":"account","edge_kind":"reference"}}"#
         ),
     }
+}
+
+/// Account endpoint authorization is enforced before PostgreSQL persistence.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_weber_cannot_create_node_to_account_edge() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = edge_write_app(
+        pool.clone(),
+        ACCOUNT_ID,
+        Role::Weber,
+        DomainReadSource::Postgres,
+        DomainEdgeWriteSource::Postgres,
+    )
+    .await?;
+    let response = app
+        .oneshot(post_edges_req(
+            &cookie,
+            &create_body(EDGE_ID_A, Some("must not persist")),
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(fixture_row_count(&pool).await, 0);
+    assert!(state.edges.read().await.get(EDGE_ID_A).is_none());
+    assert!(!in_dir.join("demo.edges.jsonl").exists());
+
+    clean(&pool).await;
+    Ok(())
 }
 
 /// A. PostgreSQL create persists one row, updates the cache, serves GET, and
@@ -345,19 +341,26 @@ async fn postgres_edge_create_persists_row_cache_and_loader_roundtrip() -> Resul
     std::fs::create_dir_all(&in_dir)?;
     let _env = set_gewebe_in_dir(&in_dir);
 
+    insert_domain_node(
+        &pool,
+        &test_node(
+            NODE_ID,
+            "PostgreSQL Vorwärtsnachweis",
+            Some("Persistente Garnrollen-Knotenbeziehung"),
+        ),
+        None,
+    )
+    .await
+    .context("persist relation node fixture")?;
+
     let (app, cookie, state) = edge_write_app(
         pool.clone(),
-        TARGET_ID,
+        ACCOUNT_ID,
+        Role::Admin,
         DomainReadSource::Postgres,
         DomainEdgeWriteSource::Postgres,
     )
     .await?;
-    state
-        .nodes
-        .write()
-        .await
-        .insert(SOURCE_ID.to_string(), relation_node());
-
     let res = app
         .clone()
         .oneshot(post_edges_req(
@@ -392,8 +395,8 @@ async fn postgres_edge_create_persists_row_cache_and_loader_roundtrip() -> Resul
     .fetch_one(&pool)
     .await
     .expect("created edge row must exist");
-    assert_eq!(source_id, SOURCE_ID);
-    assert_eq!(target_id, TARGET_ID);
+    assert_eq!(source_id, NODE_ID);
+    assert_eq!(target_id, ACCOUNT_ID);
     assert_eq!(edge_kind, "reference");
     // created_at must not silently vanish; PostgreSQL stores microseconds, the
     // response carries nanoseconds, so compare at microsecond precision.
@@ -448,9 +451,27 @@ async fn postgres_edge_create_persists_row_cache_and_loader_roundtrip() -> Resul
     let fetched = read_json_body(res).await?;
     assert_eq!(fetched["id"], EDGE_ID_A);
     assert_eq!(fetched["created_at"], response_created_at.as_str());
+    assert!(
+        fetched.get("note").is_none(),
+        "public PostgreSQL edge detail must omit free-text notes"
+    );
 
-    let immediate_details = read_account_details(&app, TARGET_ID).await?;
-    assert_account_relation(&immediate_details, &response_created_at);
+    let immediate_details = read_account_details(&app, ACCOUNT_ID).await?;
+    let projected_at = assert_account_has_single_node_relation(
+        &immediate_details,
+        ACCOUNT_ID,
+        NODE_ID,
+        "PostgreSQL Vorwärtsnachweis",
+        "reference",
+        "Wurde über einen Faden mit dem Knoten \"PostgreSQL Vorwärtsnachweis\" verknüpft.",
+    );
+    let projected_at = chrono::DateTime::parse_from_rfc3339(&projected_at)
+        .context("projected activity date must be RFC3339")?;
+    assert_eq!(
+        projected_at.timestamp_micros(),
+        response_created.timestamp_micros(),
+        "PostgreSQL may normalize nanoseconds to microseconds, but the projected activity must preserve the same instant"
+    );
 
     // Level 3: load_edges_from_postgres reconstructs the stored edge.
     let reloaded = load_edges_from_postgres(&pool)
@@ -459,9 +480,9 @@ async fn postgres_edge_create_persists_row_cache_and_loader_roundtrip() -> Resul
     let edge = reloaded
         .get(EDGE_ID_A)
         .context("edge reloaded from postgres")?;
-    assert_eq!(edge.source_id, SOURCE_ID);
+    assert_eq!(edge.source_id, NODE_ID);
     assert_eq!(edge.source_type.as_deref(), Some("node"));
-    assert_eq!(edge.target_id, TARGET_ID);
+    assert_eq!(edge.target_id, ACCOUNT_ID);
     assert_eq!(edge.target_type.as_deref(), Some("account"));
     assert_eq!(edge.edge_kind, "reference");
     assert_eq!(edge.note.as_deref(), Some("edge via postgres"));
@@ -478,18 +499,35 @@ async fn postgres_edge_create_persists_row_cache_and_loader_roundtrip() -> Resul
 
     let (restarted_app, _restarted_cookie, restarted_state) = edge_write_app(
         pool.clone(),
-        TARGET_ID,
+        ACCOUNT_ID,
+        Role::Admin,
         DomainReadSource::Postgres,
         DomainEdgeWriteSource::Postgres,
     )
     .await?;
-    restarted_state
-        .nodes
-        .write()
+    assert!(restarted_state
+        .accounts
+        .read()
         .await
-        .insert(SOURCE_ID.to_string(), relation_node());
-    let restarted_details = read_account_details(&restarted_app, TARGET_ID).await?;
-    assert_account_relation(&restarted_details, &response_created_at);
+        .get(ACCOUNT_ID)
+        .is_some());
+    assert!(restarted_state.nodes.read().await.get(NODE_ID).is_some());
+    assert!(restarted_state.edges.read().await.get(EDGE_ID_A).is_some());
+    let restarted_details = read_account_details(&restarted_app, ACCOUNT_ID).await?;
+    let restarted_at = assert_account_has_single_node_relation(
+        &restarted_details,
+        ACCOUNT_ID,
+        NODE_ID,
+        "PostgreSQL Vorwärtsnachweis",
+        "reference",
+        "Wurde über einen Faden mit dem Knoten \"PostgreSQL Vorwärtsnachweis\" verknüpft.",
+    );
+    let restarted_at = chrono::DateTime::parse_from_rfc3339(&restarted_at)?;
+    assert_eq!(
+        restarted_at.timestamp_micros(),
+        response_created.timestamp_micros(),
+        "full PostgreSQL reload must preserve the relation activity instant"
+    );
 
     clean(&pool).await;
     Ok(())
@@ -514,12 +552,13 @@ async fn postgres_edge_create_operation_replays_after_restart() -> Result<()> {
     std::fs::create_dir_all(&in_dir)?;
     let _env = set_gewebe_in_dir(&in_dir);
     let request_body = format!(
-        r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","note":"durable","operation_id":"{OPERATION_ID}"}}"#
+        r#"{{"source_id":"{NODE_ID}","source_type":"node","target_id":"{ACCOUNT_ID}","target_type":"account","edge_kind":"reference","note":"durable","operation_id":"{OPERATION_ID}"}}"#
     );
 
     let (first_app, first_cookie, _) = edge_write_app(
         pool.clone(),
         ACTOR_ID,
+        Role::Admin,
         DomainReadSource::Postgres,
         DomainEdgeWriteSource::Postgres,
     )
@@ -548,6 +587,7 @@ async fn postgres_edge_create_operation_replays_after_restart() -> Result<()> {
     let (restarted_app, restarted_cookie, restarted_state) = edge_write_app(
         pool.clone(),
         ACTOR_ID,
+        Role::Admin,
         DomainReadSource::Postgres,
         DomainEdgeWriteSource::Postgres,
     )
@@ -562,7 +602,7 @@ async fn postgres_edge_create_operation_replays_after_restart() -> Result<()> {
     assert_eq!(restarted_state.edges.read().await.len(), 1);
 
     let changed_body = format!(
-        r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","note":"changed","operation_id":"{OPERATION_ID}"}}"#
+        r#"{{"source_id":"{NODE_ID}","source_type":"node","target_id":"{ACCOUNT_ID}","target_type":"account","edge_kind":"reference","note":"changed","operation_id":"{OPERATION_ID}"}}"#
     );
     let conflict = restarted_app
         .oneshot(post_edges_req(&restarted_cookie, &changed_body))
@@ -600,6 +640,7 @@ async fn postgres_edge_create_omits_note_key_when_absent() -> Result<()> {
     let (app, cookie, _state) = edge_write_app(
         pool.clone(),
         "writepath-edge-writer-2",
+        Role::Admin,
         DomainReadSource::Postgres,
         DomainEdgeWriteSource::Postgres,
     )
@@ -662,6 +703,7 @@ async fn postgres_edge_create_duplicate_id_returns_409() -> Result<()> {
     let (app, cookie, state) = edge_write_app(
         pool.clone(),
         "writepath-edge-writer-3",
+        Role::Admin,
         DomainReadSource::Postgres,
         DomainEdgeWriteSource::Postgres,
     )
@@ -675,8 +717,8 @@ async fn postgres_edge_create_duplicate_id_returns_409() -> Result<()> {
          VALUES ($1, $2, $3, 'reference', NOW(), '{}'::jsonb)",
     )
     .bind(EDGE_ID_DUP)
-    .bind(SOURCE_ID)
-    .bind(TARGET_ID)
+    .bind(NODE_ID)
+    .bind(ACCOUNT_ID)
     .execute(&pool)
     .await
     .expect("seed conflicting edge row");
@@ -720,6 +762,7 @@ async fn postgres_read_jsonl_edge_write_is_blocked() -> Result<()> {
     let (app, cookie, state) = edge_write_app(
         pool.clone(),
         "writepath-edge-writer-4",
+        Role::Admin,
         DomainReadSource::Postgres,
         DomainEdgeWriteSource::Jsonl,
     )
@@ -765,6 +808,7 @@ async fn jsonl_read_postgres_edge_write_invalid_config_returns_500() -> Result<(
     let (app, cookie, state) = edge_write_app(
         pool.clone(),
         "writepath-edge-writer-5",
+        Role::Admin,
         DomainReadSource::Jsonl,
         DomainEdgeWriteSource::Postgres,
     )
@@ -835,8 +879,8 @@ async fn postgres_edge_create_rejects_when_cache_limit_reached() -> Result<()> {
          VALUES ($1, $2, $3, 'reference', NOW(), '{}'::jsonb)",
     )
     .bind(EDGE_ID_DUP)
-    .bind(SOURCE_ID)
-    .bind(TARGET_ID)
+    .bind(NODE_ID)
+    .bind(ACCOUNT_ID)
     .execute(&pool)
     .await
     .expect("seed limit-filling edge row");
@@ -849,6 +893,7 @@ async fn postgres_edge_create_rejects_when_cache_limit_reached() -> Result<()> {
     let (app, cookie, state) = edge_write_app(
         pool.clone(),
         "writepath-edge-writer-limit",
+        Role::Admin,
         DomainReadSource::Postgres,
         DomainEdgeWriteSource::Postgres,
     )
