@@ -57,10 +57,30 @@ class FakeWorld:
         if url == "https://weltgewebe.net/local-basemap/glyphs/Noto%20Sans%20Regular/0-255.pbf":
             return FetchResult(url, 200, {}, b"glyph-bytes")
         if url in {
+            "https://weltgewebe.net/local-basemap/basemap-hamburg.pmtiles",
             "https://weltgewebe.net/local-basemap/basemap-hamburg-v0.1.0.pmtiles",
+            "https://weltgewebe.net/local-basemap/basemap-schleswig-holstein.pmtiles",
             "https://weltgewebe.net/local-basemap/basemap-schleswig-holstein-v0.1.0.pmtiles",
         }:
-            return FetchResult(url, 206, {"Content-Range": "bytes 0-15/100"}, b"PMTiles\x03fake")
+            if headers and headers.get("Range") == "bytes=0-15":
+                return FetchResult(
+                    url,
+                    206,
+                    {
+                        "Content-Type": "application/octet-stream",
+                        "Content-Range": "bytes 0-15/100",
+                    },
+                    b"PMTiles\x03fake",
+                )
+            return FetchResult(
+                url,
+                200,
+                {
+                    "Content-Type": "application/octet-stream",
+                    "Accept-Ranges": "bytes",
+                },
+                b"PMTiles\x03fake",
+            )
         return FetchResult(url, 404, {}, b"")
 
     def checker(self):
@@ -93,14 +113,25 @@ class PublicLiveReadinessTest(unittest.TestCase):
                 "version-json",
                 "basemap-style",
                 "glyph-range",
-                "pmtiles-header:hamburg",
-                "pmtiles-header:schleswig-holstein",
+                "pmtiles-header:hamburg-stable",
+                "pmtiles-header:hamburg-versioned",
+                "pmtiles-header:schleswig-holstein-stable",
+                "pmtiles-header:schleswig-holstein-versioned",
             },
         )
         pmtiles_requests = [headers for url, headers in fake.requests if url.endswith(".pmtiles")]
         self.assertEqual(
             pmtiles_requests,
-            [{"Range": "bytes=0-15"}, {"Range": "bytes=0-15"}],
+            [
+                None,
+                {"Range": "bytes=0-15"},
+                None,
+                {"Range": "bytes=0-15"},
+                None,
+                {"Range": "bytes=0-15"},
+                None,
+                {"Range": "bytes=0-15"},
+            ],
         )
 
     def test_wrong_dns_ip_fails(self) -> None:
@@ -145,7 +176,16 @@ class PublicLiveReadinessTest(unittest.TestCase):
 
         def bad_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float):
             if url.endswith(".pmtiles"):
-                return fake.module.FetchResult(url, 200, {}, b"not-pmtiles")
+                status = 206 if headers and headers.get("Range") else 200
+                response_headers = {
+                    "Content-Type": "application/octet-stream",
+                    "Accept-Ranges": "bytes",
+                }
+                if status == 206:
+                    response_headers["Content-Range"] = "bytes 0-15/100"
+                return fake.module.FetchResult(
+                    url, status, response_headers, b"not-pmtiles"
+                )
             return fake.fetcher(url, headers, timeout)
 
         checker = fake.module.PublicLiveChecker(resolver=fake.resolver, fetcher=bad_fetcher)
@@ -153,9 +193,46 @@ class PublicLiveReadinessTest(unittest.TestCase):
             result for result in checker.run() if result.name.startswith("pmtiles-header:")
         ]
 
-        self.assertEqual(len(pmtiles_results), 2)
+        self.assertEqual(len(pmtiles_results), 4)
         self.assertTrue(all(not result.ok for result in pmtiles_results))
-        self.assertTrue(all("missing" in result.detail for result in pmtiles_results))
+        self.assertTrue(
+            all("signature" in result.detail for result in pmtiles_results)
+        )
+
+    def test_pmtiles_contract_requires_explicit_content_type(self) -> None:
+        fake = FakeWorld()
+
+        def bad_fetcher(
+            url: str, headers: Mapping[str, str] | None, timeout: float
+        ):
+            result = fake.fetcher(url, headers, timeout)
+            if url.endswith(".pmtiles"):
+                return fake.module.FetchResult(
+                    result.url,
+                    result.status,
+                    {
+                        key: value
+                        for key, value in result.headers.items()
+                        if key.lower() != "content-type"
+                    },
+                    result.body,
+                )
+            return result
+
+        checker = fake.module.PublicLiveChecker(
+            resolver=fake.resolver, fetcher=bad_fetcher
+        )
+        pmtiles_results = [
+            result
+            for result in checker.run()
+            if result.name.startswith("pmtiles-header:")
+        ]
+
+        self.assertEqual(len(pmtiles_results), 4)
+        self.assertTrue(all(not result.ok for result in pmtiles_results))
+        self.assertTrue(
+            all("content-type" in result.detail for result in pmtiles_results)
+        )
 
 
 class PublicLiveReadinessIPv6Test(unittest.TestCase):

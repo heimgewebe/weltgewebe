@@ -23,9 +23,18 @@ DEFAULT_WWW_DOMAIN = "www.weltgewebe.net"
 DEFAULT_API_DOMAIN = "api.weltgewebe.net"
 DEFAULT_EXPECTED_IP = "94.16.121.119"
 DEFAULT_GLYPH_PATH = "/local-basemap/glyphs/Noto%20Sans%20Regular/0-255.pbf"
+PMTILES_CONTENT_TYPE = "application/octet-stream"
 DEFAULT_PMTILES_PATHS = (
-    ("hamburg", "/local-basemap/basemap-hamburg-v0.1.0.pmtiles"),
-    ("schleswig-holstein", "/local-basemap/basemap-schleswig-holstein-v0.1.0.pmtiles"),
+    ("hamburg-stable", "/local-basemap/basemap-hamburg.pmtiles"),
+    ("hamburg-versioned", "/local-basemap/basemap-hamburg-v0.1.0.pmtiles"),
+    (
+        "schleswig-holstein-stable",
+        "/local-basemap/basemap-schleswig-holstein.pmtiles",
+    ),
+    (
+        "schleswig-holstein-versioned",
+        "/local-basemap/basemap-schleswig-holstein-v0.1.0.pmtiles",
+    ),
 )
 API_REQUIRED_CHECKS = ("database", "nats", "policy")
 
@@ -328,22 +337,70 @@ class PublicLiveChecker:
         name = f"pmtiles-header:{region}"
         url = f"https://{self.domain}{path}"
         try:
-            result = self.fetcher(url, {"Range": "bytes=0-15"}, self.timeout)
+            full = self.fetcher(url, None, self.timeout)
+            partial = self.fetcher(
+                url,
+                {"Range": "bytes=0-15"},
+                self.timeout,
+            )
         except Exception as exc:
             return fail_result(name, str(exc), url=url)
-        if result.status in {200, 206} and result.body.startswith(b"PMTiles"):
-            return pass_result(
-                name,
-                "Regional PMTiles artifact header is publicly reachable",
-                region=region,
-                status=result.status,
+
+        full_headers = _lower_headers(full.headers)
+        partial_headers = _lower_headers(partial.headers)
+        full_type = full_headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        partial_type = (
+            partial_headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        )
+        accept_ranges = full_headers.get("accept-ranges", "").lower()
+        content_range = partial_headers.get("content-range", "")
+
+        failures: list[str] = []
+        if full.status != 200:
+            failures.append(f"full status {full.status} != 200")
+        if not full.body.startswith(b"PMTiles"):
+            failures.append("full response is missing PMTiles signature")
+        if full_type != PMTILES_CONTENT_TYPE:
+            failures.append(
+                f"full content-type {full_type or '<missing>'} != {PMTILES_CONTENT_TYPE}"
             )
-        return fail_result(
+        if accept_ranges != "bytes":
+            failures.append(f"accept-ranges {accept_ranges or '<missing>'} != bytes")
+        if partial.status != 206:
+            failures.append(f"range status {partial.status} != 206")
+        if not partial.body.startswith(b"PMTiles"):
+            failures.append("range response is missing PMTiles signature")
+        if partial_type != PMTILES_CONTENT_TYPE:
+            failures.append(
+                f"range content-type {partial_type or '<missing>'} != {PMTILES_CONTENT_TYPE}"
+            )
+        if not content_range.startswith("bytes 0-15/"):
+            failures.append(
+                f"content-range {content_range or '<missing>'} does not start with bytes 0-15/"
+            )
+
+        if failures:
+            return fail_result(
+                name,
+                "; ".join(failures),
+                region=region,
+                full_status=full.status,
+                range_status=partial.status,
+                full_content_type=full_type,
+                range_content_type=partial_type,
+                accept_ranges=accept_ranges,
+                content_range=content_range,
+            )
+
+        return pass_result(
             name,
-            "Regional PMTiles artifact header missing",
+            "Regional PMTiles full and Range representation contract is public",
             region=region,
-            status=result.status,
-            prefix=result.body[:16].hex(),
+            full_status=full.status,
+            range_status=partial.status,
+            content_type=full_type,
+            accept_ranges=accept_ranges,
+            content_range=content_range,
         )
 
 
