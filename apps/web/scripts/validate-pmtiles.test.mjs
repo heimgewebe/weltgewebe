@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -183,4 +184,29 @@ test("rejects malformed MVT tile payloads", async (t) => {
     validateArchive({ region: "fixture", archivePath, stylePath }),
     /MVT_DECODE_FAILED|MVT_LAYERS_EMPTY/,
   );
+});
+
+test("CLI accepts the conventional standalone argument separator", async (t) => {
+  const { directory, stylePath } = await fixtureContext(t);
+  const archivePath = path.join(directory, "cli.pmtiles");
+  const outputPath = path.join(directory, "receipt.json");
+  await writeFile(archivePath, makeArchive());
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      path.resolve("scripts/validate-pmtiles.mjs"),
+      "--",
+      "--archive",
+      `fixture=${archivePath}`,
+      "--style",
+      stylePath,
+      "--output",
+      outputPath,
+    ],
+    { encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /"verdict": "PROVEN"/);
 });
