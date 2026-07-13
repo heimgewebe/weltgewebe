@@ -9,8 +9,15 @@
   import ContextPanel from "$lib/components/ContextPanel.svelte";
   import ActionBar from "$lib/components/ActionBar.svelte";
   import SearchOverlay from "$lib/components/SearchOverlay.svelte";
+  import SearchDirectionIndicators from "$lib/components/SearchDirectionIndicators.svelte";
   import FilterOverlay from "$lib/components/FilterOverlay.svelte";
   import type { MapEntityViewModel } from "$lib/map/types";
+  import {
+    deriveSearchDirectionIndicators,
+    resolveInitialMapCamera,
+    type SearchDirectionIndicator,
+    type ViewportBounds,
+  } from "$lib/map/searchNavigation";
 
   import { page } from "$app/stores";
 
@@ -53,14 +60,10 @@
     getFilterTypeKey,
     selectMapEntity,
   } from "$lib/stores/mapView";
-  import { authStore } from "$lib/auth/store";
-
+  import { authStore, type AuthStatus } from "$lib/auth/store";
   import { get } from "svelte/store";
 
-  import {
-    currentBasemap,
-    HAMMER_PARK_CENTER,
-  } from "$lib/map/config/basemap.current";
+  import { currentBasemap } from "$lib/map/config/basemap.current";
   import { resolveBasemapStyle, rewritePmtilesUrl } from "$lib/map/basemap";
   import { buildMapScene } from "$lib/map/scene";
 
@@ -115,6 +118,102 @@
   let filterTooltipTimeout: number | null = null;
 
   let nodesOverlay: NodesOverlay | null = null;
+  let searchDirectionIndicators: SearchDirectionIndicator[] = [];
+  let searchDirectionFrame: number | null = null;
+
+  async function resolveInitialAuthStatus(
+    timeoutMs = 2500,
+  ): Promise<AuthStatus> {
+    const known = get(authStore);
+    if (known.authenticated) return known;
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (status: AuthStatus) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        resolve(status);
+      };
+      const timeout = window.setTimeout(() => {
+        finish(get(authStore));
+      }, timeoutMs);
+
+      authStore.checkAuth().then(finish, () => finish(get(authStore)));
+    });
+  }
+
+  function getUsableSearchViewport(): ViewportBounds | null {
+    if (!mapContainer) return null;
+    const mapRect = mapContainer.getBoundingClientRect();
+    const edgeInset = 28;
+    let left = edgeInset;
+    let top = edgeInset;
+    let right = mapRect.width - edgeInset;
+    let bottom = mapRect.height - edgeInset;
+
+    const topBarRect = document
+      .querySelector<HTMLElement>(".topbar")
+      ?.getBoundingClientRect();
+    if (topBarRect)
+      top = Math.max(top, topBarRect.bottom - mapRect.top + edgeInset);
+
+    const actionBarRect = document
+      .querySelector<HTMLElement>(".action-bar")
+      ?.getBoundingClientRect();
+    if (actionBarRect && actionBarRect.height > 0) {
+      bottom = Math.min(bottom, actionBarRect.top - mapRect.top - edgeInset);
+    }
+
+    const searchRect = document
+      .querySelector<HTMLElement>('[data-testid="search-overlay"]')
+      ?.getBoundingClientRect();
+    if (searchRect) {
+      bottom = Math.min(bottom, searchRect.top - mapRect.top - edgeInset);
+    }
+
+    const panelRect = document
+      .querySelector<HTMLElement>('[data-testid="context-panel"]')
+      ?.getBoundingClientRect();
+    if (panelRect && panelRect.left > mapRect.left) {
+      right = Math.min(right, panelRect.left - mapRect.left - edgeInset);
+    }
+
+    return right > left && bottom > top ? { left, top, right, bottom } : null;
+  }
+
+  function updateSearchDirectionIndicators() {
+    if (
+      !map ||
+      !$isSearchOpen ||
+      !$searchQuery.trim() ||
+      filteredResults.length === 0
+    ) {
+      searchDirectionIndicators = [];
+      return;
+    }
+    const bounds = getUsableSearchViewport();
+    if (!bounds) {
+      searchDirectionIndicators = [];
+      return;
+    }
+    const projected = filteredResults.map((item) => ({
+      item,
+      point: map!.project([item.lon, item.lat]),
+    }));
+    searchDirectionIndicators = deriveSearchDirectionIndicators(
+      projected,
+      bounds,
+    );
+  }
+
+  function scheduleSearchDirectionIndicators() {
+    if (searchDirectionFrame !== null) return;
+    searchDirectionFrame = window.requestAnimationFrame(() => {
+      searchDirectionFrame = null;
+      updateSearchDirectionIndicators();
+    });
+  }
 
   // Reactive update for markers and search highlight strictly handled in overlay update
   $: if (nodesOverlay && filteredMarkersData && $view) {
@@ -125,6 +224,14 @@
         searchMatchIds,
       );
     })();
+  }
+
+  $: {
+    filteredResults;
+    $isSearchOpen;
+    $searchQuery;
+    $contextPanelOpen;
+    if (map) tick().then(scheduleSearchDirectionIndicators);
   }
 
   // Reactive update for edges – only after map style is fully loaded
@@ -161,6 +268,11 @@
   }
 
   function handleFilterSelect(event: CustomEvent<MapEntityViewModel>) {
+    focusAndFlyToPoint(event.detail);
+  }
+
+  function handleSearchDirectionSelect(event: CustomEvent<MapEntityViewModel>) {
+    closeSearch();
     focusAndFlyToPoint(event.detail);
   }
 
@@ -378,6 +490,9 @@
     // Hoisted so the cleanup can clear it; otherwise a component destroyed
     // before the style loads leaves a 10s timer pointing at dead state.
     let loadingTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
+    const handleSearchViewportChange = () => {
+      scheduleSearchDirectionIndicators();
+    };
     const handleMarkerClick = (e: Event) => {
       const target = e.target as HTMLElement;
       const markerBtn = target.closest(
@@ -396,7 +511,10 @@
     };
 
     (async () => {
-      const maplibregl = await import("maplibre-gl");
+      const [maplibregl, initialAuth] = await Promise.all([
+        import("maplibre-gl"),
+        resolveInitialAuthStatus(),
+      ]);
       if (destroyed) return;
       const container = mapContainer;
       if (!container) {
@@ -434,11 +552,20 @@
       maplibreModule = maplibregl;
       container.addEventListener("click", handleMarkerClick);
 
+      const initialUrlState = parseMapUrlState(get(page).url.searchParams);
+      const initialCamera = resolveInitialMapCamera(
+        markersData,
+        initialAuth,
+        initialUrlState.focus,
+        [currentBasemap.center[0], currentBasemap.center[1]],
+        currentBasemap.zoom,
+      );
+
       map = new maplibregl.Map({
         container,
         style: resolveBasemapStyle(currentBasemap),
-        center: currentBasemap.center,
-        zoom: currentBasemap.zoom,
+        center: initialCamera.center,
+        zoom: initialCamera.zoom,
         minZoom: currentBasemap.minZoom ?? 10,
         maxZoom: currentBasemap.maxZoom ?? 18,
         pitch: currentBasemap.pitch ?? 0,
@@ -467,6 +594,8 @@
         sysStateStr = val;
       });
       cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
+      map.on("move", handleSearchViewportChange);
+      map.on("resize", handleSearchViewportChange);
 
       loadingTimeout = setTimeout(() => {
         isLoading = false;
@@ -476,30 +605,7 @@
         clearTimeout(loadingTimeout);
         isLoading = false;
         mapStyleReady = true;
-
-        const currentSelection = get(selection);
-        const currentSystemState = get(systemState);
-        // A valid focus deep link addresses a specific entity. Suppress the
-        // default fly-to so the map does not first center on the default
-        // location while the focus target is still being resolved (which would
-        // cause a double fly / flicker). Invalid or duplicate focus params are
-        // not valid focus and therefore do not block the default behaviour.
-        const pendingFocus =
-          parseMapUrlState(get(page).url.searchParams).focus !== null;
-
-        if (
-          !pendingFocus &&
-          !currentSelection &&
-          currentSystemState === "navigation"
-        ) {
-          const currentZoom = map?.getZoom() ?? 14;
-          map?.flyTo({
-            center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat],
-            zoom: Math.max(currentZoom, 14),
-            speed: 0.8,
-            curve: 1,
-          });
-        }
+        scheduleSearchDirectionIndicators();
       };
 
       map.once("load", finishLoading);
@@ -532,8 +638,17 @@
       cleanupKomposition?.();
       cleanupFocus?.();
       unsubscribeSysState?.();
+      if (searchDirectionFrame !== null) {
+        window.cancelAnimationFrame(searchDirectionFrame);
+        searchDirectionFrame = null;
+      }
+      searchDirectionIndicators = [];
       nodesOverlay?.destroy();
-      if (map && typeof map.remove === "function") map.remove();
+      if (map) {
+        map.off("move", handleSearchViewportChange);
+        map.off("resize", handleSearchViewportChange);
+        if (typeof map.remove === "function") map.remove();
+      }
       mapContainer?.removeEventListener("click", handleMarkerClick);
       if (currentBasemap.mode === "local-sovereign" && maplibreModule) {
         try {
@@ -579,6 +694,10 @@
 
   <ContextPanel on:selectRelated={handleRelatedSelect} />
   <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
+  <SearchDirectionIndicators
+    indicators={searchDirectionIndicators}
+    on:select={handleSearchDirectionSelect}
+  />
   <FilterOverlay
     {availableTypes}
     filteredResults={filteredMarkersData}
