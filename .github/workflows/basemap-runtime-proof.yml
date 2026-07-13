@@ -662,6 +662,12 @@ jobs:
           done
           ls -la build/basemap/
 
+      - name: Materialize verified local glyphs
+        run: |
+          set -euo pipefail
+          bash scripts/basemap/fetch-glyphs.sh
+          test -s "map-style/glyphs/Noto Sans Regular/0-255.pbf"
+
       - name: Run Playwright visual basemap proof
         id: visual-proof
         run: pnpm test:proof:basemap-real
@@ -673,8 +679,8 @@ jobs:
         with:
           name: basemap-visual-proof-screenshot
           path: |
-            build/proofs/basemap-visual/screenshot.png
-            build/proofs/basemap-visual/proof-summary.json
+            build/proofs/basemap-visual/*.png
+            build/proofs/basemap-visual/*.json
           if-no-files-found: warn
           retention-days: 14
 
@@ -702,32 +708,58 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          SUMMARY_FILE="build/proofs/basemap-visual/proof-summary.json"
+          SUMMARY_DIR="build/proofs/basemap-visual"
           printf '## Basemap Visual Proof\n\n' >> "${GITHUB_STEP_SUMMARY}"
-          if [[ -f "${SUMMARY_FILE}" ]]; then
-            VERDICT="$(
-              python3 -c \
-                'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("verdict", "UNKNOWN"))' \
-                "${SUMMARY_FILE}" 2>/dev/null || echo 'UNKNOWN'
-            )"
-            if [[ "${VERDICT}" == "PROVEN" ]]; then
-              _msg='✅ **PROVEN** — MapLibre canvas visible, isStyleLoaded() true,'
-              _msg="${_msg} HTTP 206 Range delivery confirmed, zero remote violations"
-              printf '%s\n\n' "${_msg}" >> "${GITHUB_STEP_SUMMARY}"
-              printf '%s\n\n' \
-                'Chain: Browser → Vite → regional PMTiles → HTTP 206 → MapLibre rendered' \
-                >> "${GITHUB_STEP_SUMMARY}"
-            else
-              printf '%s\n\n' \
-                '❌ **NOT PROVEN** — see test results for details' \
-                >> "${GITHUB_STEP_SUMMARY}"
-            fi
-            printf '<details><summary>Proof summary</summary>\n\n```json\n' >> "${GITHUB_STEP_SUMMARY}"
-            cat "${SUMMARY_FILE}" >> "${GITHUB_STEP_SUMMARY}"
-            printf '\n```\n\n</details>\n' >> "${GITHUB_STEP_SUMMARY}"
-          else
-            printf '%s\n\n' \
-              '❌ **FAILED** — no proof summary found (Playwright test may not have run to completion)' \
-              >> "${GITHUB_STEP_SUMMARY}"
-            exit 1
-          fi
+          python3 - "${SUMMARY_DIR}" "${GITHUB_STEP_SUMMARY}" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          summary_dir = pathlib.Path(sys.argv[1])
+          output_path = pathlib.Path(sys.argv[2])
+          expected = [
+              summary_dir / "proof-summary.json",
+              summary_dir / "schleswig-holstein-proof-summary.json",
+          ]
+          all_proven = True
+          with output_path.open("a", encoding="utf-8") as output:
+              for summary_path in expected:
+                  if not summary_path.is_file():
+                      output.write(f"❌ **FAILED** — missing `{summary_path}`\n\n")
+                      all_proven = False
+                      continue
+                  try:
+                      payload = json.loads(summary_path.read_text(encoding="utf-8"))
+                  except (OSError, json.JSONDecodeError) as exc:
+                      output.write(
+                          f"❌ **FAILED** — invalid `{summary_path}`: {exc}\n\n"
+                      )
+                      all_proven = False
+                      continue
+                  region = payload.get("region", summary_path.stem)
+                  verdict = payload.get("verdict", "UNKNOWN")
+                  rendered = payload.get(
+                      "rendered_from_expected_source",
+                      payload.get("rendered_feature_count", "n/a"),
+                  )
+                  responses = payload.get("pmtiles_206_responses_observed", "n/a")
+                  marker = "✅" if verdict == "PROVEN" else "❌"
+                  output.write(
+                      f"{marker} **{region}: {verdict}** — rendered features: "
+                      f"{rendered}; HTTP 206 responses: {responses}\n\n"
+                  )
+                  output.write(
+                      f"<details><summary>{region} proof summary</summary>\n\n"
+                      "```json\n"
+                      f"{json.dumps(payload, indent=2, ensure_ascii=False)}\n"
+                      "```\n\n</details>\n\n"
+                  )
+                  all_proven = all_proven and verdict == "PROVEN"
+              if all_proven:
+                  output.write(
+                      "Chain: Browser → Vite → glyphs + regional PMTiles → "
+                      "HTTP 206 → MapLibre decoded and rendered\n"
+                  )
+          if not all_proven:
+              raise SystemExit(1)
+          PY

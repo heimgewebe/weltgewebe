@@ -101,6 +101,37 @@ class RegionalBasemapStyleTest(unittest.TestCase):
             workflow[: workflow.index("  basemap-visual-proof:")],
         )
 
+    def test_visual_proof_materializes_glyphs_and_publishes_both_evidence_sets(
+        self,
+    ) -> None:
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        visual_job = workflow[workflow.index("  basemap-visual-proof:") :]
+
+        self.assertIn(
+            "bash scripts/basemap/fetch-glyphs.sh",
+            visual_job,
+        )
+        self.assertIn(
+            'test -s "map-style/glyphs/Noto Sans Regular/0-255.pbf"',
+            visual_job,
+        )
+        self.assertIn(
+            "build/proofs/basemap-visual/*.png",
+            visual_job,
+        )
+        self.assertIn(
+            "build/proofs/basemap-visual/*.json",
+            visual_job,
+        )
+        self.assertIn(
+            'summary_dir / "proof-summary.json"',
+            visual_job,
+        )
+        self.assertIn(
+            'summary_dir / "schleswig-holstein-proof-summary.json"',
+            visual_job,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
