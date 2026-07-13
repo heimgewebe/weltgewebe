@@ -679,6 +679,8 @@
     place-items: center;
     color: var(--bg);
     box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+    align-self: end;
+    justify-self: center;
     transform-origin: center;
     transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     pointer-events: none;

@@ -67,6 +67,22 @@ test.describe("UI detail remediation", () => {
     expect(tab?.height).toBeGreaterThanOrEqual(44);
   });
 
+  test("keeps the visible node marker on the original bottom anchor", async ({
+    page,
+  }) => {
+    const marker = page.locator(".map-marker:not(.marker-account)").first();
+    const visual = marker.locator(".map-marker__visual");
+    const [markerBox, visualBox] = await Promise.all([
+      marker.boundingBox(),
+      visual.boundingBox(),
+    ]);
+    expect(markerBox).not.toBeNull();
+    expect(visualBox).not.toBeNull();
+    expect(Math.round((visualBox?.y ?? 0) + (visualBox?.height ?? 0))).toBe(
+      Math.round((markerBox?.y ?? 0) + (markerBox?.height ?? 0)),
+    );
+  });
+
   test("does not expose unfinished node tabs or raw coordinates", async ({
     page,
   }) => {
