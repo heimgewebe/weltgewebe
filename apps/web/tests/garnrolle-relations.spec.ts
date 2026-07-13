@@ -87,7 +87,7 @@ test.describe("Garnrolle relations", () => {
           activity: [
             {
               date: "2026-07-11T11:11:50.322307+00:00",
-              event: 'Hat einen Faden zum Knoten "fairschenkbox" geknüpft.',
+              event: 'Hat den Knoten "fairschenkbox" geknüpft.',
             },
           ],
         }),
@@ -102,12 +102,12 @@ test.describe("Garnrolle relations", () => {
 
     await panel.getByRole("tab", { name: "Aktivität" }).click();
     await expect(panel.locator("#panel-aktivitaet")).toContainText(
-      'Hat einen Faden zum Knoten "fairschenkbox" geknüpft.',
+      'Hat den Knoten "fairschenkbox" geknüpft.',
     );
 
     await panel.getByRole("tab", { name: "Knoten" }).click();
     await expect(panel.locator("#panel-knoten")).toContainText("fairschenkbox");
-    await expect(panel.locator("#panel-knoten")).toContainText("Faden");
+    await expect(panel.locator("#panel-knoten")).not.toContainText("Faden");
     await expect(panel.locator("#panel-knoten")).not.toContainText("reference");
   });
 });

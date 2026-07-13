@@ -474,7 +474,7 @@ async fn account_details_project_outgoing_relation_without_public_note() -> Resu
         NODE_ID,
         "fairschenkbox",
         "reference",
-        "Hat einen Faden zum Knoten \"fairschenkbox\" geknüpft.",
+        "Hat den Knoten \"fairschenkbox\" geknüpft.",
     );
     assert_eq!(projected_at, CREATED_AT);
 
