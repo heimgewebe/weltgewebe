@@ -6,6 +6,8 @@ import {
   resolveNode,
   resolveAccount,
   resolveEdge,
+  resolvePublicEdge,
+  listPublicEdges,
   getNodeEntries,
   getAccountEntries,
   getEdgeEntries,
@@ -57,6 +59,22 @@ describe("Demo Resolvers", () => {
         .sort();
 
       expect(actualEdgeIds).toEqual(expectedEdgeIds);
+    });
+
+    it("public edge and relation projections omit authoring notes", () => {
+      const edgeWithNote = demoEdges.find((edge) => "note" in edge);
+      expect(edgeWithNote).toBeDefined();
+      expect(resolvePublicEdge(edgeWithNote!.id)).not.toHaveProperty("note");
+      expect(listPublicEdges().every((edge) => !("note" in edge))).toBe(true);
+
+      const accountNodes = resolveAccountNodes(edgeWithNote!.source_id);
+      expect(accountNodes.every((relation) => !("note" in relation))).toBe(
+        true,
+      );
+      const nodeParticipants = resolveNodeParticipants(edgeWithNote!.target_id);
+      expect(nodeParticipants.every((relation) => !("note" in relation))).toBe(
+        true,
+      );
     });
 
     it("resolveEdgeParticipants remains consistent for existing and missing IDs", () => {

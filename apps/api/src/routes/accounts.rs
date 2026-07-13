@@ -91,8 +91,6 @@ pub struct AccountNodeRelation {
     pub node_title: String,
     pub node_kind: String,
     pub edge_kind: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub note: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -436,14 +434,20 @@ pub async fn get_account(
     };
 
     // Fäden are the source of truth for which Knoten belong to a Garnrolle.
-    // Both directions are accepted because the domain permits relationships in
-    // either orientation; account-to-account edges are ignored below because
-    // their counterpart is not present in the node cache.
+    // Both directions are accepted, but a raw id match is insufficient: an
+    // explicitly node-typed endpoint must never be projected as an account.
+    // Missing legacy type metadata remains readable; newly created edges always
+    // carry explicit validated types.
     let related_edges = {
         let edges = state.edges.read().await;
         edges
             .iter_in_order()
-            .filter(|edge| edge.source_id == id || edge.target_id == id)
+            .filter(|edge| {
+                (edge.source_id == id
+                    && matches!(edge.source_type.as_deref(), Some("account") | None))
+                    || (edge.target_id == id
+                        && matches!(edge.target_type.as_deref(), Some("account") | None))
+            })
             .cloned()
             .collect::<Vec<_>>()
     };
@@ -454,11 +458,15 @@ pub async fn get_account(
     let mut activity = Vec::new();
 
     for edge in related_edges {
-        let related_id = if edge.source_id == id {
-            edge.target_id.as_str()
+        let account_is_source = edge.source_id == id;
+        let (related_id, related_type) = if account_is_source {
+            (edge.target_id.as_str(), edge.target_type.as_deref())
         } else {
-            edge.source_id.as_str()
+            (edge.source_id.as_str(), edge.source_type.as_deref())
         };
+        if !matches!(related_type, Some("node") | None) {
+            continue;
+        }
         let Some(node) = node_cache.get(related_id) else {
             continue;
         };
@@ -469,15 +477,19 @@ pub async fn get_account(
                 node_title: node.title.clone(),
                 node_kind: node.kind.clone(),
                 edge_kind: edge.edge_kind.clone(),
-                note: edge.note.clone(),
             });
         }
 
         if let Some(date) = edge.created_at.clone() {
-            activity.push(AccountActivity {
-                date,
-                event: format!("Hat einen Faden zum Knoten \"{}\" geknüpft.", node.title),
-            });
+            let event = if account_is_source {
+                format!("Hat einen Faden zum Knoten \"{}\" geknüpft.", node.title)
+            } else {
+                format!(
+                    "Wurde über einen Faden mit dem Knoten \"{}\" verknüpft.",
+                    node.title
+                )
+            };
+            activity.push(AccountActivity { date, event });
         }
     }
 

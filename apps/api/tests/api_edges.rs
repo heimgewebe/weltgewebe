@@ -8,7 +8,10 @@ use axum::{
 use serial_test::serial;
 mod helpers;
 
-use helpers::set_gewebe_in_dir;
+use helpers::{
+    assert_account_has_single_node_relation, insert_test_node, read_account_details,
+    set_gewebe_in_dir, test_node,
+};
 use std::{fs, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
@@ -21,7 +24,6 @@ use weltgewebe_api::{
     routes::{
         accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
-        nodes::{Location as NodeLocation, Node},
     },
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
@@ -542,6 +544,25 @@ async fn post_edges_binds_account_source_to_authenticated_weber() -> Result<()> 
         weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
     )
     .await?;
+    state
+        .accounts
+        .write()
+        .await
+        .insert(writer_account(FOREIGN_ACCOUNT_ID, Role::Weber));
+
+    let disguised_foreign_body = format!(
+        r#"{{"source_id":"{FOREIGN_ACCOUNT_ID}","source_type":"node","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference"}}"#
+    );
+    let res = app
+        .clone()
+        .oneshot(post_edges(Some(&cookie), &disguised_foreign_body))
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(
+        !edges_path.exists(),
+        "known account ids disguised as nodes must be rejected before persistence"
+    );
+    assert!(state.edges.read().await.is_empty());
 
     let foreign_body = format!(
         r#"{{"source_id":"{FOREIGN_ACCOUNT_ID}","source_type":"account","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference"}}"#
@@ -554,6 +575,20 @@ async fn post_edges_binds_account_source_to_authenticated_weber() -> Result<()> 
     assert!(
         !edges_path.exists(),
         "foreign account source must be rejected before persistence"
+    );
+    assert!(state.edges.read().await.is_empty());
+
+    let incoming_foreign_body = format!(
+        r#"{{"source_id":"{CREATE_TARGET_ID}","source_type":"node","target_id":"{FOREIGN_ACCOUNT_ID}","target_type":"account","edge_kind":"reference"}}"#
+    );
+    let res = app
+        .clone()
+        .oneshot(post_edges(Some(&cookie), &incoming_foreign_body))
+        .await?;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    assert!(
+        !edges_path.exists(),
+        "node-to-account edge must be rejected before persistence for a Weber"
     );
     assert!(state.edges.read().await.is_empty());
 
@@ -574,52 +609,7 @@ async fn post_edges_binds_account_source_to_authenticated_weber() -> Result<()> 
 async fn post_account_edge_projects_garnrolle_relation_and_survives_reload() -> Result<()> {
     const ACCOUNT_ID: &str = "00000000-0000-0000-0000-000000000021";
     const NODE_ID: &str = "00000000-0000-0000-0000-000000000022";
-
-    fn relation_node() -> Node {
-        Node {
-            id: NODE_ID.to_string(),
-            kind: "resource".to_string(),
-            title: "Vorwärtsnachweis".to_string(),
-            created_at: "2026-07-13T04:00:00Z".to_string(),
-            updated_at: "2026-07-13T04:00:00Z".to_string(),
-            summary: Some("Neu über den regulären Schreibpfad verknüpft".to_string()),
-            info: None,
-            tags: vec![],
-            address: None,
-            location: NodeLocation {
-                lat: 53.55,
-                lon: 10.0,
-            },
-        }
-    }
-
-    async fn read_account_details(app: &Router) -> Result<serde_json::Value> {
-        let uri = format!("/accounts/{ACCOUNT_ID}");
-        let response = app
-            .clone()
-            .oneshot(
-                Request::get(uri)
-                    .header("Host", "localhost")
-                    .body(body::Body::empty())?,
-            )
-            .await?;
-        assert_eq!(response.status(), StatusCode::OK);
-        read_json_body(response).await
-    }
-
-    fn assert_relation(details: &serde_json::Value, created_at: &str) {
-        assert_eq!(details["id"], ACCOUNT_ID);
-        assert_eq!(details["nodes"].as_array().map(Vec::len), Some(1));
-        assert_eq!(details["nodes"][0]["node_id"], NODE_ID);
-        assert_eq!(details["nodes"][0]["node_title"], "Vorwärtsnachweis");
-        assert_eq!(details["nodes"][0]["edge_kind"], "reference");
-        assert_eq!(details["activity"].as_array().map(Vec::len), Some(1));
-        assert_eq!(details["activity"][0]["date"], created_at);
-        assert_eq!(
-            details["activity"][0]["event"],
-            "Hat einen Faden zum Knoten \"Vorwärtsnachweis\" geknüpft."
-        );
-    }
+    const NODE_TITLE: &str = "Vorwärtsnachweis";
 
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
@@ -634,11 +624,15 @@ async fn post_account_edge_projects_garnrolle_relation_and_survives_reload() -> 
         weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
     )
     .await?;
-    state
-        .nodes
-        .write()
-        .await
-        .insert(NODE_ID.to_string(), relation_node());
+    insert_test_node(
+        &state,
+        test_node(
+            NODE_ID,
+            NODE_TITLE,
+            Some("Neu über den regulären Schreibpfad verknüpft"),
+        ),
+    )
+    .await;
 
     let request_body = format!(
         r#"{{"source_id":"{ACCOUNT_ID}","source_type":"account","target_id":"{NODE_ID}","target_type":"node","edge_kind":"reference"}}"#
@@ -663,8 +657,16 @@ async fn post_account_edge_projects_garnrolle_relation_and_survives_reload() -> 
     assert_eq!(persisted[0]["source_id"], ACCOUNT_ID);
     assert_eq!(persisted[0]["target_id"], NODE_ID);
 
-    let immediate_details = read_account_details(&app).await?;
-    assert_relation(&immediate_details, &created_at);
+    let immediate_details = read_account_details(&app, ACCOUNT_ID).await?;
+    let immediate_date = assert_account_has_single_node_relation(
+        &immediate_details,
+        ACCOUNT_ID,
+        NODE_ID,
+        NODE_TITLE,
+        "reference",
+        "Hat einen Faden zum Knoten \"Vorwärtsnachweis\" geknüpft.",
+    );
+    assert_eq!(immediate_date, created_at);
 
     let (restarted_app, _restarted_cookie, restarted_state) = app_with_session_for_account(
         ACCOUNT_ID,
@@ -673,14 +675,26 @@ async fn post_account_edge_projects_garnrolle_relation_and_survives_reload() -> 
         weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
     )
     .await?;
-    restarted_state
-        .nodes
-        .write()
-        .await
-        .insert(NODE_ID.to_string(), relation_node());
+    insert_test_node(
+        &restarted_state,
+        test_node(
+            NODE_ID,
+            NODE_TITLE,
+            Some("Neu über den regulären Schreibpfad verknüpft"),
+        ),
+    )
+    .await;
 
-    let restarted_details = read_account_details(&restarted_app).await?;
-    assert_relation(&restarted_details, &created_at);
+    let restarted_details = read_account_details(&restarted_app, ACCOUNT_ID).await?;
+    let restarted_date = assert_account_has_single_node_relation(
+        &restarted_details,
+        ACCOUNT_ID,
+        NODE_ID,
+        NODE_TITLE,
+        "reference",
+        "Hat einen Faden zum Knoten \"Vorwärtsnachweis\" geknüpft.",
+    );
+    assert_eq!(restarted_date, created_at);
 
     Ok(())
 }
@@ -706,7 +720,18 @@ async fn post_edges_admin_retains_foreign_account_operator_path() -> Result<()> 
     let body = format!(
         r#"{{"source_id":"{FOREIGN_ACCOUNT_ID}","source_type":"account","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference"}}"#
     );
-    let res = app.oneshot(post_edges(Some(&cookie), &body)).await?;
+    let res = app
+        .clone()
+        .oneshot(post_edges(Some(&cookie), &body))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CREATED);
+
+    let incoming_body = format!(
+        r#"{{"source_id":"{CREATE_TARGET_ID}","source_type":"node","target_id":"{FOREIGN_ACCOUNT_ID}","target_type":"account","edge_kind":"reference"}}"#
+    );
+    let res = app
+        .oneshot(post_edges(Some(&cookie), &incoming_body))
+        .await?;
     assert_eq!(res.status(), StatusCode::CREATED);
 
     Ok(())
@@ -898,7 +923,10 @@ async fn post_edges_persists_note_when_present() -> Result<()> {
     let body_json = format!(
         r#"{{"source_id":"{CREATE_SOURCE_ID}","source_type":"node","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference","note":"hello edge"}}"#
     );
-    let res = app.oneshot(post_edges(Some(&cookie), &body_json)).await?;
+    let res = app
+        .clone()
+        .oneshot(post_edges(Some(&cookie), &body_json))
+        .await?;
     assert_eq!(res.status(), StatusCode::CREATED);
     let v = read_json_body(res).await?;
     assert_eq!(v["note"], "hello edge");
@@ -908,9 +936,43 @@ async fn post_edges_persists_note_when_present() -> Result<()> {
     assert_eq!(lines.len(), 1);
     assert_eq!(lines[0]["note"], "hello edge");
 
-    let cache = state.edges.read().await;
-    let cached = cache.get(&id).context("edge must be in cache")?;
-    assert_eq!(cached.note.as_deref(), Some("hello edge"));
+    {
+        let cache = state.edges.read().await;
+        let cached = cache.get(&id).context("edge must be in cache")?;
+        assert_eq!(cached.note.as_deref(), Some("hello edge"));
+    }
+
+    let res = app
+        .clone()
+        .oneshot(Request::get(format!("/edges/{id}")).body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let public_edge = read_json_body(res).await?;
+    assert!(
+        public_edge.get("note").is_none(),
+        "public edge detail must omit free-text notes"
+    );
+
+    let res = app
+        .clone()
+        .oneshot(Request::get("/edges").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let public_edges = read_json_body(res).await?;
+    assert!(
+        public_edges[0].get("note").is_none(),
+        "public edge list must omit free-text notes"
+    );
+
+    let res = app
+        .oneshot(Request::get("/edges?pagination=cursor&limit=10").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let cursor_page = read_json_body(res).await?;
+    assert!(
+        cursor_page["items"][0].get("note").is_none(),
+        "public cursor edge list must omit free-text notes"
+    );
 
     Ok(())
 }

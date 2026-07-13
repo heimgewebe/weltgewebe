@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-domain
 owner: product-domain
-last_reviewed: 2026-07-11
+last_reviewed: 2026-07-13
 review_after: 2026-10-11
 depends_on: []
 relations:
@@ -113,6 +113,12 @@ Beispiele:
 - antwortet auf.
 
 Ein Faden ist nicht automatisch ein Gespräch. Gespräche besitzen eigene Entitäten.
+
+### Autorisierung, Richtung und öffentliche Notizen
+
+1. Eine reguläre Weberhandlung, die eine Garnrolle beteiligt, muss von der eigenen angemeldeten Garnrolle ausgehen. Ein Weber darf weder eine fremde Garnrolle als Quelle ausgeben noch über `Knoten → fremde Garnrolle` eine fremde Aktivität erzeugen. Die deklarierten Endpunkttypen müssen mit bereits bekannten Entitäten übereinstimmen; eine Garnrollen-ID darf nicht als Knoten-ID ausgegeben werden.
+2. Administrative Reparaturen und kontrollierte Importe dürfen eingehende Fäden erzeugen. In der betroffenen Garnrolle werden sie neutral als eingehende Verknüpfung beschrieben, nicht als eigene Handlung.
+3. Eine optionale Fadennotiz ist gespeicherte Freitext-Metadaten des Schreibvorgangs. Öffentliche Fadenlisten, Fadendetails und Garnrollenprojektionen geben sie nicht aus. Die authentifizierte Erstellungsantwort darf die gerade übermittelte Notiz zur unmittelbaren Bestätigung zurückgeben.
 
 ## Erster organischer Produktfluss
 
