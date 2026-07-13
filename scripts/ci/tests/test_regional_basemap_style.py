@@ -8,6 +8,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 STYLE_PATH = REPO / "map-style" / "style.json"
 UP_SCRIPT_PATH = REPO / "scripts" / "weltgewebe-up"
+WORKFLOW_PATH = REPO / ".github" / "workflows" / "basemap-runtime-proof.yml"
 
 
 class RegionalBasemapStyleTest(unittest.TestCase):
@@ -65,6 +66,15 @@ class RegionalBasemapStyleTest(unittest.TestCase):
             + '{regional_meta}"'
         )
         self.assertIn(expected_url, script)
+
+    def test_content_proof_preserves_metadata_hash_variables(self) -> None:
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        self.assertIn(
+            'META_PATH="build/basemap/${META_NAME}"',
+            workflow,
+        )
+        self.assertIn('"${META_PATH}"', workflow)
+        self.assertNotIn('META_PATH="build/basemap/"', workflow)
 
 
 if __name__ == "__main__":
