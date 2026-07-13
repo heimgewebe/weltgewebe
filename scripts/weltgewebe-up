@@ -1257,56 +1257,63 @@ fi
 
 if [[ "$DEPLOY_SCOPE" == "full" ]]; then
 
-  # 6c. Basemap Artifact Guard (best effort)
-  # Try to ensure the PMTiles artifact exists for Heimserver Caddy to serve
+  # 6c. Regional Basemap Artifact Guard (best effort)
+  # Each source referenced by map-style/style.json must exist independently.
   BASEMAP_DIR="build/basemap"
+  BASEMAP_VERSION="0.1.0"
   echo
-  echo ">> Basemap Artifact Guard:"
+  echo ">> Regional Basemap Artifact Guard:"
 
-  evaluate_basemap_state() {
-    local pmtiles_files=()
-    mapfile -t pmtiles_files < <(compgen -G "$BASEMAP_DIR/*.pmtiles" || true)
-    PMTILES_COUNT="${#pmtiles_files[@]}"
-    if ((PMTILES_COUNT > 0)); then
-      FIRST_PMTILES="${pmtiles_files[0]}"
-    else
-      FIRST_PMTILES=""
+  ensure_regional_basemap() {
+    local region="$1"
+    local build_script="$2"
+    local versioned_pmtiles="$BASEMAP_DIR/basemap-${region}-v${BASEMAP_VERSION}.pmtiles"
+    local versioned_meta="$BASEMAP_DIR/basemap-${region}-v${BASEMAP_VERSION}.meta.json"
+    local alias_pmtiles="$BASEMAP_DIR/basemap-${region}.pmtiles"
+    local alias_meta="$BASEMAP_DIR/basemap-${region}.meta.json"
+
+    if [[ ! -s "$versioned_pmtiles" || ! -s "$versioned_meta" ]]; then
+      echo "   [!] ${region}: versioned artifact missing; attempting best-effort build."
+      if [[ ! -x "$build_script" ]]; then
+        echo "   [X] WARNING: ${region}: build script missing or not executable: ${build_script}"
+        return 1
+      fi
+      if ! bash "$build_script"; then
+        echo "   [X] WARNING: ${region}: PMTiles build failed."
+        return 1
+      fi
     fi
+
+    if [[ ! -s "$versioned_pmtiles" || ! -s "$versioned_meta" ]]; then
+      echo "   [X] WARNING: ${region}: build completed without both versioned files."
+      return 1
+    fi
+
+    if ! bash scripts/basemap/publish-basemap.sh \
+      "$versioned_pmtiles" "$versioned_meta" "$BASEMAP_DIR"; then
+      echo "   [X] WARNING: ${region}: atomic alias publication failed."
+      return 1
+    fi
+
+    if [[ ! -e "$alias_pmtiles" || ! -e "$alias_meta" ]]; then
+      echo "   [X] WARNING: ${region}: stable PMTiles/meta aliases are missing after publication."
+      return 1
+    fi
+
+    echo "   [✓] ${region}: versioned artifact and stable aliases ready."
   }
 
-  evaluate_basemap_state
-  if ((PMTILES_COUNT > 0)); then
-    echo "   [✓] Artifacts already present. Found ${PMTILES_COUNT} PMTiles artifact(s) in ${BASEMAP_DIR}."
-    echo "       -> e.g. ${FIRST_PMTILES}"
+  REGIONAL_BASEMAP_FAILURES=0
+  ensure_regional_basemap "hamburg" \
+    "scripts/basemap/build-hamburg-pmtiles.sh" || REGIONAL_BASEMAP_FAILURES=$((REGIONAL_BASEMAP_FAILURES + 1))
+  ensure_regional_basemap "schleswig-holstein" \
+    "scripts/basemap/build-schleswig-holstein-pmtiles.sh" || REGIONAL_BASEMAP_FAILURES=$((REGIONAL_BASEMAP_FAILURES + 1))
+
+  if ((REGIONAL_BASEMAP_FAILURES > 0)); then
+    echo "   [X] WARNING: ${REGIONAL_BASEMAP_FAILURES} regional basemap artifact set(s) are incomplete."
+    echo "       Continuing because this guard remains best effort; local-sovereign mode may show gaps."
   else
-    echo "   [!] Basemap artifact missing. Attempting best-effort PMTiles build..."
-    if [[ -x "scripts/basemap/build-hamburg-pmtiles.sh" ]]; then
-      if bash scripts/basemap/build-hamburg-pmtiles.sh; then
-        evaluate_basemap_state
-        if ((PMTILES_COUNT > 0)); then
-          echo "   [✓] Basemap build succeeded. Generated ${PMTILES_COUNT} PMTiles artifact(s)."
-          echo "       -> e.g. ${FIRST_PMTILES}"
-        else
-          echo "   [X] WARNING: Basemap artifact still missing after build attempt. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
-        fi
-      else
-        evaluate_basemap_state
-        if ((PMTILES_COUNT > 0)); then
-          echo "   [X] WARNING: PMTiles build script failed, but ${PMTILES_COUNT} PMTiles artifact(s) are present. Continuing deployment (best effort)."
-          echo "       -> e.g. ${FIRST_PMTILES}"
-        else
-          echo "   [X] WARNING: PMTiles build script failed. Continuing deployment (best effort). 0 PMTiles artifacts present in ${BASEMAP_DIR}."
-        fi
-      fi
-    else
-      evaluate_basemap_state
-      if ((PMTILES_COUNT > 0)); then
-        echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable, but ${PMTILES_COUNT} PMTiles artifact(s) are present in ${BASEMAP_DIR}."
-        echo "       -> e.g. ${FIRST_PMTILES}"
-      else
-        echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
-      fi
-    fi
+    echo "   [✓] All regional PMTiles sources required by the sovereign style are ready."
   fi
   # 6c2. Basemap Glyphs Guard (best effort)
   # Try to ensure the local glyphs (fonts) exist for offline rendering
@@ -2160,13 +2167,16 @@ if [[ "$DEPLOY_TARGET" != "vps" ]]; then
       echo "OK (sovereign style.json reachable)"
     fi
 
-    if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/basemap-hamburg.meta.json > /dev/null 2>&1; then
-      msg="Sovereign Basemap Check skipped/failed: Could not fetch basemap-hamburg.meta.json via Edge Route (/local-basemap/basemap-hamburg.meta.json). PMTiles artifact volume or route is missing."
-      echo "   [!] WARNING: $msg"
-      echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
-    else
-      echo "OK (sovereign basemap-hamburg.meta.json reachable)"
-    fi
+    for regional_meta in basemap-hamburg.meta.json basemap-schleswig-holstein.meta.json; do
+      if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" \
+        "https://weltgewebe.home.arpa/local-basemap/" > /dev/null 2>&1; then
+        msg="Sovereign Basemap Check skipped/failed: Could not fetch ${regional_meta} via Edge Route (/local-basemap/${regional_meta}). PMTiles artifact volume or route is missing."
+        echo "   [!] WARNING: $msg"
+        echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
+      else
+        echo "OK (sovereign ${regional_meta} reachable)"
+      fi
+    done
     echo "   (Note: This proves edge routing readiness, not E2E client usage)"
   fi
   echo

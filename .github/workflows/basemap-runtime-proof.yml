@@ -1,7 +1,7 @@
 ---
 name: Basemap Runtime Proof
 
-# This workflow runs four jobs:
+# This workflow runs five jobs:
 #
 #   1. basemap-runtime-proof  (Pfad 1 — epistemischer Dry-Run, nicht blockierend)
 #      Runs the guard in skip mode with no Caddy and no artefact. Reports
@@ -19,7 +19,10 @@ name: Basemap Runtime Proof
 #      The guard verifies endpoint/range delivery (HTTP 206), the PMTiles magic
 #      bytes "PMTiles" and an optional SHA256 match from the generated metadata.
 #
-#   4. basemap-visual-proof  (Pfad 4 — visueller End-to-End-Proof, blockierend)
+#   4. basemap-schleswig-holstein-content-proof
+#      Builds and verifies the pinned Schleswig-Holstein PMTiles artifact independently.
+#
+#   5. basemap-visual-proof  (Pfad 5 — visueller End-to-End-Proof, blockierend)
 #      Reuses the real Hamburg PMTiles artefact from Pfad 3, publishes the
 #      stable alias (basemap-hamburg.pmtiles), starts the Vite preview server
 #      with the local-basemap-serve middleware, and runs the Playwright visual proof
@@ -46,6 +49,7 @@ name: Basemap Runtime Proof
     paths:
       - "infra/caddy/**"
       - "scripts/basemap/build-hamburg-pmtiles.sh"
+      - "scripts/basemap/build-schleswig-holstein-pmtiles.sh"
       - "scripts/basemap/publish-basemap.sh"
       - "scripts/guard/basemap-runtime-proof.sh"
       - "apps/web/tests/proofs/**"
@@ -59,6 +63,7 @@ name: Basemap Runtime Proof
     paths:
       - "infra/caddy/**"
       - "scripts/basemap/build-hamburg-pmtiles.sh"
+      - "scripts/basemap/build-schleswig-holstein-pmtiles.sh"
       - "scripts/basemap/publish-basemap.sh"
       - "scripts/guard/basemap-runtime-proof.sh"
       - "apps/web/tests/proofs/**"
@@ -494,6 +499,83 @@ jobs:
           fi
           printf '```\n\n</details>\n' >> "${GITHUB_STEP_SUMMARY}"
 
+  basemap-schleswig-holstein-content-proof:
+    name: basemap-schleswig-holstein-content-proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASEMAP_PROOF_MODE: require
+      BASEMAP_PROOF_SCOPE: pmtiles-content
+      BASEMAP_CADDY_URL: http://localhost:8081
+      SOURCE_DATE_EPOCH: "1704067200"
+      ARTEFACT_NAME: basemap-schleswig-holstein-v0.1.0.pmtiles
+      META_NAME: basemap-schleswig-holstein-v0.1.0.meta.json
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+
+      - name: Verify Docker availability
+        run: |
+          set -euo pipefail
+          docker --version
+          docker info >/dev/null
+
+      - name: Build real PMTiles artefact (Schleswig-Holstein)
+        run: |
+          set -euo pipefail
+          bash scripts/basemap/build-schleswig-holstein-pmtiles.sh
+          test -s "build/basemap/${ARTEFACT_NAME}"
+          test -s "build/basemap/${META_NAME}"
+          EXPECTED_SHA256="$(python3 -c 'import json,os; print(json.load(open("build/basemap/" + os.environ["META_NAME"], encoding="utf-8"))["sha256"])')"
+          printf 'EXPECTED_SHA256=%s\n' "${EXPECTED_SHA256}" >> "${GITHUB_ENV}"
+
+      - name: Start Caddy serving Schleswig-Holstein PMTiles
+        run: |
+          set -euo pipefail
+          docker run -d --name caddy-proof-schleswig-holstein \
+            -p 8081:8081 \
+            -v "${PWD}/infra/caddy/Caddyfile.proof:/etc/caddy/Caddyfile:ro" \
+            -v "${PWD}/build/basemap:/srv/weltgewebe-basemap:ro" \
+            caddy:2.7 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null --max-time 2 "${BASEMAP_CADDY_URL}/"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs caddy-proof-schleswig-holstein || true
+          exit 1
+
+      - name: Prove Schleswig-Holstein PMTiles content and Range delivery
+        run: |
+          set -euo pipefail
+          BASEMAP_ENDPOINT_PATH="/local-basemap/${ARTEFACT_NAME}" \
+          BASEMAP_PMTILES_PATH="${PWD}/build/basemap/${ARTEFACT_NAME}" \
+          BASEMAP_EXPECTED_SHA256="${EXPECTED_SHA256}" \
+            scripts/guard/basemap-runtime-proof.sh 2>&1 | tee /tmp/schleswig-holstein-proof.txt
+
+      - name: Collect proof evidence
+        if: always()
+        run: |
+          docker logs caddy-proof-schleswig-holstein > /tmp/schleswig-holstein-caddy.log 2>&1 || true
+          xxd -l 16 -g 1 "build/basemap/${ARTEFACT_NAME}" > /tmp/schleswig-holstein-magic.txt 2>/dev/null || true
+
+      - name: Tear down Caddy container
+        if: always()
+        run: docker rm -f caddy-proof-schleswig-holstein || true
+
+      - name: Upload Schleswig-Holstein proof evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        with:
+          name: basemap-schleswig-holstein-content-proof-evidence
+          path: |
+            /tmp/schleswig-holstein-proof.txt
+            /tmp/schleswig-holstein-caddy.log
+            /tmp/schleswig-holstein-magic.txt
+            build/basemap/basemap-schleswig-holstein-v0.1.0.meta.json
+          if-no-files-found: warn
+          retention-days: 14
+
   basemap-visual-proof:
     name: basemap-visual-proof
     needs: [basemap-pmtiles-content-proof]
@@ -516,8 +598,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
-          node-version-file: '.node-version'
-          cache: 'pnpm'
+          node-version-file: ".node-version"
+          cache: "pnpm"
           cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Install web dependencies

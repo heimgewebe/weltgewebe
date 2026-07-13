@@ -23,7 +23,10 @@ DEFAULT_WWW_DOMAIN = "www.weltgewebe.net"
 DEFAULT_API_DOMAIN = "api.weltgewebe.net"
 DEFAULT_EXPECTED_IP = "94.16.121.119"
 DEFAULT_GLYPH_PATH = "/local-basemap/glyphs/Noto%20Sans%20Regular/0-255.pbf"
-DEFAULT_PMTILES_PATH = "/local-basemap/basemap-hamburg-v0.1.0.pmtiles"
+DEFAULT_PMTILES_PATHS = (
+    ("hamburg", "/local-basemap/basemap-hamburg-v0.1.0.pmtiles"),
+    ("schleswig-holstein", "/local-basemap/basemap-schleswig-holstein-v0.1.0.pmtiles"),
+)
 API_REQUIRED_CHECKS = ("database", "nats", "policy")
 
 
@@ -164,7 +167,7 @@ class PublicLiveChecker:
     resolver: Resolver = socket_resolve_ipv4
     fetcher: Fetcher = fetch_url
     glyph_path: str = DEFAULT_GLYPH_PATH
-    pmtiles_path: str = DEFAULT_PMTILES_PATH
+    pmtiles_paths: Sequence[tuple[str, str]] = DEFAULT_PMTILES_PATHS
 
     def run(self) -> list[CheckResult]:
         checks = [
@@ -178,7 +181,7 @@ class PublicLiveChecker:
             self.check_version_json(),
             self.check_basemap_style(),
             self.check_glyph_range(),
-            self.check_pmtiles_header(),
+            *self.check_pmtiles_headers(),
         ]
         return checks
 
@@ -318,15 +321,30 @@ class PublicLiveChecker:
             return pass_result("glyph-range", "Glyph range PBF is publicly reachable", bytes=len(result.body))
         return fail_result("glyph-range", "Glyph range PBF is not reachable", status=result.status, bytes=len(result.body))
 
-    def check_pmtiles_header(self) -> CheckResult:
-        url = f"https://{self.domain}{self.pmtiles_path}"
+    def check_pmtiles_headers(self) -> list[CheckResult]:
+        return [self.check_pmtiles_header(region, path) for region, path in self.pmtiles_paths]
+
+    def check_pmtiles_header(self, region: str, path: str) -> CheckResult:
+        name = f"pmtiles-header:{region}"
+        url = f"https://{self.domain}{path}"
         try:
             result = self.fetcher(url, {"Range": "bytes=0-15"}, self.timeout)
         except Exception as exc:
-            return fail_result("pmtiles-header", str(exc), url=url)
+            return fail_result(name, str(exc), url=url)
         if result.status in {200, 206} and result.body.startswith(b"PMTiles"):
-            return pass_result("pmtiles-header", "PMTiles artifact header is publicly reachable", status=result.status)
-        return fail_result("pmtiles-header", "PMTiles artifact header missing", status=result.status, prefix=result.body[:16].hex())
+            return pass_result(
+                name,
+                "Regional PMTiles artifact header is publicly reachable",
+                region=region,
+                status=result.status,
+            )
+        return fail_result(
+            name,
+            "Regional PMTiles artifact header missing",
+            region=region,
+            status=result.status,
+            prefix=result.body[:16].hex(),
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:

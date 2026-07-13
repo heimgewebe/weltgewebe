@@ -56,7 +56,10 @@ class FakeWorld:
             return FetchResult(url, 200, {"Content-Type": "application/json"}, json.dumps(body).encode())
         if url == "https://weltgewebe.net/local-basemap/glyphs/Noto%20Sans%20Regular/0-255.pbf":
             return FetchResult(url, 200, {}, b"glyph-bytes")
-        if url == "https://weltgewebe.net/local-basemap/basemap-hamburg-v0.1.0.pmtiles":
+        if url in {
+            "https://weltgewebe.net/local-basemap/basemap-hamburg-v0.1.0.pmtiles",
+            "https://weltgewebe.net/local-basemap/basemap-schleswig-holstein-v0.1.0.pmtiles",
+        }:
             return FetchResult(url, 206, {"Content-Range": "bytes 0-15/100"}, b"PMTiles\x03fake")
         return FetchResult(url, 404, {}, b"")
 
@@ -90,11 +93,15 @@ class PublicLiveReadinessTest(unittest.TestCase):
                 "version-json",
                 "basemap-style",
                 "glyph-range",
-                "pmtiles-header",
+                "pmtiles-header:hamburg",
+                "pmtiles-header:schleswig-holstein",
             },
         )
         pmtiles_requests = [headers for url, headers in fake.requests if url.endswith(".pmtiles")]
-        self.assertEqual(pmtiles_requests, [{"Range": "bytes=0-15"}])
+        self.assertEqual(
+            pmtiles_requests,
+            [{"Range": "bytes=0-15"}, {"Range": "bytes=0-15"}],
+        )
 
     def test_wrong_dns_ip_fails(self) -> None:
         fake = FakeWorld(ip="213.21.44.105")
@@ -142,10 +149,13 @@ class PublicLiveReadinessTest(unittest.TestCase):
             return fake.fetcher(url, headers, timeout)
 
         checker = fake.module.PublicLiveChecker(resolver=fake.resolver, fetcher=bad_fetcher)
-        pmtiles_result = [result for result in checker.run() if result.name == "pmtiles-header"][0]
+        pmtiles_results = [
+            result for result in checker.run() if result.name.startswith("pmtiles-header:")
+        ]
 
-        self.assertFalse(pmtiles_result.ok)
-        self.assertIn("missing", pmtiles_result.detail)
+        self.assertEqual(len(pmtiles_results), 2)
+        self.assertTrue(all(not result.ok for result in pmtiles_results))
+        self.assertTrue(all("missing" in result.detail for result in pmtiles_results))
 
 
 class PublicLiveReadinessIPv6Test(unittest.TestCase):
