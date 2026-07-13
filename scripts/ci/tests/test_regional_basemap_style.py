@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 STYLE_PATH = REPO / "map-style" / "style.json"
+UP_SCRIPT_PATH = REPO / "scripts" / "weltgewebe-up"
 
 
 class RegionalBasemapStyleTest(unittest.TestCase):
@@ -50,6 +51,20 @@ class RegionalBasemapStyleTest(unittest.TestCase):
         for layer in self.style["layers"]:
             if "source" in layer:
                 self.assertIn(layer["source"], sources)
+
+    def test_deploy_readiness_checks_each_regional_metadata_alias(self) -> None:
+        script = UP_SCRIPT_PATH.read_text(encoding="utf-8")
+        self.assertIn(
+            "for regional_meta in basemap-hamburg.meta.json "
+            "basemap-schleswig-holstein.meta.json; do",
+            script,
+        )
+        expected_url = (
+            '"https://weltgewebe.home.arpa/local-basemap/'
+            + chr(36)
+            + '{regional_meta}"'
+        )
+        self.assertIn(expected_url, script)
 
 
 if __name__ == "__main__":

@@ -2169,7 +2169,7 @@ if [[ "$DEPLOY_TARGET" != "vps" ]]; then
 
     for regional_meta in basemap-hamburg.meta.json basemap-schleswig-holstein.meta.json; do
       if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" \
-        "https://weltgewebe.home.arpa/local-basemap/" > /dev/null 2>&1; then
+        "https://weltgewebe.home.arpa/local-basemap/${regional_meta}" > /dev/null 2>&1; then
         msg="Sovereign Basemap Check skipped/failed: Could not fetch ${regional_meta} via Edge Route (/local-basemap/${regional_meta}). PMTiles artifact volume or route is missing."
         echo "   [!] WARNING: $msg"
         echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
