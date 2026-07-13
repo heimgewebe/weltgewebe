@@ -224,7 +224,7 @@
         </div>
       {:else}
         <div class="state-pending">
-          <p><strong>Kartenpunkt ausstehend</strong></p>
+          <p><strong>Ort ausstehend</strong></p>
           <p>
             Halte den gewünschten Ort auf der Karte etwa eine Sekunde gedrückt.
             Du kannst den Punkt danach bestätigen oder erneut setzen.

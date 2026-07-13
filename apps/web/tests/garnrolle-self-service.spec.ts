@@ -184,7 +184,7 @@ test.describe("Eigene Garnrolle speichern", () => {
 
     await expect(page).toHaveURL(/\/map\?compose=garnrolle/);
     const placement = page.locator('[data-testid="garnrolle-placement"]');
-    await expect(placement).toContainText("Kartenpunkt ausstehend");
+    await expect(placement).toContainText("Ort ausstehend");
     await longPressMapCenter(page);
     await expect(placement).toContainText("Ort gewählt");
     await placement
@@ -245,7 +245,7 @@ test.describe("Garnrollen-Kartenpunkt per Touch", () => {
     });
     await page.goto("/map?compose=garnrolle");
     const placement = page.locator('[data-testid="garnrolle-placement"]');
-    await expect(placement).toContainText("Kartenpunkt ausstehend");
+    await expect(placement).toContainText("Ort ausstehend");
 
     const map = page.locator("#map canvas").first();
     const box = await map.boundingBox();

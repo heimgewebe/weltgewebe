@@ -224,7 +224,7 @@
       if (returned) {
         selectedLocation = returned;
         saveMessage =
-          "Kartenpunkt übernommen. Prüfe Adresse und Sichtbarkeit und speichere anschließend.";
+          "Ort übernommen. Prüfe Adresse und Sichtbarkeit und speichere anschließend.";
       }
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 401) {
@@ -271,7 +271,7 @@
         return "Dein Konto darf die Garnrolle derzeit nicht bearbeiten.";
       }
       if (error.status === 400) {
-        return "Bitte prüfe Name, Adresse, Kartenpunkt und Sichtbarkeit.";
+        return "Bitte prüfe Name, Adresse, Ort und Sichtbarkeit.";
       }
     }
     return "Die Garnrolle konnte nicht gespeichert werden. Bitte versuche es erneut.";
@@ -532,14 +532,14 @@
         >
           {isSaving ? "Wird gespeichert…" : "Speichern"}
         </button>
-        <a class="btn" href="/map?compose=node">Ersten Knoten weben</a>
+        <a class="btn" href="/map?compose=node">Ersten Knoten knüpfen</a>
       </div>
       <p id="my-garnrolle-save-note" class="muted">
         Öffentlich sind Anzeigename, Kurzbeschreibung, Fähigkeiten, Güter und
         Interessen. Deine Adresse bleibt privat. Bei „Exakt sichtbar“ ist der
-        gewählte Kartenpunkt öffentlich; bei „Im Umkreis sichtbar“ nur eine
+        gewählte Ort öffentlich; bei „Im Umkreis sichtbar“ nur eine
         versetzte Näherung; bei „Noch nicht auf der Karte“ keine Position.
-        Adresse und Kartenpunkt werden nicht automatisch abgeglichen.
+        Adresse und Ort werden nicht automatisch abgeglichen.
       </p>
     </form>
   {/if}

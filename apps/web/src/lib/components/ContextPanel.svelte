@@ -9,6 +9,7 @@
   } from "$lib/stores/uiView";
   import { isSearchOpen } from "$lib/stores/searchStore";
   import { isFilterOpen } from "$lib/stores/filterStore";
+  import type { KompositionDraft, Selection, SystemState } from "$lib/stores/uiView";
 
   import NodePanel from "./panels/NodePanel.svelte";
   import AccountPanel from "./panels/AccountPanel.svelte";
@@ -16,25 +17,44 @@
   import KompositionPanel from "./panels/KompositionPanel.svelte";
 
   type RelatedSelection = { type: "node" | "garnrolle"; id: string };
-  const dispatch = createEventDispatcher<{ selectRelated: RelatedSelection }>();
-  let kompositionPanel: any = null;
+  type KompositionPanelHandle = { requestClose: () => void };
 
-  $: panelTitle =
-    $systemState === "komposition"
-      ? $kompositionDraft?.mode === "place-garnrolle"
+  const dispatch = createEventDispatcher<{ selectRelated: RelatedSelection }>();
+  let kompositionPanel: KompositionPanelHandle | null = null;
+
+  function derivePanelTitle(
+    state: SystemState,
+    draft: KompositionDraft,
+    currentSelection: Selection,
+  ): string {
+    if (state === "komposition") {
+      return draft?.mode === "place-garnrolle"
         ? "Garnrolle auf die Karte setzen"
-        : "Knoten knüpfen"
-      : $selection?.type === "node"
-        ? "Knoten"
-        : $selection?.type === "account" || $selection?.type === "garnrolle"
-          ? "Garnrolle"
-          : $selection?.type === "edge"
-            ? "Faden"
-            : "Details";
+        : "Knoten knüpfen";
+    }
+
+    if (currentSelection?.type === "node") return "Knoten";
+    if (
+      currentSelection?.type === "account" ||
+      currentSelection?.type === "garnrolle"
+    ) {
+      return "Garnrolle";
+    }
+    if (currentSelection?.type === "edge") return "Faden";
+    return "Details";
+  }
+
+  $: panelTitle = derivePanelTitle(
+    $systemState,
+    $kompositionDraft,
+    $selection,
+  );
 
   function closePanel() {
-    if ($systemState === "komposition" && kompositionPanel?.requestClose) {
-      kompositionPanel.requestClose();
+    if ($systemState === "komposition") {
+      // Fail closed: while the child handle is not bound yet, never fall back
+      // to discarding a composition draft or a partial-success state.
+      kompositionPanel?.requestClose();
       return;
     }
     leaveToNavigation();

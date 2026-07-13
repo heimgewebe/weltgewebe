@@ -61,8 +61,8 @@
     setTab(tabs[nextIndex]);
     const buttons = (e.currentTarget as HTMLElement)
       ?.closest(".tabs")
-      ?.querySelectorAll('button[role="tab"]');
-    (buttons?.[nextIndex] as HTMLElement | undefined)?.focus();
+      ?.querySelectorAll<HTMLButtonElement>('button[role="tab"]');
+    buttons?.item(nextIndex)?.focus();
   }
 </script>
 

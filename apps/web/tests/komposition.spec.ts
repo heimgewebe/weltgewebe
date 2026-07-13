@@ -205,8 +205,12 @@ test.describe("Komposition Flow (weber)", () => {
       panel.locator('button:has-text("Ohne Faden fortfahren")'),
     ).toBeVisible();
 
-    // The global close control must not discard this partial-success state.
-    await panel.getByRole("button", { name: "Schließen" }).click();
+    // Repeated header and Escape close attempts must not discard this
+    // partial-success state. The user must make an explicit decision.
+    const closeButton = panel.getByRole("button", { name: "Schließen" });
+    await closeButton.click();
+    await closeButton.click();
+    await page.keyboard.press("Escape");
     await expect(panel).toBeVisible();
     await expect(panel).toContainText("Der Knoten ist bereits gespeichert");
 
