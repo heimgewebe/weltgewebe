@@ -482,7 +482,7 @@ pub async fn get_account(
 
         if let Some(date) = edge.created_at.clone() {
             let event = if account_is_source {
-                format!("Hat einen Faden zum Knoten \"{}\" geknüpft.", node.title)
+                format!("Hat den Knoten \"{}\" geknüpft.", node.title)
             } else {
                 format!(
                     "Wurde über einen Faden mit dem Knoten \"{}\" verknüpft.",

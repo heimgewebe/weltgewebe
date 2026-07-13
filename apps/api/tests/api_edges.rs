@@ -664,7 +664,7 @@ async fn post_account_edge_projects_garnrolle_relation_and_survives_reload() -> 
         NODE_ID,
         NODE_TITLE,
         "reference",
-        "Hat einen Faden zum Knoten \"Vorwärtsnachweis\" geknüpft.",
+        "Hat den Knoten \"Vorwärtsnachweis\" geknüpft.",
     );
     assert_eq!(immediate_date, created_at);
 
@@ -692,7 +692,7 @@ async fn post_account_edge_projects_garnrolle_relation_and_survives_reload() -> 
         NODE_ID,
         NODE_TITLE,
         "reference",
-        "Hat einen Faden zum Knoten \"Vorwärtsnachweis\" geknüpft.",
+        "Hat den Knoten \"Vorwärtsnachweis\" geknüpft.",
     );
     assert_eq!(restarted_date, created_at);
 
