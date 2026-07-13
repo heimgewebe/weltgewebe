@@ -27,6 +27,7 @@ verifies_with:
   - apps/web/tests/map-interaction.spec.ts
   - apps/web/tests/ui-filter.spec.ts
 ---
+
 # UI-Interaktionsvertrag
 
 ## Leitidee
@@ -35,11 +36,11 @@ Weltgewebe ist ein kartenbasiertes Koordinationsinterface. Die Karte ist der öf
 
 ## Drei Hauptflächen
 
-| Fläche | Verantwortung |
-|---|---|
-| Karte | räumlicher Überblick, Auswahl und sichtbares Gewebe |
-| Fokuspanel | Details, Gespräche, Entscheidungen und Handlungen |
-| Aktionsleiste | Suche, Filter, Komposition und weitere Absichten |
+| Fläche        | Verantwortung                                       |
+| ------------- | --------------------------------------------------- |
+| Karte         | räumlicher Überblick, Auswahl und sichtbares Gewebe |
+| Fokuspanel    | Details, Gespräche, Entscheidungen und Handlungen   |
+| Aktionsleiste | Suche, Filter, Komposition und weitere Absichten    |
 
 Es gibt keinen zweiten Detail-Drawer, kein dauerhaftes Seitenmenü für Objektinhalte und keine frei schwebenden Hauptformulare über der Karte.
 
@@ -53,6 +54,14 @@ Interaktionen:
 - leere Kartenfläche wählen → Fokus schließen, sofern kein lokaler Dialog Vorrang hat;
 - Karte bewegen → kein neuer globaler Zustand;
 - neue Webung beginnen → Komposition im Fokuspanel.
+
+Der erste Kartenausschnitt folgt einer eindeutigen Priorität:
+
+1. Ein ausdrücklich per URL adressierter Knoten oder eine Garnrolle wird gezeigt.
+2. Sonst startet eine angemeldete Person auf ihrer öffentlich verorteten Garnrolle.
+3. Fehlt eine verortete eigene Garnrolle oder eine Anmeldung, gilt der kanonische Fallback-Ausschnitt.
+
+Die Kamera wird möglichst vor dem ersten sichtbaren Kartenbild bestimmt. Ein unnötiger Zwischensprung vom Fallback zur eigenen Garnrolle ist zu vermeiden.
 
 ## Fokuspanel
 
@@ -91,7 +100,10 @@ Suche und Filter sind lokale Kartenlinsen:
 - sie verändern die sichtbare Szene;
 - sie erzeugen keinen neuen globalen Zustand;
 - sie schließen sich gegenseitig;
-- ein Treffer kann die Karte fokussieren und das Fokuspanel öffnen;
+- passende Knoten und Garnrollen werden auf der Karte hervorgehoben;
+- liegt ein Treffer außerhalb des nutzbaren Kartenausschnitts, zeigt ein Richtungsmarker am Bildschirmrand zu ihm;
+- Richtungsmarker bleiben außerhalb von Topbar, Aktionsleiste, Suchfläche und Fokuspanel und besitzen mindestens 44 × 44 Pixel;
+- ein Treffer oder Richtungsmarker kann die Karte fokussieren und das Fokuspanel öffnen;
 - ein API-Fehler darf nicht wie eine normale leere Ergebnismenge aussehen.
 
 ## Komposition

@@ -80,11 +80,25 @@ test.describe("Search mode", () => {
     await expect(highlightedMarker).toBeVisible();
     await expect(highlightedMarker).toHaveAttribute("data-id", "mock-node-1");
 
-    // Clear search and verify highlight is removed
+    const direction = page.getByTestId("search-direction-node-mock-node-1");
+    await expect(direction).toBeVisible();
+    await expect(direction).toHaveAttribute("data-side", "bottom");
+    const directionBox = await direction.boundingBox();
+    const searchBox = await searchOverlay.boundingBox();
+    expect(directionBox).not.toBeNull();
+    expect(searchBox).not.toBeNull();
+    expect(directionBox!.width).toBeGreaterThanOrEqual(44);
+    expect(directionBox!.height).toBeGreaterThanOrEqual(44);
+    expect(directionBox!.y + directionBox!.height).toBeLessThanOrEqual(
+      searchBox!.y + 1,
+    );
+
+    // Clear search and verify highlight and direction marker are removed
     await searchInput.fill("");
     await expect(
       page.locator('.map-marker[data-search-match="true"]'),
     ).toHaveCount(0);
+    await expect(direction).toHaveCount(0);
 
     // Refill and proceed to test keyboard navigation
     await searchInput.fill("Strick");
@@ -133,6 +147,44 @@ test.describe("Search mode", () => {
     // Also verify search field was cleared
     await searchBtn.click();
     await expect(searchInput).toHaveValue("");
+  });
+
+  test("offscreen direction marker opens and centers its search result", async ({
+    page,
+  }) => {
+    await page.goto("/map");
+    await page.waitForFunction(
+      () => (window as any).__TEST_MAP__ !== undefined,
+      undefined,
+      { timeout: 15000 },
+    );
+
+    await page.getByRole("button", { name: "Suche", exact: true }).click();
+    await page.getByRole("textbox", { name: "Suchbegriff" }).fill("Strick");
+
+    const direction = page.getByTestId("search-direction-node-mock-node-1");
+    await expect(direction).toBeVisible();
+    await direction.click();
+
+    await expect(page.getByTestId("search-overlay")).toHaveCount(0);
+    await expect(page.getByTestId("context-panel")).toBeVisible();
+    await expect(page.getByTestId("search-direction-indicators")).toHaveCount(
+      0,
+    );
+    await page.waitForFunction(
+      () => {
+        const map = (window as any).__TEST_MAP__;
+        if (!map) return false;
+        const center = map.getCenter();
+        return (
+          Math.abs(center.lng - 10) < 0.0001 &&
+          Math.abs(center.lat - 51) < 0.0001 &&
+          map.getZoom() >= 14
+        );
+      },
+      undefined,
+      { timeout: 10000 },
+    );
   });
 
   test("focus restores to search button on Escape", async ({ page }) => {
