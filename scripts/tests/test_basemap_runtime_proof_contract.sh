@@ -10,7 +10,7 @@ mkdir -p "${TMP_DIR}/bin"
 printf 'PMTiles' > "${TMP_DIR}/fixture.pmtiles"
 EXPECTED_SHA256="$(sha256sum "${TMP_DIR}/fixture.pmtiles" | awk '{print $1}')"
 
-cat > "${TMP_DIR}/bin/curl" <<'PY'
+cat > "${TMP_DIR}/bin/curl" << 'PY'
 #!/usr/bin/python3
 import os
 import pathlib
