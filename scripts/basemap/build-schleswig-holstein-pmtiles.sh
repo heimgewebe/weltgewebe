@@ -80,18 +80,51 @@ if [ "$ACTUAL_SHA256" != "$OSM_SHA256" ]; then
 fi
 echo "   [✓] Input integrity verified."
 
-echo "=> Running Planetiler via Docker to generate $OUTPUT_PMTILES..."
-if ! docker run --rm \
-  --platform linux/amd64 \
-  --user "$(id -u):$(id -g)" \
-  -v "$BASEMAP_DIR":/data \
-  "$PLANETILER_IMAGE" \
-  --osm-path="/data/$OSM_FILE" \
-  --output="/data/$OUTPUT_PMTILES" \
-  --download=true; then
-  echo "Error: Docker execution failed." >&2
+PLANETILER_MAX_ATTEMPTS="${PLANETILER_MAX_ATTEMPTS:-3}"
+PLANETILER_RETRY_DELAY_SECONDS="${PLANETILER_RETRY_DELAY_SECONDS:-5}"
+if ! [[ "$PLANETILER_MAX_ATTEMPTS" =~ ^[1-5]$ ]]; then
+  echo "Error: PLANETILER_MAX_ATTEMPTS must be an integer from 1 to 5." >&2
   exit 1
 fi
+if ! [[ "$PLANETILER_RETRY_DELAY_SECONDS" =~ ^[0-9]+$ ]]; then
+  echo "Error: PLANETILER_RETRY_DELAY_SECONDS must be a non-negative integer." >&2
+  exit 1
+fi
+
+run_planetiler() {
+  docker run --rm \
+    --platform linux/amd64 \
+    --user "$(id -u):$(id -g)" \
+    -v "$BASEMAP_DIR":/data \
+    "$PLANETILER_IMAGE" \
+    --osm-path="/data/$OSM_FILE" \
+    --output="/data/$OUTPUT_PMTILES" \
+    --download=true
+}
+
+echo "=> Running Planetiler via Docker to generate $OUTPUT_PMTILES..."
+PLANETILER_ATTEMPT=1
+while true; do
+  # Keep fully downloaded auxiliary sources across attempts, but never reuse
+  # partial output or temporary feature stores from a failed build.
+  rm -f \
+    "$BASEMAP_DIR/$OUTPUT_PMTILES" \
+    "$BASEMAP_DIR/$OUTPUT_PMTILES.layerstats.tsv.gz"
+  rm -rf "$BASEMAP_DIR/tmp"
+
+  if run_planetiler; then
+    break
+  fi
+
+  if [ "$PLANETILER_ATTEMPT" -ge "$PLANETILER_MAX_ATTEMPTS" ]; then
+    echo "Error: Planetiler failed after $PLANETILER_ATTEMPT attempt(s)." >&2
+    exit 1
+  fi
+
+  echo "Warning: Planetiler attempt $PLANETILER_ATTEMPT failed; retrying after ${PLANETILER_RETRY_DELAY_SECONDS}s." >&2
+  sleep "$PLANETILER_RETRY_DELAY_SECONDS"
+  PLANETILER_ATTEMPT=$((PLANETILER_ATTEMPT + 1))
+done
 
 if [ ! -f "$BASEMAP_DIR/$OUTPUT_PMTILES" ]; then
   echo "Error: Artifact $OUTPUT_PMTILES not found." >&2
