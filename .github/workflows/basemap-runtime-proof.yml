@@ -525,7 +525,12 @@ jobs:
           bash scripts/basemap/build-schleswig-holstein-pmtiles.sh
           test -s "build/basemap/${ARTEFACT_NAME}"
           test -s "build/basemap/${META_NAME}"
-          EXPECTED_SHA256="$(python3 -c 'import json,os; print(json.load(open("build/basemap/" + os.environ["META_NAME"], encoding="utf-8"))["sha256"])')"
+          META_PATH="build/basemap/"
+          EXPECTED_SHA256="$(
+            python3 -c \
+              'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["sha256"])' \
+              ""
+          )"
           printf 'EXPECTED_SHA256=%s\n' "${EXPECTED_SHA256}" >> "${GITHUB_ENV}"
 
       - name: Start Caddy serving Schleswig-Holstein PMTiles
