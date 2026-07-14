@@ -188,20 +188,29 @@ Das ist **keine Validierung**, sondern eine **sichtbare Beobachtung**.
 
 ### Performance & Limits
 
+Die folgenden Quellenvariablen besitzen zwei bewusst getrennte Default-Ebenen:
+Der API-Code und `.env.example` halten Domänendaten lokal im JSONL-Modus. Der
+Produktions-Compose-Vertrag `infra/compose/compose.prod.yml` setzt dagegen Lesen
+und alle vorhandenen Domänenschreibpfade gemeinsam auf `postgres`. Ein laufender
+Serverzustand muss zusätzlich durch Runtime-Evidence belegt werden.
+
 - **MAX_EDGES_CACHE**: Obergrenze der beim Start geladenen Edges (Default `500000`).
   Bei Erreichen wird die Datei nicht weiter gelesen und eine Warnung geloggt.
-- **WELTGEWEBE_DOMAIN_READ_SOURCE**: Default `jsonl`.
+- **WELTGEWEBE_DOMAIN_READ_SOURCE**: lokal `jsonl`, Produktion `postgres`.
   `postgres` lädt Accounts, Knoten und Fäden beim API-Start aus den
   PostgreSQL-Domänentabellen.
-- **WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE**: Default `jsonl`.
+- **WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE**: lokal `jsonl`, Produktion `postgres`.
   `postgres` persistiert Account-Erzeugung einschließlich Auth-
   Autoprovisionierung sowie `PATCH /accounts/me/profile` für die eigene
   Garnrolle in `domain_accounts`.
-- **WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE**: Default `jsonl`.
+- **WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE**: lokal `jsonl`, Produktion `postgres`.
   `postgres` persistiert `POST /nodes` und `PATCH /nodes/{id}` in
   `domain_nodes`.
-- **WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE**: Default `jsonl`.
+- **WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE**: lokal `jsonl`, Produktion `postgres`.
   `postgres` persistiert `POST /edges` in `domain_edges`.
+- **WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE**: lokaler In-Memory-Default,
+  Produktion `postgres`. `postgres` persistiert Credentials und Signaturzähler
+  in `passkey_credentials`.
 
 `POST /nodes` und `POST /edges` akzeptieren optional eine UUID als
 `operation_id`. Sie wird vom Webclient einmal pro Nutzeraktion erzeugt und bei
