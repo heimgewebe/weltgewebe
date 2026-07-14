@@ -1,5 +1,6 @@
 pub mod accounts;
 pub mod auth;
+mod collective_write_guard;
 mod domain_write_guard;
 pub mod edges;
 pub mod health;
@@ -27,8 +28,9 @@ use self::{
         passkey_register_options, passkey_register_verify, remove_device, request_login,
         request_step_up, session, session_refresh, update_email,
     },
-    edges::{create_edge, delete_edge, get_edge, list_edges, patch_edge},
-    nodes::{create_node, delete_node, get_node, list_nodes, patch_node, replace_node},
+    collective_write_guard::{create_edge_serialized, delete_node_serialized},
+    edges::{delete_edge, get_edge, list_edges, patch_edge},
+    nodes::{create_node, get_node, list_nodes, patch_node, replace_node},
 };
 
 pub fn api_router() -> Router<ApiState> {
@@ -39,17 +41,21 @@ pub fn api_router() -> Router<ApiState> {
         )
         .route(
             "/nodes/{id}",
-            get(get_node).merge(
-                axum::routing::patch(patch_node)
-                    .put(replace_node)
-                    .delete(delete_node)
-                    .route_layer(from_fn(require_write)),
-            ),
+            get(get_node)
+                .merge(
+                    axum::routing::patch(patch_node)
+                        .put(replace_node)
+                        .route_layer(from_fn(require_write)),
+                )
+                .merge(
+                    axum::routing::delete(delete_node_serialized)
+                        .route_layer(from_fn(require_write)),
+                ),
         )
         .route(
             "/edges",
             get(list_edges)
-                .post(create_edge)
+                .post(create_edge_serialized)
                 .route_layer(from_fn(require_write)),
         )
         .route(
