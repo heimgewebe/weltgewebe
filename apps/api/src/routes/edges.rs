@@ -501,7 +501,11 @@ fn edge_create_error_message(err: &edge_create::EdgeCreateValidationError) -> St
     }
 }
 
-/// Create an edge (OPT-ARC-001 Phase E-C).
+/// Internal projection primitive for a Faden derived from a Webungsaktion.
+///
+/// This function is deliberately not registered as an HTTP route. Domain
+/// actions call it after their own durable state transition and reuse a stable
+/// operation id so a retry repairs a missing projection without duplication.
 ///
 /// Write path: write gate ([`reject_edge_create_unless_writable`]) -> contract
 /// validation (PR-1 semantics) -> server-generated `id` / `created_at` ->
@@ -734,7 +738,7 @@ pub async fn create_edge(
 /// Edge-create request contract — OPT-ARC-001 Phase E-C, PR-1 (Semantik-Lock).
 ///
 /// This module locks the *accepted* shape and validation rules of a
-/// `POST /edges` create request without taking on routing, persistence, or
+/// internal derived-Faden projection request without taking on routing, persistence, or
 /// status-code concerns. The [`create_edge`] handler (PR-2, JSONL edge create)
 /// consumes `CreateEdgeRequest` / `CreateEdgeRequest::validate` and owns the
 /// HTTP mapping.
@@ -819,7 +823,7 @@ mod edge_create {
         deserializer.deserialize_option(OptionalNonNullStringVisitor)
     }
 
-    /// Accepted shape of a future `POST /edges` create request.
+    /// Accepted shape of a future internal derived-Faden projection request.
     ///
     /// `created_at`, `expires_at`, `payload`, and `metadata` are intentionally
     /// absent; together with `deny_unknown_fields` they are rejected rather than
@@ -829,7 +833,7 @@ mod edge_create {
     /// quietly collapses into "nullable".
     ///
     /// `pub(super)` exposes the type to the parent `edges` module so the upcoming
-    /// POST /edges handler can consume it without a later visibility rework.
+    /// internal projection writer can consume it without a later visibility rework.
     #[derive(Debug, serde::Deserialize)]
     #[serde(deny_unknown_fields)]
     pub(super) struct CreateEdgeRequest {
@@ -850,7 +854,7 @@ mod edge_create {
     ///
     /// Values are preserved verbatim — no lowercasing, no trimming into storage.
     /// Whitespace is only inspected to reject blank required/optional fields.
-    /// Fields are `pub(super)` so the upcoming POST /edges handler in the parent
+    /// Fields are `pub(super)` so the internal projection writer in the parent
     /// `edges` module can read the validated values directly.
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub(super) struct ValidatedCreateEdge {
@@ -867,7 +871,7 @@ mod edge_create {
     /// Why a `CreateEdgeRequest` failed validation.
     ///
     /// Intentionally HTTP-agnostic: this PR fixes the create contract and its
-    /// validation only. Status-code mapping belongs to the POST /edges PR.
+    /// validation only. Status-code mapping belongs to the internal projection boundary.
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub(super) enum EdgeCreateValidationError {
         /// A required field was missing/blank, or an optional field that, when

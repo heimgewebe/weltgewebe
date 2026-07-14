@@ -232,7 +232,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     // Setup Auth State with Account
     let mut account_map = AccountStore::new();
     let account = AccountPublic {
-        id: "weber1".to_string(),
+        id: "cccccccc-cccc-4ccc-8ccc-000000000001".to_string(),
         kind: "garnrolle".to_string(),
         title: "Weber".to_string(),
         summary: None,
@@ -246,7 +246,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     account_map.insert(AccountInternal {
         public: account,
         role: Role::Weber,
-        email: Some("weber1@example.com".to_string()),
+        email: Some("cccccccc-cccc-4ccc-8ccc-000000000001@example.com".to_string()),
         webauthn_user_id: uuid::Uuid::new_v4(),
     });
 
@@ -254,7 +254,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     state.accounts = Arc::new(RwLock::new(account_map));
 
     // Create Session
-    let session = create_session(&state, "weber1", None).await;
+    let session = create_session(&state, "cccccccc-cccc-4ccc-8ccc-000000000001", None).await;
     let cookie_val = format!("gewebe_session={}", session.id);
 
     let app = Router::new()
@@ -336,7 +336,7 @@ async fn postgres_read_source_blocks_node_patch_without_persisting() -> anyhow::
 
     let mut account_map = AccountStore::new();
     let account = AccountPublic {
-        id: "weber1".to_string(),
+        id: "cccccccc-cccc-4ccc-8ccc-000000000001".to_string(),
         kind: "garnrolle".to_string(),
         title: "Weber".to_string(),
         summary: None,
@@ -349,7 +349,7 @@ async fn postgres_read_source_blocks_node_patch_without_persisting() -> anyhow::
     account_map.insert(AccountInternal {
         public: account,
         role: Role::Weber,
-        email: Some("weber1@example.com".to_string()),
+        email: Some("cccccccc-cccc-4ccc-8ccc-000000000001@example.com".to_string()),
         webauthn_user_id: uuid::Uuid::new_v4(),
     });
 
@@ -357,7 +357,7 @@ async fn postgres_read_source_blocks_node_patch_without_persisting() -> anyhow::
     state.config.domain_read_source = DomainReadSource::Postgres;
     state.accounts = Arc::new(RwLock::new(account_map));
 
-    let session = create_session(&state, "weber1", None).await;
+    let session = create_session(&state, "cccccccc-cccc-4ccc-8ccc-000000000001", None).await;
     let cookie_val = format!("gewebe_session={}", session.id);
 
     let app = Router::new()
@@ -483,7 +483,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
     // Setup Auth State with Account
     let mut account_map = AccountStore::new();
     let account = AccountPublic {
-        id: "weber1".to_string(),
+        id: "cccccccc-cccc-4ccc-8ccc-000000000001".to_string(),
         kind: "garnrolle".to_string(),
         title: "Weber".to_string(),
         summary: None,
@@ -497,7 +497,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
     account_map.insert(AccountInternal {
         public: account,
         role: Role::Weber,
-        email: Some("weber1@example.com".to_string()),
+        email: Some("cccccccc-cccc-4ccc-8ccc-000000000001@example.com".to_string()),
         webauthn_user_id: uuid::Uuid::new_v4(),
     });
 
@@ -505,7 +505,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
     state.accounts = Arc::new(RwLock::new(account_map));
 
     // Create Session
-    let session = create_session(&state, "weber1", None).await;
+    let session = create_session(&state, "cccccccc-cccc-4ccc-8ccc-000000000001", None).await;
     let cookie_val = format!("gewebe_session={}", session.id);
 
     let app = Router::new()
@@ -945,7 +945,11 @@ async fn nodes_post_creates_persists_and_reloads() -> anyhow::Result<()> {
     let in_dir = tmp.path().join("in");
     std::fs::create_dir_all(&in_dir)?;
 
-    let (app, cookie, state, _env) = app_with_account(&in_dir, weber_account("weber1")).await;
+    let (app, cookie, state, _env) = app_with_account(
+        &in_dir,
+        weber_account("cccccccc-cccc-4ccc-8ccc-000000000001"),
+    )
+    .await;
 
     let body = r#"{"title":"New Node","kind":"Werkstatt","address":"Musterstraße 1, 12345 Musterstadt","location":{"lat":53.55,"lon":9.99},"summary":"Short summary","tags":["a","b"]}"#;
     let res = app
@@ -1007,8 +1011,11 @@ async fn nodes_post_replays_same_operation_without_second_write() -> anyhow::Res
     let in_dir = tmp.path().join("in");
     std::fs::create_dir_all(&in_dir)?;
 
-    let (app, cookie, _initial_state, _env) =
-        app_with_account(&in_dir, weber_account("weber1")).await;
+    let (app, cookie, _initial_state, _env) = app_with_account(
+        &in_dir,
+        weber_account("cccccccc-cccc-4ccc-8ccc-000000000001"),
+    )
+    .await;
     let request_body = format!(
         r#"{{"title":"Retry Safe Node","kind":"Werkstatt","address":"Musterstraße 1","location":{{"lat":53.55,"lon":9.99}},"summary":"Same action","operation_id":"{OPERATION_ID}"}}"#
     );
@@ -1037,8 +1044,11 @@ async fn nodes_post_replays_same_operation_without_second_write() -> anyhow::Res
 
     // Build a fresh API/cache/session state to simulate a restart after the
     // server committed but the first response was lost.
-    let (restarted_app, restarted_cookie, restarted_state, _restart_env) =
-        app_with_account(&in_dir, weber_account("weber1")).await;
+    let (restarted_app, restarted_cookie, restarted_state, _restart_env) = app_with_account(
+        &in_dir,
+        weber_account("cccccccc-cccc-4ccc-8ccc-000000000001"),
+    )
+    .await;
     let replay = restarted_app
         .clone()
         .oneshot(post_node_req(Some(&restarted_cookie), &request_body))
@@ -1054,7 +1064,10 @@ async fn nodes_post_replays_same_operation_without_second_write() -> anyhow::Res
     let contents = fs::read_to_string(&nodes_path)?;
     assert_eq!(contents.lines().count(), 1);
     let record: serde_json::Value = serde_json::from_str(contents.lines().next().unwrap())?;
-    assert_eq!(record["_create_actor_id"], "weber1");
+    assert_eq!(
+        record["_create_actor_id"],
+        "cccccccc-cccc-4ccc-8ccc-000000000001"
+    );
     assert_eq!(record["_create_operation_id"], OPERATION_ID);
     assert_eq!(restarted_state.nodes.read().await.len(), 1);
 
@@ -1071,8 +1084,11 @@ async fn nodes_post_replays_same_operation_without_second_write() -> anyhow::Res
 
     // The same UUID belongs to the account/action pair, not globally to all
     // users. Another account may independently use it for a different node.
-    let (other_app, other_cookie, _other_state, _other_env) =
-        app_with_account(&in_dir, weber_account("weber2")).await;
+    let (other_app, other_cookie, _other_state, _other_env) = app_with_account(
+        &in_dir,
+        weber_account("dddddddd-dddd-4ddd-8ddd-000000000002"),
+    )
+    .await;
     let other = other_app
         .oneshot(post_node_req(Some(&other_cookie), &changed_body))
         .await?;
@@ -1133,10 +1149,10 @@ async fn nodes_post_without_origin_fails() -> anyhow::Result<()> {
     let env = set_gewebe_in_dir(&in_dir);
 
     let mut account_map = AccountStore::new();
-    account_map.insert(weber_account("weber1"));
+    account_map.insert(weber_account("cccccccc-cccc-4ccc-8ccc-000000000001"));
     let mut state = test_state().await?;
     state.accounts = Arc::new(RwLock::new(account_map));
-    let session = create_session(&state, "weber1", None).await;
+    let session = create_session(&state, "cccccccc-cccc-4ccc-8ccc-000000000001", None).await;
     let cookie_val = format!("gewebe_session={}", session.id);
 
     let app = Router::new()
@@ -1167,7 +1183,11 @@ async fn nodes_post_rejects_invalid_payloads_with_stable_400() -> anyhow::Result
     let in_dir = tmp.path().join("in");
     std::fs::create_dir_all(&in_dir)?;
 
-    let (app, cookie, state, _env) = app_with_account(&in_dir, weber_account("weber1")).await;
+    let (app, cookie, state, _env) = app_with_account(
+        &in_dir,
+        weber_account("cccccccc-cccc-4ccc-8ccc-000000000001"),
+    )
+    .await;
 
     let cases = [
         // Missing required address.

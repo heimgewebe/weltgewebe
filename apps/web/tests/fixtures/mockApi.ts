@@ -68,9 +68,8 @@ export async function mockApiResponses(
   let currentAccountId = options.auth?.account_id ?? null;
   let currentRole = options.auth?.role ?? "gast";
 
-  // Node/edge creates persist into these for the lifetime of the mock, so a
-  // reload (GET /api/nodes, /api/edges) after a POST reflects the create —
-  // mirroring the real API's persist-then-cache-then-readable contract.
+  // Node creates and their server-derived Fäden persist for the lifetime of
+  // the mock. There is deliberately no direct edge-create request surface.
   const createdNodes: Record<string, unknown>[] = [];
   const createdEdges: Record<string, unknown>[] = [];
   const mockAccounts = demoAccounts.map((account) => ({ ...account }));
@@ -130,6 +129,17 @@ export async function mockApiResponses(
         updated_at: now,
       };
       createdNodes.push(node);
+      if (currentAccountId) {
+        createdEdges.push({
+          id: `mock-edge-${nextEdgeId++}`,
+          source_id: currentAccountId,
+          source_type: "account",
+          target_id: node.id,
+          target_type: "node",
+          edge_kind: "reference",
+          created_at: now,
+        });
+      }
       return route.fulfill({
         status: 201,
         contentType: "application/json",
@@ -244,39 +254,8 @@ export async function mockApiResponses(
       });
     }
 
-    if (url.endsWith("/api/edges") && method === "POST") {
-      const payload = route.request().postDataJSON() as Record<
-        string,
-        unknown
-      > | null;
-      if (
-        typeof payload?.source_id !== "string" ||
-        typeof payload?.source_type !== "string" ||
-        typeof payload?.target_id !== "string" ||
-        typeof payload?.target_type !== "string" ||
-        typeof payload?.edge_kind !== "string"
-      ) {
-        return route.fulfill({
-          status: 400,
-          contentType: "application/json",
-          body: JSON.stringify({ error: "invalid edge create request" }),
-        });
-      }
-      const edge = {
-        id: `mock-edge-${nextEdgeId++}`,
-        source_id: payload.source_id,
-        source_type: payload.source_type,
-        target_id: payload.target_id,
-        target_type: payload.target_type,
-        edge_kind: payload.edge_kind,
-        created_at: new Date().toISOString(),
-      };
-      createdEdges.push(edge);
-      return route.fulfill({
-        status: 201,
-        contentType: "application/json",
-        body: JSON.stringify(edge),
-      });
+    if (url.endsWith("/api/edges") && method !== "GET") {
+      return route.fulfill({ status: 405 });
     }
 
     if (url.endsWith("/api/edges")) {

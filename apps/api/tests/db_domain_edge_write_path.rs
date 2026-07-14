@@ -1,7 +1,7 @@
 //! Integration proof: OPT-ARC-001 Phase E-C edge-create PostgreSQL write path.
 //!
 //! Proves that, when `domain_read_source=postgres` and
-//! `domain_edge_write_source=postgres`, `POST /edges` inserts exactly one row
+//! `domain_edge_write_source=postgres`, the internal derived-Faden projector inserts exactly one row
 //! into `domain_edges` (plain INSERT, duplicate id -> 409), updates the
 //! in-memory edge cache only after the successful insert, never touches JSONL,
 //! and that `load_edges_from_postgres` reconstructs the stored edge including
@@ -25,7 +25,8 @@ use anyhow::{Context, Result};
 use axum::{
     body,
     http::{Request, StatusCode},
-    middleware::from_fn_with_state,
+    middleware::{from_fn, from_fn_with_state},
+    routing::post,
     Router,
 };
 use serial_test::serial;
@@ -43,8 +44,8 @@ use weltgewebe_api::{
         insert_domain_node, load_accounts_from_postgres, load_edges_from_postgres,
         load_nodes_from_postgres,
     },
-    middleware::{auth::auth_middleware, csrf::require_csrf},
-    routes::api_router,
+    middleware::{auth::auth_middleware, authz::require_write, csrf::require_csrf},
+    routes::{api_router, edges::create_edge},
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
 };
@@ -248,6 +249,10 @@ async fn edge_write_app(
 
     let app = Router::new()
         .merge(api_router())
+        .route(
+            "/__test/derived-edges",
+            post(create_edge).route_layer(from_fn(require_write)),
+        )
         .layer(from_fn_with_state(state.clone(), auth_middleware))
         .layer(axum::middleware::from_fn(require_csrf))
         .with_state(state.clone());
@@ -258,7 +263,7 @@ async fn edge_write_app(
 fn post_edges_req(cookie: &str, json_body: &str) -> Request<body::Body> {
     Request::builder()
         .method("POST")
-        .uri("/edges")
+        .uri("/__test/derived-edges")
         .header("Content-Type", "application/json")
         .header("Host", "localhost")
         .header("Origin", "http://localhost")

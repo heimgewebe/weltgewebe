@@ -395,8 +395,14 @@ pub async fn list_accounts(
     if cursor_mode {
         // The AccountStore is a BTreeMap (already id-ascending); cursor_page
         // re-affirms the stable id-ascending contract shared by all cursor
-        // endpoints and projects each account to its public view.
-        let refs: Vec<&AccountInternal> = accounts.iter().map(|(_id, internal)| internal).collect();
+        // endpoints and projects each webende Garnrolle to its public view.
+        // Gastkonten are authentication identities, not Garnrollen, and must
+        // not leave a public trace in the weave.
+        let refs: Vec<&AccountInternal> = accounts
+            .iter()
+            .map(|(_id, internal)| internal)
+            .filter(|internal| internal.role != Role::Gast && !internal.public.disabled)
+            .collect();
         let page = cursor_page(
             refs,
             limit,
@@ -410,6 +416,7 @@ pub async fn list_accounts(
         // BTreeMap iterates in ascending key order, so output is deterministic by account id.
         let accounts: Vec<AccountPublic> = accounts
             .iter()
+            .filter(|(_id, internal)| internal.role != Role::Gast && !internal.public.disabled)
             .skip(offset)
             .take(limit)
             .map(|(_id, internal)| internal.public.clone())
@@ -429,6 +436,7 @@ pub async fn get_account(
         let accounts = state.accounts.read().await;
         accounts
             .get(&id)
+            .filter(|internal| internal.role != Role::Gast && !internal.public.disabled)
             .map(|internal| internal.public.clone())
             .ok_or(StatusCode::NOT_FOUND)?
     };

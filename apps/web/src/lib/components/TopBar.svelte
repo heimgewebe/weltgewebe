@@ -10,6 +10,9 @@
   aria-label="Navigation"
 >
   <div class="spacer"></div>
+  <a class="proposals-button" href="/antraege" data-testid="proposals-button">
+    Anträge
+  </a>
   <div class="actions">
     <Garnrolle />
   </div>
@@ -34,6 +37,30 @@
   .spacer {
     flex: 1;
     pointer-events: none;
+  }
+
+  .proposals-button {
+    position: absolute;
+    left: 50%;
+    top: calc(env(safe-area-inset-top) + 8px);
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 0 16px;
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    border-radius: 999px;
+    background: rgba(18, 31, 25, 0.8);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 720;
+    backdrop-filter: blur(12px);
+    pointer-events: auto;
+  }
+
+  .proposals-button:hover,
+  .proposals-button:focus-visible {
+    background: rgba(31, 91, 66, 0.94);
   }
 
   .actions {

@@ -158,6 +158,7 @@ Generated automatically. Do not edit.
 | specs.auth-ui | Auth UI Spec | reference | active | docs/specs/auth-ui.md |
 | specs.contract | Datenvertrag | reference | active | docs/specs/contract.md |
 | specs.garnrolle-knoten-faden | Garnrolle, Knoten und Faden | specification | canonical | docs/specs/garnrolle-knoten-faden.md |
+| specs.governance-antraege | Anträge, Konsent, Veto und Abstimmung | specification | canonical | docs/specs/governance-antraege.md |
 | specs.list-pagination-api | List Pagination API Spec | reference | active | docs/specs/list-pagination-api.md |
 | specs.map-experience | Kartenerlebnis | specification | canonical | docs/specs/map-experience.md |
 | specs.privacy-api | Garnrollen-Sichtbarkeit API | reference | active | docs/specs/privacy-api.md |

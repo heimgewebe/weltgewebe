@@ -602,6 +602,54 @@ fn node_create_error_message(err: &node_create::NodeCreateValidationError) -> St
     }
 }
 
+/// Ensure the Faden that visualizes a successful `Knoten knüpfen` action.
+///
+/// The edge writer remains an internal projection primitive. Its HTTP route is
+/// intentionally absent. Reusing the node operation id (or, if absent, the
+/// server-owned node id) makes projection retries idempotent across process
+/// failures and response loss.
+async fn ensure_node_created_faden(
+    state: &ApiState,
+    auth: &AuthContext,
+    node: &Node,
+    node_operation_id: Option<&str>,
+) -> Result<(), (StatusCode, String)> {
+    let account_id = auth.account_id.as_deref().ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            "authenticated account context missing".to_string(),
+        )
+    })?;
+    let projection_operation_id = node_operation_id.unwrap_or(node.id.as_str());
+    let payload = json!({
+        "source_id": account_id,
+        "source_type": "account",
+        "target_id": node.id,
+        "target_type": "node",
+        "edge_kind": "reference",
+        "operation_id": projection_operation_id,
+    });
+
+    super::edges::create_edge(State(state.clone()), Extension(auth.clone()), Json(payload))
+        .await
+        .map(|_| ())
+        .map_err(|(status, message)| {
+            tracing::error!(
+                event = "node.faden_projection.failed",
+                node_id = %node.id,
+                account_id = %account_id,
+                %status,
+                error = %message,
+                "Node is durable but its derived Faden projection failed"
+            );
+            (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "node was stored but its derived Faden could not be projected; retry the same operation"
+                .to_string(),
+        )
+        })
+}
+
 /// Create a node.
 ///
 /// Write path: write gate ([`reject_node_create_unless_writable`]) -> contract
@@ -687,9 +735,18 @@ pub async fn create_node(
                             "node operation id was already used for different data".to_string(),
                         ));
                     }
-                    let mut nodes = state.nodes.write().await;
-                    nodes.insert(existing.id.clone(), existing.clone());
-                    state.metrics.set_nodes_cache_count(nodes.len() as i64);
+                    {
+                        let mut nodes = state.nodes.write().await;
+                        nodes.insert(existing.id.clone(), existing.clone());
+                        state.metrics.set_nodes_cache_count(nodes.len() as i64);
+                    }
+                    ensure_node_created_faden(
+                        &state,
+                        &auth,
+                        &existing,
+                        semantic_request.operation_id.as_deref(),
+                    )
+                    .await?;
                     return Ok((StatusCode::OK, Json(existing)));
                 }
             }
@@ -743,9 +800,18 @@ pub async fn create_node(
                             "node operation id was already used for different data".to_string(),
                         ));
                     }
-                    let mut nodes = state.nodes.write().await;
-                    nodes.insert(existing.id.clone(), existing.clone());
-                    state.metrics.set_nodes_cache_count(nodes.len() as i64);
+                    {
+                        let mut nodes = state.nodes.write().await;
+                        nodes.insert(existing.id.clone(), existing.clone());
+                        state.metrics.set_nodes_cache_count(nodes.len() as i64);
+                    }
+                    ensure_node_created_faden(
+                        &state,
+                        &auth,
+                        &existing,
+                        semantic_request.operation_id.as_deref(),
+                    )
+                    .await?;
                     return Ok((StatusCode::OK, Json(existing)));
                 }
                 Err(NodeCreateError::DuplicateId) => {
@@ -765,6 +831,14 @@ pub async fn create_node(
             state.metrics.set_nodes_cache_count(nodes.len() as i64);
         }
     }
+
+    ensure_node_created_faden(
+        &state,
+        &auth,
+        &node,
+        semantic_request.operation_id.as_deref(),
+    )
+    .await?;
 
     tracing::info!(
         event = "node.created",

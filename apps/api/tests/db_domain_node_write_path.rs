@@ -94,6 +94,11 @@ async fn clean(pool: &PgPool) {
 /// Node-create tests generate server-owned UUID ids (no `writepath-node-`
 /// prefix), so their cleanup must not rely on the prefix-scoped `clean`.
 async fn clean_all_nodes(pool: &PgPool) {
+    // Derived Fäden can point at generated node ids. Remove them first so a
+    // repeated integration run starts from one coherent graph state.
+    pool.execute("DELETE FROM domain_edges")
+        .await
+        .expect("clean all domain_edges rows");
     pool.execute("DELETE FROM domain_nodes")
         .await
         .expect("clean all domain_nodes rows");
@@ -146,8 +151,23 @@ fn admin_operator(id: &str) -> AccountInternal {
 }
 
 async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, String, ApiState)> {
+    let operator = admin_operator(operator_id);
+    sqlx::query(
+        "INSERT INTO domain_accounts (id, kind, title, mode, role, disabled, webauthn_user_id) \
+         VALUES ($1, 'garnrolle', $2, 'not_on_map', 'admin', FALSE, $3::uuid) \
+         ON CONFLICT (id) DO UPDATE SET \
+             kind = EXCLUDED.kind, title = EXCLUDED.title, mode = EXCLUDED.mode, \
+             role = EXCLUDED.role, disabled = FALSE, webauthn_user_id = EXCLUDED.webauthn_user_id",
+    )
+    .bind(operator_id)
+    .bind(&operator.public.title)
+    .bind(operator.webauthn_user_id.to_string())
+    .execute(&pool)
+    .await
+    .context("seed canonical PostgreSQL operator account")?;
+
     let mut accounts = AccountStore::new();
-    accounts.insert(admin_operator(operator_id));
+    accounts.insert(operator);
 
     let nodes = load_nodes_from_postgres(&pool)
         .await
@@ -161,7 +181,7 @@ async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, 
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source: DomainAccountWriteSource::Postgres,
         domain_node_write_source: DomainNodeWriteSource::Postgres,
-        domain_edge_write_source: DomainEdgeWriteSource::Jsonl,
+        domain_edge_write_source: DomainEdgeWriteSource::Postgres,
         passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
         auth_public_login: false,
         auth_cookie_secure: weltgewebe_api::config::auth_cookie_secure_env_override()
@@ -257,7 +277,8 @@ async fn postgres_node_patch_persists_and_reload_sees_change() -> Result<()> {
     std::fs::create_dir_all(&in_dir)?;
     let _env = set_gewebe_in_dir(&in_dir);
 
-    let (app, cookie, state) = postgres_write_app(pool.clone(), "writepath-node-admin-1").await?;
+    let (app, cookie, state) =
+        postgres_write_app(pool.clone(), "10000000-0000-0000-0000-000000000001").await?;
 
     let res = app
         .clone()
@@ -316,7 +337,8 @@ async fn postgres_node_patch_has_no_jsonl_side_effect() -> Result<()> {
     std::fs::create_dir_all(&in_dir)?;
     let _env = set_gewebe_in_dir(&in_dir);
 
-    let (app, cookie, _state) = postgres_write_app(pool.clone(), "writepath-node-admin-2").await?;
+    let (app, cookie, _state) =
+        postgres_write_app(pool.clone(), "10000000-0000-0000-0000-000000000002").await?;
 
     let res = app
         .oneshot(patch_node_req(&cookie, NODE_B, r#"{"info": "updated"}"#))
@@ -348,7 +370,8 @@ async fn postgres_node_patch_not_found_returns_404() -> Result<()> {
     std::fs::create_dir_all(&in_dir)?;
     let _env = set_gewebe_in_dir(&in_dir);
 
-    let (app, cookie, state) = postgres_write_app(pool.clone(), "writepath-node-admin-3").await?;
+    let (app, cookie, state) =
+        postgres_write_app(pool.clone(), "10000000-0000-0000-0000-000000000003").await?;
 
     let res = app
         .oneshot(patch_node_req(&cookie, NODE_404, r#"{"info": "ghost"}"#))
@@ -417,7 +440,7 @@ async fn postgres_read_jsonl_node_write_is_blocked() -> Result<()> {
     };
 
     let mut accounts = AccountStore::new();
-    accounts.insert(admin_operator("writepath-node-admin-4"));
+    accounts.insert(admin_operator("10000000-0000-0000-0000-000000000004"));
     let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
 
     let state = ApiState {
@@ -447,7 +470,7 @@ async fn postgres_read_jsonl_node_write_is_blocked() -> Result<()> {
 
     let session = state
         .sessions
-        .create("writepath-node-admin-4".to_string(), None)
+        .create("10000000-0000-0000-0000-000000000004".to_string(), None)
         .await?;
     let cookie = format!("gewebe_session={}", session.id);
 
@@ -502,7 +525,8 @@ async fn postgres_node_patch_removes_steckbrief() -> Result<()> {
     std::fs::create_dir_all(&in_dir)?;
     let _env = set_gewebe_in_dir(&in_dir);
 
-    let (app, cookie, _state) = postgres_write_app(pool.clone(), "writepath-node-admin-5").await?;
+    let (app, cookie, _state) =
+        postgres_write_app(pool.clone(), "10000000-0000-0000-0000-000000000005").await?;
 
     // Patch with no info change (no-op for info) — only steckbrief cleanup.
     let res = app
@@ -787,6 +811,8 @@ fn post_node_req(cookie: &str, json_body: &str) -> Request<body::Body> {
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
 async fn postgres_node_create_persists_and_reload_sees_it() -> Result<()> {
+    const ACTOR_ID: &str = "10000000-0000-0000-0000-000000000003";
+
     let pool = connect_pool().await;
     run_migrations(&pool).await;
     clean_all_nodes(&pool).await;
@@ -796,7 +822,7 @@ async fn postgres_node_create_persists_and_reload_sees_it() -> Result<()> {
     std::fs::create_dir_all(&in_dir)?;
     let _env = set_gewebe_in_dir(&in_dir);
 
-    let (app, cookie, state) = postgres_write_app(pool.clone(), "writepath-node-admin-3").await?;
+    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
 
     let body = r#"{"title":"New Node","kind":"Werkstatt","address":"Musterstraße 1, 12345 Musterstadt","location":{"lat":53.55,"lon":9.99},"summary":"Short summary","tags":["a","b"]}"#;
     let res = app.clone().oneshot(post_node_req(&cookie, body)).await?;
@@ -849,6 +875,19 @@ async fn postgres_node_create_persists_and_reload_sees_it() -> Result<()> {
         Some(2)
     );
 
+    // The same Webungsaktion must also create exactly one durable derived
+    // Faden in the configured PostgreSQL edge store.
+    let (edge_source, edge_target, edge_kind): (String, String, String) = sqlx::query_as(
+        "SELECT source_id, target_id, edge_kind FROM domain_edges WHERE target_id = $1",
+    )
+    .bind(&id)
+    .fetch_one(&pool)
+    .await
+    .expect("derived Faden must exist after node create");
+    assert_eq!(edge_source, ACTOR_ID);
+    assert_eq!(edge_target, id);
+    assert_eq!(edge_kind, "reference");
+
     // JSONL must NOT be appended in PostgreSQL write mode.
     let nodes_file = in_dir.join("demo.nodes.jsonl");
     assert!(
@@ -894,7 +933,7 @@ async fn postgres_node_create_persists_and_reload_sees_it() -> Result<()> {
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
 async fn postgres_node_create_operation_replays_after_restart() -> Result<()> {
-    const ACTOR_ID: &str = "writepath-node-idempotency-actor";
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000001";
     const OPERATION_ID: &str = "30000000-0000-0000-0000-000000000001";
 
     let pool = connect_pool().await;
@@ -963,6 +1002,14 @@ async fn postgres_node_create_operation_replays_after_restart() -> Result<()> {
     assert_eq!(actor.as_deref(), Some(ACTOR_ID));
     assert_eq!(operation.as_deref(), Some(OPERATION_ID));
 
+    let (edge_count, edge_source, edge_target): (i64, Option<String>, Option<String>) =
+        sqlx::query_as("SELECT count(*), min(source_id), min(target_id) FROM domain_edges")
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(edge_count, 1, "retries must project exactly one Faden");
+    assert_eq!(edge_source.as_deref(), Some(ACTOR_ID));
+    assert_eq!(edge_target.as_deref(), Some(first_id));
+
     clean_all_nodes(&pool).await;
     Ok(())
 }
@@ -982,7 +1029,8 @@ async fn postgres_node_create_rejects_invalid_payload_without_side_effects() -> 
     std::fs::create_dir_all(&in_dir)?;
     let _env = set_gewebe_in_dir(&in_dir);
 
-    let (app, cookie, state) = postgres_write_app(pool.clone(), "writepath-node-admin-4").await?;
+    let (app, cookie, state) =
+        postgres_write_app(pool.clone(), "10000000-0000-0000-0000-000000000004").await?;
 
     // Missing required `address`.
     let res = app

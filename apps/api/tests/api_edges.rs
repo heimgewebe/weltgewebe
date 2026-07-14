@@ -2,7 +2,8 @@ use anyhow::{Context, Result};
 use axum::{
     body,
     http::{Request, StatusCode},
-    middleware::from_fn_with_state,
+    middleware::{from_fn, from_fn_with_state},
+    routing::post,
     Router,
 };
 use serial_test::serial;
@@ -20,10 +21,11 @@ use weltgewebe_api::{
         accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionBackend,
     },
     config::{AppConfig, DomainReadSource},
-    middleware::{auth::auth_middleware, csrf::require_csrf},
+    middleware::{auth::auth_middleware, authz::require_write, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
+        edges::create_edge,
     },
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
@@ -396,7 +398,7 @@ async fn edges_cursor_limit_zero_is_bad_request() -> anyhow::Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// POST /edges — JSONL edge create (OPT-ARC-001 Phase E-C, PR-2)
+// Internal derived-Faden projection — no production HTTP write surface
 // ---------------------------------------------------------------------------
 
 // Valid UUIDs for contract-conforming create payloads (`source_id`,
@@ -439,7 +441,7 @@ async fn app_with_session(
     .await
 }
 
-/// Like [`app_with_session`], but with an explicit edge-create write source so
+/// Like [`app_with_session`], but with an explicit internal Faden projection source so
 /// tests can construct write-source combinations the config loader forbids
 /// (defensive route-guard coverage).
 async fn app_with_session_and_edge_write(
@@ -479,6 +481,10 @@ async fn app_with_session_for_account(
 
     let app = Router::new()
         .merge(api_router())
+        .route(
+            "/__test/derived-edges",
+            post(create_edge).route_layer(from_fn(require_write)),
+        )
         .layer(from_fn_with_state(state.clone(), auth_middleware))
         .layer(axum::middleware::from_fn(require_csrf))
         .with_state(state.clone());
@@ -486,7 +492,7 @@ async fn app_with_session_for_account(
 }
 
 fn post_edges(cookie: Option<&str>, json_body: &str) -> Request<body::Body> {
-    let mut builder = Request::post("/edges")
+    let mut builder = Request::post("/__test/derived-edges")
         .header("Content-Type", "application/json")
         .header("Host", "localhost")
         .header("Origin", "http://localhost");

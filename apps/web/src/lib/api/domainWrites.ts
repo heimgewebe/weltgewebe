@@ -1,4 +1,4 @@
-import type { Edge, GarnrolleMapState, Location, Node } from "$lib/map/types";
+import type { GarnrolleMapState, Location, Node } from "$lib/map/types";
 
 /**
  * Thrown when a domain write is rejected by the API. Carries the HTTP status so callers can map it to an understandable,
@@ -93,19 +93,4 @@ export interface CreateNodePayload {
 /** POST /api/nodes — create a node. Server owns `id`/`created_at`/`updated_at`. */
 export function createNode(payload: CreateNodePayload): Promise<Node> {
   return postJson<Node>("/api/nodes", payload);
-}
-
-export interface CreateEdgePayload {
-  source_id: string;
-  source_type: string;
-  target_id: string;
-  target_type: string;
-  edge_kind: string;
-  /** Stable UUID for retrying one user action after an uncertain response. */
-  operation_id?: string;
-}
-
-/** POST /api/edges — create an edge. Server owns `id`/`created_at`. */
-export function createEdge(payload: CreateEdgePayload): Promise<Edge> {
-  return postJson<Edge>("/api/edges", payload);
 }
