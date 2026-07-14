@@ -399,7 +399,7 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
     def test_manifest_rejects_unknown_keys_without_echoing_values(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "manifest"
-            path.write_text("contract=weltgewebe-postgres-backup-v1\nSECRET_TOKEN=do-not-echo\n", encoding="utf-8")
+            path.write_text("contract=weltgewebe-postgres-backup-v1\nUNEXPECTED_FIELD=do-not-echo\n", encoding="utf-8")
             with self.assertRaises(evidence.EvidenceError) as caught:
                 evidence.read_key_value_file(path, allowed_keys=evidence.BACKUP_MANIFEST_KEYS)
             self.assertNotIn("do-not-echo", str(caught.exception))
