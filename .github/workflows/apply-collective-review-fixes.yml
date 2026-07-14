@@ -1,0 +1,39 @@
+name: Apply collective review corrections
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'feat/collective-edit-delete-v1'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: feat/collective-edit-delete-v1
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply review corrections
+        run: |
+          set -euo pipefail
+          python3 .operator-review/fix_collective_review.py
+          cargo fmt --all
+          git diff --check
+      - name: Prove focused API contract
+        run: cargo test -p weltgewebe-api --test api_collective_mutations -- --nocapture
+      - name: Commit corrected product state
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -r .operator-review
+          git rm .github/workflows/apply-collective-review-fixes.yml
+          git rm .github/workflows/collective-targeted-diagnosis.yml
+          git add apps/api/src/routes/nodes.rs apps/api/tests/api_collective_mutations.rs apps/web/src/lib/components/panels/EdgePanel.svelte
+          git commit -m "fix: harden collective deletion contracts"
+          git push origin HEAD:feat/collective-edit-delete-v1
