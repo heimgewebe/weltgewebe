@@ -17,18 +17,30 @@ class CanonicalTruthContractTests(unittest.TestCase):
         self.assertIn("pytest==8.3.4 pyyaml==6.0.2", docs_workflow)
         self.assertIn("pytest==8.3.4 pyyaml==6.0.2", main_workflow)
 
-    def test_required_check_catalog_is_strict_and_matches_universal_jobs(self) -> None:
+    def test_required_check_catalog_is_strict_and_matches_trusted_producers(self) -> None:
         path = ROOT / ".github/grabowski-required-checks.json"
         data = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(set(data), {"schema_version", "required_checks"})
         self.assertEqual(data["schema_version"], 1)
         self.assertEqual(
             data["required_checks"],
-            ["Required merge gate"],
+            ["Required merge gate", "Review evidence gate"],
         )
-        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-        for name in data["required_checks"]:
+        producers = {
+            "Required merge gate": ROOT / ".github/workflows/ci.yml",
+            "Review evidence gate": ROOT / ".github/workflows/review-evidence.yml",
+        }
+        self.assertEqual(set(data["required_checks"]), set(producers))
+        for name, workflow_path in producers.items():
+            workflow = workflow_path.read_text(encoding="utf-8")
             self.assertIn(f"name: {name}", workflow)
+        review_workflow = producers["Review evidence gate"].read_text(encoding="utf-8")
+        self.assertGreaterEqual(
+            review_workflow.count("context='Review evidence gate'"),
+            2,
+        )
+        self.assertIn("ref: ${{ github.event.repository.default_branch }}", review_workflow)
+        self.assertIn("persist-credentials: false", review_workflow)
 
     def test_package_license_metadata_matches_repository_license(self) -> None:
         cargo = (ROOT / "apps/api/Cargo.toml").read_text(encoding="utf-8")

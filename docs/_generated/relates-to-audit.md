@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 562 |
+| Relationen gesamt | 565 |
 | — depends_on | 20 |
-| — relates_to | 530 |
+| — relates_to | 533 |
 | — supersedes | 11 |
 | — verifies | 1 |
 | relates_to Anteil | 94% |
@@ -31,12 +31,14 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (220 Dokumente):
+**Cluster 1** (223 Dokumente):
 
+- `.github/grabowski-required-checks.json`
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
 - `.github/workflows/opt-arc-001-db-proof-matrix.yml`
 - `.github/workflows/public-login-smtp-readiness.yml`
+- `.github/workflows/review-evidence.yml`
 - `AGENTS.md`
 - `agent-policy.yaml`
 - `apps/api/migrations/20260531000002_create_domain_edges.up.sql`
@@ -126,6 +128,7 @@ _Keine Lücken erkannt._
 - `docs/process/README.md`
 - `docs/process/bash-tooling-guidelines.md`
 - `docs/process/fahrplan.md`
+- `docs/process/merge-quality-gate.md`
 - `docs/process/report-lifecycle-contract-alignment.md`
 - `docs/process/report-lifecycle.md`
 - `docs/process/sprache.md`

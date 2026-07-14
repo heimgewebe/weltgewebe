@@ -10,6 +10,10 @@ summary: Automatisch generierter Graph der Rückverweise.
 
 Generated automatically. Do not edit.
 
+## .github/grabowski-required-checks.json
+
+- [relates_to] docs/process/merge-quality-gate.md
+
 ## .github/workflows/api.yml
 
 - [relates_to] docs/reports/domain-account-write-path-proof.md
@@ -31,6 +35,10 @@ Generated automatically. Do not edit.
 ## .github/workflows/public-login-smtp-readiness.yml
 
 - [relates_to] docs/deploy/vps.md
+
+## .github/workflows/review-evidence.yml
+
+- [relates_to] docs/process/merge-quality-gate.md
 
 ## AGENTS.md
 
@@ -505,6 +513,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/process/bash-tooling-guidelines.md
 - [relates_to] docs/process/fahrplan.md
+- [relates_to] docs/process/merge-quality-gate.md
 - [relates_to] docs/process/report-lifecycle-contract-alignment.md
 - [relates_to] docs/process/report-lifecycle.md
 - [relates_to] docs/process/sprache.md
