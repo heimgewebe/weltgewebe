@@ -10,6 +10,34 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-07-14 - Schleswig-Holstein sichtbar kartografieren
+
+**Geänderte Bereiche:**
+
+- `map-style/style.json`;
+- Web-Basemap-Auflösung und regionale Browserproofs.
+
+**Beschreibung:**
+
+Der bisherige Regionalstil lud Schleswig-Holstein technisch, zeichnete jedoch nur
+Wasser, Straßen, Gebäude und Ortsnamen. Große ländliche Flächen blieben deshalb
+identisch zum grauen Hintergrund und wirkten wie fehlende Tiles. Style `0.3.0`
+zeichnet nun die vorhandenen `landcover`- und `landuse`-Layer beider regionaler
+PMTiles-Quellen. Der Browserproof verlangt diese Layer künftig ausdrücklich als
+decodierte und sichtbar gerenderte Evidenz.
+
+Der Web-Build lädt den Stil über `/local-basemap/style.json?v=0.3.0`. Der
+Versionsparameter verhindert, dass ein Browser nach einem Stylewechsel weiterhin
+den früheren Hamburg-only beziehungsweise flächenarmen Stil verwendet.
+
+**Produktionswirkung:**
+
+Style und Web-Artefakt müssen gemeinsam veröffentlicht werden. Danach werden die
+öffentliche Buildkennung, der angeforderte Style-URL, echte Schleswig-Holstein-
+Range-Antworten sowie sichtbar gerenderte Landbedeckung und Landnutzung erneut
+über den normalen Kartenpfad geprüft. Die PMTiles-Archive selbst bleiben
+unverändert.
+
 ## 2026-07-13 - PMTiles-Repräsentationsvertrag und tiefe Archivprüfung
 
 **Geänderte Bereiche:**

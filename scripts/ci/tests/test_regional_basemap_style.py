@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 STYLE_PATH = REPO / "map-style" / "style.json"
+COLORS_PATH = REPO / "map-style" / "colors.json"
 UP_SCRIPT_PATH = REPO / "scripts" / "weltgewebe-up"
 WORKFLOW_PATH = REPO / ".github" / "workflows" / "basemap-runtime-proof.yml"
 CADDY_PATHS = (
@@ -20,6 +21,7 @@ CADDY_PATHS = (
 class RegionalBasemapStyleTest(unittest.TestCase):
     def setUp(self) -> None:
         self.style = json.loads(STYLE_PATH.read_text(encoding="utf-8"))
+        self.colors = json.loads(COLORS_PATH.read_text(encoding="utf-8"))
 
     def test_style_declares_all_regional_pmtiles_sources(self) -> None:
         sources = self.style["sources"]
@@ -47,9 +49,55 @@ class RegionalBasemapStyleTest(unittest.TestCase):
 
         self.assertEqual(
             hamburg,
-            {"water", "roads", "buildings", "place-labels"},
+            {
+                "landcover",
+                "landuse",
+                "water",
+                "roads",
+                "buildings",
+                "place-labels",
+            },
         )
         self.assertEqual(schleswig_holstein, hamburg)
+
+    def test_style_version_matches_cache_busting_web_contract(self) -> None:
+        basemap_module = (
+            REPO / "apps" / "web" / "src" / "lib" / "map" / "basemap.ts"
+        ).read_text(encoding="utf-8")
+        version = self.style["metadata"]["weltgewebe:version"]
+        self.assertEqual(version, "0.3.0")
+        self.assertIn(
+            f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', basemap_module
+        )
+        self.assertIn(
+            "`/local-basemap/style.json?v=${LOCAL_BASEMAP_STYLE_VERSION}`",
+            basemap_module,
+        )
+
+    def test_regional_land_layers_are_visible_and_class_driven(self) -> None:
+        layers = {layer["id"]: layer for layer in self.style["layers"]}
+        for layer_id in (
+            "landcover",
+            "landcover-schleswig-holstein",
+            "landuse",
+            "landuse-schleswig-holstein",
+        ):
+            with self.subTest(layer=layer_id):
+                layer = layers[layer_id]
+                self.assertEqual(layer["type"], "fill")
+                self.assertGreater(layer["paint"]["fill-opacity"], 0.5)
+                expression = layer["paint"]["fill-color"]
+                self.assertEqual(expression[:2], ["match", ["get", "class"]])
+                self.assertGreaterEqual(len(expression), 8)
+
+    def test_land_layer_colors_match_the_canonical_palette(self) -> None:
+        layers = {layer["id"]: layer for layer in self.style["layers"]}
+        for category in ("landcover", "landuse"):
+            expression = layers[category]["paint"]["fill-color"]
+            pairs = dict(zip(expression[2:-1:2], expression[3:-1:2]))
+            palette = self.colors["theme"][category]
+            self.assertEqual(pairs, {k: v for k, v in palette.items() if k != "default"})
+            self.assertEqual(expression[-1], palette["default"])
 
     def test_layer_ids_are_unique_and_sources_exist(self) -> None:
         sources = self.style["sources"]
