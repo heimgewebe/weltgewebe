@@ -20,6 +20,10 @@ mod tests {
                 b"abc".as_slice(),
                 "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
             ),
+            (
+                b"286".as_slice(),
+                "00328ce57bbc14b33bd6695bc8eb32cdf2fb5f3a7d89ec14a42825e15d39df60",
+            ),
         ];
 
         for (input, expected) in cases {
