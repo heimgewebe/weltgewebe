@@ -128,6 +128,23 @@ Lauf unverändert bleiben. Vor der Mutation wird ein maschinenlesbarer JSON-Plan
 unter `.ops/deploy-plan-migration.json` geschrieben. Mit `--plan-only` kann der
 Wirkungsplan ohne Containeränderung geprüft werden.
 
+Jeder API-Release wird mit dem vollständigen Git-Commit und dessen unveränderlichem
+Git-Commitzeitpunkt kompiliert. Fehlende Werte brechen den Release-Build ab. Nach
+einem API-Rollout muss die öffentliche Releaseidentität separat geprüft werden:
+
+```bash
+commit="$(git rev-parse HEAD)"
+build_timestamp="$(git show -s --format=%cI "$commit")"
+EXPECTED_COMMIT="$commit" \
+EXPECTED_BUILD_TIMESTAMP="$build_timestamp" \
+./scripts/ops/verify-api-release-identity.sh
+```
+
+Der Readback vergleicht `/api/version` mit dem von der API selbst gelieferten
+`X-Weltgewebe-API-Build`-Header. Der globale `X-Weltgewebe-Build`-Header gehört
+weiterhin zum Web-/Caddy-Build und darf bei einem API-only-Rollout unverändert
+bleiben. Dadurch ist für diese Prüfung kein Caddy-Neustart nötig.
+
 Ein manueller Aufruf **muss** die VPS-Override-Datei mitgeben. Ohne sie fehlen
 `Caddyfile.vps`, `APP_BASE_URL`, `POLICY_LIMITS_PATH`, die IPv6-Bindings sowie
 `AUTH_TRUSTED_PROXIES` und die `AUTH_RL_*`-Rate-Limits — Caddy bliebe an
