@@ -18,6 +18,7 @@ relations:
   - type: relates_to
     target: docs/deploy/vps-migration-safe-runtime-smoke.md
 ---
+
 # VPS HTTP Smoke Preflight
 
 This runbook acknowledges the VPS compose/Caddy drift introduced for the DNS-free smoke path.
@@ -62,7 +63,10 @@ Use `docs/deploy/vps-migration-safe-runtime-smoke.md` for that separate runtime 
 
 ## Production public-route truth
 
-The production `infra/caddy/Caddyfile.vps` serves only existing static files and explicitly prerendered Svelte routes through `{path}.html`. It must not fall back to `/index.html` for an unknown path. This keeps deep links such as `/map`, `/login`, `/impressum` and `/datenschutz` working while preserving a real HTTP 404 for nonexistent resources.
+The production `infra/caddy/Caddyfile.vps` serves only existing static files and explicitly prerendered Svelte routes. It accepts both SvelteKit export forms: `{path}.html` and `{path}/index.html`. It must not fall back to the root `/index.html` for an unknown path. This keeps deep links such as `/map`, `/login`, `/impressum` and `/datenschutz` working while preserving a real HTTP 404 for nonexistent resources.
 
-The machine-readable public files `robots.txt`, `sitemap.xml` and `manifest.webmanifest` are built as real static files. A successful response for one of those paths must therefore contain the matching file format rather than the generic application shell. Any future dynamic client-only route must be explicitly represented in the build or in a reviewed Caddy matcher; reintroducing a catch-all 200 fallback is not an acceptable compatibility fix.
+The web application uses `adapter-static`; no SvelteKit server runs behind Caddy. Therefore `robots.txt` and `sitemap.xml` are emitted during the Vite build by the tested plugin in `apps/web/scripts/generate-public-web-assets.mjs`, not by runtime `+server.ts` routes. `PUBLIC_APP_BASE_URL` selects the public origin for staging or another explicitly configured artifact target. If it is absent, the generator uses the canonical production origin `https://weltgewebe.net`. The generator rejects origins containing paths, credentials, queries or fragments.
 
+`robots.txt` excludes `/api/` and the `noinert` debug-query variant from crawler discovery. `sitemap.xml` and the sitemap declaration in `robots.txt` are produced from the same normalized origin so they cannot diverge.
+
+Any future parameter route such as `/node/[id]` must be materialized by SvelteKit during the build, normally with `prerender = true` and an `entries()` implementation. A client-only parameter route without generated entries is incompatible with the fail-closed production edge and must not be rescued by a catch-all 200 fallback. A reviewed, narrowly scoped Caddy matcher is acceptable only when static generation is intentionally impossible and its 404 boundary is separately tested.

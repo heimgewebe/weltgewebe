@@ -3,6 +3,7 @@ import { defineConfig } from "vite";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createPublicWebAssetsPlugin } from "./scripts/generate-public-web-assets.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -162,6 +163,7 @@ function createLocalBasemapMiddleware() {
 
 export default defineConfig({
   plugins: [
+    createPublicWebAssetsPlugin(),
     sveltekit(),
     {
       name: "local-basemap-serve",
