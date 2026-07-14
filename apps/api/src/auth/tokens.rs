@@ -36,7 +36,7 @@ impl TokenStore {
     pub(crate) fn hash_token(token: &str) -> String {
         let mut hasher = Sha256::new();
         hasher.update(token.as_bytes());
-        format!("{:x}", hasher.finalize())
+        crate::auth::digest::encode_sha256_digest(hasher.finalize())
     }
 
     /// Checks if a token exists and is valid without consuming it.

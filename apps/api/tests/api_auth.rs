@@ -944,7 +944,7 @@ async fn request_login_rejects_boundary_255_byte_email_for_known_account() -> Re
 fn hash_token(token: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 fn extract_cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {

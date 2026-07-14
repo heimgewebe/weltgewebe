@@ -816,7 +816,7 @@ pub async fn request_login(
     // Compute hash for privacy-preserving logging
     let mut hasher = Sha256::new();
     hasher.update(email_norm.as_bytes());
-    let email_hash_full = format!("{:x}", hasher.finalize());
+    let email_hash_full = crate::auth::digest::encode_sha256_digest(hasher.finalize());
     // Pseudonymized correlation (unsalted hash prefix); not to be understood as anonymization.
     let email_hash = &email_hash_full[..16];
 
@@ -1773,7 +1773,7 @@ pub async fn request_step_up(
 
     let mut hasher = Sha256::new();
     hasher.update(email.as_bytes());
-    let email_hash_full = format!("{:x}", hasher.finalize());
+    let email_hash_full = crate::auth::digest::encode_sha256_digest(hasher.finalize());
     let email_hash = &email_hash_full[..16];
 
     match mailer.send_step_up_magic_link(&email, &link).await {
@@ -2610,7 +2610,7 @@ pub async fn passkey_auth_options(
     let email_hash = {
         let mut hasher = Sha256::new();
         hasher.update(email_norm.as_bytes());
-        let full = format!("{:x}", hasher.finalize());
+        let full = crate::auth::digest::encode_sha256_digest(hasher.finalize());
         full[..16].to_string()
     };
     if let Err(e) = state.rate_limiter.check(client_ip, &email_hash) {
@@ -2797,7 +2797,7 @@ pub async fn passkey_auth_verify(
     let auth_id_hash = {
         let mut hasher = Sha256::new();
         hasher.update(authentication_id.as_bytes());
-        let full = format!("{:x}", hasher.finalize());
+        let full = crate::auth::digest::encode_sha256_digest(hasher.finalize());
         full[..16].to_string()
     };
     let verify_rate_key = format!("passkey-verify:{auth_id_hash}");

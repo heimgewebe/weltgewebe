@@ -570,7 +570,7 @@ impl PasskeyRegistrationGrantStore {
     fn hash_grant_id(id: &str) -> String {
         let mut hasher = Sha256::new();
         hasher.update(id.as_bytes());
-        format!("{:x}", hasher.finalize())
+        crate::auth::digest::encode_sha256_digest(hasher.finalize())
     }
 
     /// Insert a new grant bound to `account_id` and `device_id`.
