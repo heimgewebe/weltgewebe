@@ -132,7 +132,10 @@ Es beschreibt:
 ## 6 · Technische Leitplanken
 
 - **Aktueller Kern:** Rust/Axum-API, statisches SvelteKit-Web, Docker Compose und Caddy.
-- **Datenwahrheit:** JSONL bleibt Standard; PostgreSQL-Pfade werden einzeln und beweisgebunden umgestellt.
+- **Datenwahrheit:** Der Produktionsvertrag nutzt PostgreSQL für Domänen-Lesen,
+  alle vorhandenen Domänenschreibpfade und Passkey-Credentials. JSONL bleibt
+  lokaler Code-Default sowie dokumentierter Import-, Test- und Rückfallpfad;
+  Liveaussagen brauchen datierte Runtime-Evidence.
 - **Events und Beobachtung:** NATS sowie Prometheus-/Grafana-/Loki-/Tempo-Konfigurationen sind vorhanden, aber kein vollständiges Event-Sourcing- oder Observability-System ist allgemein produktiv belegt.
 - **Security:** sichere Sitzungen, Proxygrenze, CI-/Contract-Checks und secret-sichere Betriebsabläufe sind reale Leitplanken; SBOM, Signaturen, automatische Rotation und Forget-Pipeline bleiben gesondert nachzuweisende Ziele.
 - **Skalierung:** Compose ist der aktuelle Standard. Nomad, Kubernetes, HA-Cluster und FinOps-Ziele sind keine heutige Betriebswahrheit.
