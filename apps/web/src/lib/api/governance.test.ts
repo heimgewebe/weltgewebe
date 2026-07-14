@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  GovernanceApiError,
   createWeberProposal,
   formatRemaining,
   statusLabel,

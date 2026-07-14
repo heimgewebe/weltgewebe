@@ -43,7 +43,8 @@ async function installGovernanceRoutes(
   } = {},
 ) {
   let currentStatus = options.initialStatus ?? "consent";
-  const requests: Array<{ method: string; pathname: string; body: unknown }> = [];
+  const requests: Array<{ method: string; pathname: string; body: unknown }> =
+    [];
 
   await page.route("**/api/proposals**", async (route: Route) => {
     const request = route.request();
@@ -75,7 +76,10 @@ async function installGovernanceRoutes(
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ ...proposal(currentStatus), own_vote: undefined }),
+        body: JSON.stringify({
+          ...proposal(currentStatus),
+          own_vote: undefined,
+        }),
       });
     }
     if (
@@ -141,7 +145,10 @@ async function installGovernanceRoutes(
     return route.fulfill({ status: 404 });
   });
 
-  return { requests, setStatus: (status: "consent" | "voting") => (currentStatus = status) };
+  return {
+    requests,
+    setStatus: (status: "consent" | "voting") => (currentStatus = status),
+  };
 }
 
 test("Anträge button is centered in the map header", async ({ page }) => {
@@ -157,7 +164,9 @@ test("Anträge button is centered in the map header", async ({ page }) => {
   const viewport = page.viewportSize();
   expect(box).not.toBeNull();
   expect(viewport).not.toBeNull();
-  expect(Math.abs((box!.x + box!.width / 2) - viewport!.width / 2)).toBeLessThan(3);
+  expect(Math.abs(box!.x + box!.width / 2 - viewport!.width / 2)).toBeLessThan(
+    3,
+  );
 });
 
 test("guest can read everything and submit only the own Weber application", async ({
@@ -171,10 +180,16 @@ test("guest can read everything and submit only the own Weber application", asyn
   });
   await page.goto("/antraege");
 
-  await expect(page.getByRole("heading", { name: "Anträge", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Weberstatus beantragen" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Anträge", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Weberstatus beantragen" }),
+  ).toBeVisible();
   await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
-  await page.getByLabel("Kurze Vorstellung oder Begründung").fill("  Ich möchte mitweben.  ");
+  await page
+    .getByLabel("Kurze Vorstellung oder Begründung")
+    .fill("  Ich möchte mitweben.  ");
   await page.getByRole("button", { name: "Weberstatus beantragen" }).click();
 
   const create = governance.requests.find(
@@ -186,9 +201,15 @@ test("guest can read everything and submit only the own Weber application", asyn
   });
 
   await page.goto(`/antraege?id=${PROPOSAL_ID}`);
-  await expect(page.getByText("Willkommen im öffentlichen Gesprächsraum.")).toBeVisible();
-  await expect(page.getByText(/Als Gast kannst du den Gesprächsraum lesen/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Veto einlegen" })).toHaveCount(0);
+  await expect(
+    page.getByText("Willkommen im öffentlichen Gesprächsraum."),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Als Gast kannst du den Gesprächsraum lesen/),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Veto einlegen" })).toHaveCount(
+    0,
+  );
   await expect(page.getByRole("button", { name: "Ja" })).toHaveCount(0);
 });
 
@@ -201,17 +222,23 @@ test("Weber veto opens the second phase and voting uses yes greater than no with
   const governance = await installGovernanceRoutes(page);
   await page.goto(`/antraege?id=${PROPOSAL_ID}`);
 
-  await page.getByPlaceholder("Konkreter Einwand und mögliche Lösung").fill(
-    "Bitte die offene Verantwortungsfrage zuerst klären.",
-  );
+  await page
+    .getByPlaceholder("Konkreter Einwand und mögliche Lösung")
+    .fill("Bitte die offene Verantwortungsfrage zuerst klären.");
   await page.getByRole("button", { name: "Veto einlegen" }).click();
 
   await expect(page.getByText("Gespräch und Abstimmung")).toBeVisible();
-  await expect(page.getByText(/Es gibt keine Mindestbeteiligung/)).toBeVisible();
+  await expect(
+    page.getByText(/Es gibt keine Mindestbeteiligung/),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Ja" }).click();
 
-  const veto = governance.requests.find((entry) => entry.pathname.endsWith("/veto"));
-  const vote = governance.requests.find((entry) => entry.pathname.endsWith("/vote"));
+  const veto = governance.requests.find((entry) =>
+    entry.pathname.endsWith("/veto"),
+  );
+  const vote = governance.requests.find((entry) =>
+    entry.pathname.endsWith("/vote"),
+  );
   expect(veto?.body).toEqual({
     reason: "Bitte die offene Verantwortungsfrage zuerst klären.",
   });

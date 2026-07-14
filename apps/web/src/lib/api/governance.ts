@@ -90,7 +90,10 @@ export function submitVeto(id: string, reason: string): Promise<Veto> {
   });
 }
 
-export function submitVote(id: string, choice: VoteChoice): Promise<{ choice: VoteChoice }> {
+export function submitVote(
+  id: string,
+  choice: VoteChoice,
+): Promise<{ choice: VoteChoice }> {
   return request<{ choice: VoteChoice }>(
     `/api/proposals/${encodeURIComponent(id)}/vote`,
     {
