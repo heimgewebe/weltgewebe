@@ -6,18 +6,28 @@ on:
       - feat/collective-edit-delete-v1
     paths:
       - .operator-build/READY
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
 
 permissions:
   contents: write
 
 jobs:
   build:
-    if: github.event.head_commit.message == 'chore: run collective edit builder'
+    if: >-
+      (github.event_name == 'push' && github.event.head_commit.message == 'chore: run collective edit builder') ||
+      (github.event_name == 'pull_request' && github.head_ref == 'feat/collective-edit-delete-v1')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: feat/collective-edit-delete-v1
       - name: Reproduce verified changes
         run: |
           set -euo pipefail
