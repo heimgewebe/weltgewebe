@@ -103,6 +103,12 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, text)
 
+    def test_production_caddyfile_preserves_real_404_semantics(self) -> None:
+        production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
+        self.assertIn("try_files {path} {path}.html", production)
+        self.assertNotIn("try_files {path} {path}.html /index.html", production)
+        self.assertIn("Unknown paths must remain real 404 responses", production)
+
     def test_compose_override_keeps_explicit_caddyfile_selection_hook(self) -> None:
         doc_text = self.doc.read_text(encoding="utf-8")
         compose_text = self.compose_override.read_text(encoding="utf-8")
