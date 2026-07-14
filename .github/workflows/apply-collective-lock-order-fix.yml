@@ -1,25 +1,19 @@
 name: Apply collective lock-order correction
 
 on:
-  push:
-    branches:
-      - feat/collective-edit-delete-v1
-    paths:
-      - .operator-lock-trigger
   pull_request:
     branches:
       - main
+    types:
+      - reopened
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    if: >-
-      (github.event_name == 'push' && github.ref_name == 'feat/collective-edit-delete-v1') ||
-      (github.event_name == 'pull_request' && github.head_ref == 'feat/collective-edit-delete-v1')
+    if: github.head_ref == 'feat/collective-edit-delete-v1'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
