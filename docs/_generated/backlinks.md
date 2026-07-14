@@ -987,6 +987,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/vps-http-route-smoke.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 
+## infra/caddy/Caddyfile.vps
+
+- [relates_to] docs/deploy/vps-http-smoke.md
+
 ## infra/compose/compose.prod.override.yml
 
 - [relates_to] docs/deploy/public-app-base-url.md
