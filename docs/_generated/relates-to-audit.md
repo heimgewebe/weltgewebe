@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 562 |
+| Relationen gesamt | 563 |
 | — depends_on | 20 |
-| — relates_to | 530 |
+| — relates_to | 531 |
 | — supersedes | 11 |
 | — verifies | 1 |
 | relates_to Anteil | 94% |
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (220 Dokumente):
+**Cluster 1** (221 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -216,6 +216,7 @@ _Keine Lücken erkannt._
 - `docs/weltgewebe-agenten-manifest.md`
 - `docs/zusammenstellung.md`
 - `infra/caddy/Caddyfile.http-smoke`
+- `infra/caddy/Caddyfile.vps`
 - `infra/compose/compose.prod.override.yml`
 - `infra/compose/compose.vps.override.yml`
 - `repo.meta.yaml`

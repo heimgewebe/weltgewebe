@@ -1,0 +1,19 @@
+{
+  "name": "Weltgewebe",
+  "short_name": "Weltgewebe",
+  "description": "Commons, Knoten, Garnrollen und ihre Beziehungen gemeinsam auf einer Karte verwalten.",
+  "lang": "de",
+  "start_url": "/map",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f1e8",
+  "theme_color": "#f5f1e8",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
