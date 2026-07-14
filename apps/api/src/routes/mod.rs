@@ -27,8 +27,8 @@ use self::{
         passkey_register_options, passkey_register_verify, remove_device, request_login,
         request_step_up, session, session_refresh, update_email,
     },
-    edges::{create_edge, get_edge, list_edges},
-    nodes::{create_node, get_node, list_nodes, patch_node},
+    edges::{create_edge, delete_edge, get_edge, list_edges, patch_edge},
+    nodes::{create_node, delete_node, get_node, list_nodes, patch_node, replace_node},
 };
 
 pub fn api_router() -> Router<ApiState> {
@@ -39,9 +39,12 @@ pub fn api_router() -> Router<ApiState> {
         )
         .route(
             "/nodes/{id}",
-            get(get_node)
-                .patch(patch_node)
-                .route_layer(from_fn(require_write)),
+            get(get_node).merge(
+                axum::routing::patch(patch_node)
+                    .put(replace_node)
+                    .delete(delete_node)
+                    .route_layer(from_fn(require_write)),
+            ),
         )
         .route(
             "/edges",
@@ -49,7 +52,14 @@ pub fn api_router() -> Router<ApiState> {
                 .post(create_edge)
                 .route_layer(from_fn(require_write)),
         )
-        .route("/edges/{id}", get(get_edge))
+        .route(
+            "/edges/{id}",
+            get(get_edge).merge(
+                axum::routing::patch(patch_edge)
+                    .delete(delete_edge)
+                    .route_layer(from_fn(require_write)),
+            ),
+        )
         .route(
             "/accounts",
             get(list_accounts)

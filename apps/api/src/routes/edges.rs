@@ -6,7 +6,8 @@ use super::query::{
 use crate::auth::role::Role;
 use crate::config::DomainEdgeWriteSource;
 use crate::domain_db::{
-    insert_domain_edge, CreateOperationKey, CreateWriteOutcome, EdgeWriteError,
+    delete_edge_in_postgres, insert_domain_edge, update_edge_kind_in_postgres, CreateOperationKey,
+    CreateWriteOutcome, EdgeMutationError, EdgeWriteError,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::{ApiState, OrderedCache};
@@ -23,7 +24,9 @@ use std::sync::OnceLock;
 use tokio::sync::Mutex;
 use tokio::{
     fs::{File, OpenOptions},
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom},
+    io::{
+        AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, BufWriter, SeekFrom,
+    },
 };
 use uuid::Uuid;
 
@@ -35,7 +38,7 @@ use uuid::Uuid;
 /// existing JSONL-API process model; cross-process file locking is out of scope.
 static EDGE_CREATE_PERSIST: OnceLock<Mutex<()>> = OnceLock::new();
 
-fn edge_create_persist_lock() -> &'static Mutex<()> {
+pub(crate) fn edge_create_persist_lock() -> &'static Mutex<()> {
     EDGE_CREATE_PERSIST.get_or_init(|| Mutex::new(()))
 }
 
@@ -281,6 +284,242 @@ pub async fn get_edge(
         source_details,
         target_details,
     }))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateEdgeRequest {
+    edge_kind: String,
+}
+
+const COLLECTIVE_EDGE_KIND_VALUES: [&str; 4] =
+    ["delegation", "membership", "ownership", "reference"];
+
+enum EdgeJsonlRewriteAction {
+    Keep,
+    Remove,
+}
+
+async fn rewrite_edges_jsonl<F>(mut transform: F) -> std::io::Result<Vec<Edge>>
+where
+    F: FnMut(&mut Value) -> std::io::Result<(EdgeJsonlRewriteAction, Option<Edge>)>,
+{
+    let path = edges_path();
+    let file = match File::open(&path).await {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error),
+    };
+    let mut lines = BufReader::new(file).lines();
+    let mut tmp_path = path.clone();
+    let filename = tmp_path.file_name().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "edges path has no filename",
+        )
+    })?;
+    let mut tmp_filename = filename.to_os_string();
+    tmp_filename.push(format!(".tmp.{}", Uuid::new_v4()));
+    tmp_path.set_file_name(tmp_filename);
+
+    let result = async {
+        let tmp_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)
+            .await?;
+        let mut writer = BufWriter::new(tmp_file);
+        let mut changed = Vec::new();
+        while let Some(line) = lines.next_line().await? {
+            let Ok(mut value) = serde_json::from_str::<Value>(&line) else {
+                writer.write_all(line.as_bytes()).await?;
+                writer.write_all(b"\n").await?;
+                continue;
+            };
+            let (action, affected) = transform(&mut value)?;
+            if let Some(edge) = affected {
+                changed.push(edge);
+            }
+            if matches!(action, EdgeJsonlRewriteAction::Remove) {
+                continue;
+            }
+            let output = serde_json::to_string(&value)
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+            writer.write_all(output.as_bytes()).await?;
+            writer.write_all(b"\n").await?;
+        }
+        writer.flush().await?;
+        let file = writer.into_inner();
+        file.sync_all().await?;
+        Ok::<Vec<Edge>, std::io::Error>(changed)
+    }
+    .await;
+
+    match result {
+        Ok(changed) => {
+            tokio::fs::rename(&tmp_path, &path).await?;
+            Ok(changed)
+        }
+        Err(error) => {
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            Err(error)
+        }
+    }
+}
+
+pub(crate) async fn delete_edges_referencing_node_jsonl(
+    node_id: &str,
+) -> std::io::Result<Vec<String>> {
+    let removed = rewrite_edges_jsonl(|value| {
+        let edge: Edge = match serde_json::from_value(value.clone()) {
+            Ok(edge) => edge,
+            Err(_) => return Ok((EdgeJsonlRewriteAction::Keep, None)),
+        };
+        let references_node = (edge.source_id == node_id
+            && edge.source_type.as_deref() != Some("account"))
+            || (edge.target_id == node_id && edge.target_type.as_deref() != Some("account"));
+        if references_node {
+            Ok((EdgeJsonlRewriteAction::Remove, Some(edge)))
+        } else {
+            Ok((EdgeJsonlRewriteAction::Keep, None))
+        }
+    })
+    .await?;
+    Ok(removed.into_iter().map(|edge| edge.id).collect())
+}
+
+pub async fn patch_edge(
+    State(state): State<ApiState>,
+    Path(id): Path<String>,
+    Json(payload): Json<Value>,
+) -> Result<Json<Edge>, (StatusCode, String)> {
+    reject_edge_create_unless_writable(&state)?;
+    let request: UpdateEdgeRequest = serde_json::from_value(payload).map_err(|error| {
+        (
+            StatusCode::BAD_REQUEST,
+            format!("invalid edge update request: {error}"),
+        )
+    })?;
+    let edge_kind = request.edge_kind.trim();
+    if !COLLECTIVE_EDGE_KIND_VALUES.contains(&edge_kind) {
+        return Err((StatusCode::BAD_REQUEST, "invalid edge_kind".to_string()));
+    }
+    let mut edge = state
+        .edges
+        .read()
+        .await
+        .get(&id)
+        .cloned()
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "edge not found".to_string()))?;
+    edge.edge_kind = edge_kind.to_string();
+
+    let _persist_guard = edge_create_persist_lock().lock().await;
+    match state.config.domain_edge_write_source {
+        DomainEdgeWriteSource::Jsonl => {
+            let mut changed = rewrite_edges_jsonl(|value| {
+                if value.get("id").and_then(Value::as_str) != Some(id.as_str()) {
+                    return Ok((EdgeJsonlRewriteAction::Keep, None));
+                }
+                let object = value.as_object_mut().ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "edge record is not an object",
+                    )
+                })?;
+                object.insert("edge_kind".to_string(), json!(edge_kind));
+                let updated: Edge = serde_json::from_value(value.clone())
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+                Ok((EdgeJsonlRewriteAction::Keep, Some(updated)))
+            })
+            .await
+            .map_err(|error| {
+                tracing::error!(%error, edge_id = %id, "failed to update edge JSONL record");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "failed to update edge".to_string(),
+                )
+            })?;
+            edge = changed.pop().ok_or_else(|| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "edge persistence record missing".to_string(),
+                )
+            })?;
+        }
+        DomainEdgeWriteSource::Postgres => {
+            let pool = state.db_pool.as_ref().ok_or_else(|| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "PostgreSQL pool unavailable for edge write".to_string(),
+                )
+            })?;
+            update_edge_kind_in_postgres(pool, &id, edge_kind).await.map_err(|error| match error {
+                EdgeMutationError::NotFound => (StatusCode::NOT_FOUND, "edge not found".to_string()),
+                other => {
+                    tracing::error!(%other, edge_id = %id, "failed to update edge in PostgreSQL");
+                    (StatusCode::INTERNAL_SERVER_ERROR, "failed to update edge".to_string())
+                }
+            })?;
+        }
+    }
+    state.edges.write().await.insert(id.clone(), edge.clone());
+    tracing::info!(event = "edge.updated.collective", edge_id = %id, "Edge collectively updated");
+    Ok(Json(edge))
+}
+
+pub async fn delete_edge(
+    State(state): State<ApiState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    reject_edge_create_unless_writable(&state)?;
+    if state.edges.read().await.get(&id).is_none() {
+        return Err((StatusCode::NOT_FOUND, "edge not found".to_string()));
+    }
+    let _persist_guard = edge_create_persist_lock().lock().await;
+    match state.config.domain_edge_write_source {
+        DomainEdgeWriteSource::Jsonl => {
+            let removed = rewrite_edges_jsonl(|value| {
+                if value.get("id").and_then(Value::as_str) != Some(id.as_str()) {
+                    return Ok((EdgeJsonlRewriteAction::Keep, None));
+                }
+                let edge: Edge = serde_json::from_value(value.clone())
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+                Ok((EdgeJsonlRewriteAction::Remove, Some(edge)))
+            })
+            .await
+            .map_err(|error| {
+                tracing::error!(%error, edge_id = %id, "failed to delete edge JSONL record");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "failed to delete edge".to_string(),
+                )
+            })?;
+            if removed.is_empty() {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "edge persistence record missing".to_string(),
+                ));
+            }
+        }
+        DomainEdgeWriteSource::Postgres => {
+            let pool = state.db_pool.as_ref().ok_or_else(|| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "PostgreSQL pool unavailable for edge write".to_string(),
+                )
+            })?;
+            delete_edge_in_postgres(pool, &id).await.map_err(|error| match error {
+                EdgeMutationError::NotFound => (StatusCode::NOT_FOUND, "edge not found".to_string()),
+                other => {
+                    tracing::error!(%other, edge_id = %id, "failed to delete edge in PostgreSQL");
+                    (StatusCode::INTERNAL_SERVER_ERROR, "failed to delete edge".to_string())
+                }
+            })?;
+        }
+    }
+    state.edges.write().await.remove(&id);
+    tracing::info!(event = "edge.deleted.collective", edge_id = %id, "Edge collectively deleted");
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Append a single edge record as a JSONL line. Durability via fsync.

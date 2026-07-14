@@ -20,6 +20,7 @@
   } from "$lib/map/searchNavigation";
 
   import { page } from "$app/stores";
+  import { invalidateAll } from "$app/navigation";
 
   import {
     view,
@@ -290,6 +291,11 @@
       (item) => item.id === event.detail.id && item.type === event.detail.type,
     );
     if (related) focusAndFlyToPoint(related);
+  }
+
+  async function handleDomainChanged() {
+    leaveToNavigation();
+    await invalidateAll();
   }
 
   // After KompositionPanel creates a node (+ its account->node edge) and
@@ -658,7 +664,10 @@
     </div>
   {/if}
 
-  <ContextPanel on:selectRelated={handleRelatedSelect} />
+  <ContextPanel
+    on:selectRelated={handleRelatedSelect}
+    on:domainChanged={handleDomainChanged}
+  />
   <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
   <SearchDirectionIndicators
     indicators={searchDirectionIndicators}

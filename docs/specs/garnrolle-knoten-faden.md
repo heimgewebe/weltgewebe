@@ -114,6 +114,17 @@ Beispiele:
 
 Ein Faden ist nicht automatisch ein Gespräch. Gespräche besitzen eigene Entitäten.
 
+## Kollektive Bearbeitung und Löschung
+
+Knoten und Fäden sind gemeinschaftlich verwaltete Gewebeelemente. Sie besitzen kein exklusives Bearbeitungsrecht der ursprünglich knüpfenden Garnrolle. Jede angemeldete Garnrolle mit Schreibrecht darf jeden Knoten und jeden Faden bearbeiten oder löschen.
+
+Dabei gelten folgende Integritätsregeln:
+
+1. Technische Identitäten bleiben geschützt: Eine Garnrolle ist der Account-Ursprung und kein kollektiv löschbares Inhaltsobjekt. Ihr privater Account- und Anmeldezustand darf nicht durch fremde Bearbeitung verändert werden.
+2. Beim Löschen eines Knotens werden alle Fäden entfernt, die diesen Knoten als Ursprung oder Ziel verwenden. Es dürfen keine verwaisten Fäden entstehen.
+3. IDs und Erstellungszeitpunkte bleiben serververwaltet und können nicht überschrieben werden.
+4. Die Oberfläche benennt vor jeder Löschung die konkrete Folge; bei Knoten ausdrücklich auch die Entfernung verbundener Fäden.
+
 ### Autorisierung, Richtung und öffentliche Notizen
 
 1. Eine reguläre Weberhandlung, die eine Garnrolle beteiligt, muss von der eigenen angemeldeten Garnrolle ausgehen. Ein Weber darf weder eine fremde Garnrolle als Quelle ausgeben noch über `Knoten → fremde Garnrolle` eine fremde Aktivität erzeugen. Die deklarierten Endpunkttypen müssen mit bereits bekannten Entitäten übereinstimmen; eine Garnrollen-ID darf nicht als Knoten-ID ausgegeben werden.

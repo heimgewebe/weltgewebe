@@ -3,6 +3,7 @@ use super::{
         reject_node_create_unless_writable, reject_node_patch_unless_writable,
         DOMAIN_READ_SOURCE_READ_ONLY, DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE,
     },
+    edges::{delete_edges_referencing_node_jsonl, edge_create_persist_lock},
     query::{
         cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
         MAX_PAGE_SIZE,
@@ -10,8 +11,9 @@ use super::{
 };
 use crate::config::DomainNodeWriteSource;
 use crate::domain_db::{
-    insert_domain_node, patch_node_in_postgres, CreateOperationKey, CreateWriteOutcome,
-    NodeCreateError, NodePatchInput, NodeWriteError,
+    delete_node_with_edges_in_postgres, insert_domain_node, patch_node_in_postgres,
+    replace_node_in_postgres, CreateOperationKey, CreateWriteOutcome, NodeCreateError,
+    NodePatchInput, NodeWriteError,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::{ApiState, OrderedCache};
@@ -1286,6 +1288,306 @@ mod node_create {
             assert!(serde_json::from_str::<CreateNodeRequest>(json).is_err());
         }
     }
+}
+
+fn set_node_record_fields(record: &mut Value, node: &Node) -> std::io::Result<()> {
+    let object = record.as_object_mut().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "node record is not an object",
+        )
+    })?;
+    object.insert("id".to_string(), json!(node.id));
+    object.insert("kind".to_string(), json!(node.kind));
+    object.insert("title".to_string(), json!(node.title));
+    object.insert("created_at".to_string(), json!(node.created_at));
+    object.insert("updated_at".to_string(), json!(node.updated_at));
+    object.insert(
+        "location".to_string(),
+        json!({ "lat": node.location.lat, "lon": node.location.lon }),
+    );
+    for (key, value) in [
+        ("summary", node.summary.as_ref().map(|value| json!(value))),
+        ("info", node.info.as_ref().map(|value| json!(value))),
+        ("address", node.address.as_ref().map(|value| json!(value))),
+    ] {
+        if let Some(value) = value {
+            object.insert(key.to_string(), value);
+        } else {
+            object.remove(key);
+        }
+    }
+    if node.tags.is_empty() {
+        object.remove("tags");
+    } else {
+        object.insert("tags".to_string(), json!(node.tags));
+    }
+    object.remove("steckbrief");
+    Ok(())
+}
+
+async fn replace_node_jsonl(node: &Node) -> std::io::Result<bool> {
+    let path = nodes_path();
+    let file = File::open(&path).await?;
+    let mut lines = BufReader::new(file).lines();
+    let mut tmp_path = path.clone();
+    let filename = tmp_path.file_name().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "nodes path has no filename",
+        )
+    })?;
+    let mut tmp_filename = filename.to_os_string();
+    tmp_filename.push(format!(".tmp.{}", Uuid::new_v4()));
+    tmp_path.set_file_name(tmp_filename);
+
+    let result = async {
+        let tmp_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)
+            .await?;
+        let mut writer = BufWriter::new(tmp_file);
+        let mut replaced = false;
+        while let Some(line) = lines.next_line().await? {
+            let mut output = line.clone();
+            if let Ok(mut value) = serde_json::from_str::<Value>(&line) {
+                if value.get("id").and_then(Value::as_str) == Some(node.id.as_str()) {
+                    set_node_record_fields(&mut value, node)?;
+                    output = serde_json::to_string(&value).map_err(|error| {
+                        std::io::Error::new(std::io::ErrorKind::InvalidData, error)
+                    })?;
+                    replaced = true;
+                }
+            }
+            writer.write_all(output.as_bytes()).await?;
+            writer.write_all(b"\n").await?;
+        }
+        writer.flush().await?;
+        let file = writer.into_inner();
+        file.sync_all().await?;
+        Ok::<bool, std::io::Error>(replaced)
+    }
+    .await;
+
+    match result {
+        Ok(replaced) => {
+            tokio::fs::rename(&tmp_path, &path).await?;
+            Ok(replaced)
+        }
+        Err(error) => {
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            Err(error)
+        }
+    }
+}
+
+async fn delete_node_jsonl(id: &str) -> std::io::Result<bool> {
+    let path = nodes_path();
+    let file = File::open(&path).await?;
+    let mut lines = BufReader::new(file).lines();
+    let mut tmp_path = path.clone();
+    let filename = tmp_path.file_name().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "nodes path has no filename",
+        )
+    })?;
+    let mut tmp_filename = filename.to_os_string();
+    tmp_filename.push(format!(".tmp.{}", Uuid::new_v4()));
+    tmp_path.set_file_name(tmp_filename);
+
+    let result = async {
+        let tmp_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)
+            .await?;
+        let mut writer = BufWriter::new(tmp_file);
+        let mut deleted = false;
+        while let Some(line) = lines.next_line().await? {
+            let matches = serde_json::from_str::<Value>(&line)
+                .ok()
+                .and_then(|value| value.get("id").and_then(Value::as_str).map(str::to_string))
+                .as_deref()
+                == Some(id);
+            if matches {
+                deleted = true;
+                continue;
+            }
+            writer.write_all(line.as_bytes()).await?;
+            writer.write_all(b"\n").await?;
+        }
+        writer.flush().await?;
+        let file = writer.into_inner();
+        file.sync_all().await?;
+        Ok::<bool, std::io::Error>(deleted)
+    }
+    .await;
+
+    match result {
+        Ok(deleted) => {
+            tokio::fs::rename(&tmp_path, &path).await?;
+            Ok(deleted)
+        }
+        Err(error) => {
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            Err(error)
+        }
+    }
+}
+
+pub async fn replace_node(
+    State(state): State<ApiState>,
+    Path(id): Path<String>,
+    Json(payload): Json<Value>,
+) -> Result<Json<Node>, PatchNodeError> {
+    reject_node_patch_unless_writable(&state)
+        .map_err(|(status, body)| PatchNodeError::Message(status, body))?;
+    let request: node_create::CreateNodeRequest =
+        serde_json::from_value(payload).map_err(|error| {
+            PatchNodeError::Message(
+                StatusCode::BAD_REQUEST,
+                format!("invalid node replacement request: {error}"),
+            )
+        })?;
+    let validated = request.validate().map_err(|error| {
+        PatchNodeError::Message(
+            StatusCode::BAD_REQUEST,
+            format!(
+                "invalid node replacement request: {}",
+                node_create_error_message(&error)
+            ),
+        )
+    })?;
+    if validated.operation_id.is_some() {
+        return Err(PatchNodeError::Message(
+            StatusCode::BAD_REQUEST,
+            "operation_id is only valid when creating a node".to_string(),
+        ));
+    }
+
+    let _persist_guard = state.nodes_persist.lock().await;
+    let existing = state
+        .nodes
+        .read()
+        .await
+        .get(&id)
+        .cloned()
+        .ok_or(PatchNodeError::Status(StatusCode::NOT_FOUND))?;
+    let node = Node {
+        id: existing.id,
+        kind: validated.kind,
+        title: validated.title,
+        created_at: existing.created_at,
+        updated_at: chrono::Utc::now().to_rfc3339(),
+        summary: validated.summary,
+        info: validated.info,
+        tags: validated.tags,
+        address: Some(validated.address),
+        location: Location {
+            lat: validated.lat,
+            lon: validated.lon,
+        },
+    };
+
+    match state.config.domain_node_write_source {
+        DomainNodeWriteSource::Jsonl => {
+            if !replace_node_jsonl(&node).await.map_err(|error| {
+                tracing::error!(%error, node_id = %id, "failed to replace node JSONL record");
+                PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            })? {
+                return Err(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+            }
+        }
+        DomainNodeWriteSource::Postgres => {
+            let pool = state
+                .db_pool
+                .as_ref()
+                .ok_or(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            replace_node_in_postgres(pool, &node).await.map_err(|error| match error {
+                NodeWriteError::NotFound => PatchNodeError::Status(StatusCode::NOT_FOUND),
+                other => {
+                    tracing::error!(%other, node_id = %id, "failed to replace node in PostgreSQL");
+                    PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            })?;
+        }
+    }
+
+    let mut nodes = state.nodes.write().await;
+    nodes.insert(id.clone(), node.clone());
+    state.metrics.set_nodes_cache_count(nodes.len() as i64);
+    tracing::info!(event = "node.updated.collective", node_id = %id, "Node collectively updated");
+    Ok(Json(node))
+}
+
+pub async fn delete_node(
+    State(state): State<ApiState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, PatchNodeError> {
+    reject_node_patch_unless_writable(&state)
+        .map_err(|(status, body)| PatchNodeError::Message(status, body))?;
+    let _persist_guard = state.nodes_persist.lock().await;
+    if state.nodes.read().await.get(&id).is_none() {
+        return Err(PatchNodeError::Status(StatusCode::NOT_FOUND));
+    }
+
+    let cached_edge_ids: Vec<String> = state
+        .edges
+        .read()
+        .await
+        .iter_in_order()
+        .filter(|edge| {
+            (edge.source_id == id && edge.source_type.as_deref() != Some("account"))
+                || (edge.target_id == id && edge.target_type.as_deref() != Some("account"))
+        })
+        .map(|edge| edge.id.clone())
+        .collect();
+
+    let persisted_edge_ids = match state.config.domain_node_write_source {
+        DomainNodeWriteSource::Jsonl => {
+            // Keep the edge lock until the node file has also been replaced. Otherwise a
+            // concurrent edge create could attach a new edge between cascade cleanup and
+            // node deletion, leaving an orphan behind.
+            let _edge_persist_guard = edge_create_persist_lock().lock().await;
+            let removed = delete_edges_referencing_node_jsonl(&id).await.map_err(|error| {
+                tracing::error!(%error, node_id = %id, "failed to remove node edges from JSONL");
+                PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            })?;
+            if !delete_node_jsonl(&id).await.map_err(|error| {
+                tracing::error!(%error, node_id = %id, "failed to delete node JSONL record");
+                PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            })? {
+                return Err(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+            }
+            removed
+        }
+        DomainNodeWriteSource::Postgres => {
+            let pool = state
+                .db_pool
+                .as_ref()
+                .ok_or(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            delete_node_with_edges_in_postgres(pool, &id).await.map_err(|error| match error {
+                NodeWriteError::NotFound => PatchNodeError::Status(StatusCode::NOT_FOUND),
+                other => {
+                    tracing::error!(%other, node_id = %id, "failed to delete node in PostgreSQL");
+                    PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            })?
+        }
+    };
+
+    let mut edges = state.edges.write().await;
+    for edge_id in cached_edge_ids.iter().chain(persisted_edge_ids.iter()) {
+        edges.remove(edge_id);
+    }
+    drop(edges);
+    let mut nodes = state.nodes.write().await;
+    nodes.remove(&id);
+    state.metrics.set_nodes_cache_count(nodes.len() as i64);
+    tracing::info!(event = "node.deleted.collective", node_id = %id, removed_edges = persisted_edge_ids.len(), "Node collectively deleted");
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn patch_node(
