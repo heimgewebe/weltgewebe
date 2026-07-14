@@ -3256,6 +3256,7 @@ dependencies = [
  "dotenvy",
  "futures-util",
  "governor",
+ "hex",
  "ipnet",
  "lettre",
  "openssl",

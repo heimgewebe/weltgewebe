@@ -29,6 +29,7 @@ axum-extra = { version = "0.12", features = ["cookie"] }
 time = "0.3.45"
 ipnet = "2.11.0"
 sha2 = "0.11.0"
+hex = "0.4"
 governor = "0.10"
 lettre = { version = "0.11", default-features = false, features = ["tokio1", "tokio1-rustls-tls", "smtp-transport", "builder"] }
 thiserror = "2.0.18"
