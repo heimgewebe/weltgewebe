@@ -55,7 +55,7 @@ export async function mockApiResponses(
   });
 
   // Intercept local map style fetching to provide a deterministic base payload during tests.
-  await page.route("**/local-basemap/style.json", (route) => {
+  await page.route("**/local-basemap/style.json*", (route) => {
     route.fulfill({
       status: 200,
       contentType: "application/json",
