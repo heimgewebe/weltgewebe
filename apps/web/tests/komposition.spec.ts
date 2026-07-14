@@ -103,9 +103,12 @@ test.describe("Komposition Flow (weber)", () => {
     const nodeRequest = page.waitForRequest(
       (req) => req.url().endsWith("/api/nodes") && req.method() === "POST",
     );
-    const edgeRequest = page.waitForRequest(
-      (req) => req.url().endsWith("/api/edges") && req.method() === "POST",
-    );
+    const directEdgePosts: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().endsWith("/api/edges") && request.method() === "POST") {
+        directEdgePosts.push(request.url());
+      }
+    });
 
     await page.locator('button:has-text("Knoten knüpfen")').click();
     const panel = page.locator('[data-testid="context-panel"]');
@@ -137,16 +140,9 @@ test.describe("Komposition Flow (weber)", () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
 
-    // Edge links the current account to the new node.
-    const edgeReq = await edgeRequest;
-    const edgePayload = edgeReq.postDataJSON();
-    expect(edgePayload.source_id).toBe(WEBER_ACCOUNT_ID);
-    expect(edgePayload.source_type).toBe("account");
-    expect(edgePayload.target_type).toBe("node");
-    expect(edgePayload.edge_kind).toBe("reference");
-    expect(edgePayload.operation_id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
+    // The browser never creates or edits a Faden. The API derives the
+    // account-to-node visualization from the successful Webungsaktion.
+    expect(directEdgePosts).toEqual([]);
 
     // Data reloaded: the debug badge's node count increases by one.
     const debugBadge = page.locator('[data-testid="debug-badge"]');
@@ -155,69 +151,6 @@ test.describe("Komposition Flow (weber)", () => {
     // The panel leaves komposition mode and the new node is focused: the
     // context panel now shows "Knoten" instead of the create form.
     await expect(panel.locator("h2")).toContainText("Knoten");
-  });
-
-  test("Edge creation failure shows a partial-success message and reuses the operation id on retry", async ({
-    page,
-  }) => {
-    const operationIds: string[] = [];
-    let edgeAttempts = 0;
-    await page.route("**/api/edges", async (route) => {
-      if (route.request().method() !== "POST") {
-        return route.fallback();
-      }
-      const payload = route.request().postDataJSON();
-      operationIds.push(payload.operation_id);
-      edgeAttempts += 1;
-      if (edgeAttempts === 1) {
-        return route.fulfill({ status: 500 });
-      }
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "mock-edge-replay",
-          ...payload,
-          created_at: new Date().toISOString(),
-        }),
-      });
-    });
-
-    await page.locator('button:has-text("Knoten knüpfen")').click();
-    const panel = page.locator('[data-testid="context-panel"]');
-
-    await longPressMapCenter(page);
-    await expect(panel.locator(".state-set")).toContainText("Ort gewählt");
-
-    await page.fill("#title", "Partial Node");
-    await page.fill("#address", "Somewhere 1");
-
-    await panel.locator('button[type="submit"]').click();
-
-    // Clear, honest partial-success messaging — never a silent failure and
-    // never a false claim that node+edge were created atomically.
-    await expect(panel).toContainText("Knoten gespeichert");
-    await expect(panel).toContainText("Faden");
-    await expect(
-      panel.locator('button:has-text("Faden erneut knüpfen")'),
-    ).toBeVisible();
-    await expect(
-      panel.locator('button:has-text("Ohne Faden fortfahren")'),
-    ).toBeVisible();
-
-    // Repeated header and Escape close attempts must not discard this
-    // partial-success state. The user must make an explicit decision.
-    const closeButton = panel.getByRole("button", { name: "Schließen" });
-    await closeButton.click();
-    await closeButton.click();
-    await page.keyboard.press("Escape");
-    await expect(panel).toBeVisible();
-    await expect(panel).toContainText("Der Knoten ist bereits gespeichert");
-
-    await panel.locator('button:has-text("Faden erneut knüpfen")').click();
-    await expect(panel.locator("h2")).toContainText("Knoten");
-    expect(operationIds).toHaveLength(2);
-    expect(operationIds[1]).toBe(operationIds[0]);
   });
 
   test("Node retry reuses its operation id while unchanged form data starts no second action", async ({

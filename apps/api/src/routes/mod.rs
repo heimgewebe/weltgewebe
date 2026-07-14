@@ -2,6 +2,7 @@ pub mod accounts;
 pub mod auth;
 mod domain_write_guard;
 pub mod edges;
+pub mod governance;
 pub mod health;
 pub mod meta;
 pub mod nodes;
@@ -27,7 +28,11 @@ use self::{
         passkey_register_options, passkey_register_verify, remove_device, request_login,
         request_step_up, session, session_refresh, update_email,
     },
-    edges::{create_edge, get_edge, list_edges},
+    edges::{get_edge, list_edges},
+    governance::{
+        create_proposal, exit_own_account, get_proposal, list_proposal_messages, list_proposals,
+        post_proposal_message, veto_proposal, vote_proposal,
+    },
     nodes::{create_node, get_node, list_nodes, patch_node},
 };
 
@@ -43,12 +48,7 @@ pub fn api_router() -> Router<ApiState> {
                 .patch(patch_node)
                 .route_layer(from_fn(require_write)),
         )
-        .route(
-            "/edges",
-            get(list_edges)
-                .post(create_edge)
-                .route_layer(from_fn(require_write)),
-        )
+        .route("/edges", get(list_edges))
         .route("/edges/{id}", get(get_edge))
         .route(
             "/accounts",
@@ -63,6 +63,28 @@ pub fn api_router() -> Router<ApiState> {
                 .route_layer(from_fn(require_write)),
         )
         .route("/accounts/{id}", get(get_account))
+        // Antragssystem (docs/specs/governance-antraege.md). `POST /proposals`
+        // und `POST /accounts/me/exit` sind bewusst NICHT hinter
+        // `require_write`: der eigene Weberantrag und der eigene Austritt sind
+        // die einzigen zustandsändernden Gastvorgänge; die Handler prüfen die
+        // Authentifizierung selbst. Veto, Stimme und Gesprächsraum-Beiträge
+        // sind Webungsaktionen und bleiben Gästen verwehrt.
+        .route("/proposals", get(list_proposals).post(create_proposal))
+        .route("/proposals/{id}", get(get_proposal))
+        .route(
+            "/proposals/{id}/veto",
+            post(veto_proposal).route_layer(from_fn(require_write)),
+        )
+        .route(
+            "/proposals/{id}/vote",
+            axum::routing::put(vote_proposal).route_layer(from_fn(require_write)),
+        )
+        .route(
+            "/proposals/{id}/messages",
+            get(list_proposal_messages)
+                .merge(post(post_proposal_message).route_layer(from_fn(require_write))),
+        )
+        .route("/accounts/me/exit", post(exit_own_account))
         .route("/auth/dev/accounts", get(list_dev_accounts))
         .route("/auth/dev/login", post(dev_login))
         .route("/auth/magic-link/request", post(request_login))

@@ -459,6 +459,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reference/glossar.md
 - [relates_to] docs/specs/contract.md
 - [relates_to] docs/specs/garnrolle-knoten-faden.md
+- [relates_to] docs/specs/governance-antraege.md
 
 ## docs/inhalt.md
 
@@ -870,6 +871,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/policies/architecture-critique.md
 - [relates_to] docs/specs/privacy-api.md
 - [relates_to] docs/vision.md
+
+## docs/specs/governance-antraege.md
+
+- [relates_to] docs/specs/garnrolle-knoten-faden.md
 
 ## docs/specs/list-pagination-api.md
 

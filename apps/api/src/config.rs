@@ -190,7 +190,7 @@ impl DomainAccountWriteSource {
     }
 }
 
-/// Selects where `POST /edges` (edge-create only) writes to.
+/// Selects where internal derived-Faden projections are persisted.
 ///
 /// OPT-ARC-001 Phase E-C: this is a deliberately narrow gate. It governs the
 /// edge-create write path **only** — account writes, node writes, step-up email
@@ -308,7 +308,7 @@ pub struct AppConfig {
     pub domain_node_write_source: DomainNodeWriteSource,
 
     /// Edge-create write source (JSONL default, PostgreSQL opt-in).
-    /// OPT-ARC-001 Phase E-C: governs `POST /edges` only.
+    /// Governs the internal derived-Faden projection writer; no public edge mutation route exists.
     #[serde(default)]
     pub domain_edge_write_source: DomainEdgeWriteSource,
 

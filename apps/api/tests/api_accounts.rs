@@ -120,7 +120,7 @@ async fn accounts_list_is_sorted_and_limited() -> Result<()> {
                 disabled: false,
                 tags: vec![],
             },
-            role: Role::Gast,
+            role: Role::Weber,
             email: None,
             webauthn_user_id: uuid::Uuid::new_v4(),
         });
@@ -166,7 +166,7 @@ async fn accounts_offset_pagination() -> Result<()> {
                 disabled: false,
                 tags: vec![],
             },
-            role: Role::Gast,
+            role: Role::Weber,
             email: None,
             webauthn_user_id: uuid::Uuid::new_v4(),
         });
@@ -234,7 +234,7 @@ async fn accounts_invalid_limit() -> Result<()> {
             disabled: false,
             tags: vec![],
         },
-        role: Role::Gast,
+        role: Role::Weber,
         email: None,
         webauthn_user_id: uuid::Uuid::new_v4(),
     });
@@ -274,7 +274,7 @@ async fn accounts_limit_is_clamped_to_max_page_size() -> Result<()> {
                 disabled: false,
                 tags: vec![],
             },
-            role: Role::Gast,
+            role: Role::Weber,
             email: None,
             webauthn_user_id: uuid::Uuid::new_v4(),
         });
@@ -307,7 +307,7 @@ fn seed_account(id: &str) -> AccountInternal {
             disabled: false,
             tags: vec![],
         },
-        role: Role::Gast,
+        role: Role::Weber,
         email: None,
         webauthn_user_id: uuid::Uuid::new_v4(),
     }
@@ -567,6 +567,36 @@ async fn account_details_ignore_node_typed_account_id_collision() -> Result<()> 
     let value = read_account_details(&app, ACCOUNT_ID).await?;
     assert_eq!(value["nodes"].as_array().map(Vec::len), Some(0));
     assert_eq!(value["activity"].as_array().map(Vec::len), Some(0));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn guest_identity_is_not_a_public_garnrolle() -> Result<()> {
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+    let mut guest = seed_account("guest-hidden");
+    guest.role = Role::Gast;
+    accounts.insert(guest);
+    accounts.insert(seed_account("weber-visible"));
+    state.accounts = Arc::new(RwLock::new(accounts));
+
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    let list = app
+        .clone()
+        .oneshot(Request::get("/accounts").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(list.status(), StatusCode::OK);
+    let bytes = body::to_bytes(list.into_body(), usize::MAX).await?;
+    let accounts: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(accounts.as_array().map(Vec::len), Some(1));
+    assert_eq!(accounts[0]["id"], "weber-visible");
+
+    let detail = app
+        .oneshot(Request::get("/accounts/guest-hidden").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(detail.status(), StatusCode::NOT_FOUND);
 
     Ok(())
 }
