@@ -75,6 +75,7 @@ function createLocalBasemapMiddleware() {
     }
 
     res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "no-cache, must-revalidate");
     res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Range, If-None-Match");
     res.setHeader(

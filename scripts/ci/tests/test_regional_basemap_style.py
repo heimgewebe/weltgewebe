@@ -65,13 +65,38 @@ class RegionalBasemapStyleTest(unittest.TestCase):
             REPO / "apps" / "web" / "src" / "lib" / "map" / "basemap.ts"
         ).read_text(encoding="utf-8")
         version = self.style["metadata"]["weltgewebe:version"]
-        self.assertEqual(version, "0.3.0")
+        self.assertEqual(version, "0.3.1")
         self.assertIn(
             f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', basemap_module
         )
         self.assertIn(
-            "`/local-basemap/style.json?v=${LOCAL_BASEMAP_STYLE_VERSION}`",
+            "`/local-basemap/style.json?v=${LOCAL_BASEMAP_STYLE_VERSION}"
+            "&build=${LOCAL_BASEMAP_BUILD_VERSION}`",
             basemap_module,
+        )
+
+        self.assertIn(
+            'import { BUILD_VERSION } from "$lib/generated/buildVersion";',
+            basemap_module,
+        )
+        generator = (
+            REPO / "apps" / "web" / "scripts" / "generate-version.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'const clientModuleFile = path.join(clientDir, "buildVersion.ts")',
+            generator,
+        )
+        self.assertIn('"export const BUILD_VERSION = "', generator)
+        package = json.loads(
+            (REPO / "apps" / "web" / "package.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            package["scripts"]["generate:client-version"],
+            "node scripts/generate-version.js --client",
+        )
+        self.assertIn(
+            "pnpm run generate:client-version",
+            package["scripts"]["pretest:unit"],
         )
 
     def test_regional_land_layers_are_visible_and_class_driven(self) -> None:
@@ -154,6 +179,22 @@ class RegionalBasemapStyleTest(unittest.TestCase):
         self.assertIn(
             "/tmp/schleswig-holstein-pmtiles-deep-validation.json",
             content_jobs,
+        )
+
+    def test_all_caddy_surfaces_revalidate_mutable_basemap_assets(self) -> None:
+        for caddy_path in CADDY_PATHS:
+            with self.subTest(caddyfile=caddy_path.name):
+                text = caddy_path.read_text(encoding="utf-8")
+                self.assertIn(
+                    'Cache-Control "no-cache, must-revalidate"', text
+                )
+
+        vite_config = (
+            REPO / "apps" / "web" / "vite.config.ts"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'res.setHeader("Cache-Control", "no-cache, must-revalidate")',
+            vite_config,
         )
 
     def test_all_caddy_surfaces_declare_pmtiles_content_type(self) -> None:

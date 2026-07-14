@@ -214,7 +214,7 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
 
       // Preflight: style endpoint must exist and point to the local Hamburg PMTiles alias
       const styleResponse = await page.request.get(
-        "/local-basemap/style.json?v=0.3.0",
+        "/local-basemap/style.json?v=0.3.1",
       );
       expect(
         styleResponse.status(),

@@ -6,6 +6,7 @@ weltgewebe.home.arpa {
   # Sovereign Basemap Style & Assets Routing
   # Mirrored from Vite dev-server: `.pmtiles` and `.meta.json` from basemap dir, others from map-style dir
   handle_path /local-basemap/* {
+    header Cache-Control "no-cache, must-revalidate"
     @pmtiles path_regexp \.pmtiles$
     handle @pmtiles {
       root * /srv/weltgewebe-basemap

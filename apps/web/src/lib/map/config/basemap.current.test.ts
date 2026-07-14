@@ -35,7 +35,9 @@ describe("resolveBasemapMode", () => {
 describe("resolveBasemapStyle", () => {
   it("maps local-sovereign to the local route, never CARTO", () => {
     const style = resolveBasemapStyle({ mode: "local-sovereign" } as any);
-    expect(style).toBe("/local-basemap/style.json?v=0.3.0");
+    expect(style).toMatch(
+      /^\/local-basemap\/style\.json\?v=0\.3\.1&build=[^&]+$/,
+    );
     expect(style).not.toContain(CARTO_HOST);
     expect(style).not.toContain("voyager-gl-style");
   });
@@ -55,8 +57,8 @@ describe("currentBasemap (build-time generated config)", () => {
   it("never carries a CARTO style url in local-sovereign mode", () => {
     if (currentBasemap.mode === "local-sovereign") {
       expect(currentBasemap).not.toHaveProperty("styleUrl");
-      expect(resolveBasemapStyle(currentBasemap)).toBe(
-        "/local-basemap/style.json?v=0.3.0",
+      expect(resolveBasemapStyle(currentBasemap)).toMatch(
+        /^\/local-basemap\/style\.json\?v=0\.3\.1&build=[^&]+$/,
       );
     } else {
       // remote-style is only reachable via an explicit PUBLIC_BASEMAP_MODE.

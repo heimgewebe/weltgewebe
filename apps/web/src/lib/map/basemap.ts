@@ -1,7 +1,9 @@
+import { BUILD_VERSION } from "$lib/generated/buildVersion";
 import type { BasemapConfig } from "./config/basemap.current";
 
-export const LOCAL_BASEMAP_STYLE_VERSION = "0.3.0";
-export const LOCAL_BASEMAP_STYLE_URL = `/local-basemap/style.json?v=${LOCAL_BASEMAP_STYLE_VERSION}`;
+export const LOCAL_BASEMAP_STYLE_VERSION = "0.3.1";
+const LOCAL_BASEMAP_BUILD_VERSION = encodeURIComponent(BUILD_VERSION);
+export const LOCAL_BASEMAP_STYLE_URL = `/local-basemap/style.json?v=${LOCAL_BASEMAP_STYLE_VERSION}&build=${LOCAL_BASEMAP_BUILD_VERSION}`;
 
 function assertNever(x: never): never {
   throw new Error(`Unsupported basemap mode: ${JSON.stringify(x)}`);
