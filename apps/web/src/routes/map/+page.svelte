@@ -64,6 +64,7 @@
 
   import { currentBasemap } from "$lib/map/config/basemap.current";
   import { resolveBasemapStyle, rewritePmtilesUrl } from "$lib/map/basemap";
+  import { getGarnrolleMarkerScale } from "$lib/map/markerScale";
   import { buildMapScene } from "$lib/map/scene";
 
   import { NodesOverlay } from "$lib/map/overlay/nodes";
@@ -210,6 +211,15 @@
       searchDirectionFrame = null;
       updateSearchDirectionIndicators();
     });
+  }
+
+  function updateGarnrolleMarkerScale() {
+    if (!map || !mapContainer) return;
+
+    mapContainer.style.setProperty(
+      "--garnrolle-marker-scale",
+      getGarnrolleMarkerScale(map.getZoom()).toFixed(3),
+    );
   }
 
   // Reactive update for markers and search highlight strictly handled in overlay update
@@ -536,6 +546,8 @@
         attributionControl: false,
         transformRequest: transformRequestFn,
       });
+      updateGarnrolleMarkerScale();
+      map.on("zoom", updateGarnrolleMarkerScale);
       map.addControl(
         new maplibregl.NavigationControl({ showZoom: true }),
         "bottom-right",
@@ -604,6 +616,7 @@
       searchDirectionIndicators = [];
       nodesOverlay?.destroy();
       if (map) {
+        map.off("zoom", updateGarnrolleMarkerScale);
         map.off("move", handleSearchViewportChange);
         map.off("resize", handleSearchViewportChange);
         if (typeof map.remove === "function") map.remove();
@@ -767,6 +780,7 @@
     border: none;
     box-shadow: none;
     border-radius: 0;
+    transform-origin: center bottom;
   }
 
   #map :global(.marker-account__icon) {
@@ -774,6 +788,8 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
+    transform: scale(var(--garnrolle-marker-scale, 1));
+    transform-origin: center bottom;
     pointer-events: none;
     user-select: none;
     -webkit-user-drag: none;
@@ -877,10 +893,6 @@
     pointer-events: none;
     font-family: monospace;
   }
-
-
-
-
 
   .degraded-banner--failed {
     background: rgba(180, 40, 40, 0.9);

@@ -94,4 +94,78 @@ test.describe("Garnrolle marker rendering", () => {
 
     expect(errorPx).toBeLessThanOrEqual(2);
   });
+
+  test("allows regional zoom-out while keeping the touch target stable", async ({
+    page,
+  }) => {
+    const marker = page.getByTestId(`marker-garnrolle-${GARNROLLE_ID}`);
+    await expect(marker).toBeVisible();
+
+    const metrics = await page.evaluate(
+      async ({ markerId }) => {
+        type TestMap = {
+          getMinZoom(): number;
+          getZoom(): number;
+          jumpTo(options: { zoom: number }): void;
+        };
+        const map = (window as typeof window & { __TEST_MAP__?: TestMap })
+          .__TEST_MAP__;
+        const markerElement = document.querySelector<HTMLElement>(
+          `[data-testid="marker-garnrolle-${markerId}"]`,
+        );
+        const icon = markerElement?.querySelector<HTMLElement>(
+          ".marker-account__icon",
+        );
+        if (!map || !markerElement || !icon) {
+          throw new Error("test map or Garnrolle marker unavailable");
+        }
+
+        const settle = async () => {
+          await new Promise((resolve) => setTimeout(resolve, 220));
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => resolve()),
+          );
+        };
+        const measure = () => {
+          const outer = markerElement.getBoundingClientRect();
+          const visibleIcon = icon.getBoundingClientRect();
+          return {
+            zoom: map.getZoom(),
+            outerWidth: outer.width,
+            outerHeight: outer.height,
+            visualWidth: visibleIcon.width,
+            visualHeight: visibleIcon.height,
+            bottomDelta: Math.abs(outer.bottom - visibleIcon.bottom),
+          };
+        };
+
+        map.jumpTo({ zoom: 13 });
+        await settle();
+        const local = measure();
+
+        map.jumpTo({ zoom: 7 });
+        await settle();
+        const regional = measure();
+
+        return { minZoom: map.getMinZoom(), local, regional };
+      },
+      { markerId: GARNROLLE_ID },
+    );
+
+    expect(metrics.minZoom).toBe(7);
+    expect(metrics.local.zoom).toBeCloseTo(13, 5);
+    expect(metrics.regional.zoom).toBeCloseTo(7, 5);
+    expect(metrics.local.outerWidth).toBeCloseTo(44, 1);
+    expect(metrics.regional.outerWidth).toBeCloseTo(44, 1);
+    expect(metrics.local.outerHeight).toBeCloseTo(44, 1);
+    expect(metrics.regional.outerHeight).toBeCloseTo(44, 1);
+    expect(metrics.local.visualWidth).toBeCloseTo(44, 1);
+    expect(metrics.regional.visualWidth).toBeCloseTo(28.16, 1);
+    expect(metrics.regional.visualHeight).toBeCloseTo(28.16, 1);
+    expect(metrics.regional.visualWidth).toBeLessThan(
+      metrics.local.visualWidth,
+    );
+    expect(metrics.local.bottomDelta).toBeLessThanOrEqual(0.5);
+    expect(metrics.regional.bottomDelta).toBeLessThanOrEqual(0.5);
+  });
 });
