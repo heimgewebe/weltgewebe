@@ -121,7 +121,7 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
             if url.endswith("/health/ready"):
                 payload = {"status": "ok", "checks": {"database": True, "nats": True, "policy": True}}
                 return FetchResult(url, 200, {}, json.dumps(payload).encode())
-            if "api.weltgewebe.net" in url:
+            if url == "https://api.weltgewebe.net/version":
                 payload = {"version": "0.1.0", "commit": "a" * 40, "build_timestamp": "x"}
                 return FetchResult(url, 200, {"X-Weltgewebe-API-Build": "c" * 40}, json.dumps(payload).encode())
             payload = {"version": "0.1.0", "commit": "b" * 40}
@@ -144,7 +144,7 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
             if url.endswith("/health/ready"):
                 payload = {"status": "ok", "checks": {"database": True, "nats": True, "policy": True}}
                 return FetchResult(url, 200, {}, json.dumps(payload).encode())
-            if "api.weltgewebe.net" in url:
+            if url == "https://api.weltgewebe.net/version":
                 payload = {"version": "0.1.0", "commit": "unknown", "build_timestamp": "unknown"}
                 return FetchResult(url, 200, {}, json.dumps(payload).encode())
             payload = {"version": "0.1.0", "commit": "b" * 40}
