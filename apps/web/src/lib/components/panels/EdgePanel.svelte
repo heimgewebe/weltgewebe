@@ -31,6 +31,7 @@
     id: string;
     edge_kind: string;
     created_at?: string;
+    note?: string | null;
     source_details?: EdgeParticipantDetails | null;
     target_details?: EdgeParticipantDetails | null;
   }
@@ -164,6 +165,9 @@
           <strong>Geknüpft am:</strong>
           {formatDate(edgeDetails?.created_at || $selection?.data?.created_at)}
         </p>
+        {#if edgeDetails?.note || $selection?.data?.note}
+          <p><strong>Beschreibung:</strong> {edgeDetails?.note || $selection?.data?.note}</p>
+        {/if}
 
         <div class="participants">
           <p><strong>Ursprung:</strong></p>

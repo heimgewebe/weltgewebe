@@ -9,7 +9,7 @@ use super::{
         MAX_PAGE_SIZE,
     },
 };
-use crate::config::DomainNodeWriteSource;
+use crate::config::{DomainEdgeWriteSource, DomainNodeWriteSource};
 use crate::domain_db::{
     delete_node_with_edges_in_postgres, insert_domain_node, patch_node_in_postgres,
     replace_node_in_postgres, CreateOperationKey, CreateWriteOutcome, NodeCreateError,
@@ -1528,6 +1528,23 @@ pub async fn delete_node(
 ) -> Result<StatusCode, PatchNodeError> {
     reject_node_patch_unless_writable(&state)
         .map_err(|(status, body)| PatchNodeError::Message(status, body))?;
+    let persistence_is_coherent = matches!(
+        (
+            state.config.domain_node_write_source,
+            state.config.domain_edge_write_source,
+        ),
+        (DomainNodeWriteSource::Jsonl, DomainEdgeWriteSource::Jsonl,)
+            | (
+                DomainNodeWriteSource::Postgres,
+                DomainEdgeWriteSource::Postgres,
+            )
+    );
+    if !persistence_is_coherent {
+        return Err(PatchNodeError::Message(
+            StatusCode::CONFLICT,
+            "node deletion requires matching node and edge write sources".to_string(),
+        ));
+    }
     let _persist_guard = state.nodes_persist.lock().await;
     if state.nodes.read().await.get(&id).is_none() {
         return Err(PatchNodeError::Status(StatusCode::NOT_FOUND));

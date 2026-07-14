@@ -238,6 +238,30 @@ async fn weber_can_replace_shared_node_update_edge_and_delete_node_cascade() -> 
 
 #[tokio::test]
 #[serial]
+async fn node_delete_rejects_mixed_node_and_edge_write_sources() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    let original = concat!(
+        r#"{"id":"n1","kind":"Werkstatt","title":"Alt","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+    );
+    write_fixture(&nodes_path, original);
+    let _env = set_gewebe_in_dir(&in_dir);
+    let mut state = state_for_role(Role::Weber).await?;
+    state.config.domain_edge_write_source = DomainEdgeWriteSource::Postgres;
+    let (app, cookie) = authenticated_app(state).await;
+
+    let delete = mutation_request("DELETE", "/nodes/n1", &cookie, "");
+    let response = app.oneshot(delete).await?;
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert_eq!(fs::read_to_string(&nodes_path)?, original);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn guest_cannot_mutate_shared_elements() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let in_dir = tmp.path().join("in");
