@@ -35,7 +35,7 @@ fn invalid_write_config() -> (StatusCode, String) {
     )
 }
 
-/// Edge-create write gate (OPT-ARC-001 Phase E-C).
+/// Edge mutation write gate (OPT-ARC-001 Phase E-C).
 ///
 /// Behaviour matrix:
 /// - JSONL read + JSONL edge write: allow (JSONL append path).
@@ -44,7 +44,7 @@ fn invalid_write_config() -> (StatusCode, String) {
 ///   PostgreSQL read source would persist writes that vanish after a restart.
 /// - JSONL read + Postgres edge write: reject defensively (config load also
 ///   forbids this); tests and internal code may construct `ApiState` manually.
-pub(super) fn reject_edge_create_unless_writable(
+pub(super) fn reject_edge_mutation_unless_writable(
     state: &ApiState,
 ) -> Result<(), (StatusCode, String)> {
     if state.config.domain_edge_write_source == DomainEdgeWriteSource::Postgres
@@ -348,7 +348,7 @@ mod tests {
             DomainNodeWriteSource::Jsonl,
             DomainEdgeWriteSource::Jsonl,
         );
-        assert!(reject_edge_create_unless_writable(&state).is_ok());
+        assert!(reject_edge_mutation_unless_writable(&state).is_ok());
     }
 
     #[test]
@@ -359,7 +359,7 @@ mod tests {
             DomainNodeWriteSource::Postgres,
             DomainEdgeWriteSource::Postgres,
         );
-        assert!(reject_edge_create_unless_writable(&state).is_ok());
+        assert!(reject_edge_mutation_unless_writable(&state).is_ok());
     }
 
     #[test]
@@ -370,7 +370,7 @@ mod tests {
             DomainNodeWriteSource::Postgres,
             DomainEdgeWriteSource::Jsonl,
         );
-        let err = reject_edge_create_unless_writable(&state).unwrap_err();
+        let err = reject_edge_mutation_unless_writable(&state).unwrap_err();
         assert_eq!(err.0, StatusCode::CONFLICT);
         assert!(err.1.contains(DOMAIN_READ_SOURCE_READ_ONLY));
     }
@@ -383,7 +383,7 @@ mod tests {
             DomainNodeWriteSource::Jsonl,
             DomainEdgeWriteSource::Postgres,
         );
-        let err = reject_edge_create_unless_writable(&state).unwrap_err();
+        let err = reject_edge_mutation_unless_writable(&state).unwrap_err();
         assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
         assert!(err.1.contains(INVALID_DOMAIN_WRITE_CONFIG));
         assert!(err.1.contains(INVALID_EDGE_WRITE_CONFIG_MESSAGE));

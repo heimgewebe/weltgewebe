@@ -1,4 +1,4 @@
-use super::domain_write_guard::reject_edge_create_unless_writable;
+use super::domain_write_guard::reject_edge_mutation_unless_writable;
 use super::query::{
     cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
     MAX_PAGE_SIZE,
@@ -393,7 +393,7 @@ pub async fn patch_edge(
     Path(id): Path<String>,
     Json(payload): Json<Value>,
 ) -> Result<Json<Edge>, (StatusCode, String)> {
-    reject_edge_create_unless_writable(&state)?;
+    reject_edge_mutation_unless_writable(&state)?;
     let request: UpdateEdgeRequest = serde_json::from_value(payload).map_err(|error| {
         (
             StatusCode::BAD_REQUEST,
@@ -471,7 +471,7 @@ pub async fn delete_edge(
     State(state): State<ApiState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    reject_edge_create_unless_writable(&state)?;
+    reject_edge_mutation_unless_writable(&state)?;
     if state.edges.read().await.get(&id).is_none() {
         return Err((StatusCode::NOT_FOUND, "edge not found".to_string()));
     }
@@ -742,7 +742,7 @@ fn edge_create_error_message(err: &edge_create::EdgeCreateValidationError) -> St
 
 /// Create an edge (OPT-ARC-001 Phase E-C).
 ///
-/// Write path: write gate ([`reject_edge_create_unless_writable`]) -> contract
+/// Write path: write gate ([`reject_edge_mutation_unless_writable`]) -> contract
 /// validation (PR-1 semantics) -> server-generated `id` / `created_at` ->
 /// persistence via the configured edge-create write source -> cache insert. A
 /// new durable write returns 201; an identical operation replay returns the
@@ -759,7 +759,7 @@ pub async fn create_edge(
     Extension(auth): Extension<AuthContext>,
     Json(payload): Json<Value>,
 ) -> Result<(StatusCode, Json<Edge>), (StatusCode, String)> {
-    reject_edge_create_unless_writable(&state)?;
+    reject_edge_mutation_unless_writable(&state)?;
 
     // Manual deserialization keeps unknown fields, missing required fields and
     // explicit nulls on one deterministic 400 contract.

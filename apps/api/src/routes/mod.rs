@@ -28,23 +28,27 @@ use self::{
         passkey_register_options, passkey_register_verify, remove_device, request_login,
         request_step_up, session, session_refresh, update_email,
     },
-    collective_write_guard::{create_edge_serialized, delete_node_serialized},
-    edges::{delete_edge, get_edge, list_edges, patch_edge},
-    nodes::{create_node, get_node, list_nodes, patch_node, replace_node},
+    collective_write_guard::{
+        create_edge_serialized, create_node_serialized, delete_edge_serialized,
+        delete_node_serialized, patch_edge_serialized, patch_node_serialized,
+        replace_node_serialized,
+    },
+    edges::{get_edge, list_edges},
+    nodes::{get_node, list_nodes},
 };
 
 pub fn api_router() -> Router<ApiState> {
     let router = Router::new()
         .route(
             "/nodes",
-            get(list_nodes).merge(post(create_node).route_layer(from_fn(require_write))),
+            get(list_nodes).merge(post(create_node_serialized).route_layer(from_fn(require_write))),
         )
         .route(
             "/nodes/{id}",
             get(get_node)
                 .merge(
-                    axum::routing::patch(patch_node)
-                        .put(replace_node)
+                    axum::routing::patch(patch_node_serialized)
+                        .put(replace_node_serialized)
                         .route_layer(from_fn(require_write)),
                 )
                 .merge(
@@ -61,8 +65,8 @@ pub fn api_router() -> Router<ApiState> {
         .route(
             "/edges/{id}",
             get(get_edge).merge(
-                axum::routing::patch(patch_edge)
-                    .delete(delete_edge)
+                axum::routing::patch(patch_edge_serialized)
+                    .delete(delete_edge_serialized)
                     .route_layer(from_fn(require_write)),
             ),
         )

@@ -50,7 +50,9 @@ impl<T> OrderedCache<T> {
 
     pub fn remove(&mut self, id: &str) -> Option<T> {
         let removed = self.items.remove(id)?;
-        self.order.retain(|existing_id| existing_id != id);
+        if let Some(position) = self.order.iter().position(|existing_id| existing_id == id) {
+            self.order.remove(position);
+        }
         Some(removed)
     }
 

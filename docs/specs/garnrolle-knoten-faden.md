@@ -122,10 +122,11 @@ Knoten und Fäden sind gemeinschaftlich verwaltete Gewebeelemente. Sie besitzen 
 Dabei gelten folgende Integritätsregeln:
 
 1. Technische Identitäten bleiben geschützt: Eine Garnrolle ist der Account-Ursprung und kein kollektiv löschbares Inhaltsobjekt. Ihr privater Account- und Anmeldezustand darf nicht durch fremde Bearbeitung verändert werden.
-2. Beim Löschen eines Knotens werden alle Fäden entfernt, die diesen Knoten als Ursprung oder Ziel verwenden. Die Löschung wird gegen das parallele Knüpfen neuer Fäden serialisiert; es dürfen keine verwaisten Fäden entstehen.
+2. Alle schreibenden Knoten- und Fadenoperationen laufen durch dasselbe Graph-Mutationstor. Dadurch werden auch Bearbeiten und Löschen gegeneinander serialisiert; beim Löschen eines Knotens werden alle Fäden entfernt, die ihn als Ursprung oder Ziel verwenden, und es dürfen keine verwaisten Fäden entstehen.
 3. IDs und Erstellungszeitpunkte bleiben serververwaltet und können nicht überschrieben werden.
 4. Die Oberfläche benennt vor jeder Löschung die konkrete Folge; bei Knoten ausdrücklich auch die Entfernung verbundener Fäden.
 5. Knotenlöschung setzt dieselbe aktive Schreibquelle für Knoten und Fäden voraus. Ein gemischter Migrationszustand wird mit Konflikt abgewiesen, statt nur einen Teil des Gewebes zu löschen.
+6. Im JSONL-Betrieb serialisiert das Mutationstor pro API-Prozess. Im PostgreSQL-Betrieb reiht es Anfragen zuerst lokal ein und nimmt danach einen datenbankweiten Advisory Lock. Wartende Anfragen belegen dadurch nicht unnötig den Verbindungspool.
 
 ### Autorisierung, Richtung und öffentliche Notizen
 

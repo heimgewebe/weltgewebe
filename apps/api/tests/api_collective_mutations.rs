@@ -299,3 +299,68 @@ async fn guest_cannot_mutate_shared_elements() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn concurrent_edge_patch_and_node_delete_leave_no_orphan_jsonl() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    write_fixture(
+        &nodes_path,
+        concat!(
+            r#"{"id":"n1","kind":"Werkstatt","title":"Quelle","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+            r#"{"id":"n2","kind":"Ort","title":"Ziel","address":"Ziel 2","location":{"lat":53.6,"lon":10.1},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+        ),
+    );
+    write_fixture(
+        &edges_path,
+        concat!(
+            r#"{"id":"e1","source_id":"n1","source_type":"node","target_id":"n2","target_type":"node","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+        ),
+    );
+    let _env = set_gewebe_in_dir(&in_dir);
+    let state = state_for_role(Role::Weber).await?;
+    state.edges.write().await.insert(
+        "e1".to_string(),
+        Edge {
+            id: "e1".to_string(),
+            source_id: "n1".to_string(),
+            source_type: Some("node".to_string()),
+            target_id: "n2".to_string(),
+            target_type: Some("node".to_string()),
+            edge_kind: "reference".to_string(),
+            note: None,
+            created_at: Some("2026-01-01T00:00:00Z".to_string()),
+        },
+    );
+    let (app, cookie) = authenticated_app(state.clone()).await;
+
+    let patch = app.clone().oneshot(mutation_request(
+        "PATCH",
+        "/edges/e1",
+        &cookie,
+        r#"{"edge_kind":"membership"}"#,
+    ));
+    let delete = app
+        .clone()
+        .oneshot(mutation_request("DELETE", "/nodes/n1", &cookie, ""));
+    let (patch_response, delete_response) = tokio::join!(patch, delete);
+    let patch_status = patch_response?.status();
+    assert!(
+        patch_status == StatusCode::OK || patch_status == StatusCode::NOT_FOUND,
+        "edge patch must finish before the cascade or observe the completed deletion"
+    );
+    assert_eq!(delete_response?.status(), StatusCode::NO_CONTENT);
+
+    assert!(state.nodes.read().await.get("n1").is_none());
+    assert!(state.edges.read().await.get("e1").is_none());
+    assert!(!fs::read_to_string(&nodes_path)?.contains(r#""id":"n1""#));
+    assert!(!fs::read_to_string(&edges_path)?.contains(r#""id":"e1""#));
+
+    Ok(())
+}

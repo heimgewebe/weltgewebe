@@ -752,12 +752,6 @@ pub async fn delete_node_with_edges_in_postgres(
     id: &str,
 ) -> Result<Vec<String>, NodeWriteError> {
     let mut tx = pool.begin().await.map_err(NodeWriteError::Database)?;
-    // Edge creation also takes this table lock. Holding it through both deletes makes
-    // "node + attached edges" one closed graph mutation instead of a race-prone pair.
-    sqlx::query("LOCK TABLE domain_edges IN EXCLUSIVE MODE")
-        .execute(&mut *tx)
-        .await
-        .map_err(NodeWriteError::Database)?;
     let node_id: Option<String> =
         sqlx::query_scalar("SELECT id FROM domain_nodes WHERE id = $1 FOR UPDATE")
             .bind(id)
@@ -770,22 +764,13 @@ pub async fn delete_node_with_edges_in_postgres(
     }
 
     let edge_ids: Vec<String> = sqlx::query_scalar(
-        "SELECT id FROM domain_edges \
+        "DELETE FROM domain_edges \
          WHERE (source_id = $1 AND COALESCE(payload->>'source_type', 'node') = 'node') \
-            OR (target_id = $1 AND COALESCE(payload->>'target_type', 'node') = 'node')",
+            OR (target_id = $1 AND COALESCE(payload->>'target_type', 'node') = 'node') \
+         RETURNING id",
     )
     .bind(id)
     .fetch_all(&mut *tx)
-    .await
-    .map_err(NodeWriteError::Database)?;
-
-    sqlx::query(
-        "DELETE FROM domain_edges \
-         WHERE (source_id = $1 AND COALESCE(payload->>'source_type', 'node') = 'node') \
-            OR (target_id = $1 AND COALESCE(payload->>'target_type', 'node') = 'node')",
-    )
-    .bind(id)
-    .execute(&mut *tx)
     .await
     .map_err(NodeWriteError::Database)?;
     sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
