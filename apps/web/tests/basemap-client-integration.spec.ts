@@ -11,7 +11,7 @@ test.describe("Basemap Client Integration (local-sovereign)", () => {
     // Override local-basemap/style.json for this specific test
     // NOTE: This intentionally mocks the network path to verify client-side behavior
     // (MapLibre config and PMTiles protocol loading), not real Edge-routing delivery.
-    await page.route("**/local-basemap/style.json", (route) => {
+    await page.route("**/local-basemap/style.json*", (route) => {
       route.fulfill({
         status: 200,
         contentType: "application/json",

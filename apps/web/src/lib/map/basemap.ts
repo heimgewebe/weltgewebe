@@ -1,5 +1,8 @@
 import type { BasemapConfig } from "./config/basemap.current";
 
+export const LOCAL_BASEMAP_STYLE_VERSION = "0.3.0";
+export const LOCAL_BASEMAP_STYLE_URL = `/local-basemap/style.json?v=${LOCAL_BASEMAP_STYLE_VERSION}`;
+
 function assertNever(x: never): never {
   throw new Error(`Unsupported basemap mode: ${JSON.stringify(x)}`);
 }
@@ -29,7 +32,7 @@ export function resolveBasemapStyle(config: BasemapConfig): string {
         throw new Error("styleUrl required for remote-style");
       return config.styleUrl;
     case "local-sovereign":
-      return "/local-basemap/style.json";
+      return LOCAL_BASEMAP_STYLE_URL;
     default:
       return assertNever(config);
   }

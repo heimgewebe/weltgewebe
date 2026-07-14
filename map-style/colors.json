@@ -5,6 +5,28 @@
     "roads": "#ffffff",
     "buildings": "#d0d0d0",
     "text": "#333333",
-    "text-halo": "#ffffff"
+    "text-halo": "#ffffff",
+    "landcover": {
+      "farmland": "#e7e0cf",
+      "grass": "#d9e5d3",
+      "wood": "#c9d9c4",
+      "wetland": "#d6e4de",
+      "sand": "#eee2c8",
+      "default": "#dedfd8"
+    },
+    "landuse": {
+      "residential": "#ddd9d2",
+      "industrial": "#d6d0cc",
+      "commercial": "#e1d5d0",
+      "retail": "#e4d7d2",
+      "cemetery": "#d3dfd0",
+      "school": "#dedbd0",
+      "university": "#dedbd0",
+      "hospital": "#e2d6d4",
+      "military": "#d8d1c7",
+      "quarry": "#d2cec5",
+      "pitch": "#d2e0ce",
+      "default": "#dedbd4"
+    }
   }
 }
