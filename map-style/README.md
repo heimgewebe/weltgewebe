@@ -12,6 +12,8 @@ To ensure total visual sovereignty and compliance (no silent vendor dependencies
 * `pmtiles://` URLs require a protocol handler in the MapLibre runtime (not part of this configuration)
 * The current configuration is wired for the local-sovereign runtime route `/local-basemap/`
 * The style composes two independent regional PMTiles sources: `basemap-hamburg.pmtiles` and `basemap-schleswig-holstein.pmtiles`. Each source carries the same OpenMapTiles layer schema; the style repeats the visual layers for both regions.
+* Style version `0.3.0` renders `landcover` and `landuse` before water, roads, buildings and labels. Rural areas therefore remain recognizable instead of collapsing into the uniform background.
+* The web runtime requests the mutable style with its declared version as a query parameter. A style change must bump both `weltgewebe:version` and `LOCAL_BASEMAP_STYLE_VERSION`; CI rejects drift between them.
 
 ## Structure
 
@@ -23,4 +25,4 @@ To ensure total visual sovereignty and compliance (no silent vendor dependencies
 
 ## Regional coverage
 
-The sovereign basemap currently covers Hamburg and Schleswig-Holstein. Additions must provide all four parts together: a pinned build script, a stable PMTiles alias, matching style layers, and an independent runtime/content proof. A style-only source is not considered deployed.
+The sovereign basemap currently covers Hamburg and Schleswig-Holstein. Additions must provide all four parts together: a pinned build script, a stable PMTiles alias, matching style layers, and an independent runtime/content proof. A style-only source is not considered deployed. Runtime proof must establish not only successful tile decoding but also visibly rendered landcover and landuse for rural regional coverage.

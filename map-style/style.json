@@ -2,8 +2,8 @@
   "version": 8,
   "name": "Weltgewebe Sovereign Basemap",
   "metadata": {
-    "weltgewebe:version": "0.2.0",
-    "weltgewebe:note": "PMTiles URL is a placeholder; actual resolution depends on runtime protocol handler"
+    "weltgewebe:version": "0.3.0",
+    "weltgewebe:note": "Regional PMTiles sources with visible landcover and landuse; bare aliases are resolved by the runtime protocol handler"
   },
   "sources": {
     "basemap": {
@@ -22,6 +22,142 @@
       "type": "background",
       "paint": {
         "background-color": "#e0e0e0"
+      }
+    },
+    {
+      "id": "landcover",
+      "type": "fill",
+      "source": "basemap",
+      "source-layer": "landcover",
+      "minzoom": 7,
+      "paint": {
+        "fill-color": [
+          "match",
+          [
+            "get",
+            "class"
+          ],
+          "farmland",
+          "#e7e0cf",
+          "grass",
+          "#d9e5d3",
+          "wood",
+          "#c9d9c4",
+          "wetland",
+          "#d6e4de",
+          "sand",
+          "#eee2c8",
+          "#dedfd8"
+        ],
+        "fill-opacity": 0.92
+      }
+    },
+    {
+      "id": "landcover-schleswig-holstein",
+      "type": "fill",
+      "source": "basemap-schleswig-holstein",
+      "source-layer": "landcover",
+      "minzoom": 7,
+      "paint": {
+        "fill-color": [
+          "match",
+          [
+            "get",
+            "class"
+          ],
+          "farmland",
+          "#e7e0cf",
+          "grass",
+          "#d9e5d3",
+          "wood",
+          "#c9d9c4",
+          "wetland",
+          "#d6e4de",
+          "sand",
+          "#eee2c8",
+          "#dedfd8"
+        ],
+        "fill-opacity": 0.92
+      }
+    },
+    {
+      "id": "landuse",
+      "type": "fill",
+      "source": "basemap",
+      "source-layer": "landuse",
+      "minzoom": 8,
+      "paint": {
+        "fill-color": [
+          "match",
+          [
+            "get",
+            "class"
+          ],
+          "residential",
+          "#ddd9d2",
+          "industrial",
+          "#d6d0cc",
+          "commercial",
+          "#e1d5d0",
+          "retail",
+          "#e4d7d2",
+          "cemetery",
+          "#d3dfd0",
+          "school",
+          "#dedbd0",
+          "university",
+          "#dedbd0",
+          "hospital",
+          "#e2d6d4",
+          "military",
+          "#d8d1c7",
+          "quarry",
+          "#d2cec5",
+          "pitch",
+          "#d2e0ce",
+          "#dedbd4"
+        ],
+        "fill-opacity": 0.72
+      }
+    },
+    {
+      "id": "landuse-schleswig-holstein",
+      "type": "fill",
+      "source": "basemap-schleswig-holstein",
+      "source-layer": "landuse",
+      "minzoom": 8,
+      "paint": {
+        "fill-color": [
+          "match",
+          [
+            "get",
+            "class"
+          ],
+          "residential",
+          "#ddd9d2",
+          "industrial",
+          "#d6d0cc",
+          "commercial",
+          "#e1d5d0",
+          "retail",
+          "#e4d7d2",
+          "cemetery",
+          "#d3dfd0",
+          "school",
+          "#dedbd0",
+          "university",
+          "#dedbd0",
+          "hospital",
+          "#e2d6d4",
+          "military",
+          "#d8d1c7",
+          "quarry",
+          "#d2cec5",
+          "pitch",
+          "#d2e0ce",
+          "#dedbd4"
+        ],
+        "fill-opacity": 0.72
       }
     },
     {
@@ -89,7 +225,9 @@
       "source-layer": "place",
       "layout": {
         "text-field": "{name}",
-        "text-font": ["Noto Sans Regular"],
+        "text-font": [
+          "Noto Sans Regular"
+        ],
         "text-size": 14
       },
       "paint": {
@@ -105,7 +243,9 @@
       "source-layer": "place",
       "layout": {
         "text-field": "{name}",
-        "text-font": ["Noto Sans Regular"],
+        "text-font": [
+          "Noto Sans Regular"
+        ],
         "text-size": 14
       },
       "paint": {

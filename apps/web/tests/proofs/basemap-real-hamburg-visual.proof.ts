@@ -35,8 +35,21 @@ import path from "node:path";
 
 const REAL_PMTILES_FILENAME = "basemap-hamburg.pmtiles";
 const SOURCE_ID = "basemap";
-const REGION_LAYER_IDS = ["water", "roads", "buildings", "place-labels"];
-const SOURCE_LAYER_IDS = ["transportation", "water", "place"];
+const REGION_LAYER_IDS = [
+  "landcover",
+  "landuse",
+  "water",
+  "roads",
+  "buildings",
+  "place-labels",
+];
+const SOURCE_LAYER_IDS = [
+  "landcover",
+  "landuse",
+  "transportation",
+  "water",
+  "place",
+];
 
 type TestMap = {
   isStyleLoaded?: () => boolean;
@@ -200,7 +213,9 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
       await page.goto("/map?proof=1&t=" + Date.now());
 
       // Preflight: style endpoint must exist and point to the local Hamburg PMTiles alias
-      const styleResponse = await page.request.get("/local-basemap/style.json");
+      const styleResponse = await page.request.get(
+        "/local-basemap/style.json?v=0.3.0",
+      );
       expect(
         styleResponse.status(),
         "Expected /local-basemap/style.json to return HTTP 200",
@@ -427,9 +442,14 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         .toBeGreaterThan(0);
 
       expect(featureEvidence.sourceLoaded).toBe(true);
+      expect(featureEvidence.renderedLayerIds).toEqual(
+        expect.arrayContaining(["landcover", "landuse"]),
+      );
       expect(
         featureEvidence.sourceFeatureCounts.transportation,
       ).toBeGreaterThan(0);
+      expect(featureEvidence.sourceFeatureCounts.landcover).toBeGreaterThan(0);
+      expect(featureEvidence.sourceFeatureCounts.landuse).toBeGreaterThan(0);
       expect(featureEvidence.sourceFeatureCounts.water).toBeGreaterThan(0);
       expect(featureEvidence.sourceFeatureCounts.place).toBeGreaterThan(0);
       expect(failedResponses).toHaveLength(0);

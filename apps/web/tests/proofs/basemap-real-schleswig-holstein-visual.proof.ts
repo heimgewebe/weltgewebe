@@ -16,12 +16,20 @@ const SOURCE_ID = "basemap-schleswig-holstein";
 const PMTILES_FILENAME = "basemap-schleswig-holstein.pmtiles";
 const KIEL_CENTER: [number, number] = [10.1228, 54.3233];
 const REGION_LAYER_IDS = [
+  "landcover-schleswig-holstein",
+  "landuse-schleswig-holstein",
   "water-schleswig-holstein",
   "roads-schleswig-holstein",
   "buildings-schleswig-holstein",
   "place-labels-schleswig-holstein",
 ];
-const SOURCE_LAYER_IDS = ["transportation", "water", "place"];
+const SOURCE_LAYER_IDS = [
+  "landcover",
+  "landuse",
+  "transportation",
+  "water",
+  "place",
+];
 
 const FORBIDDEN_REMOTE_PROVIDERS = [
   "api.maptiler.com",
@@ -174,14 +182,18 @@ test.describe("Basemap Real Schleswig-Holstein Visual Runtime Proof", () => {
 
       await page.goto(`/map?proof=1&region=${REGION}&t=${Date.now()}`);
 
-      const styleResponse = await page.request.get("/local-basemap/style.json");
+      const styleResponse = await page.request.get(
+        "/local-basemap/style.json?v=0.3.0",
+      );
       expect(styleResponse.status()).toBe(200);
       expect(styleResponse.headers()["content-type"] ?? "").toContain(
         "application/json",
       );
       const styleJson = (await styleResponse.json()) as {
+        metadata?: Record<string, string>;
         sources?: Record<string, { url?: string }>;
       };
+      expect(styleJson.metadata?.["weltgewebe:version"]).toBe("0.3.0");
       expect(styleJson.sources?.[SOURCE_ID]?.url).toBe(
         `pmtiles://${PMTILES_FILENAME}`,
       );
@@ -402,9 +414,17 @@ test.describe("Basemap Real Schleswig-Holstein Visual Runtime Proof", () => {
         expect.arrayContaining(REGION_LAYER_IDS),
       );
       expect(featureEvidence.renderedFromExpectedSource).toBeGreaterThan(0);
+      expect(featureEvidence.renderedLayerIds).toEqual(
+        expect.arrayContaining([
+          "landcover-schleswig-holstein",
+          "landuse-schleswig-holstein",
+        ]),
+      );
       expect(
         featureEvidence.sourceFeatureCounts.transportation,
       ).toBeGreaterThan(0);
+      expect(featureEvidence.sourceFeatureCounts.landcover).toBeGreaterThan(0);
+      expect(featureEvidence.sourceFeatureCounts.landuse).toBeGreaterThan(0);
       expect(featureEvidence.sourceFeatureCounts.water).toBeGreaterThan(0);
       expect(featureEvidence.sourceFeatureCounts.place).toBeGreaterThan(0);
       expect(mapDiagnostics.mapErrors).toHaveLength(0);
