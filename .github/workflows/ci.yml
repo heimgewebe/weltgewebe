@@ -102,10 +102,12 @@ jobs:
           bash -n scripts/ops/postgres-restore-proof.sh
           bash -n scripts/ops/postgres-restore-latest-proof.sh
           bash -n scripts/ops/install-web-artifact.sh
+          bash -n scripts/ops/verify-api-release-identity.sh
           bash -n scripts/tests/test_security_headers_guard.sh
           bash -n scripts/tests/test_repo_contract_guards.sh
           bash -n scripts/tests/test_postgres_backup_restore_contract.sh
           bash -n scripts/tests/test_web_artifact_install_contract.sh
+          bash -n scripts/tests/test_api_release_identity_contract.sh
           bash -n scripts/tests/test_weltgewebe_up_deploy_scope.sh
           bash -n scripts/guard/run.sh
 
@@ -123,6 +125,7 @@ jobs:
             scripts/tests/test_repo_contract_guards.sh \
             scripts/tests/test_postgres_backup_restore_contract.sh \
             scripts/tests/test_web_artifact_install_contract.sh \
+            scripts/tests/test_api_release_identity_contract.sh \
             scripts/tests/test_weltgewebe_up_deploy_scope.sh
           do
             echo "── $t ──"

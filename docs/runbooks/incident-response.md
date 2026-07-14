@@ -133,7 +133,8 @@ Ziel: Schaden stoppen, **ohne Evidenz oder Daten zu zerstören**.
 - **Metriken/Traces:** Prometheus und Tempo für Zeitfenster und Latenzspitzen.
 - **Letzte Änderung prüfen:** `git log`, Build-Metadaten öffentlich über
   `GET /api/version` (Edge) und intern im Compose-/Container-Netz über
-  `http://api:8080/version` (`GIT_COMMIT_SHA`, `BUILD_TIMESTAMP`),
+  `http://api:8080/version` (vollständiger `GIT_COMMIT_SHA` und deterministischer
+  Git-Commitzeitpunkt in `BUILD_TIMESTAMP`),
   Konfigurations-Drift gegen [`docs/deploy/DRIFT_POLICY.md`](../deploy/DRIFT_POLICY.md).
 - **Datenebene begutachten:** JSONL unter `GEWEBE_IN_DIR` (`.gewebe/in`) und
   PostgreSQL-Zustand (Migrationsstand, `sessions`; `outbox` nur falls Gate C /

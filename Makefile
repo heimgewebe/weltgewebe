@@ -43,6 +43,7 @@ validate-shell-tests:
 	bash scripts/tests/test_postgres_backup_restore_contract.sh
 	bash scripts/tests/test_offhost_backup_pull_contract.sh
 	bash scripts/tests/test_web_artifact_install_contract.sh
+	bash scripts/tests/test_api_release_identity_contract.sh
 
 validate: validate-tests validate-core validate-guards validate-shell-tests
 
