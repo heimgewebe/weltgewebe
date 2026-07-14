@@ -1,6 +1,11 @@
 name: Apply collective lock-order correction
 
 on:
+  push:
+    branches:
+      - feat/collective-edit-delete-v1
+    paths:
+      - .operator-lock-trigger
   pull_request:
     branches:
       - main
@@ -10,7 +15,9 @@ permissions:
 
 jobs:
   apply:
-    if: github.head_ref == 'feat/collective-edit-delete-v1'
+    if: >-
+      (github.event_name == 'push' && github.ref_name == 'feat/collective-edit-delete-v1') ||
+      (github.event_name == 'pull_request' && github.head_ref == 'feat/collective-edit-delete-v1')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -79,6 +86,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm .github/workflows/apply-collective-lock-order-fix.yml
+          git rm .operator-lock-trigger
           git add apps/api/src/domain_db.rs
           git commit -m "fix: align collective delete lock order"
           git push origin HEAD:feat/collective-edit-delete-v1
