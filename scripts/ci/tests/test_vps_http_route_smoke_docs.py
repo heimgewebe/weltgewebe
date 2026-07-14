@@ -105,7 +105,7 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
 
     def test_production_caddyfile_preserves_real_404_semantics(self) -> None:
         production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
-        self.assertIn("try_files {path} {path}.html", production)
+        self.assertIn("try_files {path} {path}.html {path}/index.html", production)
         self.assertNotIn("try_files {path} {path}.html /index.html", production)
         self.assertIn("Unknown paths must remain real 404 responses", production)
 

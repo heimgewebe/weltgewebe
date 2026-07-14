@@ -68,7 +68,7 @@
 		root * /srv/weltgewebe-web
 		# Serve only real files or explicitly prerendered Svelte routes.
 		# Unknown paths must remain real 404 responses instead of soft-200 app shells.
-		try_files {path} {path}.html
+		try_files {path} {path}.html {path}/index.html
 		header Cache-Control "no-cache, must-revalidate"
 		file_server
 	}

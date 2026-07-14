@@ -4,6 +4,7 @@ import type { LayoutLoad } from "./$types";
 // and disable server-side rendering for deployment as a static site.
 export const prerender = true;
 export const ssr = false;
+export const trailingSlash = "never";
 
 export const load: LayoutLoad = ({ url }) => {
   const canonical = new URL(url.pathname, url.origin).toString();
