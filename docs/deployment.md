@@ -148,6 +148,31 @@ Lauf, den Git-Stand, die exakten Compose-Argumente und den erlaubten Wirkungsrad
 Er ist ein Ausführungsbeleg, ersetzt aber weder Backup noch Restore-Proof vor einer
 produktiven Migration.
 
+## API-Releaseidentität
+
+Release-Builds der API müssen den vollständigen Git-Commit und dessen RFC3339-
+Commitzeitpunkt bereits beim Kompilieren in das Binary einbetten. `weltgewebe-up`
+leitet beide Werte aus dem ausgewählten Deploy-Commit ab und überschreibt damit
+mögliche veraltete Werte aus Runtime-Dateien. Der Docker-Build verweigert fehlende
+oder formal ungültige Werte; ein Release-Binary kann daher nicht mit
+`commit: unknown` oder `build_timestamp: unknown` entstehen.
+
+Nach einem produktiven API-Rollout wird die öffentliche Identität mit folgendem
+Vertrag geprüft:
+
+```bash
+EXPECTED_COMMIT=<voller-commit> \
+EXPECTED_BUILD_TIMESTAMP=<git-commitzeit> \
+./scripts/ops/verify-api-release-identity.sh
+```
+
+Der Readback verlangt HTTP 200, valides JSON, die exakte vollständige Commit-ID,
+den exakten deterministischen Zeitstempel und den direkt von der API gelieferten
+`X-Weltgewebe-API-Build`-Header mit demselben vollständigen Commit. Der globale
+`X-Weltgewebe-Build`-Header bleibt dagegen die Identität des Web-/Caddy-Builds.
+Der Paketwert `version` bleibt davon getrennt und bezeichnet weiterhin die
+Cargo-Paketversion.
+
 ## CSP contract
 
 The production frontend currently contains an inline bootstrap `<script>` (SvelteKit).

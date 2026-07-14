@@ -58,6 +58,9 @@ else
 fi
 
 CONFIG=$(WEB_UPSTREAM_URL="dummy" WEB_UPSTREAM_HOST="dummy" \
+  API_VERSION="test-commit" WELTGEWEBE_BUILD="test-commit" \
+  GIT_COMMIT_SHA="0123456789abcdef0123456789abcdef01234567" \
+  BUILD_TIMESTAMP="2026-07-12T19:57:15+00:00" \
   docker compose "${COMPOSE_ARGS[@]}" \
   -f "$REPO_DIR/infra/compose/compose.prod.yml" config 2> "$ERR_FILE" || true)
 

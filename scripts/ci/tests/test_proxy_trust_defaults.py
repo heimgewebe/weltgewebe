@@ -143,12 +143,20 @@ def test_deploy_vps_shim_keeps_vps_caddy_and_static_web_guards() -> None:
 
     assert 'DEPLOY_TARGET="${DEPLOY_TARGET:-vps}"' in shim
     assert '"${SCRIPT_DIR}/weltgewebe-up" "$@"' in shim
-    assert '[[ "$DEPLOY_TARGET" == "vps" && "$WITH_CADDY" == "0" ]]' in entrypoint
+    assert (
+        '[[ "$DEPLOY_TARGET" == "vps" && "$WITH_CADDY" == "0" '
+        '&& "$DEPLOY_SCOPE" == "full" ]]'
+        in entrypoint
+    )
     assert "WITH_CADDY=1" in entrypoint
     assert 'export API_VERSION="$HEAD_AFTER"' in entrypoint
     assert 'export WELTGEWEBE_BUILD="$HEAD_AFTER"' in entrypoint
+    assert 'export GIT_COMMIT_SHA="$HEAD_AFTER_FULL"' in entrypoint
+    assert 'export BUILD_TIMESTAMP="$HEAD_COMMIT_TIMESTAMP"' in entrypoint
     assert "${API_VERSION:?API_VERSION must be set}" in base_compose
     assert "${WELTGEWEBE_BUILD:?WELTGEWEBE_BUILD must be set}" in base_compose
+    assert "${GIT_COMMIT_SHA:?GIT_COMMIT_SHA must be set}" in base_compose
+    assert "${BUILD_TIMESTAMP:?BUILD_TIMESTAMP must be set}" in base_compose
 
     static_mount = "../../apps/web/build:/srv/weltgewebe-web:ro"
     assert static_mount in base_compose

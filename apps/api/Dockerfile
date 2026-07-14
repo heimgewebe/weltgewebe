@@ -24,9 +24,18 @@ COPY . .
 # 4) Build the API binary in release mode
 # Build against the checked-in lockfile for deterministic dependency resolution.
 ARG CARGO_BUILD_JOBS=2
+ARG GIT_COMMIT_SHA
+ARG BUILD_TIMESTAMP
 # Default to a conservative job count for Heimserver stability.
 # CI or larger builders may override with --build-arg CARGO_BUILD_JOBS=<n>.
-RUN CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS}" cargo build --release --locked --bin weltgewebe-api
+# Release provenance is compiled into the binary. The timestamp is derived from
+# the Git commit, not the builder clock, so rebuilding the same commit is stable.
+RUN printf '%s' "${GIT_COMMIT_SHA}" | grep -Eq '^[0-9a-f]{40}$' \
+    && printf '%s' "${BUILD_TIMESTAMP}" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$' \
+    && GIT_COMMIT_SHA="${GIT_COMMIT_SHA}" \
+       BUILD_TIMESTAMP="${BUILD_TIMESTAMP}" \
+       CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS}" \
+       cargo build --release --locked --bin weltgewebe-api
 
 # Runner stage
 FROM debian:bookworm-slim
