@@ -244,6 +244,52 @@ Datenbank schreiben, danach In-Memory-Cache aktualisieren.
   Garnrolle dauerhaft gespeichert wurde.
 
 
+### Maschinenlesbarer Produktionsbeleg
+
+`scripts/ops/collect_production_runtime_evidence.py` erzeugt einen
+maschinenlesbaren, wertredigierten Zustandsbeleg. Die Runtime-Erhebung ist rein
+lesend und führt für jeden erlaubten Laufzeitschalter genau einen
+`printenv`-Aufruf im laufenden API-Container aus. Die vollständige Containerumgebung wird weder
+gelesen noch ausgegeben. Erlaubt sind ausschließlich:
+
+- die vier Domänen-Lese-/Schreibquellen;
+- die Passkey-Persistenzquelle;
+- der API-Migrationsmodus.
+
+Der Sammler verbindet diese Werte mit öffentlicher API-Readiness, Web- und
+API-Buildidentität sowie exakt ausgewählten Backup- und Restore-Artefakten. Ausgewählte Metadaten und Dumps müssen reguläre
+Dateien sein; Symlinks und übergroße Metadatendateien werden abgelehnt. Er
+verwendet standardmäßig dieselbe Compose-Auswahl wie der VPS-Betrieb:
+`compose.prod.yml`, danach `compose.vps.override.yml`, Projekt `weltgewebe` und
+`/etc/weltgewebe/weltgewebe.env`. Abweichende Deployments müssen ihre
+Compose-Dateien ausdrücklich und in derselben Reihenfolge mit wiederholtem
+`--compose-file` angeben.
+
+Beispiel mit konkret ausgewählten Belegen:
+
+```bash
+python3 scripts/ops/collect_production_runtime_evidence.py \
+  --backup-manifest /var/backups/weltgewebe/postgres/<exact>.sha256.manifest \
+  --restore-proof /var/backups/weltgewebe/postgres/proofs/<exact>.restore-proof \
+  --output /var/lib/weltgewebe/evidence/production-runtime.json
+```
+
+Ein optionales `--offhost-backup-manifest` muss auf ein kopiertes Manifest
+zeigen, dessen Dump im selben Verzeichnis liegt. Nur wenn dieses Abbild
+hashgleich zum ausgewählten Produktionsbackup ist, erhält der Gesamtbeleg
+`status=pass`. Ohne Off-host-Beleg lautet der Zustand `partial` und der Prozess
+endet mit Code `2`; ein gebrochener Pflichtbeweis liefert `fail` und Code `1`.
+Damit kann ein lokaler Backup-/Restore-Beleg nicht versehentlich als
+Off-host-Recovery ausgegeben werden.
+
+Die JSON-Ausgabe besitzt Schema-Version, UTC-Prüfzeitpunkt, explizite
+Read-only-/Redaktionsmarker und eine `evidence_boundary` mit bewiesenen und nicht
+bewiesenen Aussagen. Bei `--output` wird sie atomar mit Dateimodus `0600`
+geschrieben; diese ausdrücklich gewählte Berichtdatei ist die einzige Mutation
+des Sammlers. Der Bericht beweist den beobachteten Zeitpunkt, nicht zukünftige
+Verfügbarkeit oder die fachliche Richtigkeit jeder Datenbankzeile.
+
+
 ---
 
 ## 6. Deployment Snapshot
