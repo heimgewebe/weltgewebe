@@ -113,10 +113,10 @@ test.describe("Garnrolle marker rendering", () => {
         const markerElement = document.querySelector<HTMLElement>(
           `[data-testid="marker-garnrolle-${markerId}"]`,
         );
-        const visual = markerElement?.querySelector<HTMLElement>(
-          ".marker-account__visual",
+        const icon = markerElement?.querySelector<HTMLElement>(
+          ".marker-account__icon",
         );
-        if (!map || !markerElement || !visual) {
+        if (!map || !markerElement || !icon) {
           throw new Error("test map or Garnrolle marker unavailable");
         }
 
@@ -128,14 +128,14 @@ test.describe("Garnrolle marker rendering", () => {
         };
         const measure = () => {
           const outer = markerElement.getBoundingClientRect();
-          const inner = visual.getBoundingClientRect();
+          const visibleIcon = icon.getBoundingClientRect();
           return {
             zoom: map.getZoom(),
             outerWidth: outer.width,
             outerHeight: outer.height,
-            visualWidth: inner.width,
-            visualHeight: inner.height,
-            bottomDelta: Math.abs(outer.bottom - inner.bottom),
+            visualWidth: visibleIcon.width,
+            visualHeight: visibleIcon.height,
+            bottomDelta: Math.abs(outer.bottom - visibleIcon.bottom),
           };
         };
 

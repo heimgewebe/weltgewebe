@@ -780,7 +780,6 @@
     border: none;
     box-shadow: none;
     border-radius: 0;
-    transform: scale(var(--garnrolle-marker-scale, 1));
     transform-origin: center bottom;
   }
 
@@ -789,6 +788,8 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
+    transform: scale(var(--garnrolle-marker-scale, 1));
+    transform-origin: center bottom;
     pointer-events: none;
     user-select: none;
     -webkit-user-drag: none;
@@ -797,9 +798,6 @@
   @media (hover: hover) and (pointer: fine) {
     #map :global(.map-marker:hover .map-marker__visual) {
       transform: scale(1.2);
-    }
-    #map :global(.map-marker.marker-account:hover .marker-account__visual) {
-      transform: scale(var(--garnrolle-marker-scale, 1)) scale(1.2);
     }
     #map :global(.map-marker:hover) {
       z-index: 10;
