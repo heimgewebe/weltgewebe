@@ -65,6 +65,8 @@ Use `docs/deploy/vps-migration-safe-runtime-smoke.md` for that separate runtime 
 
 The production `infra/caddy/Caddyfile.vps` serves only existing static files and explicitly prerendered Svelte routes. It accepts both SvelteKit export forms: `{path}.html` and `{path}/index.html`. It must not fall back to the root `/index.html` for an unknown path. This keeps deep links such as `/map`, `/login`, `/impressum` and `/datenschutz` working while preserving a real HTTP 404 for nonexistent resources.
 
+A request with a trailing slash is canonicalized only if removing that slash reveals an existing prerendered HTML artifact. For example, `/map/` redirects permanently to `/map`, while an unknown path such as `/does-not-exist/` remains a direct 404. The redirect preserves the query string. API, health, immutable asset and basemap handlers stay outside this HTML-only rule because their more specific handlers run first.
+
 The web application uses `adapter-static`; no SvelteKit server runs behind Caddy. Therefore `robots.txt` and `sitemap.xml` are emitted during the Vite build by the tested plugin in `apps/web/scripts/generate-public-web-assets.mjs`, not by runtime `+server.ts` routes. `PUBLIC_APP_BASE_URL` selects the public origin for staging or another explicitly configured artifact target. If it is absent, the generator uses the canonical production origin `https://weltgewebe.net`. The generator rejects origins containing paths, credentials, queries or fragments.
 
 `robots.txt` excludes `/api/` and the `noinert` debug-query variant from crawler discovery. `sitemap.xml` and the sitemap declaration in `robots.txt` are produced from the same normalized origin so they cannot diverge.
