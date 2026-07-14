@@ -69,6 +69,30 @@ export function resolveEdge(id: string) {
   return edgeMap.get(id);
 }
 
+/** Public edge shape used by prerendered preview endpoints. */
+export function toPublicEdge(edge: DemoEdge) {
+  return {
+    id: edge.id,
+    source_id: edge.source_id,
+    source_type: edge.source_type,
+    target_id: edge.target_id,
+    target_type: edge.target_type,
+    edge_kind: edge.edge_kind,
+    created_at: edge.created_at,
+  };
+}
+
+/** Returns all demo edges without persisted authoring notes. */
+export function listPublicEdges() {
+  return demoEdges.map(toPublicEdge);
+}
+
+/** Resolves one public demo edge without persisted authoring notes. */
+export function resolvePublicEdge(id: string) {
+  const edge = edgeMap.get(id);
+  return edge ? toPublicEdge(edge) : undefined;
+}
+
 /**
  * Resolves nodes associated with an account.
  * Replaces N+1 query pattern with a Map-based lookup.
@@ -84,7 +108,6 @@ export function resolveAccountNodes(accountId: string) {
       return {
         edge_id: edge.id,
         edge_kind: edge.edge_kind,
-        note: edge.note,
         node_id: node?.id,
         node_title: node?.title,
         node_kind: node?.kind,
@@ -111,7 +134,6 @@ export function resolveNodeParticipants(nodeId: string) {
       return {
         edge_id: edge.id,
         edge_kind: edge.edge_kind,
-        note: edge.note,
         account_id: account?.id,
         account_title: account?.title,
         account_type: account?.type,

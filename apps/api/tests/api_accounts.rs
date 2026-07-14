@@ -6,6 +6,7 @@ use axum::{
 };
 mod helpers;
 
+use helpers::{assert_account_has_single_node_relation, read_account_details, test_node};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower::ServiceExt;
@@ -17,8 +18,9 @@ use weltgewebe_api::{
     routes::{
         accounts::{AccountInternal, AccountPublic},
         api_router,
+        edges::Edge,
     },
-    state::ApiState,
+    state::{ApiState, OrderedCache},
     telemetry::{BuildInfo, Metrics},
 };
 
@@ -421,6 +423,150 @@ async fn accounts_cursor_limit_zero_is_bad_request() -> Result<()> {
     let req = Request::get("/accounts?pagination=cursor&limit=0").body(body::Body::empty())?;
     let res = app.oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn account_details_project_outgoing_relation_without_public_note() -> Result<()> {
+    const ACCOUNT_ID: &str = "account-1";
+    const NODE_ID: &str = "node-1";
+    const CREATED_AT: &str = "2026-07-11T11:11:50.322307+00:00";
+
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+    let mut account = seed_account(ACCOUNT_ID);
+    account.public.title = "Alexander Mohr".to_string();
+    account.public.summary = Some("schaunmermal".to_string());
+    accounts.insert(account);
+    state.accounts = Arc::new(RwLock::new(accounts));
+
+    let mut nodes = OrderedCache::new();
+    nodes.insert(
+        NODE_ID.to_string(),
+        test_node(NODE_ID, "fairschenkbox", Some("sharing is caring")),
+    );
+    state.nodes = Arc::new(RwLock::new(nodes));
+
+    let mut edges = OrderedCache::new();
+    edges.insert(
+        "edge-1".to_string(),
+        Edge {
+            id: "edge-1".to_string(),
+            source_id: ACCOUNT_ID.to_string(),
+            source_type: Some("account".to_string()),
+            target_id: NODE_ID.to_string(),
+            target_type: Some("node".to_string()),
+            edge_kind: "reference".to_string(),
+            note: Some("nicht öffentlich".to_string()),
+            created_at: Some(CREATED_AT.to_string()),
+        },
+    );
+    state.edges = Arc::new(RwLock::new(edges));
+
+    let app = Router::new().merge(api_router()).with_state(state);
+    let value = read_account_details(&app, ACCOUNT_ID).await?;
+
+    assert_eq!(value["title"], "Alexander Mohr");
+    let projected_at = assert_account_has_single_node_relation(
+        &value,
+        ACCOUNT_ID,
+        NODE_ID,
+        "fairschenkbox",
+        "reference",
+        "Hat den Knoten \"fairschenkbox\" geknüpft.",
+    );
+    assert_eq!(projected_at, CREATED_AT);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn account_details_attribute_incoming_admin_relation_neutrally() -> Result<()> {
+    const ACCOUNT_ID: &str = "account-incoming";
+    const NODE_ID: &str = "node-incoming";
+    const CREATED_AT: &str = "2026-07-12T12:00:00+00:00";
+
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+    accounts.insert(seed_account(ACCOUNT_ID));
+    state.accounts = Arc::new(RwLock::new(accounts));
+
+    let mut nodes = OrderedCache::new();
+    nodes.insert(
+        NODE_ID.to_string(),
+        test_node(NODE_ID, "Importknoten", None),
+    );
+    state.nodes = Arc::new(RwLock::new(nodes));
+
+    let mut edges = OrderedCache::new();
+    edges.insert(
+        "edge-incoming".to_string(),
+        Edge {
+            id: "edge-incoming".to_string(),
+            source_id: NODE_ID.to_string(),
+            source_type: Some("node".to_string()),
+            target_id: ACCOUNT_ID.to_string(),
+            target_type: Some("account".to_string()),
+            edge_kind: "reference".to_string(),
+            note: Some("interne Importnotiz".to_string()),
+            created_at: Some(CREATED_AT.to_string()),
+        },
+    );
+    state.edges = Arc::new(RwLock::new(edges));
+
+    let app = Router::new().merge(api_router()).with_state(state);
+    let value = read_account_details(&app, ACCOUNT_ID).await?;
+    let projected_at = assert_account_has_single_node_relation(
+        &value,
+        ACCOUNT_ID,
+        NODE_ID,
+        "Importknoten",
+        "reference",
+        "Wurde über einen Faden mit dem Knoten \"Importknoten\" verknüpft.",
+    );
+    assert_eq!(projected_at, CREATED_AT);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn account_details_ignore_node_typed_account_id_collision() -> Result<()> {
+    const ACCOUNT_ID: &str = "account-mistyped";
+    const NODE_ID: &str = "node-real";
+
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+    accounts.insert(seed_account(ACCOUNT_ID));
+    state.accounts = Arc::new(RwLock::new(accounts));
+
+    let mut nodes = OrderedCache::new();
+    nodes.insert(
+        NODE_ID.to_string(),
+        test_node(NODE_ID, "Echter Knoten", None),
+    );
+    state.nodes = Arc::new(RwLock::new(nodes));
+
+    let mut edges = OrderedCache::new();
+    edges.insert(
+        "edge-type-confused".to_string(),
+        Edge {
+            id: "edge-type-confused".to_string(),
+            source_id: ACCOUNT_ID.to_string(),
+            source_type: Some("node".to_string()),
+            target_id: NODE_ID.to_string(),
+            target_type: Some("node".to_string()),
+            edge_kind: "reference".to_string(),
+            note: None,
+            created_at: Some("2026-07-13T05:55:00+00:00".to_string()),
+        },
+    );
+    state.edges = Arc::new(RwLock::new(edges));
+
+    let app = Router::new().merge(api_router()).with_state(state);
+    let value = read_account_details(&app, ACCOUNT_ID).await?;
+    assert_eq!(value["nodes"].as_array().map(Vec::len), Some(0));
+    assert_eq!(value["activity"].as_array().map(Vec::len), Some(0));
 
     Ok(())
 }

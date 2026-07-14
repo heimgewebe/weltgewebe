@@ -34,6 +34,34 @@ import path from "node:path";
  */
 
 const REAL_PMTILES_FILENAME = "basemap-hamburg.pmtiles";
+const SOURCE_ID = "basemap";
+const REGION_LAYER_IDS = [
+  "landcover",
+  "landuse",
+  "water",
+  "roads",
+  "buildings",
+  "place-labels",
+];
+const SOURCE_LAYER_IDS = [
+  "landcover",
+  "landuse",
+  "transportation",
+  "water",
+  "place",
+];
+
+type TestMap = {
+  isStyleLoaded?: () => boolean;
+  isSourceLoaded?: (sourceId: string) => boolean;
+  queryRenderedFeatures?: (options?: {
+    layers?: string[];
+  }) => Array<{ source?: string; layer?: { id?: string } }>;
+  querySourceFeatures?: (
+    sourceId: string,
+    options?: { sourceLayer?: string },
+  ) => Array<unknown>;
+};
 
 const FORBIDDEN_REMOTE_PROVIDERS = [
   "api.maptiler.com",
@@ -74,17 +102,19 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
       }> = [];
       const remoteViolations: string[] = [];
       const unexpectedApiRequests: string[] = [];
+      const failedResponses: Array<{ url: string; status: number }> = [];
+      const consoleErrors: string[] = [];
 
       page.on("console", (msg) => {
         if (msg.type() === "error") {
-          console.warn(`[browser-console-error] ${msg.text()}`);
+          consoleErrors.push(msg.text());
         }
       });
 
       // Record PMTiles network events
       page.on("request", (req) => {
         const url = req.url();
-        if (url.includes("/local-basemap/") && url.endsWith(".pmtiles")) {
+        if (url.includes(`/local-basemap/${REAL_PMTILES_FILENAME}`)) {
           pmtilesRequests.push({
             url,
             method: req.method(),
@@ -100,7 +130,10 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
 
       page.on("response", (res) => {
         const url = res.url();
-        if (url.includes("/local-basemap/") && url.endsWith(".pmtiles")) {
+        if (res.status() >= 400) {
+          failedResponses.push({ url, status: res.status() });
+        }
+        if (url.includes(`/local-basemap/${REAL_PMTILES_FILENAME}`)) {
           pmtilesResponses.push({
             url,
             status: res.status(),
@@ -109,6 +142,10 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
           });
         }
       });
+
+      await page.route("**/favicon.ico", (route) =>
+        route.fulfill({ status: 204, body: "" }),
+      );
 
       // Mock /_app/version.json to suppress UpdateBanner overlay
       await page.route("**/_app/version.json", (route) => {
@@ -176,7 +213,9 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
       await page.goto("/map?proof=1&t=" + Date.now());
 
       // Preflight: style endpoint must exist and point to the local Hamburg PMTiles alias
-      const styleResponse = await page.request.get("/local-basemap/style.json");
+      const styleResponse = await page.request.get(
+        "/local-basemap/style.json?v=0.3.0",
+      );
       expect(
         styleResponse.status(),
         "Expected /local-basemap/style.json to return HTTP 200",
@@ -225,6 +264,11 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         directRangeResponse.headers()["content-range"] ?? "",
         "Expected Content-Range header for PMTiles delivery",
       ).toContain("bytes 0-511/");
+
+      expect(
+        directRangeResponse.headers()["content-type"] ?? "",
+        "Expected explicit PMTiles Content-Type",
+      ).toContain("application/octet-stream");
 
       // === BROWSER/MAPLIBRE VISUAL CONTRACT ===
       // Map container must be visible
@@ -326,6 +370,91 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         true,
       );
 
+      const readFeatureEvidence = () =>
+        page.evaluate(
+          ({ sourceId, layerIds, sourceLayerIds }) => {
+            const map = (window as unknown as Record<string, unknown>)
+              .__TEST_MAP__ as TestMap | undefined;
+            const renderedFeatures =
+              map?.queryRenderedFeatures?.({ layers: layerIds }) ?? [];
+            const sourceFeatureCounts = Object.fromEntries(
+              sourceLayerIds.map((sourceLayer) => [
+                sourceLayer,
+                map?.querySourceFeatures?.(sourceId, { sourceLayer })?.length ??
+                  0,
+              ]),
+            );
+            return {
+              sourceLoaded: map?.isSourceLoaded?.(sourceId) ?? false,
+              renderedFeatureCount: renderedFeatures.length,
+              renderedFromExpectedSource: renderedFeatures.filter(
+                (feature) => feature.source === sourceId,
+              ).length,
+              renderedLayerIds: Array.from(
+                new Set(
+                  renderedFeatures
+                    .map((feature) => feature.layer?.id)
+                    .filter((layerId): layerId is string => Boolean(layerId)),
+                ),
+              ),
+              sourceFeatureCounts,
+              sourceFeatureCount: Object.values(sourceFeatureCounts).reduce(
+                (sum, count) => sum + count,
+                0,
+              ),
+            };
+          },
+          {
+            sourceId: SOURCE_ID,
+            layerIds: REGION_LAYER_IDS,
+            sourceLayerIds: SOURCE_LAYER_IDS,
+          },
+        );
+
+      await expect
+        .poll(
+          async () => (await readFeatureEvidence()).renderedFromExpectedSource,
+          {
+            message: "Expected rendered features from the Hamburg source",
+            timeout: 30_000,
+          },
+        )
+        .toBeGreaterThan(0);
+      await expect
+        .poll(async () => (await readFeatureEvidence()).sourceFeatureCount, {
+          message:
+            "Expected decoded vector features from Hamburg source-layers",
+          timeout: 30_000,
+        })
+        .toBeGreaterThan(0);
+      const featureEvidence = await readFeatureEvidence();
+
+      await expect
+        .poll(
+          () =>
+            pmtilesResponses.filter((response) => response.status === 206)
+              .length,
+          {
+            message: "Expected observed HTTP 206 responses for Hamburg PMTiles",
+            timeout: 30_000,
+          },
+        )
+        .toBeGreaterThan(0);
+
+      expect(featureEvidence.sourceLoaded).toBe(true);
+      expect(featureEvidence.renderedLayerIds).toEqual(
+        expect.arrayContaining(["landcover", "landuse"]),
+      );
+      expect(
+        featureEvidence.sourceFeatureCounts.transportation,
+      ).toBeGreaterThan(0);
+      expect(featureEvidence.sourceFeatureCounts.landcover).toBeGreaterThan(0);
+      expect(featureEvidence.sourceFeatureCounts.landuse).toBeGreaterThan(0);
+      expect(featureEvidence.sourceFeatureCounts.water).toBeGreaterThan(0);
+      expect(featureEvidence.sourceFeatureCounts.place).toBeGreaterThan(0);
+      expect(failedResponses).toHaveLength(0);
+      expect(consoleErrors).toHaveLength(0);
+
       // Screenshot as visual artifact
       await page.screenshot({
         path: testInfo.outputPath("screenshot.png"),
@@ -336,6 +465,8 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
       const proofSummary = {
         timestamp: new Date().toISOString(),
         verdict: "PROVEN",
+        region: "hamburg",
+        source_id: SOURCE_ID,
         pmtiles_filename: REAL_PMTILES_FILENAME,
 
         // SERVER RANGE CONTRACT
@@ -344,6 +475,8 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
           directRangeResponse.headers()["accept-ranges"] ?? null,
         direct_range_content_range:
           directRangeResponse.headers()["content-range"] ?? null,
+        direct_range_content_type:
+          directRangeResponse.headers()["content-type"] ?? null,
 
         // BROWSER/MAPLIBRE VISUAL CONTRACT - OBSERVED
         pmtiles_requests_total: pmtilesRequests.length,
@@ -355,6 +488,16 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         ).length,
         canvas_dimensions: canvasDimensions,
         style_loaded: styleLoaded,
+        source_loaded: featureEvidence.sourceLoaded,
+        rendered_feature_count: featureEvidence.renderedFeatureCount,
+        rendered_from_expected_source:
+          featureEvidence.renderedFromExpectedSource,
+        rendered_layer_ids: featureEvidence.renderedLayerIds,
+        decoded_source_feature_count: featureEvidence.sourceFeatureCount,
+        decoded_source_feature_counts_by_layer:
+          featureEvidence.sourceFeatureCounts,
+        failed_responses: failedResponses,
+        console_errors: consoleErrors,
         remote_violations: remoteViolations,
         unexpected_api_requests: unexpectedApiRequests,
 
@@ -410,6 +553,11 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         "Proof requires Accept-Ranges header",
       ).toContain("bytes");
 
+      expect(
+        proofSummary.direct_range_content_type,
+        "Proof requires explicit PMTiles Content-Type",
+      ).toContain("application/octet-stream");
+
       // Hard assertion: MapLibre must have requested at least one local PMTiles file
       expect(
         proofSummary.pmtiles_requests_total,
@@ -427,6 +575,16 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         proofSummary.style_loaded,
         "Proof requires MapLibre style to be loaded",
       ).toBe(true);
+
+      expect(
+        proofSummary.rendered_from_expected_source,
+        "Proof requires visibly rendered features from the Hamburg source",
+      ).toBeGreaterThan(0);
+
+      expect(
+        proofSummary.decoded_source_feature_count,
+        "Proof requires decoded vector features from Hamburg source-layers",
+      ).toBeGreaterThan(0);
 
       // Hard assertion: No external providers
       expect(

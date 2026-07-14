@@ -34,7 +34,7 @@ export function GET({ params }: RequestEvent) {
       },
       ...nodes.map((n) => ({
         date: account.created_at, // Mocking date
-        event: `Hat Knoten "${n.node_title}" verknüpft (${n.edge_kind}).`,
+        event: `Hat den Knoten "${n.node_title}" geknüpft.`,
       })),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
   });

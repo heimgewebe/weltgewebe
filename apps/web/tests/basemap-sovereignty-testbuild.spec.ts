@@ -63,7 +63,7 @@ test.describe("Basemap Sovereignty Verification (E2E-Test-Build Environment)", (
 
     // 2. ADD SPECIFIC MOCK LAST (evaluated first by Playwright)
     // Provide a valid empty local style mock to simulate the Caddy router serving the artifact
-    await page.route("**/local-basemap/style.json", (route) => {
+    await page.route("**/local-basemap/style.json*", (route) => {
       route.fulfill({
         status: 200,
         contentType: "application/json",

@@ -10,6 +10,67 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-07-14 - Schleswig-Holstein sichtbar kartografieren
+
+**Geänderte Bereiche:**
+
+- `map-style/style.json`;
+- Web-Basemap-Auflösung und regionale Browserproofs.
+
+**Beschreibung:**
+
+Der bisherige Regionalstil lud Schleswig-Holstein technisch, zeichnete jedoch nur
+Wasser, Straßen, Gebäude und Ortsnamen. Große ländliche Flächen blieben deshalb
+identisch zum grauen Hintergrund und wirkten wie fehlende Tiles. Style `0.3.0`
+zeichnet nun die vorhandenen `landcover`- und `landuse`-Layer beider regionaler
+PMTiles-Quellen. Der Browserproof verlangt diese Layer künftig ausdrücklich als
+decodierte und sichtbar gerenderte Evidenz.
+
+Der Web-Build lädt den Stil über `/local-basemap/style.json?v=0.3.0`. Der
+Versionsparameter verhindert, dass ein Browser nach einem Stylewechsel weiterhin
+den früheren Hamburg-only beziehungsweise flächenarmen Stil verwendet.
+
+**Produktionswirkung:**
+
+Style und Web-Artefakt müssen gemeinsam veröffentlicht werden. Danach werden die
+öffentliche Buildkennung, der angeforderte Style-URL, echte Schleswig-Holstein-
+Range-Antworten sowie sichtbar gerenderte Landbedeckung und Landnutzung erneut
+über den normalen Kartenpfad geprüft. Die PMTiles-Archive selbst bleiben
+unverändert.
+
+## 2026-07-13 - PMTiles-Repräsentationsvertrag und tiefe Archivprüfung
+
+**Geänderte Bereiche:**
+
+- `infra/caddy/Caddyfile`, `Caddyfile.heim`, `Caddyfile.vps` und `Caddyfile.proof`;
+- Basemap-Runtime-Guard und Public-Live-Readiness;
+- regionale PMTiles-Content-Proofs für Hamburg und Schleswig-Holstein.
+
+**Beschreibung:**
+
+Alle `.pmtiles`-Antworten unter `/local-basemap/` erhalten ausdrücklich den
+Medientyp `application/octet-stream`. Voll-/HEAD- und Range-Pfade müssen
+zusätzlich HTTP 200 beziehungsweise 206, `Accept-Ranges: bytes`, ein passendes
+`Content-Range` und die PMTiles-Signatur belegen. Der Vertrag gilt für stabile
+Aliasse und versionierte Dateien beider Regionen.
+
+Vor Veröffentlichung traversiert ein begrenzter Validator alle erreichbaren
+PMTiles-Root- und Leaf-Verzeichnisse, gleicht die Header-Zählwerte ab und
+decodiert bis zu 96 deterministisch über Zoomstufen und Raum verteilte reale
+MVT-Payloads. Die beobachteten Layer müssen zu Metadaten und Kartenstil passen.
+Ein Vollscan jeder Kachel, kartografische Vollständigkeit und Datenfrische
+werden weiterhin nicht behauptet.
+
+**Produktionswirkung:**
+
+Beim Rollout wird ausschließlich die geprüfte `Caddyfile.vps` installiert und
+Caddy nach erfolgreicher Konfigurationsvalidierung neu geladen. Die PMTiles-
+Artefaktbytes und Aliasse werden nicht verändert. Danach müssen die vier
+öffentlichen stabilen/versionierten Pfade für Hamburg und Schleswig-Holstein
+den 200-/206-Headervertrag erfüllen; die bestehenden SHA-256-Werte und der
+Browser-Renderingpfad werden erneut gelesen. Bei Fehlern wird die vorherige
+Caddy-Konfiguration wiederhergestellt.
+
 ## 2026-07-12 - Audit-Remediation für reproduzierbare und wiederherstellbare Deployments
 
 **Geänderte Bereiche:**

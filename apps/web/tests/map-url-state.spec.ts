@@ -103,6 +103,20 @@ test.describe("Map URL addressing", () => {
     const panel = page.getByTestId("context-panel");
     await expect(panel).toBeVisible();
     await expect(panel.locator(".panel-header h2")).toContainText("Knoten");
+    await page.waitForFunction(
+      () => {
+        const map = (window as any).__TEST_MAP__;
+        if (!map) return false;
+        const center = map.getCenter();
+        return (
+          Math.abs(center.lng - 10) < 0.0005 &&
+          Math.abs(center.lat - 53.5) < 0.0005 &&
+          map.getZoom() >= 14
+        );
+      },
+      undefined,
+      { timeout: 15000 },
+    );
   });
 
   test("opens the context panel for a garnrolle focus deep link", async ({

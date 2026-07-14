@@ -1,0 +1,226 @@
+from __future__ import annotations
+
+import json
+import unittest
+from pathlib import Path
+
+
+REPO = Path(__file__).resolve().parents[3]
+STYLE_PATH = REPO / "map-style" / "style.json"
+COLORS_PATH = REPO / "map-style" / "colors.json"
+UP_SCRIPT_PATH = REPO / "scripts" / "weltgewebe-up"
+WORKFLOW_PATH = REPO / ".github" / "workflows" / "basemap-runtime-proof.yml"
+CADDY_PATHS = (
+    REPO / "infra" / "caddy" / "Caddyfile",
+    REPO / "infra" / "caddy" / "Caddyfile.heim",
+    REPO / "infra" / "caddy" / "Caddyfile.vps",
+    REPO / "infra" / "caddy" / "Caddyfile.proof",
+)
+
+
+class RegionalBasemapStyleTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.style = json.loads(STYLE_PATH.read_text(encoding="utf-8"))
+        self.colors = json.loads(COLORS_PATH.read_text(encoding="utf-8"))
+
+    def test_style_declares_all_regional_pmtiles_sources(self) -> None:
+        sources = self.style["sources"]
+        self.assertEqual(
+            sources["basemap"]["url"],
+            "pmtiles://basemap-hamburg.pmtiles",
+        )
+        self.assertEqual(
+            sources["basemap-schleswig-holstein"]["url"],
+            "pmtiles://basemap-schleswig-holstein.pmtiles",
+        )
+
+    def test_each_regional_source_has_the_same_visual_layer_set(self) -> None:
+        layers = self.style["layers"]
+        hamburg = {
+            layer["id"]
+            for layer in layers
+            if layer.get("source") == "basemap"
+        }
+        schleswig_holstein = {
+            layer["id"].removesuffix("-schleswig-holstein")
+            for layer in layers
+            if layer.get("source") == "basemap-schleswig-holstein"
+        }
+
+        self.assertEqual(
+            hamburg,
+            {
+                "landcover",
+                "landuse",
+                "water",
+                "roads",
+                "buildings",
+                "place-labels",
+            },
+        )
+        self.assertEqual(schleswig_holstein, hamburg)
+
+    def test_style_version_matches_cache_busting_web_contract(self) -> None:
+        basemap_module = (
+            REPO / "apps" / "web" / "src" / "lib" / "map" / "basemap.ts"
+        ).read_text(encoding="utf-8")
+        version = self.style["metadata"]["weltgewebe:version"]
+        self.assertEqual(version, "0.3.0")
+        self.assertIn(
+            f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', basemap_module
+        )
+        self.assertIn(
+            "`/local-basemap/style.json?v=${LOCAL_BASEMAP_STYLE_VERSION}`",
+            basemap_module,
+        )
+
+    def test_regional_land_layers_are_visible_and_class_driven(self) -> None:
+        layers = {layer["id"]: layer for layer in self.style["layers"]}
+        for layer_id in (
+            "landcover",
+            "landcover-schleswig-holstein",
+            "landuse",
+            "landuse-schleswig-holstein",
+        ):
+            with self.subTest(layer=layer_id):
+                layer = layers[layer_id]
+                self.assertEqual(layer["type"], "fill")
+                self.assertGreater(layer["paint"]["fill-opacity"], 0.5)
+                expression = layer["paint"]["fill-color"]
+                self.assertEqual(expression[:2], ["match", ["get", "class"]])
+                self.assertGreaterEqual(len(expression), 8)
+
+    def test_land_layer_colors_match_the_canonical_palette(self) -> None:
+        layers = {layer["id"]: layer for layer in self.style["layers"]}
+        for category in ("landcover", "landuse"):
+            expression = layers[category]["paint"]["fill-color"]
+            pairs = dict(zip(expression[2:-1:2], expression[3:-1:2]))
+            palette = self.colors["theme"][category]
+            self.assertEqual(pairs, {k: v for k, v in palette.items() if k != "default"})
+            self.assertEqual(expression[-1], palette["default"])
+
+    def test_layer_ids_are_unique_and_sources_exist(self) -> None:
+        sources = self.style["sources"]
+        layer_ids = [layer["id"] for layer in self.style["layers"]]
+        self.assertEqual(len(layer_ids), len(set(layer_ids)))
+        for layer in self.style["layers"]:
+            if "source" in layer:
+                self.assertIn(layer["source"], sources)
+
+    def test_deploy_readiness_checks_each_regional_metadata_alias(self) -> None:
+        script = UP_SCRIPT_PATH.read_text(encoding="utf-8")
+        self.assertIn(
+            "for regional_meta in basemap-hamburg.meta.json "
+            "basemap-schleswig-holstein.meta.json; do",
+            script,
+        )
+        expected_url = (
+            '"https://weltgewebe.home.arpa/local-basemap/'
+            + chr(36)
+            + '{regional_meta}"'
+        )
+        self.assertIn(expected_url, script)
+
+    def test_content_proof_preserves_metadata_hash_variables(self) -> None:
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        self.assertIn(
+            'META_PATH="build/basemap/${META_NAME}"',
+            workflow,
+        )
+        self.assertIn('"${META_PATH}"', workflow)
+        self.assertNotIn('META_PATH="build/basemap/"', workflow)
+
+    def test_content_jobs_run_bounded_deep_validation(self) -> None:
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        content_jobs = workflow[
+            workflow.index("  basemap-pmtiles-content-proof:") :
+            workflow.index("  basemap-visual-proof:")
+        ]
+
+        self.assertIn("pnpm test:pmtiles-validator", content_jobs)
+        self.assertIn(
+            "--archive hamburg=../../build/basemap/"
+            "basemap-hamburg-v0.1.0.pmtiles",
+            content_jobs,
+        )
+        self.assertIn(
+            "--archive schleswig-holstein=../../build/basemap/"
+            "basemap-schleswig-holstein-v0.1.0.pmtiles",
+            content_jobs,
+        )
+        self.assertIn(
+            "/tmp/hamburg-pmtiles-deep-validation.json", content_jobs
+        )
+        self.assertIn(
+            "/tmp/schleswig-holstein-pmtiles-deep-validation.json",
+            content_jobs,
+        )
+
+    def test_all_caddy_surfaces_declare_pmtiles_content_type(self) -> None:
+        for caddy_path in CADDY_PATHS:
+            with self.subTest(caddyfile=caddy_path.name):
+                text = caddy_path.read_text(encoding="utf-8")
+                self.assertIn(
+                    'Content-Type "application/octet-stream"', text
+                )
+
+
+    def test_visual_proof_materializes_both_regional_sources(self) -> None:
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        visual_job = workflow[workflow.index("  basemap-visual-proof:") :]
+
+        self.assertIn(
+            "      - basemap-schleswig-holstein-content-proof",
+            visual_job,
+        )
+        self.assertIn(
+            "name: basemap-schleswig-holstein-content-proof-evidence",
+            visual_job,
+        )
+        self.assertIn(
+            "for region in hamburg schleswig-holstein; do",
+            visual_job,
+        )
+        self.assertIn(
+            '"build/basemap/basemap-${region}-v0.1.0.pmtiles"',
+            visual_job,
+        )
+        self.assertIn(
+            "build/basemap/basemap-schleswig-holstein-v0.1.0.pmtiles",
+            workflow[: workflow.index("  basemap-visual-proof:")],
+        )
+
+    def test_visual_proof_materializes_glyphs_and_publishes_both_evidence_sets(
+        self,
+    ) -> None:
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        visual_job = workflow[workflow.index("  basemap-visual-proof:") :]
+
+        self.assertIn(
+            "bash scripts/basemap/fetch-glyphs.sh",
+            visual_job,
+        )
+        self.assertIn(
+            'test -s "map-style/glyphs/Noto Sans Regular/0-255.pbf"',
+            visual_job,
+        )
+        self.assertIn(
+            "build/proofs/basemap-visual/*.png",
+            visual_job,
+        )
+        self.assertIn(
+            "build/proofs/basemap-visual/*.json",
+            visual_job,
+        )
+        self.assertIn(
+            'summary_dir / "proof-summary.json"',
+            visual_job,
+        )
+        self.assertIn(
+            'summary_dir / "schleswig-holstein-proof-summary.json"',
+            visual_job,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

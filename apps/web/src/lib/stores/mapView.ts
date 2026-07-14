@@ -120,12 +120,24 @@ export function deriveSearchResults(
   if (!isOpen || query.trim().length === 0) {
     return [];
   }
-  const q = query.toLowerCase();
+  const q = query.trim().toLocaleLowerCase("de-DE");
   return visibleMarkers
-    .filter((m) => {
-      const titleMatch = m.title?.toLowerCase().includes(q);
-      const summaryMatch = m.summary?.toLowerCase().includes(q);
-      return titleMatch || summaryMatch;
+    .filter((marker) => {
+      const semanticTerms =
+        marker.type === "node"
+          ? ["Knoten", marker.kind]
+          : ["Garnrolle", "Garnrollen"];
+      const searchableTerms = [
+        marker.title,
+        marker.summary,
+        ...(marker.tags ?? []),
+        ...semanticTerms,
+      ];
+      return searchableTerms.some(
+        (term) =>
+          typeof term === "string" &&
+          term.toLocaleLowerCase("de-DE").includes(q),
+      );
     })
     .slice(0, 10);
 }
