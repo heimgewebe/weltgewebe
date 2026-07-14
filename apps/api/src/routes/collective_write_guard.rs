@@ -86,14 +86,16 @@ async fn acquire_collective_graph_guard(
 async fn release_collective_graph_guard(guard: CollectiveGraphGuard) -> Result<(), Response> {
     match guard {
         CollectiveGraphGuard::Jsonl(_guard) => Ok(()),
-        CollectiveGraphGuard::Postgres(transaction) => transaction.commit().await.map_err(|error| {
-            tracing::error!(%error, "failed to release collective graph advisory lock");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to release collective graph write guard",
-            )
-                .into_response()
-        }),
+        CollectiveGraphGuard::Postgres(transaction) => {
+            transaction.commit().await.map_err(|error| {
+                tracing::error!(%error, "failed to release collective graph advisory lock");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "failed to release collective graph write guard",
+                )
+                    .into_response()
+            })
+        }
     }
 }
 
@@ -106,13 +108,9 @@ pub async fn create_edge_serialized(
         Ok(guard) => guard,
         Err(response) => return response,
     };
-    let response = edges::create_edge(
-        State(state),
-        Extension(auth),
-        Json(payload),
-    )
-    .await
-    .into_response();
+    let response = edges::create_edge(State(state), Extension(auth), Json(payload))
+        .await
+        .into_response();
     match release_collective_graph_guard(guard).await {
         Ok(()) => response,
         Err(response) => response,
@@ -127,7 +125,9 @@ pub async fn delete_node_serialized(
         Ok(guard) => guard,
         Err(response) => return response,
     };
-    let response = nodes::delete_node(State(state), Path(id)).await.into_response();
+    let response = nodes::delete_node(State(state), Path(id))
+        .await
+        .into_response();
     match release_collective_graph_guard(guard).await {
         Ok(()) => response,
         Err(response) => response,
