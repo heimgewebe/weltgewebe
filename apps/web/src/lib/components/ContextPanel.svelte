@@ -1,25 +1,78 @@
 <script lang="ts">
-  import { selection, systemState, contextPanelOpen, leaveToNavigation } from '$lib/stores/uiView';
-  import { isSearchOpen } from '$lib/stores/searchStore';
-  import { isFilterOpen } from '$lib/stores/filterStore';
+  import { createEventDispatcher } from "svelte";
+  import {
+    selection,
+    systemState,
+    contextPanelOpen,
+    kompositionDraft,
+    leaveToNavigation,
+  } from "$lib/stores/uiView";
+  import { isSearchOpen } from "$lib/stores/searchStore";
+  import { isFilterOpen } from "$lib/stores/filterStore";
+  import type { KompositionDraft, Selection, SystemState } from "$lib/stores/uiView";
 
-  import NodePanel from './panels/NodePanel.svelte';
-  import AccountPanel from './panels/AccountPanel.svelte';
-  import EdgePanel from './panels/EdgePanel.svelte';
-  import KompositionPanel from './panels/KompositionPanel.svelte';
+  import NodePanel from "./panels/NodePanel.svelte";
+  import AccountPanel from "./panels/AccountPanel.svelte";
+  import EdgePanel from "./panels/EdgePanel.svelte";
+  import KompositionPanel from "./panels/KompositionPanel.svelte";
+
+  type RelatedSelection = { type: "node" | "garnrolle"; id: string };
+  type KompositionPanelHandle = { requestClose: () => void };
+
+  const dispatch = createEventDispatcher<{ selectRelated: RelatedSelection }>();
+  let kompositionPanel: KompositionPanelHandle | null = null;
+
+  function derivePanelTitle(
+    state: SystemState,
+    draft: KompositionDraft,
+    currentSelection: Selection,
+  ): string {
+    if (state === "komposition") {
+      return draft?.mode === "place-garnrolle"
+        ? "Garnrolle auf die Karte setzen"
+        : "Knoten knüpfen";
+    }
+
+    if (currentSelection?.type === "node") return "Knoten";
+    if (
+      currentSelection?.type === "account" ||
+      currentSelection?.type === "garnrolle"
+    ) {
+      return "Garnrolle";
+    }
+    if (currentSelection?.type === "edge") return "Faden";
+    return "Details";
+  }
+
+  $: panelTitle = derivePanelTitle(
+    $systemState,
+    $kompositionDraft,
+    $selection,
+  );
 
   function closePanel() {
+    if ($systemState === "komposition") {
+      // Fail closed: while the child handle is not bound yet, never fall back
+      // to discarding a composition draft or a partial-success state.
+      kompositionPanel?.requestClose();
+      return;
+    }
     leaveToNavigation();
   }
 
-  function handleKeydown(event: KeyboardEvent) {
-    // Prevent repeated Escape from cascading from overlay-close into panel-close
-    if (event.repeat || event.defaultPrevented) return;
+  function handleRelated(event: CustomEvent<RelatedSelection>) {
+    dispatch("selectRelated", event.detail);
+  }
 
-    // Escape closes the panel only when no foreground overlay (search/filter) owns the interaction
-    if (event.key === 'Escape' && $contextPanelOpen && !$isSearchOpen && !$isFilterOpen) {
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.repeat || event.defaultPrevented) return;
+    if (
+      event.key === "Escape" &&
+      $contextPanelOpen &&
+      !$isSearchOpen &&
+      !$isFilterOpen
+    )
       closePanel();
-    }
   }
 </script>
 
@@ -27,38 +80,27 @@
 
 {#if $contextPanelOpen}
   <aside class="context-panel" data-testid="context-panel">
-    <header class="panel-header">
-      {#if $systemState === 'komposition'}
-        <h2>Neuer Knoten</h2>
-      {:else if $selection}
-        {#if $selection.type === 'node'}
-          <h2>Knoten</h2>
-        {:else if $selection.type === 'account' || $selection.type === 'garnrolle'}
-          <h2>Garnrolle</h2>
-        {:else if $selection.type === 'edge'}
-          <h2>Faden</h2>
-        {/if}
-      {:else}
-        <h2>Details</h2>
-      {/if}
-      <button class="close-btn" on:click={closePanel} aria-label="Schließen">✕</button>
+    <header
+      class="panel-header"
+      class:composition={$systemState === "komposition"}
+    >
+      <h2>{panelTitle}</h2>
+      <button class="close-btn" on:click={closePanel} aria-label="Schließen"
+        >✕</button
+      >
     </header>
 
     <div class="panel-content">
-      {#if $systemState === 'komposition'}
-        <KompositionPanel />
+      {#if $systemState === "komposition"}
+        <KompositionPanel bind:this={kompositionPanel} />
       {:else if $selection}
-        {#if $selection.type === 'node'}
-          <NodePanel />
-        {:else if $selection.type === 'account' || $selection.type === 'garnrolle'}
-          <AccountPanel />
-        {:else if $selection.type === 'edge'}
+        {#if $selection.type === "node"}
+          <NodePanel on:selectRelated={handleRelated} />
+        {:else if $selection.type === "account" || $selection.type === "garnrolle"}
+          <AccountPanel on:selectRelated={handleRelated} />
+        {:else if $selection.type === "edge"}
           <EdgePanel />
         {/if}
-      {:else}
-        <div class="empty-state">
-          <p>Bitte ein Objekt auf der Karte auswählen.</p>
-        </div>
       {/if}
     </div>
   </aside>
@@ -68,25 +110,39 @@
   .context-panel {
     position: fixed;
     z-index: 50;
-    background: var(--panel, #fff);
-    color: var(--text, #333);
-    box-shadow: var(--shadow, 0 -4px 16px rgba(0,0,0,0.1));
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: var(--shadow);
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    overflow: hidden;
+    box-sizing: border-box;
   }
 
   .panel-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem;
-    border-bottom: 1px solid var(--panel-border, rgba(0,0,0,0.1));
+    min-height: 68px;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--panel-border);
+    flex: 0 0 auto;
   }
 
   .panel-header h2 {
     margin: 0;
-    font-size: 1.2rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .panel-header.composition h2 {
+    color: var(--text);
+    font-size: 1.1rem;
+    letter-spacing: 0;
+    text-transform: none;
   }
 
   .close-btn {
@@ -103,28 +159,29 @@
 
   .panel-content {
     padding: 1rem;
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
   }
 
-  /* Mobile: Bottom Sheet */
   @media (max-width: 768px) {
     .context-panel {
       bottom: 0;
       left: 0;
       right: 0;
-      max-height: 80vh;
+      max-height: 80dvh;
+      padding-bottom: env(safe-area-inset-bottom);
       border-radius: 16px 16px 0 0;
     }
   }
 
-  /* Desktop: Right Sidebar */
   @media (min-width: 769px) {
     .context-panel {
       top: 0;
       right: 0;
       bottom: 0;
-      width: var(--context-panel-width, 400px);
-      box-shadow: var(--shadow, -4px 0 16px rgba(0,0,0,0.1));
+      width: var(--context-panel-width);
+      box-shadow: -4px 0 16px rgba(0, 0, 0, 0.28);
     }
   }
 </style>

@@ -30,7 +30,7 @@ Weltgewebe verwendet künftig ein einziges Accountmodell:
 > Jeder Account hat genau eine Garnrolle.
 
 Die Garnrolle ist die sichtbare und handelnde Rolle eines Menschen oder Akteurs
-im Gewebe. Sie ist der Ursprung von Fäden und kann Knoten weben.
+im Gewebe. Sie ist der Ursprung von Fäden und kann Knoten knüpfen.
 
 Verortung und öffentliche Sichtbarkeit sind Eigenschaften dieser Garnrolle. Sie
 sind kein Identitätsmodus und keine zweite Art von Account.
@@ -81,12 +81,12 @@ eine bewusste Option, nicht der normative Default.
 
 ## Knoten und Fäden
 
-Eine Garnrolle webt Knoten.
+Eine Garnrolle knüpft Knoten.
 
 Ein Knoten ist ein verortetes oder thematisch fassbares Bündel im Gewebe: Ort,
 Projekt, Bedarf, Angebot, Werkzeug, Ereignis, Gruppe oder Commons.
 
-Beim Weben eines Knotens entsteht mindestens ein Faden. Ein Faden beschreibt,
+Beim Knüpfen eines Knotens entsteht mindestens ein Faden. Ein Faden beschreibt,
 was zwischen Garnrolle und Knoten gilt, zum Beispiel:
 
 - gebaut von
@@ -107,7 +107,7 @@ Dokumentationssprache konsistent bleibt.
 2. Seine Garnrolle entsteht.
 3. Er ergänzt Profilinformationen.
 4. Er setzt seine Garnrolle exakt sichtbar auf den Poelsweg 2.
-5. Er webt den Knoten "Fairschenkbox Caspar-Voght-Straße" an der exakten
+5. Er knüpft den Knoten "Fairschenkbox Caspar-Voght-Straße" an der exakten
    Position der Box.
 6. Das System erzeugt einen Gestaltungsfaden:
    "Alexander hat die Fairschenkbox gebaut / betreut sie".

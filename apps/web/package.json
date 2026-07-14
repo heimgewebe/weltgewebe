@@ -46,6 +46,8 @@
     "pretest:proof:basemap-real": "pnpm run generate:basemap-config",
     "pretest:unit": "pnpm run generate:basemap-config",
     "test:unit": "vitest run",
+    "test:pmtiles-validator": "node --test scripts/validate-pmtiles.test.mjs",
+    "validate:pmtiles": "node scripts/validate-pmtiles.mjs",
     "test": "playwright test",
     "test:proof:auth-passkey-register": "playwright test --config=playwright.auth.proof.config.ts --reporter=dot,html,junit",
     "test:proof:auth-session-persistence": "playwright test --config=playwright.auth-session.proof.config.ts",
@@ -61,6 +63,7 @@
     "preview:cs": "vite preview --host 0.0.0.0 --port 4173"
   },
   "devDependencies": {
+    "@mapbox/vector-tile": "1.3.1",
     "@opentelemetry/api": "^1.9.1",
     "@playwright/test": "1.61.0",
     "@sveltejs/adapter-static": "^3.0.10",
@@ -73,6 +76,7 @@
     "eslint": "9.11.1",
     "eslint-plugin-svelte": "2.45.1",
     "globals": "15.9.0",
+    "pbf": "3.3.0",
     "prettier": "3.8.4",
     "prettier-plugin-svelte": "4.1.1",
     "rimraf": "5",

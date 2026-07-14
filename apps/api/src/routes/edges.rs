@@ -52,6 +52,33 @@ pub struct Edge {
     pub created_at: Option<String>,
 }
 
+/// Public edge projection. Free-text notes remain persisted authoring metadata
+/// and are intentionally omitted from unauthenticated read surfaces.
+#[derive(Debug, Serialize, Clone, PartialEq)]
+pub struct PublicEdge {
+    pub id: String,
+    pub source_id: String,
+    pub source_type: Option<String>,
+    pub target_id: String,
+    pub target_type: Option<String>,
+    pub edge_kind: String,
+    pub created_at: Option<String>,
+}
+
+impl From<&Edge> for PublicEdge {
+    fn from(edge: &Edge) -> Self {
+        Self {
+            id: edge.id.clone(),
+            source_id: edge.source_id.clone(),
+            source_type: edge.source_type.clone(),
+            target_id: edge.target_id.clone(),
+            target_type: edge.target_type.clone(),
+            edge_kind: edge.edge_kind.clone(),
+            created_at: edge.created_at.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Clone)]
 pub struct EdgeParticipantDetails {
     pub id: String,
@@ -63,7 +90,7 @@ pub struct EdgeParticipantDetails {
 #[derive(Debug, Serialize, Clone)]
 pub struct EdgeWithDetails {
     #[serde(flatten)]
-    pub edge: Edge,
+    pub edge: PublicEdge,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_details: Option<EdgeParticipantDetails>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -147,7 +174,7 @@ pub async fn load_edges() -> OrderedCache<Edge> {
 pub async fn list_edges(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
-) -> Result<Json<ListResponse<Edge>>, StatusCode> {
+) -> Result<Json<ListResponse<PublicEdge>>, StatusCode> {
     let src = params.get("source_id");
     let dst = params.get("target_id");
     let limit: usize = parse_usize_param(&params, "limit", 250)?.min(MAX_PAGE_SIZE);
@@ -179,17 +206,17 @@ pub async fn list_edges(
             limit,
             after_id.as_deref(),
             |edge: &Edge| edge.id.as_str(),
-            |edge: &Edge| edge.clone(),
+            |edge: &Edge| PublicEdge::from(edge),
         );
         Ok(Json(ListResponse::Cursor(page)))
     } else {
         let offset: usize = parse_usize_param(&params, "offset", 0)?;
-        let out: Vec<Edge> = cache
+        let out: Vec<PublicEdge> = cache
             .iter_in_order()
             .filter(matches)
             .skip(offset)
             .take(limit)
-            .cloned()
+            .map(PublicEdge::from)
             .collect();
         Ok(Json(ListResponse::Legacy(out)))
     }
@@ -250,7 +277,7 @@ pub async fn get_edge(
     }
 
     Ok(Json(EdgeWithDetails {
-        edge,
+        edge: PublicEdge::from(&edge),
         source_details,
         target_details,
     }))
@@ -515,22 +542,45 @@ pub async fn create_edge(
     })?;
     let semantic_request = validated.clone();
 
-    // Account-originating Fäden represent an action by a concrete Garnrolle.
-    // A Weber may therefore only name the authenticated account as source;
-    // otherwise a crafted request could make another Garnrolle appear to have
-    // woven the Faden. Admins retain the explicit operator path for repairs and
-    // controlled imports. The missing-account branch stays fail-closed.
-    if validated.source_type == "account" && auth.role != Role::Admin {
+    // Endpoint type labels are security-relevant: account detail projections
+    // must never be reachable by disguising a known account id as a node. Keep
+    // the check independent of role so administrative imports cannot persist a
+    // type-confused edge either. Unknown ids remain importable; their declared
+    // type is still enforced when a matching entity becomes visible on reads.
+    let (source_is_known_account, target_is_known_account) = {
+        let accounts = state.accounts.read().await;
+        (
+            accounts.get(&validated.source_id).is_some(),
+            accounts.get(&validated.target_id).is_some(),
+        )
+    };
+    if (source_is_known_account && validated.source_type != "account")
+        || (target_is_known_account && validated.target_type != "account")
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "edge endpoint type does not match the referenced account".to_string(),
+        ));
+    }
+
+    // A non-admin may involve an account only through an outgoing action of
+    // the authenticated Garnrolle. This rejects both source impersonation and
+    // crafted node -> foreign-account edges that would otherwise make another
+    // Garnrolle appear to have acted. Admins retain the explicit repair/import
+    // path; incoming administrative edges are attributed neutrally on reads.
+    if auth.role != Role::Admin
+        && (validated.source_type == "account" || validated.target_type == "account")
+    {
         let own_account_id = auth.account_id.as_deref().ok_or_else(|| {
             (
                 StatusCode::UNAUTHORIZED,
                 "authenticated account context missing".to_string(),
             )
         })?;
-        if validated.source_id != own_account_id {
+        if validated.source_type != "account" || validated.source_id != own_account_id {
             return Err((
                 StatusCode::FORBIDDEN,
-                "account source must match the authenticated Garnrolle".to_string(),
+                "account relationships must originate from the authenticated Garnrolle".to_string(),
             ));
         }
     }

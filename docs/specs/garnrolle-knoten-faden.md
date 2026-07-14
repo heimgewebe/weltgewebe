@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-domain
 owner: product-domain
-last_reviewed: 2026-07-11
+last_reviewed: 2026-07-13
 review_after: 2026-10-11
 depends_on: []
 relations:
@@ -52,7 +52,7 @@ Die Garnrolle kann enthalten:
 - Fähigkeiten, Güter, Interessen und Tags;
 - optional eine interne reale Position;
 - optional eine öffentliche Kartenprojektion;
-- gewobene Knoten und ausgehende Fäden.
+- geknüpfte Knoten und ausgehende Fäden.
 
 Eine Berechtigungsrolle wie `gast`, `weber` oder `admin` regelt technische Rechte. Sie ist nicht die Identität der Person.
 
@@ -89,7 +89,7 @@ Ein Knoten ist ein fachlich fassbares Bündel. Er kann verortet oder ortsunabhä
 - Veranstaltung;
 - Idee, Frage oder Beschlussgegenstand.
 
-Knoten werden aus einer angemeldeten Garnrolle heraus gewoben. Seed- oder Demo-Inhalte dürfen den organischen Produktpfad nicht ersetzen.
+Knoten werden aus einer angemeldeten Garnrolle heraus geknüpft. Seed- oder Demo-Inhalte dürfen den organischen Produktpfad nicht ersetzen.
 
 ## Fäden
 
@@ -114,13 +114,19 @@ Beispiele:
 
 Ein Faden ist nicht automatisch ein Gespräch. Gespräche besitzen eigene Entitäten.
 
+### Autorisierung, Richtung und öffentliche Notizen
+
+1. Eine reguläre Weberhandlung, die eine Garnrolle beteiligt, muss von der eigenen angemeldeten Garnrolle ausgehen. Ein Weber darf weder eine fremde Garnrolle als Quelle ausgeben noch über `Knoten → fremde Garnrolle` eine fremde Aktivität erzeugen. Die deklarierten Endpunkttypen müssen mit bereits bekannten Entitäten übereinstimmen; eine Garnrollen-ID darf nicht als Knoten-ID ausgegeben werden.
+2. Administrative Reparaturen und kontrollierte Importe dürfen eingehende Fäden erzeugen. In der betroffenen Garnrolle werden sie neutral als eingehende Verknüpfung beschrieben, nicht als eigene Handlung.
+3. Eine optionale Fadennotiz ist gespeicherte Freitext-Metadaten des Schreibvorgangs. Öffentliche Fadenlisten, Fadendetails und Garnrollenprojektionen geben sie nicht aus. Die authentifizierte Erstellungsantwort darf die gerade übermittelte Notiz zur unmittelbaren Bestätigung zurückgeben.
+
 ## Erster organischer Produktfluss
 
 1. Account anmelden oder anlegen.
 2. Eigene Garnrolle sehen.
 3. Garnrolle beschreiben.
 4. Garnrolle optional auf die Karte setzen.
-5. Ersten Knoten weben.
+5. Ersten Knoten knüpfen.
 6. Beim Speichern einen passenden Faden erzeugen.
 7. Knoten und Faden nach Neuladen wiederfinden.
 
@@ -128,7 +134,7 @@ Dieser vertikale Schnitt ist der wichtigste Integrationsbeweis. Er muss ohne Dem
 
 ## Produktsprache
 
-Nutzertexte verwenden Garnrolle, Knoten, Faden, weben, Sichtbarkeit und Gesprächsraum. Interne Begriffe wie Account, Node, Edge, Credential, Token oder WebAuthn erscheinen nicht in der Hauptführung.
+Nutzertexte verwenden Garnrolle, Knoten, Faden, knüpfen, weben, Sichtbarkeit und Gesprächsraum. Interne Begriffe wie Account, Node, Edge, Credential, Token oder WebAuthn erscheinen nicht in der Hauptführung.
 
 ## Nicht-Ziele
 
