@@ -254,7 +254,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("pull_request_target:", self.workflow)
         self.assertIn("issue_comment:", self.workflow)
         self.assertIn(
-            "ref: ${{ github.event.repository.default_branch }}", self.workflow
+            "ref: main", self.workflow
         )
         self.assertIn("persist-credentials: false", self.workflow)
         self.assertNotIn("github.event.pull_request.head", self.workflow)

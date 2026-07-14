@@ -39,7 +39,7 @@ class CanonicalTruthContractTests(unittest.TestCase):
             review_workflow.count("context='Review evidence gate'"),
             2,
         )
-        self.assertIn("ref: ${{ github.event.repository.default_branch }}", review_workflow)
+        self.assertIn("ref: main", review_workflow)
         self.assertIn("persist-credentials: false", review_workflow)
 
     def test_package_license_metadata_matches_repository_license(self) -> None:
