@@ -50,6 +50,8 @@ describe("resolveBasemapStyle", () => {
 
   it("returns local path for local-sovereign mode", () => {
     const result = resolveBasemapStyle({ mode: "local-sovereign" } as any);
-    expect(result).toBe("/local-basemap/style.json?v=0.3.0");
+    expect(result).toMatch(
+      /^\/local-basemap\/style\.json\?v=0\.3\.1&build=[^&]+$/,
+    );
   });
 });

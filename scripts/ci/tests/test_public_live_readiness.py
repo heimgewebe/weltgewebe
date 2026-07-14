@@ -53,7 +53,15 @@ class FakeWorld:
             return FetchResult(url, 200, {"Content-Type": "application/json"}, json.dumps(body).encode())
         if url == "https://weltgewebe.net/local-basemap/style.json":
             body = {"glyphs": "/local-basemap/glyphs/{fontstack}/{range}.pbf"}
-            return FetchResult(url, 200, {"Content-Type": "application/json"}, json.dumps(body).encode())
+            return FetchResult(
+                url,
+                200,
+                {
+                    "Content-Type": "application/json",
+                    "Cache-Control": "no-cache, must-revalidate",
+                },
+                json.dumps(body).encode(),
+            )
         if url == "https://weltgewebe.net/local-basemap/glyphs/Noto%20Sans%20Regular/0-255.pbf":
             return FetchResult(url, 200, {}, b"glyph-bytes")
         if url in {
@@ -170,6 +178,29 @@ class PublicLiveReadinessTest(unittest.TestCase):
 
         self.assertFalse(api_result.ok)
         self.assertEqual(api_result.data["missing"], ["nats"])
+
+    def test_basemap_style_requires_revalidating_cache_policy(self) -> None:
+        fake = FakeWorld()
+
+        def bad_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float):
+            if url == "https://weltgewebe.net/local-basemap/style.json":
+                body = {"glyphs": "/local-basemap/glyphs/{fontstack}/{range}.pbf"}
+                return fake.module.FetchResult(
+                    url,
+                    200,
+                    {"Content-Type": "application/json"},
+                    json.dumps(body).encode(),
+                )
+            return fake.fetcher(url, headers, timeout)
+
+        checker = fake.module.PublicLiveChecker(
+            resolver=fake.resolver,
+            fetcher=bad_fetcher,
+        )
+        result = [item for item in checker.run() if item.name == "basemap-style"][0]
+
+        self.assertFalse(result.ok)
+        self.assertIn("cache policy", result.detail)
 
     def test_pmtiles_header_must_start_with_pmtiles_signature(self) -> None:
         fake = FakeWorld()

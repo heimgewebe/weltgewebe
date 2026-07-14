@@ -316,9 +316,22 @@ class PublicLiveChecker:
         except Exception as exc:
             return fail_result("basemap-style", str(exc), url=url)
         glyphs = payload.get("glyphs") if isinstance(payload, dict) else None
-        if result.status == 200 and isinstance(glyphs, str) and "/local-basemap/glyphs/" in glyphs:
-            return pass_result("basemap-style", "Local basemap style is reachable and references local glyphs", glyphs=glyphs)
-        return fail_result("basemap-style", "Local basemap style missing local glyph reference", status=result.status, glyphs=glyphs)
+        cache_control = _lower_headers(result.headers).get("cache-control", "")
+        cache_tokens = {token.strip().lower() for token in cache_control.split(",")}
+        if result.status != 200 or not isinstance(glyphs, str) or "/local-basemap/glyphs/" not in glyphs:
+            return fail_result("basemap-style", "Local basemap style missing local glyph reference", status=result.status, glyphs=glyphs)
+        if not {"no-cache", "must-revalidate"}.issubset(cache_tokens):
+            return fail_result(
+                "basemap-style",
+                "Local basemap style cache policy is not revalidating",
+                cache_control=cache_control,
+            )
+        return pass_result(
+            "basemap-style",
+            "Local basemap style is reachable, local, and revalidating",
+            glyphs=glyphs,
+            cache_control=cache_control,
+        )
 
     def check_glyph_range(self) -> CheckResult:
         url = f"https://{self.domain}{self.glyph_path}"

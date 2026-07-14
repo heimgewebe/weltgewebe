@@ -2,7 +2,7 @@
   "version": 8,
   "name": "Weltgewebe Sovereign Basemap",
   "metadata": {
-    "weltgewebe:version": "0.3.0",
+    "weltgewebe:version": "0.3.1",
     "weltgewebe:note": "Regional PMTiles sources with visible landcover and landuse; bare aliases are resolved by the runtime protocol handler"
   },
   "sources": {

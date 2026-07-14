@@ -15,7 +15,9 @@ relations:
 **Geänderte Bereiche:**
 
 - `map-style/style.json`;
-- Web-Basemap-Auflösung und regionale Browserproofs.
+- Web-Basemap-Auflösung, Buildidentität und regionale Browserproofs;
+- alle repo-internen `/local-basemap/`-Caddy-Routen;
+- öffentliche Live-Readiness für den Cache-Vertrag.
 
 **Beschreibung:**
 
@@ -26,17 +28,27 @@ zeichnet nun die vorhandenen `landcover`- und `landuse`-Layer beider regionaler
 PMTiles-Quellen. Der Browserproof verlangt diese Layer künftig ausdrücklich als
 decodierte und sichtbar gerenderte Evidenz.
 
-Der Web-Build lädt den Stil über `/local-basemap/style.json?v=0.3.0`. Der
-Versionsparameter verhindert, dass ein Browser nach einem Stylewechsel weiterhin
-den früheren Hamburg-only beziehungsweise flächenarmen Stil verwendet.
+Der erste Rollout verwendete weiter `/local-basemap/style.json?v=0.3.0` und
+lieferte die veränderliche Stildatei ohne ausdrückliche Cache-Regel aus. Dadurch
+konnten bestehende Browserprofile eine früh geladene Antwort behalten, während
+neue Inkognito-Profile bereits den Schleswig-Holstein-Stil sahen.
+
+Style `0.3.1` erhält deshalb zusätzlich die konkrete Web-Buildkennung im
+Anfragepfad: `/local-basemap/style.json?v=0.3.1&build=<commit>`. Alle
+repo-internen `/local-basemap/`-Routen liefern außerdem
+`Cache-Control: no-cache, must-revalidate`. Der Browser darf die Dateien lokal
+halten, muss ihre Gültigkeit aber vor Wiederverwendung beim Server prüfen.
 
 **Produktionswirkung:**
 
-Style und Web-Artefakt müssen gemeinsam veröffentlicht werden. Danach werden die
-öffentliche Buildkennung, der angeforderte Style-URL, echte Schleswig-Holstein-
-Range-Antworten sowie sichtbar gerenderte Landbedeckung und Landnutzung erneut
-über den normalen Kartenpfad geprüft. Die PMTiles-Archive selbst bleiben
-unverändert.
+Style, Web-Artefakt und `Caddyfile.vps` müssen gemeinsam veröffentlicht werden.
+Danach werden die öffentliche Buildkennung, der buildgebundene Style-URL, echte
+Schleswig-Holstein-Range-Antworten sowie sichtbar gerenderte Landbedeckung und
+Landnutzung erneut über den normalen Kartenpfad geprüft. Zusätzlich muss
+`curl -sS -D - -o /dev/null https://weltgewebe.net/local-basemap/style.json`
+den Header `Cache-Control: no-cache, must-revalidate` zeigen. Die öffentliche
+Live-Readiness schlägt künftig fehl, wenn dieser Revalidierungsvertrag fehlt.
+Die PMTiles-Archive selbst bleiben unverändert.
 
 ## 2026-07-13 - PMTiles-Repräsentationsvertrag und tiefe Archivprüfung
 

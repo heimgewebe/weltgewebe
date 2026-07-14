@@ -10,6 +10,7 @@
   # PMTiles clients strictly require HTTP Range requests and CORS headers.
   # Route matches the public edge contract: /local-basemap/ (frontend, blueprint, Vite middleware)
   handle_path /local-basemap/* {
+    header Cache-Control "no-cache, must-revalidate"
     root * /srv/weltgewebe-basemap
     @pmtiles path_regexp \.pmtiles$
     header @pmtiles Content-Type "application/octet-stream"
