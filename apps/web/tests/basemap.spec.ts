@@ -78,6 +78,8 @@ test.describe("resolveBasemapStyle", () => {
       zoom: 1,
     };
 
-    expect(resolveBasemapStyle(config)).toBe("/local-basemap/style.json");
+    expect(resolveBasemapStyle(config)).toBe(
+      "/local-basemap/style.json?v=0.3.0",
+    );
   });
 });

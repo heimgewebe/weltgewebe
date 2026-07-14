@@ -75,7 +75,7 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.waitForSelector(".action-bar", { timeout: 10000 });
 
     // Enter komposition mode via action bar
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    await page.locator('button:has-text("Knoten knüpfen")').click();
 
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
@@ -93,7 +93,7 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.waitForSelector(".action-bar", { timeout: 10000 });
 
     // Enter komposition mode to open panel
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    await page.locator('button:has-text("Knoten knüpfen")').click();
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
 
@@ -116,7 +116,7 @@ test.describe("Map Interaction & Context Panel", () => {
     page,
   }) => {
     await page.waitForSelector(".action-bar", { timeout: 10000 });
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    await page.locator('button:has-text("Knoten knüpfen")').click();
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
     await page.locator('.action-bar button[aria-label="Filter"]').click();
@@ -167,11 +167,11 @@ test.describe("Map Interaction & Context Panel", () => {
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
 
-    // Switch to a non-default tab if possible (assuming node default is 'uebersicht', switch to 'gespraech')
-    const gespraechTab = panel.locator('button:has-text("Gespräch")');
-    if (await gespraechTab.isVisible()) {
-      await gespraechTab.click();
-      await expect(gespraechTab).toHaveClass(/active/, { timeout: 5000 });
+    // Switch to the only productive secondary tab.
+    const verlaufTab = panel.locator('button:has-text("Verlauf")');
+    if (await verlaufTab.isVisible()) {
+      await verlaufTab.click();
+      await expect(verlaufTab).toHaveClass(/active/, { timeout: 5000 });
 
       // Click a different marker
       // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
@@ -196,7 +196,7 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.waitForSelector(".action-bar", { timeout: 10000 });
 
     // Click new node in action bar
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    await page.locator('button:has-text("Knoten knüpfen")').click();
 
     // Context panel should open
     const panel = page.locator('[data-testid="context-panel"]');
@@ -223,7 +223,7 @@ test.describe("Map Interaction & Context Panel", () => {
 
     const panel = page.locator('[data-testid="context-panel"]');
     await panel.waitFor({ state: "visible", timeout: 5000 });
-    await expect(panel.locator(".state-set")).toContainText("Ort gesetzt");
+    await expect(panel.locator(".state-set")).toContainText("Ort gewählt");
   });
 
   test("Empty map click does not close context panel in komposition mode", async ({
@@ -232,7 +232,7 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.waitForSelector(".action-bar", { timeout: 10000 });
 
     // Enter komposition mode via action bar
-    await page.locator('button:has-text("Neuer Knoten")').click();
+    await page.locator('button:has-text("Knoten knüpfen")').click();
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
 
@@ -277,23 +277,18 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(uebersichtTab).toBeFocused();
     await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
 
-    // Press ArrowRight -> Should move to "Gespräch"
+    // Press ArrowRight -> Should move to "Verlauf"
     await page.keyboard.press("ArrowRight");
-    const gespraechTab = panel.locator('button[role="tab"]', {
-      hasText: "Gespräch",
-    });
-    await expect(gespraechTab).toBeFocused();
-    await expect(gespraechTab).toHaveAttribute("aria-selected", "true");
-    await expect(panel.locator("#panel-gespraech")).toBeVisible();
-
-    // Press End -> Should move to "Verlauf"
-    await page.keyboard.press("End");
     const verlaufTab = panel.locator('button[role="tab"]', {
       hasText: "Verlauf",
     });
     await expect(verlaufTab).toBeFocused();
     await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
     await expect(panel.locator("#panel-verlauf")).toBeVisible();
+
+    // End remains on the last productive tab.
+    await page.keyboard.press("End");
+    await expect(verlaufTab).toBeFocused();
 
     // Press Home -> Should move back to "Übersicht"
     await page.keyboard.press("Home");

@@ -9,7 +9,7 @@ lifecycle_state: active
 lifecycle: audit
 owner: product-map
 owner_task: DOCMETA-REPORT-LIFECYCLE-001
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 review_after: 2026-08-12
 evidence_required_for_live_claims:
   - exact Git commit and image tag on wg-prod-1
@@ -27,7 +27,7 @@ relations:
 ---
 # Kartenstatus
 
-Stand: 12.07.2026. Dieses Dokument ist ein zeitgebundener Diagnosebericht. Der
+Stand: 13.07.2026. Dieses Dokument ist ein zeitgebundener Diagnosebericht. Der
 dauerhafte Produktvertrag steht in
 [`docs/specs/map-experience.md`](../specs/map-experience.md).
 
@@ -44,6 +44,8 @@ dauerhafte Produktvertrag steht in
 | Garnrolle | `not_on_map`, `exact` und `radius` sind im Browserpfad vorhanden | `garnrolle-self-service.spec.ts` |
 | Knoten und Faden | Komposition erzeugt Knoten und den zugehörigen Faden | `KompositionPanel.svelte`, `komposition.spec.ts` |
 | Produktionsvertrag | PostgreSQL ist für Accounts/Garnrollen, Knoten und Fäden die Produktionswahrheit | `.env.prod.example`, `runtime/README.md`, Compose- und API-Verträge |
+| Regionale Basemap-Integrität | Hamburg und Schleswig-Holstein werden vor Veröffentlichung durch alle erreichbaren PMTiles-Verzeichnisse traversiert; bis zu 96 reale MVT-Kacheln werden deterministisch über Zoomstufen und Raum verteilt decodiert und gegen Metadaten sowie Style-Layer geprüft | `apps/web/scripts/validate-pmtiles.mjs`, `validate-pmtiles.test.mjs`, `basemap-runtime-proof.yml` |
+| PMTiles-HTTP-Vertrag | Stabile und versionierte Regionalpfade müssen bei HTTP 200 und 206 `application/octet-stream`, `Accept-Ranges: bytes`, korrektes `Content-Range` und die PMTiles-Signatur liefern | `infra/caddy/Caddyfile.vps`, `scripts/guard/basemap-runtime-proof.sh`, `scripts/ops/check_public_live_readiness.py` |
 
 ## Datierter Livebeleg
 
@@ -70,6 +72,7 @@ relevanten Runtimewechsel muss er neu erhoben werden.
 - visuelle Korrektheit über repräsentative Zoomstufen, Browser und Geräte;
 - URL-Bindung lokaler Panel-Tabs;
 - dauerhaft gemessene Kartenleistung;
+- ein Vollscan jeder einzelnen PMTiles-Kachel; der Validator prüft alle Verzeichnisse, aber bewusst nur eine begrenzte, deterministische Payload-Stichprobe;
 - ein aktueller Backup-/Restore- und Off-Host-Beleg nach jeder Änderung.
 
 ## Nächste Beweise

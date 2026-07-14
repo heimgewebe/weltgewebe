@@ -4,7 +4,7 @@ title: Deployment Contract and Preflight Guard
 doc_type: guide
 status: active
 summary: Anleitung und Dokumentation zum Deployment.
-last_reviewed: "2026-07-12"
+last_reviewed: "2026-07-13"
 relations:
   - type: relates_to
     target: docs/deploy/README.md
@@ -37,7 +37,7 @@ Weltgewebe UI deployment fundamentally operates on three coupled layers:
 2. **Container mount layer**: A bind mount structurally exposes these artifacts to the `edge-caddy` container (`/srv/weltgewebe-web`).
 3. **Edge serving layer**: Caddy reads and serves these static files to the client.
 
-A successful frontend build does *not* automatically guarantee a successful deployment unless the container mount layer correctly reflects the newly built files. The complete chain (Build + Container-Mount + Edge-Serving) is necessary for server-side deployment correctness. It is a known issue with Docker bind mounts that they can drift from the host directory state (meaning the container sees an empty or outdated directory despite the host having the latest files).
+A successful frontend build does _not_ automatically guarantee a successful deployment unless the container mount layer correctly reflects the newly built files. The complete chain (Build + Container-Mount + Edge-Serving) is necessary for server-side deployment correctness. It is a known issue with Docker bind mounts that they can drift from the host directory state (meaning the container sees an empty or outdated directory despite the host having the latest files).
 
 To enforce correct runtime state, the deploy pipeline includes an active guard. After building the UI, `weltgewebe-up` verifies that the `edge-caddy` container can genuinely read the critical build artifacts (`test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app`). If this check fails, the pipeline forces a refresh of the edge deployment stack to restore the `edge-caddy` mount coupling, provided frontend delivery is required for the current deploy run.
 
@@ -53,11 +53,37 @@ Server-side correctness does not intrinsically prevent browsers from rendering s
    - **Client-visible diagnostics**: The technical build identifier is also shown directly in the Settings UI.
    - **Primary use**: Enables immediate comparison of delivered versions across clients (for example, Browser A vs. Browser B).
 
-*Note (Phase C Preparation): Future Evaluation: The current bind-mount model could theoretically be replaced by a dedicated Web-Container architecture to eliminate host-mount drift entirely.*
+_Note (Phase C Preparation): Future Evaluation: The current bind-mount model could theoretically be replaced by a dedicated Web-Container architecture to eliminate host-mount drift entirely._
 
 ### Basemap Artifact Deployment (Best Effort)
 
-The deployment script (`weltgewebe-up`) attempts to provide the sovereign PMTiles basemap artifact in the `build/basemap/` directory as a best-effort guard before stack initialization. The deploy/serve path can mount and serve it, but this does not imply the frontend is configured to consume it in production.
+The deployment script (`weltgewebe-up`) attempts to provide every regional PMTiles source required by `map-style/style.json` in the `build/basemap/` directory before stack initialization. Hamburg and Schleswig-Holstein are built and published independently. Each region has a versioned artifact plus stable `.pmtiles` and `.meta.json` aliases. The guard remains best effort, but it reports missing regions separately so one existing region cannot hide another missing one.
+
+#### PMTiles HTTP representation contract
+
+Every `.pmtiles` response under `/local-basemap/` uses the explicit media type `application/octet-stream`. The contract applies to versioned files and stable aliases and is identical for the development Caddyfile, the Heim reference, the VPS Caddyfile, and the isolated Caddy proof. A valid public representation must satisfy all of the following:
+
+- a full or HEAD representation returns HTTP 200, `Content-Type: application/octet-stream`, and `Accept-Ranges: bytes`;
+- `Range: bytes=0-15` returns HTTP 206 with the same `Content-Type` and a matching `Content-Range`;
+- the full GET and Range response bodies begin with the PMTiles signature; HEAD is used only for the 200/header contract.
+
+`scripts/ops/check_public_live_readiness.py` checks this contract for the stable and versioned Hamburg and Schleswig-Holstein paths after deployment.
+
+#### Bounded deep PMTiles validation
+
+`apps/web/scripts/validate-pmtiles.mjs` is the publication gate for regional archives. It uses the repository's pinned `pmtiles` reader to validate the v3 header and section boundaries, traverse every reachable root and leaf directory, reconcile directory counts with the header, read metadata, and decode a deterministic bounded sample of real MVT payloads. The sampled layers must agree with metadata and cover every source layer used by `map-style/style.json`.
+
+The two regional content-proof jobs run the validator on the exact artifacts they build and upload its JSON receipt. Unit tests also prove fail-closed behavior for a truncated archive, a corrupt root directory, and malformed MVT bytes. The gate is deliberately bounded: it does not scan every tile and does not establish cartographic completeness, OSM semantic correctness, or source freshness.
+
+Example for a locally available artifact:
+
+```bash
+cd apps/web
+pnpm validate:pmtiles -- \
+  --archive hamburg=../../build/basemap/basemap-hamburg-v0.1.0.pmtiles \
+  --style ../../map-style/style.json \
+  --output /tmp/hamburg-pmtiles-deep-validation.json
+```
 
 #### `PUBLIC_BASEMAP_MODE` Contract
 
@@ -67,12 +93,13 @@ To instruct the production frontend to actually consume the locally hosted sover
 - **Allowed Values:** `local-sovereign` | `remote-style`
 - **Default Behavior:** If unset or invalid, the application falls back to `local-sovereign` in local development/testing contexts, and `remote-style` in production builds.
 - **Purpose:** This flag acts as a deployment-time enablement switch. It allows target environments (like a Heimserver) to actively opt into the fully sovereign map architecture without requiring code changes.
-- **Note:** Setting this flag enables the *frontend capability*. A fully operational rollout still strictly requires the underlying infrastructure (e.g., Caddy routing for `/local-basemap/` and the physical PMTiles artifact) to be proven and present at runtime.
+- **Note:** Setting this flag enables the _frontend capability_. A fully operational rollout still strictly requires the underlying infrastructure (e.g., Caddy routing for `/local-basemap/` and the physical PMTiles artifact) to be proven and present at runtime.
 
 To locally verify the artifact state:
 
 ```bash
-find build/basemap -maxdepth 1 -name "*.pmtiles" -print
+find build/basemap -maxdepth 1 \
+  \( -name "basemap-hamburg*.pmtiles" -o -name "basemap-schleswig-holstein*.pmtiles" \) -print
 ```
 
 ## Preflight guard

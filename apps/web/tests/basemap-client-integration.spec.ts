@@ -11,7 +11,7 @@ test.describe("Basemap Client Integration (local-sovereign)", () => {
     // Override local-basemap/style.json for this specific test
     // NOTE: This intentionally mocks the network path to verify client-side behavior
     // (MapLibre config and PMTiles protocol loading), not real Edge-routing delivery.
-    await page.route("**/local-basemap/style.json", (route) => {
+    await page.route("**/local-basemap/style.json*", (route) => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -22,8 +22,25 @@ test.describe("Basemap Client Integration (local-sovereign)", () => {
               type: "vector",
               url: "pmtiles://basemap-hamburg.pmtiles",
             },
+            "basemap-schleswig-holstein": {
+              type: "vector",
+              url: "pmtiles://basemap-schleswig-holstein.pmtiles",
+            },
           },
-          layers: [],
+          layers: [
+            {
+              id: "hamburg-water",
+              type: "fill",
+              source: "basemap",
+              "source-layer": "water",
+            },
+            {
+              id: "schleswig-holstein-water",
+              type: "fill",
+              source: "basemap-schleswig-holstein",
+              "source-layer": "water",
+            },
+          ],
         }),
       });
     });
@@ -63,17 +80,21 @@ test.describe("Basemap Client Integration (local-sovereign)", () => {
     // Track network requests to confirm what MapLibre actually requests
     // and whether PMTiles correctly issues Range headers.
     const requestedUrls: string[] = [];
-    let sawPmtilesRangeRequest = false;
+    const pmtilesRangeRegions = new Set<string>();
 
     page.on("request", (req) => {
       const url = req.url();
       requestedUrls.push(url);
 
-      if (url.includes("/local-basemap/basemap-hamburg.pmtiles")) {
+      const regionalArtifact = [
+        "basemap-hamburg.pmtiles",
+        "basemap-schleswig-holstein.pmtiles",
+      ].find((artifact) => url.includes(`/local-basemap/${artifact}`));
+      if (regionalArtifact) {
         // PMTiles must request partial content via HTTP Range header
         const reqHeaders = req.headers();
-        if (reqHeaders["range"] && reqHeaders["range"].startsWith("bytes=")) {
-          sawPmtilesRangeRequest = true;
+        if (reqHeaders["range"]?.startsWith("bytes=")) {
+          pmtilesRangeRegions.add(regionalArtifact);
         }
       }
     });
@@ -101,30 +122,32 @@ test.describe("Basemap Client Integration (local-sovereign)", () => {
       )
       .toBeTruthy();
 
-    // PMTiles protocol fetch check. If MapLibre + pmtiles protocol is correctly linked,
-    // the source URL pmtiles://basemap-hamburg.pmtiles should be transformed to a real
-    // fetch against /local-basemap/basemap-hamburg.pmtiles, and it MUST include a Range header.
-    await expect
-      .poll(
-        () =>
-          requestedUrls.some((url) =>
-            url.includes("/local-basemap/basemap-hamburg.pmtiles"),
-          ),
-        {
-          message:
-            "Client should transform pmtiles:// protocol and request local .pmtiles artifact",
-          timeout: 5000,
-        },
-      )
-      .toBeTruthy();
+    // Both regional PMTiles sources must be resolved to local HTTP requests.
+    for (const artifact of [
+      "basemap-hamburg.pmtiles",
+      "basemap-schleswig-holstein.pmtiles",
+    ]) {
+      await expect
+        .poll(
+          () =>
+            requestedUrls.some((url) =>
+              url.includes(`/local-basemap/${artifact}`),
+            ),
+          {
+            message: `Client should request local regional artifact ${artifact}`,
+            timeout: 5000,
+          },
+        )
+        .toBeTruthy();
+    }
 
-    // Final semantic validation: Prove that it actually behaves like a PMTiles client
-    // requesting a byte slice, not just fetching a random file.
+    // Final semantic validation: both sources behave like PMTiles clients and
+    // request byte slices rather than fetching opaque whole files.
     await expect
-      .poll(() => sawPmtilesRangeRequest, {
-        message: "PMTiles client must issue a Range header",
+      .poll(() => pmtilesRangeRegions.size, {
+        message: "Both regional PMTiles clients must issue Range headers",
         timeout: 5000,
       })
-      .toBeTruthy();
+      .toBe(2);
   });
 });

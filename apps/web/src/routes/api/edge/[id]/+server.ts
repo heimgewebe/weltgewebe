@@ -1,6 +1,6 @@
 import { json, error } from "@sveltejs/kit";
 import {
-  resolveEdge,
+  resolvePublicEdge,
   resolveEdgeParticipants,
   getEdgeEntries,
 } from "$lib/demo/resolvers";
@@ -16,7 +16,7 @@ export function GET({ params }: RequestEvent) {
     throw error(400, "ID is required");
   }
 
-  const edge = resolveEdge(id);
+  const edge = resolvePublicEdge(id);
 
   if (!edge) {
     throw error(404, "Edge not found");
@@ -24,7 +24,7 @@ export function GET({ params }: RequestEvent) {
 
   const participants = resolveEdgeParticipants(id);
 
-  // Return the complete domain object with enriched data
+  // Return the public edge projection with enriched participant data
   return json({
     ...edge,
     ...participants,

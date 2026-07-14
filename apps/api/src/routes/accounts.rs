@@ -21,7 +21,11 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{collections::HashMap, env, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+    path::PathBuf,
+};
 use tokio::{
     fs::{File, OpenOptions},
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -79,6 +83,28 @@ pub struct AccountPublic {
     pub disabled: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct AccountNodeRelation {
+    pub node_id: String,
+    pub node_title: String,
+    pub node_kind: String,
+    pub edge_kind: String,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct AccountActivity {
+    pub date: String,
+    pub event: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct AccountDetails {
+    #[serde(flatten)]
+    pub account: AccountPublic,
+    pub nodes: Vec<AccountNodeRelation>,
+    pub activity: Vec<AccountActivity>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -396,13 +422,89 @@ pub async fn list_accounts(
 pub async fn get_account(
     State(state): State<ApiState>,
     Path(id): Path<String>,
-) -> Result<Json<AccountPublic>, StatusCode> {
-    let accounts = state.accounts.read().await;
-    if let Some(internal) = accounts.get(&id) {
-        Ok(Json(internal.public.clone()))
-    } else {
-        Err(StatusCode::NOT_FOUND)
+) -> Result<Json<AccountDetails>, StatusCode> {
+    // Clone the public profile before reading the relationship caches so this
+    // endpoint never holds several state locks at once.
+    let account = {
+        let accounts = state.accounts.read().await;
+        accounts
+            .get(&id)
+            .map(|internal| internal.public.clone())
+            .ok_or(StatusCode::NOT_FOUND)?
+    };
+
+    // Fäden are the source of truth for which Knoten belong to a Garnrolle.
+    // Both directions are accepted, but a raw id match is insufficient: an
+    // explicitly node-typed endpoint must never be projected as an account.
+    // Missing legacy type metadata remains readable; newly created edges always
+    // carry explicit validated types.
+    let related_edges = {
+        let edges = state.edges.read().await;
+        edges
+            .iter_in_order()
+            .filter(|edge| {
+                (edge.source_id == id
+                    && matches!(edge.source_type.as_deref(), Some("account") | None))
+                    || (edge.target_id == id
+                        && matches!(edge.target_type.as_deref(), Some("account") | None))
+            })
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+
+    let node_cache = state.nodes.read().await;
+    let mut seen_nodes = HashSet::new();
+    let mut nodes = Vec::new();
+    let mut activity = Vec::new();
+
+    for edge in related_edges {
+        let account_is_source = edge.source_id == id;
+        let (related_id, related_type) = if account_is_source {
+            (edge.target_id.as_str(), edge.target_type.as_deref())
+        } else {
+            (edge.source_id.as_str(), edge.source_type.as_deref())
+        };
+        if !matches!(related_type, Some("node") | None) {
+            continue;
+        }
+        let Some(node) = node_cache.get(related_id) else {
+            continue;
+        };
+
+        if seen_nodes.insert(node.id.clone()) {
+            nodes.push(AccountNodeRelation {
+                node_id: node.id.clone(),
+                node_title: node.title.clone(),
+                node_kind: node.kind.clone(),
+                edge_kind: edge.edge_kind.clone(),
+            });
+        }
+
+        if let Some(date) = edge.created_at.clone() {
+            let event = if account_is_source {
+                format!("Hat den Knoten \"{}\" geknüpft.", node.title)
+            } else {
+                format!(
+                    "Wurde über einen Faden mit dem Knoten \"{}\" verknüpft.",
+                    node.title
+                )
+            };
+            activity.push(AccountActivity { date, event });
+        }
     }
+
+    nodes.sort_by(|left, right| {
+        left.node_title
+            .cmp(&right.node_title)
+            .then_with(|| left.node_id.cmp(&right.node_id))
+    });
+    activity.sort_by(|left, right| right.date.cmp(&left.date));
+
+    Ok(Json(AccountDetails {
+        account,
+        nodes,
+        activity,
+    }))
 }
 
 /// Parse a JSON value as f64, accepting either a number or a numeric string.

@@ -28,51 +28,27 @@ async function gotoMapAsAccount(page: Page, accountId: string) {
   await page.waitForSelector(".action-bar", { timeout: 10000 });
 }
 
-test.describe("Own Garnrolle discoverability when not_on_map", () => {
-  test("TopBar surfaces a settings link instead of a dead 'auf Karte zeigen' action", async ({
+async function expectDirectSettingsEntry(page: Page) {
+  const link = page.locator(
+    '.garnrolle-container a[aria-label="Meine Garnrolle einstellen"]',
+  );
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute("href", "/settings#meine-garnrolle");
+  await expect(page.locator(".garnrolle-container .menu")).toHaveCount(0);
+}
+
+test.describe("Own Garnrolle settings entry", () => {
+  test("uses the same direct settings entry when the Garnrolle is not on the map", async ({
     page,
   }) => {
     await gotoMapAsAccount(page, NOT_ON_MAP_ACCOUNT_ID);
-
-    await page.click(
-      '.garnrolle-container button[aria-label="Kontoeinstellungen"]',
-    );
-    const menu = page.locator(".garnrolle-container .menu");
-    await expect(menu).toBeVisible();
-
-    // No dead-click "auf Karte zeigen" action when there is no public position —
-    // inventing a map position is not an option, so the control simply isn't
-    // offered.
-    await expect(
-      menu.locator('button:has-text("Meine Garnrolle auf Karte zeigen")'),
-    ).toHaveCount(0);
-
-    // The Garnrolle stays discoverable via the existing settings surface,
-    // with wording that honestly reflects the not-on-map state.
-    const settingsLink = menu.locator(
-      'a:has-text("Meine Garnrolle (noch nicht auf der Karte)")',
-    );
-    await expect(settingsLink).toBeVisible();
-    await expect(settingsLink).toHaveAttribute(
-      "href",
-      "/settings#meine-garnrolle",
-    );
+    await expectDirectSettingsEntry(page);
   });
 
-  test("TopBar keeps the zoom action for an account with a public position", async ({
+  test("does not add a redundant map action when the Garnrolle has a public position", async ({
     page,
   }) => {
     await gotoMapAsAccount(page, EXACT_ACCOUNT_ID);
-
-    await page.click(
-      '.garnrolle-container button[aria-label="Kontoeinstellungen"]',
-    );
-    const menu = page.locator(".garnrolle-container .menu");
-    await expect(menu).toBeVisible();
-
-    await expect(
-      menu.locator('button:has-text("Meine Garnrolle auf Karte zeigen")'),
-    ).toBeVisible();
-    await expect(menu.locator('a:has-text("Meine Garnrolle")')).toBeVisible();
+    await expectDirectSettingsEntry(page);
   });
 });

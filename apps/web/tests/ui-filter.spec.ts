@@ -89,6 +89,47 @@ test.describe("Filter mode", () => {
     await expect(page.locator(".result-item").first()).toHaveText(
       /Test Account/,
     );
+
+    // Search by the domain term, not only by the individual title.
+    await searchInput.clear();
+    await searchInput.fill("Garnrollen");
+    await expect(page.locator(".result-item")).toHaveCount(1);
+    await expect(page.locator(".result-item").first()).toHaveText(
+      /Test Account/,
+    );
+  });
+
+  test("lists selected Garnrollen as selectable map hits", async ({ page }) => {
+    const filterBtn = page.getByRole("button", { name: "Filter", exact: true });
+    await filterBtn.click();
+
+    const filterOverlay = page.getByTestId("filter-overlay");
+    const garnrolleLabel = page.locator("label.filter-item", {
+      hasText: "Garnrolle",
+    });
+    await garnrolleLabel.click();
+
+    await expect(filterOverlay.getByText("Treffer (1)")).toBeVisible();
+    const result = page.getByTestId("filter-result-garnrolle-account-1");
+    await expect(result).toContainText("Test Account");
+    await result.click();
+
+    await expect(filterOverlay).not.toBeVisible();
+    const contextPanel = page.getByTestId("context-panel");
+    await expect(contextPanel).toBeVisible();
+    await expect(contextPanel.locator(".panel-header h2")).toContainText(
+      "Garnrolle",
+    );
+
+    await page.waitForFunction(() => {
+      const map = (window as any).__TEST_MAP__;
+      if (!map) return false;
+      const center = map.getCenter();
+      return (
+        Math.abs(center.lng - 10.05) < 0.0001 &&
+        Math.abs(center.lat - 53.55) < 0.0001
+      );
+    });
   });
 
   test("Case B & E: Active filter -> Search strictly bounded, and Clear Filters", async ({
@@ -106,8 +147,10 @@ test.describe("Filter mode", () => {
     const filterOverlay = page.getByTestId("filter-overlay");
     await expect(filterOverlay).toBeVisible();
 
-    // Filter to ONLY show "Event"
-    const eventLabel = page.locator("label.filter-item", { hasText: "Event" });
+    // Filter to ONLY show "Ereignis"
+    const eventLabel = page.locator("label.filter-item", {
+      hasText: "Ereignis",
+    });
     await eventLabel.click();
 
     // Marker count drops strictly to 1
@@ -125,14 +168,14 @@ test.describe("Filter mode", () => {
     await searchInput.fill("Test Node 2");
     await expect(page.locator(".result-item")).toHaveCount(0);
     await expect(page.getByRole("status")).toHaveText(
-      `Keine Treffer für "Test Node 2"`,
+      `Keine Treffer für „Test Node 2“`,
     );
 
     await searchInput.clear();
     await searchInput.fill("Test Account");
     await expect(page.locator(".result-item")).toHaveCount(0);
     await expect(page.getByRole("status")).toHaveText(
-      `Keine Treffer für "Test Account"`,
+      `Keine Treffer für „Test Account“`,
     );
 
     // Search for included item
@@ -145,7 +188,7 @@ test.describe("Filter mode", () => {
 
     // Case E: Clear Filters resets marker count
     await filterBtn.click();
-    const clearBtn = page.getByRole("button", { name: "Alle löschen" });
+    const clearBtn = page.getByRole("button", { name: "Auswahl zurücksetzen" });
     await clearBtn.click();
     await expect(clearBtn).not.toBeVisible();
     await expect(page.locator(markerSelector)).toHaveCount(3);

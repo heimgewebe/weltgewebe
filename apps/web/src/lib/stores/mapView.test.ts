@@ -141,6 +141,37 @@ describe("mapView presentation helpers", () => {
     expect(deriveSearchMatchIds(results).has("node-1")).toBe(true);
   });
 
+  it("finds Garnrollen by semantic type, plural and profile tags", () => {
+    const scene = sceneFrom(
+      [],
+      [
+        makeAccount({
+          title: "Alexander Mohr",
+          summary: "schaunmermal",
+          tags: ["interest:Commons"],
+        }),
+      ],
+    );
+
+    for (const query of ["Garnrolle", "Garnrollen", "Commons"]) {
+      const results = deriveSearchResults(scene.entities, query, true);
+      expect(results).toHaveLength(1);
+      expect(results[0].id).toBe("acc-1");
+    }
+  });
+
+  it("finds Knoten by semantic type and kind", () => {
+    const scene = sceneFrom(
+      [makeNode({ title: "Fairschenkbox", kind: "Resource" })],
+      [],
+    );
+
+    expect(deriveSearchResults(scene.entities, "Knoten", true)).toHaveLength(1);
+    expect(deriveSearchResults(scene.entities, "Resource", true)).toHaveLength(
+      1,
+    );
+  });
+
   it("scopes search to the visible markers it is handed", () => {
     const scene = sceneFrom(
       [makeNode({ title: "Findbar", kind: "Werkstatt" })],
