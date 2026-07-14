@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-domain
 owner: product-domain
-last_reviewed: 2026-07-13
+last_reviewed: 2026-07-14
 review_after: 2026-10-11
 depends_on: []
 relations:
@@ -25,6 +25,7 @@ verifies_with:
   - contracts/domain/account.schema.json
   - contracts/domain/node.schema.json
   - contracts/domain/edge.schema.json
+  - apps/api/tests/api_collective_mutations.rs
   - apps/web/tests/garnrolle-self-service.spec.ts
   - apps/web/tests/komposition.spec.ts
 ---
@@ -124,6 +125,7 @@ Dabei gelten folgende Integritätsregeln:
 2. Beim Löschen eines Knotens werden alle Fäden entfernt, die diesen Knoten als Ursprung oder Ziel verwenden. Es dürfen keine verwaisten Fäden entstehen.
 3. IDs und Erstellungszeitpunkte bleiben serververwaltet und können nicht überschrieben werden.
 4. Die Oberfläche benennt vor jeder Löschung die konkrete Folge; bei Knoten ausdrücklich auch die Entfernung verbundener Fäden.
+5. Knotenlöschung setzt dieselbe aktive Schreibquelle für Knoten und Fäden voraus. Ein gemischter Migrationszustand wird mit Konflikt abgewiesen, statt nur einen Teil des Gewebes zu löschen.
 
 ### Autorisierung, Richtung und öffentliche Notizen
 
