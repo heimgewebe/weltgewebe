@@ -13,9 +13,13 @@ export class ApiRequestError extends Error {
   }
 }
 
-async function postJson<T>(path: string, payload: unknown): Promise<T> {
+async function requestJson<T>(
+  path: string,
+  method: "POST" | "PATCH" | "PUT",
+  payload: unknown,
+): Promise<T> {
   const res = await fetch(path, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
     credentials: "include",
@@ -26,17 +30,26 @@ async function postJson<T>(path: string, payload: unknown): Promise<T> {
   return res.json();
 }
 
+async function postJson<T>(path: string, payload: unknown): Promise<T> {
+  return requestJson<T>(path, "POST", payload);
+}
+
 async function patchJson<T>(path: string, payload: unknown): Promise<T> {
+  return requestJson<T>(path, "PATCH", payload);
+}
+
+async function putJson<T>(path: string, payload: unknown): Promise<T> {
+  return requestJson<T>(path, "PUT", payload);
+}
+
+async function deleteResource(path: string): Promise<void> {
   const res = await fetch(path, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    method: "DELETE",
     credentials: "include",
   });
   if (!res.ok) {
     throw new ApiRequestError(res.status);
   }
-  return res.json();
 }
 
 async function getJson<T>(path: string): Promise<T> {
@@ -95,6 +108,29 @@ export function createNode(payload: CreateNodePayload): Promise<Node> {
   return postJson<Node>("/api/nodes", payload);
 }
 
+export interface ReplaceNodePayload {
+  title: string;
+  kind: string;
+  address: string;
+  location: Location;
+  summary?: string;
+  info?: string;
+  tags: string[];
+}
+
+/** PUT /api/nodes/:id — collectively replace the editable fields of a node. */
+export function replaceNode(
+  id: string,
+  payload: ReplaceNodePayload,
+): Promise<Node> {
+  return putJson<Node>(`/api/nodes/${encodeURIComponent(id)}`, payload);
+}
+
+/** DELETE /api/nodes/:id — delete a node and its connected edges. */
+export function deleteNode(id: string): Promise<void> {
+  return deleteResource(`/api/nodes/${encodeURIComponent(id)}`);
+}
+
 export interface CreateEdgePayload {
   source_id: string;
   source_type: string;
@@ -108,4 +144,16 @@ export interface CreateEdgePayload {
 /** POST /api/edges — create an edge. Server owns `id`/`created_at`. */
 export function createEdge(payload: CreateEdgePayload): Promise<Edge> {
   return postJson<Edge>("/api/edges", payload);
+}
+
+/** PATCH /api/edges/:id — collectively change the semantic relationship type. */
+export function updateEdgeKind(id: string, edgeKind: string): Promise<Edge> {
+  return patchJson<Edge>(`/api/edges/${encodeURIComponent(id)}`, {
+    edge_kind: edgeKind,
+  });
+}
+
+/** DELETE /api/edges/:id — delete one relationship. */
+export function deleteEdge(id: string): Promise<void> {
+  return deleteResource(`/api/edges/${encodeURIComponent(id)}`);
 }
