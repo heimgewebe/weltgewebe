@@ -852,6 +852,7 @@ fn patch_own_profile(cookie: &str, json_body: &str) -> Request<body::Body> {
 #[serial]
 async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() -> Result<()> {
     const PROFILE_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000032";
+    const OTHER_PROFILE_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000033";
     const WEBAUTHN_ID: &str = "139d028d-56dd-4dd2-90b0-f5e6ca285bbb";
 
     let pool = connect_pool().await;
@@ -872,6 +873,21 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
     )
     .await
     .expect("insert profile fixture");
+    insert_account_from_jsonl_record(
+        &pool,
+        &serde_json::json!({
+            "id": OTHER_PROFILE_ID,
+            "type": "garnrolle",
+            "title": "Fremde PostgreSQL Garnrolle",
+            "role": "weber",
+            "email": "profile-other@example.test",
+            "webauthn_user_id": "239d028d-56dd-4dd2-90b0-f5e6ca285bbb",
+            "map_state": "not_on_map",
+            "radius_m": 0
+        }),
+    )
+    .await
+    .expect("insert foreign profile fixture");
 
     let tmp = tempfile::tempdir()?;
     let in_dir = tmp.path().join("in");
@@ -927,6 +943,14 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
     assert_eq!(private_payload["address"], "Poelsweg 2, Hamburg");
     assert_eq!(row.7.as_deref(), Some("profile-owner@example.test"));
     assert_eq!(row.8.as_deref(), Some(WEBAUTHN_ID));
+
+    let (other_title, other_email): (String, Option<String>) =
+        sqlx::query_as("SELECT title, email FROM domain_accounts WHERE id = $1")
+            .bind(OTHER_PROFILE_ID)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(other_title, "Fremde PostgreSQL Garnrolle");
+    assert_eq!(other_email.as_deref(), Some("profile-other@example.test"));
 
     // The durable row, not a parallel JSONL write, is the source of truth.
     assert!(!in_dir.join("demo.accounts.jsonl").exists());

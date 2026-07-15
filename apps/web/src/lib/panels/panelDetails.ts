@@ -21,6 +21,7 @@ export interface PanelDetailsLoaderOptions {
 export interface PanelDetailsLoader<T> {
   details: Readable<T | null>;
   isLoading: Readable<boolean>;
+  setDetails: (value: T | null) => void;
   destroy: () => void;
 }
 
@@ -97,6 +98,10 @@ export function createPanelDetailsLoader<T>(
       });
   });
 
+  function setDetails(value: T | null) {
+    details.set(value);
+  }
+
   function destroy() {
     if (abortController) {
       abortController.abort();
@@ -108,7 +113,7 @@ export function createPanelDetailsLoader<T>(
     unsubscribe();
   }
 
-  return { details, isLoading, destroy };
+  return { details, isLoading, setDetails, destroy };
 }
 
 export function buildPanelEndpoint(

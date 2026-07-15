@@ -250,6 +250,404 @@ async fn node_delete_rejects_mixed_node_and_edge_write_sources() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn node_delete_jsonl_keeps_account_and_role_endpoint_collisions() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    write_fixture(
+        &nodes_path,
+        concat!(
+            r#"{"id":"n1","kind":"Werkstatt","title":"Alt","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+            r#"{"id":"n2","kind":"Ort","title":"Ziel","address":"Ziel 2","location":{"lat":53.6,"lon":10.1},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+        ),
+    );
+    write_fixture(
+        &edges_path,
+        concat!(
+            r#"{"id":"e-node","source_id":"n1","source_type":"node","target_id":"n2","target_type":"node","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+            r#"{"id":"e-account-collision","source_id":"n1","source_type":"account","target_id":"n2","target_type":"node","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+            r#"{"id":"e-role-collision","source_id":"n2","source_type":"node","target_id":"n1","target_type":"role","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+        ),
+    );
+    let _env = set_gewebe_in_dir(&in_dir);
+    let state = state_for_role(Role::Weber).await?;
+    {
+        let mut edges = state.edges.write().await;
+        for (id, source_id, source_type, target_id, target_type) in [
+            ("e-node", "n1", "node", "n2", "node"),
+            ("e-account-collision", "n1", "account", "n2", "node"),
+            ("e-role-collision", "n2", "node", "n1", "role"),
+        ] {
+            edges.insert(
+                id.to_string(),
+                Edge {
+                    id: id.to_string(),
+                    source_id: source_id.to_string(),
+                    source_type: Some(source_type.to_string()),
+                    target_id: target_id.to_string(),
+                    target_type: Some(target_type.to_string()),
+                    edge_kind: "reference".to_string(),
+                    note: None,
+                    created_at: Some("2026-01-01T00:00:00Z".to_string()),
+                },
+            );
+        }
+    }
+    let (app, cookie) = authenticated_app(state.clone()).await;
+
+    let delete = mutation_request("DELETE", "/nodes/n1", &cookie, "");
+    let response = app.oneshot(delete).await?;
+    let status = response.status();
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    assert_eq!(
+        status,
+        StatusCode::NO_CONTENT,
+        "unexpected delete response: {}",
+        String::from_utf8_lossy(&bytes)
+    );
+
+    assert!(state.nodes.read().await.get("n1").is_none());
+    let edges = state.edges.read().await;
+    assert!(edges.get("e-node").is_none());
+    assert!(edges.get("e-account-collision").is_some());
+    assert!(edges.get("e-role-collision").is_some());
+    drop(edges);
+
+    let edge_file = fs::read_to_string(&edges_path)?;
+    assert!(!edge_file.contains(r#""id":"e-node""#));
+    assert!(edge_file.contains(r#""id":"e-account-collision""#));
+    assert!(edge_file.contains(r#""id":"e-role-collision""#));
+    assert!(!fs::read_to_string(&nodes_path)?.contains(r#""id":"n1""#));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn node_delete_jsonl_deletes_unique_untyped_legacy_edge() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    write_fixture(
+        &nodes_path,
+        concat!(
+            r#"{"id":"n1","kind":"Werkstatt","title":"Alt","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+            r#"{"id":"n2","kind":"Ort","title":"Ziel","address":"Ziel 2","location":{"lat":53.6,"lon":10.1},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+        ),
+    );
+    write_fixture(
+        &edges_path,
+        concat!(
+            r#"{"id":"e-untyped-legacy","source_id":"n1","target_id":"n2","target_type":"node","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+            r#"{"id":"e-kept","source_id":"n2","source_type":"node","target_id":"n3","target_type":"node","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+        ),
+    );
+    let _env = set_gewebe_in_dir(&in_dir);
+    let state = state_for_role(Role::Weber).await?;
+    state.edges.write().await.insert(
+        "e-untyped-legacy".to_string(),
+        Edge {
+            id: "e-untyped-legacy".to_string(),
+            source_id: "n1".to_string(),
+            source_type: None,
+            target_id: "n2".to_string(),
+            target_type: Some("node".to_string()),
+            edge_kind: "reference".to_string(),
+            note: None,
+            created_at: Some("2026-01-01T00:00:00Z".to_string()),
+        },
+    );
+    let (app, cookie) = authenticated_app(state.clone()).await;
+
+    let delete = mutation_request("DELETE", "/nodes/n1", &cookie, "");
+    let response = app.oneshot(delete).await?;
+    let status = response.status();
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    assert_eq!(
+        status,
+        StatusCode::NO_CONTENT,
+        "unexpected delete response: {}",
+        String::from_utf8_lossy(&bytes)
+    );
+
+    assert!(state.nodes.read().await.get("n1").is_none());
+    assert!(state.edges.read().await.get("e-untyped-legacy").is_none());
+    let edge_file = fs::read_to_string(&edges_path)?;
+    assert!(!edge_file.contains(r#""id":"e-untyped-legacy""#));
+    assert!(edge_file.contains(r#""id":"e-kept""#));
+    assert!(!fs::read_to_string(&nodes_path)?.contains(r#""id":"n1""#));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn node_delete_jsonl_rejects_untyped_account_collision_without_partial_mutation() -> Result<()>
+{
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let nodes_original = concat!(
+        r#"{"id":"n1","kind":"Werkstatt","title":"Alt","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+    );
+    let edges_original = concat!(
+        r#"{"id":"e-untyped-account-collision","source_id":"n1","target_id":"n2","target_type":"node","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+    );
+    write_fixture(&nodes_path, nodes_original);
+    write_fixture(&edges_path, edges_original);
+    let _env = set_gewebe_in_dir(&in_dir);
+    let state = state_for_role(Role::Weber).await?;
+    state.accounts.write().await.insert(AccountInternal {
+        public: AccountPublic {
+            id: "n1".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "Kollidierende Garnrolle".to_string(),
+            summary: None,
+            public_pos: None,
+            map_state: weltgewebe_api::routes::accounts::GarnrolleMapState::NotOnMap,
+            radius_m: 0,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Weber,
+        email: None,
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    });
+    state.edges.write().await.insert(
+        "e-untyped-account-collision".to_string(),
+        Edge {
+            id: "e-untyped-account-collision".to_string(),
+            source_id: "n1".to_string(),
+            source_type: None,
+            target_id: "n2".to_string(),
+            target_type: Some("node".to_string()),
+            edge_kind: "reference".to_string(),
+            note: None,
+            created_at: Some("2026-01-01T00:00:00Z".to_string()),
+        },
+    );
+    let (app, cookie) = authenticated_app(state.clone()).await;
+
+    let delete = mutation_request("DELETE", "/nodes/n1", &cookie, "");
+    let response = app.oneshot(delete).await?;
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+
+    assert!(state.nodes.read().await.get("n1").is_some());
+    assert!(state
+        .edges
+        .read()
+        .await
+        .get("e-untyped-account-collision")
+        .is_some());
+    assert_eq!(fs::read_to_string(&nodes_path)?, nodes_original);
+    assert_eq!(fs::read_to_string(&edges_path)?, edges_original);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn node_delete_jsonl_rejects_untyped_role_collision_without_partial_mutation() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let nodes_original = concat!(
+        r#"{"id":"n1","kind":"Werkstatt","title":"Alt","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+        r#"{"id":"n2","kind":"Ort","title":"Ziel","address":"Ziel 2","location":{"lat":53.6,"lon":10.1},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+    );
+    let edges_original = concat!(
+        r#"{"id":"e-role-evidence","source_id":"n2","source_type":"node","target_id":"n1","target_type":"role","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+        r#"{"id":"e-untyped-role-collision","source_id":"n1","target_id":"n2","target_type":"node","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+    );
+    write_fixture(&nodes_path, nodes_original);
+    write_fixture(&edges_path, edges_original);
+    let _env = set_gewebe_in_dir(&in_dir);
+    let state = state_for_role(Role::Weber).await?;
+    {
+        let mut edges = state.edges.write().await;
+        edges.insert(
+            "e-role-evidence".to_string(),
+            Edge {
+                id: "e-role-evidence".to_string(),
+                source_id: "n2".to_string(),
+                source_type: Some("node".to_string()),
+                target_id: "n1".to_string(),
+                target_type: Some("role".to_string()),
+                edge_kind: "reference".to_string(),
+                note: None,
+                created_at: Some("2026-01-01T00:00:00Z".to_string()),
+            },
+        );
+        edges.insert(
+            "e-untyped-role-collision".to_string(),
+            Edge {
+                id: "e-untyped-role-collision".to_string(),
+                source_id: "n1".to_string(),
+                source_type: None,
+                target_id: "n2".to_string(),
+                target_type: Some("node".to_string()),
+                edge_kind: "reference".to_string(),
+                note: None,
+                created_at: Some("2026-01-01T00:00:00Z".to_string()),
+            },
+        );
+    }
+    let (app, cookie) = authenticated_app(state.clone()).await;
+
+    let delete = mutation_request("DELETE", "/nodes/n1", &cookie, "");
+    let response = app.oneshot(delete).await?;
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+
+    assert!(state.nodes.read().await.get("n1").is_some());
+    assert!(state.edges.read().await.get("e-role-evidence").is_some());
+    assert!(state
+        .edges
+        .read()
+        .await
+        .get("e-untyped-role-collision")
+        .is_some());
+    assert_eq!(fs::read_to_string(&nodes_path)?, nodes_original);
+    assert_eq!(fs::read_to_string(&edges_path)?, edges_original);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn node_delete_jsonl_rejects_invalid_endpoint_type_without_partial_mutation() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let nodes_original = concat!(
+        r#"{"id":"n1","kind":"Werkstatt","title":"Alt","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+        r#"{"id":"n2","kind":"Ort","title":"Ziel","address":"Ziel 2","location":{"lat":53.6,"lon":10.1},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+    );
+    let edges_original = concat!(
+        r#"{"id":"e-node","source_id":"n1","source_type":"node","target_id":"n2","target_type":"node","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+        r#"{"id":"e-invalid-collision","source_id":"n2","source_type":"node","target_id":"n1","target_type":"group","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+    );
+    write_fixture(&nodes_path, nodes_original);
+    write_fixture(&edges_path, edges_original);
+    let _env = set_gewebe_in_dir(&in_dir);
+    let state = state_for_role(Role::Weber).await?;
+    state.edges.write().await.insert(
+        "e-node".to_string(),
+        Edge {
+            id: "e-node".to_string(),
+            source_id: "n1".to_string(),
+            source_type: Some("node".to_string()),
+            target_id: "n2".to_string(),
+            target_type: Some("node".to_string()),
+            edge_kind: "reference".to_string(),
+            note: None,
+            created_at: Some("2026-01-01T00:00:00Z".to_string()),
+        },
+    );
+    let (app, cookie) = authenticated_app(state.clone()).await;
+
+    let delete = mutation_request("DELETE", "/nodes/n1", &cookie, "");
+    let response = app.oneshot(delete).await?;
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+
+    assert!(state.nodes.read().await.get("n1").is_some());
+    assert!(state.edges.read().await.get("e-node").is_some());
+    assert_eq!(fs::read_to_string(&nodes_path)?, nodes_original);
+    assert_eq!(fs::read_to_string(&edges_path)?, edges_original);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn concurrent_replace_and_delete_leave_one_coherent_jsonl_result() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    write_fixture(
+        &nodes_path,
+        concat!(
+            r#"{"id":"n1","kind":"Werkstatt","title":"Alt","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+            r#"{"id":"n2","kind":"Ort","title":"Ziel","address":"Ziel 2","location":{"lat":53.6,"lon":10.1},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+        ),
+    );
+    write_fixture(
+        &edges_path,
+        concat!(
+            r#"{"id":"e1","source_id":"n1","source_type":"node","target_id":"n2","target_type":"node","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+        ),
+    );
+    let _env = set_gewebe_in_dir(&in_dir);
+    let state = state_for_role(Role::Weber).await?;
+    state.edges.write().await.insert(
+        "e1".to_string(),
+        Edge {
+            id: "e1".to_string(),
+            source_id: "n1".to_string(),
+            source_type: Some("node".to_string()),
+            target_id: "n2".to_string(),
+            target_type: Some("node".to_string()),
+            edge_kind: "reference".to_string(),
+            note: None,
+            created_at: Some("2026-01-01T00:00:00Z".to_string()),
+        },
+    );
+    let (app, cookie) = authenticated_app(state.clone()).await;
+
+    let replace = mutation_request(
+        "PUT",
+        "/nodes/n1",
+        &cookie,
+        r#"{"title":"Parallel gepflegt","kind":"Werkstatt","address":"Neu 1","location":{"lat":53.55,"lon":10.05},"tags":[]}"#,
+    );
+    let delete = mutation_request("DELETE", "/nodes/n1", &cookie, "");
+    let (replace_response, delete_response) =
+        tokio::join!(app.clone().oneshot(replace), app.clone().oneshot(delete),);
+    let replace_status = replace_response?.status();
+    let delete_status = delete_response?.status();
+
+    assert_eq!(delete_status, StatusCode::NO_CONTENT);
+    assert!(matches!(
+        replace_status,
+        StatusCode::OK | StatusCode::NOT_FOUND
+    ));
+    assert!(state.nodes.read().await.get("n1").is_none());
+    assert!(state.edges.read().await.get("e1").is_none());
+    assert!(!fs::read_to_string(&nodes_path)?.contains(r#""id":"n1""#));
+    assert!(!fs::read_to_string(&edges_path)?.contains(r#""id":"e1""#));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn guest_cannot_mutate_shared_elements() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let in_dir = tmp.path().join("in");

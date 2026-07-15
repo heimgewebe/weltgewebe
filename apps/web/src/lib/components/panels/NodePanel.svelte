@@ -130,8 +130,11 @@
         return "Diese Garnrolle darf derzeit nicht schreiben.";
       }
       if (error.status === 404) return "Der Knoten existiert nicht mehr.";
+      if (error.status === 400) {
+        return "Die Eingaben sind ungültig. Bitte prüfe alle Felder.";
+      }
       if (error.status === 409) {
-        return "Das Gewebe ist vorübergehend nur lesbar. Bitte später erneut versuchen.";
+        return "Der Knoten konnte wegen eines Datenkonflikts nicht geändert werden. Es wurde nichts verändert.";
       }
     }
     return "Die Änderung konnte nicht gespeichert werden.";
@@ -161,18 +164,27 @@
     saving = true;
     mutationError = "";
     try {
-      await replaceNode(id, {
+      const updatedNode = await replaceNode(id, {
         title: formTitle.trim(),
         kind: formKind.trim(),
         address: formAddress.trim(),
         location: { lat, lon },
         summary: formSummary.trim() || undefined,
-        info: formInfo || undefined,
-        tags: formTags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean),
+        info: formInfo.trim() || undefined,
+        tags: Array.from(
+          new Set(
+            formTags
+              .split(",")
+              .map((tag) => tag.trim())
+              .filter(Boolean),
+          ),
+        ),
       });
+      detailsLoader.setDetails({
+        ...(nodeDetails ?? {}),
+        ...updatedNode,
+      } as NodeDetails);
+      editing = false;
       dispatch("domainChanged", { kind: "node", id, action: "updated" });
     } catch (error) {
       mutationError = mutationMessage(error);

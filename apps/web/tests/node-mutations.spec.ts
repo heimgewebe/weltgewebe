@@ -32,7 +32,7 @@ test.describe("Knoten bearbeiten und löschen", () => {
     });
     await page.goto("/map");
 
-    let panel = await openFirstNode(page);
+    const panel = await openFirstNode(page);
     await panel.getByRole("button", { name: "Bearbeiten" }).click();
     await panel.getByLabel("Titel").fill("Gemeinsam gepflegter Knoten");
     await panel
@@ -50,10 +50,11 @@ test.describe("Knoten bearbeiten und löschen", () => {
       title: "Gemeinsam gepflegter Knoten",
       summary: "Aktualisierte öffentliche Kurzbeschreibung",
     });
-    await expect(panel).toHaveCount(0);
-
-    panel = await openFirstNode(page);
+    await expect(panel).toBeVisible();
     await expect(panel.locator("h3")).toHaveText("Gemeinsam gepflegter Knoten");
+    await expect(
+      panel.getByText("Aktualisierte öffentliche Kurzbeschreibung"),
+    ).toBeVisible();
     const markerCountBeforeDelete = await page.locator(".map-marker").count();
 
     page.once("dialog", async (dialog) => {

@@ -23,9 +23,7 @@ use std::sync::OnceLock;
 use tokio::sync::Mutex;
 use tokio::{
     fs::{File, OpenOptions},
-    io::{
-        AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, BufWriter, SeekFrom,
-    },
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom},
 };
 use uuid::Uuid;
 
@@ -285,97 +283,154 @@ pub async fn get_edge(
     }))
 }
 
-enum EdgeJsonlRewriteAction {
-    Keep,
-    Remove,
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct EdgeEndpointCollisionEvidence {
+    pub(crate) account_exists: bool,
+    pub(crate) role_exists: bool,
 }
 
-async fn rewrite_edges_jsonl<F>(mut transform: F) -> std::io::Result<Vec<Edge>>
-where
-    F: FnMut(&mut Value) -> std::io::Result<(EdgeJsonlRewriteAction, Option<Edge>)>,
-{
-    let path = edges_path();
-    let file = match File::open(&path).await {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error),
-    };
-    let mut lines = BufReader::new(file).lines();
-    let mut tmp_path = path.clone();
-    let filename = tmp_path.file_name().ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "edges path has no filename",
-        )
-    })?;
-    let mut tmp_filename = filename.to_os_string();
-    tmp_filename.push(format!(".tmp.{}", Uuid::new_v4()));
-    tmp_path.set_file_name(tmp_filename);
-
-    let result = async {
-        let tmp_file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp_path)
-            .await?;
-        let mut writer = BufWriter::new(tmp_file);
-        let mut changed = Vec::new();
-        while let Some(line) = lines.next_line().await? {
-            let Ok(mut value) = serde_json::from_str::<Value>(&line) else {
-                writer.write_all(line.as_bytes()).await?;
-                writer.write_all(b"\n").await?;
-                continue;
-            };
-            let (action, affected) = transform(&mut value)?;
-            if let Some(edge) = affected {
-                changed.push(edge);
-            }
-            if matches!(action, EdgeJsonlRewriteAction::Remove) {
-                continue;
-            }
-            let output = serde_json::to_string(&value)
-                .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
-            writer.write_all(output.as_bytes()).await?;
-            writer.write_all(b"\n").await?;
-        }
-        writer.flush().await?;
-        let file = writer.into_inner();
-        file.sync_all().await?;
-        Ok::<Vec<Edge>, std::io::Error>(changed)
-    }
-    .await;
-
-    match result {
-        Ok(changed) => {
-            tokio::fs::rename(&tmp_path, &path).await?;
-            Ok(changed)
-        }
-        Err(error) => {
-            let _ = tokio::fs::remove_file(&tmp_path).await;
-            Err(error)
-        }
+impl EdgeEndpointCollisionEvidence {
+    pub(crate) fn has_collision(self) -> bool {
+        self.account_exists || self.role_exists
     }
 }
 
-pub(crate) async fn delete_edges_referencing_node_jsonl(
+fn invalid_edge_endpoint_reference(
+    value: &Value,
+    endpoint: &str,
+    type_field: &str,
+    endpoint_id: &str,
+) -> std::io::Error {
+    let edge_id = value
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("<missing>");
+    let found_type = value
+        .get(type_field)
+        .and_then(Value::as_str)
+        .unwrap_or("<missing-or-non-string>");
+    std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        format!(
+            "edge {edge_id} uses endpoint {endpoint} id {endpoint_id} with invalid {type_field} {found_type}"
+        ),
+    )
+}
+
+fn edge_endpoint_references_node_for_delete(
+    value: &Value,
+    id_field: &str,
+    type_field: &str,
+    endpoint: &str,
     node_id: &str,
-) -> std::io::Result<Vec<String>> {
-    let removed = rewrite_edges_jsonl(|value| {
-        let edge: Edge = match serde_json::from_value(value.clone()) {
-            Ok(edge) => edge,
-            Err(_) => return Ok((EdgeJsonlRewriteAction::Keep, None)),
-        };
-        let references_node = (edge.source_id == node_id
-            && edge.source_type.as_deref() != Some("account"))
-            || (edge.target_id == node_id && edge.target_type.as_deref() != Some("account"));
-        if references_node {
-            Ok((EdgeJsonlRewriteAction::Remove, Some(edge)))
-        } else {
-            Ok((EdgeJsonlRewriteAction::Keep, None))
-        }
-    })
-    .await?;
-    Ok(removed.into_iter().map(|edge| edge.id).collect())
+    evidence: EdgeEndpointCollisionEvidence,
+) -> std::io::Result<bool> {
+    let Some(endpoint_id) = value.get(id_field).and_then(Value::as_str) else {
+        return Ok(false);
+    };
+    if endpoint_id != node_id {
+        return Ok(false);
+    }
+
+    match value.get(type_field) {
+        Some(Value::String(kind)) if kind == "node" => Ok(true),
+        Some(Value::String(kind)) if kind == "account" || kind == "role" => Ok(false),
+        None if !evidence.has_collision() => Ok(true),
+        None => Err(invalid_edge_endpoint_reference(
+            value,
+            endpoint,
+            type_field,
+            endpoint_id,
+        )),
+        Some(_) => Err(invalid_edge_endpoint_reference(
+            value,
+            endpoint,
+            type_field,
+            endpoint_id,
+        )),
+    }
+}
+
+pub(crate) fn edge_value_references_node_for_delete(
+    value: &Value,
+    node_id: &str,
+    evidence: EdgeEndpointCollisionEvidence,
+) -> std::io::Result<bool> {
+    let source_references_node = edge_endpoint_references_node_for_delete(
+        value,
+        "source_id",
+        "source_type",
+        "source",
+        node_id,
+        evidence,
+    )?;
+    let target_references_node = edge_endpoint_references_node_for_delete(
+        value,
+        "target_id",
+        "target_type",
+        "target",
+        node_id,
+        evidence,
+    )?;
+    Ok(source_references_node || target_references_node)
+}
+
+pub(crate) fn edge_references_node_for_delete(
+    edge: &Edge,
+    node_id: &str,
+    evidence: EdgeEndpointCollisionEvidence,
+) -> std::io::Result<bool> {
+    let source_references_node = edge_endpoint_option_references_node_for_delete(
+        edge.id.as_str(),
+        edge.source_id.as_str(),
+        edge.source_type.as_deref(),
+        "source",
+        "source_type",
+        node_id,
+        evidence,
+    )?;
+    let target_references_node = edge_endpoint_option_references_node_for_delete(
+        edge.id.as_str(),
+        edge.target_id.as_str(),
+        edge.target_type.as_deref(),
+        "target",
+        "target_type",
+        node_id,
+        evidence,
+    )?;
+    Ok(source_references_node || target_references_node)
+}
+
+fn edge_endpoint_option_references_node_for_delete(
+    edge_id: &str,
+    endpoint_id: &str,
+    endpoint_type: Option<&str>,
+    endpoint: &str,
+    type_field: &str,
+    node_id: &str,
+    evidence: EdgeEndpointCollisionEvidence,
+) -> std::io::Result<bool> {
+    if endpoint_id != node_id {
+        return Ok(false);
+    }
+
+    match endpoint_type {
+        Some("node") => Ok(true),
+        Some("account" | "role") => Ok(false),
+        None if !evidence.has_collision() => Ok(true),
+        Some(found_type) => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "edge {edge_id} uses endpoint {endpoint} id {endpoint_id} with invalid {type_field} {found_type}"
+            ),
+        )),
+        None => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "edge {edge_id} uses endpoint {endpoint} id {endpoint_id} with invalid {type_field} <missing>"
+            ),
+        )),
+    }
 }
 
 /// Append a single edge record as a JSONL line. Durability via fsync.

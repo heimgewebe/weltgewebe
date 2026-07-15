@@ -41,6 +41,7 @@ use weltgewebe_api::{
     domain_db::{
         delete_node_with_edges_in_postgres, insert_domain_node, load_nodes_from_postgres,
         patch_node_in_postgres, replace_node_in_postgres, NodeCreateError, NodePatchInput,
+        NodeWriteError,
     },
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
@@ -92,6 +93,9 @@ async fn clean(pool: &PgPool) {
     pool.execute("DELETE FROM domain_nodes WHERE id LIKE 'writepath-node-%'")
         .await
         .expect("clean domain_nodes fixtures");
+    pool.execute("DELETE FROM domain_accounts WHERE id LIKE 'writepath-node-%'")
+        .await
+        .expect("clean colliding domain_accounts fixtures");
 }
 
 /// Node-create tests generate server-owned UUID ids (no `writepath-node-`
@@ -1141,7 +1145,9 @@ async fn replace_and_delete_node_cascade_is_transactional_in_postgres() -> Resul
          ('writepath-edge-node', $1, 'writepath-node-other', 'reference', \
           '{\"source_type\":\"node\",\"target_type\":\"node\"}'::jsonb), \
          ('writepath-edge-account-collision', $1, 'writepath-node-other', 'reference', \
-          '{\"source_type\":\"account\",\"target_type\":\"node\"}'::jsonb)",
+          '{\"source_type\":\"account\",\"target_type\":\"node\"}'::jsonb), \
+         ('writepath-edge-role-collision', 'writepath-node-other', $1, 'reference', \
+          '{\"source_type\":\"node\",\"target_type\":\"role\"}'::jsonb)",
     )
     .bind(NODE_A)
     .execute(&pool)
@@ -1211,6 +1217,261 @@ async fn replace_and_delete_node_cascade_is_transactional_in_postgres() -> Resul
     .fetch_one(&pool)
     .await?;
     assert!(account_edge_exists);
+
+    let role_edge_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM domain_edges \
+         WHERE id = 'writepath-edge-role-collision')",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(role_edge_exists);
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// N. Unique untyped legacy edges are classified as node projections and
+/// deleted in the same PostgreSQL transaction.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn delete_node_removes_unique_untyped_legacy_postgres_edge() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    seed_node(&pool, NODE_A, Some("kept"), None).await;
+    sqlx::query(
+        "INSERT INTO domain_edges \
+         (id, source_id, target_id, edge_kind, payload) \
+         VALUES \
+         ('writepath-edge-node', $1, 'writepath-node-other', 'reference', \
+          '{\"source_type\":\"node\",\"target_type\":\"node\"}'::jsonb), \
+         ('writepath-edge-untyped-legacy', $1, 'writepath-node-other', 'reference', \
+          '{\"target_type\":\"node\"}'::jsonb), \
+         ('writepath-edge-kept', 'writepath-node-other', 'writepath-node-third', 'reference', \
+          '{\"source_type\":\"node\",\"target_type\":\"node\"}'::jsonb)",
+    )
+    .bind(NODE_A)
+    .execute(&pool)
+    .await
+    .context("seed unique untyped edge fixtures")?;
+
+    let mut removed = delete_node_with_edges_in_postgres(&pool, NODE_A)
+        .await
+        .context("delete node with legacy edge")?;
+    removed.sort();
+    assert_eq!(
+        removed,
+        vec![
+            "writepath-edge-node".to_string(),
+            "writepath-edge-untyped-legacy".to_string()
+        ]
+    );
+
+    let node_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+            .bind(NODE_A)
+            .fetch_one(&pool)
+            .await?;
+    assert!(!node_exists);
+
+    for edge_id in ["writepath-edge-node", "writepath-edge-untyped-legacy"] {
+        let edge_exists: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = $1)")
+                .bind(edge_id)
+                .fetch_one(&pool)
+                .await?;
+        assert!(!edge_exists, "{edge_id} must be removed");
+    }
+    let kept_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = $1)")
+            .bind("writepath-edge-kept")
+            .fetch_one(&pool)
+            .await?;
+    assert!(kept_exists);
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// O. Account collisions make untyped endpoints ambiguous and abort
+/// PostgreSQL node deletion before any node or edge mutation.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn delete_node_rejects_untyped_postgres_account_collision_without_partial_mutation(
+) -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    seed_node(&pool, NODE_A, Some("kept"), None).await;
+    sqlx::query(
+        "INSERT INTO domain_accounts \
+         (id, kind, title, mode, map_state, role, disabled, webauthn_user_id) \
+         VALUES ($1, 'garnrolle', 'Colliding Account', NULL, 'not_on_map', 'weber', FALSE, $2::uuid)",
+    )
+    .bind(NODE_A)
+    .bind(uuid::Uuid::new_v4().to_string())
+    .execute(&pool)
+    .await
+    .context("seed colliding account fixture")?;
+    sqlx::query(
+        "INSERT INTO domain_edges \
+         (id, source_id, target_id, edge_kind, payload) \
+         VALUES \
+         ('writepath-edge-node', $1, 'writepath-node-other', 'reference', \
+          '{\"source_type\":\"node\",\"target_type\":\"node\"}'::jsonb), \
+         ('writepath-edge-untyped-account-collision', $1, 'writepath-node-other', 'reference', \
+          '{\"target_type\":\"node\"}'::jsonb)",
+    )
+    .bind(NODE_A)
+    .execute(&pool)
+    .await
+    .context("seed ambiguous collision edge fixtures")?;
+
+    let err = match delete_node_with_edges_in_postgres(&pool, NODE_A).await {
+        Err(error) => error,
+        Ok(_) => panic!("delete must fail for ambiguous edge endpoint collisions"),
+    };
+    assert!(
+        matches!(err, NodeWriteError::InvalidEdgeReference(_)),
+        "expected InvalidEdgeReference, got {err:?}"
+    );
+
+    let node_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+            .bind(NODE_A)
+            .fetch_one(&pool)
+            .await?;
+    assert!(node_exists);
+
+    for edge_id in [
+        "writepath-edge-node",
+        "writepath-edge-untyped-account-collision",
+    ] {
+        let edge_exists: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = $1)")
+                .bind(edge_id)
+                .fetch_one(&pool)
+                .await?;
+        assert!(edge_exists, "{edge_id} must remain after failed delete");
+    }
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// P. A role-typed collision evidence makes untyped endpoints ambiguous and
+/// aborts before any node or edge mutation.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn delete_node_rejects_untyped_postgres_role_collision_without_partial_mutation() -> Result<()>
+{
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    seed_node(&pool, NODE_A, Some("kept"), None).await;
+    sqlx::query(
+        "INSERT INTO domain_edges \
+         (id, source_id, target_id, edge_kind, payload) \
+         VALUES \
+         ('writepath-edge-node', $1, 'writepath-node-other', 'reference', \
+          '{\"source_type\":\"node\",\"target_type\":\"node\"}'::jsonb), \
+         ('writepath-edge-role-evidence', 'writepath-node-other', $1, 'reference', \
+          '{\"source_type\":\"node\",\"target_type\":\"role\"}'::jsonb), \
+         ('writepath-edge-untyped-role-collision', $1, 'writepath-node-other', 'reference', \
+          '{\"target_type\":\"node\"}'::jsonb)",
+    )
+    .bind(NODE_A)
+    .execute(&pool)
+    .await
+    .context("seed role collision edge fixtures")?;
+
+    let err = match delete_node_with_edges_in_postgres(&pool, NODE_A).await {
+        Err(error) => error,
+        Ok(_) => panic!("delete must fail for ambiguous role endpoint collision"),
+    };
+    assert!(
+        matches!(err, NodeWriteError::InvalidEdgeReference(_)),
+        "expected InvalidEdgeReference, got {err:?}"
+    );
+
+    let node_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+            .bind(NODE_A)
+            .fetch_one(&pool)
+            .await?;
+    assert!(node_exists);
+
+    for edge_id in [
+        "writepath-edge-node",
+        "writepath-edge-role-evidence",
+        "writepath-edge-untyped-role-collision",
+    ] {
+        let edge_exists: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = $1)")
+                .bind(edge_id)
+                .fetch_one(&pool)
+                .await?;
+        assert!(edge_exists, "{edge_id} must remain after failed delete");
+    }
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// Q. Invalid typed endpoints still fail closed before mutation.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn delete_node_rejects_invalid_postgres_edge_type_without_partial_mutation() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    seed_node(&pool, NODE_A, Some("kept"), None).await;
+    sqlx::query(
+        "INSERT INTO domain_edges \
+         (id, source_id, target_id, edge_kind, payload) \
+         VALUES \
+         ('writepath-edge-node', $1, 'writepath-node-other', 'reference', \
+          '{\"source_type\":\"node\",\"target_type\":\"node\"}'::jsonb), \
+         ('writepath-edge-invalid-collision', 'writepath-node-other', $1, 'reference', \
+          '{\"source_type\":\"node\",\"target_type\":\"group\"}'::jsonb)",
+    )
+    .bind(NODE_A)
+    .execute(&pool)
+    .await
+    .context("seed invalid edge fixtures")?;
+
+    let err = match delete_node_with_edges_in_postgres(&pool, NODE_A).await {
+        Err(error) => error,
+        Ok(_) => panic!("delete must fail for invalid edge endpoint type"),
+    };
+    assert!(
+        matches!(err, NodeWriteError::InvalidEdgeReference(_)),
+        "expected InvalidEdgeReference, got {err:?}"
+    );
+
+    let node_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+            .bind(NODE_A)
+            .fetch_one(&pool)
+            .await?;
+    assert!(node_exists);
+
+    for edge_id in ["writepath-edge-node", "writepath-edge-invalid-collision"] {
+        let edge_exists: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = $1)")
+                .bind(edge_id)
+                .fetch_one(&pool)
+                .await?;
+        assert!(edge_exists, "{edge_id} must remain after failed delete");
+    }
 
     clean(&pool).await;
     Ok(())

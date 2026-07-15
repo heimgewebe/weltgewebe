@@ -65,7 +65,7 @@
     {
       "id": "db-domain-node-write-path-proof",
       "phase": "E-B",
-      "claim": "PostgreSQL node writes cover POST /nodes and PATCH /nodes/{id} behind authenticated write authorization.",
+      "claim": "PostgreSQL node writes cover POST /nodes, PATCH /nodes/{id}, PUT /nodes/{id}, and DELETE /nodes/{id} with cascade deletion behind authenticated write authorization.",
       "state": "prepared",
       "workflow": ".github/workflows/api.yml",
       "workflow_job": "db-domain-node-write-path-proof",

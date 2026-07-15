@@ -165,11 +165,18 @@ pub async fn run() -> anyhow::Result<()> {
     let tokens = crate::auth::tokens::TokenStore::new();
     let step_up_tokens = crate::auth::step_up_tokens::StepUpTokenStore::new();
     let (accounts_store, nodes_cache, edges_cache) = match app_config.domain_read_source {
-        DomainReadSource::Jsonl => (
-            routes::accounts::load_all_accounts().await,
-            routes::nodes::load_nodes().await,
-            routes::edges::load_edges().await,
-        ),
+        DomainReadSource::Jsonl => {
+            routes::nodes::recover_node_delete_jsonl_journal()
+                .await
+                .context(
+                    "failed to recover JSONL node-delete journal before loading domain data",
+                )?;
+            (
+                routes::accounts::load_all_accounts().await,
+                routes::nodes::load_nodes().await,
+                routes::edges::load_edges().await,
+            )
+        }
         DomainReadSource::Postgres => {
             let pool = db_pool.as_ref().ok_or_else(|| {
                 anyhow!(
