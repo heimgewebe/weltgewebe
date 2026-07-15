@@ -113,8 +113,17 @@ Knotenarten und Beziehungen wiederholbar. Die ersten Fäden bilden zusätzlich
 einen geschlossenen Ring über alle Knoten. Somit besitzt jeder Knoten garantiert
 mindestens eine eingehende und eine ausgehende Verbindung; Nachbarschaftsmessungen
 laufen nicht versehentlich gegen einen leeren Fall. Das Manifest enthält
-SHA-256-Werte für beide CSV-Dateien. Eine nachträgliche Veränderung wird vor dem
-Rendern der SQL-Dateien abgewiesen.
+SHA-256-Werte für beide CSV-Dateien. Zusätzlich werden CSV-Kopfzeilen und reale
+Zeilenzahlen gegen das Manifest geprüft. Profilname, konfigurierte Profilgrößen
+und Konfigurationshash müssen exakt zusammenpassen. Ein großes Datenpaket kann
+sich dadurch nicht als kleines, budgetfreies Profil ausgeben. Eine nachträgliche
+Veränderung wird vor dem Rendern der SQL-Dateien abgewiesen.
+
+Für die Knotenartmessung ist `Projekt` gezielt selten: genau jeder hundertste
+Knoten trägt diese Art. Das bildet eine selektive Filterabfrage ab, bei der der
+Knotenartindex sinnvoll ist. Ein breiter Filter mit etwa 20 Prozent Treffern
+dürfte dagegen berechtigt einen vollständigen Tabellendurchlauf wählen und wäre
+kein geeigneter Nachweis für die Indexfunktion.
 
 ## Gemessene Abfragen
 
@@ -136,13 +145,19 @@ Schreibaufwand und Zeitwerte in maschinenlesbarer Form.
 
 Der Prüfer blockiert zunächst nur eindeutig schädliche Planformen:
 
-- kein `Seq Scan` für die kanonischen großen Listen- und Suchabfragen,
+- kein `Seq Scan` für die kanonischen Listen- und Suchabfragen,
 - kein zusätzlicher `Sort` für die ID-Cursor,
-- keine temporären Blöcke.
+- keine temporären Blöcke,
+- für jede Abfrage der fachlich vorgesehene Index,
+- eine tatsächlich ausgeführte `Index Cond` mit den erwarteten Spalten.
 
-Die harten Planbudgets gelten nur für `scale_100k` und `scale_1m`. Bei den
-kleinen Profilen darf PostgreSQL einen vollständigen Tabellendurchlauf wählen,
-falls dieser tatsächlich günstiger ist; dort werden die Pläne nur beobachtet.
+Damit reicht ein beliebiger `Index Scan` nicht aus. Beispielsweise muss eine
+Nachbarschaftsabfrage den Index auf `source_id` beziehungsweise `target_id`
+verwenden; ein Primärschlüssel-Scan mit nachträglichem Filter gilt als Fehler.
+
+Die harten Planbudgets gelten für `ci`, `scale_100k` und `scale_1m`. Nur das
+kleine Profil `smoke` bleibt rein beobachtend, weil PostgreSQL bei 1.000 Knoten
+berechtigt einen vollständigen Tabellendurchlauf wählen kann.
 
 Zeitgrenzen bleiben ausdrücklich unkalibriert. Eine allgemeine Grenze ohne
 festgelegte Hardware, PostgreSQL-Konfiguration, Warm-up und Wiederholungszahl
@@ -182,8 +197,10 @@ python3 -B scripts/performance/domain_scale.py render-workload \
 ```
 
 Die beiden SQL-Dateien werden anschließend mit `psql` gegen eine ausdrücklich
-bestimmte Benchmark-Datenbank ausgeführt. Danach prüft der folgende Befehl die
-JSON-Abfragepläne:
+bestimmte Benchmark-Datenbank ausgeführt. Der GitHub-Workflow lädt dafür das
+Profil `ci` mit 20.000 Knoten und 100.000 Fäden in ein echtes PostgreSQL 16,
+führt alle sechs Abfragen aus und archiviert die JSON-Pläne als CI-Beleg.
+Danach prüft der folgende Befehl die JSON-Abfragepläne:
 
 ```bash
 python3 -B scripts/performance/domain_scale.py check \
@@ -191,6 +208,10 @@ python3 -B scripts/performance/domain_scale.py check \
   --plan-dir /tmp/weltgewebe-domain-scale/plans \
   --report /tmp/weltgewebe-domain-scale/report.json
 ```
+
+Auch bei einer Budgetverletzung wird `report.json` mit `status: fail` atomar
+geschrieben, bevor der Prozess mit einem Fehlercode endet. Automatisierungen
+verlieren dadurch nicht gerade im Fehlerfall ihre Diagnose.
 
 ## Folgeschnitte
 

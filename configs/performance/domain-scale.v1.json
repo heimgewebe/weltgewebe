@@ -22,26 +22,38 @@
   },
   "plan_budgets": {
     "calibration_required": true,
-    "enforced_profiles": ["scale_100k", "scale_1m"],
+    "enforced_profiles": ["ci", "scale_100k", "scale_1m"],
     "max_temp_blocks": 0,
     "workloads": {
       "node_cursor": {
-        "forbidden_node_types": ["Seq Scan", "Sort"]
+        "forbidden_node_types": ["Seq Scan", "Sort"],
+        "required_index": "domain_nodes_pkey",
+        "required_index_cond_contains": ["id"]
       },
       "edge_cursor": {
-        "forbidden_node_types": ["Seq Scan", "Sort"]
+        "forbidden_node_types": ["Seq Scan", "Sort"],
+        "required_index": "domain_edges_pkey",
+        "required_index_cond_contains": ["id"]
       },
       "bbox": {
-        "forbidden_node_types": ["Seq Scan"]
+        "forbidden_node_types": ["Seq Scan"],
+        "required_index": "domain_nodes_lat_lon_idx",
+        "required_index_cond_contains": ["lat", "lon"]
       },
       "outbound_neighbors": {
-        "forbidden_node_types": ["Seq Scan"]
+        "forbidden_node_types": ["Seq Scan"],
+        "required_index": "domain_edges_source_id_idx",
+        "required_index_cond_contains": ["source_id"]
       },
       "inbound_neighbors": {
-        "forbidden_node_types": ["Seq Scan"]
+        "forbidden_node_types": ["Seq Scan"],
+        "required_index": "domain_edges_target_id_idx",
+        "required_index_cond_contains": ["target_id"]
       },
       "kind_filter": {
-        "forbidden_node_types": ["Seq Scan"]
+        "forbidden_node_types": ["Seq Scan"],
+        "required_index": "domain_nodes_kind_idx",
+        "required_index_cond_contains": ["kind"]
       }
     }
   }

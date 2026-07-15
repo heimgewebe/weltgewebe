@@ -8,6 +8,8 @@ name: domain-scale
       - "configs/performance/domain-scale.v1.json"
       - "scripts/performance/**"
       - "scripts/tests/test_domain_scale.py"
+      - "apps/api/migrations/20260531000001_create_domain_nodes.up.sql"
+      - "apps/api/migrations/20260531000002_create_domain_edges.up.sql"
       - "docs/blueprints/domain-scale-foundation.md"
       - ".github/workflows/domain-scale.yml"
   push:
@@ -16,6 +18,8 @@ name: domain-scale
       - "configs/performance/domain-scale.v1.json"
       - "scripts/performance/**"
       - "scripts/tests/test_domain_scale.py"
+      - "apps/api/migrations/20260531000001_create_domain_nodes.up.sql"
+      - "apps/api/migrations/20260531000002_create_domain_edges.up.sql"
       - "docs/blueprints/domain-scale-foundation.md"
       - ".github/workflows/domain-scale.yml"
   workflow_dispatch: {}
@@ -34,7 +38,22 @@ jobs:
   foundation:
     name: Domain scale foundation
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      DOMAIN_SCALE_DIR: ${{ runner.temp }}/domain-scale-ci
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
 
@@ -42,27 +61,57 @@ jobs:
         with:
           python-version-file: '.python-version'
 
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends postgresql-client
+
       - name: Validate scale contract
         run: python3 -B scripts/performance/domain_scale.py validate
 
       - name: Run scale tooling tests
         run: python3 -B scripts/tests/test_domain_scale.py
 
-      - name: Render deterministic smoke fixture and SQL
+      - name: Create production-shaped PostgreSQL tables
         shell: bash
         run: |
           set -euo pipefail
-          output_dir=$(mktemp -d)
-          trap 'rm -rf "${output_dir}"' EXIT
+          psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 \
+            -f apps/api/migrations/20260531000001_create_domain_nodes.up.sql \
+            -f apps/api/migrations/20260531000002_create_domain_edges.up.sql
+
+      - name: Load CI fixture and verify real PostgreSQL plans
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "${DOMAIN_SCALE_DIR}"
+          mkdir -p "${DOMAIN_SCALE_DIR}/plans"
           python3 -B scripts/performance/domain_scale.py generate \
-            --profile smoke \
-            --output-dir "${output_dir}/fixture"
+            --profile ci \
+            --output-dir "${DOMAIN_SCALE_DIR}/fixture"
           python3 -B scripts/performance/domain_scale.py render-load \
-            --manifest "${output_dir}/fixture/manifest.json" \
-            --output "${output_dir}/load.sql"
+            --manifest "${DOMAIN_SCALE_DIR}/fixture/manifest.json" \
+            --output "${DOMAIN_SCALE_DIR}/load.sql"
+          psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${DOMAIN_SCALE_DIR}/load.sql"
+          test "$(psql "${DATABASE_URL}" -Atc 'SELECT count(*) FROM weltgewebe_perf.domain_nodes')" = "20000"
+          test "$(psql "${DATABASE_URL}" -Atc 'SELECT count(*) FROM weltgewebe_perf.domain_edges')" = "100000"
           python3 -B scripts/performance/domain_scale.py render-workload \
-            --manifest "${output_dir}/fixture/manifest.json" \
-            --plan-dir "${output_dir}/plans" \
-            --output "${output_dir}/workload.sql"
-          test -s "${output_dir}/load.sql"
-          test -s "${output_dir}/workload.sql"
+            --manifest "${DOMAIN_SCALE_DIR}/fixture/manifest.json" \
+            --plan-dir "${DOMAIN_SCALE_DIR}/plans" \
+            --output "${DOMAIN_SCALE_DIR}/workload.sql"
+          psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${DOMAIN_SCALE_DIR}/workload.sql"
+          python3 -B scripts/performance/domain_scale.py check \
+            --manifest "${DOMAIN_SCALE_DIR}/fixture/manifest.json" \
+            --plan-dir "${DOMAIN_SCALE_DIR}/plans" \
+            --report "${DOMAIN_SCALE_DIR}/report.json"
+
+      - name: Upload PostgreSQL plan evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        with:
+          name: domain-scale-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/domain-scale-ci/fixture/manifest.json
+            ${{ runner.temp }}/domain-scale-ci/load.sql
+            ${{ runner.temp }}/domain-scale-ci/workload.sql
+            ${{ runner.temp }}/domain-scale-ci/plans/*.json
+            ${{ runner.temp }}/domain-scale-ci/report.json
+          if-no-files-found: warn
