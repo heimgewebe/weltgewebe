@@ -8,7 +8,7 @@ use axum::{
 };
 use serde_json::Value;
 use sqlx::{Postgres, Transaction};
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::{Mutex, MutexGuard, Semaphore, SemaphorePermit};
 
 use crate::{
     config::{DomainNodeWriteSource, DomainReadSource},
@@ -25,12 +25,20 @@ use super::nodes;
 // reduce local parallelism and never weaken correctness.
 const NODE_MUTATION_LOCK_NAMESPACE: &str = "weltgewebe:node-mutation:v1";
 const LOCAL_NODE_LOCK_STRIPES: usize = 64;
+// Each PostgreSQL mutation temporarily needs two pool connections: one holds
+// the advisory-lock transaction and one performs the existing mutation helper.
+// Leave one connection available for unrelated requests and cap concurrent
+// mutations to the remaining connection pairs.
+const LOCAL_POSTGRES_NODE_MUTATION_SLOTS: usize =
+    (crate::DATABASE_POOL_MAX_CONNECTIONS as usize - 1) / 2;
 static LOCAL_NODE_LOCKS: OnceLock<Vec<Mutex<()>>> = OnceLock::new();
+static POSTGRES_NODE_MUTATION_SLOTS: OnceLock<Semaphore> = OnceLock::new();
 
 enum NodeMutationGuard {
     None,
     Postgres {
         _guard: MutexGuard<'static, ()>,
+        _slot: SemaphorePermit<'static>,
         transaction: Transaction<'static, Postgres>,
     },
 }
@@ -57,6 +65,10 @@ fn local_node_lock(node_id: &str) -> &'static Mutex<()> {
     &local_node_locks()[local_node_lock_index(node_id)]
 }
 
+fn postgres_node_mutation_slots() -> &'static Semaphore {
+    POSTGRES_NODE_MUTATION_SLOTS.get_or_init(|| Semaphore::new(LOCAL_POSTGRES_NODE_MUTATION_SLOTS))
+}
+
 fn uses_postgres_node_persistence(state: &ApiState) -> bool {
     state.config.domain_read_source == DomainReadSource::Postgres
         && state.config.domain_node_write_source == DomainNodeWriteSource::Postgres
@@ -75,7 +87,21 @@ async fn acquire_node_mutation_guard(
         return Ok(NodeMutationGuard::None);
     }
 
+    // Take the per-node stripe first so same-node waiters do not consume the
+    // global pool budget. The slot then guarantees enough free connections for
+    // the mutation helper and unrelated database traffic.
     let guard = local_node_lock(node_id).lock().await;
+    let slot = postgres_node_mutation_slots()
+        .acquire()
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, node_id, "PostgreSQL node mutation limiter closed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to acquire collective node write guard",
+            )
+                .into_response()
+        })?;
     let pool = state.db_pool.as_ref().ok_or_else(|| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -110,6 +136,7 @@ async fn acquire_node_mutation_guard(
 
     Ok(NodeMutationGuard::Postgres {
         _guard: guard,
+        _slot: slot,
         transaction,
     })
 }
@@ -119,6 +146,7 @@ async fn release_node_mutation_guard(guard: NodeMutationGuard) {
         NodeMutationGuard::None => {}
         NodeMutationGuard::Postgres {
             _guard,
+            _slot,
             transaction,
         } => {
             if let Err(error) = transaction.commit().await {
@@ -203,6 +231,16 @@ mod tests {
     use std::collections::HashSet;
 
     use super::*;
+
+    #[test]
+    fn postgres_mutation_slots_preserve_pool_headroom() {
+        assert_eq!(crate::DATABASE_POOL_MAX_CONNECTIONS, 5);
+        assert_eq!(LOCAL_POSTGRES_NODE_MUTATION_SLOTS, 2);
+        assert!(
+            LOCAL_POSTGRES_NODE_MUTATION_SLOTS * 2 < crate::DATABASE_POOL_MAX_CONNECTIONS as usize,
+            "lock and mutation connection pairs must leave one pool connection free"
+        );
+    }
 
     #[test]
     fn node_lock_keys_and_stripes_are_stable_per_id_and_not_global() {

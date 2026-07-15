@@ -39,6 +39,13 @@ use tower::ServiceBuilder;
 use tower_http::request_id::{MakeRequestUuid, SetRequestIdLayer};
 use tracing_subscriber::{fmt, EnvFilter};
 
+/// Fixed process-local PostgreSQL pool budget.
+///
+/// Node mutation coordination derives its concurrency slots from this value so
+/// an advisory-lock transaction and the mutation transaction cannot exhaust the
+/// pool by each waiting for a second connection.
+pub(crate) const DATABASE_POOL_MAX_CONNECTIONS: u32 = 5;
+
 pub async fn run() -> anyhow::Result<()> {
     // Load `.env` *before* initialising tracing so a `RUST_LOG` defined there is
     // visible to `EnvFilter::try_from_default_env()` inside `init_tracing`. The
@@ -553,7 +560,7 @@ async fn initialise_database_pool() -> anyhow::Result<(Option<sqlx::PgPool>, boo
     };
 
     let pool = PgPoolOptions::new()
-        .max_connections(5)
+        .max_connections(DATABASE_POOL_MAX_CONNECTIONS)
         .connect_lazy(&database_url)
         .context("DATABASE_URL is set but the database pool could not be configured")?;
 

@@ -26,8 +26,8 @@ use axum::{
     Router,
 };
 use serial_test::serial;
-use sqlx::{Executor, PgPool};
-use std::{path::PathBuf, sync::Arc};
+use sqlx::{postgres::PgPoolOptions, Executor, PgPool};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
@@ -266,6 +266,27 @@ fn patch_node_req(cookie: &str, id: &str, json_body: &str) -> Request<body::Body
         .header("Origin", "http://localhost")
         .header("Cookie", cookie)
         .body(body::Body::from(json_body.to_string()))
+        .unwrap()
+}
+
+fn replace_node_req(cookie: &str, id: &str, title: &str) -> Request<body::Body> {
+    Request::builder()
+        .method("PUT")
+        .uri(format!("/nodes/{id}"))
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .header("Cookie", cookie)
+        .body(body::Body::from(
+            serde_json::json!({
+                "title": title,
+                "kind": "Werkstatt",
+                "address": "Neue Straße 1",
+                "location": {"lat": 53.55, "lon": 10.05},
+                "tags": ["parallel"]
+            })
+            .to_string(),
+        ))
         .unwrap()
 }
 
@@ -1472,6 +1493,78 @@ async fn delete_node_rejects_invalid_postgres_edge_type_without_partial_mutation
                 .await?;
         assert!(edge_exists, "{edge_id} must remain after failed delete");
     }
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// R. Distinct-node mutations cannot consume the whole five-connection pool
+/// with advisory-lock transactions while every request waits for a second
+/// connection to perform its update.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn concurrent_distinct_node_replaces_preserve_pool_headroom() -> Result<()> {
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&direct_database_url())
+        .await
+        .context("connect five-connection production-sized pool")?;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let ids = [
+        "writepath-node-pool-1",
+        "writepath-node-pool-2",
+        "writepath-node-pool-3",
+        "writepath-node-pool-4",
+        "writepath-node-pool-5",
+    ];
+    for id in ids {
+        seed_node(&pool, id, Some("before"), None).await;
+    }
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, _state) =
+        postgres_write_app(pool.clone(), "10000000-0000-0000-0000-000000000099").await?;
+
+    let requests = async {
+        tokio::join!(
+            app.clone()
+                .oneshot(replace_node_req(&cookie, ids[0], "Parallel 1")),
+            app.clone()
+                .oneshot(replace_node_req(&cookie, ids[1], "Parallel 2")),
+            app.clone()
+                .oneshot(replace_node_req(&cookie, ids[2], "Parallel 3")),
+            app.clone()
+                .oneshot(replace_node_req(&cookie, ids[3], "Parallel 4")),
+            app.clone()
+                .oneshot(replace_node_req(&cookie, ids[4], "Parallel 5")),
+        )
+    };
+    let responses = tokio::time::timeout(Duration::from_secs(10), requests)
+        .await
+        .context("five distinct node replacements must not deadlock the pool")?;
+    for response in [
+        responses.0?,
+        responses.1?,
+        responses.2?,
+        responses.3?,
+        responses.4?,
+    ] {
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    let updated_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM domain_nodes          WHERE id = ANY($1) AND title LIKE 'Parallel %'",
+    )
+    .bind(ids.as_slice())
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(updated_count, ids.len() as i64);
 
     clean(&pool).await;
     Ok(())
