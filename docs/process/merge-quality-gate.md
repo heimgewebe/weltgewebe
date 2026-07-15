@@ -26,6 +26,25 @@ Dieses Dokument beschreibt den verbindlichen Qualitätsprozess für nichttrivial
 prüfbare Bindung zwischen dem tatsächlich gemergten Code und genau dem Diff, der
 geprüft wurde.
 
+## Einen PR zügig mergefähig machen
+
+Der Normalfall soll ohne manuelle Hasharbeit auskommen:
+
+1. **R0 – kleine reine Markdown-Änderung:** Risikomarker setzen und CI abwarten.
+   Eine externe Review ist nicht erforderlich. Dies gilt auch für Markdown-Dateien
+   unter `apps/`, solange höchstens 50 Zeilen geändert werden und kein sensibler
+   Pfad betroffen ist.
+2. **R1 – kleine Konfiguration, Metadaten oder sichere Rastergrafik:** Risikomarker
+   setzen und eine normale GitHub-Review mit `Approve` auf dem aktuellen Head
+   einholen. Ein JSON-Belegblock ist nicht erforderlich.
+3. **R2/R3 – Produktlogik oder sicherheitsrelevante Änderung:** Das automatisch
+   erzeugte Reviewpaket verwenden und die vollständigen hashgebundenen Berichte
+   als PR-Kommentare attestieren.
+
+Bei jedem Push werden alte Freigaben nur dann weitergezählt, wenn GitHub sie
+ausdrücklich an den neuen Head bindet. Für R2 und R3 bleiben frühere Berichte
+immer ungültig, sobald sich Head, Basis oder Diff ändern.
+
 ## Grundprinzip
 
 Ein Merge ist nur zulässig, wenn:
@@ -47,14 +66,16 @@ Jeder Pull Request enthält genau einen maschinenlesbaren Marker:
 
 | Klasse | Beispiele | Erforderliche Reviews |
 | --- | --- | --- |
-| R0 | kleine Dokumentationsänderung, höchstens 50 geänderte Zeilen | keine externe Reviewpflicht |
-| R1 | Konfiguration, Metadaten, ungefährliche Werkzeuge | mindestens ein exakter PASS-Beleg |
-| R2 | Produktlogik, API, UI, Persistenz, nichtprivilegierte CI | mindestens zwei Prüfer und zwei Reviewachsen |
+| R0 | kleine reine Markdown-Änderung, höchstens 50 geänderte Zeilen | keine externe Reviewpflicht |
+| R1 | Konfiguration, Metadaten, sichere Rastergrafiken | eine native GitHub-Freigabe auf dem aktuellen Head oder ein exakter PASS-Beleg |
+| R2 | Produktlogik, API, UI, Persistenz, nichtprivilegierte CI | zwei hashgebundene Berichte, zwei Prüfer und zwei Reviewachsen |
 | R3 | Authentifizierung, Datenschutz, Sicherheit, Migration, Deployment, privilegierte Workflows | mindestens zwei Prüfer und zwei Reviewachsen; mindestens eine Hochrisikoachse |
 
 Bestimmte Pfade erzwingen automatisch eine Mindestklasse. Eine niedrigere
 Deklaration führt fail-closed zum Gatefehler. R0 ist nur für kleine reine
-Markdown-Änderungen zulässig.
+Markdown-Änderungen zulässig. Der Dateipfad allein macht eine README unter
+`apps/` nicht zu Produktcode; sensible Dokumentationspfade wie Deploy- und
+Runbook-Dokumente bleiben dagegen R3.
 
 ## Reviewpaket
 
@@ -104,18 +125,30 @@ Der Beleg folgt genau einmal im selben Kommentar:
 ```
 
 `report_sha256` muss dem SHA-256 des getrimmten UTF-8-Texts vor dem Marker
-entsprechen. Berichte unter 120 Byte, mehrere Belegblöcke in einem Kommentar oder
-doppelt verwendete Berichtshashes zählen nicht als unabhängige Reviews.
+entsprechen. Vor dem Hashen werden `CRLF` und einzelne `CR` auf `LF` normalisiert,
+damit Browser und Betriebssysteme denselben Berichtshash erzeugen. Berichte unter
+120 Byte, mehrere Belegblöcke in einem Kommentar oder doppelt verwendete
+Berichtshashes zählen nicht als unabhängige Reviews.
 
-Nicht textuell dargestellte Binär- oder Großdateien erscheinen als
-`opaque_files`. Sie blockieren das Gate derzeit fail-closed, weil ein Textreview
-ihren tatsächlichen Inhalt nicht beweisen kann. Ein separates, hashgebundenes
-Artefakt-Prüfverfahren ist dafür eine spätere Erweiterung.
+Für R1 kann statt des Belegblocks eine native GitHub-Review mit `Approve` zählen.
+Sie muss von einem durch GitHub als `OWNER`, `MEMBER` oder `COLLABORATOR`
+ausgewiesenen Prüfer stammen und exakt den aktuellen Head-Commit betreffen. Eine aktuelle `Changes requested`-Review blockiert. Native
+Freigaben ersetzen die ausführlichen Berichte für R2 und R3 ausdrücklich nicht.
+
+Nicht textuell dargestellte Dateien erscheinen als `opaque_files`. Häufige
+Rasterformate (`png`, `jpg`, `jpeg`, `gif`, `webp`, `avif`, `ico`) sind in den
+festgelegten Doku- und Web-Assetpfaden visuell über den GitHub-Dateidiff prüfbar
+und erzwingen mindestens R1. PDF, SVG, Archive, ausführbare Dateien und Rasterbilder
+außerhalb dieser Pfade blockieren weiterhin fail-closed. Damit sind alltägliche
+Bildänderungen möglich, ohne undurchsichtige Artefakte pauschal freizugeben.
 
 Ein neuer Push, ein Basiswechsel oder ein anderer Diffhash entwertet den Beleg
 automatisch. Für dieselbe Kombination aus Prüfer und Reviewachse zählt nur der
 zeitlich neueste exakte Beleg. Ein späteres `BLOCKED` oder `FAIL` hebt einen früheren
-PASS derselben Kombination auf.
+PASS derselben Kombination auf. Der Workflow liest Kommentare und native Reviews
+unmittelbar vor der Statusveröffentlichung erneut. Gleichzeitige Reviewereignisse
+konvergieren dadurch auf den frischesten GitHub-Zustand; Zeitstempel werden als
+UTC-Datumswerte und bei Gleichstand über stabile GitHub-IDs geordnet.
 
 ## Erforderliche Prüfungen
 
@@ -166,22 +199,24 @@ Der privilegierte Workflow darf niemals:
   `.github/review-evidence-authorities.json` freigegeben ist;
 - bei internen Fehlern erfolgreich enden.
 
-Ein Review kann von einem externen Prüfer stammen und durch einen freigegebenen
-Attestierer in den PR übertragen werden. Das Feld `reviewer` bezeichnet den vom
-Attestierer benannten Prüfer; der GitHub-Kommentarautor muss zusätzlich in der
+Für R1 ist der GitHub-Reviewautor zugleich Prüfer und Attestierer. Für R2/R3 kann
+ein Review dagegen von einem externen Prüfer stammen und durch einen freigegebenen
+Attestierer in den PR übertragen werden. Das Feld `reviewer` bezeichnet dann den
+vom Attestierer benannten Prüfer; der GitHub-Kommentarautor muss zusätzlich in der
 versionierten Allowlist `.github/review-evidence-authorities.json` stehen.
 Repositoryrollen allein reichen nicht aus. Der Hash bindet die Attestation an den
 sichtbaren vollständigen Bericht. Für R2 und R3 müssen Prüferidentität, Reviewachse
 und Berichtshash jeweils verschieden sein. Technisch bewiesen werden die Identität
 des Attestierers, der Berichtshash und dessen Diffbindung – nicht eine unabhängige
-Authentifizierung der frei benannten Prüferidentität.
+Authentifizierung der frei benannten externen Prüferidentität.
 
 Alle Parser- und Bundlefunktionen stammen aus `main`. API-Daten werden nur als
 Bytes oder JSON geparst. Eine unvollständige Dateiliste, ein SHA-Wechsel, eine
 fehlende Patchdarstellung oder ein interner Fehler führt zu `evaluation.json` mit
 `pass: false` und zu einem fehlgeschlagenen Commitstatus. Dateien ohne GitHub-
-Textdarstellung werden im Manifest als `opaque_files` markiert und blockieren das
-Gate bis zu einem separaten Artefakt-Prüfverfahren.
+Textdarstellung werden im Manifest in visuell prüfbare Raster-Assets und
+blockierende undurchsichtige Dateien getrennt. Nur die eng freigegebenen
+Rasterformate und Pfade dürfen über eine aktuelle R1-Freigabe passieren.
 
 ## Merge- und Produktionsabschluss
 

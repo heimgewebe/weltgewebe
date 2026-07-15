@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import scripts.quality.review_governance as review_governance
 from scripts.quality.review_governance import (
     Bundle,
     DiffStats,
@@ -39,6 +40,7 @@ def _comment(
     author: str = "alex",
     report_text: str | None = None,
     report_sha256: str | None = None,
+    comment_id: int = 1,
 ) -> dict:
     report = report_text or (
         f"Unabhängiger Reviewbericht von {record.get('reviewer')} zur Achse "
@@ -47,10 +49,12 @@ def _comment(
         "geprüft. Es bleiben keine unaufgelösten Mergeblocker."
     )
     payload = dict(record)
+    normalized_report = report.replace("\r\n", "\n").replace("\r", "\n").strip()
     payload["report_sha256"] = (
-        report_sha256 or hashlib.sha256(report.strip().encode("utf-8")).hexdigest()
+        report_sha256 or hashlib.sha256(normalized_report.encode("utf-8")).hexdigest()
     )
     return {
+        "id": comment_id,
         "body": report
         + "\n<!-- weltgewebe-review-evidence\n"
         + json.dumps(payload)
@@ -66,11 +70,39 @@ def _comment(
 ALLOWED_ATTESTERS = frozenset({"alex"})
 
 
-def _evaluate(*, bundle: Bundle, risk_class: str, comments: list[dict]) -> dict:
+def _review(
+    bundle: Bundle,
+    *,
+    state: str = "APPROVED",
+    author: str = "alex",
+    association: str = "OWNER",
+    commit_id: str | None = None,
+    review_id: int = 1,
+    submitted_at: str = "2026-07-14T12:00:00Z",
+) -> dict:
+    return {
+        "id": review_id,
+        "state": state,
+        "commit_id": commit_id or bundle.head_sha,
+        "author_association": association,
+        "user": {"login": author},
+        "html_url": "https://example.invalid/native-review",
+        "submitted_at": submitted_at,
+    }
+
+
+def _evaluate(
+    *,
+    bundle: Bundle,
+    risk_class: str,
+    comments: list[dict],
+    reviews: list[dict] | None = None,
+) -> dict:
     return evaluate_evidence(
         bundle=bundle,
         risk_class=risk_class,
         comments=comments,
+        reviews=reviews or [],
         allowed_attesters=ALLOWED_ATTESTERS,
     )
 
@@ -125,6 +157,9 @@ class RiskParsingTests(unittest.TestCase):
 
     def test_sensitive_paths_raise_minimum_risk(self) -> None:
         self.assertEqual(minimum_risk_for_paths(["docs/example.md"]), "R0")
+        self.assertEqual(minimum_risk_for_paths(["apps/web/README.md"]), "R0")
+        self.assertEqual(minimum_risk_for_paths(["docs/images/map.png"]), "R1")
+        self.assertEqual(minimum_risk_for_paths(["apps/web/static/map.webp"]), "R1")
         self.assertEqual(minimum_risk_for_paths(["apps/web/src/app.ts"]), "R2")
         self.assertEqual(minimum_risk_for_paths([".github/workflows/ci.yml"]), "R3")
         self.assertEqual(
@@ -133,6 +168,10 @@ class RiskParsingTests(unittest.TestCase):
         )
         self.assertEqual(
             minimum_risk_for_paths(["scripts/quality/review_governance.py"]),
+            "R3",
+        )
+        self.assertEqual(
+            minimum_risk_for_paths(["docs/process/merge-quality-gate.md"]),
             "R3",
         )
         self.assertEqual(minimum_risk_for_paths(["apps/api/src/auth.rs"]), "R3")
@@ -208,9 +247,36 @@ class BundleTests(unittest.TestCase):
             self.assertEqual(manifest["stats"]["binary_files"], ["image.bin"])
             self.assertEqual(manifest["stats"]["opaque_files"], ["image.bin"])
             self.assertIn(
-                "Nicht im GitHub-Textdiff dargestellte Dateien",
+                "Nicht zuverlässig prüfbare und daher blockierende Dateien",
                 bundle.request_path.read_text(encoding="utf-8"),
             )
+
+    def test_local_binary_rename_uses_destination_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir) / "repo"
+            repo.mkdir()
+            _git(repo, "init", "-b", "main")
+            _git(repo, "config", "user.name", "Test")
+            _git(repo, "config", "user.email", "test@example.invalid")
+            (repo / "old.png").write_bytes(b"\x89PNG\r\n\x1a\n\x00binary")
+            _git(repo, "add", "old.png")
+            _git(repo, "commit", "-m", "base image")
+            base = _git(repo, "rev-parse", "HEAD")
+            (repo / "docs").mkdir()
+            _git(repo, "mv", "old.png", "docs/new.png")
+            _git(repo, "commit", "-m", "rename image")
+            head = _git(repo, "rev-parse", "HEAD")
+
+            bundle = generate_bundle(
+                repo=repo,
+                output_dir=Path(temp_dir) / "out",
+                base_revision=base,
+                head_revision=head,
+                pr_number=10,
+                risk_class="R1",
+            )
+            self.assertEqual(bundle.stats.changed_files, ("docs/new.png",))
+            self.assertEqual(bundle.stats.binary_files, ("docs/new.png",))
 
     def test_materialized_github_bundle_is_hash_bound_and_validated(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -327,6 +393,45 @@ class BundleTests(unittest.TestCase):
                     patch_file=patch_file,
                     risk_class="R2",
                 )
+
+    def test_materialized_bundle_enforces_artifact_size_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            diff_file = root / "pr.diff"
+            patch_file = root / "pr.patch"
+            metadata_file = root / "metadata.json"
+            diff_file.write_bytes(b"diff --git a/a.txt b/a.txt\n" + b"x" * 80)
+            patch_file.write_bytes(b"p" * 80)
+            metadata_file.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "pr_number": 17,
+                        "base_sha": "a" * 40,
+                        "head_sha": "b" * 40,
+                        "merge_base_sha": "c" * 40,
+                        "changed_file_count": 1,
+                        "changed_files": ["a.txt"],
+                        "additions": 1,
+                        "deletions": 0,
+                        "opaque_files": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            original = review_governance.MAX_ARTIFACT_BYTES
+            review_governance.MAX_ARTIFACT_BYTES = 64
+            try:
+                with self.assertRaisesRegex(GovernanceError, "safety limit"):
+                    generate_materialized_bundle(
+                        output_dir=root / "out",
+                        metadata_file=metadata_file,
+                        diff_file=diff_file,
+                        patch_file=patch_file,
+                        risk_class="R1",
+                    )
+            finally:
+                review_governance.MAX_ARTIFACT_BYTES = original
 
     def test_local_patch_uses_merge_base_not_moving_base_tip(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -490,8 +595,8 @@ class EvidenceTests(unittest.TestCase):
         self.assertFalse(result["pass"])
         self.assertIn("two distinct review reports", " ".join(result["reasons"]))
 
-    def test_opaque_files_block_even_with_valid_reviews(self) -> None:
-        base = _bundle(paths=("image.png",), changed_lines=0)
+    def test_safe_raster_asset_is_reviewable_with_r1_approval(self) -> None:
+        base = _bundle(paths=("docs/images/map.png",), changed_lines=0)
         bundle = Bundle(
             pr_number=base.pr_number,
             base_sha=base.base_sha,
@@ -503,7 +608,117 @@ class EvidenceTests(unittest.TestCase):
             diff_path=base.diff_path,
             patch_path=base.patch_path,
             request_path=base.request_path,
-            stats=DiffStats(("image.png",), 0, 0, (), ("image.png",)),
+            stats=DiffStats(
+                ("docs/images/map.png",),
+                0,
+                0,
+                (),
+                ("docs/images/map.png",),
+            ),
+        )
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R1",
+            comments=[],
+            reviews=[_review(bundle)],
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+        self.assertEqual(result["reviewable_opaque_files"], ["docs/images/map.png"])
+        self.assertEqual(result["blocking_opaque_files"], [])
+
+    def test_unsafe_opaque_file_still_blocks(self) -> None:
+        base = _bundle(paths=("docs/report.pdf",), changed_lines=0)
+        bundle = Bundle(
+            pr_number=base.pr_number,
+            base_sha=base.base_sha,
+            head_sha=base.head_sha,
+            merge_base_sha=base.merge_base_sha,
+            diff_sha256=base.diff_sha256,
+            patch_sha256=base.patch_sha256,
+            manifest_path=base.manifest_path,
+            diff_path=base.diff_path,
+            patch_path=base.patch_path,
+            request_path=base.request_path,
+            stats=DiffStats(("docs/report.pdf",), 0, 0, (), ("docs/report.pdf",)),
+        )
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R1",
+            comments=[],
+            reviews=[_review(bundle)],
+        )
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["blocking_opaque_files"], ["docs/report.pdf"])
+        self.assertIn("opaque files outside", " ".join(result["reasons"]))
+
+    def test_r1_accepts_native_current_head_approval(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R1",
+            comments=[],
+            reviews=[_review(bundle)],
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+        self.assertEqual(result["accepted_reviews"][0]["kind"], "github-approval")
+
+    def test_native_approval_must_match_current_head_and_does_not_replace_r2_reports(
+        self,
+    ) -> None:
+        r1_bundle = _bundle(paths=("config/example.json",))
+        stale = _evaluate(
+            bundle=r1_bundle,
+            risk_class="R1",
+            comments=[],
+            reviews=[_review(r1_bundle, commit_id="f" * 40)],
+        )
+        self.assertFalse(stale["pass"])
+        self.assertEqual(stale["stale_native_review_count"], 1)
+
+        r2_bundle = _bundle(paths=("apps/web/src/app.ts",))
+        r2 = _evaluate(
+            bundle=r2_bundle,
+            risk_class="R2",
+            comments=[],
+            reviews=[_review(r2_bundle)],
+        )
+        self.assertFalse(r2["pass"])
+        self.assertEqual(r2["accepted_review_count"], 0)
+
+    def test_native_approval_requires_trusted_github_association(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R1",
+            comments=[],
+            reviews=[
+                _review(
+                    bundle,
+                    author="outside-reviewer",
+                    association="CONTRIBUTOR",
+                )
+            ],
+        )
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["unauthorized_native_review_count"], 1)
+
+    def test_current_head_changes_requested_blocks_r1(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R1",
+            comments=[],
+            reviews=[_review(bundle, state="CHANGES_REQUESTED")],
+        )
+        self.assertFalse(result["pass"])
+        self.assertIn("request changes", " ".join(result["reasons"]))
+
+    def test_report_hash_normalizes_crlf_and_bare_cr(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        report = (
+            "Ausführlicher Bericht zur Korrektheit.\r\n"
+            "Geprüft wurden Regressionen, Fehlerszenarien und Invarianten.\r"
+            "Es verbleiben keine Mergeblocker und alle Befunde sind aufgelöst."
         )
         result = _evaluate(
             bundle=bundle,
@@ -512,12 +727,80 @@ class EvidenceTests(unittest.TestCase):
                 _comment(
                     _record(
                         bundle, reviewer="Reviewer A", axis="correctness", risk="R1"
-                    )
+                    ),
+                    report_text=report,
                 )
             ],
         )
+        self.assertTrue(result["pass"], result["reasons"])
+
+    def test_malformed_and_multiple_evidence_blocks_are_diagnostic(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        malformed = {
+            "id": 1,
+            "body": "Bericht<!-- weltgewebe-review-evidence {kaputt} -->",
+            "author_association": "OWNER",
+            "user": {"login": "alex"},
+        }
+        result = _evaluate(bundle=bundle, risk_class="R1", comments=[malformed])
         self.assertFalse(result["pass"])
-        self.assertIn("opaque or binary files", " ".join(result["reasons"]))
+        self.assertEqual(result["malformed_evidence_count"], 1)
+
+        first = _comment(
+            _record(bundle, reviewer="Reviewer A", axis="correctness", risk="R1")
+        )
+        first["body"] += first["body"][
+            first["body"].index("<!-- weltgewebe-review-evidence") :
+        ]
+        result = _evaluate(bundle=bundle, risk_class="R1", comments=[first])
+        self.assertFalse(result["pass"])
+        self.assertGreaterEqual(result["malformed_evidence_count"], 2)
+
+    def test_unicode_equivalent_reviewer_names_are_not_distinct(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",))
+        composed = "Revér A"
+        decomposed = "Reve\u0301r A"
+        comments = [
+            _comment(
+                _record(bundle, reviewer=composed, axis="correctness", risk="R2"),
+                comment_id=1,
+            ),
+            _comment(
+                _record(bundle, reviewer=decomposed, axis="testing", risk="R2"),
+                comment_id=2,
+            ),
+        ]
+        result = _evaluate(bundle=bundle, risk_class="R2", comments=comments)
+        self.assertFalse(result["pass"])
+        self.assertIn("two distinct reviewer identities", " ".join(result["reasons"]))
+
+    def test_same_timestamp_uses_higher_comment_id_deterministically(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        passed = _comment(
+            _record(bundle, reviewer="Reviewer A", axis="correctness", risk="R1"),
+            comment_id=10,
+        )
+        blocked = _comment(
+            _record(
+                bundle,
+                reviewer="Reviewer A",
+                axis="correctness",
+                risk="R1",
+                verdict="BLOCKED",
+            ),
+            comment_id=11,
+        )
+        result = _evaluate(bundle=bundle, risk_class="R1", comments=[blocked, passed])
+        self.assertFalse(result["pass"])
+        self.assertIn("blocking verdicts", " ".join(result["reasons"]))
+
+    def test_findings_resolved_must_be_true_for_pass(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        record = _record(bundle, reviewer="Reviewer A", axis="correctness", risk="R1")
+        record["findings_resolved"] = False
+        result = _evaluate(bundle=bundle, risk_class="R1", comments=[_comment(record)])
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["accepted_review_count"], 0)
 
     def test_evidence_schema_and_reviewer_are_strict(self) -> None:
         bundle = _bundle(paths=("config/example.json",))
@@ -606,6 +889,7 @@ class WorkflowContractTests(unittest.TestCase):
     def test_privileged_workflow_executes_only_literal_main_code(self) -> None:
         self.assertIn("pull_request_target:", self.workflow)
         self.assertIn("issue_comment:", self.workflow)
+        self.assertIn("pull_request_review:", self.workflow)
         self.assertIn("ref: main", self.workflow)
         self.assertIn("fetch-depth: 1", self.workflow)
         self.assertIn("persist-credentials: false", self.workflow)
@@ -620,6 +904,10 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("pr-after.json", self.workflow)
         self.assertIn("diff_file_count", self.workflow)
         self.assertIn("max_artifact_bytes", self.workflow)
+        self.assertIn("/reviews?per_page=100", self.workflow)
+        self.assertIn("--reviews-file", self.workflow)
+        self.assertIn("Refresh current-head evidence before publication", self.workflow)
+        self.assertNotIn("continue-on-error: true", self.workflow)
         self.assertIn(
             "scripts/quality/review_governance.py evaluate-materialized",
             self.workflow,
