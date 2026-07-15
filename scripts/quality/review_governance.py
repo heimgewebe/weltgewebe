@@ -20,6 +20,9 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 SCHEMA_VERSION = 1
+MAX_ARTIFACT_BYTES = 100 * 1024 * 1024
+SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
+GITHUB_LOGIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
 RISK_ORDER = {"R0": 0, "R1": 1, "R2": 2, "R3": 3}
 REQUIRED_REVIEWS = {"R0": 0, "R1": 1, "R2": 2, "R3": 2}
 AUTHORIZED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
@@ -51,12 +54,37 @@ class GovernanceError(RuntimeError):
     """A fail-closed governance error."""
 
 
+def load_allowed_attesters(path: Path) -> frozenset[str]:
+    raw = _load_json(path)
+    required = {"schema_version", "allowed_attesters"}
+    if not isinstance(raw, dict) or set(raw) != required:
+        raise GovernanceError(
+            "attester authority file must contain exactly schema_version and allowed_attesters"
+        )
+    if raw["schema_version"] != SCHEMA_VERSION:
+        raise GovernanceError("unsupported attester authority schema")
+    values = raw["allowed_attesters"]
+    if not isinstance(values, list) or not values:
+        raise GovernanceError("allowed_attesters must be a non-empty list")
+    normalized: list[str] = []
+    for value in values:
+        if not isinstance(value, str) or value != value.strip():
+            raise GovernanceError("allowed_attesters contains an invalid login")
+        if not GITHUB_LOGIN_RE.fullmatch(value):
+            raise GovernanceError("allowed_attesters contains an invalid GitHub login")
+        normalized.append(value.casefold())
+    if len(set(normalized)) != len(normalized):
+        raise GovernanceError("allowed_attesters must not contain duplicates")
+    return frozenset(normalized)
+
+
 @dataclass(frozen=True)
 class DiffStats:
     changed_files: tuple[str, ...]
     additions: int
     deletions: int
     binary_files: tuple[str, ...]
+    opaque_files: tuple[str, ...] = ()
 
     @property
     def changed_lines(self) -> int:
@@ -213,50 +241,66 @@ def _r0_scope_valid(stats: DiffStats) -> tuple[bool, str]:
     return True, ""
 
 
-def generate_bundle(
-    *,
-    repo: Path,
-    output_dir: Path,
-    base_revision: str,
-    head_revision: str,
-    pr_number: int,
-    risk_class: str | None,
-) -> Bundle:
-    repo = repo.resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
-    base_sha = _resolve_sha(repo, base_revision)
-    head_sha = _resolve_sha(repo, head_revision)
-    merge_base = str(_git(repo, ["merge-base", base_sha, head_sha], text=True)).strip()
-    range_spec = f"{base_sha}...{head_sha}"
+def _validate_binding(
+    *, pr_number: int, base_sha: str, head_sha: str, merge_base_sha: str
+) -> None:
+    if pr_number < 1:
+        raise GovernanceError("PR number must be a positive integer")
+    for name, value in (
+        ("base_sha", base_sha),
+        ("head_sha", head_sha),
+        ("merge_base_sha", merge_base_sha),
+    ):
+        if not SHA40_RE.fullmatch(value):
+            raise GovernanceError(f"{name} must be a lowercase 40-character Git SHA")
 
-    diff_bytes = _git(
-        repo,
-        [
-            "diff",
-            "--binary",
-            "--full-index",
-            "--find-renames",
-            "--no-ext-diff",
-            range_spec,
-        ],
+
+def _validate_stats(stats: DiffStats) -> None:
+    if stats.additions < 0 or stats.deletions < 0:
+        raise GovernanceError("diff totals must be non-negative")
+    if len(set(stats.changed_files)) != len(stats.changed_files):
+        raise GovernanceError("changed_files must not contain duplicates")
+    if not set(stats.binary_files).issubset(stats.changed_files):
+        raise GovernanceError("binary_files must be a subset of changed_files")
+    if not set(stats.opaque_files).issubset(stats.changed_files):
+        raise GovernanceError("opaque_files must be a subset of changed_files")
+    for file_path in stats.changed_files:
+        if not isinstance(file_path, str) or not file_path or "\x00" in file_path:
+            raise GovernanceError("changed_files contains an invalid path")
+
+
+def _build_bundle(
+    *,
+    output_dir: Path,
+    pr_number: int,
+    base_sha: str,
+    head_sha: str,
+    merge_base_sha: str,
+    risk_class: str | None,
+    diff_bytes: bytes,
+    patch_bytes: bytes,
+    stats: DiffStats,
+    source: str,
+) -> Bundle:
+    _validate_binding(
+        pr_number=pr_number,
+        base_sha=base_sha,
+        head_sha=head_sha,
+        merge_base_sha=merge_base_sha,
     )
-    patch_bytes = _git(
-        repo,
-        [
-            "format-patch",
-            "--stdout",
-            "--binary",
-            "--full-index",
-            "--no-signature",
-            f"{base_sha}..{head_sha}",
-        ],
-    )
-    assert isinstance(diff_bytes, bytes)
-    assert isinstance(patch_bytes, bytes)
+    _validate_stats(stats)
+    if not diff_bytes:
+        raise GovernanceError("review diff is empty")
+    if not patch_bytes:
+        raise GovernanceError("review patch is empty")
+    if len(diff_bytes) > MAX_ARTIFACT_BYTES or len(patch_bytes) > MAX_ARTIFACT_BYTES:
+        raise GovernanceError(
+            f"review artifacts exceed the {MAX_ARTIFACT_BYTES}-byte safety limit"
+        )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
     diff_hash = _sha256(diff_bytes)
     patch_hash = _sha256(patch_bytes)
-    stats = _diff_stats(repo, base_sha, head_sha)
-
     stem = f"weltgewebe-pr-{pr_number}-{_safe_name(head_sha[:12])}-{diff_hash[:12]}"
     diff_path = output_dir / f"{stem}.diff"
     patch_path = output_dir / f"{stem}.patch"
@@ -269,7 +313,7 @@ def generate_bundle(
         "pr_number": pr_number,
         "base_sha": base_sha,
         "head_sha": head_sha,
-        "merge_base_sha": merge_base,
+        "merge_base_sha": merge_base_sha,
         "diff_sha256": diff_hash,
         "risk_class": risk_class,
     }
@@ -277,6 +321,7 @@ def generate_bundle(
         "schema_version": SCHEMA_VERSION,
         "kind": "weltgewebe-review-bundle",
         "generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "source": source,
         "binding": binding,
         "stats": {
             "changed_files": list(stats.changed_files),
@@ -284,6 +329,7 @@ def generate_bundle(
             "additions": stats.additions,
             "deletions": stats.deletions,
             "binary_files": list(stats.binary_files),
+            "opaque_files": list(stats.opaque_files),
         },
         "artifacts": {
             "diff": {
@@ -300,6 +346,13 @@ def generate_bundle(
     }
     manifest_path.write_bytes(_canonical_json(manifest))
 
+    opaque_note = ""
+    if stats.opaque_files:
+        opaque_note = (
+            "\n- Nicht im GitHub-Textdiff dargestellte Dateien: "
+            + ", ".join(f"`{item}`" for item in stats.opaque_files)
+            + "\n"
+        )
     request = f"""# Weltgewebe – exakter Reviewauftrag
 
 Prüfe ausschließlich den beigefügten Diff. Frühere oder spätere Versionen zählen nicht.
@@ -308,15 +361,17 @@ Prüfe ausschließlich den beigefügten Diff. Frühere oder spätere Versionen z
 - Risikoklasse: {risk_class or "FEHLT"}
 - Basis-Commit: `{base_sha}`
 - Head-Commit: `{head_sha}`
-- Merge-Basis: `{merge_base}`
+- Merge-Basis: `{merge_base_sha}`
 - Diff-SHA-256: `{diff_hash}`
+- Quelle: `{source}`
 - Geänderte Dateien: {len(stats.changed_files)}
 - Zeilen: +{stats.additions} / -{stats.deletions}
-
+{opaque_note}
 Bewerte mindestens eine klar benannte Achse, etwa `correctness`, `security`,
 `data-integrity`, `concurrency`, `architecture`, `testing` oder `operations`.
 Benenne konkrete Befunde. Ein PASS ist nur zulässig, wenn alle Mergeblocker behoben
-oder nachvollziehbar widerlegt sind.
+oder nachvollziehbar widerlegt sind. Dateien ohne GitHub-Textdarstellung müssen
+separat geprüft oder als offener Mergeblocker benannt werden.
 
 Nach dem Review wird ein Beleg nach diesem Muster als PR-Kommentar hinterlegt:
 
@@ -345,7 +400,7 @@ neue Push, Basiswechsel oder Diffwechsel entwertet den Beleg automatisch.
         pr_number=pr_number,
         base_sha=base_sha,
         head_sha=head_sha,
-        merge_base_sha=merge_base,
+        merge_base_sha=merge_base_sha,
         diff_sha256=diff_hash,
         patch_sha256=patch_hash,
         manifest_path=manifest_path,
@@ -353,6 +408,153 @@ neue Push, Basiswechsel oder Diffwechsel entwertet den Beleg automatisch.
         patch_path=patch_path,
         request_path=request_path,
         stats=stats,
+    )
+
+
+def generate_bundle(
+    *,
+    repo: Path,
+    output_dir: Path,
+    base_revision: str,
+    head_revision: str,
+    pr_number: int,
+    risk_class: str | None,
+) -> Bundle:
+    repo = repo.resolve()
+    base_sha = _resolve_sha(repo, base_revision)
+    head_sha = _resolve_sha(repo, head_revision)
+    merge_base = str(_git(repo, ["merge-base", base_sha, head_sha], text=True)).strip()
+    range_spec = f"{base_sha}...{head_sha}"
+    diff_bytes = _git(
+        repo,
+        [
+            "diff",
+            "--binary",
+            "--full-index",
+            "--find-renames",
+            "--no-ext-diff",
+            range_spec,
+        ],
+    )
+    patch_bytes = _git(
+        repo,
+        [
+            "format-patch",
+            "--stdout",
+            "--binary",
+            "--full-index",
+            "--no-signature",
+            f"{base_sha}..{head_sha}",
+        ],
+    )
+    assert isinstance(diff_bytes, bytes)
+    assert isinstance(patch_bytes, bytes)
+    return _build_bundle(
+        output_dir=output_dir,
+        pr_number=pr_number,
+        base_sha=base_sha,
+        head_sha=head_sha,
+        merge_base_sha=merge_base,
+        risk_class=risk_class,
+        diff_bytes=diff_bytes,
+        patch_bytes=patch_bytes,
+        stats=_diff_stats(repo, base_sha, head_sha),
+        source="local-git-binary",
+    )
+
+
+def _materialized_metadata(path: Path) -> tuple[int, str, str, str, DiffStats]:
+    raw = _load_json(path)
+    if not isinstance(raw, dict):
+        raise GovernanceError("materialized metadata must be a JSON object")
+    required = {
+        "schema_version",
+        "pr_number",
+        "base_sha",
+        "head_sha",
+        "merge_base_sha",
+        "changed_file_count",
+        "changed_files",
+        "additions",
+        "deletions",
+        "opaque_files",
+    }
+    if set(raw) != required:
+        missing = sorted(required - set(raw))
+        extra = sorted(set(raw) - required)
+        raise GovernanceError(
+            f"materialized metadata keys mismatch; missing={missing}, extra={extra}"
+        )
+    if raw["schema_version"] != SCHEMA_VERSION:
+        raise GovernanceError("unsupported materialized metadata schema")
+    pr_number = raw["pr_number"]
+    additions = raw["additions"]
+    deletions = raw["deletions"]
+    changed_files = raw["changed_files"]
+    opaque_files = raw["opaque_files"]
+    if not isinstance(pr_number, int) or isinstance(pr_number, bool):
+        raise GovernanceError("materialized pr_number must be an integer")
+    for name, value in (("additions", additions), ("deletions", deletions)):
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise GovernanceError(f"materialized {name} must be an integer")
+    if not isinstance(changed_files, list) or not all(
+        isinstance(item, str) for item in changed_files
+    ):
+        raise GovernanceError("materialized changed_files must be a string list")
+    if not isinstance(opaque_files, list) or not all(
+        isinstance(item, str) for item in opaque_files
+    ):
+        raise GovernanceError("materialized opaque_files must be a string list")
+    if raw["changed_file_count"] != len(changed_files):
+        raise GovernanceError(
+            "materialized changed_file_count does not match file list"
+        )
+    stats = DiffStats(
+        tuple(changed_files),
+        additions,
+        deletions,
+        (),
+        tuple(opaque_files),
+    )
+    base_sha = raw["base_sha"]
+    head_sha = raw["head_sha"]
+    merge_base_sha = raw["merge_base_sha"]
+    if not all(
+        isinstance(value, str) for value in (base_sha, head_sha, merge_base_sha)
+    ):
+        raise GovernanceError("materialized Git SHAs must be strings")
+    _validate_binding(
+        pr_number=pr_number,
+        base_sha=base_sha,
+        head_sha=head_sha,
+        merge_base_sha=merge_base_sha,
+    )
+    _validate_stats(stats)
+    return pr_number, base_sha, head_sha, merge_base_sha, stats
+
+
+def generate_materialized_bundle(
+    *,
+    output_dir: Path,
+    metadata_file: Path,
+    diff_file: Path,
+    patch_file: Path,
+    risk_class: str | None,
+) -> Bundle:
+    pr_number, base_sha, head_sha, merge_base_sha, stats = _materialized_metadata(
+        metadata_file
+    )
+    return _build_bundle(
+        output_dir=output_dir,
+        pr_number=pr_number,
+        base_sha=base_sha,
+        head_sha=head_sha,
+        merge_base_sha=merge_base_sha,
+        risk_class=risk_class,
+        diff_bytes=diff_file.read_bytes(),
+        patch_bytes=patch_file.read_bytes(),
+        stats=stats,
+        source="github-pull-api",
     )
 
 
@@ -404,7 +606,16 @@ def evaluate_evidence(
     bundle: Bundle,
     risk_class: str | None,
     comments: Sequence[dict[str, Any]],
+    allowed_attesters: frozenset[str],
 ) -> dict[str, Any]:
+    if not allowed_attesters or any(
+        not isinstance(login, str) or not GITHUB_LOGIN_RE.fullmatch(login)
+        for login in allowed_attesters
+    ):
+        raise GovernanceError(
+            "allowed_attesters must be a non-empty set of GitHub logins"
+        )
+    normalized_attesters = frozenset(login.casefold() for login in allowed_attesters)
     reasons: list[str] = []
     if risk_class is None:
         reasons.append(
@@ -428,7 +639,11 @@ def evaluate_evidence(
     unauthorized = 0
     malformed = 0
     for record in records:
-        if record.get("_author_association") not in AUTHORIZED_ASSOCIATIONS:
+        comment_author = str(record.get("_comment_author") or "").strip()
+        if (
+            record.get("_author_association") not in AUTHORIZED_ASSOCIATIONS
+            or comment_author.casefold() not in normalized_attesters
+        ):
             unauthorized += 1
             continue
         required_fields = {
@@ -528,7 +743,7 @@ def evaluate_evidence(
         {
             "reviewer": record["reviewer"],
             "review_axis": record["review_axis"],
-            "comment_author": record.get("_comment_author"),
+            "attester": record.get("_comment_author"),
             "comment_url": record.get("_comment_url"),
         }
         for record in sorted(
@@ -594,6 +809,42 @@ def _command_bundle(args: argparse.Namespace) -> int:
     return 0
 
 
+def _command_bundle_materialized(args: argparse.Namespace) -> int:
+    body = (
+        Path(args.pr_body_file).read_text(encoding="utf-8") if args.pr_body_file else ""
+    )
+    bundle = generate_materialized_bundle(
+        output_dir=Path(args.output_dir),
+        metadata_file=Path(args.metadata_file),
+        diff_file=Path(args.diff_file),
+        patch_file=Path(args.patch_file),
+        risk_class=parse_risk_class(body),
+    )
+    print(bundle.manifest_path)
+    return 0
+
+
+def _evaluate_and_write(
+    *,
+    output_dir: Path,
+    bundle: Bundle,
+    risk_class: str | None,
+    comments_file: Path,
+    authorities_file: Path,
+) -> int:
+    raw_comments = _load_json(comments_file)
+    comments = _flatten_comments(raw_comments)
+    evaluation = evaluate_evidence(
+        bundle=bundle,
+        risk_class=risk_class,
+        comments=comments,
+        allowed_attesters=load_allowed_attesters(authorities_file),
+    )
+    (output_dir / "evaluation.json").write_bytes(_canonical_json(evaluation))
+    print(json.dumps(evaluation, sort_keys=True))
+    return 0 if evaluation["pass"] else 1
+
+
 def _command_evaluate(args: argparse.Namespace) -> int:
     output_dir = Path(args.output_dir)
     try:
@@ -607,16 +858,38 @@ def _command_evaluate(args: argparse.Namespace) -> int:
             pr_number=args.pr_number,
             risk_class=risk_class,
         )
-        raw_comments = _load_json(Path(args.comments_file))
-        comments = _flatten_comments(raw_comments)
-        evaluation = evaluate_evidence(
+        return _evaluate_and_write(
+            output_dir=output_dir,
             bundle=bundle,
             risk_class=risk_class,
-            comments=comments,
+            comments_file=Path(args.comments_file),
+            authorities_file=Path(args.authorities_file),
         )
-        (output_dir / "evaluation.json").write_bytes(_canonical_json(evaluation))
-        print(json.dumps(evaluation, sort_keys=True))
-        return 0 if evaluation["pass"] else 1
+    except Exception as exc:  # fail closed and preserve a machine-readable receipt
+        _write_failure(output_dir, f"internal governance failure: {exc}")
+        print(f"review governance failed closed: {exc}", file=sys.stderr)
+        return 2
+
+
+def _command_evaluate_materialized(args: argparse.Namespace) -> int:
+    output_dir = Path(args.output_dir)
+    try:
+        body = Path(args.pr_body_file).read_text(encoding="utf-8")
+        risk_class = parse_risk_class(body)
+        bundle = generate_materialized_bundle(
+            output_dir=output_dir,
+            metadata_file=Path(args.metadata_file),
+            diff_file=Path(args.diff_file),
+            patch_file=Path(args.patch_file),
+            risk_class=risk_class,
+        )
+        return _evaluate_and_write(
+            output_dir=output_dir,
+            bundle=bundle,
+            risk_class=risk_class,
+            comments_file=Path(args.comments_file),
+            authorities_file=Path(args.authorities_file),
+        )
     except Exception as exc:  # fail closed and preserve a machine-readable receipt
         _write_failure(output_dir, f"internal governance failure: {exc}")
         print(f"review governance failed closed: {exc}", file=sys.stderr)
@@ -626,16 +899,35 @@ def _command_evaluate(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for name in ("bundle", "evaluate"):
+
+    bundle = subparsers.add_parser("bundle")
+    bundle.add_argument("--repo", required=True)
+    bundle.add_argument("--output-dir", required=True)
+    bundle.add_argument("--base-sha", required=True)
+    bundle.add_argument("--head-sha", required=True)
+    bundle.add_argument("--pr-number", required=True, type=int)
+    bundle.add_argument("--pr-body-file")
+
+    evaluate = subparsers.add_parser("evaluate")
+    evaluate.add_argument("--repo", required=True)
+    evaluate.add_argument("--output-dir", required=True)
+    evaluate.add_argument("--base-sha", required=True)
+    evaluate.add_argument("--head-sha", required=True)
+    evaluate.add_argument("--pr-number", required=True, type=int)
+    evaluate.add_argument("--pr-body-file", required=True)
+    evaluate.add_argument("--comments-file", required=True)
+    evaluate.add_argument("--authorities-file", required=True)
+
+    for name in ("bundle-materialized", "evaluate-materialized"):
         command = subparsers.add_parser(name)
-        command.add_argument("--repo", required=True)
         command.add_argument("--output-dir", required=True)
-        command.add_argument("--base-sha", required=True)
-        command.add_argument("--head-sha", required=True)
-        command.add_argument("--pr-number", required=True, type=int)
-        command.add_argument("--pr-body-file", required=name == "evaluate")
-        if name == "evaluate":
+        command.add_argument("--metadata-file", required=True)
+        command.add_argument("--diff-file", required=True)
+        command.add_argument("--patch-file", required=True)
+        command.add_argument("--pr-body-file", required=name == "evaluate-materialized")
+        if name == "evaluate-materialized":
             command.add_argument("--comments-file", required=True)
+            command.add_argument("--authorities-file", required=True)
     return parser
 
 
@@ -643,6 +935,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "bundle":
         return _command_bundle(args)
+    if args.command == "bundle-materialized":
+        return _command_bundle_materialized(args)
+    if args.command == "evaluate-materialized":
+        return _command_evaluate_materialized(args)
     return _command_evaluate(args)
 
 
