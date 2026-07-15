@@ -1,0 +1,247 @@
+---
+name: Review Evidence Gate
+
+"on":
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  issue_comment:
+    types: [created, edited]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Open pull request number to re-evaluate
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: review-evidence-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  GH_API_VERSION: "2022-11-28"
+
+jobs:
+  review-evidence:
+    name: Review evidence gate
+    if: >-
+      github.event_name != 'issue_comment' ||
+      github.event.issue.pull_request != null
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Security boundary: this workflow has a token that may write commit status.
+      # It executes only code from literal `main`. Pull-request content is downloaded
+      # through the GitHub API as inert diff/patch/JSON data; no PR Git object is fetched,
+      # checked out, imported or executed.
+      - name: Checkout trusted governance implementation
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Resolve PR and evaluate exact review evidence
+        id: evaluate
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PATH: ${{ github.event_path }}
+          DISPATCH_PR_NUMBER: ${{ inputs.pr_number }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          output_dir="${RUNNER_TEMP}/weltgewebe-review-evidence"
+          mkdir -p "${output_dir}"
+
+          write_internal_failure() {
+            local message="$1"
+            jq -n --arg message "${message}" '{
+              schema_version: 1,
+              kind: "weltgewebe-review-evaluation",
+              pass: false,
+              reasons: [$message]
+            }' > "${output_dir}/evaluation.json"
+          }
+
+          on_error() {
+            local rc=$?
+            write_internal_failure \
+              "trusted workflow preparation failed with exit code ${rc}"
+            exit "${rc}"
+          }
+          trap on_error ERR
+
+          case "${EVENT_NAME}" in
+            pull_request_target)
+              pr_number="$(jq -r '.pull_request.number' "${EVENT_PATH}")"
+              ;;
+            issue_comment)
+              pr_number="$(jq -r '.issue.number' "${EVENT_PATH}")"
+              ;;
+            workflow_dispatch)
+              pr_number="${DISPATCH_PR_NUMBER}"
+              ;;
+            *)
+              write_internal_failure "unsupported event: ${EVENT_NAME}"
+              exit 2
+              ;;
+          esac
+          [[ "${pr_number}" =~ ^[1-9][0-9]*$ ]]
+
+          api_header="X-GitHub-Api-Version: ${GH_API_VERSION}"
+          pr_api="repos/${REPOSITORY}/pulls/${pr_number}"
+          gh api -H "${api_header}" "${pr_api}" > "${RUNNER_TEMP}/pr-before.json"
+          state="$(jq -r '.state' "${RUNNER_TEMP}/pr-before.json")"
+          base_ref="$(jq -r '.base.ref' "${RUNNER_TEMP}/pr-before.json")"
+          base_sha="$(jq -r '.base.sha' "${RUNNER_TEMP}/pr-before.json")"
+          head_sha="$(jq -r '.head.sha' "${RUNNER_TEMP}/pr-before.json")"
+          [[ "${state}" == "open" ]]
+          [[ "${base_ref}" == "main" ]]
+          [[ "${base_sha}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${head_sha}" =~ ^[0-9a-f]{40}$ ]]
+
+          {
+            echo "pr_number=${pr_number}"
+            echo "base_sha=${base_sha}"
+            echo "head_sha=${head_sha}"
+            echo "output_dir=${output_dir}"
+          } >> "${GITHUB_OUTPUT}"
+
+          gh api --method POST -H "${api_header}" \
+            "repos/${REPOSITORY}/statuses/${head_sha}" \
+            -f state=pending \
+            -f context='Review evidence gate' \
+            -f description='Exact diff and review evidence are being verified.' \
+            -f target_url="${GITHUB_SERVER_URL}/${REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            >/dev/null
+
+          gh api -H "${api_header}" -H 'Accept: application/vnd.github.diff' \
+            "${pr_api}" > "${RUNNER_TEMP}/pr.diff"
+          gh api -H "${api_header}" -H 'Accept: application/vnd.github.patch' \
+            "${pr_api}" > "${RUNNER_TEMP}/pr.patch"
+          max_artifact_bytes=$((100 * 1024 * 1024))
+          diff_bytes="$(wc -c < "${RUNNER_TEMP}/pr.diff")"
+          patch_bytes="$(wc -c < "${RUNNER_TEMP}/pr.patch")"
+          (( diff_bytes > 0 && diff_bytes <= max_artifact_bytes ))
+          (( patch_bytes > 0 && patch_bytes <= max_artifact_bytes ))
+          gh api -H "${api_header}" \
+            "repos/${REPOSITORY}/compare/${base_sha}...${head_sha}" \
+            > "${RUNNER_TEMP}/compare.json"
+          gh api --paginate --slurp -H "${api_header}" \
+            "${pr_api}/files?per_page=100" \
+            > "${RUNNER_TEMP}/file-pages.json"
+          jq -e 'type == "array" and all(.[]; type == "array")' \
+            "${RUNNER_TEMP}/file-pages.json" >/dev/null
+          jq '[.[][]]' "${RUNNER_TEMP}/file-pages.json" \
+            > "${RUNNER_TEMP}/files.json"
+
+          expected_files="$(jq -r '.changed_files' "${RUNNER_TEMP}/pr-before.json")"
+          actual_files="$(jq -r 'length' "${RUNNER_TEMP}/files.json")"
+          diff_file_count="$(grep -c '^diff --git ' "${RUNNER_TEMP}/pr.diff" || true)"
+          [[ "${actual_files}" == "${expected_files}" ]]
+          [[ "${diff_file_count}" == "${expected_files}" ]]
+          jq -e 'all(.[]; (.filename | type == "string") and (.filename | length > 0))' \
+            "${RUNNER_TEMP}/files.json" >/dev/null
+
+          gh api -H "${api_header}" "${pr_api}" > "${RUNNER_TEMP}/pr-after.json"
+          jq -e --arg base "${base_sha}" --arg head "${head_sha}" '
+            .state == "open" and
+            .base.ref == "main" and
+            .base.sha == $base and
+            .head.sha == $head
+          ' "${RUNNER_TEMP}/pr-after.json" >/dev/null
+
+          jq -n \
+            --slurpfile pr "${RUNNER_TEMP}/pr-before.json" \
+            --slurpfile compare "${RUNNER_TEMP}/compare.json" \
+            --slurpfile files "${RUNNER_TEMP}/files.json" '
+            {
+              schema_version: 1,
+              pr_number: $pr[0].number,
+              base_sha: $pr[0].base.sha,
+              head_sha: $pr[0].head.sha,
+              merge_base_sha: $compare[0].merge_base_commit.sha,
+              changed_file_count: ($files[0] | length),
+              changed_files: [$files[0][].filename],
+              additions: $pr[0].additions,
+              deletions: $pr[0].deletions,
+              opaque_files: [
+                $files[0][] |
+                select((has("patch") | not) or .patch == null) |
+                .filename
+              ]
+            }
+          ' > "${RUNNER_TEMP}/metadata.json"
+
+          jq -r '.body // ""' "${RUNNER_TEMP}/pr-before.json" \
+            > "${RUNNER_TEMP}/pr-body.md"
+          gh api --paginate --slurp -H "${api_header}" \
+            "repos/${REPOSITORY}/issues/${pr_number}/comments?per_page=100" \
+            > "${RUNNER_TEMP}/comments.json"
+
+          trap - ERR
+          python3 scripts/quality/review_governance.py evaluate-materialized \
+            --output-dir "${output_dir}" \
+            --metadata-file "${RUNNER_TEMP}/metadata.json" \
+            --diff-file "${RUNNER_TEMP}/pr.diff" \
+            --patch-file "${RUNNER_TEMP}/pr.patch" \
+            --pr-body-file "${RUNNER_TEMP}/pr-body.md" \
+            --comments-file "${RUNNER_TEMP}/comments.json" \
+            --authorities-file .github/review-evidence-authorities.json
+
+      - name: Upload downloadable diff and review bundle
+        if: ${{ always() && steps.evaluate.outputs.pr_number != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        with:
+          name: wg-review-pr-${{ steps.evaluate.outputs.pr_number }}-${{ steps.evaluate.outputs.head_sha }}
+          path: ${{ steps.evaluate.outputs.output_dir }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish exact-head gate status
+        if: ${{ always() && steps.evaluate.outputs.head_sha != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ steps.evaluate.outputs.head_sha }}
+          OUTPUT_DIR: ${{ steps.evaluate.outputs.output_dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          evaluation="${OUTPUT_DIR}/evaluation.json"
+          if [[ -f "${evaluation}" ]] && \
+             [[ "$(jq -r '.pass // false' "${evaluation}")" == "true" ]]; then
+            state=success
+            description='Exact diff and required review attestations are verified.'
+          else
+            state=failure
+            description='Review evidence is missing, stale, malformed or blocking.'
+          fi
+          gh api --method POST \
+            -H "X-GitHub-Api-Version: ${GH_API_VERSION}" \
+            "repos/${REPOSITORY}/statuses/${HEAD_SHA}" \
+            -f state="${state}" \
+            -f context='Review evidence gate' \
+            -f description="${description}" \
+            -f target_url="${GITHUB_SERVER_URL}/${REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            >/dev/null
+
+      - name: Enforce review evidence result
+        if: ${{ always() }}
+        env:
+          OUTPUT_DIR: ${{ steps.evaluate.outputs.output_dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${OUTPUT_DIR:-}"
+          test -f "${OUTPUT_DIR}/evaluation.json"
+          test "$(jq -r '.pass // false' "${OUTPUT_DIR}/evaluation.json")" = "true"

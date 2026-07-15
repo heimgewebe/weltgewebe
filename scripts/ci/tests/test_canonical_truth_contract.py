@@ -12,23 +12,50 @@ ROOT = Path(__file__).resolve().parents[3]
 
 class CanonicalTruthContractTests(unittest.TestCase):
     def test_docmeta_ci_jobs_install_the_pinned_yaml_dependency(self) -> None:
-        docs_workflow = (ROOT / ".github/workflows/docs-guard.yml").read_text(encoding="utf-8")
+        docs_workflow = (ROOT / ".github/workflows/docs-guard.yml").read_text(
+            encoding="utf-8"
+        )
         main_workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("pytest==8.3.4 pyyaml==6.0.2", docs_workflow)
         self.assertIn("pytest==8.3.4 pyyaml==6.0.2", main_workflow)
 
-    def test_required_check_catalog_is_strict_and_matches_universal_jobs(self) -> None:
+    def test_required_check_catalog_is_strict_and_matches_trusted_producers(
+        self,
+    ) -> None:
         path = ROOT / ".github/grabowski-required-checks.json"
         data = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(set(data), {"schema_version", "required_checks"})
         self.assertEqual(data["schema_version"], 1)
         self.assertEqual(
             data["required_checks"],
-            ["Required merge gate"],
+            ["Required merge gate", "Review evidence gate"],
         )
-        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-        for name in data["required_checks"]:
+        producers = {
+            "Required merge gate": ROOT / ".github/workflows/ci.yml",
+            "Review evidence gate": ROOT / ".github/workflows/review-evidence.yml",
+        }
+        self.assertEqual(set(data["required_checks"]), set(producers))
+        for name, workflow_path in producers.items():
+            workflow = workflow_path.read_text(encoding="utf-8")
             self.assertIn(f"name: {name}", workflow)
+        review_workflow = producers["Review evidence gate"].read_text(encoding="utf-8")
+        self.assertGreaterEqual(
+            review_workflow.count("context='Review evidence gate'"),
+            2,
+        )
+        self.assertIn("ref: main", review_workflow)
+        self.assertIn("fetch-depth: 1", review_workflow)
+        self.assertIn("persist-credentials: false", review_workflow)
+        self.assertNotIn("git fetch", review_workflow)
+        self.assertNotIn("refs/pull/", review_workflow)
+        self.assertIn("evaluate-materialized", review_workflow)
+        self.assertIn("application/vnd.github.diff", review_workflow)
+        self.assertIn("diff_file_count", review_workflow)
+        self.assertIn("max_artifact_bytes", review_workflow)
+        self.assertIn(
+            "--authorities-file .github/review-evidence-authorities.json",
+            review_workflow,
+        )
 
     def test_package_license_metadata_matches_repository_license(self) -> None:
         cargo = (ROOT / "apps/api/Cargo.toml").read_text(encoding="utf-8")
@@ -50,9 +77,15 @@ class CanonicalTruthContractTests(unittest.TestCase):
     def test_canonical_entrypoints_are_substantive(self) -> None:
         required = {
             "architecture/overview.md": ("## Komponenten", "## Hauptdatenflüsse"),
-            "architecture/security.md": ("## Vertrauensgrenzen", "## Authentifizierungsflächen"),
+            "architecture/security.md": (
+                "## Vertrauensgrenzen",
+                "## Authentifizierungsflächen",
+            ),
             "runtime/README.md": ("## Laufzeitprofile", "## Domänenquellen"),
-            "runbooks/README.md": ("## Einstieg nach Situation", "## Sichere Reihenfolge"),
+            "runbooks/README.md": (
+                "## Einstieg nach Situation",
+                "## Sichere Reihenfolge",
+            ),
         }
         for relative, headings in required.items():
             text = (ROOT / relative).read_text(encoding="utf-8")
@@ -60,10 +93,16 @@ class CanonicalTruthContractTests(unittest.TestCase):
             for heading in headings:
                 self.assertIn(heading, text, relative)
 
-    def test_active_architecture_and_runbook_do_not_claim_missing_subsystems(self) -> None:
-        architecture = (ROOT / "docs/architekturstruktur.md").read_text(encoding="utf-8")
+    def test_active_architecture_and_runbook_do_not_claim_missing_subsystems(
+        self,
+    ) -> None:
+        architecture = (ROOT / "docs/architekturstruktur.md").read_text(
+            encoding="utf-8"
+        )
         runbook = (ROOT / "docs/runbook.md").read_text(encoding="utf-8")
-        orientation = (ROOT / "docs/policies/orientierung.md").read_text(encoding="utf-8")
+        orientation = (ROOT / "docs/policies/orientierung.md").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("keinen produktiven Outbox-Relay", architecture)
         self.assertNotIn("Outbox/JetStream-Eventing", architecture)
         self.assertRegex(runbook, r"keinen\s+implementierten WAL-/PITR-")
@@ -83,7 +122,9 @@ class CanonicalTruthContractTests(unittest.TestCase):
 
     def test_data_model_names_actual_sources_and_absent_tables(self) -> None:
         text = (ROOT / "docs/datenmodell.md").read_text(encoding="utf-8")
-        compose_prod = (ROOT / "infra/compose/compose.prod.yml").read_text(encoding="utf-8")
+        compose_prod = (ROOT / "infra/compose/compose.prod.yml").read_text(
+            encoding="utf-8"
+        )
         env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
 
         self.assertIn("Repository-Produktionsvertrag", text)
@@ -93,7 +134,13 @@ class CanonicalTruthContractTests(unittest.TestCase):
             compose_prod,
         )
         self.assertIn("WELTGEWEBE_DOMAIN_READ_SOURCE=jsonl", env_example)
-        for table in ("sessions", "domain_accounts", "domain_nodes", "domain_edges", "passkey_credentials"):
+        for table in (
+            "sessions",
+            "domain_accounts",
+            "domain_nodes",
+            "domain_edges",
+            "passkey_credentials",
+        ):
             self.assertIn(f"`{table}`", text)
         self.assertIn("keine `conversations`, `messages`, `roles`, `outbox`", text)
         self.assertNotIn("Domänendaten bleibt JSONL der Standard", text)
@@ -107,7 +154,9 @@ class CanonicalTruthContractTests(unittest.TestCase):
             "docs/policies/orientierung.md",
             "docs/zusammenstellung.md",
         )
-        forbidden = re.compile(r"(?i)(keine cookies|keine cookies/track|also keine cookies)")
+        forbidden = re.compile(
+            r"(?i)(keine cookies|keine cookies/track|also keine cookies)"
+        )
         for relative in paths:
             text = (ROOT / relative).read_text(encoding="utf-8")
             self.assertIsNone(forbidden.search(text), relative)

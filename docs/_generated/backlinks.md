@@ -10,6 +10,14 @@ summary: Automatisch generierter Graph der Rückverweise.
 
 Generated automatically. Do not edit.
 
+## .github/PULL_REQUEST_TEMPLATE.md
+
+- [relates_to] docs/process/merge-quality-gate.md
+
+## .github/grabowski-required-checks.json
+
+- [relates_to] docs/process/merge-quality-gate.md
+
 ## .github/workflows/api.yml
 
 - [relates_to] docs/reports/domain-account-write-path-proof.md
@@ -18,6 +26,10 @@ Generated automatically. Do not edit.
 ## .github/workflows/basemap-runtime-proof.yml
 
 - [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
+
+## .github/workflows/ci.yml
+
+- [relates_to] docs/process/merge-quality-gate.md
 
 ## .github/workflows/cost-report.yml
 
@@ -31,6 +43,10 @@ Generated automatically. Do not edit.
 ## .github/workflows/public-login-smtp-readiness.yml
 
 - [relates_to] docs/deploy/vps.md
+
+## .github/workflows/review-evidence.yml
+
+- [relates_to] docs/process/merge-quality-gate.md
 
 ## AGENTS.md
 
@@ -1143,6 +1159,14 @@ Generated automatically. Do not edit.
 ## scripts/ops/reconcile_public_login_smtp_env.py
 
 - [relates_to] docs/deploy/vps.md
+
+## scripts/quality/review_governance.py
+
+- [relates_to] docs/process/merge-quality-gate.md
+
+## scripts/quality/tests/test_review_governance.py
+
+- [relates_to] docs/process/merge-quality-gate.md
 
 ## scripts/tests/test_domain_single_instance_guard.sh
 
