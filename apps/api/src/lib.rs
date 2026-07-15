@@ -1,3 +1,4 @@
+mod advisory_lock;
 pub mod auth;
 pub mod config;
 pub mod domain_db;
@@ -37,6 +38,13 @@ use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::request_id::{MakeRequestUuid, SetRequestIdLayer};
 use tracing_subscriber::{fmt, EnvFilter};
+
+/// Fixed process-local PostgreSQL pool budget.
+///
+/// Node mutation coordination derives its concurrency slots from this value so
+/// an advisory-lock transaction and the mutation transaction cannot exhaust the
+/// pool by each waiting for a second connection.
+pub(crate) const DATABASE_POOL_MAX_CONNECTIONS: u32 = 5;
 
 pub async fn run() -> anyhow::Result<()> {
     // Load `.env` *before* initialising tracing so a `RUST_LOG` defined there is
@@ -165,11 +173,18 @@ pub async fn run() -> anyhow::Result<()> {
     let tokens = crate::auth::tokens::TokenStore::new();
     let step_up_tokens = crate::auth::step_up_tokens::StepUpTokenStore::new();
     let (accounts_store, nodes_cache, edges_cache) = match app_config.domain_read_source {
-        DomainReadSource::Jsonl => (
-            routes::accounts::load_all_accounts().await,
-            routes::nodes::load_nodes().await,
-            routes::edges::load_edges().await,
-        ),
+        DomainReadSource::Jsonl => {
+            routes::nodes::recover_node_delete_jsonl_journal()
+                .await
+                .context(
+                    "failed to recover JSONL node-delete journal before loading domain data",
+                )?;
+            (
+                routes::accounts::load_all_accounts().await,
+                routes::nodes::load_nodes().await,
+                routes::edges::load_edges().await,
+            )
+        }
         DomainReadSource::Postgres => {
             let pool = db_pool.as_ref().ok_or_else(|| {
                 anyhow!(
@@ -545,7 +560,7 @@ async fn initialise_database_pool() -> anyhow::Result<(Option<sqlx::PgPool>, boo
     };
 
     let pool = PgPoolOptions::new()
-        .max_connections(5)
+        .max_connections(DATABASE_POOL_MAX_CONNECTIONS)
         .connect_lazy(&database_url)
         .context("DATABASE_URL is set but the database pool could not be configured")?;
 

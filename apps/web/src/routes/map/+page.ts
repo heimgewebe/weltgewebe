@@ -9,7 +9,9 @@ import type {
 
 type ResourceName = "nodes" | "accounts" | "edges";
 
-export const load: PageLoad = async ({ fetch }) => {
+export const load: PageLoad = async ({ fetch, depends }) => {
+  depends("weltgewebe:domain-data");
+
   // Fallback to local dev/test default if not configured
   const apiUrl = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "";
 

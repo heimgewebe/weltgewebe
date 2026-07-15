@@ -72,6 +72,14 @@ export async function mockApiResponses(
   // the mock. There is deliberately no direct edge-create request surface.
   const createdNodes: Record<string, unknown>[] = [];
   const createdEdges: Record<string, unknown>[] = [];
+  const mutableDemoNodes: Record<string, unknown>[] = demoNodes.map((node) => ({
+    ...node,
+    address: "Musterstraße 1",
+    info: "Öffentliche Information zum Knoten",
+    tags: ["commons"],
+    location: { ...node.location },
+  }));
+  const deletedNodeIds = new Set<string>();
   const mockAccounts = demoAccounts.map((account) => ({ ...account }));
   const privateProfiles = new Map(
     mockAccounts.map((account) => [
@@ -147,11 +155,111 @@ export async function mockApiResponses(
       });
     }
 
+    const nodeDetailMatch = new URL(url).pathname.match(
+      /^\/api\/nodes\/([^/]+)$/,
+    );
+    if (nodeDetailMatch) {
+      const nodeId = decodeURIComponent(nodeDetailMatch[1]);
+      const allNodes = [...mutableDemoNodes, ...createdNodes];
+      const node = allNodes.find((item) => item.id === nodeId);
+
+      if (method === "GET") {
+        return route.fulfill({
+          status: node ? 200 : 404,
+          contentType: "application/json",
+          body: JSON.stringify(node ?? { error: "node not found" }),
+        });
+      }
+
+      if (!isAuthenticated || currentRole === "gast") {
+        return route.fulfill({ status: 403 });
+      }
+      if (!node) {
+        return route.fulfill({ status: 404 });
+      }
+
+      if (method === "PUT") {
+        const payload = route.request().postDataJSON() as Record<
+          string,
+          unknown
+        > | null;
+        const title =
+          typeof payload?.title === "string" ? payload.title.trim() : "";
+        const kind =
+          typeof payload?.kind === "string" ? payload.kind.trim() : "";
+        const address =
+          typeof payload?.address === "string" ? payload.address.trim() : "";
+        const location = payload?.location as
+          | { lat?: unknown; lon?: unknown }
+          | undefined;
+        if (
+          !title ||
+          !kind ||
+          !address ||
+          typeof location?.lat !== "number" ||
+          typeof location?.lon !== "number"
+        ) {
+          return route.fulfill({ status: 400 });
+        }
+        const updated = {
+          ...node,
+          title,
+          kind,
+          address,
+          location: { lat: location.lat, lon: location.lon },
+          summary:
+            typeof payload?.summary === "string" ? payload.summary : undefined,
+          info: typeof payload?.info === "string" ? payload.info : undefined,
+          tags: Array.isArray(payload?.tags) ? payload.tags : [],
+          id: node.id,
+          created_at: node.created_at,
+          updated_at: new Date().toISOString(),
+        };
+        const demoIndex = mutableDemoNodes.findIndex(
+          (item) => item.id === nodeId,
+        );
+        if (demoIndex >= 0) {
+          mutableDemoNodes[demoIndex] = updated;
+        } else {
+          const createdIndex = createdNodes.findIndex(
+            (item) => item.id === nodeId,
+          );
+          createdNodes[createdIndex] = updated;
+        }
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(updated),
+        });
+      }
+
+      if (method === "DELETE") {
+        const demoIndex = mutableDemoNodes.findIndex(
+          (item) => item.id === nodeId,
+        );
+        if (demoIndex >= 0) mutableDemoNodes.splice(demoIndex, 1);
+        const createdIndex = createdNodes.findIndex(
+          (item) => item.id === nodeId,
+        );
+        if (createdIndex >= 0) createdNodes.splice(createdIndex, 1);
+        deletedNodeIds.add(nodeId);
+        for (let index = createdEdges.length - 1; index >= 0; index -= 1) {
+          const edge = createdEdges[index];
+          if (edge.source_id === nodeId || edge.target_id === nodeId) {
+            createdEdges.splice(index, 1);
+          }
+        }
+        return route.fulfill({ status: 204, body: "" });
+      }
+
+      return route.fulfill({ status: 405 });
+    }
+
     if (url.endsWith("/api/nodes")) {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([...demoNodes, ...createdNodes]),
+        body: JSON.stringify([...mutableDemoNodes, ...createdNodes]),
       });
     }
 
@@ -262,7 +370,15 @@ export async function mockApiResponses(
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([...demoEdges, ...createdEdges]),
+        body: JSON.stringify(
+          [...demoEdges, ...createdEdges].filter(
+            (edge) =>
+              (typeof edge.source_id !== "string" ||
+                !deletedNodeIds.has(edge.source_id)) &&
+              (typeof edge.target_id !== "string" ||
+                !deletedNodeIds.has(edge.target_id)),
+          ),
+        ),
       });
     }
 

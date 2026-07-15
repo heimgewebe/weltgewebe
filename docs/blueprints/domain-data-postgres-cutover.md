@@ -61,6 +61,8 @@ Der belegte Repository- und Produktionsvertrag nach der Remediation vom
   - `POST /accounts`
   - `POST /nodes`
   - `PATCH /nodes`
+  - `PUT /nodes`
+  - `DELETE /nodes`
   - `POST /edges`
 - `APP_CONFIG_PATH` ist fail-closed: eine explizit gesetzte,
   fehlerhafte Config fällt nicht still auf Defaults zurück.
@@ -80,14 +82,14 @@ PostgreSQL-Produktionsvertrag.
 
 | Domain | Lokaler Default | Produktionsvertrag | Status |
 |---|---|---|---|
-| nodes | JSONL read/write | PostgreSQL Read + `POST /nodes` + `PATCH /nodes/{id}` | Produktionswahrheit laut Repo-Vertrag; Livebeleg separat |
+| nodes | JSONL read/write | PostgreSQL Read + `POST /nodes` + `PATCH /nodes/{id}` + `PUT /nodes/{id}` + `DELETE /nodes/{id}` | Produktionswahrheit laut Repo-Vertrag; Livebeleg separat |
 | edges | JSONL read/legacy | PostgreSQL Read + `POST /edges` | Produktionswahrheit laut Repo-Vertrag; Edge-Referenzpolitik offen |
 | accounts | JSONL read/create | PostgreSQL Read + `POST /accounts` | Produktionswahrheit laut Repo-Vertrag; weitere Auth-Mutationen offen |
 
 Zusatzdetails:
 
-- `nodes`: Schema/Backfill/Read-Path proof-geführt; opt-in Node-Create und
-  Node-Patch vorhanden; nicht Default.
+- `nodes`: Schema/Backfill/Read-Path proof-geführt; opt-in Node-Create,
+  Node-Patch, Node-Replace und Node-Delete vorhanden; nicht Default.
 - `edges`: Schema/Backfill/Read-Path proof-geführt; opt-in Edge-Create
   vorhanden; nicht Default.
 - `accounts`: Schema/Backfill/Read-Path proof-geführt; opt-in Account-Create
@@ -101,7 +103,7 @@ Zusatzbefund:
 - Config-Gates müssen explizit gesetzt werden; fehlerhafte `APP_CONFIG_PATH`-Konfigurationen fail-closed.
 - PostgreSQL-Write-Slices sind getrennt implementiert:
   - E-A Account-Create
-  - E-B Node-Create und Node-Patch
+  - E-B Node-Create, Node-Patch, Node-Replace und Node-Delete
   - E-C Edge-Create
 - Account-Create, Step-up-E-Mail, normalisierte E-Mail-Eindeutigkeit und der
   PostgreSQL-Passkey-Store sind implementiert und datenbankgetestet.
@@ -214,7 +216,7 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
 | C | Backfill-/Import-Pfad | implementiert und proof-geführt |
 | D | Read-Path hinter Config | implementiert; Produktion setzt PostgreSQL, lokaler Legacy-Default bleibt JSONL |
 | E-A | Account-Create-Write-Path | implementiert; Produktion schreibt PostgreSQL |
-| E-B | Node-Schreibpfad | implementiert; Produktion schreibt PostgreSQL |
+| E-B | Node-Schreibpfad | implementiert; Produktion schreibt PostgreSQL; `POST`, `PATCH`, `PUT` und `DELETE` sind proof-geführt |
 | E-C | Edge-Create-Write-Path | implementiert; Produktion schreibt PostgreSQL |
 | E-Rest | Weitere Account-/Integritätsbelege | Step-up-E-Mail, E-Mail-Unique und Passkey-Store implementiert; Legacy-Backfill/NOT NULL und Edge-Referenzpolitik separat offen |
 | F | Runtime-Smoke und Betriebsentscheidung | Produktionscutover und vertikaler Garnrolle–Knoten–Faden-Smoke am 11./12.07.2026 belegt; nach Deploys neu zu erheben |
@@ -239,6 +241,13 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
   vor späterem `NOT NULL` auf der Spalte.
 - Edge-Create funktioniert opt-in, aber Lock-/Limit-Strategie ist
   nicht performance-optimiert.
+- Node-Delete ist als direkter Webprozess implementiert. PostgreSQL löscht
+  Node plus betroffene Fadenprojektionen atomar in einer Transaktion; JSONL
+  nutzt eine Journal-/Backup-Recovery-Transaktion über Nodes- und Edges-Datei
+  im Gewebe-Datenverzeichnis.
+- Legacy-untypisierte Edge-Endpunkte werden beim Node-Delete nur dann als
+  Node-Endpunkte behandelt, wenn keine Account-/Role-Kollision belegt ist;
+  unbekannte oder ungültige Typen bleiben Cutover-Blocker und fail-closed.
 - Der Runtime-Smoke vom 11./12.07.2026 ist belegt; jede aktuelle Liveaussage
   braucht nach einem Deploy eine neue datierte Evidence.
 - JSONL-Legacy-/Rollback-Aufräumung ist offen.
@@ -327,6 +336,12 @@ Weiter erforderlich:
     sortieren.
 - Edge-Orphan-/Referenz-Audit-Proof vor der finalen Entscheidung zwischen
   Foreign Keys und bewusst loser Referenzsemantik.
+- Node-Delete-Cascade-Proof:
+  - PostgreSQL: atomare Transaktion für Node plus betroffene Edge-Projektionen,
+    inklusive eindeutiger untypisierter Legacy-Edges und fail-closed
+    Account-/Role-/invalid-Type-Kollisionen.
+  - JSONL: recoverbare Journal-/Backup-Transaktion über `demo.nodes.jsonl`
+    und `demo.edges.jsonl`, inklusive Recovery vor Startup-Load.
 - Runtime-Smoke für vollständigen PostgreSQL-Domain-Betrieb auf `wg-prod-1`
 - Multi-Instance-/Cache-Kohärenz-Proof, falls horizontale Skalierung
   erlaubt werden soll

@@ -3,19 +3,24 @@ use super::{
         reject_node_create_unless_writable, reject_node_patch_unless_writable,
         DOMAIN_READ_SOURCE_READ_ONLY, DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE,
     },
+    edges::{
+        edge_create_persist_lock, edge_references_node_for_delete,
+        edge_value_references_node_for_delete, EdgeEndpointCollisionEvidence,
+    },
     query::{
         cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
         MAX_PAGE_SIZE,
     },
 };
-use crate::config::DomainNodeWriteSource;
+use crate::config::{DomainEdgeWriteSource, DomainNodeWriteSource};
 use crate::domain_db::{
-    insert_domain_node, patch_node_in_postgres, CreateOperationKey, CreateWriteOutcome,
-    NodeCreateError, NodePatchInput, NodeWriteError,
+    delete_node_with_edges_in_postgres, insert_domain_node, patch_node_in_postgres,
+    replace_node_in_postgres, CreateOperationKey, CreateWriteOutcome, NodeCreateError,
+    NodePatchInput, NodeWriteError,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::{ApiState, OrderedCache};
-use crate::utils::nodes_path;
+use crate::utils::{edges_path, nodes_path};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -25,6 +30,7 @@ use axum::{
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::path::{Path as FsPath, PathBuf};
 use tokio::{
     fs::{File, OpenOptions},
     io::{
@@ -33,23 +39,23 @@ use tokio::{
 };
 use uuid::Uuid;
 
-pub enum PatchNodeError {
+pub enum NodeMutationError {
     Status(StatusCode),
     DomainReadSourceReadOnly,
     Message(StatusCode, String),
 }
 
-impl IntoResponse for PatchNodeError {
+impl IntoResponse for NodeMutationError {
     fn into_response(self) -> Response {
         match self {
-            PatchNodeError::Status(status) => status.into_response(),
-            PatchNodeError::DomainReadSourceReadOnly => {
+            NodeMutationError::Status(status) => status.into_response(),
+            NodeMutationError::DomainReadSourceReadOnly => {
                 let body = format!(
                     "{DOMAIN_READ_SOURCE_READ_ONLY}: {DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE}"
                 );
                 (StatusCode::CONFLICT, body).into_response()
             }
-            PatchNodeError::Message(status, body) => (status, body).into_response(),
+            NodeMutationError::Message(status, body) => (status, body).into_response(),
         }
     }
 }
@@ -102,14 +108,22 @@ pub struct UpdateNode {
     pub info: Option<Option<String>>,
 }
 
-/// Lightweight struct for fast-path ID checking during node updates.
+/// Lightweight struct for fast-path ID checking during node rewrites.
 ///
 /// Used to check if a line matches the target node ID without fully parsing
 /// the entire JSON `Value`. This avoids full deserialization for non-matching
-/// lines (the vast majority during PATCH) and keeps memory usage O(1).
+/// lines during PATCH, PUT and DELETE preparation and keeps memory usage O(1).
 #[derive(Deserialize)]
 struct IdOnly {
     id: Option<String>,
+}
+
+fn jsonl_line_has_id(line: &str, target_id: &str) -> bool {
+    serde_json::from_str::<IdOnly>(line)
+        .ok()
+        .and_then(|record| record.id)
+        .as_deref()
+        == Some(target_id)
 }
 
 #[derive(Deserialize)]
@@ -358,6 +372,10 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
 /// - External modifications to the nodes file (e.g. via deployment or manual edit)
 ///   will NOT be detected until the API process is restarted.
 pub async fn load_nodes() -> OrderedCache<Node> {
+    // The application startup path must complete or reject pending node-delete
+    // recovery before any domain cache is loaded. Keeping recovery out of this
+    // infallible loader prevents a recovery error from being logged and then
+    // silently flattened into a partial cache.
     let start = std::time::Instant::now();
     let path = nodes_path();
     let file = match File::open(&path).await {
@@ -1362,13 +1380,866 @@ mod node_create {
     }
 }
 
+fn set_node_record_fields(record: &mut Value, node: &Node) -> std::io::Result<()> {
+    let object = record.as_object_mut().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "node record is not an object",
+        )
+    })?;
+    object.insert("id".to_string(), json!(node.id));
+    object.insert("kind".to_string(), json!(node.kind));
+    object.insert("title".to_string(), json!(node.title));
+    object.insert("created_at".to_string(), json!(node.created_at));
+    object.insert("updated_at".to_string(), json!(node.updated_at));
+    object.insert(
+        "location".to_string(),
+        json!({ "lat": node.location.lat, "lon": node.location.lon }),
+    );
+    for (key, value) in [
+        ("summary", node.summary.as_ref().map(|value| json!(value))),
+        ("info", node.info.as_ref().map(|value| json!(value))),
+        ("address", node.address.as_ref().map(|value| json!(value))),
+    ] {
+        if let Some(value) = value {
+            object.insert(key.to_string(), value);
+        } else {
+            object.remove(key);
+        }
+    }
+    if node.tags.is_empty() {
+        object.remove("tags");
+    } else {
+        object.insert("tags".to_string(), json!(node.tags));
+    }
+    object.remove("steckbrief");
+    Ok(())
+}
+
+async fn replace_node_jsonl(node: &Node) -> std::io::Result<bool> {
+    let path = nodes_path();
+    let file = File::open(&path).await?;
+    let mut lines = BufReader::new(file).lines();
+    let mut tmp_path = path.clone();
+    let filename = tmp_path.file_name().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "nodes path has no filename",
+        )
+    })?;
+    let mut tmp_filename = filename.to_os_string();
+    tmp_filename.push(format!(".tmp.{}", Uuid::new_v4()));
+    tmp_path.set_file_name(tmp_filename);
+
+    let result = async {
+        let tmp_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)
+            .await?;
+        let mut writer = BufWriter::new(tmp_file);
+        let mut replaced = false;
+        while let Some(line) = lines.next_line().await? {
+            let mut output = line.clone();
+            if jsonl_line_has_id(&line, &node.id) {
+                let mut value = serde_json::from_str::<Value>(&line)
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+                set_node_record_fields(&mut value, node)?;
+                output = serde_json::to_string(&value)
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+                replaced = true;
+            }
+            writer.write_all(output.as_bytes()).await?;
+            writer.write_all(b"\n").await?;
+        }
+        writer.flush().await?;
+        let file = writer.into_inner();
+        file.sync_all().await?;
+        Ok::<bool, std::io::Error>(replaced)
+    }
+    .await;
+
+    match result {
+        Ok(replaced) => {
+            tokio::fs::rename(&tmp_path, &path).await?;
+            if let Some(parent) = path.parent() {
+                sync_directory(parent)?;
+            }
+            Ok(replaced)
+        }
+        Err(error) => {
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            Err(error)
+        }
+    }
+}
+
+const NODE_DELETE_JOURNAL_FILE: &str = ".node-delete-cascade.journal.json";
+const NODE_DELETE_JOURNAL_VERSION: u8 = 1;
+const NODE_DELETE_JOURNAL_KIND: &str = "node_delete_cascade";
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum NodeDeleteJournalPhase {
+    Prepared,
+    BackupsCreated,
+    EdgeSwapped,
+    NodeSwapped,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct NodeDeleteJournal {
+    version: u8,
+    kind: String,
+    tx_id: String,
+    phase: NodeDeleteJournalPhase,
+    node_tmp: String,
+    edge_tmp: String,
+    node_backup: String,
+    edge_backup: String,
+    edge_original_existed: bool,
+}
+
+#[derive(Debug)]
+struct NodeDeletePaths {
+    dir: PathBuf,
+    nodes: PathBuf,
+    edges: PathBuf,
+    journal: PathBuf,
+}
+
+#[derive(Debug)]
+struct JsonlNodeDeleteOutcome {
+    node_deleted: bool,
+    removed_edge_ids: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct JsonlNodeDeleteFailureInjection {
+    fail_after_temps_prepared: bool,
+    fail_before_node_swap: bool,
+    crash_after_edge_swap: bool,
+    defer_cleanup_after_node_swap: bool,
+}
+
+enum JsonlNodeDeleteTxError {
+    Io(std::io::Error),
+    SimulatedCrash(std::io::Error),
+}
+
+impl From<std::io::Error> for JsonlNodeDeleteTxError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+fn io_invalid_data(message: impl Into<String>) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, message.into())
+}
+
+fn io_invalid_input(message: impl Into<String>) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidInput, message.into())
+}
+
+fn node_delete_paths() -> std::io::Result<NodeDeletePaths> {
+    let nodes = nodes_path();
+    let edges = edges_path();
+    let node_dir = nodes
+        .parent()
+        .ok_or_else(|| io_invalid_input("nodes path has no parent directory"))?;
+    let edge_dir = edges
+        .parent()
+        .ok_or_else(|| io_invalid_input("edges path has no parent directory"))?;
+    if node_dir != edge_dir {
+        return Err(io_invalid_input(
+            "nodes and edges JSONL paths must share the same data directory",
+        ));
+    }
+    let dir = node_dir.to_path_buf();
+    Ok(NodeDeletePaths {
+        journal: dir.join(NODE_DELETE_JOURNAL_FILE),
+        dir,
+        nodes,
+        edges,
+    })
+}
+
+fn file_name_for(path: &FsPath, label: &str) -> std::io::Result<String> {
+    path.file_name()
+        .and_then(|value| value.to_str())
+        .map(str::to_string)
+        .ok_or_else(|| io_invalid_input(format!("{label} path has no UTF-8 filename")))
+}
+
+fn journal_child_path(dir: &FsPath, filename: &str) -> std::io::Result<PathBuf> {
+    if filename.is_empty() {
+        return Err(io_invalid_data("journal path filename is empty"));
+    }
+    let path = FsPath::new(filename);
+    if path.components().count() != 1
+        || path.file_name().and_then(|value| value.to_str()) != Some(filename)
+    {
+        return Err(io_invalid_data(format!(
+            "journal path {filename} is not a single data-directory filename"
+        )));
+    }
+    Ok(dir.join(filename))
+}
+
+async fn ensure_regular_file_or_missing(path: &FsPath, label: &str) -> std::io::Result<bool> {
+    match tokio::fs::symlink_metadata(path).await {
+        Ok(metadata) if metadata.file_type().is_file() => Ok(true),
+        Ok(_) => Err(io_invalid_input(format!(
+            "{label} path {} is not a regular file",
+            path.display()
+        ))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+async fn ensure_regular_file(path: &FsPath, label: &str) -> std::io::Result<()> {
+    if ensure_regular_file_or_missing(path, label).await? {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("{label} path {} does not exist", path.display()),
+        ))
+    }
+}
+
+fn sync_directory(path: &FsPath) -> std::io::Result<()> {
+    std::fs::File::open(path)?.sync_all()
+}
+
+async fn write_node_delete_journal(
+    paths: &NodeDeletePaths,
+    journal: &NodeDeleteJournal,
+) -> std::io::Result<()> {
+    ensure_regular_file_or_missing(&paths.journal, "node-delete journal").await?;
+    let bytes = serde_json::to_vec(journal)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+    let journal_tmp = paths
+        .dir
+        .join(format!("{NODE_DELETE_JOURNAL_FILE}.{}.tmp", Uuid::new_v4()));
+    let write_result = async {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&journal_tmp)
+            .await?;
+        file.write_all(&bytes).await?;
+        file.write_all(b"\n").await?;
+        file.flush().await?;
+        file.sync_all().await?;
+        tokio::fs::rename(&journal_tmp, &paths.journal).await?;
+        sync_directory(&paths.dir)?;
+        Ok::<(), std::io::Error>(())
+    }
+    .await;
+    if write_result.is_err() {
+        let _ = remove_file_if_exists(&journal_tmp).await;
+    }
+    write_result
+}
+
+async fn read_node_delete_journal(
+    paths: &NodeDeletePaths,
+) -> std::io::Result<Option<NodeDeleteJournal>> {
+    match ensure_regular_file_or_missing(&paths.journal, "node-delete journal").await {
+        Ok(true) => {}
+        Ok(false) => return Ok(None),
+        Err(error) => return Err(error),
+    }
+    let bytes = tokio::fs::read(&paths.journal).await?;
+    let journal: NodeDeleteJournal = serde_json::from_slice(&bytes)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+    if journal.version != NODE_DELETE_JOURNAL_VERSION || journal.kind != NODE_DELETE_JOURNAL_KIND {
+        return Err(io_invalid_data("unknown node-delete journal format"));
+    }
+    Ok(Some(journal))
+}
+
+fn new_node_delete_journal(paths: &NodeDeletePaths) -> std::io::Result<NodeDeleteJournal> {
+    let tx_id = Uuid::new_v4().to_string();
+    let node_name = file_name_for(&paths.nodes, "nodes")?;
+    let edge_name = file_name_for(&paths.edges, "edges")?;
+    Ok(NodeDeleteJournal {
+        version: NODE_DELETE_JOURNAL_VERSION,
+        kind: NODE_DELETE_JOURNAL_KIND.to_string(),
+        tx_id: tx_id.clone(),
+        phase: NodeDeleteJournalPhase::Prepared,
+        node_tmp: format!("{node_name}.delete.{tx_id}.tmp"),
+        edge_tmp: format!("{edge_name}.delete.{tx_id}.tmp"),
+        node_backup: format!("{node_name}.delete.{tx_id}.bak"),
+        edge_backup: format!("{edge_name}.delete.{tx_id}.bak"),
+        edge_original_existed: false,
+    })
+}
+
+async fn remove_file_if_exists(path: &FsPath) -> std::io::Result<()> {
+    match tokio::fs::remove_file(path).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+async fn restore_backup(
+    target: &FsPath,
+    backup: &FsPath,
+    original_existed: bool,
+) -> std::io::Result<()> {
+    if original_existed {
+        if ensure_regular_file_or_missing(backup, "node-delete backup").await? {
+            remove_file_if_exists(target).await?;
+            tokio::fs::rename(backup, target).await?;
+        } else {
+            // Before backups are created the original target is still valid.
+            // After that point a missing target and missing backup is corruption
+            // and must keep the journal in place for operator recovery.
+            ensure_regular_file(target, "node-delete rollback target").await?;
+        }
+    } else {
+        remove_file_if_exists(target).await?;
+        remove_file_if_exists(backup).await?;
+    }
+    Ok(())
+}
+
+async fn rollback_node_delete_journal(
+    paths: &NodeDeletePaths,
+    journal: &NodeDeleteJournal,
+) -> std::io::Result<()> {
+    let node_tmp = journal_child_path(&paths.dir, &journal.node_tmp)?;
+    let edge_tmp = journal_child_path(&paths.dir, &journal.edge_tmp)?;
+    let node_backup = journal_child_path(&paths.dir, &journal.node_backup)?;
+    let edge_backup = journal_child_path(&paths.dir, &journal.edge_backup)?;
+
+    remove_file_if_exists(&node_tmp).await?;
+    remove_file_if_exists(&edge_tmp).await?;
+    restore_backup(&paths.nodes, &node_backup, true).await?;
+    restore_backup(&paths.edges, &edge_backup, journal.edge_original_existed).await?;
+    remove_file_if_exists(&paths.journal).await?;
+    sync_directory(&paths.dir)?;
+    Ok(())
+}
+
+async fn complete_node_delete_commit(
+    paths: &NodeDeletePaths,
+    journal: &NodeDeleteJournal,
+) -> std::io::Result<()> {
+    if journal.phase != NodeDeleteJournalPhase::NodeSwapped {
+        return Err(io_invalid_data(
+            "node-delete commit cleanup requires the durable node_swapped marker",
+        ));
+    }
+
+    let node_tmp = journal_child_path(&paths.dir, &journal.node_tmp)?;
+    let edge_tmp = journal_child_path(&paths.dir, &journal.edge_tmp)?;
+    let node_backup = journal_child_path(&paths.dir, &journal.node_backup)?;
+    let edge_backup = journal_child_path(&paths.dir, &journal.edge_backup)?;
+
+    remove_file_if_exists(&node_tmp).await?;
+    remove_file_if_exists(&edge_tmp).await?;
+
+    // Never discard the rollback material until both committed projections are
+    // demonstrably present as regular files.
+    ensure_regular_file(&paths.nodes, "committed nodes JSONL").await?;
+    ensure_regular_file(&paths.edges, "committed edges JSONL").await?;
+    sync_directory(&paths.dir)?;
+    remove_file_if_exists(&node_backup).await?;
+    remove_file_if_exists(&edge_backup).await?;
+    remove_file_if_exists(&node_tmp).await?;
+    remove_file_if_exists(&edge_tmp).await?;
+    remove_file_if_exists(&paths.journal).await?;
+    sync_directory(&paths.dir)?;
+    Ok(())
+}
+
+pub async fn recover_node_delete_jsonl_journal() -> std::io::Result<()> {
+    let paths = node_delete_paths()?;
+    let Some(journal) = read_node_delete_journal(&paths).await? else {
+        return Ok(());
+    };
+    match journal.phase {
+        NodeDeleteJournalPhase::Prepared
+        | NodeDeleteJournalPhase::BackupsCreated
+        | NodeDeleteJournalPhase::EdgeSwapped => {
+            rollback_node_delete_journal(&paths, &journal).await
+        }
+        NodeDeleteJournalPhase::NodeSwapped => complete_node_delete_commit(&paths, &journal).await,
+    }
+}
+
+fn edge_endpoint_is_role_collision(
+    value: &Value,
+    id_field: &str,
+    type_field: &str,
+    node_id: &str,
+) -> bool {
+    value.get(id_field).and_then(Value::as_str) == Some(node_id)
+        && value.get(type_field).and_then(Value::as_str) == Some("role")
+}
+
+async fn edge_role_collision_jsonl(edge_path: &FsPath, node_id: &str) -> std::io::Result<bool> {
+    let file = match File::open(edge_path).await {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    let mut lines = BufReader::new(file).lines();
+    while let Some(line) = lines.next_line().await? {
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if edge_endpoint_is_role_collision(&value, "source_id", "source_type", node_id)
+            || edge_endpoint_is_role_collision(&value, "target_id", "target_type", node_id)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+async fn prepare_node_delete_tmp(
+    source_path: &FsPath,
+    tmp_path: &FsPath,
+    node_id: &str,
+) -> std::io::Result<bool> {
+    let file = File::open(source_path).await?;
+    let mut lines = BufReader::new(file).lines();
+    let tmp_file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(tmp_path)
+        .await?;
+    let mut writer = BufWriter::new(tmp_file);
+    let mut deleted = false;
+
+    while let Some(line) = lines.next_line().await? {
+        let matches = jsonl_line_has_id(&line, node_id);
+        if matches {
+            deleted = true;
+            continue;
+        }
+        writer.write_all(line.as_bytes()).await?;
+        writer.write_all(b"\n").await?;
+    }
+    writer.flush().await?;
+    let file = writer.into_inner();
+    file.sync_all().await?;
+    Ok(deleted)
+}
+
+async fn prepare_edge_delete_tmp(
+    source_path: &FsPath,
+    tmp_path: &FsPath,
+    node_id: &str,
+    evidence: EdgeEndpointCollisionEvidence,
+) -> std::io::Result<Vec<String>> {
+    let maybe_file = match File::open(source_path).await {
+        Ok(file) => Some(file),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error),
+    };
+    let tmp_file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(tmp_path)
+        .await?;
+    let mut writer = BufWriter::new(tmp_file);
+    let mut removed = Vec::new();
+
+    if let Some(file) = maybe_file {
+        let mut lines = BufReader::new(file).lines();
+        let mut line_number = 0usize;
+        while let Some(line) = lines.next_line().await? {
+            line_number += 1;
+            let value = serde_json::from_str::<Value>(&line).map_err(|error| {
+                io_invalid_data(format!("invalid edge JSONL at line {line_number}: {error}"))
+            })?;
+            if edge_value_references_node_for_delete(&value, node_id, evidence)? {
+                let edge_id = value.get("id").and_then(Value::as_str).ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "edge referencing node must have a string id",
+                    )
+                })?;
+                removed.push(edge_id.to_string());
+                continue;
+            }
+            writer.write_all(line.as_bytes()).await?;
+            writer.write_all(b"\n").await?;
+        }
+    }
+
+    writer.flush().await?;
+    let file = writer.into_inner();
+    file.sync_all().await?;
+    Ok(removed)
+}
+
+async fn rename_target_to_backup(
+    target: &FsPath,
+    backup: &FsPath,
+    original_existed: bool,
+) -> std::io::Result<()> {
+    if original_existed {
+        ensure_regular_file(target, "JSONL target").await?;
+        if ensure_regular_file_or_missing(backup, "JSONL backup").await? {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("backup {} already exists", backup.display()),
+            ));
+        }
+        tokio::fs::rename(target, backup).await?;
+    }
+    Ok(())
+}
+
+async fn cleanup_node_delete_transaction_files(
+    paths: &NodeDeletePaths,
+    journal: &NodeDeleteJournal,
+) -> std::io::Result<()> {
+    let node_backup = journal_child_path(&paths.dir, &journal.node_backup)?;
+    let edge_backup = journal_child_path(&paths.dir, &journal.edge_backup)?;
+    let node_tmp = journal_child_path(&paths.dir, &journal.node_tmp)?;
+    let edge_tmp = journal_child_path(&paths.dir, &journal.edge_tmp)?;
+    remove_file_if_exists(&node_backup).await?;
+    remove_file_if_exists(&edge_backup).await?;
+    remove_file_if_exists(&node_tmp).await?;
+    remove_file_if_exists(&edge_tmp).await?;
+    remove_file_if_exists(&paths.journal).await?;
+    sync_directory(&paths.dir)?;
+    Ok(())
+}
+
+async fn delete_node_and_edges_jsonl(
+    node_id: &str,
+    evidence: EdgeEndpointCollisionEvidence,
+) -> std::io::Result<JsonlNodeDeleteOutcome> {
+    delete_node_and_edges_jsonl_with_injection(
+        node_id,
+        evidence,
+        JsonlNodeDeleteFailureInjection::default(),
+    )
+    .await
+}
+
+async fn delete_node_and_edges_jsonl_with_injection(
+    node_id: &str,
+    mut evidence: EdgeEndpointCollisionEvidence,
+    injection: JsonlNodeDeleteFailureInjection,
+) -> std::io::Result<JsonlNodeDeleteOutcome> {
+    recover_node_delete_jsonl_journal().await?;
+
+    let paths = node_delete_paths()?;
+    tokio::fs::create_dir_all(&paths.dir).await?;
+    ensure_regular_file(&paths.nodes, "nodes JSONL").await?;
+    let edge_original_existed = ensure_regular_file_or_missing(&paths.edges, "edges JSONL").await?;
+    ensure_regular_file_or_missing(&paths.journal, "node-delete journal").await?;
+
+    evidence.role_exists |= edge_role_collision_jsonl(&paths.edges, node_id).await?;
+
+    let mut journal = new_node_delete_journal(&paths)?;
+    journal.edge_original_existed = edge_original_existed;
+    let node_tmp = journal_child_path(&paths.dir, &journal.node_tmp)?;
+    let edge_tmp = journal_child_path(&paths.dir, &journal.edge_tmp)?;
+    let node_backup = journal_child_path(&paths.dir, &journal.node_backup)?;
+    let edge_backup = journal_child_path(&paths.dir, &journal.edge_backup)?;
+
+    let result = async {
+        let removed_edge_ids =
+            prepare_edge_delete_tmp(&paths.edges, &edge_tmp, node_id, evidence).await?;
+        let node_deleted = prepare_node_delete_tmp(&paths.nodes, &node_tmp, node_id).await?;
+        if !node_deleted {
+            return Err(JsonlNodeDeleteTxError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "node was not found in JSONL persistence during delete",
+            )));
+        }
+        sync_directory(&paths.dir)?;
+
+        if injection.fail_after_temps_prepared {
+            return Err(JsonlNodeDeleteTxError::Io(std::io::Error::other(
+                "injected node-delete failure after temp preparation",
+            )));
+        }
+
+        write_node_delete_journal(&paths, &journal).await?;
+
+        rename_target_to_backup(&paths.edges, &edge_backup, edge_original_existed).await?;
+        rename_target_to_backup(&paths.nodes, &node_backup, true).await?;
+        sync_directory(&paths.dir)?;
+        journal.phase = NodeDeleteJournalPhase::BackupsCreated;
+        write_node_delete_journal(&paths, &journal).await?;
+
+        tokio::fs::rename(&edge_tmp, &paths.edges).await?;
+        sync_directory(&paths.dir)?;
+        journal.phase = NodeDeleteJournalPhase::EdgeSwapped;
+        write_node_delete_journal(&paths, &journal).await?;
+
+        if injection.crash_after_edge_swap {
+            return Err(JsonlNodeDeleteTxError::SimulatedCrash(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "injected node-delete crash after edge swap",
+            )));
+        }
+
+        if injection.fail_before_node_swap {
+            return Err(JsonlNodeDeleteTxError::Io(std::io::Error::other(
+                "injected node-delete failure before node swap",
+            )));
+        }
+
+        tokio::fs::rename(&node_tmp, &paths.nodes).await?;
+        sync_directory(&paths.dir)?;
+        journal.phase = NodeDeleteJournalPhase::NodeSwapped;
+        write_node_delete_journal(&paths, &journal).await?;
+
+        if injection.defer_cleanup_after_node_swap {
+            tracing::warn!(
+                node_id,
+                "node delete committed; transaction cleanup deliberately deferred"
+            );
+        } else if let Err(error) = cleanup_node_delete_transaction_files(&paths, &journal).await {
+            tracing::warn!(
+                %error,
+                node_id,
+                "node delete committed; transaction cleanup deferred to startup recovery"
+            );
+        }
+        Ok::<JsonlNodeDeleteOutcome, JsonlNodeDeleteTxError>(JsonlNodeDeleteOutcome {
+            node_deleted,
+            removed_edge_ids,
+        })
+    }
+    .await;
+
+    match result {
+        Ok(outcome) => Ok(outcome),
+        Err(JsonlNodeDeleteTxError::SimulatedCrash(error)) => Err(error),
+        Err(JsonlNodeDeleteTxError::Io(error)) => {
+            rollback_node_delete_journal(&paths, &journal).await?;
+            Err(error)
+        }
+    }
+}
+
+pub async fn replace_node(
+    State(state): State<ApiState>,
+    Path(id): Path<String>,
+    Json(payload): Json<Value>,
+) -> Result<Json<Node>, NodeMutationError> {
+    reject_node_patch_unless_writable(&state)
+        .map_err(|(status, body)| NodeMutationError::Message(status, body))?;
+    let request: node_create::CreateNodeRequest =
+        serde_json::from_value(payload).map_err(|error| {
+            NodeMutationError::Message(
+                StatusCode::BAD_REQUEST,
+                format!("invalid node replacement request: {error}"),
+            )
+        })?;
+    let validated = request.validate().map_err(|error| {
+        NodeMutationError::Message(
+            StatusCode::BAD_REQUEST,
+            format!(
+                "invalid node replacement request: {}",
+                node_create_error_message(&error)
+            ),
+        )
+    })?;
+    if validated.operation_id.is_some() {
+        return Err(NodeMutationError::Message(
+            StatusCode::BAD_REQUEST,
+            "operation_id is only valid when creating a node".to_string(),
+        ));
+    }
+
+    let _persist_guard = state.nodes_persist.lock().await;
+    let existing = state
+        .nodes
+        .read()
+        .await
+        .get(&id)
+        .cloned()
+        .ok_or(NodeMutationError::Status(StatusCode::NOT_FOUND))?;
+    let node = Node {
+        id: existing.id,
+        kind: validated.kind,
+        title: validated.title,
+        created_at: existing.created_at,
+        updated_at: chrono::Utc::now().to_rfc3339(),
+        summary: validated.summary,
+        info: validated.info,
+        tags: validated.tags,
+        address: Some(validated.address),
+        location: Location {
+            lat: validated.lat,
+            lon: validated.lon,
+        },
+    };
+
+    match state.config.domain_node_write_source {
+        DomainNodeWriteSource::Jsonl => {
+            if !replace_node_jsonl(&node).await.map_err(|error| {
+                tracing::error!(%error, node_id = %id, "failed to replace node JSONL record");
+                NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            })? {
+                return Err(NodeMutationError::Status(StatusCode::NOT_FOUND));
+            }
+        }
+        DomainNodeWriteSource::Postgres => {
+            let pool = state
+                .db_pool
+                .as_ref()
+                .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            replace_node_in_postgres(pool, &node).await.map_err(|error| match error {
+                NodeWriteError::NotFound => NodeMutationError::Status(StatusCode::NOT_FOUND),
+                other => {
+                    tracing::error!(%other, node_id = %id, "failed to replace node in PostgreSQL");
+                    NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            })?;
+        }
+    }
+
+    let mut nodes = state.nodes.write().await;
+    nodes.insert(id.clone(), node.clone());
+    state.metrics.set_nodes_cache_count(nodes.len() as i64);
+    tracing::info!(event = "node.updated.collective", node_id = %id, "Node collectively updated");
+    Ok(Json(node))
+}
+
+pub async fn delete_node(
+    State(state): State<ApiState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, NodeMutationError> {
+    reject_node_patch_unless_writable(&state)
+        .map_err(|(status, body)| NodeMutationError::Message(status, body))?;
+    let persistence_is_coherent = matches!(
+        (
+            state.config.domain_node_write_source,
+            state.config.domain_edge_write_source,
+        ),
+        (DomainNodeWriteSource::Jsonl, DomainEdgeWriteSource::Jsonl,)
+            | (
+                DomainNodeWriteSource::Postgres,
+                DomainEdgeWriteSource::Postgres,
+            )
+    );
+    if !persistence_is_coherent {
+        return Err(NodeMutationError::Message(
+            StatusCode::CONFLICT,
+            "node deletion requires matching node and edge write sources".to_string(),
+        ));
+    }
+    let _persist_guard = state.nodes_persist.lock().await;
+    if state.nodes.read().await.get(&id).is_none() {
+        return Err(NodeMutationError::Status(StatusCode::NOT_FOUND));
+    }
+
+    let account_collision_exists = {
+        let accounts = state.accounts.read().await;
+        accounts.get(&id).is_some()
+    };
+    let cached_edge_ids = {
+        let edges = state.edges.read().await;
+        let role_collision_exists = edges.iter_in_order().any(|edge| {
+            (edge.source_id == id && edge.source_type.as_deref() == Some("role"))
+                || (edge.target_id == id && edge.target_type.as_deref() == Some("role"))
+        });
+        let evidence = EdgeEndpointCollisionEvidence {
+            account_exists: account_collision_exists,
+            role_exists: role_collision_exists,
+        };
+        let mut edge_ids = Vec::new();
+        for edge in edges.iter_in_order() {
+            if edge_references_node_for_delete(edge, &id, evidence).map_err(|error| {
+                tracing::error!(%error, node_id = %id, "node deletion blocked by ambiguous cached edge endpoint");
+                NodeMutationError::Message(
+                    StatusCode::CONFLICT,
+                    "node deletion blocked by ambiguous edge endpoint".to_string(),
+                )
+            })? {
+                edge_ids.push(edge.id.clone());
+            }
+        }
+        edge_ids
+    };
+
+    let persisted_edge_ids = match state.config.domain_node_write_source {
+        DomainNodeWriteSource::Jsonl => {
+            // Keep the edge lock until the node file has also been replaced. Otherwise a
+            // concurrent edge create could attach a new edge between cascade cleanup and
+            // node deletion, leaving an orphan behind.
+            let _edge_persist_guard = edge_create_persist_lock().lock().await;
+            let outcome = delete_node_and_edges_jsonl(
+                &id,
+                EdgeEndpointCollisionEvidence {
+                    account_exists: account_collision_exists,
+                    role_exists: false,
+                },
+            )
+            .await
+            .map_err(|error| {
+                tracing::error!(%error, node_id = %id, "failed to delete node and edges from JSONL");
+                if error.kind() == std::io::ErrorKind::InvalidData {
+                    NodeMutationError::Message(
+                        StatusCode::CONFLICT,
+                        "node deletion blocked by ambiguous edge endpoint".to_string(),
+                    )
+                } else {
+                    NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            })?;
+            if !outcome.node_deleted {
+                return Err(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+            }
+            outcome.removed_edge_ids
+        }
+        DomainNodeWriteSource::Postgres => {
+            let pool = state
+                .db_pool
+                .as_ref()
+                .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            delete_node_with_edges_in_postgres(pool, &id).await.map_err(|error| match error {
+                NodeWriteError::NotFound => NodeMutationError::Status(StatusCode::NOT_FOUND),
+                NodeWriteError::InvalidEdgeReference(_) => NodeMutationError::Message(
+                    StatusCode::CONFLICT,
+                    "node deletion blocked by ambiguous edge endpoint".to_string(),
+                ),
+                other => {
+                    tracing::error!(%other, node_id = %id, "failed to delete node in PostgreSQL");
+                    NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            })?
+        }
+    };
+
+    let mut edges = state.edges.write().await;
+    for edge_id in cached_edge_ids.iter().chain(persisted_edge_ids.iter()) {
+        edges.remove(edge_id);
+    }
+    let edge_count = edges.len();
+    drop(edges);
+    state.metrics.set_edges_cache_count(edge_count as i64);
+    let mut nodes = state.nodes.write().await;
+    nodes.remove(&id);
+    state.metrics.set_nodes_cache_count(nodes.len() as i64);
+    tracing::info!(event = "node.deleted.collective", node_id = %id, removed_edges = persisted_edge_ids.len(), "Node collectively deleted");
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn patch_node(
     State(state): State<ApiState>,
     Path(id): Path<String>,
     Json(payload): Json<UpdateNode>,
-) -> Result<Json<Node>, PatchNodeError> {
+) -> Result<Json<Node>, NodeMutationError> {
     reject_node_patch_unless_writable(&state)
-        .map_err(|(status, body)| PatchNodeError::Message(status, body))?;
+        .map_err(|(status, body)| NodeMutationError::Message(status, body))?;
 
     if state.config.domain_node_write_source == DomainNodeWriteSource::Postgres {
         return patch_node_postgres(&state, &id, payload).await;
@@ -1381,11 +2252,11 @@ async fn patch_node_postgres(
     state: &ApiState,
     id: &str,
     payload: UpdateNode,
-) -> Result<Json<Node>, PatchNodeError> {
+) -> Result<Json<Node>, NodeMutationError> {
     let pool = state
         .db_pool
         .as_ref()
-        .ok_or(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+        .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
     let patch = NodePatchInput {
         info: payload.info.clone(),
@@ -1399,18 +2270,22 @@ async fn patch_node_postgres(
     let node = patch_node_in_postgres(pool, id, patch)
         .await
         .map_err(|e| match e {
-            NodeWriteError::NotFound => PatchNodeError::Status(StatusCode::NOT_FOUND),
+            NodeWriteError::NotFound => NodeMutationError::Status(StatusCode::NOT_FOUND),
+            NodeWriteError::InvalidEdgeReference(err) => {
+                tracing::error!(%err, node_id = %id, "node patch blocked by edge reference integrity error");
+                NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            }
             NodeWriteError::Mapping(err) => {
                 tracing::error!(?err, node_id = %id, "node mapping failed after postgres patch");
-                PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
             }
             NodeWriteError::Serialization(err) => {
                 tracing::error!(?err, node_id = %id, "payload serialization failed during node patch");
-                PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
             }
             NodeWriteError::Database(err) => {
                 tracing::error!(?err, node_id = %id, "database error during node patch");
-                PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
             }
         })?;
 
@@ -1430,7 +2305,7 @@ async fn patch_node_jsonl(
     state: ApiState,
     id: String,
     payload: UpdateNode,
-) -> Result<Json<Node>, PatchNodeError> {
+) -> Result<Json<Node>, NodeMutationError> {
     // Serialize PATCH persistence (per-process): allow concurrent node reads during file I/O;
     // only the brief in-memory cache write-lock blocks readers to guarantee read-your-writes in this instance.
     let start_persist_wait = std::time::Instant::now();
@@ -1441,7 +2316,7 @@ async fn patch_node_jsonl(
     // Open source file for reading
     let file = File::open(&path)
         .await
-        .map_err(|_| PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+        .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
     let mut lines = BufReader::new(file).lines();
 
     // Use a unique temporary file + rename for atomic writes to prevent data corruption and race conditions
@@ -1451,7 +2326,7 @@ async fn patch_node_jsonl(
         new_filename.push(format!(".tmp.{}", Uuid::new_v4()));
         tmp_path.set_file_name(new_filename);
     } else {
-        return Err(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        return Err(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     let start_persist = std::time::Instant::now();
@@ -1464,7 +2339,7 @@ async fn patch_node_jsonl(
             .truncate(true)
             .open(&tmp_path)
             .await
-            .map_err(|_| PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
         let mut writer = BufWriter::new(tmp_file);
         let mut found_node: Option<Node> = None;
@@ -1474,12 +2349,12 @@ async fn patch_node_jsonl(
             // Optimization: check ID without parsing full Value
             let should_update = match serde_json::from_str::<IdOnly>(&line) {
                 Ok(obj) => obj.id.as_deref() == Some(id.as_str()),
-                Err(_) => return Err(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)),
+                Err(_) => return Err(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)),
             };
 
             if should_update {
                 let mut v: Value =
-                    serde_json::from_str(&line).map_err(|_| PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+                    serde_json::from_str(&line).map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
                 // Update the field
                 let mut has_changes = false;
@@ -1510,48 +2385,48 @@ async fn patch_node_jsonl(
 
                 // Map to Node and fail hard if mapping fails.
                 // Ensures we never persist changes without a valid Node response.
-                let node = map_json_to_node(&v).ok_or(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+                let node = map_json_to_node(&v).ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
                 // Security/Consistency: Ensure the ID hasn't been changed via the update.
                 if node.id != id {
                     tracing::error!(path_id = %id, payload_id = %node.id, "Node ID mismatch in PATCH");
-                    return Err(PatchNodeError::Status(StatusCode::BAD_REQUEST));
+                    return Err(NodeMutationError::Status(StatusCode::BAD_REQUEST));
                 }
                 found_node = Some(node);
 
-                let s = serde_json::to_string(&v).map_err(|_| PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+                let s = serde_json::to_string(&v).map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
                 writer
                     .write_all(s.as_bytes())
                     .await
-                    .map_err(|_| PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+                    .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
                 updated = true;
             } else {
                 writer
                     .write_all(line.as_bytes())
                     .await
-                    .map_err(|_| PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+                    .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
             }
 
             writer
                 .write_all(b"\n")
                 .await
-                .map_err(|_| PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+                .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
         }
 
         if !updated {
-            return Err(PatchNodeError::Status(StatusCode::NOT_FOUND));
+            return Err(NodeMutationError::Status(StatusCode::NOT_FOUND));
         }
 
         writer
             .flush()
             .await
-            .map_err(|_| PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
         // Ensure durability
         let file = writer.into_inner();
         file.sync_all()
             .await
-            .map_err(|_| PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
         Ok(found_node)
     }
@@ -1569,7 +2444,13 @@ async fn patch_node_jsonl(
     if let Err(_e) = tokio::fs::rename(&tmp_path, &path).await {
         // Cleanup temp file if rename fails
         let _ = tokio::fs::remove_file(&tmp_path).await;
-        return Err(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        return Err(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+    }
+    if let Some(parent) = path.parent() {
+        sync_directory(parent).map_err(|error| {
+            tracing::error!(%error, node_id = %id, "failed to sync node JSONL directory after patch");
+            NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+        })?;
     }
 
     let persist_ms = start_persist.elapsed().as_millis();
@@ -1605,7 +2486,7 @@ async fn patch_node_jsonl(
 
     found_node
         .map(Json)
-        .ok_or(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))
+        .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))
 }
 
 pub async fn list_nodes(
@@ -1653,5 +2534,297 @@ pub async fn list_nodes(
             .cloned()
             .collect();
         Ok(Json(ListResponse::Legacy(out)))
+    }
+}
+
+#[cfg(test)]
+mod node_delete_journal_tests {
+    use super::*;
+    use crate::test_helpers::EnvGuard;
+    use serial_test::serial;
+    use std::fs;
+
+    fn set_gewebe_in_dir(path: &FsPath) -> EnvGuard {
+        EnvGuard::set(
+            "GEWEBE_IN_DIR",
+            path.to_str()
+                .expect("test GEWEBE_IN_DIR path must be valid UTF-8"),
+        )
+    }
+
+    fn write_fixture(path: &FsPath, content: &str) {
+        fs::create_dir_all(path.parent().expect("fixture parent")).expect("create fixture dir");
+        fs::write(path, content).expect("write fixture");
+    }
+
+    fn assert_no_transaction_files(dir: &FsPath) {
+        let entries = fs::read_dir(dir)
+            .expect("read data dir")
+            .map(|entry| entry.expect("dir entry").file_name())
+            .map(|name| name.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        assert!(
+            entries.iter().all(|name| {
+                !name.contains(".delete.")
+                    && name != NODE_DELETE_JOURNAL_FILE
+                    && !name.ends_with(".tmp")
+                    && !name.ends_with(".bak")
+            }),
+            "unexpected transaction files: {entries:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn jsonl_node_delete_rolls_back_when_node_swap_fails_after_edge_temp() {
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let in_dir = tmp.path().join("in");
+        let nodes_path = in_dir.join("demo.nodes.jsonl");
+        let edges_path = in_dir.join("demo.edges.jsonl");
+        let nodes_original = concat!(
+            r#"{"id":"n1","kind":"Werkstatt","title":"Alt","location":{"lat":53.5,"lon":10.0}}"#,
+            "\n",
+            r#"{"id":"n2","kind":"Ort","title":"Ziel","location":{"lat":53.6,"lon":10.1}}"#,
+            "\n",
+        );
+        let edges_original = concat!(
+            r#"{"id":"e1","source_id":"n1","source_type":"node","target_id":"n2","target_type":"node","edge_kind":"reference"}"#,
+            "\n",
+        );
+        write_fixture(&nodes_path, nodes_original);
+        write_fixture(&edges_path, edges_original);
+        let _env = set_gewebe_in_dir(&in_dir);
+
+        let error = delete_node_and_edges_jsonl_with_injection(
+            "n1",
+            EdgeEndpointCollisionEvidence::default(),
+            JsonlNodeDeleteFailureInjection {
+                fail_before_node_swap: true,
+                ..JsonlNodeDeleteFailureInjection::default()
+            },
+        )
+        .await
+        .expect_err("injected node swap failure must fail");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::Other);
+        assert_eq!(
+            fs::read_to_string(&nodes_path).expect("nodes"),
+            nodes_original
+        );
+        assert_eq!(
+            fs::read_to_string(&edges_path).expect("edges"),
+            edges_original
+        );
+        assert_no_transaction_files(&in_dir);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn jsonl_node_delete_recovery_rolls_back_crash_between_swaps() {
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let in_dir = tmp.path().join("in");
+        let nodes_path = in_dir.join("demo.nodes.jsonl");
+        let edges_path = in_dir.join("demo.edges.jsonl");
+        let nodes_original = concat!(
+            r#"{"id":"n1","kind":"Werkstatt","title":"Alt","location":{"lat":53.5,"lon":10.0}}"#,
+            "\n",
+            r#"{"id":"n2","kind":"Ort","title":"Ziel","location":{"lat":53.6,"lon":10.1}}"#,
+            "\n",
+        );
+        let edges_original = concat!(
+            r#"{"id":"e1","source_id":"n1","source_type":"node","target_id":"n2","target_type":"node","edge_kind":"reference"}"#,
+            "\n",
+            r#"{"id":"e2","source_id":"n2","source_type":"node","target_id":"n3","target_type":"node","edge_kind":"reference"}"#,
+            "\n",
+        );
+        write_fixture(&nodes_path, nodes_original);
+        write_fixture(&edges_path, edges_original);
+        let _env = set_gewebe_in_dir(&in_dir);
+
+        let error = delete_node_and_edges_jsonl_with_injection(
+            "n1",
+            EdgeEndpointCollisionEvidence::default(),
+            JsonlNodeDeleteFailureInjection {
+                crash_after_edge_swap: true,
+                ..JsonlNodeDeleteFailureInjection::default()
+            },
+        )
+        .await
+        .expect_err("injected crash must leave recovery work");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::Interrupted);
+        assert!(
+            in_dir.join(NODE_DELETE_JOURNAL_FILE).exists(),
+            "journal must survive the simulated crash"
+        );
+        assert!(
+            !nodes_path.exists(),
+            "simulated crash point is between edge and node swaps"
+        );
+
+        recover_node_delete_jsonl_journal()
+            .await
+            .expect("recovery must roll back before the durable node swap marker");
+
+        assert_eq!(
+            fs::read_to_string(&nodes_path).expect("nodes after recovery"),
+            nodes_original
+        );
+        assert_eq!(
+            fs::read_to_string(&edges_path).expect("edges after recovery"),
+            edges_original
+        );
+        assert_no_transaction_files(&in_dir);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn jsonl_node_delete_returns_success_when_committed_cleanup_is_deferred() {
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let in_dir = tmp.path().join("in");
+        let nodes_path = in_dir.join("demo.nodes.jsonl");
+        let edges_path = in_dir.join("demo.edges.jsonl");
+        write_fixture(
+            &nodes_path,
+            concat!(
+                r#"{"id":"n1","kind":"Werkstatt","title":"Alt","location":{"lat":53.5,"lon":10.0}}"#,
+                "\n",
+                r#"{"id":"n2","kind":"Ort","title":"Ziel","location":{"lat":53.6,"lon":10.1}}"#,
+                "\n",
+            ),
+        );
+        write_fixture(
+            &edges_path,
+            concat!(
+                r#"{"id":"e1","source_id":"n1","source_type":"node","target_id":"n2","target_type":"node","edge_kind":"reference"}"#,
+                "\n",
+                r#"{"id":"e2","source_id":"n2","source_type":"node","target_id":"n3","target_type":"node","edge_kind":"reference"}"#,
+                "\n",
+            ),
+        );
+        let _env = set_gewebe_in_dir(&in_dir);
+
+        let outcome = delete_node_and_edges_jsonl_with_injection(
+            "n1",
+            EdgeEndpointCollisionEvidence::default(),
+            JsonlNodeDeleteFailureInjection {
+                defer_cleanup_after_node_swap: true,
+                ..JsonlNodeDeleteFailureInjection::default()
+            },
+        )
+        .await
+        .expect("durably committed delete must remain successful");
+
+        assert!(outcome.node_deleted);
+        assert_eq!(outcome.removed_edge_ids, vec!["e1"]);
+        assert!(in_dir.join(NODE_DELETE_JOURNAL_FILE).exists());
+        let committed_nodes = fs::read_to_string(&nodes_path).expect("committed nodes");
+        let committed_edges = fs::read_to_string(&edges_path).expect("committed edges");
+        assert!(!committed_nodes.contains(r#""id":"n1""#));
+        assert!(committed_nodes.contains(r#""id":"n2""#));
+        assert!(!committed_edges.contains(r#""id":"e1""#));
+        assert!(committed_edges.contains(r#""id":"e2""#));
+
+        recover_node_delete_jsonl_journal()
+            .await
+            .expect("startup recovery must finish committed cleanup");
+
+        assert_eq!(
+            fs::read_to_string(&nodes_path).expect("nodes after cleanup"),
+            committed_nodes
+        );
+        assert_eq!(
+            fs::read_to_string(&edges_path).expect("edges after cleanup"),
+            committed_edges
+        );
+        assert_no_transaction_files(&in_dir);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn jsonl_node_delete_rejects_malformed_edge_without_partial_mutation() {
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let in_dir = tmp.path().join("in");
+        let nodes_path = in_dir.join("demo.nodes.jsonl");
+        let edges_path = in_dir.join("demo.edges.jsonl");
+        let nodes_original = concat!(
+            r#"{"id":"n1","kind":"Werkstatt","title":"Alt","location":{"lat":53.5,"lon":10.0}}"#,
+            "\n",
+        );
+        let edges_original = concat!(
+            r#"{"id":"e1","source_id":"n1","source_type":"node","target_id":"n2","target_type":"node","edge_kind":"reference"}"#,
+            "\n",
+            r#"{"id":"broken""#,
+            "\n",
+        );
+        write_fixture(&nodes_path, nodes_original);
+        write_fixture(&edges_path, edges_original);
+        let _env = set_gewebe_in_dir(&in_dir);
+
+        let error = delete_node_and_edges_jsonl("n1", EdgeEndpointCollisionEvidence::default())
+            .await
+            .expect_err("malformed edge persistence must block destructive delete");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("invalid edge JSONL at line 2"));
+        assert_eq!(
+            fs::read_to_string(&nodes_path).expect("nodes"),
+            nodes_original
+        );
+        assert_eq!(
+            fs::read_to_string(&edges_path).expect("edges"),
+            edges_original
+        );
+        assert_no_transaction_files(&in_dir);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn jsonl_node_delete_streams_large_edge_file_and_preserves_untouched_lines() {
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let in_dir = tmp.path().join("in");
+        let nodes_path = in_dir.join("demo.nodes.jsonl");
+        let edges_path = in_dir.join("demo.edges.jsonl");
+        let surviving_node =
+            r#"{"id":"n2","kind":"Ort","title":"Ziel","location":{"lat":53.6,"lon":10.1}}"#;
+        let nodes_original = format!(
+            "{}\n{}\n",
+            r#"{"id":"n1","kind":"Werkstatt","title":"Alt","location":{"lat":53.5,"lon":10.0}}"#,
+            surviving_node,
+        );
+        let mut edges_original = String::new();
+        let mut expected_edges = String::new();
+        for index in 0..5_000usize {
+            let source_id = if index == 2_500 { "n1" } else { "n2" };
+            let line = format!(
+                r#"{{ "id": "e-{index:04}", "source_id": "{source_id}", "source_type": "node", "target_id": "n3", "target_type": "node", "edge_kind": "reference" }}"#,
+            );
+            edges_original.push_str(&line);
+            edges_original.push('\n');
+            if index != 2_500 {
+                expected_edges.push_str(&line);
+                expected_edges.push('\n');
+            }
+        }
+        write_fixture(&nodes_path, &nodes_original);
+        write_fixture(&edges_path, &edges_original);
+        let _env = set_gewebe_in_dir(&in_dir);
+
+        let outcome = delete_node_and_edges_jsonl("n1", EdgeEndpointCollisionEvidence::default())
+            .await
+            .expect("large streaming delete must succeed");
+
+        assert!(outcome.node_deleted);
+        assert_eq!(outcome.removed_edge_ids, vec!["e-2500"]);
+        assert_eq!(
+            fs::read_to_string(&nodes_path).expect("nodes after delete"),
+            format!("{surviving_node}\n")
+        );
+        assert_eq!(
+            fs::read_to_string(&edges_path).expect("edges after delete"),
+            expected_edges,
+            "untouched edge lines must remain byte-for-byte stable"
+        );
+        assert_no_transaction_files(&in_dir);
     }
 }

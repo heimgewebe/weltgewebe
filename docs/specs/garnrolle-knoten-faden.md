@@ -84,6 +84,8 @@ Eine angenommene Aufnahme aktiviert genau eine Garnrolle. Sie kann enthalten:
 
 Die Rollen `weber` und `admin` regeln technische Rechte. Die Garnrolle bleibt die fachliche Darstellung des webenden Accounts.
 
+Garnrollen-Schreibwege sind strikt eigenbezogen: Eine angemeldete Garnrolle darf nur ihr eigenes Profil und ihre eigene Kartenprojektion bearbeiten. Andere Garnrollen dürfen über öffentliche Account-/Garnrollen-Schreibwege weder bearbeitet noch gelöscht werden.
+
 ## Verortung und Sichtbarkeit
 
 Die Nutzerhandlung lautet:
@@ -120,11 +122,25 @@ Ein Knoten ist ein fachlich fassbares Bündel. Er kann verortet oder ortsunabhä
 
 Knoten werden durch die Webungsaktion **Knoten knüpfen** aus einer angemeldeten Garnrolle heraus angelegt. Seed- oder Demo-Inhalte dürfen den organischen Produktpfad nicht ersetzen.
 
+Knoten gehören anschließend zum gemeinsamen Gewebe und nicht dauerhaft einer einzelnen Garnrolle. Weber und Administratoren dürfen ihre fachlichen Felder unmittelbar bearbeiten oder einen Knoten unmittelbar löschen. Gäste dürfen diese Änderungen weder ausführen noch simulieren.
+
+Knotenänderungen und Knotenlöschungen sind direkte Webprozesse. Sie dürfen nicht als Governance-Anträge modelliert, umgedeutet oder verzögert werden.
+
+Für Bearbeitung und Löschung gelten folgende Integritätsregeln:
+
+1. Der Server validiert und speichert Änderungen vollständig; der Browser verändert keine lokale Nebenwahrheit.
+2. Technische Identität und Erstellungszeit des Knotens bleiben bei einer Bearbeitung erhalten.
+3. Eine Löschung entfernt den Knoten und alle daraus betroffenen Fadenprojektionen als serverseitig serialisierten Vorgang.
+4. Das Entfernen der Fadenprojektionen ist eine serverseitige Folge der Knotenlöschung und kein direkter Fadenlöschweg.
+5. Knoten- und Fadenpersistenz müssen für die Löschung dieselbe kanonische Quelle verwenden; gemischte Schreibquellen werden fail-closed abgelehnt.
+
 ## Webungsaktionen
 
-Webungsaktionen verändern oder erweitern das gemeinsame Gewebe. Dazu gehören unter anderem:
+Webungsaktionen verändern oder erweitern das gemeinsame Gewebe und werden nach erfolgreicher Servervalidierung unmittelbar ausgeführt. Dazu gehören unter anderem:
 
 - Knoten knüpfen;
+- Knoten bearbeiten;
+- Knoten löschen;
 - kommunizieren;
 - Anträge stellen;
 - ein begründetes Veto einlegen;
@@ -137,7 +153,7 @@ Die jeweilige fachliche Aktion ist die Quelle der Wahrheit. Sie wird vollständi
 
 Ein Faden ist **kein direkt bearbeitbares Fachobjekt**. Nutzer können Fäden weder erstellen noch ändern noch löschen.
 
-Ein Faden entsteht ausschließlich als automatisch abgeleitete Visualisierung einer erfolgreichen Webungsaktion. Daraus folgen vier harte Regeln:
+Ein Faden entsteht ausschließlich als automatisch abgeleitete Visualisierung einer erfolgreichen Webungsaktion. Fäden bleiben abgeleitete Projektionen ohne öffentliche CRUD-Routen. Daraus folgen vier harte Regeln:
 
 1. Es gibt keinen öffentlichen `POST`, `PUT`, `PATCH` oder `DELETE`-Pfad für Fäden.
 2. Die Benutzeroberfläche bietet keinen Fadeneditor und keine Aktion „Faden ohne zugrunde liegende Handlung erzeugen“.

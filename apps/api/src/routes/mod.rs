@@ -1,5 +1,6 @@
 pub mod accounts;
 pub mod auth;
+mod collective_write_guard;
 mod domain_write_guard;
 pub mod edges;
 pub mod governance;
@@ -28,25 +29,36 @@ use self::{
         passkey_register_options, passkey_register_verify, remove_device, request_login,
         request_step_up, session, session_refresh, update_email,
     },
+    collective_write_guard::{
+        create_node_serialized, delete_node_serialized, patch_node_serialized,
+        replace_node_serialized,
+    },
     edges::{get_edge, list_edges},
     governance::{
         create_proposal, exit_own_account, get_proposal, list_proposal_messages, list_proposals,
         post_proposal_message, veto_proposal, vote_proposal,
     },
-    nodes::{create_node, get_node, list_nodes, patch_node},
+    nodes::{get_node, list_nodes},
 };
 
 pub fn api_router() -> Router<ApiState> {
     let router = Router::new()
         .route(
             "/nodes",
-            get(list_nodes).merge(post(create_node).route_layer(from_fn(require_write))),
+            get(list_nodes).merge(post(create_node_serialized).route_layer(from_fn(require_write))),
         )
         .route(
             "/nodes/{id}",
             get(get_node)
-                .patch(patch_node)
-                .route_layer(from_fn(require_write)),
+                .merge(
+                    axum::routing::patch(patch_node_serialized)
+                        .put(replace_node_serialized)
+                        .route_layer(from_fn(require_write)),
+                )
+                .merge(
+                    axum::routing::delete(delete_node_serialized)
+                        .route_layer(from_fn(require_write)),
+                ),
         )
         .route("/edges", get(list_edges))
         .route("/edges/{id}", get(get_edge))

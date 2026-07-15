@@ -532,14 +532,13 @@
         >
           {isSaving ? "Wird gespeichert…" : "Speichern"}
         </button>
-        <a class="btn" href="/map?compose=node">Ersten Knoten knüpfen</a>
       </div>
       <p id="my-garnrolle-save-note" class="muted">
         Öffentlich sind Anzeigename, Kurzbeschreibung, Fähigkeiten, Güter und
         Interessen. Deine Adresse bleibt privat. Bei „Exakt sichtbar“ ist der
-        gewählte Ort öffentlich; bei „Im Umkreis sichtbar“ nur eine
-        versetzte Näherung; bei „Noch nicht auf der Karte“ keine Position.
-        Adresse und Ort werden nicht automatisch abgeglichen.
+        gewählte Ort öffentlich; bei „Im Umkreis sichtbar“ nur eine versetzte
+        Näherung; bei „Noch nicht auf der Karte“ keine Position. Adresse und Ort
+        werden nicht automatisch abgeglichen.
       </p>
     </form>
   {/if}

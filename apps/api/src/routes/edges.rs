@@ -35,7 +35,7 @@ use uuid::Uuid;
 /// existing JSONL-API process model; cross-process file locking is out of scope.
 static EDGE_CREATE_PERSIST: OnceLock<Mutex<()>> = OnceLock::new();
 
-fn edge_create_persist_lock() -> &'static Mutex<()> {
+pub(crate) fn edge_create_persist_lock() -> &'static Mutex<()> {
     EDGE_CREATE_PERSIST.get_or_init(|| Mutex::new(()))
 }
 
@@ -281,6 +281,156 @@ pub async fn get_edge(
         source_details,
         target_details,
     }))
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct EdgeEndpointCollisionEvidence {
+    pub(crate) account_exists: bool,
+    pub(crate) role_exists: bool,
+}
+
+impl EdgeEndpointCollisionEvidence {
+    pub(crate) fn has_collision(self) -> bool {
+        self.account_exists || self.role_exists
+    }
+}
+
+fn invalid_edge_endpoint_reference(
+    value: &Value,
+    endpoint: &str,
+    type_field: &str,
+    endpoint_id: &str,
+) -> std::io::Error {
+    let edge_id = value
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("<missing>");
+    let found_type = value
+        .get(type_field)
+        .and_then(Value::as_str)
+        .unwrap_or("<missing-or-non-string>");
+    std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        format!(
+            "edge {edge_id} uses endpoint {endpoint} id {endpoint_id} with invalid {type_field} {found_type}"
+        ),
+    )
+}
+
+fn edge_endpoint_references_node_for_delete(
+    value: &Value,
+    id_field: &str,
+    type_field: &str,
+    endpoint: &str,
+    node_id: &str,
+    evidence: EdgeEndpointCollisionEvidence,
+) -> std::io::Result<bool> {
+    let Some(endpoint_id) = value.get(id_field).and_then(Value::as_str) else {
+        return Ok(false);
+    };
+    if endpoint_id != node_id {
+        return Ok(false);
+    }
+
+    match value.get(type_field) {
+        Some(Value::String(kind)) if kind == "node" => Ok(true),
+        Some(Value::String(kind)) if kind == "account" || kind == "role" => Ok(false),
+        None if !evidence.has_collision() => Ok(true),
+        None => Err(invalid_edge_endpoint_reference(
+            value,
+            endpoint,
+            type_field,
+            endpoint_id,
+        )),
+        Some(_) => Err(invalid_edge_endpoint_reference(
+            value,
+            endpoint,
+            type_field,
+            endpoint_id,
+        )),
+    }
+}
+
+pub(crate) fn edge_value_references_node_for_delete(
+    value: &Value,
+    node_id: &str,
+    evidence: EdgeEndpointCollisionEvidence,
+) -> std::io::Result<bool> {
+    let source_references_node = edge_endpoint_references_node_for_delete(
+        value,
+        "source_id",
+        "source_type",
+        "source",
+        node_id,
+        evidence,
+    )?;
+    let target_references_node = edge_endpoint_references_node_for_delete(
+        value,
+        "target_id",
+        "target_type",
+        "target",
+        node_id,
+        evidence,
+    )?;
+    Ok(source_references_node || target_references_node)
+}
+
+pub(crate) fn edge_references_node_for_delete(
+    edge: &Edge,
+    node_id: &str,
+    evidence: EdgeEndpointCollisionEvidence,
+) -> std::io::Result<bool> {
+    let source_references_node = edge_endpoint_option_references_node_for_delete(
+        edge.id.as_str(),
+        edge.source_id.as_str(),
+        edge.source_type.as_deref(),
+        "source",
+        "source_type",
+        node_id,
+        evidence,
+    )?;
+    let target_references_node = edge_endpoint_option_references_node_for_delete(
+        edge.id.as_str(),
+        edge.target_id.as_str(),
+        edge.target_type.as_deref(),
+        "target",
+        "target_type",
+        node_id,
+        evidence,
+    )?;
+    Ok(source_references_node || target_references_node)
+}
+
+fn edge_endpoint_option_references_node_for_delete(
+    edge_id: &str,
+    endpoint_id: &str,
+    endpoint_type: Option<&str>,
+    endpoint: &str,
+    type_field: &str,
+    node_id: &str,
+    evidence: EdgeEndpointCollisionEvidence,
+) -> std::io::Result<bool> {
+    if endpoint_id != node_id {
+        return Ok(false);
+    }
+
+    match endpoint_type {
+        Some("node") => Ok(true),
+        Some("account" | "role") => Ok(false),
+        None if !evidence.has_collision() => Ok(true),
+        Some(found_type) => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "edge {edge_id} uses endpoint {endpoint} id {endpoint_id} with invalid {type_field} {found_type}"
+            ),
+        )),
+        None => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "edge {edge_id} uses endpoint {endpoint} id {endpoint_id} with invalid {type_field} <missing>"
+            ),
+        )),
+    }
 }
 
 /// Append a single edge record as a JSONL line. Durability via fsync.

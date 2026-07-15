@@ -9,7 +9,11 @@
   } from "$lib/stores/uiView";
   import { isSearchOpen } from "$lib/stores/searchStore";
   import { isFilterOpen } from "$lib/stores/filterStore";
-  import type { KompositionDraft, Selection, SystemState } from "$lib/stores/uiView";
+  import type {
+    KompositionDraft,
+    Selection,
+    SystemState,
+  } from "$lib/stores/uiView";
 
   import NodePanel from "./panels/NodePanel.svelte";
   import AccountPanel from "./panels/AccountPanel.svelte";
@@ -17,9 +21,17 @@
   import KompositionPanel from "./panels/KompositionPanel.svelte";
 
   type RelatedSelection = { type: "node" | "garnrolle"; id: string };
+  type DomainChanged = {
+    kind: "node";
+    id: string;
+    action: "updated" | "deleted";
+  };
   type KompositionPanelHandle = { requestClose: () => void };
 
-  const dispatch = createEventDispatcher<{ selectRelated: RelatedSelection }>();
+  const dispatch = createEventDispatcher<{
+    selectRelated: RelatedSelection;
+    domainChanged: DomainChanged;
+  }>();
   let kompositionPanel: KompositionPanelHandle | null = null;
 
   function derivePanelTitle(
@@ -44,11 +56,7 @@
     return "Details";
   }
 
-  $: panelTitle = derivePanelTitle(
-    $systemState,
-    $kompositionDraft,
-    $selection,
-  );
+  $: panelTitle = derivePanelTitle($systemState, $kompositionDraft, $selection);
 
   function closePanel() {
     if ($systemState === "komposition") {
@@ -62,6 +70,10 @@
 
   function handleRelated(event: CustomEvent<RelatedSelection>) {
     dispatch("selectRelated", event.detail);
+  }
+
+  function handleDomainChanged(event: CustomEvent<DomainChanged>) {
+    dispatch("domainChanged", event.detail);
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -95,7 +107,10 @@
         <KompositionPanel bind:this={kompositionPanel} />
       {:else if $selection}
         {#if $selection.type === "node"}
-          <NodePanel on:selectRelated={handleRelated} />
+          <NodePanel
+            on:selectRelated={handleRelated}
+            on:domainChanged={handleDomainChanged}
+          />
         {:else if $selection.type === "account" || $selection.type === "garnrolle"}
           <AccountPanel on:selectRelated={handleRelated} />
         {:else if $selection.type === "edge"}

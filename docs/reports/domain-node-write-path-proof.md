@@ -12,9 +12,11 @@ created: 2026-06-05
 lang: de
 summary: >
   Proof-Bericht für OPT-ARC-001 Phase E-B: optionaler PostgreSQL-Schreibpfad
-  ausschließlich für `PATCH /nodes` hinter explizitem Write-Gate.
-  JSONL bleibt Default; kein Dual-Write; Account-, Kanten-, Step-up-E-Mail-
-  und WebAuthn-Writeback-Persistenz bleiben unverändert.
+  für `POST /nodes`, `PATCH /nodes`, `PUT /nodes/{id}` und
+  `DELETE /nodes/{id}` hinter explizitem Write-Gate.
+  JSONL bleibt Default; kein Dual-Write; keine öffentlichen Edge-CRUD-Routen;
+  Account-, Step-up-E-Mail- und WebAuthn-Writeback-Persistenz bleiben
+  unverändert.
 relations:
   - type: relates_to
     target: docs/blueprints/domain-data-postgres-cutover.md
@@ -34,12 +36,15 @@ relations:
 
 ## Scope
 
-OPT-ARC-001 Phase E-B implementiert einen engen PostgreSQL-Write-Path nur für
-`PATCH /nodes`. Alle anderen Endpunkte bleiben unverändert.
+OPT-ARC-001 Phase E-B implementiert PostgreSQL-Write-Paths für
+`POST /nodes`, `PATCH /nodes/{id}`, `PUT /nodes/{id}` und
+`DELETE /nodes/{id}`. `DELETE /nodes/{id}` entfernt betroffene
+Fadenprojektionen ausschließlich als serverseitige Cascade-Folge der
+Knotenlöschung; es entsteht kein öffentlicher Edge-Delete-Pfad.
 
 ## Nicht-Ziele
 
-- keine Edge-Writes
+- kein öffentlicher Edge-CRUD-Pfad
 - keine Step-up-E-Mail-Persistenz
 - kein WebAuthn-User-ID-Writeback
 - kein Account-Write-Umbau über Phase E-A hinaus
@@ -80,6 +85,30 @@ OPT-ARC-001 Phase E-B implementiert einen engen PostgreSQL-Write-Path nur für
   `NodeWriteError::Serialization`.
 - Nicht-Objekt-Payloads (Datenbeschädigung in `domain_nodes.payload`) werden vor
   jeder Mutation als `NodeWriteError::Mapping` zurückgewiesen.
+- `PUT /nodes/{id}` ersetzt die fachlichen Felder vollständig, behält `id` und
+  `created_at` bei und persistiert in PostgreSQL über `UPDATE domain_nodes`.
+- `DELETE /nodes/{id}` verlangt kohärente Node-/Edge-Write-Quellen. Gemischte
+  JSONL/PostgreSQL-Schreibquellen werden vor Mutation mit 409 abgelehnt.
+- PostgreSQL-Delete läuft in einer Transaktion, hält den bestehenden
+  `domain_edges`-Lock, sperrt die Ziel-Node mit `FOR UPDATE`, validiert
+  Edge-Endpunkte vor jeder Mutation und löscht anschließend Node plus
+  node-typisierte bzw. eindeutig legacy-untypisierte Fadenprojektionen
+  atomar. Explizite `account`-/`role`-Endpunkte bleiben erhalten.
+- Legacy-Edges ohne `source_type`/`target_type` werden beim Delete als
+  Node-Endpunkt klassifiziert, wenn für dieselbe ID weder ein Account noch ein
+  Role-Kollisionsbeleg existiert. Account-/Role-Kollisionen und unbekannte oder
+  ungültige Typen blockieren fail-closed ohne Teilmutation.
+- JSONL-Delete verwendet eine gemeinsame Journal-Transaktion im bestehenden
+  Gewebe-Datenverzeichnis: neue vollständige Node-/Edge-Dateien werden
+  vorbereitet und fsync't, Originale als Backups gehalten, Phasen ins Journal
+  geschrieben und fsync't, Zielpfade geswappt, der Verzeichniszustand fsync't
+  und erst danach Backups/Journal entfernt.
+- JSONL-Startup-Recovery läuft vor dem Laden von Nodes/Edges. Bis einschließlich
+  `edge_swapped` rollt sie beide Projektionen auf den Originalstand zurück. Erst
+  der dauerhaft gespeicherte Marker `node_swapped` gilt als Commit; danach wird
+  ausschließlich die verbliebene Transaktionsbereinigung abgeschlossen.
+- Nicht parsebare Edge-JSONL-Zeilen blockieren die destruktive Operation ohne
+  Teilmutation, weil ihre Beziehung zum Zielknoten nicht sicher bestimmbar ist.
 
 ## Payload-Semantik `info: Some(None)` — Option B
 
@@ -90,7 +119,18 @@ DB-Payload-Shape. Dies ist dokumentiert und akzeptiert.
 
 ## Proofs
 
-- `apps/api/tests/db_domain_node_write_path.rs` (Tests A–H, `#[ignore]`)
+- `apps/api/tests/db_domain_node_write_path.rs` (PostgreSQL-Proofs,
+  `#[ignore]`): Node-Create/Patch/Replace/Delete, Cascade-Atomizität,
+  eindeutige untypisierte Legacy-Edges, Account-/Role-Kollisionen und
+  ungültige Typen.
+- `apps/api/tests/api_collective_mutations.rs`: JSONL-Route-Proofs für
+  direkte PUT/DELETE-Webprozesse, kohärente Write-Source-Gates,
+  Legacy-untypisierte Cascade-Löschung, Account-/Role-Kollisionen und
+  ungültige Typen ohne Teilmutation.
+- `apps/api/src/routes/nodes.rs` Unit-Tests `node_delete_journal_tests`:
+  Fehler-Injection/Rollback vor dem Commit-Marker, Recovery nach simuliertem
+  Prozessabbruch zwischen Edge- und Node-Swap, aufgeschobene Bereinigung nach
+  dauerhaftem Commit sowie Fail-Closed-Verhalten bei kaputten Edge-Zeilen.
 - CI-Job: `db-domain-node-write-path-proof` in `.github/workflows/api.yml`
 
 ## Status
@@ -99,7 +139,8 @@ Phase E-B ist implementiert. OPT-ARC-001 bleibt `partial`.
 
 Offen bleiben:
 
-- Edge-Writes
+- öffentliche Edge-Writes bleiben Nicht-Ziel; Fadenprojektionen werden nur als
+  serverseitige Folge erfolgreicher Webungsaktionen geschrieben oder gelöscht
 - Step-up-E-Mail-Persistenz
 - WebAuthn-User-ID-Writeback
 - Runtime-Smoke / vollständiger Cutover-Beweis
