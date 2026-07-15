@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "seed": "weltgewebe-domain-scale-v1",
+  "database_schema": "weltgewebe_perf",
+  "profiles": {
+    "smoke": {
+      "nodes": 1000,
+      "edges": 5000
+    },
+    "ci": {
+      "nodes": 20000,
+      "edges": 100000
+    },
+    "scale_100k": {
+      "nodes": 100000,
+      "edges": 500000
+    },
+    "scale_1m": {
+      "nodes": 1000000,
+      "edges": 5000000
+    }
+  },
+  "plan_budgets": {
+    "calibration_required": true,
+    "enforced_profiles": ["scale_100k", "scale_1m"],
+    "max_temp_blocks": 0,
+    "workloads": {
+      "node_cursor": {
+        "forbidden_node_types": ["Seq Scan", "Sort"]
+      },
+      "edge_cursor": {
+        "forbidden_node_types": ["Seq Scan", "Sort"]
+      },
+      "bbox": {
+        "forbidden_node_types": ["Seq Scan"]
+      },
+      "outbound_neighbors": {
+        "forbidden_node_types": ["Seq Scan"]
+      },
+      "inbound_neighbors": {
+        "forbidden_node_types": ["Seq Scan"]
+      },
+      "kind_filter": {
+        "forbidden_node_types": ["Seq Scan"]
+      }
+    }
+  }
+}

@@ -1,0 +1,68 @@
+---
+name: domain-scale
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - "configs/performance/domain-scale.v1.json"
+      - "scripts/performance/**"
+      - "scripts/tests/test_domain_scale.py"
+      - "docs/blueprints/domain-scale-foundation.md"
+      - ".github/workflows/domain-scale.yml"
+  push:
+    branches: [main]
+    paths:
+      - "configs/performance/domain-scale.v1.json"
+      - "scripts/performance/**"
+      - "scripts/tests/test_domain_scale.py"
+      - "docs/blueprints/domain-scale-foundation.md"
+      - ".github/workflows/domain-scale.yml"
+  workflow_dispatch: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foundation:
+    name: Domain scale foundation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # tag: v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Validate scale contract
+        run: python3 -B scripts/performance/domain_scale.py validate
+
+      - name: Run scale tooling tests
+        run: python3 -B scripts/tests/test_domain_scale.py
+
+      - name: Render deterministic smoke fixture and SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          output_dir=$(mktemp -d)
+          trap 'rm -rf "${output_dir}"' EXIT
+          python3 -B scripts/performance/domain_scale.py generate \
+            --profile smoke \
+            --output-dir "${output_dir}/fixture"
+          python3 -B scripts/performance/domain_scale.py render-load \
+            --manifest "${output_dir}/fixture/manifest.json" \
+            --output "${output_dir}/load.sql"
+          python3 -B scripts/performance/domain_scale.py render-workload \
+            --manifest "${output_dir}/fixture/manifest.json" \
+            --plan-dir "${output_dir}/plans" \
+            --output "${output_dir}/workload.sql"
+          test -s "${output_dir}/load.sql"
+          test -s "${output_dir}/workload.sql"

@@ -57,6 +57,7 @@ Generated automatically. Do not edit.
 | docs.architecture.overview | Architekturüberblick | architecture | active | docs/architekturstruktur.md |
 | docs.blueprints.agent-operability | Minimaler Agent-Operability-Kern | blueprint | draft | docs/blueprints/agent-operability-blaupause.md |
 | docs.blueprints.agent-safety-control-layer | Blueprint — Agent Safety Control Layer | blueprint | draft | docs/blueprints/blueprint-agent-safety-control-layer.md |
+| docs.blueprints.domain-scale-foundation | Domain Scale Foundation | blueprint | active | docs/blueprints/domain-scale-foundation.md |
 | docs.blueprints.kartenklarheit | Blaupause zur Optimierung der Karte | blueprint | deprecated | docs/blueprints/kartenklarheit.md |
 | docs.blueprints.kartenklarheit-phase6 | Kartenklarheit Phase 6: Der Wahrheitsbeweis | blueprint | deprecated | docs/blueprints/kartenklarheit-phase6.md |
 | docs.blueprints.kartenklarheit-roadmap | Roadmap - Kartenklarheit | roadmap | deprecated | docs/blueprints/kartenklarheit-roadmap.md |
