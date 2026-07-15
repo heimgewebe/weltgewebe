@@ -27,7 +27,7 @@ def _write_json(path: Path, value: object) -> None:
 def _good_plan(config: dict[str, object], workload: str) -> list[dict[str, object]]:
     rules = config["plan_budgets"]["workloads"][workload]  # type: ignore[index]
     condition = " AND ".join(
-        f"({token} IS NOT NULL)" for token in rules["required_index_cond_contains"]  # type: ignore[index]
+        f"({token} IS NOT NULL)" for token in rules["required_index_cond_identifiers"]  # type: ignore[index]
     )
     return [
         {
@@ -40,6 +40,7 @@ def _good_plan(config: dict[str, object], workload: str) -> list[dict[str, objec
                         "Node Type": "Index Scan",
                         "Index Name": rules["required_index"],  # type: ignore[index]
                         "Index Cond": condition,
+                        "Actual Loops": 1,
                     }
                 ],
             },
@@ -115,6 +116,26 @@ class DomainScaleTests(unittest.TestCase):
             self.assertEqual(sql.count("COMMIT;"), 1)
             self.assertLess(sql.index("\\copy weltgewebe_perf.domain_edges"), sql.index("COMMIT;"))
 
+    def test_psql_meta_paths_reject_parser_metacharacters(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            unsafe_fixture = root / "path with space" / "fixture"
+            domain_scale.generate_fixture(CONFIG, "smoke", unsafe_fixture)
+            with self.assertRaisesRegex(domain_scale.DomainScaleError, "psql file paths"):
+                domain_scale.render_load_sql(
+                    unsafe_fixture / "manifest.json", root / "load.sql", CONFIG
+                )
+
+            safe_fixture = root / "safe-fixture"
+            domain_scale.generate_fixture(CONFIG, "smoke", safe_fixture)
+            with self.assertRaisesRegex(domain_scale.DomainScaleError, "psql file paths"):
+                domain_scale.render_workload_sql(
+                    safe_fixture / "manifest.json",
+                    root / "plans'quoted",
+                    root / "workload.sql",
+                    CONFIG,
+                )
+
     def test_workload_sql_targets_filter_indexes_without_unrelated_ordering(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -148,7 +169,6 @@ class DomainScaleTests(unittest.TestCase):
 
             wrong_index = _good_plan(config, "bbox")
             wrong_index[0]["Plan"]["Plans"][0]["Index Name"] = "domain_nodes_pkey"  # type: ignore[index]
-            wrong_index[0]["Plan"]["Plans"][0]["Index Cond"] = "(id IS NOT NULL)"  # type: ignore[index]
             _write_json(plan_dir / "bbox.json", wrong_index)
             failed = domain_scale.check_plans(config, plan_dir, "ci")
             self.assertEqual(failed["status"], "fail")
@@ -156,11 +176,21 @@ class DomainScaleTests(unittest.TestCase):
 
             _write_good_plans(config, plan_dir)
             wrong_condition = _good_plan(config, "bbox")
-            wrong_condition[0]["Plan"]["Plans"][0]["Index Cond"] = "(id IS NOT NULL)"  # type: ignore[index]
+            wrong_condition[0]["Plan"]["Plans"][0]["Index Cond"] = (
+                "(latitude IS NOT NULL) AND (longitude IS NOT NULL)"
+            )  # type: ignore[index]
             _write_json(plan_dir / "bbox.json", wrong_condition)
             condition_failed = domain_scale.check_plans(config, plan_dir, "ci")
             self.assertEqual(condition_failed["status"], "fail")
             self.assertTrue(any("matching Index Cond" in item for item in condition_failed["failures"]))
+
+            _write_good_plans(config, plan_dir)
+            not_executed = _good_plan(config, "bbox")
+            not_executed[0]["Plan"]["Plans"][0]["Actual Loops"] = 0  # type: ignore[index]
+            _write_json(plan_dir / "bbox.json", not_executed)
+            execution_failed = domain_scale.check_plans(config, plan_dir, "ci")
+            self.assertEqual(execution_failed["status"], "fail")
+            self.assertTrue(any("was not executed" in item for item in execution_failed["failures"]))
 
     def test_plan_checker_rejects_seq_scan_and_nested_temp_blocks(self) -> None:
         config = domain_scale.load_config(CONFIG)

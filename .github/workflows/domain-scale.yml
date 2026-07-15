@@ -81,7 +81,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          DOMAIN_SCALE_DIR="${RUNNER_TEMP}/domain-scale-ci"
+          DOMAIN_SCALE_DIR="${RUNNER_TEMP:?RUNNER_TEMP is required}/domain-scale-ci"
           rm -rf "${DOMAIN_SCALE_DIR}"
           mkdir -p "${DOMAIN_SCALE_DIR}/plans"
           python3 -B scripts/performance/domain_scale.py generate \

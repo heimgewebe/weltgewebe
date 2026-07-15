@@ -21,6 +21,7 @@ from typing import Any, Iterable, Mapping, Sequence
 DEFAULT_CONFIG = Path("configs/performance/domain-scale.v1.json")
 BENCHMARK_SCHEMA = "weltgewebe_perf"
 SCHEMA_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
+PSQL_SAFE_PATH_RE = re.compile(r"^/[A-Za-z0-9_./-]+$")
 NODE_KINDS = ("Ort", "Projekt", "Person", "Ressource", "Gespraech")
 RARE_NODE_KIND = "Projekt"
 COMMON_NODE_KINDS = tuple(kind for kind in NODE_KINDS if kind != RARE_NODE_KIND)
@@ -147,11 +148,11 @@ def validate_config(config: Mapping[str, Any]) -> None:
         expected_rule_keys = {
             "forbidden_node_types",
             "required_index",
-            "required_index_cond_contains",
+            "required_index_cond_identifiers",
         }
         if not isinstance(rules, dict) or set(rules) != expected_rule_keys:
             raise DomainScaleError(
-                f"workload {name} must define forbidden_node_types, required_index and required_index_cond_contains"
+                f"workload {name} must define forbidden_node_types, required_index and required_index_cond_identifiers"
             )
         node_types = rules["forbidden_node_types"]
         if not isinstance(node_types, list) or not node_types:
@@ -161,10 +162,10 @@ def validate_config(config: Mapping[str, Any]) -> None:
         required_index = rules["required_index"]
         if not isinstance(required_index, str) or not SCHEMA_RE.fullmatch(required_index):
             raise DomainScaleError(f"workload {name} required_index must be a safe index name")
-        condition_tokens = rules["required_index_cond_contains"]
+        condition_tokens = rules["required_index_cond_identifiers"]
         if not isinstance(condition_tokens, list) or not condition_tokens:
             raise DomainScaleError(
-                f"workload {name} required_index_cond_contains must be a non-empty list"
+                f"workload {name} required_index_cond_identifiers must be a non-empty list"
             )
         if any(not isinstance(item, str) or not item for item in condition_tokens):
             raise DomainScaleError(f"workload {name} contains an invalid index-condition token")
@@ -425,6 +426,15 @@ def _sql_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def _psql_meta_path_literal(path: Path) -> str:
+    value = str(path.resolve())
+    if not PSQL_SAFE_PATH_RE.fullmatch(value):
+        raise DomainScaleError(
+            "psql file paths must be absolute and contain only ASCII letters, digits, '/', '.', '_' or '-'"
+        )
+    return _sql_literal(value)
+
+
 def render_load_sql(
     manifest_path: Path, output_path: Path, config_path: Path = DEFAULT_CONFIG
 ) -> None:
@@ -439,8 +449,8 @@ CREATE SCHEMA {schema};
 CREATE TABLE {schema}.domain_nodes (LIKE public.domain_nodes INCLUDING ALL);
 CREATE TABLE {schema}.domain_edges (LIKE public.domain_edges INCLUDING ALL);
 
-\\copy {schema}.domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) FROM {_sql_literal(str(nodes_path))} WITH (FORMAT csv, HEADER true)
-\\copy {schema}.domain_edges (id, source_id, target_id, edge_kind, created_at, payload) FROM {_sql_literal(str(edges_path))} WITH (FORMAT csv, HEADER true)
+\\copy {schema}.domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) FROM {_psql_meta_path_literal(nodes_path)} WITH (FORMAT csv, HEADER true)
+\\copy {schema}.domain_edges (id, source_id, target_id, edge_kind, created_at, payload) FROM {_psql_meta_path_literal(edges_path)} WITH (FORMAT csv, HEADER true)
 
 ANALYZE {schema}.domain_nodes;
 ANALYZE {schema}.domain_edges;
@@ -458,7 +468,7 @@ COMMIT;
 def _explain_block(name: str, plan_dir: Path, query: str) -> str:
     plan_path = (plan_dir / f"{name}.json").resolve()
     return (
-        f"\\o {_sql_literal(str(plan_path))}\n"
+        f"\\o {_psql_meta_path_literal(plan_path)}\n"
         f"EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON) {query};\n"
         "\\o\n"
     )
@@ -532,24 +542,62 @@ def _plan_node_types(plan: Mapping[str, Any]) -> list[str]:
     ]
 
 
+def _sql_condition_identifiers(condition: str) -> set[str]:
+    """Return exact SQL identifiers outside single-quoted string literals."""
+
+    without_literals: list[str] = []
+    index = 0
+    in_literal = False
+    while index < len(condition):
+        char = condition[index]
+        if char == "'":
+            if in_literal and index + 1 < len(condition) and condition[index + 1] == "'":
+                without_literals.extend((" ", " "))
+                index += 2
+                continue
+            in_literal = not in_literal
+            without_literals.append(" ")
+        elif in_literal:
+            without_literals.append(" ")
+        else:
+            without_literals.append(char)
+        index += 1
+    if in_literal:
+        return set()
+    return {
+        match.group(0).lower()
+        for match in re.finditer(r"[A-Za-z_][A-Za-z0-9_]*", "".join(without_literals))
+    }
+
+
 def _index_evidence(
-    plan: Mapping[str, Any], required_index: str, condition_tokens: Sequence[str]
-) -> list[dict[str, str]]:
-    evidence: list[dict[str, str]] = []
+    plan: Mapping[str, Any], required_index: str, condition_identifiers: Sequence[str]
+) -> list[dict[str, Any]]:
+    required_identifiers = {identifier.lower() for identifier in condition_identifiers}
+    evidence: list[dict[str, Any]] = []
     for node in _plan_nodes(plan):
         if node.get("Index Name") != required_index:
             continue
         condition = node.get("Index Cond")
         if not isinstance(condition, str) or not condition.strip():
             continue
-        lowered = condition.lower()
-        if not all(token.lower() in lowered for token in condition_tokens):
+        actual_loops = node.get("Actual Loops")
+        if (
+            not isinstance(actual_loops, (int, float))
+            or isinstance(actual_loops, bool)
+            or actual_loops <= 0
+        ):
+            continue
+        identifiers = _sql_condition_identifiers(condition)
+        if not required_identifiers.issubset(identifiers):
             continue
         evidence.append(
             {
                 "node_type": str(node.get("Node Type", "")),
                 "index_name": required_index,
                 "index_cond": condition,
+                "index_cond_identifiers": sorted(identifiers),
+                "actual_loops": actual_loops,
             }
         )
     return evidence
@@ -599,7 +647,7 @@ def check_plans(
         present_forbidden = sorted(set(node_types).intersection(forbidden))
         required_index = rules["required_index"]
         index_evidence = _index_evidence(
-            plan, required_index, rules["required_index_cond_contains"]
+            plan, required_index, rules["required_index_cond_identifiers"]
         )
         temp_blocks = _temp_blocks(plan)
         if budget_enforced and present_forbidden:

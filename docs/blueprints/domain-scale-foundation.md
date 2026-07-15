@@ -95,9 +95,17 @@ Er darf nicht:
 - das Schema `public` verwerfen,
 - den Testdatensatz ohne Hashprüfung verwenden.
 
-Die Unit-Tests prüfen diese Grenze statisch. PostgreSQL-Berechtigungen bleiben
-die zweite Schutzschicht: Ein Benchmark-Benutzer sollte keine Rechte zum
-Verwerfen produktiver Tabellen besitzen.
+Unit-Tests und der echte PostgreSQL-CI-Lauf prüfen diese Grenze. Der CI-Lauf
+verwendet den ephemeren Container-Superuser und besitzt daher keine zweite
+Berechtigungsschicht. Bei manuellen oder dauerhaften Messumgebungen soll dagegen
+ein eigener Benchmark-Benutzer ohne Rechte zum Verwerfen produktiver Tabellen
+verwendet werden.
+
+Dateipfade, die in psql-Metabefehle wie `\copy` oder `\o` gelangen, müssen
+absolute kontrollierte Pfade sein und dürfen nur ASCII-Buchstaben, Ziffern,
+Schrägstrich, Punkt, Unterstrich oder Bindestrich enthalten. Leerzeichen,
+Apostrophe, Backslashes und Steuerzeichen werden abgewiesen. Damit hängt die
+Sicherheitsgrenze nicht von mehrdeutigen psql-Escapingregeln ab.
 
 ## Determinismus
 
@@ -149,9 +157,12 @@ Der Prüfer blockiert zunächst nur eindeutig schädliche Planformen:
 - kein zusätzlicher `Sort` für die ID-Cursor,
 - keine temporären Blöcke,
 - für jede Abfrage der fachlich vorgesehene Index,
-- eine tatsächlich ausgeführte `Index Cond` mit den erwarteten Spalten.
+- eine tatsächlich ausgeführte `Index Cond` mit den erwarteten SQL-Bezeichnern,
+- mindestens einen ausgeführten Durchlauf des betreffenden Indexknotens.
 
-Damit reicht ein beliebiger `Index Scan` nicht aus. Beispielsweise muss eine
+Die Bezeichner werden exakt ausgewertet: `id` zählt nicht als Treffer innerhalb
+von `source_id`, und `lat` nicht innerhalb von `latitude`. Damit reicht ein
+beliebiger `Index Scan` nicht aus. Beispielsweise muss eine
 Nachbarschaftsabfrage den Index auf `source_id` beziehungsweise `target_id`
 verwenden; ein Primärschlüssel-Scan mit nachträglichem Filter gilt als Fehler.
 
@@ -197,7 +208,8 @@ python3 -B scripts/performance/domain_scale.py render-workload \
 ```
 
 Die beiden SQL-Dateien werden anschließend mit `psql` gegen eine ausdrücklich
-bestimmte Benchmark-Datenbank ausgeführt. Der GitHub-Workflow lädt dafür das
+bestimmte Benchmark-Datenbank ausgeführt. Der Ausführungspfad muss dabei die oben
+beschriebene kontrollierte Pfadform erfüllen. Der GitHub-Workflow lädt dafür das
 Profil `ci` mit 20.000 Knoten und 100.000 Fäden in ein echtes PostgreSQL 16,
 führt alle sechs Abfragen aus und archiviert die JSON-Pläne als CI-Beleg.
 Danach prüft der folgende Befehl die JSON-Abfragepläne:
