@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { authStore } from "$lib/auth/store";
+  import GovernanceFaden from "./GovernanceFaden.svelte";
   import {
     GovernanceApiError,
     formatRemaining,
@@ -128,6 +129,8 @@
     </header>
 
     {#if error}<div class="error" role="alert">{error}</div>{/if}
+
+    <GovernanceFaden {proposal} {messages} />
 
     {#if proposal.vetoes.length > 0}
       <section class="card" aria-labelledby="vetos-heading">
