@@ -261,6 +261,7 @@ Generated automatically. Do not edit.
 
 ## docs/blueprints/domain-data-postgres-cutover.md
 
+- [relates_to] docs/blueprints/domain-scale-foundation.md
 - [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
 - [relates_to] docs/reports/domain-account-write-path-proof.md
 - [relates_to] docs/reports/domain-backfill-proof.md
@@ -340,6 +341,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/adr/0043-edge-vs-conversation.md
 - [relates_to] docs/architekturstruktur.md
+- [relates_to] docs/blueprints/domain-scale-foundation.md
 - [relates_to] docs/domain/vocabulary.md
 - [relates_to] docs/reports/optimierungsbericht.md
 - [relates_to] docs/runbooks/db-recovery.md
@@ -782,6 +784,7 @@ Generated automatically. Do not edit.
 ## docs/roadmap.md
 
 - [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
+- [relates_to] docs/blueprints/domain-scale-foundation.md
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-blaupause.md
 - [relates_to] docs/blueprints/ui-blaupause.md

@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 166 |
-| Dokumente mit ausgehenden Relationen | 165 |
+| Dokumente gesamt | 167 |
+| Dokumente mit ausgehenden Relationen | 166 |
 | Dokumente als Ziel referenziert | 128 |
-| Relationen gesamt | 571 |
+| Relationen gesamt | 574 |
 | — depends_on | 20 |
-| — relates_to | 539 |
+| — relates_to | 542 |
 | — supersedes | 11 |
 | — verifies | 1 |
 | Isolierte Dokumente | 0 |
@@ -41,9 +41,10 @@ Generated automatically. Do not edit.
 - ⚠️ High inbound count (14): `docs/reports/auth-status-matrix.md` — central dependency, review carefully
 - ⚠️ High inbound count (13): `docs/adr/ADR-0007__auth-persistence-production-db-path.md` — central dependency, review carefully
 - ⚠️ High inbound count (13): `docs/reports/optimierungsstatus.md` — central dependency, review carefully
+- ⚠️ High inbound count (12): `docs/blueprints/domain-data-postgres-cutover.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/blueprints/auth-roadmap.md` — central dependency, review carefully
-- ⚠️ High inbound count (11): `docs/blueprints/domain-data-postgres-cutover.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/deployment.md` — central dependency, review carefully
+- ⚠️ High inbound count (10): `docs/roadmap.md` — central dependency, review carefully
 
 ### Zyklen (depends_on)
 
@@ -68,9 +69,10 @@ _Keine Zyklen gefunden._
 - `docs/reports/auth-status-matrix.md` — 14 eingehende Relationen
 - `docs/adr/ADR-0007__auth-persistence-production-db-path.md` — 13 eingehende Relationen
 - `docs/reports/optimierungsstatus.md` — 13 eingehende Relationen
+- `docs/blueprints/domain-data-postgres-cutover.md` — 12 eingehende Relationen
 - `docs/blueprints/auth-roadmap.md` — 11 eingehende Relationen
-- `docs/blueprints/domain-data-postgres-cutover.md` — 11 eingehende Relationen
 - `docs/deployment.md` — 11 eingehende Relationen
+- `docs/roadmap.md` — 10 eingehende Relationen
 
 ### Isolierte Dokumente
 
