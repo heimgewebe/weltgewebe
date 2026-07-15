@@ -14,6 +14,8 @@ relations:
     target: docs/blueprints/domain-data-postgres-cutover.md
   - type: relates_to
     target: docs/datenmodell.md
+  - type: relates_to
+    target: docs/roadmap.md
 verifies_with:
   - scripts/tests/test_domain_scale.py
 depends_on:

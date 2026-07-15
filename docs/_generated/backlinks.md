@@ -784,6 +784,7 @@ Generated automatically. Do not edit.
 ## docs/roadmap.md
 
 - [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
+- [relates_to] docs/blueprints/domain-scale-foundation.md
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-blaupause.md
 - [relates_to] docs/blueprints/ui-blaupause.md
