@@ -200,7 +200,26 @@ test("guest can read everything and submit only the own Weber application", asyn
     summary: "Ich möchte mitweben.",
   });
 
+  const directFadenWrites: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/edges" && request.method() !== "GET") {
+      directFadenWrites.push(request.method());
+    }
+  });
+
   await page.goto(`/antraege?id=${PROPOSAL_ID}`);
+  await expect(
+    page.getByRole("heading", { name: "Fäden dieses Antrags" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("faden-count-proposal")).toContainText("1");
+  await expect(page.getByTestId("faden-count-vetoes")).toContainText("0");
+  await expect(page.getByTestId("faden-count-messages")).toContainText("1");
+  await expect(page.getByTestId("faden-count-votes")).toContainText("0");
+  await expect(
+    page.getByTestId("governance-faden").locator("path"),
+  ).toHaveCount(2);
+  expect(directFadenWrites).toEqual([]);
   await expect(
     page.getByText("Willkommen im öffentlichen Gesprächsraum."),
   ).toBeVisible();

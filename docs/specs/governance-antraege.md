@@ -151,11 +151,14 @@ Der Button **Anträge** befindet sich im Kartenkopf oben mittig. Die Oberfläche
 - Status und verbleibende Zeit;
 - Informationsseite;
 - Vetos und Stimmenzahlen;
+- ein aus den belegten Aktionen abgeleitetes Antragsgewebe mit nicht bearbeitbaren Fadenbündeln;
 - Gesprächsraum;
 - kontextabhängige Veto- und Abstimmungsaktionen;
 - für Gäste den Weberantrag und den Gast-Austritt.
 
 Die Oberfläche darf keine Rechte simulieren. Nicht erlaubte Aktionen sind serverseitig gesperrt, auch wenn ein Client manipuliert wird.
+
+Das Antragsgewebe ist eine reine Leseprojektion auf der Informationsseite. Es zeigt den Antrag im Zentrum sowie Fadenbündel für Antragstellung, Vetos, Gesprächsbeiträge und Stimmen. Die exakten Zahlen stammen aus den Governance-Datensätzen; es werden weder öffentliche Faden-Schreibwege noch zusätzliche `domain_edges` erzeugt. Da Anträge keinen geografischen Ort besitzen, erscheint diese Projektion nicht auf der Karte.
 
 ## Erweiterung auf weitere Antragstypen
 

@@ -146,7 +146,9 @@ Ein Faden entsteht ausschließlich als automatisch abgeleitete Visualisierung ei
 
 Beim Knotenknüpfen erzeugt der Server nach der dauerhaften Knotenanlage den zugehörigen Garnrolle-Knoten-Faden. Schlägt die Projektion nach der Knotenanlage fehl, meldet der Server den Gesamtvorgang als noch nicht erfolgreich. Eine Wiederholung derselben Operations-ID repariert die fehlende Projektion; der Browser darf weder selbst einen Faden schreiben noch „ohne Faden fortfahren“.
 
-Anträge, Vetos, Abstimmungen und Gesprächsbeiträge sind bereits als eigene dauerhafte Governance-Datensätze belegt. Ihre räumliche oder graphische Fadenprojektion wird aus diesen Datensätzen abgeleitet, sobald der jeweilige Darstellungskontext spezifiziert ist. Es entsteht dafür kein manueller Fadenschreibweg.
+Anträge, Vetos, Abstimmungen und Gesprächsbeiträge sind als eigene dauerhafte Governance-Datensätze belegt. Ihr Darstellungskontext ist die Informationsseite des jeweiligen Antrags: Der Antrag steht im Zentrum; Antragstellung, Vetos, Gesprächsbeiträge und Stimmen werden als nicht bearbeitbare Fadenbündel darum angeordnet. Die Projektion wird bei jedem Laden ausschließlich aus den Governance-Datensätzen berechnet und nicht als zweiter Domain-Edge-Bestand gespeichert.
+
+Die geografische Karte zeigt diese Governance-Fäden nicht, weil ein Antrag keinen räumlichen Ort besitzt. Exakte Aktionszahlen bleiben als Text sichtbar; nur die Zahl gleichzeitig gezeichneter paralleler Linien darf zur Renderbegrenzung gedeckelt werden. Es entsteht dafür kein manueller Fadenschreibweg.
 
 ## Erster organischer Produktfluss
 
