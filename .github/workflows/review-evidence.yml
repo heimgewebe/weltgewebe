@@ -5,7 +5,7 @@ name: Review Evidence Gate
   pull_request_target:
     types: [opened, synchronize, reopened, edited, ready_for_review]
   issue_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
   pull_request_review:
     types: [submitted, edited, dismissed]
   workflow_dispatch:
@@ -37,7 +37,12 @@ jobs:
         github.event_name != 'issue_comment' ||
         (
           github.event.issue.pull_request != null &&
-          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+          (
+            contains(github.event.comment.body, '<!-- weltgewebe-review-evidence') ||
+            contains(github.event.changes.body.from, '<!-- weltgewebe-review-evidence') ||
+            startsWith(github.event.comment.body, '/review-evidence recheck')
+          )
         )
       ) &&
       (

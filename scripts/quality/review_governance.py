@@ -58,7 +58,7 @@ ALLOWED_AXES = HIGH_RISK_AXES | {
 }
 RISK_RE = re.compile(r"<!--\s*weltgewebe-risk:\s*(R[0-3])\s*-->", re.IGNORECASE)
 EVIDENCE_START_RE = re.compile(r"<!--\s*weltgewebe-review-evidence\b", re.IGNORECASE)
-EVIDENCE_END = "-->"
+EVIDENCE_END_RE = re.compile(r"\s*-->")
 
 
 class GovernanceError(RuntimeError):
@@ -165,16 +165,28 @@ def _decode_git_path(raw: bytes) -> str:
 
 
 def _parse_numstat_z(raw: bytes) -> tuple[int, int, tuple[str, ...]]:
+    """Parse Git's NUL-delimited numstat stream, including rename records.
+
+    A normal record is ``additions<TAB>deletions<TAB>path<NUL>``. For a
+    rename/copy Git emits an empty path in that record followed by the old and
+    new paths as two additional NUL-delimited fields. Filenames may contain
+    tabs, so the first record is split at most twice.
+    """
+
     additions = 0
     deletions = 0
     binary: list[str] = []
+    if not raw:
+        return additions, deletions, tuple(binary)
+
     fields = raw.split(b"\0")
-    index = 0
-    while index < len(fields):
-        entry = fields[index]
-        index += 1
+    if fields[-1] != b"":
+        raise GovernanceError("git numstat stream is not NUL terminated")
+
+    records = iter(fields[:-1])
+    for entry in records:
         if not entry:
-            continue
+            raise GovernanceError("git numstat produced an empty record")
         parts = entry.split(b"\t", 2)
         if len(parts) != 3:
             raise GovernanceError("git numstat produced a malformed record")
@@ -182,19 +194,32 @@ def _parse_numstat_z(raw: bytes) -> tuple[int, int, tuple[str, ...]]:
         if path_raw:
             path = _decode_git_path(path_raw)
         else:
-            if index + 1 >= len(fields):
-                raise GovernanceError("git numstat rename record is incomplete")
-            index += 1  # old path is intentionally not part of the changed-file set
-            path = _decode_git_path(fields[index])
-            index += 1
-        if added_raw == b"-" or deleted_raw == b"-":
+            try:
+                old_path_raw = next(records)
+                new_path_raw = next(records)
+            except StopIteration as exc:
+                raise GovernanceError(
+                    "git numstat rename record is incomplete"
+                ) from exc
+            if not old_path_raw or not new_path_raw:
+                raise GovernanceError("git numstat rename paths must not be empty")
+            path = _decode_git_path(new_path_raw)
+        if not path:
+            raise GovernanceError("git numstat path must not be empty")
+        if (added_raw == b"-") != (deleted_raw == b"-"):
+            raise GovernanceError("git numstat contains a partial binary marker")
+        if added_raw == b"-":
             binary.append(path)
             continue
         try:
-            additions += int(added_raw)
-            deletions += int(deleted_raw)
+            added = int(added_raw)
+            deleted = int(deleted_raw)
         except ValueError as exc:
             raise GovernanceError("git numstat contains non-numeric totals") from exc
+        if added < 0 or deleted < 0:
+            raise GovernanceError("git numstat contains negative totals")
+        additions += added
+        deletions += deleted
     return additions, deletions, tuple(binary)
 
 
@@ -261,6 +286,7 @@ def minimum_risk_for_paths(paths: Iterable[str]) -> str:
             in {
                 ".github/grabowski-required-checks.json",
                 ".github/review-evidence-authorities.json",
+                ".github/pull_request_template.md",
                 "scripts/quality/review_governance.py",
                 "docs/process/merge-quality-gate.md",
             }
@@ -715,33 +741,49 @@ def _numeric_id(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
 
+def _decode_evidence_payload(
+    body: str, payload_start: int
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Decode one JSON object and require an adjacent comment terminator.
+
+    ``JSONDecoder.raw_decode`` tracks the JSON boundary correctly even when a
+    JSON string itself contains ``-->``. A first-substring search cannot do so.
+    """
+
+    source = body[payload_start:].lstrip()
+    try:
+        record, consumed = json.JSONDecoder().raw_decode(source)
+    except json.JSONDecodeError:
+        return None, "malformed"
+    payload_text = source[:consumed]
+    if len(payload_text.encode("utf-8")) > MAX_EVIDENCE_PAYLOAD_BYTES:
+        return None, "oversized"
+    if EVIDENCE_END_RE.match(source, consumed) is None:
+        return None, "malformed"
+    if not isinstance(record, dict):
+        return None, "malformed"
+    return record, None
+
+
 def _evidence_blocks(
     comments: Sequence[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], int]:
+) -> tuple[list[dict[str, Any]], int, int]:
     evidence: list[dict[str, Any]] = []
     parse_failures = 0
+    oversized_payloads = 0
     for comment_index, comment in enumerate(comments):
         body = comment.get("body") or ""
         if not isinstance(body, str):
             continue
         starts = list(EVIDENCE_START_RE.finditer(body))
         for block_index, match in enumerate(starts):
-            end = body.find(EVIDENCE_END, match.end())
-            if end < 0:
+            record, failure = _decode_evidence_payload(body, match.end())
+            if failure is not None:
                 parse_failures += 1
+                if failure == "oversized":
+                    oversized_payloads += 1
                 continue
-            payload_text = body[match.end() : end].strip()
-            if len(payload_text.encode("utf-8")) > MAX_EVIDENCE_PAYLOAD_BYTES:
-                parse_failures += 1
-                continue
-            try:
-                record = json.loads(payload_text)
-            except json.JSONDecodeError:
-                parse_failures += 1
-                continue
-            if not isinstance(record, dict):
-                parse_failures += 1
-                continue
+            assert record is not None
             report_text = _normalized_report_text(body[: match.start()])
             report_bytes = report_text.encode("utf-8")
             record = dict(record)
@@ -763,7 +805,7 @@ def _evidence_blocks(
                 comment.get("updated_at") or comment.get("created_at") or ""
             )
             evidence.append(record)
-    return evidence, parse_failures
+    return evidence, parse_failures, oversized_payloads
 
 
 def _native_review_evidence(
@@ -865,7 +907,7 @@ def evaluate_evidence(
         if not valid:
             reasons.append(detail)
 
-    records, evidence_parse_failures = _evidence_blocks(comments)
+    records, evidence_parse_failures, oversized_evidence = _evidence_blocks(comments)
     exact: list[dict[str, Any]] = []
     stale = 0
     unauthorized = 0
@@ -995,7 +1037,20 @@ def evaluate_evidence(
             + ", ".join(record["reviewer"] for record in native_blocking)
         )
 
-    quick_approvals = native_accepted if risk_class == "R1" else []
+    attested_reviewer_ids = {
+        unicodedata.normalize("NFC", record["reviewer"]).casefold()
+        for record in accepted
+    }
+    quick_approvals = (
+        [
+            record
+            for record in native_accepted
+            if unicodedata.normalize("NFC", record["reviewer"]).casefold()
+            not in attested_reviewer_ids
+        ]
+        if risk_class == "R1"
+        else []
+    )
     required = REQUIRED_REVIEWS[risk_class]
     accepted_count = len(accepted) + len(quick_approvals)
     if accepted_count < required:
@@ -1071,6 +1126,7 @@ def evaluate_evidence(
         "stale_evidence_count": stale,
         "unauthorized_evidence_count": unauthorized,
         "malformed_evidence_count": malformed,
+        "oversized_evidence_count": oversized_evidence,
         "stale_native_review_count": stale_native,
         "unauthorized_native_review_count": unauthorized_native,
         "malformed_native_review_count": malformed_native,

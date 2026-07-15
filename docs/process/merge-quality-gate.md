@@ -78,7 +78,8 @@ Bestimmte Pfade erzwingen automatisch eine Mindestklasse. Eine niedrigere
 Deklaration führt fail-closed zum Gatefehler. R0 ist nur für kleine reine
 Markdown-Änderungen zulässig. Der Dateipfad allein macht eine README unter
 `apps/` nicht zu Produktcode; sensible Dokumentationspfade wie Deploy- und
-Runbook-Dokumente bleiben dagegen R3.
+Runbook-Dokumente sowie das PR-Template und die Governance-Implementierung
+bleiben dagegen R3.
 
 ## Reviewpaket
 
@@ -143,8 +144,10 @@ GitHub stuft Tokens für Fork- und Dependabot-Reviewereignisse auf read-only her
 Der Reviewlauf wird dort deshalb bewusst übersprungen, statt mit einem
 irreführenden 403 zu scheitern. Ein Maintainer löst nach der Freigabe mit
 `/review-evidence recheck` einen `issue_comment`-Lauf auf dem vertrauenswürdigen
-Default-Branch aus. Kommentare ohne Repositoryrolle starten keinen privilegierten
-Lauf.
+Default-Branch aus. Kommentare ohne Repositoryrolle sowie gewöhnliche
+Diskussionskommentare ohne Belegmarker oder Recheck-Befehl starten keinen
+privilegierten Lauf. Bearbeitung oder Löschung eines Belegkommentars löst dagegen
+eine erneute Auswertung aus, damit ein früherer Erfolgsstatus nicht stehen bleibt.
 
 Nicht textuell dargestellte Dateien erscheinen als `opaque_files`. Häufige
 Rasterformate (`png`, `jpg`, `jpeg`, `gif`, `webp`, `avif`, `ico`) sind in den

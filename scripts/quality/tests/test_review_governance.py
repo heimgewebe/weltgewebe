@@ -19,6 +19,7 @@ from scripts.quality.review_governance import (
     load_allowed_attesters,
     minimum_risk_for_paths,
     parse_risk_class,
+    _parse_numstat_z,
 )
 
 
@@ -174,10 +175,31 @@ class RiskParsingTests(unittest.TestCase):
             minimum_risk_for_paths(["docs/process/merge-quality-gate.md"]),
             "R3",
         )
+        self.assertEqual(
+            minimum_risk_for_paths([".github/PULL_REQUEST_TEMPLATE.md"]),
+            "R3",
+        )
         self.assertEqual(minimum_risk_for_paths(["apps/api/src/auth.rs"]), "R3")
 
 
 class BundleTests(unittest.TestCase):
+    def test_numstat_parser_handles_tabs_and_mixed_rename_records(self) -> None:
+        raw = b"3\t2\tpath\twith-tab.txt\0-\t-\t\0old.bin\0docs/new.bin\0"
+        additions, deletions, binary = _parse_numstat_z(raw)
+        self.assertEqual((additions, deletions), (3, 2))
+        self.assertEqual(binary, ("docs/new.bin",))
+
+    def test_numstat_parser_rejects_malformed_streams(self) -> None:
+        malformed = (
+            b"1\t0\tfile.txt",
+            b"-\t1\tfile.bin\0",
+            b"1\t0\t\0old.txt\0",
+        )
+        for raw in malformed:
+            with self.subTest(raw=raw):
+                with self.assertRaises(GovernanceError):
+                    _parse_numstat_z(raw)
+
     def test_bundle_hash_is_deterministic_for_same_commits(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo = Path(temp_dir) / "repo"
@@ -277,6 +299,40 @@ class BundleTests(unittest.TestCase):
             )
             self.assertEqual(bundle.stats.changed_files, ("docs/new.png",))
             self.assertEqual(bundle.stats.binary_files, ("docs/new.png",))
+
+    def test_local_multiple_text_and_binary_renames_are_parsed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir) / "repo"
+            repo.mkdir()
+            _git(repo, "init", "-b", "main")
+            _git(repo, "config", "user.name", "Test")
+            _git(repo, "config", "user.email", "test@example.invalid")
+            (repo / "old.txt").write_text("unchanged text\n", encoding="utf-8")
+            (repo / "old.png").write_bytes(b"\x89PNG\r\n\x1a\n\x00binary")
+            _git(repo, "add", "old.txt", "old.png")
+            _git(repo, "commit", "-m", "base files")
+            base = _git(repo, "rev-parse", "HEAD")
+
+            (repo / "docs").mkdir()
+            _git(repo, "mv", "old.txt", "docs/new.txt")
+            _git(repo, "mv", "old.png", "docs/new.png")
+            _git(repo, "commit", "-m", "rename files")
+            head = _git(repo, "rev-parse", "HEAD")
+
+            bundle = generate_bundle(
+                repo=repo,
+                output_dir=Path(temp_dir) / "out",
+                base_revision=base,
+                head_revision=head,
+                pr_number=11,
+                risk_class="R1",
+            )
+            self.assertEqual(
+                bundle.stats.changed_files,
+                ("docs/new.png", "docs/new.txt"),
+            )
+            self.assertEqual(bundle.stats.binary_files, ("docs/new.png",))
+            self.assertEqual(bundle.stats.changed_lines, 0)
 
     def test_materialized_github_bundle_is_hash_bound_and_validated(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -658,6 +714,24 @@ class EvidenceTests(unittest.TestCase):
         self.assertTrue(result["pass"], result["reasons"])
         self.assertEqual(result["accepted_reviews"][0]["kind"], "github-approval")
 
+    def test_r1_deduplicates_native_and_attested_review_by_identity(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        comment = _comment(
+            _record(bundle, reviewer="Alex", axis="correctness", risk="R1")
+        )
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R1",
+            comments=[comment],
+            reviews=[_review(bundle, author="alex")],
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+        self.assertEqual(result["accepted_review_count"], 1)
+        self.assertEqual(
+            [review["kind"] for review in result["accepted_reviews"]],
+            ["attested-report"],
+        )
+
     def test_native_approval_must_match_current_head_and_does_not_replace_r2_reports(
         self,
     ) -> None:
@@ -709,6 +783,44 @@ class EvidenceTests(unittest.TestCase):
         self.assertFalse(result["pass"])
         self.assertIn("request changes", " ".join(result["reasons"]))
 
+    def test_latest_native_review_state_wins_and_dismissal_invalidates(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        approved = _review(
+            bundle,
+            state="APPROVED",
+            review_id=1,
+            submitted_at="2026-07-14T12:00:00Z",
+        )
+        changes_requested = _review(
+            bundle,
+            state="CHANGES_REQUESTED",
+            review_id=2,
+            submitted_at="2026-07-14T13:00:00Z",
+        )
+        blocked = _evaluate(
+            bundle=bundle,
+            risk_class="R1",
+            comments=[],
+            reviews=[approved, changes_requested],
+        )
+        self.assertFalse(blocked["pass"])
+        self.assertIn("request changes", " ".join(blocked["reasons"]))
+
+        dismissed = _review(
+            bundle,
+            state="DISMISSED",
+            review_id=3,
+            submitted_at="2026-07-14T14:00:00Z",
+        )
+        invalidated = _evaluate(
+            bundle=bundle,
+            risk_class="R1",
+            comments=[],
+            reviews=[approved, dismissed],
+        )
+        self.assertFalse(invalidated["pass"])
+        self.assertEqual(invalidated["accepted_review_count"], 0)
+
     def test_report_hash_normalizes_crlf_and_bare_cr(self) -> None:
         bundle = _bundle(paths=("config/example.json",))
         report = (
@@ -751,6 +863,41 @@ class EvidenceTests(unittest.TestCase):
         result = _evaluate(bundle=bundle, risk_class="R1", comments=[first])
         self.assertFalse(result["pass"])
         self.assertGreaterEqual(result["malformed_evidence_count"], 2)
+
+    def test_evidence_json_may_contain_html_comment_terminator_text(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R1",
+            comments=[
+                _comment(
+                    _record(
+                        bundle,
+                        reviewer="Reviewer --> A",
+                        axis="correctness",
+                        risk="R1",
+                    )
+                )
+            ],
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+
+    def test_oversized_evidence_payload_is_reported_separately(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        oversized = _record(
+            bundle,
+            reviewer="R" * (21 * 1024),
+            axis="correctness",
+            risk="R1",
+        )
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R1",
+            comments=[_comment(oversized)],
+        )
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["malformed_evidence_count"], 1)
+        self.assertEqual(result["oversized_evidence_count"], 1)
 
     def test_unicode_equivalent_reviewer_names_are_not_distinct(self) -> None:
         bundle = _bundle(paths=("apps/web/src/app.ts",))
@@ -900,6 +1047,15 @@ class WorkflowContractTests(unittest.TestCase):
             self.workflow,
         )
         self.assertIn("github.event.comment.author_association", self.workflow)
+        self.assertIn("types: [created, edited, deleted]", self.workflow)
+        self.assertIn(
+            "contains(github.event.comment.body, '<!-- weltgewebe-review-evidence')",
+            self.workflow,
+        )
+        self.assertIn(
+            "startsWith(github.event.comment.body, '/review-evidence recheck')",
+            self.workflow,
+        )
         self.assertNotIn("actions/checkout@v", self.workflow)
         self.assertNotIn("git fetch", self.workflow)
         self.assertNotIn("refs/pull/", self.workflow)
