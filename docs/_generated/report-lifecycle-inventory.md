@@ -95,7 +95,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/proof-matrix-generalization-decision.md | report | active | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  | 1 | 4 | 6 |  |  |
 | docs/reports/repo-audit-2026-07-02.md | report | active | active | audit | REPO-AUDIT-001 | 2026-10-31 |  | 1 | 4 | 4 |  |  |
 | docs/reports/report-lifecycle-restbestand-triage.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  | 0 | 5 | 3 | review_after |  |
-| docs/reports/weltgewebe-os-foundation-status.md | status | active |  |  | WELTGEWEBE-OS-001 | 2026-08-15 |  | 2 | 3 | 4 | lifecycle, lifecycle_state |  |
+| docs/reports/weltgewebe-os-foundation-status.md | status | active |  |  | WELTGEWEBE-OS-001 | 2026-08-15 |  | 2 | 4 | 4 | lifecycle, lifecycle_state |  |
 
 ## Absent Core Lifecycle Metadata
 
@@ -703,6 +703,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/report-lifecycle.md`
 
 ## Primary Unreferenced Reports
 
