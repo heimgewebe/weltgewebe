@@ -22,10 +22,20 @@ from typing import Any, Iterable, Sequence
 
 SCHEMA_VERSION = 1
 MAX_ARTIFACT_BYTES = 100 * 1024 * 1024
+MAX_EVIDENCE_PAYLOAD_BYTES = 20 * 1024
 MIN_REVIEW_REPORT_BYTES = 120
 SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
 REPORT_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 GITHUB_LOGIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
+SAFE_OPAQUE_SUFFIXES = frozenset(
+    {".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".ico"}
+)
+SAFE_OPAQUE_PREFIXES = (
+    "docs/",
+    "apps/web/static/",
+    "apps/web/src/lib/assets/",
+    "static/",
+)
 RISK_ORDER = {"R0": 0, "R1": 1, "R2": 2, "R3": 3}
 REQUIRED_REVIEWS = {"R0": 0, "R1": 1, "R2": 2, "R3": 2}
 AUTHORIZED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
@@ -47,10 +57,7 @@ ALLOWED_AXES = HIGH_RISK_AXES | {
     "testing",
 }
 RISK_RE = re.compile(r"<!--\s*weltgewebe-risk:\s*(R[0-3])\s*-->", re.IGNORECASE)
-EVIDENCE_RE = re.compile(
-    r"<!--\s*weltgewebe-review-evidence\s*(\{.*?\})\s*-->",
-    re.IGNORECASE | re.DOTALL,
-)
+EVIDENCE_START_RE = re.compile(r"<!--\s*weltgewebe-review-evidence\b", re.IGNORECASE)
 
 
 class GovernanceError(RuntimeError):
@@ -152,33 +159,78 @@ def _resolve_sha(repo: Path, revision: str) -> str:
     return str(output).strip()
 
 
+def _decode_git_path(raw: bytes) -> str:
+    return raw.decode("utf-8", "surrogateescape")
+
+
+def _parse_numstat_z(raw: bytes) -> tuple[int, int, tuple[str, ...]]:
+    """Parse Git's NUL-delimited numstat stream, including rename records.
+
+    A normal record is ``additions<TAB>deletions<TAB>path<NUL>``. For a
+    rename/copy Git emits an empty path in that record followed by the old and
+    new paths as two additional NUL-delimited fields. Filenames may contain
+    tabs, so the first record is split at most twice.
+    """
+
+    additions = 0
+    deletions = 0
+    binary: list[str] = []
+    if not raw:
+        return additions, deletions, tuple(binary)
+
+    fields = raw.split(b"\0")
+    if fields[-1] != b"":
+        raise GovernanceError("git numstat stream is not NUL terminated")
+
+    records = iter(fields[:-1])
+    for entry in records:
+        if not entry:
+            raise GovernanceError("git numstat produced an empty record")
+        parts = entry.split(b"\t", 2)
+        if len(parts) != 3:
+            raise GovernanceError("git numstat produced a malformed record")
+        added_raw, deleted_raw, path_raw = parts
+        if path_raw:
+            path = _decode_git_path(path_raw)
+        else:
+            try:
+                old_path_raw = next(records)
+                new_path_raw = next(records)
+            except StopIteration as exc:
+                raise GovernanceError(
+                    "git numstat rename record is incomplete"
+                ) from exc
+            if not old_path_raw or not new_path_raw:
+                raise GovernanceError("git numstat rename paths must not be empty")
+            path = _decode_git_path(new_path_raw)
+        if not path:
+            raise GovernanceError("git numstat path must not be empty")
+        if (added_raw == b"-") != (deleted_raw == b"-"):
+            raise GovernanceError("git numstat contains a partial binary marker")
+        if added_raw == b"-":
+            binary.append(path)
+            continue
+        try:
+            added = int(added_raw)
+            deleted = int(deleted_raw)
+        except ValueError as exc:
+            raise GovernanceError("git numstat contains non-numeric totals") from exc
+        if added < 0 or deleted < 0:
+            raise GovernanceError("git numstat contains negative totals")
+        additions += added
+        deletions += deleted
+    return additions, deletions, tuple(binary)
+
+
 def _diff_stats(repo: Path, base_sha: str, head_sha: str) -> DiffStats:
     range_spec = f"{base_sha}...{head_sha}"
     names_raw = _git(repo, ["diff", "--name-only", "-z", "--find-renames", range_spec])
     assert isinstance(names_raw, bytes)
-    names = tuple(
-        part.decode("utf-8", "surrogateescape")
-        for part in names_raw.split(b"\0")
-        if part
-    )
+    names = tuple(_decode_git_path(part) for part in names_raw.split(b"\0") if part)
 
-    numstat_raw = _git(
-        repo, ["diff", "--numstat", "--find-renames", range_spec], text=True
-    )
-    additions = 0
-    deletions = 0
-    binary: list[str] = []
-    for line in str(numstat_raw).splitlines():
-        fields = line.split("\t", 2)
-        if len(fields) != 3:
-            continue
-        added, deleted, path = fields
-        if added == "-" or deleted == "-":
-            binary.append(path)
-            continue
-        additions += int(added)
-        deletions += int(deleted)
-    binary_files = tuple(binary)
+    numstat_raw = _git(repo, ["diff", "--numstat", "-z", "--find-renames", range_spec])
+    assert isinstance(numstat_raw, bytes)
+    additions, deletions, binary_files = _parse_numstat_z(numstat_raw)
     return DiffStats(
         names,
         additions,
@@ -205,6 +257,24 @@ def parse_risk_class(pr_body: str) -> str | None:
     return matches[0]
 
 
+def _is_safe_opaque_asset(path: str) -> bool:
+    lowered = path.lower()
+    return (
+        lowered.startswith(SAFE_OPAQUE_PREFIXES)
+        and Path(lowered).suffix in SAFE_OPAQUE_SUFFIXES
+    )
+
+
+def _partition_opaque_files(
+    paths: Iterable[str],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    reviewable: list[str] = []
+    blocking: list[str] = []
+    for path in paths:
+        (reviewable if _is_safe_opaque_asset(path) else blocking).append(path)
+    return tuple(reviewable), tuple(blocking)
+
+
 def minimum_risk_for_paths(paths: Iterable[str]) -> str:
     minimum = "R0"
     for raw_path in paths:
@@ -215,7 +285,9 @@ def minimum_risk_for_paths(paths: Iterable[str]) -> str:
             in {
                 ".github/grabowski-required-checks.json",
                 ".github/review-evidence-authorities.json",
+                ".github/pull_request_template.md",
                 "scripts/quality/review_governance.py",
+                "docs/process/merge-quality-gate.md",
             }
             or path.startswith("infra/")
             or path.startswith("scripts/ops/")
@@ -228,6 +300,11 @@ def minimum_risk_for_paths(paths: Iterable[str]) -> str:
             or path.startswith("docs/runbooks/")
         ):
             return "R3"
+        if path.endswith(".md"):
+            continue
+        if _is_safe_opaque_asset(path):
+            minimum = max((minimum, "R1"), key=RISK_ORDER.__getitem__)
+            continue
         if (
             path.startswith("apps/api/")
             or path.startswith("apps/web/")
@@ -240,7 +317,7 @@ def minimum_risk_for_paths(paths: Iterable[str]) -> str:
             )
         ):
             minimum = "R2"
-        elif not path.endswith(".md"):
+        else:
             minimum = max((minimum, "R1"), key=RISK_ORDER.__getitem__)
     return minimum
 
@@ -343,6 +420,7 @@ def _build_bundle(
     request_path = output_dir / f"{stem}.review-request.md"
     diff_path.write_bytes(diff_bytes)
     patch_path.write_bytes(patch_bytes)
+    reviewable_opaque, blocking_opaque = _partition_opaque_files(stats.opaque_files)
 
     binding = {
         "pr_number": pr_number,
@@ -365,6 +443,8 @@ def _build_bundle(
             "deletions": stats.deletions,
             "binary_files": list(stats.binary_files),
             "opaque_files": list(stats.opaque_files),
+            "reviewable_opaque_files": list(reviewable_opaque),
+            "blocking_opaque_files": list(blocking_opaque),
         },
         "artifacts": {
             "diff": {
@@ -382,10 +462,16 @@ def _build_bundle(
     manifest_path.write_bytes(_canonical_json(manifest))
 
     opaque_note = ""
-    if stats.opaque_files:
-        opaque_note = (
-            "\n- Nicht im GitHub-Textdiff dargestellte Dateien: "
-            + ", ".join(f"`{item}`" for item in stats.opaque_files)
+    if reviewable_opaque:
+        opaque_note += (
+            "\n- Visuell im GitHub-Dateidiff zu prüfende Raster-Assets: "
+            + ", ".join(f"`{item}`" for item in reviewable_opaque)
+            + "\n"
+        )
+    if blocking_opaque:
+        opaque_note += (
+            "\n- Nicht zuverlässig prüfbare und daher blockierende Dateien: "
+            + ", ".join(f"`{item}`" for item in blocking_opaque)
             + "\n"
         )
     request = f"""# Weltgewebe – exakter Reviewauftrag
@@ -405,12 +491,13 @@ Prüfe ausschließlich den beigefügten Diff. Frühere oder spätere Versionen z
 Bewerte mindestens eine klar benannte Achse, etwa `correctness`, `security`,
 `data-integrity`, `concurrency`, `architecture`, `testing` oder `operations`.
 Benenne konkrete Befunde. Ein PASS ist nur zulässig, wenn alle Mergeblocker behoben
-oder nachvollziehbar widerlegt sind. Dateien ohne GitHub-Textdarstellung müssen
-separat geprüft oder als offener Mergeblocker benannt werden.
+oder nachvollziehbar widerlegt sind. Sichere Raster-Assets in den dokumentierten Doku-/Web-Assetpfaden müssen
+im GitHub-Dateidiff visuell geprüft werden. Andere Dateien ohne Textdarstellung
+bleiben offene Mergeblocker.
 
 Nach dem Review wird der vollständige Reviewtext als normaler Kommentartext
-vor dem Marker hinterlegt. `report_sha256` ist der SHA-256 des getrimmten
-UTF-8-Reviewtexts vor dem Marker. Danach folgt genau ein Belegblock:
+vor dem Marker hinterlegt. `report_sha256` ist der SHA-256 des getrimmten, auf LF-Zeilenumbrüche
+normalisierten UTF-8-Reviewtexts vor dem Marker. Danach folgt genau ein Belegblock:
 
 ```text
 <VOLLSTÄNDIGER REVIEWTEXT>
@@ -621,26 +708,88 @@ def _flatten_comments(raw: Any) -> list[dict[str, Any]]:
     return flattened
 
 
-def _evidence_blocks(comments: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+def _flatten_reviews(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        raise GovernanceError("reviews JSON must be a list")
+    flattened: list[dict[str, Any]] = []
+    for item in raw:
+        if isinstance(item, list):
+            flattened.extend(entry for entry in item if isinstance(entry, dict))
+        elif isinstance(item, dict):
+            flattened.append(item)
+    return flattened
+
+
+def _normalized_report_text(value: str) -> str:
+    return value.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def _github_timestamp(value: Any) -> dt.datetime:
+    if not isinstance(value, str) or not value:
+        return dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def _numeric_id(value: Any) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _decode_evidence_payload(
+    body: str, payload_start: int
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Decode one JSON object and require an adjacent comment terminator.
+
+    ``JSONDecoder.raw_decode`` tracks the JSON boundary correctly even when a
+    JSON string itself contains ``-->``. A first-substring search cannot do so.
+    """
+
+    source = body[payload_start:].lstrip()
+    try:
+        record, consumed = json.JSONDecoder().raw_decode(source)
+    except json.JSONDecodeError:
+        return None, "malformed"
+    payload_text = source[:consumed]
+    if len(payload_text.encode("utf-8")) > MAX_EVIDENCE_PAYLOAD_BYTES:
+        return None, "oversized"
+    remainder = source[consumed:].lstrip()
+    if not remainder.startswith(("-->", "--!>")):
+        return None, "malformed"
+    if not isinstance(record, dict):
+        return None, "malformed"
+    return record, None
+
+
+def _evidence_blocks(
+    comments: Sequence[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int, int]:
     evidence: list[dict[str, Any]] = []
+    parse_failures = 0
+    oversized_payloads = 0
     for comment_index, comment in enumerate(comments):
         body = comment.get("body") or ""
         if not isinstance(body, str):
             continue
-        matches = list(EVIDENCE_RE.finditer(body))
-        for block_index, match in enumerate(matches):
-            try:
-                record = json.loads(match.group(1))
-            except json.JSONDecodeError:
+        starts = list(EVIDENCE_START_RE.finditer(body))
+        for block_index, match in enumerate(starts):
+            record, failure = _decode_evidence_payload(body, match.end())
+            if failure is not None:
+                parse_failures += 1
+                if failure == "oversized":
+                    oversized_payloads += 1
                 continue
-            if not isinstance(record, dict):
-                continue
-            report_text = body[: match.start()].strip()
+            assert record is not None
+            report_text = _normalized_report_text(body[: match.start()])
             report_bytes = report_text.encode("utf-8")
             record = dict(record)
             record["_comment_index"] = comment_index
             record["_block_index"] = block_index
-            record["_comment_evidence_block_count"] = len(matches)
+            record["_comment_evidence_block_count"] = len(starts)
             record["_report_text_bytes"] = len(report_bytes)
             record["_report_text_sha256"] = _sha256(report_bytes)
             record["_author_association"] = str(
@@ -651,11 +800,69 @@ def _evidence_blocks(comments: Sequence[dict[str, Any]]) -> list[dict[str, Any]]
                 user.get("login") if isinstance(user, dict) else None
             )
             record["_comment_url"] = comment.get("html_url")
+            record["_comment_id"] = _numeric_id(comment.get("id"))
             record["_updated_at"] = (
                 comment.get("updated_at") or comment.get("created_at") or ""
             )
             evidence.append(record)
-    return evidence
+    return evidence, parse_failures, oversized_payloads
+
+
+def _native_review_evidence(
+    *,
+    reviews: Sequence[dict[str, Any]],
+    head_sha: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int, int, int]:
+    latest: dict[str, dict[str, Any]] = {}
+    unauthorized = 0
+    malformed = 0
+    for index, review in enumerate(reviews):
+        state = str(review.get("state") or "").upper()
+        if state not in {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}:
+            continue
+        user = review.get("user") or {}
+        login = user.get("login") if isinstance(user, dict) else None
+        association = str(review.get("author_association") or "").upper()
+        if not isinstance(login, str) or not GITHUB_LOGIN_RE.fullmatch(login):
+            malformed += 1
+            continue
+        if association not in AUTHORIZED_ASSOCIATIONS:
+            unauthorized += 1
+            continue
+        commit_id = review.get("commit_id")
+        if not isinstance(commit_id, str) or not SHA40_RE.fullmatch(commit_id):
+            malformed += 1
+            continue
+        ordering = (
+            _github_timestamp(review.get("submitted_at")),
+            _numeric_id(review.get("id")),
+            index,
+        )
+        key = login.casefold()
+        previous = latest.get(key)
+        if previous is None or ordering >= previous["_ordering"]:
+            latest[key] = {
+                "reviewer": login,
+                "attester": login,
+                "state": state,
+                "commit_id": commit_id,
+                "review_axis": "github-approval",
+                "review_url": review.get("html_url"),
+                "_ordering": ordering,
+            }
+
+    accepted: list[dict[str, Any]] = []
+    blocking: list[dict[str, Any]] = []
+    stale = 0
+    for record in latest.values():
+        if record["commit_id"] != head_sha:
+            stale += 1
+            continue
+        if record["state"] == "APPROVED":
+            accepted.append(record)
+        elif record["state"] == "CHANGES_REQUESTED":
+            blocking.append(record)
+    return accepted, blocking, stale, unauthorized, malformed
 
 
 def evaluate_evidence(
@@ -664,6 +871,7 @@ def evaluate_evidence(
     risk_class: str | None,
     comments: Sequence[dict[str, Any]],
     allowed_attesters: frozenset[str],
+    reviews: Sequence[dict[str, Any]] = (),
 ) -> dict[str, Any]:
     if not allowed_attesters or any(
         not isinstance(login, str) or not GITHUB_LOGIN_RE.fullmatch(login)
@@ -680,11 +888,13 @@ def evaluate_evidence(
         )
         risk_class = "R3"
 
-    if bundle.stats.opaque_files:
+    reviewable_opaque, blocking_opaque = _partition_opaque_files(
+        bundle.stats.opaque_files
+    )
+    if blocking_opaque:
         reasons.append(
-            "opaque or binary files require a separately verified artifact-review "
-            "mechanism and currently block the review evidence gate: "
-            + ", ".join(bundle.stats.opaque_files)
+            "opaque files outside the reviewable raster-asset policy block the review evidence gate: "
+            + ", ".join(blocking_opaque)
         )
 
     minimum_risk = minimum_risk_for_paths(bundle.stats.changed_files)
@@ -697,11 +907,11 @@ def evaluate_evidence(
         if not valid:
             reasons.append(detail)
 
-    records = _evidence_blocks(comments)
+    records, evidence_parse_failures, oversized_evidence = _evidence_blocks(comments)
     exact: list[dict[str, Any]] = []
     stale = 0
     unauthorized = 0
-    malformed = 0
+    malformed = evidence_parse_failures
     for record in records:
         comment_author = str(record.get("_comment_author") or "").strip()
         if (
@@ -748,13 +958,14 @@ def evaluate_evidence(
             stale += 1
             continue
         reviewer_value = record.get("reviewer")
-        reviewer = reviewer_value.strip() if isinstance(reviewer_value, str) else ""
+        reviewer_raw = reviewer_value if isinstance(reviewer_value, str) else ""
+        reviewer = unicodedata.normalize("NFC", reviewer_raw.strip())
         report_sha256 = str(record.get("report_sha256") or "").strip()
         axis = str(record.get("review_axis") or "").strip().lower()
         verdict = str(record.get("verdict") or "").strip().upper()
         if (
             not reviewer
-            or reviewer != reviewer_value
+            or reviewer_raw != reviewer_raw.strip()
             or len(reviewer) > 120
             or any(unicodedata.category(char).startswith("C") for char in reviewer)
             or not REPORT_SHA256_RE.fullmatch(report_sha256)
@@ -763,6 +974,7 @@ def evaluate_evidence(
             or record.get("_comment_evidence_block_count") != 1
             or axis not in ALLOWED_AXES
             or verdict not in {"PASS", "BLOCKED", "FAIL"}
+            or not isinstance(record.get("findings_resolved"), bool)
         ):
             malformed += 1
             continue
@@ -776,7 +988,8 @@ def evaluate_evidence(
     for record in exact:
         key = (record["reviewer"].casefold(), record["review_axis"])
         ordering = (
-            str(record.get("_updated_at") or ""),
+            _github_timestamp(record.get("_updated_at")),
+            int(record.get("_comment_id", 0)),
             int(record.get("_comment_index", 0)),
             int(record.get("_block_index", 0)),
         )
@@ -785,7 +998,8 @@ def evaluate_evidence(
             latest[key] = record
             continue
         previous_ordering = (
-            str(previous.get("_updated_at") or ""),
+            _github_timestamp(previous.get("_updated_at")),
+            int(previous.get("_comment_id", 0)),
             int(previous.get("_comment_index", 0)),
             int(previous.get("_block_index", 0)),
         )
@@ -807,10 +1021,46 @@ def evaluate_evidence(
         for record in latest.values()
         if record["verdict"] == "PASS" and record.get("findings_resolved") is True
     ]
-    required = REQUIRED_REVIEWS[risk_class]
-    if len(accepted) < required:
+    (
+        native_accepted,
+        native_blocking,
+        stale_native,
+        unauthorized_native,
+        malformed_native,
+    ) = _native_review_evidence(
+        reviews=reviews,
+        head_sha=bundle.head_sha,
+    )
+    if native_blocking:
         reasons.append(
-            f"risk {risk_class} requires {required} exact PASS reviews, found {len(accepted)}"
+            "current-head GitHub reviews request changes: "
+            + ", ".join(record["reviewer"] for record in native_blocking)
+        )
+
+    attested_reviewer_ids = {
+        unicodedata.normalize("NFC", record["reviewer"]).casefold()
+        for record in accepted
+    }
+    quick_approvals = (
+        [
+            record
+            for record in native_accepted
+            if unicodedata.normalize("NFC", record["reviewer"]).casefold()
+            not in attested_reviewer_ids
+        ]
+        if risk_class == "R1"
+        else []
+    )
+    required = REQUIRED_REVIEWS[risk_class]
+    accepted_count = len(accepted) + len(quick_approvals)
+    if accepted_count < required:
+        suffix = (
+            " (native current-head APPROVED reviews count for R1)"
+            if risk_class == "R1"
+            else ""
+        )
+        reasons.append(
+            f"risk {risk_class} requires {required} exact PASS reviews, found {accepted_count}{suffix}"
         )
 
     reviewer_names = {record["reviewer"].casefold() for record in accepted}
@@ -830,6 +1080,7 @@ def evaluate_evidence(
 
     accepted_summary = [
         {
+            "kind": "attested-report",
             "reviewer": record["reviewer"],
             "report_sha256": record["report_sha256"],
             "review_axis": record["review_axis"],
@@ -841,6 +1092,19 @@ def evaluate_evidence(
             key=lambda item: (item["review_axis"], item["reviewer"].casefold()),
         )
     ]
+    accepted_summary.extend(
+        {
+            "kind": "github-approval",
+            "reviewer": record["reviewer"],
+            "report_sha256": None,
+            "review_axis": "github-approval",
+            "attester": record["attester"],
+            "comment_url": record.get("review_url"),
+        }
+        for record in sorted(
+            quick_approvals, key=lambda item: item["reviewer"].casefold()
+        )
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "weltgewebe-review-evaluation",
@@ -854,12 +1118,18 @@ def evaluate_evidence(
             "merge_base_sha": bundle.merge_base_sha,
             "diff_sha256": bundle.diff_sha256,
         },
+        "reviewable_opaque_files": list(reviewable_opaque),
+        "blocking_opaque_files": list(blocking_opaque),
         "required_review_count": required,
-        "accepted_review_count": len(accepted),
+        "accepted_review_count": accepted_count,
         "accepted_reviews": accepted_summary,
         "stale_evidence_count": stale,
         "unauthorized_evidence_count": unauthorized,
         "malformed_evidence_count": malformed,
+        "oversized_evidence_count": oversized_evidence,
+        "stale_native_review_count": stale_native,
+        "unauthorized_native_review_count": unauthorized_native,
+        "malformed_native_review_count": malformed_native,
         "reasons": reasons,
     }
 
@@ -920,14 +1190,17 @@ def _evaluate_and_write(
     bundle: Bundle,
     risk_class: str | None,
     comments_file: Path,
+    reviews_file: Path | None,
     authorities_file: Path,
 ) -> int:
     raw_comments = _load_json(comments_file)
     comments = _flatten_comments(raw_comments)
+    reviews = _flatten_reviews(_load_json(reviews_file)) if reviews_file else []
     evaluation = evaluate_evidence(
         bundle=bundle,
         risk_class=risk_class,
         comments=comments,
+        reviews=reviews,
         allowed_attesters=load_allowed_attesters(authorities_file),
     )
     (output_dir / "evaluation.json").write_bytes(_canonical_json(evaluation))
@@ -953,6 +1226,7 @@ def _command_evaluate(args: argparse.Namespace) -> int:
             bundle=bundle,
             risk_class=risk_class,
             comments_file=Path(args.comments_file),
+            reviews_file=Path(args.reviews_file) if args.reviews_file else None,
             authorities_file=Path(args.authorities_file),
         )
     except Exception as exc:  # fail closed and preserve a machine-readable receipt
@@ -978,6 +1252,7 @@ def _command_evaluate_materialized(args: argparse.Namespace) -> int:
             bundle=bundle,
             risk_class=risk_class,
             comments_file=Path(args.comments_file),
+            reviews_file=Path(args.reviews_file) if args.reviews_file else None,
             authorities_file=Path(args.authorities_file),
         )
     except Exception as exc:  # fail closed and preserve a machine-readable receipt
@@ -1006,6 +1281,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--pr-number", required=True, type=int)
     evaluate.add_argument("--pr-body-file", required=True)
     evaluate.add_argument("--comments-file", required=True)
+    evaluate.add_argument("--reviews-file")
     evaluate.add_argument("--authorities-file", required=True)
 
     for name in ("bundle-materialized", "evaluate-materialized"):
@@ -1017,6 +1293,7 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--pr-body-file", required=name == "evaluate-materialized")
         if name == "evaluate-materialized":
             command.add_argument("--comments-file", required=True)
+            command.add_argument("--reviews-file")
             command.add_argument("--authorities-file", required=True)
     return parser
 

@@ -1,8 +1,8 @@
 <!--
 Weltgewebe is the primary project. Replace R? with exactly one class:
-R0 = Markdown-only, at most 50 changed lines
-R1 = bounded low-risk change
-R2 = application code, API, tests, scripts or dependencies
+R0 = Markdown-only, at most 50 changed lines; CI only
+R1 = bounded low-risk change or approved raster asset; one native current-head GitHub approval is enough
+R2 = application code, API, tests, scripts or dependencies; two hash-bound reports
 R3 = auth, privacy, security, concurrency, migration, workflow, deploy or operations
 The gate rejects a class below the path-derived minimum.
 -->
@@ -37,12 +37,18 @@ Der Workflow **Review Evidence Gate** erzeugt ein herunterladbares Paket mit:
 - Reviewauftrag und maschinenlesbarem Manifest;
 - aktuellem Ergebnis der hashgebundenen Reviewattestierungen.
 
-Nicht textuell dargestellte Binär- oder Großdateien werden als `opaque_files`
-ausgewiesen und blockieren das Gate, bis ein separates Artefakt-Prüfverfahren
-vorliegt.
+Für R0 ist keine Fremdreview erforderlich. Für R1 genügt eine normale GitHub-Review
+mit **Approve**, sofern GitHub den Prüfer als `OWNER`, `MEMBER` oder `COLLABORATOR`
+ausweist und die Freigabe den aktuellen Head betrifft. Bei Fork- oder
+Dependabot-PRs postet ein Maintainer danach `/review-evidence recheck`. R2 und R3
+benötigen weiterhin die vollständigen hashgebundenen Berichte aus der erzeugten
+`*.review-request.md`.
 
-Reviewbelege gehören als PR-Kommentar in das Format aus der erzeugten
-`*.review-request.md`. Jeder neue Push oder Basiswechsel entwertet frühere Belege.
+Nicht textuell dargestellte Dateien werden als `opaque_files` ausgewiesen. Gängige
+Rastergrafiken in den festgelegten Doku- und Web-Assetpfaden sind mit mindestens
+R1 visuell prüfbar. PDF, SVG, Archive, ausführbare Dateien und andere undurchsichtige
+Artefakte blockieren weiterhin. Jeder neue Push oder Basiswechsel entwertet
+frühere hashgebundene Berichte.
 
 ## Veröffentlichung und Liveprüfung
 

@@ -5,7 +5,9 @@ name: Review Evidence Gate
   pull_request_target:
     types: [opened, synchronize, reopened, edited, ready_for_review]
   issue_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -31,8 +33,25 @@ jobs:
   review-evidence:
     name: Review evidence gate
     if: >-
-      github.event_name != 'issue_comment' ||
-      github.event.issue.pull_request != null
+      (
+        github.event_name != 'issue_comment' ||
+        (
+          github.event.issue.pull_request != null &&
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+          (
+            contains(github.event.comment.body, '<!-- weltgewebe-review-evidence') ||
+            contains(github.event.changes.body.from, '<!-- weltgewebe-review-evidence') ||
+            startsWith(github.event.comment.body, '/review-evidence recheck')
+          )
+        )
+      ) &&
+      (
+        github.event_name != 'pull_request_review' ||
+        (
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]'
+        )
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -49,7 +68,6 @@ jobs:
 
       - name: Resolve PR and evaluate exact review evidence
         id: evaluate
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
@@ -81,7 +99,7 @@ jobs:
           trap on_error ERR
 
           case "${EVENT_NAME}" in
-            pull_request_target)
+            pull_request_target|pull_request_review)
               pr_number="$(jq -r '.pull_request.number' "${EVENT_PATH}")"
               ;;
             issue_comment)
@@ -187,6 +205,9 @@ jobs:
           gh api --paginate --slurp -H "${api_header}" \
             "repos/${REPOSITORY}/issues/${pr_number}/comments?per_page=100" \
             > "${RUNNER_TEMP}/comments.json"
+          gh api --paginate --slurp -H "${api_header}" \
+            "${pr_api}/reviews?per_page=100" \
+            > "${RUNNER_TEMP}/reviews.json"
 
           trap - ERR
           python3 scripts/quality/review_governance.py evaluate-materialized \
@@ -196,7 +217,73 @@ jobs:
             --patch-file "${RUNNER_TEMP}/pr.patch" \
             --pr-body-file "${RUNNER_TEMP}/pr-body.md" \
             --comments-file "${RUNNER_TEMP}/comments.json" \
+            --reviews-file "${RUNNER_TEMP}/reviews.json" \
             --authorities-file .github/review-evidence-authorities.json
+
+      - name: Refresh current-head evidence before publication
+        id: refresh
+        if: ${{ always() && steps.evaluate.outputs.head_sha != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.evaluate.outputs.pr_number }}
+          BASE_SHA: ${{ steps.evaluate.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.evaluate.outputs.head_sha }}
+          OUTPUT_DIR: ${{ steps.evaluate.outputs.output_dir }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          api_header="X-GitHub-Api-Version: ${GH_API_VERSION}"
+          pr_api="repos/${REPOSITORY}/pulls/${PR_NUMBER}"
+
+          write_refresh_failure() {
+            local message="$1"
+            jq -n --arg message "${message}" '{
+              schema_version: 1,
+              kind: "weltgewebe-review-evaluation",
+              pass: false,
+              reasons: [$message]
+            }' > "${OUTPUT_DIR}/evaluation.json"
+          }
+
+          on_error() {
+            local rc=$?
+            trap - ERR
+            write_refresh_failure "final evidence refresh failed with exit code ${rc}"
+            exit "${rc}"
+          }
+          trap on_error ERR
+
+          gh api -H "${api_header}" "${pr_api}" > "${RUNNER_TEMP}/pr-final.json"
+          jq -e --arg base "${BASE_SHA}" --arg head "${HEAD_SHA}" '
+            .state == "open" and
+            .base.ref == "main" and
+            .base.sha == $base and
+            .head.sha == $head
+          ' "${RUNNER_TEMP}/pr-final.json" >/dev/null
+          jq -r '.body // ""' "${RUNNER_TEMP}/pr-final.json" > \
+            "${RUNNER_TEMP}/pr-body-final.md"
+          gh api --paginate --slurp -H "${api_header}" \
+            "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
+            > "${RUNNER_TEMP}/comments-final.json"
+          gh api --paginate --slurp -H "${api_header}" \
+            "${pr_api}/reviews?per_page=100" \
+            > "${RUNNER_TEMP}/reviews-final.json"
+
+          trap - ERR
+          set +e
+          python3 scripts/quality/review_governance.py evaluate-materialized \
+            --output-dir "${OUTPUT_DIR}" \
+            --metadata-file "${RUNNER_TEMP}/metadata.json" \
+            --diff-file "${RUNNER_TEMP}/pr.diff" \
+            --patch-file "${RUNNER_TEMP}/pr.patch" \
+            --pr-body-file "${RUNNER_TEMP}/pr-body-final.md" \
+            --comments-file "${RUNNER_TEMP}/comments-final.json" \
+            --reviews-file "${RUNNER_TEMP}/reviews-final.json" \
+            --authorities-file .github/review-evidence-authorities.json
+          evaluation_rc=$?
+          set -e
+          exit "${evaluation_rc}"
 
       - name: Upload downloadable diff and review bundle
         if: ${{ always() && steps.evaluate.outputs.pr_number != '' }}
@@ -221,19 +308,28 @@ jobs:
           if [[ -f "${evaluation}" ]] && \
              [[ "$(jq -r '.pass // false' "${evaluation}")" == "true" ]]; then
             state=success
-            description='Exact diff and required review attestations are verified.'
+            description='Exact diff and required review evidence are verified.'
           else
             state=failure
             description='Review evidence is missing, stale, malformed or blocking.'
           fi
-          gh api --method POST \
-            -H "X-GitHub-Api-Version: ${GH_API_VERSION}" \
-            "repos/${REPOSITORY}/statuses/${HEAD_SHA}" \
-            -f state="${state}" \
-            -f context='Review evidence gate' \
-            -f description="${description}" \
-            -f target_url="${GITHUB_SERVER_URL}/${REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
-            >/dev/null
+
+          published=false
+          for attempt in 1 2 3; do
+            if gh api --method POST \
+              -H "X-GitHub-Api-Version: ${GH_API_VERSION}" \
+              "repos/${REPOSITORY}/statuses/${HEAD_SHA}" \
+              -f state="${state}" \
+              -f context='Review evidence gate' \
+              -f description="${description}" \
+              -f target_url="${GITHUB_SERVER_URL}/${REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+              >/dev/null; then
+              published=true
+              break
+            fi
+            sleep "${attempt}"
+          done
+          test "${published}" = true
 
       - name: Enforce review evidence result
         if: ${{ always() }}
