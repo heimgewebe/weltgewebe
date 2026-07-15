@@ -96,6 +96,7 @@ Generated automatically. Do not edit.
 | process.README | Prozess-Übersicht | reference | active | docs/process/README.md |
 | process.bash-tooling-guidelines | Bash Tooling Guidelines | reference | active | docs/process/bash-tooling-guidelines.md |
 | process.fahrplan | Fahrplan | reference | active | docs/process/fahrplan.md |
+| process.merge-quality-gate | Merge-Qualitätsgate | policy | active | docs/process/merge-quality-gate.md |
 | process.report-lifecycle | Report Lifecycle Policy | policy | active | docs/process/report-lifecycle.md |
 | process.report-lifecycle-contract-alignment | Report Lifecycle Contract Alignment | decision | active | docs/process/report-lifecycle-contract-alignment.md |
 | process.sprache | Sprache | reference | active | docs/process/sprache.md |

@@ -149,6 +149,9 @@ jobs:
       - name: Validate Garnrolle ontology contract
         run: python3 -m unittest scripts.ci.tests.test_garnrolle_ontology_contract -v
 
+      - name: Validate merge governance contracts
+        run: python3 -m unittest scripts.quality.tests.test_review_governance -v
+
   ci:
     needs: docs-changes
     runs-on: ubuntu-latest

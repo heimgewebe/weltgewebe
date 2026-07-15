@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 565 |
+| Relationen gesamt | 571 |
 | — depends_on | 20 |
-| — relates_to | 533 |
+| — relates_to | 539 |
 | — supersedes | 11 |
 | — verifies | 1 |
 | relates_to Anteil | 94% |
@@ -256,14 +256,24 @@ _Keine Lücken erkannt._
 - `scripts/tests/test_domain_single_instance_guard.sh`
 - `tests/fixtures/agent/handoff-valid.json`
 
-**Cluster 2** (4 Dokumente):
+**Cluster 2** (7 Dokumente):
+
+- `.github/PULL_REQUEST_TEMPLATE.md`
+- `.github/grabowski-required-checks.json`
+- `.github/workflows/ci.yml`
+- `.github/workflows/review-evidence.yml`
+- `docs/process/merge-quality-gate.md`
+- `scripts/quality/review_governance.py`
+- `scripts/quality/tests/test_review_governance.py`
+
+**Cluster 3** (4 Dokumente):
 
 - `.github/workflows/cost-report.yml`
 - `docs/reports/cost-report.md`
 - `tools/py/cost/model.csv`
 - `tools/py/cost/report.py`
 
-**Cluster 3** (3 Dokumente):
+**Cluster 4** (3 Dokumente):
 
 - `docs/adr/0042-consume-semantah-contracts.md`
 - `docs/x-repo/peers-learnings.md`
