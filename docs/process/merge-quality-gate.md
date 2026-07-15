@@ -67,8 +67,8 @@ Der PR wird ausschließlich über die GitHub-API als Diff-, Patch- und JSON-Date
 gelesen. Vor und nach dem Download werden Basis- und Head-SHA verglichen. Der
 Workflow erzeugt:
 
-- `weltgewebe-pr-<nr>-<head>-<diffhash>.diff` – den vollständigen von GitHub
-  gelieferten Textdiff;
+- `weltgewebe-pr-<nr>-<head>-<diffhash>.diff` – den von GitHub gelieferten
+  Textdiff, dessen Dateiblockzahl gegen die vollständige Dateiliste geprüft wird;
 - `*.patch` – die von GitHub gelieferte Patchdarstellung;
 - `*.review.json` – Bindung, Hashes, Dateiliste, Umfang und nicht im Textdiff
   dargestellte Dateien;
@@ -106,6 +106,11 @@ Der Beleg folgt genau einmal im selben Kommentar:
 `report_sha256` muss dem SHA-256 des getrimmten UTF-8-Texts vor dem Marker
 entsprechen. Berichte unter 120 Byte, mehrere Belegblöcke in einem Kommentar oder
 doppelt verwendete Berichtshashes zählen nicht als unabhängige Reviews.
+
+Nicht textuell dargestellte Binär- oder Großdateien erscheinen als
+`opaque_files`. Sie blockieren das Gate derzeit fail-closed, weil ein Textreview
+ihren tatsächlichen Inhalt nicht beweisen kann. Ein separates, hashgebundenes
+Artefakt-Prüfverfahren ist dafür eine spätere Erweiterung.
 
 Ein neuer Push, ein Basiswechsel oder ein anderer Diffhash entwertet den Beleg
 automatisch. Für dieselbe Kombination aus Prüfer und Reviewachse zählt nur der
@@ -162,20 +167,21 @@ Der privilegierte Workflow darf niemals:
 - bei internen Fehlern erfolgreich enden.
 
 Ein Review kann von einem externen Prüfer stammen und durch einen freigegebenen
-Attestierer in den PR übertragen werden. Das Feld `reviewer` bezeichnet den
-tatsächlichen Prüfer; der GitHub-Kommentarautor muss zusätzlich in der versionierten
-Allowlist `.github/review-evidence-authorities.json` stehen. Repositoryrollen allein
-reichen nicht aus. Der Hash bindet die Attestation an den sichtbaren vollständigen
-Bericht. Für R2 und R3 müssen Prüferidentität, Reviewachse und Berichtshash jeweils
-verschieden sein. So kann ein beliebiger Collaborator keine fremde Reviewidentität
-als gültigen Mergebeleg ausgeben und ein Bericht nicht doppelt gezählt werden.
+Attestierer in den PR übertragen werden. Das Feld `reviewer` bezeichnet den vom
+Attestierer benannten Prüfer; der GitHub-Kommentarautor muss zusätzlich in der
+versionierten Allowlist `.github/review-evidence-authorities.json` stehen.
+Repositoryrollen allein reichen nicht aus. Der Hash bindet die Attestation an den
+sichtbaren vollständigen Bericht. Für R2 und R3 müssen Prüferidentität, Reviewachse
+und Berichtshash jeweils verschieden sein. Technisch bewiesen werden die Identität
+des Attestierers, der Berichtshash und dessen Diffbindung – nicht eine unabhängige
+Authentifizierung der frei benannten Prüferidentität.
 
 Alle Parser- und Bundlefunktionen stammen aus `main`. API-Daten werden nur als
 Bytes oder JSON geparst. Eine unvollständige Dateiliste, ein SHA-Wechsel, eine
 fehlende Patchdarstellung oder ein interner Fehler führt zu `evaluation.json` mit
 `pass: false` und zu einem fehlgeschlagenen Commitstatus. Dateien ohne GitHub-
-Textdarstellung werden im Manifest als `opaque_files` markiert und müssen separat
-geprüft werden.
+Textdarstellung werden im Manifest als `opaque_files` markiert und blockieren das
+Gate bis zu einem separaten Artefakt-Prüfverfahren.
 
 ## Merge- und Produktionsabschluss
 

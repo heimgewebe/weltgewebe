@@ -32,10 +32,14 @@ The gate rejects a class below the path-derived minimum.
 
 Der Workflow **Review Evidence Gate** erzeugt ein herunterladbares Paket mit:
 
-- vollständigem `.diff` und anwendbarem `.patch`;
+- von GitHub geliefertem Textdiff und Patch;
 - Basis-, Head-, Merge-Basis- und Diff-SHA-256;
 - Reviewauftrag und maschinenlesbarem Manifest;
-- aktuellem Ergebnis der hashgebundenen Fremdreviews.
+- aktuellem Ergebnis der hashgebundenen Reviewattestierungen.
+
+Nicht textuell dargestellte Binär- oder Großdateien werden als `opaque_files`
+ausgewiesen und blockieren das Gate, bis ein separates Artefakt-Prüfverfahren
+vorliegt.
 
 Reviewbelege gehören als PR-Kommentar in das Format aus der erzeugten
 `*.review-request.md`. Jeder neue Push oder Basiswechsel entwertet frühere Belege.

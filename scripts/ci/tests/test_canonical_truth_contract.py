@@ -50,6 +50,8 @@ class CanonicalTruthContractTests(unittest.TestCase):
         self.assertNotIn("refs/pull/", review_workflow)
         self.assertIn("evaluate-materialized", review_workflow)
         self.assertIn("application/vnd.github.diff", review_workflow)
+        self.assertIn("diff_file_count", review_workflow)
+        self.assertIn("max_artifact_bytes", review_workflow)
         self.assertIn(
             "--authorities-file .github/review-evidence-authorities.json",
             review_workflow,

@@ -15,6 +15,7 @@ import json
 import re
 import subprocess
 import sys
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
@@ -177,7 +178,14 @@ def _diff_stats(repo: Path, base_sha: str, head_sha: str) -> DiffStats:
             continue
         additions += int(added)
         deletions += int(deleted)
-    return DiffStats(names, additions, deletions, tuple(binary))
+    binary_files = tuple(binary)
+    return DiffStats(
+        names,
+        additions,
+        deletions,
+        binary_files,
+        binary_files,
+    )
 
 
 def _safe_name(value: str) -> str:
@@ -191,10 +199,10 @@ def _canonical_json(data: Any) -> bytes:
 
 
 def parse_risk_class(pr_body: str) -> str | None:
-    matches = {match.upper() for match in RISK_RE.findall(pr_body or "")}
+    matches = [match.upper() for match in RISK_RE.findall(pr_body or "")]
     if len(matches) != 1:
         return None
-    return next(iter(matches))
+    return matches[0]
 
 
 def minimum_risk_for_paths(paths: Iterable[str]) -> str:
@@ -203,6 +211,12 @@ def minimum_risk_for_paths(paths: Iterable[str]) -> str:
         path = raw_path.lower()
         if (
             path.startswith(".github/workflows/")
+            or path
+            in {
+                ".github/grabowski-required-checks.json",
+                ".github/review-evidence-authorities.json",
+                "scripts/quality/review_governance.py",
+            }
             or path.startswith("infra/")
             or path.startswith("scripts/ops/")
             or "/migrations/" in f"/{path}"
@@ -262,12 +276,23 @@ def _validate_stats(stats: DiffStats) -> None:
         raise GovernanceError("diff totals must be non-negative")
     if len(set(stats.changed_files)) != len(stats.changed_files):
         raise GovernanceError("changed_files must not contain duplicates")
+    if len(set(stats.binary_files)) != len(stats.binary_files):
+        raise GovernanceError("binary_files must not contain duplicates")
+    if len(set(stats.opaque_files)) != len(stats.opaque_files):
+        raise GovernanceError("opaque_files must not contain duplicates")
     if not set(stats.binary_files).issubset(stats.changed_files):
         raise GovernanceError("binary_files must be a subset of changed_files")
     if not set(stats.opaque_files).issubset(stats.changed_files):
         raise GovernanceError("opaque_files must be a subset of changed_files")
     for file_path in stats.changed_files:
-        if not isinstance(file_path, str) or not file_path or "\x00" in file_path:
+        if (
+            not isinstance(file_path, str)
+            or not file_path
+            or file_path != file_path.strip()
+            or file_path.startswith("/")
+            or any(part in {"", ".", ".."} for part in file_path.split("/"))
+            or any(unicodedata.category(char).startswith("C") for char in file_path)
+        ):
             raise GovernanceError("changed_files contains an invalid path")
 
 
@@ -298,6 +323,14 @@ def _build_bundle(
     if len(diff_bytes) > MAX_ARTIFACT_BYTES or len(patch_bytes) > MAX_ARTIFACT_BYTES:
         raise GovernanceError(
             f"review artifacts exceed the {MAX_ARTIFACT_BYTES}-byte safety limit"
+        )
+    diff_file_count = sum(
+        1 for line in diff_bytes.splitlines() if line.startswith(b"diff --git ")
+    )
+    if diff_file_count != len(stats.changed_files):
+        raise GovernanceError(
+            "review diff file count does not match materialized changed-file list: "
+            f"diff={diff_file_count}, metadata={len(stats.changed_files)}"
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -452,7 +485,7 @@ def generate_bundle(
             "--binary",
             "--full-index",
             "--no-signature",
-            f"{base_sha}..{head_sha}",
+            f"{merge_base}..{head_sha}",
         ],
     )
     assert isinstance(diff_bytes, bytes)
@@ -493,18 +526,28 @@ def _materialized_metadata(path: Path) -> tuple[int, str, str, str, DiffStats]:
         raise GovernanceError(
             f"materialized metadata keys mismatch; missing={missing}, extra={extra}"
         )
-    if raw["schema_version"] != SCHEMA_VERSION:
+    schema_version = raw["schema_version"]
+    if (
+        not isinstance(schema_version, int)
+        or isinstance(schema_version, bool)
+        or schema_version != SCHEMA_VERSION
+    ):
         raise GovernanceError("unsupported materialized metadata schema")
     pr_number = raw["pr_number"]
     additions = raw["additions"]
     deletions = raw["deletions"]
+    changed_file_count = raw["changed_file_count"]
     changed_files = raw["changed_files"]
     opaque_files = raw["opaque_files"]
     if not isinstance(pr_number, int) or isinstance(pr_number, bool):
         raise GovernanceError("materialized pr_number must be an integer")
-    for name, value in (("additions", additions), ("deletions", deletions)):
-        if not isinstance(value, int) or isinstance(value, bool):
-            raise GovernanceError(f"materialized {name} must be an integer")
+    for name, value in (
+        ("changed_file_count", changed_file_count),
+        ("additions", additions),
+        ("deletions", deletions),
+    ):
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise GovernanceError(f"materialized {name} must be a non-negative integer")
     if not isinstance(changed_files, list) or not all(
         isinstance(item, str) for item in changed_files
     ):
@@ -513,7 +556,7 @@ def _materialized_metadata(path: Path) -> tuple[int, str, str, str, DiffStats]:
         isinstance(item, str) for item in opaque_files
     ):
         raise GovernanceError("materialized opaque_files must be a string list")
-    if raw["changed_file_count"] != len(changed_files):
+    if changed_file_count != len(changed_files):
         raise GovernanceError(
             "materialized changed_file_count does not match file list"
         )
@@ -637,6 +680,13 @@ def evaluate_evidence(
         )
         risk_class = "R3"
 
+    if bundle.stats.opaque_files:
+        reasons.append(
+            "opaque or binary files require a separately verified artifact-review "
+            "mechanism and currently block the review evidence gate: "
+            + ", ".join(bundle.stats.opaque_files)
+        )
+
     minimum_risk = minimum_risk_for_paths(bundle.stats.changed_files)
     if RISK_ORDER[risk_class] < RISK_ORDER[minimum_risk]:
         reasons.append(
@@ -673,12 +723,23 @@ def evaluate_evidence(
             "verdict",
             "findings_resolved",
         }
-        if not required_fields.issubset(record):
+        external_fields = {key for key in record if not key.startswith("_")}
+        if external_fields != required_fields:
+            malformed += 1
+            continue
+        schema_version = record.get("schema_version")
+        pr_number = record.get("pr_number")
+        if (
+            not isinstance(schema_version, int)
+            or isinstance(schema_version, bool)
+            or not isinstance(pr_number, int)
+            or isinstance(pr_number, bool)
+        ):
             malformed += 1
             continue
         if (
-            record.get("schema_version") != SCHEMA_VERSION
-            or record.get("pr_number") != bundle.pr_number
+            schema_version != SCHEMA_VERSION
+            or pr_number != bundle.pr_number
             or record.get("base_sha") != bundle.base_sha
             or record.get("head_sha") != bundle.head_sha
             or record.get("diff_sha256") != bundle.diff_sha256
@@ -686,13 +747,16 @@ def evaluate_evidence(
         ):
             stale += 1
             continue
-        reviewer = str(record.get("reviewer") or "").strip()
+        reviewer_value = record.get("reviewer")
+        reviewer = reviewer_value.strip() if isinstance(reviewer_value, str) else ""
         report_sha256 = str(record.get("report_sha256") or "").strip()
         axis = str(record.get("review_axis") or "").strip().lower()
         verdict = str(record.get("verdict") or "").strip().upper()
         if (
             not reviewer
+            or reviewer != reviewer_value
             or len(reviewer) > 120
+            or any(unicodedata.category(char).startswith("C") for char in reviewer)
             or not REPORT_SHA256_RE.fullmatch(report_sha256)
             or report_sha256 != record.get("_report_text_sha256")
             or record.get("_report_text_bytes", 0) < MIN_REVIEW_REPORT_BYTES

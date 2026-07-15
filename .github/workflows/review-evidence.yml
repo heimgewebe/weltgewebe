@@ -128,6 +128,11 @@ jobs:
             "${pr_api}" > "${RUNNER_TEMP}/pr.diff"
           gh api -H "${api_header}" -H 'Accept: application/vnd.github.patch' \
             "${pr_api}" > "${RUNNER_TEMP}/pr.patch"
+          max_artifact_bytes=$((100 * 1024 * 1024))
+          diff_bytes="$(wc -c < "${RUNNER_TEMP}/pr.diff")"
+          patch_bytes="$(wc -c < "${RUNNER_TEMP}/pr.patch")"
+          (( diff_bytes > 0 && diff_bytes <= max_artifact_bytes ))
+          (( patch_bytes > 0 && patch_bytes <= max_artifact_bytes ))
           gh api -H "${api_header}" \
             "repos/${REPOSITORY}/compare/${base_sha}...${head_sha}" \
             > "${RUNNER_TEMP}/compare.json"
@@ -141,7 +146,9 @@ jobs:
 
           expected_files="$(jq -r '.changed_files' "${RUNNER_TEMP}/pr-before.json")"
           actual_files="$(jq -r 'length' "${RUNNER_TEMP}/files.json")"
+          diff_file_count="$(grep -c '^diff --git ' "${RUNNER_TEMP}/pr.diff" || true)"
           [[ "${actual_files}" == "${expected_files}" ]]
+          [[ "${diff_file_count}" == "${expected_files}" ]]
           jq -e 'all(.[]; (.filename | type == "string") and (.filename | length > 0))' \
             "${RUNNER_TEMP}/files.json" >/dev/null
 
@@ -214,7 +221,7 @@ jobs:
           if [[ -f "${evaluation}" ]] && \
              [[ "$(jq -r '.pass // false' "${evaluation}")" == "true" ]]; then
             state=success
-            description='Exact diff and required independent reviews are verified.'
+            description='Exact diff and required review attestations are verified.'
           else
             state=failure
             description='Review evidence is missing, stale, malformed or blocking.'

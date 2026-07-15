@@ -119,11 +119,22 @@ class RiskParsingTests(unittest.TestCase):
         self.assertIsNone(
             parse_risk_class("<!-- weltgewebe-risk: R1 --><!-- weltgewebe-risk: R2 -->")
         )
+        self.assertIsNone(
+            parse_risk_class("<!-- weltgewebe-risk: R2 --><!-- weltgewebe-risk: R2 -->")
+        )
 
     def test_sensitive_paths_raise_minimum_risk(self) -> None:
         self.assertEqual(minimum_risk_for_paths(["docs/example.md"]), "R0")
         self.assertEqual(minimum_risk_for_paths(["apps/web/src/app.ts"]), "R2")
         self.assertEqual(minimum_risk_for_paths([".github/workflows/ci.yml"]), "R3")
+        self.assertEqual(
+            minimum_risk_for_paths([".github/review-evidence-authorities.json"]),
+            "R3",
+        )
+        self.assertEqual(
+            minimum_risk_for_paths(["scripts/quality/review_governance.py"]),
+            "R3",
+        )
         self.assertEqual(minimum_risk_for_paths(["apps/api/src/auth.rs"]), "R3")
 
 
@@ -166,13 +177,51 @@ class BundleTests(unittest.TestCase):
             )
             self.assertEqual(first.stats.changed_files, ("README.md",))
 
+    def test_local_binary_bundle_marks_binary_as_opaque(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir) / "repo"
+            repo.mkdir()
+            _git(repo, "init", "-b", "main")
+            _git(repo, "config", "user.name", "Test")
+            _git(repo, "config", "user.email", "test@example.invalid")
+            (repo / "README.md").write_text("base\n", encoding="utf-8")
+            _git(repo, "add", "README.md")
+            _git(repo, "commit", "-m", "base")
+            base = _git(repo, "rev-parse", "HEAD")
+
+            (repo / "image.bin").write_bytes(b"\x00\x01binary-payload\xff")
+            _git(repo, "add", "image.bin")
+            _git(repo, "commit", "-m", "add binary")
+            head = _git(repo, "rev-parse", "HEAD")
+
+            bundle = generate_bundle(
+                repo=repo,
+                output_dir=Path(temp_dir) / "out",
+                base_revision=base,
+                head_revision=head,
+                pr_number=9,
+                risk_class="R2",
+            )
+            self.assertEqual(bundle.stats.binary_files, ("image.bin",))
+            self.assertEqual(bundle.stats.opaque_files, ("image.bin",))
+            manifest = json.loads(bundle.manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["stats"]["binary_files"], ["image.bin"])
+            self.assertEqual(manifest["stats"]["opaque_files"], ["image.bin"])
+            self.assertIn(
+                "Nicht im GitHub-Textdiff dargestellte Dateien",
+                bundle.request_path.read_text(encoding="utf-8"),
+            )
+
     def test_materialized_github_bundle_is_hash_bound_and_validated(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             diff_file = root / "pr.diff"
             patch_file = root / "pr.patch"
             metadata_file = root / "metadata.json"
-            diff_file.write_bytes(b"diff --git a/a.txt b/a.txt\n+new\n")
+            diff_file.write_bytes(
+                b"diff --git a/a.txt b/a.txt\n+new\n"
+                b"diff --git a/image.png b/image.png\nBinary files differ\n"
+            )
             patch_file.write_bytes(b"From abc Mon Sep 17 00:00:00 2001\n+new\n")
             metadata = {
                 "schema_version": 1,
@@ -213,6 +262,106 @@ class BundleTests(unittest.TestCase):
                     patch_file=patch_file,
                     risk_class="R2",
                 )
+
+            metadata["changed_file_count"] = 2
+            metadata_file.write_text(json.dumps(metadata), encoding="utf-8")
+            diff_file.write_bytes(b"diff --git a/a.txt b/a.txt\n+new\n")
+            with self.assertRaisesRegex(GovernanceError, "diff file count"):
+                generate_materialized_bundle(
+                    output_dir=root / "truncated",
+                    metadata_file=metadata_file,
+                    diff_file=diff_file,
+                    patch_file=patch_file,
+                    risk_class="R2",
+                )
+
+            metadata["changed_file_count"] = True
+            metadata_file.write_text(json.dumps(metadata), encoding="utf-8")
+            with self.assertRaisesRegex(GovernanceError, "non-negative integer"):
+                generate_materialized_bundle(
+                    output_dir=root / "boolean-count",
+                    metadata_file=metadata_file,
+                    diff_file=diff_file,
+                    patch_file=patch_file,
+                    risk_class="R2",
+                )
+
+    def test_materialized_paths_reject_controls_and_opaque_duplicates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            diff_file = root / "pr.diff"
+            patch_file = root / "pr.patch"
+            metadata_file = root / "metadata.json"
+            diff_file.write_bytes(b"diff --git a/a.txt b/a.txt\n+new\n")
+            patch_file.write_bytes(b"From abc Mon Sep 17 00:00:00 2001\n+new\n")
+            metadata = {
+                "schema_version": 1,
+                "pr_number": 17,
+                "base_sha": "a" * 40,
+                "head_sha": "b" * 40,
+                "merge_base_sha": "c" * 40,
+                "changed_file_count": 1,
+                "changed_files": ["bad\nname.txt"],
+                "additions": 1,
+                "deletions": 0,
+                "opaque_files": [],
+            }
+            metadata_file.write_text(json.dumps(metadata), encoding="utf-8")
+            with self.assertRaisesRegex(GovernanceError, "invalid path"):
+                generate_materialized_bundle(
+                    output_dir=root / "bad-path",
+                    metadata_file=metadata_file,
+                    diff_file=diff_file,
+                    patch_file=patch_file,
+                    risk_class="R2",
+                )
+
+            metadata["changed_files"] = ["a.txt"]
+            metadata["opaque_files"] = ["a.txt", "a.txt"]
+            metadata_file.write_text(json.dumps(metadata), encoding="utf-8")
+            with self.assertRaisesRegex(GovernanceError, "opaque_files.*duplicates"):
+                generate_materialized_bundle(
+                    output_dir=root / "duplicate-opaque",
+                    metadata_file=metadata_file,
+                    diff_file=diff_file,
+                    patch_file=patch_file,
+                    risk_class="R2",
+                )
+
+    def test_local_patch_uses_merge_base_not_moving_base_tip(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir) / "repo"
+            repo.mkdir()
+            _git(repo, "init", "-b", "main")
+            _git(repo, "config", "user.name", "Test")
+            _git(repo, "config", "user.email", "test@example.invalid")
+            (repo / "common.txt").write_text("base\n", encoding="utf-8")
+            _git(repo, "add", "common.txt")
+            _git(repo, "commit", "-m", "common base")
+            _git(repo, "branch", "feature")
+
+            (repo / "main-only.txt").write_text("main side\n", encoding="utf-8")
+            _git(repo, "add", "main-only.txt")
+            _git(repo, "commit", "-m", "main side change")
+            main_tip = _git(repo, "rev-parse", "HEAD")
+
+            _git(repo, "checkout", "feature")
+            (repo / "feature.txt").write_text("feature side\n", encoding="utf-8")
+            _git(repo, "add", "feature.txt")
+            _git(repo, "commit", "-m", "feature side change")
+            feature_tip = _git(repo, "rev-parse", "HEAD")
+
+            bundle = generate_bundle(
+                repo=repo,
+                output_dir=Path(temp_dir) / "out",
+                base_revision=main_tip,
+                head_revision=feature_tip,
+                pr_number=8,
+                risk_class="R2",
+            )
+            patch = bundle.patch_path.read_text(encoding="utf-8")
+            self.assertIn("feature side change", patch)
+            self.assertNotIn("main side change", patch)
 
 
 class AuthorityTests(unittest.TestCase):
@@ -341,6 +490,62 @@ class EvidenceTests(unittest.TestCase):
         self.assertFalse(result["pass"])
         self.assertIn("two distinct review reports", " ".join(result["reasons"]))
 
+    def test_opaque_files_block_even_with_valid_reviews(self) -> None:
+        base = _bundle(paths=("image.png",), changed_lines=0)
+        bundle = Bundle(
+            pr_number=base.pr_number,
+            base_sha=base.base_sha,
+            head_sha=base.head_sha,
+            merge_base_sha=base.merge_base_sha,
+            diff_sha256=base.diff_sha256,
+            patch_sha256=base.patch_sha256,
+            manifest_path=base.manifest_path,
+            diff_path=base.diff_path,
+            patch_path=base.patch_path,
+            request_path=base.request_path,
+            stats=DiffStats(("image.png",), 0, 0, (), ("image.png",)),
+        )
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R1",
+            comments=[
+                _comment(
+                    _record(
+                        bundle, reviewer="Reviewer A", axis="correctness", risk="R1"
+                    )
+                )
+            ],
+        )
+        self.assertFalse(result["pass"])
+        self.assertIn("opaque or binary files", " ".join(result["reasons"]))
+
+    def test_evidence_schema_and_reviewer_are_strict(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        extra = _record(bundle, reviewer="Reviewer A", axis="correctness", risk="R1")
+        extra["unexpected"] = "not allowed"
+        result = _evaluate(bundle=bundle, risk_class="R1", comments=[_comment(extra)])
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["malformed_evidence_count"], 1)
+
+        boolean_schema = _record(
+            bundle, reviewer="Reviewer A", axis="correctness", risk="R1"
+        )
+        boolean_schema["schema_version"] = True
+        result = _evaluate(
+            bundle=bundle, risk_class="R1", comments=[_comment(boolean_schema)]
+        )
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["malformed_evidence_count"], 1)
+
+        control_name = _record(
+            bundle, reviewer="Reviewer\nA", axis="correctness", risk="R1"
+        )
+        result = _evaluate(
+            bundle=bundle, risk_class="R1", comments=[_comment(control_name)]
+        )
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["malformed_evidence_count"], 1)
+
     def test_latest_blocking_verdict_overrides_prior_pass(self) -> None:
         bundle = _bundle(paths=("config/example.json",))
         passed = _comment(
@@ -413,6 +618,8 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("Accept: application/vnd.github.patch", self.workflow)
         self.assertIn("pr-before.json", self.workflow)
         self.assertIn("pr-after.json", self.workflow)
+        self.assertIn("diff_file_count", self.workflow)
+        self.assertIn("max_artifact_bytes", self.workflow)
         self.assertIn(
             "scripts/quality/review_governance.py evaluate-materialized",
             self.workflow,
