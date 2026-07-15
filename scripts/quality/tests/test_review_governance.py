@@ -882,6 +882,19 @@ class EvidenceTests(unittest.TestCase):
         )
         self.assertTrue(result["pass"], result["reasons"])
 
+    def test_alternate_html_comment_terminator_is_accepted(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        comment = _comment(
+            _record(bundle, reviewer="Reviewer A", axis="correctness", risk="R1")
+        )
+        comment["body"] = comment["body"].replace("\n-->", "\n--!>")
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R1",
+            comments=[comment],
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+
     def test_oversized_evidence_payload_is_reported_separately(self) -> None:
         bundle = _bundle(paths=("config/example.json",))
         oversized = _record(

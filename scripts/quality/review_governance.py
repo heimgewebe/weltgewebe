@@ -58,7 +58,6 @@ ALLOWED_AXES = HIGH_RISK_AXES | {
 }
 RISK_RE = re.compile(r"<!--\s*weltgewebe-risk:\s*(R[0-3])\s*-->", re.IGNORECASE)
 EVIDENCE_START_RE = re.compile(r"<!--\s*weltgewebe-review-evidence\b", re.IGNORECASE)
-EVIDENCE_END_RE = re.compile(r"\s*-->")
 
 
 class GovernanceError(RuntimeError):
@@ -758,7 +757,8 @@ def _decode_evidence_payload(
     payload_text = source[:consumed]
     if len(payload_text.encode("utf-8")) > MAX_EVIDENCE_PAYLOAD_BYTES:
         return None, "oversized"
-    if EVIDENCE_END_RE.match(source, consumed) is None:
+    remainder = source[consumed:].lstrip()
+    if not remainder.startswith(("-->", "--!>")):
         return None, "malformed"
     if not isinstance(record, dict):
         return None, "malformed"
