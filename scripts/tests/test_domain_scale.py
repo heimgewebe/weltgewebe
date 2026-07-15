@@ -154,6 +154,14 @@ class DomainScaleTests(unittest.TestCase):
             self.assertEqual(failed["status"], "fail")
             self.assertTrue(any("domain_nodes_lat_lon" in item for item in failed["failures"]))
 
+            _write_good_plans(config, plan_dir)
+            wrong_condition = _good_plan(config, "bbox")
+            wrong_condition[0]["Plan"]["Plans"][0]["Index Cond"] = "(id IS NOT NULL)"  # type: ignore[index]
+            _write_json(plan_dir / "bbox.json", wrong_condition)
+            condition_failed = domain_scale.check_plans(config, plan_dir, "ci")
+            self.assertEqual(condition_failed["status"], "fail")
+            self.assertTrue(any("matching Index Cond" in item for item in condition_failed["failures"]))
+
     def test_plan_checker_rejects_seq_scan_and_nested_temp_blocks(self) -> None:
         config = domain_scale.load_config(CONFIG)
         with tempfile.TemporaryDirectory() as directory:
