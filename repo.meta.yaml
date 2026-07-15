@@ -4,7 +4,9 @@ repo_type: service
 role: weltgewebe-stack
 status: active
 summary: >
-  Aktives Karten- und Koordinationssystem mit kanonischer Zielarchitektur als föderiertes Weltgewebe OS; heutige Runtime mit SvelteKit, Rust/Axum, PostgreSQL, NATS, Caddy und Compose.
+  Aktives Karten- und Koordinationssystem mit kanonischer Zielarchitektur als
+  föderiertes Weltgewebe OS; heutige Runtime mit SvelteKit, Rust/Axum,
+  PostgreSQL, NATS, Caddy und Compose.
 
 owners:
   - heimgewebe
