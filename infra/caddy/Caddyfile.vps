@@ -64,9 +64,26 @@
 		file_server
 	}
 
+	# Canonicalize a trailing slash only when the slashless path has a real
+	# prerendered HTML artifact. Unknown slash paths remain direct 404 responses.
+	@trailingSlash path_regexp ^/.+/$
+	handle @trailingSlash {
+		route {
+			uri strip_suffix /
+			@prerendered file {
+				root /srv/weltgewebe-web
+				try_files {path}.html {path}/index.html
+			}
+			redir @prerendered {uri} 308
+			respond 404
+		}
+	}
+
 	handle {
 		root * /srv/weltgewebe-web
-		try_files {path} {path}.html /index.html
+		# Serve only real files or explicitly prerendered Svelte routes.
+		# Unknown paths must remain real 404 responses instead of soft-200 app shells.
+		try_files {path} {path}.html {path}/index.html
 		header Cache-Control "no-cache, must-revalidate"
 		file_server
 	}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -31,10 +32,28 @@ def _git(repo: Path, *args: str) -> str:
     return completed.stdout.strip()
 
 
-def _comment(record: dict, *, association: str = "OWNER", author: str = "alex") -> dict:
+def _comment(
+    record: dict,
+    *,
+    association: str = "OWNER",
+    author: str = "alex",
+    report_text: str | None = None,
+    report_sha256: str | None = None,
+) -> dict:
+    report = report_text or (
+        f"Unabhängiger Reviewbericht von {record.get('reviewer')} zur Achse "
+        f"{record.get('review_axis')}. Der exakte Diff wurde auf Korrektheit, "
+        "Regressionen, Fehlerszenarien und die im Auftrag genannten Invarianten "
+        "geprüft. Es bleiben keine unaufgelösten Mergeblocker."
+    )
+    payload = dict(record)
+    payload["report_sha256"] = (
+        report_sha256 or hashlib.sha256(report.strip().encode("utf-8")).hexdigest()
+    )
     return {
-        "body": "Review text\n<!-- weltgewebe-review-evidence\n"
-        + json.dumps(record)
+        "body": report
+        + "\n<!-- weltgewebe-review-evidence\n"
+        + json.dumps(payload)
         + "\n-->",
         "author_association": association,
         "user": {"login": author},
@@ -282,6 +301,45 @@ class EvidenceTests(unittest.TestCase):
         ]
         result = _evaluate(bundle=bundle, risk_class="R3", comments=high_risk_comments)
         self.assertTrue(result["pass"], result["reasons"])
+
+    def test_report_hash_must_match_substantive_comment_text(self) -> None:
+        bundle = _bundle(paths=("config/example.json",))
+        mismatched = _comment(
+            _record(bundle, reviewer="Reviewer A", axis="correctness", risk="R1"),
+            report_sha256="0" * 64,
+        )
+        result = _evaluate(bundle=bundle, risk_class="R1", comments=[mismatched])
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["malformed_evidence_count"], 1)
+
+        too_short = _comment(
+            _record(bundle, reviewer="Reviewer A", axis="correctness", risk="R1"),
+            report_text="zu kurz",
+        )
+        result = _evaluate(bundle=bundle, risk_class="R1", comments=[too_short])
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["malformed_evidence_count"], 1)
+
+    def test_r2_requires_distinct_review_report_hashes(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",))
+        shared_report = (
+            "Derselbe ausführliche Bericht wird absichtlich zweimal verwendet. "
+            "Er beschreibt Korrektheit, Tests, Regressionen und Fehlerszenarien, "
+            "darf aber nicht als zwei unabhängige Prüfberichte gezählt werden."
+        )
+        comments = [
+            _comment(
+                _record(bundle, reviewer="Reviewer A", axis="correctness", risk="R2"),
+                report_text=shared_report,
+            ),
+            _comment(
+                _record(bundle, reviewer="Reviewer B", axis="testing", risk="R2"),
+                report_text=shared_report,
+            ),
+        ]
+        result = _evaluate(bundle=bundle, risk_class="R2", comments=comments)
+        self.assertFalse(result["pass"])
+        self.assertIn("two distinct review reports", " ".join(result["reasons"]))
 
     def test_latest_blocking_verdict_overrides_prior_pass(self) -> None:
         bundle = _bundle(paths=("config/example.json",))

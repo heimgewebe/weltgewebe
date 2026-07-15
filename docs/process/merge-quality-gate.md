@@ -1,15 +1,22 @@
 ---
+id: process.merge-quality-gate
 title: Merge-Qualitätsgate
-description: Verbindlicher, risikogewichteter Mergeprozess für Weltgewebe mit exakten Diff- und Reviewbelegen.
+doc_type: policy
 status: active
-category: process
-relates_to:
-  - .github/PULL_REQUEST_TEMPLATE.md
-  - .github/grabowski-required-checks.json
-  - .github/workflows/ci.yml
-  - .github/workflows/review-evidence.yml
-  - scripts/quality/review_governance.py
-  - scripts/quality/tests/test_review_governance.py
+summary: Verbindlicher, risikogewichteter Mergeprozess mit exakten Diff- und Reviewbelegen.
+relations:
+  - type: relates_to
+    target: .github/PULL_REQUEST_TEMPLATE.md
+  - type: relates_to
+    target: .github/grabowski-required-checks.json
+  - type: relates_to
+    target: .github/workflows/ci.yml
+  - type: relates_to
+    target: .github/workflows/review-evidence.yml
+  - type: relates_to
+    target: scripts/quality/review_governance.py
+  - type: relates_to
+    target: scripts/quality/tests/test_review_governance.py
 ---
 
 # Merge-Qualitätsgate
@@ -79,19 +86,26 @@ Der Reviewbeleg muss mindestens enthalten:
   "diff_sha256": "64-stellige SHA-256",
   "risk_class": "R2",
   "reviewer": "eindeutige Prüferidentität",
+  "report_sha256": "SHA-256 des Reviewtexts vor dem Marker",
   "review_axis": "correctness",
   "verdict": "PASS",
   "findings_resolved": true
 }
 ```
 
-Der Beleg wird in einen PR-Kommentar zwischen folgende Marker gesetzt:
+Der vollständige Reviewbericht steht als normaler Kommentartext vor dem Marker.
+Der Beleg folgt genau einmal im selben Kommentar:
 
 ```text
+<VOLLSTÄNDIGER REVIEWBERICHT>
 <!-- weltgewebe-review-evidence
 {...}
 -->
 ```
+
+`report_sha256` muss dem SHA-256 des getrimmten UTF-8-Texts vor dem Marker
+entsprechen. Berichte unter 120 Byte, mehrere Belegblöcke in einem Kommentar oder
+doppelt verwendete Berichtshashes zählen nicht als unabhängige Reviews.
 
 Ein neuer Push, ein Basiswechsel oder ein anderer Diffhash entwertet den Beleg
 automatisch. Für dieselbe Kombination aus Prüfer und Reviewachse zählt nur der
@@ -151,8 +165,10 @@ Ein Review kann von einem externen Prüfer stammen und durch einen freigegebenen
 Attestierer in den PR übertragen werden. Das Feld `reviewer` bezeichnet den
 tatsächlichen Prüfer; der GitHub-Kommentarautor muss zusätzlich in der versionierten
 Allowlist `.github/review-evidence-authorities.json` stehen. Repositoryrollen allein
-reichen nicht aus. So kann ein beliebiger Collaborator keine fremde Reviewidentität
-als gültigen Mergebeleg ausgeben.
+reichen nicht aus. Der Hash bindet die Attestation an den sichtbaren vollständigen
+Bericht. Für R2 und R3 müssen Prüferidentität, Reviewachse und Berichtshash jeweils
+verschieden sein. So kann ein beliebiger Collaborator keine fremde Reviewidentität
+als gültigen Mergebeleg ausgeben und ein Bericht nicht doppelt gezählt werden.
 
 Alle Parser- und Bundlefunktionen stammen aus `main`. API-Daten werden nur als
 Bytes oder JSON geparst. Eine unvollständige Dateiliste, ein SHA-Wechsel, eine

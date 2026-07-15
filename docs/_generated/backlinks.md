@@ -10,6 +10,10 @@ summary: Automatisch generierter Graph der Rückverweise.
 
 Generated automatically. Do not edit.
 
+## .github/PULL_REQUEST_TEMPLATE.md
+
+- [relates_to] docs/process/merge-quality-gate.md
+
 ## .github/grabowski-required-checks.json
 
 - [relates_to] docs/process/merge-quality-gate.md
@@ -22,6 +26,10 @@ Generated automatically. Do not edit.
 ## .github/workflows/basemap-runtime-proof.yml
 
 - [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
+
+## .github/workflows/ci.yml
+
+- [relates_to] docs/process/merge-quality-gate.md
 
 ## .github/workflows/cost-report.yml
 
@@ -467,6 +475,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reference/glossar.md
 - [relates_to] docs/specs/contract.md
 - [relates_to] docs/specs/garnrolle-knoten-faden.md
+- [relates_to] docs/specs/governance-antraege.md
 
 ## docs/inhalt.md
 
@@ -513,7 +522,6 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/process/bash-tooling-guidelines.md
 - [relates_to] docs/process/fahrplan.md
-- [relates_to] docs/process/merge-quality-gate.md
 - [relates_to] docs/process/report-lifecycle-contract-alignment.md
 - [relates_to] docs/process/report-lifecycle.md
 - [relates_to] docs/process/sprache.md
@@ -880,6 +888,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/specs/privacy-api.md
 - [relates_to] docs/vision.md
 
+## docs/specs/governance-antraege.md
+
+- [relates_to] docs/specs/garnrolle-knoten-faden.md
+
 ## docs/specs/list-pagination-api.md
 
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
@@ -994,6 +1006,10 @@ Generated automatically. Do not edit.
 ## infra/caddy/Caddyfile.http-smoke
 
 - [relates_to] docs/deploy/vps-http-route-smoke.md
+- [relates_to] docs/deploy/vps-http-smoke.md
+
+## infra/caddy/Caddyfile.vps
+
 - [relates_to] docs/deploy/vps-http-smoke.md
 
 ## infra/compose/compose.prod.override.yml
@@ -1143,6 +1159,14 @@ Generated automatically. Do not edit.
 ## scripts/ops/reconcile_public_login_smtp_env.py
 
 - [relates_to] docs/deploy/vps.md
+
+## scripts/quality/review_governance.py
+
+- [relates_to] docs/process/merge-quality-gate.md
+
+## scripts/quality/tests/test_review_governance.py
+
+- [relates_to] docs/process/merge-quality-gate.md
 
 ## scripts/tests/test_domain_single_instance_guard.sh
 

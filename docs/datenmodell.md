@@ -3,7 +3,7 @@ id: datenmodell
 title: Datenmodell
 doc_type: reference
 status: active
-summary: Aktuelles physisches Datenmodell, Quellenumschaltung und noch nicht implementiertes Zielmodell.
+summary: Aktuelles physisches Datenmodell, lokale Legacy-Defaults und PostgreSQL-Produktionsvertrag.
 relations:
   - type: relates_to
     target: architecture/overview.md
@@ -19,25 +19,34 @@ relations:
 
 ## Wichtigste Aussage
 
-PostgreSQL ist **nicht** pauschal die alleinige Quelle der Wahrheit. Für
-Domänendaten bleibt JSONL der Standard. PostgreSQL kann als Lesequelle und für
-einzelne Schreibpfade ausdrücklich aktiviert werden. Auth-Sitzungen und
-Passkey-Credentials besitzen eigene Persistenzentscheidungen.
+Der Repository-Produktionsvertrag in `infra/compose/compose.prod.yml` verwendet
+PostgreSQL als Lese- und Schreibwahrheit für Accounts/Garnrollen, Knoten und
+Fäden. Passkey-Credentials werden dort ebenfalls aus PostgreSQL gelesen und
+geschrieben; `DATABASE_URL` bindet Sitzungen und weitere DB-Pfade an dieselbe
+Persistenzschicht. Eine Aussage über den tatsächlich laufenden Server verlangt
+zusätzlich einen datierten Runtime-Beleg.
+
+JSONL bleibt der lokale, testbare Code-Default sowie ein historischer Import-,
+Export- und ausdrücklich freizugebender Rückfallpfad. Dieser lokale Default ist
+keine Aussage über die Produktionsarchitektur und kein stiller
+Produktionsfallback.
 
 ## Quellenmatrix
 
-| Domäne | Standard lesen | Standard schreiben | PostgreSQL-Option |
+| Domäne | Lokaler/Legacy-Default | Produktionsvertrag | Physische PostgreSQL-Fläche |
 |---|---|---|---|
-| Accounts/Garnrollen | JSONL | JSONL-Append | `domain_accounts`; Account-Create opt-in |
-| Knoten | JSONL | JSONL-Rewrite | `domain_nodes`; Patch opt-in |
-| Fäden | JSONL | JSONL-Append | `domain_edges`; Create opt-in |
-| Sitzungen | In-Memory ohne DB | gleicher Store | `sessions` bei konfiguriertem DB-Store |
-| Passkeys | In-Memory | In-Memory | `passkey_credentials` opt-in |
+| Accounts/Garnrollen | JSONL lesen und anhängen | PostgreSQL lesen und schreiben | `domain_accounts` |
+| Knoten | JSONL lesen und umschreiben | PostgreSQL lesen; `POST` und `PATCH` schreiben | `domain_nodes` |
+| Fäden | JSONL lesen und anhängen | PostgreSQL lesen; `POST` schreibt | `domain_edges` |
+| Sitzungen | In-Memory ohne `DATABASE_URL` | PostgreSQL bei verpflichtender `DATABASE_URL` | `sessions` |
+| Passkeys | In-Memory | PostgreSQL als Produktionsdefault | `passkey_credentials` |
 | Gespräche/Nachrichten | kein vollständiger produktiver Pfad | kein vollständiger produktiver Pfad | nur Contracts, keine Tabellen |
 
 PostgreSQL-Schreiben verlangt PostgreSQL-Lesen. Die API verweigert ungültige
 Mischzustände, damit Änderungen nach einem Neustart nicht unsichtbar werden.
-Es gibt keinen allgemeinen Dual-Write.
+Es gibt keinen allgemeinen Dual-Write. `compose.prod.yml` setzt Lesequelle und
+alle vorhandenen Domänenschreibquellen gemeinsam auf `postgres`;
+`.env.example` bleibt dagegen absichtlich eine lokal startbare JSONL-Vorlage.
 
 Für Fäden gilt unabhängig von der physischen Quelle: Freie `note`-Texte werden
 persistiert, gehören aber nicht zur öffentlichen Projektion von `GET /edges`,
@@ -65,8 +74,9 @@ Die folgende Übersicht wird aus den aktuellen Migrationen abgeleitet.
 | `last_active` | `TIMESTAMPTZ` | letzte Aktivität |
 | `expires_at` | `TIMESTAMPTZ` | serverseitiger Ablauf |
 
-Derzeit besteht kein Foreign Key auf `domain_accounts`, weil Accounts weiterhin
-aus JSONL gelesen werden können.
+Derzeit besteht kein Foreign Key auf `domain_accounts`, weil lokale Legacy-,
+Import- und ausdrücklich freigegebene Rückfallpfade weiterhin JSONL-Identitäten
+verarbeiten können.
 
 ### `domain_accounts`
 
@@ -139,15 +149,18 @@ derselben Kennung für andere Daten wird als Konflikt abgewiesen.
 | Zeitfelder | `TIMESTAMPTZ` | Erstellung, Änderung, letzte Nutzung |
 
 Die Tabelle speichert keine privaten Passkey-Schlüssel. Ein Foreign Key zu
-`domain_accounts` ist bis zum vollständigen PostgreSQL-Accountcutover bewusst
-ausgesetzt.
+`domain_accounts` bleibt bis zum belegten Legacy-Backfill und zur abschließenden
+Identitätsbereinigung bewusst ausgesetzt.
 
 ## JSONL-Modell
 
-JSONL-Datensätze folgen den JSON-Schemas in `contracts/domain`. Die API lädt sie
-beim Start in begrenzte In-Memory-Stores. Schreibpfade serialisieren
-check-and-write innerhalb eines Prozesses und verwenden `fsync`; sie sind kein
-Ersatz für eine transaktionale Mehrprozessdatenbank.
+JSONL-Datensätze folgen den JSON-Schemas in `contracts/domain`. Im lokalen oder
+ausdrücklich aktivierten Legacy-Modus lädt die API sie beim Start in begrenzte
+In-Memory-Stores. Schreibpfade serialisieren check-and-write innerhalb eines
+Prozesses und verwenden `fsync`; sie sind kein Ersatz für eine transaktionale
+Mehrprozessdatenbank. In Produktion darf JSONL nur als dokumentierter Import-,
+Export- oder Rollbackpfad eingesetzt werden, nie als stiller Ersatz für einen
+fehlgeschlagenen PostgreSQL-Pfad.
 
 ## Contracts ohne produktive Tabellen
 

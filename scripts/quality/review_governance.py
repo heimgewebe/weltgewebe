@@ -21,7 +21,9 @@ from typing import Any, Iterable, Sequence
 
 SCHEMA_VERSION = 1
 MAX_ARTIFACT_BYTES = 100 * 1024 * 1024
+MIN_REVIEW_REPORT_BYTES = 120
 SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
+REPORT_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 GITHUB_LOGIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
 RISK_ORDER = {"R0": 0, "R1": 1, "R2": 2, "R3": 3}
 REQUIRED_REVIEWS = {"R0": 0, "R1": 1, "R2": 2, "R3": 2}
@@ -373,9 +375,12 @@ Benenne konkrete Befunde. Ein PASS ist nur zulässig, wenn alle Mergeblocker beh
 oder nachvollziehbar widerlegt sind. Dateien ohne GitHub-Textdarstellung müssen
 separat geprüft oder als offener Mergeblocker benannt werden.
 
-Nach dem Review wird ein Beleg nach diesem Muster als PR-Kommentar hinterlegt:
+Nach dem Review wird der vollständige Reviewtext als normaler Kommentartext
+vor dem Marker hinterlegt. `report_sha256` ist der SHA-256 des getrimmten
+UTF-8-Reviewtexts vor dem Marker. Danach folgt genau ein Belegblock:
 
 ```text
+<VOLLSTÄNDIGER REVIEWTEXT>
 <!-- weltgewebe-review-evidence
 {{
   "schema_version": 1,
@@ -385,6 +390,7 @@ Nach dem Review wird ein Beleg nach diesem Muster als PR-Kommentar hinterlegt:
   "diff_sha256": "{diff_hash}",
   "risk_class": "{risk_class or "R?"}",
   "reviewer": "NAME DES PRÜFERS",
+  "report_sha256": "SHA-256 DES REVIEWTEXTS VOR DEM MARKER",
   "review_axis": "correctness",
   "verdict": "PASS",
   "findings_resolved": true
@@ -392,8 +398,10 @@ Nach dem Review wird ein Beleg nach diesem Muster als PR-Kommentar hinterlegt:
 -->
 ```
 
-Der Kommentar muss von einem GitHub-Owner, Member oder Collaborator stammen. Jeder
-neue Push, Basiswechsel oder Diffwechsel entwertet den Beleg automatisch.
+Der Kommentar muss von einem freigegebenen GitHub-Attestierer stammen. Leere,
+zu kurze, mehrfach markierte oder nicht zum Berichtshash passende Kommentare
+zählen nicht. Jeder neue Push, Basiswechsel oder Diffwechsel entwertet den Beleg
+automatisch.
 """
     request_path.write_text(request, encoding="utf-8")
     return Bundle(
@@ -576,16 +584,22 @@ def _evidence_blocks(comments: Sequence[dict[str, Any]]) -> list[dict[str, Any]]
         body = comment.get("body") or ""
         if not isinstance(body, str):
             continue
-        for block_index, match in enumerate(EVIDENCE_RE.finditer(body)):
+        matches = list(EVIDENCE_RE.finditer(body))
+        for block_index, match in enumerate(matches):
             try:
                 record = json.loads(match.group(1))
             except json.JSONDecodeError:
                 continue
             if not isinstance(record, dict):
                 continue
+            report_text = body[: match.start()].strip()
+            report_bytes = report_text.encode("utf-8")
             record = dict(record)
             record["_comment_index"] = comment_index
             record["_block_index"] = block_index
+            record["_comment_evidence_block_count"] = len(matches)
+            record["_report_text_bytes"] = len(report_bytes)
+            record["_report_text_sha256"] = _sha256(report_bytes)
             record["_author_association"] = str(
                 comment.get("author_association") or ""
             ).upper()
@@ -654,6 +668,7 @@ def evaluate_evidence(
             "diff_sha256",
             "risk_class",
             "reviewer",
+            "report_sha256",
             "review_axis",
             "verdict",
             "findings_resolved",
@@ -672,16 +687,23 @@ def evaluate_evidence(
             stale += 1
             continue
         reviewer = str(record.get("reviewer") or "").strip()
+        report_sha256 = str(record.get("report_sha256") or "").strip()
         axis = str(record.get("review_axis") or "").strip().lower()
         verdict = str(record.get("verdict") or "").strip().upper()
         if (
             not reviewer
+            or len(reviewer) > 120
+            or not REPORT_SHA256_RE.fullmatch(report_sha256)
+            or report_sha256 != record.get("_report_text_sha256")
+            or record.get("_report_text_bytes", 0) < MIN_REVIEW_REPORT_BYTES
+            or record.get("_comment_evidence_block_count") != 1
             or axis not in ALLOWED_AXES
             or verdict not in {"PASS", "BLOCKED", "FAIL"}
         ):
             malformed += 1
             continue
         record["reviewer"] = reviewer
+        record["report_sha256"] = report_sha256
         record["review_axis"] = axis
         record["verdict"] = verdict
         exact.append(record)
@@ -728,10 +750,13 @@ def evaluate_evidence(
         )
 
     reviewer_names = {record["reviewer"].casefold() for record in accepted}
+    report_hashes = {record["report_sha256"] for record in accepted}
     axes = {record["review_axis"] for record in accepted}
     if required >= 2:
         if len(reviewer_names) < 2:
             reasons.append("R2/R3 require at least two distinct reviewer identities")
+        if len(report_hashes) < 2:
+            reasons.append("R2/R3 require at least two distinct review reports")
         if len(axes) < 2:
             reasons.append("R2/R3 require at least two distinct review axes")
     if risk_class == "R3" and not (axes & HIGH_RISK_AXES):
@@ -742,6 +767,7 @@ def evaluate_evidence(
     accepted_summary = [
         {
             "reviewer": record["reviewer"],
+            "report_sha256": record["report_sha256"],
             "review_axis": record["review_axis"],
             "attester": record.get("_comment_author"),
             "comment_url": record.get("_comment_url"),

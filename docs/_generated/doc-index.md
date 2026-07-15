@@ -96,7 +96,7 @@ Generated automatically. Do not edit.
 | process.README | Prozess-Übersicht | reference | active | docs/process/README.md |
 | process.bash-tooling-guidelines | Bash Tooling Guidelines | reference | active | docs/process/bash-tooling-guidelines.md |
 | process.fahrplan | Fahrplan | reference | active | docs/process/fahrplan.md |
-| process.merge-quality-gate | Weltgewebe Merge Quality Gate | policy | active | docs/process/merge-quality-gate.md |
+| process.merge-quality-gate | Merge-Qualitätsgate | policy | active | docs/process/merge-quality-gate.md |
 | process.report-lifecycle | Report Lifecycle Policy | policy | active | docs/process/report-lifecycle.md |
 | process.report-lifecycle-contract-alignment | Report Lifecycle Contract Alignment | decision | active | docs/process/report-lifecycle-contract-alignment.md |
 | process.sprache | Sprache | reference | active | docs/process/sprache.md |
@@ -159,6 +159,7 @@ Generated automatically. Do not edit.
 | specs.auth-ui | Auth UI Spec | reference | active | docs/specs/auth-ui.md |
 | specs.contract | Datenvertrag | reference | active | docs/specs/contract.md |
 | specs.garnrolle-knoten-faden | Garnrolle, Knoten und Faden | specification | canonical | docs/specs/garnrolle-knoten-faden.md |
+| specs.governance-antraege | Anträge, Konsent, Veto und Abstimmung | specification | canonical | docs/specs/governance-antraege.md |
 | specs.list-pagination-api | List Pagination API Spec | reference | active | docs/specs/list-pagination-api.md |
 | specs.map-experience | Kartenerlebnis | specification | canonical | docs/specs/map-experience.md |
 | specs.privacy-api | Garnrollen-Sichtbarkeit API | reference | active | docs/specs/privacy-api.md |

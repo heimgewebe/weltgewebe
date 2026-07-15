@@ -1346,7 +1346,7 @@ pub async fn update_account_email_in_postgres(
 
 // ── OPT-ARC-001 Phase E-C: edge-create write path ───────────────────────────
 //
-// Narrow PostgreSQL write helper for `POST /edges` only. It maps the same
+// Narrow PostgreSQL helper for internal derived-Faden projection. It maps the same
 // validated `Edge` value that `create_edge` puts into the cache and the
 // response (built via the canonical `build_edge_record` semantics), so the
 // PostgreSQL branch accepts exactly the same create semantics as JSONL. The

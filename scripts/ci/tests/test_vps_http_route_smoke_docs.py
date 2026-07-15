@@ -103,6 +103,38 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, text)
 
+    def test_production_caddyfile_preserves_real_404_semantics(self) -> None:
+        production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
+        self.assertIn("try_files {path} {path}.html {path}/index.html", production)
+        self.assertNotIn("try_files {path} {path}.html /index.html", production)
+        self.assertIn("Unknown paths must remain real 404 responses", production)
+
+    def test_production_caddyfile_canonicalizes_only_existing_trailing_slash_routes(self) -> None:
+        production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
+
+        required = [
+            "@trailingSlash path_regexp ^/.+/$",
+            "uri strip_suffix /",
+            "@prerendered file {",
+            "root /srv/weltgewebe-web",
+            "try_files {path}.html {path}/index.html",
+            "redir @prerendered {uri} 308",
+            "respond 404",
+        ]
+        for phrase in required:
+            with self.subTest(required=phrase):
+                self.assertIn(phrase, production)
+
+        self.assertLess(
+            production.index("handle_path /api/*"),
+            production.index("@trailingSlash path_regexp ^/.+/$"),
+        )
+        self.assertLess(
+            production.index("@trailingSlash path_regexp ^/.+/$"),
+            production.index("# Serve only real files or explicitly prerendered Svelte routes."),
+        )
+        self.assertIn("Unknown slash paths remain direct 404 responses", production)
+
     def test_compose_override_keeps_explicit_caddyfile_selection_hook(self) -> None:
         doc_text = self.doc.read_text(encoding="utf-8")
         compose_text = self.compose_override.read_text(encoding="utf-8")

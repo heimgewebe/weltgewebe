@@ -8,11 +8,7 @@
     systemState,
   } from "$lib/stores/uiView";
   import { authStore } from "$lib/auth/store";
-  import {
-    createEdge,
-    createNode,
-    ApiRequestError,
-  } from "$lib/api/domainWrites";
+  import { createNode, ApiRequestError } from "$lib/api/domainWrites";
 
   let title = "";
   let description = "";
@@ -24,20 +20,11 @@
   let addressError = false;
   let formError: string | null = null;
 
-  // Set once the node itself is durably created. While set (and edgeError is
-  // set alongside it), the panel shows the partial-success/retry state
-  // instead of the create form — the node exists, the account->node Faden
-  // does not yet, and the UI must say so rather than imply one atomic step.
-  let createdNodeId: string | null = null;
-  let edgeError: string | null = null;
-  let closeBlocked = false;
-
   // One operation id identifies one semantic user action. A transport failure
   // may hide a successful server write, so retries reuse the same id while the
   // payload stays unchanged. Editing the form starts a new semantic action.
   let nodeOperationId: string | null = null;
   let nodeOperationSignature: string | null = null;
-  let edgeOperationId: string | null = null;
 
   $: canWrite = $authStore.role === "weber" || $authStore.role === "admin";
   $: placingGarnrolle = $kompositionDraft?.mode === "place-garnrolle";
@@ -59,10 +46,6 @@
     return nodeOperationId;
   }
 
-  function operationIdForEdge(): string {
-    edgeOperationId ??= crypto.randomUUID();
-    return edgeOperationId;
-  }
 
   async function returnToGarnrolleSettings(withLocation: boolean) {
     const location = withLocation ? $kompositionDraft?.lngLat : undefined;
@@ -82,10 +65,6 @@
   }
 
   function handleCancel() {
-    if (createdNodeId && edgeError) {
-      closeBlocked = true;
-      return;
-    }
     if (placingGarnrolle) {
       void returnToGarnrolleSettings(false);
       return;
@@ -112,51 +91,6 @@
     await invalidateAll();
     lastCreatedNodeId.set(nodeId);
     leaveToNavigation();
-  }
-
-  async function attemptCreateEdge(nodeId: string) {
-    edgeError = null;
-    closeBlocked = false;
-    const accountId = $authStore.account_id;
-    if (!accountId) {
-      edgeError =
-        "Der Knoten wurde gespeichert, aber der Faden zu deiner Garnrolle konnte nicht geknüpft werden (keine aktive Sitzung). Du kannst es erneut versuchen.";
-      return;
-    }
-    try {
-      await createEdge({
-        source_id: accountId,
-        source_type: "account",
-        target_id: nodeId,
-        target_type: "node",
-        edge_kind: "reference",
-        operation_id: operationIdForEdge(),
-      });
-      await finalizeSuccess(nodeId);
-    } catch (e) {
-      edgeError =
-        "Der Knoten wurde gespeichert, aber der Faden zu deiner Garnrolle konnte nicht geknüpft werden. Du kannst es erneut versuchen oder bewusst ohne Faden fortfahren.";
-    }
-  }
-
-  async function retryEdge() {
-    if (!createdNodeId || isSubmitting) return;
-    isSubmitting = true;
-    try {
-      await attemptCreateEdge(createdNodeId);
-    } finally {
-      isSubmitting = false;
-    }
-  }
-
-  async function continueWithoutEdge() {
-    if (!createdNodeId || isSubmitting) return;
-    isSubmitting = true;
-    try {
-      await finalizeSuccess(createdNodeId);
-    } finally {
-      isSubmitting = false;
-    }
   }
 
   async function handleSubmit(e: Event) {
@@ -190,8 +124,10 @@
       // Guard: only proceed if we are still in komposition state and the
       // draft hasn't been replaced in the meantime.
       if ($systemState === "komposition" && $kompositionDraft === submitDraft) {
-        createdNodeId = node.id;
-        await attemptCreateEdge(node.id);
+        // Der Faden ist keine zweite Nutzeraktion. Der Server hat ihn bereits
+        // als Projektion derselben Webungsaktion erzeugt oder die Anfrage
+        // fehlgeschlagen zurückgegeben.
+        await finalizeSuccess(node.id);
       }
     } catch (err) {
       formError = describeCreateNodeError(err);
@@ -249,33 +185,6 @@
           Diesen Punkt übernehmen
         </button>
       </div>
-    </div>
-  {:else if createdNodeId && edgeError}
-    {#if closeBlocked}<div class="form-error" role="alert">
-        Der Knoten ist bereits gespeichert. Entscheide, ob der Faden erneut
-        geknüpft oder bewusst ausgelassen werden soll.
-      </div>{/if}
-    <div class="state-set">
-      <p><strong>Knoten gespeichert</strong></p>
-      <p>{edgeError}</p>
-    </div>
-    <div class="actions">
-      <button
-        type="button"
-        class="btn btn-secondary"
-        on:click={continueWithoutEdge}
-        disabled={isSubmitting}
-      >
-        Ohne Faden fortfahren
-      </button>
-      <button
-        type="button"
-        class="btn btn-primary"
-        on:click={retryEdge}
-        disabled={isSubmitting}
-      >
-        {isSubmitting ? "Versuche erneut…" : "Faden erneut knüpfen"}
-      </button>
     </div>
   {:else}
     <form on:submit={handleSubmit} class="komposition-form">

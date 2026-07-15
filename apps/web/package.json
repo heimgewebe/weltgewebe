@@ -47,6 +47,7 @@
     "pretest:unit": "pnpm run generate:client-version && pnpm run generate:basemap-config",
     "test:unit": "vitest run",
     "test:pmtiles-validator": "node --test scripts/validate-pmtiles.test.mjs",
+    "test:public-web-assets": "node --test scripts/generate-public-web-assets.test.mjs",
     "validate:pmtiles": "node scripts/validate-pmtiles.mjs",
     "test": "playwright test",
     "test:proof:auth-passkey-register": "playwright test --config=playwright.auth.proof.config.ts --reporter=dot,html,junit",
@@ -58,7 +59,7 @@
     "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
     "sync": "node scripts/generate-version.js --client && pnpm run generate:basemap-config && svelte-kit sync",
     "preci": "pnpm run generate:basemap-config",
-    "ci": "node ../../ci/scripts/assert-web-budget.mjs && pnpm lint && pnpm check:ci",
+    "ci": "node ../../ci/scripts/assert-web-budget.mjs && pnpm test:public-web-assets && pnpm lint && pnpm check:ci",
     "dev:cs": "node scripts/generate-version.js --client && pnpm run generate:basemap-config && vite dev --host 0.0.0.0 --port 5173",
     "preview:cs": "vite preview --host 0.0.0.0 --port 4173",
     "generate:client-version": "node scripts/generate-version.js --client"

@@ -120,7 +120,18 @@ class CanonicalTruthContractTests(unittest.TestCase):
 
     def test_data_model_names_actual_sources_and_absent_tables(self) -> None:
         text = (ROOT / "docs/datenmodell.md").read_text(encoding="utf-8")
-        self.assertIn("JSONL der Standard", text)
+        compose_prod = (ROOT / "infra/compose/compose.prod.yml").read_text(
+            encoding="utf-8"
+        )
+        env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+
+        self.assertIn("Repository-Produktionsvertrag", text)
+        self.assertIn("JSONL bleibt der lokale, testbare Code-Default", text)
+        self.assertIn(
+            "WELTGEWEBE_DOMAIN_READ_SOURCE: ${WELTGEWEBE_DOMAIN_READ_SOURCE:-postgres}",
+            compose_prod,
+        )
+        self.assertIn("WELTGEWEBE_DOMAIN_READ_SOURCE=jsonl", env_example)
         for table in (
             "sessions",
             "domain_accounts",
@@ -130,6 +141,7 @@ class CanonicalTruthContractTests(unittest.TestCase):
         ):
             self.assertIn(f"`{table}`", text)
         self.assertIn("keine `conversations`, `messages`, `roles`, `outbox`", text)
+        self.assertNotIn("Domänendaten bleibt JSONL der Standard", text)
         self.assertNotIn("PostgreSQL ist die alleinige Quelle der Wahrheit", text)
 
     def test_active_privacy_docs_do_not_promise_zero_cookies(self) -> None:

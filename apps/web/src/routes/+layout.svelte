@@ -15,17 +15,19 @@
 
   onMount(() => {
     setUAClasses();
-    // Toggle: ?noinert=1 schaltet Polyfill ab (Debug/Kompat)
     const q = new URLSearchParams(get(page).url.search);
     const disable = q.get('noinert') === '1' || (window as any).__NO_INERT__ === true;
     if (!disable) ensureInertPolyfill();
-
-    // Initialize update polling for controlled self-updating
     updateStore.init();
   });
 </script>
 
 <svelte:head>
+  <title>Weltgewebe – Commons gemeinsam verwalten</title>
+  <meta name="description" content="Das Weltgewebe macht Commons, Knoten, Garnrollen und ihre Beziehungen auf einer gemeinsamen Karte sichtbar und verwaltbar." />
+  <meta name="application-name" content="Weltgewebe" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   {#if data?.canonical}
     <link rel="canonical" href={data.canonical} />
   {/if}

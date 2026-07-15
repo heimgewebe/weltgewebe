@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod config;
 pub mod domain_db;
+pub mod governance;
 pub mod mailer;
 pub mod middleware;
 pub mod routes;
@@ -109,10 +110,12 @@ pub async fn run() -> anyhow::Result<()> {
                     "domain_edge_write_source=postgres requires DATABASE_URL and an available PostgreSQL pool; refusing to start"
                 ));
             }
-            tracing::info!("Edge write source: PostgreSQL (POST /edges).");
+            tracing::info!(
+                "Faden projection source: PostgreSQL (internal Webungsaktion projection)."
+            );
         }
         DomainEdgeWriteSource::Jsonl => {
-            tracing::info!("Edge write source: JSONL (default).");
+            tracing::info!("Faden projection source: JSONL (default internal projection).");
         }
     }
 
@@ -255,6 +258,36 @@ pub async fn run() -> anyhow::Result<()> {
         passkey_authentications,
         passkeys,
     };
+
+    // Governance-Fristen-Sweeper: wertet Antragsfristen serverseitig und
+    // idempotent aus, unabhängig davon, ob ein Browser Anfragen stellt. Ohne
+    // Pool existiert kein Sweeper — die Governance-Endpunkte antworten dann
+    // fail-closed (503), niemals aus einem Fallback.
+    if state.config.domain_read_source == config::DomainReadSource::Postgres
+        && state.config.domain_account_write_source == config::DomainAccountWriteSource::Postgres
+    {
+        let Some(pool) = state.db_pool.clone() else {
+            return Err(anyhow!(
+                "canonical PostgreSQL governance requires an available pool; refusing to start"
+            ));
+        };
+        let accounts = state.accounts.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(std::time::Duration::from_secs(60));
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                ticker.tick().await;
+                match governance::finalize_due_proposals(&pool, chrono::Utc::now()).await {
+                    Ok(outcomes) => {
+                        governance::apply_promotions_to_store(&accounts, &outcomes).await;
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "governance deadline sweep failed");
+                    }
+                }
+            }
+        });
+    }
 
     let app = Router::new()
         // Serve at root for Caddy (which strips /api prefix)
