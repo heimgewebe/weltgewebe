@@ -867,16 +867,15 @@ pub async fn insert_domain_node(
     let mut tx = pool.begin().await.map_err(NodeCreateError::Database)?;
 
     if let Some(operation) = operation {
-        sqlx::query(
-            "SELECT pg_advisory_xact_lock(\
-                 hashtextextended($1, hashtextextended($2, 0))\
-             )",
-        )
-        .bind(&operation.actor_id)
-        .bind(&operation.operation_id)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(NodeCreateError::Database)?;
+        let lock_key = crate::advisory_lock::stable_advisory_lock_key(
+            "weltgewebe:create-operation:v1",
+            &[&operation.actor_id, &operation.operation_id],
+        );
+        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+            .bind(lock_key)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(NodeCreateError::Database)?;
 
         let existing: Option<NodeRow> = sqlx::query_as(
             "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text \

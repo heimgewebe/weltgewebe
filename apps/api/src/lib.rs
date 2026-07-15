@@ -1,3 +1,4 @@
+mod advisory_lock;
 pub mod auth;
 pub mod config;
 pub mod domain_db;

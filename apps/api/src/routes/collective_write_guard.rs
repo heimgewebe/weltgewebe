@@ -1,9 +1,4 @@
-use std::{
-    collections::hash_map::DefaultHasher,
-    future::Future,
-    hash::{Hash, Hasher},
-    sync::OnceLock,
-};
+use std::{future::Future, sync::OnceLock};
 
 use axum::{
     extract::{Path, State},
@@ -28,7 +23,7 @@ use super::nodes;
 // the connection pool while the first request owns the database advisory lock.
 // Different node ids can proceed concurrently; rare stripe collisions only
 // reduce local parallelism and never weaken correctness.
-const NODE_MUTATION_LOCK_SEED: i64 = 0x5747_4E4F_4445_4D55;
+const NODE_MUTATION_LOCK_NAMESPACE: &str = "weltgewebe:node-mutation:v1";
 const LOCAL_NODE_LOCK_STRIPES: usize = 64;
 static LOCAL_NODE_LOCKS: OnceLock<Vec<Mutex<()>>> = OnceLock::new();
 
@@ -50,10 +45,12 @@ fn local_node_locks() -> &'static [Mutex<()>] {
         .as_slice()
 }
 
+fn node_mutation_lock_key(node_id: &str) -> i64 {
+    crate::advisory_lock::stable_advisory_lock_key(NODE_MUTATION_LOCK_NAMESPACE, &[node_id])
+}
+
 fn local_node_lock_index(node_id: &str) -> usize {
-    let mut hasher = DefaultHasher::new();
-    node_id.hash(&mut hasher);
-    (hasher.finish() as usize) % LOCAL_NODE_LOCK_STRIPES
+    (node_mutation_lock_key(node_id) as u64 as usize) % LOCAL_NODE_LOCK_STRIPES
 }
 
 fn local_node_lock(node_id: &str) -> &'static Mutex<()> {
@@ -94,9 +91,12 @@ async fn acquire_node_mutation_guard(
         )
             .into_response()
     })?;
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, $2))")
-        .bind(node_id)
-        .bind(NODE_MUTATION_LOCK_SEED)
+    // Hash in application code and call only PostgreSQL's documented bigint
+    // advisory-lock API. This avoids depending on backend hash support
+    // functions whose availability may differ across PostgreSQL-compatible
+    // managed services.
+    sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+        .bind(node_mutation_lock_key(node_id))
         .execute(&mut *transaction)
         .await
         .map_err(|error| {
@@ -205,7 +205,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn node_lock_stripes_are_stable_per_id_and_not_global() {
+    fn node_lock_keys_and_stripes_are_stable_per_id_and_not_global() {
+        assert_eq!(
+            node_mutation_lock_key("node-stable"),
+            2_204_785_427_200_031_019
+        );
         assert_eq!(
             local_node_lock_index("node-stable"),
             local_node_lock_index("node-stable")

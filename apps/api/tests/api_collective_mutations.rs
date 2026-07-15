@@ -203,6 +203,27 @@ async fn weber_can_replace_shared_node_and_delete_node_cascade() -> Result<()> {
     assert_eq!(node["title"], "Gemeinsam gepflegt");
     assert_eq!(node["created_at"], "2026-01-01T00:00:00Z");
 
+    // PUT intentionally shares the create contract: coordinates are nested
+    // under `location`. Flat `lat`/`lon` fields must fail rather than silently
+    // drifting away from the TypeScript client contract.
+    let flat_location = mutation_request(
+        "PUT",
+        "/nodes/n1",
+        &cookie,
+        r#"{"title":"Falscher Vertrag","kind":"Werkstatt","address":"Neu 1","lat":53.55,"lon":10.05,"tags":[]}"#,
+    );
+    let response = app.clone().oneshot(flat_location).await?;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        state
+            .nodes
+            .read()
+            .await
+            .get("n1")
+            .map(|node| node.title.as_str()),
+        Some("Gemeinsam gepflegt")
+    );
+
     let delete_node = mutation_request("DELETE", "/nodes/n1", &cookie, "");
     let response = app.clone().oneshot(delete_node).await?;
     assert_eq!(response.status(), StatusCode::NO_CONTENT);

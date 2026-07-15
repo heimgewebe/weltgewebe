@@ -108,14 +108,22 @@ pub struct UpdateNode {
     pub info: Option<Option<String>>,
 }
 
-/// Lightweight struct for fast-path ID checking during node updates.
+/// Lightweight struct for fast-path ID checking during node rewrites.
 ///
 /// Used to check if a line matches the target node ID without fully parsing
 /// the entire JSON `Value`. This avoids full deserialization for non-matching
-/// lines (the vast majority during PATCH) and keeps memory usage O(1).
+/// lines during PATCH, PUT and DELETE preparation and keeps memory usage O(1).
 #[derive(Deserialize)]
 struct IdOnly {
     id: Option<String>,
+}
+
+fn jsonl_line_has_id(line: &str, target_id: &str) -> bool {
+    serde_json::from_str::<IdOnly>(line)
+        .ok()
+        .and_then(|record| record.id)
+        .as_deref()
+        == Some(target_id)
 }
 
 #[derive(Deserialize)]
@@ -1433,14 +1441,13 @@ async fn replace_node_jsonl(node: &Node) -> std::io::Result<bool> {
         let mut replaced = false;
         while let Some(line) = lines.next_line().await? {
             let mut output = line.clone();
-            if let Ok(mut value) = serde_json::from_str::<Value>(&line) {
-                if value.get("id").and_then(Value::as_str) == Some(node.id.as_str()) {
-                    set_node_record_fields(&mut value, node)?;
-                    output = serde_json::to_string(&value).map_err(|error| {
-                        std::io::Error::new(std::io::ErrorKind::InvalidData, error)
-                    })?;
-                    replaced = true;
-                }
+            if jsonl_line_has_id(&line, &node.id) {
+                let mut value = serde_json::from_str::<Value>(&line)
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+                set_node_record_fields(&mut value, node)?;
+                output = serde_json::to_string(&value)
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+                replaced = true;
             }
             writer.write_all(output.as_bytes()).await?;
             writer.write_all(b"\n").await?;
@@ -1812,11 +1819,7 @@ async fn prepare_node_delete_tmp(
     let mut deleted = false;
 
     while let Some(line) = lines.next_line().await? {
-        let matches = serde_json::from_str::<Value>(&line)
-            .ok()
-            .and_then(|value| value.get("id").and_then(Value::as_str).map(str::to_string))
-            .as_deref()
-            == Some(node_id);
+        let matches = jsonl_line_has_id(&line, node_id);
         if matches {
             deleted = true;
             continue;
