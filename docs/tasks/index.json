@@ -1564,6 +1564,331 @@
         ]
       },
       "updated_at": "2026-07-02"
+    },
+    {
+      "id": "WELTGEWEBE-OS-001",
+      "title": "Weltgewebe-OS-Verfassung und Architekturentscheidungen verankern",
+      "area": "governance",
+      "status": "partial",
+      "priority": "high",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "governance",
+      "evidence": [
+        "architecture/weltgewebe-os.md",
+        "docs/adr/ADR-0010__kubernetes-kanonische-plattform.md",
+        "docs/adr/ADR-0011__foederierte-gewebezellen.md",
+        "docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md",
+        "docs/specs/federation-core.md",
+        "docs/blueprints/weltgewebe-os-masterplan.md",
+        "docs/reports/weltgewebe-os-foundation-status.md"
+      ],
+      "missing_evidence": [
+        "Merge auf main und Post-Merge-Guards fehlen",
+        "Bureau-Gesamtinitiative und Ökosystem-Folgetasks sind bis zur separaten Registry-Veröffentlichung noch nicht kanonisch"
+      ],
+      "acceptance": [
+        "Kanonische Architektur, ADRs, Föderationskern, Masterplan und Statusbericht sind auf main",
+        "Roadmap, Task-Control, Techstack und Repository-Wahrheitsmodell verweisen konsistent auf Weltgewebe OS",
+        "Kein Dokument behauptet eine bereits erfolgte Kubernetes-, HA- oder Föderationsmigration",
+        "Bureau führt eine schema-konforme Gesamtinitiative mit abhängigen Systemtasks"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "architecture/weltgewebe-os.md",
+          "docs/blueprints/weltgewebe-os-masterplan.md",
+          "docs/reports/weltgewebe-os-foundation-status.md"
+        ]
+      },
+      "updated_at": "2026-07-15"
+    },
+    {
+      "id": "WELTGEWEBE-OS-002",
+      "title": "Multi-Instance-State-Audit durchführen",
+      "area": "api",
+      "status": "open",
+      "priority": "high",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "api",
+      "evidence": [
+        "docs/reports/domain-postgres-instance-coherence-decision.md",
+        "scripts/guard/domain-single-instance-guard.sh"
+      ],
+      "missing_evidence": [
+        "Vollständiges Inventar aller prozesslokalen autoritativen, temporären und Cache-Zustände",
+        "Umsetzungsslices und konkrete Mehrinstanz-Testmatrix"
+      ],
+      "acceptance": [
+        "Jeder relevante API-Zustand ist nach Autorität, Persistenz, Lebensdauer, Eigentümer und Fehlerwirkung klassifiziert",
+        "Alle Multi-Instanz-Blocker sind konkreten Folgetasks und Tests zugeordnet",
+        "Der Single-Instance-Guard bleibt unverändert aktiv"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/domain-postgres-instance-coherence-decision.md",
+          "docs/reports/weltgewebe-os-foundation-status.md"
+        ]
+      },
+      "updated_at": "2026-07-15"
+    },
+    {
+      "id": "WELTGEWEBE-OS-003",
+      "title": "Autoritative Auth-Zwischenzustände gemeinsam persistieren",
+      "area": "auth",
+      "status": "open",
+      "priority": "high",
+      "effort": "L",
+      "risk": "high",
+      "owner": "auth",
+      "evidence": [
+        "docs/reports/domain-postgres-instance-coherence-decision.md",
+        "docs/blueprints/auth-roadmap.md"
+      ],
+      "missing_evidence": [
+        "Persistenz- und Ablaufvertrag für Magic-Link-, Step-up-, Challenge- und Passkey-Zwischenzustände",
+        "Cross-Instance-, Restart- und Ablaufbeweise"
+      ],
+      "acceptance": [
+        "Kein produktionsrelevanter Auth-Zwischenzustand hängt ausschließlich an einem API-Prozess",
+        "Zwei API-Instanzen können denselben Auth-Vorgang sicher fortsetzen",
+        "Ablauf, Einmaligkeit, Replay-Schutz und Bereinigung sind getestet"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/auth-roadmap.md",
+          "docs/reports/weltgewebe-os-foundation-status.md"
+        ]
+      },
+      "updated_at": "2026-07-15"
+    },
+    {
+      "id": "WELTGEWEBE-OS-004",
+      "title": "Transactional Outbox und versioniertes Ereignisrückgrat einführen",
+      "area": "api",
+      "status": "open",
+      "priority": "high",
+      "effort": "L",
+      "risk": "high",
+      "owner": "api",
+      "evidence": [
+        "docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md"
+      ],
+      "missing_evidence": [
+        "Outbox-Schema, Relay, JetStream-Vertrag und erster idempotenter Konsument",
+        "Crash-, Doppelzustellungs-, Backpressure- und Replay-Beweise"
+      ],
+      "acceptance": [
+        "Fachmutation und Outbox-Eintrag sind atomar",
+        "Relay setzt nach Absturz ohne Ereignisverlust fort",
+        "Doppelte Veröffentlichung erzeugt keine doppelte Fachwirkung",
+        "Rückstand, Fehler und Quarantäne sind beobachtbar"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md",
+          "docs/reports/weltgewebe-os-foundation-status.md"
+        ]
+      },
+      "updated_at": "2026-07-15"
+    },
+    {
+      "id": "WELTGEWEBE-OS-005",
+      "title": "Zwei-API-Kohärenz und Guard-Ablösung beweisen",
+      "area": "api",
+      "status": "blocked",
+      "priority": "high",
+      "effort": "L",
+      "risk": "high",
+      "owner": "api",
+      "evidence": [
+        "scripts/guard/domain-single-instance-guard.sh",
+        "docs/reports/domain-postgres-instance-coherence-decision.md"
+      ],
+      "missing_evidence": [
+        "Shared-State- und Outbox-Voraussetzungen aus WELTGEWEBE-OS-003/004",
+        "Zwei-Replica-CI-, Parallelitäts-, Restart- und Verzögerungstests"
+      ],
+      "acceptance": [
+        "Zwei API-Instanzen gegen dieselbe Datenbank liefern nach Lesen, Schreiben, Neustart und verzögerten Ereignissen konsistente Ergebnisse",
+        "Cacheinvalidierung und Deduplikation sind belegt",
+        "Der Single-Instance-Guard wird nur in demselben diffgebundenen Schnitt durch einen stärkeren Multi-Instance-Guard ersetzt"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/domain-postgres-instance-coherence-decision.md",
+          "docs/blueprints/weltgewebe-os-masterplan.md"
+        ]
+      },
+      "updated_at": "2026-07-15"
+    },
+    {
+      "id": "WELTGEWEBE-OS-006",
+      "title": "Kubernetes- und GitOps-Grundlage reproduzierbar aufbauen",
+      "area": "infra",
+      "status": "blocked",
+      "priority": "medium",
+      "effort": "XL",
+      "risk": "high",
+      "owner": "infra",
+      "evidence": [
+        "docs/adr/ADR-0010__kubernetes-kanonische-plattform.md",
+        "architecture/weltgewebe-os.md"
+      ],
+      "missing_evidence": [
+        "Kanonische platform-Struktur, lokale Clusterreferenz, Flux-, Gateway-, Netzwerk-, Secret-, Policy- und Telemetriebeweise"
+      ],
+      "acceptance": [
+        "Ein leerer lokaler Cluster wird aus versionierten Artefakten reproduzierbar aufgebaut",
+        "Dieselben App-Basen werden in CI und Staging verwendet",
+        "Compose bleibt ein begrenzter, getesteter Nebenpfad statt einer zweiten Wahrheit",
+        "Keine Produktionsmigration erfolgt vor WELTGEWEBE-OS-005"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/adr/ADR-0010__kubernetes-kanonische-plattform.md",
+          "docs/blueprints/weltgewebe-os-masterplan.md"
+        ]
+      },
+      "updated_at": "2026-07-15"
+    },
+    {
+      "id": "WELTGEWEBE-OS-007",
+      "title": "Observability Spine über Runtime, Ereignisse und Receipts verbinden",
+      "area": "infra",
+      "status": "blocked",
+      "priority": "medium",
+      "effort": "L",
+      "risk": "medium",
+      "owner": "infra",
+      "evidence": [
+        "architecture/weltgewebe-os.md",
+        "docs/blueprints/weltgewebe-os-masterplan.md"
+      ],
+      "missing_evidence": [
+        "Korrelationsvertrag für Trace, Event, Deployment, Zellbeziehung und Grabowski-Receipt",
+        "SLO-Dashboards und getestete Alarme"
+      ],
+      "acceptance": [
+        "Eine Nutzer- oder Föderationswirkung ist von Anfrage über Ereignis und Deployment bis Receipt korrelierbar",
+        "SLOs und Fehlerbudgets sind messbar",
+        "Leitstand und Schauwerk konsumieren Projektionen statt neue Wahrheiten zu erzeugen"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "architecture/weltgewebe-os.md",
+          "docs/blueprints/weltgewebe-os-masterplan.md"
+        ]
+      },
+      "updated_at": "2026-07-15"
+    },
+    {
+      "id": "WELTGEWEBE-OS-008",
+      "title": "Hochverfügbare Referenzzelle mit Restore und Failover beweisen",
+      "area": "infra",
+      "status": "blocked",
+      "priority": "medium",
+      "effort": "XL",
+      "risk": "high",
+      "owner": "infra",
+      "evidence": [
+        "docs/blueprints/weltgewebe-os-masterplan.md"
+      ],
+      "missing_evidence": [
+        "Fehlerdomänen, repliziertes PostgreSQL und JetStream, PITR, Blank-Cluster-Restore, gemessene RTO/RPO"
+      ],
+      "acceptance": [
+        "API-, Datenbank- und Messagingausfälle wurden kontrolliert geprobt",
+        "Kein bestätigter Fachvorgang geht verloren",
+        "RTO, RPO, Upgrade und Rollback sind gemessen",
+        "Ein Einzelhost wird nicht als HA-Beleg verwendet"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/weltgewebe-os-masterplan.md",
+          "docs/reports/weltgewebe-os-foundation-status.md"
+        ]
+      },
+      "updated_at": "2026-07-15"
+    },
+    {
+      "id": "WELTGEWEBE-OS-009",
+      "title": "Föderationsprotokoll v0 und Konformitätssuite entwickeln",
+      "area": "governance",
+      "status": "blocked",
+      "priority": "medium",
+      "effort": "XL",
+      "risk": "high",
+      "owner": "governance",
+      "evidence": [
+        "docs/adr/ADR-0011__foederierte-gewebezellen.md",
+        "docs/specs/federation-core.md"
+      ],
+      "missing_evidence": [
+        "Wire-Protokoll, Zellschlüssel, Inbox/Outbox, Versionsaushandlung, Quarantäne und positive/negative Konformitätstests"
+      ],
+      "acceptance": [
+        "Unabhängige Testzellen prüfen Identität, Signatur, Reichweite, Wiederholung, Aktualisierung und Löschung",
+        "Öffentliche Föderation benötigt keinen internen Cluster- oder NATS-Zugriff",
+        "Unbekannte Versionen und Zellen werden fail-closed oder quarantänisiert"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/specs/federation-core.md",
+          "docs/adr/ADR-0011__foederierte-gewebezellen.md"
+        ]
+      },
+      "updated_at": "2026-07-15"
+    },
+    {
+      "id": "WELTGEWEBE-OS-010",
+      "title": "Zwei-Zellen-Nachbarschaft als Produktbeweis umsetzen",
+      "area": "web",
+      "status": "blocked",
+      "priority": "medium",
+      "effort": "XL",
+      "risk": "high",
+      "owner": "product",
+      "evidence": [
+        "docs/blueprints/weltgewebe-os-masterplan.md",
+        "docs/specs/federation-core.md"
+      ],
+      "missing_evidence": [
+        "Zwei unabhängige Zellen, Zellbeziehung, gemeinsamer Raum, Nachbarschaftssuche und Partition-Recovery"
+      ],
+      "acceptance": [
+        "Zellübergreifende Knoten, Fäden und ein gemeinsamer Raum funktionieren",
+        "Beide Zellen bleiben bei Trennung lokal arbeitsfähig",
+        "Wiederverbindung konvergiert ohne stille Datenverluste",
+        "Lokale Moderation und Reichweiten bleiben wirksam"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/weltgewebe-os-masterplan.md",
+          "docs/specs/federation-core.md"
+        ]
+      },
+      "updated_at": "2026-07-15"
     }
   ]
 }

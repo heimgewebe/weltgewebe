@@ -28,6 +28,10 @@ relations:
   - type: depends_on
     target: docs/blueprints/versionierungs-blaupause.md
   - type: depends_on
+    target: docs/blueprints/weltgewebe-os-masterplan.md
+  - type: depends_on
+    target: docs/reports/weltgewebe-os-foundation-status.md
+  - type: depends_on
     target: docs/reports/optimierungsstatus.md
   - type: depends_on
     target: docs/reports/auth-status-matrix.md
@@ -80,6 +84,7 @@ Status- oder Reihenfolgequelle für die Master-Roadmap dient.
 
 | Thema | Sub-Roadmap | Statusbeleg |
 |---|---|---|
+| Weltgewebe OS | [weltgewebe-os-masterplan.md](blueprints/weltgewebe-os-masterplan.md), [kanonische Zielarchitektur](../architecture/weltgewebe-os.md) | [weltgewebe-os-foundation-status.md](reports/weltgewebe-os-foundation-status.md) |
 | Auth | [auth-roadmap.md](blueprints/auth-roadmap.md) | [auth-status-matrix.md](reports/auth-status-matrix.md) |
 | Auth-Persistenz (Runtime-Proof) | [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md) | [auth-persistence-readiness.md](reports/auth-persistence-readiness.md), [auth-persistence-next-step.md](reports/auth-persistence-next-step.md) |
 | UI | [UI-Interaktionsvertrag](specs/ui-interaction.md), [Zustandsmaschine](specs/ui-state-machine.md) | [Kartenstatus](reports/map-status.md) |
@@ -89,6 +94,20 @@ Status- oder Reihenfolgequelle für die Master-Roadmap dient.
 | Dokumentationsstruktur & Task-Steuerung | [doc-structure-task-control-roadmap.md](blueprints/doc-structure-task-control-roadmap.md), [Blueprint](blueprints/doc-structure-task-control.md) | Beleg in der Task-Control-Schicht: [tasks/README.md](tasks/README.md), [board.md](tasks/board.md), [index.json](tasks/index.json), Drift-Guard `.github/workflows/task-index.yml`. Phase 2 vorhanden; Phase 4 Check-Modus + CI-Guard vorhanden (CI-Lauf-Nachweis offen, `TASK-CTL-003`); Schreibgenerator/Bot-PRs und Implementierungs-Mapping offen. Kein gesonderter OPT-Eintrag in `reports/optimierungsstatus.md` — Task-Control-Phasen laufen über `docs/tasks/`. |
 | Versionierung | [versionierungs-blaupause.md](blueprints/versionierungs-blaupause.md) | [versionierungs-statusgrundlage.md](blueprints/versionierungs-statusgrundlage.md) |
 | Optimierungsfront | (kein Sub-Plan) | [optimierungsstatus.md](reports/optimierungsstatus.md), [optimierungsbericht.md](reports/optimierungsbericht.md) |
+
+## Strang Weltgewebe OS
+
+Die Zielarchitektur ist föderiert und Kubernetes-native, ohne den heutigen Compose- und Single-Instance-Zustand als bereits migriert darzustellen. Die ausführliche Reihenfolge steht im [Weltgewebe-OS-Masterplan](blueprints/weltgewebe-os-masterplan.md).
+
+- [~] Welle 0 — Verfassung und Architekturentscheidungen: kanonische Zielarchitektur, ADR-0010 bis ADR-0012, Föderationskern, Masterplan und Statusbericht in diesem Änderungsschnitt.
+- [ ] Welle 1 — Multi-Instanz-Wahrheit: State-Audit, Shared Auth State, abgeleitete Caches, Transactional Outbox, idempotente Konsumenten und Zwei-API-Kohärenz.
+- [ ] Welle 2 — Kubernetes-native Grundlage: lokale Referenz, kanonische Manifeste, GitOps, Gateway, Netzwerkpolicies, Telemetrie und Previewpfad.
+- [ ] Welle 3 — Hochverfügbare Referenzzelle: Datenbank-/Messagingfailover, PITR, Blank-Cluster-Restore und gemessene RTO/RPO.
+- [ ] Welle 4 — Föderationskern-Runtime: Zellidentitäten, globale Objektadressen, signierte Ereignisse, Reichweite, Inbox/Outbox, Quarantäne und Konformitätstests.
+- [ ] Welle 5 — Zwei-Zellen-Nachbarschaft: unabhängige Testzellen, gemeinsame Räume, zellübergreifende Knoten/Fäden und Partition-Recovery.
+- [ ] Welle 6+ — globale rekonstruierbare Projektionen, deklarative Zellprofile, Grabowski-Rechengewebe und Edge-/Offlinezellen nur nach den vorherigen Beweisen.
+
+Der bestehende Single-Instance-Guard bleibt bis zum Welle-1-Kohärenzbeweis aktiv. Die Zielentscheidung ist kein Freibrief für Replica-Skalierung oder Produktionsmigration.
 
 ## Strang Auth
 
@@ -157,13 +176,18 @@ Dauerhafte UX-Regeln stehen in [Kartenerlebnis](specs/map-experience.md); die Ba
 
 ## Themenübergreifende Reihenfolge (Was vor Was)
 
-1. **Direkter SQLx/Postgres-Persistenzpfad-Nachweis** vor produktivem `DbSessionStore`; PgBouncer-Proofs sind nach ADR-0007 optionaler Dev-/Spezialpfad.
-2. **Auth-Phase 3 (Step-up)** vor **UI Auth-Integration**.
-3. **Kartenklarheit Phase 5 (souveräne Pipeline)** vor **Phase 6 (Wahrheitsbeweis)**.
-4. **Basemap-Roadmap Phase 3 (Runtime-Integration)** überlappt mit
+1. **Weltgewebe-OS-Verfassung und Multi-Instance-State-Audit** vor jeder horizontalen Skalierung, Kubernetes-Produktionsmigration oder öffentlichen Föderation.
+2. **Shared Auth State und Transactional Outbox** vor Ablösung des Single-Instance-Guards.
+3. **Zwei-API-Kohärenzbeweis** vor Kubernetes-Replica-Skalierung.
+4. **Kubernetes-Reproduzierbarkeit und Restore-Proof** vor einer HA-Behauptung.
+5. **Föderationskern und Konformitätstests** vor dem Zwei-Zellen-Pilot.
+6. **Direkter SQLx/Postgres-Persistenzpfad-Nachweis** vor produktivem `DbSessionStore`; PgBouncer-Proofs sind nach ADR-0007 optionaler Dev-/Spezialpfad.
+7. **Auth-Phase 3 (Step-up)** vor **UI Auth-Integration**.
+8. **Kartenklarheit Phase 5 (souveräne Pipeline)** vor **Phase 6 (Wahrheitsbeweis)**.
+9. **Basemap-Roadmap Phase 3 (Runtime-Integration)** überlappt mit
    **Kartenklarheit Phase 5/6** — gemeinsame Schnittmenge: PMTiles-Auslieferung
    über Caddy mit reproduzierbarem Artefakt.
-5. **Versionierungs-Statusgrundlage** vor jedem Feature, das semver-relevante
+10. **Versionierungs-Statusgrundlage** vor jedem Feature, das semver-relevante
    Schemata berührt (Domain-Contracts).
 
 ## Pflege-Regeln

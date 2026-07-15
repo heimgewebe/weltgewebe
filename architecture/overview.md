@@ -18,6 +18,8 @@ relations:
     target: runtime/README.md
   - type: relates_to
     target: docs/techstack.md
+  - type: relates_to
+    target: architecture/weltgewebe-os.md
 verifies_with: []
 ---
 
@@ -38,6 +40,12 @@ Kernfläche besteht aus:
 Gespräche, Nachrichten, föderale Governance und Gewebekonten sind teilweise als
 Contracts oder Konzepte vorhanden, aber nicht als vollständige produktive
 Ende-zu-Ende-Systeme.
+
+## Kanonische Zielrichtung
+
+Die langfristige Zielarchitektur steht in [`architecture/weltgewebe-os.md`](weltgewebe-os.md). Weltgewebe wird als föderiertes System autonomer Gewebe-Zellen mit globalen Identitäten, Beziehungen und gemeinsamen Räumen entwickelt. Kubernetes ist die kanonische Zielplattform; Compose bleibt die heutige reale Runtime und ein begrenzter Entwicklungs-/Recoverypfad.
+
+Diese Zielrichtung ändert keine unbelegte Gegenwartswahrheit: Der Single-Instance-Guard bleibt aktiv, bis gemeinsame Zustände, Transactional Outbox, idempotente Konsumenten und Zwei-API-Kohärenz belegt sind.
 
 ## Komponenten
 
@@ -108,6 +116,8 @@ darstellen.
 - Gesprächs- und Nachrichtencontracts bedeuten noch keine produktive
   Persistenzfläche.
 - NATS im Stack bedeutet noch keinen belegten Transactional-Outbox-Betrieb.
+- Kubernetes als Zielplattform bedeutet noch keinen laufenden Cluster oder HA-Beleg.
+- Föderationsverträge bedeuten noch keine öffentliche Zellföderation.
 - Externe Vorschauplattformen sind keine Quelle für die Produktionsrouting-
   oder Runtimewahrheit.
 

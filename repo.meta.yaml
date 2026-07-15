@@ -4,7 +4,7 @@ repo_type: service
 role: weltgewebe-stack
 status: active
 summary: >
-  Aktives Karteninterface mit SvelteKit, Rust/Axum, JSONL-/PostgreSQL-Cutoverpfaden, NATS und Caddy.
+  Aktives Karten- und Koordinationssystem mit kanonischer Zielarchitektur als föderiertes Weltgewebe OS; heutige Runtime mit SvelteKit, Rust/Axum, PostgreSQL, NATS, Caddy und Compose.
 
 owners:
   - heimgewebe
@@ -35,6 +35,8 @@ canonical_sources:
   - agent-policy.yaml
   - docs/policies/agent-reading-protocol.md
   - docs/policies/architecture-critique.md
+  - architecture/weltgewebe-os.md
+  - docs/specs/federation-core.md
   - docs/specs/map-experience.md
   - docs/specs/ui-interaction.md
   - docs/specs/ui-state-machine.md
@@ -107,6 +109,10 @@ indexing:
 related_repos: []
 
 keywords:
+  - weltgewebe-os
+  - federation
+  - kubernetes
+  - local-sovereignty
   - docs
   - agent-ready
 
@@ -127,6 +133,8 @@ truth_model:
         - "agent-policy.yaml"
         - "docs/policies/agent-reading-protocol.md"
         - "docs/policies/architecture-critique.md"
+        - "architecture/overview.md"
+        - "architecture/weltgewebe-os.md"
     - class: runtime_configs_and_code
       paths: ["infra/compose/*.yml", "apps/api/src/*", "apps/web/src/*", ".github/workflows/*.yml"]
     - class: normative_specifications

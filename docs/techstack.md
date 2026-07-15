@@ -11,6 +11,10 @@ relations:
     target: docs/architekturstruktur.md
   - type: relates_to
     target: docs/datenmodell.md
+  - type: relates_to
+    target: architecture/weltgewebe-os.md
+  - type: relates_to
+    target: docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
 ---
 
 # Techstack
@@ -87,37 +91,49 @@ werden.
 
 Für diese Punkte ist jeweils ein eigener Runtime- oder Ende-zu-Ende-Beleg nötig.
 
+## Kanonische Zielplattform, noch nicht als Runtime belegt
+
+- Kubernetes als Primärorchestrierung für Staging und Produktion
+- GitOps-Reconciliation und unveränderliche Images
+- Gateway API, Network Policies und beobachtbare Dienstflüsse
+- portable PostgreSQL-HA-, Backup- und Restore-Verträge
+- NATS JetStream mit Transactional Outbox und idempotenten Konsumenten
+- autonome Gewebe-Zellen mit fachlicher Föderation
+
+Diese Punkte sind durch `architecture/weltgewebe-os.md` und ADR-0010 bis ADR-0012 als Zielrichtung entschieden. Sie sind noch keine Behauptung über eine laufende Produktionsruntime. Compose bleibt bis zum belegten Cutover der reale Betriebsweg und ein begrenzter Entwicklungs-/Recoverypfad.
+
 ## Geplant oder noch unvollständig
 
 - Entfernung der nullable Legacy-`mode`-Rollbackspalte nach eigenem Post-Cutover-Beleg
 - Gespräche und Nachrichten
-- föderale Governance und Gewebekonten
+- föderierte Identitäten, Zellbeziehungen und gemeinsame Räume
 - normalisierte Geoabfragen beziehungsweise PostGIS
-- verlässliche Eventprojektionen und Outbox
+- verlässliche Eventprojektionen und Transactional Outbox
+- Multi-Instanz-Kohärenz und Ablösung des Single-Instance-Guards
 - konsolidierte Observability mit definierten SLOs
-- WAL-/PITR- oder Object-Lock-Backupstrategie, falls sie betrieblich benötigt
-  wird
+- WAL-/PITR- oder Object-Lock-Backupstrategie, falls sie betrieblich benötigt wird
 
-## Nicht aktueller Standard
+## Nicht als heutige Betriebswahrheit belegt
 
-Folgende Technologien sind keine heutige Betriebswahrheit und dürfen nur nach
-einer neuen Architekturentscheidung als Standard bezeichnet werden:
+Folgende Fähigkeiten oder Technologien dürfen trotz Zielentscheidung nicht als bereits betrieben bezeichnet werden:
 
-- Nomad oder Kubernetes als Primärorchestrierung
+- Kubernetes-Produktionsbetrieb
 - Multi-AZ- oder Multi-Region-Betrieb
 - KeyDB
 - Typesense oder MeiliSearch
 - Debezium
+- Nomad als neue Primärzielrichtung
 - Loki/Tempo als vollständig betriebene Plattform
 - automatische Cosign-/SLSA-Attestierung aller Artefakte
 - automatisierte Rotation sämtlicher Schlüssel
 
 ## Entscheidungsregel
 
-Eine neue Technologie wird erst Teil des kanonischen Stacks, wenn
+Eine konkrete Implementierung wird erst Teil der betriebenen Runtime, wenn
 
-1. ein konkretes Produkt- oder Betriebsproblem belegt ist,
-2. der einfachere vorhandene Stack nicht genügt,
-3. Betriebs- und Wiederherstellungspfad definiert sind,
-4. Tests und Ownership existieren,
-5. die Änderung in Code oder Runtime nachgewiesen ist.
+1. sie der kanonischen Weltgewebe-OS-Architektur entspricht,
+2. ein konkretes Produkt- oder Betriebsproblem belegt ist,
+3. der einfachere vorhandene Stack nicht genügt oder spätere invasive Migrationen verhindert werden müssen,
+4. Betriebs- und Wiederherstellungspfad definiert sind,
+5. Tests, Ownership und Wirkungsevidenz existieren,
+6. die Änderung in Code und Zielruntime nachgewiesen ist.

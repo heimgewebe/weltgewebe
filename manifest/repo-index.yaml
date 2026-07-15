@@ -4,6 +4,7 @@ zones:
     path: architecture/
     canonical_docs:
       - overview.md
+      - weltgewebe-os.md
       - security.md
       - docmeta.schema.md
   policy:
@@ -19,6 +20,7 @@ zones:
       - governance-antraege.md
       - ui-interaction.md
       - map-experience.md
+      - federation-core.md
   reality:
     path: runtime/
     canonical_docs:

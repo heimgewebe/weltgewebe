@@ -11,6 +11,8 @@ relations:
     target: docs/techstack.md
   - type: relates_to
     target: docs/datenmodell.md
+  - type: relates_to
+    target: architecture/weltgewebe-os.md
 ---
 
 # Architektur und Repositorystruktur
@@ -75,14 +77,14 @@ Vertragsvorbereitung und nicht als fertiges Subsystem gelesen werden.
 
 ### `infra`
 
-Docker Compose und Caddy sind die aktuelle Delivery-Basis. Vorhandene Profile
-werden in [`runtime/README.md`](../runtime/README.md) eingeordnet. Nomad,
-Kubernetes, eigenständige Suchdienste oder weitere Orchestrierungsschichten sind
-keine heutige Standardarchitektur.
+Docker Compose und Caddy sind die aktuelle reale Delivery-Basis. Vorhandene Profile
+werden in [`runtime/README.md`](../runtime/README.md) eingeordnet. Kubernetes ist
+nach ADR-0010 die kanonische Zielplattform, aber noch keine belegte heutige
+Produktionsruntime. Nomad ist keine neue Primärzielrichtung.
 
 ### `docs`, `architecture`, `runtime`, `runbooks`
 
-- `architecture/`: knappe kanonische System- und Sicherheitswahrheit,
+- `architecture/`: knappe kanonische System-, Ziel- und Sicherheitswahrheit,
 - `runtime/`: unterstützte Laufzeitverträge und Beobachtungsgrenzen,
 - `runbooks/`: operative Einstiege,
 - `docs/`: Detailverträge, ADRs, Berichte und Planung.
@@ -96,11 +98,17 @@ Neue Verzeichnisse oder Dienste werden erst angelegt, wenn ein konkreter Bedarf
 und ein Betriebsvertrag bestehen. Aktuell nicht als Standard vorhanden sind:
 
 - `apps/worker` für Projektionen oder Outbox-Relay,
+- `platform/` als kanonischer Kubernetes-/GitOps-Vertrag,
 - eigenständige Search-Services,
 - `packages/` als gemeinsame SDK-Schicht,
-- Nomad-/Kubernetes-Produktionsorchestrierung,
+- belegter Kubernetes-Produktionsbetrieb,
+- Föderationsgateway und Zellkonformitätstests,
 - Event-Sourcing als allgemeines Persistenzmodell,
 - vollständige Observability-Plattform mit verbindlichen SLOs.
+
+Die fehlende Runtime-Implementierung hebt die Zielentscheidung nicht auf. Neue
+Strukturen werden entlang `architecture/weltgewebe-os.md` eingeführt, sobald der
+jeweilige kleine Implementierungsschnitt und sein Betriebsvertrag belegt sind.
 
 ## Änderungsregel
 
