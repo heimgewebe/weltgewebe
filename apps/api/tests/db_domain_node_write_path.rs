@@ -39,8 +39,8 @@ use weltgewebe_api::{
         DomainReadSource,
     },
     domain_db::{
-        insert_domain_node, load_nodes_from_postgres, patch_node_in_postgres, NodeCreateError,
-        NodePatchInput,
+        delete_node_with_edges_in_postgres, insert_domain_node, load_nodes_from_postgres,
+        patch_node_in_postgres, replace_node_in_postgres, NodeCreateError, NodePatchInput,
     },
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
@@ -86,6 +86,9 @@ const NODE_NULL_LOC: &str = "writepath-node-null-location";
 const NODE_BAD_PAYLOAD: &str = "writepath-node-bad-payload";
 
 async fn clean(pool: &PgPool) {
+    pool.execute("DELETE FROM domain_edges WHERE id LIKE 'writepath-edge-%'")
+        .await
+        .expect("clean domain_edges fixtures");
     pool.execute("DELETE FROM domain_nodes WHERE id LIKE 'writepath-node-%'")
         .await
         .expect("clean domain_nodes fixtures");
@@ -1117,5 +1120,98 @@ async fn insert_domain_node_classifies_duplicate_id() -> Result<()> {
     );
 
     clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// M. Full replacement preserves technical identity, and deletion removes only
+/// node-typed edge projections in the same PostgreSQL transaction.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn replace_and_delete_node_cascade_is_transactional_in_postgres() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    seed_node(&pool, NODE_A, Some("old info"), None).await;
+    sqlx::query(
+        "INSERT INTO domain_edges \
+         (id, source_id, target_id, edge_kind, payload) \
+         VALUES \
+         ('writepath-edge-node', $1, 'writepath-node-other', 'reference', \
+          '{\"source_type\":\"node\",\"target_type\":\"node\"}'::jsonb), \
+         ('writepath-edge-account-collision', $1, 'writepath-node-other', 'reference', \
+          '{\"source_type\":\"account\",\"target_type\":\"node\"}'::jsonb)",
+    )
+    .bind(NODE_A)
+    .execute(&pool)
+    .await
+    .context("seed node and account-typed edge fixtures")?;
+
+    let replacement = Node {
+        id: NODE_A.to_string(),
+        kind: "Werkstatt".to_string(),
+        title: "Gemeinsam gepflegt".to_string(),
+        created_at: "2026-01-01T00:00:00Z".to_string(),
+        updated_at: "2026-07-15T04:00:00Z".to_string(),
+        summary: Some("Neue Zusammenfassung".to_string()),
+        info: Some("Neue Information".to_string()),
+        tags: vec!["commons".to_string()],
+        address: Some("Neue Straße 1".to_string()),
+        location: Location {
+            lat: 53.55,
+            lon: 10.05,
+        },
+    };
+    replace_node_in_postgres(&pool, &replacement)
+        .await
+        .context("replace node")?;
+
+    let row: (String, String, f64, f64, serde_json::Value) = sqlx::query_as(
+        "SELECT kind, title, lat, lon, payload \
+         FROM domain_nodes WHERE id = $1",
+    )
+    .bind(NODE_A)
+    .fetch_one(&pool)
+    .await
+    .context("read replaced node")?;
+    assert_eq!(row.0, "Werkstatt");
+    assert_eq!(row.1, "Gemeinsam gepflegt");
+    assert_eq!(row.2, 53.55);
+    assert_eq!(row.3, 10.05);
+    assert_eq!(row.4["summary"], "Neue Zusammenfassung");
+    assert_eq!(row.4["info"], "Neue Information");
+    assert_eq!(row.4["address"], "Neue Straße 1");
+    assert_eq!(row.4["tags"], serde_json::json!(["commons"]));
+
+    let mut removed = delete_node_with_edges_in_postgres(&pool, NODE_A)
+        .await
+        .context("delete node with projections")?;
+    removed.sort();
+    assert_eq!(removed, vec!["writepath-edge-node".to_string()]);
+
+    let node_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+            .bind(NODE_A)
+            .fetch_one(&pool)
+            .await?;
+    assert!(!node_exists);
+
+    let node_edge_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = 'writepath-edge-node')",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(!node_edge_exists);
+
+    let account_edge_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM domain_edges \
+         WHERE id = 'writepath-edge-account-collision')",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(account_edge_exists);
+
+    clean(&pool).await;
     Ok(())
 }

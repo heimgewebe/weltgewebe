@@ -23,7 +23,9 @@ use std::sync::OnceLock;
 use tokio::sync::Mutex;
 use tokio::{
     fs::{File, OpenOptions},
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom},
+    io::{
+        AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, BufWriter, SeekFrom,
+    },
 };
 use uuid::Uuid;
 
@@ -35,7 +37,7 @@ use uuid::Uuid;
 /// existing JSONL-API process model; cross-process file locking is out of scope.
 static EDGE_CREATE_PERSIST: OnceLock<Mutex<()>> = OnceLock::new();
 
-fn edge_create_persist_lock() -> &'static Mutex<()> {
+pub(crate) fn edge_create_persist_lock() -> &'static Mutex<()> {
     EDGE_CREATE_PERSIST.get_or_init(|| Mutex::new(()))
 }
 
@@ -281,6 +283,99 @@ pub async fn get_edge(
         source_details,
         target_details,
     }))
+}
+
+enum EdgeJsonlRewriteAction {
+    Keep,
+    Remove,
+}
+
+async fn rewrite_edges_jsonl<F>(mut transform: F) -> std::io::Result<Vec<Edge>>
+where
+    F: FnMut(&mut Value) -> std::io::Result<(EdgeJsonlRewriteAction, Option<Edge>)>,
+{
+    let path = edges_path();
+    let file = match File::open(&path).await {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error),
+    };
+    let mut lines = BufReader::new(file).lines();
+    let mut tmp_path = path.clone();
+    let filename = tmp_path.file_name().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "edges path has no filename",
+        )
+    })?;
+    let mut tmp_filename = filename.to_os_string();
+    tmp_filename.push(format!(".tmp.{}", Uuid::new_v4()));
+    tmp_path.set_file_name(tmp_filename);
+
+    let result = async {
+        let tmp_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)
+            .await?;
+        let mut writer = BufWriter::new(tmp_file);
+        let mut changed = Vec::new();
+        while let Some(line) = lines.next_line().await? {
+            let Ok(mut value) = serde_json::from_str::<Value>(&line) else {
+                writer.write_all(line.as_bytes()).await?;
+                writer.write_all(b"\n").await?;
+                continue;
+            };
+            let (action, affected) = transform(&mut value)?;
+            if let Some(edge) = affected {
+                changed.push(edge);
+            }
+            if matches!(action, EdgeJsonlRewriteAction::Remove) {
+                continue;
+            }
+            let output = serde_json::to_string(&value)
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+            writer.write_all(output.as_bytes()).await?;
+            writer.write_all(b"\n").await?;
+        }
+        writer.flush().await?;
+        let file = writer.into_inner();
+        file.sync_all().await?;
+        Ok::<Vec<Edge>, std::io::Error>(changed)
+    }
+    .await;
+
+    match result {
+        Ok(changed) => {
+            tokio::fs::rename(&tmp_path, &path).await?;
+            Ok(changed)
+        }
+        Err(error) => {
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            Err(error)
+        }
+    }
+}
+
+pub(crate) async fn delete_edges_referencing_node_jsonl(
+    node_id: &str,
+) -> std::io::Result<Vec<String>> {
+    let removed = rewrite_edges_jsonl(|value| {
+        let edge: Edge = match serde_json::from_value(value.clone()) {
+            Ok(edge) => edge,
+            Err(_) => return Ok((EdgeJsonlRewriteAction::Keep, None)),
+        };
+        let references_node = (edge.source_id == node_id
+            && edge.source_type.as_deref() != Some("account"))
+            || (edge.target_id == node_id && edge.target_type.as_deref() != Some("account"));
+        if references_node {
+            Ok((EdgeJsonlRewriteAction::Remove, Some(edge)))
+        } else {
+            Ok((EdgeJsonlRewriteAction::Keep, None))
+        }
+    })
+    .await?;
+    Ok(removed.into_iter().map(|edge| edge.id).collect())
 }
 
 /// Append a single edge record as a JSONL line. Durability via fsync.

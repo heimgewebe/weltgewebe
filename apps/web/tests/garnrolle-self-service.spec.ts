@@ -20,6 +20,9 @@ async function openSettingsAsWeber(page: Page) {
   await expect(section).toBeVisible();
   await expect(section.getByLabel("Anzeigename")).not.toHaveValue("");
   await expect(section.locator('[data-testid="save-garnrolle"]')).toBeEnabled();
+  await expect(
+    section.getByText("Ersten Knoten knüpfen", { exact: true }),
+  ).toHaveCount(0);
   return section;
 }
 

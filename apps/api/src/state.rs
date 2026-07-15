@@ -48,6 +48,14 @@ impl<T> OrderedCache<T> {
         self.items.get(id)
     }
 
+    pub fn remove(&mut self, id: &str) -> Option<T> {
+        let removed = self.items.remove(id)?;
+        if let Some(position) = self.order.iter().position(|existing_id| existing_id == id) {
+            self.order.remove(position);
+        }
+        Some(removed)
+    }
+
     pub fn len(&self) -> usize {
         self.items.len()
     }
@@ -136,5 +144,21 @@ mod tests {
         // Order must match original insertion of the unique ID
         let order: Vec<_> = cache.iter_in_order().collect();
         assert_eq!(order, vec![&"second".to_string(), &"item2".to_string()]);
+    }
+
+    #[test]
+    fn test_ordered_cache_remove_updates_lookup_length_and_order() {
+        let mut cache = OrderedCache::<String>::new();
+        cache.insert("id1".to_string(), "first".to_string());
+        cache.insert("id2".to_string(), "second".to_string());
+
+        assert_eq!(cache.remove("id1"), Some("first".to_string()));
+        assert_eq!(cache.get("id1"), None);
+        assert_eq!(cache.len(), 1);
+        assert_eq!(
+            cache.iter_in_order().collect::<Vec<_>>(),
+            vec![&"second".to_string()]
+        );
+        assert_eq!(cache.remove("missing"), None);
     }
 }

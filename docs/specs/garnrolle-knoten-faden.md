@@ -120,6 +120,16 @@ Ein Knoten ist ein fachlich fassbares Bündel. Er kann verortet oder ortsunabhä
 
 Knoten werden durch die Webungsaktion **Knoten knüpfen** aus einer angemeldeten Garnrolle heraus angelegt. Seed- oder Demo-Inhalte dürfen den organischen Produktpfad nicht ersetzen.
 
+Knoten gehören anschließend zum gemeinsamen Gewebe und nicht dauerhaft einer einzelnen Garnrolle. Weber und Administratoren dürfen ihre fachlichen Felder bearbeiten oder einen Knoten löschen. Gäste dürfen diese Änderungen weder ausführen noch simulieren.
+
+Für Bearbeitung und Löschung gelten folgende Integritätsregeln:
+
+1. Der Server validiert und speichert Änderungen vollständig; der Browser verändert keine lokale Nebenwahrheit.
+2. Technische Identität und Erstellungszeit des Knotens bleiben bei einer Bearbeitung erhalten.
+3. Eine Löschung entfernt den Knoten und alle daraus betroffenen Fadenprojektionen als serverseitig serialisierten Vorgang.
+4. Das Entfernen der Fadenprojektionen ist eine serverseitige Folge der Knotenlöschung und kein direkter Fadenlöschweg.
+5. Knoten- und Fadenpersistenz müssen für die Löschung dieselbe kanonische Quelle verwenden; gemischte Schreibquellen werden fail-closed abgelehnt.
+
 ## Webungsaktionen
 
 Webungsaktionen verändern oder erweitern das gemeinsame Gewebe. Dazu gehören unter anderem:
