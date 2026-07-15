@@ -10,5 +10,5 @@ relations:
 ---
 # Edge systemd units (optional)
 
-This is **not** the primary orchestration path. Default remains **Docker Compose → Nomad**.
-Use these units only for tiny single-node edge installs where Compose isn't available.
+This is **not** the primary orchestration path. The current runtime path remains Docker Compose; Kubernetes is the canonical target platform defined by ADR-0010. Nomad is not the current target.
+Use these units only for tiny single-node or future edge-cell installs where Compose or Kubernetes is not appropriate, and do not infer high availability from a systemd deployment.

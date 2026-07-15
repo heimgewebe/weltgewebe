@@ -15,6 +15,7 @@ Source: scripts/docmeta/generate_system_map.py
 
 |id|path|role|organ|status|last_reviewed|depends_on|verifies_with|missing_scripts|
 |---|---|---|---|---|---|---|---|---|
+|architecture.weltgewebe-os|architecture/weltgewebe-os.md|norm|governance|canonical|2026-07-15|overview|||
 |docmeta.schema|architecture/docmeta.schema.md|norm|docmeta|canonical|2026-06-09||scripts/docmeta/check_doc_review_age.py, scripts/docmeta/check_repo_index_consistency.py, scripts/docmeta/generate_system_map.py, scripts/docmeta/validate_relations.py||
 |overview|architecture/overview.md|norm|governance|canonical|2026-07-11||||
 |security|architecture/security.md|norm|governance|canonical|2026-07-11||||
@@ -30,6 +31,7 @@ Source: scripts/docmeta/generate_system_map.py
 
 |id|path|role|organ|status|last_reviewed|depends_on|verifies_with|missing_scripts|
 |---|---|---|---|---|---|---|---|---|
+|docs.specs.federation-core|docs/specs/federation-core.md|norm|governance|canonical|2026-07-15|architecture.weltgewebe-os|||
 |specs.garnrolle-knoten-faden|docs/specs/garnrolle-knoten-faden.md|norm|product-domain|canonical|2026-07-14||apps/api/tests/api_accounts.rs, apps/api/tests/api_governance_guards.rs, apps/web/tests/garnrolle-self-service.spec.ts, apps/web/tests/komposition.spec.ts, contracts/domain/account.schema.json, contracts/domain/edge.schema.json, contracts/domain/node.schema.json||
 |specs.governance-antraege|docs/specs/governance-antraege.md|norm|governance|canonical|2026-07-14|specs.garnrolle-knoten-faden|apps/api/tests/api_governance_guards.rs, apps/api/tests/db_governance.rs, apps/web/src/lib/api/governance.test.ts, apps/web/tests/governance.spec.ts||
 |specs.map-experience|docs/specs/map-experience.md|norm|product-map|canonical|2026-07-11|specs.ui-interaction, specs.ui-state-machine, specs.garnrolle-knoten-faden|apps/web/src/lib/map/scene.ts, apps/web/src/lib/map/types.ts, apps/web/src/routes/map/+page.svelte, apps/web/src/routes/map/+page.ts, apps/web/tests/edge-visibility.spec.ts, apps/web/tests/map-load-fallback.spec.ts, apps/web/tests/map-url-state.spec.ts||

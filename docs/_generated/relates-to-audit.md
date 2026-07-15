@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 574 |
-| — depends_on | 20 |
-| — relates_to | 542 |
+| Relationen gesamt | 602 |
+| — depends_on | 24 |
+| — relates_to | 566 |
 | — supersedes | 11 |
 | — verifies | 1 |
 | relates_to Anteil | 94% |
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (223 Dokumente):
+**Cluster 1** (230 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -49,6 +49,7 @@ _Keine Lücken erkannt._
 - `apps/api/tests/db_domain_account_write_path.rs`
 - `apps/api/tests/db_domain_backfill.rs`
 - `architecture/overview.md`
+- `architecture/weltgewebe-os.md`
 - `audit/impl-registry.yaml`
 - `contracts/agent/handoff.schema.json`
 - `contracts/agent/run-result.schema.json`
@@ -66,6 +67,9 @@ _Keine Lücken erkannt._
 - `docs/adr/ADR-0007__auth-persistence-production-db-path.md`
 - `docs/adr/ADR-0008__domain-mail-provider-boundaries.md`
 - `docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md`
+- `docs/adr/ADR-0010__kubernetes-kanonische-plattform.md`
+- `docs/adr/ADR-0011__foederierte-gewebezellen.md`
+- `docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md`
 - `docs/architekturstruktur.md`
 - `docs/blueprints/agent-operability-blaupause.md`
 - `docs/blueprints/auth-persistence-runtime-proof.md`
@@ -87,6 +91,7 @@ _Keine Lücken erkannt._
 - `docs/blueprints/ui-state-machine.md`
 - `docs/blueprints/versionierungs-blaupause.md`
 - `docs/blueprints/versionierungs-statusgrundlage.md`
+- `docs/blueprints/weltgewebe-os-masterplan.md`
 - `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 - `docs/blueprints/weltgewebe.config.diff.md`
 - `docs/blueprints/weltgewebe.deploy.plan.md`
@@ -185,6 +190,7 @@ _Keine Lücken erkannt._
 - `docs/reports/proof-matrix-generalization-decision.md`
 - `docs/reports/repo-audit-2026-07-02.md`
 - `docs/reports/report-lifecycle-restbestand-triage.md`
+- `docs/reports/weltgewebe-os-foundation-status.md`
 - `docs/roadmap.md`
 - `docs/runbook.md`
 - `docs/runbook.observability.md`
@@ -202,6 +208,7 @@ _Keine Lücken erkannt._
 - `docs/specs/auth-state-machine.md`
 - `docs/specs/auth-ui.md`
 - `docs/specs/contract.md`
+- `docs/specs/federation-core.md`
 - `docs/specs/garnrolle-knoten-faden.md`
 - `docs/specs/governance-antraege.md`
 - `docs/specs/list-pagination-api.md`

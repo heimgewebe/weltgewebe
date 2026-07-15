@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 167 |
-| Dokumente mit ausgehenden Relationen | 166 |
-| Dokumente als Ziel referenziert | 128 |
-| Relationen gesamt | 574 |
-| — depends_on | 20 |
-| — relates_to | 542 |
+| Dokumente gesamt | 173 |
+| Dokumente mit ausgehenden Relationen | 172 |
+| Dokumente als Ziel referenziert | 133 |
+| Relationen gesamt | 602 |
+| — depends_on | 24 |
+| — relates_to | 566 |
 | — supersedes | 11 |
 | — verifies | 1 |
 | Isolierte Dokumente | 0 |
@@ -29,13 +29,13 @@ Generated automatically. Do not edit.
 
 > Heuristische Hinweise — keine CI-Fehler. Zyklen deuten auf zirkuläre Abhängigkeiten, hohe Vernetzung auf zentrale Dokumente, die bei Änderungen besondere Aufmerksamkeit erfordern.
 
+- ⚠️ High outbound count (15): `docs/roadmap.md` — possible over-linking
 - ⚠️ High outbound count (13): `docs/blueprints/domain-data-postgres-cutover.md` — possible over-linking
-- ⚠️ High outbound count (13): `docs/roadmap.md` — possible over-linking
 - ⚠️ High outbound count (9): `docs/blueprints/blueprint-agent-safety-control-layer.md` — possible over-linking
 - ⚠️ High outbound count (9): `docs/runbooks/db-recovery.md` — possible over-linking
 - ⚠️ High outbound count (8): `docs/reference/agent-operability-fixture-matrix.md` — possible over-linking
 - ⚠️ High outbound count (8): `docs/reports/domain-edge-write-path-proof.md` — possible over-linking
-- ⚠️ High inbound count (20): `docs/tasks/board.md` — central dependency, review carefully
+- ⚠️ High inbound count (22): `docs/tasks/board.md` — central dependency, review carefully
 - ⚠️ High inbound count (16): `docs/deploy/README.md` — central dependency, review carefully
 - ⚠️ High inbound count (15): `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — central dependency, review carefully
 - ⚠️ High inbound count (14): `docs/reports/auth-status-matrix.md` — central dependency, review carefully
@@ -44,7 +44,7 @@ Generated automatically. Do not edit.
 - ⚠️ High inbound count (12): `docs/blueprints/domain-data-postgres-cutover.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/blueprints/auth-roadmap.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/deployment.md` — central dependency, review carefully
-- ⚠️ High inbound count (10): `docs/roadmap.md` — central dependency, review carefully
+- ⚠️ High inbound count (11): `docs/roadmap.md` — central dependency, review carefully
 
 ### Zyklen (depends_on)
 
@@ -54,8 +54,8 @@ _Keine Zyklen gefunden._
 
 **Ausgehend (outbound):**
 
+- `docs/roadmap.md` — 15 ausgehende Relationen
 - `docs/blueprints/domain-data-postgres-cutover.md` — 13 ausgehende Relationen
-- `docs/roadmap.md` — 13 ausgehende Relationen
 - `docs/blueprints/blueprint-agent-safety-control-layer.md` — 9 ausgehende Relationen
 - `docs/runbooks/db-recovery.md` — 9 ausgehende Relationen
 - `docs/reference/agent-operability-fixture-matrix.md` — 8 ausgehende Relationen
@@ -63,7 +63,7 @@ _Keine Zyklen gefunden._
 
 **Eingehend (inbound):**
 
-- `docs/tasks/board.md` — 20 eingehende Relationen
+- `docs/tasks/board.md` — 22 eingehende Relationen
 - `docs/deploy/README.md` — 16 eingehende Relationen
 - `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — 15 eingehende Relationen
 - `docs/reports/auth-status-matrix.md` — 14 eingehende Relationen
@@ -72,7 +72,7 @@ _Keine Zyklen gefunden._
 - `docs/blueprints/domain-data-postgres-cutover.md` — 12 eingehende Relationen
 - `docs/blueprints/auth-roadmap.md` — 11 eingehende Relationen
 - `docs/deployment.md` — 11 eingehende Relationen
-- `docs/roadmap.md` — 10 eingehende Relationen
+- `docs/roadmap.md` — 11 eingehende Relationen
 
 ### Isolierte Dokumente
 

@@ -10,7 +10,7 @@ relations:
   - type: relates_to
     target: docs/weltgewebe-agenten-manifest.md
 ---
-> **Historischer Orientierungsstand:** Dieser Text vermischt Vision, abgeleitete Governancewerte und frühere technische Zielbilder. Maßgeblich sind heute `docs/vision.md`, `docs/specs/garnrolle-knoten-faden.md`, `docs/specs/ui-interaction.md`, `docs/specs/ui-state-machine.md` und `docs/specs/map-experience.md`.
+> **Historischer Orientierungsstand:** Dieser Text vermischt Vision, abgeleitete Governancewerte und frühere technische Zielbilder. Maßgeblich sind heute `architecture/weltgewebe-os.md`, `docs/vision.md`, `docs/specs/federation-core.md`, `docs/specs/garnrolle-knoten-faden.md`, `docs/specs/ui-interaction.md`, `docs/specs/ui-state-machine.md` und `docs/specs/map-experience.md`.
 
 # Leitfaden · Ethik & Systemdesign (Weltgewebe)
 
@@ -138,7 +138,7 @@ Es beschreibt:
   Liveaussagen brauchen datierte Runtime-Evidence.
 - **Events und Beobachtung:** NATS sowie Prometheus-/Grafana-/Loki-/Tempo-Konfigurationen sind vorhanden, aber kein vollständiges Event-Sourcing- oder Observability-System ist allgemein produktiv belegt.
 - **Security:** sichere Sitzungen, Proxygrenze, CI-/Contract-Checks und secret-sichere Betriebsabläufe sind reale Leitplanken; SBOM, Signaturen, automatische Rotation und Forget-Pipeline bleiben gesondert nachzuweisende Ziele.
-- **Skalierung:** Compose ist der aktuelle Standard. Nomad, Kubernetes, HA-Cluster und FinOps-Ziele sind keine heutige Betriebswahrheit.
+- **Skalierung:** Compose ist die aktuelle Betriebsrealität. Kubernetes ist nach ADR-0010 die kanonische Zielplattform, aber noch keine heutige Runtime- oder HA-Wahrheit. Nomad ist keine neue Primärzielrichtung.
 - **Garnrollen-Sichtbarkeit:** Sichtbarkeit und Verortung sind Eigenschaften einer Garnrolle (`not_on_map`, `exact`, `radius`); Legacy-RoN wird nur lesend privacy-sicher normalisiert.
 
 ---

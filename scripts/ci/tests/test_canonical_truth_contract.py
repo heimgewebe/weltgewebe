@@ -70,12 +70,15 @@ class CanonicalTruthContractTests(unittest.TestCase):
 
     def test_readme_describes_active_implementation_not_docs_only_status(self) -> None:
         text = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("aktives, im Aufbau befindliches Karteninterface", text)
+        self.assertIn("aktives, im Aufbau befindliches Karten- und Koordinationssystem", text)
+        self.assertIn("föderierten Weltgewebe OS", text)
+        self.assertIn("Docker Compose die heutige reale Runtime", text)
         self.assertNotRegex(text, r"(?i)formaler\s+\*\*docs-only")
         self.assertNotIn("<!-- Docs-only", text)
 
     def test_canonical_entrypoints_are_substantive(self) -> None:
         required = {
+            "architecture/weltgewebe-os.md": ("## 2. Verfassungsprinzipien", "## 7. Plattformarchitektur"),
             "architecture/overview.md": ("## Komponenten", "## Hauptdatenflüsse"),
             "architecture/security.md": (
                 "## Vertrauensgrenzen",
@@ -108,17 +111,24 @@ class CanonicalTruthContractTests(unittest.TestCase):
         self.assertRegex(runbook, r"keinen\s+implementierten WAL-/PITR-")
         self.assertNotIn("WAL-Archivierung aktiv", runbook)
         self.assertNotIn("den `outbox`-Relay-Prozess starten", runbook)
-        self.assertIn("Compose ist der aktuelle Standard", orientation)
+        self.assertIn("Compose ist die aktuelle Betriebsrealität", orientation)
+        self.assertIn("Kubernetes ist nach ADR-0010 die kanonische Zielplattform", orientation)
+        self.assertIn("noch keine heutige Runtime- oder HA-Wahrheit", orientation)
 
     def test_techstack_separates_current_present_planned_and_nonstandard(self) -> None:
         text = (ROOT / "docs/techstack.md").read_text(encoding="utf-8")
         for heading in (
             "## Heute implementiert und kanonisch",
             "## Im Repository vorhanden, aber nicht allgemein produktiv belegt",
+            "## Kanonische Zielplattform, noch nicht als Runtime belegt",
             "## Geplant oder noch unvollständig",
-            "## Nicht aktueller Standard",
+            "## Nicht als heutige Betriebswahrheit belegt",
         ):
             self.assertIn(heading, text)
+        self.assertIn("Kubernetes als Primärorchestrierung für Staging und Produktion", text)
+        self.assertIn("noch keine Behauptung über eine laufende Produktionsruntime", text)
+        self.assertIn("Compose bleibt bis zum belegten Cutover der reale Betriebsweg", text)
+        self.assertIn("Nomad als neue Primärzielrichtung", text)
 
     def test_data_model_names_actual_sources_and_absent_tables(self) -> None:
         text = (ROOT / "docs/datenmodell.md").read_text(encoding="utf-8")

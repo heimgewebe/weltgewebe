@@ -16,23 +16,23 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 | Metric | Count |
 | --- | ---: |
-| files_total | 46 |
-| files_with_frontmatter | 46 |
+| files_total | 47 |
+| files_with_frontmatter | 47 |
 | files_without_frontmatter | 0 |
-| files_with_status | 46 |
+| files_with_status | 47 |
 | files_missing_status | 0 |
 | files_with_lifecycle_state | 43 |
-| files_missing_lifecycle_state | 3 |
+| files_missing_lifecycle_state | 4 |
 | files_with_lifecycle | 42 |
-| files_missing_lifecycle | 4 |
-| files_with_owner_task | 42 |
+| files_missing_lifecycle | 5 |
+| files_with_owner_task | 43 |
 | files_missing_owner_task | 4 |
-| files_with_review_after | 33 |
+| files_with_review_after | 34 |
 | files_missing_review_after | 13 |
-| files_primary_referenced | 41 |
+| files_primary_referenced | 42 |
 | files_primary_unreferenced | 5 |
-| files_with_derived_references | 46 |
-| files_with_relations | 46 |
+| files_with_derived_references | 47 |
+| files_with_relations | 47 |
 | files_with_missing_supersession_target | 0 |
 
 ## Doc Type Distribution
@@ -42,6 +42,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | documentation | 1 |
 | reference | 1 |
 | report | 42 |
+| status | 1 |
 | status-matrix | 2 |
 
 ## Reports
@@ -76,7 +77,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 2 | 4 | 6 |  |  |
 | docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 1 | 6 | 8 |  |  |
 | docs/reports/domain-node-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 6 |  |  |
-| docs/reports/domain-postgres-instance-coherence-decision.md | report | active | active | audit | DOMAIN-PG-002 | 2026-12-18 |  | 2 | 5 | 6 |  |  |
+| docs/reports/domain-postgres-instance-coherence-decision.md | report | active | active | audit | DOMAIN-PG-002 | 2026-12-18 |  | 5 | 5 | 6 |  |  |
 | docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | 4 | 4 | 3 |  |  |
 | docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 4 | 4 | 5 |  |  |
 | docs/reports/domain-runtime-data-source-reconciliation.md | report | active | active | audit | DB-PROOF-001 | 2026-07-18 |  | 1 | 4 | 5 |  |  |
@@ -94,6 +95,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/proof-matrix-generalization-decision.md | report | active | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  | 1 | 4 | 6 |  |  |
 | docs/reports/repo-audit-2026-07-02.md | report | active | active | audit | REPO-AUDIT-001 | 2026-10-31 |  | 1 | 4 | 4 |  |  |
 | docs/reports/report-lifecycle-restbestand-triage.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  | 0 | 5 | 3 | review_after |  |
+| docs/reports/weltgewebe-os-foundation-status.md | status | active |  |  | WELTGEWEBE-OS-001 | 2026-08-15 |  | 2 | 4 | 4 | lifecycle, lifecycle_state |  |
 
 ## Absent Core Lifecycle Metadata
 
@@ -112,6 +114,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/passkey-register-verify-prep.md | review_after |
 | docs/reports/planning-registration-findings.md | review_after |
 | docs/reports/report-lifecycle-restbestand-triage.md | review_after |
+| docs/reports/weltgewebe-os-foundation-status.md | lifecycle, lifecycle_state |
 
 ## Relations
 
@@ -163,6 +166,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/proof-matrix-generalization-decision.md | 6 | relates_to | .github/workflows/opt-arc-001-db-proof-matrix.yml, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, docs/tasks/index.json, scripts/docmeta/tests/test_validate_opt_arc_001_db_proof_matrix.py, scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py |
 | docs/reports/repo-audit-2026-07-02.md | 4 | relates_to | docs/policies/agent-reading-protocol.md, docs/policies/architecture-critique.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md |
 | docs/reports/report-lifecycle-restbestand-triage.md | 3 | relates_to | docs/process/report-lifecycle.md, docs/tasks/index.json, scripts/docmeta/validate_report_lifecycle.py |
+| docs/reports/weltgewebe-os-foundation-status.md | 4 | depends_on, relates_to | architecture/weltgewebe-os.md, docs/blueprints/weltgewebe-os-masterplan.md, docs/reports/domain-postgres-instance-coherence-decision.md, docs/tasks/board.md |
 
 ## Primary Referenced Reports
 
@@ -294,7 +298,10 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/reports/domain-edge-write-path-proof.md`
 
 - `docs/reports/domain-postgres-instance-coherence-decision.md`
+  - `docs/adr/ADR-0010__kubernetes-kanonische-plattform.md`
+  - `docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
+  - `docs/reports/weltgewebe-os-foundation-status.md`
   - `docs/tasks/board.md`
 
 - `docs/reports/domain-provider-role-finding.md`
@@ -385,6 +392,10 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/repo-audit-2026-07-02.md`
   - `docs/tasks/board.md`
+
+- `docs/reports/weltgewebe-os-foundation-status.md`
+  - `docs/blueprints/weltgewebe-os-masterplan.md`
+  - `docs/roadmap.md`
 
 ## Derived Referenced Reports
 
@@ -687,6 +698,12 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
   - `docs/_generated/staleness-report.md`
+
+- `docs/reports/weltgewebe-os-foundation-status.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/report-lifecycle.md`
 
 ## Primary Unreferenced Reports
 

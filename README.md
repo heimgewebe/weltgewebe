@@ -1,7 +1,9 @@
 # Weltgewebe
 
-Weltgewebe ist ein aktives, im Aufbau befindliches Karteninterface für
-Kollektivgüter, lokale Beziehungen und gemeinschaftliche Koordination. Das
+Weltgewebe ist ein aktives, im Aufbau befindliches Karten- und Koordinationssystem für
+Kollektivgüter, lokale Beziehungen und gemeinschaftliche Handlungsfähigkeit. Die
+kanonische Zielarchitektur entwickelt es zum föderierten Weltgewebe OS: lokale
+autonome Zellen mit globalen Identitäten, Beziehungen und gemeinsamen Räumen. Das
 Repository enthält die Webanwendung, die Rust-API, Datenverträge,
 Datenbankmigrationen, Compose-Profile, Caddy-Konfiguration und Betriebswerkzeuge.
 
@@ -21,6 +23,10 @@ Datenbankmigrationen, Compose-Profile, Caddy-Konfiguration und Betriebswerkzeuge
   Skalierung, Referenzintegrität, wiederholte Geräteabnahme und weitere
   Produktbereiche, nicht mehr den ersten vertikalen Persistenzschnitt.
 
+## Zielarchitektur
+
+[`architecture/weltgewebe-os.md`](architecture/weltgewebe-os.md) ist die verbindliche langfristige Zielarchitektur. Kubernetes ist die kanonische Zielplattform, während Docker Compose die heutige reale Runtime und ein begrenzter Entwicklungs-/Recoverypfad bleibt. Der bestehende Single-Instance-Guard bleibt aktiv, bis gemeinsame Zustände, Transactional Outbox, idempotente Konsumenten und Zwei-API-Kohärenz belegt sind.
+
 Historische ADRs und Berichte bleiben als Entscheidungs- und
 Entwicklungsgeschichte erhalten. Sie dürfen den aktuellen Code, die Migrationen
 oder die hier verlinkten kanonischen Ist-Dokumente nicht überstimmen.
@@ -33,6 +39,7 @@ aktualisiert und sind keine eigenständige Wahrheits- oder Entscheidungsschicht.
 
 | Frage | Wahrheitsort |
 |---|---|
+| Was ist das langfristige Ziel? | [`architecture/weltgewebe-os.md`](architecture/weltgewebe-os.md) |
 | Was läuft heute? | [`runtime/README.md`](runtime/README.md) |
 | Wie sind die Komponenten verbunden? | [`architecture/overview.md`](architecture/overview.md) |
 | Welche Sicherheitsgrenzen gelten? | [`architecture/security.md`](architecture/security.md) |
@@ -142,6 +149,8 @@ belegt ihn über `/_app/version.json` sowie den `X-Weltgewebe-Build`-Header.
 
 ## Planung und Status
 
+- [`docs/blueprints/weltgewebe-os-masterplan.md`](docs/blueprints/weltgewebe-os-masterplan.md) ordnet die langfristigen Umsetzungswellen.
+- [`docs/reports/weltgewebe-os-foundation-status.md`](docs/reports/weltgewebe-os-foundation-status.md) trennt Ziel und belegte Gegenwart.
 - [`docs/tasks/board.md`](docs/tasks/board.md) ist eine repositoryinterne
   Arbeitskarte.
 - [`docs/tasks/index.json`](docs/tasks/index.json) ist der maschinenlesbare

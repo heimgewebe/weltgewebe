@@ -24,6 +24,9 @@ Generated automatically. Do not edit.
 | adr.ADR-0007-auth-persistence-production-db-path | ADR-0007 — Auth-Persistenz Produktionspfad: Direkter PostgreSQL-Zugriff statt PgBouncer | reference | accepted | docs/adr/ADR-0007__auth-persistence-production-db-path.md |
 | adr.ADR-0008-domain-mail-provider-boundaries | ADR-0008 — Domain-, Mail- und SMTP-Providergrenzen | reference | accepted | docs/adr/ADR-0008__domain-mail-provider-boundaries.md |
 | adr.ADR-0009__garnrolle-verortung-sichtbarkeit | ADR-0009 — Garnrolle, Verortung und Sichtbarkeit | reference | active | docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md |
+| adr.ADR-0010__kubernetes-kanonische-plattform | ADR-0010 — Kubernetes als kanonische Zielplattform | reference | active | docs/adr/ADR-0010__kubernetes-kanonische-plattform.md |
+| adr.ADR-0011__foederierte-gewebezellen | ADR-0011 — Föderierte Gewebe-Zellen | reference | active | docs/adr/ADR-0011__foederierte-gewebezellen.md |
+| adr.ADR-0012__ereignisrueckgrat-transactional-outbox | ADR-0012 — Ereignisrückgrat mit Transactional Outbox | reference | active | docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md |
 | blueprint-doc-structure-task-control | Weltgewebe Dokumentationsstruktur und Task-Steuerung | blueprint | draft | docs/blueprints/doc-structure-task-control.md |
 | blueprint-doc-structure-task-control-examples | Dokumentationsstruktur und Task-Steuerung Beispiele | reference | draft | docs/blueprints/doc-structure-task-control-examples.md |
 | blueprint-doc-structure-task-control-roadmap | Dokumentationsstruktur und Task-Steuerung Roadmap | roadmap | draft | docs/blueprints/doc-structure-task-control-roadmap.md |
@@ -61,6 +64,7 @@ Generated automatically. Do not edit.
 | docs.blueprints.kartenklarheit | Blaupause zur Optimierung der Karte | blueprint | deprecated | docs/blueprints/kartenklarheit.md |
 | docs.blueprints.kartenklarheit-phase6 | Kartenklarheit Phase 6: Der Wahrheitsbeweis | blueprint | deprecated | docs/blueprints/kartenklarheit-phase6.md |
 | docs.blueprints.kartenklarheit-roadmap | Roadmap - Kartenklarheit | roadmap | deprecated | docs/blueprints/kartenklarheit-roadmap.md |
+| docs.blueprints.weltgewebe-os-masterplan | Weltgewebe OS — Masterplan | roadmap | active | docs/blueprints/weltgewebe-os-masterplan.md |
 | docs.claims.readme | Claim-Registry | reference | active | docs/claims/README.md |
 | docs.index | Weltgewebe - Doku-Index | index | active | docs/index.md |
 | docs.policies.agent-reading-protocol | Agent Reading Protocol | policy | canonical | docs/policies/agent-reading-protocol.md |
@@ -73,10 +77,12 @@ Generated automatically. Do not edit.
 | docs.reference.generated-artifact-control | Generated Artifact Control | reference | active | docs/reference/generated-artifact-control.md |
 | docs.reports.agent-readiness-audit | Agent Readiness Audit | documentation | active | docs/reports/agent-readiness-audit.md |
 | docs.reports.domain-runtime-data-source-reconciliation | Domain Runtime Data Source Reconciliation | report | active | docs/reports/domain-runtime-data-source-reconciliation.md |
+| docs.reports.weltgewebe-os-foundation-status | Weltgewebe OS Foundation — Status und Beweisgrenzen | status | active | docs/reports/weltgewebe-os-foundation-status.md |
 | docs.roadmap | Weltgewebe — Master-Umsetzungsroadmap | roadmap | active | docs/roadmap.md |
 | docs.runbook | Runbook | runbook | active | docs/runbook.md |
 | docs.runbook.observability | Observability Runbook | runbook | active | docs/runbook.observability.md |
 | docs.security.agent-write-scope-baseline | Agent Write Scope Baseline | security | active | docs/security/agent-write-scope-baseline.md |
+| docs.specs.federation-core | Föderationskern — normative Fachinvarianten | specification | canonical | docs/specs/federation-core.md |
 | docs.techstack | Techstack | architecture | active | docs/techstack.md |
 | docs.vision | Vision | vision | active | docs/vision.md |
 | domain.modules | Modul-IDs | reference | active | docs/domain/modules.md |

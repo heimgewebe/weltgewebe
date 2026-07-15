@@ -106,6 +106,16 @@ Generated automatically. Do not edit.
 - [relates_to] docs/datenmodell.md
 - [relates_to] docs/techstack.md
 
+## architecture/weltgewebe-os.md
+
+- [relates_to] docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
+- [relates_to] docs/adr/ADR-0011__foederierte-gewebezellen.md
+- [relates_to] docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md
+- [relates_to] docs/architekturstruktur.md
+- [depends_on] docs/blueprints/weltgewebe-os-masterplan.md
+- [depends_on] docs/reports/weltgewebe-os-foundation-status.md
+- [relates_to] docs/techstack.md
+
 ## audit/impl-registry.yaml
 
 - [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
@@ -200,6 +210,21 @@ Generated automatically. Do not edit.
 - [relates_to] docs/specs/garnrolle-knoten-faden.md
 - [relates_to] docs/specs/privacy-api.md
 - [relates_to] docs/specs/privacy-ui.md
+
+## docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
+
+- [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
+- [relates_to] docs/techstack.md
+
+## docs/adr/ADR-0011__foederierte-gewebezellen.md
+
+- [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
+- [relates_to] docs/specs/federation-core.md
+
+## docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md
+
+- [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
+- [relates_to] docs/specs/federation-core.md
 
 ## docs/architekturstruktur.md
 
@@ -336,6 +361,14 @@ Generated automatically. Do not edit.
 ## docs/blueprints/versionierungs-statusgrundlage.md
 
 - [relates_to] docs/blueprints/versionierungs-blaupause.md
+
+## docs/blueprints/weltgewebe-os-masterplan.md
+
+- [relates_to] docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
+- [relates_to] docs/adr/ADR-0011__foederierte-gewebezellen.md
+- [relates_to] docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md
+- [relates_to] docs/reports/weltgewebe-os-foundation-status.md
+- [depends_on] docs/roadmap.md
 
 ## docs/datenmodell.md
 
@@ -709,7 +742,10 @@ Generated automatically. Do not edit.
 
 ## docs/reports/domain-postgres-instance-coherence-decision.md
 
+- [relates_to] docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
+- [relates_to] docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/reports/weltgewebe-os-foundation-status.md
 
 ## docs/reports/domain-provider-role-finding.md
 
@@ -781,6 +817,11 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/auth-pg-002-passkey-db-store.md
 
+## docs/reports/weltgewebe-os-foundation-status.md
+
+- [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
+- [depends_on] docs/roadmap.md
+
 ## docs/roadmap.md
 
 - [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
@@ -790,6 +831,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/ui-blaupause.md
 - [relates_to] docs/blueprints/ui-interaction-doctrine.md
 - [relates_to] docs/blueprints/ui-state-machine.md
+- [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
 - [relates_to] docs/blueprints/weltgewebe.auth-and-ui-routing.md
 - [relates_to] docs/proofs/basemap-hamburg-artifact-proof.md
 - [relates_to] docs/reports/auth-persistence-runtime-target-reconciliation.md
@@ -887,7 +929,9 @@ Generated automatically. Do not edit.
 ## docs/specs/garnrolle-knoten-faden.md
 
 - [relates_to] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
+- [relates_to] docs/adr/ADR-0011__foederierte-gewebezellen.md
 - [relates_to] docs/policies/architecture-critique.md
+- [relates_to] docs/specs/federation-core.md
 - [relates_to] docs/specs/privacy-api.md
 - [relates_to] docs/vision.md
 
@@ -932,6 +976,7 @@ Generated automatically. Do not edit.
 ## docs/tasks/board.md
 
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
 - [relates_to] docs/deploy/secondary-domain-web-surfaces.md
 - [relates_to] docs/reports/domain-account-write-path-proof.md
 - [relates_to] docs/reports/domain-edge-cache-limit-design.md
@@ -948,6 +993,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
 - [relates_to] docs/reports/proof-matrix-generalization-decision.md
 - [relates_to] docs/reports/repo-audit-2026-07-02.md
+- [relates_to] docs/reports/weltgewebe-os-foundation-status.md
 - [relates_to] docs/security/agent-write-scope-baseline.md
 - [relates_to] docs/tasks/DEPLOY-DNS-001B.md
 - [relates_to] docs/tasks/README.md

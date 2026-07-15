@@ -14,11 +14,13 @@ summary: Navigationsindex zu den aktuellen Verträgen, Betriebsdokumenten, Arbei
 ## In fünf Minuten
 
 1. [Vision](vision.md) – wozu das Weltgewebe dient.
-2. [Architektur](../architecture/overview.md) – was heute im System existiert.
-3. [Garnrolle, Knoten und Faden](specs/garnrolle-knoten-faden.md) – Produktdomäne.
-4. [UI-Interaktionsvertrag](specs/ui-interaction.md) und [Zustandsmaschine](specs/ui-state-machine.md) – Bedienlogik.
-5. [Kartenerlebnis](specs/map-experience.md) – Kartenwahrheit und Darstellung.
-6. [Runtime](../runtime/README.md) und [Runbooks](../runbooks/README.md) – Betrieb.
+2. [Weltgewebe OS](../architecture/weltgewebe-os.md) – verbindliche langfristige Zielarchitektur.
+3. [Architektur](../architecture/overview.md) – was heute im System existiert.
+4. [Garnrolle, Knoten und Faden](specs/garnrolle-knoten-faden.md) – Produktdomäne.
+5. [Föderationskern](specs/federation-core.md) – Zell-, Ursprungs- und Reichweiteninvarianten.
+6. [UI-Interaktionsvertrag](specs/ui-interaction.md) und [Zustandsmaschine](specs/ui-state-machine.md) – Bedienlogik.
+7. [Kartenerlebnis](specs/map-experience.md) – Kartenwahrheit und Darstellung.
+8. [Runtime](../runtime/README.md) und [Runbooks](../runbooks/README.md) – Betrieb.
 
 ## Kanonische Produktverträge
 
@@ -26,6 +28,7 @@ summary: Navigationsindex zu den aktuellen Verträgen, Betriebsdokumenten, Arbei
 - [UI-Interaktionsvertrag](specs/ui-interaction.md)
 - [UI-Zustandsmaschine](specs/ui-state-machine.md)
 - [Kartenerlebnis](specs/map-experience.md)
+- [Föderationskern](specs/federation-core.md)
 
 ## Weitere aktive Spezifikationen
 
@@ -38,6 +41,7 @@ Diese Dokumente präzisieren Teilbereiche, sind aber nicht als eigene kanonische
 
 ## Architektur und Daten
 
+- [Weltgewebe OS](../architecture/weltgewebe-os.md)
 - [Architecture Overview](../architecture/overview.md)
 - [Security Architecture](../architecture/security.md)
 - [Techstack](techstack.md)
@@ -50,6 +54,8 @@ Diese Dokumente präzisieren Teilbereiche, sind aber nicht als eigene kanonische
 Roadmaps und Blaupausen beschreiben Arbeit oder mögliche Zielbilder. Sie sind nicht automatisch aktuelle Produktwahrheit.
 
 - [Master-Roadmap](roadmap.md)
+- [Weltgewebe-OS-Masterplan](blueprints/weltgewebe-os-masterplan.md)
+- [Weltgewebe-OS-Foundation-Status](reports/weltgewebe-os-foundation-status.md)
 - [Auth-Roadmap](blueprints/auth-roadmap.md)
 - [Domain-PostgreSQL-Cutover](blueprints/domain-data-postgres-cutover.md)
 - [Basemap-Architektur](blueprints/map-blaupause.md)
