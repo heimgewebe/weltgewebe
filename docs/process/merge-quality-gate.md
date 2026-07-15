@@ -36,7 +36,10 @@ Der Normalfall soll ohne manuelle Hasharbeit auskommen:
    Pfad betroffen ist.
 2. **R1 – kleine Konfiguration, Metadaten oder sichere Rastergrafik:** Risikomarker
    setzen und eine normale GitHub-Review mit `Approve` auf dem aktuellen Head
-   einholen. Ein JSON-Belegblock ist nicht erforderlich.
+   einholen. Ein JSON-Belegblock ist nicht erforderlich. Bei internen Branches
+   wird der Status automatisch neu berechnet. Bei Fork- und Dependabot-PRs postet
+   ein Maintainer danach `/review-evidence recheck`; dieser sichere
+   Default-Branch-Pfad besitzt die nötige Statusberechtigung.
 3. **R2/R3 – Produktlogik oder sicherheitsrelevante Änderung:** Das automatisch
    erzeugte Reviewpaket verwenden und die vollständigen hashgebundenen Berichte
    als PR-Kommentare attestieren.
@@ -132,8 +135,16 @@ Berichtshashes zählen nicht als unabhängige Reviews.
 
 Für R1 kann statt des Belegblocks eine native GitHub-Review mit `Approve` zählen.
 Sie muss von einem durch GitHub als `OWNER`, `MEMBER` oder `COLLABORATOR`
-ausgewiesenen Prüfer stammen und exakt den aktuellen Head-Commit betreffen. Eine aktuelle `Changes requested`-Review blockiert. Native
-Freigaben ersetzen die ausführlichen Berichte für R2 und R3 ausdrücklich nicht.
+ausgewiesenen Prüfer stammen und exakt den aktuellen Head-Commit betreffen. Eine
+aktuelle `Changes requested`-Review blockiert. Native Freigaben ersetzen die
+ausführlichen Berichte für R2 und R3 ausdrücklich nicht.
+
+GitHub stuft Tokens für Fork- und Dependabot-Reviewereignisse auf read-only herab.
+Der Reviewlauf wird dort deshalb bewusst übersprungen, statt mit einem
+irreführenden 403 zu scheitern. Ein Maintainer löst nach der Freigabe mit
+`/review-evidence recheck` einen `issue_comment`-Lauf auf dem vertrauenswürdigen
+Default-Branch aus. Kommentare ohne Repositoryrolle starten keinen privilegierten
+Lauf.
 
 Nicht textuell dargestellte Dateien erscheinen als `opaque_files`. Häufige
 Rasterformate (`png`, `jpg`, `jpeg`, `gif`, `webp`, `avif`, `ico`) sind in den

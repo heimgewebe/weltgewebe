@@ -39,8 +39,10 @@ Der Workflow **Review Evidence Gate** erzeugt ein herunterladbares Paket mit:
 
 Für R0 ist keine Fremdreview erforderlich. Für R1 genügt eine normale GitHub-Review
 mit **Approve**, sofern GitHub den Prüfer als `OWNER`, `MEMBER` oder `COLLABORATOR`
-ausweist und die Freigabe den aktuellen Head betrifft. R2 und R3 benötigen weiterhin die vollständigen hashgebundenen
-Berichte aus der erzeugten `*.review-request.md`.
+ausweist und die Freigabe den aktuellen Head betrifft. Bei Fork- oder
+Dependabot-PRs postet ein Maintainer danach `/review-evidence recheck`. R2 und R3
+benötigen weiterhin die vollständigen hashgebundenen Berichte aus der erzeugten
+`*.review-request.md`.
 
 Nicht textuell dargestellte Dateien werden als `opaque_files` ausgewiesen. Gängige
 Rastergrafiken in den festgelegten Doku- und Web-Assetpfaden sind mit mindestens

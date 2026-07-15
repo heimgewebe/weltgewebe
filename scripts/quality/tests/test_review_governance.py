@@ -7,8 +7,8 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-import scripts.quality.review_governance as review_governance
 from scripts.quality.review_governance import (
     Bundle,
     DiffStats,
@@ -419,9 +419,7 @@ class BundleTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            original = review_governance.MAX_ARTIFACT_BYTES
-            review_governance.MAX_ARTIFACT_BYTES = 64
-            try:
+            with mock.patch("scripts.quality.review_governance.MAX_ARTIFACT_BYTES", 64):
                 with self.assertRaisesRegex(GovernanceError, "safety limit"):
                     generate_materialized_bundle(
                         output_dir=root / "out",
@@ -430,8 +428,6 @@ class BundleTests(unittest.TestCase):
                         patch_file=patch_file,
                         risk_class="R1",
                     )
-            finally:
-                review_governance.MAX_ARTIFACT_BYTES = original
 
     def test_local_patch_uses_merge_base_not_moving_base_tip(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -893,7 +889,17 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("ref: main", self.workflow)
         self.assertIn("fetch-depth: 1", self.workflow)
         self.assertIn("persist-credentials: false", self.workflow)
-        self.assertNotIn("github.event.pull_request.head", self.workflow)
+        self.assertNotIn("github.event.pull_request.head.sha", self.workflow)
+        self.assertNotIn("github.event.pull_request.head.ref", self.workflow)
+        self.assertIn(
+            "github.event.pull_request.head.repo.full_name == github.repository",
+            self.workflow,
+        )
+        self.assertIn(
+            "github.event.pull_request.user.login != 'dependabot[bot]'",
+            self.workflow,
+        )
+        self.assertIn("github.event.comment.author_association", self.workflow)
         self.assertNotIn("actions/checkout@v", self.workflow)
         self.assertNotIn("git fetch", self.workflow)
         self.assertNotIn("refs/pull/", self.workflow)
