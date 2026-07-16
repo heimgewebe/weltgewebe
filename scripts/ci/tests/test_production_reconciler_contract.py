@@ -23,6 +23,7 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("superseded_after_deploy", script)
         self.assertIn("exit 75", script)
         self.assertNotIn("curl -fsSI", script)
+        self.assertIn("--max-filesize 1048576", script)
 
     def test_deploy_helper_preserves_legacy_checkout_and_binds_main(self) -> None:
         script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
@@ -39,7 +40,17 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn('ln -s "$basemap_real" "$release_dir/build/basemap"', script)
         self.assertIn("basemap link escapes the canonical data root", script)
         self.assertIn("-type l -print0", script)
-        self.assertIn('install -d -m 0700 "$STATE_ROOT/receipts"', script)
+        self.assertIn('install -d -o root -g root -m 0700 "$STATE_ROOT/receipts"', script)
+
+    def test_deploy_helper_requires_immutable_root_artifact(self) -> None:
+        script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
+        self.assertIn("web artifact escaped the root-owned artifact directory", script)
+        self.assertIn("web artifact is not root-owned", script)
+        self.assertIn("web artifact is group- or world-writable", script)
+        self.assertIn("web artifact has unexpected hard links", script)
+        self.assertIn("web artifact changed during validation", script)
+        self.assertGreaterEqual(script.count('sha256sum "$artifact_real"'), 2)
+        self.assertIn('write_deploy_receipt \\\n      "failed"', script)
 
     def test_reconciler_has_bounded_storage_and_state_transitions(self) -> None:
         script = self.read("scripts/ops/reconcile-production-main-vps.sh")
@@ -48,8 +59,10 @@ class ProductionReconcilerContractTests(unittest.TestCase):
             "building",
             "artifact_validated",
             "deferred",
+            "superseded_after_observe",
             "superseded_after_deploy",
             "superseded_after_verify",
+            "verified_observed",
             "verified",
             "failed",
         ):
@@ -61,6 +74,10 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn('worktree remove "$release_dir"', script)
         self.assertNotIn("worktree remove --force", script)
         self.assertIn("web_artifacts[@]:20", script)
+        self.assertIn("repair_observed_deployment_state", script)
+        self.assertIn("original web artifact hash", script)
+        self.assertIn('ln -sfn "receipts/$target_commit.json"', script)
+        self.assertIn('chmod 0600 "$artifact"', script)
 
     def test_reconciler_build_cannot_write_release_or_source(self) -> None:
         script = self.read("scripts/ops/reconcile-production-main-vps.sh")
@@ -117,12 +134,8 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn('cron: "*/5 * * * *"', workflow)
         self.assertIn("wait_seconds=1200", workflow)
         self.assertNotIn("production-live-contract-${{ github.event_name }}", workflow)
-        self.assertIn(
-            "+refs/heads/main:refs/remotes/origin/main", workflow
-        )
-        self.assertIn(
-            'BASE_SHA="$(git rev-parse refs/remotes/origin/main)"', workflow
-        )
+        self.assertIn("+refs/heads/main:refs/remotes/origin/main", workflow)
+        self.assertIn('BASE_SHA="$(git rev-parse refs/remotes/origin/main)"', workflow)
         self.assertIn('git diff --binary "$BASE_SHA...$HEAD_SHA"', workflow)
         self.assertIn("review-diff-manifest.txt", workflow)
         self.assertIn("review-diff-pr-", workflow)
