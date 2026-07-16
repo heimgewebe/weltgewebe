@@ -5,6 +5,7 @@ SOURCE_CHECKOUT="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 RELEASE_ROOT="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
 RUNTIME_ENV="${WELTGEWEBE_RUNTIME_ENV:-/etc/weltgewebe/weltgewebe.env}"
 STATE_ROOT="${WELTGEWEBE_DEPLOY_STATE_ROOT:-/var/lib/weltgewebe-main-reconciler}"
+ARTIFACT_ROOT="$STATE_ROOT/artifacts"
 FRONTEND_URL="${WELTGEWEBE_FRONTEND_VERSION_URL:-https://weltgewebe.net/_app/version.json}"
 API_URL="${WELTGEWEBE_API_VERSION_URL:-https://weltgewebe.net/api/version}"
 ARCHIVE_VALIDATOR="${WELTGEWEBE_ARCHIVE_VALIDATOR:-/usr/local/libexec/weltgewebe-validate-web-deploy-archive}"
@@ -16,6 +17,11 @@ WEB_SHA256=""
 api_headers=""
 started_at=""
 release_dir=""
+api_commit=""
+frontend_commit=""
+last_observed_main=""
+receipt_started=false
+receipt_terminal=false
 
 usage() {
   cat << 'EOF'
@@ -34,16 +40,6 @@ fail() {
 require_command() {
   command -v "$1" > /dev/null 2>&1 || fail "required command not found: $1"
 }
-
-cleanup() {
-  local rc=$?
-  trap - EXIT
-  if [[ -n "$api_headers" && -f "$api_headers" && ! -L "$api_headers" ]]; then
-    rm -f -- "$api_headers"
-  fi
-  exit "$rc"
-}
-trap cleanup EXIT
 
 fetch_main() {
   git -C "$SOURCE_CHECKOUT" fetch --no-tags origin \
@@ -71,7 +67,7 @@ payload = {
     "environment": "production",
     "commit": sys.argv[2],
     "web_artifact_sha256": sys.argv[3],
-    "started_at": sys.argv[4],
+    "started_at": sys.argv[4] or None,
     "completed_at": sys.argv[5] or None,
     "api_commit": sys.argv[6] or None,
     "frontend_commit": sys.argv[7] or None,
@@ -92,6 +88,21 @@ finally:
     os.close(directory_fd)
 PY
 }
+
+cleanup() {
+  local rc=$?
+  trap - EXIT
+  if ((rc != 0)) && [[ "$receipt_started" == true && "$receipt_terminal" == false ]]; then
+    completed_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
+    write_deploy_receipt \
+      "failed" "$completed_at" "$api_commit" "$frontend_commit" "$last_observed_main" || true
+  fi
+  if [[ -n "$api_headers" && -f "$api_headers" && ! -L "$api_headers" ]]; then
+    rm -f -- "$api_headers"
+  fi
+  exit "$rc"
+}
+trap cleanup EXIT
 
 validate_release_tree() {
   local line
@@ -146,9 +157,24 @@ for command_name in git docker curl jq sha256sum tar flock install rm python3 aw
   require_command "$command_name"
 done
 
-install -d -m 0711 "$STATE_ROOT"
-install -d -m 0700 "$STATE_ROOT/receipts"
-install -d -m 0755 "$RELEASE_ROOT"
+install -d -o root -g root -m 0711 "$STATE_ROOT"
+install -d -o root -g root -m 0700 "$STATE_ROOT/receipts" "$ARTIFACT_ROOT"
+install -d -o root -g root -m 0755 "$RELEASE_ROOT"
+
+artifact_real="$(realpath "$WEB_ARTIFACT")"
+artifact_root_real="$(realpath "$ARTIFACT_ROOT")"
+case "$artifact_real" in
+  "$artifact_root_real"/*) ;;
+  *) fail "web artifact escaped the root-owned artifact directory" ;;
+esac
+[[ "$(stat --format=%u "$artifact_real")" == "0" ]] || fail "web artifact is not root-owned"
+artifact_mode="$(stat --format=%a "$artifact_real")"
+(((8#$artifact_mode & 022) == 0)) || fail "web artifact is group- or world-writable"
+[[ "$(stat --format=%h "$artifact_real")" == "1" ]] || fail "web artifact has unexpected hard links"
+[[ "$(stat --format=%u "$RUNTIME_ENV")" == "0" ]] || fail "runtime environment is not root-owned"
+runtime_mode="$(stat --format=%a "$RUNTIME_ENV")"
+(((8#$runtime_mode & 022) == 0)) || fail "runtime environment is group- or world-writable"
+
 [[ "$(stat --format=%u "$SOURCE_CHECKOUT")" == "0" ]] || fail "source checkout is not root-owned"
 git_common_dir="$(git -C "$SOURCE_CHECKOUT" rev-parse --git-common-dir)"
 [[ "$git_common_dir" == /* ]] || git_common_dir="$SOURCE_CHECKOUT/$git_common_dir"
@@ -158,7 +184,7 @@ unsafe_git_path="$(find "$git_common_dir" -xdev \( ! -user root -o -perm /022 \)
 exec 9> "$LOCK_FILE"
 flock -n 9 || fail "another production deployment is already active"
 
-actual_artifact_sha="$(sha256sum "$WEB_ARTIFACT" | awk '{print $1}')"
+actual_artifact_sha="$(sha256sum "$artifact_real" | awk '{print $1}')"
 [[ "$actual_artifact_sha" == "$WEB_SHA256" ]] ||
   fail "web artifact checksum mismatch: expected $WEB_SHA256, got $actual_artifact_sha"
 
@@ -216,9 +242,11 @@ else
 fi
 validate_release_tree
 
-"$ARCHIVE_VALIDATOR" "$WEB_ARTIFACT"
+"$ARCHIVE_VALIDATOR" "$artifact_real"
+validated_artifact_sha="$(sha256sum "$artifact_real" | awk '{print $1}')"
+[[ "$validated_artifact_sha" == "$WEB_SHA256" ]] || fail "web artifact changed during validation"
 rm -rf -- "$release_dir/apps/web/build"
-tar --no-same-owner --no-same-permissions -xzf "$WEB_ARTIFACT" -C "$release_dir/apps/web"
+tar --no-same-owner --no-same-permissions -xzf "$artifact_real" -C "$release_dir/apps/web"
 chown -R --no-dereference root:root "$release_dir/apps/web/build"
 find "$release_dir/apps/web/build" -type d -exec chmod 0755 {} +
 find "$release_dir/apps/web/build" -type f -exec chmod 0644 {} +
@@ -231,18 +259,20 @@ artifact_version="$(jq -er '.version' "$release_dir/apps/web/build/_app/version.
 [[ -s "$release_dir/apps/web/build/index.html" ]] || fail "web artifact has no index.html"
 
 remote_main="$(fetch_main)"
+last_observed_main="$remote_main"
 [[ "$remote_main" == "$COMMIT" ]] ||
   fail "origin/main advanced immediately before deployment: expected $COMMIT, got $remote_main"
 
 started_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
 write_deploy_receipt "deploying" "" "" "" "$remote_main"
+receipt_started=true
 DEPLOY_TARGET=vps ENV_FILE="$RUNTIME_ENV" \
   "$release_dir/scripts/weltgewebe-up" \
   --no-pull --force-build --no-build-web --with-caddy
 
 api_headers="$(mktemp "$STATE_ROOT/.api-headers.XXXXXX")"
-api_body="$(curl --fail --silent --show-error --max-redirs 0 --connect-timeout 5 --max-time 15 --retry 2 --retry-all-errors -D "$api_headers" "$API_URL")"
-frontend_body="$(curl --fail --silent --show-error --max-redirs 0 --connect-timeout 5 --max-time 15 --retry 2 --retry-all-errors "$FRONTEND_URL")"
+api_body="$(curl --fail --silent --show-error --max-redirs 0 --connect-timeout 5 --max-time 15 --max-filesize 1048576 --retry 2 --retry-all-errors -D "$api_headers" "$API_URL")"
+frontend_body="$(curl --fail --silent --show-error --max-redirs 0 --connect-timeout 5 --max-time 15 --max-filesize 1048576 --retry 2 --retry-all-errors "$FRONTEND_URL")"
 api_commit="$(jq -er '.commit' <<< "$api_body")"
 frontend_commit="$(jq -er '.commit' <<< "$frontend_body")"
 [[ "$api_commit" == "$COMMIT" ]] || fail "live API serves $api_commit instead of $COMMIT"
@@ -262,13 +292,16 @@ fi
 ln -sfn "$release_real" "$STATE_ROOT/current-release"
 
 post_deploy_main="$(fetch_main)"
+last_observed_main="$post_deploy_main"
 completed_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
 if [[ "$post_deploy_main" != "$COMMIT" ]]; then
   write_deploy_receipt "superseded_after_deploy" "$completed_at" "$api_commit" "$frontend_commit" "$post_deploy_main"
+  receipt_terminal=true
   echo "production_deployment=superseded commit=$COMMIT current=$post_deploy_main" >&2
   exit 75
 fi
 
 write_deploy_receipt "verified" "$completed_at" "$api_commit" "$frontend_commit" "$post_deploy_main"
+receipt_terminal=true
 ln -sfn "receipts/$COMMIT.json" "$STATE_ROOT/current.json"
 echo "production_deployment=verified commit=$COMMIT receipt=$STATE_ROOT/receipts/$COMMIT.json"
