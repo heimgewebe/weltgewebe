@@ -607,9 +607,8 @@ def refresh_images(args: argparse.Namespace) -> dict[str, Any]:
     if output(["git", "status", "--porcelain"]):
         raise ProofError("image refresh requires a clean, commit-bound worktree")
     commit = output(["git", "rev-parse", "HEAD"])
-    timestamp = commit_timestamp()
-    image_ids = build_images(commit, timestamp)
-    load_images(tools["kind"], args.cluster)
+    timestamp = output(["git", "show", "-s", "--format=%cI", "HEAD"])
+    image_ids = build_images(tools["kind"], args.cluster, commit, timestamp)
     write_marker(args.cluster, commit)
     configure_cluster_access(tools["kind"], args.cluster)
     return {

@@ -85,6 +85,15 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertIn("configure_cluster_access(kind, args.cluster)", source)
         self.assertIn('"--for=condition=Ready", "nodes"', source)
 
+    def test_resumable_image_refresh_uses_canonical_builder_signature(self) -> None:
+        source = (ROOT / "scripts/platform/kind_reference.py").read_text()
+        self.assertIn(
+            'build_images(tools["kind"], args.cluster, commit, timestamp)',
+            source,
+        )
+        self.assertNotIn("commit_timestamp()", source)
+        self.assertNotIn("load_images(tools", source)
+
     def test_migration_uses_runtime_secret_reference(self) -> None:
         pod = self.reference.migration_pod("weltgewebe-api:local", "weltgewebe")
         env = pod["spec"]["containers"][0]["env"]
