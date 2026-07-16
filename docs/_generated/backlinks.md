@@ -486,6 +486,7 @@ Generated automatically. Do not edit.
 ## docs/deploy/vps.md
 
 - [relates_to] docs/deploy/README.md
+- [relates_to] docs/deploy/merge-to-live.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 - [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
 
@@ -499,6 +500,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 - [relates_to] docs/deploy/heimserver.deployment.md
 - [relates_to] docs/deploy/heimserver.integration.md
+- [relates_to] docs/deploy/merge-to-live.md
 - [relates_to] docs/deploy/security.md
 - [relates_to] docs/deployment_governance.md
 - [relates_to] docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
@@ -1205,6 +1207,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md
 
+## scripts/ops/deploy-exact-commit-vps.sh
+
+- [relates_to] docs/deploy/merge-to-live.md
+
 ## scripts/ops/postgres-backup.sh
 
 - [relates_to] docs/runbooks/db-recovery.md
@@ -1220,6 +1226,10 @@ Generated automatically. Do not edit.
 ## scripts/ops/pull-production-postgres-backup.sh
 
 - [relates_to] docs/runbooks/db-recovery.md
+
+## scripts/ops/reconcile-production-main-vps.sh
+
+- [relates_to] docs/deploy/merge-to-live.md
 
 ## scripts/ops/reconcile_public_login_smtp_env.py
 
