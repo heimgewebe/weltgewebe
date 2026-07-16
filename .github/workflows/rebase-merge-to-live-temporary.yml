@@ -2,6 +2,11 @@
 name: Temporary merge-to-live rebase
 
 "on":
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/rebase-merge-to-live-temporary.yml
   push:
     branches:
       - deploy/merge-to-live-v1-rebased-20260716
