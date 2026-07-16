@@ -29,7 +29,7 @@ Heimserver-Pfad ist retired/deprecated und kein Produktionsziel mehr.
 **Weitere Dokumente:**
 
 - [VPS-Deployment](vps.md) – kanonisches Produktionsrunbook für `wg-prod-1`
-- [Domain-/Providerarchitektur und DDNS-Handoff](domain-mail-migration-ionos-to-inwx-mailbox-brevo.md) – historischer Providerstand, Implementierungsbesitz und Runtime-Beweisgrenze
+- [Domain-/Providerarchitektur und historischer DDNS-Pfad](domain-mail-migration-ionos-to-inwx-mailbox-brevo.md) – Providerstand, stillgelegter Heimberry-Schreibpfad und Runtime-Beweisgrenze
 - [Sekundäre Domain-Webflächen](secondary-domain-web-surfaces.md) – Artefakt- und Handoff-Vertrag für die Weltweberei-Informationsfläche und den späteren Heimserver-Edge (keine öffentliche Einsatzbereitschaft)
 - [Deployment-Änderungsprotokoll](./CHANGELOG.md) – Infrastrukturänderungen und deren Auswirkungen
 - [Drift-Taxonomie & Guard-Policy](./DRIFT_POLICY.md) – Klassifizierung und Handling von Drift

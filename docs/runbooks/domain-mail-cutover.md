@@ -39,7 +39,8 @@ relations:
 ## Recovery-Grenze
 
 Ein IONOS-Rollback ist nicht mehr verfügbar.
-Aktuelle Fehler werden über INWX-Zonenkorrektur, DDNS-, Edge- und
-Runtime-Prüfung behandelt.
+Aktuelle Fehler werden über INWX-Zonenkorrektur sowie Edge- und
+VPS-Runtime-Prüfung behandelt. Der frühere Heimberry-DDNS-Pfad ist kein
+Rollback.
 
 Der historische Vollinhalt bleibt über die Git-Historie nachvollziehbar.

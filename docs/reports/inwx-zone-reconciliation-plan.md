@@ -32,7 +32,7 @@ relations:
 
 ## Ergebnis
 
-- `weltgewebe.net` nutzt INWX und dynamisches DDNS.
+- Damals dokumentierter Zwischenstand: `weltgewebe.net` nutzte INWX und dynamisches DDNS. Dieser Pfad wurde durch `wg-prod-1` abgelöst und ist nicht mehr operativ.
 - IONOS ist gekündigt.
 - Die damaligen statischen IP-, IONOS- und Rollbackannahmen sind nicht mehr gültig.
 - `weltweb.net` und `weltweberei.org` bleiben unter `DEPLOY-DNS-001` offen.

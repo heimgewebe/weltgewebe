@@ -37,7 +37,7 @@ Die IONOS-Kündigung wurde nach menschlicher Freigabe durchgeführt. Ein reprodu
 
 - **Registrar:** INWX
 - **Autoritative DNS-Verwaltung:** INWX
-- **Web/API:** Die öffentlichen A-Records für Apex, `www` und `api` werden dynamisch durch den Heimberry-DDNS-Dienst gepflegt. Keine statische WAN-IP ist kanonische Repository-Wahrheit.
+- **Web/API:** Die öffentlichen A-Records für Apex, `www` und `api` zeigen auf den kanonischen Public-VPS-Pfad `wg-prod-1`. Heimberry besitzt keinen aktiven DNS-Schreibpfad mehr. Die konkrete VPS-Adresse ist zu jedem Prüfzeitpunkt aus einer unabhängigen, freigegebenen Deployment-Identität zu bestimmen und anschließend gegen autoritative DNS- und Runtime-Evidence zu prüfen.
 
 ### weltweb.net
 
@@ -56,48 +56,74 @@ Die IONOS-Kündigung wurde nach menschlicher Freigabe durchgeführt. Ein reprodu
 - **mailbox.org:** `kontakt@weltgewebe.net` (menschliche Inbound/Outbound-Mail). Betriebsfähig und belegt.
 - **Brevo:** `noreply@login.weltgewebe.net` (technische Magic-Link-Mail). Betriebsfähig und belegt.
 
-## 4. DNS- und DDNS-Prinzip
+## 4. DNS- und historischer DDNS-Pfad
 
-Die Produktions-Runtime erfordert keine statische WAN-IP. Das Routing erfolgt primär über DDNS für `weltgewebe.net`. Die öffentliche URL der Anwendung wird zusätzlich in `docs/deploy/public-app-base-url.md` vertraglich geregelt.
+Der kanonische öffentliche Produktionspfad ist `wg-prod-1` gemäß
+`runtime/README.md` und `docs/deploy/vps.md`. Die drei öffentlichen A-Records
+für `weltgewebe.net`, `www.weltgewebe.net` und `api.weltgewebe.net` müssen auf
+den ausdrücklich freigegebenen VPS zeigen. Eine wechselnde Heim-WAN-Adresse ist
+kein zulässiges Produktionsziel.
 
-### Implementierungsbesitz
+### Historischer Implementierungsbesitz
 
-Dieses Repository besitzt den öffentlichen Vertrag, nicht die Heimberry-Implementierung. Der Implementierungsbesitzer ist das Repository `heimgewebe/heimserver`. Dort liegen die kanonischen Pfade:
+Der dauerhafte Sollvertrag ist im Fremdrepository `heimgewebe/heimserver`
+durch Commit `heimgewebe/heimserver@15dfbd6cc1c8899ec030ac6666464db4bc132c71` gebunden. In diesem Commit
+verlangen `ops/systemd/weltgewebe-ddns.service` und
+`ops/systemd/weltgewebe-ddns.timer` den expliziten Marker
+`/etc/weltgewebe-ddns/ENABLE_RETIRED_RUNTIME`; das Installationsskript
+`scripts/heimberry/install_weltgewebe_ddns.sh` weist den früheren
+`--activate`-Pfad fail-closed ab und bietet nur die kontrollierte Stilllegung
+`--retire` an.
 
-- `scripts/heimberry/weltgewebe_ddns.py` – fail-closed Reconciliation-Client,
-- `scripts/heimberry/install_weltgewebe_ddns.sh` – Installation, read-only Driftprüfung und explizite Aktivierung,
-- `ops/systemd/weltgewebe-ddns.service` und `ops/systemd/weltgewebe-ddns.timer` – Laufzeitsteuerung,
-- `runbooks/weltgewebe-dyndns.md` – Betrieb, Diagnose und Rollback.
+Diese Fremdrepo-Referenz belegt die versionierte Implementierung, nicht ihren
+fortdauernden Livezustand. Credentials und installierter Runtime-Zustand bleiben
+außerhalb dieses Repositories und müssen separat geprüft werden.
 
-Die repository-übergreifende Runtime-Abnahme steht in `docs/runbooks/weltgewebe-ddns-runtime-verification.md`.
-
-Die öffentliche Host-Allowlist ist exakt:
+Die ehemalige öffentliche Host-Allowlist war exakt:
 
 - `weltgewebe.net`,
 - `www.weltgewebe.net`,
 - `api.weltgewebe.net`.
 
-Weitere öffentliche DynDNS-Hosts, Wildcards oder eine statische WAN-IP benötigen eine neue Architekturentscheidung. Credentials und installierter Runtime-Zustand gehören nicht in dieses Repository.
+Diese historische Begrenzung erteilt keine aktuelle DNS-Ownership. Eine spätere
+Reaktivierung erfordert eine neue Architekturentscheidung, eine explizite
+Freigabe des DNS-Zielbilds und frische Ende-zu-Ende-Belege.
 
 ### Beweisgrenze
 
-Ein grüner Repository-Test im Implementierungsrepo beweist Quellcode, Installervertrag und deterministische Gegenwelten. Er beweist weder, dass Heimberry bereits aktualisiert wurde, noch dass DNS, Edge und Anwendung live den Zielzustand erfüllen.
+Ein vollständiger aktueller Runtime-Nachweis erfordert separat:
 
-Ein vollständiger Runtime-Nachweis erfordert separat:
+1. `runtime/README.md`, `docs/deploy/vps.md` und eine aktuelle Deployment-Identität weisen `wg-prod-1` sowie die unabhängig bestimmte erwartete VPS-Adresse aus,
+2. alle drei autoritativen INWX-Nameserver liefern für alle drei Hosts genau diesen erwarteten VPS-A-Record,
+3. öffentliches HTTPS antwortet für Apex, `www` und `api`,
+4. die kanonischen API-Health-Pfade antworten erfolgreich,
+5. `weltgewebe-ddns.timer` auf Heimberry ist `disabled` und `inactive`,
+6. seit der Stilllegung wurden keine weiteren DDNS-Schreibereignisse des Heimberry-Dienstes protokolliert.
 
-1. installierte Programm- und Unit-Dateien stimmen mit einem exakten gemergten `heimserver`-Commit überein,
-2. Service und Timer besitzen den erwarteten Zustand,
-3. alle drei autoritativen INWX-Nameserver liefern für alle drei erlaubten Hosts den erwarteten einzelnen A-Record,
-4. öffentliches HTTPS antwortet für Apex, `www` und `api`,
-5. der kanonische API-Health-Pfad antwortet erfolgreich,
-6. Heimberry besitzt keinen eingehenden öffentlichen DDNS-Dienst und App-, Admin- oder Datenbankports sind nicht direkt exponiert.
+Ein Repository-Test, Merge-Dump oder früherer DDNS-Abnahmebericht ersetzt diese
+Livebelege nicht.
 
-Live-Aktivierung erfolgt erst nach Review und Merge des Implementierungscommits. Ein PR, ein Merge-Dump oder ein erfolgreicher Health-Bericht ersetzt diesen Runtime-Nachweis nicht.
+### Zeitgebundene Livebeobachtung vom 16. Juli 2026
+
+Zwischen 03:58 und 04:00 Uhr CEST wurde auf Heimberry folgender Zustand gelesen:
+
+- installierte Service-Unit: SHA-256 `b1ecad62a69ce94ff203e2a4e4d0d387f88efe5abed58cf27309fd88f81ea8f8`,
+- installierte Timer-Unit: SHA-256 `72da42bdd9aa83e89c5f248f6977a047469c8fe415527994591a6383b5b191c5`,
+- beide Units enthalten den Marker-Schutz aus Heimserver-Commit `15dfbd6cc1c8899ec030ac6666464db4bc132c71`,
+- `weltgewebe-ddns.timer` ist `disabled` und `inactive`,
+- der Aktivierungsmarker fehlt,
+- `systemctl --failed` meldet keine fehlgeschlagenen Units,
+- seit dem dokumentierten Timer-Stopp am 16. Juli 2026 um 02:40:05 Uhr CEST
+  wurden bis 04:00 Uhr keine Ereignisse `dyndns.update_started` oder
+  `dyndns.host_updated` mehr gefunden.
+
+Dieser Abschnitt ist ein datierter Beobachtungsbeleg, keine dauerhafte
+Wahrheitsgarantie. Für eine spätere Betriebsentscheidung muss die obige
+Beweiskette erneut ausgeführt werden.
 
 ## 5. Wiederherstellungsgrenze
 
-Ein IONOS-Rollback ist nicht mehr verfügbar.
-Wiederherstellung erfolgt durch Korrektur der INWX-Zone, der DDNS-Konfiguration oder der aktuellen Runtime.
+Ein IONOS-Rollback ist nicht mehr verfügbar. Wiederherstellung erfolgt durch Korrektur der INWX-Zone oder der aktuellen VPS-Runtime. Der Heimberry-DDNS-Pfad ist kein Standardrollback und darf nur nach einer neuen, ausdrücklich freigegebenen Architekturentscheidung reaktiviert werden.
 
 ## 6. Offener Restbestand
 
