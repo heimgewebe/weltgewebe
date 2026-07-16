@@ -77,7 +77,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 2 | 4 | 6 |  |  |
 | docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 1 | 6 | 8 |  |  |
 | docs/reports/domain-node-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 6 |  |  |
-| docs/reports/domain-postgres-instance-coherence-decision.md | report | active | active | audit | DOMAIN-PG-002 | 2026-12-18 |  | 5 | 5 | 6 |  |  |
+| docs/reports/domain-postgres-instance-coherence-decision.md | report | active | active | audit | WELTGEWEBE-OS-002 | 2027-01-16 |  | 5 | 6 | 10 |  |  |
 | docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | 4 | 4 | 3 |  |  |
 | docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 4 | 4 | 5 |  |  |
 | docs/reports/domain-runtime-data-source-reconciliation.md | report | active | active | audit | DB-PROOF-001 | 2026-07-18 |  | 1 | 4 | 5 |  |  |
@@ -148,7 +148,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-edge-reference-audit.md | 6 | relates_to | apps/api/migrations/20260531000002_create_domain_edges.up.sql, contracts/domain/edge.schema.json, docs/blueprints/domain-data-postgres-cutover.md, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, scripts/docmeta/audit_domain_edge_references.py |
 | docs/reports/domain-edge-write-path-proof.md | 8 | relates_to, supersedes | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-edge-create-semantics-preflight.md, docs/reports/domain-node-write-path-proof.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md, docs/tasks/index.json |
 | docs/reports/domain-node-write-path-proof.md | 6 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md, docs/tasks/index.json |
-| docs/reports/domain-postgres-instance-coherence-decision.md | 6 | relates_to | apps/api/src/state.rs, docs/blueprints/domain-data-postgres-cutover.md, docs/tasks/board.md, docs/tasks/index.json, scripts/guard/domain-single-instance-guard.sh, scripts/tests/test_domain_single_instance_guard.sh |
+| docs/reports/domain-postgres-instance-coherence-decision.md | 10 | relates_to | apps/api/migrations/20260716000001_multi_instance_foundation.up.sql, apps/api/src/auth/ephemeral_db.rs, apps/api/src/outbox.rs, apps/api/src/state.rs, apps/api/tests/db_multi_instance_foundation.rs, docs/blueprints/domain-data-postgres-cutover.md, docs/tasks/board.md, docs/tasks/index.json, scripts/guard/domain-multi-instance-guard.sh, scripts/tests/test_domain_multi_instance_guard.sh |
 | docs/reports/domain-provider-role-finding.md | 3 | relates_to | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md, docs/runbooks/domain-mail-cutover.md, docs/tasks/board.md |
 | docs/reports/domain-read-path-proof.md | 5 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-backfill-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md |
 | docs/reports/domain-runtime-data-source-reconciliation.md | 5 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-edge-reference-audit.md, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, docs/tasks/index.json |
@@ -583,6 +583,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/doc-index.md`
   - `docs/_generated/impl-index.md`
   - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/relations-analysis.md`
   - `docs/_generated/report-lifecycle.md`
 
 - `docs/reports/domain-provider-role-finding.md`

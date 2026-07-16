@@ -5,16 +5,17 @@ doc_type: report
 status: active
 lifecycle_state: active
 lifecycle: audit
-owner_task: DOMAIN-PG-002
-review_after: 2026-12-18
+owner_task: WELTGEWEBE-OS-002
+review_after: 2027-01-16
 created: 2026-06-18
-last_reviewed: 2026-06-19
+last_reviewed: 2026-07-16
 lang: de
 summary: >
-  DOMAIN-PG-002 entscheidet für den aktuellen PostgreSQL-Domain-Pfad Option A:
-  höchstens eine API-Instanz innerhalb dieser Kohärenzgrenze. Prozesslokale
-  Domain- und Auth-Zustände besitzen keine getestete instanzübergreifende
-  Invalidierung. Ein statischer Guard blockiert klar erkennbare Scale-out-Drift.
+  Die frühere Single-Instance-Grenze ist durch einen geprüften PostgreSQL-
+  Kohärenzvertrag ersetzt: kurzlebiger Auth-Zustand und Rate-Limits sind
+  gemeinsam persistiert, Domain-Projektionen generationsgebunden, Mutationen
+  erzeugen atomare Outbox-Ereignisse und ein Zwei-Instanz-/Restart-Beweis
+  schützt den Vertrag. Produktionsreplikation bleibt ein getrennter Rollout.
 relations:
   - type: relates_to
     target: docs/blueprints/domain-data-postgres-cutover.md
@@ -25,259 +26,215 @@ relations:
   - type: relates_to
     target: apps/api/src/state.rs
   - type: relates_to
-    target: scripts/guard/domain-single-instance-guard.sh
+    target: apps/api/src/auth/ephemeral_db.rs
   - type: relates_to
-    target: scripts/tests/test_domain_single_instance_guard.sh
+    target: apps/api/src/outbox.rs
+  - type: relates_to
+    target: apps/api/migrations/20260716000001_multi_instance_foundation.up.sql
+  - type: relates_to
+    target: apps/api/tests/db_multi_instance_foundation.rs
+  - type: relates_to
+    target: scripts/guard/domain-multi-instance-guard.sh
+  - type: relates_to
+    target: scripts/tests/test_domain_multi_instance_guard.sh
 ---
 
 # Domain PostgreSQL Instance Coherence Decision
 
-- Task: `DOMAIN-PG-002`
-- Entscheidung: **Option A — Single-Instance-Invariante**
-- Status: `done / decision-recorded / guard-backed`
+- Initiative: `WELTGEWEBE-OS-V1`
+- Bureau-Aufgabe: `WELTGEWEBE-OS-V1-T002`
+- lokale Aufgaben: `WELTGEWEBE-OS-002` bis `WELTGEWEBE-OS-005`
+- Entscheidung: **PostgreSQL-gestützter Multi-Instance-Vertrag**
+- frühere Entscheidung: Single-Instance-Invariante, abgelöst am 16. Juli 2026
 
 ## Kurzurteil
 
-Für den aktuellen PostgreSQL-Domain-Pfad darf innerhalb dieser Kohärenzgrenze
-höchstens eine API-Instanz laufen. Der Normalbetrieb erwartet eine lebende
-API-Instanz. Horizontale API-Skalierung bleibt ausgeschlossen, bis entweder
-prozesslokale autoritative Domain-Caches entfallen oder eine getestete
-instanzübergreifende Invalidierungs- beziehungsweise Kohärenzlösung existiert.
+Mehrere API-Prozesse dürfen denselben PostgreSQL-Domainpfad verwenden, ohne
+prozesslokale Fachwahrheit auseinanderlaufen zu lassen. Der Vertrag beruht nicht
+auf einer best-effort NATS-Invalidierung, sondern auf PostgreSQL als gemeinsamer
+Wahrheit:
 
-`scale: 0`, `deploy.replicas: 0` und `docker compose --scale api=0` verletzen
-die Kohärenzgrenze nicht. Die Entscheidung ist daher kein Verfügbarkeitsbeweis.
-Sie ist auch keine Multi-Instance-Kohärenzimplementierung.
+1. kurzlebige Auth-Zustände und Rate-Limits liegen gemeinsam in PostgreSQL;
+2. Domain-Mutationen erhöhen atomar eine monotone Projektionsgeneration;
+3. jeder PostgreSQL-gestützte Request prüft diese Generation und lädt bei Drift
+   eine stabile vollständige Projektion;
+4. derselbe Trigger schreibt die versionierte Domain-Mutation in eine
+   transaktionale Outbox;
+5. mehrere Relays claimen konkurrierend mit `FOR UPDATE SKIP LOCKED`;
+6. JetStream und eine PostgreSQL-Verbrauchsquittung begrenzen
+   Doppelzustellungen;
+7. Fehler erhalten Backoff und nach zehn Versuchen eine explizite Quarantäne.
 
-## Problem
+Der Vertrag hebt **nicht** automatisch die Produktionsreplikazahl an. Compose
+und die laufende Produktion bleiben bis zum getrennten Kubernetes-/GitOps-
+Rollout unverändert. Mehrinstanz-Korrektheit und produktive Hochverfügbarkeit
+sind verschiedene Beweise.
 
-`nodes`, `edges` und `accounts` werden beim Start geladen und anschließend aus
-prozesslokalen `Arc<RwLock<…>>`-Strukturen gelesen. Optionale PostgreSQL-
-Schreibpfade aktualisieren PostgreSQL und den lokalen Cache derselben Instanz.
-Eine zweite Instanz sieht diesen lokalen Cache-Write nicht automatisch.
+## Vollständiges Zustandsinventar
 
-Auch Teile des Auth-Zustands bleiben prozesslokal: Magic-Link-Tokens,
-Step-up-Tokens, Challenges und Passkey-Zwischenzustände. Ohne explizite
-Invalidierung entsteht bei mehreren Instanzen ein stiller Cache-Split-Brain.
+| Zustand | Autorität | Produktionspersistenz | Lebensdauer | Mehrinstanzvertrag | Fehlerwirkung |
+|---|---|---|---|---|---|
+| Accounts | PostgreSQL | dauerhaft | fachlich | Generation + stabiler Reload | Request 503 bei nicht ladbarer Projektion |
+| Knoten | PostgreSQL | dauerhaft | fachlich | Generation + stabiler Reload | Request 503 bei nicht ladbarer Projektion |
+| Fäden | PostgreSQL | dauerhaft | fachlich | Generation + stabiler Reload | Request 503 bei nicht ladbarer Projektion |
+| Prozesslokale Domain-Strukturen | Projektion, keine Autorität | nein | Prozess | atomarer Gesamttausch unter Request-Gate | keine partielle Mischgeneration |
+| Sessions | PostgreSQL bei `DATABASE_URL` | TTL | Tage | bestehender gemeinsamer Session-Store | Auth fail-closed |
+| Magic-Link-Tokens | PostgreSQL | TTL | 15 Minuten | newest-wins pro normalisierter Mail, single-use | 503 statt lokalem Fallback |
+| Step-up-Challenges | PostgreSQL | TTL | 5 Minuten | kontextgebunden, instanzübergreifend konsumierbar | 503 statt lokalem Fallback |
+| Step-up-Tokens | PostgreSQL | TTL | 5 Minuten | Konto-, Gerät- und Challenge-Bindung in einer Consume-Transaktion | Replay bleibt blockiert |
+| Passkey-Registrierungsgrants | PostgreSQL | TTL | kurz | Konto-/Gerätebindung, single-use | Replay bleibt blockiert |
+| WebAuthn-Registrierungszustand | PostgreSQL | TTL | Zeremonie | nur serverseitig serialisiert, single-use | 503 bei Backendfehler |
+| WebAuthn-Authentifizierungszustand | PostgreSQL | TTL | Zeremonie | globale Kapazitätsprüfung unter Advisory Lock | 503 bei Überlast/Backendfehler |
+| Auth-Rate-Limits | PostgreSQL | Fenster | Minute/Stunde | gemeinsame feste Fenster über alle Prozesse | 429 bei Limit, 503 bei Backendfehler |
+| Raw-Magic-Token-Testindex | Prozesslokale Testinstrumentierung | nein | Testprozess | keine Produktionsautorität | keine Produktwirkung |
+| Metriken/Logger/Clients | Prozesslokale Beobachtung | nein | Prozess | absichtlich lokal | keine Fachwahrheit |
+| Domain-Outbox | PostgreSQL | bis Publish/Archiv | Ereignis | atomar mit Fachmutation | kein stiller Ereignisverlust |
+| Verbrauchsquittungen | PostgreSQL | dauerhaft/archivierbar | Konsumentenvertrag | `(consumer_name,event_id)` create-once | doppelte Zustellung ohne doppelte Fachwirkung |
 
-## Geprüfte Evidenz
+Ohne `DATABASE_URL` bleiben die bestehenden In-Memory-Stores als begrenzter
+lokaler Entwicklungs- und Testpfad erhalten. Diese Konfiguration begründet
+keinen Mehrinstanzanspruch.
 
-Runtime und State:
+## Projektionskohärenz
 
-- `apps/api/src/state.rs`
-- `apps/api/src/lib.rs`
-- `apps/api/src/domain_db.rs`
-- `apps/api/src/routes/accounts.rs`
-- `apps/api/src/routes/nodes.rs`
-- `apps/api/src/routes/edges.rs`
-- `apps/api/src/routes/auth.rs`
-- `apps/api/src/auth/accounts.rs`
-- `apps/api/src/auth/session.rs`
-- `apps/api/src/auth/session_db.rs`
-- `apps/api/src/auth/tokens.rs`
-- `apps/api/src/auth/step_up_tokens.rs`
-- `apps/api/src/auth/challenges.rs`
-- `apps/api/src/auth/passkeys.rs`
+`domain_projection_state.version` wird von denselben PostgreSQL-Triggern erhöht,
+die Outbox-Ereignisse anlegen. Eine API-Instanz speichert nur die zuletzt
+vollständig geladene Generation.
 
-Deployment und Automatisierung:
+Vor jedem PostgreSQL-gestützten API-Request gilt:
 
-- `infra/compose/compose.core.yml`
-- `infra/compose/compose.prod.yml`
-- `infra/compose/compose.prod.override.yml`
-- `infra/compose/compose.heimserver.override.yml`
-- `infra/caddy/Caddyfile*`
-- `scripts/weltgewebe-up`
-- `.github/workflows/compose-smoke.yml`
-- `Makefile`, `Justfile`, `.devcontainer`
+1. Datenbankgeneration lesen;
+2. bei Gleichheit lokale Projektion weiterverwenden;
+3. bei Abweichung ein exklusives Projektionsgate nehmen;
+4. Accounts, Knoten und Fäden laden;
+5. Generation vor und nach dem Laden vergleichen;
+6. bei überlappender Mutation neu laden;
+7. alle drei Projektionen gemeinsam ersetzen;
+8. während des Handlers ein Lesegate halten.
 
-## Zustandsmatrix
+Auch eine niedrigere Generation nach Restore oder PITR löst einen Reload aus.
+Direkte `TRUNCATE`- oder andere triggerumgehende Wartung an Domain-Tabellen ist
+außerhalb dieses Laufzeitvertrags und muss mit kontrolliertem Neustart oder
+expliziter Projektionsneubildung verbunden werden.
 
-| Oberfläche | Prozesslokal | DB-gestützt | Instanzübergreifende Invalidierung | Konsequenz |
-|---|---:|---:|---:|---|
-| accounts | ja | Read/Write opt-in | nein | Single-Instance-Grenze |
-| nodes | ja | Read/Write opt-in | nein | Single-Instance-Grenze |
-| edges | ja | Read/Write opt-in | nein | Single-Instance-Grenze |
-| sessions | ohne `DATABASE_URL` | mit `DATABASE_URL` | PostgreSQL ist gemeinsame Wahrheit | allein nicht ausreichend |
-| magic-link tokens | ja | nein | nein | Single-Instance-Grenze |
-| step-up tokens | ja | nein | nein | Single-Instance-Grenze |
-| challenges | ja | nein | nein | Single-Instance-Grenze |
-| Passkey-Zwischenzustände | ja | nein | nein | Single-Instance-Grenze |
-| `nats_client` | optional | nicht zutreffend | kein Domain-Invalidierungspfad | keine Kohärenzlösung |
+## Gemeinsamer Auth-Zustand
 
-DB-gestützte Sessions heben die Grenze nicht auf, weil Domain-Caches und weitere
-Auth-Zustände weiterhin prozesslokal bleiben. NATS wird nur als optionale
-Infrastruktur beziehungsweise im Readiness-Kontext verwendet; ein getesteter
-Publish-/Subscribe-Invalidierungspfad für Domain-Caches existiert nicht.
+`auth_ephemeral_state` hält ausschließlich kurzlebigen serverseitigen Zustand.
+Opaque IDs werden vor Speicherung gehasht. Kontextoperationen verwenden
+transaktionsgebundene PostgreSQL-Advisory-Locks, damit beispielsweise zwei
+parallel angeforderte Magic Links nicht beide als aktuell gelten.
 
-## Topologiebefund
+WebAuthn-Zeremoniezustand wird über die dafür vorgesehene
+`webauthn-rs`-Serialisierung serverseitig gespeichert. Dafür ist in Version 0.5
+das bewusst auffällig benannte Feature `danger-allow-state-serialisation`
+erforderlich. Seine Freigabe gilt ausschließlich für kurzlebigen,
+serverseitigen PostgreSQL-Zustand: nie für Cookies, Browserdaten, Logs oder eine
+langfristige Fachrepräsentation. Die Payload bleibt an gehashte opaque IDs,
+Konto und Gerät gebunden, besitzt eine kurze TTL und wird single-use konsumiert.
+Ein Bibliotheksupgrade oder eine stabile, enger typisierte Persistenzschnittstelle
+muss dieses Feature erneut sicherheitsgebunden bewerten; stilles Ausweiten des
+Serialisierungsumfangs ist unzulässig. Ein periodischer Sweeper entfernt
+abgelaufene Auth- und Rate-Limit-Zeilen auch ohne neuen Traffic.
 
-In den geprüften Compose-, Caddy-, Script-, CI- und Dokumentationsflächen wurde
-keine beabsichtigte API-Skalierung gefunden. Die vorhandenen Caddy-Routen nutzen
-jeweils einen API-Upstream. `scripts/weltgewebe-up` skaliert nur Caddy auf null,
-nicht die API.
+Step-up-Challenges verwenden bewusst den exakten Kontext aus Konto, Gerät und
+Intent. Dadurch kollidieren `LogoutAll`, Passkey-Registrierung, Geräteentfernung
+und E-Mail-Änderung nicht miteinander. Unterschiedliche Zielwerte sind getrennte,
+kurzlebige und gebundene Operationen; das bloße Entfernen des Intents aus dem
+Kontextschlüssel würde dagegen eine neue Anfrage fälschlich mit dem Payload einer
+älteren Operation wiederverwenden.
 
-Das ist ein statischer Repo-Befund. Er beweist weder den aktuellen Live-
-Containerstand noch die Laufzeitkorrektheit.
+## Transaktionale Outbox
 
-## Entscheidung
+Trigger auf `domain_accounts`, `domain_nodes` und `domain_edges` schreiben für
+Insert, Update und Delete ein Ereignis. No-op-Updates erzeugen keines. Dadurch
+ist die Outbox nicht von einzelnen Route-Hooks abhängig und bleibt auch für
+künftige Schreibpfade verbindlich. Die Erstinstallation erzeugt keine
+Ereignisse für vorhandene Zeilen, weil die Trigger erst nach den additiven
+Tabellen angelegt werden. Spätere Massenmutationen und Backfills müssen dagegen
+in begrenzten Batches erfolgen und Outbox-Backlog, Lockzeiten sowie
+Konsumentenfortschritt überwachen. Ein stilles Abschalten der Trigger wäre ein
+Verlust des Ereignisvertrags und ist kein zulässiger Performance-Workaround.
 
-Option A wird verbindlich gewählt:
+Relays:
 
-1. Der aktuelle Domain-Pfad unterstützt höchstens eine API-Instanz.
-2. Eine zweite Instanz darf nicht allein durch Konfigurationsdrift entstehen.
-3. Multi-Instance-Betrieb benötigt einen neuen Task und eigenen Proof.
-4. Die Entscheidung wird vorzeitig überprüft, sobald Domain-Reads vollständig
-   DB-gestützt sind oder eine Invalidierungs-/Kohärenzschicht eingeführt wird.
+- claimen kleine Batches mit `FOR UPDATE SKIP LOCKED` in der Reihenfolge
+  `(available_at, id)`, passend zum partiellen Pending-Index;
+- setzen eine zeitlich begrenzte Claim-Lease;
+- veröffentlichen mit `Nats-Msg-Id=domain-outbox-<id>`;
+- markieren erst nach JetStream-Acknowledgement als publiziert;
+- planen Fehler exponentiell mit eventgebundenem Jitter neu;
+- quarantänisieren nach zehn Fehlversuchen;
+- erlauben eine explizite, nur für unveröffentlichte Quarantäneereignisse gültige
+  Operator-Requeue über `requeue_quarantined`. Vor und nach jeder Requeue sind
+  Ereignisinhalt, Fehlerursache und betroffene Konsumenten zu prüfen; eine
+  pauschale Wiederfreigabe aller Quarantäneereignisse ist unzulässig.
 
-## Operative Folgen
+Ein Absturz zwischen Publish und PostgreSQL-Markierung kann erneut publizieren.
+Das ist zulässige At-least-once-Semantik. Eine Vorabmarkierung als publiziert ist
+ausdrücklich ausgeschlossen, weil ein Absturz danach ein nie versendetes
+Ereignis dauerhaft als erledigt erscheinen ließe. Der Konsumentenvertrag verhindert
+doppelte Fachwirkung über eine create-once-Verbrauchsquittung. Die
+JetStream-Deduplizierung reduziert zusätzliche Duplikate, ersetzt diese
+Quittung aber nicht.
 
-- Kein `api.scale` größer als eins.
-- Kein `api.deploy.replicas` größer als eins.
-- Kein direkter `api.replicas`-Key; diese Form ist auch mit `0` oder `1`
-  unzulässig.
-- Kein konkretes `docker compose --scale api=<value>`,
-  `docker compose scale api=<value>` oder `docker-compose`-Äquivalent mit
-  einem Wert ungleich null oder eins auf ausführbaren Flächen.
-- Kein geschützter API-Upstream zusammen mit einem weiteren Upstream auf
-  derselben Caddy-`reverse_proxy`- oder `to`-Direktivzeile.
-- Optionale NATS-Verfügbarkeit gilt nicht als Cache-Kohärenz.
+## Beweise
 
-## Statischer Guard
+`apps/api/tests/db_multi_instance_foundation.rs` baut gegen eine isolierte
+PostgreSQL-Datenbank und einen JetStream-Server auf:
 
-`scripts/guard/domain-single-instance-guard.sh` wird über
-`scripts/guard/run.sh` und den unabhängigen Job `Core Guard Tests` in
-`.github/workflows/ci.yml` ausgeführt. Dieser Job hängt nicht vom
-Markdown-/Docs-Filter des schweren `ci`-Jobs ab.
-`scripts/tests/test_domain_single_instance_guard.sh` ruft stets den echten
-Guard über einen `REPO_ROOT`-Override auf.
+- zwei unabhängig konstruierte `ApiState`-Instanzen;
+- Magic-Link newest-wins und single-use über Instanzgrenzen;
+- Challenge-, Step-up- und Passkey-Grant-Handoff;
+- echten serialisierten WebAuthn-Registrierungszustand;
+- globales Rate-Limit statt prozessweise vervielfachtem Budget;
+- Domain-Insert und -Update mit Projektionsnachzug;
+- dritte, neu konstruierte Restart-Instanz;
+- zwei gleichzeitig gestartete Outbox-Relays;
+- JetStream-Publish und PostgreSQL-Verbrauchsquittung;
+- Replay-Unterdrückung, Backoff, Quarantäne und kontrollierte Requeue;
+- den echten `logout_all`-Handler mit instanzübergreifend sichtbarer Challenge.
 
-Der Guard prüft:
+Der Test verweigert Datenbanknamen ohne `_test`, um versehentliche Ausführung
+gegen nicht ausdrücklich isolierte Datenbanken zu verhindern.
 
-### Compose
+## Neuer Guard
 
-Für blockartig geschriebenes Compose-YAML werden nur strukturell relevante Keys
-unter `services.api` ausgewertet:
+`scripts/guard/domain-multi-instance-guard.sh` ersetzt den früheren
+Single-Instance-Guard im selben Schnitt. Er erlaubt eine Replikazahl größer als
+eins, solange die stärkeren Voraussetzungen im Repository gemeinsam bestehen:
 
-- direkter Key `scale`;
-- direkter Key `replicas` als immer unzulässige Fehlkonfigurationsfläche;
-- direkter Key `deploy.replicas`.
+- Shared-Auth- und Rate-Limit-Schema;
+- generationengebundene Domain-Projektion;
+- Trigger-basierte transaktionale Outbox;
+- konkurrierender Relay-Claim;
+- Publisher- und Consumer-Idempotenz;
+- Backoff und Quarantäne;
+- Laufzeitverdrahtung;
+- Zwei-Instanz- und Restart-Beweis.
 
-Nur die Literale `0` und `1`, optional vollständig einfach oder doppelt zitiert,
-sind an `scale` und `deploy.replicas` erlaubt. Leere, numerisch größere,
-symbolische, Alias- und expandierte Werte werden an diesen erkannten Keys
-blockiert. Zitierte Mapping-Keys wie `"services"`, `'api'`, `"deploy"` und
-`'replicas'` werden wie unzitierte Keys behandelt. Gleichnamige Keys unter
-`environment`, `labels` oder tieferen Unterobjekten werden ignoriert.
-
-Nicht statisch beweisbare Formen am `api`-Service oder seinem `deploy`-Block
-werden fail-closed blockiert: ein Inline-Flow-Mapping (`api: { … }`,
-`deploy: { … }`), ein Alias als vollständiger Wert (`api: *anchor`,
-`deploy: *deployment`) und ein Merge-Key (`<<: *anchor`) auf API- oder
-Deploy-Ebene. Reine Block-Anchor-Definitionen wie `api: &defaults` oder
-`deploy: &deployment` sind erlaubt; die darunterliegenden Kinder werden
-weiterhin geprüft. Eine vollständige YAML-Anker-/Merge-Auflösung findet bewusst
-nicht statt.
-
-### Docker-Compose-CLI
-
-Auf ausführbaren Flächen (`scripts`, `infra`, `.github/workflows`,
-`.devcontainer`, `Makefile`, `Justfile`) sind für API-Skalierungsargumente
-hinter einem tokenbasiert erkannten `docker compose`- oder `docker-compose`-
-Kommando nur `0` und `1` erlaubt. Erkannt werden insbesondere
-`docker compose up --scale api=1`, `docker compose up --scale api 1`,
-`docker compose up --scale=api=1`, `docker compose scale api=1`,
-`docker compose scale api 1` und die entsprechenden `docker-compose`-Formen.
-Die tokenisierte `--scale = api = 1`-Form wird dabei wie `--scale=api=1`
-behandelt. Fehlende, symbolische, expandierte oder andere Werte werden
-blockiert. Zeilen wie `some compose scale api=2` oder
-`some-tool --scale api=2` gelten nicht als Docker-Compose-Kommando.
-
-In `docs` sind zusätzlich ausschließlich die abstrakten Platzhalter `N` und
-`<value>` erlaubt. Die dokumentierte Positivliste ist damit `0`, `1`, `N` und
-`<value>`. Alles andere bleibt blockiert, insbesondere `<N>`, `banana`,
-`*alias`, `-1`, `1.5`, `<whatever>`, `${API_SCALE}` und `2`. Konkrete
-ungültige Dokumentationswerte werden nicht als Platzhalter glattgebügelt.
-
-Der CLI-Scan schließt `.git`, `node_modules`, `target`, `.venv` und
-`docs/_generated` aus. `docs/_generated` ist eine generierte diagnostische
-Oberfläche und wird nicht durch manuelle Guard-Reparaturen erzwungen.
-
-Der CLI-Scanner ist kein vollständiger Shell-Parser. Quoted Strings, `echo`,
-Shell-Aliase und komplexe Pipeline-Semantik bleiben bewusst außerhalb dieses
-Schnitts.
-
-### Caddy
-
-Kommentare werden entfernt, bevor eine Direktive erkannt wird. Gezählt werden
-`host:port`-Upstreams auf einer einzelnen `reverse_proxy`- oder `to`-Zeile,
-inklusive optionalem `http://` beziehungsweise `https://` und geklammerter IPv6-
-Adressen. Als geschützte API-Hosts gelten `api`, `weltgewebe-api` und ihre
-numerisch suffigierten Instanznamen wie `api-2`, `api_2`, `api.2` oder
-`weltgewebe-api-1`. Namen wie `api-gateway`, `capital-api` oder `myapi` gelten
-nicht als diese API.
-
-Nummerierte `weltgewebe-api`-Formen werden konservativ als potenzielle
-API-Instanzidentitäten erkannt. Das macht sie nicht zu erlaubten oder stabilen
-Routing-Aliasen; kanonischer stabiler Alias bleibt `weltgewebe-api`.
-
-### Scanfehler und Exitcodes
-
-Die Exitcodes sind getrennt: `0` = keine Verletzung, `1` = Single-Instance-
-Policy verletzt, `2` = interner Fehler (ein Scanner wie `find`, `grep` oder
-`awk` ist gescheitert oder eine Prüfung konnte nicht laufen). Interner Fehler
-hat Vorrang vor der Policy-Verletzung. Ein gescheiterter oder abgestürzter
-Scanner führt damit zu `2` (inconclusive), niemals zu einem stillen Pass und
-niemals zu einem bestandenen Negativtest. Die Scanner sind über `FIND_BIN`,
-`GREP_BIN` und `AWK_BIN` überschreibbar, damit Tests Fehlerfälle erzwingen
-können.
+`scripts/tests/test_domain_multi_instance_guard.sh` prüft den realen
+Repositoryzustand, einen erlaubten Replica-3-Fall und negative Mutationen für
+Shared Auth, Projektionsgate, `SKIP LOCKED`, Restartbeweis und den verbotenen
+Rückfall zum alten Guard.
 
 ## Bewusste Grenzen
 
-Der Guard ist kein vollständiger YAML-, Shell- oder Caddy-Parser. Nicht belegt
-sind insbesondere:
+Dieser Schnitt beweist nicht:
 
-- vollständige Auflösung von Compose-Inline-Maps, YAML-Ankern und Merge-Keys
-  (diese Formen werden am `api`-Service fail-closed blockiert, nicht aufgelöst);
-- vollständige Shell-Semantik, Shell-Aliase, Quoting-Kontexte, `echo`-Beispiele
-  und komplexe Pipeline-Auswertung;
-- mehrzeilige Caddy-`to`-Blöcke mit einem Upstream pro Zeile;
-- Caddy-Upstreamformen außerhalb der erkannten `host:port`-Tokens;
-- alternative API-Aliasnamen außerhalb der dokumentierten Hostkonvention;
-- der reale Live-Containerstand;
-- Cross-Instance-Kohärenz oder Runtime-Korrektheit.
+- produktive Kubernetes- oder Compose-Replikation;
+- PostgreSQL-Hochverfügbarkeit oder automatisches Failover;
+- JetStream-Clusterhochverfügbarkeit;
+- regionsübergreifende Föderationskonsistenz;
+- beliebige externe Konsumenten ohne eigene idempotente Wirkungssperre;
+- Schema-Migration während beliebiger alter und neuer Binärversionen zugleich.
 
-Diese Grenzen sind Claim-Grenzen, keine stillen Versprechen. Ein AST-basierter
-Guard wäre ein eigener Toolchain- und CI-Schnitt.
+Diese Punkte gehören zu `WELTGEWEBE-OS-006` ff. Der jetzige Vertrag entfernt
+den fachlichen Single-Instance-Blocker, nicht alle Betriebsrisiken.
 
-## Review-Trigger
+## Rückfallregel
 
-`review_after: 2026-12-18` ist nur ein Kalender-Backstop. Früher prüfen, wenn:
-
-- Domain-Reads nicht mehr aus autoritativen Prozesscaches bedient werden;
-- ein Invalidierungs-/Kohärenzmechanismus eingeführt wird;
-- horizontale API-Skalierung gewünscht wird;
-- Compose- oder Caddy-Topologie grundlegend geändert wird;
-- die dokumentierten Parsergrenzen praktisch relevant werden.
-
-## Folgearbeiten, nicht Teil von DOMAIN-PG-002
-
-- optionaler YAML-AST-Guard mit gepinnter Toolchain;
-- optionaler Caddy-AST-Guard über `caddy adapt`;
-- gemeinsame Guard-Helper erst bei tatsächlich wiederholter stabiler Struktur;
-- Runtime-Singleton-/Lease-Mechanismus nur als eigener Architekturentscheid;
-- Claim-/Freshness-Integration für diese Invariante.
-
-## Verwandte Blocker
-
-- `DOMAIN-PG-001` bleibt durch `DB-PROOF-001` und die FK-vs-Guard-Entscheidung
-  blockiert.
-- `AUTH-PG-001` und `AUTH-PG-002` dürfen nur unter dieser Grenze fortschreiten.
-- `OPT-ARC-001` bleibt `partial`.
-
-## Nicht-Ziele
-
-- keine Rust-Runtime-Änderung;
-- keine SQL-Migration;
-- keine Edge-FK-/Guard-Implementierung;
-- keine Auth-Persistenzimplementierung;
-- keine Redis-/PubSub-/NATS-Invalidierung;
-- kein Multi-Instance-Kohärenz-Claim.
+Eine Änderung, die wieder prozesslokale Produktionsautorität einführt, den
+Projektionszaun umgeht, Domain-Mutationen ohne Outbox zulässt oder einen
+Konsumenten ohne Idempotenzwirkung hinzufügt, muss den Multi-Instance-Beweis und
+den Guard im selben diffgebundenen Schnitt erweitern. Ein stiller Rückfall auf
+eine einzelne API-Instanz ist keine zulässige Reparatur.

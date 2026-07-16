@@ -205,7 +205,7 @@ Compose darf als generierter oder streng geprüfter Minimal-, Entwicklungs- und 
 
 ## 8. Multi-Instanz-Invariante
 
-Der bestehende Single-Instance-Guard bleibt wirksam, solange Multi-Instanz-Kohärenz nicht bewiesen ist. Er darf nicht aufgrund dieses Zielbildes entfernt werden.
+Der frühere Single-Instance-Guard wurde nach dem diffgebundenen Zwei-API-/Restart-Beweis durch den Multi-Instance-Guard ersetzt. Produktionsreplikation bleibt trotzdem ein eigener Plattform- und Betriebsentscheid.
 
 Vor horizontaler API-Skalierung sind mindestens zu belegen:
 
@@ -268,7 +268,7 @@ Später aktivierbar sind weitere Regionen, globale Indizes, lokale KI, GPU-Börs
 - eigener GewebeZelle-Operator vor stabilen realen Zellprofilen,
 - Serverless für alle Workloads,
 - Blockchain als allgemeine Wahrheitsgrundlage,
-- Entfernung des Single-Instance-Guards ohne Kohärenzbeweis.
+- Entfernung oder Schwächung des Multi-Instance-Guards ohne gleichwertigen Kohärenzbeweis.
 
 ## 13. Abgrenzung des heutigen Zustands
 

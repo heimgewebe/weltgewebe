@@ -39,5 +39,5 @@ echo "== guard: Caddy build header contract =="
 echo "== guard: caddy basemap route contract =="
 "${REPO_ROOT}/scripts/guard/caddy-basemap-route-guard.sh"
 
-echo "== guard: domain single-instance boundary =="
-"${REPO_ROOT}/scripts/guard/domain-single-instance-guard.sh"
+echo "== guard: domain multi-instance coherence =="
+"${REPO_ROOT}/scripts/guard/domain-multi-instance-guard.sh"

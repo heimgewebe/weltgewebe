@@ -5,6 +5,7 @@ pub mod domain_db;
 pub mod governance;
 pub mod mailer;
 pub mod middleware;
+pub mod outbox;
 pub mod routes;
 pub mod state;
 pub mod telemetry;
@@ -30,6 +31,7 @@ use config::{
 };
 use middleware::auth::auth_middleware;
 use middleware::csrf::require_csrf;
+use middleware::domain_projection::ensure_current_domain_projection;
 use routes::{api_router, health::health_routes, meta::meta_routes};
 use sqlx::{migrate::Migrator, postgres::PgPoolOptions, PgPool, Row};
 use state::ApiState;
@@ -129,10 +131,10 @@ pub async fn run() -> anyhow::Result<()> {
 
     // AUTH-PG-002 Slice B: registered passkey credential store gate.
     //
-    // Ceremony state (registration/authentication/grants) remains in-memory.
-    // Only durable WebAuthn credential records switch here. PostgreSQL mode is
-    // fail-closed: if explicitly selected but the pool is missing, startup
-    // refuses to continue rather than silently falling back to in-memory.
+    // Durable credentials and WebAuthn ceremony state are separate contracts.
+    // Whenever DATABASE_URL is configured, all short-lived ceremony state is
+    // also stored in PostgreSQL so a ceremony can cross API process boundaries.
+    // PostgreSQL mode is fail-closed: startup never silently falls back.
     match app_config.passkey_credential_source {
         PasskeyCredentialSource::Postgres => {
             if db_pool.is_none() {
@@ -169,10 +171,27 @@ pub async fn run() -> anyhow::Result<()> {
             crate::auth::session::SessionBackend::new_in_memory()
         }
     };
-    let challenges = crate::auth::challenges::ChallengeStore::new();
-    let tokens = crate::auth::tokens::TokenStore::new();
-    let step_up_tokens = crate::auth::step_up_tokens::StepUpTokenStore::new();
-    let (accounts_store, nodes_cache, edges_cache) = match app_config.domain_read_source {
+    let (challenges, tokens, step_up_tokens) = match db_pool.as_ref() {
+        Some(pool) => {
+            tracing::info!("Short-lived authentication state backed by PostgreSQL");
+            (
+                crate::auth::challenges::ChallengeStore::new_postgres(pool.clone()),
+                crate::auth::tokens::TokenStore::new_postgres(pool.clone()),
+                crate::auth::step_up_tokens::StepUpTokenStore::new_postgres(pool.clone()),
+            )
+        }
+        None => {
+            tracing::info!("Short-lived authentication state in-memory (database not configured)");
+            (
+                crate::auth::challenges::ChallengeStore::new(),
+                crate::auth::tokens::TokenStore::new(),
+                crate::auth::step_up_tokens::StepUpTokenStore::new(),
+            )
+        }
+    };
+    let (accounts_store, nodes_cache, edges_cache, initial_projection_version) = match app_config
+        .domain_read_source
+    {
         DomainReadSource::Jsonl => {
             routes::nodes::recover_node_delete_jsonl_journal()
                 .await
@@ -183,6 +202,7 @@ pub async fn run() -> anyhow::Result<()> {
                 routes::accounts::load_all_accounts().await,
                 routes::nodes::load_nodes().await,
                 routes::edges::load_edges().await,
+                0,
             )
         }
         DomainReadSource::Postgres => {
@@ -191,11 +211,9 @@ pub async fn run() -> anyhow::Result<()> {
                     "domain_read_source=postgres requires DATABASE_URL and an available PostgreSQL pool"
                 )
             })?;
-            (
-                crate::domain_db::load_accounts_from_postgres(pool).await?,
-                crate::domain_db::load_nodes_from_postgres(pool).await?,
-                crate::domain_db::load_edges_from_postgres(pool).await?,
-            )
+            let (accounts, nodes, edges, version) =
+                crate::domain_db::load_stable_domain_projection_from_postgres(pool).await?;
+            (accounts, nodes, edges, version)
         }
     };
     let accounts = Arc::new(tokio::sync::RwLock::new(accounts_store));
@@ -204,11 +222,20 @@ pub async fn run() -> anyhow::Result<()> {
     let nodes = Arc::new(tokio::sync::RwLock::new(nodes_cache));
     let nodes_persist = Arc::new(tokio::sync::Mutex::new(()));
     let accounts_persist = Arc::new(tokio::sync::Mutex::new(()));
+    let domain_projection_gate = Arc::new(tokio::sync::RwLock::new(()));
+    let domain_projection_version = Arc::new(std::sync::atomic::AtomicI64::new(
+        initial_projection_version,
+    ));
 
     metrics.set_edges_cache_count(edges_cache.len() as i64);
     let edges = Arc::new(tokio::sync::RwLock::new(edges_cache));
 
-    let rate_limiter = Arc::new(crate::auth::rate_limit::AuthRateLimiter::new(&app_config));
+    let rate_limiter = Arc::new(match db_pool.as_ref() {
+        Some(pool) => {
+            crate::auth::rate_limit::AuthRateLimiter::new_postgres(&app_config, pool.clone())
+        }
+        None => crate::auth::rate_limit::AuthRateLimiter::new(&app_config),
+    });
 
     // WebAuthn / Passkey support (optional — only active when WEBAUTHN_RP_ID + WEBAUTHN_RP_ORIGIN are set)
     let webauthn = match crate::auth::passkeys::build_webauthn(&app_config) {
@@ -224,9 +251,19 @@ pub async fn run() -> anyhow::Result<()> {
             return Err(anyhow!("Failed to initialize WebAuthn: {}", e));
         }
     };
-    let passkey_registrations = crate::auth::passkeys::PasskeyRegistrationStore::new();
-    let passkey_registration_grants = crate::auth::passkeys::PasskeyRegistrationGrantStore::new();
-    let passkey_authentications = crate::auth::passkeys::PasskeyAuthenticationStore::new();
+    let (passkey_registrations, passkey_registration_grants, passkey_authentications) =
+        match db_pool.as_ref() {
+            Some(pool) => (
+                crate::auth::passkeys::PasskeyRegistrationStore::new_postgres(pool.clone()),
+                crate::auth::passkeys::PasskeyRegistrationGrantStore::new_postgres(pool.clone()),
+                crate::auth::passkeys::PasskeyAuthenticationStore::new_postgres(pool.clone()),
+            ),
+            None => (
+                crate::auth::passkeys::PasskeyRegistrationStore::new(),
+                crate::auth::passkeys::PasskeyRegistrationGrantStore::new(),
+                crate::auth::passkeys::PasskeyAuthenticationStore::new(),
+            ),
+        };
     let passkeys = crate::auth::passkeys::PasskeyStore::new();
 
     let mailer = match crate::mailer::Mailer::new(&app_config) {
@@ -264,6 +301,8 @@ pub async fn run() -> anyhow::Result<()> {
         nodes,
         nodes_persist,
         accounts_persist,
+        domain_projection_gate,
+        domain_projection_version,
         edges,
         rate_limiter,
         mailer,
@@ -273,6 +312,22 @@ pub async fn run() -> anyhow::Result<()> {
         passkey_authentications,
         passkeys,
     };
+
+    if let Some(pool) = state.db_pool.clone() {
+        crate::auth::ephemeral_db::spawn_cleanup_loop(pool);
+    }
+
+    if let (Some(pool), Some(client)) = (state.db_pool.clone(), state.nats_client.clone()) {
+        outbox::start(pool, client)
+            .await
+            .context("failed to start transactional domain outbox")?;
+        tracing::info!("Transactional domain outbox and idempotent receipt consumer started");
+    } else if state.db_pool.is_some() {
+        tracing::warn!(
+            nats_configured = state.nats_configured,
+            "PostgreSQL domain outbox is durable, but no NATS client is active; events remain pending"
+        );
+    }
 
     // Governance-Fristen-Sweeper: wertet Antragsfristen serverseitig und
     // idempotent aus, unabhängig davon, ob ein Browser Anfragen stellt. Ohne
@@ -309,14 +364,22 @@ pub async fn run() -> anyhow::Result<()> {
         .merge(
             api_router()
                 .route_layer(from_fn_with_state(state.clone(), auth_middleware))
-                .layer(axum::middleware::from_fn(require_csrf)),
+                .layer(axum::middleware::from_fn(require_csrf))
+                .layer(from_fn_with_state(
+                    state.clone(),
+                    ensure_current_domain_projection,
+                )),
         )
         // Serve at /api for direct access (e.g. apps/web fallback)
         .nest(
             "/api",
             api_router()
                 .route_layer(from_fn_with_state(state.clone(), auth_middleware))
-                .layer(axum::middleware::from_fn(require_csrf)),
+                .layer(axum::middleware::from_fn(require_csrf))
+                .layer(from_fn_with_state(
+                    state.clone(),
+                    ensure_current_domain_projection,
+                )),
         )
         .merge(health_routes())
         .merge(meta_routes())

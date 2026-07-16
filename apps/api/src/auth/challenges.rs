@@ -1,5 +1,8 @@
+use crate::auth::ephemeral_db::{EphemeralDb, NewEphemeralRecord};
+use anyhow::Context;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock, RwLockWriteGuard};
 use uuid::Uuid;
@@ -46,13 +49,26 @@ struct ChallengeState {
 #[derive(Clone, Default)]
 pub struct ChallengeStore {
     state: Arc<RwLock<ChallengeState>>,
+    db: Option<EphemeralDb>,
 }
 
 impl ChallengeStore {
     pub fn new() -> Self {
         Self {
             state: Arc::new(RwLock::new(ChallengeState::default())),
+            db: None,
         }
+    }
+
+    pub fn new_postgres(pool: PgPool) -> Self {
+        Self {
+            db: Some(EphemeralDb::new(pool)),
+            ..Self::new()
+        }
+    }
+
+    pub fn is_shared(&self) -> bool {
+        self.db.is_some()
     }
 
     /// Rebuilds `active_by_context` from non-expired entries in `challenges`.
@@ -230,6 +246,89 @@ impl ChallengeStore {
             }
             None => None,
         }
+    }
+
+    fn shared_context_key(
+        account_id: &str,
+        device_id: &str,
+        intent: &ChallengeIntent,
+    ) -> anyhow::Result<String> {
+        let raw = serde_json::to_string(&(account_id, device_id, intent))
+            .context("failed to serialize challenge context")?;
+        Ok(EphemeralDb::hash_opaque_id(&raw))
+    }
+
+    pub async fn create_shared(
+        &self,
+        account_id: String,
+        device_id: String,
+        intent: ChallengeIntent,
+    ) -> anyhow::Result<Challenge> {
+        let Some(db) = &self.db else {
+            return Ok(self.create(account_id, device_id, intent));
+        };
+        let now = Utc::now();
+        let candidate = Challenge {
+            id: Uuid::new_v4().to_string(),
+            account_id: account_id.clone(),
+            device_id: device_id.clone(),
+            intent: intent.clone(),
+            created_at: now,
+            expires_at: now + Duration::minutes(5),
+        };
+        let context_key = Self::shared_context_key(&account_id, &device_id, &intent)?;
+        let key_hash = EphemeralDb::hash_opaque_id(&candidate.id);
+        let payload = serde_json::to_value(&candidate).context("failed to serialize challenge")?;
+        let record = db
+            .get_or_insert_context(
+                "step_up_challenge",
+                &context_key,
+                NewEphemeralRecord {
+                    key_hash: &key_hash,
+                    account_id: Some(&account_id),
+                    device_id: Some(&device_id),
+                    payload: &payload,
+                    created_at: now,
+                    expires_at: candidate.expires_at,
+                },
+            )
+            .await?;
+        serde_json::from_value(record.payload).context("invalid stored challenge payload")
+    }
+
+    pub async fn get_shared(&self, challenge_id: &str) -> anyhow::Result<Option<Challenge>> {
+        let Some(db) = &self.db else {
+            return Ok(self.get(challenge_id));
+        };
+        let key_hash = EphemeralDb::hash_opaque_id(challenge_id);
+        db.peek("step_up_challenge", &key_hash)
+            .await?
+            .map(|record| {
+                serde_json::from_value(record.payload).context("invalid stored challenge payload")
+            })
+            .transpose()
+    }
+
+    pub async fn consume_shared(&self, challenge_id: &str) -> anyhow::Result<Option<Challenge>> {
+        let Some(db) = &self.db else {
+            return Ok(self.consume(challenge_id));
+        };
+        let key_hash = EphemeralDb::hash_opaque_id(challenge_id);
+        db.consume("step_up_challenge", &key_hash)
+            .await?
+            .map(|record| {
+                serde_json::from_value(record.payload).context("invalid stored challenge payload")
+            })
+            .transpose()
+    }
+
+    pub async fn cleanup_expired_shared(&self) -> anyhow::Result<()> {
+        let Some(db) = &self.db else {
+            self.cleanup_expired();
+            return Ok(());
+        };
+        db.cleanup_expired("step_up_challenge").await?;
+        Ok(())
     }
 }
 

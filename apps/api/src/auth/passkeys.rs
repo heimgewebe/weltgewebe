@@ -29,7 +29,15 @@ use url::Url;
 use uuid::Uuid;
 use webauthn_rs::prelude::*;
 
-use crate::{auth::lock::RwLockRecover, config::AppConfig};
+use crate::{
+    auth::{
+        ephemeral_db::{BoundConsumeResult, EphemeralDb, NewEphemeralRecord},
+        lock::RwLockRecover,
+    },
+    config::AppConfig,
+};
+use anyhow::Context;
+use sqlx::PgPool;
 
 /// TTL for in-progress passkey registrations (5 minutes).
 const REGISTRATION_TTL_SECS: i64 = 300;
@@ -293,11 +301,23 @@ struct PendingRegistration {
 #[derive(Clone, Default)]
 pub struct PasskeyRegistrationStore {
     store: Arc<TokioRwLock<HashMap<String, PendingRegistration>>>,
+    db: Option<EphemeralDb>,
 }
 
 impl PasskeyRegistrationStore {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn new_postgres(pool: PgPool) -> Self {
+        Self {
+            db: Some(EphemeralDb::new(pool)),
+            ..Self::default()
+        }
+    }
+
+    pub fn is_shared(&self) -> bool {
+        self.db.is_some()
     }
 
     /// Store a new in-progress registration. Returns the opaque registration
@@ -346,6 +366,62 @@ impl PasskeyRegistrationStore {
         }
         // Valid match: single-use consume.
         store.remove(registration_id).map(|p| p.state)
+    }
+
+    pub async fn insert_shared(
+        &self,
+        account_id: String,
+        state: PasskeyRegistration,
+    ) -> anyhow::Result<String> {
+        let Some(db) = &self.db else {
+            return Ok(self.insert(account_id, state).await);
+        };
+        let id = Uuid::new_v4().to_string();
+        let key_hash = EphemeralDb::hash_opaque_id(&id);
+        let now = Utc::now();
+        let payload = serde_json::to_value(&state)
+            .context("failed to serialize passkey registration state")?;
+        db.insert(
+            "passkey_registration",
+            None,
+            NewEphemeralRecord {
+                key_hash: &key_hash,
+                account_id: Some(&account_id),
+                device_id: None,
+                payload: &payload,
+                created_at: now,
+                expires_at: now + Duration::seconds(REGISTRATION_TTL_SECS),
+            },
+        )
+        .await?;
+        Ok(id)
+    }
+
+    pub async fn consume_shared(
+        &self,
+        registration_id: &str,
+        account_id: &str,
+    ) -> anyhow::Result<Option<PasskeyRegistration>> {
+        let Some(db) = &self.db else {
+            return Ok(self.consume(registration_id, account_id).await);
+        };
+        let key_hash = EphemeralDb::hash_opaque_id(registration_id);
+        match db
+            .consume_bound(
+                "passkey_registration",
+                &key_hash,
+                Some(account_id),
+                None,
+                None,
+            )
+            .await?
+        {
+            BoundConsumeResult::Consumed(payload) => Ok(Some(
+                serde_json::from_value(payload)
+                    .context("invalid stored passkey registration state")?,
+            )),
+            BoundConsumeResult::NotFound | BoundConsumeResult::BindingMismatch => Ok(None),
+        }
     }
 }
 
@@ -425,6 +501,7 @@ struct PendingAuthentication {
 pub struct PasskeyAuthenticationStore {
     store: Arc<TokioRwLock<HashMap<String, PendingAuthentication>>>,
     max_entries: usize,
+    db: Option<EphemeralDb>,
 }
 
 impl Default for PasskeyAuthenticationStore {
@@ -432,6 +509,7 @@ impl Default for PasskeyAuthenticationStore {
         Self {
             store: Arc::new(TokioRwLock::new(HashMap::new())),
             max_entries: AUTHENTICATION_STORE_MAX_ENTRIES,
+            db: None,
         }
     }
 }
@@ -441,6 +519,17 @@ impl PasskeyAuthenticationStore {
         Self::default()
     }
 
+    pub fn new_postgres(pool: PgPool) -> Self {
+        Self {
+            db: Some(EphemeralDb::new(pool)),
+            ..Self::default()
+        }
+    }
+
+    pub fn is_shared(&self) -> bool {
+        self.db.is_some()
+    }
+
     /// Test-only constructor with a custom capacity, so the capacity behaviour
     /// can be exercised without inserting tens of thousands of entries.
     #[cfg(test)]
@@ -448,6 +537,7 @@ impl PasskeyAuthenticationStore {
         Self {
             store: Arc::new(TokioRwLock::new(HashMap::new())),
             max_entries,
+            db: None,
         }
     }
 
@@ -521,6 +611,61 @@ impl PasskeyAuthenticationStore {
         }
         Some((pending.account_id, pending.state))
     }
+
+    pub async fn insert_shared(
+        &self,
+        account_id: String,
+        state: PasskeyAuthentication,
+    ) -> anyhow::Result<String> {
+        let Some(db) = &self.db else {
+            return self
+                .insert(account_id, state)
+                .await
+                .map_err(anyhow::Error::from);
+        };
+        let id = Uuid::new_v4().to_string();
+        let key_hash = EphemeralDb::hash_opaque_id(&id);
+        let now = Utc::now();
+        let payload = serde_json::to_value(&state)
+            .context("failed to serialize passkey authentication state")?;
+        let inserted = db
+            .insert_with_capacity(
+                "passkey_authentication",
+                NewEphemeralRecord {
+                    key_hash: &key_hash,
+                    account_id: Some(&account_id),
+                    device_id: None,
+                    payload: &payload,
+                    created_at: now,
+                    expires_at: now + Duration::seconds(AUTHENTICATION_TTL_SECS),
+                },
+                self.max_entries as i64,
+            )
+            .await?;
+        if !inserted {
+            anyhow::bail!("passkey authentication store is at capacity");
+        }
+        Ok(id)
+    }
+
+    pub async fn consume_shared(
+        &self,
+        authentication_id: &str,
+    ) -> anyhow::Result<Option<(String, PasskeyAuthentication)>> {
+        let Some(db) = &self.db else {
+            return Ok(self.consume(authentication_id).await);
+        };
+        let key_hash = EphemeralDb::hash_opaque_id(authentication_id);
+        let Some(record) = db.consume("passkey_authentication", &key_hash).await? else {
+            return Ok(None);
+        };
+        let account_id = record
+            .account_id
+            .context("stored passkey authentication missing account")?;
+        let state = serde_json::from_value(record.payload)
+            .context("invalid stored passkey authentication state")?;
+        Ok(Some((account_id, state)))
+    }
 }
 
 // ── Registration Grant Store ──────────────────────────────────────────────
@@ -533,6 +678,7 @@ struct PasskeyRegistrationGrantData {
 }
 
 /// Result of a [`PasskeyRegistrationGrantStore::consume`] operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConsumeGrantResult {
     /// Grant not found or has expired.
     NotFound,
@@ -560,11 +706,23 @@ pub enum ConsumeGrantResult {
 #[derive(Clone, Default)]
 pub struct PasskeyRegistrationGrantStore {
     store: Arc<StdRwLock<HashMap<String, PasskeyRegistrationGrantData>>>,
+    db: Option<EphemeralDb>,
 }
 
 impl PasskeyRegistrationGrantStore {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn new_postgres(pool: PgPool) -> Self {
+        Self {
+            db: Some(EphemeralDb::new(pool)),
+            ..Self::default()
+        }
+    }
+
+    pub fn is_shared(&self) -> bool {
+        self.db.is_some()
     }
 
     fn hash_grant_id(id: &str) -> String {
@@ -634,6 +792,76 @@ impl PasskeyRegistrationGrantStore {
                 }
             }
         }
+    }
+
+    pub async fn insert_shared(
+        &self,
+        account_id: String,
+        device_id: String,
+    ) -> anyhow::Result<String> {
+        self.insert_shared_with_ttl(
+            account_id,
+            device_id,
+            Duration::seconds(REGISTRATION_GRANT_TTL_SECS),
+        )
+        .await
+    }
+
+    pub async fn insert_shared_with_ttl(
+        &self,
+        account_id: String,
+        device_id: String,
+        duration: Duration,
+    ) -> anyhow::Result<String> {
+        let Some(db) = &self.db else {
+            return Ok(self.insert_with_ttl(account_id, device_id, duration));
+        };
+        let id = Uuid::new_v4().to_string();
+        let key_hash = Self::hash_grant_id(&id);
+        let now = Utc::now();
+        let payload = serde_json::json!({"schema_version": 1});
+        db.insert(
+            "passkey_registration_grant",
+            None,
+            NewEphemeralRecord {
+                key_hash: &key_hash,
+                account_id: Some(&account_id),
+                device_id: Some(&device_id),
+                payload: &payload,
+                created_at: now,
+                expires_at: now + duration,
+            },
+        )
+        .await?;
+        Ok(id)
+    }
+
+    pub async fn consume_shared(
+        &self,
+        grant_id: &str,
+        account_id: &str,
+        device_id: &str,
+    ) -> anyhow::Result<ConsumeGrantResult> {
+        let Some(db) = &self.db else {
+            return Ok(self.consume(grant_id, account_id, device_id));
+        };
+        let key_hash = Self::hash_grant_id(grant_id);
+        Ok(
+            match db
+                .consume_bound(
+                    "passkey_registration_grant",
+                    &key_hash,
+                    Some(account_id),
+                    Some(device_id),
+                    None,
+                )
+                .await?
+            {
+                BoundConsumeResult::NotFound => ConsumeGrantResult::NotFound,
+                BoundConsumeResult::BindingMismatch => ConsumeGrantResult::BindingMismatch,
+                BoundConsumeResult::Consumed(_) => ConsumeGrantResult::Consumed,
+            },
+        )
     }
 }
 

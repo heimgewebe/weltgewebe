@@ -306,7 +306,7 @@ Jedes System behält eine klare Rolle. Funktionsduplikate werden nicht durch Kop
 
 ## 8. Verbotene Abkürzungen
 
-- Single-Instance-Guard ohne Kohärenzbeweis entfernen,
+- Multi-Instance-Guard ohne gleichwertigen Kohärenzbeweis entfernen oder schwächen,
 - heutigen Compose-Stack unverändert nach Kubernetes verschieben,
 - Compose und Kubernetes als unabhängige Wahrheiten pflegen,
 - einen Einzelhost als hochverfügbar bezeichnen,

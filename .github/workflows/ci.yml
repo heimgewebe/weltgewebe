@@ -90,8 +90,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash -n scripts/guard/domain-single-instance-guard.sh
-          bash -n scripts/tests/test_domain_single_instance_guard.sh
+          bash -n scripts/guard/domain-multi-instance-guard.sh
+          bash -n scripts/tests/test_domain_multi_instance_guard.sh
           bash -n scripts/guard/prod-public-base-url-guard.sh
           bash -n scripts/tests/test_prod_public_base_url_guard.sh
           bash -n scripts/guard/security-headers-guard.sh
@@ -119,7 +119,7 @@ jobs:
             scripts/tests/test_token_leak_guard.sh \
             scripts/tests/test_compose_volumes_guard.sh \
             scripts/tests/test_metrics_ref_guard.sh \
-            scripts/tests/test_domain_single_instance_guard.sh \
+            scripts/tests/test_domain_multi_instance_guard.sh \
             scripts/tests/test_prod_public_base_url_guard.sh \
             scripts/tests/test_security_headers_guard.sh \
             scripts/tests/test_repo_contract_guards.sh \
@@ -420,8 +420,9 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_ci
-      PG_DIRECT_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_ci
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_t002_test
+      PG_DIRECT_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_t002_test
+      NATS_URL: nats://127.0.0.1:4222
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
@@ -433,8 +434,27 @@ jobs:
           toolchain: 1.89.0
       - name: Cache cargo
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
-      - name: Run PostgreSQL proof suite
+      - name: Start isolated JetStream proof service
+        run: |
+          set -euo pipefail
+          docker run --detach --rm \
+            --name weltgewebe-ci-nats \
+            --publish 127.0.0.1:4222:4222 \
+            nats@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927 \
+            -js
+          for attempt in {1..30}; do
+            if (echo > /dev/tcp/127.0.0.1/4222) 2>/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs weltgewebe-ci-nats
+          exit 1
+      - name: Run PostgreSQL and multi-instance proof suite
         run: scripts/ci/run-postgres-integration-proofs.sh
+      - name: Stop isolated JetStream proof service
+        if: ${{ always() }}
+        run: docker stop weltgewebe-ci-nats || true
 
   lint-docs:
     name: Docs & Shell Hygiene

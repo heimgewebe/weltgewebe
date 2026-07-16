@@ -112,7 +112,7 @@ Caches sind abgeleitete Beschleuniger, keine Primärwahrheit. Ein Cache muss:
 - keine globale Ereignisreihenfolge,
 - keine Entfernung relationaler Primärmodelle,
 - keine öffentliche Föderation vor Protokoll- und Sicherheitsbeweisen,
-- keine Entfernung des Single-Instance-Guards allein aufgrund vorhandener NATS-Infrastruktur.
+- keine Produktionsreplikation allein aufgrund vorhandener NATS-Infrastruktur; erforderlich bleiben Outbox-, Idempotenz- und Zwei-Instanz-Beweise.
 
 ## Alternativen
 
@@ -144,4 +144,4 @@ Verworfen. Der zusätzliche Modell- und Migrationsaufwand ist nicht durch aktuel
 - doppelte Veröffentlichung erzeugt keine doppelte Fachwirkung,
 - unveröffentlichte und fehlgeschlagene Ereignisse sind beobachtbar,
 - mindestens zwei API-Instanzen sehen nach einer Mutation konsistent denselben Zustand,
-- Single-Instance-Guard bleibt bis zum vollständigen Kohärenzbeweis aktiv.
+- Der vollständige Kohärenzbeweis ersetzt den Single-Instance-Guard durch einen stärkeren Multi-Instance-Guard.

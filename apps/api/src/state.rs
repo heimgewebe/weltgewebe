@@ -1,4 +1,10 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Arc,
+    },
+};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
@@ -86,6 +92,11 @@ pub struct ApiState {
     /// Serializes account-create persistence (append to JSONL) so concurrent
     /// creates cannot interleave the duplicate-check and the write.
     pub accounts_persist: Arc<Mutex<()>>,
+    /// Blocks projection replacement while PostgreSQL-backed requests are
+    /// reading the process-local projection. Requests share a read guard;
+    /// refreshes take the write guard.
+    pub domain_projection_gate: Arc<RwLock<()>>,
+    pub domain_projection_version: Arc<AtomicI64>,
     pub edges: Arc<RwLock<OrderedCache<Edge>>>,
     pub rate_limiter: Arc<AuthRateLimiter>,
     pub mailer: Option<Arc<Mailer>>,
@@ -93,10 +104,46 @@ pub struct ApiState {
     pub webauthn: Option<Arc<Webauthn>>,
     pub passkey_registrations: PasskeyRegistrationStore,
     pub passkey_registration_grants: PasskeyRegistrationGrantStore,
-    /// In-progress passkey authentication (login) ceremonies — separate from
-    /// `passkey_registrations`; in-memory, TTL-bounded, single-use.
+    /// In-progress passkey authentication ceremonies. PostgreSQL-backed
+    /// deployments share this TTL-bounded, single-use state across processes.
     pub passkey_authentications: PasskeyAuthenticationStore,
     pub passkeys: PasskeyStore,
+}
+
+impl ApiState {
+    pub async fn refresh_domain_projection_if_stale(&self) -> anyhow::Result<()> {
+        if self.config.domain_read_source != crate::config::DomainReadSource::Postgres {
+            return Ok(());
+        }
+        let pool = self
+            .db_pool
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("PostgreSQL domain source has no database pool"))?;
+        let observed = crate::domain_db::domain_projection_version(pool).await?;
+        if observed == self.domain_projection_version.load(Ordering::Acquire) {
+            return Ok(());
+        }
+
+        let _projection_write = self.domain_projection_gate.write().await;
+        let observed = crate::domain_db::domain_projection_version(pool).await?;
+        if observed == self.domain_projection_version.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        let (accounts, nodes, edges, stable_version) =
+            crate::domain_db::load_stable_domain_projection_from_postgres(pool).await?;
+
+        let mut accounts_guard = self.accounts.write().await;
+        let mut nodes_guard = self.nodes.write().await;
+        let mut edges_guard = self.edges.write().await;
+        *accounts_guard = accounts;
+        *nodes_guard = nodes;
+        *edges_guard = edges;
+        self.metrics.set_nodes_cache_count(nodes_guard.len() as i64);
+        self.metrics.set_edges_cache_count(edges_guard.len() as i64);
+        self.domain_projection_version
+            .store(stable_version, Ordering::Release);
+        Ok(())
+    }
 }
 
 #[cfg(test)]

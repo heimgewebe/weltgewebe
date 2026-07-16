@@ -462,6 +462,46 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
     Ok(store)
 }
 
+/// Monotonic version advanced by the same triggers that append domain outbox
+/// events. A process compares this value with its local projection generation
+/// before serving PostgreSQL-backed domain reads.
+pub async fn domain_projection_version(pool: &PgPool) -> Result<i64> {
+    sqlx::query_scalar("SELECT version FROM domain_projection_state WHERE singleton = TRUE")
+        .fetch_one(pool)
+        .await
+        .context("failed to read domain projection version")
+}
+
+/// Load all process-local domain projections while the committed database
+/// generation is stable. Reads use independent pooled connections, but the
+/// before/after version fence forces a retry whenever a committed domain
+/// mutation overlaps the load. Therefore a returned projection cannot combine
+/// rows from two committed generations.
+pub async fn load_stable_domain_projection_from_postgres(
+    pool: &PgPool,
+) -> Result<(AccountStore, OrderedCache<Node>, OrderedCache<Edge>, i64)> {
+    const MAX_ATTEMPTS: usize = 5;
+    for attempt in 1..=MAX_ATTEMPTS {
+        let before = domain_projection_version(pool).await?;
+        let (accounts, nodes, edges) = tokio::try_join!(
+            load_accounts_from_postgres(pool),
+            load_nodes_from_postgres(pool),
+            load_edges_from_postgres(pool),
+        )?;
+        let after = domain_projection_version(pool).await?;
+        if before == after {
+            return Ok((accounts, nodes, edges, after));
+        }
+        tracing::info!(
+            attempt,
+            before,
+            after,
+            "Domain projection changed during reload; retrying stable snapshot"
+        );
+    }
+    anyhow::bail!("domain projection did not stabilize after {MAX_ATTEMPTS} reload attempts")
+}
+
 /// Look up exactly one account by its normalized, non-empty email
 /// (`lower(btrim(email))`), mirroring the partial unique index
 /// [`ACCOUNT_EMAIL_UNIQUE_CONSTRAINT`].

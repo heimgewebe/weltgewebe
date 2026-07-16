@@ -107,7 +107,7 @@ Die Zielarchitektur ist föderiert und Kubernetes-native, ohne den heutigen Comp
 - [ ] Welle 5 — Zwei-Zellen-Nachbarschaft: unabhängige Testzellen, gemeinsame Räume, zellübergreifende Knoten/Fäden und Partition-Recovery.
 - [ ] Welle 6+ — globale rekonstruierbare Projektionen, deklarative Zellprofile, Grabowski-Rechengewebe und Edge-/Offlinezellen nur nach den vorherigen Beweisen.
 
-Der bestehende Single-Instance-Guard bleibt bis zum Welle-1-Kohärenzbeweis aktiv. Die Zielentscheidung ist kein Freibrief für Replica-Skalierung oder Produktionsmigration.
+Der Welle-1-Kohärenzbeweis ist seit dem 16. Juli 2026 erfüllt und der Multi-Instance-Guard aktiv. Produktionsskalierung oder Migration benötigen weiterhin einen eigenen Plattform- und Betriebsbeweis.
 
 ## Strang Auth
 
@@ -177,7 +177,7 @@ Dauerhafte UX-Regeln stehen in [Kartenerlebnis](specs/map-experience.md); die Ba
 ## Themenübergreifende Reihenfolge (Was vor Was)
 
 1. **Weltgewebe-OS-Verfassung und Multi-Instance-State-Audit** vor jeder horizontalen Skalierung, Kubernetes-Produktionsmigration oder öffentlichen Föderation.
-2. **Shared Auth State und Transactional Outbox** vor Ablösung des Single-Instance-Guards.
+2. **Kubernetes-/GitOps-Grundlage** auf dem belegten Shared-State-, Outbox- und Multi-Instance-Vertrag aufbauen.
 3. **Zwei-API-Kohärenzbeweis** vor Kubernetes-Replica-Skalierung.
 4. **Kubernetes-Reproduzierbarkeit und Restore-Proof** vor einer HA-Behauptung.
 5. **Föderationskern und Konformitätstests** vor dem Zwei-Zellen-Pilot.

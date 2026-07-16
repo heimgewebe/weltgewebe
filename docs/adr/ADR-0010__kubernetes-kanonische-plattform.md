@@ -44,7 +44,7 @@ Die Entscheidung bedeutet ab sofort:
 Diese ADR ändert nicht automatisch die heutige Laufzeit.
 
 - Compose bleibt aktueller realer Betriebsweg.
-- Der Single-Instance-Guard bleibt aktiv.
+- Der Multi-Instance-Guard bleibt aktiv; Produktionsreplikation folgt erst mit dem Plattformrollout.
 - Kein Produktionscluster wird allein aufgrund dieser ADR installiert.
 - Keine bestehende Deploymentlane wird ungeprüft übernommen oder umgestellt.
 
