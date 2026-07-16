@@ -151,6 +151,12 @@ Root-eigene Deploymentbelege liegen unter
 Installationsmanifest bindet die installierten Helfer und Units zusätzlich an
 SHA-256.
 
+Ist der exakte aktuelle Commit bereits öffentlich belegt, aber sein ursprünglicher
+Deploymentbeleg fehlt, repariert der Reconciler die Zustandszeiger mit einem
+`verified_observed`-Beleg. Dabei werden fehlende historische Werte wie
+Webartefakt-Hash oder Startzeit ausdrücklich als unbekannt ausgewiesen und nicht
+erfunden.
+
 `verified` belegt die Code- und Webartefaktidentität. Laufzeitkonfiguration und
 Karteninhalt bleiben bewusst außerhalb dieser Commitidentität; ihre Belegung
 erfolgt über die bestehenden Produktions- und Kartenmanifeste.
