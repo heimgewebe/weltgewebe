@@ -15,6 +15,7 @@ COPY --from=builder /workspace/build /srv/weltgewebe
 RUN cp /usr/bin/caddy /usr/bin/caddy.uncapped \
     && mv /usr/bin/caddy.uncapped /usr/bin/caddy \
     && chmod 0755 /usr/bin/caddy \
+    && chmod 0444 /etc/caddy/Caddyfile \
     && mkdir -p /data /config /tmp \
     && chown -R 10001:10001 /data /config /tmp /srv/weltgewebe
 USER 10001:10001

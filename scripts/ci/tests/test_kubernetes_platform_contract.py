@@ -79,11 +79,13 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         copy_uncapped = dockerfile.index("RUN cp /usr/bin/caddy /usr/bin/caddy.uncapped")
         move_uncapped = dockerfile.index("&& mv /usr/bin/caddy.uncapped /usr/bin/caddy")
         chmod_uncapped = dockerfile.index("&& chmod 0755 /usr/bin/caddy")
+        chmod_config = dockerfile.index("&& chmod 0444 /etc/caddy/Caddyfile")
         user = dockerfile.index("USER 10001:10001")
         self.assertLess(final_stage, copy_uncapped)
         self.assertLess(copy_uncapped, move_uncapped)
         self.assertLess(move_uncapped, chmod_uncapped)
-        self.assertLess(chmod_uncapped, user)
+        self.assertLess(chmod_uncapped, chmod_config)
+        self.assertLess(chmod_config, user)
 
     def test_api_container_scripts_are_world_readable_and_executable(self) -> None:
         dockerfile = (ROOT / "apps/api/Dockerfile").read_text()
