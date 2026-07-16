@@ -42,6 +42,7 @@ verifies_with:
 
 - Keine Secret-Objekte oder Secretwerte werden versioniert.
 - Local und CI erzeugen Secrets ephemer im Cluster.
+- Der lokale Referenzbeweis verwendet dafür eine deterministische, ausdrücklich öffentliche Test-Fixture; sie ist kein Produktionsgeheimnis.
 - Staging und Production benötigen einen externen, auditierten Secretpfad.
 - Eigene Container laufen ohne Root, ohne Service-Account-Token, ohne Privilege Escalation und mit Default-Deny-Netzpolitik.
 - Der Referenzrunner übernimmt oder löscht niemals einen bereits vorhandenen Cluster.

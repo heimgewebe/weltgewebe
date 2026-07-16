@@ -94,6 +94,17 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertNotIn("commit_timestamp()", source)
         self.assertNotIn("load_images(tools", source)
 
+    def test_local_fixture_is_deterministic_and_explicitly_non_secret(self) -> None:
+        first = self.reference.local_fixture_value("cluster-a")
+        second = self.reference.local_fixture_value("cluster-a")
+        other = self.reference.local_fixture_value("cluster-b")
+        self.assertEqual(first, second)
+        self.assertNotEqual(first, other)
+        self.assertTrue(first.startswith("local-test-only-"))
+        for path in (ROOT / "platform").rglob("*"):
+            if path.is_file():
+                self.assertNotIn(first, path.read_text(errors="ignore"), str(path))
+
     def test_migration_uses_runtime_secret_reference(self) -> None:
         pod = self.reference.migration_pod("weltgewebe-api:local", "weltgewebe")
         env = pod["spec"]["containers"][0]["env"]

@@ -621,6 +621,37 @@ def refresh_images(args: argparse.Namespace) -> dict[str, Any]:
         "production_changed": False,
     }
 
+
+def local_fixture_value(cluster: str) -> str:
+    return "local-test-only-" + hashlib.sha256(cluster.encode()).hexdigest()[:24]
+
+
+def local_data_up(args: argparse.Namespace) -> dict[str, Any]:
+    receipt = tool_receipt()
+    tools = receipt["tools"]
+    marker = require_owned_cluster(tools["kind"], args.cluster)
+    kubectl = tools["kubectl"]
+    kustomize = tools["kustomize"]
+    fixture = local_fixture_value(args.cluster)
+    app_namespace = "weltgewebe"
+    apply_yaml(kubectl, namespace_document("weltgewebe-data"))
+    apply_yaml(kubectl, namespace_document(app_namespace, data_client=True))
+    for document in secret_documents(fixture, app_namespace):
+        apply_yaml(kubectl, document)
+    apply_direct(kubectl, kustomize, "platform/infrastructure/local-data")
+    wait_rollout(kubectl, "weltgewebe-data", "deployment/postgres")
+    wait_rollout(kubectl, "weltgewebe-data", "deployment/nats")
+    migrate(kubectl, app_namespace)
+    return {
+        "schema_version": 1,
+        "status": "pass",
+        "phase": "local-data-fixture",
+        "cluster": args.cluster,
+        "commit": marker["commit"],
+        "credential_class": "public-local-test-fixture",
+        "production_changed": False,
+    }
+
 def data_up(args: argparse.Namespace) -> dict[str, Any]:
     receipt = tool_receipt()
     tools = receipt["tools"]
@@ -781,6 +812,8 @@ def main() -> int:
     proof_parser.add_argument("--mode", choices=("direct", "gitops"), default="direct")
     proof_parser.add_argument("--source-ref")
     proof_parser.add_argument("--keep", action="store_true")
+    fixture_parser = subparsers.add_parser("phase-d")
+    fixture_parser.add_argument("--cluster", default=DEFAULT_CLUSTER)
     image_parser = subparsers.add_parser("phase-c")
     image_parser.add_argument("--cluster", default=DEFAULT_CLUSTER)
     data_parser = subparsers.add_parser("phase-a")
@@ -796,7 +829,9 @@ def main() -> int:
             delete_owned_cluster(receipt["tools"]["kind"], args.cluster)
             print(json.dumps({"status": "deleted", "cluster": args.cluster}))
             return 0
-        if args.command == "phase-c":
+        if args.command == "phase-d":
+            result = local_data_up(args)
+        elif args.command == "phase-c":
             result = refresh_images(args)
         elif args.command == "phase-a":
             result = data_up(args)

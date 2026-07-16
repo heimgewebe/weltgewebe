@@ -31,6 +31,8 @@ verifies_with:
 - kein bestehender Cluster mit dem gewählten Namen;
 - keine laufende Produktionsänderung in diesem Pfad.
 
+Die lokale Datenzelle verwendet ausschließlich eine deterministische, öffentliche Test-Fixture; reale Geheimnisse werden weder benötigt noch geschrieben.
+
 Die Werkzeuge werden nicht global installiert. `bootstrap_tools.py` lädt sie in den ignorierten Repositorycache und verifiziert jeden SHA-256.
 
 ## Statischer Vertrag
