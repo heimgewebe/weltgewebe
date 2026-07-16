@@ -1,0 +1,43 @@
+---
+name: Apply PR 1445 final PAX boundary
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/apply-pr1445-pax-final.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: deploy/merge-to-live-v1
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version-file: ".python-version"
+      - name: Apply final PAX refinement and prove deployment paths
+        shell: bash
+        env:
+          EXPECTED_PARENT: ad78a769e4b20fb3f7a4daae13b774be83c19dc1
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD^)" == "$EXPECTED_PARENT" ]]
+          python scripts/ci/prepare_pr1445_pax_compat.py
+          python -m py_compile scripts/ops/validate_web_deploy_archive.py
+          python -m unittest \
+            scripts/ci/tests/test_validate_web_deploy_archive.py \
+            scripts/ci/tests/test_deploy_exact_commit_integration.py -v
+          git diff --check
+          [[ "$(git diff --name-only)" == "scripts/ops/validate_web_deploy_archive.py" ]]
+          git config user.name alexdermohr
+          git config user.email 216529510+alexdermohr@users.noreply.github.com
+          git add scripts/ops/validate_web_deploy_archive.py
+          git commit -m "fix: allow only safe numeric PAX mtime metadata"
+          git push origin HEAD:deploy/merge-to-live-v1
