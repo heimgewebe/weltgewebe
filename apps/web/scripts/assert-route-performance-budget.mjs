@@ -86,8 +86,10 @@ export function measureRoute({ buildDir, routeFile }) {
   const html = readFileSync(routePath, "utf8");
   const metrics = {
     route: routeFile,
+    initial_js_asset_count: 0,
     initial_js_raw_bytes: 0,
     initial_js_gzip_bytes: 0,
+    initial_css_asset_count: 0,
     initial_css_raw_bytes: 0,
     initial_css_gzip_bytes: 0,
     stylesheet_contents: [],
@@ -105,9 +107,11 @@ export function measureRoute({ buildDir, routeFile }) {
       gzip_bytes: gzipBytes,
     });
     if (extension === ".js") {
+      metrics.initial_js_asset_count += 1;
       metrics.initial_js_raw_bytes += bytes.byteLength;
       metrics.initial_js_gzip_bytes += gzipBytes;
     } else if (extension === ".css") {
+      metrics.initial_css_asset_count += 1;
       metrics.initial_css_raw_bytes += bytes.byteLength;
       metrics.initial_css_gzip_bytes += gzipBytes;
       metrics.stylesheet_contents.push({
@@ -121,6 +125,30 @@ export function measureRoute({ buildDir, routeFile }) {
 
 export function validateRouteBudget(metrics, budget) {
   const errors = [];
+  const minima = {
+    initial_js_asset_count: budget.min_initial_js_assets,
+    initial_css_asset_count: budget.min_initial_css_assets,
+  };
+  for (const [key, minimum] of Object.entries(minima)) {
+    if (!Number.isInteger(minimum) || minimum < 1) {
+      errors.push(
+        metrics.route + ": budget " + key + " must be a positive integer",
+      );
+      continue;
+    }
+    if (metrics[key] < minimum) {
+      errors.push(
+        metrics.route +
+          ": " +
+          key +
+          " " +
+          metrics[key] +
+          " is below " +
+          minimum,
+      );
+    }
+  }
+
   const maxima = {
     initial_js_gzip_bytes: budget.max_initial_js_gzip_bytes,
     initial_css_gzip_bytes: budget.max_initial_css_gzip_bytes,
@@ -204,8 +232,10 @@ export function runBudgetCheck({
     const metrics = measureRoute({ buildDir: resolvedBuildDir, routeFile });
     reports.push({
       route: routeFile,
+      initial_js_asset_count: metrics.initial_js_asset_count,
       initial_js_raw_bytes: metrics.initial_js_raw_bytes,
       initial_js_gzip_bytes: metrics.initial_js_gzip_bytes,
+      initial_css_asset_count: metrics.initial_css_asset_count,
       initial_css_raw_bytes: metrics.initial_css_raw_bytes,
       initial_css_gzip_bytes: metrics.initial_css_gzip_bytes,
       assets: metrics.assets,
@@ -218,9 +248,13 @@ export function runBudgetCheck({
       report.route +
         ": JS " +
         report.initial_js_gzip_bytes +
-        " B gzip / CSS " +
+        " B gzip (" +
+        report.initial_js_asset_count +
+        " assets) / CSS " +
         report.initial_css_gzip_bytes +
-        " B gzip",
+        " B gzip (" +
+        report.initial_css_asset_count +
+        " assets)",
     );
   }
   if (errors.length > 0) throw new Error(errors.join("\n"));

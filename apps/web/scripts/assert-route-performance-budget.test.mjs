@@ -38,6 +38,8 @@ test("measures gzip bytes and detects forbidden CSS", () => {
   assert.ok(metrics.initial_css_gzip_bytes > 0);
   assert.deepEqual(
     validateRouteBudget(metrics, {
+      min_initial_js_assets: 1,
+      min_initial_css_assets: 1,
       max_initial_js_gzip_bytes: 10_000,
       max_initial_css_gzip_bytes: 10_000,
       forbid_css_markers: [".maplibregl-"],
@@ -52,7 +54,6 @@ test("measures gzip bytes and detects forbidden CSS", () => {
 
 test("rejects route asset traversal", () => {
   const root = mkdtempSync(join(tmpdir(), "route-budget-traversal-"));
-  writeFileSync(root + ".js", "outside\n");
   writeFileSync(
     join(root, "login.html"),
     '<link rel="modulepreload" href="../route-budget-traversal.js">',
@@ -88,4 +89,29 @@ test("selects only an adapter output containing every budgeted route", () => {
     resolveBuildDirectory({ root, routeFiles, preferVercel: true }),
     resolve(staticOutput),
   );
+});
+
+test("fails closed when initial asset discovery yields no JS or CSS", () => {
+  const errors = validateRouteBudget(
+    {
+      route: "login.html",
+      initial_js_asset_count: 0,
+      initial_js_gzip_bytes: 0,
+      initial_css_asset_count: 0,
+      initial_css_gzip_bytes: 0,
+      stylesheet_contents: [],
+    },
+    {
+      min_initial_js_assets: 1,
+      min_initial_css_assets: 1,
+      max_initial_js_gzip_bytes: 10_000,
+      max_initial_css_gzip_bytes: 10_000,
+      forbid_css_markers: [],
+      require_css_markers: [],
+    },
+  );
+  assert.deepEqual(errors, [
+    "login.html: initial_js_asset_count 0 is below 1",
+    "login.html: initial_css_asset_count 0 is below 1",
+  ]);
 });
