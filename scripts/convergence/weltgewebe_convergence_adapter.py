@@ -9,6 +9,7 @@ import json
 import math
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -45,6 +46,61 @@ REQUEST_REQUIRED_KEYS = {
     "verifications",
 }
 REQUEST_ALLOWED_KEYS = REQUEST_REQUIRED_KEYS | {"closure"}
+OBSERVATION_KEYS = {
+    "schema_version",
+    "observation_id",
+    "observed_at",
+    "source_state",
+    "source_refs",
+    "claims",
+    "does_not_establish",
+}
+SOURCE_REF_KEYS = {"kind", "ref", "subject_sha256"}
+CLASSIFICATION_KEYS = {"schema_version", "change_class", "semantic_change", "blocked_by"}
+EFFECT_KEYS = {"schema_version", "kind", "evidence_ref", "subject_sha256"}
+VERIFICATION_KEYS = EFFECT_KEYS | {"result"}
+CLOSURE_REQUIRED_KEYS = {"schema_version", "closure_id", "status", "residual_risks"}
+CLOSURE_ALLOWED_KEYS = CLOSURE_REQUIRED_KEYS | {
+    "bureau_task_ref",
+    "chronik_event_ref",
+    "cleanup_evidence",
+}
+CHANGE_CLASSES = {
+    "documentation",
+    "contract",
+    "application",
+    "runtime",
+    "infrastructure",
+    "security",
+    "data",
+    "lifecycle",
+    "product_outcome",
+}
+SEMANTIC_CHANGES = {"none", "possible", "material", "unknown"}
+EFFECT_KINDS = {
+    "commit",
+    "pull_request",
+    "merge",
+    "artifact",
+    "deployment",
+    "configuration_change",
+}
+VERIFICATION_KINDS = {
+    "deterministic_regeneration",
+    "tests",
+    "review",
+    "independent_review",
+    "ci",
+    "deployment_identity",
+    "runtime_identity",
+    "service_health",
+    "smoke_test",
+    "negative_control",
+    "consumer_compatibility",
+    "recovery",
+    "product_outcome",
+}
+VERIFICATION_RESULTS = {"pass", "fail", "unknown"}
 FORBIDDEN_PAYLOAD_KEYS = {
     "account",
     "bureau_task_payload",
@@ -107,7 +163,9 @@ def load_profile(path: Path) -> dict[str, Any]:
 
 
 def canonical_json(data: Any) -> str:
-    return json.dumps(data, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return json.dumps(
+        data, ensure_ascii=False, separators=(",", ":"), sort_keys=True, allow_nan=False
+    )
 
 
 def sha256_hex(text: str) -> str:
@@ -127,15 +185,16 @@ def build_request(profile: dict[str, Any]) -> tuple[dict[str, Any], str, str]:
 
 
 def validate_profile(profile: dict[str, Any]) -> None:
+    _assert_no_non_finite(profile, "profile")
     _assert_object_keys(profile, PROFILE_KEYS, "profile")
     _assert_no_forbidden_keys(profile, "profile")
     _assert_const(profile["schema_version"], SCHEMA_VERSION, "schema_version")
     _assert_pattern(profile["profile_id"], ID_RE, "profile_id")
     _assert_const(profile["protocol_head"], PROTOCOL_HEAD, "protocol_head")
     _assert_const(profile["adapter"], ADAPTER_NAME, "adapter")
-    _validate_evidence_mode(profile["evidence_mode"], profile["request"])
     _validate_intent(profile["intent"])
     _validate_request(profile["request"])
+    _validate_evidence_mode(profile["evidence_mode"], profile["request"])
 
 
 def _validate_evidence_mode(mode: Any, request: Any) -> None:
@@ -190,43 +249,26 @@ def _validate_intent(intent: Any) -> None:
 
 
 def _validate_request(request: Any) -> None:
-    if not isinstance(request, dict):
-        raise ConvergenceAdapterError("request must be an object")
-    missing = REQUEST_REQUIRED_KEYS - set(request)
-    if missing:
-        raise ConvergenceAdapterError(
-            f"request missing required keys {', '.join(sorted(missing))}"
-        )
-    unknown = set(request) - REQUEST_ALLOWED_KEYS
-    if unknown:
-        raise ConvergenceAdapterError(
-            f"request has unexpected keys {', '.join(sorted(unknown))}"
-        )
-    if request["schema_version"] != REQUEST_SCHEMA_VERSION:
-        raise ConvergenceAdapterError("request.schema_version must be 1")
+    _assert_required_allowed_keys(
+        request, REQUEST_REQUIRED_KEYS, REQUEST_ALLOWED_KEYS, "request"
+    )
+    _assert_schema_version_one(request["schema_version"], "request.schema_version")
+    _assert_string(request["assessment_id"], "request.assessment_id", max_length=200)
     if request["risk_level"] not in {"R0", "R1", "R2", "R3"}:
         raise ConvergenceAdapterError("request.risk_level must be R0, R1, R2 or R3")
 
-    observation = request["observation"]
-    if not isinstance(observation, dict):
-        raise ConvergenceAdapterError("request.observation must be an object")
-    source_refs = observation.get("source_refs")
-    if not isinstance(source_refs, list):
-        raise ConvergenceAdapterError("request.observation.source_refs must be an array")
+    source_refs = _validate_observation(request["observation"])
+    _validate_classification(request["classification"])
+    effects = _validate_effects(request["effects"])
+    verifications = _validate_verifications(request["verifications"])
+
     _require_source_ref_kinds(
-        source_refs,
-        {"bureau_task", "chronik_event", "grabowski_live_receipt"},
+        source_refs, {"bureau_task", "chronik_event", "grabowski_live_receipt"}
     )
     if not any(_is_exact_revision_ref(item) for item in source_refs):
         raise ConvergenceAdapterError(
             "request.observation.source_refs must include an exact Weltgewebe commit or deploy receipt"
         )
-
-    effects = _assert_receipt_list(request["effects"], "request.effects")
-    verifications = _assert_receipt_list(
-        request["verifications"],
-        "request.verifications",
-    )
     if request["risk_level"] == "R2":
         _require_receipt_kind(effects, "merge", "request.effects")
         _require_receipt_kind(effects, "deployment", "request.effects")
@@ -234,31 +276,162 @@ def _validate_request(request: Any) -> None:
     _require_pass_verification(verifications, "recovery")
 
     closure = request.get("closure")
-    if not isinstance(closure, dict):
+    if closure is None:
         raise ConvergenceAdapterError("request.closure must be present for rollback evidence")
-    for key in ("bureau_task_ref", "chronik_event_ref", "cleanup_evidence", "residual_risks"):
-        if not closure.get(key):
-            raise ConvergenceAdapterError(f"request.closure.{key} must be present")
+    _validate_closure(closure)
 
 
-def _require_source_ref_kinds(source_refs: list[Any], required: set[str]) -> None:
-    kinds: set[str] = set()
-    for index, item in enumerate(source_refs):
-        if not isinstance(item, dict):
-            raise ConvergenceAdapterError(f"request.observation.source_refs[{index}] must be an object")
-        for key in ("kind", "ref", "subject_sha256"):
-            if key not in item:
-                raise ConvergenceAdapterError(
-                    f"request.observation.source_refs[{index}] missing {key}"
-                )
-        _assert_string(item["kind"], f"request.observation.source_refs[{index}].kind")
-        _assert_string(item["ref"], f"request.observation.source_refs[{index}].ref")
-        _assert_pattern(
-            item["subject_sha256"],
-            SHA256_RE,
-            f"request.observation.source_refs[{index}].subject_sha256",
+def _validate_observation(observation: Any) -> list[dict[str, Any]]:
+    _assert_object_keys(observation, OBSERVATION_KEYS, "request.observation")
+    _assert_schema_version_one(
+        observation["schema_version"], "request.observation.schema_version"
+    )
+    _assert_string(
+        observation["observation_id"], "request.observation.observation_id", max_length=200
+    )
+    _assert_datetime(observation["observed_at"], "request.observation.observed_at")
+    if observation["source_state"] not in {"current", "stale", "unknown"}:
+        raise ConvergenceAdapterError(
+            "request.observation.source_state must be current, stale or unknown"
         )
-        kinds.add(item["kind"])
+
+    raw_refs = observation["source_refs"]
+    if not isinstance(raw_refs, list):
+        raise ConvergenceAdapterError("request.observation.source_refs must be an array")
+    if not 1 <= len(raw_refs) <= 32:
+        raise ConvergenceAdapterError(
+            "request.observation.source_refs must contain between 1 and 32 items"
+        )
+    source_refs: list[dict[str, Any]] = []
+    for index, item in enumerate(raw_refs):
+        path = f"request.observation.source_refs[{index}]"
+        _assert_object_keys(item, SOURCE_REF_KEYS, path)
+        _assert_string(item["kind"], f"{path}.kind", max_length=80)
+        _assert_string(item["ref"], f"{path}.ref", max_length=2048)
+        _assert_pattern(item["subject_sha256"], SHA256_RE, f"{path}.subject_sha256")
+        _reject_symbolic_git_reference(item["kind"], item["ref"], path)
+        source_refs.append(item)
+
+    _assert_string_list(
+        observation["claims"],
+        "request.observation.claims",
+        min_items=1,
+        max_items=64,
+        max_length=500,
+    )
+    _assert_string_list(
+        observation["does_not_establish"],
+        "request.observation.does_not_establish",
+        min_items=0,
+        max_items=64,
+        max_length=200,
+        unique=True,
+    )
+    return source_refs
+
+
+def _reject_symbolic_git_reference(kind: str, ref: str, path: str) -> None:
+    normalized_kind = kind.casefold()
+    git_shaped = normalized_kind.startswith("git") or "git:" in ref.casefold()
+    if git_shaped and EXACT_COMMIT_REF_RE.search(ref) is None:
+        raise ConvergenceAdapterError(
+            f"{path}.ref must bind a git reference to an exact 40-character commit"
+        )
+
+
+def _validate_classification(classification: Any) -> None:
+    _assert_object_keys(classification, CLASSIFICATION_KEYS, "request.classification")
+    _assert_schema_version_one(
+        classification["schema_version"], "request.classification.schema_version"
+    )
+    if classification["change_class"] not in CHANGE_CLASSES:
+        raise ConvergenceAdapterError("request.classification.change_class is invalid")
+    if classification["semantic_change"] not in SEMANTIC_CHANGES:
+        raise ConvergenceAdapterError("request.classification.semantic_change is invalid")
+    _assert_string_list(
+        classification["blocked_by"],
+        "request.classification.blocked_by",
+        min_items=0,
+        max_items=64,
+        max_length=300,
+        unique=True,
+    )
+
+
+def _validate_effects(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ConvergenceAdapterError("request.effects must be an array")
+    if len(value) > 64:
+        raise ConvergenceAdapterError("request.effects must contain at most 64 items")
+    receipts: list[dict[str, Any]] = []
+    for index, item in enumerate(value):
+        path = f"request.effects[{index}]"
+        _assert_object_keys(item, EFFECT_KEYS, path)
+        _assert_schema_version_one(item["schema_version"], f"{path}.schema_version")
+        if item["kind"] not in EFFECT_KINDS:
+            raise ConvergenceAdapterError(f"{path}.kind is invalid")
+        _assert_string(item["evidence_ref"], f"{path}.evidence_ref", max_length=2048)
+        _assert_pattern(item["subject_sha256"], SHA256_RE, f"{path}.subject_sha256")
+        receipts.append(item)
+    return receipts
+
+
+def _validate_verifications(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ConvergenceAdapterError("request.verifications must be an array")
+    if len(value) > 128:
+        raise ConvergenceAdapterError("request.verifications must contain at most 128 items")
+    receipts: list[dict[str, Any]] = []
+    for index, item in enumerate(value):
+        path = f"request.verifications[{index}]"
+        _assert_object_keys(item, VERIFICATION_KEYS, path)
+        _assert_schema_version_one(item["schema_version"], f"{path}.schema_version")
+        if item["kind"] not in VERIFICATION_KINDS:
+            raise ConvergenceAdapterError(f"{path}.kind is invalid")
+        _assert_string(item["evidence_ref"], f"{path}.evidence_ref", max_length=2048)
+        _assert_pattern(item["subject_sha256"], SHA256_RE, f"{path}.subject_sha256")
+        if item["result"] not in VERIFICATION_RESULTS:
+            raise ConvergenceAdapterError(f"{path}.result is invalid")
+        receipts.append(item)
+    return receipts
+
+
+def _validate_closure(closure: Any) -> None:
+    _assert_required_allowed_keys(
+        closure, CLOSURE_REQUIRED_KEYS, CLOSURE_ALLOWED_KEYS, "request.closure"
+    )
+    _assert_schema_version_one(closure["schema_version"], "request.closure.schema_version")
+    _assert_string(closure["closure_id"], "request.closure.closure_id", max_length=200)
+    if closure["status"] not in {"proposed", "closed"}:
+        raise ConvergenceAdapterError("request.closure.status must be proposed or closed")
+    for key in ("bureau_task_ref", "chronik_event_ref"):
+        if key not in closure:
+            raise ConvergenceAdapterError(f"request.closure.{key} must be present")
+        _assert_string(closure[key], f"request.closure.{key}", max_length=500)
+    if "cleanup_evidence" not in closure:
+        raise ConvergenceAdapterError("request.closure.cleanup_evidence must be present")
+    _assert_string_list(
+        closure["cleanup_evidence"],
+        "request.closure.cleanup_evidence",
+        min_items=1,
+        max_items=64,
+        max_length=2048,
+        unique=True,
+    )
+    _assert_string_list(
+        closure["residual_risks"],
+        "request.closure.residual_risks",
+        min_items=1,
+        max_items=64,
+        max_length=500,
+        unique=True,
+    )
+
+
+def _require_source_ref_kinds(
+    source_refs: list[dict[str, Any]], required: set[str]
+) -> None:
+    kinds = {item["kind"] for item in source_refs}
     missing = required - kinds
     if missing:
         raise ConvergenceAdapterError(
@@ -280,25 +453,6 @@ def _is_exact_revision_ref(source_ref: Any) -> bool:
     )
 
 
-def _assert_receipt_list(value: Any, path: str) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        raise ConvergenceAdapterError(f"{path} must be an array")
-    receipts: list[dict[str, Any]] = []
-    for index, item in enumerate(value):
-        if not isinstance(item, dict):
-            raise ConvergenceAdapterError(f"{path}[{index}] must be an object")
-        for key in ("schema_version", "kind", "evidence_ref", "subject_sha256"):
-            if key not in item:
-                raise ConvergenceAdapterError(f"{path}[{index}] missing {key}")
-        if item["schema_version"] != REQUEST_SCHEMA_VERSION:
-            raise ConvergenceAdapterError(f"{path}[{index}].schema_version must be 1")
-        _assert_string(item["kind"], f"{path}[{index}].kind")
-        _assert_string(item["evidence_ref"], f"{path}[{index}].evidence_ref")
-        _assert_pattern(item["subject_sha256"], SHA256_RE, f"{path}[{index}].subject_sha256")
-        receipts.append(item)
-    return receipts
-
-
 def _require_receipt_kind(receipts: list[dict[str, Any]], kind: str, path: str) -> None:
     if not any(item["kind"] == kind for item in receipts):
         raise ConvergenceAdapterError(f"{path} missing {kind}")
@@ -306,9 +460,59 @@ def _require_receipt_kind(receipts: list[dict[str, Any]], kind: str, path: str) 
 
 def _require_pass_verification(verifications: list[dict[str, Any]], kind: str) -> None:
     for item in verifications:
-        if item["kind"] == kind and item.get("result") == "pass":
+        if item["kind"] == kind and item["result"] == "pass":
             return
     raise ConvergenceAdapterError(f"request.verifications missing passing {kind}")
+
+
+def _assert_required_allowed_keys(
+    value: Any, required: set[str], allowed: set[str], path: str
+) -> None:
+    if not isinstance(value, dict):
+        raise ConvergenceAdapterError(f"{path} must be an object")
+    missing = required - set(value)
+    if missing:
+        raise ConvergenceAdapterError(f"{path} missing required keys {', '.join(sorted(missing))}")
+    unknown = set(value) - allowed
+    if unknown:
+        raise ConvergenceAdapterError(f"{path} has unexpected keys {', '.join(sorted(unknown))}")
+
+
+def _assert_schema_version_one(value: Any, path: str) -> None:
+    if type(value) is not int or value != REQUEST_SCHEMA_VERSION:
+        raise ConvergenceAdapterError(f"{path} must be integer 1")
+
+
+def _assert_datetime(value: Any, path: str) -> None:
+    _assert_string(value, path, max_length=64)
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ConvergenceAdapterError(f"{path} must be an RFC 3339 date-time") from exc
+    if parsed.tzinfo is None:
+        raise ConvergenceAdapterError(f"{path} must include a timezone")
+
+
+def _assert_string_list(
+    value: Any,
+    path: str,
+    *,
+    min_items: int,
+    max_items: int,
+    max_length: int,
+    unique: bool = False,
+) -> None:
+    if not isinstance(value, list):
+        raise ConvergenceAdapterError(f"{path} must be an array")
+    if not min_items <= len(value) <= max_items:
+        raise ConvergenceAdapterError(
+            f"{path} must contain between {min_items} and {max_items} items"
+        )
+    for index, item in enumerate(value):
+        _assert_string(item, f"{path}[{index}]", max_length=max_length)
+    if unique and len(set(value)) != len(value):
+        raise ConvergenceAdapterError(f"{path} must contain unique items")
 
 
 def _assert_object_keys(value: Any, allowed: set[str], path: str) -> None:

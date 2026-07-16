@@ -45,7 +45,7 @@ The only local schema truth is:
 
 - `contracts/convergence/v1.0.0/assessment-profile.schema.json`
 
-No local request schema is authoritative. The request shape is owned by the public checkout at `/home/alex/repos/konvergenzregelkreis` and specifically by `protocol/assessment-request.v1.schema.json` plus the referenced receipt schemas at the pinned head above.
+No local request schema is authoritative. The request shape is owned by the public checkout at `/home/alex/repos/konvergenzregelkreis` and specifically by `protocol/assessment-request.v1.schema.json` plus the referenced receipt schemas at the pinned head above. The adapter nevertheless enforces a defensive, fail-closed projection of that pinned v1 shape: exact nested keys, enums, cardinalities, unique arrays, timezone-aware timestamps, integer schema versions and finite JSON values. This executable guard is compatibility code, not a second protocol authority; evaluator acceptance at the pinned public head remains decisive.
 
 The deterministic terminal conformance fixtures are:
 

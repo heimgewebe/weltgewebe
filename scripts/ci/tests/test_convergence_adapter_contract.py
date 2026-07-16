@@ -228,9 +228,19 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
             with self.assertRaises(self.adapter.ConvergenceAdapterError):
                 self.adapter.build_request(invalid)
 
-        with self.subTest("symbolic revision"):
+        with self.subTest("symbolic revision replaces exact commit"):
             invalid = copy.deepcopy(profile)
-            invalid["request"]["observation"]["source_refs"][3]["ref"] = "git:weltgewebe@main"
+            invalid["request"]["observation"]["source_refs"][3]["ref"] = (
+                "fixture:git:weltgewebe@main"
+            )
+            with self.assertRaises(self.adapter.ConvergenceAdapterError):
+                self.adapter.build_request(invalid)
+
+        with self.subTest("symbolic revision beside exact commit"):
+            invalid = copy.deepcopy(profile)
+            symbolic = copy.deepcopy(invalid["request"]["observation"]["source_refs"][3])
+            symbolic["ref"] = "fixture:git:weltgewebe@main"
+            invalid["request"]["observation"]["source_refs"].append(symbolic)
             with self.assertRaises(self.adapter.ConvergenceAdapterError):
                 self.adapter.build_request(invalid)
 
@@ -251,6 +261,78 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
             ]
             with self.assertRaises(self.adapter.ConvergenceAdapterError):
                 self.adapter.build_request(invalid)
+
+    def test_programmatic_and_nested_protocol_inputs_fail_closed(self) -> None:
+        base = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
+
+        cases: list[tuple[str, Any]] = [
+            (
+                "non-finite programmatic value",
+                lambda profile: profile["request"]["classification"]["blocked_by"].append(
+                    float("nan")
+                ),
+            ),
+            (
+                "boolean schema version",
+                lambda profile: profile["request"].__setitem__("schema_version", True),
+            ),
+            (
+                "timezone-free observation",
+                lambda profile: profile["request"]["observation"].__setitem__(
+                    "observed_at", "2026-07-16T12:00:00"
+                ),
+            ),
+            (
+                "unknown observation field",
+                lambda profile: profile["request"]["observation"].__setitem__(
+                    "copiedDomainObject", {}
+                ),
+            ),
+            (
+                "unknown source reference field",
+                lambda profile: profile["request"]["observation"]["source_refs"][0].__setitem__(
+                    "copiedObject", "forbidden by exact protocol shape"
+                ),
+            ),
+            (
+                "invalid classification enum",
+                lambda profile: profile["request"]["classification"].__setitem__(
+                    "change_class", "other"
+                ),
+            ),
+            (
+                "invalid effect kind",
+                lambda profile: profile["request"]["effects"][0].__setitem__(
+                    "kind", "unknown_effect"
+                ),
+            ),
+            (
+                "missing verification result",
+                lambda profile: profile["request"]["verifications"][0].pop("result"),
+            ),
+            (
+                "invalid closure status",
+                lambda profile: profile["request"]["closure"].__setitem__(
+                    "status", "terminal"
+                ),
+            ),
+            (
+                "duplicate cleanup evidence",
+                lambda profile: profile["request"]["closure"]["cleanup_evidence"].append(
+                    profile["request"]["closure"]["cleanup_evidence"][0]
+                ),
+            ),
+        ]
+
+        for name, mutate in cases:
+            with self.subTest(name):
+                invalid = copy.deepcopy(base)
+                mutate(invalid)
+                with self.assertRaises(self.adapter.ConvergenceAdapterError):
+                    self.adapter.build_request(invalid)
+
+        with self.assertRaises(ValueError):
+            self.adapter.canonical_json({"non_finite": float("inf")})
 
     def test_synthetic_fixture_cannot_be_mistaken_for_live_evidence(self) -> None:
         profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
