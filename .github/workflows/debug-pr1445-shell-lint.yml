@@ -1,0 +1,54 @@
+---
+name: Debug PR 1445 shell lint
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/debug-pr1445-shell-lint.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: debug/pr1445-shell-lint-20260716
+          fetch-depth: 0
+      - name: Capture exact diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends shellcheck shfmt
+          shell_files="$RUNNER_TEMP/shell-files.txt"
+          python3 scripts/tools/list-shell-files.py > "$shell_files"
+          set +e
+          xargs -0 -a "$shell_files" -n 1 bash -n -- > bash-n.log 2>&1
+          bash_rc=$?
+          xargs -0 -a "$shell_files" shfmt -d -i 2 -ci -sr -- > shfmt.log 2>&1
+          shfmt_rc=$?
+          xargs -0 -a "$shell_files" shellcheck -S style -- > shellcheck.log 2>&1
+          shellcheck_rc=$?
+          set -e
+          printf 'bash_n=%s\nshfmt=%s\nshellcheck=%s\n' \
+            "$bash_rc" "$shfmt_rc" "$shellcheck_rc" > result.txt
+          cat result.txt
+          cat shfmt.log
+          cat shellcheck.log
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr1445-shell-lint-diagnostics
+          path: |
+            result.txt
+            bash-n.log
+            shfmt.log
+            shellcheck.log
+          if-no-files-found: error
+          retention-days: 3
