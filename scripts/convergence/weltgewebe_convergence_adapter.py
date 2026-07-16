@@ -122,6 +122,9 @@ FORBIDDEN_PAYLOAD_KEYS = {
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,127}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 EXACT_COMMIT_REF_RE = re.compile(r"@[0-9a-f]{40}$")
+RFC3339_DATETIME_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$"
+)
 
 
 class ConvergenceAdapterError(ValueError):
@@ -485,7 +488,11 @@ def _assert_schema_version_one(value: Any, path: str) -> None:
 
 def _assert_datetime(value: Any, path: str) -> None:
     _assert_string(value, path, max_length=64)
-    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    if RFC3339_DATETIME_RE.fullmatch(value) is None:
+        raise ConvergenceAdapterError(f"{path} must be an RFC 3339 date-time")
+    normalized = value.replace("t", "T")
+    if normalized.endswith(("Z", "z")):
+        normalized = normalized[:-1] + "+00:00"
     try:
         parsed = datetime.fromisoformat(normalized)
     except ValueError as exc:

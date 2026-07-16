@@ -283,6 +283,18 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 ),
             ),
             (
+                "space separated timestamp accepted by datetime but rejected by protocol",
+                lambda profile: profile["request"]["observation"].__setitem__(
+                    "observed_at", "2026-07-16 12:00:00+00:00"
+                ),
+            ),
+            (
+                "timezone without colon",
+                lambda profile: profile["request"]["observation"].__setitem__(
+                    "observed_at", "2026-07-16T12:00:00+0000"
+                ),
+            ),
+            (
                 "unknown observation field",
                 lambda profile: profile["request"]["observation"].__setitem__(
                     "copiedDomainObject", {}
@@ -333,6 +345,15 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             self.adapter.canonical_json({"non_finite": float("inf")})
+
+        for accepted in (
+            "2026-07-16T12:00:00Z",
+            "2026-07-16t12:00:00z",
+            "2026-07-16T12:00:00.123+02:30",
+        ):
+            valid = copy.deepcopy(base)
+            valid["request"]["observation"]["observed_at"] = accepted
+            self.adapter.build_request(valid)
 
     def test_synthetic_fixture_cannot_be_mistaken_for_live_evidence(self) -> None:
         profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
