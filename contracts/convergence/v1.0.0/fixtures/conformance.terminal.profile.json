@@ -1,0 +1,158 @@
+{
+  "schema_version": "1.0.0",
+  "profile_id": "weltgewebe-os-v1-t013-conformance-fixture",
+  "protocol_head": "83ed435bf9eb490e81a6ff2103b6c1397440d40b",
+  "adapter": "weltgewebe-os-convergence-adapter",
+  "intent": {
+    "objective": "Emit a synthetic public Assessment Request v1 for deterministic protocol conformance testing only.",
+    "desired_state": "The synthetic request is accepted by the pinned public convergence evaluator without claiming live completion.",
+    "observed_state": "Every evidence reference is fixture-prefixed and represents no live Bureau, Chronik, Grabowski or Weltgewebe fact.",
+    "deviation": "The earlier fixture used production-shaped references that could be mistaken for real T013 closure evidence.",
+    "decision": "Keep protocol-complete R2 evidence while marking the entire profile and every reference as synthetic fixture data.",
+    "rollback": "Rollback remains a synthetic recovery verification; real rollback evidence must be supplied by a separate live profile."
+  },
+  "request": {
+    "schema_version": 1,
+    "assessment_id": "weltgewebe-os-v1-t013-conformance-fixture",
+    "risk_level": "R2",
+    "observation": {
+      "schema_version": 1,
+      "observation_id": "obs-weltgewebe-os-v1-t013-conformance-fixture",
+      "observed_at": "2000-01-01T00:00:00Z",
+      "source_state": "current",
+      "source_refs": [
+        {
+          "kind": "bureau_task",
+          "ref": "fixture:bureau-task:WELTGEWEBE-OS-V1-T013",
+          "subject_sha256": "1cd867c2445ce63f1eb039303f84d72193333b3758d4cc80044315e1d76f6bd4"
+        },
+        {
+          "kind": "chronik_event",
+          "ref": "fixture:chronik-event:WELTGEWEBE-OS-V1-T013",
+          "subject_sha256": "8fabef98e330c1a06d2c2151ad5452c72684f0f57cc6f27852761ffeb4f6c8de"
+        },
+        {
+          "kind": "grabowski_live_receipt",
+          "ref": "fixture:grabowski-live-receipt:WELTGEWEBE-OS-V1-T013",
+          "subject_sha256": "d90d5959c1d618db75505af7d13f541eddb8939f1a7ca57e8a8908be839283bb"
+        },
+        {
+          "kind": "git_commit",
+          "ref": "fixture:git:weltgewebe@f4ca791c21b49b161dffce886d4858a05d83d667",
+          "subject_sha256": "92a0b7ae092d6296eae39994bae748ef7bf1fdb03bfd40632b89f6f753fe71b5"
+        }
+      ],
+      "claims": [
+        "This synthetic fixture maps the required authority domains using fixture-only references.",
+        "No reference or digest in this request establishes a live merge, deployment, task closure or Chronik event."
+      ],
+      "does_not_establish": [
+        "any_live_evidence",
+        "live_deployment_acceptance",
+        "bureau_task_closure",
+        "chronik_event_import",
+        "grabowski_live_execution"
+      ]
+    },
+    "classification": {
+      "schema_version": 1,
+      "change_class": "contract",
+      "semantic_change": "material",
+      "blocked_by": []
+    },
+    "effects": [
+      {
+        "schema_version": 1,
+        "kind": "merge",
+        "evidence_ref": "fixture:git-merge:weltgewebe@f4ca791c21b49b161dffce886d4858a05d83d667",
+        "subject_sha256": "aab5dd1f3e249bff25fde9aa80dcc49538f388f5b5cf99847d8b719832d886af"
+      },
+      {
+        "schema_version": 1,
+        "kind": "deployment",
+        "evidence_ref": "fixture:weltgewebe-deploy-receipt:WELTGEWEBE-OS-V1-T013",
+        "subject_sha256": "a419f850ae4a90301fe2f1876ed270dbdfeb6a1a49ddf519fe5ad5f3bc216986"
+      }
+    ],
+    "verifications": [
+      {
+        "schema_version": 1,
+        "kind": "tests",
+        "evidence_ref": "fixture:tests:scripts/ci/tests/test_convergence_adapter_contract.py",
+        "subject_sha256": "27b8e3267ef072aab0c44b235ab758af980e4eec85f7881295313d12d8e9f375",
+        "result": "pass"
+      },
+      {
+        "schema_version": 1,
+        "kind": "review",
+        "evidence_ref": "fixture:review:contract-fidelity:WELTGEWEBE-OS-V1-T013",
+        "subject_sha256": "dfa277f4f3bed89e9122e262d8b108a64b3ffef77a2f3d78f3109d0a8f75c4eb",
+        "result": "pass"
+      },
+      {
+        "schema_version": 1,
+        "kind": "ci",
+        "evidence_ref": "fixture:ci:targeted-local:WELTGEWEBE-OS-V1-T013",
+        "subject_sha256": "dfd9db6dfe3a8e22039ffa228560ec7c555d4baf60c503584b6d5a2194c43e1f",
+        "result": "pass"
+      },
+      {
+        "schema_version": 1,
+        "kind": "deployment_identity",
+        "evidence_ref": "fixture:deployment-identity:WELTGEWEBE-OS-V1-T013",
+        "subject_sha256": "f7b237027f59d1281db85a66e48282d43abd1428ab5dfc5f0c7b13f842040a3e",
+        "result": "pass"
+      },
+      {
+        "schema_version": 1,
+        "kind": "runtime_identity",
+        "evidence_ref": "fixture:runtime-identity:WELTGEWEBE-OS-V1-T013",
+        "subject_sha256": "8b8202569938b55733f0c231c339420c7d35ff84d420518d9c900c5b1d234343",
+        "result": "pass"
+      },
+      {
+        "schema_version": 1,
+        "kind": "service_health",
+        "evidence_ref": "fixture:service-health:WELTGEWEBE-OS-V1-T013",
+        "subject_sha256": "9bd955acd1a56070d7f9f2bbced3c267846218c01a80851eed18b329aa7e1dfc",
+        "result": "pass"
+      },
+      {
+        "schema_version": 1,
+        "kind": "smoke_test",
+        "evidence_ref": "fixture:smoke-test:adapter-request-build:WELTGEWEBE-OS-V1-T013",
+        "subject_sha256": "902c5ee9652e2540b281a728644c1e91467a566848dab94f8a27d56d260593dd",
+        "result": "pass"
+      },
+      {
+        "schema_version": 1,
+        "kind": "negative_control",
+        "evidence_ref": "fixture:negative-control:no-unknown-request-fields:WELTGEWEBE-OS-V1-T013",
+        "subject_sha256": "af8dd7a61c26f7dcecbe80f696098cfa49ac2d97da093321ed9ca52e358c8602",
+        "result": "pass"
+      },
+      {
+        "schema_version": 1,
+        "kind": "recovery",
+        "evidence_ref": "fixture:recovery:rollback-reference:WELTGEWEBE-OS-V1-T013",
+        "subject_sha256": "9022da5c70c5d49bd76d3e916fbe29888ae1be7b25221d3080cc5c2221ee6030",
+        "result": "pass"
+      }
+    ],
+    "closure": {
+      "schema_version": 1,
+      "closure_id": "closure-weltgewebe-os-v1-t013-conformance-fixture",
+      "status": "closed",
+      "bureau_task_ref": "fixture:bureau-task:WELTGEWEBE-OS-V1-T013",
+      "chronik_event_ref": "fixture:chronik-event:WELTGEWEBE-OS-V1-T013",
+      "cleanup_evidence": [
+        "fixture:grabowski-live-receipt:WELTGEWEBE-OS-V1-T013",
+        "fixture:recovery:rollback-reference:WELTGEWEBE-OS-V1-T013"
+      ],
+      "residual_risks": [
+        "fixture:residual-risk:rollback-execution-remains-external-to-read-only-adapter"
+      ]
+    }
+  },
+  "evidence_mode": "synthetic_fixture"
+}
