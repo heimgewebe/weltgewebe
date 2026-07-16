@@ -247,6 +247,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 """\
                 #!/usr/bin/env python3
                 import json
+                import os
                 import sys
                 from datetime import datetime, timezone
                 from pathlib import Path
@@ -254,34 +255,39 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 args = sys.argv[1:]
                 commit = args[args.index("--expected-commit") + 1]
                 output = Path(args[args.index("--output") + 1])
+                marker = os.environ.get("TEST_DEPLOY_MARKER")
+                deployed = marker is None or Path(marker).exists()
+                observed_commit = commit if deployed else os.environ["PUBLIC_COMMIT"]
+                passed = observed_commit == commit
                 payload = {
                     "schema_version": 2,
                     "expected_commit": commit,
                     "verified_at": datetime.now(timezone.utc).isoformat(),
-                    "pass": True,
-                    "reasons": [],
+                    "pass": passed,
+                    "reasons": [] if passed else ["public commit differs"],
                     "frontend": {
                         "url": "https://example.invalid/_app/version.json",
                         "status": 200,
-                        "commit": commit,
-                        "version": commit[:8],
+                        "commit": observed_commit,
+                        "version": observed_commit[:8],
                         "headers": {"cache-control": "no-store"},
                         "error": None,
                     },
                     "api": {
                         "url": "https://example.invalid/api/version",
                         "status": 200,
-                        "commit": commit,
+                        "commit": observed_commit,
                         "version": "0.1.0",
                         "headers": {
-                            "x-weltgewebe-api-build": commit,
-                            "x-weltgewebe-build": commit[:8],
+                            "x-weltgewebe-api-build": observed_commit,
+                            "x-weltgewebe-build": observed_commit[:8],
                         },
                         "error": None,
                     },
                 }
                 output.parent.mkdir(parents=True, exist_ok=True)
                 output.write_text(json.dumps(payload) + "\\n", encoding="utf-8")
+                raise SystemExit(0 if passed else 1)
                 """
             ),
             encoding="utf-8",
@@ -293,7 +299,12 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         forbidden_deploy.chmod(0o755)
 
         successful_deploy = self.bin / "successful-deploy"
-        successful_deploy.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        successful_deploy.write_text(
+            "#!/usr/bin/env bash\nset -euo pipefail\n"
+            ': "${TEST_DEPLOY_MARKER:?}"\n'
+            'touch "$TEST_DEPLOY_MARKER"\n',
+            encoding="utf-8",
+        )
         successful_deploy.chmod(0o755)
 
     def base_environment(self) -> dict[str, str]:
@@ -360,6 +371,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 "WELTGEWEBE_DEPLOY_HELPER": str(self.bin / "successful-deploy"),
                 "WELTGEWEBE_MIN_FREE_KIB": "1",
                 "PUBLIC_COMMIT": "0" * 40,
+                "TEST_DEPLOY_MARKER": str(self.root / "deploy-complete"),
             }
         )
         argv = self.privileged(
