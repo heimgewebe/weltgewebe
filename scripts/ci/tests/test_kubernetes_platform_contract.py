@@ -332,22 +332,39 @@ spec:
         with mock.patch.object(self.reference, "output", return_value=json.dumps(document)):
             self.assertEqual(self.reference.gateway_addresses("kubectl"), ["172.22.0.3", "172.22.0.4"])
 
-    def test_gateway_http_probe_uses_programmed_address(self) -> None:
-        health_response = mock.Mock()
-        health_response.read.return_value = b"healthy"
-        web_response = mock.Mock()
-        web_response.read.return_value = b"web"
-        with mock.patch.object(self.reference.urllib.request, "urlopen", side_effect=[health_response, web_response]) as urlopen:
-            result = self.reference.probe_gateway_http(["172.22.0.3"], timeout_seconds=1)
+    def test_gateway_http_probe_uses_in_cluster_probe_pod(self) -> None:
+        with (
+            mock.patch.object(self.reference, "run") as run_mock,
+            mock.patch.object(
+                self.reference,
+                "output",
+                side_effect=["healthy", "web"],
+            ) as output_mock,
+        ):
+            result = self.reference.probe_gateway_http(
+                "kubectl", ["172.22.0.3"], timeout_seconds=1
+            )
         self.assertEqual(result, ("172.22.0.3", b"healthy", b"web"))
-        self.assertEqual(urlopen.call_args_list[0].args[0], "http://172.22.0.3/health/live")
-        self.assertEqual(urlopen.call_args_list[1].args[0], "http://172.22.0.3/")
+        self.assertIn("run", run_mock.call_args_list[1].args[0])
+        self.assertIn("--image=weltgewebe-api:local", run_mock.call_args_list[1].args[0])
+        self.assertIn("--image-pull-policy=Never", run_mock.call_args_list[1].args[0])
+        self.assertEqual(
+            output_mock.call_args_list[0].args[0][-1],
+            "http://172.22.0.3/health/live",
+        )
+        self.assertEqual(
+            output_mock.call_args_list[1].args[0][-1],
+            "http://172.22.0.3/",
+        )
+        self.assertIn("delete", run_mock.call_args_list[-1].args[0])
 
     def test_gateway_proof_does_not_port_forward_selectorless_service(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()
         self.assertNotIn("def port_forward", source)
         self.assertNotIn('"port-forward"', source)
-        self.assertIn("probe_gateway_http(gateway_addresses(kubectl))", source)
+        self.assertIn(
+            "probe_gateway_http(kubectl, gateway_addresses(kubectl))", source
+        )
 
     def test_full_proof_uses_canonical_builder_signature(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()

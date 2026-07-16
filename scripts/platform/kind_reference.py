@@ -10,8 +10,6 @@ import shutil
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -536,22 +534,111 @@ def gateway_addresses(kubectl: str) -> list[str]:
     return addresses
 
 
-def probe_gateway_http(addresses: list[str], timeout_seconds: int = 30) -> tuple[str, bytes, bytes]:
-    deadline = time.monotonic() + timeout_seconds
-    last_error: BaseException | None = None
-    while True:
-        for address in addresses:
-            try:
-                health = urllib.request.urlopen(f"http://{address}/health/live", timeout=10).read()
-                web = urllib.request.urlopen(f"http://{address}/", timeout=10).read(1024)
-                if health and web:
-                    return address, health, web
-                last_error = ProofError("Gateway route returned empty content")
-            except (OSError, TimeoutError, urllib.error.URLError) as error:
-                last_error = error
-        if time.monotonic() >= deadline:
-            raise ProofError(f"Gateway addresses did not serve HTTP: {addresses!r}") from last_error
-        time.sleep(1)
+def probe_gateway_http(
+    kubectl: str,
+    addresses: list[str],
+    timeout_seconds: int = 30,
+) -> tuple[str, bytes, bytes]:
+    namespace = "weltgewebe-gateway"
+    pod = "weltgewebe-gateway-probe"
+    run(
+        [
+            kubectl,
+            "-n",
+            namespace,
+            "delete",
+            "pod",
+            pod,
+            "--ignore-not-found=true",
+            "--wait=true",
+        ]
+    )
+    try:
+        run(
+            [
+                kubectl,
+                "-n",
+                namespace,
+                "run",
+                pod,
+                "--image=weltgewebe-api:local",
+                "--image-pull-policy=Never",
+                "--restart=Never",
+                "--command",
+                "--",
+                "sleep",
+                "300",
+            ]
+        )
+        run(
+            [
+                kubectl,
+                "-n",
+                namespace,
+                "wait",
+                f"pod/{pod}",
+                "--for=condition=Ready",
+                "--timeout=2m",
+            ]
+        )
+        deadline = time.monotonic() + timeout_seconds
+        last_error: BaseException | None = None
+        while True:
+            for address in addresses:
+                try:
+                    health = output(
+                        [
+                            kubectl,
+                            "-n",
+                            namespace,
+                            "exec",
+                            pod,
+                            "--",
+                            "wget",
+                            "-qO-",
+                            "-T",
+                            "10",
+                            f"http://{address}/health/live",
+                        ]
+                    ).encode("utf-8")
+                    web = output(
+                        [
+                            kubectl,
+                            "-n",
+                            namespace,
+                            "exec",
+                            pod,
+                            "--",
+                            "wget",
+                            "-qO-",
+                            "-T",
+                            "10",
+                            f"http://{address}/",
+                        ]
+                    ).encode("utf-8")
+                    if health and web:
+                        return address, health, web
+                    last_error = ProofError("Gateway route returned empty content")
+                except subprocess.CalledProcessError as error:
+                    last_error = error
+            if time.monotonic() >= deadline:
+                raise ProofError(
+                    f"Gateway addresses did not serve in-cluster HTTP: {addresses!r}"
+                ) from last_error
+            time.sleep(1)
+    finally:
+        run(
+            [
+                kubectl,
+                "-n",
+                namespace,
+                "delete",
+                "pod",
+                pod,
+                "--ignore-not-found=true",
+                "--wait=true",
+            ]
+        )
 
 
 
@@ -588,7 +675,7 @@ def prove_gateway(kubectl: str) -> dict[str, str]:
     )
     if not service:
         raise ProofError("Gateway service was not created")
-    address, health, web = probe_gateway_http(gateway_addresses(kubectl))
+    address, health, web = probe_gateway_http(kubectl, gateway_addresses(kubectl))
     return {
         "service": service,
         "address": address,
