@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[3]
 DEPLOY_SCRIPT = ROOT / "scripts" / "ops" / "deploy-exact-commit-vps.sh"
+RECONCILE_SCRIPT = ROOT / "scripts" / "ops" / "reconcile-production-main-vps.sh"
 VALIDATOR = ROOT / "scripts" / "ops" / "validate_web_deploy_archive.py"
 
 
@@ -53,7 +54,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.state = self.root / "state"
         self.runtime_env = self.root / "runtime.env"
         self.bin = self.root / "bin"
-        self.artifact = self.root / "web.tar.gz"
+        self.artifact = self.state / "artifacts" / "web.tar.gz"
         self.runtime_env.write_text("TEST_RUNTIME=1\n", encoding="utf-8")
         self.bin.mkdir()
 
@@ -110,13 +111,35 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         (self.source / "build/basemap").mkdir(parents=True)
         (self.source / "build/basemap/map.pmtiles").write_bytes(b"pmtiles")
 
-        # The production helper requires the source and its object store to be
-        # entirely root-owned and not writable by group/world.
-        run(self.privileged(["chown", "-R", "root:root", str(self.source)]))
-        run(self.privileged(["chmod", "-R", "go-w", str(self.source)]))
-
         self.make_artifact()
         self.make_command_shims()
+
+        # Production inputs crossing the root boundary must be root-owned and
+        # not writable by group/world.
+        run(
+            self.privileged(
+                [
+                    "chown",
+                    "-R",
+                    "root:root",
+                    str(self.source),
+                    str(self.state),
+                    str(self.runtime_env),
+                ]
+            )
+        )
+        run(
+            self.privileged(
+                [
+                    "chmod",
+                    "-R",
+                    "go-w",
+                    str(self.source),
+                    str(self.state),
+                    str(self.runtime_env),
+                ]
+            )
+        )
 
     def restore_test_ownership(self) -> None:
         if not self.root.exists():
@@ -152,6 +175,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             json.dumps({"commit": self.commit, "version": self.commit[:8]}) + "\n",
             encoding="utf-8",
         )
+        self.artifact.parent.mkdir(parents=True)
         with tarfile.open(self.artifact, "w:gz") as bundle:
             bundle.add(tree, arcname="build")
         self.artifact_sha = run(["sha256sum", str(self.artifact)]).stdout.split()[0]
@@ -160,6 +184,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         docker = self.bin / "docker"
         docker.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
         docker.chmod(0o755)
+
         curl = self.bin / "curl"
         curl.write_text(
             textwrap.dedent(
@@ -196,9 +221,60 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         )
         curl.chmod(0o755)
 
-    def deploy(self, *, advance: bool) -> subprocess.CompletedProcess[str]:
+        verifier = self.bin / "verify-public"
+        verifier.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env python3
+                import json
+                import sys
+                from datetime import datetime, timezone
+                from pathlib import Path
+
+                args = sys.argv[1:]
+                commit = args[args.index("--expected-commit") + 1]
+                output = Path(args[args.index("--output") + 1])
+                payload = {
+                    "schema_version": 2,
+                    "expected_commit": commit,
+                    "verified_at": datetime.now(timezone.utc).isoformat(),
+                    "pass": True,
+                    "reasons": [],
+                    "frontend": {
+                        "url": "https://example.invalid/_app/version.json",
+                        "status": 200,
+                        "commit": commit,
+                        "version": commit[:8],
+                        "headers": {"cache-control": "no-store"},
+                        "error": None,
+                    },
+                    "api": {
+                        "url": "https://example.invalid/api/version",
+                        "status": 200,
+                        "commit": commit,
+                        "version": "0.1.0",
+                        "headers": {
+                            "x-weltgewebe-api-build": commit,
+                            "x-weltgewebe-build": commit[:8],
+                        },
+                        "error": None,
+                    },
+                }
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text(json.dumps(payload) + "\\n", encoding="utf-8")
+                """
+            ),
+            encoding="utf-8",
+        )
+        verifier.chmod(0o755)
+
+        forbidden_deploy = self.bin / "forbidden-deploy"
+        forbidden_deploy.write_text("#!/usr/bin/env bash\nexit 99\n", encoding="utf-8")
+        forbidden_deploy.chmod(0o755)
+
+    def base_environment(self) -> dict[str, str]:
         inherited_path = os.environ.get("PATH", "/usr/bin:/bin")
-        deploy_env = {
+        return {
             "PATH": f"{self.bin}:{inherited_path}",
             "WELTGEWEBE_SOURCE_CHECKOUT": str(self.source),
             "WELTGEWEBE_RELEASE_ROOT": str(self.releases),
@@ -211,8 +287,11 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             "WELTGEWEBE_API_VERSION_URL": "https://example.invalid/api/version",
             "TEST_COMMIT": self.commit,
             "TEST_REMOTE": str(self.remote),
-            "ADVANCE_REMOTE_ON_DEPLOY": "1" if advance else "0",
         }
+
+    def deploy(self, *, advance: bool) -> subprocess.CompletedProcess[str]:
+        deploy_env = self.base_environment()
+        deploy_env["ADVANCE_REMOTE_ON_DEPLOY"] = "1" if advance else "0"
         argv = self.privileged(
             [
                 "env",
@@ -228,6 +307,25 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         )
         return run(argv, check=False)
 
+    def reconcile_existing_public_commit(self) -> subprocess.CompletedProcess[str]:
+        reconcile_env = self.base_environment()
+        reconcile_env.update(
+            {
+                "WELTGEWEBE_BUILD_USER": "root",
+                "WELTGEWEBE_LIVE_VERIFIER": str(self.bin / "verify-public"),
+                "WELTGEWEBE_DEPLOY_HELPER": str(self.bin / "forbidden-deploy"),
+                "WELTGEWEBE_MIN_FREE_KIB": "1",
+            }
+        )
+        argv = self.privileged(
+            [
+                "env",
+                *[f"{key}={value}" for key, value in reconcile_env.items()],
+                str(RECONCILE_SCRIPT),
+            ]
+        )
+        return run(argv, check=False)
+
     def test_success_marks_exact_commit_current(self) -> None:
         result = self.deploy(advance=False)
         self.restore_test_ownership()
@@ -237,7 +335,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.assertEqual(receipt["result"], "verified")
         self.assertEqual(receipt["observed_main_after_deploy"], self.commit)
         current = (self.state / "current.json").resolve()
-        self.assertEqual(current, self.state / "receipts" / f"{self.commit}.json")
+        self.assertEqual(current, receipt_path)
 
     def test_main_advancing_during_deploy_is_not_marked_current(self) -> None:
         result = self.deploy(advance=True)
@@ -248,6 +346,22 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.assertEqual(receipt["result"], "superseded_after_deploy")
         self.assertNotEqual(receipt["observed_main_after_deploy"], self.commit)
         self.assertFalse((self.state / "current.json").exists())
+
+    def test_public_noop_repairs_missing_deployment_receipt(self) -> None:
+        self.artifact.unlink()
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt_path = self.state / "receipts" / f"{self.commit}.json"
+        receipt = json.loads(receipt_path.read_text())
+        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertIsNone(receipt["web_artifact_sha256"])
+        self.assertIn("original web artifact hash", receipt["evidence_boundary"])
+        self.assertEqual((self.state / "current.json").resolve(), receipt_path)
+        reconcile_receipt = json.loads(
+            (self.state / "reconcile-receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(reconcile_receipt["result"], "verified_observed")
 
 
 if __name__ == "__main__":
