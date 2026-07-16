@@ -171,7 +171,7 @@ jobs:
             https://github.com/heimgewebe/konvergenzregelkreis.git
           git -C "${PROTOCOL_ROOT}" fetch --depth=1 origin "${PROTOCOL_HEAD}"
           git -C "${PROTOCOL_ROOT}" checkout --detach "${PROTOCOL_HEAD}"
-          
+
           # The exact object id and fsck bind CI to one Git commit object.
           # They do not prove a signer identity, so verify-commit is intentionally
           # not required until a trusted signing identity is defined.
@@ -180,7 +180,7 @@ jobs:
             exit 1
           fi
           git -C "${PROTOCOL_ROOT}" fsck --strict --no-dangling
-          
+
           test "$(git -C "${PROTOCOL_ROOT}" rev-parse HEAD)" = "${PROTOCOL_HEAD}"
           python3 -m pip install --disable-pip-version-check --no-input \
             'jsonschema==4.26.0'
