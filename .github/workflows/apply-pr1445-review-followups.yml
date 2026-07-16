@@ -33,9 +33,11 @@ jobs:
           expected_paths=(
             .github/workflows/apply-pr1445-review-followups.yml
             scripts/ci/apply_pr1445_review_followups.py
+            scripts/ci/prepare_pr1445_contract_index.py
           )
           [[ "${staged_paths[*]}" == "${expected_paths[*]}" ]]
 
+          python scripts/ci/prepare_pr1445_contract_index.py
           python scripts/ci/apply_pr1445_review_followups.py
           python -m py_compile \
             scripts/ops/verify_public_release_commit.py \
@@ -51,7 +53,8 @@ jobs:
           mapfile -t changed_paths < <(
             git diff --name-only "$EXPECTED_BASE" -- \
               ':(exclude).github/workflows/apply-pr1445-review-followups.yml' \
-              ':(exclude)scripts/ci/apply_pr1445_review_followups.py'
+              ':(exclude)scripts/ci/apply_pr1445_review_followups.py' \
+              ':(exclude)scripts/ci/prepare_pr1445_contract_index.py'
           )
           expected_changed=(
             docs/deploy/merge-to-live.md
