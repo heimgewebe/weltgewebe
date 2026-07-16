@@ -45,7 +45,7 @@ The only local schema truth is:
 
 - `contracts/convergence/v1.0.0/assessment-profile.schema.json`
 
-No local request schema is authoritative. The request shape is owned by the public checkout at `/home/alex/repos/konvergenzregelkreis` and specifically by `protocol/assessment-request.v1.schema.json` plus the referenced receipt schemas at the pinned head above. The adapter nevertheless enforces a defensive, fail-closed projection of that pinned v1 shape: exact nested keys, enums, cardinalities, unique arrays, timezone-aware timestamps, integer schema versions and finite JSON values. This executable guard is compatibility code, not a second protocol authority; evaluator acceptance at the pinned public head remains decisive.
+No local request schema is authoritative. The request shape is owned by the public `heimgewebe/konvergenzregelkreis` repository, specifically `protocol/assessment-request.v1.schema.json`, its referenced receipt schemas and `profiles/R2.v1.json` at the pinned head above. The adapter nevertheless contains an explicit defensive mirror of that pinned v1 surface: exact nested keys, enums, cardinalities, schema-declared uniqueness, RFC 3339 timestamps, integer schema versions, finite JSON values and the pinned R2 evidence requirements. This executable mirror is compatibility and supply-chain guard code, not a second protocol authority. CI checks every mirrored key and enum set against an exact detached checkout of the pinned public commit and then runs the protocol-owned evaluator. Evaluator acceptance remains decisive.
 
 The deterministic terminal conformance fixtures are:
 
@@ -64,7 +64,7 @@ The adapter has exactly these local effects:
 - compute a SHA-256 digest over canonical request JSON;
 - print the selected output to stdout.
 
-The adapter must not call Bureau, Chronik, Grabowski, GitHub, Docker, Kubernetes or production services. It must not write receipts, update task state, append event history, deploy, roll back or mark acceptance. A successful adapter run is only a local request-building proof.
+The adapter must not call Bureau, Chronik, Grabowski, GitHub, Docker, Kubernetes or production services. It must not write receipts, update task state, append event history, deploy, roll back or mark acceptance. A successful adapter run is only a local request-building proof. The profile and intent digests bind the bytes used for request construction, but they do not authenticate an author. Provenance is established externally by the hash-bound Grabowski execution receipt.
 
 ## Reference Boundary
 
@@ -85,13 +85,13 @@ Rollback is not executed by this adapter. Rollback is represented as:
 - closure cleanup evidence;
 - a residual-risk reference that names the external rollback execution boundary.
 
-Negative control is represented as a passing `verification` with `kind: negative_control`. The adapter rejects profiles that try to embed mutable external payloads or symbolic revision references.
+Negative control is represented as a passing `verification` with `kind: negative_control`. The adapter rejects profiles that try to embed mutable external payloads or symbolic Git revisions in source references, effect and verification evidence, or closure references.
 
 ## Evaluator Compatibility
 
-The regression test `scripts/ci/tests/test_convergence_adapter_contract.py` loads the protocol-owned evaluator from `/home/alex/repos/konvergenzregelkreis` when that checkout is present at `83ed435bf9eb490e81a6ff2103b6c1397440d40b`.
+The regression test `scripts/ci/tests/test_convergence_adapter_contract.py` reads the protocol checkout from `KONVERGENZREGELKREIS_ROOT`. CI creates that checkout in the runner's temporary directory, fetches only the exact commit `83ed435bf9eb490e81a6ff2103b6c1397440d40b`, verifies `HEAD`, and treats a missing or different checkout as failure. Local development falls back to `/home/alex/repos/konvergenzregelkreis` and may skip only the four protocol integration tests when no checkout is available.
 
-The positive request must evaluate to `terminally_closed` under the public R2 profile. A request missing required evidence must block with `evidence_missing`. A request with conflicting receipt hashes must block with `conflicting_evidence`. A request with adapter metadata such as `protocol_head` at top level must be rejected by the public request schema.
+The mirror test compares the adapter's request keys, nested receipt keys, enums and R2 requirements directly with the pinned schemas and profile. The positive request must then evaluate to `terminally_closed` under the public R2 profile. A request missing required evidence must block with `evidence_missing`. A request with conflicting receipt hashes must block with `conflicting_evidence`. A request with adapter metadata such as `protocol_head` at top level must be rejected by the public request schema.
 
 ## CLI Shape
 
@@ -101,7 +101,7 @@ Default output is an adapter envelope:
 python3 scripts/convergence/weltgewebe_convergence_adapter.py PROFILE.json
 ```
 
-The envelope contains adapter metadata, `protocol_head`, request digest and the pure public request.
+The envelope contains adapter metadata, `protocol_head`, the pure public request, `request_sha256`, `profile_sha256` and a separate `intent_sha256`. It intentionally contains no generated-at timestamp: identical input must produce identical output. Freshness and replay decisions belong to the request's `observation.observed_at`, the referenced receipts and the external evaluator; an adapter-local clock field would not provide replay protection.
 
 For the request alone:
 

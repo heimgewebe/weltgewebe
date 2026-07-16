@@ -6,6 +6,7 @@ import copy
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -18,7 +19,11 @@ CONTRACT_ROOT = ROOT / "contracts/convergence/v1.0.0"
 FIXTURE_ROOT = CONTRACT_ROOT / "fixtures"
 ADAPTER_PATH = ROOT / "scripts/convergence/weltgewebe_convergence_adapter.py"
 DOC_PATH = ROOT / "docs/architecture/weltgewebe-os-convergence-adapter.md"
-PROTOCOL_ROOT = Path("/home/alex/repos/konvergenzregelkreis")
+PROTOCOL_ROOT_ENV = "KONVERGENZREGELKREIS_ROOT"
+PROTOCOL_ROOT = Path(
+    os.environ.get(PROTOCOL_ROOT_ENV, "/home/alex/repos/konvergenzregelkreis")
+)
+PROTOCOL_ROOT_REQUIRED = PROTOCOL_ROOT_ENV in os.environ
 PROTOCOL_HEAD = "83ed435bf9eb490e81a6ff2103b6c1397440d40b"
 CANONICAL_REQUEST_KEYS = {
     "schema_version",
@@ -47,6 +52,10 @@ def read_json(path: Path) -> Any:
 
 def load_protocol_core() -> Any:
     if not PROTOCOL_ROOT.exists():
+        if PROTOCOL_ROOT_REQUIRED:
+            raise AssertionError(
+                f"required protocol checkout not present at {PROTOCOL_ROOT}"
+            )
         raise unittest.SkipTest(f"protocol checkout not present at {PROTOCOL_ROOT}")
     head = subprocess.run(
         ["git", "-C", str(PROTOCOL_ROOT), "rev-parse", "HEAD"],
@@ -99,13 +108,84 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
         self.assertEqual(schema["properties"]["protocol_head"]["const"], PROTOCOL_HEAD)
         self.assertNotIn("risk" + "_class", json.dumps(schema, sort_keys=True))
 
-    def test_conformance_profile_generates_exact_public_request(self) -> None:
-        expected = read_json(FIXTURE_ROOT / "conformance.terminal.request.json")
-        request, request_sha256, profile_sha256 = self.adapter.build_request_from_path(
-            FIXTURE_ROOT / "conformance.terminal.profile.json"
+    def test_defensive_mirror_matches_pinned_protocol(self) -> None:
+        if self.protocol_core is None:
+            self.skipTest("pinned konvergenzregelkreis checkout not available")
+
+        protocol = PROTOCOL_ROOT / "protocol"
+        request_schema = read_json(protocol / "assessment-request.v1.schema.json")
+        observation_schema = read_json(protocol / "observation.v1.schema.json")
+        classification_schema = read_json(protocol / "classification.v1.schema.json")
+        effect_schema = read_json(protocol / "effect-receipt.v1.schema.json")
+        verification_schema = read_json(protocol / "verification-receipt.v1.schema.json")
+        closure_schema = read_json(protocol / "closure-receipt.v1.schema.json")
+        r2_profile = read_json(PROTOCOL_ROOT / "profiles/R2.v1.json")
+
+        self.assertEqual(self.adapter.REQUEST_REQUIRED_KEYS, set(request_schema["required"]))
+        self.assertEqual(self.adapter.REQUEST_ALLOWED_KEYS, set(request_schema["properties"]))
+        self.assertEqual(self.adapter.OBSERVATION_KEYS, set(observation_schema["properties"]))
+        self.assertEqual(self.adapter.OBSERVATION_KEYS, set(observation_schema["required"]))
+        self.assertEqual(
+            self.adapter.CLASSIFICATION_KEYS, set(classification_schema["properties"])
+        )
+        self.assertEqual(
+            self.adapter.CLASSIFICATION_KEYS, set(classification_schema["required"])
+        )
+        self.assertEqual(self.adapter.EFFECT_KEYS, set(effect_schema["properties"]))
+        self.assertEqual(self.adapter.EFFECT_KEYS, set(effect_schema["required"]))
+        self.assertEqual(
+            self.adapter.VERIFICATION_KEYS, set(verification_schema["properties"])
+        )
+        self.assertEqual(
+            self.adapter.VERIFICATION_KEYS, set(verification_schema["required"])
+        )
+        self.assertEqual(
+            self.adapter.CLOSURE_PROTOCOL_REQUIRED_KEYS, set(closure_schema["required"])
+        )
+        self.assertEqual(self.adapter.CLOSURE_ALLOWED_KEYS, set(closure_schema["properties"]))
+        self.assertEqual(
+            self.adapter.CHANGE_CLASSES,
+            set(classification_schema["properties"]["change_class"]["enum"]),
+        )
+        self.assertEqual(
+            self.adapter.SEMANTIC_CHANGES,
+            set(classification_schema["properties"]["semantic_change"]["enum"]),
+        )
+        self.assertEqual(
+            self.adapter.EFFECT_KINDS, set(effect_schema["properties"]["kind"]["enum"])
+        )
+        self.assertEqual(
+            self.adapter.VERIFICATION_KINDS,
+            set(verification_schema["properties"]["kind"]["enum"]),
+        )
+        self.assertEqual(
+            self.adapter.VERIFICATION_RESULTS,
+            set(verification_schema["properties"]["result"]["enum"]),
+        )
+        self.assertEqual(
+            self.adapter.R2_REQUIRED_EFFECT_KINDS, set(r2_profile["required_effects"])
+        )
+        self.assertEqual(
+            self.adapter.R2_REQUIRED_VERIFICATION_KINDS,
+            set(r2_profile["required_verifications"]),
+        )
+        self.assertEqual(
+            self.adapter.R2_REQUIRED_CLOSURE_FIELDS,
+            set(r2_profile["required_closure_fields"]),
         )
 
+    def test_conformance_profile_generates_exact_public_request(self) -> None:
+        expected = read_json(FIXTURE_ROOT / "conformance.terminal.request.json")
+        profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
+        request, request_sha256, profile_sha256 = self.adapter.build_request(profile)
+
         self.assertEqual(request, expected)
+        request["assessment_id"] = "mutated-return-value"
+        self.assertEqual(
+            profile["request"]["assessment_id"],
+            "weltgewebe-os-v1-t013-conformance-fixture",
+        )
+        request = expected
         self.assertEqual(set(request), CANONICAL_REQUEST_KEYS)
         self.assertEqual(request["schema_version"], 1)
         self.assertEqual(request["risk_level"], "R2")
@@ -201,10 +281,34 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(stderr.getvalue(), "")
         envelope = json.loads(stdout.getvalue())
+        self.assertEqual(
+            set(envelope),
+            {
+                "schema_version",
+                "adapter",
+                "adapter_version",
+                "profile_id",
+                "evidence_mode",
+                "profile_sha256",
+                "intent_sha256",
+                "protocol_head",
+                "request",
+                "request_sha256",
+            },
+        )
         self.assertEqual(envelope["protocol_head"], PROTOCOL_HEAD)
         self.assertEqual(envelope["adapter"], "weltgewebe-os-convergence-adapter")
+        self.assertEqual(envelope["adapter_version"], "1.0.0")
         self.assertEqual(envelope["evidence_mode"], "synthetic_fixture")
         self.assertEqual(envelope["request"], expected_request)
+        self.assertEqual(
+            envelope["intent_sha256"],
+            self.adapter.sha256_hex(
+                self.adapter.canonical_json(
+                    read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")["intent"]
+                )
+            ),
+        )
         self.assertNotIn("protocol_head", envelope["request"])
 
         stdout = io.StringIO()
@@ -216,6 +320,20 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
         )
         self.assertEqual(rc, 0)
         self.assertEqual(json.loads(stdout.getvalue()), expected_request)
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        rc = self.adapter.main(
+            [str(FIXTURE_ROOT / "conformance.terminal.profile.json"), "--output", "hash"],
+            stdout=stdout,
+            stderr=stderr,
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(
+            stdout.getvalue().strip(),
+            self.adapter.sha256_hex(self.adapter.canonical_json(expected_request)),
+        )
 
     def test_adapter_rejects_profile_payloads_symbolic_revisions_and_missing_controls(self) -> None:
         profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
@@ -241,6 +359,53 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
             symbolic = copy.deepcopy(invalid["request"]["observation"]["source_refs"][3])
             symbolic["ref"] = "fixture:git:weltgewebe@main"
             invalid["request"]["observation"]["source_refs"].append(symbolic)
+            with self.assertRaises(self.adapter.ConvergenceAdapterError):
+                self.adapter.build_request(invalid)
+
+        symbolic_evidence_mutations: list[tuple[str, Any]] = [
+            (
+                "symbolic effect evidence",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref", "fixture:git-merge:weltgewebe@main"
+                ),
+            ),
+            (
+                "symbolic verification evidence",
+                lambda candidate: candidate["request"]["verifications"][0].__setitem__(
+                    "evidence_ref", "fixture:git:weltgewebe@main"
+                ),
+            ),
+            (
+                "symbolic cleanup evidence",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(0, "fixture:git:weltgewebe@main"),
+            ),
+            (
+                "symbolic residual risk reference",
+                lambda candidate: candidate["request"]["closure"][
+                    "residual_risks"
+                ].__setitem__(0, "fixture:git:weltgewebe@main"),
+            ),
+        ]
+        for name, mutate in symbolic_evidence_mutations:
+            with self.subTest(name):
+                invalid = copy.deepcopy(profile)
+                mutate(invalid)
+                with self.assertRaises(self.adapter.ConvergenceAdapterError):
+                    self.adapter.build_request(invalid)
+
+        with self.subTest("missing R2 CI verification"):
+            invalid = copy.deepcopy(profile)
+            invalid["request"]["verifications"] = [
+                item for item in invalid["request"]["verifications"] if item["kind"] != "ci"
+            ]
+            with self.assertRaises(self.adapter.ConvergenceAdapterError):
+                self.adapter.build_request(invalid)
+
+        with self.subTest("missing required closure reference"):
+            invalid = copy.deepcopy(profile)
+            invalid["request"]["closure"].pop("bureau_task_ref")
             with self.assertRaises(self.adapter.ConvergenceAdapterError):
                 self.adapter.build_request(invalid)
 

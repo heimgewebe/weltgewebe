@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import math
@@ -59,12 +60,31 @@ SOURCE_REF_KEYS = {"kind", "ref", "subject_sha256"}
 CLASSIFICATION_KEYS = {"schema_version", "change_class", "semantic_change", "blocked_by"}
 EFFECT_KEYS = {"schema_version", "kind", "evidence_ref", "subject_sha256"}
 VERIFICATION_KEYS = EFFECT_KEYS | {"result"}
-CLOSURE_REQUIRED_KEYS = {"schema_version", "closure_id", "status", "residual_risks"}
-CLOSURE_ALLOWED_KEYS = CLOSURE_REQUIRED_KEYS | {
+CLOSURE_PROTOCOL_REQUIRED_KEYS = {
+    "schema_version",
+    "closure_id",
+    "status",
+    "residual_risks",
+}
+R2_REQUIRED_EFFECT_KINDS = {"merge", "deployment"}
+R2_REQUIRED_VERIFICATION_KINDS = {
+    "tests",
+    "review",
+    "ci",
+    "deployment_identity",
+    "runtime_identity",
+    "service_health",
+    "smoke_test",
+    "negative_control",
+}
+R2_REQUIRED_CLOSURE_FIELDS = {
     "bureau_task_ref",
     "chronik_event_ref",
     "cleanup_evidence",
 }
+ADAPTER_REQUIRED_VERIFICATION_KINDS = {"recovery"}
+CLOSURE_REQUIRED_KEYS = CLOSURE_PROTOCOL_REQUIRED_KEYS | R2_REQUIRED_CLOSURE_FIELDS
+CLOSURE_ALLOWED_KEYS = CLOSURE_REQUIRED_KEYS
 CHANGE_CLASSES = {
     "documentation",
     "contract",
@@ -122,6 +142,9 @@ FORBIDDEN_PAYLOAD_KEYS = {
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,127}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 EXACT_COMMIT_REF_RE = re.compile(r"@[0-9a-f]{40}$")
+GIT_REFERENCE_MARKER_RE = re.compile(
+    r"(?:^|:)git(?:[-_][a-z0-9]+)*:", re.IGNORECASE
+)
 RFC3339_DATETIME_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$"
 )
@@ -181,9 +204,11 @@ def build_request_from_path(path: Path) -> tuple[dict[str, Any], str, str]:
 
 def build_request(profile: dict[str, Any]) -> tuple[dict[str, Any], str, str]:
     validate_profile(profile)
-    profile_sha256 = sha256_hex(canonical_json(profile))
-    request = json.loads(canonical_json(profile["request"]))
-    request_sha256 = sha256_hex(canonical_json(request))
+    profile_json = canonical_json(profile)
+    request = copy.deepcopy(profile["request"])
+    request_json = canonical_json(request)
+    profile_sha256 = sha256_hex(profile_json)
+    request_sha256 = sha256_hex(request_json)
     return request, request_sha256, profile_sha256
 
 
@@ -273,10 +298,9 @@ def _validate_request(request: Any) -> None:
             "request.observation.source_refs must include an exact Weltgewebe commit or deploy receipt"
         )
     if request["risk_level"] == "R2":
-        _require_receipt_kind(effects, "merge", "request.effects")
-        _require_receipt_kind(effects, "deployment", "request.effects")
-    _require_pass_verification(verifications, "negative_control")
-    _require_pass_verification(verifications, "recovery")
+        _require_receipt_kinds(effects, R2_REQUIRED_EFFECT_KINDS, "request.effects")
+        _require_pass_verifications(verifications, R2_REQUIRED_VERIFICATION_KINDS)
+    _require_pass_verifications(verifications, ADAPTER_REQUIRED_VERIFICATION_KINDS)
 
     closure = request.get("closure")
     if closure is None:
@@ -312,7 +336,7 @@ def _validate_observation(observation: Any) -> list[dict[str, Any]]:
         _assert_string(item["kind"], f"{path}.kind", max_length=80)
         _assert_string(item["ref"], f"{path}.ref", max_length=2048)
         _assert_pattern(item["subject_sha256"], SHA256_RE, f"{path}.subject_sha256")
-        _reject_symbolic_git_reference(item["kind"], item["ref"], path)
+        _reject_symbolic_git_reference(item["ref"], path, kind=item["kind"])
         source_refs.append(item)
 
     _assert_string_list(
@@ -333,12 +357,17 @@ def _validate_observation(observation: Any) -> list[dict[str, Any]]:
     return source_refs
 
 
-def _reject_symbolic_git_reference(kind: str, ref: str, path: str) -> None:
+def _reject_symbolic_git_reference(
+    ref: str, path: str, *, kind: str = ""
+) -> None:
     normalized_kind = kind.casefold()
-    git_shaped = normalized_kind.startswith("git") or "git:" in ref.casefold()
+    git_shaped = (
+        normalized_kind.startswith("git")
+        or GIT_REFERENCE_MARKER_RE.search(ref) is not None
+    )
     if git_shaped and EXACT_COMMIT_REF_RE.search(ref) is None:
         raise ConvergenceAdapterError(
-            f"{path}.ref must bind a git reference to an exact 40-character commit"
+            f"{path} must bind a git reference to an exact 40-character commit"
         )
 
 
@@ -374,6 +403,7 @@ def _validate_effects(value: Any) -> list[dict[str, Any]]:
         if item["kind"] not in EFFECT_KINDS:
             raise ConvergenceAdapterError(f"{path}.kind is invalid")
         _assert_string(item["evidence_ref"], f"{path}.evidence_ref", max_length=2048)
+        _reject_symbolic_git_reference(item["evidence_ref"], f"{path}.evidence_ref")
         _assert_pattern(item["subject_sha256"], SHA256_RE, f"{path}.subject_sha256")
         receipts.append(item)
     return receipts
@@ -392,6 +422,7 @@ def _validate_verifications(value: Any) -> list[dict[str, Any]]:
         if item["kind"] not in VERIFICATION_KINDS:
             raise ConvergenceAdapterError(f"{path}.kind is invalid")
         _assert_string(item["evidence_ref"], f"{path}.evidence_ref", max_length=2048)
+        _reject_symbolic_git_reference(item["evidence_ref"], f"{path}.evidence_ref")
         _assert_pattern(item["subject_sha256"], SHA256_RE, f"{path}.subject_sha256")
         if item["result"] not in VERIFICATION_RESULTS:
             raise ConvergenceAdapterError(f"{path}.result is invalid")
@@ -408,11 +439,9 @@ def _validate_closure(closure: Any) -> None:
     if closure["status"] not in {"proposed", "closed"}:
         raise ConvergenceAdapterError("request.closure.status must be proposed or closed")
     for key in ("bureau_task_ref", "chronik_event_ref"):
-        if key not in closure:
-            raise ConvergenceAdapterError(f"request.closure.{key} must be present")
-        _assert_string(closure[key], f"request.closure.{key}", max_length=500)
-    if "cleanup_evidence" not in closure:
-        raise ConvergenceAdapterError("request.closure.cleanup_evidence must be present")
+        path = f"request.closure.{key}"
+        _assert_string(closure[key], path, max_length=500)
+        _reject_symbolic_git_reference(closure[key], path)
     _assert_string_list(
         closure["cleanup_evidence"],
         "request.closure.cleanup_evidence",
@@ -420,6 +449,9 @@ def _validate_closure(closure: Any) -> None:
         max_items=64,
         max_length=2048,
         unique=True,
+    )
+    _reject_symbolic_git_reference_list(
+        closure["cleanup_evidence"], "request.closure.cleanup_evidence"
     )
     _assert_string_list(
         closure["residual_risks"],
@@ -429,6 +461,14 @@ def _validate_closure(closure: Any) -> None:
         max_length=500,
         unique=True,
     )
+    _reject_symbolic_git_reference_list(
+        closure["residual_risks"], "request.closure.residual_risks"
+    )
+
+
+def _reject_symbolic_git_reference_list(values: list[str], path: str) -> None:
+    for index, value in enumerate(values):
+        _reject_symbolic_git_reference(value, f"{path}[{index}]")
 
 
 def _require_source_ref_kinds(
@@ -451,21 +491,30 @@ def _is_exact_revision_ref(source_ref: Any) -> bool:
         return False
     return (
         kind == "weltgewebe_deploy_receipt"
-        or kind == "git_commit"
-        and EXACT_COMMIT_REF_RE.search(ref) is not None
+        or (kind == "git_commit" and EXACT_COMMIT_REF_RE.search(ref) is not None)
     )
 
 
-def _require_receipt_kind(receipts: list[dict[str, Any]], kind: str, path: str) -> None:
-    if not any(item["kind"] == kind for item in receipts):
-        raise ConvergenceAdapterError(f"{path} missing {kind}")
+def _require_receipt_kinds(
+    receipts: list[dict[str, Any]], required_kinds: set[str], path: str
+) -> None:
+    present = {item["kind"] for item in receipts}
+    missing = required_kinds - present
+    if missing:
+        raise ConvergenceAdapterError(
+            f"{path} missing required kinds {', '.join(sorted(missing))}"
+        )
 
 
-def _require_pass_verification(verifications: list[dict[str, Any]], kind: str) -> None:
-    for item in verifications:
-        if item["kind"] == kind and item["result"] == "pass":
-            return
-    raise ConvergenceAdapterError(f"request.verifications missing passing {kind}")
+def _require_pass_verifications(
+    verifications: list[dict[str, Any]], required_kinds: set[str]
+) -> None:
+    passing = {item["kind"] for item in verifications if item["result"] == "pass"}
+    missing = required_kinds - passing
+    if missing:
+        raise ConvergenceAdapterError(
+            "request.verifications missing passing " + ", ".join(sorted(missing))
+        )
 
 
 def _assert_required_allowed_keys(
@@ -601,6 +650,7 @@ def render_output(
         "profile_id": profile["profile_id"],
         "evidence_mode": profile["evidence_mode"],
         "profile_sha256": profile_sha256,
+        "intent_sha256": sha256_hex(canonical_json(profile["intent"])),
         "protocol_head": PROTOCOL_HEAD,
         "request": request,
         "request_sha256": request_sha256,

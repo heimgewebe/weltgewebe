@@ -149,6 +149,27 @@ jobs:
       - name: Validate Garnrolle ontology contract
         run: python3 -m unittest scripts.ci.tests.test_garnrolle_ontology_contract -v
 
+      - name: Check out pinned convergence protocol
+        env:
+          PROTOCOL_HEAD: 83ed435bf9eb490e81a6ff2103b6c1397440d40b
+          PROTOCOL_ROOT: ${{ runner.temp }}/konvergenzregelkreis
+        run: |
+          set -euo pipefail
+          test ! -e "${PROTOCOL_ROOT}"
+          git init "${PROTOCOL_ROOT}"
+          git -C "${PROTOCOL_ROOT}" remote add origin \
+            https://github.com/heimgewebe/konvergenzregelkreis.git
+          git -C "${PROTOCOL_ROOT}" fetch --depth=1 origin "${PROTOCOL_HEAD}"
+          git -C "${PROTOCOL_ROOT}" checkout --detach "${PROTOCOL_HEAD}"
+          test "$(git -C "${PROTOCOL_ROOT}" rev-parse HEAD)" = "${PROTOCOL_HEAD}"
+          python3 -m pip install --disable-pip-version-check --no-input \
+            'jsonschema==4.26.0'
+
+      - name: Validate convergence adapter contract
+        env:
+          KONVERGENZREGELKREIS_ROOT: ${{ runner.temp }}/konvergenzregelkreis
+        run: python3 -m unittest scripts.ci.tests.test_convergence_adapter_contract -v
+
       - name: Validate merge governance contracts
         run: python3 -m unittest scripts.quality.tests.test_review_governance -v
 
