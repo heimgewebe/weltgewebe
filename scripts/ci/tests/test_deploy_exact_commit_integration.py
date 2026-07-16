@@ -9,6 +9,7 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).parents[3]
 DEPLOY_SCRIPT = ROOT / "scripts" / "ops" / "deploy-exact-commit-vps.sh"
@@ -23,10 +24,16 @@ def run(
     env: dict[str, str] | None = None,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
+    effective_env = None if env is None else env.copy()
+    if argv and Path(argv[0]).name == "git":
+        effective_env = os.environ.copy() if effective_env is None else effective_env
+        effective_env["GIT_CONFIG_GLOBAL"] = os.devnull
+        effective_env["GIT_CONFIG_NOSYSTEM"] = "1"
+
     result = subprocess.run(
         argv,
         cwd=cwd,
-        env=env,
+        env=effective_env,
         text=True,
         capture_output=True,
         check=False,
@@ -37,6 +44,46 @@ def run(
             f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
     return result
+
+
+class GitFixtureIsolationTests(unittest.TestCase):
+    def test_run_ignores_inherited_global_git_hooks(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            hooks = root / "hooks"
+            hooks.mkdir()
+            pre_push = hooks / "pre-push"
+            pre_push.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+            pre_push.chmod(0o755)
+            global_config = root / "global.gitconfig"
+            global_config.write_text(
+                f"[core]\n\thooksPath = {hooks}\n",
+                encoding="utf-8",
+            )
+            remote = root / "remote.git"
+            seed = root / "seed"
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "GIT_CONFIG_GLOBAL": str(global_config),
+                    "GIT_CONFIG_NOSYSTEM": "1",
+                },
+            ):
+                run(["git", "init", "--bare", str(remote)])
+                run(["git", "init", "-b", "main", str(seed)])
+                run(["git", "config", "user.name", "Integration Test"], cwd=seed)
+                run(
+                    ["git", "config", "user.email", "integration@example.invalid"],
+                    cwd=seed,
+                )
+                (seed / "fixture.txt").write_text("fixture\n", encoding="utf-8")
+                run(["git", "add", "fixture.txt"], cwd=seed)
+                run(["git", "commit", "-m", "fixture"], cwd=seed)
+                run(["git", "remote", "add", "origin", str(remote)], cwd=seed)
+                result = run(["git", "push", "-u", "origin", "main"], cwd=seed)
+
+            self.assertEqual(result.returncode, 0)
 
 
 class DeployExactCommitIntegrationTests(unittest.TestCase):
@@ -311,6 +358,8 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         inherited_path = os.environ.get("PATH", "/usr/bin:/bin")
         return {
             "PATH": f"{self.bin}:{inherited_path}",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
             "WELTGEWEBE_SOURCE_CHECKOUT": str(self.source),
             "WELTGEWEBE_RELEASE_ROOT": str(self.releases),
             "WELTGEWEBE_RUNTIME_ENV": str(self.runtime_env),
