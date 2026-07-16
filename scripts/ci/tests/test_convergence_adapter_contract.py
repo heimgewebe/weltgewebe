@@ -538,6 +538,13 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 ),
             ),
             (
+                "non-github pull path",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://example.invalid/heimgewebe/weltgewebe/pull/1451",
+                ),
+            ),
+            (
                 "gitlab mr with subpath",
                 lambda candidate: candidate["request"]["effects"][0].__setitem__(
                     "evidence_ref",
@@ -570,6 +577,13 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 lambda candidate: candidate["request"]["effects"][0].__setitem__(
                     "evidence_ref",
                     "https://gitlab.com/heimgewebe/weltgewebe/-/merge_requests/1451#note_1",
+                ),
+            ),
+            (
+                "non-gitlab merge request path",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://example.invalid/heimgewebe/weltgewebe/-/merge_requests/1451",
                 ),
             ),
             (

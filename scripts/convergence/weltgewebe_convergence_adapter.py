@@ -453,15 +453,20 @@ def _validate_observation(observation: Any) -> list[dict[str, Any]]:
 def _reject_symbolic_git_reference(
     ref: str, path: str, *, kind: str = ""
 ) -> None:
-    if "github.com" in ref.casefold() and "/pull/" in ref.casefold():
-        if GITHUB_PR_RE.fullmatch(ref) is None:
-            raise ConvergenceAdapterError(f"{path} must be an exact GitHub PR URL without subpaths")
+    normalized_ref = ref.casefold()
+    if GITHUB_PR_RE.fullmatch(ref) is not None:
         return
+    if "/pull/" in normalized_ref:
+        raise ConvergenceAdapterError(
+            f"{path} must be an exact GitHub PR URL without subpaths"
+        )
 
-    if "gitlab.com" in ref.casefold() and "/-/merge_requests/" in ref.casefold():
-        if GITLAB_MR_RE.fullmatch(ref) is None:
-            raise ConvergenceAdapterError(f"{path} must be an exact GitLab MR URL without subpaths")
+    if GITLAB_MR_RE.fullmatch(ref) is not None:
         return
+    if "/-/merge_requests/" in normalized_ref:
+        raise ConvergenceAdapterError(
+            f"{path} must be an exact GitLab MR URL without subpaths"
+        )
 
     if EXPLICIT_SYMBOLIC_GIT_REF_RE.search(ref) is not None:
         raise ConvergenceAdapterError(
