@@ -34,11 +34,13 @@ jobs:
             .github/workflows/apply-pr1445-review-followups.yml
             scripts/ci/apply_pr1445_review_followups.py
             scripts/ci/prepare_pr1445_contract_index.py
+            scripts/ci/prepare_pr1445_pax_compat.py
           )
           [[ "${staged_paths[*]}" == "${expected_paths[*]}" ]]
 
           python scripts/ci/prepare_pr1445_contract_index.py
           python scripts/ci/apply_pr1445_review_followups.py
+          python scripts/ci/prepare_pr1445_pax_compat.py
           python -m py_compile \
             scripts/ops/verify_public_release_commit.py \
             scripts/ops/validate_web_deploy_archive.py
@@ -47,14 +49,16 @@ jobs:
           python -m unittest \
             scripts/ci/tests/test_verify_public_release_commit.py \
             scripts/ci/tests/test_validate_web_deploy_archive.py \
-            scripts/ci/tests/test_production_reconciler_contract.py -v
+            scripts/ci/tests/test_production_reconciler_contract.py \
+            scripts/ci/tests/test_deploy_exact_commit_integration.py -v
           git diff --check
 
           mapfile -t changed_paths < <(
             git diff --name-only "$EXPECTED_BASE" -- \
               ':(exclude).github/workflows/apply-pr1445-review-followups.yml' \
               ':(exclude)scripts/ci/apply_pr1445_review_followups.py' \
-              ':(exclude)scripts/ci/prepare_pr1445_contract_index.py'
+              ':(exclude)scripts/ci/prepare_pr1445_contract_index.py' \
+              ':(exclude)scripts/ci/prepare_pr1445_pax_compat.py'
           )
           expected_changed=(
             docs/deploy/merge-to-live.md
