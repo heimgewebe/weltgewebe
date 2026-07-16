@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import tarfile
+import unicodedata
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 
@@ -19,6 +20,7 @@ DEFAULT_MAX_PATH_BYTES = 1024
 DEFAULT_MAX_COMPONENT_BYTES = 255
 DEFAULT_MAX_DEPTH = 32
 REQUIRED_REGULAR_FILES = frozenset({"build/index.html", "build/_app/version.json"})
+UNSAFE_UNICODE_CATEGORIES = frozenset({"Cc", "Cf", "Cs"})
 
 
 class ArchiveValidationError(ValueError):
@@ -39,7 +41,10 @@ def _canonical_member_name(member: tarfile.TarInfo) -> str:
     name = member.name
     if not isinstance(name, str) or not name:
         raise ArchiveValidationError("archive member has an empty name")
-    if "\\" in name or any(ord(character) < 32 or ord(character) == 127 for character in name):
+    if "\\" in name or any(
+        unicodedata.category(character) in UNSAFE_UNICODE_CATEGORIES
+        for character in name
+    ):
         raise ArchiveValidationError(f"unsafe archive path characters: {name!r}")
 
     path_bytes = name.encode("utf-8")
@@ -62,7 +67,10 @@ def _canonical_member_name(member: tarfile.TarInfo) -> str:
         raise ArchiveValidationError(f"archive path is too deep: {name}")
     if any(part in {"", ".", ".."} for part in member_path.parts):
         raise ArchiveValidationError(f"unsafe archive path: {name}")
-    if any(len(part.encode("utf-8")) > DEFAULT_MAX_COMPONENT_BYTES for part in member_path.parts):
+    if any(
+        len(part.encode("utf-8")) > DEFAULT_MAX_COMPONENT_BYTES
+        for part in member_path.parts
+    ):
         raise ArchiveValidationError(f"archive path component is too long: {name}")
     return canonical
 
