@@ -705,6 +705,18 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 ].__setitem__(0, "https://example.invalid/repo.git?ref=main"),
             ),
             (
+                "generic bare git repository URL",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(0, "https://example.invalid/repo.git"),
+            ),
+            (
+                "generic git repository branch path",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(0, "https://example.invalid/repo.git/branch/main"),
+            ),
+            (
                 "gitlab raw branch",
                 lambda candidate: candidate["request"]["effects"][0].__setitem__(
                     "evidence_ref",

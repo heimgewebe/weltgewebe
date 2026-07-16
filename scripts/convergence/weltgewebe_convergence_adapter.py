@@ -163,6 +163,9 @@ EXACT_COMMIT_REF_RE = re.compile(r"@[0-9a-f]{40}$")
 GIT_REFERENCE_MARKER_RE = re.compile(
     r"(?:^|:)git(?:[-_][a-z0-9]+)*:", re.IGNORECASE
 )
+GIT_REPOSITORY_MARKER_RE = re.compile(
+    r"(?:^|/)[^/?#\s]+\.git(?:/|[?#]|$)", re.IGNORECASE
+)
 PERCENT_ENCODED_PATH_SEPARATOR_RE = re.compile(r"%(?:25)*(?:2f|5c)", re.IGNORECASE)
 GIT_REVISION_PATH_RE = re.compile(
     r"^https://(?:github\.com|gitlab\.com|bitbucket\.org)/[^/\s]+/[^/\s]+/"
@@ -604,6 +607,7 @@ def _reject_symbolic_git_reference(
     shorthand_git_ref = (
         normalized_kind.startswith("git")
         or GIT_REFERENCE_MARKER_RE.search(ref) is not None
+        or GIT_REPOSITORY_MARKER_RE.search(ref) is not None
     )
     url_revision_bound = any(
         match is not None
