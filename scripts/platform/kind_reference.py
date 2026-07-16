@@ -7,14 +7,13 @@ import ipaddress
 import json
 import os
 import shutil
-import socket
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import yaml
 
@@ -518,45 +517,42 @@ def prove_flux_drift(kubectl: str, flux: str, namespace: str) -> None:
     raise ProofError("Flux did not repair replica drift")
 
 
-@contextmanager
-def port_forward(kubectl: str, namespace: str, service: str, remote_port: int) -> Iterator[int]:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        local_port = probe.getsockname()[1]
-    process = subprocess.Popen(
-        [
-            kubectl,
-            "-n",
-            namespace,
-            "port-forward",
-            f"service/{service}",
-            f"{local_port}:{remote_port}",
-            "--address=127.0.0.1",
-        ],
-        cwd=ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    try:
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            with socket.socket() as client:
-                if client.connect_ex(("127.0.0.1", local_port)) == 0:
-                    break
-            if process.poll() is not None:
-                raise ProofError("kubectl port-forward exited early")
-            time.sleep(0.25)
-        else:
-            raise ProofError("kubectl port-forward did not become ready")
-        yield local_port
-    finally:
-        process.terminate()
+def gateway_addresses(kubectl: str) -> list[str]:
+    document = json.loads(output([kubectl, "-n", "weltgewebe-gateway", "get", "gateway", "weltgewebe", "-o", "json"]))
+    addresses: list[str] = []
+    for entry in document.get("status", {}).get("addresses", []):
+        if entry.get("type") != "IPAddress" or not isinstance(entry.get("value"), str):
+            continue
         try:
-            process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
+            address = ipaddress.ip_address(entry["value"])
+        except ValueError:
+            continue
+        if address.version == 4 and not address.is_unspecified:
+            value = str(address)
+            if value not in addresses:
+                addresses.append(value)
+    if not addresses:
+        raise ProofError("Gateway has no usable IPv4 status address")
+    return addresses
+
+
+def probe_gateway_http(addresses: list[str], timeout_seconds: int = 30) -> tuple[str, bytes, bytes]:
+    deadline = time.monotonic() + timeout_seconds
+    last_error: BaseException | None = None
+    while True:
+        for address in addresses:
+            try:
+                health = urllib.request.urlopen(f"http://{address}/health/live", timeout=10).read()
+                web = urllib.request.urlopen(f"http://{address}/", timeout=10).read(1024)
+                if health and web:
+                    return address, health, web
+                last_error = ProofError("Gateway route returned empty content")
+            except (OSError, TimeoutError, urllib.error.URLError) as error:
+                last_error = error
+        if time.monotonic() >= deadline:
+            raise ProofError(f"Gateway addresses did not serve HTTP: {addresses!r}") from last_error
+        time.sleep(1)
+
 
 
 def prove_gateway(kubectl: str) -> dict[str, str]:
@@ -592,13 +588,10 @@ def prove_gateway(kubectl: str) -> dict[str, str]:
     )
     if not service:
         raise ProofError("Gateway service was not created")
-    with port_forward(kubectl, "weltgewebe-gateway", service, 80) as port:
-        health = urllib.request.urlopen(f"http://127.0.0.1:{port}/health/live", timeout=10).read()
-        web = urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=10).read(1024)
-    if not health or not web:
-        raise ProofError("Gateway route returned empty content")
+    address, health, web = probe_gateway_http(gateway_addresses(kubectl))
     return {
         "service": service,
+        "address": address,
         "health_sha256": hashlib.sha256(health).hexdigest(),
         "web_prefix_sha256": hashlib.sha256(web).hexdigest(),
     }
