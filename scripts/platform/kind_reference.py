@@ -534,138 +534,87 @@ def gateway_addresses(kubectl: str) -> list[str]:
     return addresses
 
 
+def kind_docker_network(cluster: str) -> str:
+    names = output(
+        [
+            "docker",
+            "inspect",
+            "--format",
+            "{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{\n}}{{end}}",
+            f"{cluster}-control-plane",
+        ]
+    ).splitlines()
+    networks = [name.strip() for name in names if name.strip()]
+    if "kind" in networks:
+        return "kind"
+    if len(networks) == 1:
+        return networks[0]
+    raise ProofError(f"cannot determine kind Docker network: {networks!r}")
+
+
 def probe_gateway_http(
-    kubectl: str,
+    cluster: str,
     addresses: list[str],
     timeout_seconds: int = 30,
 ) -> tuple[str, bytes, bytes]:
-    namespace = "weltgewebe-gateway"
-    pod = "weltgewebe-gateway-probe"
-    run(
-        [
-            kubectl,
-            "-n",
-            namespace,
-            "delete",
-            "pod",
-            pod,
-            "--ignore-not-found=true",
-            "--wait=true",
-        ]
-    )
-    try:
-        manifest = {
-            "apiVersion": "v1",
-            "kind": "Pod",
-            "metadata": {
-                "name": pod,
-                "namespace": namespace,
-                "labels": {
-                    "app.kubernetes.io/name": "weltgewebe-gateway-probe",
-                    "app.kubernetes.io/part-of": "weltgewebe",
-                },
-            },
-            "spec": {
-                "automountServiceAccountToken": False,
-                "restartPolicy": "Never",
-                "securityContext": {
-                    "runAsNonRoot": True,
-                    "runAsUser": 10001,
-                    "runAsGroup": 10001,
-                    "seccompProfile": {"type": "RuntimeDefault"},
-                },
-                "containers": [
-                    {
-                        "name": "probe",
-                        "image": "weltgewebe-api:local",
-                        "imagePullPolicy": "Never",
-                        "command": ["sleep", "300"],
-                        "securityContext": {
-                            "allowPrivilegeEscalation": False,
-                            "capabilities": {"drop": ["ALL"]},
-                            "readOnlyRootFilesystem": True,
-                        },
-                    }
-                ],
-            },
-        }
-        run(
-            [kubectl, "apply", "-f", "-"],
-            input_text=json.dumps(manifest),
-        )
-        run(
-            [
-                kubectl,
-                "-n",
-                namespace,
-                "wait",
-                f"pod/{pod}",
-                "--for=condition=Ready",
-                "--timeout=2m",
+    network = kind_docker_network(cluster)
+    deadline = time.monotonic() + timeout_seconds
+    last_error: BaseException | None = None
+    while True:
+        for address in addresses:
+            common = [
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                network,
+                "--read-only",
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                "--pids-limit",
+                "64",
+                "--user",
+                "10001:10001",
+                "--entrypoint",
+                "wget",
+                "weltgewebe-api:local",
+                "-qO-",
+                "-T",
+                "10",
             ]
-        )
-        deadline = time.monotonic() + timeout_seconds
-        last_error: BaseException | None = None
-        while True:
-            for address in addresses:
-                try:
-                    health = output(
-                        [
-                            kubectl,
-                            "-n",
-                            namespace,
-                            "exec",
-                            pod,
-                            "--",
-                            "wget",
-                            "-qO-",
-                            "-T",
-                            "10",
-                            f"http://{address}/health/live",
-                        ]
-                    ).encode("utf-8")
-                    web = output(
-                        [
-                            kubectl,
-                            "-n",
-                            namespace,
-                            "exec",
-                            pod,
-                            "--",
-                            "wget",
-                            "-qO-",
-                            "-T",
-                            "10",
-                            f"http://{address}/",
-                        ]
-                    ).encode("utf-8")
-                    if health and web:
-                        return address, health, web
-                    last_error = ProofError("Gateway route returned empty content")
-                except subprocess.CalledProcessError as error:
-                    last_error = error
-            if time.monotonic() >= deadline:
-                raise ProofError(
-                    f"Gateway addresses did not serve in-cluster HTTP: {addresses!r}"
-                ) from last_error
-            time.sleep(1)
-    finally:
-        run(
-            [
-                kubectl,
-                "-n",
-                namespace,
-                "delete",
-                "pod",
-                pod,
-                "--ignore-not-found=true",
-                "--wait=true",
-            ]
-        )
+            try:
+                health = subprocess.run(
+                    [*common, f"http://{address}/health/live"],
+                    cwd=ROOT,
+                    text=False,
+                    capture_output=True,
+                    check=True,
+                    timeout=15,
+                ).stdout
+                web = subprocess.run(
+                    [*common, f"http://{address}/"],
+                    cwd=ROOT,
+                    text=False,
+                    capture_output=True,
+                    check=True,
+                    timeout=15,
+                ).stdout[:1024]
+                if health and web:
+                    return address, health, web
+                last_error = ProofError("Gateway route returned empty content")
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                last_error = error
+        if time.monotonic() >= deadline:
+            raise ProofError(
+                f"Gateway addresses did not serve Docker-network HTTP: {addresses!r}"
+            ) from last_error
+        time.sleep(1)
 
 
 
-def prove_gateway(kubectl: str) -> dict[str, str]:
+def prove_gateway(kubectl: str, cluster: str) -> dict[str, str]:
     wait_condition(kubectl, "weltgewebe-gateway", "gateway/weltgewebe", "Programmed")
     wait_http_route_parent_condition(
         kubectl,
@@ -698,7 +647,7 @@ def prove_gateway(kubectl: str) -> dict[str, str]:
     )
     if not service:
         raise ProofError("Gateway service was not created")
-    address, health, web = probe_gateway_http(kubectl, gateway_addresses(kubectl))
+    address, health, web = probe_gateway_http(cluster, gateway_addresses(kubectl))
     return {
         "service": service,
         "address": address,
@@ -776,7 +725,7 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
         restart = prove_restart(kubectl, app_namespace)
         if args.mode == "gitops":
             prove_flux_drift(kubectl, flux, app_namespace)
-        gateway = prove_gateway(kubectl)
+        gateway = prove_gateway(kubectl, args.cluster)
         result = {
             "schema_version": 1,
             "status": "pass",

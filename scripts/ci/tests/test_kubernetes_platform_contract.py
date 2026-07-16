@@ -332,52 +332,54 @@ spec:
         with mock.patch.object(self.reference, "output", return_value=json.dumps(document)):
             self.assertEqual(self.reference.gateway_addresses("kubectl"), ["172.22.0.3", "172.22.0.4"])
 
-    def test_gateway_http_probe_uses_in_cluster_probe_pod(self) -> None:
+    def test_kind_docker_network_prefers_named_kind_network(self) -> None:
+        with mock.patch.object(
+            self.reference,
+            "output",
+            return_value="other\nkind\n",
+        ):
+            self.assertEqual(self.reference.kind_docker_network("cluster"), "kind")
+
+    def test_gateway_http_probe_uses_hardened_docker_client(self) -> None:
+        health = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=b"healthy", stderr=b""
+        )
+        web = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=b"web", stderr=b""
+        )
         with (
-            mock.patch.object(self.reference, "run") as run_mock,
+            mock.patch.object(self.reference, "kind_docker_network", return_value="kind"),
             mock.patch.object(
-                self.reference,
-                "output",
-                side_effect=["healthy", "web"],
-            ) as output_mock,
+                self.reference.subprocess,
+                "run",
+                side_effect=[health, web],
+            ) as run_mock,
         ):
             result = self.reference.probe_gateway_http(
-                "kubectl", ["172.22.0.3"], timeout_seconds=1
+                "cluster", ["172.22.0.3"], timeout_seconds=1
             )
         self.assertEqual(result, ("172.22.0.3", b"healthy", b"web"))
+        argv = run_mock.call_args_list[0].args[0]
+        self.assertEqual(argv[:3], ["docker", "run", "--rm"])
+        self.assertIn("--network", argv)
+        self.assertIn("--read-only", argv)
+        self.assertIn("--cap-drop", argv)
+        self.assertIn("ALL", argv)
+        self.assertIn("no-new-privileges", argv)
+        self.assertIn("10001:10001", argv)
+        self.assertIn("--entrypoint", argv)
+        self.assertIn("wget", argv)
+        self.assertEqual(argv[-1], "http://172.22.0.3/health/live")
         self.assertEqual(
-            run_mock.call_args_list[1].args[0], ["kubectl", "apply", "-f", "-"]
+            run_mock.call_args_list[1].args[0][-1], "http://172.22.0.3/"
         )
-        manifest = json.loads(run_mock.call_args_list[1].kwargs["input_text"])
-        self.assertFalse(manifest["spec"]["automountServiceAccountToken"])
-        self.assertTrue(manifest["spec"]["securityContext"]["runAsNonRoot"])
-        self.assertEqual(manifest["spec"]["securityContext"]["runAsUser"], 10001)
-        self.assertEqual(
-            manifest["spec"]["securityContext"]["seccompProfile"]["type"],
-            "RuntimeDefault",
-        )
-        container = manifest["spec"]["containers"][0]
-        self.assertEqual(container["image"], "weltgewebe-api:local")
-        self.assertEqual(container["imagePullPolicy"], "Never")
-        self.assertFalse(container["securityContext"]["allowPrivilegeEscalation"])
-        self.assertEqual(container["securityContext"]["capabilities"]["drop"], ["ALL"])
-        self.assertTrue(container["securityContext"]["readOnlyRootFilesystem"])
-        self.assertEqual(
-            output_mock.call_args_list[0].args[0][-1],
-            "http://172.22.0.3/health/live",
-        )
-        self.assertEqual(
-            output_mock.call_args_list[1].args[0][-1],
-            "http://172.22.0.3/",
-        )
-        self.assertIn("delete", run_mock.call_args_list[-1].args[0])
 
     def test_gateway_proof_does_not_port_forward_selectorless_service(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()
         self.assertNotIn("def port_forward", source)
         self.assertNotIn('"port-forward"', source)
         self.assertIn(
-            "probe_gateway_http(kubectl, gateway_addresses(kubectl))", source
+            "probe_gateway_http(cluster, gateway_addresses(kubectl))", source
         )
 
     def test_full_proof_uses_canonical_builder_signature(self) -> None:
