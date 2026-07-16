@@ -50,14 +50,19 @@ No local request schema is authoritative. The request shape is owned by the publ
 The deterministic terminal conformance fixtures are:
 
 - `contracts/convergence/v1.0.0/fixtures/conformance.terminal.profile.json`
+
 The pure public request is derived from the `request` property within the profile. No redundant terminal request fixture is maintained.
 
 
 ## Threat Model and Trust Boundaries
 
-The adapter operates in a zero-trust external environment. It only formally validates SHA-256 strings; as a read-only and reference-only component, it cannot fetch or recalculate the content of external domain objects, commits, or receipts.
-If the adapter itself is compromised, it could emit arbitrary payloads that falsely claim conformance. Therefore, the adapter envelope must be verified by the authoritative evaluator, which uses independent receipt hashes (like Grabowski) to establish true provenance. The trust boundary remains at the evaluator, not the local adapter.
-The protocol upgrade path involves pinning a new `PROTOCOL_HEAD` (e.g. for `v1.1.0`), deploying an updated adapter schema, and updating the evaluator to accept both versions during transition.
+The adapter operates in a zero-trust external environment. It validates SHA-256 values only as lowercase 64-character hexadecimal strings. As a read-only and reference-only component, it does not fetch referenced objects and cannot recompute whether a digest matches external content.
+
+A compromised adapter could emit an internally consistent but false request or envelope. The public evaluator checks protocol shape and assessment semantics; it does not, by itself, authenticate every external URL or receipt. Operational trust therefore requires both evaluator acceptance and independent verification of referenced commits, receipts, sources, and their digests.
+
+The exact 40-character Git object id and `git fsck --strict` bind CI to one commit object and validate repository structure. They do not prove who signed or authored that commit. `git verify-commit` becomes meaningful only after a trusted signing identity and key policy are defined.
+
+For a later protocol release, add a new versioned contract directory, pin its protocol head, update the defensive mirror and fixtures, and run old and new evaluator contracts in parallel during migration. Do not silently retarget the existing `v1.0.0` pin.
 
 ## Authority Boundary
 
@@ -93,24 +98,43 @@ Rollback is not executed by this adapter. Rollback is represented as:
 - closure cleanup evidence;
 - a residual-risk reference that names the external rollback execution boundary.
 
-Negative control is represented as a passing `verification` with `kind: negative_control`. The adapter rejects profiles that try to embed mutable external payloads or symbolic Git revisions in source references, effect and verification evidence, or closure references. This includes branch and tag shorthands, `refs/heads` and `refs/tags`, GitHub/GitLab/Bitbucket tree, blob, raw, archive and compare URLs, codeload URLs, query revisions and `.git#...` fragments. Exact 40-character commit URLs and stable pull-request identity URLs remain valid references.
+Negative control is represented as a passing `verification` with `kind: negative_control`. The adapter rejects profiles that try to embed mutable external payloads or symbolic Git revisions in source references, effect and verification evidence, or closure references. This includes branch and tag shorthands, `refs/heads` and `refs/tags`, GitHub/GitLab/Bitbucket tree, blob, raw, archive and compare URLs, codeload URLs, query revisions and `.git#...` fragments. Exact 40-character commit URLs, exact GitHub pull-request identity URLs, and exact GitLab merge-request identity URLs remain valid references. Subpaths, queries, fragments, lookalike hosts, userinfo, and explicit ports are rejected for PR and MR identity references.
 
 ## Evaluator Compatibility
 
-The regression test `scripts/ci/tests/test_convergence_adapter_contract.py` reads the protocol checkout from `KONVERGENZREGELKREIS_ROOT`. CI creates that checkout in the runner's temporary directory, fetches only the exact commit `83ed435bf9eb490e81a6ff2103b6c1397440d40b`, verifies `HEAD`, and treats a missing or different checkout as failure. Local development falls back to `/home/alex/repos/konvergenzregelkreis` and may skip only the four protocol integration tests when no checkout is available; the remaining eleven adapter and safety tests still run.
+The regression test `scripts/ci/tests/test_convergence_adapter_contract.py` reads the protocol checkout from `KONVERGENZREGELKREIS_ROOT`. CI creates that checkout in the runner's temporary directory, fetches only the exact commit `83ed435bf9eb490e81a6ff2103b6c1397440d40b`, verifies `HEAD`, and treats a missing or different checkout as failure. Local development falls back to `/home/alex/repos/konvergenzregelkreis`. Protocol integration tests require a checkout at the pinned commit; repository-local validation and safety tests remain independently runnable.
 
 The mirror test compares the adapter's request keys, nested receipt keys, enums and R2 requirements directly with the pinned schemas and profile. The positive request must then evaluate to `terminally_closed` under the public R2 profile. A request missing required evidence must block with `evidence_missing`. A request with conflicting receipt hashes must block with `conflicting_evidence`. A request with adapter metadata such as `protocol_head` at top level must be rejected by the public request schema.
 
 ## Profile and Request Constraints
 
-The `profile_id` is restricted to a maximum of 128 characters to ensure it can be safely embedded in external systems like Bureau or Chronik without hitting length limits, while providing enough entropy for unique identification.
+The `profile_id` is restricted to 128 characters as a local operational bound: identifiers remain manageable in logs, envelopes, filenames, and external references while retaining ample space for descriptive uniqueness. This limit is not a claim about Bureau or Chronik storage limits.
 
 ## CLI Shape
 
-Default output is an adapter envelope:
+Inspect the command surface:
+
+```sh
+python3 scripts/convergence/weltgewebe_convergence_adapter.py --help
+```
+
+The help output names the required profile path and the three output modes `envelope`, `request`, and `hash`. Default output is an adapter envelope:
 
 ```sh
 python3 scripts/convergence/weltgewebe_convergence_adapter.py PROFILE.json
+```
+
+Abbreviated output shape:
+
+```json
+{
+  "adapter": "weltgewebe-os-convergence-adapter",
+  "protocol_head": "83ed435bf9eb490e81a6ff2103b6c1397440d40b",
+  "request": {"schema_version": 1, "...": "..."},
+  "request_sha256": "<64 lowercase hex characters>",
+  "profile_sha256": "<64 lowercase hex characters>",
+  "intent_sha256": "<64 lowercase hex characters>"
+}
 ```
 
 The envelope contains adapter metadata, `protocol_head`, the pure public request, `request_sha256`, `profile_sha256` and a separate `intent_sha256`. It intentionally contains no generated-at timestamp: identical input must produce identical output. Freshness and replay decisions belong to the request's `observation.observed_at`, the referenced receipts and the external evaluator; an adapter-local clock field would not provide replay protection.

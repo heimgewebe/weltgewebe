@@ -154,7 +154,17 @@ jobs:
           PROTOCOL_ROOT: ${{ runner.temp }}/konvergenzregelkreis
         run: |
           set -euo pipefail
-          PROTOCOL_HEAD=$(cat contracts/convergence/v1.0.0/PINNED_PROTOCOL_HEAD | tr -d '[:space:]')
+          protocol_head_file=contracts/convergence/v1.0.0/PINNED_PROTOCOL_HEAD
+          mapfile -t protocol_head_lines < "${protocol_head_file}"
+          if (( ${#protocol_head_lines[@]} != 1 )); then
+            echo "PINNED_PROTOCOL_HEAD must contain exactly one line" >&2
+            exit 1
+          fi
+          PROTOCOL_HEAD=${protocol_head_lines[0]}
+          if [[ ! "${PROTOCOL_HEAD}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "PINNED_PROTOCOL_HEAD must be 40 lowercase hexadecimal characters" >&2
+            exit 1
+          fi
           test ! -e "${PROTOCOL_ROOT}"
           git init "${PROTOCOL_ROOT}"
           git -C "${PROTOCOL_ROOT}" remote add origin \
@@ -162,10 +172,9 @@ jobs:
           git -C "${PROTOCOL_ROOT}" fetch --depth=1 origin "${PROTOCOL_HEAD}"
           git -C "${PROTOCOL_ROOT}" checkout --detach "${PROTOCOL_HEAD}"
           
-          # Härten des Checkouts:
-          # Wir verlangen kein `git verify-commit`, solange keine kryptographische
-          # Identität belegt und hinterlegt ist. Die Sicherheit basiert auf dem
-          # exakten SHA-1 Hash.
+          # The exact object id and fsck bind CI to one Git commit object.
+          # They do not prove a signer identity, so verify-commit is intentionally
+          # not required until a trusted signing identity is defined.
           if [ "$(git -C "${PROTOCOL_ROOT}" cat-file -t "${PROTOCOL_HEAD}")" != "commit" ]; then
             echo "Error: PINNED_PROTOCOL_HEAD is not a commit" >&2
             exit 1

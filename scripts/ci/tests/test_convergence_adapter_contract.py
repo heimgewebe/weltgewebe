@@ -9,9 +9,11 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -215,7 +217,6 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
     def test_conformance_profile_generates_exact_public_request(self) -> None:
         profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
         expected = profile["request"]
-        profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
         request, request_sha256, profile_sha256 = self.adapter.build_request(profile)
 
         self.assertEqual(request, expected)
@@ -314,11 +315,15 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
         expected_request = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")["request"]
         stdout = io.StringIO()
         stderr = io.StringIO()
-        rc = self.adapter.main(
-            [str(FIXTURE_ROOT / "conformance.terminal.profile.json")],
-            stdout=stdout,
-            stderr=stderr,
-        )
+        with mock.patch.object(
+            self.adapter, "load_profile", wraps=self.adapter.load_profile
+        ) as load_profile:
+            rc = self.adapter.main(
+                [str(FIXTURE_ROOT / "conformance.terminal.profile.json")],
+                stdout=stdout,
+                stderr=stderr,
+            )
+        self.assertEqual(load_profile.call_count, 1)
         self.assertEqual(rc, 0)
         self.assertEqual(stderr.getvalue(), "")
         envelope = json.loads(stdout.getvalue())
@@ -484,10 +489,87 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 ),
             ),
             (
+                "github lookalike host prefix",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://evilgithub.com/heimgewebe/weltgewebe/pull/1451",
+                ),
+            ),
+            (
+                "github lookalike host suffix",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com.evil/heimgewebe/weltgewebe/pull/1451",
+                ),
+            ),
+            (
+                "github userinfo",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://user@github.com/heimgewebe/weltgewebe/pull/1451",
+                ),
+            ),
+            (
+                "github explicit port",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com:443/heimgewebe/weltgewebe/pull/1451",
+                ),
+            ),
+            (
+                "github query",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com/heimgewebe/weltgewebe/pull/1451?diff=split",
+                ),
+            ),
+            (
+                "github fragment",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com/heimgewebe/weltgewebe/pull/1451#discussion",
+                ),
+            ),
+            (
+                "github zero pull request id",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com/heimgewebe/weltgewebe/pull/0",
+                ),
+            ),
+            (
                 "gitlab mr with subpath",
                 lambda candidate: candidate["request"]["effects"][0].__setitem__(
                     "evidence_ref",
                     "https://gitlab.com/heimgewebe/weltgewebe/-/merge_requests/1451/diffs",
+                ),
+            ),
+            (
+                "gitlab lookalike host prefix",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://evilgitlab.com/heimgewebe/weltgewebe/-/merge_requests/1451",
+                ),
+            ),
+            (
+                "gitlab lookalike host suffix",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://gitlab.com.evil/heimgewebe/weltgewebe/-/merge_requests/1451",
+                ),
+            ),
+            (
+                "gitlab query",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://gitlab.com/heimgewebe/weltgewebe/-/merge_requests/1451?view=inline",
+                ),
+            ),
+            (
+                "gitlab fragment",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://gitlab.com/heimgewebe/weltgewebe/-/merge_requests/1451#note_1",
                 ),
             ),
             (
@@ -665,7 +747,6 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 self.adapter.build_request(candidate)
 
 
-
     def test_programmatic_and_nested_protocol_inputs_fail_closed(self) -> None:
         base = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
 
@@ -822,42 +903,49 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
             for label in ('"lo' + 'w"', '"medi' + 'um"', '"hi' + 'gh"'):
                 self.assertNotIn(label, text)
 
-    
+
     def test_non_utf8_profile_fails(self) -> None:
-        path = FIXTURE_ROOT / "invalid_utf8.json"
-        path.write_bytes(b'{"test": "\xff"}')
-        try:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "invalid_utf8.json"
+            path.write_bytes(b'{"test": "' + bytes([0xFF]) + b'"}')
             with self.assertRaises(self.adapter.ConvergenceAdapterError):
                 self.adapter.load_profile(path)
-            # CLI code 2 test
+
             stdout = io.StringIO()
             stderr = io.StringIO()
             rc = self.adapter.main([str(path)], stdout=stdout, stderr=stderr)
             self.assertEqual(rc, 2)
-        finally:
-            path.unlink()
+            self.assertIn("not valid UTF-8", stderr.getvalue())
 
     def test_symlink_profile_rejected(self) -> None:
-        target = FIXTURE_ROOT / "conformance.terminal.profile.json"
-        symlink = FIXTURE_ROOT / "symlink.json"
-        symlink.symlink_to(target.name)
-        try:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            target = directory / "profile.json"
+            target.write_text(
+                (FIXTURE_ROOT / "conformance.terminal.profile.json").read_text(
+                    encoding="utf-8"
+                ),
+                encoding="utf-8",
+            )
+            symlink = directory / "symlink.json"
+            try:
+                symlink.symlink_to(target.name)
+            except (NotImplementedError, OSError) as exc:
+                self.skipTest(f"symlinks unavailable: {exc}")
             with self.assertRaises(self.adapter.ConvergenceAdapterError):
                 self.adapter.load_profile(symlink)
-        finally:
-            symlink.unlink()
 
     def test_verification_boundaries(self) -> None:
         profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
         v = profile["request"]["verifications"][0]
-        
+
         # Add copies of v until we reach 128
         while len(profile["request"]["verifications"]) < 128:
             profile["request"]["verifications"].append(copy.deepcopy(v))
-            
+
         # Should pass
         self.adapter.build_request(profile)
-        
+
         # 129 should fail
         profile["request"]["verifications"].append(copy.deepcopy(v))
         with self.assertRaises(self.adapter.ConvergenceAdapterError):
@@ -868,6 +956,31 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
         live = make_live_profile(profile)
         self.assertEqual(live["request"]["nested"][0], "string")
         self.assertEqual(live["evidence_mode"], "live")
+        self.assertEqual(profile["request"]["nested"][0], "fixture:string")
+        self.assertNotIn("evidence_mode", profile)
+
+    def test_pinned_protocol_head_is_strictly_formatted(self) -> None:
+        self.assertEqual(
+            self.adapter._read_protocol_head(PROTOCOL_HEAD_FILE), PROTOCOL_HEAD
+        )
+        invalid_values = (
+            "",
+            PROTOCOL_HEAD.upper(),
+            f" {PROTOCOL_HEAD}",
+            f"{PROTOCOL_HEAD} ",
+            f"{PROTOCOL_HEAD}\n\n",
+            "a" * 39,
+            "g" * 40,
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "PINNED_PROTOCOL_HEAD"
+            for value in invalid_values:
+                with self.subTest(value=repr(value)):
+                    path.write_text(value, encoding="utf-8")
+                    with self.assertRaises(
+                        self.adapter.ConvergenceAdapterConfigurationError
+                    ):
+                        self.adapter._read_protocol_head(path)
 
     def test_local_schema_does_not_restrict_request(self) -> None:
         schema = read_json(CONTRACT_ROOT / "assessment-profile.schema.json")
@@ -879,7 +992,7 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
         # valid
         profile["request"]["observation"]["observed_at"] = "2026-07-16T12:00:00Z"
         self.adapter.build_request(profile)
-        
+
         # invalid semantic but valid shape (e.g. month 13)
         profile["request"]["observation"]["observed_at"] = "2026-13-16T12:00:00Z"
         with self.assertRaises(self.adapter.ConvergenceAdapterError):

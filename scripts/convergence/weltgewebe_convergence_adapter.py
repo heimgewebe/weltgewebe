@@ -12,12 +12,18 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, TextIO, Iterator
+from typing import Any, Iterator, TextIO
 
 SCHEMA_VERSION = "1.0.0"
 REQUEST_SCHEMA_VERSION = 1
-PROTOCOL_HEAD_FILE = Path(__file__).resolve().parents[2] / "contracts" / "convergence" / "v1.0.0" / "PINNED_PROTOCOL_HEAD"
-PROTOCOL_HEAD = PROTOCOL_HEAD_FILE.read_text(encoding="utf-8").strip()
+PROTOCOL_HEAD_FILE = (
+    Path(__file__).resolve().parents[2]
+    / "contracts"
+    / "convergence"
+    / "v1.0.0"
+    / "PINNED_PROTOCOL_HEAD"
+)
+PROTOCOL_HEAD_RE = re.compile(r"^[0-9a-f]{40}$")
 ADAPTER_NAME = "weltgewebe-os-convergence-adapter"
 ADAPTER_VERSION = "1.0.0"
 
@@ -199,15 +205,41 @@ RFC3339_DATETIME_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$"
 )
 GITHUB_PR_RE = re.compile(
-    r"github\.com/[^/\s]+/[^/\s]+/pull/\d+$", re.IGNORECASE
+    r"https://github\.com/[^/?#\s]+/[^/?#\s]+/pull/[1-9]\d*",
+    re.IGNORECASE,
 )
 GITLAB_MR_RE = re.compile(
-    r"gitlab\.com/(?:[^/\s]+/)+[^/\s]+/-/merge_requests/\d+$", re.IGNORECASE
+    r"https://gitlab\.com/(?:[^/?#\s]+/)+[^/?#\s]+/-/merge_requests/[1-9]\d*",
+    re.IGNORECASE,
 )
 
 
 class ConvergenceAdapterError(ValueError):
     """Raised when an input profile cannot be safely converted."""
+
+
+class ConvergenceAdapterConfigurationError(RuntimeError):
+    """Raised when repository-pinned adapter configuration is invalid."""
+
+
+def _read_protocol_head(path: Path) -> str:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise ConvergenceAdapterConfigurationError(
+            f"cannot read pinned convergence protocol head from {path}: {exc}"
+        ) from exc
+
+    value = raw[:-1] if raw.endswith("\n") else raw
+    if PROTOCOL_HEAD_RE.fullmatch(value) is None:
+        raise ConvergenceAdapterConfigurationError(
+            f"pinned convergence protocol head {path} must contain exactly one "
+            "40-character lowercase hexadecimal commit id"
+        )
+    return value
+
+
+PROTOCOL_HEAD = _read_protocol_head(PROTOCOL_HEAD_FILE)
 
 
 def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -422,12 +454,12 @@ def _reject_symbolic_git_reference(
     ref: str, path: str, *, kind: str = ""
 ) -> None:
     if "github.com" in ref.casefold() and "/pull/" in ref.casefold():
-        if GITHUB_PR_RE.search(ref) is None:
+        if GITHUB_PR_RE.fullmatch(ref) is None:
             raise ConvergenceAdapterError(f"{path} must be an exact GitHub PR URL without subpaths")
         return
 
     if "gitlab.com" in ref.casefold() and "/-/merge_requests/" in ref.casefold():
-        if GITLAB_MR_RE.search(ref) is None:
+        if GITLAB_MR_RE.fullmatch(ref) is None:
             raise ConvergenceAdapterError(f"{path} must be an exact GitLab MR URL without subpaths")
         return
 
@@ -827,9 +859,11 @@ def main(
     )
     args = parser.parse_args(argv)
     try:
-        request, request_sha256, profile_sha256 = build_request_from_path(Path(args.profile))
         profile = load_profile(Path(args.profile))
-        stdout.write(render_output(profile, request, request_sha256, profile_sha256, args.output))
+        request, request_sha256, profile_sha256 = build_request(profile)
+        stdout.write(
+            render_output(profile, request, request_sha256, profile_sha256, args.output)
+        )
         stdout.write("\n")
         return 0
     except ConvergenceAdapterError as exc:
