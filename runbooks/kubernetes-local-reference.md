@@ -48,7 +48,7 @@ make platform-render
 python3 scripts/platform/kind_reference.py proof   --cluster weltgewebe-reference   --mode direct
 ```
 
-Der Runner baut API und Web, lädt sie in kind, installiert Gateway API, Cilium/Hubble und Flux, erzeugt das ephemere Migration-Secret aus der öffentlichen Fixture, führt die Migration kontrolliert vor dem Replica-Start aus, startet zwei API-Pods, prüft Restart und Gateway und entfernt ausschließlich den selbst markierten Cluster. Der kind-Cluster startet ohne Standard-CNI und ohne kube-proxy; Cilium übernimmt den Kubernetes-Serviceverkehr ausdrücklich über `kubeProxyReplacement=true`, weil sein Gateway-Controller sonst nicht aktiv wird.
+Der Runner baut API und Web, lädt sie in kind, installiert Gateway API, Cilium/Hubble und Flux, erzeugt das ephemere Migration-Secret aus der öffentlichen Fixture, führt die Migration kontrolliert vor dem Replica-Start aus, startet zwei API-Pods, prüft Restart und Gateway und entfernt ausschließlich den selbst markierten Cluster. Der kind-Cluster startet ohne Standard-CNI und ohne kube-proxy; Cilium übernimmt den Kubernetes-Serviceverkehr ausdrücklich über `kubeProxyReplacement=true`, weil sein Gateway-Controller sonst nicht aktiv wird. Für diesen Bootstrap liest der Runner die IPv4-Adresse des eigenen kind-Control-Plane-Containers aus und übergibt sie Cilium zusammen mit Port `6443`; die virtuelle Service-Adresse ist vor Ciliums Start noch nicht erreichbar.
 
 ## GitOps-Beweis
 

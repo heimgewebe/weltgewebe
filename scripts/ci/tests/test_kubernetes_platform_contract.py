@@ -102,6 +102,24 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertIn("configure_cluster_access(kind, args.cluster)", source)
         self.assertIn('"--for=condition=Ready", "nodes"', source)
 
+    def test_control_plane_address_uses_kind_network(self) -> None:
+        payload = [
+            {
+                "NetworkSettings": {
+                    "Networks": {
+                        "other": {"IPAddress": "172.19.0.9"},
+                        "kind": {"IPAddress": "172.18.0.2"},
+                    }
+                }
+            }
+        ]
+        with mock.patch.object(
+            self.reference, "output", return_value=json.dumps(payload)
+        ):
+            self.assertEqual(
+                self.reference.control_plane_address("reference"), "172.18.0.2"
+            )
+
     def test_gateway_contract_uses_cilium_kube_proxy_replacement(self) -> None:
         kind_config = (ROOT / "platform/clusters/local/kind.yaml").read_text()
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()
@@ -109,6 +127,8 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertIn("kubeProxyMode: none", kind_config)
         self.assertIn('"gatewayAPI.enabled=true"', source)
         self.assertIn('"kubeProxyReplacement=true"', source)
+        self.assertIn('f"k8sServiceHost={api_server_host}"', source)
+        self.assertIn('"k8sServicePort=6443"', source)
 
     def test_full_proof_uses_canonical_builder_signature(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()

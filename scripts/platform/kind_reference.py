@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 import shutil
@@ -52,6 +53,28 @@ def run(
 
 def output(argv: list[str]) -> str:
     return run(argv, capture=True).stdout.strip()
+
+
+def control_plane_address(cluster: str) -> str:
+    raw = json.loads(output(["docker", "inspect", f"{cluster}-control-plane"]))
+    try:
+        networks = raw[0]["NetworkSettings"]["Networks"]
+    except (IndexError, KeyError, TypeError) as exc:
+        raise ProofError("kind control-plane network metadata is missing") from exc
+    preferred = networks.get("kind", {}).get("IPAddress")
+    candidates = [
+        details.get("IPAddress")
+        for details in networks.values()
+        if details.get("IPAddress")
+    ]
+    address = preferred or (candidates[0] if candidates else "")
+    try:
+        parsed = ipaddress.ip_address(address)
+    except ValueError as exc:
+        raise ProofError("kind control-plane IPv4 address is missing or invalid") from exc
+    if parsed.version != 4:
+        raise ProofError("kind control-plane address must be IPv4")
+    return str(parsed)
 
 
 def tool_receipt() -> dict[str, Any]:
@@ -223,6 +246,7 @@ def install_platform_components(
     flux: str,
     helm: str,
     artifacts: dict[str, str],
+    api_server_host: str,
 ) -> None:
     apply_file(kubectl, Path(artifacts["gateway_api_standard"]))
     run(
@@ -238,6 +262,10 @@ def install_platform_components(
             "gatewayAPI.enabled=true",
             "--set",
             "kubeProxyReplacement=true",
+            "--set",
+            f"k8sServiceHost={api_server_host}",
+            "--set",
+            "k8sServicePort=6443",
             "--set",
             "hubble.relay.enabled=true",
             "--set",
@@ -642,9 +670,12 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
         )
         write_marker(args.cluster, commit)
         configure_cluster_access(kind, args.cluster)
+        api_server_host = control_plane_address(args.cluster)
         created = True
         image_ids = build_images(kind, args.cluster, commit, timestamp)
-        install_platform_components(kubectl, flux, helm, receipt["artifacts"])
+        install_platform_components(
+            kubectl, flux, helm, receipt["artifacts"], api_server_host
+        )
         run([kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=5m"])
         apply_yaml(kubectl, namespace_document(app_namespace, data_client=True))
         if args.mode == "gitops":
@@ -672,6 +703,7 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
             "commit": commit,
             "tool_lock_sha256": receipt["lock_sha256"],
             "image_ids": image_ids,
+            "bootstrap_api_server": {"host": api_server_host, "port": 6443},
             "api_restart": restart,
             "gateway": gateway,
             "api_replicas": 2,
