@@ -167,6 +167,10 @@ GIT_REPOSITORY_MARKER_RE = re.compile(
     r"(?:^|/)[^/?#\s]+\.git(?:/|[?#]|$)", re.IGNORECASE
 )
 PERCENT_ENCODED_PATH_SEPARATOR_RE = re.compile(r"%(?:25)*(?:2f|5c)", re.IGNORECASE)
+PERCENT_ENCODED_DOT_RE = re.compile(r"%(?:25)*2e", re.IGNORECASE)
+GIT_BRAND_HOST_MARKERS = frozenset(
+    {"github", "gitlab", "bitbucket", "githubusercontent"}
+)
 GIT_REVISION_PATH_RE = re.compile(
     r"^https://(?:github\.com|gitlab\.com|bitbucket\.org)/[^/\s]+/[^/\s]+/"
     r"(?:-/(?:tree|blob|raw|commit|commits|archive)|tree|blob|raw|commit|commits|src|releases/tag|tags)/"
@@ -221,6 +225,37 @@ GITHUB_PR_RE = re.compile(
 )
 GITLAB_MR_RE = re.compile(
     r"https://gitlab\.com/(?:[^/?#\s]+/)+[^/?#\s]+/-/merge_requests/[1-9]\d*",
+    re.IGNORECASE,
+)
+GITHUB_COMMIT_BOUND_URL_RE = re.compile(
+    r"^https://github\.com/[^/?#\s]+/[^/?#\s]+/"
+    r"(?:commit/[0-9a-f]{40}|"
+    r"(?:tree|blob)/[0-9a-f]{40}(?:/[^?#\s]+)?|"
+    r"compare/[0-9a-f]{40}\.{2,3}[0-9a-f]{40}|"
+    r"archive/[0-9a-f]{40}(?:\.zip|\.tar\.gz)?|"
+    r"archive\.tar\.gz\?ref=[0-9a-f]{40})$",
+    re.IGNORECASE,
+)
+GITLAB_COMMIT_BOUND_URL_RE = re.compile(
+    r"^https://gitlab\.com/(?:[^/?#\s]+/)+[^/?#\s]+/-/"
+    r"(?:commit/[0-9a-f]{40}|"
+    r"(?:tree|blob|raw)/[0-9a-f]{40}(?:/[^?#\s]+)?|"
+    r"compare/[0-9a-f]{40}\.{2,3}[0-9a-f]{40})$",
+    re.IGNORECASE,
+)
+BITBUCKET_COMMIT_BOUND_URL_RE = re.compile(
+    r"^https://bitbucket\.org/[^/?#\s]+/[^/?#\s]+/src/[0-9a-f]{40}"
+    r"(?:/[^?#\s]+)?$",
+    re.IGNORECASE,
+)
+RAW_GITHUB_COMMIT_BOUND_URL_RE = re.compile(
+    r"^https://raw\.githubusercontent\.com/[^/?#\s]+/[^/?#\s]+/"
+    r"[0-9a-f]{40}/[^?#\s]+$",
+    re.IGNORECASE,
+)
+CODELOAD_GITHUB_COMMIT_BOUND_URL_RE = re.compile(
+    r"^https://codeload\.github\.com/[^/?#\s]+/[^/?#\s]+/"
+    r"(?:zip|tar\.gz)/[0-9a-f]{40}$",
     re.IGNORECASE,
 )
 
@@ -493,8 +528,15 @@ def _known_git_url_host(ref: str, path: str) -> str | None:
         raise ConvergenceAdapterError(f"{path} has invalid URL syntax") from exc
     if parsed.hostname is None:
         return None
-    hostname = parsed.hostname.casefold()
+    raw_hostname = parsed.hostname.casefold()
+    hostname = raw_hostname.rstrip(".")
+    if hostname in KNOWN_GIT_HOSTS and raw_hostname != hostname:
+        raise ConvergenceAdapterError(
+            f"{path} must not use a trailing-dot Git hostname"
+        )
     if hostname not in KNOWN_GIT_HOSTS:
+        if any(marker in raw_hostname for marker in GIT_BRAND_HOST_MARKERS):
+            raise ConvergenceAdapterError(f"{path} uses a lookalike Git hostname")
         return None
     if parsed.scheme.casefold() != "https":
         raise ConvergenceAdapterError(
@@ -512,7 +554,30 @@ def _known_git_url_host(ref: str, path: str) -> str | None:
         raise ConvergenceAdapterError(
             f"{path} must not contain percent-encoded path separators for a known Git host"
         )
+    if PERCENT_ENCODED_DOT_RE.search(parsed.path) is not None:
+        raise ConvergenceAdapterError(
+            f"{path} must not contain percent-encoded dots for a known Git host"
+        )
+    if "\\" in parsed.path or "//" in parsed.path:
+        raise ConvergenceAdapterError(
+            f"{path} must not contain ambiguous Git URL path separators"
+        )
+    if any(segment in {".", ".."} for segment in parsed.path.split("/")):
+        raise ConvergenceAdapterError(
+            f"{path} must not contain Git URL dot segments"
+        )
     return hostname
+
+
+def _known_git_url_is_commit_bound(ref: str, hostname: str) -> bool:
+    patterns = {
+        "github.com": (GITHUB_COMMIT_BOUND_URL_RE,),
+        "gitlab.com": (GITLAB_COMMIT_BOUND_URL_RE,),
+        "bitbucket.org": (BITBUCKET_COMMIT_BOUND_URL_RE,),
+        "raw.githubusercontent.com": (RAW_GITHUB_COMMIT_BOUND_URL_RE,),
+        "codeload.github.com": (CODELOAD_GITHUB_COMMIT_BOUND_URL_RE,),
+    }
+    return any(pattern.fullmatch(ref) is not None for pattern in patterns[hostname])
 
 
 def _reject_symbolic_git_reference(
@@ -520,18 +585,25 @@ def _reject_symbolic_git_reference(
 ) -> bool:
     normalized_ref = ref.casefold()
     git_url_host = _known_git_url_host(ref, path)
-    if GITHUB_PR_RE.fullmatch(ref) is not None:
-        return False
-    if "/pull/" in normalized_ref:
+    if git_url_host == "github.com":
+        if GITHUB_PR_RE.fullmatch(ref) is not None:
+            return False
+        if "/pull/" in normalized_ref:
+            raise ConvergenceAdapterError(
+                f"{path} must be an exact GitHub PR URL without subpaths"
+            )
+    if git_url_host == "gitlab.com":
+        if GITLAB_MR_RE.fullmatch(ref) is not None:
+            return False
+        if "/-/merge_requests/" in normalized_ref:
+            raise ConvergenceAdapterError(
+                f"{path} must be an exact GitLab MR URL without subpaths"
+            )
+    if git_url_host is not None and not _known_git_url_is_commit_bound(
+        ref, git_url_host
+    ):
         raise ConvergenceAdapterError(
-            f"{path} must be an exact GitHub PR URL without subpaths"
-        )
-
-    if GITLAB_MR_RE.fullmatch(ref) is not None:
-        return False
-    if "/-/merge_requests/" in normalized_ref:
-        raise ConvergenceAdapterError(
-            f"{path} must be an exact GitLab MR URL without subpaths"
+            f"{path} must be an exact commit-bound Git URL or exact PR/MR identity URL"
         )
 
     if EXPLICIT_SYMBOLIC_GIT_REF_RE.search(ref) is not None:

@@ -529,6 +529,62 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 ),
             ),
             (
+                "github commit subpath",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    f"https://github.com/heimgewebe/weltgewebe/commit/{exact}/files",
+                ),
+            ),
+            (
+                "github commit query",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    f"https://github.com/heimgewebe/weltgewebe/commit/{exact}?view=1",
+                ),
+            ),
+            (
+                "github commit fragment",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    f"https://github.com/heimgewebe/weltgewebe/commit/{exact}#diff",
+                ),
+            ),
+            (
+                "github trailing-dot hostname",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com./heimgewebe/weltgewebe/tree/main",
+                ),
+            ),
+            (
+                "github commit dot-segment escape",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    f"https://github.com/heimgewebe/weltgewebe/tree/{exact}/../../tree/main",
+                ),
+            ),
+            (
+                "github commit encoded-dot escape",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    f"https://github.com/heimgewebe/weltgewebe/tree/{exact}/%252e%252e/tree/main",
+                ),
+            ),
+            (
+                "github commit repeated separator",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    f"https://github.com/heimgewebe/weltgewebe/tree/{exact}//tree/main",
+                ),
+            ),
+            (
+                "percent-encoded github hostname",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    f"https://github%2ecom/heimgewebe/weltgewebe/commit/{exact}",
+                ),
+            ),
+            (
                 "github percent-encoded pull path",
                 lambda candidate: candidate["request"]["effects"][0].__setitem__(
                     "evidence_ref",
@@ -547,13 +603,6 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 lambda candidate: candidate["request"]["effects"][0].__setitem__(
                     "evidence_ref",
                     "https://github.com/heimgewebe/weltgewebe/pull/0",
-                ),
-            ),
-            (
-                "non-github pull path",
-                lambda candidate: candidate["request"]["effects"][0].__setitem__(
-                    "evidence_ref",
-                    "https://example.invalid/heimgewebe/weltgewebe/pull/1451",
                 ),
             ),
             (
@@ -596,13 +645,6 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 lambda candidate: candidate["request"]["effects"][0].__setitem__(
                     "evidence_ref",
                     "https://gitlab.com/heimgewebe/weltgewebe%2F-%2Fmerge_requests%2F1451",
-                ),
-            ),
-            (
-                "non-gitlab merge request path",
-                lambda candidate: candidate["request"]["effects"][0].__setitem__(
-                    "evidence_ref",
-                    "https://example.invalid/heimgewebe/weltgewebe/-/merge_requests/1451",
                 ),
             ),
             (
@@ -797,6 +839,14 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
             (
                 "github codeload commit",
                 f"https://codeload.github.com/heimgewebe/weltgewebe/tar.gz/{exact}",
+            ),
+            (
+                "neutral external pull path",
+                "https://evidence.example/bucket/pull/1451/receipt.json",
+            ),
+            (
+                "neutral external merge-request path",
+                "https://evidence.example/bucket/-/merge_requests/1451/receipt.json",
             ),
         ]
         for name, evidence_ref in accepted:
