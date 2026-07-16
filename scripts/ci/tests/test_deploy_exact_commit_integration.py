@@ -179,7 +179,29 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
 
     def make_command_shims(self) -> None:
         docker = self.bin / "docker"
-        docker.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        docker.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env bash
+                set -euo pipefail
+                expected_config="$WELTGEWEBE_DEPLOY_STATE_ROOT/docker-config"
+                [[ "${DOCKER_CONFIG:-}" == "$expected_config" ]] || {
+                  printf 'unexpected DOCKER_CONFIG: %s\n' "${DOCKER_CONFIG:-<unset>}" >&2
+                  exit 91
+                }
+                [[ -d "$DOCKER_CONFIG" ]] || {
+                  printf 'DOCKER_CONFIG directory is missing\n' >&2
+                  exit 92
+                }
+                [[ "$(stat -c %a "$DOCKER_CONFIG")" == "700" ]] || {
+                  printf 'DOCKER_CONFIG mode is not 700\n' >&2
+                  exit 93
+                }
+                cat "$TEST_WEB_ARTIFACT"
+                """
+            ),
+            encoding="utf-8",
+        )
         docker.chmod(0o755)
 
         curl = self.bin / "curl"
@@ -198,19 +220,20 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                     shift
                   fi
                 done
+                public_commit="${PUBLIC_COMMIT:-$TEST_COMMIT}"
                 if [[ "$url" == *"/api/version" ]]; then
                   if [[ -n "$headers" ]]; then
                     {
                       printf 'HTTP/1.1 200 OK\\r\\n'
-                      printf 'X-Weltgewebe-API-Build: %s\\r\\n' "$TEST_COMMIT"
-                      printf 'X-Weltgewebe-Build: %s\\r\\n' "${TEST_COMMIT:0:8}"
+                      printf 'X-Weltgewebe-API-Build: %s\\r\\n' "$public_commit"
+                      printf 'X-Weltgewebe-Build: %s\\r\\n' "${public_commit:0:8}"
                       printf '\\r\\n'
                     } > "$headers"
                   fi
-                  printf '{"commit":"%s","version":"0.1.0"}\\n' "$TEST_COMMIT"
+                  printf '{"commit":"%s","version":"0.1.0"}\\n' "$public_commit"
                 else
                   printf '{"commit":"%s","version":"%s"}\\n' \
-                    "$TEST_COMMIT" "${TEST_COMMIT:0:8}"
+                    "$public_commit" "${public_commit:0:8}"
                 fi
                 """
             ),
@@ -224,6 +247,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 """\
                 #!/usr/bin/env python3
                 import json
+                import os
                 import sys
                 from datetime import datetime, timezone
                 from pathlib import Path
@@ -231,34 +255,39 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 args = sys.argv[1:]
                 commit = args[args.index("--expected-commit") + 1]
                 output = Path(args[args.index("--output") + 1])
+                marker = os.environ.get("TEST_DEPLOY_MARKER")
+                deployed = marker is None or Path(marker).exists()
+                observed_commit = commit if deployed else os.environ["PUBLIC_COMMIT"]
+                passed = observed_commit == commit
                 payload = {
                     "schema_version": 2,
                     "expected_commit": commit,
                     "verified_at": datetime.now(timezone.utc).isoformat(),
-                    "pass": True,
-                    "reasons": [],
+                    "pass": passed,
+                    "reasons": [] if passed else ["public commit differs"],
                     "frontend": {
                         "url": "https://example.invalid/_app/version.json",
                         "status": 200,
-                        "commit": commit,
-                        "version": commit[:8],
+                        "commit": observed_commit,
+                        "version": observed_commit[:8],
                         "headers": {"cache-control": "no-store"},
                         "error": None,
                     },
                     "api": {
                         "url": "https://example.invalid/api/version",
                         "status": 200,
-                        "commit": commit,
+                        "commit": observed_commit,
                         "version": "0.1.0",
                         "headers": {
-                            "x-weltgewebe-api-build": commit,
-                            "x-weltgewebe-build": commit[:8],
+                            "x-weltgewebe-api-build": observed_commit,
+                            "x-weltgewebe-build": observed_commit[:8],
                         },
                         "error": None,
                     },
                 }
                 output.parent.mkdir(parents=True, exist_ok=True)
                 output.write_text(json.dumps(payload) + "\\n", encoding="utf-8")
+                raise SystemExit(0 if passed else 1)
                 """
             ),
             encoding="utf-8",
@@ -268,6 +297,15 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         forbidden_deploy = self.bin / "forbidden-deploy"
         forbidden_deploy.write_text("#!/usr/bin/env bash\nexit 99\n", encoding="utf-8")
         forbidden_deploy.chmod(0o755)
+
+        successful_deploy = self.bin / "successful-deploy"
+        successful_deploy.write_text(
+            "#!/usr/bin/env bash\nset -euo pipefail\n"
+            ': "${TEST_DEPLOY_MARKER:?}"\n'
+            'touch "$TEST_DEPLOY_MARKER"\n',
+            encoding="utf-8",
+        )
+        successful_deploy.chmod(0o755)
 
     def base_environment(self) -> dict[str, str]:
         inherited_path = os.environ.get("PATH", "/usr/bin:/bin")
@@ -284,6 +322,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             "WELTGEWEBE_API_VERSION_URL": "https://example.invalid/api/version",
             "TEST_COMMIT": self.commit,
             "TEST_REMOTE": str(self.remote),
+            "TEST_WEB_ARTIFACT": str(self.artifact),
         }
 
     def deploy(self, *, advance: bool) -> subprocess.CompletedProcess[str]:
@@ -322,6 +361,40 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             ]
         )
         return run(argv, check=False)
+
+    def reconcile_stale_public_commit(self) -> subprocess.CompletedProcess[str]:
+        reconcile_env = self.base_environment()
+        reconcile_env.update(
+            {
+                "WELTGEWEBE_BUILD_USER": "root",
+                "WELTGEWEBE_LIVE_VERIFIER": str(self.bin / "verify-public"),
+                "WELTGEWEBE_DEPLOY_HELPER": str(self.bin / "successful-deploy"),
+                "WELTGEWEBE_MIN_FREE_KIB": "1",
+                "PUBLIC_COMMIT": "0" * 40,
+                "TEST_DEPLOY_MARKER": str(self.root / "deploy-complete"),
+            }
+        )
+        argv = self.privileged(
+            [
+                "env",
+                *[f"{key}={value}" for key, value in reconcile_env.items()],
+                str(RECONCILE_SCRIPT),
+            ]
+        )
+        return run(argv, check=False)
+
+    def test_reconciler_exports_private_docker_config_to_build(self) -> None:
+        result = self.reconcile_stale_public_commit()
+        docker_config = self.state / "docker-config"
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(docker_config.stat().st_uid, 0)
+        self.assertEqual(docker_config.stat().st_gid, 0)
+        self.assertEqual(docker_config.stat().st_mode & 0o777, 0o700)
+        self.restore_test_ownership()
+        receipt = json.loads(
+            (self.state / "reconcile-receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["result"], "verified")
 
     def test_success_marks_exact_commit_current(self) -> None:
         result = self.deploy(advance=False)

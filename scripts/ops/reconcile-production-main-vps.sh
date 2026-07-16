@@ -5,6 +5,8 @@ SOURCE_CHECKOUT="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 RELEASE_ROOT="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
 RUNTIME_ENV="${WELTGEWEBE_RUNTIME_ENV:-/etc/weltgewebe/weltgewebe.env}"
 STATE_ROOT="${WELTGEWEBE_DEPLOY_STATE_ROOT:-/var/lib/weltgewebe-main-reconciler}"
+DOCKER_CONFIG="$STATE_ROOT/docker-config"
+export DOCKER_CONFIG
 BUILD_USER="${WELTGEWEBE_BUILD_USER:-alex}"
 FRONTEND_URL="${WELTGEWEBE_FRONTEND_VERSION_URL:-https://weltgewebe.net/_app/version.json}"
 API_URL="${WELTGEWEBE_API_VERSION_URL:-https://weltgewebe.net/api/version}"
@@ -265,7 +267,8 @@ for command_name in git docker sha256sum flock install id rm mv awk getent chmod
 done
 
 install -d -o root -g root -m 0711 "$STATE_ROOT"
-install -d -o root -g root -m 0700 "$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT"
+install -d -o root -g root -m 0700 \
+  "$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT" "$DOCKER_CONFIG"
 install -d -o root -g root -m 0755 "$RELEASE_ROOT"
 exec 9> "$LOCK_FILE"
 if ! flock -n 9; then
