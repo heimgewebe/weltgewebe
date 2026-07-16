@@ -747,6 +747,69 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 ].__setitem__(0, "https://example.invalid/repo.git?ref=main"),
             ),
             (
+                "generic git query with extra parameter",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(
+                    0,
+                    f"https://example.invalid/repo.git?ref={exact}&view=1",
+                ),
+            ),
+            (
+                "generic git query with fragment",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(
+                    0,
+                    f"https://example.invalid/repo.git?ref={exact}#view",
+                ),
+            ),
+            (
+                "generic git fragment with suffix",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(
+                    0,
+                    f"https://example.invalid/repo.git#{exact}/suffix",
+                ),
+            ),
+            (
+                "generic git HTTP commit query",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(
+                    0,
+                    f"http://example.invalid/repo.git?ref={exact}",
+                ),
+            ),
+            (
+                "generic git userinfo commit query",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(
+                    0,
+                    f"https://user@example.invalid/repo.git?ref={exact}",
+                ),
+            ),
+            (
+                "generic git explicit-port commit query",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(
+                    0,
+                    f"https://example.invalid:443/repo.git?ref={exact}",
+                ),
+            ),
+            (
+                "generic git dot-segment commit query",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(
+                    0,
+                    f"https://example.invalid/group/../repo.git?ref={exact}",
+                ),
+            ),
+            (
                 "generic bare git repository URL",
                 lambda candidate: candidate["request"]["closure"][
                     "cleanup_evidence"

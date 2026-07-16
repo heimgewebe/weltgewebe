@@ -166,8 +166,6 @@ GIT_REFERENCE_MARKER_RE = re.compile(
 GIT_REPOSITORY_MARKER_RE = re.compile(
     r"(?:^|/)[^/?#\s]+\.git(?:/|[?#]|$)", re.IGNORECASE
 )
-PERCENT_ENCODED_PATH_SEPARATOR_RE = re.compile(r"%(?:25)*(?:2f|5c)", re.IGNORECASE)
-PERCENT_ENCODED_DOT_RE = re.compile(r"%(?:25)*2e", re.IGNORECASE)
 GIT_BRAND_HOST_MARKERS = frozenset(
     {"github", "gitlab", "bitbucket", "githubusercontent"}
 )
@@ -256,6 +254,11 @@ RAW_GITHUB_COMMIT_BOUND_URL_RE = re.compile(
 CODELOAD_GITHUB_COMMIT_BOUND_URL_RE = re.compile(
     r"^https://codeload\.github\.com/[^/?#\s]+/[^/?#\s]+/"
     r"(?:zip|tar\.gz)/[0-9a-f]{40}$",
+    re.IGNORECASE,
+)
+GENERIC_GIT_COMMIT_URL_RE = re.compile(
+    r"^https://[^/?#\s]+(?:/[^/?#\s]+)*/[^/?#\s]+\.git"
+    r"(?:\?(?:ref|at)=[0-9a-f]{40}|#[0-9a-f]{40})$",
     re.IGNORECASE,
 )
 
@@ -550,13 +553,9 @@ def _known_git_url_host(ref: str, path: str) -> str | None:
         raise ConvergenceAdapterError(
             f"{path} must not use userinfo or an explicit port for a known Git host"
         )
-    if PERCENT_ENCODED_PATH_SEPARATOR_RE.search(parsed.path) is not None:
+    if "%" in parsed.path:
         raise ConvergenceAdapterError(
-            f"{path} must not contain percent-encoded path separators for a known Git host"
-        )
-    if PERCENT_ENCODED_DOT_RE.search(parsed.path) is not None:
-        raise ConvergenceAdapterError(
-            f"{path} must not contain percent-encoded dots for a known Git host"
+            f"{path} must not contain percent-encoded Git URL path octets"
         )
     if "\\" in parsed.path or "//" in parsed.path:
         raise ConvergenceAdapterError(
@@ -578,6 +577,29 @@ def _known_git_url_is_commit_bound(ref: str, hostname: str) -> bool:
         "codeload.github.com": (CODELOAD_GITHUB_COMMIT_BOUND_URL_RE,),
     }
     return any(pattern.fullmatch(ref) is not None for pattern in patterns[hostname])
+
+
+def _generic_git_url_is_commit_bound(ref: str) -> bool:
+    if GENERIC_GIT_COMMIT_URL_RE.fullmatch(ref) is None:
+        return False
+    try:
+        parsed = urlsplit(ref)
+        port = parsed.port
+    except ValueError:
+        return False
+    if (
+        parsed.hostname is None
+        or parsed.hostname.endswith(".")
+        or parsed.username is not None
+        or parsed.password is not None
+        or port is not None
+        or "%" in parsed.path
+        or "\\" in parsed.path
+        or "//" in parsed.path
+        or any(segment in {".", ".."} for segment in parsed.path.split("/"))
+    ):
+        return False
+    return True
 
 
 def _reject_symbolic_git_reference(
@@ -604,6 +626,16 @@ def _reject_symbolic_git_reference(
     ):
         raise ConvergenceAdapterError(
             f"{path} must be an exact commit-bound Git URL or exact PR/MR identity URL"
+        )
+
+    generic_git_url = (
+        git_url_host is None
+        and GIT_REPOSITORY_MARKER_RE.search(ref) is not None
+        and "://" in ref
+    )
+    if generic_git_url and not _generic_git_url_is_commit_bound(ref):
+        raise ConvergenceAdapterError(
+            f"{path} must use an exact generic .git commit query or fragment URL"
         )
 
     if EXPLICIT_SYMBOLIC_GIT_REF_RE.search(ref) is not None:
