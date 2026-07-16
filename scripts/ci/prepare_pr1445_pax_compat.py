@@ -12,7 +12,7 @@ replacements = [
     ),
     (
         "DEFAULT_MAX_DEPTH = 32\nREQUIRED_REGULAR_FILES",
-        "DEFAULT_MAX_DEPTH = 32\nALLOWED_MEMBER_PAX_HEADERS = frozenset({\"mtime\"})\nPAX_TIME_RE = re.compile(r\"^-?[0-9]+(?:\\\\.[0-9]+)?$\")\nREQUIRED_REGULAR_FILES",
+        "DEFAULT_MAX_DEPTH = 32\nALLOWED_MEMBER_PAX_HEADERS = frozenset({\"mtime\"})\nPAX_TIME_RE = re.compile(r\"^-?[0-9]+(?:\\.[0-9]+)?$\")\nREQUIRED_REGULAR_FILES",
     ),
     (
         '''                if member.pax_headers:\n                    raise ArchiveValidationError(\n                        f"archive member has unsupported pax headers: {canonical}"\n                    )\n''',
