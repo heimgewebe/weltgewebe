@@ -85,11 +85,11 @@ Rollback is not executed by this adapter. Rollback is represented as:
 - closure cleanup evidence;
 - a residual-risk reference that names the external rollback execution boundary.
 
-Negative control is represented as a passing `verification` with `kind: negative_control`. The adapter rejects profiles that try to embed mutable external payloads or symbolic Git revisions in source references, effect and verification evidence, or closure references.
+Negative control is represented as a passing `verification` with `kind: negative_control`. The adapter rejects profiles that try to embed mutable external payloads or symbolic Git revisions in source references, effect and verification evidence, or closure references. This includes branch and tag shorthands, `refs/heads` and `refs/tags`, GitHub/GitLab/Bitbucket tree, blob, raw, archive and compare URLs, codeload URLs, query revisions and `.git#...` fragments. Exact 40-character commit URLs and stable pull-request identity URLs remain valid references.
 
 ## Evaluator Compatibility
 
-The regression test `scripts/ci/tests/test_convergence_adapter_contract.py` reads the protocol checkout from `KONVERGENZREGELKREIS_ROOT`. CI creates that checkout in the runner's temporary directory, fetches only the exact commit `83ed435bf9eb490e81a6ff2103b6c1397440d40b`, verifies `HEAD`, and treats a missing or different checkout as failure. Local development falls back to `/home/alex/repos/konvergenzregelkreis` and may skip only the four protocol integration tests when no checkout is available.
+The regression test `scripts/ci/tests/test_convergence_adapter_contract.py` reads the protocol checkout from `KONVERGENZREGELKREIS_ROOT`. CI creates that checkout in the runner's temporary directory, fetches only the exact commit `83ed435bf9eb490e81a6ff2103b6c1397440d40b`, verifies `HEAD`, and treats a missing or different checkout as failure. Local development falls back to `/home/alex/repos/konvergenzregelkreis` and may skip only the four protocol integration tests when no checkout is available; the remaining eleven adapter and safety tests still run.
 
 The mirror test compares the adapter's request keys, nested receipt keys, enums and R2 requirements directly with the pinned schemas and profile. The positive request must then evaluate to `terminally_closed` under the public R2 profile. A request missing required evidence must block with `evidence_missing`. A request with conflicting receipt hashes must block with `conflicting_evidence`. A request with adapter metadata such as `protocol_head` at top level must be rejected by the public request schema.
 

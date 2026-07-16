@@ -145,6 +145,44 @@ EXACT_COMMIT_REF_RE = re.compile(r"@[0-9a-f]{40}$")
 GIT_REFERENCE_MARKER_RE = re.compile(
     r"(?:^|:)git(?:[-_][a-z0-9]+)*:", re.IGNORECASE
 )
+GIT_HOST_RE = re.compile(
+    r"(?:github\.com|gitlab\.com|bitbucket\.org|raw\.githubusercontent\.com|codeload\.github\.com)",
+    re.IGNORECASE,
+)
+GIT_REVISION_PATH_RE = re.compile(
+    r"(?:github\.com|gitlab\.com|bitbucket\.org)/[^/\s]+/[^/\s]+/"
+    r"(?:-/(?:tree|blob|raw|commit|commits|archive)|tree|blob|raw|commit|commits|src|releases/tag|tags)/"
+    r"(?P<revision>[^/?#\s]+)",
+    re.IGNORECASE,
+)
+RAW_GITHUB_REVISION_RE = re.compile(
+    r"raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<revision>[^/?#\s]+)",
+    re.IGNORECASE,
+)
+CODELOAD_GITHUB_REVISION_RE = re.compile(
+    r"codeload\.github\.com/[^/\s]+/[^/\s]+/(?:zip|tar\.gz)/"
+    r"(?P<revision>[^/?#\s]+)",
+    re.IGNORECASE,
+)
+GITHUB_ARCHIVE_REVISION_RE = re.compile(
+    r"github\.com/[^/\s]+/[^/\s]+/archive/"
+    r"(?P<revision>[^/?#\s]+?)(?:\.zip|\.tar\.gz)?(?:$|[?#])",
+    re.IGNORECASE,
+)
+GIT_COMPARE_RE = re.compile(
+    r"(?:github\.com|gitlab\.com|bitbucket\.org)/[^/\s]+/[^/\s]+/compare/"
+    r"(?P<left>[^/?#\s]+?)\.{2,3}(?P<right>[^/?#\s]+)",
+    re.IGNORECASE,
+)
+GIT_QUERY_REVISION_RE = re.compile(
+    r"[?&](?:ref|at)=(?P<revision>[^&#\s]+)", re.IGNORECASE
+)
+GIT_FRAGMENT_REVISION_RE = re.compile(
+    r"\.git#(?P<revision>[^#\s]+)", re.IGNORECASE
+)
+EXPLICIT_SYMBOLIC_GIT_REF_RE = re.compile(
+    r"(?:^|[/:])refs/(?:heads|tags)/", re.IGNORECASE
+)
 RFC3339_DATETIME_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$"
 )
@@ -360,14 +398,70 @@ def _validate_observation(observation: Any) -> list[dict[str, Any]]:
 def _reject_symbolic_git_reference(
     ref: str, path: str, *, kind: str = ""
 ) -> None:
+    if EXPLICIT_SYMBOLIC_GIT_REF_RE.search(ref) is not None:
+        raise ConvergenceAdapterError(
+            f"{path} must not contain refs/heads or refs/tags references"
+        )
+
+    revision_match = GIT_REVISION_PATH_RE.search(ref)
+    if revision_match is not None:
+        _assert_exact_git_revision(revision_match.group("revision"), path)
+
+    raw_match = RAW_GITHUB_REVISION_RE.search(ref)
+    if raw_match is not None:
+        _assert_exact_git_revision(raw_match.group("revision"), path)
+
+    codeload_match = CODELOAD_GITHUB_REVISION_RE.search(ref)
+    if codeload_match is not None:
+        _assert_exact_git_revision(codeload_match.group("revision"), path)
+
+    archive_match = GITHUB_ARCHIVE_REVISION_RE.search(ref)
+    if archive_match is not None:
+        _assert_exact_git_revision(archive_match.group("revision"), path)
+
+    compare_match = GIT_COMPARE_RE.search(ref)
+    if compare_match is not None:
+        _assert_exact_git_revision(compare_match.group("left"), path)
+        _assert_exact_git_revision(compare_match.group("right"), path)
+
+    if GIT_HOST_RE.search(ref) is not None:
+        query_match = GIT_QUERY_REVISION_RE.search(ref)
+        if query_match is not None:
+            _assert_exact_git_revision(query_match.group("revision"), path)
+
+    fragment_match = GIT_FRAGMENT_REVISION_RE.search(ref)
+    if fragment_match is not None:
+        _assert_exact_git_revision(fragment_match.group("revision"), path)
+
     normalized_kind = kind.casefold()
-    git_shaped = (
+    shorthand_git_ref = (
         normalized_kind.startswith("git")
         or GIT_REFERENCE_MARKER_RE.search(ref) is not None
     )
-    if git_shaped and EXACT_COMMIT_REF_RE.search(ref) is None:
+    url_revision_bound = any(
+        match is not None
+        for match in (
+            revision_match,
+            raw_match,
+            codeload_match,
+            archive_match,
+            compare_match,
+        )
+    )
+    if (
+        shorthand_git_ref
+        and EXACT_COMMIT_REF_RE.search(ref) is None
+        and not url_revision_bound
+    ):
         raise ConvergenceAdapterError(
             f"{path} must bind a git reference to an exact 40-character commit"
+        )
+
+
+def _assert_exact_git_revision(revision: str, path: str) -> None:
+    if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise ConvergenceAdapterError(
+            f"{path} must bind a git URL or query to an exact 40-character commit"
         )
 
 

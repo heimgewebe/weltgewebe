@@ -85,6 +85,21 @@ def collect_keys(value: Any) -> set[str]:
     return set()
 
 
+def make_live_profile(profile: dict[str, Any]) -> dict[str, Any]:
+    def strip_fixture_prefix(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: strip_fixture_prefix(child) for key, child in value.items()}
+        if isinstance(value, list):
+            return [strip_fixture_prefix(child) for child in value]
+        if isinstance(value, str) and value.startswith("fixture:"):
+            return value.removeprefix("fixture:")
+        return value
+
+    live = strip_fixture_prefix(copy.deepcopy(profile))
+    live["evidence_mode"] = "live"
+    return live
+
+
 class ConvergenceAdapterContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -129,6 +144,17 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
         self.assertEqual(self.adapter.REQUEST_ALLOWED_KEYS, set(request_schema["properties"]))
         self.assertEqual(self.adapter.OBSERVATION_KEYS, set(observation_schema["properties"]))
         self.assertEqual(self.adapter.OBSERVATION_KEYS, set(observation_schema["required"]))
+        source_ref_schema = observation_schema["properties"]["source_refs"]["items"]
+        self.assertEqual(self.adapter.SOURCE_REF_KEYS, set(source_ref_schema["properties"]))
+        self.assertEqual(self.adapter.SOURCE_REF_KEYS, set(source_ref_schema["required"]))
+        self.assertEqual(
+            {"current", "stale", "unknown"},
+            set(observation_schema["properties"]["source_state"]["enum"]),
+        )
+        self.assertEqual(
+            {"R0", "R1", "R2", "R3"},
+            set(request_schema["properties"]["risk_level"]["enum"]),
+        )
         self.assertEqual(
             self.adapter.CLASSIFICATION_KEYS, set(classification_schema["properties"])
         )
@@ -147,6 +173,10 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
             self.adapter.CLOSURE_PROTOCOL_REQUIRED_KEYS, set(closure_schema["required"])
         )
         self.assertEqual(self.adapter.CLOSURE_ALLOWED_KEYS, set(closure_schema["properties"]))
+        self.assertEqual(
+            {"proposed", "closed"},
+            set(closure_schema["properties"]["status"]["enum"]),
+        )
         self.assertEqual(
             self.adapter.CHANGE_CLASSES,
             set(classification_schema["properties"]["change_class"]["enum"]),
@@ -430,6 +460,149 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
             ]
             with self.assertRaises(self.adapter.ConvergenceAdapterError):
                 self.adapter.build_request(invalid)
+
+    def test_git_evidence_urls_require_exact_commits(self) -> None:
+        base = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
+        exact = "0123456789abcdef0123456789abcdef01234567"
+        other = "89abcdef0123456789abcdef0123456789abcdef"
+
+        rejected: list[tuple[str, Any]] = [
+            (
+                "github tree branch",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com/heimgewebe/weltgewebe/tree/main",
+                ),
+            ),
+            (
+                "gitlab blob branch",
+                lambda candidate: candidate["request"]["verifications"][0].__setitem__(
+                    "evidence_ref",
+                    "https://gitlab.com/heimgewebe/weltgewebe/-/blob/main/README.md",
+                ),
+            ),
+            (
+                "bitbucket source branch",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(
+                    0,
+                    "https://bitbucket.org/heimgewebe/weltgewebe/src/main/README.md",
+                ),
+            ),
+            (
+                "raw github branch",
+                lambda candidate: candidate["request"]["closure"][
+                    "residual_risks"
+                ].__setitem__(
+                    0,
+                    "https://raw.githubusercontent.com/heimgewebe/weltgewebe/main/README.md",
+                ),
+            ),
+            (
+                "explicit refs heads",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref", "git:weltgewebe@refs/heads/main"
+                ),
+            ),
+            (
+                "github symbolic compare",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com/heimgewebe/weltgewebe/compare/main...release",
+                ),
+            ),
+            (
+                "github query ref",
+                lambda candidate: candidate["request"]["verifications"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com/heimgewebe/weltgewebe/archive.tar.gz?ref=main",
+                ),
+            ),
+            (
+                "git fragment branch",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(0, "https://example.invalid/repo.git#main"),
+            ),
+            (
+                "gitlab raw branch",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://gitlab.com/heimgewebe/weltgewebe/-/raw/main/README.md",
+                ),
+            ),
+            (
+                "github archive branch",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com/heimgewebe/weltgewebe/archive/main.tar.gz",
+                ),
+            ),
+            (
+                "github codeload branch",
+                lambda candidate: candidate["request"]["verifications"][0].__setitem__(
+                    "evidence_ref",
+                    "https://codeload.github.com/heimgewebe/weltgewebe/tar.gz/main",
+                ),
+            ),
+        ]
+        for name, mutate in rejected:
+            with self.subTest(name):
+                candidate = make_live_profile(base)
+                mutate(candidate)
+                with self.assertRaises(self.adapter.ConvergenceAdapterError):
+                    self.adapter.build_request(candidate)
+
+        accepted: list[tuple[str, str]] = [
+            (
+                "github commit URL",
+                f"https://github.com/heimgewebe/weltgewebe/commit/{exact}",
+            ),
+            (
+                "github tree commit URL",
+                f"https://github.com/heimgewebe/weltgewebe/tree/{exact}/scripts",
+            ),
+            (
+                "raw github commit URL",
+                f"https://raw.githubusercontent.com/heimgewebe/weltgewebe/{exact}/README.md",
+            ),
+            (
+                "github compare commits",
+                f"https://github.com/heimgewebe/weltgewebe/compare/{exact}...{other}",
+            ),
+            (
+                "github query commit",
+                f"https://github.com/heimgewebe/weltgewebe/archive.tar.gz?ref={exact}",
+            ),
+            (
+                "git fragment commit",
+                f"https://example.invalid/repo.git#{exact}",
+            ),
+            (
+                "github archive commit",
+                f"https://github.com/heimgewebe/weltgewebe/archive/{exact}.tar.gz",
+            ),
+            (
+                "github codeload commit",
+                f"https://codeload.github.com/heimgewebe/weltgewebe/tar.gz/{exact}",
+            ),
+        ]
+        for name, evidence_ref in accepted:
+            with self.subTest(name):
+                candidate = make_live_profile(base)
+                candidate["request"]["effects"][0]["evidence_ref"] = evidence_ref
+                self.adapter.build_request(candidate)
+
+        with self.subTest("stable pull request identity URL"):
+            candidate = make_live_profile(base)
+            pull_request = copy.deepcopy(candidate["request"]["effects"][0])
+            pull_request["kind"] = "pull_request"
+            pull_request["evidence_ref"] = (
+                "https://github.com/heimgewebe/weltgewebe/pull/1451"
+            )
+            candidate["request"]["effects"].append(pull_request)
+            self.adapter.build_request(candidate)
 
     def test_programmatic_and_nested_protocol_inputs_fail_closed(self) -> None:
         base = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
