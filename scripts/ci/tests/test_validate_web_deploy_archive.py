@@ -80,6 +80,11 @@ class ValidateWebDeployArchiveTests(unittest.TestCase):
         with self.assertRaisesRegex(ArchiveValidationError, "unsafe archive path characters"):
             validate_archive(self.make_archive(members))
 
+    def test_rejects_unicode_format_control(self) -> None:
+        members = self.valid_members() + [tarfile.TarInfo("build/bad\u202ename.js")]
+        with self.assertRaisesRegex(ArchiveValidationError, "unsafe archive path characters"):
+            validate_archive(self.make_archive(members))
+
     def test_rejects_elevated_permission_bits(self) -> None:
         member = tarfile.TarInfo("build/helper")
         member.mode = 0o4755
