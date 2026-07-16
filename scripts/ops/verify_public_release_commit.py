@@ -58,7 +58,16 @@ def validate_commit(value: str) -> str:
 
 
 def _normalize_headers(headers: Mapping[str, str]) -> dict[str, str]:
-    return {str(key).lower(): str(value) for key, value in headers.items()}
+    normalized: dict[str, str] = {}
+    raw_items = getattr(headers, "raw_items", headers.items)
+    for key, value in raw_items():
+        normalized_key = str(key).lower()
+        normalized_value = str(value)
+        existing = normalized.get(normalized_key)
+        normalized[normalized_key] = (
+            f"{existing}, {normalized_value}" if existing else normalized_value
+        )
+    return normalized
 
 
 def _read_bounded(response: Any, max_response_bytes: int) -> bytes:

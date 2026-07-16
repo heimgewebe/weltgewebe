@@ -88,7 +88,23 @@ class ValidateWebDeployArchiveTests(unittest.TestCase):
     def test_rejects_elevated_permission_bits(self) -> None:
         member = tarfile.TarInfo("build/helper")
         member.mode = 0o4755
-        with self.assertRaisesRegex(ArchiveValidationError, "elevated permission bits"):
+        with self.assertRaisesRegex(
+            ArchiveValidationError, "elevated or writable permission bits"
+        ):
+            validate_archive(self.make_archive(self.valid_members() + [member]))
+
+    def test_rejects_group_writable_member(self) -> None:
+        member = tarfile.TarInfo("build/group-writable.js")
+        member.mode = 0o664
+        with self.assertRaisesRegex(
+            ArchiveValidationError, "elevated or writable permission bits"
+        ):
+            validate_archive(self.make_archive(self.valid_members() + [member]))
+
+    def test_rejects_member_pax_headers(self) -> None:
+        member = tarfile.TarInfo("build/pax.js")
+        member.pax_headers = {"comment": "unexpected"}
+        with self.assertRaisesRegex(ArchiveValidationError, "unsupported pax headers"):
             validate_archive(self.make_archive(self.valid_members() + [member]))
 
     def test_rejects_expanded_size_limit(self) -> None:

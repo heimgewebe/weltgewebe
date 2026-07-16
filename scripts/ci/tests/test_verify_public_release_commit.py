@@ -15,6 +15,7 @@ sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 EndpointResult = MODULE.EndpointResult
+_normalize_headers = MODULE._normalize_headers
 evaluate = MODULE.evaluate
 fetch_endpoint = MODULE.fetch_endpoint
 validate_commit = MODULE.validate_commit
@@ -89,6 +90,13 @@ class VerifyPublicReleaseCommitTests(unittest.TestCase):
         for invalid in ("7b65127e", "A" * 40, "G" * 40, "", "a" * 41):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 validate_commit(invalid)
+
+    def test_aggregates_duplicate_headers(self) -> None:
+        headers = Message()
+        headers["Cache-Control"] = "public"
+        headers["Cache-Control"] = "no-store"
+        normalized = _normalize_headers(headers)
+        self.assertEqual(normalized["cache-control"], "public, no-store")
 
     def test_rejects_oversized_response(self) -> None:
         response = FakeResponse(b"x" * 12)

@@ -177,3 +177,29 @@ Arbeitsbaum, sondern direkt aus dem angegebenen Git-Objekt, prüft, dass dieser
 Commit weiterhin `origin/main` ist, kompiliert und validiert die Dateien und
 schreibt ein root-eigenes Hashmanifest. Danach übernimmt der VPS-Timer alle
 weiteren `main`-Abgleiche selbständig.
+
+## Bedrohungsmodell und Beweisgrenzen
+
+Der Vertrag schützt gegen einen weiterwandernden `main`-Branch, parallele Reconciler,
+manipulierte oder übergroße Webarchive, unerwartete Release-Worktree-Zustände und
+einen öffentlichen Readback, der nicht exakt zum Zielcommit passt.
+
+Er setzt weiterhin folgende Vertrauensanker voraus:
+
+- Der root-eigene Git-Objektspeicher auf dem VPS ist unverändert und authentisch.
+- Kernel, Docker-Daemon und Root-Kontext des VPS sind nicht kompromittiert.
+- Das digestgepinnte Node-Basisimage und die über den Lockfile aufgelösten Pakete
+  sind für den Build vertrauenswürdig.
+- Der Build darf derzeit aus dem Bridge-Netz laden, weil `pnpm install
+  --frozen-lockfile` innerhalb des flüchtigen Containers läuft. Ein vollständig
+  netzloser Build benötigt das in `WELTGEWEBE-OS-V1-T015` geplante,
+  repositoryeigene Buildimage mit vorab gebundenem Paketbestand.
+
+`SOURCE_DATE_EPOCH`, der vollständige Commit und das digestgepinnte Basisimage
+verbessern die Deterministik. Sie beweisen jedoch keine byteidentische
+Reproduzierbarkeit des gesamten Node-Ökosystems. Deshalb bindet `verified` den
+öffentlich gelesenen Code- und Webartefaktstand, nicht eine unabhängig
+reproduzierte Buildgleichheit. Ein kompromittierter VPS-Root kann Receipts und
+Laufzeit gleichermaßen manipulieren; dagegen hilft nur eine zusätzliche externe
+Attestierungs- und Produktionsidentitätsachse, die in
+`WELTGEWEBE-OS-V1-T014` weitergeführt wird.

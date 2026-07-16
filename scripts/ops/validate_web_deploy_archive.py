@@ -15,7 +15,7 @@ from pathlib import Path, PurePosixPath
 DEFAULT_MAX_COMPRESSED_BYTES = 256 * 1024 * 1024
 DEFAULT_MAX_EXPANDED_BYTES = 512 * 1024 * 1024
 DEFAULT_MAX_FILE_BYTES = 64 * 1024 * 1024
-DEFAULT_MAX_MEMBERS = 20_000
+DEFAULT_MAX_MEMBERS = 5_000
 DEFAULT_MAX_PATH_BYTES = 1024
 DEFAULT_MAX_COMPONENT_BYTES = 255
 DEFAULT_MAX_DEPTH = 32
@@ -110,12 +110,18 @@ def validate_archive(
     member_count = 0
     try:
         with tarfile.open(path, mode="r:gz") as bundle:
+            if bundle.pax_headers:
+                raise ArchiveValidationError("archive has unsupported global pax headers")
             for member in bundle:
                 member_count += 1
                 if member_count > max_members:
                     raise ArchiveValidationError("archive has too many members")
 
                 canonical = _canonical_member_name(member)
+                if member.pax_headers:
+                    raise ArchiveValidationError(
+                        f"archive member has unsupported pax headers: {canonical}"
+                    )
                 if canonical in seen:
                     raise ArchiveValidationError(f"duplicate archive path: {canonical}")
                 seen.add(canonical)
@@ -124,9 +130,9 @@ def validate_archive(
                     raise ArchiveValidationError(
                         f"unsupported archive member type: {canonical}"
                     )
-                if member.mode & 0o6000:
+                if member.mode & 0o7022:
                     raise ArchiveValidationError(
-                        f"elevated permission bits in archive: {canonical}"
+                        f"elevated or writable permission bits in archive: {canonical}"
                     )
                 if member.isdir() and member.size != 0:
                     raise ArchiveValidationError(

@@ -15,6 +15,8 @@ COMMIT=""
 WEB_ARTIFACT=""
 WEB_SHA256=""
 api_headers=""
+api_body_file=""
+frontend_body_file=""
 started_at=""
 release_dir=""
 api_commit=""
@@ -39,6 +41,27 @@ fail() {
 
 require_command() {
   command -v "$1" > /dev/null 2>&1 || fail "required command not found: $1"
+}
+
+write_bounded_response() {
+  local output="$1"
+  local limit="$2"
+  python3 -c '
+import os
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+limit = int(sys.argv[2])
+data = sys.stdin.buffer.read(limit + 1)
+if len(data) > limit:
+    print(f"response exceeds byte limit: more than {limit} bytes", file=sys.stderr)
+    raise SystemExit(1)
+with path.open("wb") as handle:
+    handle.write(data)
+    handle.flush()
+    os.fsync(handle.fileno())
+' "$output" "$limit"
 }
 
 fetch_main() {
@@ -97,9 +120,12 @@ cleanup() {
     write_deploy_receipt \
       "failed" "$completed_at" "$api_commit" "$frontend_commit" "$last_observed_main" || true
   fi
-  if [[ -n "$api_headers" && -f "$api_headers" && ! -L "$api_headers" ]]; then
-    rm -f -- "$api_headers"
-  fi
+  local temporary_path
+  for temporary_path in "$api_headers" "$api_body_file" "$frontend_body_file"; do
+    if [[ -n "$temporary_path" && -f "$temporary_path" && ! -L "$temporary_path" ]]; then
+      rm -f -- "$temporary_path"
+    fi
+  done
   exit "$rc"
 }
 trap cleanup EXIT
@@ -271,14 +297,22 @@ DEPLOY_TARGET=vps ENV_FILE="$RUNTIME_ENV" \
   --no-pull --force-build --no-build-web --with-caddy
 
 api_headers="$(mktemp "$STATE_ROOT/.api-headers.XXXXXX")"
-api_body="$(curl --fail --silent --show-error --max-redirs 0 --connect-timeout 5 --max-time 15 --max-filesize 1048576 --retry 2 --retry-all-errors -D "$api_headers" "$API_URL")"
-frontend_body="$(curl --fail --silent --show-error --max-redirs 0 --connect-timeout 5 --max-time 15 --max-filesize 1048576 --retry 2 --retry-all-errors "$FRONTEND_URL")"
-api_commit="$(jq -er '.commit' <<< "$api_body")"
-frontend_commit="$(jq -er '.commit' <<< "$frontend_body")"
+api_body_file="$(mktemp "$STATE_ROOT/.api-body.XXXXXX")"
+frontend_body_file="$(mktemp "$STATE_ROOT/.frontend-body.XXXXXX")"
+if ! curl --fail --silent --show-error --max-redirs 0 --connect-timeout 5 --max-time 15 --max-filesize 1048576 --retry 2 --retry-all-errors -D "$api_headers" "$API_URL" |
+  write_bounded_response "$api_body_file" 1048576; then
+  fail "live API readback failed or exceeded the byte limit"
+fi
+if ! curl --fail --silent --show-error --max-redirs 0 --connect-timeout 5 --max-time 15 --max-filesize 1048576 --retry 2 --retry-all-errors "$FRONTEND_URL" |
+  write_bounded_response "$frontend_body_file" 1048576; then
+  fail "live frontend readback failed or exceeded the byte limit"
+fi
+api_commit="$(jq -er '.commit' "$api_body_file")"
+frontend_commit="$(jq -er '.commit' "$frontend_body_file")"
 [[ "$api_commit" == "$COMMIT" ]] || fail "live API serves $api_commit instead of $COMMIT"
 [[ "$frontend_commit" == "$COMMIT" ]] || fail "live frontend serves $frontend_commit instead of $COMMIT"
-api_header="$(awk -F': ' 'tolower($1)=="x-weltgewebe-api-build" {gsub("\r", "", $2); print $2}' "$api_headers")"
-edge_header="$(awk -F': ' 'tolower($1)=="x-weltgewebe-build" {gsub("\r", "", $2); print $2}' "$api_headers")"
+api_header="$(awk -F':' 'tolower($1)=="x-weltgewebe-api-build" {gsub(/^[ \t]+|[ \t\r]+$/, "", $2); print $2}' "$api_headers")"
+edge_header="$(awk -F':' 'tolower($1)=="x-weltgewebe-build" {gsub(/^[ \t]+|[ \t\r]+$/, "", $2); print $2}' "$api_headers")"
 [[ "$api_header" == "$COMMIT" ]] || fail "live API build header does not match target commit"
 [[ "$edge_header" == "${COMMIT:0:8}" ]] || fail "live edge build header does not match target commit"
 

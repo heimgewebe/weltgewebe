@@ -14,7 +14,7 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
         self.assertGreaterEqual(script.count("fetch_main"), 3)
         deploy = script.index('"$release_dir/scripts/weltgewebe-up"')
-        public_readback = script.index('api_body="$(curl', deploy)
+        public_readback = script.index('api_body_file="$(mktemp', deploy)
         post_check = script.index('post_deploy_main="$(fetch_main)"', public_readback)
         verified_link = script.index('ln -sfn "receipts/$COMMIT.json"', post_check)
         self.assertLess(deploy, public_readback)
@@ -24,6 +24,9 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("exit 75", script)
         self.assertNotIn("curl -fsSI", script)
         self.assertIn("--max-filesize 1048576", script)
+        self.assertIn("write_bounded_response", script)
+        self.assertIn('api_body_file="$(mktemp', script)
+        self.assertIn("awk -F':'", script)
 
     def test_deploy_helper_preserves_legacy_checkout_and_binds_main(self) -> None:
         script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
