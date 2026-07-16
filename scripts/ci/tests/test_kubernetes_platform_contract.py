@@ -218,6 +218,47 @@ spec:
                 self.reference.control_plane_address("reference"), "172.18.0.2"
             )
 
+    def test_http_route_wait_reads_parent_scoped_conditions(self) -> None:
+        route = {
+            "status": {
+                "parents": [
+                    {
+                        "parentRef": {
+                            "name": "weltgewebe",
+                            "namespace": "weltgewebe-gateway",
+                        },
+                        "conditions": [
+                            {"type": "Accepted", "status": "True"},
+                            {"type": "ResolvedRefs", "status": "True"},
+                        ],
+                    }
+                ]
+            }
+        }
+        with mock.patch.object(
+            self.reference, "output", return_value=json.dumps(route)
+        ) as output:
+            self.reference.wait_http_route_parent_condition(
+                "kubectl",
+                "weltgewebe",
+                "weltgewebe",
+                "Accepted",
+                parent_name="weltgewebe",
+                parent_namespace="weltgewebe-gateway",
+                timeout_seconds=1,
+            )
+        output.assert_called_once_with(
+            [
+                "kubectl",
+                "-n",
+                "weltgewebe",
+                "get",
+                "httproute/weltgewebe",
+                "-o",
+                "json",
+            ]
+        )
+
     def test_gateway_contract_uses_cilium_kube_proxy_replacement(self) -> None:
         kind_config = (ROOT / "platform/clusters/local/kind.yaml").read_text()
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()

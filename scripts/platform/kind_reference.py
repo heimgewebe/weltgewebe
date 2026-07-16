@@ -200,6 +200,50 @@ def wait_condition(
     )
 
 
+def wait_http_route_parent_condition(
+    kubectl: str,
+    namespace: str,
+    route: str,
+    condition: str,
+    *,
+    parent_name: str,
+    parent_namespace: str,
+    timeout_seconds: int = 480,
+) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_parents: list[dict[str, Any]] = []
+    while time.monotonic() < deadline:
+        document = json.loads(
+            output(
+                [
+                    kubectl,
+                    "-n",
+                    namespace,
+                    "get",
+                    f"httproute/{route}",
+                    "-o",
+                    "json",
+                ]
+            )
+        )
+        last_parents = document.get("status", {}).get("parents", [])
+        for parent in last_parents:
+            reference = parent.get("parentRef", {})
+            if (
+                reference.get("name") != parent_name
+                or reference.get("namespace", namespace) != parent_namespace
+            ):
+                continue
+            for observed in parent.get("conditions", []):
+                if observed.get("type") == condition and observed.get("status") == "True":
+                    return
+        time.sleep(2)
+    raise ProofError(
+        f"HTTPRoute {namespace}/{route} parent condition {condition} was not true: "
+        f"{json.dumps(last_parents, sort_keys=True)}"
+    )
+
+
 def build_images(kind: str, cluster: str, commit: str, timestamp: str) -> dict[str, str]:
     images = {
         "api": "weltgewebe-api:local",
@@ -512,7 +556,14 @@ def port_forward(kubectl: str, namespace: str, service: str, remote_port: int) -
 
 def prove_gateway(kubectl: str) -> dict[str, str]:
     wait_condition(kubectl, "weltgewebe-gateway", "gateway/weltgewebe", "Programmed")
-    wait_condition(kubectl, "weltgewebe", "httproute/weltgewebe", "Accepted")
+    wait_http_route_parent_condition(
+        kubectl,
+        "weltgewebe",
+        "weltgewebe",
+        "Accepted",
+        parent_name="weltgewebe",
+        parent_namespace="weltgewebe-gateway",
+    )
     service = output(
         [
             kubectl,
