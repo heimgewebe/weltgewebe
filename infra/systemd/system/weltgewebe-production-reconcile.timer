@@ -1,0 +1,12 @@
+[Unit]
+Description=Check every two minutes whether Weltgewebe main is live
+
+[Timer]
+OnBootSec=45s
+OnUnitInactiveSec=2min
+RandomizedDelaySec=15s
+AccuracySec=10s
+Unit=weltgewebe-production-reconcile.service
+
+[Install]
+WantedBy=timers.target

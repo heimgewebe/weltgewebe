@@ -1,0 +1,167 @@
+---
+name: Production live contract
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/web/scripts/generate-version.js"
+      - "scripts/ops/verify_public_release_commit.py"
+      - "scripts/ops/validate_web_deploy_archive.py"
+      - "scripts/ops/deploy-exact-commit-vps.sh"
+      - "scripts/ops/reconcile-production-main-vps.sh"
+      - "scripts/ops/install-production-reconciler.sh"
+      - "scripts/ci/tests/test_generate_version_env.py"
+      - "scripts/ci/tests/test_verify_public_release_commit.py"
+      - "scripts/ci/tests/test_validate_web_deploy_archive.py"
+      - "scripts/ci/tests/test_production_reconciler_contract.py"
+      - "scripts/ci/tests/test_deploy_exact_commit_integration.py"
+      - "infra/systemd/**"
+      - ".github/workflows/production-live-contract.yml"
+  push:
+    branches: [main]
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    ${{ github.event_name == 'pull_request'
+        && format('production-live-pr-{0}', github.event.pull_request.number)
+        || 'production-live-main' }}
+  cancel-in-progress: >-
+    ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
+jobs:
+  contract-tests:
+    name: Production reconciler contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version-file: ".python-version"
+      - name: Compile Python tools
+        run: |
+          python -m py_compile scripts/ops/verify_public_release_commit.py
+          python -m py_compile scripts/ops/validate_web_deploy_archive.py
+      - name: Check shell syntax and semantics
+        run: |
+          bash -n scripts/ops/deploy-exact-commit-vps.sh
+          bash -n scripts/ops/reconcile-production-main-vps.sh
+          bash -n scripts/ops/install-production-reconciler.sh
+          shellcheck \
+            scripts/ops/deploy-exact-commit-vps.sh \
+            scripts/ops/reconcile-production-main-vps.sh \
+            scripts/ops/install-production-reconciler.sh
+      - name: Verify systemd units
+        run: |
+          sudo install -d -m 0755 /usr/local/libexec
+          sudo install -m 0755 /bin/true \
+            /usr/local/libexec/weltgewebe-reconcile-production-main
+          systemd-analyze verify \
+            infra/systemd/system/weltgewebe-production-reconcile.service \
+            infra/systemd/system/weltgewebe-production-reconcile.timer
+      - name: Run contract tests
+        run: |
+          python -m unittest \
+            scripts/ci/tests/test_generate_version_env.py -v
+          python -m unittest \
+            scripts/ci/tests/test_verify_public_release_commit.py -v
+          python -m unittest \
+            scripts/ci/tests/test_validate_web_deploy_archive.py -v
+          python -m unittest \
+            scripts/ci/tests/test_production_reconciler_contract.py -v
+          python -m unittest \
+            scripts/ci/tests/test_deploy_exact_commit_integration.py -v
+
+  review-diff:
+    name: Exact review diff artifact
+    if: github.event_name == 'pull_request'
+    needs: contract-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+      - name: Generate exact binary patch
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main"
+          BASE_SHA="$(git rev-parse refs/remotes/origin/main)"
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "$BASE_SHA^{commit}"
+          git cat-file -e "$HEAD_SHA^{commit}"
+          patch="weltgewebe-pr-${PR_NUMBER}-${HEAD_SHA}.patch"
+          git diff --binary "$BASE_SHA...$HEAD_SHA" -- > "$patch"
+          bytes="$(stat --format=%s "$patch")"
+          ((bytes > 0 && bytes <= 67108864))
+          digest="$(sha256sum "$patch" | awk '{print $1}')"
+          printf 'base=%s\nhead=%s\nsha256=%s\nbytes=%s\n' \
+            "$BASE_SHA" "$HEAD_SHA" "$digest" "$bytes" \
+            > review-diff-manifest.txt
+      - name: Upload exact review diff
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: review-diff-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: |
+            weltgewebe-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}.patch
+            review-diff-manifest.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  verify-live-commit:
+    name: Exact main commit is live
+    if: github.event_name != 'pull_request'
+    needs: contract-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version-file: ".python-version"
+      - name: Resolve exact main commit
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit="$(git rev-parse HEAD)"
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]]
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+      - name: Verify public frontend and API identity
+        run: |
+          wait_seconds=0
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            wait_seconds=1200
+          fi
+          python scripts/ops/verify_public_release_commit.py \
+            --expected-commit "${{ steps.target.outputs.commit }}" \
+            --wait-seconds "$wait_seconds" \
+            --poll-seconds 15 \
+            --output production-live-receipt.json
+      - name: Upload production receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-live-${{ steps.target.outputs.commit }}
+          path: production-live-receipt.json
+          if-no-files-found: error
+          retention-days: 30
