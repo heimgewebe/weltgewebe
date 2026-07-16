@@ -37,6 +37,7 @@ Generated automatically. Do not edit.
 | blueprints.weltgewebe.config.diff | Config Diff | reference | deprecated | docs/blueprints/weltgewebe.config.diff.md |
 | blueprints.weltgewebe.deploy.plan | Deploy-Plan | reference | deprecated | docs/blueprints/weltgewebe.deploy.plan.md |
 | datenmodell | Datenmodell | reference | active | docs/datenmodell.md |
+| deploy-merge-to-live-contract | Merge-to-Live-Vertrag | runbook | active | docs/deploy/merge-to-live.md |
 | deploy.CHANGELOG | Deploy Changelog | reference | active | docs/deploy/CHANGELOG.md |
 | deploy.DRIFT_POLICY | Drift Policy | reference | active | docs/deploy/DRIFT_POLICY.md |
 | deploy.README | Deployment-Übersicht | reference | active | docs/deploy/README.md |

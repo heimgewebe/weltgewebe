@@ -1,0 +1,26 @@
+[Unit]
+Description=Reconcile Weltgewebe origin/main to verified production
+Documentation=https://github.com/heimgewebe/weltgewebe
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/weltgewebe-reconcile-production-main
+Environment=WELTGEWEBE_BUILD_USER=alex
+UMask=0077
+RuntimeMaxSec=7200
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+LockPersonality=true
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
