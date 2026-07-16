@@ -345,9 +345,23 @@ spec:
                 "kubectl", ["172.22.0.3"], timeout_seconds=1
             )
         self.assertEqual(result, ("172.22.0.3", b"healthy", b"web"))
-        self.assertIn("run", run_mock.call_args_list[1].args[0])
-        self.assertIn("--image=weltgewebe-api:local", run_mock.call_args_list[1].args[0])
-        self.assertIn("--image-pull-policy=Never", run_mock.call_args_list[1].args[0])
+        self.assertEqual(
+            run_mock.call_args_list[1].args[0], ["kubectl", "apply", "-f", "-"]
+        )
+        manifest = json.loads(run_mock.call_args_list[1].kwargs["input_text"])
+        self.assertFalse(manifest["spec"]["automountServiceAccountToken"])
+        self.assertTrue(manifest["spec"]["securityContext"]["runAsNonRoot"])
+        self.assertEqual(manifest["spec"]["securityContext"]["runAsUser"], 10001)
+        self.assertEqual(
+            manifest["spec"]["securityContext"]["seccompProfile"]["type"],
+            "RuntimeDefault",
+        )
+        container = manifest["spec"]["containers"][0]
+        self.assertEqual(container["image"], "weltgewebe-api:local")
+        self.assertEqual(container["imagePullPolicy"], "Never")
+        self.assertFalse(container["securityContext"]["allowPrivilegeEscalation"])
+        self.assertEqual(container["securityContext"]["capabilities"]["drop"], ["ALL"])
+        self.assertTrue(container["securityContext"]["readOnlyRootFilesystem"])
         self.assertEqual(
             output_mock.call_args_list[0].args[0][-1],
             "http://172.22.0.3/health/live",

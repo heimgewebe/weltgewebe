@@ -554,21 +554,44 @@ def probe_gateway_http(
         ]
     )
     try:
+        manifest = {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "name": pod,
+                "namespace": namespace,
+                "labels": {
+                    "app.kubernetes.io/name": "weltgewebe-gateway-probe",
+                    "app.kubernetes.io/part-of": "weltgewebe",
+                },
+            },
+            "spec": {
+                "automountServiceAccountToken": False,
+                "restartPolicy": "Never",
+                "securityContext": {
+                    "runAsNonRoot": True,
+                    "runAsUser": 10001,
+                    "runAsGroup": 10001,
+                    "seccompProfile": {"type": "RuntimeDefault"},
+                },
+                "containers": [
+                    {
+                        "name": "probe",
+                        "image": "weltgewebe-api:local",
+                        "imagePullPolicy": "Never",
+                        "command": ["sleep", "300"],
+                        "securityContext": {
+                            "allowPrivilegeEscalation": False,
+                            "capabilities": {"drop": ["ALL"]},
+                            "readOnlyRootFilesystem": True,
+                        },
+                    }
+                ],
+            },
+        }
         run(
-            [
-                kubectl,
-                "-n",
-                namespace,
-                "run",
-                pod,
-                "--image=weltgewebe-api:local",
-                "--image-pull-policy=Never",
-                "--restart=Never",
-                "--command",
-                "--",
-                "sleep",
-                "300",
-            ]
+            [kubectl, "apply", "-f", "-"],
+            input_text=json.dumps(manifest),
         )
         run(
             [
