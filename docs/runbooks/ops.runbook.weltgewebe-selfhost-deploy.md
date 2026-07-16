@@ -24,11 +24,14 @@ zu einem **self-hosted Heimserver-Deployment mit edge-caddy**.
 > [!NOTE]
 > **Historische DNS-Phase**
 > Dieses Dokument beschreibt den historischen Schritt von Netlify zu IONOS.
-> Der heutige Zustand von `weltgewebe.net` nutzt INWX und dynamisches DDNS. Die Nebendomains sind DNS-seitig noch offen.
+> Der heutige Zustand von `weltgewebe.net` nutzt INWX und den kanonischen
+> Public-VPS-Pfad `wg-prod-1`. Der frühere Heimberry-DDNS-Schreibpfad ist
+> stillgelegt; die Nebendomains sind DNS-seitig noch offen.
 >
-> Die aktuelle DDNS-Installation und Runtime-Abnahme steht ausschließlich in
+> Die aktuelle Prüfanweisung für die Stilllegung steht in
 > `docs/runbooks/weltgewebe-ddns-runtime-verification.md`. Die folgenden
-> IONOS-Beispiele sind keine heutige Betriebsanweisung.
+> IONOS-, Heimserver- und Portforward-Beispiele sind keine heutige
+> Betriebsanweisung.
 
 Die damalige Migration beinhaltete:
 

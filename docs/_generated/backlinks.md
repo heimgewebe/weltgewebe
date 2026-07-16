@@ -427,7 +427,6 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/heim-first-phase0.md
 - [relates_to] docs/deploy/heimserver.integration.md
 - [relates_to] docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
-- [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
 
 ## docs/deploy/heimserver.integration.md
 
@@ -472,6 +471,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/deploy/README.md
 - [relates_to] docs/deploy/vps-http-smoke.md
+- [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
 
 ## docs/deployment.md
 
