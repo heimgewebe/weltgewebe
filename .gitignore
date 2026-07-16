@@ -75,3 +75,6 @@ map-style/glyphs/*/.complete
 
 # Local pnpm content-addressable store; not repository content.
 .pnpm-store/
+
+# Local Kubernetes/GitOps tool and proof cache
+.cache/weltgewebe-platform/

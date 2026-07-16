@@ -1,0 +1,17 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: weltgewebe
+resources:
+  - namespace.yaml
+  - ../../base
+patches:
+  - path: config-map-patch.yaml
+  - path: deployment-patch.yaml
+images:
+  - name: ghcr.io/heimgewebe/weltgewebe-api
+    newName: weltgewebe-api
+    newTag: local
+  - name: ghcr.io/heimgewebe/weltgewebe-web
+    newName: weltgewebe-web
+    newTag: local

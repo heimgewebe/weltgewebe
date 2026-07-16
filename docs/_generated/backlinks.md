@@ -231,6 +231,7 @@ Generated automatically. Do not edit.
 ## docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
 
 - [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
+- [depends_on] docs/reports/kubernetes-platform-foundation-status.md
 - [relates_to] docs/techstack.md
 
 ## docs/adr/ADR-0011__foederierte-gewebezellen.md
@@ -765,6 +766,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
 - [relates_to] docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/reports/kubernetes-platform-foundation-status.md
 - [relates_to] docs/reports/weltgewebe-os-foundation-status.md
 
 ## docs/reports/domain-provider-role-finding.md
@@ -1095,6 +1097,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/vps-http-smoke.md
 - [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md
 
+## platform/README.md
+
+- [relates_to] docs/reports/kubernetes-platform-foundation-status.md
+
 ## repo.meta.yaml
 
 - [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
@@ -1240,6 +1246,14 @@ Generated automatically. Do not edit.
 ## scripts/ops/reconcile_public_login_smtp_env.py
 
 - [relates_to] docs/deploy/vps.md
+
+## scripts/platform/kind_reference.py
+
+- [verifies] docs/reports/kubernetes-platform-foundation-status.md
+
+## scripts/platform/validate_platform.py
+
+- [verifies] docs/reports/kubernetes-platform-foundation-status.md
 
 ## scripts/quality/review_governance.py
 

@@ -79,6 +79,7 @@ Generated automatically. Do not edit.
 | docs.reference.generated-artifact-control | Generated Artifact Control | reference | active | docs/reference/generated-artifact-control.md |
 | docs.reports.agent-readiness-audit | Agent Readiness Audit | documentation | active | docs/reports/agent-readiness-audit.md |
 | docs.reports.domain-runtime-data-source-reconciliation | Domain Runtime Data Source Reconciliation | report | active | docs/reports/domain-runtime-data-source-reconciliation.md |
+| docs.reports.kubernetes-platform-foundation-status | Kubernetes- und GitOps-Grundlage — Status und Beweisgrenzen | status | active | docs/reports/kubernetes-platform-foundation-status.md |
 | docs.reports.weltgewebe-os-foundation-status | Weltgewebe OS Foundation — Status und Beweisgrenzen | status | active | docs/reports/weltgewebe-os-foundation-status.md |
 | docs.roadmap | Weltgewebe — Master-Umsetzungsroadmap | roadmap | active | docs/roadmap.md |
 | docs.runbook | Runbook | runbook | active | docs/runbook.md |

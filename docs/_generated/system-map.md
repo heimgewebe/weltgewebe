@@ -20,6 +20,12 @@ Source: scripts/docmeta/generate_system_map.py
 |overview|architecture/overview.md|norm|governance|canonical|2026-07-11||||
 |security|architecture/security.md|norm|governance|canonical|2026-07-11||||
 
+## Zone: platform
+
+|id|path|role|organ|status|last_reviewed|depends_on|verifies_with|missing_scripts|
+|---|---|---|---|---|---|---|---|---|
+|platform.readme|platform/README.md|norm|ops|canonical|2026-07-16||scripts/platform/kind_reference.py, scripts/platform/validate_platform.py||
+
 ## Zone: policy
 
 |id|path|role|organ|status|last_reviewed|depends_on|verifies_with|missing_scripts|
@@ -48,6 +54,7 @@ Source: scripts/docmeta/generate_system_map.py
 
 |id|path|role|organ|status|last_reviewed|depends_on|verifies_with|missing_scripts|
 |---|---|---|---|---|---|---|---|---|
+|runbooks.kubernetes-local-reference|runbooks/kubernetes-local-reference.md|runbooks|ops|canonical|2026-07-16|platform.readme|scripts/platform/kind_reference.py||
 |runbooks.readme|runbooks/README.md|runbooks|ops|canonical|2026-07-11||||
 
 ## Automated Checks

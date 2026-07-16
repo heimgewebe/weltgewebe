@@ -16,23 +16,23 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 | Metric | Count |
 | --- | ---: |
-| files_total | 47 |
-| files_with_frontmatter | 47 |
+| files_total | 48 |
+| files_with_frontmatter | 48 |
 | files_without_frontmatter | 0 |
-| files_with_status | 47 |
+| files_with_status | 48 |
 | files_missing_status | 0 |
 | files_with_lifecycle_state | 43 |
-| files_missing_lifecycle_state | 4 |
+| files_missing_lifecycle_state | 5 |
 | files_with_lifecycle | 42 |
-| files_missing_lifecycle | 5 |
-| files_with_owner_task | 43 |
+| files_missing_lifecycle | 6 |
+| files_with_owner_task | 44 |
 | files_missing_owner_task | 4 |
-| files_with_review_after | 34 |
+| files_with_review_after | 35 |
 | files_missing_review_after | 13 |
 | files_primary_referenced | 42 |
-| files_primary_unreferenced | 5 |
-| files_with_derived_references | 47 |
-| files_with_relations | 47 |
+| files_primary_unreferenced | 6 |
+| files_with_derived_references | 48 |
+| files_with_relations | 48 |
 | files_with_missing_supersession_target | 0 |
 
 ## Doc Type Distribution
@@ -42,7 +42,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | documentation | 1 |
 | reference | 1 |
 | report | 42 |
-| status | 1 |
+| status | 2 |
 | status-matrix | 2 |
 
 ## Reports
@@ -77,13 +77,14 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 2 | 4 | 6 |  |  |
 | docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 1 | 6 | 8 |  |  |
 | docs/reports/domain-node-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 6 |  |  |
-| docs/reports/domain-postgres-instance-coherence-decision.md | report | active | active | audit | WELTGEWEBE-OS-002 | 2027-01-16 |  | 5 | 6 | 10 |  |  |
+| docs/reports/domain-postgres-instance-coherence-decision.md | report | active | active | audit | WELTGEWEBE-OS-002 | 2027-01-16 |  | 6 | 6 | 10 |  |  |
 | docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | 4 | 4 | 3 |  |  |
 | docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 4 | 4 | 5 |  |  |
 | docs/reports/domain-runtime-data-source-reconciliation.md | report | active | active | audit | DB-PROOF-001 | 2026-07-18 |  | 1 | 4 | 5 |  |  |
 | docs/reports/github-action-ref-pinning-audit.md | report | active | active | audit | OPT-INF-002 | 2026-09-30 |  | 0 | 4 | 4 |  |  |
 | docs/reports/github-actions-node24-readiness.md | report | active | active | audit | OPT-CI-005 | 2026-09-29 |  | 2 | 4 | 5 |  |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | deprecated | archived | planning | DEPLOY-DNS-001 |  |  | 1 | 5 | 4 | review_after |  |
+| docs/reports/kubernetes-platform-foundation-status.md | status | active |  |  | WELTGEWEBE-OS-006 | 2026-08-16 |  | 0 | 5 | 5 | lifecycle, lifecycle_state |  |
 | docs/reports/map-architekturkritik.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 4 | 5 | 2 |  |  |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 2 | 6 | 6 |  |  |
 | docs/reports/map-status-matrix.md | status-matrix | deprecated | archived |  |  |  |  | 8 | 6 | 3 | lifecycle, owner_task, review_after |  |
@@ -109,6 +110,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/auth-status-matrix.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/domain-edge-create-semantics-preflight.md | review_after |
 | docs/reports/inwx-zone-reconciliation-plan.md | review_after |
+| docs/reports/kubernetes-platform-foundation-status.md | lifecycle, lifecycle_state |
 | docs/reports/map-status-matrix.md | lifecycle, owner_task, review_after |
 | docs/reports/optimierungsstatus.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/passkey-register-verify-prep.md | review_after |
@@ -155,6 +157,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/github-action-ref-pinning-audit.md | 4 | relates_to | docs/tasks/board.md, docs/tasks/index.json, scripts/ci/check_github_action_pinning.py, scripts/ci/tests/test_check_github_action_pinning.py |
 | docs/reports/github-actions-node24-readiness.md | 5 | relates_to | .github/workflows/opt-arc-001-db-proof-matrix.yml, docs/tasks/board.md, docs/tasks/index.json, scripts/ci/check_actions_node24_readiness.py, scripts/ci/tests/test_check_actions_node24_readiness.py |
 | docs/reports/inwx-zone-reconciliation-plan.md | 4 | relates_to | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md, docs/reports/domain-provider-role-finding.md, docs/runbooks/domain-mail-cutover.md, docs/tasks/board.md |
+| docs/reports/kubernetes-platform-foundation-status.md | 5 | depends_on, relates_to, verifies | docs/adr/ADR-0010__kubernetes-kanonische-plattform.md, docs/reports/domain-postgres-instance-coherence-decision.md, platform/README.md, scripts/platform/kind_reference.py, scripts/platform/validate_platform.py |
 | docs/reports/map-architekturkritik.md | 2 | relates_to | docs/blueprints/kartenklarheit-roadmap.md, docs/reports/map-status-matrix.md |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | 6 | relates_to | .github/workflows/basemap-runtime-proof.yml, docs/blueprints/kartenklarheit-phase6.md, docs/blueprints/kartenklarheit-roadmap.md, docs/proofs/basemap-hamburg-artifact-proof.md, docs/reports/map-status-matrix.md, scripts/guard/basemap-runtime-proof.sh |
 | docs/reports/map-status-matrix.md | 3 | relates_to | docs/blueprints/kartenklarheit-roadmap.md, docs/blueprints/ui-interaction-doctrine.md, docs/reports/map-architekturkritik.md |
@@ -301,6 +304,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/adr/ADR-0010__kubernetes-kanonische-plattform.md`
   - `docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
+  - `docs/reports/kubernetes-platform-foundation-status.md`
   - `docs/reports/weltgewebe-os-foundation-status.md`
   - `docs/tasks/board.md`
 
@@ -623,6 +627,13 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/report-lifecycle.md`
   - `docs/_generated/staleness-report.md`
 
+- `docs/reports/kubernetes-platform-foundation-status.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/impl-index.md`
+  - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/report-lifecycle.md`
+
 - `docs/reports/map-architekturkritik.md`
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
@@ -712,6 +723,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 - `docs/reports/auth-pg-002-schema-preflight-ci.md`
 - `docs/reports/domain-edge-cache-limit-design.md`
 - `docs/reports/github-action-ref-pinning-audit.md`
+- `docs/reports/kubernetes-platform-foundation-status.md`
 - `docs/reports/report-lifecycle-restbestand-triage.md`
 
 ## Supersession Target Diagnostics

@@ -1,4 +1,4 @@
-.PHONY: up down logs ps smoke docs-guard validate ci-validate validate-tests validate-core validate-guards validate-shell-tests generate diagnose prepare-commit generate-system-map check-system-map-drift
+.PHONY: up down logs ps smoke docs-guard validate ci-validate validate-tests validate-core validate-guards validate-shell-tests platform-check platform-render platform-kind-proof generate diagnose prepare-commit generate-system-map check-system-map-drift
 
 validate-tests:
 	python3 -m unittest discover scripts/docmeta/tests/
@@ -7,6 +7,16 @@ validate-tests:
 	python3 scripts/docmeta/validate_claim_registry.py
 	python3 scripts/docmeta/validate_doc_freshness_registry.py
 	python3 -m scripts.docmeta.generate_claim_evidence_map --check
+
+platform-check:
+	python3 scripts/platform/validate_platform.py
+	python3 -m unittest scripts.ci.tests.test_kubernetes_platform_contract
+
+platform-render:
+	python3 scripts/platform/validate_platform.py --render
+
+platform-kind-proof:
+	python3 scripts/platform/kind_reference.py proof --mode direct
 
 validate-core:
 	python3 -m scripts.docmeta.validate_schema
@@ -45,7 +55,7 @@ validate-shell-tests:
 	bash scripts/tests/test_web_artifact_install_contract.sh
 	bash scripts/tests/test_api_release_identity_contract.sh
 
-validate: validate-tests validate-core validate-guards validate-shell-tests
+validate: platform-check validate-tests validate-core validate-guards validate-shell-tests
 
 ci-validate: validate
 
