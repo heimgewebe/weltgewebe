@@ -211,6 +211,7 @@ spec:
         self.assertIn("disableDefaultCNI: true", kind_config)
         self.assertIn("kubeProxyMode: none", kind_config)
         self.assertIn('"gatewayAPI.enabled=true"', source)
+        self.assertIn('"gatewayAPI.hostNetwork.enabled=true"', source)
         self.assertIn('"kubeProxyReplacement=true"', source)
         self.assertIn('f"k8sServiceHost={api_server_host}"', source)
         self.assertIn('"k8sServicePort=6443"', source)

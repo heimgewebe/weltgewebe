@@ -266,6 +266,8 @@ def install_platform_components(
             "--set",
             "gatewayAPI.enabled=true",
             "--set",
+            "gatewayAPI.hostNetwork.enabled=true",
+            "--set",
             "kubeProxyReplacement=true",
             "--set",
             f"k8sServiceHost={api_server_host}",
