@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -181,6 +182,18 @@ spec:
         )
         self.assertNotIn("RUN chmod +x /usr/local/bin/generate-demo-data", dockerfile)
 
+    def test_api_version_retries_service_propagation(self) -> None:
+        temporary_failure = subprocess.CalledProcessError(4, ["wget"])
+        response = '{"git_commit":"0123456789abcdef0123456789abcdef01234567"}'
+        with mock.patch.object(
+            self.reference,
+            "output",
+            side_effect=["api-pod", temporary_failure, response],
+        ), mock.patch.object(self.reference.time, "sleep") as sleep:
+            observed = self.reference.api_version("kubectl", "weltgewebe")
+        self.assertEqual(observed, response)
+        sleep.assert_called_once_with(1)
+
     def test_reference_binds_cluster_access_after_cni_bootstrap(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()
         self.assertNotIn('"--wait",\n                "180s"', source)
@@ -212,6 +225,8 @@ spec:
         self.assertIn("kubeProxyMode: none", kind_config)
         self.assertIn('"gatewayAPI.enabled=true"', source)
         self.assertIn('"gatewayAPI.hostNetwork.enabled=true"', source)
+        self.assertIn('"nodeIPAM.enabled=true"', source)
+        self.assertIn('"defaultLBServiceIPAM=nodeipam"', source)
         self.assertIn('"kubeProxyReplacement=true"', source)
         self.assertIn('f"k8sServiceHost={api_server_host}"', source)
         self.assertIn('"k8sServicePort=6443"', source)

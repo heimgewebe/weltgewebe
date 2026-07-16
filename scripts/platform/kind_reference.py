@@ -268,6 +268,10 @@ def install_platform_components(
             "--set",
             "gatewayAPI.hostNetwork.enabled=true",
             "--set",
+            "nodeIPAM.enabled=true",
+            "--set",
+            "defaultLBServiceIPAM=nodeipam",
+            "--set",
             "kubeProxyReplacement=true",
             "--set",
             f"k8sServiceHost={api_server_host}",
@@ -409,19 +413,29 @@ def api_version(kubectl: str, namespace: str) -> str:
             "jsonpath={.items[0].metadata.name}",
         ]
     )
-    return output(
-        [
-            kubectl,
-            "-n",
-            namespace,
-            "exec",
-            pod,
-            "--",
-            "wget",
-            "-qO-",
-            "http://weltgewebe-api:8080/version",
-        ]
-    )
+    command = [
+        kubectl,
+        "-n",
+        namespace,
+        "exec",
+        pod,
+        "--",
+        "wget",
+        "-qO-",
+        "-T",
+        "5",
+        "http://weltgewebe-api:8080/version",
+    ]
+    for attempt in range(30):
+        try:
+            return output(command)
+        except subprocess.CalledProcessError as error:
+            if attempt == 29:
+                raise ProofError(
+                    "API service did not become reachable from an API pod"
+                ) from error
+            time.sleep(1)
+    raise AssertionError("unreachable API service retry state")
 
 
 def prove_restart(kubectl: str, namespace: str) -> dict[str, str]:
