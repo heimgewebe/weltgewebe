@@ -482,6 +482,27 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 ),
             ),
             (
+                "gitlab nested namespace branch",
+                lambda candidate: candidate["request"]["verifications"][0].__setitem__(
+                    "evidence_ref",
+                    "https://gitlab.com/heimgewebe/platform/weltgewebe/-/blob/main/README.md",
+                ),
+            ),
+            (
+                "gitlab nested symbolic compare",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://gitlab.com/heimgewebe/platform/weltgewebe/-/compare/main...release",
+                ),
+            ),
+            (
+                "gitlab symbolic tag",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://gitlab.com/heimgewebe/platform/weltgewebe/-/tags/v1.0.0",
+                ),
+            ),
+            (
                 "bitbucket source branch",
                 lambda candidate: candidate["request"]["closure"][
                     "cleanup_evidence"
@@ -524,6 +545,12 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 lambda candidate: candidate["request"]["closure"][
                     "cleanup_evidence"
                 ].__setitem__(0, "https://example.invalid/repo.git#main"),
+            ),
+            (
+                "generic git query branch",
+                lambda candidate: candidate["request"]["closure"][
+                    "cleanup_evidence"
+                ].__setitem__(0, "https://example.invalid/repo.git?ref=main"),
             ),
             (
                 "gitlab raw branch",
@@ -580,6 +607,18 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 f"https://example.invalid/repo.git#{exact}",
             ),
             (
+                "generic git query commit",
+                f"https://example.invalid/repo.git?ref={exact}",
+            ),
+            (
+                "gitlab nested commit URL",
+                f"https://gitlab.com/heimgewebe/platform/weltgewebe/-/blob/{exact}/README.md",
+            ),
+            (
+                "gitlab nested compare commits",
+                f"https://gitlab.com/heimgewebe/platform/weltgewebe/-/compare/{exact}...{other}",
+            ),
+            (
                 "github archive commit",
                 f"https://github.com/heimgewebe/weltgewebe/archive/{exact}.tar.gz",
             ),
@@ -612,6 +651,16 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 "non-finite programmatic value",
                 lambda profile: profile["request"]["classification"]["blocked_by"].append(
                     float("nan")
+                ),
+            ),
+            (
+                "non-string top-level object key",
+                lambda profile: profile.__setitem__(1, "invalid key"),
+            ),
+            (
+                "non-string nested object key",
+                lambda profile: profile["request"]["observation"].__setitem__(
+                    1, "invalid key"
                 ),
             ),
             (

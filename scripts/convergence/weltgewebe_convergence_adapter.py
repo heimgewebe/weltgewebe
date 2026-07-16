@@ -155,6 +155,12 @@ GIT_REVISION_PATH_RE = re.compile(
     r"(?P<revision>[^/?#\s]+)",
     re.IGNORECASE,
 )
+GITLAB_REVISION_PATH_RE = re.compile(
+    r"gitlab\.com/(?:[^/\s]+/)+[^/\s]+/-/"
+    r"(?:tree|blob|raw|commit|commits|archive|tags|releases)/"
+    r"(?P<revision>[^/?#\s]+)",
+    re.IGNORECASE,
+)
 RAW_GITHUB_REVISION_RE = re.compile(
     r"raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<revision>[^/?#\s]+)",
     re.IGNORECASE,
@@ -171,6 +177,11 @@ GITHUB_ARCHIVE_REVISION_RE = re.compile(
 )
 GIT_COMPARE_RE = re.compile(
     r"(?:github\.com|gitlab\.com|bitbucket\.org)/[^/\s]+/[^/\s]+/compare/"
+    r"(?P<left>[^/?#\s]+?)\.{2,3}(?P<right>[^/?#\s]+)",
+    re.IGNORECASE,
+)
+GITLAB_COMPARE_RE = re.compile(
+    r"gitlab\.com/(?:[^/\s]+/)+[^/\s]+/-/compare/"
     r"(?P<left>[^/?#\s]+?)\.{2,3}(?P<right>[^/?#\s]+)",
     re.IGNORECASE,
 )
@@ -407,6 +418,10 @@ def _reject_symbolic_git_reference(
     if revision_match is not None:
         _assert_exact_git_revision(revision_match.group("revision"), path)
 
+    gitlab_revision_match = GITLAB_REVISION_PATH_RE.search(ref)
+    if gitlab_revision_match is not None:
+        _assert_exact_git_revision(gitlab_revision_match.group("revision"), path)
+
     raw_match = RAW_GITHUB_REVISION_RE.search(ref)
     if raw_match is not None:
         _assert_exact_git_revision(raw_match.group("revision"), path)
@@ -424,7 +439,12 @@ def _reject_symbolic_git_reference(
         _assert_exact_git_revision(compare_match.group("left"), path)
         _assert_exact_git_revision(compare_match.group("right"), path)
 
-    if GIT_HOST_RE.search(ref) is not None:
+    gitlab_compare_match = GITLAB_COMPARE_RE.search(ref)
+    if gitlab_compare_match is not None:
+        _assert_exact_git_revision(gitlab_compare_match.group("left"), path)
+        _assert_exact_git_revision(gitlab_compare_match.group("right"), path)
+
+    if GIT_HOST_RE.search(ref) is not None or ".git" in ref.casefold():
         query_match = GIT_QUERY_REVISION_RE.search(ref)
         if query_match is not None:
             _assert_exact_git_revision(query_match.group("revision"), path)
@@ -442,10 +462,12 @@ def _reject_symbolic_git_reference(
         match is not None
         for match in (
             revision_match,
+            gitlab_revision_match,
             raw_match,
             codeload_match,
             archive_match,
             compare_match,
+            gitlab_compare_match,
         )
     )
     if (
@@ -616,6 +638,7 @@ def _assert_required_allowed_keys(
 ) -> None:
     if not isinstance(value, dict):
         raise ConvergenceAdapterError(f"{path} must be an object")
+    _assert_string_keys(value, path)
     missing = required - set(value)
     if missing:
         raise ConvergenceAdapterError(f"{path} missing required keys {', '.join(sorted(missing))}")
@@ -668,12 +691,19 @@ def _assert_string_list(
 def _assert_object_keys(value: Any, allowed: set[str], path: str) -> None:
     if not isinstance(value, dict):
         raise ConvergenceAdapterError(f"{path} must be an object")
+    _assert_string_keys(value, path)
     missing = allowed - set(value)
     if missing:
         raise ConvergenceAdapterError(f"{path} missing required keys {', '.join(sorted(missing))}")
     unknown = set(value) - allowed
     if unknown:
         raise ConvergenceAdapterError(f"{path} has unexpected keys {', '.join(sorted(unknown))}")
+
+
+def _assert_string_keys(value: dict[Any, Any], path: str) -> None:
+    non_string = [key for key in value if not isinstance(key, str)]
+    if non_string:
+        raise ConvergenceAdapterError(f"{path} object keys must be strings")
 
 
 def _assert_const(value: Any, expected: str, path: str) -> None:
