@@ -107,15 +107,12 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         run(["git", "clone", "--branch", "main", str(self.remote), str(self.source)])
         self.commit = run(["git", "rev-parse", "HEAD"], cwd=self.source).stdout.strip()
 
-        # Persistent basemap data is deliberately untracked, matching production.
         (self.source / "build/basemap").mkdir(parents=True)
         (self.source / "build/basemap/map.pmtiles").write_bytes(b"pmtiles")
 
         self.make_artifact()
         self.make_command_shims()
 
-        # Production inputs crossing the root boundary must be root-owned and
-        # not writable by group/world.
         run(
             self.privileged(
                 [
@@ -348,7 +345,6 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.assertFalse((self.state / "current.json").exists())
 
     def test_public_noop_repairs_missing_deployment_receipt(self) -> None:
-        self.artifact.unlink()
         result = self.reconcile_existing_public_commit()
         self.restore_test_ownership()
         self.assertEqual(result.returncode, 0, result.stderr)
