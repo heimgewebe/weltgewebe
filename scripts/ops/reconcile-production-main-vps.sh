@@ -15,6 +15,7 @@ ARCHIVE_VALIDATOR="${WELTGEWEBE_ARCHIVE_VALIDATOR:-/usr/local/libexec/weltgewebe
 LOCK_FILE="$STATE_ROOT/reconcile.lock"
 ARTIFACT_ROOT="$STATE_ROOT/artifacts"
 RECEIPT_ROOT="$STATE_ROOT/reconcile-receipts"
+DEPLOY_RECEIPT_ROOT="$STATE_ROOT/receipts"
 MIN_FREE_KIB="${WELTGEWEBE_MIN_FREE_KIB:-4194304}"
 temporary_artifact=""
 temporary_source=""
@@ -75,6 +76,116 @@ finally:
     os.close(directory_fd)
 PY
   state_result="$result"
+}
+
+repair_observed_deployment_state() {
+  local verification_receipt="$1"
+  local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$target_commit.json"
+  if [[ -e "$deployment_receipt" || -L "$deployment_receipt" ]]; then
+    [[ -f "$deployment_receipt" && ! -L "$deployment_receipt" ]] ||
+      fail "deployment receipt is not a regular file: $deployment_receipt"
+  fi
+
+  python3 - "$verification_receipt" "$deployment_receipt" "$target_commit" << 'PY'
+import json
+import os
+import sys
+from pathlib import Path
+
+verification_path = Path(sys.argv[1])
+deployment_path = Path(sys.argv[2])
+commit = sys.argv[3]
+verification = json.loads(verification_path.read_text(encoding="utf-8"))
+if verification.get("pass") is not True:
+    raise SystemExit("public verification receipt is not passing")
+if verification.get("expected_commit") != commit:
+    raise SystemExit("public verification receipt targets another commit")
+frontend = verification.get("frontend") or {}
+api = verification.get("api") or {}
+if frontend.get("commit") != commit or api.get("commit") != commit:
+    raise SystemExit("public verification receipt does not bind both endpoints")
+
+preserve = False
+if deployment_path.exists():
+    try:
+        existing = json.loads(deployment_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        existing = None
+    if isinstance(existing, dict):
+        preserve = (
+            existing.get("commit") == commit
+            and existing.get("result") in {"verified", "verified_observed"}
+        )
+if preserve:
+    raise SystemExit(0)
+
+payload = {
+    "schema_version": 2,
+    "environment": "production",
+    "commit": commit,
+    "web_artifact_sha256": None,
+    "started_at": None,
+    "completed_at": verification.get("verified_at"),
+    "api_commit": api.get("commit"),
+    "frontend_commit": frontend.get("commit"),
+    "observed_main_after_deploy": commit,
+    "result": "verified_observed",
+    "evidence_boundary": (
+        "Recovered from exact public readback; original web artifact hash and "
+        "deployment start time are unavailable."
+    ),
+}
+temporary = deployment_path.with_name(
+    f".{deployment_path.name}.{os.getpid()}.tmp"
+)
+with temporary.open("w", encoding="utf-8") as handle:
+    json.dump(payload, handle, sort_keys=True, indent=2)
+    handle.write("\n")
+    handle.flush()
+    os.fsync(handle.fileno())
+os.replace(temporary, deployment_path)
+directory_fd = os.open(deployment_path.parent, os.O_RDONLY | os.O_DIRECTORY)
+try:
+    os.fsync(directory_fd)
+finally:
+    os.close(directory_fd)
+PY
+
+  ln -sfn "receipts/$target_commit.json" "$STATE_ROOT/current.json"
+
+  local candidate_release="$RELEASE_ROOT/$target_commit"
+  if [[ -e "$candidate_release" ]]; then
+    [[ -d "$candidate_release" && ! -L "$candidate_release" ]] ||
+      fail "observed release path is unsafe: $candidate_release"
+    local release_root_real
+    local candidate_real
+    local candidate_head
+    release_root_real="$(realpath "$RELEASE_ROOT")"
+    candidate_real="$(realpath "$candidate_release")"
+    case "$candidate_real" in
+      "$release_root_real"/*) ;;
+      *) fail "observed release escaped the release root" ;;
+    esac
+    [[ "$(stat --format=%u "$candidate_real")" == "0" ]] ||
+      fail "observed release is not root-owned"
+    candidate_head="$(git -C "$candidate_real" rev-parse HEAD)"
+    [[ "$candidate_head" == "$target_commit" ]] ||
+      fail "observed release does not match the public commit"
+    if [[ -L "$STATE_ROOT/current-release" ]]; then
+      local previous_release
+      previous_release="$(readlink -f "$STATE_ROOT/current-release")" ||
+        fail "current release marker is broken"
+      case "$previous_release" in
+        "$release_root_real"/*)
+          if [[ "$previous_release" != "$candidate_real" ]]; then
+            ln -sfn "$previous_release" "$STATE_ROOT/previous-release"
+          fi
+          ;;
+        *) fail "current release marker escapes release root" ;;
+      esac
+    fi
+    ln -sfn "$candidate_real" "$STATE_ROOT/current-release"
+  fi
 }
 
 cleanup() {
@@ -149,13 +260,13 @@ prune_releases() {
 getent passwd "$BUILD_USER" > /dev/null || fail "build user does not exist: $BUILD_USER"
 [[ "$MIN_FREE_KIB" =~ ^[0-9]+$ ]] || fail "minimum free space is invalid"
 
-for command_name in git docker sha256sum flock install id rm mv awk getent chmod ln readlink find sort cut df stat rmdir python3; do
+for command_name in git docker sha256sum flock install id rm mv awk getent chmod ln readlink find sort cut df stat rmdir python3 realpath; do
   require_command "$command_name"
 done
 
-install -d -m 0711 "$STATE_ROOT"
-install -d -m 0700 "$ARTIFACT_ROOT" "$RECEIPT_ROOT"
-install -d -m 0755 "$RELEASE_ROOT"
+install -d -o root -g root -m 0711 "$STATE_ROOT"
+install -d -o root -g root -m 0700 "$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT"
+install -d -o root -g root -m 0755 "$RELEASE_ROOT"
 exec 9> "$LOCK_FILE"
 if ! flock -n 9; then
   echo "production_reconcile=skipped reason=already-running"
@@ -183,11 +294,18 @@ if "$LIVE_VERIFIER" \
   --frontend-url "$FRONTEND_URL" \
   --api-url "$API_URL" \
   --output "$initial_receipt"; then
-  write_state "verified_observed" "$target_commit" "public state already matched"
+  observed_main="$(fetch_main)"
+  if [[ "$observed_main" != "$target_commit" ]]; then
+    write_state "superseded_after_observe" "$observed_main" "main advanced after public readback"
+    echo "production_reconcile=superseded observed=$target_commit current=$observed_main"
+    exit 0
+  fi
+  repair_observed_deployment_state "$initial_receipt"
+  write_state "verified_observed" "$target_commit" "public state already matched; markers repaired"
   ln -sfn "reconcile-receipts/$target_commit.json" "$STATE_ROOT/reconcile-current.json"
   prune_artifacts
   prune_releases
-  echo "production_reconcile=noop commit=$target_commit"
+  echo "production_reconcile=noop commit=$target_commit state=repaired"
   exit 0
 fi
 
@@ -240,6 +358,7 @@ source_archive=""
 artifact="$ARTIFACT_ROOT/web-$target_commit.tar.gz"
 mv "$temporary_artifact" "$artifact"
 temporary_artifact=""
+chmod 0600 "$artifact"
 artifact_sha="$(sha256sum "$artifact" | awk '{print $1}')"
 [[ "$artifact_sha" =~ ^[0-9a-f]{64}$ ]] || fail "frontend artifact hash is invalid"
 write_state "artifact_validated" "$target_commit" "frontend artifact ready"
