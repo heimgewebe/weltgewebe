@@ -93,7 +93,7 @@ cleanup() {
   local rc=$?
   trap - EXIT
   if ((rc != 0)) && [[ "$receipt_started" == true && "$receipt_terminal" == false ]]; then
-    completed_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
+    completed_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ 2> /dev/null || true)"
     write_deploy_receipt \
       "failed" "$completed_at" "$api_commit" "$frontend_commit" "$last_observed_main" || true
   fi

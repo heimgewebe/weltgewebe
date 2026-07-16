@@ -231,19 +231,19 @@ prune_releases() {
   local release_dir
   local release_name
   local release_head
-  current_release="$(readlink -f "$STATE_ROOT/current-release" 2>/dev/null || true)"
-  previous_release="$(readlink -f "$STATE_ROOT/previous-release" 2>/dev/null || true)"
+  current_release="$(readlink -f "$STATE_ROOT/current-release" 2> /dev/null || true)"
+  previous_release="$(readlink -f "$STATE_ROOT/previous-release" 2> /dev/null || true)"
   while IFS= read -r release_dir; do
     [[ "$release_dir" == "$current_release" || "$release_dir" == "$previous_release" ]] && continue
     release_name="${release_dir##*/}"
     [[ "$release_name" =~ ^[0-9a-f]{40}$ ]] || continue
     [[ -d "$release_dir" && ! -L "$release_dir" ]] || continue
     [[ "$(stat --format=%u "$release_dir")" == "0" ]] || continue
-    release_head="$(git -C "$release_dir" rev-parse HEAD 2>/dev/null || true)"
+    release_head="$(git -C "$release_dir" rev-parse HEAD 2> /dev/null || true)"
     [[ "$release_head" == "$release_name" ]] || continue
     rm -rf -- "$release_dir/apps/web/build"
     rm -f -- "$release_dir/build/basemap"
-    rmdir "$release_dir/build" 2>/dev/null || true
+    rmdir "$release_dir/build" 2> /dev/null || true
     if [[ -z "$(git -C "$release_dir" status --porcelain --untracked-files=normal)" ]]; then
       git -C "$SOURCE_CHECKOUT" worktree remove "$release_dir"
     fi
