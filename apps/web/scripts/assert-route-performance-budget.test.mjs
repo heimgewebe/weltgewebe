@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import {
   collectInitialAssetReferences,
   measureRoute,
+  resolveBuildDirectory,
   validateRouteBudget,
 } from "./assert-route-performance-budget.mjs";
 
@@ -59,5 +60,32 @@ test("rejects route asset traversal", () => {
   assert.throws(
     () => measureRoute({ buildDir: root, routeFile: "login.html" }),
     /escapes build directory/,
+  );
+});
+
+test("selects only an adapter output containing every budgeted route", () => {
+  const root = mkdtempSync(join(tmpdir(), "route-budget-output-"));
+  const staticOutput = join(root, ".vercel/output/static");
+  const localOutput = join(root, "build");
+  mkdirSync(staticOutput, { recursive: true });
+  mkdirSync(localOutput, { recursive: true });
+  writeFileSync(join(staticOutput, "login.html"), "vercel");
+  writeFileSync(join(localOutput, "login.html"), "local");
+  writeFileSync(join(localOutput, "settings.html"), "local");
+
+  const routeFiles = ["login.html", "settings.html"];
+  assert.equal(
+    resolveBuildDirectory({ root, routeFiles, preferVercel: true }),
+    resolve(localOutput),
+  );
+
+  writeFileSync(join(staticOutput, "settings.html"), "vercel");
+  assert.equal(
+    resolveBuildDirectory({ root, routeFiles, preferVercel: false }),
+    resolve(localOutput),
+  );
+  assert.equal(
+    resolveBuildDirectory({ root, routeFiles, preferVercel: true }),
+    resolve(staticOutput),
   );
 });

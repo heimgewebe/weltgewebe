@@ -1,13 +1,38 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(scriptDir, "..");
-const defaultBuildDir = resolve(webRoot, "build");
 const defaultBudgetPath = resolve(webRoot, "route-performance-budget.json");
+
+export function resolveBuildDirectory({
+  root = webRoot,
+  routeFiles,
+  preferVercel = Boolean(process.env.VERCEL),
+}) {
+  const relativeCandidates = preferVercel
+    ? [".vercel/output/static", "build"]
+    : ["build", ".vercel/output/static"];
+  const candidates = relativeCandidates.map((candidate) =>
+    resolve(root, candidate),
+  );
+  for (const candidate of candidates) {
+    if (
+      routeFiles.every((routeFile) =>
+        existsSync(resolveAssetPath(candidate, routeFile)),
+      )
+    ) {
+      return candidate;
+    }
+  }
+  throw new Error(
+    "No complete route build directory found. Checked: " +
+      candidates.join(", "),
+  );
+}
 
 function attribute(tag, name) {
   const pattern = new RegExp(
@@ -153,7 +178,7 @@ export function validateRouteBudget(metrics, budget) {
 }
 
 export function runBudgetCheck({
-  buildDir = defaultBuildDir,
+  buildDir,
   budgetPath = defaultBudgetPath,
   reportOnly = false,
 } = {}) {
@@ -168,10 +193,15 @@ export function runBudgetCheck({
     );
   }
 
+  const resolvedBuildDir =
+    buildDir ??
+    resolveBuildDirectory({
+      routeFiles: Object.keys(parsed.routes),
+    });
   const reports = [];
   const errors = [];
   for (const [routeFile, budget] of Object.entries(parsed.routes)) {
-    const metrics = measureRoute({ buildDir, routeFile });
+    const metrics = measureRoute({ buildDir: resolvedBuildDir, routeFile });
     reports.push({
       route: routeFile,
       initial_js_raw_bytes: metrics.initial_js_raw_bytes,
