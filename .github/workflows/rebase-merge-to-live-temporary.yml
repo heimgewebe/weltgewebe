@@ -57,7 +57,10 @@ jobs:
           git checkout "$SOURCE_HEAD" -- "${paths[@]}"
           make generate
           git rm .github/workflows/rebase-merge-to-live-temporary.yml
-          cat > expected-paths.txt <<'EOF'
+          expected_paths="$(mktemp)"
+          actual_paths="$(mktemp)"
+          trap 'rm -f "$expected_paths" "$actual_paths"' EXIT
+          cat > "$expected_paths" <<'EOF'
           .github/workflows/production-live-contract.yml
           .github/workflows/rebase-merge-to-live-temporary.yml
           apps/web/scripts/generate-version.js
@@ -79,11 +82,10 @@ jobs:
           scripts/ops/validate_web_deploy_archive.py
           scripts/ops/verify_public_release_commit.py
           EOF
-          sed -i 's/^          //' expected-paths.txt
-          git status --porcelain | cut -c4- | sort > actual-paths.txt
-          sort -o expected-paths.txt expected-paths.txt
-          diff -u expected-paths.txt actual-paths.txt
-          rm expected-paths.txt actual-paths.txt
+          sed -i 's/^          //' "$expected_paths"
+          git status --porcelain | cut -c4- | sort > "$actual_paths"
+          sort -o "$expected_paths" "$expected_paths"
+          diff -u "$expected_paths" "$actual_paths"
           git add -- "${paths[@]}" docs/_generated
           git diff --cached --check
           git config user.name "weltgewebe-rebase-bot"
