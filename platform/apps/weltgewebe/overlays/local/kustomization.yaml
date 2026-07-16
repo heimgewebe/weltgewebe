@@ -4,10 +4,17 @@ kind: Kustomization
 namespace: weltgewebe
 resources:
   - namespace.yaml
+  - fixture-config-map.yaml
   - ../../base
 patches:
   - path: config-map-patch.yaml
   - path: deployment-patch.yaml
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: weltgewebe-api
+    path: database-url-patch.yaml
 images:
   - name: ghcr.io/heimgewebe/weltgewebe-api
     newName: weltgewebe-api

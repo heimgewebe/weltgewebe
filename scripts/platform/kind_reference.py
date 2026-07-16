@@ -326,7 +326,15 @@ def apply_flux_data(kubectl: str, branch: str) -> None:
     wait_condition(kubectl, "flux-system", "kustomization/weltgewebe-local-data", "Ready")
 
 
-def migration_pod(image: str, namespace: str) -> dict[str, Any]:
+def migration_pod(
+    image: str, namespace: str, *, local_fixture: bool = False
+) -> dict[str, Any]:
+    runtime_reference = {
+        "configMapKeyRef" if local_fixture else "secretKeyRef": {
+            "name": "weltgewebe-local-fixture" if local_fixture else "weltgewebe-runtime",
+            "key": "database-url",
+        }
+    }
     environment = {
         "API_BIND": "0.0.0.0:8080",
         "APP_BASE_URL": "http://weltgewebe.localhost",
@@ -374,12 +382,7 @@ def migration_pod(image: str, namespace: str) -> dict[str, Any]:
                     + [
                         {
                             "name": "DATABASE_URL",
-                            "valueFrom": {
-                                "secretKeyRef": {
-                                    "name": "weltgewebe-runtime",
-                                    "key": "database-url",
-                                }
-                            },
+                            "valueFrom": runtime_reference,
                         }
                     ],
                     "readinessProbe": {
@@ -411,8 +414,12 @@ def migration_pod(image: str, namespace: str) -> dict[str, Any]:
     }
 
 
-def migrate(kubectl: str, namespace: str) -> None:
-    pod = migration_pod("weltgewebe-api:local", namespace)
+def migrate(
+    kubectl: str, namespace: str, *, local_fixture: bool = False
+) -> None:
+    pod = migration_pod(
+        "weltgewebe-api:local", namespace, local_fixture=local_fixture
+    )
     run([kubectl, "-n", namespace, "delete", "pod", pod["metadata"]["name"], "--ignore-not-found=true"])
     apply_yaml(kubectl, pod)
     wait_condition(kubectl, namespace, f"pod/{pod['metadata']['name']}", "Ready", "8m")
@@ -622,26 +629,21 @@ def refresh_images(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def local_fixture_value(cluster: str) -> str:
-    return "local-test-only-" + hashlib.sha256(cluster.encode()).hexdigest()[:24]
-
-
 def local_data_up(args: argparse.Namespace) -> dict[str, Any]:
     receipt = tool_receipt()
     tools = receipt["tools"]
     marker = require_owned_cluster(tools["kind"], args.cluster)
     kubectl = tools["kubectl"]
     kustomize = tools["kustomize"]
-    fixture = local_fixture_value(args.cluster)
     app_namespace = "weltgewebe"
-    apply_yaml(kubectl, namespace_document("weltgewebe-data"))
-    apply_yaml(kubectl, namespace_document(app_namespace, data_client=True))
-    for document in secret_documents(fixture, app_namespace):
-        apply_yaml(kubectl, document)
     apply_direct(kubectl, kustomize, "platform/infrastructure/local-data")
+    apply_file(
+        kubectl,
+        ROOT / "platform/apps/weltgewebe/overlays/local/fixture-config-map.yaml",
+    )
     wait_rollout(kubectl, "weltgewebe-data", "deployment/postgres")
     wait_rollout(kubectl, "weltgewebe-data", "deployment/nats")
-    migrate(kubectl, app_namespace)
+    migrate(kubectl, app_namespace, local_fixture=True)
     return {
         "schema_version": 1,
         "status": "pass",

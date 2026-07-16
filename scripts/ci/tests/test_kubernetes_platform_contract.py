@@ -94,16 +94,30 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertNotIn("commit_timestamp()", source)
         self.assertNotIn("load_images(tools", source)
 
-    def test_local_fixture_is_deterministic_and_explicitly_non_secret(self) -> None:
-        first = self.reference.local_fixture_value("cluster-a")
-        second = self.reference.local_fixture_value("cluster-a")
-        other = self.reference.local_fixture_value("cluster-b")
-        self.assertEqual(first, second)
-        self.assertNotEqual(first, other)
-        self.assertTrue(first.startswith("local-test-only-"))
-        for path in (ROOT / "platform").rglob("*"):
-            if path.is_file():
-                self.assertNotIn(first, path.read_text(errors="ignore"), str(path))
+    def test_local_fixture_is_public_config_map_only(self) -> None:
+        data_fixture = (
+            ROOT / "platform/infrastructure/local-data/fixture-config-map.yaml"
+        ).read_text()
+        app_fixture = (
+            ROOT / "platform/apps/weltgewebe/overlays/local/fixture-config-map.yaml"
+        ).read_text()
+        self.assertIn("kind: ConfigMap", data_fixture)
+        self.assertIn("kind: ConfigMap", app_fixture)
+        self.assertIn("local-test-only-weltgewebe", data_fixture)
+        self.assertIn("local-test-only-weltgewebe", app_fixture)
+        self.assertNotIn("kind: Secret", data_fixture + app_fixture)
+        pod = self.reference.migration_pod(
+            "weltgewebe-api:local", "weltgewebe", local_fixture=True
+        )
+        database = next(
+            item
+            for item in pod["spec"]["containers"][0]["env"]
+            if item["name"] == "DATABASE_URL"
+        )
+        self.assertEqual(
+            database["valueFrom"]["configMapKeyRef"],
+            {"name": "weltgewebe-local-fixture", "key": "database-url"},
+        )
 
     def test_migration_uses_runtime_secret_reference(self) -> None:
         pod = self.reference.migration_pod("weltgewebe-api:local", "weltgewebe")

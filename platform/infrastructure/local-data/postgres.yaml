@@ -33,17 +33,17 @@ spec:
           env:
             - name: POSTGRES_USER
               valueFrom:
-                secretKeyRef:
+                configMapKeyRef:
                   name: weltgewebe-data
                   key: postgres-user
             - name: POSTGRES_PASSWORD
               valueFrom:
-                secretKeyRef:
+                configMapKeyRef:
                   name: weltgewebe-data
                   key: postgres-password
             - name: POSTGRES_DB
               valueFrom:
-                secretKeyRef:
+                configMapKeyRef:
                   name: weltgewebe-data
                   key: postgres-database
             - name: PGDATA
