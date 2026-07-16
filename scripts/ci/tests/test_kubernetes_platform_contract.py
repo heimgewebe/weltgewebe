@@ -332,6 +332,16 @@ spec:
         with mock.patch.object(self.reference, "output", return_value=json.dumps(document)):
             self.assertEqual(self.reference.gateway_addresses("kubectl"), ["172.22.0.3", "172.22.0.4"])
 
+    def test_gateway_node_port_requires_valid_integer(self) -> None:
+        with mock.patch.object(self.reference, "output", return_value="31293"):
+            self.assertEqual(
+                self.reference.gateway_node_port("kubectl", "gateway-service"),
+                31293,
+            )
+        with mock.patch.object(self.reference, "output", return_value="not-a-port"):
+            with self.assertRaisesRegex(self.reference.ProofError, "invalid NodePort"):
+                self.reference.gateway_node_port("kubectl", "gateway-service")
+
     def test_kind_docker_network_prefers_named_kind_network(self) -> None:
         with mock.patch.object(
             self.reference,
@@ -356,7 +366,7 @@ spec:
             ) as run_mock,
         ):
             result = self.reference.probe_gateway_http(
-                "cluster", ["172.22.0.3"], timeout_seconds=1
+                "cluster", ["172.22.0.3"], 31293, timeout_seconds=1
             )
         self.assertEqual(result, ("172.22.0.3", b"healthy", b"web"))
         argv = run_mock.call_args_list[0].args[0]
@@ -369,9 +379,9 @@ spec:
         self.assertIn("10001:10001", argv)
         self.assertIn("--entrypoint", argv)
         self.assertIn("wget", argv)
-        self.assertEqual(argv[-1], "http://172.22.0.3/health/live")
+        self.assertEqual(argv[-1], "http://172.22.0.3:31293/health/live")
         self.assertEqual(
-            run_mock.call_args_list[1].args[0][-1], "http://172.22.0.3/"
+            run_mock.call_args_list[1].args[0][-1], "http://172.22.0.3:31293/"
         )
 
     def test_gateway_proof_does_not_port_forward_selectorless_service(self) -> None:
@@ -379,7 +389,7 @@ spec:
         self.assertNotIn("def port_forward", source)
         self.assertNotIn('"port-forward"', source)
         self.assertIn(
-            "probe_gateway_http(cluster, gateway_addresses(kubectl))", source
+            "gateway_node_port(kubectl, service)", source
         )
 
     def test_full_proof_uses_canonical_builder_signature(self) -> None:

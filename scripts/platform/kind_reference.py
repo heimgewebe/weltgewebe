@@ -534,6 +534,28 @@ def gateway_addresses(kubectl: str) -> list[str]:
     return addresses
 
 
+def gateway_node_port(kubectl: str, service: str) -> int:
+    raw = output(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe-gateway",
+            "get",
+            "service",
+            service,
+            "-o",
+            "jsonpath={.spec.ports[0].nodePort}",
+        ]
+    )
+    try:
+        port = int(raw)
+    except ValueError as error:
+        raise ProofError(f"Gateway service has invalid NodePort: {raw!r}") from error
+    if not 1 <= port <= 65535:
+        raise ProofError(f"Gateway service NodePort is out of range: {port}")
+    return port
+
+
 def kind_docker_network(cluster: str) -> str:
     document = json.loads(
         output(
@@ -559,6 +581,7 @@ def kind_docker_network(cluster: str) -> str:
 def probe_gateway_http(
     cluster: str,
     addresses: list[str],
+    port: int,
     timeout_seconds: int = 30,
 ) -> tuple[str, bytes, bytes]:
     network = kind_docker_network(cluster)
@@ -590,7 +613,7 @@ def probe_gateway_http(
             ]
             try:
                 health = subprocess.run(
-                    [*common, f"http://{address}/health/live"],
+                    [*common, f"http://{address}:{port}/health/live"],
                     cwd=ROOT,
                     text=False,
                     capture_output=True,
@@ -598,7 +621,7 @@ def probe_gateway_http(
                     timeout=15,
                 ).stdout
                 web = subprocess.run(
-                    [*common, f"http://{address}/"],
+                    [*common, f"http://{address}:{port}/"],
                     cwd=ROOT,
                     text=False,
                     capture_output=True,
@@ -651,7 +674,11 @@ def prove_gateway(kubectl: str, cluster: str) -> dict[str, str]:
     )
     if not service:
         raise ProofError("Gateway service was not created")
-    address, health, web = probe_gateway_http(cluster, gateway_addresses(kubectl))
+    address, health, web = probe_gateway_http(
+        cluster,
+        gateway_addresses(kubectl),
+        gateway_node_port(kubectl, service),
+    )
     return {
         "service": service,
         "address": address,
