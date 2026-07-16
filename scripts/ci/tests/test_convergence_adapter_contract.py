@@ -987,6 +987,26 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
         # Validate we don't have additionalProperties: false in request to avoid making it authoritative
         self.assertNotIn("additionalProperties", schema["properties"]["request"])
 
+    def test_intent_length_boundary_matches_profile_schema(self) -> None:
+        schema = read_json(CONTRACT_ROOT / "assessment-profile.schema.json")
+        intent_properties = schema["properties"]["intent"]["properties"]
+        self.assertEqual(
+            {definition["minLength"] for definition in intent_properties.values()},
+            {8},
+        )
+
+        profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
+        for key in sorted(self.adapter.INTENT_KEYS):
+            with self.subTest(key=key, length=8):
+                valid = copy.deepcopy(profile)
+                valid["intent"][key] = "abcdefgh"
+                self.adapter.build_request(valid)
+            with self.subTest(key=key, length=7):
+                invalid = copy.deepcopy(profile)
+                invalid["intent"][key] = "abcdefg"
+                with self.assertRaises(self.adapter.ConvergenceAdapterError):
+                    self.adapter.build_request(invalid)
+
     def test_rfc3339_strict_shape_and_semantic_validation(self) -> None:
         profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
         # valid

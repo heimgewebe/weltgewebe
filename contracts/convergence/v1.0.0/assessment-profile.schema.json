@@ -50,32 +50,32 @@
       "properties": {
         "objective": {
           "type": "string",
-          "minLength": 16,
+          "minLength": 8,
           "maxLength": 500
         },
         "desired_state": {
           "type": "string",
-          "minLength": 16,
+          "minLength": 8,
           "maxLength": 500
         },
         "observed_state": {
           "type": "string",
-          "minLength": 16,
+          "minLength": 8,
           "maxLength": 500
         },
         "deviation": {
           "type": "string",
-          "minLength": 16,
+          "minLength": 8,
           "maxLength": 500
         },
         "decision": {
           "type": "string",
-          "minLength": 16,
+          "minLength": 8,
           "maxLength": 500
         },
         "rollback": {
           "type": "string",
-          "minLength": 16,
+          "minLength": 8,
           "maxLength": 500
         }
       }
