@@ -58,7 +58,7 @@ COPY --from=builder /app/target/release/weltgewebe-api /app/weltgewebe-api
 COPY scripts/dev/generate-demo-data.sh /usr/local/bin/generate-demo-data
 COPY scripts/dev/bootstrap-first-account.sh /usr/local/bin/bootstrap-first-account
 COPY apps/api/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/generate-demo-data /usr/local/bin/bootstrap-first-account /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/generate-demo-data /usr/local/bin/bootstrap-first-account /usr/local/bin/entrypoint.sh
 RUN groupadd --gid 10001 weltgewebe \
     && useradd --uid 10001 --gid 10001 --home-dir /app --shell /usr/sbin/nologin weltgewebe \
     && mkdir -p /data /tmp \

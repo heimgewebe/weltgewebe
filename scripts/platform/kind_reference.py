@@ -21,6 +21,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CACHE = ROOT / ".cache/weltgewebe-platform"
 MARKERS = CACHE / "clusters"
+KUBECONFIGS = CACHE / "kubeconfigs"
 DEFAULT_CLUSTER = "weltgewebe-reference"
 
 
@@ -65,6 +66,31 @@ def require_host_tools() -> None:
 
 def marker_path(name: str) -> Path:
     return MARKERS / f"{name}.json"
+
+
+def kubeconfig_path(name: str) -> Path:
+    return KUBECONFIGS / f"{name}.yaml"
+
+
+def configure_cluster_access(kind: str, name: str) -> Path:
+    KUBECONFIGS.mkdir(parents=True, exist_ok=True)
+    path = kubeconfig_path(name)
+    run([kind, "export", "kubeconfig", "--name", name, "--kubeconfig", str(path)])
+    os.environ["KUBECONFIG"] = str(path)
+    return path
+
+
+def require_owned_cluster(kind: str, name: str) -> dict[str, Any]:
+    marker = marker_path(name)
+    if name not in clusters(kind):
+        raise ProofError(f"owned cluster {name!r} is absent")
+    if not marker.is_file():
+        raise ProofError(f"cluster {name!r} has no ownership marker")
+    data = json.loads(marker.read_text(encoding="utf-8"))
+    if data.get("cluster") != name or data.get("repository") != str(ROOT):
+        raise ProofError(f"cluster {name!r} ownership marker does not match")
+    configure_cluster_access(kind, name)
+    return data
 
 
 def clusters(kind: str) -> set[str]:
@@ -112,6 +138,7 @@ def delete_owned_cluster(kind: str, name: str) -> None:
     if name in clusters(kind):
         run([kind, "delete", "cluster", "--name", name])
     marker.unlink(missing_ok=True)
+    kubeconfig_path(name).unlink(missing_ok=True)
 
 
 def apply_yaml(kubectl: str, document: dict[str, Any] | list[dict[str, Any]]) -> None:
@@ -299,10 +326,7 @@ def apply_flux_data(kubectl: str, branch: str) -> None:
     wait_condition(kubectl, "flux-system", "kustomization/weltgewebe-local-data", "Ready")
 
 
-def migration_pod(image: str, password: str, namespace: str) -> dict[str, Any]:
-    database_url = (
-        f"postgres://welt:{password}@postgres.weltgewebe-data.svc.cluster.local:5432/weltgewebe"
-    )
+def migration_pod(image: str, namespace: str) -> dict[str, Any]:
     environment = {
         "API_BIND": "0.0.0.0:8080",
         "APP_BASE_URL": "http://weltgewebe.localhost",
@@ -319,7 +343,6 @@ def migration_pod(image: str, password: str, namespace: str) -> dict[str, Any]:
         "WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE": "postgres",
         "WELTGEWEBE_DOMAIN_READ_SOURCE": "postgres",
         "WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE": "postgres",
-        "DATABASE_URL": database_url,
     }
     return {
         "apiVersion": "v1",
@@ -344,7 +367,21 @@ def migration_pod(image: str, password: str, namespace: str) -> dict[str, Any]:
                     "name": "api",
                     "image": image,
                     "imagePullPolicy": "Never",
-                    "env": [{"name": key, "value": value} for key, value in environment.items()],
+                    "env": [
+                        {"name": key, "value": value}
+                        for key, value in environment.items()
+                    ]
+                    + [
+                        {
+                            "name": "DATABASE_URL",
+                            "valueFrom": {
+                                "secretKeyRef": {
+                                    "name": "weltgewebe-runtime",
+                                    "key": "database-url",
+                                }
+                            },
+                        }
+                    ],
                     "readinessProbe": {
                         "httpGet": {"path": "/health/ready", "port": 8080},
                         "periodSeconds": 2,
@@ -374,8 +411,8 @@ def migration_pod(image: str, password: str, namespace: str) -> dict[str, Any]:
     }
 
 
-def migrate(kubectl: str, password: str, namespace: str) -> None:
-    pod = migration_pod("weltgewebe-api:local", password, namespace)
+def migrate(kubectl: str, namespace: str) -> None:
+    pod = migration_pod("weltgewebe-api:local", namespace)
     run([kubectl, "-n", namespace, "delete", "pod", pod["metadata"]["name"], "--ignore-not-found=true"])
     apply_yaml(kubectl, pod)
     wait_condition(kubectl, namespace, f"pod/{pod['metadata']['name']}", "Ready", "8m")
@@ -561,6 +598,72 @@ def diagnostic_snapshot(kubectl: str, name: str) -> None:
         (target / filename).write_text(result.stdout + result.stderr, encoding="utf-8")
 
 
+
+def data_up(args: argparse.Namespace) -> dict[str, Any]:
+    receipt = tool_receipt()
+    tools = receipt["tools"]
+    marker = require_owned_cluster(tools["kind"], args.cluster)
+    kubectl = tools["kubectl"]
+    kustomize = tools["kustomize"]
+    password = secrets.token_urlsafe(24)
+    app_namespace = "weltgewebe"
+    apply_yaml(kubectl, namespace_document("weltgewebe-data"))
+    apply_yaml(kubectl, namespace_document(app_namespace, data_client=True))
+    for document in secret_documents(password, app_namespace):
+        apply_yaml(kubectl, document)
+    apply_direct(kubectl, kustomize, "platform/infrastructure/local-data")
+    wait_rollout(kubectl, "weltgewebe-data", "deployment/postgres")
+    wait_rollout(kubectl, "weltgewebe-data", "deployment/nats")
+    migrate(kubectl, app_namespace)
+    return {
+        "schema_version": 1,
+        "status": "pass",
+        "phase": "data-up",
+        "cluster": args.cluster,
+        "commit": marker["commit"],
+        "production_changed": False,
+    }
+
+
+def app_verify(args: argparse.Namespace) -> dict[str, Any]:
+    receipt = tool_receipt()
+    tools = receipt["tools"]
+    marker = require_owned_cluster(tools["kind"], args.cluster)
+    kubectl = tools["kubectl"]
+    kustomize = tools["kustomize"]
+    apply_app_and_gateway(kubectl, kustomize, "direct")
+    wait_apps(kubectl, "weltgewebe")
+    restart = prove_restart(kubectl, "weltgewebe")
+    gateway = prove_gateway(kubectl)
+    image_ids = {
+        name: output(["docker", "image", "inspect", "--format", "{{.Id}}", image])
+        for name, image in {
+            "api": "weltgewebe-api:local",
+            "web": "weltgewebe-web:local",
+        }.items()
+    }
+    result = {
+        "schema_version": 1,
+        "status": "pass",
+        "phase": "app-verify",
+        "cluster": args.cluster,
+        "mode": "direct",
+        "commit": marker["commit"],
+        "tool_lock_sha256": receipt["lock_sha256"],
+        "image_ids": image_ids,
+        "api_restart": restart,
+        "gateway": gateway,
+        "api_replicas": 2,
+        "production_changed": False,
+    }
+    target = CACHE / "receipts"
+    target.mkdir(parents=True, exist_ok=True)
+    path = target / f"{args.cluster}-{marker['commit']}.json"
+    path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    result["receipt_path"] = str(path)
+    result["receipt_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return result
+
 def proof(args: argparse.Namespace) -> dict[str, Any]:
     require_host_tools()
     receipt = tool_receipt()
@@ -590,15 +693,15 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
                 receipt["kubernetes"]["kind_node_image"],
                 "--config",
                 "platform/clusters/local/kind.yaml",
-                "--wait",
-                "180s",
             ],
             timeout=600,
         )
         write_marker(args.cluster, commit)
+        configure_cluster_access(kind, args.cluster)
         created = True
         image_ids = build_images(kind, args.cluster, commit, timestamp)
         install_platform_components(kubectl, flux, helm, receipt["artifacts"])
+        run([kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=5m"])
         apply_yaml(kubectl, namespace_document("weltgewebe-data"))
         apply_yaml(kubectl, namespace_document(app_namespace, data_client=True))
         for secret in secret_documents(password, app_namespace):
@@ -611,7 +714,7 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
             apply_direct(kubectl, kustomize, "platform/infrastructure/local-data")
             wait_rollout(kubectl, "weltgewebe-data", "deployment/postgres")
             wait_rollout(kubectl, "weltgewebe-data", "deployment/nats")
-        migrate(kubectl, password, app_namespace)
+        migrate(kubectl, app_namespace)
         apply_app_and_gateway(kubectl, kustomize, args.mode)
         wait_apps(kubectl, app_namespace)
         restart = prove_restart(kubectl, app_namespace)
@@ -656,6 +759,10 @@ def main() -> int:
     proof_parser.add_argument("--mode", choices=("direct", "gitops"), default="direct")
     proof_parser.add_argument("--source-ref")
     proof_parser.add_argument("--keep", action="store_true")
+    data_parser = subparsers.add_parser("phase-a")
+    data_parser.add_argument("--cluster", default=DEFAULT_CLUSTER)
+    app_parser = subparsers.add_parser("phase-b")
+    app_parser.add_argument("--cluster", default=DEFAULT_CLUSTER)
     down_parser = subparsers.add_parser("down")
     down_parser.add_argument("--cluster", default=DEFAULT_CLUSTER)
     args = parser.parse_args()
@@ -665,7 +772,12 @@ def main() -> int:
             delete_owned_cluster(receipt["tools"]["kind"], args.cluster)
             print(json.dumps({"status": "deleted", "cluster": args.cluster}))
             return 0
-        result = proof(args)
+        if args.command == "phase-a":
+            result = data_up(args)
+        elif args.command == "phase-b":
+            result = app_verify(args)
+        else:
+            result = proof(args)
     except (ProofError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         print(f"kind reference proof failed: {error}", file=sys.stderr)
         if isinstance(error, subprocess.CalledProcessError):

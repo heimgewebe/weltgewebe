@@ -70,6 +70,31 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             dockerfile,
         )
 
+    def test_api_container_scripts_are_world_readable_and_executable(self) -> None:
+        dockerfile = (ROOT / "apps/api/Dockerfile").read_text()
+        self.assertIn(
+            "RUN chmod 0755 /usr/local/bin/generate-demo-data "
+            "/usr/local/bin/bootstrap-first-account /usr/local/bin/entrypoint.sh",
+            dockerfile,
+        )
+        self.assertNotIn("RUN chmod +x /usr/local/bin/generate-demo-data", dockerfile)
+
+    def test_reference_binds_cluster_access_after_cni_bootstrap(self) -> None:
+        source = (ROOT / "scripts/platform/kind_reference.py").read_text()
+        self.assertNotIn('"--wait",\n                "180s"', source)
+        self.assertIn("configure_cluster_access(kind, args.cluster)", source)
+        self.assertIn('"--for=condition=Ready", "nodes"', source)
+
+    def test_migration_uses_runtime_secret_reference(self) -> None:
+        pod = self.reference.migration_pod("weltgewebe-api:local", "weltgewebe")
+        env = pod["spec"]["containers"][0]["env"]
+        database = next(item for item in env if item["name"] == "DATABASE_URL")
+        self.assertEqual(
+            database["valueFrom"]["secretKeyRef"],
+            {"name": "weltgewebe-runtime", "key": "database-url"},
+        )
+        self.assertNotIn("value", database)
+
     def test_secret_contract_contains_no_values(self) -> None:
         contract = json.loads(
             (ROOT / "platform/apps/weltgewebe/secret-contract.json").read_text()
