@@ -4,6 +4,7 @@ kind: Cluster
 name: weltgewebe-reference
 networking:
   disableDefaultCNI: true
+  kubeProxyMode: none
 nodes:
   - role: control-plane
   - role: worker

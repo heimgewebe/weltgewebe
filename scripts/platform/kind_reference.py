@@ -237,6 +237,8 @@ def install_platform_components(
             "--set",
             "gatewayAPI.enabled=true",
             "--set",
+            "kubeProxyReplacement=true",
+            "--set",
             "hubble.relay.enabled=true",
             "--set",
             "hubble.ui.enabled=false",

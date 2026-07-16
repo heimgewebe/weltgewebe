@@ -102,6 +102,14 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertIn("configure_cluster_access(kind, args.cluster)", source)
         self.assertIn('"--for=condition=Ready", "nodes"', source)
 
+    def test_gateway_contract_uses_cilium_kube_proxy_replacement(self) -> None:
+        kind_config = (ROOT / "platform/clusters/local/kind.yaml").read_text()
+        source = (ROOT / "scripts/platform/kind_reference.py").read_text()
+        self.assertIn("disableDefaultCNI: true", kind_config)
+        self.assertIn("kubeProxyMode: none", kind_config)
+        self.assertIn('"gatewayAPI.enabled=true"', source)
+        self.assertIn('"kubeProxyReplacement=true"', source)
+
     def test_full_proof_uses_canonical_builder_signature(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()
         self.assertIn(
