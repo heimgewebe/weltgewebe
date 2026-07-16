@@ -35,14 +35,14 @@ verifies_with:
 - `apps/weltgewebe/overlays/` enthält ausschließlich kleine Umgebungsdeltas.
 - `infrastructure/local-data/` stellt PostgreSQL und JetStream nur für lokale und CI-Beweise bereit.
 - `infrastructure/gateway/` definiert Gateway API und HTTPRoute.
-- `clusters/local/` definiert die Flux-Abhängigkeitskette `data → app → gateway`.
+- `clusters/local/` definiert die Flux-Abhängigkeitskette `data → migration → app → gateway`.
 - `toolchain.lock.json` bindet Werkzeuge, Clusterimage und Drittartefakte an SHA-256.
 
 ## Sicherheitsgrenzen
 
 - Keine Secret-Objekte oder Secretwerte werden versioniert.
 - Local und CI verwenden für Datenzelle und lokale App eine deterministische, ausdrücklich öffentliche Test-Fixture als ConfigMap; sie ist kein Produktionsgeheimnis.
-- Der Referenzrunner erzeugt nur für den Migration-Pod ein ephemeres `weltgewebe-runtime` Secret im Cluster. Dessen `database-url` spiegelt exakt die öffentliche Local-Fixture, damit die Secret-Referenz geprüft wird, ohne einen Produktions-Secretpfad zu behaupten.
+- Der Referenzrunner verwendet für Local/CI einen deklarativen Migration-only-Job mit öffentlicher ConfigMap-Fixture. Staging und Produktion bleiben durch den externen Secret- und Image-Promotionsvertrag blockiert.
 - Staging und Production benötigen einen externen, auditierten Secretpfad.
 - Eigene Container laufen ohne Root, ohne Service-Account-Token, ohne Privilege Escalation und mit Default-Deny-Netzpolitik.
 - Der Referenzrunner übernimmt oder löscht niemals einen bereits vorhandenen Cluster.

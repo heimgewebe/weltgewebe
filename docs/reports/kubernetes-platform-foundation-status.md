@@ -31,9 +31,9 @@ relations:
 - externer Secretvertrag ohne versionierte Secretwerte;
 - Gateway API als Eingangsschicht;
 - Cilium/Hubble als lokaler Netzwerk- und Beobachtbarkeitsbeweis;
-- Flux-Abhängigkeitskette mit Wait, Prune, Health Checks und Driftkorrektur;
+- Flux-Abhängigkeitskette `data → migration → app → gateway` mit Wait, Prune, Health Checks und Driftkorrektur;
 - isolierter kind-Lifecycle mit Besitzmarker und eigener Bereinigung;
-- Migration vor dem Start mehrerer API-Replikate;
+- deklarativer, completion-gesteuerter Migration-only-Job vor dem Start mehrerer API-Replikate;
 - Zwei-API-, Restart-, Gateway- und GitOps-Driftbeweis.
 
 ## Nicht behauptet

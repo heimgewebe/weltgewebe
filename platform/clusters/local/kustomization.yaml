@@ -4,5 +4,6 @@ kind: Kustomization
 resources:
   - source.yaml
   - local-data.yaml
+  - migration.yaml
   - app.yaml
   - gateway.yaml

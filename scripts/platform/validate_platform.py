@@ -118,6 +118,42 @@ def _assert_images() -> None:
                 raise ContractError(f"unbounded latest image in {path.relative_to(ROOT)}")
 
 
+
+def _assert_migration_job() -> None:
+    job = next(
+        _documents(PLATFORM / "apps/weltgewebe/migration/local/job.yaml")
+    )
+    if job.get("apiVersion") != "batch/v1" or job.get("kind") != "Job":
+        raise ContractError("local migration workload must be a batch/v1 Job")
+    spec = job.get("spec", {})
+    if spec.get("backoffLimit") != 0 or spec.get("activeDeadlineSeconds") != 480:
+        raise ContractError("local migration Job must fail once and have a bounded deadline")
+    pod = spec.get("template", {}).get("spec", {})
+    if pod.get("restartPolicy") != "Never" or pod.get("automountServiceAccountToken") is not False:
+        raise ContractError("local migration Job has an unsafe pod lifecycle")
+    if pod.get("securityContext", {}).get("runAsNonRoot") is not True:
+        raise ContractError("local migration Job must run as non-root")
+    containers = pod.get("containers", [])
+    if len(containers) != 1:
+        raise ContractError("local migration Job must contain exactly one container")
+    container = containers[0]
+    security = container.get("securityContext", {})
+    if security.get("readOnlyRootFilesystem") is not True:
+        raise ContractError("local migration Job requires a read-only root filesystem")
+    if security.get("capabilities", {}).get("drop") != ["ALL"]:
+        raise ContractError("local migration Job must drop all capabilities")
+    environment = {item.get("name"): item for item in container.get("env", [])}
+    if environment.get("WELTGEWEBE_API_MIGRATION_ONLY", {}).get("value") != "1":
+        raise ContractError("local migration Job does not enable migration-only mode")
+    if environment.get("WELTGEWEBE_API_STARTUP_MIGRATIONS", {}).get("value") != "run":
+        raise ContractError("local migration Job does not run migrations")
+    database = environment.get("DATABASE_URL", {}).get("valueFrom", {})
+    if database.get("configMapKeyRef") != {
+        "name": "weltgewebe-local-fixture",
+        "key": "database-url",
+    }:
+        raise ContractError("local migration Job must use the public ConfigMap fixture")
+
 def _assert_flux_chain() -> None:
     cluster = PLATFORM / "clusters/local"
     source = next(_documents(cluster / "source.yaml"))
@@ -125,7 +161,8 @@ def _assert_flux_chain() -> None:
         raise ContractError("local Flux source is not the canonical repository")
     expected = {
         "local-data.yaml": [],
-        "app.yaml": ["weltgewebe-local-data"],
+        "migration.yaml": ["weltgewebe-local-data"],
+        "app.yaml": ["weltgewebe-migration"],
         "gateway.yaml": ["weltgewebe-app"],
     }
     for filename, dependencies in expected.items():
@@ -179,6 +216,7 @@ def _render_and_validate() -> dict[str, int]:
     targets = [
         *(f"platform/apps/weltgewebe/overlays/{name}" for name in OVERLAYS),
         "platform/infrastructure/local-data",
+        "platform/apps/weltgewebe/migration/local",
         "platform/infrastructure/gateway",
         "platform/clusters/local",
     ]
@@ -216,6 +254,9 @@ def validate(render: bool) -> dict[str, Any]:
         PLATFORM / "apps/weltgewebe/overlays/production/kustomization.yaml",
         PLATFORM / "clusters/local/kind.yaml",
         PLATFORM / "clusters/local/kustomization.yaml",
+        PLATFORM / "clusters/local/migration.yaml",
+        PLATFORM / "apps/weltgewebe/migration/local/kustomization.yaml",
+        PLATFORM / "apps/weltgewebe/migration/local/job.yaml",
         PLATFORM / "infrastructure/gateway/kustomization.yaml",
         PLATFORM / "infrastructure/local-data/kustomization.yaml",
     ]
@@ -225,6 +266,7 @@ def validate(render: bool) -> dict[str, Any]:
     _assert_no_secrets()
     _assert_first_party_deployments()
     _assert_images()
+    _assert_migration_job()
     _assert_flux_chain()
     _assert_compose_parity()
     rendered = _render_and_validate() if render else {}

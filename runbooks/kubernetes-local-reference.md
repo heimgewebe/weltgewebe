@@ -31,7 +31,7 @@ verifies_with:
 - kein bestehender Cluster mit dem gewählten Namen;
 - keine laufende Produktionsänderung in diesem Pfad.
 
-Die lokale Datenzelle und die lokale App verwenden eine deterministische, öffentliche Test-Fixture als ConfigMap; reale Geheimnisse werden weder benötigt noch geschrieben. Für den Migration-Pod erzeugt der Runner ein ephemeres `weltgewebe-runtime` Secret, dessen `database-url` exakt dieselbe öffentliche Fixture spiegelt.
+Die lokale Datenzelle, der Migrationsjob und die lokale App verwenden eine deterministische, öffentliche Test-Fixture als ConfigMap; reale Geheimnisse werden weder benötigt noch geschrieben. Staging und Produktion behalten unverändert den externen Secretvertrag.
 
 Die Werkzeuge werden nicht global installiert. `bootstrap_tools.py` lädt sie in den ignorierten Repositorycache und verifiziert jeden SHA-256.
 Gateway API ist zusätzlich an den Cilium-Vertrag gebunden: Für Cilium 1.19.5 werden aus Gateway API 1.4.1 ausschließlich GatewayClass, Gateway, HTTPRoute, ReferenceGrant und GRPCRoute installiert. TLSRoute bleibt uninstalled, weil Weltgewebe es nicht benötigt und Cilium fehlende optionale TLSRoute-Unterstützung sauber deaktiviert. Der Bootstrap weist zusätzliche oder falsch gebundene CRDs fail-closed zurück.
@@ -49,7 +49,7 @@ make platform-render
 python3 scripts/platform/kind_reference.py proof   --cluster weltgewebe-reference   --mode direct
 ```
 
-Der Runner baut API und Web, lädt sie in kind, installiert Gateway API, Cilium/Hubble und Flux, erzeugt das ephemere Migration-Secret aus der öffentlichen Fixture, führt die Migration kontrolliert vor dem Replica-Start aus, startet zwei API-Pods, prüft Restart und Gateway und entfernt ausschließlich den selbst markierten Cluster. Der kind-Cluster startet ohne Standard-CNI und ohne kube-proxy; Cilium übernimmt den Kubernetes-Serviceverkehr ausdrücklich über `kubeProxyReplacement=true`, weil sein Gateway-Controller sonst nicht aktiv wird. Für diesen Bootstrap liest der Runner die IPv4-Adresse des eigenen kind-Control-Plane-Containers aus und übergibt sie Cilium zusammen mit Port `6443`; die virtuelle Service-Adresse ist vor Ciliums Start noch nicht erreichbar.
+Der Runner baut API und Web, lädt sie in kind, installiert Gateway API, Cilium/Hubble und Flux, führt den deklarativen Migration-only-Job kontrolliert vor dem Replica-Start aus, startet zwei API-Pods, prüft Restart und Gateway und entfernt ausschließlich den selbst markierten Cluster. Der kind-Cluster startet ohne Standard-CNI und ohne kube-proxy; Cilium übernimmt den Kubernetes-Serviceverkehr ausdrücklich über `kubeProxyReplacement=true`, weil sein Gateway-Controller sonst nicht aktiv wird. Für diesen Bootstrap liest der Runner die IPv4-Adresse des eigenen kind-Control-Plane-Containers aus und übergibt sie Cilium zusammen mit Port `6443`; die virtuelle Service-Adresse ist vor Ciliums Start noch nicht erreichbar.
 
 ## GitOps-Beweis
 

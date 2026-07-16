@@ -297,6 +297,21 @@ implementations:
       - scripts/ci/tests/test_kubernetes_platform_contract.py
       - .github/workflows/kubernetes-platform.yml
 
+
+  - id: impl.api.migration-only
+    path: apps/api/src/lib.rs
+    impl_type: service
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - platform/README.md
+      - runbooks/kubernetes-local-reference.md
+      - docs/reports/kubernetes-platform-foundation-status.md
+    verified_by:
+      - scripts/ci/tests/test_kubernetes_platform_contract.py
+      - .github/workflows/kubernetes-platform.yml
+
   - id: impl.guard.kubernetes-platform
     path: scripts/platform/validate_platform.py
     impl_type: guard

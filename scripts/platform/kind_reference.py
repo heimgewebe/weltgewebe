@@ -23,9 +23,6 @@ CACHE = ROOT / ".cache/weltgewebe-platform"
 MARKERS = CACHE / "clusters"
 KUBECONFIGS = CACHE / "kubeconfigs"
 DEFAULT_CLUSTER = "weltgewebe-reference"
-LOCAL_APP_FIXTURE = (
-    ROOT / "platform/apps/weltgewebe/overlays/local/fixture-config-map.yaml"
-)
 GATEWAY_API_ARTIFACTS = (
     "gateway_api_gatewayclasses",
     "gateway_api_gateways",
@@ -307,28 +304,6 @@ def install_platform_components(
         wait_rollout(kubectl, "flux-system", f"deployment/{deployment}")
 
 
-def local_fixture_database_url() -> str:
-    fixture = yaml.safe_load(LOCAL_APP_FIXTURE.read_text(encoding="utf-8"))
-    database_url = fixture.get("data", {}).get("database-url")
-    if not isinstance(database_url, str) or not database_url:
-        raise ProofError("local fixture database-url is missing")
-    return database_url
-
-
-def runtime_secret_document(app_namespace: str) -> dict[str, Any]:
-    return {
-        "apiVersion": "v1",
-        "kind": "Secret",
-        "metadata": {"name": "weltgewebe-runtime", "namespace": app_namespace},
-        "type": "Opaque",
-        "stringData": {"database-url": local_fixture_database_url()},
-    }
-
-
-def apply_runtime_secret(kubectl: str, app_namespace: str) -> None:
-    apply_yaml(kubectl, runtime_secret_document(app_namespace))
-
-
 def namespace_document(name: str, *, data_client: bool = False) -> dict[str, Any]:
     labels = {
         "pod-security.kubernetes.io/enforce": "restricted",
@@ -358,112 +333,33 @@ def apply_direct(kubectl: str, kustomize: str, path: str) -> None:
 def apply_flux_data(kubectl: str, branch: str) -> None:
     apply_yaml(kubectl, flux_source_document(branch))
     apply_file(kubectl, ROOT / "platform/clusters/local/local-data.yaml")
+    apply_file(kubectl, ROOT / "platform/clusters/local/migration.yaml")
     wait_condition(kubectl, "flux-system", "gitrepository/weltgewebe", "Ready")
     wait_condition(kubectl, "flux-system", "kustomization/weltgewebe-local-data", "Ready")
+    wait_condition(kubectl, "flux-system", "kustomization/weltgewebe-migration", "Ready")
 
 
-def migration_pod(image: str, namespace: str) -> dict[str, Any]:
-    runtime_reference = {
-        "secretKeyRef": {
-            "name": "weltgewebe-runtime",
-            "key": "database-url",
-        }
-    }
-    environment = {
-        "API_BIND": "0.0.0.0:8080",
-        "APP_BASE_URL": "http://weltgewebe.localhost",
-        "AUTH_COOKIE_SECURE": "0",
-        "AUTH_PUBLIC_LOGIN": "0",
-        "GEWEBE_IN_DIR": "/data",
-        "GEWEBE_SEED_DEMO": "false",
-        "GEWEBE_SEED_REAL": "false",
-        "NATS_URL": "nats://nats.weltgewebe-data.svc.cluster.local:4222",
-        "RUST_LOG": "info",
-        "WELTGEWEBE_API_STARTUP_MIGRATIONS": "run",
-        "WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE": "postgres",
-        "WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE": "postgres",
-        "WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE": "postgres",
-        "WELTGEWEBE_DOMAIN_READ_SOURCE": "postgres",
-        "WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE": "postgres",
-    }
-    return {
-        "apiVersion": "v1",
-        "kind": "Pod",
-        "metadata": {
-            "name": "weltgewebe-migration-bootstrap",
-            "namespace": namespace,
-            "labels": {"app.kubernetes.io/name": "weltgewebe-migration-bootstrap"},
-        },
-        "spec": {
-            "restartPolicy": "Never",
-            "automountServiceAccountToken": False,
-            "securityContext": {
-                "runAsNonRoot": True,
-                "runAsUser": 10001,
-                "runAsGroup": 10001,
-                "fsGroup": 10001,
-                "seccompProfile": {"type": "RuntimeDefault"},
-            },
-            "containers": [
-                {
-                    "name": "api",
-                    "image": image,
-                    "imagePullPolicy": "Never",
-                    "env": [
-                        {"name": key, "value": value}
-                        for key, value in environment.items()
-                    ]
-                    + [
-                        {
-                            "name": "DATABASE_URL",
-                            "valueFrom": runtime_reference,
-                        }
-                    ],
-                    "readinessProbe": {
-                        "httpGet": {"path": "/health/ready", "port": 8080},
-                        "periodSeconds": 2,
-                        "failureThreshold": 60,
-                    },
-                    "resources": {
-                        "requests": {"cpu": "100m", "memory": "128Mi"},
-                        "limits": {"cpu": "1", "memory": "512Mi"},
-                    },
-                    "securityContext": {
-                        "allowPrivilegeEscalation": False,
-                        "privileged": False,
-                        "readOnlyRootFilesystem": True,
-                        "capabilities": {"drop": ["ALL"]},
-                    },
-                    "volumeMounts": [
-                        {"name": "data", "mountPath": "/data"},
-                        {"name": "tmp", "mountPath": "/tmp"},
-                    ],
-                }
-            ],
-            "volumes": [
-                {"name": "data", "emptyDir": {}},
-                {"name": "tmp", "emptyDir": {}},
-            ],
-        },
-    }
-
-
-def migrate(kubectl: str, namespace: str) -> None:
-    pod = migration_pod("weltgewebe-api:local", namespace)
+def migrate_direct(kubectl: str, kustomize: str) -> None:
     run(
         [
             kubectl,
             "-n",
-            namespace,
+            "weltgewebe",
             "delete",
-            "pod",
-            pod["metadata"]["name"],
+            "job",
+            "weltgewebe-migration",
             "--ignore-not-found=true",
+            "--wait=true",
         ]
     )
-    apply_yaml(kubectl, pod)
-    wait_condition(kubectl, namespace, f"pod/{pod['metadata']['name']}", "Ready", "8m")
-    run([kubectl, "-n", namespace, "delete", "pod", pod["metadata"]["name"], "--wait=true"])
+    apply_direct(kubectl, kustomize, "platform/apps/weltgewebe/migration/local")
+    wait_condition(
+        kubectl,
+        "weltgewebe",
+        "job/weltgewebe-migration",
+        "Complete",
+        "8m",
+    )
 
 
 def apply_app_and_gateway(
@@ -685,7 +581,6 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
             kubectl, flux, helm, receipt["artifacts"], api_server_host
         )
         run([kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=5m"])
-        apply_yaml(kubectl, namespace_document(app_namespace, data_client=True))
         if args.mode == "gitops":
             if not args.source_ref:
                 raise ProofError("--source-ref is required for gitops mode")
@@ -694,8 +589,7 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
             apply_direct(kubectl, kustomize, "platform/infrastructure/local-data")
             wait_rollout(kubectl, "weltgewebe-data", "deployment/postgres")
             wait_rollout(kubectl, "weltgewebe-data", "deployment/nats")
-        apply_runtime_secret(kubectl, app_namespace)
-        migrate(kubectl, app_namespace)
+            migrate_direct(kubectl, kustomize)
         apply_app_and_gateway(kubectl, kustomize, args.mode)
         wait_apps(kubectl, app_namespace)
         restart = prove_restart(kubectl, app_namespace)
@@ -715,9 +609,8 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
             "api_restart": restart,
             "gateway": gateway,
             "api_replicas": 2,
-            "migration_credential_class": (
-                "ephemeral-runtime-secret-from-public-local-fixture"
-            ),
+            "migration_credential_class": "public-local-configmap",
+            "migration_workload": "batch/v1 Job/weltgewebe-migration",
             "production_changed": False,
         }
         target = CACHE / "receipts"

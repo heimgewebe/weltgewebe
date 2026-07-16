@@ -75,10 +75,18 @@ pub async fn run() -> anyhow::Result<()> {
     // re-reading the environment behind the config's back.
     routes::auth::init_trusted_proxies(&app_config);
 
+    let migration_mode = StartupMigrationMode::load()?;
+    let migration_only = migration_only_requested()?;
     let (db_pool, db_pool_configured) = initialise_database_pool().await?;
-    let (nats_client, nats_configured) = initialise_nats_client().await;
+    validate_migration_only_request(migration_only, migration_mode, db_pool_configured)?;
+    handle_startup_migrations(db_pool_configured, db_pool.as_ref(), migration_mode).await?;
 
-    handle_startup_migrations(db_pool_configured, db_pool.as_ref()).await?;
+    if migration_only {
+        tracing::info!("startup migrations completed in migration-only mode; exiting before runtime initialization");
+        return Ok(());
+    }
+
+    let (nats_client, nats_configured) = initialise_nats_client().await;
 
     // Domain write-source startup gates. Config loading already enforces that
     // every PostgreSQL write source is paired with PostgreSQL reads. Here we
@@ -451,6 +459,46 @@ impl StartupMigrationMode {
     }
 }
 
+fn migration_only_requested() -> anyhow::Result<bool> {
+    let raw = match env::var("WELTGEWEBE_API_MIGRATION_ONLY") {
+        Ok(value) => value,
+        Err(env::VarError::NotPresent) => return Ok(false),
+        Err(error) => {
+            return Err(anyhow!(error))
+                .context("failed to read WELTGEWEBE_API_MIGRATION_ONLY from the environment");
+        }
+    };
+
+    match raw.trim() {
+        "0" => Ok(false),
+        "1" => Ok(true),
+        _ => Err(anyhow!(
+            "invalid WELTGEWEBE_API_MIGRATION_ONLY value {raw:?}; expected `0` or `1`"
+        )),
+    }
+}
+
+fn validate_migration_only_request(
+    requested: bool,
+    migration_mode: StartupMigrationMode,
+    db_pool_configured: bool,
+) -> anyhow::Result<()> {
+    if !requested {
+        return Ok(());
+    }
+    if migration_mode != StartupMigrationMode::Run {
+        return Err(anyhow!(
+            "WELTGEWEBE_API_MIGRATION_ONLY=1 requires WELTGEWEBE_API_STARTUP_MIGRATIONS=run"
+        ));
+    }
+    if !db_pool_configured {
+        return Err(anyhow!(
+            "WELTGEWEBE_API_MIGRATION_ONLY=1 requires DATABASE_URL and a configured PostgreSQL pool"
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone)]
 struct AppliedStartupMigration {
     success: bool,
@@ -460,6 +508,7 @@ struct AppliedStartupMigration {
 async fn handle_startup_migrations(
     db_pool_configured: bool,
     db_pool: Option<&PgPool>,
+    migration_mode: StartupMigrationMode,
 ) -> anyhow::Result<()> {
     let pool = match (db_pool_configured, db_pool) {
         (false, None) => return Ok(()),
@@ -478,7 +527,7 @@ async fn handle_startup_migrations(
 
     let migrator = sqlx::migrate!("./migrations");
 
-    match StartupMigrationMode::load()? {
+    match migration_mode {
         StartupMigrationMode::Run => {
             migrator
                 .run(pool)
@@ -656,8 +705,9 @@ async fn initialise_nats_client() -> (Option<NatsClient>, bool) {
 #[cfg(test)]
 mod tests {
     use super::{
-        initialise_database_pool, record_applied_startup_migration,
-        validate_applied_startup_migrations, AppliedStartupMigration, StartupMigrationMode,
+        initialise_database_pool, migration_only_requested, record_applied_startup_migration,
+        validate_applied_startup_migrations, validate_migration_only_request,
+        AppliedStartupMigration, StartupMigrationMode,
     };
     use crate::test_helpers::EnvGuard;
     use serial_test::serial;
@@ -712,6 +762,39 @@ mod tests {
         let _guard = EnvGuard::set("WELTGEWEBE_API_STARTUP_MIGRATIONS", "verify-applied");
         let mode = StartupMigrationMode::load().expect("verify-applied mode should load");
         assert_eq!(mode, StartupMigrationMode::VerifyApplied);
+    }
+
+    #[test]
+    #[serial]
+    fn migration_only_defaults_to_disabled() {
+        let _guard = EnvGuard::unset("WELTGEWEBE_API_MIGRATION_ONLY");
+        assert!(!migration_only_requested().expect("unset mode should load"));
+    }
+
+    #[test]
+    #[serial]
+    fn migration_only_accepts_explicit_one() {
+        let _guard = EnvGuard::set("WELTGEWEBE_API_MIGRATION_ONLY", "1");
+        assert!(migration_only_requested().expect("enabled mode should load"));
+    }
+
+    #[test]
+    #[serial]
+    fn migration_only_rejects_unknown_values() {
+        let _guard = EnvGuard::set("WELTGEWEBE_API_MIGRATION_ONLY", "true");
+        let error = migration_only_requested().expect_err("unknown value must fail closed");
+        assert!(error.to_string().contains("expected `0` or `1`"));
+    }
+
+    #[test]
+    fn migration_only_requires_run_mode_and_database() {
+        validate_migration_only_request(true, StartupMigrationMode::Run, true)
+            .expect("run mode with a configured database should pass");
+        assert!(
+            validate_migration_only_request(true, StartupMigrationMode::VerifyApplied, true)
+                .is_err()
+        );
+        assert!(validate_migration_only_request(true, StartupMigrationMode::Run, false).is_err());
     }
 
     #[test]

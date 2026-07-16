@@ -2,7 +2,7 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: weltgewebe-app
+  name: weltgewebe-migration
   namespace: flux-system
 spec:
   interval: 2m
@@ -11,17 +11,14 @@ spec:
   prune: true
   wait: true
   dependsOn:
-    - name: weltgewebe-migration
+    - name: weltgewebe-local-data
+  force: true
   sourceRef:
     kind: GitRepository
     name: weltgewebe
-  path: ./platform/apps/weltgewebe/overlays/local
+  path: ./platform/apps/weltgewebe/migration/local
   healthChecks:
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: weltgewebe-api
-      namespace: weltgewebe
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: weltgewebe-web
+    - apiVersion: batch/v1
+      kind: Job
+      name: weltgewebe-migration
       namespace: weltgewebe

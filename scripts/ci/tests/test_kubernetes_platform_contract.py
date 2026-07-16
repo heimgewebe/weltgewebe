@@ -194,7 +194,7 @@ spec:
             ROOT / "platform/infrastructure/local-data/fixture-config-map.yaml"
         ).read_text()
         app_fixture = (
-            ROOT / "platform/apps/weltgewebe/overlays/local/fixture-config-map.yaml"
+            ROOT / "platform/apps/weltgewebe/migration/local/fixture-config-map.yaml"
         ).read_text()
         self.assertIn("kind: ConfigMap", data_fixture)
         self.assertIn("kind: ConfigMap", app_fixture)
@@ -207,39 +207,43 @@ spec:
         self.assertIn("configMapKeyRef:", patch)
         self.assertIn("name: weltgewebe-local-fixture", patch)
 
-    def test_full_proof_wires_runtime_secret_to_public_fixture(self) -> None:
-        app_fixture = (
-            ROOT / "platform/apps/weltgewebe/overlays/local/fixture-config-map.yaml"
+    def test_migration_is_a_declarative_completion_gated_job(self) -> None:
+        job = self.reference.yaml.safe_load(
+            (ROOT / "platform/apps/weltgewebe/migration/local/job.yaml").read_text()
         )
-        fixture_url = self.reference.local_fixture_database_url()
+        self.assertEqual(job["apiVersion"], "batch/v1")
+        self.assertEqual(job["kind"], "Job")
+        self.assertEqual(job["spec"]["backoffLimit"], 0)
+        pod = job["spec"]["template"]["spec"]
+        self.assertEqual(pod["restartPolicy"], "Never")
+        self.assertFalse(pod["automountServiceAccountToken"])
+        container = pod["containers"][0]
+        environment = {item["name"]: item for item in container["env"]}
+        self.assertEqual(environment["WELTGEWEBE_API_MIGRATION_ONLY"]["value"], "1")
+        self.assertEqual(environment["WELTGEWEBE_API_STARTUP_MIGRATIONS"]["value"], "run")
         self.assertEqual(
-            fixture_url,
-            self.reference.yaml.safe_load(app_fixture.read_text())["data"][
-                "database-url"
-            ],
+            environment["DATABASE_URL"]["valueFrom"]["configMapKeyRef"],
+            {"name": "weltgewebe-local-fixture", "key": "database-url"},
         )
-        secret = self.reference.runtime_secret_document("weltgewebe")
-        self.assertEqual(secret["kind"], "Secret")
-        self.assertEqual(secret["metadata"]["name"], "weltgewebe-runtime")
-        self.assertEqual(secret["metadata"]["namespace"], "weltgewebe")
-        self.assertEqual(secret["stringData"], {"database-url": fixture_url})
-        self.assertNotIn("local-test-only-weltgewebe", json.dumps(secret["metadata"]))
-        pod = self.reference.migration_pod("weltgewebe-api:local", "weltgewebe")
-        database = next(
-            item
-            for item in pod["spec"]["containers"][0]["env"]
-            if item["name"] == "DATABASE_URL"
-        )
-        self.assertEqual(
-            database["valueFrom"]["secretKeyRef"],
-            {"name": "weltgewebe-runtime", "key": "database-url"},
-        )
-        self.assertNotIn("configMapKeyRef", database["valueFrom"])
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()
-        self.assertIn("apply_runtime_secret(kubectl, app_namespace)", source)
-        self.assertIn("migrate(kubectl, app_namespace)", source)
-        self.assertNotIn("secrets.token_urlsafe", source)
-        self.assertNotIn("secret_documents", source)
+        self.assertIn("migrate_direct(kubectl, kustomize)", source)
+        self.assertIn('"job/weltgewebe-migration"', source)
+        self.assertIn('"Complete"', source)
+        self.assertNotIn("runtime_secret_document", source)
+        self.assertNotIn("migration_pod", source)
+
+    def test_flux_chain_gates_app_on_completed_migration(self) -> None:
+        migration = self.reference.yaml.safe_load(
+            (ROOT / "platform/clusters/local/migration.yaml").read_text()
+        )
+        app = self.reference.yaml.safe_load(
+            (ROOT / "platform/clusters/local/app.yaml").read_text()
+        )
+        self.assertEqual(
+            migration["spec"]["dependsOn"], [{"name": "weltgewebe-local-data"}]
+        )
+        self.assertTrue(migration["spec"]["force"])
+        self.assertEqual(app["spec"]["dependsOn"], [{"name": "weltgewebe-migration"}])
 
     def test_reference_exposes_only_full_proof_and_owned_down(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()
