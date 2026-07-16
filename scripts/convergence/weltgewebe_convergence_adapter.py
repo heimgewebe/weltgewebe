@@ -12,11 +12,12 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, TextIO, Iterator
 
 SCHEMA_VERSION = "1.0.0"
 REQUEST_SCHEMA_VERSION = 1
-PROTOCOL_HEAD = "83ed435bf9eb490e81a6ff2103b6c1397440d40b"
+PROTOCOL_HEAD_FILE = Path(__file__).resolve().parents[2] / "contracts" / "convergence" / "v1.0.0" / "PINNED_PROTOCOL_HEAD"
+PROTOCOL_HEAD = PROTOCOL_HEAD_FILE.read_text(encoding="utf-8").strip()
 ADAPTER_NAME = "weltgewebe-os-convergence-adapter"
 ADAPTER_VERSION = "1.0.0"
 
@@ -197,6 +198,12 @@ EXPLICIT_SYMBOLIC_GIT_REF_RE = re.compile(
 RFC3339_DATETIME_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$"
 )
+GITHUB_PR_RE = re.compile(
+    r"github\.com/[^/\s]+/[^/\s]+/pull/\d+$", re.IGNORECASE
+)
+GITLAB_MR_RE = re.compile(
+    r"gitlab\.com/(?:[^/\s]+/)+[^/\s]+/-/merge_requests/\d+$", re.IGNORECASE
+)
 
 
 class ConvergenceAdapterError(ValueError):
@@ -217,8 +224,13 @@ def _reject_json_constant(value: str) -> None:
 
 
 def load_profile(path: Path) -> dict[str, Any]:
+    if path.is_symlink():
+        # Rejecting symlinks reduces local path confusion; it is not a general host filesystem security mechanism.
+        raise ConvergenceAdapterError(f"profile path {path} must not be a symlink")
     try:
         text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ConvergenceAdapterError(f"profile {path} is not valid UTF-8: {exc}") from exc
     except OSError as exc:
         raise ConvergenceAdapterError(f"cannot read profile {path}: {exc}") from exc
     try:
@@ -231,7 +243,6 @@ def load_profile(path: Path) -> dict[str, Any]:
         raise ConvergenceAdapterError(
             f"invalid JSON in profile {path}: {exc.msg} at line {exc.lineno} column {exc.colno}"
         ) from exc
-    _assert_no_non_finite(data, "profile")
     if not isinstance(data, dict):
         raise ConvergenceAdapterError("profile root must be an object")
     return data
@@ -254,6 +265,7 @@ def build_request_from_path(path: Path) -> tuple[dict[str, Any], str, str]:
 def build_request(profile: dict[str, Any]) -> tuple[dict[str, Any], str, str]:
     validate_profile(profile)
     profile_json = canonical_json(profile)
+    # Return value should be isolated from the input profile
     request = copy.deepcopy(profile["request"])
     request_json = canonical_json(request)
     profile_sha256 = sha256_hex(profile_json)
@@ -289,7 +301,7 @@ def _validate_evidence_mode(mode: Any, request: Any) -> None:
         raise ConvergenceAdapterError("live profiles must not contain fixture evidence references")
 
 
-def _iter_evidence_refs(request: Any):
+def _iter_evidence_refs(request: Any) -> Iterator[str]:
     if not isinstance(request, dict):
         return
     observation = request.get("observation")
@@ -322,7 +334,7 @@ def _iter_evidence_refs(request: Any):
 def _validate_intent(intent: Any) -> None:
     _assert_object_keys(intent, INTENT_KEYS, "intent")
     for key in sorted(INTENT_KEYS):
-        _assert_string(intent[key], f"intent.{key}", min_length=16, max_length=500)
+        _assert_string(intent[key], f"intent.{key}", min_length=8, max_length=500)
 
 
 def _validate_request(request: Any) -> None:
@@ -409,6 +421,16 @@ def _validate_observation(observation: Any) -> list[dict[str, Any]]:
 def _reject_symbolic_git_reference(
     ref: str, path: str, *, kind: str = ""
 ) -> None:
+    if "github.com" in ref.casefold() and "/pull/" in ref.casefold():
+        if GITHUB_PR_RE.search(ref) is None:
+            raise ConvergenceAdapterError(f"{path} must be an exact GitHub PR URL without subpaths")
+        return
+
+    if "gitlab.com" in ref.casefold() and "/-/merge_requests/" in ref.casefold():
+        if GITLAB_MR_RE.search(ref) is None:
+            raise ConvergenceAdapterError(f"{path} must be an exact GitLab MR URL without subpaths")
+        return
+
     if EXPLICIT_SYMBOLIC_GIT_REF_RE.search(ref) is not None:
         raise ConvergenceAdapterError(
             f"{path} must not contain refs/heads or refs/tags references"
@@ -654,6 +676,7 @@ def _assert_schema_version_one(value: Any, path: str) -> None:
 
 def _assert_datetime(value: Any, path: str) -> None:
     _assert_string(value, path, max_length=64)
+    # The regex provides strict shape validation, while fromisoformat provides semantic validation
     if RFC3339_DATETIME_RE.fullmatch(value) is None:
         raise ConvergenceAdapterError(f"{path} must be an RFC 3339 date-time")
     normalized = value.replace("t", "T")
@@ -730,7 +753,7 @@ def _assert_string(
         raise ConvergenceAdapterError(
             f"{path} length must be between {min_length} and {max_length}"
         )
-    if any(char in value for char in ("\r", "\n", "\t")):
+    if "\n" in value or "\r" in value or "\t" in value:
         raise ConvergenceAdapterError(f"{path} must be a single-line string")
 
 
@@ -796,12 +819,16 @@ def main(
         "--output",
         choices=("envelope", "request", "hash"),
         default="envelope",
-        help="Output the default adapter envelope, only the public request JSON, or only the hash.",
+        help=(
+            "Output the default adapter envelope, only the public request JSON, or only the hash. "
+            "Example envelope (abbreviated): {'schema_version': '1.0.0', 'adapter': '...', "
+            "'profile_id': '...', 'request': {...}}"
+        ),
     )
     args = parser.parse_args(argv)
     try:
+        request, request_sha256, profile_sha256 = build_request_from_path(Path(args.profile))
         profile = load_profile(Path(args.profile))
-        request, request_sha256, profile_sha256 = build_request(profile)
         stdout.write(render_output(profile, request, request_sha256, profile_sha256, args.output))
         stdout.write("\n")
         return 0

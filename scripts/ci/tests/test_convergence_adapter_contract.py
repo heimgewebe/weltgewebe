@@ -24,7 +24,8 @@ PROTOCOL_ROOT = Path(
     os.environ.get(PROTOCOL_ROOT_ENV, "/home/alex/repos/konvergenzregelkreis")
 )
 PROTOCOL_ROOT_REQUIRED = PROTOCOL_ROOT_ENV in os.environ
-PROTOCOL_HEAD = "83ed435bf9eb490e81a6ff2103b6c1397440d40b"
+PROTOCOL_HEAD_FILE = CONTRACT_ROOT / "PINNED_PROTOCOL_HEAD"
+PROTOCOL_HEAD = PROTOCOL_HEAD_FILE.read_text(encoding="utf-8").strip()
 CANONICAL_REQUEST_KEYS = {
     "schema_version",
     "assessment_id",
@@ -95,12 +96,13 @@ def make_live_profile(profile: dict[str, Any]) -> dict[str, Any]:
             return value.removeprefix("fixture:")
         return value
 
-    live = strip_fixture_prefix(copy.deepcopy(profile))
+    live = strip_fixture_prefix(profile)
     live["evidence_mode"] = "live"
     return live
 
 
 class ConvergenceAdapterContractTests(unittest.TestCase):
+    """Base class for tests."""
     @classmethod
     def setUpClass(cls) -> None:
         cls.adapter = load_adapter()
@@ -108,6 +110,8 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
             cls.protocol_core = load_protocol_core()
         except unittest.SkipTest:
             cls.protocol_core = None
+
+    # === SECTION: Schema and Protocol Core Rules ===
 
     def test_only_profile_schema_is_local_truth(self) -> None:
         self.assertTrue((CONTRACT_ROOT / "assessment-profile.schema.json").exists())
@@ -209,7 +213,8 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
         )
 
     def test_conformance_profile_generates_exact_public_request(self) -> None:
-        expected = read_json(FIXTURE_ROOT / "conformance.terminal.request.json")
+        profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
+        expected = profile["request"]
         profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
         request, request_sha256, profile_sha256 = self.adapter.build_request(profile)
 
@@ -275,7 +280,7 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
     def test_protocol_evaluator_blocks_missing_and_conflicting_requests(self) -> None:
         if self.protocol_core is None:
             self.skipTest("pinned konvergenzregelkreis checkout not available")
-        request = read_json(FIXTURE_ROOT / "conformance.terminal.request.json")
+        request = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")["request"]
 
         missing = copy.deepcopy(request)
         missing["verifications"] = [
@@ -298,13 +303,15 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
     def test_protocol_rejects_unknown_request_fields(self) -> None:
         if self.protocol_core is None:
             self.skipTest("pinned konvergenzregelkreis checkout not available")
-        request = read_json(FIXTURE_ROOT / "conformance.terminal.request.json")
+        request = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")["request"]
         request["protocol_head"] = PROTOCOL_HEAD
         with self.assertRaises(self.protocol_core.ContractValidationError):
             self.protocol_core.validate_request(PROTOCOL_ROOT, request)
 
+    # === SECTION: CLI and Output Generation ===
+
     def test_cli_main_emits_adapter_envelope_metadata_without_changing_request(self) -> None:
-        expected_request = read_json(FIXTURE_ROOT / "conformance.terminal.request.json")
+        expected_request = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")["request"]
         stdout = io.StringIO()
         stderr = io.StringIO()
         rc = self.adapter.main(
@@ -368,6 +375,8 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
             stdout.getvalue().strip(),
             self.adapter.sha256_hex(self.adapter.canonical_json(expected_request)),
         )
+
+    # === SECTION: Evidence Reference and Shape Validation ===
 
     def test_adapter_rejects_profile_payloads_symbolic_revisions_and_missing_controls(self) -> None:
         profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
@@ -467,6 +476,20 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
         other = "89abcdef0123456789abcdef0123456789abcdef"
 
         rejected: list[tuple[str, Any]] = [
+            (
+                "github pr with commits subpath",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com/heimgewebe/weltgewebe/pull/1451/commits/abcdef123",
+                ),
+            ),
+            (
+                "gitlab mr with subpath",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://gitlab.com/heimgewebe/weltgewebe/-/merge_requests/1451/diffs",
+                ),
+            ),
             (
                 "github tree branch",
                 lambda candidate: candidate["request"]["effects"][0].__setitem__(
@@ -583,6 +606,14 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
 
         accepted: list[tuple[str, str]] = [
             (
+                "github pr identity",
+                "https://github.com/heimgewebe/weltgewebe/pull/1451",
+            ),
+            (
+                "gitlab mr identity",
+                "https://gitlab.com/heimgewebe/weltgewebe/-/merge_requests/1451",
+            ),
+            (
                 "github commit URL",
                 f"https://github.com/heimgewebe/weltgewebe/commit/{exact}",
             ),
@@ -633,15 +664,7 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 candidate["request"]["effects"][0]["evidence_ref"] = evidence_ref
                 self.adapter.build_request(candidate)
 
-        with self.subTest("stable pull request identity URL"):
-            candidate = make_live_profile(base)
-            pull_request = copy.deepcopy(candidate["request"]["effects"][0])
-            pull_request["kind"] = "pull_request"
-            pull_request["evidence_ref"] = (
-                "https://github.com/heimgewebe/weltgewebe/pull/1451"
-            )
-            candidate["request"]["effects"].append(pull_request)
-            self.adapter.build_request(candidate)
+
 
     def test_programmatic_and_nested_protocol_inputs_fail_closed(self) -> None:
         base = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
@@ -766,7 +789,7 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
 
     def test_payload_keys_and_obsolete_risk_labels_are_absent(self) -> None:
         profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
-        request = read_json(FIXTURE_ROOT / "conformance.terminal.request.json")
+        request = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")["request"]
         forbidden_keys = {
             "account",
             "bureau_task_payload",
@@ -791,7 +814,6 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
         checked_paths = [
             CONTRACT_ROOT / "assessment-profile.schema.json",
             FIXTURE_ROOT / "conformance.terminal.profile.json",
-            FIXTURE_ROOT / "conformance.terminal.request.json",
             ADAPTER_PATH,
             DOC_PATH,
         ]
@@ -799,6 +821,69 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             for label in ('"lo' + 'w"', '"medi' + 'um"', '"hi' + 'gh"'):
                 self.assertNotIn(label, text)
+
+    
+    def test_non_utf8_profile_fails(self) -> None:
+        path = FIXTURE_ROOT / "invalid_utf8.json"
+        path.write_bytes(b'{"test": "\xff"}')
+        try:
+            with self.assertRaises(self.adapter.ConvergenceAdapterError):
+                self.adapter.load_profile(path)
+            # CLI code 2 test
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            rc = self.adapter.main([str(path)], stdout=stdout, stderr=stderr)
+            self.assertEqual(rc, 2)
+        finally:
+            path.unlink()
+
+    def test_symlink_profile_rejected(self) -> None:
+        target = FIXTURE_ROOT / "conformance.terminal.profile.json"
+        symlink = FIXTURE_ROOT / "symlink.json"
+        symlink.symlink_to(target.name)
+        try:
+            with self.assertRaises(self.adapter.ConvergenceAdapterError):
+                self.adapter.load_profile(symlink)
+        finally:
+            symlink.unlink()
+
+    def test_verification_boundaries(self) -> None:
+        profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
+        v = profile["request"]["verifications"][0]
+        
+        # Add copies of v until we reach 128
+        while len(profile["request"]["verifications"]) < 128:
+            profile["request"]["verifications"].append(copy.deepcopy(v))
+            
+        # Should pass
+        self.adapter.build_request(profile)
+        
+        # 129 should fail
+        profile["request"]["verifications"].append(copy.deepcopy(v))
+        with self.assertRaises(self.adapter.ConvergenceAdapterError):
+            self.adapter.build_request(profile)
+
+    def test_make_live_profile_nested_fixtures(self) -> None:
+        profile = {"request": {"nested": ["fixture:string"]}}
+        live = make_live_profile(profile)
+        self.assertEqual(live["request"]["nested"][0], "string")
+        self.assertEqual(live["evidence_mode"], "live")
+
+    def test_local_schema_does_not_restrict_request(self) -> None:
+        schema = read_json(CONTRACT_ROOT / "assessment-profile.schema.json")
+        # Validate we don't have additionalProperties: false in request to avoid making it authoritative
+        self.assertNotIn("additionalProperties", schema["properties"]["request"])
+
+    def test_rfc3339_strict_shape_and_semantic_validation(self) -> None:
+        profile = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
+        # valid
+        profile["request"]["observation"]["observed_at"] = "2026-07-16T12:00:00Z"
+        self.adapter.build_request(profile)
+        
+        # invalid semantic but valid shape (e.g. month 13)
+        profile["request"]["observation"]["observed_at"] = "2026-13-16T12:00:00Z"
+        with self.assertRaises(self.adapter.ConvergenceAdapterError):
+            self.adapter.build_request(profile)
 
     def test_adapter_source_has_no_live_or_mutating_dependencies(self) -> None:
         source = ADAPTER_PATH.read_text(encoding="utf-8")

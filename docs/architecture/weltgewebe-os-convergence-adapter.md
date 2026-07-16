@@ -50,11 +50,19 @@ No local request schema is authoritative. The request shape is owned by the publ
 The deterministic terminal conformance fixtures are:
 
 - `contracts/convergence/v1.0.0/fixtures/conformance.terminal.profile.json`
-- `contracts/convergence/v1.0.0/fixtures/conformance.terminal.request.json`
+The pure public request is derived from the `request` property within the profile. No redundant terminal request fixture is maintained.
 
-`conformance.terminal.request.json` is the pure public request, not the adapter envelope.
+
+## Threat Model and Trust Boundaries
+
+The adapter operates in a zero-trust external environment. It only formally validates SHA-256 strings; as a read-only and reference-only component, it cannot fetch or recalculate the content of external domain objects, commits, or receipts.
+If the adapter itself is compromised, it could emit arbitrary payloads that falsely claim conformance. Therefore, the adapter envelope must be verified by the authoritative evaluator, which uses independent receipt hashes (like Grabowski) to establish true provenance. The trust boundary remains at the evaluator, not the local adapter.
+The protocol upgrade path involves pinning a new `PROTOCOL_HEAD` (e.g. for `v1.1.0`), deploying an updated adapter schema, and updating the evaluator to accept both versions during transition.
 
 ## Authority Boundary
+
+
+Profile paths provided as symlinks are explicitly rejected. This design choice reduces local path confusion and accidental referencing of incorrect profiles. It is not intended as a general host filesystem security mechanism.
 
 The adapter has exactly these local effects:
 
@@ -92,6 +100,10 @@ Negative control is represented as a passing `verification` with `kind: negative
 The regression test `scripts/ci/tests/test_convergence_adapter_contract.py` reads the protocol checkout from `KONVERGENZREGELKREIS_ROOT`. CI creates that checkout in the runner's temporary directory, fetches only the exact commit `83ed435bf9eb490e81a6ff2103b6c1397440d40b`, verifies `HEAD`, and treats a missing or different checkout as failure. Local development falls back to `/home/alex/repos/konvergenzregelkreis` and may skip only the four protocol integration tests when no checkout is available; the remaining eleven adapter and safety tests still run.
 
 The mirror test compares the adapter's request keys, nested receipt keys, enums and R2 requirements directly with the pinned schemas and profile. The positive request must then evaluate to `terminally_closed` under the public R2 profile. A request missing required evidence must block with `evidence_missing`. A request with conflicting receipt hashes must block with `conflicting_evidence`. A request with adapter metadata such as `protocol_head` at top level must be rejected by the public request schema.
+
+## Profile and Request Constraints
+
+The `profile_id` is restricted to a maximum of 128 characters to ensure it can be safely embedded in external systems like Bureau or Chronik without hitting length limits, while providing enough entropy for unique identification.
 
 ## CLI Shape
 
