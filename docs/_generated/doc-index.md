@@ -59,6 +59,7 @@ Generated automatically. Do not edit.
 | deployment_governance | Deployment Governance | reference | active | docs/deployment_governance.md |
 | dev.codespaces | Codespaces | reference | active | docs/dev/codespaces.md |
 | docs.architecture.overview | Architekturüberblick | architecture | active | docs/architekturstruktur.md |
+| docs.architecture.weltgewebe-os-convergence-adapter | Weltgewebe OS Convergence Adapter | architecture | active | docs/architecture/weltgewebe-os-convergence-adapter.md |
 | docs.blueprints.agent-operability | Minimaler Agent-Operability-Kern | blueprint | draft | docs/blueprints/agent-operability-blaupause.md |
 | docs.blueprints.agent-safety-control-layer | Blueprint — Agent Safety Control Layer | blueprint | draft | docs/blueprints/blueprint-agent-safety-control-layer.md |
 | docs.blueprints.domain-scale-foundation | Domain Scale Foundation | blueprint | active | docs/blueprints/domain-scale-foundation.md |
