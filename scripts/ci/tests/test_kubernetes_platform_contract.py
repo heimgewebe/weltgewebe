@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -71,6 +72,40 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertEqual(
             self.reference.GATEWAY_API_ARTIFACTS, tuple(expected)
         )
+
+    def test_tool_install_is_atomic_and_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "downloaded-kind"
+            destination = root / "bin" / "kind"
+            source.write_bytes(b"new-kind-binary")
+            destination.parent.mkdir()
+            destination.write_bytes(b"old-kind-binary")
+            real_copy2 = self.bootstrap.shutil.copy2
+            real_replace = os.replace
+            copy_targets: list[Path] = []
+
+            def guarded_copy(source_path, destination_path):
+                target = Path(destination_path)
+                self.assertNotEqual(target, destination)
+                copy_targets.append(target)
+                return real_copy2(source_path, destination_path)
+
+            with mock.patch.object(
+                self.bootstrap.shutil, "copy2", side_effect=guarded_copy
+            ), mock.patch.object(
+                self.bootstrap.os, "replace", wraps=real_replace
+            ) as replace:
+                self.bootstrap._install_executable(source, destination)
+
+            self.assertEqual(destination.read_bytes(), source.read_bytes())
+            self.assertTrue(destination.stat().st_mode & 0o110)
+            self.assertEqual(len(copy_targets), 1)
+            replace.assert_called_once_with(copy_targets[0], destination)
+
+            with mock.patch.object(self.bootstrap.shutil, "copy2") as copy:
+                self.bootstrap._install_executable(source, destination)
+            copy.assert_not_called()
 
     def test_gateway_artifact_contract_rejects_extra_or_wrong_crds(self) -> None:
         spec = {"required_crd_kind": "HTTPRoute"}

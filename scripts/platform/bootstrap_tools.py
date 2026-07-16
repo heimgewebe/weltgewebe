@@ -48,6 +48,30 @@ def _download(url: str, expected_sha256: str, destination: Path) -> None:
     os.replace(tmp_path, destination)
 
 
+def _install_executable(source: Path, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink():
+        raise RuntimeError(f"refusing to replace symlinked tool destination: {destination}")
+    executable_bits = stat.S_IXUSR | stat.S_IXGRP
+    if destination.is_file() and _sha256(destination) == _sha256(source):
+        destination.chmod(destination.stat().st_mode | executable_bits)
+        return
+    with tempfile.NamedTemporaryFile(
+        dir=destination.parent,
+        prefix=f".{destination.name}.",
+        delete=False,
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        shutil.copy2(source, tmp_path)
+        tmp_path.chmod(tmp_path.stat().st_mode | executable_bits)
+        with tmp_path.open("rb") as handle:
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, destination)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
 def _assert_artifact_contract(name: str, path: Path, spec: dict[str, Any]) -> None:
     required_kind = spec.get("required_crd_kind")
     if required_kind is None:
@@ -106,7 +130,7 @@ def install(cache: Path) -> dict[str, Any]:
         _download(spec["url"], spec["sha256"], archive)
         destination = bin_dir / spec["binary"]
         if spec["format"] == "binary":
-            shutil.copy2(archive, destination)
+            _install_executable(archive, destination)
         elif spec["format"] == "tar.gz":
             with tempfile.TemporaryDirectory(dir=cache) as tmp:
                 tmp_dir = Path(tmp)
@@ -117,10 +141,9 @@ def install(cache: Path) -> dict[str, Any]:
                 )
                 if candidate is None:
                     raise RuntimeError(f"binary {spec['binary']} missing from {archive}")
-                shutil.copy2(candidate, destination)
+                _install_executable(candidate, destination)
         else:
             raise RuntimeError(f"unsupported format {spec['format']} for {name}")
-        destination.chmod(destination.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
         tool_paths[name] = str(destination)
 
     artifact_paths: dict[str, str] = {}
