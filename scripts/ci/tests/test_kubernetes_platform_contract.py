@@ -342,15 +342,21 @@ spec:
             with self.assertRaisesRegex(self.reference.ProofError, "invalid NodePort"):
                 self.reference.gateway_node_port("kubectl", "gateway-service")
 
-    def test_kind_docker_network_prefers_named_kind_network(self) -> None:
+    def test_kind_nodes_require_nonempty_cluster(self) -> None:
         with mock.patch.object(
             self.reference,
             "output",
-            return_value=json.dumps({"other": {}, "kind": {}}),
+            return_value="control-plane\nworker\n",
         ):
-            self.assertEqual(self.reference.kind_docker_network("cluster"), "kind")
+            self.assertEqual(
+                self.reference.kind_nodes("kind", "cluster"),
+                ["control-plane", "worker"],
+            )
+        with mock.patch.object(self.reference, "output", return_value=""):
+            with self.assertRaisesRegex(self.reference.ProofError, "no nodes"):
+                self.reference.kind_nodes("kind", "cluster")
 
-    def test_gateway_http_probe_uses_hardened_docker_client(self) -> None:
+    def test_gateway_http_probe_uses_node_local_nodeport(self) -> None:
         health = subprocess.CompletedProcess(
             args=[], returncode=0, stdout=b"healthy", stderr=b""
         )
@@ -358,7 +364,11 @@ spec:
             args=[], returncode=0, stdout=b"web", stderr=b""
         )
         with (
-            mock.patch.object(self.reference, "kind_docker_network", return_value="kind"),
+            mock.patch.object(
+                self.reference,
+                "kind_nodes",
+                return_value=["cluster-worker"],
+            ),
             mock.patch.object(
                 self.reference.subprocess,
                 "run",
@@ -366,23 +376,38 @@ spec:
             ) as run_mock,
         ):
             result = self.reference.probe_gateway_http(
-                "cluster", ["172.22.0.3"], 31293, timeout_seconds=1
+                "kind",
+                "cluster",
+                ["172.22.0.3"],
+                31293,
+                timeout_seconds=1,
             )
-        self.assertEqual(result, ("172.22.0.3", b"healthy", b"web"))
+        self.assertEqual(
+            result,
+            ("cluster-worker", "172.22.0.3", b"healthy", b"web"),
+        )
         argv = run_mock.call_args_list[0].args[0]
-        self.assertEqual(argv[:3], ["docker", "run", "--rm"])
-        self.assertIn("--network", argv)
-        self.assertIn("--read-only", argv)
-        self.assertIn("--cap-drop", argv)
-        self.assertIn("ALL", argv)
-        self.assertIn("no-new-privileges", argv)
-        self.assertIn("10001:10001", argv)
-        self.assertIn("--entrypoint", argv)
-        self.assertIn("wget", argv)
+        self.assertEqual(argv[:3], ["docker", "exec", "cluster-worker"])
+        self.assertIn("curl", argv)
+        self.assertIn("--fail", argv)
+        self.assertIn("--max-time", argv)
         self.assertEqual(argv[-1], "http://172.22.0.3:31293/health/live")
         self.assertEqual(
-            run_mock.call_args_list[1].args[0][-1], "http://172.22.0.3:31293/"
+            run_mock.call_args_list[1].args[0][-1],
+            "http://172.22.0.3:31293/",
         )
+
+    def test_gateway_policy_allows_only_cilium_ingress_identity(self) -> None:
+        source = (
+            ROOT
+            / "platform/apps/weltgewebe/base/network-policy-gateway-ingress.yaml"
+        ).read_text()
+        self.assertIn("apiVersion: cilium.io/v2", source)
+        self.assertIn("kind: CiliumNetworkPolicy", source)
+        self.assertIn("fromEntities:", source)
+        self.assertIn("- ingress", source)
+        self.assertIn('port: "8080"', source)
+        self.assertNotIn("namespaceSelector:", source)
 
     def test_gateway_proof_does_not_port_forward_selectorless_service(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()

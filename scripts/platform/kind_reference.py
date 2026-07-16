@@ -556,92 +556,76 @@ def gateway_node_port(kubectl: str, service: str) -> int:
     return port
 
 
-def kind_docker_network(cluster: str) -> str:
-    document = json.loads(
-        output(
-            [
-                "docker",
-                "inspect",
-                "--format",
-                "{{json .NetworkSettings.Networks}}",
-                f"{cluster}-control-plane",
-            ]
-        )
-    )
-    if not isinstance(document, dict):
-        raise ProofError("Docker network inspection did not return an object")
-    networks = sorted(str(name) for name in document)
-    if "kind" in networks:
-        return "kind"
-    if len(networks) == 1:
-        return networks[0]
-    raise ProofError(f"cannot determine kind Docker network: {networks!r}")
+def kind_nodes(kind: str, cluster: str) -> list[str]:
+    nodes = [
+        node.strip()
+        for node in output([kind, "get", "nodes", "--name", cluster]).splitlines()
+        if node.strip()
+    ]
+    if not nodes:
+        raise ProofError(f"kind cluster has no nodes: {cluster}")
+    return nodes
 
 
 def probe_gateway_http(
+    kind: str,
     cluster: str,
     addresses: list[str],
     port: int,
     timeout_seconds: int = 30,
-) -> tuple[str, bytes, bytes]:
-    network = kind_docker_network(cluster)
+) -> tuple[str, str, bytes, bytes]:
+    nodes = kind_nodes(kind, cluster)
     deadline = time.monotonic() + timeout_seconds
     last_error: BaseException | None = None
     while True:
-        for address in addresses:
-            common = [
-                "docker",
-                "run",
-                "--rm",
-                "--network",
-                network,
-                "--read-only",
-                "--cap-drop",
-                "ALL",
-                "--security-opt",
-                "no-new-privileges",
-                "--pids-limit",
-                "64",
-                "--user",
-                "10001:10001",
-                "--entrypoint",
-                "wget",
-                "weltgewebe-api:local",
-                "-qO-",
-                "-T",
-                "10",
-            ]
-            try:
-                health = subprocess.run(
-                    [*common, f"http://{address}:{port}/health/live"],
-                    cwd=ROOT,
-                    text=False,
-                    capture_output=True,
-                    check=True,
-                    timeout=15,
-                ).stdout
-                web = subprocess.run(
-                    [*common, f"http://{address}:{port}/"],
-                    cwd=ROOT,
-                    text=False,
-                    capture_output=True,
-                    check=True,
-                    timeout=15,
-                ).stdout[:1024]
-                if health and web:
-                    return address, health, web
-                last_error = ProofError("Gateway route returned empty content")
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-                last_error = error
+        for node in nodes:
+            for address in addresses:
+                common = [
+                    "docker",
+                    "exec",
+                    node,
+                    "curl",
+                    "--fail",
+                    "--silent",
+                    "--show-error",
+                    "--max-time",
+                    "10",
+                ]
+                try:
+                    health = subprocess.run(
+                        [*common, f"http://{address}:{port}/health/live"],
+                        cwd=ROOT,
+                        text=False,
+                        capture_output=True,
+                        check=True,
+                        timeout=15,
+                    ).stdout
+                    web = subprocess.run(
+                        [*common, f"http://{address}:{port}/"],
+                        cwd=ROOT,
+                        text=False,
+                        capture_output=True,
+                        check=True,
+                        timeout=15,
+                    ).stdout[:1024]
+                    if health and web:
+                        return node, address, health, web
+                    last_error = ProofError("Gateway route returned empty content")
+                except (
+                    subprocess.CalledProcessError,
+                    subprocess.TimeoutExpired,
+                ) as error:
+                    last_error = error
         if time.monotonic() >= deadline:
             raise ProofError(
-                f"Gateway addresses did not serve Docker-network HTTP: {addresses!r}"
+                "Gateway NodePort did not serve node-local HTTP: "
+                f"nodes={nodes!r} addresses={addresses!r} port={port}"
             ) from last_error
         time.sleep(1)
 
 
 
-def prove_gateway(kubectl: str, cluster: str) -> dict[str, str]:
+def prove_gateway(kubectl: str, kind: str, cluster: str) -> dict[str, str]:
     wait_condition(kubectl, "weltgewebe-gateway", "gateway/weltgewebe", "Programmed")
     wait_http_route_parent_condition(
         kubectl,
@@ -674,13 +658,15 @@ def prove_gateway(kubectl: str, cluster: str) -> dict[str, str]:
     )
     if not service:
         raise ProofError("Gateway service was not created")
-    address, health, web = probe_gateway_http(
+    probe_node, address, health, web = probe_gateway_http(
+        kind,
         cluster,
         gateway_addresses(kubectl),
         gateway_node_port(kubectl, service),
     )
     return {
         "service": service,
+        "probe_node": probe_node,
         "address": address,
         "health_sha256": hashlib.sha256(health).hexdigest(),
         "web_prefix_sha256": hashlib.sha256(web).hexdigest(),
@@ -756,7 +742,7 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
         restart = prove_restart(kubectl, app_namespace)
         if args.mode == "gitops":
             prove_flux_drift(kubectl, flux, app_namespace)
-        gateway = prove_gateway(kubectl, args.cluster)
+        gateway = prove_gateway(kubectl, kind, args.cluster)
         result = {
             "schema_version": 1,
             "status": "pass",

@@ -1,20 +1,18 @@
 ---
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
 metadata:
   name: allow-cilium-gateway
 spec:
-  podSelector:
+  endpointSelector:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
         values: ["weltgewebe-api", "weltgewebe-web"]
-  policyTypes: ["Ingress"]
   ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-      ports:
-        - port: 8080
-          protocol: TCP
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
