@@ -111,7 +111,8 @@ install -d -o root -g root -m 0711 /var/lib/weltgewebe-main-reconciler
 install -d -o root -g root -m 0700 \
   /var/lib/weltgewebe-main-reconciler/artifacts \
   /var/lib/weltgewebe-main-reconciler/receipts \
-  /var/lib/weltgewebe-main-reconciler/reconcile-receipts
+  /var/lib/weltgewebe-main-reconciler/reconcile-receipts \
+  /var/lib/weltgewebe-main-reconciler/docker-config
 install -d -o root -g root -m 0755 /opt/weltgewebe-releases
 
 manifest="/var/lib/weltgewebe-main-reconciler/installed-contract.sha256"

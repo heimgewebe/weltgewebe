@@ -81,6 +81,9 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("original web artifact hash", script)
         self.assertIn('ln -sfn "receipts/$target_commit.json"', script)
         self.assertIn('chmod 0600 "$artifact"', script)
+        self.assertIn('DOCKER_CONFIG="$STATE_ROOT/docker-config"', script)
+        self.assertIn("export DOCKER_CONFIG", script)
+        self.assertIn('"$DEPLOY_RECEIPT_ROOT" "$DOCKER_CONFIG"', script)
 
     def test_reconciler_build_cannot_write_release_or_source(self) -> None:
         script = self.read("scripts/ops/reconcile-production-main-vps.sh")
@@ -127,6 +130,7 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn('git -C "$REPO_DIR" show "$COMMIT:$source_path"', script)
         self.assertIn("production-reconciler.env", script)
         self.assertIn("installed-contract.sha256", script)
+        self.assertIn("/var/lib/weltgewebe-main-reconciler/docker-config", script)
         self.assertNotIn("Environment=WELTGEWEBE_BUILD_USER=alex", script)
 
     def test_github_contract_serializes_main_observers(self) -> None:
