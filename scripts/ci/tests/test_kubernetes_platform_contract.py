@@ -224,7 +224,7 @@ spec:
         self.assertIn("disableDefaultCNI: true", kind_config)
         self.assertIn("kubeProxyMode: none", kind_config)
         self.assertIn('"gatewayAPI.enabled=true"', source)
-        self.assertIn('"gatewayAPI.hostNetwork.enabled=true"', source)
+        self.assertNotIn('"gatewayAPI.hostNetwork.enabled=true"', source)
         self.assertIn('"nodeIPAM.enabled=true"', source)
         self.assertIn('"defaultLBServiceIPAM=nodeipam"', source)
         self.assertIn('"kubeProxyReplacement=true"', source)

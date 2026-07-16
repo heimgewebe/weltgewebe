@@ -266,8 +266,6 @@ def install_platform_components(
             "--set",
             "gatewayAPI.enabled=true",
             "--set",
-            "gatewayAPI.hostNetwork.enabled=true",
-            "--set",
             "nodeIPAM.enabled=true",
             "--set",
             "defaultLBServiceIPAM=nodeipam",
