@@ -1,6 +1,7 @@
 pub mod accounts;
 pub mod challenges;
 pub(crate) mod digest;
+pub mod ephemeral_db;
 pub mod lock;
 pub mod passkeys;
 pub mod passkeys_db;

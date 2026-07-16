@@ -109,7 +109,7 @@ Diese Punkte sind durch `architecture/weltgewebe-os.md` und ADR-0010 bis ADR-001
 - föderierte Identitäten, Zellbeziehungen und gemeinsame Räume
 - normalisierte Geoabfragen beziehungsweise PostGIS
 - verlässliche Eventprojektionen und Transactional Outbox
-- Multi-Instanz-Kohärenz und Ablösung des Single-Instance-Guards
+- Multi-Instanz-Kohärenz durch Shared State, Projektionsgeneration, Outbox und Multi-Instance-Guard
 - konsolidierte Observability mit definierten SLOs
 - WAL-/PITR- oder Object-Lock-Backupstrategie, falls sie betrieblich benötigt wird
 

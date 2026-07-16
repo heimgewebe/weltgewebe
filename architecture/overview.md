@@ -45,7 +45,7 @@ Ende-zu-Ende-Systeme.
 
 Die langfristige Zielarchitektur steht in [`architecture/weltgewebe-os.md`](weltgewebe-os.md). Weltgewebe wird als föderiertes System autonomer Gewebe-Zellen mit globalen Identitäten, Beziehungen und gemeinsamen Räumen entwickelt. Kubernetes ist die kanonische Zielplattform; Compose bleibt die heutige reale Runtime und ein begrenzter Entwicklungs-/Recoverypfad.
 
-Diese Zielrichtung ändert keine unbelegte Gegenwartswahrheit: Der Single-Instance-Guard bleibt aktiv, bis gemeinsame Zustände, Transactional Outbox, idempotente Konsumenten und Zwei-API-Kohärenz belegt sind.
+Der PostgreSQL-Mehrinstanzvertrag ist seit dem 16. Juli 2026 belegt und durch einen stärkeren Guard geschützt. Das aktiviert noch keine Produktionsreplikation; diese bleibt Teil des Kubernetes-/GitOps-Rollouts.
 
 ## Komponenten
 

@@ -17,9 +17,9 @@ Generated automatically. Do not edit.
 | Dokumente gesamt | 173 |
 | Dokumente mit ausgehenden Relationen | 172 |
 | Dokumente als Ziel referenziert | 133 |
-| Relationen gesamt | 602 |
+| Relationen gesamt | 606 |
 | — depends_on | 24 |
-| — relates_to | 566 |
+| — relates_to | 570 |
 | — supersedes | 11 |
 | — verifies | 1 |
 | Isolierte Dokumente | 0 |
@@ -31,6 +31,7 @@ Generated automatically. Do not edit.
 
 - ⚠️ High outbound count (15): `docs/roadmap.md` — possible over-linking
 - ⚠️ High outbound count (13): `docs/blueprints/domain-data-postgres-cutover.md` — possible over-linking
+- ⚠️ High outbound count (10): `docs/reports/domain-postgres-instance-coherence-decision.md` — possible over-linking
 - ⚠️ High outbound count (9): `docs/blueprints/blueprint-agent-safety-control-layer.md` — possible over-linking
 - ⚠️ High outbound count (9): `docs/runbooks/db-recovery.md` — possible over-linking
 - ⚠️ High outbound count (8): `docs/reference/agent-operability-fixture-matrix.md` — possible over-linking
@@ -56,6 +57,7 @@ _Keine Zyklen gefunden._
 
 - `docs/roadmap.md` — 15 ausgehende Relationen
 - `docs/blueprints/domain-data-postgres-cutover.md` — 13 ausgehende Relationen
+- `docs/reports/domain-postgres-instance-coherence-decision.md` — 10 ausgehende Relationen
 - `docs/blueprints/blueprint-agent-safety-control-layer.md` — 9 ausgehende Relationen
 - `docs/runbooks/db-recovery.md` — 9 ausgehende Relationen
 - `docs/reference/agent-operability-fixture-matrix.md` — 8 ausgehende Relationen

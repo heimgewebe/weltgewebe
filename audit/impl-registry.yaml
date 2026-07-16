@@ -81,8 +81,6 @@ implementations:
       - .github/workflows/compose-smoke.yml
       - scripts/tests/test_compose_volumes_guard.sh
       - scripts/guard-compose-no-relative-volumes.sh
-      - scripts/guard/domain-single-instance-guard.sh
-      - scripts/tests/test_domain_single_instance_guard.sh
 
   - id: impl.contracts
     path: contracts/domain/
@@ -147,8 +145,6 @@ implementations:
       - docs/deployment.md
     verified_by:
       - scripts/guard/caddy-basemap-route-guard.sh
-      - scripts/guard/domain-single-instance-guard.sh
-      - scripts/tests/test_domain_single_instance_guard.sh
       - scripts/ci/tests/test_regional_basemap_style.py
       - scripts/ci/tests/test_public_live_readiness.py
 
@@ -191,8 +187,33 @@ implementations:
     verified_by:
       - apps/api/tests/db_session_store_persistence.rs
 
-  - id: impl.guard.domain-single-instance
-    path: scripts/guard/domain-single-instance-guard.sh
+  - id: impl.auth.shared-ephemeral-state
+    path: apps/api/src/auth/ephemeral_db.rs
+    impl_type: service
+    status: active
+    criticality: high
+    evidence_level: test
+    documented_by:
+      - docs/reports/domain-postgres-instance-coherence-decision.md
+    verified_by:
+      - apps/api/tests/db_multi_instance_foundation.rs
+      - scripts/guard/domain-multi-instance-guard.sh
+
+  - id: impl.domain.transactional-outbox
+    path: apps/api/src/outbox.rs
+    impl_type: service
+    status: active
+    criticality: high
+    evidence_level: test
+    documented_by:
+      - docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md
+      - docs/reports/domain-postgres-instance-coherence-decision.md
+    verified_by:
+      - apps/api/tests/db_multi_instance_foundation.rs
+      - scripts/guard/domain-multi-instance-guard.sh
+
+  - id: impl.guard.domain-multi-instance
+    path: scripts/guard/domain-multi-instance-guard.sh
     impl_type: guard
     status: active
     criticality: high
@@ -201,7 +222,8 @@ implementations:
       - docs/reports/domain-postgres-instance-coherence-decision.md
       - docs/blueprints/domain-data-postgres-cutover.md
     verified_by:
-      - scripts/tests/test_domain_single_instance_guard.sh
+      - scripts/tests/test_domain_multi_instance_guard.sh
+      - apps/api/tests/db_multi_instance_foundation.rs
       - .github/workflows/ci.yml
 
   - id: impl.guard.prod-public-base-url

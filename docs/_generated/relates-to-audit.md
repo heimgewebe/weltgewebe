@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 602 |
+| Relationen gesamt | 606 |
 | — depends_on | 24 |
-| — relates_to | 566 |
+| — relates_to | 570 |
 | — supersedes | 11 |
 | — verifies | 1 |
 | relates_to Anteil | 94% |
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (230 Dokumente):
+**Cluster 1** (234 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -40,14 +40,18 @@ _Keine Lücken erkannt._
 - `AGENTS.md`
 - `agent-policy.yaml`
 - `apps/api/migrations/20260531000002_create_domain_edges.up.sql`
+- `apps/api/migrations/20260716000001_multi_instance_foundation.up.sql`
 - `apps/api/src/auth/accounts.rs`
+- `apps/api/src/auth/ephemeral_db.rs`
 - `apps/api/src/domain_db.rs`
+- `apps/api/src/outbox.rs`
 - `apps/api/src/routes/accounts.rs`
 - `apps/api/src/routes/edges.rs`
 - `apps/api/src/routes/nodes.rs`
 - `apps/api/src/state.rs`
 - `apps/api/tests/db_domain_account_write_path.rs`
 - `apps/api/tests/db_domain_backfill.rs`
+- `apps/api/tests/db_multi_instance_foundation.rs`
 - `architecture/overview.md`
 - `architecture/weltgewebe-os.md`
 - `audit/impl-registry.yaml`
@@ -252,7 +256,7 @@ _Keine Lücken erkannt._
 - `scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py`
 - `scripts/docmeta/validate_report_lifecycle.py`
 - `scripts/guard/basemap-runtime-proof.sh`
-- `scripts/guard/domain-single-instance-guard.sh`
+- `scripts/guard/domain-multi-instance-guard.sh`
 - `scripts/ops/check_public_live_readiness.py`
 - `scripts/ops/check_vps_db_migration_history_shape.py`
 - `scripts/ops/check_vps_migration_safe_runtime_env.py`
@@ -261,7 +265,7 @@ _Keine Lücken erkannt._
 - `scripts/ops/postgres-restore-proof.sh`
 - `scripts/ops/pull-production-postgres-backup.sh`
 - `scripts/ops/reconcile_public_login_smtp_env.py`
-- `scripts/tests/test_domain_single_instance_guard.sh`
+- `scripts/tests/test_domain_multi_instance_guard.sh`
 - `tests/fixtures/agent/handoff-valid.json`
 
 **Cluster 2** (7 Dokumente):
@@ -307,6 +311,19 @@ _Keine Lücken erkannt._
 - relates_to → `docs/tasks/board.md`
 - relates_to → `docs/tasks/index.json`
 
+**`docs/reports/domain-postgres-instance-coherence-decision.md`**:
+
+- relates_to → `apps/api/migrations/20260716000001_multi_instance_foundation.up.sql`
+- relates_to → `apps/api/src/auth/ephemeral_db.rs`
+- relates_to → `apps/api/src/outbox.rs`
+- relates_to → `apps/api/src/state.rs`
+- relates_to → `apps/api/tests/db_multi_instance_foundation.rs`
+- relates_to → `docs/blueprints/domain-data-postgres-cutover.md`
+- relates_to → `docs/tasks/board.md`
+- relates_to → `docs/tasks/index.json`
+- relates_to → `scripts/guard/domain-multi-instance-guard.sh`
+- relates_to → `scripts/tests/test_domain_multi_instance_guard.sh`
+
 **`docs/blueprints/blueprint-agent-safety-control-layer.md`**:
 
 - relates_to → `AGENTS.md`
@@ -318,18 +335,6 @@ _Keine Lücken erkannt._
 - relates_to → `docs/roadmap.md`
 - relates_to → `docs/tasks/index.json`
 - relates_to → `repo.meta.yaml`
-
-**`docs/runbooks/db-recovery.md`**:
-
-- relates_to → `docs/adr/ADR-0007__auth-persistence-production-db-path.md`
-- relates_to → `docs/datenmodell.md`
-- relates_to → `docs/runbook.md`
-- relates_to → `docs/runbooks/README.md`
-- relates_to → `docs/runbooks/incident-response.md`
-- relates_to → `scripts/ops/postgres-backup.sh`
-- relates_to → `scripts/ops/postgres-restore-latest-proof.sh`
-- relates_to → `scripts/ops/postgres-restore-proof.sh`
-- relates_to → `scripts/ops/pull-production-postgres-backup.sh`
 
 ### Hinweise
 

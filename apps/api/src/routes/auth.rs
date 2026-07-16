@@ -23,10 +23,10 @@ use uuid::Uuid;
 #[cfg(feature = "integration-testing")]
 use crate::routes::accounts::AccountPublic;
 use crate::{
-    auth::challenges::ChallengeIntent,
+    auth::challenges::{Challenge, ChallengeIntent},
     auth::passkeys::{
         start_passkey_authentication, start_passkey_registration, ConsumeGrantResult,
-        PasskeyAuthenticationStoreInsertError, RegistrationInput,
+        RegistrationInput,
     },
     auth::passkeys_runtime::{self, PasskeyCredentialRuntimeError},
     auth::session::SessionBackendError,
@@ -53,6 +53,27 @@ pub const NONCE_COOKIE_NAME: &str = "auth_nonce";
 pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will receive a login link.";
 /// Maximum email length in bytes (RFC 5321 forward path limit).
 pub const MAX_EMAIL_LEN: usize = 254;
+
+async fn create_shared_challenge(
+    state: &ApiState,
+    account_id: String,
+    device_id: String,
+    intent: ChallengeIntent,
+) -> Result<Challenge, StatusCode> {
+    state
+        .challenges
+        .create_shared(account_id, device_id, intent)
+        .await
+        .map_err(|error| {
+            tracing::error!(
+                event = "auth.ephemeral_backend_unavailable",
+                store = "step_up_challenge",
+                error = %error,
+                "Shared auth state backend unavailable"
+            );
+            StatusCode::SERVICE_UNAVAILABLE
+        })
+}
 
 fn get_request_id(headers: &HeaderMap) -> String {
     headers
@@ -688,7 +709,19 @@ async fn process_magic_link_delivery(
 
     // 4. Generate Token (only if deliverable)
     // Use normalized email for token creation too
-    let token = state.tokens.create(email_norm.to_string());
+    let token = state
+        .tokens
+        .create_shared(email_norm.to_string())
+        .await
+        .map_err(|error| {
+            tracing::error!(
+                event = "login.token_backend_unavailable",
+                account_id = %account_id,
+                error = %error,
+                "Shared magic-link token backend unavailable"
+            );
+            StatusCode::SERVICE_UNAVAILABLE
+        })?;
 
     // 5. Send/Log Email
     // Ensure the base URL does not have a trailing slash for clean formatting
@@ -821,7 +854,14 @@ pub async fn request_login(
     let email_hash = &email_hash_full[..16];
 
     // 1b. Rate Limiting (IP + Email)
-    if let Err(e) = state.rate_limiter.check(client_ip, email_hash) {
+    if let Err(e) = state.rate_limiter.check_shared(client_ip, email_hash).await {
+        if matches!(
+            e,
+            crate::auth::rate_limit::RateLimitError::BackendUnavailable(_)
+        ) {
+            tracing::error!(event = "auth.rate_limit_backend_unavailable", error = %e);
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
         tracing::warn!(
             event = "login.rate_limited",
             request_id = %request_id,
@@ -1018,9 +1058,13 @@ pub async fn consume_login_get(
     Query(params): Query<ConsumeTokenParams>,
 ) -> impl IntoResponse {
     // Check if token exists and is valid (peek only)
-    if state.tokens.peek(&params.token).is_none() {
-        // Invalid or expired token
-        return Redirect::to("/login?error=invalid_token").into_response();
+    match state.tokens.peek_shared(&params.token).await {
+        Ok(Some(_)) => {}
+        Ok(None) => return Redirect::to("/login?error=invalid_token").into_response(),
+        Err(error) => {
+            tracing::error!(event = "login.token_backend_unavailable", error = %error);
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
     }
 
     // Generate Nonce
@@ -1128,7 +1172,14 @@ pub async fn consume_login_post(
     }
 
     // 2. Consume Token
-    if let Some(email) = state.tokens.consume(&form.token) {
+    let email = match state.tokens.consume_shared(&form.token).await {
+        Ok(email) => email,
+        Err(error) => {
+            tracing::error!(event = "login.token_backend_unavailable", error = %error);
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+    };
+    if let Some(email) = email {
         // Find account
         let accounts = state.accounts.read().await;
         // email in AccountStore index is normalized to lowercase
@@ -1351,11 +1402,17 @@ pub async fn update_email(
         return (status, Json(err)).into_response();
     }
 
-    let challenge = state.challenges.create(
+    let challenge = match create_shared_challenge(
+        &state,
         account_id,
         device_id,
         ChallengeIntent::UpdateEmail { new_email },
-    );
+    )
+    .await
+    {
+        Ok(challenge) => challenge,
+        Err(status) => return status.into_response(),
+    };
     let err_payload = serde_json::json!({
         "error": "STEP_UP_REQUIRED",
         "challenge_id": challenge.id
@@ -1630,13 +1687,19 @@ pub async fn remove_device(
         "Removing a foreign device requires Step-Up Auth, generating challenge"
     );
 
-    let challenge = state.challenges.create(
+    let challenge = match create_shared_challenge(
+        &state,
         account_id,
         current_device_id.to_string(),
         ChallengeIntent::RemoveDevice {
             target_device_id: device_id.clone(),
         },
-    );
+    )
+    .await
+    {
+        Ok(challenge) => challenge,
+        Err(status) => return status.into_response(),
+    };
 
     let err_payload = serde_json::json!({
         "error": "STEP_UP_REQUIRED",
@@ -1680,9 +1743,9 @@ pub async fn request_step_up(
     };
 
     // 1. Verify that the challenge exists and is bound to this exact session (account + device)
-    let challenge = match state.challenges.get(&payload.challenge_id) {
-        Some(c) => c,
-        None => {
+    let challenge = match state.challenges.get_shared(&payload.challenge_id).await {
+        Ok(Some(challenge)) => challenge,
+        Ok(None) => {
             tracing::warn!(
                 event = "auth.step_up.request.invalid_challenge",
                 request_id = %request_id,
@@ -1692,6 +1755,10 @@ pub async fn request_step_up(
             // We return a generic error to prevent enumeration of challenges
             let err_payload = serde_json::json!({"error": "CHALLENGE_INVALID"});
             return (StatusCode::BAD_REQUEST, Json(err_payload)).into_response();
+        }
+        Err(error) => {
+            tracing::error!(event = "auth.ephemeral_backend_unavailable", store = "step_up_challenge", error = %error);
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
     };
 
@@ -1730,10 +1797,21 @@ pub async fn request_step_up(
     };
 
     // 3. Generate a Step-up Token bound to the challenge (NOT the email)
-    let token =
-        state
-            .step_up_tokens
-            .create(challenge.id.clone(), account_id.clone(), device_id.clone());
+    let token = match state
+        .step_up_tokens
+        .create_shared(challenge.id.clone(), account_id.clone(), device_id.clone())
+        .await
+    {
+        Ok(token) => token,
+        Err(error) => {
+            tracing::error!(
+                event = "auth.ephemeral_backend_unavailable",
+                store = "step_up_token",
+                error = %error
+            );
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+    };
 
     // 4. Send the Step-up Magic Link via Mailer
     let base_url = match &state.config.app_base_url {
@@ -1846,13 +1924,25 @@ pub async fn consume_step_up(
     // 1. Atomically validate all bindings and consume the token.
     // The token is only removed when challenge_id, account_id, and device_id all match,
     // so a wrong caller cannot burn a valid token that belongs to a different session.
-    match state.step_up_tokens.consume_if_matches(
-        &payload.token,
-        &payload.challenge_id,
-        &account_id,
-        &device_id,
-    ) {
-        ConsumeMatchResult::NotFound => {
+    match state
+        .step_up_tokens
+        .consume_if_matches_shared(
+            &payload.token,
+            &payload.challenge_id,
+            &account_id,
+            &device_id,
+        )
+        .await
+    {
+        Err(error) => {
+            tracing::error!(
+                event = "auth.ephemeral_backend_unavailable",
+                store = "step_up_token",
+                error = %error
+            );
+            return (StatusCode::SERVICE_UNAVAILABLE, jar).into_response();
+        }
+        Ok(ConsumeMatchResult::NotFound) => {
             tracing::warn!(
                 event = "auth.step_up.consume.token_invalid",
                 request_id = %request_id,
@@ -1861,7 +1951,7 @@ pub async fn consume_step_up(
             let err = serde_json::json!({"error": "TOKEN_INVALID"});
             return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
         }
-        ConsumeMatchResult::BindingMismatch => {
+        Ok(ConsumeMatchResult::BindingMismatch) => {
             tracing::warn!(
                 event = "auth.step_up.consume.binding_mismatch",
                 request_id = %request_id,
@@ -1870,7 +1960,7 @@ pub async fn consume_step_up(
             let err = serde_json::json!({"error": "TOKEN_INVALID"});
             return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
         }
-        ConsumeMatchResult::Consumed => {}
+        Ok(ConsumeMatchResult::Consumed) => {}
     }
 
     // 2. Consume the challenge (single-use, validates TTL).
@@ -1880,9 +1970,9 @@ pub async fn consume_step_up(
     // race where the challenge expires while the token is still valid is extremely narrow in
     // practice. A full atomic guarantee would require a combined store operation; that refactor is
     // deferred until the use-case demands it.
-    let challenge = match state.challenges.consume(&payload.challenge_id) {
-        Some(c) => c,
-        None => {
+    let challenge = match state.challenges.consume_shared(&payload.challenge_id).await {
+        Ok(Some(challenge)) => challenge,
+        Ok(None) => {
             tracing::warn!(
                 event = "auth.step_up.consume.challenge_expired",
                 request_id = %request_id,
@@ -1890,6 +1980,10 @@ pub async fn consume_step_up(
             );
             let err = serde_json::json!({"error": "TOKEN_INVALID"});
             return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+        }
+        Err(error) => {
+            tracing::error!(event = "auth.ephemeral_backend_unavailable", store = "step_up_challenge", error = %error);
+            return (StatusCode::SERVICE_UNAVAILABLE, jar).into_response();
         }
     };
 
@@ -2107,9 +2201,21 @@ pub async fn consume_step_up(
             }
         }
         ChallengeIntent::BeginPasskeyRegistration => {
-            let grant_id = state
+            let grant_id = match state
                 .passkey_registration_grants
-                .insert(account_id.clone(), device_id.clone());
+                .insert_shared(account_id.clone(), device_id.clone())
+                .await
+            {
+                Ok(grant_id) => grant_id,
+                Err(error) => {
+                    tracing::error!(
+                        event = "auth.ephemeral_backend_unavailable",
+                        store = "passkey_registration_grant",
+                        error = %error
+                    );
+                    return (StatusCode::SERVICE_UNAVAILABLE, jar).into_response();
+                }
+            };
             tracing::info!(
                 event = "auth.step_up.consume.begin_passkey_registration",
                 request_id = %request_id,
@@ -2210,11 +2316,17 @@ pub async fn passkey_register_options(
         }
         drop(accounts);
 
-        let challenge = state.challenges.create(
+        let challenge = match create_shared_challenge(
+            &state,
             account_id.clone(),
             device_id,
             ChallengeIntent::BeginPasskeyRegistration,
-        );
+        )
+        .await
+        {
+            Ok(challenge) => challenge,
+            Err(status) => return status.into_response(),
+        };
 
         tracing::info!(
             event = "auth.passkey.register_options.step_up_required",
@@ -2234,9 +2346,18 @@ pub async fn passkey_register_options(
     // Grant supplied — validate and consume it before starting the ceremony.
     match state
         .passkey_registration_grants
-        .consume(grant_id, &account_id, &device_id)
+        .consume_shared(grant_id, &account_id, &device_id)
+        .await
     {
-        ConsumeGrantResult::NotFound => {
+        Err(error) => {
+            tracing::error!(
+                event = "auth.ephemeral_backend_unavailable",
+                store = "passkey_registration_grant",
+                error = %error
+            );
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+        Ok(ConsumeGrantResult::NotFound) => {
             tracing::warn!(
                 event = "auth.passkey.register_options.grant_not_found",
                 request_id = %request_id,
@@ -2246,7 +2367,7 @@ pub async fn passkey_register_options(
             let err = serde_json::json!({"error": "GRANT_INVALID"});
             return (StatusCode::FORBIDDEN, Json(err)).into_response();
         }
-        ConsumeGrantResult::BindingMismatch => {
+        Ok(ConsumeGrantResult::BindingMismatch) => {
             tracing::warn!(
                 event = "auth.passkey.register_options.grant_binding_mismatch",
                 request_id = %request_id,
@@ -2256,7 +2377,7 @@ pub async fn passkey_register_options(
             let err = serde_json::json!({"error": "GRANT_INVALID"});
             return (StatusCode::FORBIDDEN, Json(err)).into_response();
         }
-        ConsumeGrantResult::Consumed => {}
+        Ok(ConsumeGrantResult::Consumed) => {}
     }
 
     // Grant consumed — start the WebAuthn creation ceremony.
@@ -2315,10 +2436,21 @@ pub async fn passkey_register_options(
             (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
         }
         Ok((ccr, reg_state)) => {
-            let registration_id = state
+            let registration_id = match state
                 .passkey_registrations
-                .insert(account_id.clone(), reg_state)
-                .await;
+                .insert_shared(account_id.clone(), reg_state)
+                .await
+            {
+                Ok(registration_id) => registration_id,
+                Err(error) => {
+                    tracing::error!(
+                        event = "auth.ephemeral_backend_unavailable",
+                        store = "passkey_registration",
+                        error = %error
+                    );
+                    return StatusCode::SERVICE_UNAVAILABLE.into_response();
+                }
+            };
 
             tracing::info!(
                 event = "auth.passkey.register_options.ok",
@@ -2413,11 +2545,11 @@ pub async fn passkey_register_verify(
 
     let reg_state = match state
         .passkey_registrations
-        .consume(&payload.registration_id, &account_id)
+        .consume_shared(&payload.registration_id, &account_id)
         .await
     {
-        Some(state) => state,
-        None => {
+        Ok(Some(state)) => state,
+        Ok(None) => {
             tracing::warn!(
                 event = "auth.passkey.register_verify.registration_invalid",
                 request_id = %request_id,
@@ -2426,6 +2558,14 @@ pub async fn passkey_register_verify(
             );
             let err = serde_json::json!({"error": "REGISTRATION_INVALID"});
             return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+        Err(error) => {
+            tracing::error!(
+                event = "auth.ephemeral_backend_unavailable",
+                store = "passkey_registration",
+                error = %error
+            );
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
     };
 
@@ -2613,7 +2753,18 @@ pub async fn passkey_auth_options(
         let full = crate::auth::digest::encode_sha256_digest(hasher.finalize());
         full[..16].to_string()
     };
-    if let Err(e) = state.rate_limiter.check(client_ip, &email_hash) {
+    if let Err(e) = state
+        .rate_limiter
+        .check_shared(client_ip, &email_hash)
+        .await
+    {
+        if matches!(
+            e,
+            crate::auth::rate_limit::RateLimitError::BackendUnavailable(_)
+        ) {
+            tracing::error!(event = "auth.rate_limit_backend_unavailable", error = %e);
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
         tracing::warn!(
             event = "auth.passkey.auth_options.rate_limited",
             request_id = %request_id,
@@ -2688,16 +2839,17 @@ pub async fn passkey_auth_options(
         Ok((rcr, auth_state)) => {
             let authentication_id = match state
                 .passkey_authentications
-                .insert(account_id.clone(), auth_state)
+                .insert_shared(account_id.clone(), auth_state)
                 .await
             {
                 Ok(id) => id,
-                Err(PasskeyAuthenticationStoreInsertError::Full) => {
-                    tracing::warn!(
-                        event = "auth.passkey.auth_options.store_full",
+                Err(error) => {
+                    tracing::error!(
+                        event = "auth.ephemeral_backend_unavailable",
+                        store = "passkey_authentication",
                         request_id = %request_id,
                         account_id = %account_id,
-                        "Passkey auth-options: authentication state store at capacity"
+                        error = %error
                     );
                     let err = serde_json::json!({"error": "SERVICE_OVERLOADED"});
                     return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
@@ -2801,7 +2953,18 @@ pub async fn passkey_auth_verify(
         full[..16].to_string()
     };
     let verify_rate_key = format!("passkey-verify:{auth_id_hash}");
-    if let Err(e) = state.rate_limiter.check(client_ip, &verify_rate_key) {
+    if let Err(e) = state
+        .rate_limiter
+        .check_shared(client_ip, &verify_rate_key)
+        .await
+    {
+        if matches!(
+            e,
+            crate::auth::rate_limit::RateLimitError::BackendUnavailable(_)
+        ) {
+            tracing::error!(event = "auth.rate_limit_backend_unavailable", error = %e);
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
         tracing::warn!(
             event = "auth.passkey.auth_verify.rate_limited",
             request_id = %request_id,
@@ -2818,11 +2981,11 @@ pub async fn passkey_auth_verify(
     // challenge can never be probed twice).
     let (expected_account_id, auth_state) = match state
         .passkey_authentications
-        .consume(authentication_id)
+        .consume_shared(authentication_id)
         .await
     {
-        Some(value) => value,
-        None => {
+        Ok(Some(value)) => value,
+        Ok(None) => {
             tracing::warn!(
                 event = "auth.passkey.auth_verify.authentication_invalid",
                 request_id = %request_id,
@@ -2830,6 +2993,14 @@ pub async fn passkey_auth_verify(
             );
             let err = serde_json::json!({"error": "AUTHENTICATION_INVALID"});
             return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+        Err(error) => {
+            tracing::error!(
+                event = "auth.ephemeral_backend_unavailable",
+                store = "passkey_authentication",
+                error = %error
+            );
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
     };
 
@@ -3140,9 +3311,21 @@ pub async fn passkey_testing_issue_grant(
         }
     };
 
-    let grant_id = state
+    let grant_id = match state
         .passkey_registration_grants
-        .insert(account_id.clone(), device_id.clone());
+        .insert_shared(account_id.clone(), device_id.clone())
+        .await
+    {
+        Ok(grant_id) => grant_id,
+        Err(error) => {
+            tracing::error!(
+                event = "auth.ephemeral_backend_unavailable",
+                store = "passkey_registration_grant",
+                error = %error
+            );
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+    };
 
     tracing::info!(
         event = "auth.passkey.testing_issue_grant.ok",

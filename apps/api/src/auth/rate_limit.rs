@@ -1,51 +1,73 @@
 use crate::config::AppConfig;
+use chrono::{TimeZone, Utc};
 use governor::{clock::DefaultClock, state::keyed::DefaultKeyedStateStore, Quota, RateLimiter};
+use sha2::{Digest, Sha256};
+use sqlx::PgPool;
 use std::net::IpAddr;
 use std::num::NonZeroU32;
 use thiserror::Error;
+
+type IpLimiter = RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock>;
+type EmailLimiter = RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>;
 
 #[derive(Debug, Error)]
 pub enum RateLimitError {
     #[error("Too many requests from IP")]
     IpLimited,
-    #[error("Too many requests for this email")]
+    #[error("Too many requests for this identifier")]
     EmailLimited,
+    #[error("Shared rate-limit backend unavailable: {0}")]
+    BackendUnavailable(String),
 }
-
-type IpLimiter = RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock>;
-type EmailLimiter = RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>;
 
 pub struct AuthRateLimiter {
     ip_limiter_min: Option<IpLimiter>,
     ip_limiter_hour: Option<IpLimiter>,
     email_limiter_min: Option<EmailLimiter>,
     email_limiter_hour: Option<EmailLimiter>,
+    db: Option<PgPool>,
+    ip_per_min: Option<u32>,
+    ip_per_hour: Option<u32>,
+    email_per_min: Option<u32>,
+    email_per_hour: Option<u32>,
 }
 
 impl AuthRateLimiter {
     pub fn new(config: &AppConfig) -> Self {
         let ip_limiter_min = config.auth_rl_ip_per_min.and_then(|limit| {
-            NonZeroU32::new(limit).map(|l| RateLimiter::keyed(Quota::per_minute(l)))
+            NonZeroU32::new(limit).map(|limit| RateLimiter::keyed(Quota::per_minute(limit)))
         });
-
         let ip_limiter_hour = config.auth_rl_ip_per_hour.and_then(|limit| {
-            NonZeroU32::new(limit).map(|l| RateLimiter::keyed(Quota::per_hour(l)))
+            NonZeroU32::new(limit).map(|limit| RateLimiter::keyed(Quota::per_hour(limit)))
         });
-
         let email_limiter_min = config.auth_rl_email_per_min.and_then(|limit| {
-            NonZeroU32::new(limit).map(|l| RateLimiter::keyed(Quota::per_minute(l)))
+            NonZeroU32::new(limit).map(|limit| RateLimiter::keyed(Quota::per_minute(limit)))
         });
-
         let email_limiter_hour = config.auth_rl_email_per_hour.and_then(|limit| {
-            NonZeroU32::new(limit).map(|l| RateLimiter::keyed(Quota::per_hour(l)))
+            NonZeroU32::new(limit).map(|limit| RateLimiter::keyed(Quota::per_hour(limit)))
         });
-
         Self {
             ip_limiter_min,
             ip_limiter_hour,
             email_limiter_min,
             email_limiter_hour,
+            db: None,
+            ip_per_min: config.auth_rl_ip_per_min,
+            ip_per_hour: config.auth_rl_ip_per_hour,
+            email_per_min: config.auth_rl_email_per_min,
+            email_per_hour: config.auth_rl_email_per_hour,
         }
+    }
+
+    pub fn new_postgres(config: &AppConfig, pool: PgPool) -> Self {
+        Self {
+            db: Some(pool),
+            ..Self::new(config)
+        }
+    }
+
+    pub fn is_shared(&self) -> bool {
+        self.db.is_some()
     }
 
     pub fn check(&self, ip: IpAddr, email_hash: &str) -> Result<(), RateLimitError> {
@@ -59,9 +81,7 @@ impl AuthRateLimiter {
                 return Err(RateLimitError::IpLimited);
             }
         }
-
         let email_hash_owned = email_hash.to_string();
-
         if let Some(limiter) = &self.email_limiter_min {
             if limiter.check_key(&email_hash_owned).is_err() {
                 return Err(RateLimitError::EmailLimited);
@@ -72,7 +92,90 @@ impl AuthRateLimiter {
                 return Err(RateLimitError::EmailLimited);
             }
         }
+        Ok(())
+    }
 
+    fn subject_hash(value: &str) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(value.as_bytes());
+        crate::auth::digest::encode_sha256_digest(hasher.finalize())
+    }
+
+    async fn increment_window(
+        pool: &PgPool,
+        scope: &str,
+        subject: &str,
+        window_seconds: i64,
+        limit: u32,
+    ) -> Result<bool, sqlx::Error> {
+        if limit == 0 {
+            return Ok(true);
+        }
+        let now = Utc::now();
+        let now_epoch = now.timestamp();
+        let window_start = now_epoch - now_epoch.rem_euclid(window_seconds);
+        let expires_at = Utc
+            .timestamp_opt(window_start + window_seconds + 60, 0)
+            .single()
+            .expect("bounded epoch seconds");
+        let count: i64 = sqlx::query_scalar(
+            "INSERT INTO auth_rate_limit_counters \
+             (scope, subject_hash, window_start, window_seconds, request_count, expires_at) \
+             VALUES ($1, $2, $3, $4, 1, $5) \
+             ON CONFLICT (scope, subject_hash, window_start, window_seconds) \
+             DO UPDATE SET request_count = auth_rate_limit_counters.request_count + 1 \
+             RETURNING request_count",
+        )
+        .bind(scope)
+        .bind(Self::subject_hash(subject))
+        .bind(window_start)
+        .bind(window_seconds as i32)
+        .bind(expires_at)
+        .fetch_one(pool)
+        .await?;
+        Ok(count <= i64::from(limit))
+    }
+
+    pub async fn check_shared(
+        &self,
+        ip: IpAddr,
+        identifier_hash: &str,
+    ) -> Result<(), RateLimitError> {
+        let Some(pool) = &self.db else {
+            return self.check(ip, identifier_hash);
+        };
+        let ip = ip.to_string();
+        let checks = [
+            ("ip-minute", ip.as_str(), 60_i64, self.ip_per_min, true),
+            ("ip-hour", ip.as_str(), 3600_i64, self.ip_per_hour, true),
+            (
+                "identifier-minute",
+                identifier_hash,
+                60_i64,
+                self.email_per_min,
+                false,
+            ),
+            (
+                "identifier-hour",
+                identifier_hash,
+                3600_i64,
+                self.email_per_hour,
+                false,
+            ),
+        ];
+        for (scope, subject, seconds, limit, ip_scope) in checks {
+            let Some(limit) = limit else { continue };
+            let allowed = Self::increment_window(pool, scope, subject, seconds, limit)
+                .await
+                .map_err(|error| RateLimitError::BackendUnavailable(error.to_string()))?;
+            if !allowed {
+                return Err(if ip_scope {
+                    RateLimitError::IpLimited
+                } else {
+                    RateLimitError::EmailLimited
+                });
+            }
+        }
         Ok(())
     }
 }

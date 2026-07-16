@@ -25,7 +25,7 @@ Datenbankmigrationen, Compose-Profile, Caddy-Konfiguration und Betriebswerkzeuge
 
 ## Zielarchitektur
 
-[`architecture/weltgewebe-os.md`](architecture/weltgewebe-os.md) ist die verbindliche langfristige Zielarchitektur. Kubernetes ist die kanonische Zielplattform, während Docker Compose die heutige reale Runtime und ein begrenzter Entwicklungs-/Recoverypfad bleibt. Der bestehende Single-Instance-Guard bleibt aktiv, bis gemeinsame Zustände, Transactional Outbox, idempotente Konsumenten und Zwei-API-Kohärenz belegt sind.
+[`architecture/weltgewebe-os.md`](architecture/weltgewebe-os.md) ist die verbindliche langfristige Zielarchitektur. Kubernetes ist die kanonische Zielplattform, während Docker Compose die heutige reale Runtime und ein begrenzter Entwicklungs-/Recoverypfad bleibt. Der PostgreSQL-Mehrinstanzvertrag ist durch Shared Auth State, generationsgebundene Domain-Projektionen, Transactional Outbox, idempotente Konsumenten und einen Zwei-API-/Restart-Beweis geschützt. Die Produktionsreplikazahl bleibt bis zum getrennten Plattformrollout unverändert.
 
 Historische ADRs und Berichte bleiben als Entscheidungs- und
 Entwicklungsgeschichte erhalten. Sie dürfen den aktuellen Code, die Migrationen

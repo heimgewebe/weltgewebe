@@ -32,7 +32,7 @@ Dieser Bericht verhindert, dass langfristige Architektur als bereits betriebene 
 - NATS ist im Produktionsstack vorhanden.
 - Karten-, Garnrollen-, Knoten- und Fadenflächen besitzen reale Implementierungen und Tests.
 - Task-Control, Agent-Safety und beweisgebundene Dokumentationsmechanismen sind vorhanden.
-- Der bestehende Single-Instance-Guard verhindert derzeit zu Recht eine unbelegte horizontale API-Skalierung.
+- Der Multi-Instance-Guard schützt den seit 16. Juli 2026 belegten PostgreSQL-Kohärenzvertrag; die Produktionsreplikazahl bleibt separat kontrolliert.
 - `architecture/weltgewebe-os.md` und ADR-0010 bis ADR-0012 definieren nach Annahme dieses Änderungsschnitts die langfristige Zielrichtung.
 
 ## Noch nicht belegt
@@ -127,7 +127,7 @@ Die Weltgewebe-OS-Zielentscheidung supersediert diese Sicherheitsgrenze nicht. S
 Dieser Bericht etabliert nicht:
 
 - Produktionsfreigabe für Kubernetes,
-- Berechtigung zur Entfernung des Single-Instance-Guards,
+- Berechtigung zur Aktivierung produktiver Replikation,
 - vorhandene Hochverfügbarkeit,
 - globale Datenschutzkonformität,
 - ActivityPub- oder Matrix-Kompatibilität,
@@ -145,4 +145,4 @@ Der nächste technische Schnitt ist ein read-only Multi-Instance-State-Audit mit
 5. Zwei-API-Kohärenztest,
 6. Graceful Shutdown und Migrationsvertrag.
 
-Erst nach diesen Belegen wird der Single-Instance-Guard neu bewertet.
+Diese Belege liegen inzwischen vor; der frühere Guard wurde durch den stärkeren Multi-Instance-Guard ersetzt. Der Plattformrollout bleibt offen.

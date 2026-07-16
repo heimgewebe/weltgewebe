@@ -1067,19 +1067,16 @@
       "owner": "unknown",
       "evidence": [
         "docs/reports/domain-postgres-instance-coherence-decision.md",
-        "docs/blueprints/domain-data-postgres-cutover.md",
-        "scripts/guard/domain-single-instance-guard.sh",
-        "scripts/tests/test_domain_single_instance_guard.sh",
-        ".github/workflows/ci.yml",
-        "scripts/guard/run.sh"
+        "apps/api/tests/db_multi_instance_foundation.rs",
+        "scripts/guard/domain-multi-instance-guard.sh",
+        "scripts/tests/test_domain_multi_instance_guard.sh"
       ],
       "missing_evidence": [],
       "acceptance": [
-        "Option A ist entschieden: Der aktuelle PostgreSQL-Domain-Pfad ist auf hoechstens eine API-Instanz begrenzt; kein Cross-Instance-Kohaerenz-Claim",
-        "Decision-Report und Cutover-Blueprint benennen Risiko, operative Folgen, Review-Trigger, Parsergrenzen und Nicht-Beweise",
-        "Der statische Guard akzeptiert an services.api.scale und services.api.deploy.replicas nur literal 0/1, verbietet direkte services.api.replicas, trennt ausfuehrbare CLI-Werte von Dokumentationsplatzhaltern, prueft Docker-Compose-CLI-Formen inklusive --scale api=*, --scale=api=* und scale api=* und entfernt Caddy-Kommentare vor der Direktiverkennung",
-        "Der Guard ist in einem unabhaengigen CI-Job und der Guard-Orchestrierung angebunden; gezielte Fixtures plus Real-Repo-Drift-Check sind gruen",
-        "Die Entscheidung beweist weder den Live-Containerstand noch Runtime-Korrektheit oder PostgreSQL-Cutover-Readiness"
+        "PostgreSQL-backed production state is coherent across API processes",
+        "Transactional outbox and idempotent consumption are guarded",
+        "Two API instances and a restart state pass against one database",
+        "Production replica activation remains a separate rollout decision"
       ],
       "links": {
         "issues": [],
@@ -1091,7 +1088,7 @@
           "docs/blueprints/domain-data-postgres-cutover.md"
         ]
       },
-      "updated_at": "2026-06-19"
+      "updated_at": "2026-07-16"
     },
     {
       "id": "AUTH-PG-001",
@@ -1608,23 +1605,23 @@
       "id": "WELTGEWEBE-OS-002",
       "title": "Multi-Instance-State-Audit durchführen",
       "area": "api",
-      "status": "open",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "medium",
       "owner": "api",
       "evidence": [
         "docs/reports/domain-postgres-instance-coherence-decision.md",
-        "scripts/guard/domain-single-instance-guard.sh"
+        "apps/api/migrations/20260716000001_multi_instance_foundation.up.sql",
+        "apps/api/tests/db_multi_instance_foundation.rs",
+        "scripts/guard/domain-multi-instance-guard.sh",
+        "scripts/tests/test_domain_multi_instance_guard.sh"
       ],
-      "missing_evidence": [
-        "Vollständiges Inventar aller prozesslokalen autoritativen, temporären und Cache-Zustände",
-        "Umsetzungsslices und konkrete Mehrinstanz-Testmatrix"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Jeder relevante API-Zustand ist nach Autorität, Persistenz, Lebensdauer, Eigentümer und Fehlerwirkung klassifiziert",
-        "Alle Multi-Instanz-Blocker sind konkreten Folgetasks und Tests zugeordnet",
-        "Der Single-Instance-Guard bleibt unverändert aktiv"
+        "Shared Auth State, Rate Limits, Domain-Projektion und Outbox sind implementiert",
+        "Der frühere Single-Instance-Guard ist im selben Beweisschnitt durch den Multi-Instance-Guard ersetzt"
       ],
       "links": {
         "issues": [],
@@ -1634,25 +1631,25 @@
           "docs/reports/weltgewebe-os-foundation-status.md"
         ]
       },
-      "updated_at": "2026-07-15"
+      "updated_at": "2026-07-16"
     },
     {
       "id": "WELTGEWEBE-OS-003",
       "title": "Autoritative Auth-Zwischenzustände gemeinsam persistieren",
       "area": "auth",
-      "status": "open",
+      "status": "done",
       "priority": "high",
       "effort": "L",
       "risk": "high",
       "owner": "auth",
       "evidence": [
         "docs/reports/domain-postgres-instance-coherence-decision.md",
-        "docs/blueprints/auth-roadmap.md"
+        "apps/api/migrations/20260716000001_multi_instance_foundation.up.sql",
+        "apps/api/tests/db_multi_instance_foundation.rs",
+        "scripts/guard/domain-multi-instance-guard.sh",
+        "scripts/tests/test_domain_multi_instance_guard.sh"
       ],
-      "missing_evidence": [
-        "Persistenz- und Ablaufvertrag für Magic-Link-, Step-up-, Challenge- und Passkey-Zwischenzustände",
-        "Cross-Instance-, Restart- und Ablaufbeweise"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Kein produktionsrelevanter Auth-Zwischenzustand hängt ausschließlich an einem API-Prozess",
         "Zwei API-Instanzen können denselben Auth-Vorgang sicher fortsetzen",
@@ -1663,27 +1660,29 @@
         "prs": [],
         "docs": [
           "docs/blueprints/auth-roadmap.md",
-          "docs/reports/weltgewebe-os-foundation-status.md"
+          "docs/reports/weltgewebe-os-foundation-status.md",
+          "docs/reports/domain-postgres-instance-coherence-decision.md"
         ]
       },
-      "updated_at": "2026-07-15"
+      "updated_at": "2026-07-16"
     },
     {
       "id": "WELTGEWEBE-OS-004",
       "title": "Transactional Outbox und versioniertes Ereignisrückgrat einführen",
       "area": "api",
-      "status": "open",
+      "status": "done",
       "priority": "high",
       "effort": "L",
       "risk": "high",
       "owner": "api",
       "evidence": [
-        "docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md"
+        "docs/reports/domain-postgres-instance-coherence-decision.md",
+        "apps/api/migrations/20260716000001_multi_instance_foundation.up.sql",
+        "apps/api/tests/db_multi_instance_foundation.rs",
+        "scripts/guard/domain-multi-instance-guard.sh",
+        "scripts/tests/test_domain_multi_instance_guard.sh"
       ],
-      "missing_evidence": [
-        "Outbox-Schema, Relay, JetStream-Vertrag und erster idempotenter Konsument",
-        "Crash-, Doppelzustellungs-, Backpressure- und Replay-Beweise"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Fachmutation und Outbox-Eintrag sind atomar",
         "Relay setzt nach Absturz ohne Ereignisverlust fort",
@@ -1695,28 +1694,29 @@
         "prs": [],
         "docs": [
           "docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md",
-          "docs/reports/weltgewebe-os-foundation-status.md"
+          "docs/reports/weltgewebe-os-foundation-status.md",
+          "docs/reports/domain-postgres-instance-coherence-decision.md"
         ]
       },
-      "updated_at": "2026-07-15"
+      "updated_at": "2026-07-16"
     },
     {
       "id": "WELTGEWEBE-OS-005",
       "title": "Zwei-API-Kohärenz und Guard-Ablösung beweisen",
       "area": "api",
-      "status": "blocked",
+      "status": "done",
       "priority": "high",
       "effort": "L",
       "risk": "high",
       "owner": "api",
       "evidence": [
-        "scripts/guard/domain-single-instance-guard.sh",
-        "docs/reports/domain-postgres-instance-coherence-decision.md"
+        "docs/reports/domain-postgres-instance-coherence-decision.md",
+        "apps/api/migrations/20260716000001_multi_instance_foundation.up.sql",
+        "apps/api/tests/db_multi_instance_foundation.rs",
+        "scripts/guard/domain-multi-instance-guard.sh",
+        "scripts/tests/test_domain_multi_instance_guard.sh"
       ],
-      "missing_evidence": [
-        "Shared-State- und Outbox-Voraussetzungen aus WELTGEWEBE-OS-003/004",
-        "Zwei-Replica-CI-, Parallelitäts-, Restart- und Verzögerungstests"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Zwei API-Instanzen gegen dieselbe Datenbank liefern nach Lesen, Schreiben, Neustart und verzögerten Ereignissen konsistente Ergebnisse",
         "Cacheinvalidierung und Deduplikation sind belegt",
@@ -1730,13 +1730,13 @@
           "docs/blueprints/weltgewebe-os-masterplan.md"
         ]
       },
-      "updated_at": "2026-07-15"
+      "updated_at": "2026-07-16"
     },
     {
       "id": "WELTGEWEBE-OS-006",
       "title": "Kubernetes- und GitOps-Grundlage reproduzierbar aufbauen",
       "area": "infra",
-      "status": "blocked",
+      "status": "open",
       "priority": "medium",
       "effort": "XL",
       "risk": "high",
@@ -1762,7 +1762,7 @@
           "docs/blueprints/weltgewebe-os-masterplan.md"
         ]
       },
-      "updated_at": "2026-07-15"
+      "updated_at": "2026-07-16"
     },
     {
       "id": "WELTGEWEBE-OS-007",

@@ -1,11 +1,16 @@
-use crate::auth::lock::RwLockRecover;
+use crate::auth::{
+    ephemeral_db::{BoundConsumeResult, EphemeralDb, NewEphemeralRecord},
+    lock::RwLockRecover,
+};
+use anyhow::Context;
 use chrono::{DateTime, Duration, Utc};
 use sha2::{Digest, Sha256};
+use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct StepUpTokenData {
     pub challenge_id: String,
     pub account_id: String,
@@ -14,6 +19,7 @@ pub struct StepUpTokenData {
 }
 
 /// Result of an atomic [`StepUpTokenStore::consume_if_matches`] operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConsumeMatchResult {
     /// Token not found or expired.
     NotFound,
@@ -27,13 +33,26 @@ pub enum ConsumeMatchResult {
 #[derive(Clone, Default)]
 pub struct StepUpTokenStore {
     store: Arc<RwLock<HashMap<String, StepUpTokenData>>>,
+    db: Option<EphemeralDb>,
 }
 
 impl StepUpTokenStore {
     pub fn new() -> Self {
         Self {
             store: Arc::new(RwLock::new(HashMap::new())),
+            db: None,
         }
+    }
+
+    pub fn new_postgres(pool: PgPool) -> Self {
+        Self {
+            db: Some(EphemeralDb::new(pool)),
+            ..Self::new()
+        }
+    }
+
+    pub fn is_shared(&self) -> bool {
+        self.db.is_some()
     }
 
     pub(crate) fn hash_token(token: &str) -> String {
@@ -127,6 +146,112 @@ impl StepUpTokenStore {
         // Expired tokens were already purged by retain() above, so any
         // token still present is guaranteed to be valid.
         store.remove(&hash)
+    }
+
+    pub async fn peek_shared(&self, token: &str) -> anyhow::Result<Option<StepUpTokenData>> {
+        let Some(db) = &self.db else {
+            return Ok(self.peek(token));
+        };
+        let hash = Self::hash_token(token);
+        db.peek("step_up_token", &hash)
+            .await?
+            .map(|record| {
+                serde_json::from_value(record.payload).context("invalid stored step-up token")
+            })
+            .transpose()
+    }
+
+    pub async fn create_shared(
+        &self,
+        challenge_id: String,
+        account_id: String,
+        device_id: String,
+    ) -> anyhow::Result<String> {
+        self.create_shared_with_expiry(challenge_id, account_id, device_id, Duration::minutes(5))
+            .await
+    }
+
+    pub async fn create_shared_with_expiry(
+        &self,
+        challenge_id: String,
+        account_id: String,
+        device_id: String,
+        duration: Duration,
+    ) -> anyhow::Result<String> {
+        let Some(db) = &self.db else {
+            return Ok(self.create_with_expiry(challenge_id, account_id, device_id, duration));
+        };
+        let token = Uuid::new_v4().to_string();
+        let hash = Self::hash_token(&token);
+        let now = Utc::now();
+        let data = StepUpTokenData {
+            challenge_id,
+            account_id: account_id.clone(),
+            device_id: device_id.clone(),
+            expires_at: now + duration,
+        };
+        let payload = serde_json::to_value(&data).context("failed to serialize step-up token")?;
+        db.insert(
+            "step_up_token",
+            None,
+            NewEphemeralRecord {
+                key_hash: &hash,
+                account_id: Some(&account_id),
+                device_id: Some(&device_id),
+                payload: &payload,
+                created_at: now,
+                expires_at: data.expires_at,
+            },
+        )
+        .await?;
+        Ok(token)
+    }
+
+    pub async fn consume_if_matches_shared(
+        &self,
+        token: &str,
+        expected_challenge_id: &str,
+        expected_account_id: &str,
+        expected_device_id: &str,
+    ) -> anyhow::Result<ConsumeMatchResult> {
+        let Some(db) = &self.db else {
+            return Ok(self.consume_if_matches(
+                token,
+                expected_challenge_id,
+                expected_account_id,
+                expected_device_id,
+            ));
+        };
+        let hash = Self::hash_token(token);
+        Ok(
+            match db
+                .consume_bound(
+                    "step_up_token",
+                    &hash,
+                    Some(expected_account_id),
+                    Some(expected_device_id),
+                    Some(("challenge_id", expected_challenge_id)),
+                )
+                .await?
+            {
+                BoundConsumeResult::NotFound => ConsumeMatchResult::NotFound,
+                BoundConsumeResult::BindingMismatch => ConsumeMatchResult::BindingMismatch,
+                BoundConsumeResult::Consumed(_) => ConsumeMatchResult::Consumed,
+            },
+        )
+    }
+
+    pub async fn consume_shared(&self, token: &str) -> anyhow::Result<Option<StepUpTokenData>> {
+        let Some(db) = &self.db else {
+            return Ok(self.consume(token));
+        };
+        let hash = Self::hash_token(token);
+        db.consume("step_up_token", &hash)
+            .await?
+            .map(|record| {
+                serde_json::from_value(record.payload).context("invalid stored step-up token")
+            })
+            .transpose()
     }
 }
 

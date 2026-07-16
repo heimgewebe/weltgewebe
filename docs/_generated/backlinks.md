@@ -65,13 +65,25 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-edge-reference-audit.md
 
+## apps/api/migrations/20260716000001_multi_instance_foundation.up.sql
+
+- [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
+
 ## apps/api/src/auth/accounts.rs
 
 - [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
 
+## apps/api/src/auth/ephemeral_db.rs
+
+- [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
+
 ## apps/api/src/domain_db.rs
 
 - [relates_to] docs/reports/domain-edge-cache-limit-design.md
+
+## apps/api/src/outbox.rs
+
+- [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 
 ## apps/api/src/routes/accounts.rs
 
@@ -99,6 +111,10 @@ Generated automatically. Do not edit.
 ## apps/api/tests/db_domain_backfill.rs
 
 - [relates_to] docs/reports/domain-backfill-proof.md
+
+## apps/api/tests/db_multi_instance_foundation.rs
+
+- [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 
 ## architecture/overview.md
 
@@ -1173,7 +1189,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/proofs/basemap-hamburg-artifact-proof.md
 - [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
 
-## scripts/guard/domain-single-instance-guard.sh
+## scripts/guard/domain-multi-instance-guard.sh
 
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 
@@ -1217,7 +1233,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/process/merge-quality-gate.md
 
-## scripts/tests/test_domain_single_instance_guard.sh
+## scripts/tests/test_domain_multi_instance_guard.sh
 
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 

@@ -1,9 +1,16 @@
-use crate::auth::lock::RwLockRecover;
+use crate::auth::{
+    ephemeral_db::{EphemeralDb, NewEphemeralRecord},
+    lock::RwLockRecover,
+};
 use chrono::{DateTime, Duration, Utc};
+use serde_json::json;
 use sha2::{Digest, Sha256};
+use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
+
+const STATE_KIND: &str = "magic_link_token";
 
 #[derive(Clone, Debug)]
 pub struct TokenData {
@@ -14,12 +21,7 @@ pub struct TokenData {
 #[derive(Clone, Default)]
 pub struct TokenStore {
     store: Arc<RwLock<HashMap<String, TokenData>>>,
-    /// Maps email → most recently created raw token.
-    ///
-    /// Populated only when the `integration-testing` feature is enabled or in
-    /// unit-test builds. Used by integration tests to retrieve the token
-    /// generated inside request handlers without seeding it manually.
-    /// Never compiled into production builds.
+    db: Option<EphemeralDb>,
     #[cfg(any(test, feature = "integration-testing"))]
     raw_by_email: Arc<RwLock<HashMap<String, String>>>,
 }
@@ -28,9 +30,21 @@ impl TokenStore {
     pub fn new() -> Self {
         Self {
             store: Arc::new(RwLock::new(HashMap::new())),
+            db: None,
             #[cfg(any(test, feature = "integration-testing"))]
             raw_by_email: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    pub fn new_postgres(pool: PgPool) -> Self {
+        Self {
+            db: Some(EphemeralDb::new(pool)),
+            ..Self::new()
+        }
+    }
+
+    pub fn is_shared(&self) -> bool {
+        self.db.is_some()
     }
 
     pub(crate) fn hash_token(token: &str) -> String {
@@ -39,19 +53,15 @@ impl TokenStore {
         crate::auth::digest::encode_sha256_digest(hasher.finalize())
     }
 
-    /// Checks if a token exists and is valid without consuming it.
-    /// Returns the associated email if valid.
+    /// In-memory compatibility path for database-free development and tests.
     pub fn peek(&self, token: &str) -> Option<String> {
         let now = Utc::now();
         let hash = Self::hash_token(token);
         let store = self.store.read_recover();
-
-        if let Some(data) = store.get(&hash) {
-            if data.expires_at > now {
-                return Some(data.email.clone());
-            }
-        }
-        None
+        store
+            .get(&hash)
+            .filter(|data| data.expires_at > now)
+            .map(|data| data.email.clone())
     }
 
     pub fn create(&self, email: String) -> String {
@@ -63,44 +73,97 @@ impl TokenStore {
         let hash = Self::hash_token(&token);
         let now = Utc::now();
         let expires_at = now + duration;
-
-        #[cfg(any(test, feature = "integration-testing"))]
-        let email_for_capture = email.clone();
-
         let data = TokenData {
             email: email.clone(),
             expires_at,
         };
-
         let mut store = self.store.write_recover();
-        // Keep the store bounded and make the newest request authoritative.
-        // This is done under the same write lock as insertion, so concurrent
-        // requests cannot leave two usable tokens for one normalized address.
         store.retain(|_, existing| existing.expires_at > now && existing.email != email);
         store.insert(hash, data);
-
         #[cfg(any(test, feature = "integration-testing"))]
-        {
-            let mut raw = self.raw_by_email.write_recover();
-            raw.insert(email_for_capture, token.clone());
-        }
-
+        self.raw_by_email
+            .write_recover()
+            .insert(email, token.clone());
         token
     }
 
-    /// Return the most recently created raw token for the given email.
     #[cfg(any(test, feature = "integration-testing"))]
     pub fn latest_raw_for_email(&self, email: &str) -> Option<String> {
-        let raw = self.raw_by_email.read_recover();
-        raw.get(email).cloned()
+        self.raw_by_email.read_recover().get(email).cloned()
     }
 
     pub fn consume(&self, token: &str) -> Option<String> {
         let now = Utc::now();
         let hash = Self::hash_token(token);
         let mut store = self.store.write_recover();
-        store.retain(|_, v| v.expires_at > now);
+        store.retain(|_, value| value.expires_at > now);
         store.remove(&hash).map(|data| data.email)
+    }
+
+    pub async fn peek_shared(&self, token: &str) -> Result<Option<String>, sqlx::Error> {
+        let Some(db) = &self.db else {
+            return Ok(self.peek(token));
+        };
+        let hash = Self::hash_token(token);
+        Ok(db.peek(STATE_KIND, &hash).await?.and_then(|record| {
+            record
+                .payload
+                .get("email")
+                .and_then(|value| value.as_str())
+                .map(ToOwned::to_owned)
+        }))
+    }
+
+    pub async fn create_shared(&self, email: String) -> Result<String, sqlx::Error> {
+        self.create_shared_with_expiry(email, Duration::minutes(15))
+            .await
+    }
+
+    pub async fn create_shared_with_expiry(
+        &self,
+        email: String,
+        duration: Duration,
+    ) -> Result<String, sqlx::Error> {
+        let Some(db) = &self.db else {
+            return Ok(self.create_with_expiry(email, duration));
+        };
+        let token = Uuid::new_v4().to_string();
+        let hash = Self::hash_token(&token);
+        let email_context = EphemeralDb::hash_opaque_id(&email);
+        let now = Utc::now();
+        let payload = json!({"email": email.clone()});
+        db.replace_context(
+            STATE_KIND,
+            &email_context,
+            NewEphemeralRecord {
+                key_hash: &hash,
+                account_id: None,
+                device_id: None,
+                payload: &payload,
+                created_at: now,
+                expires_at: now + duration,
+            },
+        )
+        .await?;
+        #[cfg(any(test, feature = "integration-testing"))]
+        self.raw_by_email
+            .write_recover()
+            .insert(email, token.clone());
+        Ok(token)
+    }
+
+    pub async fn consume_shared(&self, token: &str) -> Result<Option<String>, sqlx::Error> {
+        let Some(db) = &self.db else {
+            return Ok(self.consume(token));
+        };
+        let hash = Self::hash_token(token);
+        Ok(db.consume(STATE_KIND, &hash).await?.and_then(|record| {
+            record
+                .payload
+                .get("email")
+                .and_then(|value| value.as_str())
+                .map(ToOwned::to_owned)
+        }))
     }
 }
 
