@@ -17,6 +17,7 @@ use std::{
 };
 
 use anyhow::Result;
+use axum::{body, extract::State, response::IntoResponse, Extension};
 use serial_test::serial;
 use sqlx::{PgPool, Row};
 use tokio::sync::{Mutex, RwLock};
@@ -32,6 +33,7 @@ use weltgewebe_api::{
             PasskeyStore, RegistrationInput,
         },
         rate_limit::{AuthRateLimiter, RateLimitError},
+        role::Role,
         session::SessionBackend,
         step_up_tokens::{ConsumeMatchResult, StepUpTokenStore},
         tokens::TokenStore,
@@ -41,6 +43,7 @@ use weltgewebe_api::{
         DomainNodeWriteSource, DomainReadSource, PasskeyCredentialSource,
     },
     domain_db::{domain_projection_version, load_stable_domain_projection_from_postgres},
+    middleware::auth::AuthContext,
     outbox,
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
@@ -232,6 +235,36 @@ async fn two_instances_and_restart_share_truth_and_event_receipts() -> Result<()
 
     let state_a = api_state(pool.clone(), nats_a).await?;
     let state_b = api_state(pool.clone(), nats_b).await?;
+
+    // The actual logout-all route must create its step-up challenge in the
+    // shared backend, not in the process-local fallback store.
+    let response = weltgewebe_api::routes::auth::logout_all(
+        State(state_a.clone()),
+        Extension(AuthContext {
+            authenticated: true,
+            account_id: Some(ACCOUNT_ID.to_string()),
+            device_id: Some(DEVICE_ID.to_string()),
+            role: Role::Weber,
+            expires_at: None,
+        }),
+    )
+    .await
+    .into_response();
+    assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
+    let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let response_json: serde_json::Value = serde_json::from_slice(&response_body)?;
+    let logout_challenge_id = response_json["challenge_id"]
+        .as_str()
+        .expect("logout-all response contains challenge id");
+    let logout_challenge = state_b
+        .challenges
+        .get_shared(logout_challenge_id)
+        .await?
+        .expect("logout-all challenge is visible on second instance");
+    assert!(matches!(
+        logout_challenge.intent,
+        ChallengeIntent::LogoutAll
+    ));
 
     // Magic links are newest-wins and single-use across processes.
     let old = state_a
@@ -465,6 +498,15 @@ async fn two_instances_and_restart_share_truth_and_event_receipts() -> Result<()
             .fetch_one(&pool)
             .await?;
     assert!(quarantined);
+    assert!(outbox::requeue_quarantined(&pool, failed_id).await?);
+    let requeued: (bool, i32, bool) = sqlx::query_as(
+        "SELECT quarantined_at IS NULL, attempt_count, available_at <= NOW()          FROM domain_outbox WHERE id = $1",
+    )
+    .bind(failed_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(requeued, (true, 0, true));
+    assert!(!outbox::requeue_quarantined(&pool, failed_id).await?);
 
     reset(&pool).await;
     Ok(())

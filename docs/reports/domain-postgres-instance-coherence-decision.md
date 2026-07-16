@@ -125,28 +125,54 @@ transaktionsgebundene PostgreSQL-Advisory-Locks, damit beispielsweise zwei
 parallel angeforderte Magic Links nicht beide als aktuell gelten.
 
 WebAuthn-Zeremoniezustand wird über die dafür vorgesehene
-`webauthn-rs`-Serialisierung serverseitig gespeichert. Er gelangt nicht in
-Cookies oder Browserzustand. Ein periodischer Sweeper entfernt abgelaufene
-Auth- und Rate-Limit-Zeilen auch ohne neuen Traffic.
+`webauthn-rs`-Serialisierung serverseitig gespeichert. Dafür ist in Version 0.5
+das bewusst auffällig benannte Feature `danger-allow-state-serialisation`
+erforderlich. Seine Freigabe gilt ausschließlich für kurzlebigen,
+serverseitigen PostgreSQL-Zustand: nie für Cookies, Browserdaten, Logs oder eine
+langfristige Fachrepräsentation. Die Payload bleibt an gehashte opaque IDs,
+Konto und Gerät gebunden, besitzt eine kurze TTL und wird single-use konsumiert.
+Ein Bibliotheksupgrade oder eine stabile, enger typisierte Persistenzschnittstelle
+muss dieses Feature erneut sicherheitsgebunden bewerten; stilles Ausweiten des
+Serialisierungsumfangs ist unzulässig. Ein periodischer Sweeper entfernt
+abgelaufene Auth- und Rate-Limit-Zeilen auch ohne neuen Traffic.
+
+Step-up-Challenges verwenden bewusst den exakten Kontext aus Konto, Gerät und
+Intent. Dadurch kollidieren `LogoutAll`, Passkey-Registrierung, Geräteentfernung
+und E-Mail-Änderung nicht miteinander. Unterschiedliche Zielwerte sind getrennte,
+kurzlebige und gebundene Operationen; das bloße Entfernen des Intents aus dem
+Kontextschlüssel würde dagegen eine neue Anfrage fälschlich mit dem Payload einer
+älteren Operation wiederverwenden.
 
 ## Transaktionale Outbox
 
 Trigger auf `domain_accounts`, `domain_nodes` und `domain_edges` schreiben für
 Insert, Update und Delete ein Ereignis. No-op-Updates erzeugen keines. Dadurch
 ist die Outbox nicht von einzelnen Route-Hooks abhängig und bleibt auch für
-künftige Schreibpfade verbindlich.
+künftige Schreibpfade verbindlich. Die Erstinstallation erzeugt keine
+Ereignisse für vorhandene Zeilen, weil die Trigger erst nach den additiven
+Tabellen angelegt werden. Spätere Massenmutationen und Backfills müssen dagegen
+in begrenzten Batches erfolgen und Outbox-Backlog, Lockzeiten sowie
+Konsumentenfortschritt überwachen. Ein stilles Abschalten der Trigger wäre ein
+Verlust des Ereignisvertrags und ist kein zulässiger Performance-Workaround.
 
 Relays:
 
-- claimen kleine Batches mit `FOR UPDATE SKIP LOCKED`;
+- claimen kleine Batches mit `FOR UPDATE SKIP LOCKED` in der Reihenfolge
+  `(available_at, id)`, passend zum partiellen Pending-Index;
 - setzen eine zeitlich begrenzte Claim-Lease;
 - veröffentlichen mit `Nats-Msg-Id=domain-outbox-<id>`;
 - markieren erst nach JetStream-Acknowledgement als publiziert;
-- planen Fehler exponentiell neu;
-- quarantänisieren nach zehn Fehlversuchen.
+- planen Fehler exponentiell mit eventgebundenem Jitter neu;
+- quarantänisieren nach zehn Fehlversuchen;
+- erlauben eine explizite, nur für unveröffentlichte Quarantäneereignisse gültige
+  Operator-Requeue über `requeue_quarantined`. Vor und nach jeder Requeue sind
+  Ereignisinhalt, Fehlerursache und betroffene Konsumenten zu prüfen; eine
+  pauschale Wiederfreigabe aller Quarantäneereignisse ist unzulässig.
 
 Ein Absturz zwischen Publish und PostgreSQL-Markierung kann erneut publizieren.
-Das ist zulässige At-least-once-Semantik. Der Konsumentenvertrag verhindert
+Das ist zulässige At-least-once-Semantik. Eine Vorabmarkierung als publiziert ist
+ausdrücklich ausgeschlossen, weil ein Absturz danach ein nie versendetes
+Ereignis dauerhaft als erledigt erscheinen ließe. Der Konsumentenvertrag verhindert
 doppelte Fachwirkung über eine create-once-Verbrauchsquittung. Die
 JetStream-Deduplizierung reduziert zusätzliche Duplikate, ersetzt diese
 Quittung aber nicht.
@@ -165,7 +191,8 @@ PostgreSQL-Datenbank und einen JetStream-Server auf:
 - dritte, neu konstruierte Restart-Instanz;
 - zwei gleichzeitig gestartete Outbox-Relays;
 - JetStream-Publish und PostgreSQL-Verbrauchsquittung;
-- Replay-Unterdrückung, Backoff und Quarantäne.
+- Replay-Unterdrückung, Backoff, Quarantäne und kontrollierte Requeue;
+- den echten `logout_all`-Handler mit instanzübergreifend sichtbarer Challenge.
 
 Der Test verweigert Datenbanknamen ohne `_test`, um versehentliche Ausführung
 gegen nicht ausdrücklich isolierte Datenbanken zu verhindern.

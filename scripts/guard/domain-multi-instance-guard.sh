@@ -43,6 +43,7 @@ for trigger in domain_nodes_outbox domain_edges_outbox domain_accounts_outbox; d
   require_literal "$MIGRATION" "CREATE TRIGGER $trigger" 'transactional trigger'
 done
 require_literal "$MIGRATION" 'UPDATE domain_projection_state' 'projection generation'
+require_literal "$MIGRATION" 'ON CONFLICT (singleton) DO NOTHING' 'idempotent projection-state initialization'
 require_literal "$MIGRATION" "INSERT INTO domain_outbox" 'transactional outbox'
 
 for symbol in replace_context get_or_insert_context consume_bound insert_with_capacity \
@@ -54,6 +55,7 @@ for call in create_shared peek_shared consume_shared get_shared \
   require_literal "$ROUTES" ".${call}" 'shared auth route'
 done
 require_literal "$ROUTES" 'check_shared' 'shared rate limit route'
+require_literal "$ROUTES" 'AUTH_BACKEND_UNAVAILABLE' 'JSON shared-backend error contract'
 
 require_literal "$DOMAIN_DB" 'load_stable_domain_projection_from_postgres' 'stable projection load'
 require_literal "$DOMAIN_DB" 'domain_projection_version' 'projection generation read'
@@ -63,8 +65,10 @@ require_literal "$MIDDLEWARE" 'refresh_domain_projection_if_stale' 'per-request 
 require_literal "$MIDDLEWARE" 'domain_projection_gate.read().await' 'request projection fence'
 
 require_literal "$OUTBOX" 'FOR UPDATE SKIP LOCKED' 'multi-relay claim'
+require_literal "$OUTBOX" 'ORDER BY available_at ASC, id ASC' 'pending-index claim order'
 require_literal "$OUTBOX" 'Nats-Msg-Id' 'JetStream publisher deduplication'
 require_literal "$OUTBOX" 'quarantined_at' 'poison-event quarantine'
+require_literal "$OUTBOX" 'requeue_quarantined' 'controlled quarantine recovery'
 require_literal "$OUTBOX" 'record_consumed_once' 'consumer idempotency ledger'
 require_literal "$OUTBOX" 'ack_policy: consumer::AckPolicy::Explicit' 'explicit consumer acknowledgement'
 require_literal "$LIB" 'outbox::start(pool, client)' 'runtime outbox startup'
@@ -75,6 +79,7 @@ for marker in 'let state_a =' 'let state_b =' 'let state_c =' \
   'outbox::start(pool.clone(), nats_b.clone())' \
   'refresh_domain_projection_if_stale' \
   'consume_shared(&restart_token)' \
+  'logout-all challenge is visible on second instance' \
   'record_consumed_once'; do
   require_literal "$PROOF" "$marker" 'two-instance/restart proof'
 done

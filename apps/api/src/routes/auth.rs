@@ -54,25 +54,53 @@ pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will recei
 /// Maximum email length in bytes (RFC 5321 forward path limit).
 pub const MAX_EMAIL_LEN: usize = 254;
 
+fn shared_auth_backend_json_response(
+    store: &'static str,
+    error: &impl std::fmt::Display,
+) -> axum::response::Response {
+    tracing::error!(
+        event = "auth.shared_backend_unavailable",
+        store,
+        error = %error,
+        "Shared authentication backend unavailable"
+    );
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(serde_json::json!({"error": "AUTH_BACKEND_UNAVAILABLE"})),
+    )
+        .into_response()
+}
+
+fn shared_auth_backend_json_response_with_jar(
+    store: &'static str,
+    error: &impl std::fmt::Display,
+    jar: CookieJar,
+) -> axum::response::Response {
+    tracing::error!(
+        event = "auth.shared_backend_unavailable",
+        store,
+        error = %error,
+        "Shared authentication backend unavailable"
+    );
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        jar,
+        Json(serde_json::json!({"error": "AUTH_BACKEND_UNAVAILABLE"})),
+    )
+        .into_response()
+}
+
 async fn create_shared_challenge(
     state: &ApiState,
     account_id: String,
     device_id: String,
     intent: ChallengeIntent,
-) -> Result<Challenge, StatusCode> {
+) -> Result<Challenge, axum::response::Response> {
     state
         .challenges
         .create_shared(account_id, device_id, intent)
         .await
-        .map_err(|error| {
-            tracing::error!(
-                event = "auth.ephemeral_backend_unavailable",
-                store = "step_up_challenge",
-                error = %error,
-                "Shared auth state backend unavailable"
-            );
-            StatusCode::SERVICE_UNAVAILABLE
-        })
+        .map_err(|error| shared_auth_backend_json_response("step_up_challenge", &error))
 }
 
 fn get_request_id(headers: &HeaderMap) -> String {
@@ -688,7 +716,7 @@ async fn process_magic_link_delivery(
     account_id: &str,
     email_norm: &str,
     ctx: &ProvisionContext<'_>,
-) -> Result<(), StatusCode> {
+) -> Result<(), axum::response::Response> {
     // 3. Check Delivery Mechanism
     let can_deliver = state.mailer.is_some();
     let can_log = state.config.auth_log_magic_token;
@@ -704,7 +732,8 @@ async fn process_magic_link_delivery(
             account_id = %account_id,
             "Public login enabled but no delivery path configured"
         );
-        return Err(StatusCode::SERVICE_UNAVAILABLE);
+        let body = serde_json::json!({"error": "AUTH_DELIVERY_UNAVAILABLE"});
+        return Err((StatusCode::SERVICE_UNAVAILABLE, Json(body)).into_response());
     }
 
     // 4. Generate Token (only if deliverable)
@@ -713,15 +742,7 @@ async fn process_magic_link_delivery(
         .tokens
         .create_shared(email_norm.to_string())
         .await
-        .map_err(|error| {
-            tracing::error!(
-                event = "login.token_backend_unavailable",
-                account_id = %account_id,
-                error = %error,
-                "Shared magic-link token backend unavailable"
-            );
-            StatusCode::SERVICE_UNAVAILABLE
-        })?;
+        .map_err(|error| shared_auth_backend_json_response("magic_link_token", &error))?;
 
     // 5. Send/Log Email
     // Ensure the base URL does not have a trailing slash for clean formatting
@@ -859,8 +880,7 @@ pub async fn request_login(
             e,
             crate::auth::rate_limit::RateLimitError::BackendUnavailable(_)
         ) {
-            tracing::error!(event = "auth.rate_limit_backend_unavailable", error = %e);
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+            return shared_auth_backend_json_response("rate_limit", &e);
         }
         tracing::warn!(
             event = "login.rate_limited",
@@ -968,8 +988,8 @@ pub async fn request_login(
     };
 
     if let Some(id) = account_id {
-        if let Err(status) = process_magic_link_delivery(&state, &id, &email_norm, &ctx).await {
-            return status.into_response();
+        if let Err(response) = process_magic_link_delivery(&state, &id, &email_norm, &ctx).await {
+            return response;
         }
     } else if provision_failed {
         // Persistence failed: no phantom cache-only account, no magic link.
@@ -987,10 +1007,10 @@ pub async fn request_login(
     } else if state.config.is_open_registration() {
         match provision_account(&state, &email_norm, &ctx).await {
             ProvisionOutcome::Ready(id) => {
-                if let Err(status) =
+                if let Err(response) =
                     process_magic_link_delivery(&state, &id, &email_norm, &ctx).await
                 {
-                    return status.into_response();
+                    return response;
                 }
 
                 tracing::info!(
@@ -1062,8 +1082,7 @@ pub async fn consume_login_get(
         Ok(Some(_)) => {}
         Ok(None) => return Redirect::to("/login?error=invalid_token").into_response(),
         Err(error) => {
-            tracing::error!(event = "login.token_backend_unavailable", error = %error);
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+            return shared_auth_backend_json_response("magic_link_token", &error);
         }
     }
 
@@ -1175,8 +1194,7 @@ pub async fn consume_login_post(
     let email = match state.tokens.consume_shared(&form.token).await {
         Ok(email) => email,
         Err(error) => {
-            tracing::error!(event = "login.token_backend_unavailable", error = %error);
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+            return shared_auth_backend_json_response("magic_link_token", &error);
         }
     };
     if let Some(email) = email {
@@ -1300,9 +1318,13 @@ pub async fn logout_all(
         "Logout All requested, generating step-up challenge"
     );
 
-    let challenge = state
-        .challenges
-        .create(account_id, device_id, ChallengeIntent::LogoutAll);
+    let challenge =
+        match create_shared_challenge(&state, account_id, device_id, ChallengeIntent::LogoutAll)
+            .await
+        {
+            Ok(challenge) => challenge,
+            Err(response) => return response,
+        };
 
     let err_payload = serde_json::json!({
         "error": "STEP_UP_REQUIRED",
@@ -1411,7 +1433,7 @@ pub async fn update_email(
     .await
     {
         Ok(challenge) => challenge,
-        Err(status) => return status.into_response(),
+        Err(response) => return response,
     };
     let err_payload = serde_json::json!({
         "error": "STEP_UP_REQUIRED",
@@ -1698,7 +1720,7 @@ pub async fn remove_device(
     .await
     {
         Ok(challenge) => challenge,
-        Err(status) => return status.into_response(),
+        Err(response) => return response,
     };
 
     let err_payload = serde_json::json!({
@@ -1756,10 +1778,8 @@ pub async fn request_step_up(
             let err_payload = serde_json::json!({"error": "CHALLENGE_INVALID"});
             return (StatusCode::BAD_REQUEST, Json(err_payload)).into_response();
         }
-        Err(error) => {
-            tracing::error!(event = "auth.ephemeral_backend_unavailable", store = "step_up_challenge", error = %error);
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
-        }
+
+        Err(error) => return shared_auth_backend_json_response("step_up_challenge", &error),
     };
 
     if challenge.account_id != *account_id || challenge.device_id != *device_id {
@@ -1803,14 +1823,8 @@ pub async fn request_step_up(
         .await
     {
         Ok(token) => token,
-        Err(error) => {
-            tracing::error!(
-                event = "auth.ephemeral_backend_unavailable",
-                store = "step_up_token",
-                error = %error
-            );
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
-        }
+
+        Err(error) => return shared_auth_backend_json_response("step_up_token", &error),
     };
 
     // 4. Send the Step-up Magic Link via Mailer
@@ -1935,12 +1949,7 @@ pub async fn consume_step_up(
         .await
     {
         Err(error) => {
-            tracing::error!(
-                event = "auth.ephemeral_backend_unavailable",
-                store = "step_up_token",
-                error = %error
-            );
-            return (StatusCode::SERVICE_UNAVAILABLE, jar).into_response();
+            return shared_auth_backend_json_response_with_jar("step_up_token", &error, jar);
         }
         Ok(ConsumeMatchResult::NotFound) => {
             tracing::warn!(
@@ -1981,9 +1990,9 @@ pub async fn consume_step_up(
             let err = serde_json::json!({"error": "TOKEN_INVALID"});
             return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
         }
+
         Err(error) => {
-            tracing::error!(event = "auth.ephemeral_backend_unavailable", store = "step_up_challenge", error = %error);
-            return (StatusCode::SERVICE_UNAVAILABLE, jar).into_response();
+            return shared_auth_backend_json_response_with_jar("step_up_challenge", &error, jar);
         }
     };
 
@@ -2207,13 +2216,13 @@ pub async fn consume_step_up(
                 .await
             {
                 Ok(grant_id) => grant_id,
+
                 Err(error) => {
-                    tracing::error!(
-                        event = "auth.ephemeral_backend_unavailable",
-                        store = "passkey_registration_grant",
-                        error = %error
+                    return shared_auth_backend_json_response_with_jar(
+                        "passkey_registration_grant",
+                        &error,
+                        jar,
                     );
-                    return (StatusCode::SERVICE_UNAVAILABLE, jar).into_response();
                 }
             };
             tracing::info!(
@@ -2325,7 +2334,7 @@ pub async fn passkey_register_options(
         .await
         {
             Ok(challenge) => challenge,
-            Err(status) => return status.into_response(),
+            Err(response) => return response,
         };
 
         tracing::info!(
@@ -2350,12 +2359,7 @@ pub async fn passkey_register_options(
         .await
     {
         Err(error) => {
-            tracing::error!(
-                event = "auth.ephemeral_backend_unavailable",
-                store = "passkey_registration_grant",
-                error = %error
-            );
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+            return shared_auth_backend_json_response("passkey_registration_grant", &error);
         }
         Ok(ConsumeGrantResult::NotFound) => {
             tracing::warn!(
@@ -2442,13 +2446,9 @@ pub async fn passkey_register_options(
                 .await
             {
                 Ok(registration_id) => registration_id,
+
                 Err(error) => {
-                    tracing::error!(
-                        event = "auth.ephemeral_backend_unavailable",
-                        store = "passkey_registration",
-                        error = %error
-                    );
-                    return StatusCode::SERVICE_UNAVAILABLE.into_response();
+                    return shared_auth_backend_json_response("passkey_registration", &error);
                 }
             };
 
@@ -2559,13 +2559,9 @@ pub async fn passkey_register_verify(
             let err = serde_json::json!({"error": "REGISTRATION_INVALID"});
             return (StatusCode::BAD_REQUEST, Json(err)).into_response();
         }
+
         Err(error) => {
-            tracing::error!(
-                event = "auth.ephemeral_backend_unavailable",
-                store = "passkey_registration",
-                error = %error
-            );
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+            return shared_auth_backend_json_response("passkey_registration", &error);
         }
     };
 
@@ -2762,8 +2758,7 @@ pub async fn passkey_auth_options(
             e,
             crate::auth::rate_limit::RateLimitError::BackendUnavailable(_)
         ) {
-            tracing::error!(event = "auth.rate_limit_backend_unavailable", error = %e);
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+            return shared_auth_backend_json_response("rate_limit", &e);
         }
         tracing::warn!(
             event = "auth.passkey.auth_options.rate_limited",
@@ -2962,8 +2957,7 @@ pub async fn passkey_auth_verify(
             e,
             crate::auth::rate_limit::RateLimitError::BackendUnavailable(_)
         ) {
-            tracing::error!(event = "auth.rate_limit_backend_unavailable", error = %e);
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+            return shared_auth_backend_json_response("rate_limit", &e);
         }
         tracing::warn!(
             event = "auth.passkey.auth_verify.rate_limited",
@@ -2994,13 +2988,9 @@ pub async fn passkey_auth_verify(
             let err = serde_json::json!({"error": "AUTHENTICATION_INVALID"});
             return (StatusCode::BAD_REQUEST, Json(err)).into_response();
         }
+
         Err(error) => {
-            tracing::error!(
-                event = "auth.ephemeral_backend_unavailable",
-                store = "passkey_authentication",
-                error = %error
-            );
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+            return shared_auth_backend_json_response("passkey_authentication", &error);
         }
     };
 
@@ -3317,13 +3307,9 @@ pub async fn passkey_testing_issue_grant(
         .await
     {
         Ok(grant_id) => grant_id,
+
         Err(error) => {
-            tracing::error!(
-                event = "auth.ephemeral_backend_unavailable",
-                store = "passkey_registration_grant",
-                error = %error
-            );
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+            return shared_auth_backend_json_response("passkey_registration_grant", &error);
         }
     };
 
@@ -3394,9 +3380,28 @@ pub async fn passkey_testing_list_credentials(
 mod tests {
     use super::*;
     use crate::test_helpers::EnvGuard;
-    use axum::http::HeaderMap;
+    use axum::{body, http::header::CONTENT_TYPE, http::HeaderMap};
     use serial_test::serial;
     use std::net::SocketAddr;
+
+    #[tokio::test]
+    async fn shared_auth_backend_failure_uses_json_contract() {
+        let response = shared_auth_backend_json_response("test_store", &"database unavailable");
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            response
+                .headers()
+                .get(CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("application/json")
+        );
+        let bytes = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read JSON error body");
+        let payload: serde_json::Value =
+            serde_json::from_slice(&bytes).expect("parse JSON error body");
+        assert_eq!(payload["error"], "AUTH_BACKEND_UNAVAILABLE");
+    }
 
     #[test]
     #[serial]

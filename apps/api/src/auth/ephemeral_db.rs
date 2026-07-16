@@ -343,12 +343,6 @@ impl EphemeralDb {
     ) -> Result<bool, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         Self::lock_context(&mut tx, kind, "__capacity__").await?;
-        sqlx::query(
-            "DELETE FROM auth_ephemeral_state WHERE state_kind = $1 AND expires_at <= NOW()",
-        )
-        .bind(kind)
-        .execute(&mut *tx)
-        .await?;
         let active: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM auth_ephemeral_state WHERE state_kind = $1 AND expires_at > NOW()",
         )

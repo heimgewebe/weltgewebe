@@ -61,7 +61,8 @@ CREATE TABLE domain_projection_state (
     version BIGINT NOT NULL DEFAULT 0 CHECK (version >= 0)
 );
 
-INSERT INTO domain_projection_state (singleton, version) VALUES (TRUE, 0);
+INSERT INTO domain_projection_state (singleton, version) VALUES (TRUE, 0)
+ON CONFLICT (singleton) DO NOTHING;
 
 CREATE OR REPLACE FUNCTION weltgewebe_enqueue_domain_event()
 RETURNS TRIGGER

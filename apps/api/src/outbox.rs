@@ -70,7 +70,7 @@ pub async fn claim_pending(pool: &PgPool, limit: i64) -> anyhow::Result<Vec<Outb
              WHERE published_at IS NULL \
                AND quarantined_at IS NULL \
                AND available_at <= NOW() \
-             ORDER BY id ASC \
+             ORDER BY available_at ASC, id ASC \
              FOR UPDATE SKIP LOCKED \
              LIMIT $1\
          ) \
@@ -124,7 +124,11 @@ pub async fn mark_failed(
     }
 
     let exponent = u32::try_from(attempt_count.clamp(1, 8)).unwrap_or(8);
-    let delay_seconds = (2_i32.pow(exponent) * 2).min(300);
+    let base_delay_seconds = (2_i32.pow(exponent) * 2).min(300);
+    // Deterministic per-event jitter prevents many failed events from becoming
+    // eligible in the same second while keeping retry timing testable.
+    let jitter_seconds = i32::try_from(event_id.rem_euclid(11)).unwrap_or(0);
+    let delay_seconds = (base_delay_seconds + jitter_seconds).min(300);
     sqlx::query(
         "UPDATE domain_outbox \
             SET available_at = NOW() + make_interval(secs => $2), last_error = $3 \
@@ -137,6 +141,21 @@ pub async fn mark_failed(
     .await
     .context("failed to reschedule domain outbox event")?;
     Ok(false)
+}
+
+/// Requeue one explicitly quarantined event for a controlled operator retry.
+/// Published events are never reopened, and non-quarantined events are left unchanged.
+pub async fn requeue_quarantined(pool: &PgPool, event_id: i64) -> anyhow::Result<bool> {
+    let result = sqlx::query(
+        "UPDATE domain_outbox \
+            SET quarantined_at = NULL, attempt_count = 0, available_at = NOW(), last_error = NULL \
+          WHERE id = $1 AND published_at IS NULL AND quarantined_at IS NOT NULL",
+    )
+    .bind(event_id)
+    .execute(pool)
+    .await
+    .context("failed to requeue quarantined domain outbox event")?;
+    Ok(result.rows_affected() == 1)
 }
 
 pub async fn record_consumed_once(
