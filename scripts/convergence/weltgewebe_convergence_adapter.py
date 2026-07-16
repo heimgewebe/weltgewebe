@@ -525,7 +525,7 @@ def _reject_symbolic_git_reference(
         )
 
     if GITLAB_MR_RE.fullmatch(ref) is not None:
-        return
+        return False
     if "/-/merge_requests/" in normalized_ref:
         raise ConvergenceAdapterError(
             f"{path} must be an exact GitLab MR URL without subpaths"

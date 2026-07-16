@@ -22,10 +22,8 @@ FIXTURE_ROOT = CONTRACT_ROOT / "fixtures"
 ADAPTER_PATH = ROOT / "scripts/convergence/weltgewebe_convergence_adapter.py"
 DOC_PATH = ROOT / "docs/architecture/weltgewebe-os-convergence-adapter.md"
 PROTOCOL_ROOT_ENV = "KONVERGENZREGELKREIS_ROOT"
-PROTOCOL_ROOT = Path(
-    os.environ.get(PROTOCOL_ROOT_ENV, str(ROOT.parent / "konvergenzregelkreis"))
-)
-PROTOCOL_ROOT_REQUIRED = PROTOCOL_ROOT_ENV in os.environ
+PROTOCOL_ROOT_VALUE = os.environ.get(PROTOCOL_ROOT_ENV)
+PROTOCOL_ROOT = Path(PROTOCOL_ROOT_VALUE) if PROTOCOL_ROOT_VALUE else None
 PROTOCOL_HEAD_FILE = CONTRACT_ROOT / "PINNED_PROTOCOL_HEAD"
 PROTOCOL_HEAD = PROTOCOL_HEAD_FILE.read_text(encoding="utf-8").strip()
 CANONICAL_REQUEST_KEYS = {
@@ -54,12 +52,12 @@ def read_json(path: Path) -> Any:
 
 
 def load_protocol_core() -> Any:
+    if PROTOCOL_ROOT is None:
+        raise unittest.SkipTest(
+            f"set {PROTOCOL_ROOT_ENV} to run pinned protocol integration tests"
+        )
     if not PROTOCOL_ROOT.exists():
-        if PROTOCOL_ROOT_REQUIRED:
-            raise AssertionError(
-                f"required protocol checkout not present at {PROTOCOL_ROOT}"
-            )
-        raise unittest.SkipTest(f"protocol checkout not present at {PROTOCOL_ROOT}")
+        raise AssertionError(f"required protocol checkout not present at {PROTOCOL_ROOT}")
     head = subprocess.run(
         ["git", "-C", str(PROTOCOL_ROOT), "rev-parse", "HEAD"],
         check=True,
