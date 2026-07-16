@@ -34,17 +34,17 @@ spec:
             - name: POSTGRES_USER
               valueFrom:
                 configMapKeyRef:
-                  name: weltgewebe-data
+                  name: weltgewebe-local-fixture
                   key: postgres-user
             - name: POSTGRES_PASSWORD
               valueFrom:
                 configMapKeyRef:
-                  name: weltgewebe-data
+                  name: weltgewebe-local-fixture
                   key: postgres-password
             - name: POSTGRES_DB
               valueFrom:
                 configMapKeyRef:
-                  name: weltgewebe-data
+                  name: weltgewebe-local-fixture
                   key: postgres-database
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata

@@ -41,8 +41,8 @@ verifies_with:
 ## Sicherheitsgrenzen
 
 - Keine Secret-Objekte oder Secretwerte werden versioniert.
-- Local und CI erzeugen Secrets ephemer im Cluster.
-- Der lokale Referenzbeweis verwendet dafür eine deterministische, ausdrücklich öffentliche Test-Fixture; sie ist kein Produktionsgeheimnis.
+- Local und CI verwenden für Datenzelle und lokale App eine deterministische, ausdrücklich öffentliche Test-Fixture als ConfigMap; sie ist kein Produktionsgeheimnis.
+- Der Referenzrunner erzeugt nur für den Migration-Pod ein ephemeres `weltgewebe-runtime` Secret im Cluster. Dessen `database-url` spiegelt exakt die öffentliche Local-Fixture, damit die Secret-Referenz geprüft wird, ohne einen Produktions-Secretpfad zu behaupten.
 - Staging und Production benötigen einen externen, auditierten Secretpfad.
 - Eigene Container laufen ohne Root, ohne Service-Account-Token, ohne Privilege Escalation und mit Default-Deny-Netzpolitik.
 - Der Referenzrunner übernimmt oder löscht niemals einen bereits vorhandenen Cluster.

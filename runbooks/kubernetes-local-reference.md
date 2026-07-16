@@ -31,7 +31,7 @@ verifies_with:
 - kein bestehender Cluster mit dem gewählten Namen;
 - keine laufende Produktionsänderung in diesem Pfad.
 
-Die lokale Datenzelle verwendet ausschließlich eine deterministische, öffentliche Test-Fixture; reale Geheimnisse werden weder benötigt noch geschrieben.
+Die lokale Datenzelle und die lokale App verwenden eine deterministische, öffentliche Test-Fixture als ConfigMap; reale Geheimnisse werden weder benötigt noch geschrieben. Für den Migration-Pod erzeugt der Runner ein ephemeres `weltgewebe-runtime` Secret, dessen `database-url` exakt dieselbe öffentliche Fixture spiegelt.
 
 Die Werkzeuge werden nicht global installiert. `bootstrap_tools.py` lädt sie in den ignorierten Repositorycache und verifiziert jeden SHA-256.
 
@@ -48,7 +48,7 @@ make platform-render
 python3 scripts/platform/kind_reference.py proof   --cluster weltgewebe-reference   --mode direct
 ```
 
-Der Runner baut API und Web, lädt sie in kind, installiert Gateway API, Cilium/Hubble und Flux, erzeugt ephemere Secrets, führt die Migration kontrolliert vor dem Replica-Start aus, startet zwei API-Pods, prüft Restart und Gateway und entfernt ausschließlich den selbst markierten Cluster.
+Der Runner baut API und Web, lädt sie in kind, installiert Gateway API, Cilium/Hubble und Flux, erzeugt das ephemere Migration-Secret aus der öffentlichen Fixture, führt die Migration kontrolliert vor dem Replica-Start aus, startet zwei API-Pods, prüft Restart und Gateway und entfernt ausschließlich den selbst markierten Cluster.
 
 ## GitOps-Beweis
 
@@ -59,6 +59,11 @@ python3 scripts/platform/kind_reference.py proof   --cluster weltgewebe-referenc
 ```
 
 Zusätzlich wird ein absichtlicher Replica-Drift gesetzt und durch Flux korrigiert.
+
+## Bedienoberfläche
+
+Der Runner bietet nur den vollständigen `proof` und das besitzgeprüfte `down`.
+Es gibt keine veröffentlichten Zwischenphasen-Subcommands.
 
 ## Abbruch und Diagnose
 
