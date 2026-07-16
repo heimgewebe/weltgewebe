@@ -95,7 +95,7 @@ if [[ -e "$ROOT/scripts/guard/domain-single-instance-guard.sh" ]]; then
   fail=1
 fi
 
-if (( fail != 0 )); then
+if ((fail != 0)); then
   printf 'DOMAIN-MULTI-INSTANCE-GUARD: contract violated.\n' >&2
   exit 1
 fi
