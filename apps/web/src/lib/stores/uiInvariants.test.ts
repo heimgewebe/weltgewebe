@@ -4,7 +4,7 @@ import { assertUiStateInvariant } from "./uiInvariants";
 const mockSelection = { type: "node" as const, id: "123" };
 const mockDraft = {
   mode: "new-knoten" as const,
-  source: "action-bar" as const,
+  source: "tool-fan" as const,
 };
 
 describe("assertUiStateInvariant", () => {

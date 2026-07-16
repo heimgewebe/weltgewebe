@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
-test.describe("Filter mode", () => {
+test.describe("Sicht mode", () => {
   test.beforeEach(async ({ page }) => {
     // 1. Load the base mock API to prevent CartoCDN errors, etc.
     await mockApiResponses(page);
@@ -64,14 +64,23 @@ test.describe("Filter mode", () => {
     await page.waitForSelector(".map-marker");
   });
 
+  async function openFinden(page: import("@playwright/test").Page) {
+    await page.getByTestId("tool-fan-trigger").click();
+    await page.getByTestId("tool-fan-find").click();
+  }
+
+  async function openSicht(page: import("@playwright/test").Page) {
+    await page.getByTestId("tool-fan-trigger").click();
+    await page.getByTestId("tool-fan-sight").click();
+  }
+
   test("Case A: No filters -> Search global", async ({ page }) => {
-    const searchBtn = page.getByRole("button", { name: "Suche", exact: true });
-    await searchBtn.click();
+    await openFinden(page);
 
     const searchOverlay = page.getByTestId("search-overlay");
     await expect(searchOverlay).toBeVisible();
 
-    const searchInput = page.getByRole("textbox", { name: "Suchbegriff" });
+    const searchInput = page.getByRole("searchbox", { name: "Suchbegriff" });
     await expect(searchInput).toBeVisible();
 
     // Search for a node item
@@ -99,22 +108,27 @@ test.describe("Filter mode", () => {
     );
   });
 
-  test("lists selected Garnrollen as selectable map hits", async ({ page }) => {
-    const filterBtn = page.getByRole("button", { name: "Filter", exact: true });
-    await filterBtn.click();
+  test("Sicht narrows the map, and the narrowed marker stays selectable on the map", async ({
+    page,
+  }) => {
+    await openSicht(page);
 
-    const filterOverlay = page.getByTestId("filter-overlay");
+    const sichtOverlay = page.getByTestId("filter-overlay");
     const garnrolleLabel = page.locator("label.filter-item", {
       hasText: "Garnrolle",
     });
     await garnrolleLabel.click();
 
-    await expect(filterOverlay.getByText("Treffer (1)")).toBeVisible();
-    const result = page.getByTestId("filter-result-garnrolle-account-1");
-    await expect(result).toContainText("Test Account");
-    await result.click();
+    // Sicht itself carries no automatic hit list — only the active count.
+    await expect(sichtOverlay.getByText(/^1 Auswahl aktiv/)).toBeVisible();
+    await expect(page.locator(".filter-result")).toHaveCount(0);
 
-    await expect(filterOverlay).not.toBeVisible();
+    // The map is the primary result surface: only the selected type remains.
+    await expect(page.locator(".map-marker, .marker-account")).toHaveCount(1);
+    const marker = page.getByTestId("marker-garnrolle-account-1");
+    await expect(marker).toBeVisible();
+    await marker.click({ force: true });
+
     const contextPanel = page.getByTestId("context-panel");
     await expect(contextPanel).toBeVisible();
     await expect(contextPanel.locator(".panel-header h2")).toContainText(
@@ -132,20 +146,18 @@ test.describe("Filter mode", () => {
     });
   });
 
-  test("Case B & E: Active filter -> Search strictly bounded, and Clear Filters", async ({
+  test("Case B & E: Active Sicht -> Search strictly bounded, and reset", async ({
     page,
   }) => {
-    const filterBtn = page.getByRole("button", { name: "Filter", exact: true });
-    const searchBtn = page.getByRole("button", { name: "Suche", exact: true });
     const markerSelector = ".map-marker, .marker-account";
 
     // Initial marker count is 3
     await expect(page.locator(markerSelector)).toHaveCount(3);
 
-    // Open filter overlay
-    await filterBtn.click();
-    const filterOverlay = page.getByTestId("filter-overlay");
-    await expect(filterOverlay).toBeVisible();
+    // Open Sicht
+    await openSicht(page);
+    const sichtOverlay = page.getByTestId("filter-overlay");
+    await expect(sichtOverlay).toBeVisible();
 
     // Filter to ONLY show "Ereignis"
     const eventLabel = page.locator("label.filter-item", {
@@ -156,11 +168,11 @@ test.describe("Filter mode", () => {
     // Marker count drops strictly to 1
     await expect(page.locator(markerSelector)).toHaveCount(1);
 
-    // Open search, verify it strictly respects the active filter
-    await searchBtn.click();
-    await expect(filterOverlay).not.toBeVisible();
+    // Open search, verify it strictly respects the active Sicht selection
+    await openFinden(page);
+    await expect(sichtOverlay).not.toBeVisible();
 
-    const searchInput = page.getByRole("textbox", { name: "Suchbegriff" });
+    const searchInput = page.getByRole("searchbox", { name: "Suchbegriff" });
     await expect(searchInput).toBeVisible();
 
     // Search for excluded items should return no results
@@ -186,48 +198,45 @@ test.describe("Filter mode", () => {
       /Test Node 1/,
     );
 
-    // Case E: Clear Filters resets marker count
-    await filterBtn.click();
-    const clearBtn = page.getByRole("button", { name: "Auswahl zurücksetzen" });
+    // Case E: reset restores the full marker count
+    await openSicht(page);
+    const clearBtn = page.getByRole("button", { name: "Alles wieder zeigen" });
     await clearBtn.click();
     await expect(clearBtn).not.toBeVisible();
     await expect(page.locator(markerSelector)).toHaveCount(3);
   });
 
   test("Case C: Overlay exclusivity and focus shift", async ({ page }) => {
-    const filterBtn = page.getByRole("button", { name: "Filter", exact: true });
-    const searchBtn = page.getByRole("button", { name: "Suche", exact: true });
-
-    const filterOverlay = page.getByTestId("filter-overlay");
+    const sichtOverlay = page.getByTestId("filter-overlay");
     const searchOverlay = page.getByTestId("search-overlay");
 
     // Open search
-    await searchBtn.click();
+    await openFinden(page);
     await expect(searchOverlay).toBeVisible();
-    await expect(filterOverlay).not.toBeVisible();
+    await expect(sichtOverlay).not.toBeVisible();
 
-    // Open filter -> Search closes, focus should be inside filter
-    await filterBtn.click();
-    await expect(filterOverlay).toBeVisible();
+    // Open Sicht -> Search closes, focus should be inside Sicht
+    await openSicht(page);
+    await expect(sichtOverlay).toBeVisible();
     await expect(searchOverlay).not.toBeVisible();
     const firstCheckbox = page.locator('input[type="checkbox"]').first();
     await expect(firstCheckbox).toBeFocused();
 
-    // Open search -> Filter closes, focus should be inside search
-    await searchBtn.click();
+    // Open search -> Sicht closes, focus should be inside search
+    await openFinden(page);
     await expect(searchOverlay).toBeVisible();
-    await expect(filterOverlay).not.toBeVisible();
-    const searchInput = page.getByRole("textbox", { name: "Suchbegriff" });
+    await expect(sichtOverlay).not.toBeVisible();
+    const searchInput = page.getByRole("searchbox", { name: "Suchbegriff" });
     await expect(searchInput).toBeFocused();
   });
 
-  test("Case D: Focus management for Filter", async ({ page }) => {
-    const filterBtn = page.getByRole("button", { name: "Filter", exact: true });
+  test("Case D: Focus management for Sicht", async ({ page }) => {
+    const trigger = page.getByTestId("tool-fan-trigger");
 
-    // Open filter overlay
-    await filterBtn.click();
-    const filterOverlay = page.getByTestId("filter-overlay");
-    await expect(filterOverlay).toBeVisible();
+    // Open Sicht
+    await openSicht(page);
+    const sichtOverlay = page.getByTestId("filter-overlay");
+    await expect(sichtOverlay).toBeVisible();
 
     // First checkbox should be focused
     const firstCheckbox = page.locator('input[type="checkbox"]').first();
@@ -235,9 +244,25 @@ test.describe("Filter mode", () => {
 
     // Close with Escape
     await page.keyboard.press("Escape");
-    await expect(filterOverlay).not.toBeVisible();
+    await expect(sichtOverlay).not.toBeVisible();
 
-    // Focus lands back on Filter button
-    await expect(filterBtn).toBeFocused();
+    // Focus lands back on the tool fan trigger
+    await expect(trigger).toBeFocused();
+  });
+
+  test("active type count and reset are visible in Sicht", async ({ page }) => {
+    await openSicht(page);
+    const sichtOverlay = page.getByTestId("filter-overlay");
+
+    await expect(sichtOverlay.getByText(/^Alles sichtbar/)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Alles wieder zeigen" }),
+    ).toHaveCount(0);
+
+    await page.locator("label.filter-item", { hasText: "Ereignis" }).click();
+    await expect(sichtOverlay.getByText(/^1 Auswahl aktiv/)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Alles wieder zeigen" }),
+    ).toBeVisible();
   });
 });

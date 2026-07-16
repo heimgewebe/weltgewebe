@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, tick } from "svelte";
+  import { tick } from "svelte";
   import {
     isFilterOpen,
     activeFilters,
@@ -8,20 +8,19 @@
     clearFilters,
   } from "$lib/stores/filterStore";
   import { contextPanelOpen } from "$lib/stores/uiView";
-  import { restoreTarget, suppressNextRestore } from "$lib/utils/focusManager";
+  import { restoreTarget } from "$lib/utils/focusManager";
   import type { MapEntityViewModel } from "$lib/map/types";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
 
   export let availableTypes: { id: string; label: string; count: number }[] =
     [];
   export let filteredResults: MapEntityViewModel[] = [];
-  const dispatch = createEventDispatcher<{ select: MapEntityViewModel }>();
-  $: showResults = $activeFilters.size > 0;
-  $: listedResults = showResults ? filteredResults.slice(0, 50) : [];
 
   let overlayEl: HTMLDivElement;
   let closeBtnEl: HTMLButtonElement;
   let wasOpen = false;
+
+  $: activeCount = $activeFilters.size;
 
   $: {
     if ($isFilterOpen) {
@@ -39,18 +38,8 @@
     }
   }
 
-  function selectResult(result: MapEntityViewModel) {
-    suppressNextRestore("filter");
-    dispatch("select", result);
-    closeFilter();
-  }
-  function resultType(result: MapEntityViewModel): string {
-    return result.type === "garnrolle"
-      ? "Garnrolle"
-      : nodeKindLabel(result.kind);
-  }
   function filterLabel(type: { id: string; label: string }): string {
-    return type.id === "Garnrolle" ? "Garnrolle" : nodeKindLabel(type.id);
+    return type.id === "Garnrolle" ? "Garnrollen" : nodeKindLabel(type.id);
   }
   function handleGlobalKeydown(e: KeyboardEvent) {
     if ($isFilterOpen && !e.defaultPrevented && e.key === "Escape")
@@ -67,139 +56,98 @@
     class:panel-open={$contextPanelOpen}
     data-testid="filter-overlay"
     role="dialog"
-    aria-label="Filter"
+    aria-label="Sicht"
     aria-modal="false"
   >
     <div class="filter-header">
-      <h3>Filter</h3>
-      <div class="header-actions">
-        {#if $activeFilters.size > 0}<button
-            class="clear-btn"
-            on:click={clearFilters}>Auswahl zurücksetzen</button
-          >{/if}
-        <button
-          class="close-btn"
-          bind:this={closeBtnEl}
-          on:click={closeFilter}
-          aria-label="Filter schließen">✕</button
-        >
+      <div>
+        <span class="eyebrow">Kartenlinse</span>
+        <h3>Sicht</h3>
       </div>
+      <button
+        class="close-btn"
+        bind:this={closeBtnEl}
+        on:click={closeFilter}
+        aria-label="Sicht schließen">✕</button
+      >
     </div>
 
-    <div class="filter-content">
-      {#if availableTypes.length > 0}
-        <fieldset class="filter-group">
-          <legend>Sichtbare Elemente</legend>
-          <ul class="filter-list">
-            {#each availableTypes as type}
-              <li>
-                <label class="filter-item"
-                  ><input
-                    type="checkbox"
-                    checked={$activeFilters.has(type.id)}
-                    on:change={() => toggleFilterType(type.id)}
-                  /><span class="filter-label">{filterLabel(type)}</span><span
-                    class="filter-count">{type.count}</span
-                  ></label
-                >
-              </li>
-            {/each}
-          </ul>
-        </fieldset>
-      {:else}
-        <div class="no-filters" role="status">
-          Keine filterbaren Elemente vorhanden
-        </div>
-      {/if}
+    <p class="filter-summary" aria-live="polite">
+      {activeCount === 0
+        ? `Alles sichtbar · ${filteredResults.length} Elemente`
+        : `${activeCount} Auswahl${activeCount === 1 ? "" : "en"} aktiv · ${filteredResults.length} sichtbar`}
+    </p>
 
-      {#if showResults}
-        <section
-          class="filter-results"
-          aria-labelledby="filter-results-heading"
-        >
-          <h4 id="filter-results-heading">
-            Treffer ({filteredResults.length})
-          </h4>
-          {#if listedResults.length > 0}
-            <ul class="filter-result-list">
-              {#each listedResults as result}
-                <li>
-                  <button
-                    type="button"
-                    class="filter-result"
-                    data-testid={`filter-result-${result.type}-${result.id}`}
-                    on:click={() => selectResult(result)}
-                    ><span class="filter-result-main"
-                      ><span class="filter-result-title">{result.title}</span
-                      >{#if result.summary}<span class="filter-result-summary"
-                          >{result.summary}</span
-                        >{/if}</span
-                    ><span class="filter-result-type">{resultType(result)}</span
-                    ></button
-                  >
-                </li>
-              {/each}
-            </ul>
-            {#if filteredResults.length > listedResults.length}<p
-                class="result-limit-note"
+    {#if availableTypes.length > 0}
+      <fieldset class="filter-group">
+        <legend>Was soll auf der Karte erscheinen?</legend>
+        <ul class="filter-list">
+          {#each availableTypes as type}
+            <li>
+              <label
+                class="filter-item"
+                class:active={$activeFilters.has(type.id)}
+                ><input
+                  type="checkbox"
+                  checked={$activeFilters.has(type.id)}
+                  on:change={() => toggleFilterType(type.id)}
+                /><span class="filter-label">{filterLabel(type)}</span><span
+                  class="filter-count">{type.count}</span
+                ></label
               >
-                Die ersten {listedResults.length} Treffer werden angezeigt.
-              </p>{/if}
-          {:else}
-            <p class="no-results" role="status">
-              Keine Treffer für diese Auswahl.
-            </p>
-          {/if}
-        </section>
-      {:else}
-        <p class="filter-hint">
-          Wähle mindestens eine Art aus, um die Karte einzugrenzen.
-        </p>
-      {/if}
-    </div>
+            </li>
+          {/each}
+        </ul>
+      </fieldset>
+    {:else}
+      <div class="no-filters" role="status">
+        Keine auswählbaren Elemente vorhanden
+      </div>
+    {/if}
+
+    {#if activeCount > 0}
+      <button class="clear-btn" type="button" on:click={clearFilters}
+        >Alles wieder zeigen</button
+      >
+    {/if}
   </div>
 {/if}
 
 <style>
   .filter-overlay {
     position: fixed;
-    bottom: var(--map-bottom-ui-offset);
-    left: 0;
-    right: 0;
-    background: var(--panel);
-    border-top: 1px solid var(--panel-border);
-    z-index: 39;
-    padding: 1rem;
+    top: calc(env(safe-area-inset-top) + var(--toolbar-offset) + 10px);
+    right: 16px;
+    width: min(380px, calc(100vw - 32px));
+    max-height: min(440px, calc(100dvh - 112px));
+    z-index: 44;
+    padding: 0.9rem;
+    border: 1px solid var(--panel-border-strong);
+    border-radius: 16px;
+    background: rgba(20, 22, 28, 0.95);
     box-shadow: var(--shadow);
+    backdrop-filter: blur(14px);
     display: flex;
     flex-direction: column;
-    max-height: 50dvh;
     box-sizing: border-box;
+    overflow-y: auto;
   }
   .filter-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.75rem;
-    flex: 0 0 auto;
+    gap: 1rem;
   }
   .filter-header h3 {
-    margin: 0;
-    font-size: 1.1rem;
+    margin: 0.1rem 0 0;
+    font-size: 1.15rem;
   }
-  .header-actions {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-  }
-  .clear-btn {
-    background: none;
-    border: none;
-    color: var(--accent);
-    font-size: 0.9rem;
-    cursor: pointer;
-    min-height: 44px;
-    padding: 0 0.5rem;
+  .eyebrow {
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
   }
   .close-btn {
     background: none;
@@ -212,116 +160,103 @@
     display: grid;
     place-items: center;
   }
-  .filter-content {
-    overflow-y: auto;
-    min-height: 0;
+  .filter-summary {
+    margin: 0.45rem 0 0.75rem;
+    color: var(--muted);
+    font-size: 0.82rem;
   }
   .filter-group {
-    border: none;
+    border: 0;
     padding: 0;
     margin: 0;
   }
-  .filter-group legend,
-  .filter-results h4 {
-    margin: 0 0 0.5rem;
-    font-size: 0.78rem;
+  .filter-group legend {
+    margin: 0 0 0.55rem;
     color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    font-size: 0.78rem;
   }
-  .filter-list,
-  .filter-result-list {
+  .filter-list {
     list-style: none;
     padding: 0;
     margin: 0;
     display: grid;
-    gap: 0.35rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
   }
   .filter-item {
+    min-height: 44px;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
     display: flex;
     align-items: center;
-    gap: 0.65rem;
+    gap: 0.5rem;
     cursor: pointer;
-    min-height: 44px;
-    padding: 0 0.25rem;
+    background: rgba(15, 17, 21, 0.72);
+  }
+  .filter-item.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
   }
   .filter-item input {
-    width: 1.2rem;
-    height: 1.2rem;
+    width: 1.15rem;
+    height: 1.15rem;
+    margin: 0;
+    accent-color: var(--accent);
   }
   .filter-label {
-    flex: 1;
-    font-size: 1rem;
-  }
-  .filter-count {
-    color: var(--muted);
-    font-variant-numeric: tabular-nums;
-  }
-  .filter-results {
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--panel-border);
-  }
-  .filter-result {
-    width: 100%;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.65rem 0.75rem;
-    border: 1px solid var(--panel-border-strong);
-    border-radius: 8px;
-    background: var(--panel-solid);
-    color: var(--text);
-    text-align: left;
-    cursor: pointer;
-  }
-  .filter-result:hover,
-  .filter-result:focus-visible {
-    border-color: var(--accent);
-  }
-  .filter-result-main {
     min-width: 0;
-    display: grid;
-    gap: 0.15rem;
-  }
-  .filter-result-title {
-    font-weight: 600;
-  }
-  .filter-result-summary {
+    flex: 1;
     overflow: hidden;
-    color: var(--muted);
-    font-size: 0.85rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .filter-result-type {
-    flex: 0 0 auto;
+  .filter-count {
     color: var(--muted);
-    font-size: 0.8rem;
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
   }
-  .filter-hint,
-  .result-limit-note,
-  .no-results,
+  .clear-btn {
+    min-height: 44px;
+    margin-top: 0.75rem;
+    border: 1px solid var(--panel-border-strong);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    font-weight: 650;
+  }
+  .clear-btn:hover,
+  .clear-btn:focus-visible {
+    background: var(--accent-soft);
+  }
   .no-filters {
     color: var(--muted);
-    margin: 0.75rem 0 0;
+    padding: 0.75rem 0;
   }
 
   @media (min-width: 769px) {
-    .filter-overlay {
-      left: 50%;
-      right: auto;
-      width: min(720px, calc(100vw - 2rem));
-      transform: translateX(-50%);
-      border: 1px solid var(--panel-border);
-      border-bottom: 0;
-      border-radius: 12px 12px 0 0;
-    }
     .filter-overlay.panel-open {
-      left: calc((100vw - var(--context-panel-width)) / 2);
-      width: min(720px, calc(100vw - var(--context-panel-width) - 2rem));
+      right: calc(var(--context-panel-width) + 16px);
+      width: min(
+        380px,
+        calc(100vw - var(--context-panel-width) - 32px)
+      );
+    }
+  }
+
+  @media (max-width: 520px) {
+    .filter-overlay {
+      top: calc(env(safe-area-inset-top) + var(--toolbar-offset) + 4px);
+      left: 10px;
+      right: 10px;
+      width: auto;
+      max-height: min(46dvh, 390px);
+      padding: 0.75rem;
+      border-radius: 14px;
+    }
+    .filter-list {
+      grid-template-columns: 1fr;
     }
   }
 </style>

@@ -14,22 +14,18 @@
   --danger: #ff8585;
   --radius: 12px;
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
-  /* Layout-Defaults */
+  /* Layout-Defaults: Die Karte reserviert keinen dauerhaften unteren Balken. */
   --toolbar-offset: 52px;
   --context-panel-width: 400px;
-  --actionbar-base-height: 60px;
-  --actionbar-border-width: 1px;
-  --map-bottom-ui-offset: calc(
-    var(--actionbar-base-height) + var(--actionbar-border-width) +
-      env(safe-area-inset-bottom)
-  );
+  --tool-fan-size: 52px;
+  --tool-fan-collapsed-width: 116px;
 
   /* Swipe-Edge Defaults (innenliegende Greifzonen, kollisionsarm mit OS-Gesten) */
-  --edge-inset-x: 24px; /* Abstand von links/rechts */
-  --edge-inset-top: 24px; /* Abstand oben */
-  --edge-top-height: 16px; /* Höhe Top-Zone */
-  --edge-left-width: 16px; /* Breite linke Zone */
-  --edge-right-width: 16px; /* Breite rechte Zone */
+  --edge-inset-x: 24px;
+  --edge-inset-top: 24px;
+  --edge-top-height: 16px;
+  --edge-left-width: 16px;
+  --edge-right-width: 16px;
 }
 
 /* Android: Back-Swipe oft breiter → Zone schmaler & leicht weiter innen */

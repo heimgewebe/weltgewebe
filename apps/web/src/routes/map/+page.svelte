@@ -7,7 +7,7 @@
 
   import TopBar from "$lib/components/TopBar.svelte";
   import ContextPanel from "$lib/components/ContextPanel.svelte";
-  import ActionBar from "$lib/components/ActionBar.svelte";
+  import ToolFan from "$lib/components/ToolFan.svelte";
   import SearchOverlay from "$lib/components/SearchOverlay.svelte";
   import SearchDirectionIndicators from "$lib/components/SearchDirectionIndicators.svelte";
   import FilterOverlay from "$lib/components/FilterOverlay.svelte";
@@ -157,18 +157,25 @@
     if (topBarRect)
       top = Math.max(top, topBarRect.bottom - mapRect.top + edgeInset);
 
-    const actionBarRect = document
-      .querySelector<HTMLElement>(".action-bar")
-      ?.getBoundingClientRect();
-    if (actionBarRect && actionBarRect.height > 0) {
-      bottom = Math.min(bottom, actionBarRect.top - mapRect.top - edgeInset);
-    }
-
     const searchRect = document
       .querySelector<HTMLElement>('[data-testid="search-overlay"]')
       ?.getBoundingClientRect();
     if (searchRect) {
-      bottom = Math.min(bottom, searchRect.top - mapRect.top - edgeInset);
+      top = Math.max(top, searchRect.bottom - mapRect.top + edgeInset);
+    }
+
+    const filterRect = document
+      .querySelector<HTMLElement>('[data-testid="filter-overlay"]')
+      ?.getBoundingClientRect();
+    if (filterRect) {
+      top = Math.max(top, filterRect.bottom - mapRect.top + edgeInset);
+    }
+
+    const toolTriggerRect = document
+      .querySelector<HTMLElement>('[data-testid="tool-fan-trigger"]')
+      ?.getBoundingClientRect();
+    if (toolTriggerRect && toolTriggerRect.height > 0) {
+      bottom = Math.min(bottom, toolTriggerRect.top - mapRect.top - edgeInset);
     }
 
     const panelRect = document
@@ -275,10 +282,6 @@
     focusAndFlyToPoint(event.detail);
   }
 
-  function handleFilterSelect(event: CustomEvent<MapEntityViewModel>) {
-    focusAndFlyToPoint(event.detail);
-  }
-
   function handleSearchDirectionSelect(event: CustomEvent<MapEntityViewModel>) {
     closeSearch();
     focusAndFlyToPoint(event.detail);
@@ -343,7 +346,7 @@
       closeFilter();
       enterKomposition({
         mode: parsed.compose === "garnrolle" ? "place-garnrolle" : "new-knoten",
-        source: "action-bar",
+        source: "tool-fan",
       });
       return;
     }
@@ -675,12 +678,8 @@
     indicators={searchDirectionIndicators}
     on:select={handleSearchDirectionSelect}
   />
-  <FilterOverlay
-    {availableTypes}
-    filteredResults={filteredMarkersData}
-    on:select={handleFilterSelect}
-  />
-  <ActionBar />
+  <FilterOverlay {availableTypes} filteredResults={filteredMarkersData} />
+  <ToolFan />
   {#if import.meta.env.DEV || import.meta.env.MODE === "test"}
     <div class="debug-badge" data-testid="debug-badge">
       Nodes: {markerCounts.nodes} / Accounts: {markerCounts.accounts} / Edges: {edgesData.length}
@@ -840,8 +839,12 @@
   }
 
   #map :global(.maplibregl-ctrl-bottom-right) {
-    right: 12px !important;
-    bottom: calc(var(--map-bottom-ui-offset) + 12px) !important;
+    right: calc(var(--tool-fan-collapsed-width) + 28px) !important;
+    bottom: calc(env(safe-area-inset-bottom) + 12px) !important;
+  }
+
+  :global(.tool-fan.expanded) ~ #map :global(.maplibregl-ctrl-bottom-right) {
+    right: 256px !important;
   }
 
   #map :global(.maplibregl-ctrl-group button) {
@@ -849,20 +852,23 @@
     height: 44px;
   }
 
-  #map.search-open :global(.maplibregl-ctrl-bottom-right),
-  #map.filter-open :global(.maplibregl-ctrl-bottom-right) {
-    bottom: calc(50dvh + var(--map-bottom-ui-offset) + 12px) !important;
-  }
-
   @media (min-width: 769px) {
     #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
-      right: calc(var(--context-panel-width) + 12px) !important;
+      right: calc(
+        var(--context-panel-width) + var(--tool-fan-collapsed-width) + 28px
+      ) !important;
+    }
+
+    :global(.tool-fan.expanded.panel-open)
+      ~ #map.panel-open
+      :global(.maplibregl-ctrl-bottom-right) {
+      right: calc(var(--context-panel-width) + 256px) !important;
     }
   }
 
   @media (max-width: 768px) {
     #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
-      top: calc(env(safe-area-inset-top) + 60px);
+      top: calc(env(safe-area-inset-top) + var(--toolbar-offset) + 8px);
       right: 10px !important;
       bottom: auto !important;
     }
