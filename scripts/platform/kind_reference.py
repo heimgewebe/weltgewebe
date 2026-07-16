@@ -226,6 +226,7 @@ def wait_http_route_parent_condition(
                 ]
             )
         )
+        generation = document.get("metadata", {}).get("generation")
         last_parents = document.get("status", {}).get("parents", [])
         for parent in last_parents:
             reference = parent.get("parentRef", {})
@@ -235,7 +236,11 @@ def wait_http_route_parent_condition(
             ):
                 continue
             for observed in parent.get("conditions", []):
-                if observed.get("type") == condition and observed.get("status") == "True":
+                if (
+                    observed.get("type") == condition
+                    and observed.get("status") == "True"
+                    and observed.get("observedGeneration") == generation
+                ):
                     return
         time.sleep(2)
     raise ProofError(
@@ -561,6 +566,14 @@ def prove_gateway(kubectl: str) -> dict[str, str]:
         "weltgewebe",
         "weltgewebe",
         "Accepted",
+        parent_name="weltgewebe",
+        parent_namespace="weltgewebe-gateway",
+    )
+    wait_http_route_parent_condition(
+        kubectl,
+        "weltgewebe",
+        "weltgewebe",
+        "ResolvedRefs",
         parent_name="weltgewebe",
         parent_namespace="weltgewebe-gateway",
     )

@@ -220,6 +220,7 @@ spec:
 
     def test_http_route_wait_reads_parent_scoped_conditions(self) -> None:
         route = {
+            "metadata": {"generation": 3},
             "status": {
                 "parents": [
                     {
@@ -228,8 +229,16 @@ spec:
                             "namespace": "weltgewebe-gateway",
                         },
                         "conditions": [
-                            {"type": "Accepted", "status": "True"},
-                            {"type": "ResolvedRefs", "status": "True"},
+                            {
+                                "type": "Accepted",
+                                "status": "True",
+                                "observedGeneration": 3,
+                            },
+                            {
+                                "type": "ResolvedRefs",
+                                "status": "True",
+                                "observedGeneration": 3,
+                            },
                         ],
                     }
                 ]
@@ -258,6 +267,47 @@ spec:
                 "json",
             ]
         )
+
+    def test_http_route_wait_rejects_stale_generation(self) -> None:
+        stale = {
+            "metadata": {"generation": 2},
+            "status": {
+                "parents": [
+                    {
+                        "parentRef": {
+                            "name": "weltgewebe",
+                            "namespace": "weltgewebe-gateway",
+                        },
+                        "conditions": [
+                            {
+                                "type": "Accepted",
+                                "status": "True",
+                                "observedGeneration": 1,
+                            }
+                        ],
+                    }
+                ]
+            },
+        }
+        current = json.loads(json.dumps(stale))
+        current["status"]["parents"][0]["conditions"][0][
+            "observedGeneration"
+        ] = 2
+        with mock.patch.object(
+            self.reference,
+            "output",
+            side_effect=[json.dumps(stale), json.dumps(current)],
+        ), mock.patch.object(self.reference.time, "sleep") as sleep:
+            self.reference.wait_http_route_parent_condition(
+                "kubectl",
+                "weltgewebe",
+                "weltgewebe",
+                "Accepted",
+                parent_name="weltgewebe",
+                parent_namespace="weltgewebe-gateway",
+                timeout_seconds=10,
+            )
+        sleep.assert_called_once_with(2)
 
     def test_gateway_contract_uses_cilium_kube_proxy_replacement(self) -> None:
         kind_config = (ROOT / "platform/clusters/local/kind.yaml").read_text()
