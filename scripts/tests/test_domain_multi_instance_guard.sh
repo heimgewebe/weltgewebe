@@ -42,7 +42,7 @@ expect_pass() {
 expect_fail() {
   local name="$1" root="$2" needle="$3" out rc=0
   out="$(REPO_ROOT="$root" bash "$GUARD" 2>&1)" || rc=$?
-  if [[ "$rc" -eq 1 ]] && grep -qF -- "$needle" <<<"$out"; then
+  if [[ "$rc" -eq 1 ]] && grep -qF -- "$needle" <<< "$out"; then
     printf 'PASS: %s\n' "$name"
   else
     printf 'FAIL: %s (rc=%s, need=%s): %s\n' "$name" "$rc" "$needle" "$out" >&2
