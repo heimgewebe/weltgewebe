@@ -170,7 +170,9 @@ jobs:
           git -C "${PROTOCOL_ROOT}" remote add origin \
             https://github.com/heimgewebe/konvergenzregelkreis.git
           git -C "${PROTOCOL_ROOT}" fetch --depth=1 origin "${PROTOCOL_HEAD}"
-          git -C "${PROTOCOL_ROOT}" checkout --detach "${PROTOCOL_HEAD}"
+          fetched_head=$(git -C "${PROTOCOL_ROOT}" rev-parse FETCH_HEAD)
+          test "${fetched_head}" = "${PROTOCOL_HEAD}"
+          git -C "${PROTOCOL_ROOT}" checkout --detach FETCH_HEAD
 
           # The exact object id and fsck bind CI to one Git commit object.
           # They do not prove a signer identity, so verify-commit is intentionally

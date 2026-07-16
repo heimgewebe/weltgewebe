@@ -71,7 +71,7 @@ Profile paths provided as symlinks are explicitly rejected. This design choice r
 
 The adapter has exactly these local effects:
 
-- parse a local profile file;
+- parse a local profile file up to a fail-closed 1 MiB input limit;
 - reject duplicate JSON keys, non-finite JSON constants and forbidden embedded payload keys;
 - canonicalize an in-memory public Assessment Request v1;
 - compute a SHA-256 digest over canonical request JSON;
@@ -98,7 +98,7 @@ Rollback is not executed by this adapter. Rollback is represented as:
 - closure cleanup evidence;
 - a residual-risk reference that names the external rollback execution boundary.
 
-Negative control is represented as a passing `verification` with `kind: negative_control`. The adapter rejects profiles that try to embed mutable external payloads or symbolic Git revisions in source references, effect and verification evidence, or closure references. This includes branch and tag shorthands, `refs/heads` and `refs/tags`, GitHub/GitLab/Bitbucket tree, blob, raw, archive and compare URLs, codeload URLs, query revisions and `.git#...` fragments. Exact 40-character commit URLs, exact GitHub pull-request identity URLs, and exact GitLab merge-request identity URLs remain valid references. Subpaths, queries, fragments, lookalike hosts, userinfo, and explicit ports are rejected for PR and MR identity references.
+Negative control is represented as a passing `verification` with `kind: negative_control`. The adapter rejects profiles that try to embed mutable external payloads or symbolic Git revisions in source references, effect and verification evidence, or closure references. This includes branch and tag shorthands, `refs/heads` and `refs/tags`, GitHub/GitLab/Bitbucket tree, blob, raw, archive and compare URLs, codeload URLs, query revisions and `.git#...` fragments. Exact 40-character commit URLs, exact GitHub pull-request identity URLs, and exact GitLab merge-request identity URLs remain valid references. Known public Git hosts require HTTPS and either a recognized exact commit-bound form or an exact PR/MR identity URL. Subpaths, queries, fragments, lookalike hosts, userinfo, explicit ports, and percent-encoded path separators are rejected at known Git-host identity boundaries.
 
 ## Evaluator Compatibility
 

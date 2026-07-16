@@ -23,7 +23,7 @@ ADAPTER_PATH = ROOT / "scripts/convergence/weltgewebe_convergence_adapter.py"
 DOC_PATH = ROOT / "docs/architecture/weltgewebe-os-convergence-adapter.md"
 PROTOCOL_ROOT_ENV = "KONVERGENZREGELKREIS_ROOT"
 PROTOCOL_ROOT = Path(
-    os.environ.get(PROTOCOL_ROOT_ENV, "/home/alex/repos/konvergenzregelkreis")
+    os.environ.get(PROTOCOL_ROOT_ENV, str(ROOT.parent / "konvergenzregelkreis"))
 )
 PROTOCOL_ROOT_REQUIRED = PROTOCOL_ROOT_ENV in os.environ
 PROTOCOL_HEAD_FILE = CONTRACT_ROOT / "PINNED_PROTOCOL_HEAD"
@@ -531,6 +531,20 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 ),
             ),
             (
+                "github percent-encoded pull path",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com/heimgewebe/weltgewebe%2Fpull%2F1451",
+                ),
+            ),
+            (
+                "github double-encoded pull path",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com/heimgewebe/weltgewebe%252Fpull%252F1451",
+                ),
+            ),
+            (
                 "github zero pull request id",
                 lambda candidate: candidate["request"]["effects"][0].__setitem__(
                     "evidence_ref",
@@ -580,10 +594,31 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 ),
             ),
             (
+                "gitlab percent-encoded merge-request path",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://gitlab.com/heimgewebe/weltgewebe%2F-%2Fmerge_requests%2F1451",
+                ),
+            ),
+            (
                 "non-gitlab merge request path",
                 lambda candidate: candidate["request"]["effects"][0].__setitem__(
                     "evidence_ref",
                     "https://example.invalid/heimgewebe/weltgewebe/-/merge_requests/1451",
+                ),
+            ),
+            (
+                "github unrecognized issue URL",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    "https://github.com/heimgewebe/weltgewebe/issues/1",
+                ),
+            ),
+            (
+                "github HTTP commit URL",
+                lambda candidate: candidate["request"]["effects"][0].__setitem__(
+                    "evidence_ref",
+                    f"http://github.com/heimgewebe/weltgewebe/commit/{exact}",
                 ),
             ),
             (
@@ -760,6 +795,31 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
                 candidate["request"]["effects"][0]["evidence_ref"] = evidence_ref
                 self.adapter.build_request(candidate)
 
+        exact_source_refs = (
+            f"https://github.com/heimgewebe/weltgewebe/commit/{exact}",
+            f"https://gitlab.com/heimgewebe/weltgewebe/-/commit/{exact}",
+            f"https://example.invalid/repo.git?ref={exact}",
+            f"https://example.invalid/repo.git#{exact}",
+        )
+        for source_ref in exact_source_refs:
+            with self.subTest(source_ref=source_ref):
+                candidate = make_live_profile(base)
+                candidate["request"]["observation"]["source_refs"][3]["ref"] = source_ref
+                self.adapter.build_request(candidate)
+
+        lookalike = make_live_profile(base)
+        lookalike["request"]["observation"]["source_refs"][3]["ref"] = (
+            f"https://github.com.evil/heimgewebe/weltgewebe/commit/{exact}"
+        )
+        with self.assertRaises(self.adapter.ConvergenceAdapterError):
+            self.adapter.build_request(lookalike)
+
+        embedded_host = make_live_profile(base)
+        embedded_host["request"]["observation"]["source_refs"][3]["ref"] = (
+            f"https://github.com/attacker/github.com/heimgewebe/weltgewebe/commit/{exact}"
+        )
+        with self.assertRaises(self.adapter.ConvergenceAdapterError):
+            self.adapter.build_request(embedded_host)
 
     def test_programmatic_and_nested_protocol_inputs_fail_closed(self) -> None:
         base = read_json(FIXTURE_ROOT / "conformance.terminal.profile.json")
@@ -931,6 +991,21 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
             self.assertEqual(rc, 2)
             self.assertIn("not valid UTF-8", stderr.getvalue())
 
+    def test_oversized_profile_fails_before_json_parsing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "oversized.json"
+            path.write_bytes(b" " * (self.adapter.MAX_PROFILE_BYTES + 1))
+            with mock.patch.object(
+                Path,
+                "read_bytes",
+                side_effect=AssertionError("oversized profile must not be read"),
+            ):
+                with self.assertRaisesRegex(
+                    self.adapter.ConvergenceAdapterError,
+                    "exceeds the .*byte input limit",
+                ):
+                    self.adapter.load_profile(path)
+
     def test_symlink_profile_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             directory = Path(tmp_dir)
@@ -1038,12 +1113,12 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
             "import socket",
             "import subprocess",
             "import http",
-            "import urllib",
+            "import urllib.request",
             "import requests",
             "from socket",
             "from subprocess",
             "from http",
-            "from urllib",
+            "from urllib.request",
         )
         for forbidden in forbidden_imports:
             self.assertNotIn(forbidden, source)

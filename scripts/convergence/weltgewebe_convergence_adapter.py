@@ -13,6 +13,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, TextIO
+from urllib.parse import urlsplit
 
 SCHEMA_VERSION = "1.0.0"
 REQUEST_SCHEMA_VERSION = 1
@@ -26,6 +27,16 @@ PROTOCOL_HEAD_FILE = (
 PROTOCOL_HEAD_RE = re.compile(r"^[0-9a-f]{40}$")
 ADAPTER_NAME = "weltgewebe-os-convergence-adapter"
 ADAPTER_VERSION = "1.0.0"
+MAX_PROFILE_BYTES = 1_048_576
+KNOWN_GIT_HOSTS = frozenset(
+    {
+        "github.com",
+        "gitlab.com",
+        "bitbucket.org",
+        "raw.githubusercontent.com",
+        "codeload.github.com",
+    }
+)
 
 PROFILE_KEYS = {
     "schema_version",
@@ -152,43 +163,40 @@ EXACT_COMMIT_REF_RE = re.compile(r"@[0-9a-f]{40}$")
 GIT_REFERENCE_MARKER_RE = re.compile(
     r"(?:^|:)git(?:[-_][a-z0-9]+)*:", re.IGNORECASE
 )
-GIT_HOST_RE = re.compile(
-    r"(?:github\.com|gitlab\.com|bitbucket\.org|raw\.githubusercontent\.com|codeload\.github\.com)",
-    re.IGNORECASE,
-)
+PERCENT_ENCODED_PATH_SEPARATOR_RE = re.compile(r"%(?:25)*(?:2f|5c)", re.IGNORECASE)
 GIT_REVISION_PATH_RE = re.compile(
-    r"(?:github\.com|gitlab\.com|bitbucket\.org)/[^/\s]+/[^/\s]+/"
+    r"^https://(?:github\.com|gitlab\.com|bitbucket\.org)/[^/\s]+/[^/\s]+/"
     r"(?:-/(?:tree|blob|raw|commit|commits|archive)|tree|blob|raw|commit|commits|src|releases/tag|tags)/"
     r"(?P<revision>[^/?#\s]+)",
     re.IGNORECASE,
 )
 GITLAB_REVISION_PATH_RE = re.compile(
-    r"gitlab\.com/(?:[^/\s]+/)+[^/\s]+/-/"
+    r"^https://gitlab\.com/(?:[^/\s]+/)+[^/\s]+/-/"
     r"(?:tree|blob|raw|commit|commits|archive|tags|releases)/"
     r"(?P<revision>[^/?#\s]+)",
     re.IGNORECASE,
 )
 RAW_GITHUB_REVISION_RE = re.compile(
-    r"raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<revision>[^/?#\s]+)",
+    r"^https://raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<revision>[^/?#\s]+)",
     re.IGNORECASE,
 )
 CODELOAD_GITHUB_REVISION_RE = re.compile(
-    r"codeload\.github\.com/[^/\s]+/[^/\s]+/(?:zip|tar\.gz)/"
+    r"^https://codeload\.github\.com/[^/\s]+/[^/\s]+/(?:zip|tar\.gz)/"
     r"(?P<revision>[^/?#\s]+)",
     re.IGNORECASE,
 )
 GITHUB_ARCHIVE_REVISION_RE = re.compile(
-    r"github\.com/[^/\s]+/[^/\s]+/archive/"
+    r"^https://github\.com/[^/\s]+/[^/\s]+/archive/"
     r"(?P<revision>[^/?#\s]+?)(?:\.zip|\.tar\.gz)?(?:$|[?#])",
     re.IGNORECASE,
 )
 GIT_COMPARE_RE = re.compile(
-    r"(?:github\.com|gitlab\.com|bitbucket\.org)/[^/\s]+/[^/\s]+/compare/"
+    r"^https://(?:github\.com|gitlab\.com|bitbucket\.org)/[^/\s]+/[^/\s]+/compare/"
     r"(?P<left>[^/?#\s]+?)\.{2,3}(?P<right>[^/?#\s]+)",
     re.IGNORECASE,
 )
 GITLAB_COMPARE_RE = re.compile(
-    r"gitlab\.com/(?:[^/\s]+/)+[^/\s]+/-/compare/"
+    r"^https://gitlab\.com/(?:[^/\s]+/)+[^/\s]+/-/compare/"
     r"(?P<left>[^/?#\s]+?)\.{2,3}(?P<right>[^/?#\s]+)",
     re.IGNORECASE,
 )
@@ -260,11 +268,25 @@ def load_profile(path: Path) -> dict[str, Any]:
         # Rejecting symlinks reduces local path confusion; it is not a general host filesystem security mechanism.
         raise ConvergenceAdapterError(f"profile path {path} must not be a symlink")
     try:
-        text = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError as exc:
-        raise ConvergenceAdapterError(f"profile {path} is not valid UTF-8: {exc}") from exc
+        size = path.stat().st_size
+    except OSError as exc:
+        raise ConvergenceAdapterError(f"cannot inspect profile {path}: {exc}") from exc
+    if size > MAX_PROFILE_BYTES:
+        raise ConvergenceAdapterError(
+            f"profile {path} exceeds the {MAX_PROFILE_BYTES}-byte input limit"
+        )
+    try:
+        raw = path.read_bytes()
     except OSError as exc:
         raise ConvergenceAdapterError(f"cannot read profile {path}: {exc}") from exc
+    if len(raw) > MAX_PROFILE_BYTES:
+        raise ConvergenceAdapterError(
+            f"profile {path} exceeds the {MAX_PROFILE_BYTES}-byte input limit"
+        )
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ConvergenceAdapterError(f"profile {path} is not valid UTF-8: {exc}") from exc
     try:
         data = json.loads(
             text,
@@ -378,7 +400,9 @@ def _validate_request(request: Any) -> None:
     if request["risk_level"] not in {"R0", "R1", "R2", "R3"}:
         raise ConvergenceAdapterError("request.risk_level must be R0, R1, R2 or R3")
 
-    source_refs = _validate_observation(request["observation"])
+    source_refs, has_exact_revision_reference = _validate_observation(
+        request["observation"]
+    )
     _validate_classification(request["classification"])
     effects = _validate_effects(request["effects"])
     verifications = _validate_verifications(request["verifications"])
@@ -386,7 +410,7 @@ def _validate_request(request: Any) -> None:
     _require_source_ref_kinds(
         source_refs, {"bureau_task", "chronik_event", "grabowski_live_receipt"}
     )
-    if not any(_is_exact_revision_ref(item) for item in source_refs):
+    if not has_exact_revision_reference:
         raise ConvergenceAdapterError(
             "request.observation.source_refs must include an exact Weltgewebe commit or deploy receipt"
         )
@@ -401,7 +425,9 @@ def _validate_request(request: Any) -> None:
     _validate_closure(closure)
 
 
-def _validate_observation(observation: Any) -> list[dict[str, Any]]:
+def _validate_observation(
+    observation: Any,
+) -> tuple[list[dict[str, Any]], bool]:
     _assert_object_keys(observation, OBSERVATION_KEYS, "request.observation")
     _assert_schema_version_one(
         observation["schema_version"], "request.observation.schema_version"
@@ -423,13 +449,20 @@ def _validate_observation(observation: Any) -> list[dict[str, Any]]:
             "request.observation.source_refs must contain between 1 and 32 items"
         )
     source_refs: list[dict[str, Any]] = []
+    has_exact_revision_reference = False
     for index, item in enumerate(raw_refs):
         path = f"request.observation.source_refs[{index}]"
         _assert_object_keys(item, SOURCE_REF_KEYS, path)
         _assert_string(item["kind"], f"{path}.kind", max_length=80)
         _assert_string(item["ref"], f"{path}.ref", max_length=2048)
         _assert_pattern(item["subject_sha256"], SHA256_RE, f"{path}.subject_sha256")
-        _reject_symbolic_git_reference(item["ref"], path, kind=item["kind"])
+        exact_revision_bound = _reject_symbolic_git_reference(
+            item["ref"], path, kind=item["kind"]
+        )
+        if item["kind"] == "weltgewebe_deploy_receipt" or (
+            item["kind"] == "git_commit" and exact_revision_bound
+        ):
+            has_exact_revision_reference = True
         source_refs.append(item)
 
     _assert_string_list(
@@ -447,15 +480,45 @@ def _validate_observation(observation: Any) -> list[dict[str, Any]]:
         max_length=200,
         unique=True,
     )
-    return source_refs
+    return source_refs, has_exact_revision_reference
+
+
+def _known_git_url_host(ref: str, path: str) -> str | None:
+    try:
+        parsed = urlsplit(ref)
+    except ValueError as exc:
+        raise ConvergenceAdapterError(f"{path} has invalid URL syntax") from exc
+    if parsed.hostname is None:
+        return None
+    hostname = parsed.hostname.casefold()
+    if hostname not in KNOWN_GIT_HOSTS:
+        return None
+    if parsed.scheme.casefold() != "https":
+        raise ConvergenceAdapterError(
+            f"{path} must use HTTPS for a known Git host"
+        )
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ConvergenceAdapterError(f"{path} has an invalid URL port") from exc
+    if parsed.username is not None or parsed.password is not None or port is not None:
+        raise ConvergenceAdapterError(
+            f"{path} must not use userinfo or an explicit port for a known Git host"
+        )
+    if PERCENT_ENCODED_PATH_SEPARATOR_RE.search(parsed.path) is not None:
+        raise ConvergenceAdapterError(
+            f"{path} must not contain percent-encoded path separators for a known Git host"
+        )
+    return hostname
 
 
 def _reject_symbolic_git_reference(
     ref: str, path: str, *, kind: str = ""
-) -> None:
+) -> bool:
     normalized_ref = ref.casefold()
+    git_url_host = _known_git_url_host(ref, path)
     if GITHUB_PR_RE.fullmatch(ref) is not None:
-        return
+        return False
     if "/pull/" in normalized_ref:
         raise ConvergenceAdapterError(
             f"{path} must be an exact GitHub PR URL without subpaths"
@@ -473,37 +536,62 @@ def _reject_symbolic_git_reference(
             f"{path} must not contain refs/heads or refs/tags references"
         )
 
-    revision_match = GIT_REVISION_PATH_RE.search(ref)
+    revision_match = (
+        GIT_REVISION_PATH_RE.search(ref)
+        if git_url_host in {"github.com", "gitlab.com", "bitbucket.org"}
+        else None
+    )
     if revision_match is not None:
         _assert_exact_git_revision(revision_match.group("revision"), path)
 
-    gitlab_revision_match = GITLAB_REVISION_PATH_RE.search(ref)
+    gitlab_revision_match = (
+        GITLAB_REVISION_PATH_RE.search(ref) if git_url_host == "gitlab.com" else None
+    )
     if gitlab_revision_match is not None:
         _assert_exact_git_revision(gitlab_revision_match.group("revision"), path)
 
-    raw_match = RAW_GITHUB_REVISION_RE.search(ref)
+    raw_match = (
+        RAW_GITHUB_REVISION_RE.search(ref)
+        if git_url_host == "raw.githubusercontent.com"
+        else None
+    )
     if raw_match is not None:
         _assert_exact_git_revision(raw_match.group("revision"), path)
 
-    codeload_match = CODELOAD_GITHUB_REVISION_RE.search(ref)
+    codeload_match = (
+        CODELOAD_GITHUB_REVISION_RE.search(ref)
+        if git_url_host == "codeload.github.com"
+        else None
+    )
     if codeload_match is not None:
         _assert_exact_git_revision(codeload_match.group("revision"), path)
 
-    archive_match = GITHUB_ARCHIVE_REVISION_RE.search(ref)
+    archive_match = (
+        GITHUB_ARCHIVE_REVISION_RE.search(ref)
+        if git_url_host == "github.com"
+        else None
+    )
     if archive_match is not None:
         _assert_exact_git_revision(archive_match.group("revision"), path)
 
-    compare_match = GIT_COMPARE_RE.search(ref)
+    compare_match = (
+        GIT_COMPARE_RE.search(ref)
+        if git_url_host in {"github.com", "gitlab.com", "bitbucket.org"}
+        else None
+    )
     if compare_match is not None:
         _assert_exact_git_revision(compare_match.group("left"), path)
         _assert_exact_git_revision(compare_match.group("right"), path)
 
-    gitlab_compare_match = GITLAB_COMPARE_RE.search(ref)
+    gitlab_compare_match = (
+        GITLAB_COMPARE_RE.search(ref) if git_url_host == "gitlab.com" else None
+    )
     if gitlab_compare_match is not None:
         _assert_exact_git_revision(gitlab_compare_match.group("left"), path)
         _assert_exact_git_revision(gitlab_compare_match.group("right"), path)
 
-    if GIT_HOST_RE.search(ref) is not None or ".git" in ref.casefold():
+    query_match = None
+    if git_url_host is not None or ".git" in normalized_ref:
         query_match = GIT_QUERY_REVISION_RE.search(ref)
         if query_match is not None:
             _assert_exact_git_revision(query_match.group("revision"), path)
@@ -527,6 +615,8 @@ def _reject_symbolic_git_reference(
             archive_match,
             compare_match,
             gitlab_compare_match,
+            query_match,
+            fragment_match,
         )
     )
     if (
@@ -537,6 +627,11 @@ def _reject_symbolic_git_reference(
         raise ConvergenceAdapterError(
             f"{path} must bind a git reference to an exact 40-character commit"
         )
+    if git_url_host is not None and not url_revision_bound:
+        raise ConvergenceAdapterError(
+            f"{path} must be an exact commit-bound Git URL or exact PR/MR identity URL"
+        )
+    return EXACT_COMMIT_REF_RE.search(ref) is not None or url_revision_bound
 
 
 def _assert_exact_git_revision(revision: str, path: str) -> None:
@@ -655,19 +750,6 @@ def _require_source_ref_kinds(
         raise ConvergenceAdapterError(
             f"request.observation.source_refs missing {', '.join(sorted(missing))}"
         )
-
-
-def _is_exact_revision_ref(source_ref: Any) -> bool:
-    if not isinstance(source_ref, dict):
-        return False
-    kind = source_ref.get("kind")
-    ref = source_ref.get("ref")
-    if not isinstance(ref, str):
-        return False
-    return (
-        kind == "weltgewebe_deploy_receipt"
-        or (kind == "git_commit" and EXACT_COMMIT_REF_RE.search(ref) is not None)
-    )
 
 
 def _require_receipt_kinds(
