@@ -336,7 +336,7 @@ spec:
         with mock.patch.object(
             self.reference,
             "output",
-            return_value="other\nkind\n",
+            return_value=json.dumps({"other": {}, "kind": {}}),
         ):
             self.assertEqual(self.reference.kind_docker_network("cluster"), "kind")
 

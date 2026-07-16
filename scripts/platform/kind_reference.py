@@ -535,16 +535,20 @@ def gateway_addresses(kubectl: str) -> list[str]:
 
 
 def kind_docker_network(cluster: str) -> str:
-    names = output(
-        [
-            "docker",
-            "inspect",
-            "--format",
-            "{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{\n}}{{end}}",
-            f"{cluster}-control-plane",
-        ]
-    ).splitlines()
-    networks = [name.strip() for name in names if name.strip()]
+    document = json.loads(
+        output(
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{json .NetworkSettings.Networks}}",
+                f"{cluster}-control-plane",
+            ]
+        )
+    )
+    if not isinstance(document, dict):
+        raise ProofError("Docker network inspection did not return an object")
+    networks = sorted(str(name) for name in document)
     if "kind" in networks:
         return "kind"
     if len(networks) == 1:
