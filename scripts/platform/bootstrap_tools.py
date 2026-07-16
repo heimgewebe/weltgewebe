@@ -12,6 +12,8 @@ import tarfile
 import tempfile
 import urllib.parse
 import urllib.request
+
+import yaml
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +47,25 @@ def _download(url: str, expected_sha256: str, destination: Path) -> None:
         )
     os.replace(tmp_path, destination)
 
+
+def _assert_artifact_contract(name: str, path: Path, spec: dict[str, Any]) -> None:
+    required_kind = spec.get("required_crd_kind")
+    if required_kind is None:
+        return
+    observed: list[str] = []
+    for document in yaml.safe_load_all(path.read_text(encoding="utf-8")):
+        if not isinstance(document, dict):
+            continue
+        if document.get("kind") != "CustomResourceDefinition":
+            raise RuntimeError(f"artifact {name} contains a non-CRD document")
+        kind = document.get("spec", {}).get("names", {}).get("kind")
+        if not isinstance(kind, str):
+            raise RuntimeError(f"artifact {name} contains a CRD without a kind")
+        observed.append(kind)
+    if observed != [required_kind]:
+        raise RuntimeError(
+            f"artifact {name} must contain only CRD {required_kind}, got {observed}"
+        )
 
 def _safe_extract_tar(archive: Path, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
@@ -106,6 +127,7 @@ def install(cache: Path) -> dict[str, Any]:
     for name, spec in lock["artifacts"].items():
         destination = artifact_dir / spec["filename"]
         _download(spec["url"], spec["sha256"], destination)
+        _assert_artifact_contract(name, destination, spec)
         artifact_paths[name] = str(destination)
 
     receipt = {

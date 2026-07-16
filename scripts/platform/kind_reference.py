@@ -26,6 +26,13 @@ DEFAULT_CLUSTER = "weltgewebe-reference"
 LOCAL_APP_FIXTURE = (
     ROOT / "platform/apps/weltgewebe/overlays/local/fixture-config-map.yaml"
 )
+GATEWAY_API_ARTIFACTS = (
+    "gateway_api_gatewayclasses",
+    "gateway_api_gateways",
+    "gateway_api_httproutes",
+    "gateway_api_referencegrants",
+    "gateway_api_grpcroutes",
+)
 
 
 class ProofError(RuntimeError):
@@ -248,7 +255,8 @@ def install_platform_components(
     artifacts: dict[str, str],
     api_server_host: str,
 ) -> None:
-    apply_file(kubectl, Path(artifacts["gateway_api_standard"]))
+    for artifact in GATEWAY_API_ARTIFACTS:
+        apply_file(kubectl, Path(artifacts[artifact]))
     run(
         [
             helm,

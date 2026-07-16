@@ -30,6 +30,10 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             "weltgewebe_kind_reference",
             ROOT / "scripts/platform/kind_reference.py",
         )
+        cls.bootstrap = load_module(
+            "weltgewebe_platform_bootstrap",
+            ROOT / "scripts/platform/bootstrap_tools.py",
+        )
 
     def test_static_platform_contract_passes(self) -> None:
         result = self.validator.validate(render=False)
@@ -42,6 +46,52 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             for name, entry in section.items():
                 self.assertRegex(entry["sha256"], r"^[0-9a-f]{64}$", name)
         self.assertIn("@sha256:", lock["kubernetes"]["kind_node_image"])
+
+    def test_gateway_api_pin_matches_cilium_required_crds(self) -> None:
+        lock = json.loads((ROOT / "platform/toolchain.lock.json").read_text())
+        expected = {
+            "gateway_api_gatewayclasses": ("GatewayClass", "7d958ad3965ea4a4996616846d9ecaf1fededbf9351b9752b8b85973936ae8c8"),
+            "gateway_api_gateways": ("Gateway", "a02ea425fc901f197b668c9ddd56375e1f6896994914c6e6b9b4fdb85cf3ba6e"),
+            "gateway_api_httproutes": ("HTTPRoute", "98c6777c22309d319292e9c288ee632006c9ffdd4272383d6f9dffa3fbccaf14"),
+            "gateway_api_referencegrants": ("ReferenceGrant", "d74fc2f8e90094f4c4d6dc13a2d720011a40e30e5640b3e2a2051fac820f6584"),
+            "gateway_api_grpcroutes": ("GRPCRoute", "b72068b42cb32051ca609e5a8dfefb16904d164abe2e71d9f3c776fae41c4dab"),
+        }
+        gateway_entries = {
+            name: entry
+            for name, entry in lock["artifacts"].items()
+            if name.startswith("gateway_api_")
+        }
+        self.assertEqual(set(gateway_entries), set(expected))
+        for name, (kind, sha256) in expected.items():
+            entry = gateway_entries[name]
+            self.assertEqual(entry["version"], "1.4.1")
+            self.assertEqual(entry["required_crd_kind"], kind)
+            self.assertEqual(entry["sha256"], sha256)
+        self.assertNotIn("TLSRoute", json.dumps(gateway_entries))
+        self.assertEqual(
+            self.reference.GATEWAY_API_ARTIFACTS, tuple(expected)
+        )
+
+    def test_gateway_artifact_contract_rejects_extra_or_wrong_crds(self) -> None:
+        spec = {"required_crd_kind": "HTTPRoute"}
+        compatible = """apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+spec:
+  names:
+    kind: HTTPRoute
+"""
+        wrong = compatible.replace("HTTPRoute", "TLSRoute")
+        extra = compatible + "---\n" + wrong
+        with tempfile.TemporaryDirectory() as tmp:
+            artifact = Path(tmp) / "gateway.yaml"
+            artifact.write_text(compatible)
+            self.bootstrap._assert_artifact_contract("http", artifact, spec)
+            artifact.write_text(wrong)
+            with self.assertRaisesRegex(RuntimeError, "HTTPRoute"):
+                self.bootstrap._assert_artifact_contract("http", artifact, spec)
+            artifact.write_text(extra)
+            with self.assertRaisesRegex(RuntimeError, "HTTPRoute"):
+                self.bootstrap._assert_artifact_contract("http", artifact, spec)
 
     def test_reference_never_adopts_existing_cluster(self) -> None:
         with mock.patch.object(self.reference, "clusters", return_value={"occupied"}):

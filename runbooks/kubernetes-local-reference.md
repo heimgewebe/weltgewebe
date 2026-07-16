@@ -34,6 +34,7 @@ verifies_with:
 Die lokale Datenzelle und die lokale App verwenden eine deterministische, öffentliche Test-Fixture als ConfigMap; reale Geheimnisse werden weder benötigt noch geschrieben. Für den Migration-Pod erzeugt der Runner ein ephemeres `weltgewebe-runtime` Secret, dessen `database-url` exakt dieselbe öffentliche Fixture spiegelt.
 
 Die Werkzeuge werden nicht global installiert. `bootstrap_tools.py` lädt sie in den ignorierten Repositorycache und verifiziert jeden SHA-256.
+Gateway API ist zusätzlich an den Cilium-Vertrag gebunden: Für Cilium 1.19.5 werden aus Gateway API 1.4.1 ausschließlich GatewayClass, Gateway, HTTPRoute, ReferenceGrant und GRPCRoute installiert. TLSRoute bleibt uninstalled, weil Weltgewebe es nicht benötigt und Cilium fehlende optionale TLSRoute-Unterstützung sauber deaktiviert. Der Bootstrap weist zusätzliche oder falsch gebundene CRDs fail-closed zurück.
 
 ## Statischer Vertrag
 

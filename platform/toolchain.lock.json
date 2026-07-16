@@ -50,11 +50,40 @@
     }
   },
   "artifacts": {
-    "gateway_api_standard": {
-      "version": "1.6.0",
-      "url": "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/standard-install.yaml",
-      "sha256": "a557172e8348f758479e9ee4000bbbb4b4aa48302a6b73461823ea5349bad56d",
-      "filename": "gateway-api-standard-install.yaml"
+    "gateway_api_gatewayclasses": {
+      "version": "1.4.1",
+      "url": "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.4.1/config/crd/standard/gateway.networking.k8s.io_gatewayclasses.yaml",
+      "sha256": "7d958ad3965ea4a4996616846d9ecaf1fededbf9351b9752b8b85973936ae8c8",
+      "filename": "gateway.networking.k8s.io_gatewayclasses.yaml",
+      "required_crd_kind": "GatewayClass"
+    },
+    "gateway_api_gateways": {
+      "version": "1.4.1",
+      "url": "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.4.1/config/crd/standard/gateway.networking.k8s.io_gateways.yaml",
+      "sha256": "a02ea425fc901f197b668c9ddd56375e1f6896994914c6e6b9b4fdb85cf3ba6e",
+      "filename": "gateway.networking.k8s.io_gateways.yaml",
+      "required_crd_kind": "Gateway"
+    },
+    "gateway_api_httproutes": {
+      "version": "1.4.1",
+      "url": "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.4.1/config/crd/standard/gateway.networking.k8s.io_httproutes.yaml",
+      "sha256": "98c6777c22309d319292e9c288ee632006c9ffdd4272383d6f9dffa3fbccaf14",
+      "filename": "gateway.networking.k8s.io_httproutes.yaml",
+      "required_crd_kind": "HTTPRoute"
+    },
+    "gateway_api_referencegrants": {
+      "version": "1.4.1",
+      "url": "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.4.1/config/crd/standard/gateway.networking.k8s.io_referencegrants.yaml",
+      "sha256": "d74fc2f8e90094f4c4d6dc13a2d720011a40e30e5640b3e2a2051fac820f6584",
+      "filename": "gateway.networking.k8s.io_referencegrants.yaml",
+      "required_crd_kind": "ReferenceGrant"
+    },
+    "gateway_api_grpcroutes": {
+      "version": "1.4.1",
+      "url": "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.4.1/config/crd/standard/gateway.networking.k8s.io_grpcroutes.yaml",
+      "sha256": "b72068b42cb32051ca609e5a8dfefb16904d164abe2e71d9f3c776fae41c4dab",
+      "filename": "gateway.networking.k8s.io_grpcroutes.yaml",
+      "required_crd_kind": "GRPCRoute"
     },
     "cilium_chart": {
       "version": "1.19.5",
