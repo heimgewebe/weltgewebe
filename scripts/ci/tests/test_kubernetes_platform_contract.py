@@ -58,6 +58,18 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             finally:
                 self.reference.MARKERS = original
 
+    def test_web_container_copies_postinstall_script_before_install(self) -> None:
+        dockerfile = (ROOT / "apps/web/Dockerfile").read_text()
+        script_copy = dockerfile.index(
+            "COPY apps/web/scripts/verify-cookie-version.js ./scripts/verify-cookie-version.js"
+        )
+        install = dockerfile.index("RUN pnpm install --frozen-lockfile")
+        self.assertLess(script_copy, install)
+        self.assertIn(
+            "COPY --from=builder /workspace/build /srv/weltgewebe",
+            dockerfile,
+        )
+
     def test_secret_contract_contains_no_values(self) -> None:
         contract = json.loads(
             (ROOT / "platform/apps/weltgewebe/secret-contract.json").read_text()
