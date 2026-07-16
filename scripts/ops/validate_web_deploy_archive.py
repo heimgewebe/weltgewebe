@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tarfile
 import unicodedata
@@ -19,6 +20,8 @@ DEFAULT_MAX_MEMBERS = 5_000
 DEFAULT_MAX_PATH_BYTES = 1024
 DEFAULT_MAX_COMPONENT_BYTES = 255
 DEFAULT_MAX_DEPTH = 32
+ALLOWED_MEMBER_PAX_HEADERS = frozenset({"mtime"})
+PAX_TIME_RE = re.compile(r"^-?[0-9]+(?:\.[0-9]+)?$")
 REQUIRED_REGULAR_FILES = frozenset({"build/index.html", "build/_app/version.json"})
 UNSAFE_UNICODE_CATEGORIES = frozenset({"Cc", "Cf", "Cs"})
 
@@ -118,9 +121,20 @@ def validate_archive(
                     raise ArchiveValidationError("archive has too many members")
 
                 canonical = _canonical_member_name(member)
-                if member.pax_headers:
+                unsupported_pax = (
+                    set(member.pax_headers) - ALLOWED_MEMBER_PAX_HEADERS
+                )
+                if unsupported_pax:
                     raise ArchiveValidationError(
-                        f"archive member has unsupported pax headers: {canonical}"
+                        "archive member has unsupported pax headers: "
+                        f"{canonical}: {sorted(unsupported_pax)!r}"
+                    )
+                pax_mtime = member.pax_headers.get("mtime")
+                if pax_mtime is not None and (
+                    len(pax_mtime) > 64 or not PAX_TIME_RE.fullmatch(pax_mtime)
+                ):
+                    raise ArchiveValidationError(
+                        f"archive member has invalid pax mtime: {canonical}"
                     )
                 if canonical in seen:
                     raise ArchiveValidationError(f"duplicate archive path: {canonical}")
