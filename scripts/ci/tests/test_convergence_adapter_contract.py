@@ -106,6 +106,10 @@ class ConvergenceAdapterContractTests(unittest.TestCase):
         self.assertFalse(schema["additionalProperties"])
         self.adapter.validate_profile(profile)
         self.assertEqual(schema["properties"]["protocol_head"]["const"], PROTOCOL_HEAD)
+        request_description = schema["properties"]["request"]["description"]
+        self.assertIn("defensive mirror", request_description)
+        self.assertIn("CI compares", request_description)
+        self.assertNotIn("adapter and tests validate it against", request_description)
         self.assertNotIn("risk" + "_class", json.dumps(schema, sort_keys=True))
 
     def test_defensive_mirror_matches_pinned_protocol(self) -> None:

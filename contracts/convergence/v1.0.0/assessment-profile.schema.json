@@ -82,7 +82,7 @@
     },
     "request": {
       "type": "object",
-      "description": "A public Assessment Request v1 object. The adapter and tests validate it against the pinned protocol checkout instead of maintaining a local parallel request schema."
+      "description": "A public Assessment Request v1 object. The adapter applies a defensive mirror of the pinned protocol; CI compares that mirror with the exact public protocol checkout and runs its evaluator."
     }
   }
 }
