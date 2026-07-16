@@ -599,6 +599,29 @@ def diagnostic_snapshot(kubectl: str, name: str) -> None:
 
 
 
+
+def refresh_images(args: argparse.Namespace) -> dict[str, Any]:
+    receipt = tool_receipt()
+    tools = receipt["tools"]
+    require_owned_cluster(tools["kind"], args.cluster)
+    if output(["git", "status", "--porcelain"]):
+        raise ProofError("image refresh requires a clean, commit-bound worktree")
+    commit = output(["git", "rev-parse", "HEAD"])
+    timestamp = commit_timestamp()
+    image_ids = build_images(commit, timestamp)
+    load_images(tools["kind"], args.cluster)
+    write_marker(args.cluster, commit)
+    configure_cluster_access(tools["kind"], args.cluster)
+    return {
+        "schema_version": 1,
+        "status": "pass",
+        "phase": "image-refresh",
+        "cluster": args.cluster,
+        "commit": commit,
+        "image_ids": image_ids,
+        "production_changed": False,
+    }
+
 def data_up(args: argparse.Namespace) -> dict[str, Any]:
     receipt = tool_receipt()
     tools = receipt["tools"]
@@ -759,6 +782,8 @@ def main() -> int:
     proof_parser.add_argument("--mode", choices=("direct", "gitops"), default="direct")
     proof_parser.add_argument("--source-ref")
     proof_parser.add_argument("--keep", action="store_true")
+    image_parser = subparsers.add_parser("phase-c")
+    image_parser.add_argument("--cluster", default=DEFAULT_CLUSTER)
     data_parser = subparsers.add_parser("phase-a")
     data_parser.add_argument("--cluster", default=DEFAULT_CLUSTER)
     app_parser = subparsers.add_parser("phase-b")
@@ -772,7 +797,9 @@ def main() -> int:
             delete_owned_cluster(receipt["tools"]["kind"], args.cluster)
             print(json.dumps({"status": "deleted", "cluster": args.cluster}))
             return 0
-        if args.command == "phase-a":
+        if args.command == "phase-c":
+            result = refresh_images(args)
+        elif args.command == "phase-a":
             result = data_up(args)
         elif args.command == "phase-b":
             result = app_verify(args)
