@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { activateToolFanAction } from "./fixtures/toolFan";
 
 test.describe("Map Interaction & Context Panel", () => {
   test.beforeEach(async ({ page }) => {
@@ -75,8 +76,7 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.waitForSelector('[data-testid="tool-fan"]', { timeout: 10000 });
 
     // Enter komposition mode via the tool fan
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-weave").click();
+    await activateToolFanAction(page, "weave");
 
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
@@ -94,14 +94,12 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.waitForSelector('[data-testid="tool-fan"]', { timeout: 10000 });
 
     // Enter komposition mode to open panel
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-weave").click();
+    await activateToolFanAction(page, "weave");
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
 
     // Open search
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-find").click();
+    await activateToolFanAction(page, "find");
     const searchOverlay = page.locator('[data-testid="search-overlay"]');
     await expect(searchOverlay).toBeVisible();
 
@@ -119,12 +117,10 @@ test.describe("Map Interaction & Context Panel", () => {
     page,
   }) => {
     await page.waitForSelector('[data-testid="tool-fan"]', { timeout: 10000 });
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-weave").click();
+    await activateToolFanAction(page, "weave");
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-sight").click();
+    await activateToolFanAction(page, "sight");
     const filterOverlay = page.locator('[data-testid="filter-overlay"]');
     await expect(filterOverlay).toBeVisible();
     await page.keyboard.press("Escape");
@@ -201,8 +197,7 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.waitForSelector('[data-testid="tool-fan"]', { timeout: 10000 });
 
     // Click Weben in the tool fan
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-weave").click();
+    await activateToolFanAction(page, "weave");
 
     // Context panel should open
     const panel = page.locator('[data-testid="context-panel"]');
@@ -238,8 +233,7 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.waitForSelector('[data-testid="tool-fan"]', { timeout: 10000 });
 
     // Enter komposition mode via the tool fan
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-weave").click();
+    await activateToolFanAction(page, "weave");
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
 

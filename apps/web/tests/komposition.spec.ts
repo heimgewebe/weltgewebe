@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { activateToolFanAction } from "./fixtures/toolFan";
 
 const WEBER_ACCOUNT_ID = "weber-e2e-1";
 
@@ -37,11 +38,6 @@ async function gotoMapAs(
   await page.waitForSelector('[data-testid="tool-fan"]', { timeout: 10000 });
 }
 
-async function openWeben(page: Page) {
-  await page.getByTestId("tool-fan-trigger").click();
-  await page.getByTestId("tool-fan-weave").click();
-}
-
 async function longPressMapCenter(page: Page) {
   const mapContainer = page.locator("#map");
   await mapContainer.hover({ position: { x: 50, y: 50 } });
@@ -62,9 +58,10 @@ test.describe("Komposition Flow (weber)", () => {
   test("Komposition form requires location, name, and address to submit", async ({
     page,
   }) => {
-    await openWeben(page);
+    await activateToolFanAction(page, "weave");
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
+    await expect(page.locator("#title")).toBeFocused();
 
     await expect(panel.locator(".state-pending")).toContainText(
       "Ort ausstehend",
@@ -93,7 +90,7 @@ test.describe("Komposition Flow (weber)", () => {
   });
 
   test("Cancel flow cleans up state and closes panel", async ({ page }) => {
-    await openWeben(page);
+    await activateToolFanAction(page, "weave");
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
 
@@ -115,7 +112,7 @@ test.describe("Komposition Flow (weber)", () => {
       }
     });
 
-    await openWeben(page);
+    await activateToolFanAction(page, "weave");
     const panel = page.locator('[data-testid="context-panel"]');
 
     await longPressMapCenter(page);
@@ -186,7 +183,7 @@ test.describe("Komposition Flow (weber)", () => {
       });
     });
 
-    await openWeben(page);
+    await activateToolFanAction(page, "weave");
     const panel = page.locator('[data-testid="context-panel"]');
     await longPressMapCenter(page);
     await page.fill("#title", "Retry Node");
@@ -209,7 +206,18 @@ test.describe("Komposition Flow (gast/anonymous)", () => {
     await gotoMapAs(page, { authenticated: false, role: "gast" });
 
     await page.getByTestId("tool-fan-trigger").click();
-    await expect(page.getByTestId("tool-fan-weave")).toBeDisabled();
+    const weave = page.getByTestId("tool-fan-weave");
+    await expect(weave).toBeDisabled();
+    await expect(weave).toHaveAttribute(
+      "aria-label",
+      "Weben – Weber-Garnrolle erforderlich",
+    );
+    await expect(weave).toHaveAttribute(
+      "title",
+      "Zum Weben ist eine Weber-Garnrolle nötig",
+    );
+    await weave.click({ force: true });
+    await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
 
     await longPressMapCenter(page);
     await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);

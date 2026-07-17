@@ -9,12 +9,14 @@
   } from "$lib/stores/uiView";
   import { authStore } from "$lib/auth/store";
   import { createNode, ApiRequestError } from "$lib/api/domainWrites";
+  import { onMount, tick } from "svelte";
 
   let title = "";
   let description = "";
   let address = "";
   let nodeType = "standard";
   let isSubmitting = false;
+  let titleInput: HTMLInputElement | null = null;
 
   let titleError = false;
   let addressError = false;
@@ -30,6 +32,11 @@
   $: placingGarnrolle = $kompositionDraft?.mode === "place-garnrolle";
   $: canSubmit =
     !!$kompositionDraft?.lngLat && !!title.trim() && !!address.trim();
+
+  onMount(async () => {
+    await tick();
+    titleInput?.focus();
+  });
 
   function operationIdForNode(payload: {
     title: string;
@@ -228,6 +235,7 @@
         <input
           type="text"
           id="title"
+          bind:this={titleInput}
           bind:value={title}
           class="input"
           class:error={titleError}

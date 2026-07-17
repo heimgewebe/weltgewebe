@@ -133,13 +133,66 @@ test.describe("Tool Fan Layout", () => {
 
     const panel = page.getByTestId("context-panel");
     await expect(panel).toBeVisible();
-    const focusedInsidePanel = await page.evaluate(() => {
-      const panelElement = document.querySelector(
-        '[data-testid="context-panel"]',
+    await expect(panel.locator("#title")).toBeFocused();
+  });
+
+  test("all opened branches stay inside a 320 pixel viewport", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.getByTestId("tool-fan-trigger").click();
+
+    for (const testId of [
+      "tool-fan-trigger",
+      "tool-fan-find",
+      "tool-fan-sight",
+      "tool-fan-weave",
+      "tool-fan-proposals",
+    ]) {
+      const box = await page.getByTestId(testId).boundingBox();
+      expect(box, `${testId} has no box`).not.toBeNull();
+      expect(box!.x, `${testId} leaves the left edge`).toBeGreaterThanOrEqual(
+        0,
       );
-      return Boolean(panelElement?.contains(document.activeElement));
-    });
-    expect(focusedInsidePanel).toBe(true);
+      expect(box!.y, `${testId} leaves the top edge`).toBeGreaterThanOrEqual(0);
+      expect(
+        box!.x + box!.width,
+        `${testId} leaves the right edge`,
+      ).toBeLessThanOrEqual(320);
+      expect(
+        box!.y + box!.height,
+        `${testId} leaves the bottom edge`,
+      ).toBeLessThanOrEqual(568);
+    }
+  });
+
+  test("outside click closes only the fan while search and focus stay open", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.locator(".map-marker").first().click();
+    const panel = page.getByTestId("context-panel");
+    await expect(panel).toBeVisible();
+
+    await page.getByTestId("tool-fan-trigger").click();
+    await page.getByTestId("tool-fan-find").click();
+    const search = page.getByTestId("search-overlay");
+    await expect(search).toBeVisible();
+
+    await page.getByTestId("tool-fan-trigger").click();
+    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
+      "data-expanded",
+      "true",
+    );
+    await search.getByRole("searchbox", { name: "Suchbegriff" }).click();
+
+    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
+      "data-expanded",
+      "false",
+    );
+    await expect(search).toBeVisible();
+    await expect(panel).toBeVisible();
   });
 
   test("respects reduced motion by disabling the fan open transition", async ({
@@ -184,6 +237,7 @@ test.describe("Tool Fan Layout — guest role", () => {
     await mockApiResponses(page, {
       auth: { authenticated: false, role: "gast" },
     });
+    await page.setViewportSize({ width: 320, height: 568 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/map");
     await page.waitForSelector('[data-testid="tool-fan"]', {
@@ -194,6 +248,25 @@ test.describe("Tool Fan Layout — guest role", () => {
     const weave = page.getByTestId("tool-fan-weave");
     await expect(weave).toBeVisible();
     await expect(weave).toBeDisabled();
+    await expect(weave).toHaveAttribute("tabindex", "-1");
+    await expect(weave).toHaveAttribute(
+      "aria-label",
+      "Weben – Weber-Garnrolle erforderlich",
+    );
+    await expect(weave).toContainText("Weben · Weberstatus nötig");
+    const weaveBox = await weave.boundingBox();
+    expect(weaveBox).not.toBeNull();
+    expect(weaveBox!.x).toBeGreaterThanOrEqual(0);
+    expect(weaveBox!.x + weaveBox!.width).toBeLessThanOrEqual(320);
+
+    const trigger = page.getByTestId("tool-fan-trigger");
+    await trigger.focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByTestId("tool-fan-find")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByTestId("tool-fan-sight")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByTestId("tool-fan-proposals")).toBeFocused();
 
     const find = page.getByTestId("tool-fan-find");
     const sight = page.getByTestId("tool-fan-sight");

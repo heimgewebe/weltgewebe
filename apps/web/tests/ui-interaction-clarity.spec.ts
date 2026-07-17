@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { activateToolFanAction } from "./fixtures/toolFan";
 
 test.describe("Interaction Clarity & State Feedback", () => {
   test.beforeEach(async ({ page }) => {
@@ -14,14 +15,12 @@ test.describe("Interaction Clarity & State Feedback", () => {
 
   test("entering komposition closes open search overlay", async ({ page }) => {
     // Open search overlay via the tool fan
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-find").click();
+    await activateToolFanAction(page, "find");
     const searchOverlay = page.locator('[data-testid="search-overlay"]');
     await expect(searchOverlay).toBeVisible();
 
     // Open the fan again and trigger "Weben" while search is open
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-weave").click();
+    await activateToolFanAction(page, "weave");
 
     // Search overlay must be closed
     await expect(searchOverlay).toHaveCount(0);
@@ -36,14 +35,12 @@ test.describe("Interaction Clarity & State Feedback", () => {
 
   test("entering komposition closes open filter overlay", async ({ page }) => {
     // Open filter overlay via the tool fan
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-sight").click();
+    await activateToolFanAction(page, "sight");
     const filterOverlay = page.locator('[data-testid="filter-overlay"]');
     await expect(filterOverlay).toBeVisible();
 
     // Open the fan again and trigger "Weben" while Sicht is open
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-weave").click();
+    await activateToolFanAction(page, "weave");
 
     // Filter overlay must be closed
     await expect(filterOverlay).toHaveCount(0);

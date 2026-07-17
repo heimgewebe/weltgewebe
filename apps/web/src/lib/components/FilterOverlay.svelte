@@ -74,8 +74,8 @@
 
     <p class="filter-summary" aria-live="polite">
       {activeCount === 0
-        ? `Alles sichtbar · ${filteredResults.length} Elemente`
-        : `${activeCount} Auswahl${activeCount === 1 ? "" : "en"} aktiv · ${filteredResults.length} sichtbar`}
+        ? `Alle ${filteredResults.length} Elemente auf der Karte`
+        : `${activeCount} Auswahl${activeCount === 1 ? "" : "en"} aktiv · ${filteredResults.length} Elemente auf der Karte`}
     </p>
 
     {#if availableTypes.length > 0}
@@ -117,16 +117,16 @@
   .filter-overlay {
     position: fixed;
     top: calc(env(safe-area-inset-top) + var(--toolbar-offset) + 10px);
-    right: 16px;
+    right: calc(16px + env(safe-area-inset-right));
     width: min(380px, calc(100vw - 32px));
     max-height: min(440px, calc(100dvh - 112px));
-    z-index: 44;
+    z-index: var(--z-map-lens);
     padding: 0.9rem;
     border: 1px solid var(--panel-border-strong);
     border-radius: 16px;
     background: rgba(20, 22, 28, 0.95);
     box-shadow: var(--shadow);
-    backdrop-filter: blur(14px);
+    backdrop-filter: blur(var(--map-lens-blur));
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
@@ -242,6 +242,13 @@
         380px,
         calc(100vw - var(--context-panel-width) - 32px)
       );
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .filter-overlay {
+      background: var(--panel-solid);
+      backdrop-filter: none;
     }
   }
 

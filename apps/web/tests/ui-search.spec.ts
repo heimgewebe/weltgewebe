@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { activateToolFanAction } from "./fixtures/toolFan";
 
 test.describe("Search mode", () => {
   test.beforeEach(async ({ page }) => {
@@ -40,11 +41,6 @@ test.describe("Search mode", () => {
     });
   });
 
-  async function openFinden(page: import("@playwright/test").Page) {
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-find").click();
-  }
-
   test("toggles search overlay, highlights markers, and supports keyboard navigation with map centering", async ({
     page,
   }) => {
@@ -59,7 +55,7 @@ test.describe("Search mode", () => {
     await page.waitForSelector(".map-marker");
 
     // Open Finden via the tool fan
-    await openFinden(page);
+    await activateToolFanAction(page, "find");
 
     // Verify search overlay appears
     const searchOverlay = page.locator('[data-testid="search-overlay"]');
@@ -126,7 +122,7 @@ test.describe("Search mode", () => {
     await searchInput.press("ArrowDown");
 
     // Verify ARIA activedescendant is set
-    const firstResultId = `search-result-mock-node-1`;
+    const firstResultId = `search-option-node-mock-node-1`;
     await expect(searchInput).toHaveAttribute(
       "aria-activedescendant",
       firstResultId,
@@ -163,8 +159,82 @@ test.describe("Search mode", () => {
     );
 
     // Also verify search field was cleared
-    await openFinden(page);
+    await activateToolFanAction(page, "find");
     await expect(searchInput).toHaveValue("");
+  });
+
+  test("resets keyboard selection when visible results change without a query change", async ({
+    page,
+  }) => {
+    await page.goto("/map");
+    await page.waitForSelector(".map-marker");
+    await activateToolFanAction(page, "find");
+    const input = page.getByLabel("Suchbegriff");
+    await input.fill("a");
+    await expect(page.getByRole("option").first()).toBeVisible();
+
+    await input.press("ArrowDown");
+    await input.press("ArrowDown");
+    await expect(input).toHaveAttribute("aria-activedescendant", /.+/);
+
+    await page.evaluate(() => {
+      const setActiveFilters = (window as any).__TEST_SET_ACTIVE_FILTERS__;
+      if (typeof setActiveFilters !== "function") {
+        throw new Error("test filter control is unavailable");
+      }
+      setActiveFilters(["Garnrolle"]);
+    });
+
+    await expect(input).not.toHaveAttribute("aria-activedescendant", /.+/);
+    await input.press("Enter");
+    await expect(page.getByTestId("context-panel")).toBeVisible();
+  });
+
+  test("zero results show one unambiguous status message", async ({ page }) => {
+    await page.goto("/map");
+    await page.waitForSelector(".map-marker");
+    await activateToolFanAction(page, "find");
+    await page
+      .getByRole("searchbox", { name: "Suchbegriff" })
+      .fill("Unauffindbar");
+
+    await expect(
+      page.getByText("Keine Treffer für „Unauffindbar“"),
+    ).toBeVisible();
+    await expect(page.getByText("0 Treffer auf der Karte")).toHaveCount(0);
+  });
+
+  test("node and Garnrolle with the same id keep unique option ids", async ({
+    page,
+  }) => {
+    await page.route("**/api/accounts", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "mock-node-1",
+            title: "Abendliches Stricken Garnrolle",
+            role: "weber",
+            public_pos: { lat: 51.01, lon: 10.01 },
+          },
+        ]),
+      });
+    });
+    await page.goto("/map");
+    await page.waitForSelector(".map-marker");
+    await activateToolFanAction(page, "find");
+    const input = page.getByRole("searchbox", { name: "Suchbegriff" });
+    await input.fill("Abendliches Stricken");
+
+    const options = page.getByRole("option");
+    await expect(options).toHaveCount(2);
+    const ids = await options.evaluateAll((elements) =>
+      elements.map((element) => element.id),
+    );
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toContain("search-option-node-mock-node-1");
+    expect(ids).toContain("search-option-garnrolle-mock-node-1");
   });
 
   test("shows at most 6 automatic suggestions with the map as the primary result surface", async ({
@@ -193,7 +263,7 @@ test.describe("Search mode", () => {
       undefined,
       { timeout: 15000 },
     );
-    await openFinden(page);
+    await activateToolFanAction(page, "find");
 
     const searchInput = page.locator(".search-box input");
     await searchInput.fill("Strick");
@@ -226,7 +296,7 @@ test.describe("Search mode", () => {
       { timeout: 15000 },
     );
 
-    await openFinden(page);
+    await activateToolFanAction(page, "find");
     await page.getByRole("searchbox", { name: "Suchbegriff" }).fill("Strick");
 
     const direction = page.getByTestId("search-direction-node-mock-node-1");
@@ -265,7 +335,7 @@ test.describe("Search mode", () => {
     await page.waitForSelector(".map-marker");
 
     const trigger = page.getByTestId("tool-fan-trigger");
-    await openFinden(page);
+    await activateToolFanAction(page, "find");
 
     const searchOverlay = page.locator('[data-testid="search-overlay"]');
     await expect(searchOverlay).toBeVisible();

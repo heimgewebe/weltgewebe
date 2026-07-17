@@ -17,6 +17,7 @@
   let wasOpen = false;
   let showAll = false;
   let previousQuery = "";
+  let previousResults = filteredResults;
 
   $: visibleResults = showAll ? filteredResults : filteredResults.slice(0, 6);
   $: {
@@ -24,6 +25,13 @@
       previousQuery = $searchQuery;
       showAll = false;
       activeIndex = -1;
+    }
+  }
+  $: {
+    if (filteredResults !== previousResults) {
+      previousResults = filteredResults;
+      activeIndex = -1;
+      if (filteredResults.length <= 6) showAll = false;
     }
   }
   $: {
@@ -41,6 +49,10 @@
         restoreTarget("search");
       }
     }
+  }
+
+  function resultOptionId(item: MapEntityViewModel): string {
+    return `search-option-${item.type}-${item.id}`;
   }
 
   function onSelect(item: MapEntityViewModel) {
@@ -64,7 +76,8 @@
       scrollToActive();
     } else if (e.key === "Enter") {
       e.preventDefault();
-      onSelect(visibleResults[activeIndex >= 0 ? activeIndex : 0]);
+      const selected = visibleResults[activeIndex >= 0 ? activeIndex : 0];
+      if (selected) onSelect(selected);
     } else if (e.key === "Home") {
       e.preventDefault();
       activeIndex = 0;
@@ -106,8 +119,9 @@
         visibleResults.length > 0
           ? "search-results-listbox"
           : undefined}
-        aria-activedescendant={activeIndex >= 0 && visibleResults.length > 0
-          ? `search-result-${visibleResults[activeIndex]?.id}`
+        aria-activedescendant={activeIndex >= 0 &&
+        activeIndex < visibleResults.length
+          ? resultOptionId(visibleResults[activeIndex])
           : undefined}
         on:keydown={handleInputKeydown}
       />
@@ -119,12 +133,12 @@
     </div>
 
     {#if $searchQuery.trim().length > 0}
-      <div class="result-meta" aria-live="polite">
-        {filteredResults.length === 1
-          ? "1 Treffer auf der Karte"
-          : `${filteredResults.length} Treffer auf der Karte`}
-      </div>
       {#if visibleResults.length > 0}
+        <div class="result-meta" aria-live="polite">
+          {filteredResults.length === 1
+            ? "1 Treffer auf der Karte"
+            : `${filteredResults.length} Treffer auf der Karte`}
+        </div>
         <ul
           class="results"
           id="search-results-listbox"
@@ -134,7 +148,7 @@
         >
           {#each visibleResults as result, index}
             <li
-              id={`search-result-${result.id}`}
+              id={resultOptionId(result)}
               class="result-item"
               role="option"
               aria-selected={activeIndex === index}
@@ -190,13 +204,13 @@
     width: min(520px, calc(100vw - 32px));
     max-height: min(360px, calc(100dvh - 110px));
     transform: translateX(-50%);
-    z-index: 44;
+    z-index: var(--z-map-lens);
     padding: 0.65rem;
     border: 1px solid var(--panel-border-strong);
     border-radius: 16px;
     background: rgba(20, 22, 28, 0.95);
     box-shadow: var(--shadow);
-    backdrop-filter: blur(14px);
+    backdrop-filter: blur(var(--map-lens-blur));
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
@@ -316,6 +330,13 @@
     .search-overlay.panel-open {
       left: calc((100vw - var(--context-panel-width)) / 2);
       width: min(520px, calc(100vw - var(--context-panel-width) - 32px));
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .search-overlay {
+      background: var(--panel-solid);
+      backdrop-filter: none;
     }
   }
 

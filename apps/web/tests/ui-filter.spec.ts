@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { activateToolFanAction } from "./fixtures/toolFan";
 
 test.describe("Sicht mode", () => {
   test.beforeEach(async ({ page }) => {
@@ -64,18 +65,8 @@ test.describe("Sicht mode", () => {
     await page.waitForSelector(".map-marker");
   });
 
-  async function openFinden(page: import("@playwright/test").Page) {
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-find").click();
-  }
-
-  async function openSicht(page: import("@playwright/test").Page) {
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-sight").click();
-  }
-
   test("Case A: No filters -> Search global", async ({ page }) => {
-    await openFinden(page);
+    await activateToolFanAction(page, "find");
 
     const searchOverlay = page.getByTestId("search-overlay");
     await expect(searchOverlay).toBeVisible();
@@ -111,7 +102,7 @@ test.describe("Sicht mode", () => {
   test("Sicht narrows the map, and the narrowed marker stays selectable on the map", async ({
     page,
   }) => {
-    await openSicht(page);
+    await activateToolFanAction(page, "sight");
 
     const sichtOverlay = page.getByTestId("filter-overlay");
     const garnrolleLabel = page.locator("label.filter-item", {
@@ -155,7 +146,7 @@ test.describe("Sicht mode", () => {
     await expect(page.locator(markerSelector)).toHaveCount(3);
 
     // Open Sicht
-    await openSicht(page);
+    await activateToolFanAction(page, "sight");
     const sichtOverlay = page.getByTestId("filter-overlay");
     await expect(sichtOverlay).toBeVisible();
 
@@ -169,7 +160,7 @@ test.describe("Sicht mode", () => {
     await expect(page.locator(markerSelector)).toHaveCount(1);
 
     // Open search, verify it strictly respects the active Sicht selection
-    await openFinden(page);
+    await activateToolFanAction(page, "find");
     await expect(sichtOverlay).not.toBeVisible();
 
     const searchInput = page.getByRole("searchbox", { name: "Suchbegriff" });
@@ -199,7 +190,7 @@ test.describe("Sicht mode", () => {
     );
 
     // Case E: reset restores the full marker count
-    await openSicht(page);
+    await activateToolFanAction(page, "sight");
     const clearBtn = page.getByRole("button", { name: "Alles wieder zeigen" });
     await clearBtn.click();
     await expect(clearBtn).not.toBeVisible();
@@ -211,19 +202,19 @@ test.describe("Sicht mode", () => {
     const searchOverlay = page.getByTestId("search-overlay");
 
     // Open search
-    await openFinden(page);
+    await activateToolFanAction(page, "find");
     await expect(searchOverlay).toBeVisible();
     await expect(sichtOverlay).not.toBeVisible();
 
     // Open Sicht -> Search closes, focus should be inside Sicht
-    await openSicht(page);
+    await activateToolFanAction(page, "sight");
     await expect(sichtOverlay).toBeVisible();
     await expect(searchOverlay).not.toBeVisible();
     const firstCheckbox = page.locator('input[type="checkbox"]').first();
     await expect(firstCheckbox).toBeFocused();
 
     // Open search -> Sicht closes, focus should be inside search
-    await openFinden(page);
+    await activateToolFanAction(page, "find");
     await expect(searchOverlay).toBeVisible();
     await expect(sichtOverlay).not.toBeVisible();
     const searchInput = page.getByRole("searchbox", { name: "Suchbegriff" });
@@ -234,7 +225,7 @@ test.describe("Sicht mode", () => {
     const trigger = page.getByTestId("tool-fan-trigger");
 
     // Open Sicht
-    await openSicht(page);
+    await activateToolFanAction(page, "sight");
     const sichtOverlay = page.getByTestId("filter-overlay");
     await expect(sichtOverlay).toBeVisible();
 
@@ -251,10 +242,12 @@ test.describe("Sicht mode", () => {
   });
 
   test("active type count and reset are visible in Sicht", async ({ page }) => {
-    await openSicht(page);
+    await activateToolFanAction(page, "sight");
     const sichtOverlay = page.getByTestId("filter-overlay");
 
-    await expect(sichtOverlay.getByText(/^Alles sichtbar/)).toBeVisible();
+    await expect(
+      sichtOverlay.getByText(/^Alle \d+ Elemente auf der Karte/),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Alles wieder zeigen" }),
     ).toHaveCount(0);

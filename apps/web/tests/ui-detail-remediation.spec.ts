@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { activateToolFanAction } from "./fixtures/toolFan";
 
 test.describe("UI detail remediation", () => {
   test.beforeEach(async ({ page }) => {
@@ -98,9 +99,10 @@ test.describe("UI detail remediation", () => {
   test("Sicht never shows an automatic hit list, only type selection", async ({
     page,
   }) => {
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-sight").click();
-    await expect(page.getByText(/^Alles sichtbar/)).toBeVisible();
+    await activateToolFanAction(page, "sight");
+    await expect(
+      page.getByText(/^Alle \d+ Elemente auf der Karte/),
+    ).toBeVisible();
     await expect(page.locator(".filter-result")).toHaveCount(0);
     await expect(page.locator(".filter-item")).not.toHaveCount(0);
   });

@@ -58,15 +58,6 @@
     closeFilter();
     enterKomposition({ mode: "new-knoten", source: "tool-fan" });
     closeFan();
-    tick().then(() => {
-      const panel = document.querySelector<HTMLElement>(
-        '[data-testid="context-panel"]',
-      );
-      const firstControl = panel?.querySelector<HTMLElement>(
-        'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])',
-      );
-      firstControl?.focus();
-    });
   }
 
   function handleWindowPointerDown(event: PointerEvent) {
@@ -110,7 +101,14 @@
     <span class="trigger-label">Werkzeuge</span>
   </button>
 
-  <div id="tool-fan-actions" class="fan-menu" class:open aria-hidden={!open}>
+  <div
+    id="tool-fan-actions"
+    class="fan-menu"
+    class:open
+    role="group"
+    aria-label="Werkzeugfächer"
+    aria-hidden={!open}
+  >
     <button
       type="button"
       class="fan-action fan-action--find"
@@ -149,18 +147,19 @@
       class="fan-action fan-action--weave"
       class:active={$systemState === "komposition"}
       data-testid="tool-fan-weave"
-      aria-label="Weben"
+      aria-label={canCreateNode
+        ? "Weben"
+        : "Weben – Weber-Garnrolle erforderlich"}
       aria-pressed={$systemState === "komposition"}
-      aria-disabled={!canCreateNode}
       disabled={!canCreateNode}
       title={canCreateNode
         ? "Knoten knüpfen"
         : "Zum Weben ist eine Weber-Garnrolle nötig"}
-      tabindex={open ? 0 : -1}
+      tabindex={open && canCreateNode ? 0 : -1}
       on:click={onWeave}
     >
       <span class="fan-symbol" aria-hidden="true">⌁</span>
-      <span>Weben</span>
+      <span>{canCreateNode ? "Weben" : "Weben · Weberstatus nötig"}</span>
     </button>
 
     <a
@@ -175,13 +174,13 @@
 <style>
   .tool-fan {
     position: fixed;
-    right: 16px;
-    bottom: calc(16px + env(safe-area-inset-bottom));
-    width: 228px;
-    height: 252px;
-    z-index: 45;
+    right: calc(var(--tool-fan-edge) + env(safe-area-inset-right));
+    bottom: calc(var(--tool-fan-edge) + env(safe-area-inset-bottom));
+    width: var(--tool-fan-open-width);
+    height: var(--tool-fan-open-height);
+    z-index: var(--z-map-tool-fan);
     pointer-events: none;
-    transition: right 0.25s ease;
+    transition: right var(--motion-ui);
   }
 
   .fan-trigger,
@@ -239,7 +238,7 @@
     pointer-events: none;
     transform: translate(0, 0) scale(0.76);
     transition:
-      transform 0.18s ease,
+      transform var(--motion-fan),
       opacity 0.14s ease,
       visibility 0s linear 0.18s;
   }
@@ -276,15 +275,15 @@
   }
 
   .fan-menu.open .fan-action--find {
-    transform: translate(-12px, -168px) scale(1);
+    transform: translate(var(--tool-fan-find-x), var(--tool-fan-find-y)) scale(1);
   }
 
   .fan-menu.open .fan-action--sight {
-    transform: translate(-102px, -108px) scale(1);
+    transform: translate(var(--tool-fan-sight-x), var(--tool-fan-sight-y)) scale(1);
   }
 
   .fan-menu.open .fan-action--weave {
-    transform: translate(-112px, -48px) scale(1);
+    transform: translate(var(--tool-fan-weave-x), var(--tool-fan-weave-y)) scale(1);
   }
 
   .fan-action.active {
@@ -293,8 +292,12 @@
   }
 
   .fan-action:disabled {
+    width: 180px;
+    min-width: 180px;
+    box-sizing: border-box;
     cursor: not-allowed;
-    opacity: 0.58;
+    opacity: 0.68;
+    font-size: 0.8rem;
   }
 
   .count-badge {
@@ -347,13 +350,25 @@
 
   @media (min-width: 769px) {
     .tool-fan.panel-open {
-      right: calc(var(--context-panel-width) + 16px);
+      right: calc(
+        var(--context-panel-width) + var(--tool-fan-edge) +
+          env(safe-area-inset-right)
+      );
     }
   }
 
   @media (max-width: 420px) {
     .trigger-label {
       font-size: 0.82rem;
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .fan-trigger,
+    .fan-action,
+    .governance-link {
+      background: var(--panel-solid);
+      backdrop-filter: none;
     }
   }
 

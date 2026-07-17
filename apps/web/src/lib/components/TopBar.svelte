@@ -19,7 +19,7 @@
     position: absolute;
     inset: 0 0 auto 0;
     min-height: var(--toolbar-offset);
-    z-index: 41;
+    z-index: var(--z-map-topbar);
     display: flex;
     justify-content: flex-end;
     align-items: center;

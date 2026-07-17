@@ -36,6 +36,7 @@
   let kompositionPanel: KompositionPanelHandle | null = null;
   let sheetStage: SheetStage = "preview";
   let previousPanelIdentity = "";
+  let panelTitle = "Details";
 
   function derivePanelTitle(
     state: SystemState,
@@ -59,19 +60,21 @@
     return "Details";
   }
 
-  $: panelTitle = derivePanelTitle($systemState, $kompositionDraft, $selection);
-  $: panelIdentity =
-    $systemState === "komposition"
-      ? `komposition:${$kompositionDraft?.mode ?? "unknown"}`
-      : $selection
-        ? `${$selection.type}:${$selection.id}`
-        : "";
-  $: if (panelIdentity !== previousPanelIdentity) {
-    previousPanelIdentity = panelIdentity;
-    sheetStage = $systemState === "komposition" ? "full" : "preview";
-  }
-  $: if ($systemState === "komposition" && sheetStage !== "full") {
-    sheetStage = "full";
+  $: {
+    panelTitle = derivePanelTitle($systemState, $kompositionDraft, $selection);
+    const nextPanelIdentity =
+      $systemState === "komposition"
+        ? `komposition:${$kompositionDraft?.mode ?? "unknown"}`
+        : $selection
+          ? `${$selection.type}:${$selection.id}`
+          : "";
+
+    if (nextPanelIdentity !== previousPanelIdentity) {
+      previousPanelIdentity = nextPanelIdentity;
+      sheetStage = $systemState === "komposition" ? "full" : "preview";
+    } else if ($systemState === "komposition" && sheetStage !== "full") {
+      sheetStage = "full";
+    }
   }
 
   function closePanel() {
@@ -120,7 +123,6 @@
       class:composition={$systemState === "komposition"}
     >
       <div class="heading-group">
-        <span class="sheet-handle" aria-hidden="true"></span>
         <h2>{panelTitle}</h2>
       </div>
       <div class="header-actions">
@@ -128,21 +130,21 @@
           <div class="sheet-controls" role="group" aria-label="Panelgröße">
             <button
               type="button"
-              aria-label="Kompakte Vorschau"
+              aria-label="Vorschau"
               aria-pressed={sheetStage === "preview"}
-              on:click={() => (sheetStage = "preview")}>Kompakt</button
+              on:click={() => (sheetStage = "preview")}>Vorschau</button
             >
             <button
               type="button"
-              aria-label="Halbe Ansicht"
+              aria-label="Halbe Höhe"
               aria-pressed={sheetStage === "half"}
-              on:click={() => (sheetStage = "half")}>Halb</button
+              on:click={() => (sheetStage = "half")}>Halbe Höhe</button
             >
             <button
               type="button"
-              aria-label="Volle Ansicht"
+              aria-label="Vollbild"
               aria-pressed={sheetStage === "full"}
-              on:click={() => (sheetStage = "full")}>Voll</button
+              on:click={() => (sheetStage = "full")}>Vollbild</button
             >
           </div>
         {/if}
@@ -174,7 +176,7 @@
 <style>
   .context-panel {
     position: fixed;
-    z-index: 50;
+    z-index: var(--z-map-context-panel);
     background: var(--panel);
     color: var(--text);
     box-shadow: var(--shadow);
@@ -212,10 +214,6 @@
     font-size: 1.1rem;
     letter-spacing: 0;
     text-transform: none;
-  }
-
-  .sheet-handle {
-    display: none;
   }
 
   .header-actions,
@@ -277,7 +275,7 @@
       max-height: none;
       padding-bottom: env(safe-area-inset-bottom);
       border-radius: 18px 18px 0 0;
-      transition: height 0.22s ease;
+      transition: height var(--motion-ui);
     }
     .context-panel.stage-preview {
       height: clamp(190px, 29dvh, 270px);
@@ -288,14 +286,6 @@
     .context-panel.stage-full,
     .context-panel.composition {
       height: 88dvh;
-    }
-    .sheet-handle {
-      display: block;
-      width: 42px;
-      height: 4px;
-      margin: 0 auto 0.45rem;
-      border-radius: 999px;
-      background: var(--panel-border-strong);
     }
     .panel-header {
       min-height: 72px;

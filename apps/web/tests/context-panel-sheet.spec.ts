@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { activateToolFanAction } from "./fixtures/toolFan";
 
 test.describe("ContextPanel mobile sheet stages", () => {
   test.beforeEach(async ({ page }) => {
@@ -24,8 +25,9 @@ test.describe("ContextPanel mobile sheet stages", () => {
     await expect(panel).toBeVisible();
     await expect(panel).toHaveAttribute("data-sheet-stage", "preview");
 
-    const preview = page.getByRole("button", { name: "Kompakte Vorschau" });
+    const preview = page.getByRole("button", { name: "Vorschau" });
     await expect(preview).toHaveAttribute("aria-pressed", "true");
+    await expect(panel.locator(".sheet-handle")).toHaveCount(0);
   });
 
   test("the accessible toggle switches between preview, half and full", async ({
@@ -41,8 +43,8 @@ test.describe("ContextPanel mobile sheet stages", () => {
     );
 
     const panel = page.getByTestId("context-panel");
-    const half = page.getByRole("button", { name: "Halbe Ansicht" });
-    const full = page.getByRole("button", { name: "Volle Ansicht" });
+    const half = page.getByRole("button", { name: "Halbe Höhe" });
+    const full = page.getByRole("button", { name: "Vollbild" });
 
     const previewBox = await panel.boundingBox();
 
@@ -67,13 +69,31 @@ test.describe("ContextPanel mobile sheet stages", () => {
     });
     // The tool fan collapses on mobile once the panel is open, so open
     // komposition first.
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-weave").click();
+    await activateToolFanAction(page, "weave");
 
     const panel = page.getByTestId("context-panel");
     await expect(panel).toBeVisible();
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
     await expect(page.getByLabel("Panelgröße")).toHaveCount(0);
+  });
+
+  test("orientation change keeps the open panel inside the viewport", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.locator(".map-marker").first().click();
+    const panel = page.getByTestId("context-panel");
+    await page.getByRole("button", { name: "Vollbild" }).click();
+    await expect(panel).toHaveAttribute("data-sheet-stage", "full");
+
+    await page.setViewportSize({ width: 844, height: 390 });
+    const box = await panel.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(844);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(390);
+    await expect(page.getByLabel("Panelgröße")).toBeHidden();
   });
 
   test("switching the selected marker resets the sheet back to preview", async ({
@@ -85,7 +105,7 @@ test.describe("ContextPanel mobile sheet stages", () => {
       )?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
     );
     const panel = page.getByTestId("context-panel");
-    await page.getByRole("button", { name: "Volle Ansicht" }).click();
+    await page.getByRole("button", { name: "Vollbild" }).click();
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
 
     await page.evaluate(() =>
