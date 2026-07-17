@@ -173,6 +173,50 @@ def apply_object_store_endpoint(kubectl: str, address: str) -> None:
     )
 
 
+def cnpg_webhook_ready(kubectl: str) -> bool:
+    endpoint = subprocess.run(
+        [
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "get",
+            "endpoints",
+            "cnpg-webhook-service",
+            "-o",
+            "jsonpath={.subsets[0].addresses[0].ip}",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        timeout=15,
+    )
+    if endpoint.returncode != 0 or not endpoint.stdout.strip():
+        return False
+    probe = {
+        "apiVersion": "postgresql.cnpg.io/v1",
+        "kind": "Cluster",
+        "metadata": {"name": "weltgewebe-cnpg-webhook-probe", "namespace": "default"},
+        "spec": {"instances": 1, "storage": {"size": "1Gi"}},
+    }
+    result = subprocess.run(
+        [
+            kubectl,
+            "apply",
+            "--server-side",
+            "--dry-run=server",
+            "--field-manager=weltgewebe-ha-proof",
+            "-f",
+            "-",
+        ],
+        cwd=ROOT,
+        input=json.dumps(probe),
+        text=True,
+        capture_output=True,
+        timeout=20,
+    )
+    return result.returncode == 0
+
+
 def install_cnpg(kubectl: str, artifact: str) -> None:
     source = Path(artifact).read_text(encoding="utf-8")
     tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
@@ -192,6 +236,12 @@ def install_cnpg(kubectl: str, artifact: str) -> None:
     )
     ref.run([kubectl, "wait", "--for=condition=Established", "crd/clusters.postgresql.cnpg.io", "--timeout=3m"])
     ref.wait_rollout(kubectl, "cnpg-system", "deployment/cnpg-controller-manager", "8m")
+    wait_until(
+        "CloudNativePG admission webhook",
+        lambda: cnpg_webhook_ready(kubectl),
+        timeout_seconds=180,
+        interval=2,
+    )
     observed = ref.output([kubectl, "-n", "cnpg-system", "get", "deployment/cnpg-controller-manager", "-o", "jsonpath={.spec.template.spec.containers[0].image}"])
     if observed != CNPG_OPERATOR_IMAGE:
         raise ref.ProofError(f"CloudNativePG operator image is not digest-bound: {observed}")
