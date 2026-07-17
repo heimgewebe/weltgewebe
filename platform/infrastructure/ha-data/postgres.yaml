@@ -36,22 +36,8 @@ spec:
     topologyKey: topology.kubernetes.io/zone
     nodeSelector:
       weltgewebe.net/data-node: "true"
-  backup:
-    target: prefer-standby
-    retentionPolicy: 7d
-    barmanObjectStore:
-      destinationPath: s3://weltgewebe-postgres/
-      endpointURL: http://seaweedfs-s3.weltgewebe-data.svc.cluster.local:8333
-      s3Credentials:
-        accessKeyId:
-          name: weltgewebe-ha-s3
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: weltgewebe-ha-s3
-          key: ACCESS_SECRET_KEY
-      wal:
-        compression: gzip
-        maxParallel: 2
-      data:
-        compression: gzip
-        jobs: 2
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: weltgewebe-ha-backup

@@ -19,6 +19,12 @@ ROOT = Path(__file__).resolve().parents[2]
 CACHE = ROOT / ".cache/weltgewebe-platform"
 DEFAULT_CLUSTER = "weltgewebe-ha-reference"
 CNPG_OPERATOR_IMAGE = "ghcr.io/cloudnative-pg/cloudnative-pg@sha256:a2701eb97cdd2a34b1fdb2cb51987f544b706e40bec72ae7146cd8580efefebb"
+CERT_MANAGER_IMAGES = {
+    "quay.io/jetstack/cert-manager-controller:v1.21.0": "quay.io/jetstack/cert-manager-controller@sha256:e370f7800a53078e9d74324287a7d52b553864e55f5b4e521f911c3f6c7da203",
+    "quay.io/jetstack/cert-manager-cainjector:v1.21.0": "quay.io/jetstack/cert-manager-cainjector@sha256:ad1dcc5b2fccc420f9b3fbee7ce8a869450c540fd4f2f41de2d95b1ca0c4d701",
+    "quay.io/jetstack/cert-manager-webhook:v1.21.0": "quay.io/jetstack/cert-manager-webhook@sha256:c33cca307541e2d58861a55b1af5f390b7e19c8741e48b433693b73a7cce88b3",
+}
+BARMAN_CLOUD_PLUGIN_IMAGE = "ghcr.io/cloudnative-pg/plugin-barman-cloud@sha256:71589dbac582333442812b07b31f7ea4d00324a8358aac7ca507dabf9f4b6c96"
 POSTGRES_IMAGE = "ghcr.io/cloudnative-pg/postgresql:16.14@sha256:05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1"
 NATS_BOX_IMAGE = "natsio/nats-box@sha256:9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d"
 SEAWEEDFS_IMAGE = "chrislusf/seaweedfs@sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d"
@@ -54,9 +60,13 @@ def wait_until(description: str, probe, *, timeout_seconds: int = 600, interval:
 
 def create_kind_cluster(kind: str, name: str, image: str, config: str, commit: str) -> None:
     ref.assert_available_cluster_name(kind, name)
-    ref.run([kind, "create", "cluster", "--name", name, "--image", image, "--config", config], timeout=900)
     ref.write_marker(name, commit)
-    ref.configure_cluster_access(kind, name)
+    try:
+        ref.run([kind, "create", "cluster", "--name", name, "--image", image, "--config", config], timeout=900)
+        ref.configure_cluster_access(kind, name)
+    except Exception:
+        ref.delete_owned_cluster(kind, name)
+        raise
 
 
 def apply_secret_contracts(kubectl: str, app_password: str, s3_secret_key: str) -> None:
@@ -109,36 +119,40 @@ def start_external_object_store(cluster: str, commit: str, s3_secret_key: str) -
     if subprocess.run(["docker", "volume", "inspect", volume], capture_output=True).returncode == 0:
         raise ref.ProofError(f"external object-store volume already exists: {volume}")
     ref.run(["docker", "volume", "create", "--label", f"weltgewebe.net/proof-commit={commit}", volume])
-    run_with_environment(
-        [
-            "docker", "run", "--detach", "--name", container,
-            "--label", f"weltgewebe.net/proof-commit={commit}",
-            "--network", "kind",
-            "--env", "AWS_ACCESS_KEY_ID",
-            "--env", "AWS_SECRET_ACCESS_KEY",
-            "--env", "S3_BUCKET",
-            "--volume", f"{volume}:/data",
-            SEAWEEDFS_IMAGE, "mini", "-dir=/data", "-ip=0.0.0.0",
-        ],
-        {
-            "AWS_ACCESS_KEY_ID": S3_ACCESS_KEY,
-            "AWS_SECRET_ACCESS_KEY": s3_secret_key,
-            "S3_BUCKET": S3_BUCKET,
-        },
-        timeout=120,
-    )
-    def address_probe() -> str | bool:
-        address = ref.output(["docker", "inspect", "--format", "{{(index .NetworkSettings.Networks \"kind\").IPAddress}}", container])
-        return address if address else False
-    address = str(wait_until("external object-store address", address_probe, timeout_seconds=60))
-    def port_probe() -> bool:
-        result = subprocess.run(
-            ["docker", "exec", container, "sh", "-c", "wget -qO- http://127.0.0.1:9333/cluster/status >/dev/null"],
-            capture_output=True,
+    try:
+        run_with_environment(
+            [
+                "docker", "run", "--detach", "--name", container,
+                "--label", f"weltgewebe.net/proof-commit={commit}",
+                "--network", "kind",
+                "--env", "AWS_ACCESS_KEY_ID",
+                "--env", "AWS_SECRET_ACCESS_KEY",
+                "--env", "S3_BUCKET",
+                "--volume", f"{volume}:/data",
+                SEAWEEDFS_IMAGE, "mini", "-dir=/data", "-ip=0.0.0.0",
+            ],
+            {
+                "AWS_ACCESS_KEY_ID": S3_ACCESS_KEY,
+                "AWS_SECRET_ACCESS_KEY": s3_secret_key,
+                "S3_BUCKET": S3_BUCKET,
+            },
+            timeout=120,
         )
-        return result.returncode == 0
-    wait_until("external object-store readiness", port_probe, timeout_seconds=180)
-    return container, volume, address
+        def address_probe() -> str | bool:
+            address = ref.output(["docker", "inspect", "--format", "{{(index .NetworkSettings.Networks \"kind\").IPAddress}}", container])
+            return address if address else False
+        address = str(wait_until("external object-store address", address_probe, timeout_seconds=60))
+        def port_probe() -> bool:
+            result = subprocess.run(
+                ["docker", "exec", container, "sh", "-c", "wget -qO- http://127.0.0.1:9333/cluster/status >/dev/null"],
+                capture_output=True,
+            )
+            return result.returncode == 0
+        wait_until("external object-store readiness", port_probe, timeout_seconds=180)
+        return container, volume, address
+    except Exception:
+        delete_external_object_store(cluster, commit)
+        raise
 
 
 def delete_external_object_store(cluster: str, commit: str) -> None:
@@ -247,6 +261,126 @@ def install_cnpg(kubectl: str, artifact: str) -> None:
         raise ref.ProofError(f"CloudNativePG operator image is not digest-bound: {observed}")
 
 
+def apply_digest_locked_manifest(
+    kubectl: str,
+    artifact: str,
+    replacements: dict[str, str],
+) -> None:
+    source = Path(artifact).read_text(encoding="utf-8")
+    for tagged, digest in replacements.items():
+        if source.count(tagged) != 1:
+            raise ref.ProofError(f"release image reference changed unexpectedly: {tagged}")
+        source = source.replace(tagged, digest)
+    ref.run(
+        [
+            kubectl,
+            "apply",
+            "--server-side",
+            "--force-conflicts",
+            "--field-manager=weltgewebe-ha-proof",
+            "-f",
+            "-",
+        ],
+        input_text=source,
+    )
+
+
+def install_cert_manager(kubectl: str, artifact: str) -> None:
+    apply_digest_locked_manifest(kubectl, artifact, CERT_MANAGER_IMAGES)
+    ref.run(
+        [
+            kubectl,
+            "wait",
+            "--for=condition=Established",
+            "crd/certificates.cert-manager.io",
+            "--timeout=3m",
+        ]
+    )
+    deployments = {
+        "cert-manager": CERT_MANAGER_IMAGES[
+            "quay.io/jetstack/cert-manager-controller:v1.21.0"
+        ],
+        "cert-manager-cainjector": CERT_MANAGER_IMAGES[
+            "quay.io/jetstack/cert-manager-cainjector:v1.21.0"
+        ],
+        "cert-manager-webhook": CERT_MANAGER_IMAGES[
+            "quay.io/jetstack/cert-manager-webhook:v1.21.0"
+        ],
+    }
+    for deployment, expected_image in deployments.items():
+        ref.wait_rollout(kubectl, "cert-manager", f"deployment/{deployment}", "8m")
+        observed = ref.output(
+            [
+                kubectl,
+                "-n",
+                "cert-manager",
+                "get",
+                f"deployment/{deployment}",
+                "-o",
+                "jsonpath={.spec.template.spec.containers[0].image}",
+            ]
+        )
+        if observed != expected_image:
+            raise ref.ProofError(
+                f"cert-manager image is not digest-bound for {deployment}: {observed}"
+            )
+    wait_until(
+        "cert-manager webhook endpoint",
+        lambda: ref.output(
+            [
+                kubectl,
+                "-n",
+                "cert-manager",
+                "get",
+                "endpoints/cert-manager-webhook",
+                "-o",
+                "jsonpath={.subsets[0].addresses[0].ip}",
+            ]
+        ),
+        timeout_seconds=180,
+    )
+
+
+def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
+    tagged = "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0"
+    apply_digest_locked_manifest(
+        kubectl,
+        artifact,
+        {tagged: BARMAN_CLOUD_PLUGIN_IMAGE},
+    )
+    ref.run(
+        [
+            kubectl,
+            "wait",
+            "--for=condition=Established",
+            "crd/objectstores.barmancloud.cnpg.io",
+            "--timeout=3m",
+        ]
+    )
+    for certificate in ("barman-cloud-client", "barman-cloud-server"):
+        ref.wait_condition(
+            kubectl,
+            "cnpg-system",
+            f"certificate/{certificate}",
+            "Ready",
+            "5m",
+        )
+    ref.wait_rollout(kubectl, "cnpg-system", "deployment/barman-cloud", "8m")
+    observed = ref.output(
+        [
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "get",
+            "deployment/barman-cloud",
+            "-o",
+            "jsonpath={.spec.template.spec.containers[0].image}",
+        ]
+    )
+    if observed != BARMAN_CLOUD_PLUGIN_IMAGE:
+        raise ref.ProofError(f"Barman Cloud plugin image is not digest-bound: {observed}")
+
+
 def current_primary(kubectl: str, cluster: str = "postgres-ha") -> str:
     return ref.output([kubectl, "-n", "weltgewebe-data", "get", f"cluster/{cluster}", "-o", "jsonpath={.status.currentPrimary}"])
 
@@ -264,11 +398,29 @@ def ha_diagnostic_snapshot(kubectl: str, name: str) -> None:
         "cnpg-pods-logs.txt": [kubectl, "-n", "weltgewebe-data", "logs", "-l", "cnpg.io/cluster", "--all-containers=true", "--prefix=true", "--tail=2000"],
         "cnpg-pods-previous-logs.txt": [kubectl, "-n", "weltgewebe-data", "logs", "-l", "cnpg.io/cluster", "--all-containers=true", "--prefix=true", "--previous=true", "--tail=2000"],
         "cnpg-operator-logs.txt": [kubectl, "-n", "cnpg-system", "logs", "deployment/cnpg-controller-manager", "--tail=2000"],
+        "barman-plugin-logs.txt": [kubectl, "-n", "cnpg-system", "logs", "deployment/barman-cloud", "--tail=2000"],
+        "barman-objectstores.yaml": [kubectl, "get", "objectstores.barmancloud.cnpg.io", "-A", "-o", "yaml"],
+        "certificates.yaml": [kubectl, "get", "certificates.cert-manager.io", "-A", "-o", "yaml"],
         "storage.txt": [kubectl, "get", "pv,pvc", "-A", "-o", "wide"],
     }
     for filename, argv in commands.items():
-        result = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True)
-        (target / filename).write_text(result.stdout + result.stderr, encoding="utf-8")
+        try:
+            result = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True, timeout=30)
+            evidence = result.stdout + result.stderr
+        except (OSError, subprocess.TimeoutExpired) as error:
+            evidence = f"diagnostic command failed: {error}\n"
+        (target / filename).write_text(evidence, encoding="utf-8")
+
+
+def wal_segment_position(name: str) -> tuple[int, int, int]:
+    normalized = name.strip().upper()
+    if len(normalized) != 24 or any(character not in "0123456789ABCDEF" for character in normalized):
+        raise ref.ProofError(f"invalid PostgreSQL WAL segment name: {name!r}")
+    return tuple(int(normalized[offset : offset + 8], 16) for offset in (0, 8, 16))
+
+
+def wal_archived_at_or_after(observed: str, required: str) -> bool:
+    return wal_segment_position(observed) >= wal_segment_position(required)
 
 
 def psql(kubectl: str, sql: str, *, cluster: str = "postgres-ha") -> str:
@@ -392,15 +544,12 @@ def restore_cluster_document(target_time: str) -> dict[str, Any]:
             },
             "externalClusters": [{
                 "name": "postgres-ha",
-                "barmanObjectStore": {
-                    "destinationPath": f"s3://{S3_BUCKET}/",
-                    "endpointURL": "http://seaweedfs-s3.weltgewebe-data.svc.cluster.local:8333",
-                    "serverName": "postgres-ha",
-                    "s3Credentials": {
-                        "accessKeyId": {"name": "weltgewebe-ha-s3", "key": "ACCESS_KEY_ID"},
-                        "secretAccessKey": {"name": "weltgewebe-ha-s3", "key": "ACCESS_SECRET_KEY"},
+                "plugin": {
+                    "name": "barman-cloud.cloudnative-pg.io",
+                    "parameters": {
+                        "barmanObjectName": "weltgewebe-ha-backup",
+                        "serverName": "postgres-ha",
                     },
-                    "wal": {"maxParallel": 2},
                 },
             }],
             "storage": {"size": "1Gi"},
@@ -443,7 +592,12 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         apply_secret_contracts(kubectl, app_password, s3_secret_key)
         ref.apply_file(kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml")
         apply_object_store_endpoint(kubectl, object_store_address)
+        install_cert_manager(kubectl, receipt["artifacts"]["cert_manager"])
         install_cnpg(kubectl, receipt["artifacts"]["cloudnative_pg_operator"])
+        install_barman_cloud_plugin(
+            kubectl,
+            receipt["artifacts"]["barman_cloud_plugin"],
+        )
         ref.apply_direct(kubectl, kustomize, "platform/infrastructure/ha-data")
         ref.wait_rollout(kubectl, "weltgewebe-data", "statefulset/nats", "12m")
         wait_cluster_ready(kubectl, "postgres-ha", "15m")
@@ -512,18 +666,39 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         after_id = "00000000-0000-4000-8000-00000000c004"
         insert_domain_node(kubectl, before_id, "T004 before PITR target")
         backup_name = f"t004-{commit[:8]}"
-        ref.apply_yaml(kubectl, {"apiVersion": "postgresql.cnpg.io/v1", "kind": "Backup", "metadata": {"name": backup_name, "namespace": "weltgewebe-data"}, "spec": {"method": "barmanObjectStore", "cluster": {"name": "postgres-ha"}}})
+        ref.apply_yaml(
+            kubectl,
+            {
+                "apiVersion": "postgresql.cnpg.io/v1",
+                "kind": "Backup",
+                "metadata": {"name": backup_name, "namespace": "weltgewebe-data"},
+                "spec": {
+                    "method": "plugin",
+                    "target": "prefer-standby",
+                    "cluster": {"name": "postgres-ha"},
+                    "pluginConfiguration": {
+                        "name": "barman-cloud.cloudnative-pg.io"
+                    },
+                },
+            },
+        )
         backup = wait_backup_complete(kubectl, backup_name)
         target_time = psql(kubectl, "SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')")
         time.sleep(2)
         insert_domain_node(kubectl, after_id, "T004 after PITR target")
-        archived_before = ref.output([kubectl, "-n", "weltgewebe-data", "get", "cluster/postgres-ha", "-o", "jsonpath={.status.lastArchivedWAL}"])
-        psql(kubectl, "SELECT pg_switch_wal()")
-        wait_until(
-            "WAL archive after PITR marker",
-            lambda: (lambda value: value if value and value != archived_before else False)(ref.output([kubectl, "-n", "weltgewebe-data", "get", "cluster/postgres-ha", "-o", "jsonpath={.status.lastArchivedWAL}"])),
+        required_wal = psql(kubectl, "SELECT pg_walfile_name(pg_switch_wal())")
+        wal_segment_position(required_wal)
+        def archived_wal_probe() -> str | bool:
+            observed = psql(
+                kubectl,
+                "SELECT COALESCE(last_archived_wal, '') FROM pg_stat_archiver",
+            )
+            return observed if observed and wal_archived_at_or_after(observed, required_wal) else False
+        archived_wal = str(wait_until(
+            f"WAL archive at or after {required_wal}",
+            archived_wal_probe,
             timeout_seconds=300,
-        )
+        ))
 
         create_kind_cluster(kind, restore_name, receipt["kubernetes"]["kind_node_image"], "platform/clusters/ha/restore-kind.yaml", commit)
         created_restore = True
@@ -533,7 +708,22 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         apply_secret_contracts(restore_kubectl, app_password, s3_secret_key)
         ref.apply_file(restore_kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml")
         apply_object_store_endpoint(restore_kubectl, object_store_address)
-        install_cnpg(restore_kubectl, receipt["artifacts"]["cloudnative_pg_operator"])
+        install_cert_manager(
+            restore_kubectl,
+            receipt["artifacts"]["cert_manager"],
+        )
+        install_cnpg(
+            restore_kubectl,
+            receipt["artifacts"]["cloudnative_pg_operator"],
+        )
+        install_barman_cloud_plugin(
+            restore_kubectl,
+            receipt["artifacts"]["barman_cloud_plugin"],
+        )
+        ref.apply_file(
+            restore_kubectl,
+            ROOT / "platform/infrastructure/ha-data/barman-object-store.yaml",
+        )
         ref.apply_file(
             restore_kubectl,
             ROOT / "platform/infrastructure/ha-data/postgres-image-catalog.yaml",
@@ -565,7 +755,13 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "acknowledged_domain_mutation_preserved": True,
                 "acknowledged_jetstream_messages": 2,
             },
-            "backup": {"name": backup_name, "phase": backup.get("status", {}).get("phase"), "target_time": target_time},
+            "backup": {
+                "name": backup_name,
+                "phase": backup.get("status", {}).get("phase"),
+                "target_time": target_time,
+                "required_archived_wal": required_wal,
+                "observed_archived_wal": archived_wal,
+            },
             "restore": {"rto_seconds": round(restore_rto, 3), "pitr_comparison": preserved, "blank_kind_cluster": True},
             "gateway_before": gateway_before,
             "production_changed": False,
@@ -588,6 +784,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             ref.diagnostic_snapshot(kubectl, args.cluster)
         if created_restore:
             ref.configure_cluster_access(kind, restore_name)
+            ha_diagnostic_snapshot(kubectl, restore_name)
             ref.diagnostic_snapshot(kubectl, restore_name)
         raise
     finally:

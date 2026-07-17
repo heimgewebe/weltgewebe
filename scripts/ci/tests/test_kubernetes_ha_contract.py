@@ -45,6 +45,10 @@ class KubernetesHaContractTests(unittest.TestCase):
             {
                 "cloudnative_pg_operator",
                 "cloudnative_pg_postgresql",
+                "cert_manager_controller",
+                "cert_manager_cainjector",
+                "cert_manager_webhook",
+                "barman_cloud_plugin",
                 "nats",
                 "nats_box",
                 "seaweedfs",
@@ -52,6 +56,25 @@ class KubernetesHaContractTests(unittest.TestCase):
         )
         for name, image in lock["images"].items():
             self.assertRegex(image, r"@sha256:[0-9a-f]{64}$", name)
+
+    def test_plugin_runtime_images_match_the_digest_lock(self) -> None:
+        lock = json.loads((ROOT / "platform/toolchain.lock.json").read_text())
+        expected = {
+            "cert_manager_controller": self.ha.CERT_MANAGER_IMAGES[
+                "quay.io/jetstack/cert-manager-controller:v1.21.0"
+            ],
+            "cert_manager_cainjector": self.ha.CERT_MANAGER_IMAGES[
+                "quay.io/jetstack/cert-manager-cainjector:v1.21.0"
+            ],
+            "cert_manager_webhook": self.ha.CERT_MANAGER_IMAGES[
+                "quay.io/jetstack/cert-manager-webhook:v1.21.0"
+            ],
+            "barman_cloud_plugin": self.ha.BARMAN_CLOUD_PLUGIN_IMAGE,
+        }
+        for name, image in expected.items():
+            self.assertEqual(lock["images"][name], image, name)
+        self.assertEqual(lock["artifacts"]["cert_manager"]["version"], "1.21.0")
+        self.assertEqual(lock["artifacts"]["barman_cloud_plugin"]["version"], "0.13.0")
 
     def test_ha_migration_reads_runtime_database_url_from_secret(self) -> None:
         job = next(
@@ -77,10 +100,69 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertEqual(recovery["source"], "postgres-ha")
         self.assertEqual(recovery["recoveryTarget"]["targetTime"], target)
         self.assertTrue(recovery["recoveryTarget"]["exclusive"])
+        plugin = spec["externalClusters"][0]["plugin"]
+        self.assertEqual(plugin["name"], "barman-cloud.cloudnative-pg.io")
         self.assertEqual(
-            spec["externalClusters"][0]["barmanObjectStore"]["serverName"],
-            "postgres-ha",
+            plugin["parameters"],
+            {
+                "barmanObjectName": "weltgewebe-ha-backup",
+                "serverName": "postgres-ha",
+            },
         )
+
+    def test_barman_plugin_contract_replaces_native_backup(self) -> None:
+        postgres = next(
+            self.validator._documents(
+                ROOT / "platform/infrastructure/ha-data/postgres.yaml"
+            )
+        )
+        spec = postgres["spec"]
+        self.assertNotIn("backup", spec)
+        self.assertEqual(
+            spec["plugins"],
+            [
+                {
+                    "name": "barman-cloud.cloudnative-pg.io",
+                    "isWALArchiver": True,
+                    "parameters": {
+                        "barmanObjectName": "weltgewebe-ha-backup"
+                    },
+                }
+            ],
+        )
+        store = next(
+            self.validator._documents(
+                ROOT / "platform/infrastructure/ha-data/barman-object-store.yaml"
+            )
+        )
+        self.assertEqual(store["apiVersion"], "barmancloud.cnpg.io/v1")
+        self.assertEqual(store["kind"], "ObjectStore")
+        self.assertEqual(store["spec"]["retentionPolicy"], "7d")
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        self.assertIn('"method": "plugin"', source)
+        self.assertIn('"target": "prefer-standby"', source)
+        self.assertIn('"name": "barman-cloud.cloudnative-pg.io"', source)
+
+    def test_restore_direct_manifests_are_explicitly_namespaced(self) -> None:
+        for relative in (
+            "platform/infrastructure/ha-data/object-store.yaml",
+            "platform/infrastructure/ha-data/barman-object-store.yaml",
+            "platform/infrastructure/ha-data/postgres-image-catalog.yaml",
+        ):
+            document = next(self.validator._documents(ROOT / relative))
+            self.assertEqual(
+                document["metadata"].get("namespace"),
+                "weltgewebe-data",
+                relative,
+            )
+
+    def test_ha_workflow_checks_out_the_immutable_pr_head(self) -> None:
+        workflow = (ROOT / ".github/workflows/kubernetes-platform.yml").read_text()
+        expected = (
+            "ref: ${{ github.event_name == 'pull_request' && "
+            "github.event.pull_request.head.sha || github.sha }}"
+        )
+        self.assertEqual(workflow.count(expected), 3)
 
     def test_zone_contract_requires_three_distinct_zones(self) -> None:
         valid = {
@@ -100,6 +182,98 @@ class KubernetesHaContractTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(self.ha.ref.ProofError, "foreign"):
                 self.ha.delete_external_object_store("proof", "expected-commit")
+
+    def test_external_object_store_start_cleans_partial_owned_resources(self) -> None:
+        absent = mock.Mock(returncode=1)
+        with mock.patch.object(
+            self.ha.subprocess, "run", side_effect=[absent, absent]
+        ), mock.patch.object(self.ha.ref, "run"), mock.patch.object(
+            self.ha, "run_with_environment", side_effect=self.ha.ref.ProofError("container start failed")
+        ), mock.patch.object(self.ha, "delete_external_object_store") as cleanup:
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "container start failed"):
+                self.ha.start_external_object_store("proof", "a" * 40, "secret")
+        cleanup.assert_called_once_with("proof", "a" * 40)
+
+    def test_kind_cluster_creation_is_transactional(self) -> None:
+        with mock.patch.object(self.ha.ref, "assert_available_cluster_name"), mock.patch.object(
+            self.ha.ref, "write_marker"
+        ) as marker, mock.patch.object(
+            self.ha.ref, "run", side_effect=self.ha.ref.ProofError("kind failed")
+        ), mock.patch.object(self.ha.ref, "delete_owned_cluster") as cleanup:
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "kind failed"):
+                self.ha.create_kind_cluster("kind", "proof", "node-image", "cluster.yaml", "b" * 40)
+        marker.assert_called_once_with("proof", "b" * 40)
+        cleanup.assert_called_once_with("kind", "proof")
+
+    def test_digest_locked_manifest_replaces_each_release_image_once(self) -> None:
+        tagged = {
+            "registry.example/controller:v1": "registry.example/controller@sha256:" + "a" * 64,
+            "registry.example/webhook:v1": "registry.example/webhook@sha256:" + "b" * 64,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / "release.yaml"
+            artifact.write_text(
+                "\n".join(f"image: {image}" for image in tagged) + "\n",
+                encoding="utf-8",
+            )
+            with mock.patch.object(self.ha.ref, "run") as run:
+                self.ha.apply_digest_locked_manifest("kubectl", str(artifact), tagged)
+        argv = run.call_args.args[0]
+        payload = run.call_args.kwargs["input_text"]
+        self.assertIn("--server-side", argv)
+        self.assertIn("--force-conflicts", argv)
+        self.assertIn("--field-manager=weltgewebe-ha-proof", argv)
+        for source, digest in tagged.items():
+            self.assertNotIn(source, payload)
+            self.assertEqual(payload.count(digest), 1)
+
+    def test_cert_manager_install_waits_and_verifies_digest_images(self) -> None:
+        expected = list(self.ha.CERT_MANAGER_IMAGES.values())
+        with mock.patch.object(
+            self.ha, "apply_digest_locked_manifest"
+        ) as apply_manifest, mock.patch.object(
+            self.ha.ref, "run"
+        ) as run, mock.patch.object(
+            self.ha.ref, "wait_rollout"
+        ) as wait_rollout, mock.patch.object(
+            self.ha, "wait_until"
+        ) as wait_until, mock.patch.object(
+            self.ha.ref, "output", side_effect=expected
+        ):
+            self.ha.install_cert_manager("kubectl", "cert-manager.yaml")
+        apply_manifest.assert_called_once_with(
+            "kubectl", "cert-manager.yaml", self.ha.CERT_MANAGER_IMAGES
+        )
+        self.assertIn("crd/certificates.cert-manager.io", run.call_args.args[0])
+        self.assertEqual(wait_rollout.call_count, 3)
+        wait_until.assert_called_once()
+
+    def test_barman_plugin_install_waits_and_verifies_digest_image(self) -> None:
+        with mock.patch.object(
+            self.ha, "apply_digest_locked_manifest"
+        ) as apply_manifest, mock.patch.object(
+            self.ha.ref, "run"
+        ) as run, mock.patch.object(
+            self.ha.ref, "wait_condition"
+        ) as wait_condition, mock.patch.object(
+            self.ha.ref, "wait_rollout"
+        ) as wait_rollout, mock.patch.object(
+            self.ha.ref, "output", return_value=self.ha.BARMAN_CLOUD_PLUGIN_IMAGE
+        ):
+            self.ha.install_barman_cloud_plugin("kubectl", "barman.yaml")
+        apply_manifest.assert_called_once_with(
+            "kubectl",
+            "barman.yaml",
+            {
+                "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0":
+                    self.ha.BARMAN_CLOUD_PLUGIN_IMAGE
+            },
+        )
+        self.assertIn("crd/objectstores.barmancloud.cnpg.io", run.call_args.args[0])
+        self.assertEqual(wait_condition.call_count, 2)
+        wait_rollout.assert_called_once_with(
+            "kubectl", "cnpg-system", "deployment/barman-cloud", "8m"
+        )
 
     def test_cnpg_release_uses_server_side_apply(self) -> None:
         artifact = ROOT / ".cache/test-cnpg-release.yaml"
@@ -162,6 +336,9 @@ class KubernetesHaContractTests(unittest.TestCase):
                     "cnpg-pods-logs.txt",
                     "cnpg-pods-previous-logs.txt",
                     "cnpg-operator-logs.txt",
+                    "barman-plugin-logs.txt",
+                    "barman-objectstores.yaml",
+                    "certificates.yaml",
                     "storage.txt",
                 },
             )
@@ -181,6 +358,35 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertLess(node_ready, cilium_ready)
         self.assertLess(cilium_ready, postgres_ready)
         self.assertIn('["docker", "stop", "--timeout", "10", stopped_node]', source)
+
+    def test_wal_archive_contract_requires_the_forced_segment_or_later(self) -> None:
+        required = "000000020000000A000000FE"
+        self.assertEqual(self.ha.wal_segment_position(required), (2, 10, 254))
+        self.assertTrue(self.ha.wal_archived_at_or_after(required, required))
+        self.assertTrue(self.ha.wal_archived_at_or_after("000000020000000A000000FF", required))
+        self.assertTrue(self.ha.wal_archived_at_or_after("000000030000000000000001", required))
+        self.assertFalse(self.ha.wal_archived_at_or_after("000000020000000A000000FD", required))
+        with self.assertRaisesRegex(self.ha.ref.ProofError, "invalid PostgreSQL WAL"):
+            self.ha.wal_segment_position("not-a-wal")
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        self.assertIn("SELECT pg_walfile_name(pg_switch_wal())", source)
+        self.assertIn('"required_archived_wal": required_wal', source)
+        self.assertIn('"observed_archived_wal": archived_wal', source)
+        self.assertIn("FROM pg_stat_archiver", source)
+        self.assertNotIn("status.lastArchivedWAL", source)
+
+    def test_ha_diagnostics_are_bounded_and_do_not_raise_on_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            self.ha, "CACHE", Path(directory)
+        ), mock.patch.object(
+            self.ha.subprocess, "run", side_effect=self.ha.subprocess.TimeoutExpired(["kubectl"], 30)
+        ) as run:
+            self.ha.ha_diagnostic_snapshot("kubectl", "timeout")
+            target = Path(directory) / "failures" / "timeout"
+            for evidence in target.iterdir():
+                self.assertIn("diagnostic command failed", evidence.read_text())
+        self.assertTrue(run.call_args_list)
+        self.assertTrue(all(call.kwargs["timeout"] == 30 for call in run.call_args_list))
 
     def test_sensitive_environment_values_never_enter_argv(self) -> None:
         completed = mock.Mock(returncode=0)

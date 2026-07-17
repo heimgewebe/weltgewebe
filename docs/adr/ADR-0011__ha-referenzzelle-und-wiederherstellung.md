@@ -7,9 +7,9 @@ summary: >
   Definiert den nichtproduktiven Referenzvertrag für drei Fehlerdomänen, PostgreSQL- und JetStream-Quorum, kontrollierten Zonenausfall und Point-in-Time-Restore in einen leeren Cluster.
 relations:
   - type: relates_to
-    target: adr/ADR-0010__kubernetes-kanonische-plattform.md
+    target: docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
   - type: relates_to
-    target: runbooks/kubernetes-ha-recovery-proof.md
+    target: docs/runbooks/kubernetes-ha-recovery-proof.md
 ---
 
 # ADR-0011 — Hochverfügbare Referenzzelle und Wiederherstellungsbeweis
@@ -27,13 +27,15 @@ Die T004-Referenzzelle verwendet drei explizite Zonen und folgende Verträge:
 
 - drei API-Replikate mit verpflichtender Zonenverteilung,
 - CloudNativePG mit drei PostgreSQL-Instanzen und verpflichtender Zonen-Anti-Affinität,
+- cert-manager und das Barman-Cloud-Plugin als getrennte, digestgebundene Sicherungskomponenten,
+- einen pluginbasierten `ObjectStore` für WAL-Archivierung, Basisbackup und PITR statt der auslaufenden nativen Barman-Integration,
 - NATS JetStream mit drei RAFT-Mitgliedern und `minAvailable: 2`,
 - einen ausschließlich für den Beweis verwendeten externen S3-kompatiblen SeaweedFS-Dienst,
 - dynamisch erzeugte kurzlebige Secrets statt eingecheckter Zugangsdaten,
 - einen kontrollierten Ausfall des Worker-Knotens, der den PostgreSQL-Primary trägt,
 - einen neuen zweiten kind-Cluster für den Point-in-Time-Restore.
 
-Alle Drittimages und das CloudNativePG-Releaseartefakt sind per SHA-256 beziehungsweise OCI-Digest gebunden.
+Alle Drittimages sowie die Releaseartefakte von CloudNativePG, cert-manager und Barman Cloud sind per SHA-256 beziehungsweise OCI-Digest gebunden. Die PostgreSQL-Operanden bleiben minimale Standardimages; Sicherungswerkzeuge werden nicht in das Datenbankimage eingebaut.
 
 ## Messvertrag
 

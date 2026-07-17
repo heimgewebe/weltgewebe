@@ -121,6 +121,10 @@ def _assert_images() -> None:
     expected_images = {
         "cloudnative_pg_operator",
         "cloudnative_pg_postgresql",
+        "cert_manager_controller",
+        "cert_manager_cainjector",
+        "cert_manager_webhook",
+        "barman_cloud_plugin",
         "nats",
         "nats_box",
         "seaweedfs",
@@ -251,15 +255,34 @@ def _assert_ha_contract() -> None:
     if catalog_ref != expected_catalog_ref or "imageName" in spec:
         raise ContractError("HA PostgreSQL must resolve its major version through the pinned ImageCatalog")
     catalog = next(_documents(PLATFORM / "infrastructure/ha-data/postgres-image-catalog.yaml"))
+    if catalog.get("metadata", {}).get("namespace") != "weltgewebe-data":
+        raise ContractError("HA PostgreSQL ImageCatalog must be directly applicable in weltgewebe-data")
     images = catalog.get("spec", {}).get("images", [])
     if images != [{"major": 16, "image": lock["images"]["cloudnative_pg_postgresql"]}]:
         raise ContractError("HA PostgreSQL ImageCatalog differs from the digest lock")
     affinity = spec.get("affinity", {})
     if affinity.get("podAntiAffinityType") != "required" or affinity.get("topologyKey") != "topology.kubernetes.io/zone":
         raise ContractError("HA PostgreSQL does not require zone anti-affinity")
-    backup = spec.get("backup", {}).get("barmanObjectStore", {})
-    if not str(backup.get("destinationPath", "")).startswith("s3://"):
-        raise ContractError("HA PostgreSQL lacks object-store backup")
+    expected_plugin = {
+        "name": "barman-cloud.cloudnative-pg.io",
+        "isWALArchiver": True,
+        "parameters": {"barmanObjectName": "weltgewebe-ha-backup"},
+    }
+    if spec.get("plugins") != [expected_plugin] or "backup" in spec:
+        raise ContractError("HA PostgreSQL must use only the Barman Cloud plugin for WAL archiving")
+    backup_store = next(
+        _documents(PLATFORM / "infrastructure/ha-data/barman-object-store.yaml")
+    )
+    if backup_store.get("kind") != "ObjectStore" or backup_store.get("apiVersion") != "barmancloud.cnpg.io/v1":
+        raise ContractError("HA PostgreSQL backup must use a Barman Cloud ObjectStore")
+    if backup_store.get("metadata", {}).get("namespace") != "weltgewebe-data":
+        raise ContractError("HA Barman Cloud ObjectStore must be directly applicable in weltgewebe-data")
+    backup_spec = backup_store.get("spec", {})
+    configuration = backup_spec.get("configuration", {})
+    if not str(configuration.get("destinationPath", "")).startswith("s3://"):
+        raise ContractError("HA Barman Cloud ObjectStore lacks an S3 destination")
+    if backup_spec.get("retentionPolicy") != "7d":
+        raise ContractError("HA Barman Cloud ObjectStore must retain a seven-day recovery window")
 
     nats_docs = list(_documents(PLATFORM / "infrastructure/ha-data/nats.yaml"))
     stateful = next((item for item in nats_docs if item.get("kind") == "StatefulSet"), None)
@@ -304,6 +327,8 @@ def _assert_ha_contract() -> None:
         "docker", "stop", "postgres_rto_seconds", "nats_rto_seconds",
         "recoveryTarget", "blank_kind_cluster", "production_changed",
         "restore-kind.yaml", "PITR data comparison failed",
+        "install_cert_manager", "install_barman_cloud_plugin",
+        "pg_stat_archiver", "pluginConfiguration",
     )
     for marker in required_markers:
         if marker not in proof:

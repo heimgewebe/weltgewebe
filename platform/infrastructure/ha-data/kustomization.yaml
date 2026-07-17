@@ -5,6 +5,7 @@ namespace: weltgewebe-data
 resources:
   - namespace.yaml
   - object-store.yaml
+  - barman-object-store.yaml
   - postgres-image-catalog.yaml
   - postgres.yaml
   - nats.yaml

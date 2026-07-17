@@ -1,0 +1,27 @@
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  namespace: weltgewebe-data
+  name: weltgewebe-ha-backup
+  labels:
+    app.kubernetes.io/name: postgres-ha
+    app.kubernetes.io/component: backup
+spec:
+  configuration:
+    destinationPath: s3://weltgewebe-postgres/
+    endpointURL: http://seaweedfs-s3.weltgewebe-data.svc.cluster.local:8333
+    s3Credentials:
+      accessKeyId:
+        name: weltgewebe-ha-s3
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: weltgewebe-ha-s3
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
+      maxParallel: 2
+    data:
+      compression: gzip
+      jobs: 2
+  retentionPolicy: 7d
