@@ -16,7 +16,7 @@ use axum::{
     http::StatusCode,
     Extension, Json,
 };
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -685,8 +685,8 @@ fn build_edge_record(
         target_type: Some(validated.target_type),
         edge_kind: validated.edge_kind,
         note: validated.note,
-        created_at: Some(created_at.to_rfc3339()),
-        expires_at: Some(expires_at.to_rfc3339()),
+        created_at: Some(created_at.to_rfc3339_opts(SecondsFormat::Micros, true)),
+        expires_at: Some(expires_at.to_rfc3339_opts(SecondsFormat::Micros, true)),
     };
 
     let mut record = serde_json::Map::new();
@@ -1718,7 +1718,7 @@ mod tests {
         DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
     };
     use crate::test_helpers::EnvGuard;
-    use chrono::{Duration, TimeZone, Utc};
+    use chrono::{DateTime, Duration, TimeZone, Utc};
     use serial_test::serial;
 
     fn lifecycle_edge(created_at: Option<&str>, expires_at: Option<&str>) -> Edge {
@@ -1737,7 +1737,9 @@ mod tests {
 
     #[test]
     fn new_faden_expires_exactly_after_168_hours_and_persists_both_timestamps() {
-        let created_at = Utc.with_ymd_and_hms(2026, 7, 17, 10, 0, 0).unwrap();
+        let created_at = DateTime::parse_from_rfc3339("2026-07-17T10:00:00.123456789Z")
+            .unwrap()
+            .with_timezone(&Utc);
         assert_eq!(
             faden_expires_at(created_at),
             created_at + Duration::hours(FADEN_LIFETIME_HOURS)
@@ -1760,11 +1762,11 @@ mod tests {
         );
         assert_eq!(
             edge.created_at.as_deref(),
-            Some("2026-07-17T10:00:00+00:00")
+            Some("2026-07-17T10:00:00.123456Z")
         );
         assert_eq!(
             edge.expires_at.as_deref(),
-            Some("2026-07-24T10:00:00+00:00")
+            Some("2026-07-24T10:00:00.123456Z")
         );
         assert_eq!(
             record.get("created_at"),

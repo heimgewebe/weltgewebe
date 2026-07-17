@@ -52,6 +52,7 @@ test.describe("Edge visibility on load", () => {
       let haloColor = null;
       let haloWidth = null;
       let haloOpacity = null;
+      let mainOpacity = null;
       let isUnderMain = false;
 
       let haloDasharray = null;
@@ -61,6 +62,7 @@ test.describe("Edge visibility on load", () => {
         haloColor = m.getPaintProperty("edges-halo-layer", "line-color");
         haloWidth = m.getPaintProperty("edges-halo-layer", "line-width");
         haloOpacity = m.getPaintProperty("edges-halo-layer", "line-opacity");
+        mainOpacity = m.getPaintProperty("edges-layer", "line-opacity");
         haloDasharray = m.getPaintProperty(
           "edges-halo-layer",
           "line-dasharray",
@@ -96,6 +98,7 @@ test.describe("Edge visibility on load", () => {
         haloColor,
         haloWidth,
         haloOpacity,
+        mainOpacity,
         haloDasharray,
         mainDasharray,
         isUnderMain,
@@ -108,7 +111,12 @@ test.describe("Edge visibility on load", () => {
     expect(edgeState.haloLayer).toBe(true);
     expect(edgeState.haloColor).toBe("#ffffff");
     expect(edgeState.haloWidth).toBe(4);
-    expect(edgeState.haloOpacity).toBe(0.8);
+    expect(edgeState.mainOpacity).toEqual([
+      "coalesce",
+      ["to-number", ["get", "opacity"]],
+      0,
+    ]);
+    expect(edgeState.haloOpacity).toEqual(["*", edgeState.mainOpacity, 0.8]);
     // Structural invariant: Halo and main line must share the exact same dasharray
     // to prevent the solid background from visually filling the dashed gaps.
     expect(edgeState.mainDasharray).toBeDefined();

@@ -5,7 +5,7 @@ doc_type: report
 status: active
 lifecycle_state: active
 lifecycle: proof
-owner_task: WELTGEWEBE-FADEN-VERFALL-V1-T001
+owner_task: OPT-ARC-001
 created: 2026-07-17
 review_after: 2026-10-17
 canonicality: evidence
