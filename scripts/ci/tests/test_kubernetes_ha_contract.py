@@ -52,6 +52,20 @@ class KubernetesHaContractTests(unittest.TestCase):
         for name, image in lock["images"].items():
             self.assertRegex(image, r"@sha256:[0-9a-f]{64}$", name)
 
+    def test_ha_migration_reads_runtime_database_url_from_secret(self) -> None:
+        job = next(
+            self.validator._documents(
+                ROOT / "platform/apps/weltgewebe/migration/ha/job.yaml"
+            )
+        )
+        container = job["spec"]["template"]["spec"]["containers"][0]
+        database = next(item for item in container["env"] if item["name"] == "DATABASE_URL")
+        self.assertEqual(
+            database["valueFrom"].get("secretKeyRef"),
+            {"name": "weltgewebe-ha-runtime", "key": "database-url"},
+        )
+        self.assertNotIn("configMapKeyRef", database["valueFrom"])
+
     def test_restore_document_uses_pitr_and_three_instances(self) -> None:
         target = "2026-07-17T15:00:00.000000Z"
         document = self.ha.restore_cluster_document(target)
