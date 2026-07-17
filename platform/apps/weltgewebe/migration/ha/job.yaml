@@ -31,7 +31,7 @@ spec:
           env:
             - name: DATABASE_URL
               valueFrom:
-                configMapKeyRef:
+                secretKeyRef:
                   name: weltgewebe-ha-runtime
                   key: database-url
             - name: APP_BASE_URL

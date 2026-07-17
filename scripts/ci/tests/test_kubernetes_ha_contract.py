@@ -37,6 +37,23 @@ class KubernetesHaContractTests(unittest.TestCase):
     def test_static_ha_contract_passes(self) -> None:
         self.validator._assert_ha_contract()
 
+    def test_ha_migration_reads_database_url_from_secret(self) -> None:
+        document = next(
+            self.validator._documents(
+                ROOT / "platform/apps/weltgewebe/migration/ha/job.yaml"
+            )
+        )
+        environment = document["spec"]["template"]["spec"]["containers"][0]["env"]
+        database_url = next(
+            item for item in environment if item["name"] == "DATABASE_URL"
+        )
+        value_from = database_url["valueFrom"]
+        self.assertEqual(
+            value_from["secretKeyRef"],
+            {"name": "weltgewebe-ha-runtime", "key": "database-url"},
+        )
+        self.assertNotIn("configMapKeyRef", value_from)
+
     def test_all_ha_images_are_digest_bound(self) -> None:
         lock = json.loads((ROOT / "platform/toolchain.lock.json").read_text())
         self.assertEqual(
