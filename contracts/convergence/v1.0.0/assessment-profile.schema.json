@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weltgewebe.org/schemas/convergence/v1.0.0/assessment-profile.schema.json",
+  "title": "Weltgewebe Convergence Adapter Input Profile v1.0.0",
+  "description": "Read-only, reference-only input profile for emitting a public konvergenzregelkreis Assessment Request v1 at the pinned protocol head. This schema does not redefine the public request protocol.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "protocol_head",
+    "adapter",
+    "evidence_mode",
+    "intent",
+    "request"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "profile_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"
+    },
+    "protocol_head": {
+      "const": "83ed435bf9eb490e81a6ff2103b6c1397440d40b"
+    },
+    "adapter": {
+      "const": "weltgewebe-os-convergence-adapter"
+    },
+    "evidence_mode": {
+      "type": "string",
+      "enum": [
+        "synthetic_fixture",
+        "live"
+      ],
+      "description": "Synthetic fixtures require fixture:-prefixed evidence references; live profiles reject them."
+    },
+    "intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objective",
+        "desired_state",
+        "observed_state",
+        "deviation",
+        "decision",
+        "rollback"
+      ],
+      "properties": {
+        "objective": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 500
+        },
+        "desired_state": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 500
+        },
+        "observed_state": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 500
+        },
+        "deviation": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 500
+        },
+        "decision": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 500
+        },
+        "rollback": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 500
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "description": "A public Assessment Request v1 object. The adapter applies a defensive mirror of the pinned protocol; CI compares that mirror with the exact public protocol checkout and runs its evaluator."
+    }
+  }
+}

@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 610 |
+| Relationen gesamt | 613 |
 | — depends_on | 24 |
-| — relates_to | 574 |
+| — relates_to | 577 |
 | — supersedes | 11 |
 | — verifies | 1 |
 | relates_to Anteil | 94% |
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (237 Dokumente):
+**Cluster 1** (238 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -74,6 +74,7 @@ _Keine Lücken erkannt._
 - `docs/adr/ADR-0010__kubernetes-kanonische-plattform.md`
 - `docs/adr/ADR-0011__foederierte-gewebezellen.md`
 - `docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md`
+- `docs/architecture/weltgewebe-os-convergence-adapter.md`
 - `docs/architekturstruktur.md`
 - `docs/blueprints/agent-operability-blaupause.md`
 - `docs/blueprints/auth-persistence-runtime-proof.md`

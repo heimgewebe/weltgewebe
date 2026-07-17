@@ -149,6 +149,49 @@ jobs:
       - name: Validate Garnrolle ontology contract
         run: python3 -m unittest scripts.ci.tests.test_garnrolle_ontology_contract -v
 
+      - name: Check out pinned convergence protocol
+        env:
+          PROTOCOL_ROOT: ${{ runner.temp }}/konvergenzregelkreis
+        run: |
+          set -euo pipefail
+          protocol_head_file=contracts/convergence/v1.0.0/PINNED_PROTOCOL_HEAD
+          mapfile -t protocol_head_lines < "${protocol_head_file}"
+          if (( ${#protocol_head_lines[@]} != 1 )); then
+            echo "PINNED_PROTOCOL_HEAD must contain exactly one line" >&2
+            exit 1
+          fi
+          PROTOCOL_HEAD=${protocol_head_lines[0]}
+          if [[ ! "${PROTOCOL_HEAD}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "PINNED_PROTOCOL_HEAD must be 40 lowercase hexadecimal characters" >&2
+            exit 1
+          fi
+          test ! -e "${PROTOCOL_ROOT}"
+          git init "${PROTOCOL_ROOT}"
+          git -C "${PROTOCOL_ROOT}" remote add origin \
+            https://github.com/heimgewebe/konvergenzregelkreis.git
+          git -C "${PROTOCOL_ROOT}" fetch --depth=1 origin "${PROTOCOL_HEAD}"
+          fetched_head=$(git -C "${PROTOCOL_ROOT}" rev-parse FETCH_HEAD)
+          test "${fetched_head}" = "${PROTOCOL_HEAD}"
+          git -C "${PROTOCOL_ROOT}" checkout --detach FETCH_HEAD
+
+          # The exact object id and fsck bind CI to one Git commit object.
+          # They do not prove a signer identity, so verify-commit is intentionally
+          # not required until a trusted signing identity is defined.
+          if [ "$(git -C "${PROTOCOL_ROOT}" cat-file -t "${PROTOCOL_HEAD}")" != "commit" ]; then
+            echo "Error: PINNED_PROTOCOL_HEAD is not a commit" >&2
+            exit 1
+          fi
+          git -C "${PROTOCOL_ROOT}" fsck --strict --no-dangling
+
+          test "$(git -C "${PROTOCOL_ROOT}" rev-parse HEAD)" = "${PROTOCOL_HEAD}"
+          python3 -m pip install --disable-pip-version-check --no-input \
+            'jsonschema==4.26.0'
+
+      - name: Validate convergence adapter contract
+        env:
+          KONVERGENZREGELKREIS_ROOT: ${{ runner.temp }}/konvergenzregelkreis
+        run: python3 -m unittest scripts.ci.tests.test_convergence_adapter_contract -v
+
       - name: Validate merge governance contracts
         run: python3 -m unittest scripts.quality.tests.test_review_governance -v
 
