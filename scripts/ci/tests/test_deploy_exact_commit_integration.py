@@ -85,6 +85,27 @@ class GitFixtureIsolationTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0)
 
+    def test_privileged_skips_without_passwordless_sudo(self) -> None:
+        denied = subprocess.CompletedProcess(
+            args=["/usr/bin/sudo", "-n", "true"],
+            returncode=1,
+            stdout="",
+            stderr="sudo: a password is required",
+        )
+        with (
+            mock.patch.object(os, "geteuid", return_value=1000),
+            mock.patch.object(shutil, "which", return_value="/usr/bin/sudo"),
+            mock.patch.object(subprocess, "run", return_value=denied) as run_mock,
+        ):
+            with self.assertRaisesRegex(unittest.SkipTest, "passwordless sudo"):
+                DeployExactCommitIntegrationTests.privileged(["chown", "target"])
+        run_mock.assert_called_once_with(
+            ["/usr/bin/sudo", "-n", "true"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
 
 class DeployExactCommitIntegrationTests(unittest.TestCase):
     maxDiff = None
@@ -188,17 +209,18 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
     def restore_test_ownership(self) -> None:
         if not self.root.exists():
             return
-        run(
-            self.privileged(
+        try:
+            command = self.privileged(
                 [
                     "chown",
                     "-R",
                     f"{os.getuid()}:{os.getgid()}",
                     str(self.root),
                 ]
-            ),
-            check=False,
-        )
+            )
+        except unittest.SkipTest:
+            return
+        run(command, check=False)
 
     @staticmethod
     def privileged(argv: list[str]) -> list[str]:
@@ -208,6 +230,16 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         if sudo is None:
             raise unittest.SkipTest(
                 "sudo is required for the root-bound deployment integration test"
+            )
+        probe = subprocess.run(
+            [sudo, "-n", "true"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if probe.returncode != 0:
+            raise unittest.SkipTest(
+                "passwordless sudo is unavailable for the root-bound deployment integration test"
             )
         return [sudo, "-n", *argv]
 

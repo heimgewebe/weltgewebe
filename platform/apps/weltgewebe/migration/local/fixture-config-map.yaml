@@ -1,0 +1,11 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: weltgewebe-local-fixture
+  namespace: weltgewebe
+  labels:
+    app.kubernetes.io/name: weltgewebe-local-fixture
+    app.kubernetes.io/component: local-test-fixture
+data:
+  database-url: postgres://welt:local-test-only-weltgewebe@postgres.weltgewebe-data.svc.cluster.local:5432/weltgewebe
