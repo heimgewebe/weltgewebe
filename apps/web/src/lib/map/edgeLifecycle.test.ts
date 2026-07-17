@@ -26,7 +26,7 @@ describe("edge lifecycle", () => {
       createdAtMs: createdAt,
       expiresAtMs: createdAt + FADEN_LIFETIME_MS,
     });
-    expect(FADEN_PROJECTION_REFRESH_MS).toBe(24 * 60 * 60 * 1000);
+    expect(FADEN_PROJECTION_REFRESH_MS).toBe(60_000);
     expect(edgeOpacityAt(edge, createdAt)).toBe(1);
     expect(edgeOpacityAt(edge, createdAt + FADEN_LIFETIME_MS / 2)).toBe(0.5);
     expect(

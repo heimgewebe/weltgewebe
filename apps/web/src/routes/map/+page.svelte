@@ -573,8 +573,8 @@
     // build a map, bind listeners and register protocols that nobody ever
     // removes. Every await in the initialiser therefore re-checks this flag.
     let destroyed = false;
-    // Rebuilding the complete edge GeoJSON once per day is sufficient for the
-    // requested 24-hour fade cadence. Exact expiry remains a separate timeout.
+    // One minute changes a seven-day linear opacity by less than 0.0001.
+    // Exact expiry remains a separate timeout and is therefore not rounded.
     const edgeDecayInterval = window.setInterval(() => {
       edgeProjectionNow = Date.now();
     }, FADEN_PROJECTION_REFRESH_MS);
