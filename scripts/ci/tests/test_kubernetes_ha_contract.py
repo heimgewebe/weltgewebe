@@ -86,6 +86,28 @@ class KubernetesHaContractTests(unittest.TestCase):
             with self.assertRaisesRegex(self.ha.ref.ProofError, "foreign"):
                 self.ha.delete_external_object_store("proof", "expected-commit")
 
+    def test_cnpg_release_uses_server_side_apply(self) -> None:
+        artifact = ROOT / ".cache/test-cnpg-release.yaml"
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
+        artifact.write_text(f"image: {tagged}\ndefault: {tagged}\n")
+        try:
+            with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
+                self.ha.ref, "wait_rollout"
+            ), mock.patch.object(
+                self.ha.ref, "output", return_value=self.ha.CNPG_OPERATOR_IMAGE
+            ):
+                self.ha.install_cnpg("kubectl", str(artifact))
+            apply_argv = run.call_args_list[0].args[0]
+            self.assertIn("--server-side", apply_argv)
+            self.assertIn("--force-conflicts", apply_argv)
+            self.assertIn("--field-manager=weltgewebe-ha-proof", apply_argv)
+            payload = run.call_args_list[0].kwargs["input_text"]
+            self.assertNotIn(tagged, payload)
+            self.assertEqual(payload.count(self.ha.CNPG_OPERATOR_IMAGE), 2)
+        finally:
+            artifact.unlink(missing_ok=True)
+
     def test_sensitive_environment_values_never_enter_argv(self) -> None:
         completed = mock.Mock(returncode=0)
         with mock.patch.object(self.ha.subprocess, "run", return_value=completed) as run:
