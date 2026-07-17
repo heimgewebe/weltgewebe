@@ -178,7 +178,18 @@ def install_cnpg(kubectl: str, artifact: str) -> None:
     tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
     if source.count(tagged) != 2:
         raise ref.ProofError("CloudNativePG release image reference changed unexpectedly")
-    ref.run([kubectl, "apply", "-f", "-"], input_text=source.replace(tagged, CNPG_OPERATOR_IMAGE))
+    ref.run(
+        [
+            kubectl,
+            "apply",
+            "--server-side",
+            "--force-conflicts",
+            "--field-manager=weltgewebe-ha-proof",
+            "-f",
+            "-",
+        ],
+        input_text=source.replace(tagged, CNPG_OPERATOR_IMAGE),
+    )
     ref.run([kubectl, "wait", "--for=condition=Established", "crd/clusters.postgresql.cnpg.io", "--timeout=3m"])
     ref.wait_rollout(kubectl, "cnpg-system", "deployment/cnpg-controller-manager", "8m")
     observed = ref.output([kubectl, "-n", "cnpg-system", "get", "deployment/cnpg-controller-manager", "-o", "jsonpath={.spec.template.spec.containers[0].image}"])
