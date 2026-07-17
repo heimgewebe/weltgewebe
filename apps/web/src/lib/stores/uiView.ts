@@ -66,7 +66,7 @@ export const contextPanelOpen = derived(
 export type KompositionDraft = {
   mode: "new-knoten" | "place-garnrolle";
   lngLat?: [number, number];
-  source: "map-longpress" | "action-bar";
+  source: "map-longpress" | "tool-fan";
 } | null;
 
 export const kompositionDraft = writable<KompositionDraft>(null);

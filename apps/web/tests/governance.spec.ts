@@ -151,22 +151,21 @@ async function installGovernanceRoutes(
   };
 }
 
-test("Anträge button is centered in the map header", async ({ page }) => {
+test("Anträge is reachable as a secondary link inside the tool fan", async ({
+  page,
+}) => {
   await mockApiResponses(page, {
     auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
   });
   await page.goto("/map");
 
-  const button = page.getByTestId("proposals-button");
-  await expect(button).toBeVisible();
-  await expect(button).toHaveAttribute("href", "/antraege");
-  const box = await button.boundingBox();
-  const viewport = page.viewportSize();
-  expect(box).not.toBeNull();
-  expect(viewport).not.toBeNull();
-  expect(Math.abs(box!.x + box!.width / 2 - viewport!.width / 2)).toBeLessThan(
-    3,
-  );
+  const link = page.getByTestId("tool-fan-proposals");
+  // Secondary access: not reachable while the fan is closed.
+  await expect(link).toHaveAttribute("tabindex", "-1");
+
+  await page.getByTestId("tool-fan-trigger").click();
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute("href", "/antraege");
 });
 
 test("guest can read everything and submit only the own Weber application", async ({

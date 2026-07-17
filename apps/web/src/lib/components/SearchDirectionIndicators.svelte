@@ -40,7 +40,7 @@
   .search-directions {
     position: absolute;
     inset: 0;
-    z-index: 38;
+    z-index: var(--z-map-direction);
     pointer-events: none;
   }
 

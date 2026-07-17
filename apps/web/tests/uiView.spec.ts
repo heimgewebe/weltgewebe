@@ -27,13 +27,13 @@ test.describe("uiView store state transitions", () => {
   });
 
   test("enterKomposition sets selection === null and kompositionDraft !== null", () => {
-    enterKomposition({ mode: "new-knoten", source: "action-bar" });
+    enterKomposition({ mode: "new-knoten", source: "tool-fan" });
     expect(get(systemState)).toBe("komposition");
     expect(get(selection)).toBeNull();
     expect(get(kompositionDraft)).not.toBeNull();
     expect(get(kompositionDraft)).toEqual({
       mode: "new-knoten",
-      source: "action-bar",
+      source: "tool-fan",
     });
     expect(get(contextPanelOpen)).toBe(true);
   });
@@ -53,7 +53,7 @@ test.describe("uiView store state transitions", () => {
       assertUiStateInvariant(
         "navigation",
         { type: "node", id: "1" },
-        { mode: "new-knoten", source: "action-bar" },
+        { mode: "new-knoten", source: "tool-fan" },
       ),
     ).toThrow(/cannot both be set at the same time/);
 
@@ -76,7 +76,7 @@ test.describe("uiView store state transitions", () => {
     expect(() =>
       assertUiStateInvariant("navigation", null, {
         mode: "new-knoten",
-        source: "action-bar",
+        source: "tool-fan",
       }),
     ).toThrow(
       /systemState is not 'komposition' but kompositionDraft is not null/,

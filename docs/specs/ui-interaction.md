@@ -1,7 +1,7 @@
 ---
 id: specs.ui-interaction
 title: UI-Interaktionsvertrag
-summary: Kanonischer Vertrag für Karte, Fokuspanel, Aktionsleiste, Kartenlinsen, Komposition und Zugänglichkeit.
+summary: Kanonischer Vertrag für Karte, Fokuspanel, Werkzeugfächer, Kartenlinsen, Komposition und Zugänglichkeit.
 doc_type: specification
 status: canonical
 canonicality: normative
@@ -21,11 +21,14 @@ relations:
     target: docs/blueprints/ui-blaupause.md
 verifies_with:
   - apps/web/src/lib/components/ContextPanel.svelte
-  - apps/web/src/lib/components/ActionBar.svelte
+  - apps/web/src/lib/components/ToolFan.svelte
   - apps/web/src/lib/components/SearchOverlay.svelte
   - apps/web/src/lib/components/FilterOverlay.svelte
   - apps/web/tests/map-interaction.spec.ts
   - apps/web/tests/ui-filter.spec.ts
+  - apps/web/tests/ui-search.spec.ts
+  - apps/web/tests/tool-fan-layout.spec.ts
+  - apps/web/tests/context-panel-sheet.spec.ts
 ---
 
 # UI-Interaktionsvertrag
@@ -36,11 +39,11 @@ Weltgewebe ist ein kartenbasiertes Koordinationsinterface. Die Karte ist der öf
 
 ## Drei Hauptflächen
 
-| Fläche        | Verantwortung                                       |
-| ------------- | --------------------------------------------------- |
-| Karte         | räumlicher Überblick, Auswahl und sichtbares Gewebe |
-| Fokuspanel    | Details, Gespräche, Entscheidungen und Handlungen   |
-| Aktionsleiste | Suche, Filter, Komposition und weitere Absichten    |
+| Fläche         | Verantwortung                                       |
+| -------------- | --------------------------------------------------- |
+| Karte          | räumlicher Überblick, Auswahl und sichtbares Gewebe |
+| Fokuspanel     | Details, Gespräche, Entscheidungen und Handlungen   |
+| Werkzeugfächer | Finden, Sicht, Weben und seltene Zugänge            |
 
 Es gibt keinen zweiten Detail-Drawer, kein dauerhaftes Seitenmenü für Objektinhalte und keine frei schwebenden Hauptformulare über der Karte.
 
@@ -69,10 +72,10 @@ Das Fokuspanel ist der einzige Detail-, Entscheidungs- und Handlungsraum.
 
 Responsive Darstellung:
 
-- mobil als Bottom Sheet;
+- mobil als Bottom Sheet mit den Raststufen Vorschau, Halb und Voll;
 - auf breiten Bildschirmen als rechtes Seitenpanel.
 
-Beide Darstellungen teilen denselben Zustand und dieselben Inhalte.
+Fokus startet mobil in der Vorschau und kann bewusst erweitert werden. Komposition öffnet ausreichend groß. Alle Stufen teilen denselben Fachzustand und dieselben Inhalte; sie sind keine zusätzlichen globalen Zustände.
 
 Typische Tabs:
 
@@ -82,27 +85,30 @@ Typische Tabs:
 
 Tabs sind lokal. Sie werden erst Teil der URL, wenn ein eigener verbindlicher Tab-Vertrag existiert.
 
-## Aktionsleiste
+## Werkzeugfächer
 
-Die Aktionsleiste formuliert Absichten und bleibt knapp. Kernhandlungen:
+Der Werkzeugfächer formuliert Absichten, ohne der Karte dauerhaft eine Leiste zu entziehen. Im Ruhezustand bleibt nur ein kompakter, beschrifteter Wurzelknopf sichtbar. Geöffnet besitzt er genau drei stabile Hauptäste:
 
-- Suche;
-- Filter;
-- einen Knoten knüpfen;
-- Zugang zur eigenen Garnrolle und zu Kontoeinstellungen.
+- **Finden** öffnet die Suchlinse;
+- **Sicht** öffnet die Auswahl der sichtbaren Kartenarten;
+- **Weben** beginnt eine Komposition, sofern die Rolle dazu berechtigt ist.
 
-Seltene oder noch nicht produktive Module gehören nicht als dauerhafte Hauptschaltflächen in die erste Ebene.
+Die Äste bleiben räumlich und in der Tastaturreihenfolge stabil. Rollenabhängige Berechtigungen dürfen die anderen Äste nicht verschieben. Seltene Zugänge wie Anträge dürfen nach dem bewussten Öffnen sekundär erscheinen, aber keine neue dauerhafte Kartenleiste bilden. Konto und eigene Garnrolle bleiben im Identitätszugang.
+
+Der Werkzeugfächer schließt durch erneutes Betätigen, Escape oder Auswahl außerhalb. Beim Schließen kehrt der Tastaturfokus sinnvoll zum Wurzelknopf zurück. Animationen verwenden nur Transformation und Deckkraft und entfallen bei reduzierter Bewegung.
 
 ## Kartenlinsen
 
-Suche und Filter sind lokale Kartenlinsen:
+Finden und Sicht sind lokale Kartenlinsen:
 
 - sie verändern die sichtbare Szene;
 - sie erzeugen keinen neuen globalen Zustand;
 - sie schließen sich gegenseitig;
+- sie erscheinen kompakt oberhalb der Karte und reservieren keine dauerhafte untere Fläche;
+- die Karte bleibt die primäre Trefferfläche; Finden zeigt höchstens sechs automatische Vorschläge, weitere Treffer öffnen nur auf bewusste Anforderung; Sicht zeigt keine automatische Trefferliste, nur Typauswahl, aktive Anzahl und Rücksetzen;
 - passende Knoten und Garnrollen werden auf der Karte hervorgehoben;
 - liegt ein Treffer außerhalb des nutzbaren Kartenausschnitts, zeigt ein Richtungsmarker am Bildschirmrand zu ihm;
-- Richtungsmarker bleiben außerhalb von Topbar, Aktionsleiste, Suchfläche und Fokuspanel und besitzen mindestens 44 × 44 Pixel;
+- Richtungsmarker bleiben außerhalb von Topbar, sichtbaren Kartenlinsen, Werkzeugfächer und Fokuspanel und besitzen mindestens 44 × 44 Pixel;
 - ein Treffer oder Richtungsmarker kann die Karte fokussieren und das Fokuspanel öffnen;
 - ein API-Fehler darf nicht wie eine normale leere Ergebnismenge aussehen.
 
@@ -167,7 +173,7 @@ Die Hauptführung verwendet Produktbegriffe. Technische Namen bleiben in Diagnos
 ## Nicht erlaubt
 
 - mehrere konkurrierende Detailflächen;
-- Suche oder Filter als globale Hauptzustände;
+- Finden oder Sicht als globale Hauptzustände;
 - stille API-Fallbacks, die Fehler als Leere darstellen;
 - technische Feldnamen in der Nutzerführung;
 - ein Kompositionsformular ohne eindeutigen Abbruch- und Erfolgsweg.
