@@ -52,6 +52,56 @@ class KubernetesHaContractTests(unittest.TestCase):
         for name, image in lock["images"].items():
             self.assertRegex(image, r"@sha256:[0-9a-f]{64}$", name)
 
+        self.assertEqual(
+            {
+                "cloudnative_pg_operator": self.ha.CNPG_OPERATOR_IMAGE,
+                "cloudnative_pg_postgresql": self.ha.POSTGRES_IMAGE,
+                "nats_box": self.ha.NATS_BOX_IMAGE,
+                "seaweedfs": self.ha.SEAWEEDFS_IMAGE,
+            },
+            {
+                name: lock["images"][name]
+                for name in (
+                    "cloudnative_pg_operator",
+                    "cloudnative_pg_postgresql",
+                    "nats_box",
+                    "seaweedfs",
+                )
+            },
+        )
+
+    def test_failed_kind_creation_cleans_only_the_owned_cluster(self) -> None:
+        with (
+            mock.patch.object(self.ha.ref, "assert_available_cluster_name"),
+            mock.patch.object(self.ha.ref, "write_marker") as marker,
+            mock.patch.object(
+                self.ha.ref, "run", side_effect=RuntimeError("create failed")
+            ),
+            mock.patch.object(self.ha.ref, "delete_owned_cluster") as cleanup,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "create failed"):
+                self.ha.create_kind_cluster(
+                    "kind", "proof", "image", "config", "commit"
+                )
+        marker.assert_called_once_with("proof", "commit")
+        cleanup.assert_called_once_with("kind", "proof")
+
+    def test_failed_object_store_setup_cleans_only_owned_resources(self) -> None:
+        absent = mock.Mock(returncode=1)
+        with (
+            mock.patch.object(self.ha.subprocess, "run", return_value=absent),
+            mock.patch.object(self.ha.ref, "run"),
+            mock.patch.object(
+                self.ha,
+                "run_with_environment",
+                side_effect=RuntimeError("start failed"),
+            ),
+            mock.patch.object(self.ha, "delete_external_object_store") as cleanup,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "start failed"):
+                self.ha.start_external_object_store("proof", "commit", "secret")
+        cleanup.assert_called_once_with("proof", "commit")
+
     def test_restore_document_uses_pitr_and_three_instances(self) -> None:
         target = "2026-07-17T15:00:00.000000Z"
         document = self.ha.restore_cluster_document(target)
@@ -80,8 +130,9 @@ class KubernetesHaContractTests(unittest.TestCase):
 
     def test_external_object_store_cleanup_is_ownership_bound(self) -> None:
         inspect = mock.Mock(return_value=mock.Mock(returncode=0))
-        with mock.patch.object(self.ha.subprocess, "run", inspect), mock.patch.object(
-            self.ha.ref, "output", return_value="foreign-commit"
+        with (
+            mock.patch.object(self.ha.subprocess, "run", inspect),
+            mock.patch.object(self.ha.ref, "output", return_value="foreign-commit"),
         ):
             with self.assertRaisesRegex(self.ha.ref.ProofError, "foreign"):
                 self.ha.delete_external_object_store("proof", "expected-commit")
@@ -92,12 +143,13 @@ class KubernetesHaContractTests(unittest.TestCase):
         tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
         artifact.write_text(f"image: {tagged}\ndefault: {tagged}\n")
         try:
-            with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
-                self.ha.ref, "wait_rollout"
-            ), mock.patch.object(
-                self.ha, "wait_until"
-            ), mock.patch.object(
-                self.ha.ref, "output", return_value=self.ha.CNPG_OPERATOR_IMAGE
+            with (
+                mock.patch.object(self.ha.ref, "run") as run,
+                mock.patch.object(self.ha.ref, "wait_rollout"),
+                mock.patch.object(self.ha, "wait_until"),
+                mock.patch.object(
+                    self.ha.ref, "output", return_value=self.ha.CNPG_OPERATOR_IMAGE
+                ),
             ):
                 self.ha.install_cnpg("kubectl", str(artifact))
             apply_argv = run.call_args_list[0].args[0]
@@ -112,8 +164,12 @@ class KubernetesHaContractTests(unittest.TestCase):
 
     def test_cnpg_webhook_probe_requires_endpoint_and_server_dry_run(self) -> None:
         endpoint = mock.Mock(returncode=0, stdout="10.0.0.12")
-        dry_run = mock.Mock(returncode=0, stdout="cluster.postgresql.cnpg.io/probe serverside-applied")
-        with mock.patch.object(self.ha.subprocess, "run", side_effect=[endpoint, dry_run]) as run:
+        dry_run = mock.Mock(
+            returncode=0, stdout="cluster.postgresql.cnpg.io/probe serverside-applied"
+        )
+        with mock.patch.object(
+            self.ha.subprocess, "run", side_effect=[endpoint, dry_run]
+        ) as run:
             self.assertTrue(self.ha.cnpg_webhook_ready("kubectl"))
         endpoint_argv = run.call_args_list[0].args[0]
         dry_run_argv = run.call_args_list[1].args[0]
@@ -132,7 +188,9 @@ class KubernetesHaContractTests(unittest.TestCase):
 
     def test_sensitive_environment_values_never_enter_argv(self) -> None:
         completed = mock.Mock(returncode=0)
-        with mock.patch.object(self.ha.subprocess, "run", return_value=completed) as run:
+        with mock.patch.object(
+            self.ha.subprocess, "run", return_value=completed
+        ) as run:
             self.ha.run_with_environment(
                 ["docker", "run", "--env", "PROOF_SECRET"],
                 {"PROOF_SECRET": "ephemeral-sensitive-value"},
@@ -150,7 +208,9 @@ class KubernetesHaContractTests(unittest.TestCase):
         image = self.ha.POSTGRES_IMAGE
         self.assertIn(":16.14@sha256:", image)
         self.assertNotIn("postgresql@sha256:", image)
-        catalog = (ROOT / "platform/infrastructure/ha-data/postgres-image-catalog.yaml").read_text()
+        catalog = (
+            ROOT / "platform/infrastructure/ha-data/postgres-image-catalog.yaml"
+        ).read_text()
         self.assertIn(image, catalog)
         manifest = (ROOT / "platform/infrastructure/ha-data/postgres.yaml").read_text()
         self.assertNotIn("imageName:", manifest)
