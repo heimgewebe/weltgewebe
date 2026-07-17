@@ -170,7 +170,7 @@ Die geografische Karte zeigt diese Governance-Fäden nicht, weil ein Antrag kein
 
 Jeder neu abgeleitete, unverzwirnte Faden besitzt ab seiner Entstehung eine eigene Lebensdauer von exakt **168 Stunden**. Der Server setzt `expires_at` ausschließlich aus dem servereigenen `created_at`; ein Client darf weder Beginn noch Ende vorgeben.
 
-1. Die sichtbare Stärke nimmt zwischen `created_at` und `expires_at` kontinuierlich und linear von vollständig sichtbar auf unsichtbar ab. Die Karte projiziert den Wert minütlich neu; bei einer Lebensdauer von sieben Tagen beträgt der maximale Deckkraftschritt weniger als 0,0001. Die exakte Ablaufgrenze wird unabhängig davon terminiert.
+1. Die Zieldeckkraft sinkt zwischen `created_at` und `expires_at` linear. Die Karte projiziert diesen Wert ressourcenschonend nur im 24-Stunden-Takt neu, sodass der sichtbare Verlauf täglich stufenweise abnimmt; die exakte Ablaufgrenze wird unabhängig davon terminiert.
 2. Bei `now == expires_at` gehört der Faden nicht mehr zur aktiven Projektion. Listen, Einzelabrufe und Karte geben ihn dann nicht mehr aus.
 3. Eine spätere Webungsaktion verlängert keinen bestehenden Faden. Sie erzeugt, sofern fachlich vorgesehen, eine neue Projektion mit eigener Uhr.
 4. Die zugrunde liegende Webungsaktion und ihre Chronik bleiben dauerhaft erhalten. Aufgelöst wird nur die abgeleitete Fadenprojektion.

@@ -1,7 +1,7 @@
 import type { Edge, MapEdge } from "$lib/map/types";
 
 export const FADEN_LIFETIME_MS = 168 * 60 * 60 * 1000;
-export const FADEN_PROJECTION_REFRESH_MS = 60_000;
+export const FADEN_PROJECTION_REFRESH_MS = 24 * 60 * 60 * 1000;
 
 const RFC3339_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/;
@@ -67,7 +67,7 @@ export function normalizeEdgeLifecycle(edge: Edge): MapEdge {
   };
 }
 
-/** Continuous linear opacity, sampled often enough to remain visually smooth. */
+/** Linear target opacity, sampled by the map at a 24-hour cadence. */
 export function edgeOpacityAt(edge: MapEdge, nowMs: number): number {
   if (edge.lifecycle.kind === "legacy") return 1;
   if (edge.lifecycle.kind === "invalid" || !Number.isFinite(nowMs)) return 0;
@@ -78,7 +78,7 @@ export function edgeOpacityAt(edge: MapEdge, nowMs: number): number {
   return Math.max(0, Math.min(1, (expiresAtMs - nowMs) / FADEN_LIFETIME_MS));
 }
 
-/** Earliest active expiry; exact removal remains independent of periodic refreshes. */
+/** Earliest active expiry; exact removal remains independent of the daily refresh. */
 export function nextEdgeExpiryAt(
   edges: MapEdge[],
   nowMs: number,
