@@ -127,6 +127,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
 - [relates_to] docs/adr/ADR-0011__foederierte-gewebezellen.md
 - [relates_to] docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md
+- [relates_to] docs/architecture/weltgewebe-os-convergence-adapter.md
 - [relates_to] docs/architekturstruktur.md
 - [depends_on] docs/blueprints/weltgewebe-os-masterplan.md
 - [depends_on] docs/reports/weltgewebe-os-foundation-status.md
@@ -383,6 +384,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
 - [relates_to] docs/adr/ADR-0011__foederierte-gewebezellen.md
 - [relates_to] docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md
+- [relates_to] docs/architecture/weltgewebe-os-convergence-adapter.md
 - [relates_to] docs/reports/weltgewebe-os-foundation-status.md
 - [depends_on] docs/roadmap.md
 
@@ -943,6 +945,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
 - [relates_to] docs/domain/vocabulary.md
 - [relates_to] docs/specs/list-pagination-api.md
+
+## docs/specs/federation-core.md
+
+- [relates_to] docs/architecture/weltgewebe-os-convergence-adapter.md
 
 ## docs/specs/garnrolle-knoten-faden.md
 
