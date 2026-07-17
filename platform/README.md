@@ -56,4 +56,4 @@ make platform-render
 make platform-kind-proof
 ```
 
-Der vollständige GitOps-Beweis läuft im Workflow `kubernetes-platform` gegen einen eindeutig benannten, kurzlebigen kind-Cluster.
+Der Workflow `kubernetes-platform` prüft Pull Requests im Direct-Modus gegen den exakt ausgecheckten Merge-Zustand. Nach einem Push auf `main` und bei manuellen Läufen prüft er zusätzlich die vollständige Flux-/GitOps-Kette gegen einen eindeutig benannten, kurzlebigen kind-Cluster.

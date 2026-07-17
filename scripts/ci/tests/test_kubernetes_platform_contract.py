@@ -41,6 +41,56 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         result = self.validator.validate(render=False)
         self.assertEqual(result["status"], "pass")
 
+    def test_ci_proof_binds_pull_requests_to_checked_out_merge_state(self) -> None:
+        workflow = (ROOT / ".github/workflows/kubernetes-platform.yml").read_text()
+        self.assertIn('if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then', workflow)
+        pull_request_branch, gitops_branch = workflow.split(
+            'if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then', 1
+        )[1].split("else", 1)
+        self.assertIn("--mode direct", pull_request_branch)
+        self.assertNotIn("--source-ref", pull_request_branch)
+        self.assertIn("--mode gitops", gitops_branch)
+        self.assertIn('--source-commit "$GITHUB_SHA"', gitops_branch)
+        self.assertNotIn("SOURCE_REF:", workflow)
+        self.assertNotIn("github.head_ref || github.ref_name", workflow)
+
+    def test_source_binding_fails_before_cluster_work_for_invalid_modes(self) -> None:
+        commit = "0123456789abcdef0123456789abcdef01234567"
+        self.reference.validate_source_binding(
+            "direct", source_ref=None, source_commit=None
+        )
+        self.reference.validate_source_binding(
+            "gitops", source_ref=None, source_commit=commit
+        )
+        self.reference.validate_source_binding(
+            "gitops", source_ref="main", source_commit=None
+        )
+        invalid = (
+            ("direct", "main", None, "invalid for direct"),
+            ("direct", None, commit, "invalid for direct"),
+            ("gitops", None, None, "exactly one"),
+            ("gitops", "main", commit, "exactly one"),
+            ("gitops", None, "abc", "full lowercase"),
+        )
+        for mode, source_ref, source_commit, message in invalid:
+            with self.subTest(mode=mode, source_ref=source_ref), self.assertRaisesRegex(
+                self.reference.ProofError, message
+            ):
+                self.reference.validate_source_binding(
+                    mode, source_ref=source_ref, source_commit=source_commit
+                )
+
+    def test_flux_source_can_bind_exact_commit_or_explicit_branch(self) -> None:
+        commit = "0123456789abcdef0123456789abcdef01234567"
+        by_commit = self.reference.flux_source_document(commit=commit)
+        by_branch = self.reference.flux_source_document(branch="main")
+        self.assertEqual(by_commit["spec"]["ref"], {"commit": commit})
+        self.assertEqual(by_branch["spec"]["ref"], {"branch": "main"})
+        with self.assertRaisesRegex(self.reference.ProofError, "exactly one"):
+            self.reference.flux_source_document()
+        with self.assertRaisesRegex(self.reference.ProofError, "exactly one"):
+            self.reference.flux_source_document(branch="main", commit=commit)
+
     def test_nonlocal_overlays_reject_local_fixture_markers(self) -> None:
         production = "platform/apps/weltgewebe/overlays/production"
         for marker in self.validator.LOCAL_FIXTURE_SENTINELS:

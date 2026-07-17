@@ -369,9 +369,34 @@ def namespace_document(name: str, *, data_client: bool = False) -> dict[str, Any
     }
 
 
-def flux_source_document(branch: str) -> dict[str, Any]:
+def validate_source_binding(
+    mode: str, *, source_ref: str | None, source_commit: str | None
+) -> None:
+    if mode == "direct":
+        if source_ref or source_commit:
+            raise ProofError(
+                "--source-ref and --source-commit are invalid for direct mode"
+            )
+        return
+    if bool(source_ref) == bool(source_commit):
+        raise ProofError(
+            "exactly one of --source-ref or --source-commit is required "
+            "for gitops mode"
+        )
+    if source_commit and (
+        len(source_commit) not in (40, 64)
+        or any(character not in "0123456789abcdef" for character in source_commit)
+    ):
+        raise ProofError("--source-commit must be a full lowercase Git object id")
+
+
+def flux_source_document(
+    *, branch: str | None = None, commit: str | None = None
+) -> dict[str, Any]:
+    if bool(branch) == bool(commit):
+        raise ProofError("exactly one Flux source branch or commit is required")
     document = yaml.safe_load((ROOT / "platform/clusters/local/source.yaml").read_text())
-    document["spec"]["ref"] = {"branch": branch}
+    document["spec"]["ref"] = {"branch": branch} if branch else {"commit": commit}
     return document
 
 
@@ -380,8 +405,13 @@ def apply_direct(kubectl: str, kustomize: str, path: str) -> None:
     run([kubectl, "apply", "-f", "-"], input_text=rendered)
 
 
-def apply_flux_data(kubectl: str, branch: str) -> None:
-    apply_yaml(kubectl, flux_source_document(branch))
+def apply_flux_data(
+    kubectl: str, *, source_ref: str | None = None, source_commit: str | None = None
+) -> None:
+    apply_yaml(
+        kubectl,
+        flux_source_document(branch=source_ref, commit=source_commit),
+    )
     apply_file(kubectl, ROOT / "platform/clusters/local/local-data.yaml")
     apply_file(kubectl, ROOT / "platform/clusters/local/migration.yaml")
     wait_condition(kubectl, "flux-system", "gitrepository/weltgewebe", "Ready")
@@ -816,6 +846,11 @@ def diagnostic_snapshot(kubectl: str, name: str) -> None:
 
 
 def proof(args: argparse.Namespace) -> dict[str, Any]:
+    validate_source_binding(
+        args.mode,
+        source_ref=args.source_ref,
+        source_commit=args.source_commit,
+    )
     require_host_tools()
     receipt = tool_receipt()
     tools = receipt["tools"]
@@ -856,9 +891,11 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
         )
         run([kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=5m"])
         if args.mode == "gitops":
-            if not args.source_ref:
-                raise ProofError("--source-ref is required for gitops mode")
-            apply_flux_data(kubectl, args.source_ref)
+            apply_flux_data(
+                kubectl,
+                source_ref=args.source_ref,
+                source_commit=args.source_commit,
+            )
         else:
             apply_direct(kubectl, kustomize, "platform/infrastructure/local-data")
             wait_rollout(kubectl, "weltgewebe-data", "deployment/postgres")
@@ -876,6 +913,7 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
             "cluster": args.cluster,
             "mode": args.mode,
             "source_ref": args.source_ref,
+            "source_commit": args.source_commit,
             "commit": commit,
             "tool_lock_sha256": receipt["lock_sha256"],
             "image_ids": image_ids,
