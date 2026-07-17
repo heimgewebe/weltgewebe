@@ -64,6 +64,8 @@ export interface Edge {
   target_id: string;
   target_type?: string;
   edge_kind: string;
+  created_at?: string | null;
+  expires_at?: string | null;
 }
 
 // Phase 3: Discriminated union for map entities – eliminates semantic guesswork

@@ -191,6 +191,7 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
             edge_kind,
             note: payload_string(&payload, "note"),
             created_at: created_at.map(|t| t.to_rfc3339()),
+            expires_at: payload_string(&payload, "expires_at"),
         };
         cache.insert(id, edge);
         seen += 1;
@@ -597,6 +598,7 @@ fn edge_from_row(row: EdgeRow) -> Result<Edge, anyhow::Error> {
         edge_kind,
         note: payload_string(&payload, "note"),
         created_at: created_at.map(|t| t.to_rfc3339()),
+        expires_at: payload_string(&payload, "expires_at"),
     })
 }
 
@@ -1553,11 +1555,11 @@ impl NewDomainEdgeRow {
     ///
     /// - `created_at` must be present and RFC3339-parseable; otherwise mapping
     ///   fails and the route returns 500 without any DB or cache mutation.
-    /// - `payload` carries `source_type` / `target_type` (when present) and
-    ///   `note` only when `Some` — absent means omitted, never `null` —
+    /// - `payload` carries `source_type` / `target_type` (when present),
+    ///   `note` only when `Some`, and the server-owned `expires_at` when present —
     ///   matching what `load_edges_from_postgres` reads back.
-    /// - `expires_at`, `payload`, `metadata` create fields do not exist here:
-    ///   `CreateEdgeRequest` rejects them via `deny_unknown_fields`.
+    /// - client `expires_at`, `payload`, and `metadata` create fields do not exist
+    ///   in `CreateEdgeRequest`; `deny_unknown_fields` rejects them.
     pub fn from_edge(edge: &crate::routes::edges::Edge) -> Result<Self> {
         let created_at_text = edge
             .created_at
@@ -1582,6 +1584,9 @@ impl NewDomainEdgeRow {
         }
         if let Some(note) = &edge.note {
             payload_map.insert("note".to_string(), Value::String(note.clone()));
+        }
+        if let Some(expires_at) = &edge.expires_at {
+            payload_map.insert("expires_at".to_string(), Value::String(expires_at.clone()));
         }
         let payload = serde_json::to_string(&Value::Object(payload_map))
             .context("failed to serialise edge payload")?;
@@ -1750,6 +1755,7 @@ mod edge_write_path_tests {
             edge_kind: "reference".to_string(),
             note: None,
             created_at: Some("2026-06-12T10:00:00+00:00".to_string()),
+            expires_at: Some("2026-06-19T10:00:00+00:00".to_string()),
         }
     }
 
@@ -1774,6 +1780,10 @@ mod edge_write_path_tests {
             Some("account")
         );
         assert_eq!(payload.get("note").and_then(|v| v.as_str()), Some("a note"));
+        assert_eq!(
+            payload.get("expires_at").and_then(|v| v.as_str()),
+            Some("2026-06-19T10:00:00+00:00")
+        );
     }
 
     #[test]

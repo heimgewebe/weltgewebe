@@ -1,5 +1,6 @@
 use super::{
     domain_write_guard::reject_account_create_unless_writable,
+    edges::edge_is_active_at,
     query::{
         cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
         MAX_PAGE_SIZE,
@@ -19,6 +20,7 @@ use axum::{
     http::StatusCode,
     Extension, Json,
 };
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -447,14 +449,16 @@ pub async fn get_account(
     // Missing legacy type metadata remains readable; newly created edges always
     // carry explicit validated types.
     let related_edges = {
+        let now = Utc::now();
         let edges = state.edges.read().await;
         edges
             .iter_in_order()
             .filter(|edge| {
-                (edge.source_id == id
-                    && matches!(edge.source_type.as_deref(), Some("account") | None))
-                    || (edge.target_id == id
-                        && matches!(edge.target_type.as_deref(), Some("account") | None))
+                edge_is_active_at(edge, now)
+                    && ((edge.source_id == id
+                        && matches!(edge.source_type.as_deref(), Some("account") | None))
+                        || (edge.target_id == id
+                            && matches!(edge.target_type.as_deref(), Some("account") | None)))
             })
             .cloned()
             .collect::<Vec<_>>()

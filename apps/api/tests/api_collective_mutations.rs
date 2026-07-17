@@ -188,6 +188,7 @@ async fn weber_can_replace_shared_node_and_delete_node_cascade() -> Result<()> {
             edge_kind: "reference".to_string(),
             note: None,
             created_at: Some("2026-01-01T00:00:00Z".to_string()),
+            expires_at: None,
         },
     );
     let (app, cookie) = authenticated_app(state.clone()).await;
@@ -318,6 +319,7 @@ async fn node_delete_jsonl_keeps_account_and_role_endpoint_collisions() -> Resul
                     edge_kind: "reference".to_string(),
                     note: None,
                     created_at: Some("2026-01-01T00:00:00Z".to_string()),
+                    expires_at: None,
                 },
             );
         }
@@ -389,6 +391,7 @@ async fn node_delete_jsonl_deletes_unique_untyped_legacy_edge() -> Result<()> {
             edge_kind: "reference".to_string(),
             note: None,
             created_at: Some("2026-01-01T00:00:00Z".to_string()),
+            expires_at: None,
         },
     );
     let (app, cookie) = authenticated_app(state.clone()).await;
@@ -461,6 +464,7 @@ async fn node_delete_jsonl_rejects_untyped_account_collision_without_partial_mut
             edge_kind: "reference".to_string(),
             note: None,
             created_at: Some("2026-01-01T00:00:00Z".to_string()),
+            expires_at: None,
         },
     );
     let (app, cookie) = authenticated_app(state.clone()).await;
@@ -518,6 +522,7 @@ async fn node_delete_jsonl_rejects_untyped_role_collision_without_partial_mutati
                 edge_kind: "reference".to_string(),
                 note: None,
                 created_at: Some("2026-01-01T00:00:00Z".to_string()),
+                expires_at: None,
             },
         );
         edges.insert(
@@ -531,6 +536,7 @@ async fn node_delete_jsonl_rejects_untyped_role_collision_without_partial_mutati
                 edge_kind: "reference".to_string(),
                 note: None,
                 created_at: Some("2026-01-01T00:00:00Z".to_string()),
+                expires_at: None,
             },
         );
     }
@@ -588,6 +594,7 @@ async fn node_delete_jsonl_rejects_invalid_endpoint_type_without_partial_mutatio
             edge_kind: "reference".to_string(),
             note: None,
             created_at: Some("2026-01-01T00:00:00Z".to_string()),
+            expires_at: None,
         },
     );
     let (app, cookie) = authenticated_app(state.clone()).await;
@@ -640,6 +647,7 @@ async fn concurrent_replace_and_delete_leave_one_coherent_jsonl_result() -> Resu
             edge_kind: "reference".to_string(),
             note: None,
             created_at: Some("2026-01-01T00:00:00Z".to_string()),
+            expires_at: None,
         },
     );
     let (app, cookie) = authenticated_app(state.clone()).await;

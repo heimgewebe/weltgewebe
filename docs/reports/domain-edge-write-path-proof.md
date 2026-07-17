@@ -2,10 +2,11 @@
 id: reports.domain-edge-write-path-proof
 title: "Domain Edge Write Path Proof"
 doc_type: report
-status: active
-lifecycle_state: active
+status: deprecated
+lifecycle_state: superseded
 lifecycle: proof
 owner_task: OPT-ARC-001
+superseded_by: docs/reports/domain-edge-faden-lifecycle-proof.md
 review_after: 2026-07-16
 canonicality: evidence
 created: 2026-06-12

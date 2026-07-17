@@ -115,6 +115,7 @@
   let map: MapLibreMap | null = null;
   let mapStyleReady = false;
   let isLoading = true;
+  let edgeProjectionNow = Date.now();
   let lastFocusedElement: HTMLElement | null = null;
 
   let nodesOverlay: NodesOverlay | null = null;
@@ -193,7 +194,9 @@
     const toolObstacle =
       toolFan?.dataset.expanded === "true"
         ? document.getElementById("tool-fan-actions")
-        : document.querySelector<HTMLElement>('[data-testid="tool-fan-trigger"]');
+        : document.querySelector<HTMLElement>(
+            '[data-testid="tool-fan-trigger"]',
+          );
     const toolRect = toolObstacle?.getBoundingClientRect();
     if (toolRect && toolRect.height > 0) {
       bottom = Math.min(bottom, toolRect.top - mapRect.top - edgeInset);
@@ -231,9 +234,9 @@
       '[data-testid="search-overlay"]',
       '[data-testid="filter-overlay"]',
       '[data-testid="governance-fan"]',
-      '#governance-fan-actions',
+      "#governance-fan-actions",
       '[data-testid="tool-fan"]',
-      '#tool-fan-actions',
+      "#tool-fan-actions",
       '[data-testid="context-panel"]',
     ]) {
       const element = document.querySelector<HTMLElement>(selector);
@@ -317,7 +320,13 @@
 
   // Reactive update for edges – only after map style is fully loaded
   $: if (map && mapStyleReady && edgesData && $view) {
-    updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
+    updateEdges(
+      map,
+      edgesData,
+      filteredMarkersData,
+      $view.showEdges,
+      edgeProjectionNow,
+    );
   }
 
   function focusAndFlyToPoint(item: MapEntityViewModel) {
@@ -537,6 +546,9 @@
     // build a map, bind listeners and register protocols that nobody ever
     // removes. Every await in the initialiser therefore re-checks this flag.
     let destroyed = false;
+    const edgeDecayInterval = window.setInterval(() => {
+      edgeProjectionNow = Date.now();
+    }, 60_000);
     // Hoisted so the cleanup can clear it; otherwise a component destroyed
     // before the style loads leaves a 10s timer pointing at dead state.
     let loadingTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
@@ -685,6 +697,7 @@
       // Signals the async initialiser to stop at its next await boundary, so a
       // component destroyed mid-import never finishes building a map.
       destroyed = true;
+      window.clearInterval(edgeDecayInterval);
       if (loadingTimeout !== undefined) {
         clearTimeout(loadingTimeout);
         loadingTimeout = undefined;

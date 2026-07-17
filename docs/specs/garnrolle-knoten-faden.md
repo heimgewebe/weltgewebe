@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-domain
 owner: product-domain
-last_reviewed: 2026-07-14
+last_reviewed: 2026-07-17
 review_after: 2026-10-12
 depends_on: []
 relations:
@@ -165,6 +165,19 @@ Beim Knotenknüpfen erzeugt der Server nach der dauerhaften Knotenanlage den zug
 Anträge, Vetos, Abstimmungen und Gesprächsbeiträge sind als eigene dauerhafte Governance-Datensätze belegt. Ihr Darstellungskontext ist die Informationsseite des jeweiligen Antrags: Der Antrag steht im Zentrum; Antragstellung, Vetos, Gesprächsbeiträge und Stimmen werden als nicht bearbeitbare Fadenbündel darum angeordnet. Die Projektion wird bei jedem Laden ausschließlich aus den Governance-Datensätzen berechnet und nicht als zweiter Domain-Edge-Bestand gespeichert.
 
 Die geografische Karte zeigt diese Governance-Fäden nicht, weil ein Antrag keinen räumlichen Ort besitzt. Exakte Aktionszahlen bleiben als Text sichtbar; nur die Zahl gleichzeitig gezeichneter paralleler Linien darf zur Renderbegrenzung gedeckelt werden. Es entsteht dafür kein manueller Fadenschreibweg.
+
+### Auflösung unverzwirnter Fäden
+
+Jeder neu abgeleitete, unverzwirnte Faden besitzt ab seiner Entstehung eine eigene Lebensdauer von exakt **168 Stunden**. Der Server setzt `expires_at` ausschließlich aus dem servereigenen `created_at`; ein Client darf weder Beginn noch Ende vorgeben.
+
+1. Die sichtbare Stärke nimmt zwischen `created_at` und `expires_at` kontinuierlich und linear von vollständig sichtbar auf unsichtbar ab.
+2. Bei `now == expires_at` gehört der Faden nicht mehr zur aktiven Projektion. Listen, Einzelabrufe und Karte geben ihn dann nicht mehr aus.
+3. Eine spätere Webungsaktion verlängert keinen bestehenden Faden. Sie erzeugt, sofern fachlich vorgesehen, eine neue Projektion mit eigener Uhr.
+4. Die zugrunde liegende Webungsaktion und ihre Chronik bleiben dauerhaft erhalten. Aufgelöst wird nur die abgeleitete Fadenprojektion.
+5. Bestehende Datensätze ohne `expires_at` bleiben aus Kompatibilitätsgründen sichtbar. Sie dürfen nicht durch eine rückwirkend geratene Ablaufzeit gelöscht werden.
+6. Ein vorhandener, aber ungültiger oder nicht exakt 168 Stunden langer Ablaufvertrag wird in aktiven Projektionen fail-closed ausgeblendet.
+
+Ein verzwirnter, dauerhafter Zusammenhang heißt **Garn** und ist vom Fadenverfall ausgenommen. Die Verzwirnungsaktion und ihre technische Garnrepräsentation sind nicht Bestandteil dieses Vertragsstands; bis zu ihrer eigenen kanonischen Spezifikation darf dafür weder ein öffentliches CRUD noch ein geratenes Edge-Feld eingeführt werden. `expires_at = null` ist deshalb kein regulärer Erzeugungswert für neue Fäden, sondern ausschließlich ein Legacy- und späterer expliziter Garn-Kompatibilitätspfad.
 
 ## Erster organischer Produktfluss
 
