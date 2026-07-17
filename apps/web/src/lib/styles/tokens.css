@@ -20,30 +20,28 @@
   --tool-fan-size: 52px;
   --tool-fan-collapsed-width: 116px;
   --tool-fan-edge: 16px;
-  --tool-fan-open-width: 228px;
-  --tool-fan-open-height: 252px;
-  --tool-fan-find-x: -12px;
-  --tool-fan-find-y: -168px;
-  --tool-fan-sight-x: -102px;
-  --tool-fan-sight-y: -108px;
-  --tool-fan-weave-x: -112px;
-  --tool-fan-weave-y: -48px;
-  --tool-fan-control-gap: 28px;
-  --tool-fan-expanded-control-offset: calc(
-    var(--tool-fan-open-width) + var(--tool-fan-control-gap)
-  );
-  --motion-ui: 0.25s ease;
-  --motion-fan: 0.18s ease;
+  --tool-fan-menu-gap: 12px;
+  --tool-fan-menu-width: 390px;
+  --governance-fan-menu-width: 620px;
+  --map-control-edge: 12px;
+  --motion-ui-duration: 250ms;
+  --motion-fan-duration: 180ms;
+  --motion-fan-fast-duration: 140ms;
+  --motion-ui: var(--motion-ui-duration) ease;
+  --motion-fan: var(--motion-fan-duration) ease;
+  --motion-fan-fast: var(--motion-fan-fast-duration) ease;
   --map-lens-blur: 12px;
 
-  /* Map UI layer contract: higher values deliberately sit above lower ones. */
-  --z-map-debug: 20;
-  --z-map-direction: 38;
-  --z-map-topbar: 41;
-  --z-map-lens: 44;
-  --z-map-tool-fan: 45;
-  --z-map-context-panel: 50;
-  --z-map-loading: 60;
+  /* Map UI layer contract: deliberate 10-step bands leave room for extensions. */
+  --z-map-debug: 10;
+  --z-map-direction: 30;
+  --z-map-topbar: 40;
+  --z-map-lens: 50;
+  --z-map-fan: 60;
+  --z-map-context-panel: 70;
+  --z-map-toast: 80;
+  --z-map-modal: 90;
+  --z-map-loading: 100;
 
   /* Swipe-Edge Defaults (innenliegende Greifzonen, kollisionsarm mit OS-Gesten) */
   --edge-inset-x: 24px;

@@ -25,9 +25,11 @@ test.describe("ContextPanel mobile sheet stages", () => {
     await expect(panel).toBeVisible();
     await expect(panel).toHaveAttribute("data-sheet-stage", "preview");
 
-    const preview = page.getByRole("button", { name: "Vorschau" });
+    const preview = page.getByRole("button", { name: "Vorschau", exact: true });
     await expect(preview).toHaveAttribute("aria-pressed", "true");
-    await expect(panel.locator(".sheet-handle")).toHaveCount(0);
+    const handle = page.getByTestId("sheet-handle");
+    await expect(handle).toBeVisible();
+    expect((await handle.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   });
 
   test("the accessible toggle switches between preview, half and full", async ({
@@ -43,8 +45,8 @@ test.describe("ContextPanel mobile sheet stages", () => {
     );
 
     const panel = page.getByTestId("context-panel");
-    const half = page.getByRole("button", { name: "Halbe Höhe" });
-    const full = page.getByRole("button", { name: "Vollbild" });
+    const half = page.getByRole("button", { name: "Halbe Höhe", exact: true });
+    const full = page.getByRole("button", { name: "Vollbild", exact: true });
 
     const previewBox = await panel.boundingBox();
 
@@ -61,9 +63,7 @@ test.describe("ContextPanel mobile sheet stages", () => {
     expect(fullBox!.height).toBeGreaterThan(halfBox!.height);
   });
 
-  test("Komposition always opens the full stage, without a stage toggle", async ({
-    page,
-  }) => {
+  test("Komposition starts full but remains resizable", async ({ page }) => {
     await page.waitForSelector('[data-testid="tool-fan"]', {
       timeout: 10000,
     });
@@ -74,7 +74,34 @@ test.describe("ContextPanel mobile sheet stages", () => {
     const panel = page.getByTestId("context-panel");
     await expect(panel).toBeVisible();
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
-    await expect(page.getByLabel("Panelgröße")).toHaveCount(0);
+    await expect(page.getByLabel("Panelgröße")).toBeVisible();
+    await page.getByRole("button", { name: "Halbe Höhe", exact: true }).click();
+    await expect(panel).toHaveAttribute("data-sheet-stage", "half");
+  });
+
+  test("sheet handle supports keyboard stages and pointer dragging", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.locator(".map-marker").first().click();
+    const panel = page.getByTestId("context-panel");
+    const handle = page.getByTestId("sheet-handle");
+
+    await handle.focus();
+    await handle.press("ArrowUp");
+    await expect(panel).toHaveAttribute("data-sheet-stage", "half");
+    await handle.press("End");
+    await expect(panel).toHaveAttribute("data-sheet-stage", "full");
+    await handle.press("Home");
+    await expect(panel).toHaveAttribute("data-sheet-stage", "preview");
+
+    const box = await handle.boundingBox();
+    expect(box).not.toBeNull();
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + box!.width / 2, box!.y - 300, { steps: 8 });
+    await page.mouse.up();
+    await expect(panel).not.toHaveAttribute("data-sheet-stage", "preview");
   });
 
   test("orientation change keeps the open panel inside the viewport", async ({
@@ -83,7 +110,7 @@ test.describe("ContextPanel mobile sheet stages", () => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.locator(".map-marker").first().click();
     const panel = page.getByTestId("context-panel");
-    await page.getByRole("button", { name: "Vollbild" }).click();
+    await page.getByRole("button", { name: "Vollbild", exact: true }).click();
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
 
     await page.setViewportSize({ width: 844, height: 390 });
@@ -105,7 +132,7 @@ test.describe("ContextPanel mobile sheet stages", () => {
       )?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
     );
     const panel = page.getByTestId("context-panel");
-    await page.getByRole("button", { name: "Vollbild" }).click();
+    await page.getByRole("button", { name: "Vollbild", exact: true }).click();
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
 
     await page.evaluate(() =>

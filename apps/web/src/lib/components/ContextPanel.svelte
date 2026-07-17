@@ -34,9 +34,14 @@
     domainChanged: DomainChanged;
   }>();
   let kompositionPanel: KompositionPanelHandle | null = null;
+  const SHEET_STAGES: SheetStage[] = ["preview", "half", "full"];
   let sheetStage: SheetStage = "preview";
   let previousPanelIdentity = "";
   let panelTitle = "Details";
+  let dragStartY = 0;
+  let dragStartHeight = 0;
+  let dragHeight: number | null = null;
+  let dragging = false;
 
   function derivePanelTitle(
     state: SystemState,
@@ -72,8 +77,87 @@
     if (nextPanelIdentity !== previousPanelIdentity) {
       previousPanelIdentity = nextPanelIdentity;
       sheetStage = $systemState === "komposition" ? "full" : "preview";
-    } else if ($systemState === "komposition" && sheetStage !== "full") {
-      sheetStage = "full";
+      dragHeight = null;
+      dragging = false;
+    }
+  }
+
+  function setSheetStage(stage: SheetStage): void {
+    sheetStage = stage;
+    dragHeight = null;
+    dragging = false;
+  }
+
+  function stepSheetStage(direction: -1 | 1): void {
+    const index = SHEET_STAGES.indexOf(sheetStage);
+    const next = Math.min(
+      SHEET_STAGES.length - 1,
+      Math.max(0, index + direction),
+    );
+    setSheetStage(SHEET_STAGES[next]);
+  }
+
+  function nearestSheetStage(height: number): SheetStage {
+    const viewport = window.innerHeight;
+    const preview = Math.min(270, Math.max(190, viewport * 0.29));
+    const targets: Array<[SheetStage, number]> = [
+      ["preview", preview],
+      ["half", viewport * 0.55],
+      ["full", viewport * 0.88],
+    ];
+    return targets.reduce((nearest, current) =>
+      Math.abs(current[1] - height) < Math.abs(nearest[1] - height)
+        ? current
+        : nearest,
+    )[0];
+  }
+
+  function handleSheetPointerDown(event: PointerEvent): void {
+    if (window.innerWidth > 768) return;
+    const panel = event.currentTarget as HTMLElement;
+    const aside = panel.closest<HTMLElement>('[data-testid="context-panel"]');
+    if (!aside) return;
+    event.preventDefault();
+    panel.setPointerCapture(event.pointerId);
+    dragStartY = event.clientY;
+    dragStartHeight = aside.getBoundingClientRect().height;
+    dragHeight = dragStartHeight;
+    dragging = true;
+  }
+
+  function handleSheetPointerMove(event: PointerEvent): void {
+    if (!dragging) return;
+    const minHeight = 190;
+    const maxHeight = window.innerHeight * 0.88;
+    dragHeight = Math.min(
+      maxHeight,
+      Math.max(minHeight, dragStartHeight + dragStartY - event.clientY),
+    );
+  }
+
+  function handleSheetPointerUp(event: PointerEvent): void {
+    if (!dragging) return;
+    const panel = event.currentTarget as HTMLElement;
+    if (panel.hasPointerCapture(event.pointerId)) {
+      panel.releasePointerCapture(event.pointerId);
+    }
+    const finalHeight = dragHeight ?? dragStartHeight;
+    setSheetStage(nearestSheetStage(finalHeight));
+  }
+
+  function handleSheetKeydown(event: KeyboardEvent): void {
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      stepSheetStage(1);
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      stepSheetStage(-1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setSheetStage("preview");
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setSheetStage("full");
     }
   }
 
@@ -114,10 +198,31 @@
     class:stage-half={sheetStage === "half"}
     class:stage-full={sheetStage === "full"}
     class:composition={$systemState === "komposition"}
+    class:dragging
     data-testid="context-panel"
     data-sheet-stage={sheetStage}
     aria-label={panelTitle}
+    style={dragHeight === null ? undefined : `height: ${dragHeight}px`}
   >
+    <button
+      type="button"
+      class="sheet-handle"
+      data-testid="sheet-handle"
+      aria-label={`Panelhöhe ziehen, aktuell ${
+        sheetStage === "preview"
+          ? "Vorschau"
+          : sheetStage === "half"
+            ? "halbe Höhe"
+            : "Vollbild"
+      }`}
+      on:pointerdown={handleSheetPointerDown}
+      on:pointermove={handleSheetPointerMove}
+      on:pointerup={handleSheetPointerUp}
+      on:pointercancel={handleSheetPointerUp}
+      on:keydown={handleSheetKeydown}
+    >
+      <span aria-hidden="true"></span>
+    </button>
     <header
       class="panel-header"
       class:composition={$systemState === "komposition"}
@@ -126,28 +231,26 @@
         <h2>{panelTitle}</h2>
       </div>
       <div class="header-actions">
-        {#if $systemState !== "komposition"}
-          <div class="sheet-controls" role="group" aria-label="Panelgröße">
-            <button
-              type="button"
-              aria-label="Vorschau"
-              aria-pressed={sheetStage === "preview"}
-              on:click={() => (sheetStage = "preview")}>Vorschau</button
-            >
-            <button
-              type="button"
-              aria-label="Halbe Höhe"
-              aria-pressed={sheetStage === "half"}
-              on:click={() => (sheetStage = "half")}>Halbe Höhe</button
-            >
-            <button
-              type="button"
-              aria-label="Vollbild"
-              aria-pressed={sheetStage === "full"}
-              on:click={() => (sheetStage = "full")}>Vollbild</button
-            >
-          </div>
-        {/if}
+        <div class="sheet-controls" role="group" aria-label="Panelgröße">
+          <button
+            type="button"
+            aria-label="Vorschau"
+            aria-pressed={sheetStage === "preview"}
+            on:click={() => setSheetStage("preview")}>Vorschau</button
+          >
+          <button
+            type="button"
+            aria-label="Halbe Höhe"
+            aria-pressed={sheetStage === "half"}
+            on:click={() => setSheetStage("half")}>Halbe Höhe</button
+          >
+          <button
+            type="button"
+            aria-label="Vollbild"
+            aria-pressed={sheetStage === "full"}
+            on:click={() => setSheetStage("full")}>Vollbild</button
+          >
+        </div>
         <button class="close-btn" on:click={closePanel} aria-label="Schließen"
           >✕</button
         >
@@ -184,6 +287,10 @@
     flex-direction: column;
     overflow: hidden;
     box-sizing: border-box;
+  }
+
+  .sheet-handle {
+    display: none;
   }
 
   .panel-header {
@@ -231,7 +338,8 @@
   }
 
   .sheet-controls button {
-    min-height: 36px;
+    min-width: 44px;
+    min-height: 44px;
     padding: 0 0.55rem;
     border: 1px solid transparent;
     border-radius: 9px;
@@ -283,13 +391,38 @@
     .context-panel.stage-half {
       height: 55dvh;
     }
-    .context-panel.stage-full,
-    .context-panel.composition {
+    .context-panel.stage-full {
       height: 88dvh;
     }
+    .sheet-handle {
+      width: 100%;
+      min-height: 44px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      display: grid;
+      place-items: center;
+      cursor: ns-resize;
+      touch-action: none;
+    }
+    .sheet-handle span {
+      width: 44px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--panel-border-strong);
+    }
+    .sheet-handle:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: -4px;
+    }
+    .context-panel.dragging {
+      transition: none;
+      user-select: none;
+    }
     .panel-header {
-      min-height: 72px;
-      padding-top: 0.45rem;
+      min-height: 64px;
+      padding-top: 0.25rem;
     }
     .heading-group {
       flex: 1;

@@ -45,6 +45,7 @@
     openSearchExclusive,
     openFilterExclusive,
   } from "$lib/stores/overlayManager";
+  import { mapChrome } from "$lib/stores/mapChrome";
   import {
     parseMapUrlState,
     type MapUrlFocus,
@@ -160,6 +161,18 @@
     if (topBarRect)
       top = Math.max(top, topBarRect.bottom - mapRect.top + edgeInset);
 
+    const governanceFan = document.querySelector<HTMLElement>(
+      '[data-testid="governance-fan"]',
+    );
+    const governanceObstacle =
+      governanceFan?.dataset.expanded === "true"
+        ? document.getElementById("governance-fan-actions")
+        : null;
+    const governanceRect = governanceObstacle?.getBoundingClientRect();
+    if (governanceRect && governanceRect.height > 0) {
+      top = Math.max(top, governanceRect.bottom - mapRect.top + edgeInset);
+    }
+
     const searchRect = document
       .querySelector<HTMLElement>('[data-testid="search-overlay"]')
       ?.getBoundingClientRect();
@@ -174,11 +187,16 @@
       top = Math.max(top, filterRect.bottom - mapRect.top + edgeInset);
     }
 
-    const toolTriggerRect = document
-      .querySelector<HTMLElement>('[data-testid="tool-fan-trigger"]')
-      ?.getBoundingClientRect();
-    if (toolTriggerRect && toolTriggerRect.height > 0) {
-      bottom = Math.min(bottom, toolTriggerRect.top - mapRect.top - edgeInset);
+    const toolFan = document.querySelector<HTMLElement>(
+      '[data-testid="tool-fan"]',
+    );
+    const toolObstacle =
+      toolFan?.dataset.expanded === "true"
+        ? document.getElementById("tool-fan-actions")
+        : document.querySelector<HTMLElement>('[data-testid="tool-fan-trigger"]');
+    const toolRect = toolObstacle?.getBoundingClientRect();
+    if (toolRect && toolRect.height > 0) {
+      bottom = Math.min(bottom, toolRect.top - mapRect.top - edgeInset);
     }
 
     const panelRect = document
@@ -212,7 +230,10 @@
       ".topbar",
       '[data-testid="search-overlay"]',
       '[data-testid="filter-overlay"]',
-      '[data-testid="tool-fan-trigger"]',
+      '[data-testid="governance-fan"]',
+      '#governance-fan-actions',
+      '[data-testid="tool-fan"]',
+      '#tool-fan-actions',
       '[data-testid="context-panel"]',
     ]) {
       const element = document.querySelector<HTMLElement>(selector);
@@ -274,13 +295,23 @@
     })();
   }
 
-  $: {
+  // Search content changes only require a marker refresh. ResizeObserver already
+  // reports intrinsic overlay-size changes, so it must not be recycled per key.
+  $: if (map) {
     filteredResults;
-    $isSearchOpen;
     $searchQuery;
+    $isSearchOpen;
+    scheduleSearchDirectionIndicators();
+  }
+
+  // Rebind observers only when an observed surface is mounted or removed.
+  $: {
+    $isSearchOpen;
     $contextPanelOpen;
     $isFilterOpen;
-    searchViewportGeometryDirty = true;
+    $mapChrome.toolFanOpen;
+    $mapChrome.toolFanBranch;
+    $mapChrome.governanceFanOpen;
     if (map) tick().then(refreshSearchViewportObservers);
   }
 
@@ -607,11 +638,10 @@
       );
       map.addControl(
         new maplibregl.AttributionControl({
-          compact: false,
           customAttribution:
             '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
         }),
-        "bottom-right",
+        "bottom-left",
       );
 
       // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, etc.) carry domain meaning.
@@ -888,14 +918,18 @@
 
   #map :global(.maplibregl-ctrl-bottom-right) {
     right: calc(
-      var(--tool-fan-collapsed-width) + var(--tool-fan-control-gap)
+      env(safe-area-inset-right) + var(--map-control-edge)
     ) !important;
-    bottom: calc(env(safe-area-inset-bottom) + 12px) !important;
-    transition: right var(--motion-ui) !important;
+    bottom: calc(
+      env(safe-area-inset-bottom) + var(--map-control-edge)
+    ) !important;
   }
 
-  :global(.tool-fan.expanded) ~ #map :global(.maplibregl-ctrl-bottom-right) {
-    right: var(--tool-fan-expanded-control-offset) !important;
+  #map :global(.maplibregl-ctrl-bottom-left) {
+    left: calc(env(safe-area-inset-left) + var(--map-control-edge)) !important;
+    bottom: calc(
+      env(safe-area-inset-bottom) + var(--map-control-edge)
+    ) !important;
   }
 
   #map :global(.maplibregl-ctrl-group button) {
@@ -906,33 +940,25 @@
   @media (min-width: 769px) {
     #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
       right: calc(
-        var(--context-panel-width) + var(--tool-fan-collapsed-width) +
-          var(--tool-fan-control-gap)
-      ) !important;
-      transition: none !important;
-    }
-
-    :global(.tool-fan.expanded.panel-open)
-      ~ #map.panel-open
-      :global(.maplibregl-ctrl-bottom-right) {
-      right: calc(
-        var(--context-panel-width) + var(--tool-fan-expanded-control-offset)
+        var(--context-panel-width) + env(safe-area-inset-right) +
+          var(--map-control-edge)
       ) !important;
     }
   }
 
   @media (max-width: 768px) {
-    #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
+    #map.panel-open :global(.maplibregl-ctrl-bottom-right),
+    #map.panel-open :global(.maplibregl-ctrl-bottom-left) {
       top: calc(env(safe-area-inset-top) + var(--toolbar-offset) + 8px);
-      right: 10px !important;
       bottom: auto !important;
-      transition: none !important;
     }
-  }
 
-  @media (prefers-reduced-motion: reduce) {
-    #map :global(.maplibregl-ctrl-bottom-right) {
-      transition: none !important;
+    #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
+      right: calc(env(safe-area-inset-right) + 10px) !important;
+    }
+
+    #map.panel-open :global(.maplibregl-ctrl-bottom-left) {
+      left: calc(env(safe-area-inset-left) + 10px) !important;
     }
   }
 

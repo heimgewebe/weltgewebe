@@ -22,6 +22,7 @@ verifies_with:
   - apps/web/src/lib/api/governance.test.ts
   - apps/web/tests/governance.spec.ts
 ---
+
 # Anträge, Konsent, Veto und Abstimmung
 
 ## Grundsatz
@@ -145,7 +146,7 @@ Der Sonderpfad ist für Weber und Administratoren gesperrt. Deren Austritt berü
 
 ## Anträge-Oberfläche
 
-Der Button **Anträge** befindet sich im Kartenkopf oben mittig. Die Oberfläche bietet:
+Der Wurzelknopf **Gemeinsam** befindet sich im Kartenkopf oben mittig. Er fächert ausschließlich reale Governance-Sichten nach unten auf: alle Anträge, offene Konsentverfahren, Vetos, Gesprächsphasen und laufende Abstimmungen. Das Stellen eines Antrags ist davon getrennt und erscheint als eigene Webungsaktion im unteren Werkzeugfächer. Die Oberfläche bietet:
 
 - Liste aller Anträge;
 - Status und verbleibende Zeit;
@@ -154,7 +155,8 @@ Der Button **Anträge** befindet sich im Kartenkopf oben mittig. Die Oberfläche
 - ein aus den belegten Aktionen abgeleitetes Antragsgewebe mit nicht bearbeitbaren Fadenbündeln;
 - Gesprächsraum;
 - kontextabhängige Veto- und Abstimmungsaktionen;
-- für Gäste den Weberantrag und den Gast-Austritt.
+- für Gäste den Weberantrag und den Gast-Austritt;
+- einen direkten Einstieg `Antrag stellen` aus der Webungsebene des unteren Werkzeugfächers.
 
 Die Oberfläche darf keine Rechte simulieren. Nicht erlaubte Aktionen sind serverseitig gesperrt, auch wenn ein Client manipuliert wird.
 

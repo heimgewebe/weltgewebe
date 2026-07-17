@@ -50,25 +50,17 @@ test.describe("Interaction Clarity & State Feedback", () => {
     await expect(panel).toBeVisible();
   });
 
-  test("'Weben' action shows active state in komposition mode", async ({
+  test("Weben is an explicit branch and reports active composition after reopening", async ({
     page,
   }) => {
+    await activateToolFanAction(page, "weave");
+    await expect(page.getByTestId("context-panel")).toBeVisible();
+
     await page.getByTestId("tool-fan-trigger").click();
-    const weaveBtn = page.getByTestId("tool-fan-weave");
-
-    // Initially, the action should NOT have active state
-    await expect(weaveBtn).toHaveAttribute("aria-pressed", "false");
-
-    // Enter komposition mode
-    await weaveBtn.click();
-
-    // Now the action should report active state
-    await expect(weaveBtn).toHaveAttribute("aria-pressed", "true");
-
-    // Close panel → back to navigation → active state clears
-    await page.keyboard.press("Escape");
-    await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
-    await expect(weaveBtn).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("tool-fan-weave")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   test("Garnrolle führt ohne Zwischenmenü direkt zu ihren Einstellungen", async ({
@@ -100,6 +92,7 @@ test.describe("Interaction Clarity & State Feedback", () => {
     // Trigger "Weben" — suppressNextRestore should prevent focus restore
     await trigger.click();
     await page.getByTestId("tool-fan-weave").click();
+    await page.getByTestId("tool-fan-create-node").click();
     await expect(searchOverlay).toHaveCount(0);
 
     // Focus must NOT be on the tool fan trigger
@@ -113,13 +106,14 @@ test.describe("Interaction Clarity & State Feedback", () => {
 
     // Open filter overlay (sets restore target to the tool fan trigger)
     await trigger.click();
-    await page.getByTestId("tool-fan-sight").click();
+    await page.getByTestId("tool-fan-map-content").click();
     const filterOverlay = page.locator('[data-testid="filter-overlay"]');
     await expect(filterOverlay).toBeVisible();
 
     // Trigger "Weben" — suppressNextRestore should prevent focus restore
     await trigger.click();
     await page.getByTestId("tool-fan-weave").click();
+    await page.getByTestId("tool-fan-create-node").click();
     await expect(filterOverlay).toHaveCount(0);
 
     // Focus must NOT be on the tool fan trigger

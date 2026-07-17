@@ -1,5 +1,6 @@
 <script lang="ts">
   import Garnrolle from "./Garnrolle.svelte";
+  import GovernanceFan from "./GovernanceFan.svelte";
   import { contextPanelOpen } from "$lib/stores/uiView";
 </script>
 
@@ -9,6 +10,10 @@
   role="toolbar"
   aria-label="Navigation"
 >
+  <div aria-hidden="true"></div>
+  <div class="governance-slot">
+    <GovernanceFan />
+  </div>
   <div class="actions">
     <Garnrolle />
   </div>
@@ -20,17 +25,25 @@
     inset: 0 0 auto 0;
     min-height: var(--toolbar-offset);
     z-index: var(--z-map-topbar);
-    display: flex;
-    justify-content: flex-end;
+    display: grid;
+    grid-template-columns: minmax(44px, 1fr) auto minmax(44px, 1fr);
     align-items: center;
     padding: env(safe-area-inset-top) 12px 0;
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.46), rgba(0, 0, 0, 0));
     color: var(--text);
     pointer-events: none;
-    transition: right 0.25s ease;
+    transition: right var(--motion-ui);
+  }
+
+  .governance-slot {
+    grid-column: 2;
+    justify-self: center;
+    pointer-events: auto;
   }
 
   .actions {
+    grid-column: 3;
+    justify-self: end;
     display: flex;
     align-items: center;
     pointer-events: auto;
@@ -38,7 +51,11 @@
 
   @media (min-width: 769px) {
     .topbar.panel-open {
-      right: var(--context-panel-width, 400px);
+      right: var(--context-panel-width);
+      --governance-fan-menu-width: max(
+        304px,
+        calc(100vw - var(--context-panel-width) - 24px)
+      );
     }
   }
 

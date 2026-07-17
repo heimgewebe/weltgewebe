@@ -1,5 +1,17 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+
+function overlap(
+  a: NonNullable<Awaited<ReturnType<Locator["boundingBox"]>>>,
+  b: NonNullable<Awaited<ReturnType<Locator["boundingBox"]>>>,
+): boolean {
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  );
+}
 
 test.describe("MapLibre control placement", () => {
   test.beforeEach(async ({ page }) => {
@@ -11,96 +23,135 @@ test.describe("MapLibre control placement", () => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
   });
 
-  test("zoom controls never overlap the persistently visible tool fan trigger", async ({
+  test("zoom and attribution occupy stable opposite corners", async ({
     page,
   }) => {
-    const controls = page.locator(".maplibregl-ctrl-bottom-right").first();
+    const zoom = page.locator(".maplibregl-ctrl-bottom-right").first();
+    const attribution = page.locator(".maplibregl-ctrl-bottom-left").first();
     const trigger = page.getByTestId("tool-fan-trigger");
-    const [controlsBox, triggerBox] = await Promise.all([
-      controls.boundingBox(),
+    const [zoomBox, attributionBox, triggerBox] = await Promise.all([
+      zoom.boundingBox(),
+      attribution.boundingBox(),
       trigger.boundingBox(),
     ]);
-    expect(controlsBox).not.toBeNull();
+
+    expect(zoomBox).not.toBeNull();
+    expect(attributionBox).not.toBeNull();
     expect(triggerBox).not.toBeNull();
-    const overlaps =
-      controlsBox!.x < triggerBox!.x + triggerBox!.width &&
-      controlsBox!.x + controlsBox!.width > triggerBox!.x &&
-      controlsBox!.y < triggerBox!.y + triggerBox!.height &&
-      controlsBox!.y + controlsBox!.height > triggerBox!.y;
-    expect(overlaps).toBe(false);
+    expect(overlap(zoomBox!, triggerBox!)).toBe(false);
+    expect(overlap(attributionBox!, triggerBox!)).toBe(false);
+    expect(zoomBox!.x).toBeGreaterThan(triggerBox!.x + triggerBox!.width);
+    expect(attributionBox!.x + attributionBox!.width).toBeLessThan(
+      triggerBox!.x,
+    );
   });
 
-  test("opening the fan moves controls clear of every visible branch", async ({
+  test("opening either centered fan does not move MapLibre controls", async ({
     page,
   }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const zoom = page.locator(".maplibregl-ctrl-bottom-right").first();
+    const attribution = page.locator(".maplibregl-ctrl-bottom-left").first();
+    const baselineZoom = await zoom.boundingBox();
+    const baselineAttribution = await attribution.boundingBox();
+
+    await page.getByTestId("tool-fan-trigger").click();
+    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
+      "data-expanded",
+      "true",
+    );
+    expect(await zoom.boundingBox()).toEqual(baselineZoom);
+    expect(await attribution.boundingBox()).toEqual(baselineAttribution);
+
+    await page.getByTestId("governance-fan-trigger").click();
+    await expect(page.getByTestId("governance-fan")).toHaveAttribute(
+      "data-expanded",
+      "true",
+    );
+    expect(await zoom.boundingBox()).toEqual(baselineZoom);
+    expect(await attribution.boundingBox()).toEqual(baselineAttribution);
+  });
+
+  test("fan branches and controls do not overlap", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.getByTestId("tool-fan-trigger").click();
 
-    const controls = page.locator(".maplibregl-ctrl-bottom-right").first();
-    const controlsBox = await controls.boundingBox();
-    expect(controlsBox).not.toBeNull();
+    const controlBoxes = await Promise.all([
+      page.locator(".maplibregl-ctrl-bottom-right").first().boundingBox(),
+      page.locator(".maplibregl-ctrl-bottom-left").first().boundingBox(),
+    ]);
+    expect(controlBoxes.every(Boolean)).toBe(true);
 
     for (const testId of [
       "tool-fan-find",
-      "tool-fan-sight",
+      "tool-fan-map-content",
       "tool-fan-weave",
-      "tool-fan-proposals",
     ]) {
       const branchBox = await page.getByTestId(testId).boundingBox();
       expect(branchBox).not.toBeNull();
-      const overlaps =
-        controlsBox!.x < branchBox!.x + branchBox!.width &&
-        controlsBox!.x + controlsBox!.width > branchBox!.x &&
-        controlsBox!.y < branchBox!.y + branchBox!.height &&
-        controlsBox!.y + controlsBox!.height > branchBox!.y;
-      expect(overlaps, `${testId} overlaps map controls`).toBe(false);
+      for (const controlBox of controlBoxes) {
+        expect(
+          overlap(controlBox!, branchBox!),
+          `${testId} overlaps MapLibre controls`,
+        ).toBe(false);
+      }
     }
   });
 
-  test("expanded fan and desktop focus panel both keep controls unobstructed", async ({
+  test("desktop focus panel shifts only the right-hand zoom controls", async ({
     page,
   }) => {
-    await page.emulateMedia({ reducedMotion: "reduce" });
+    const zoom = page.locator(".maplibregl-ctrl-bottom-right").first();
+    const attribution = page.locator(".maplibregl-ctrl-bottom-left").first();
+    const initialZoom = await zoom.boundingBox();
+    const initialAttribution = await attribution.boundingBox();
+
     await page.locator(".map-marker").first().click();
     const panel = page.getByTestId("context-panel");
     await expect(panel).toBeVisible();
+    const [panelBox, shiftedZoom, shiftedAttribution] = await Promise.all([
+      panel.boundingBox(),
+      zoom.boundingBox(),
+      attribution.boundingBox(),
+    ]);
 
-    await page.getByTestId("tool-fan-trigger").click();
-    const controls = page.locator(".maplibregl-ctrl-bottom-right").first();
-    const controlsBox = await controls.boundingBox();
-    const panelBox = await panel.boundingBox();
-    expect(controlsBox).not.toBeNull();
     expect(panelBox).not.toBeNull();
-
-    const overlaps = (
-      a: NonNullable<typeof controlsBox>,
-      b: NonNullable<typeof panelBox>,
-    ) =>
-      a.x < b.x + b.width &&
-      a.x + a.width > b.x &&
-      a.y < b.y + b.height &&
-      a.y + a.height > b.y;
-
-    expect(
-      overlaps(controlsBox!, panelBox!),
-      "controls overlap focus panel",
-    ).toBe(false);
-    for (const testId of [
-      "tool-fan-find",
-      "tool-fan-sight",
-      "tool-fan-weave",
-      "tool-fan-proposals",
-    ]) {
-      const branchBox = await page.getByTestId(testId).boundingBox();
-      expect(branchBox).not.toBeNull();
-      expect(
-        overlaps(controlsBox!, branchBox!),
-        `${testId} overlaps map controls while focus panel is open`,
-      ).toBe(false);
-    }
+    expect(shiftedZoom).not.toBeNull();
+    expect(shiftedAttribution).not.toBeNull();
+    expect(overlap(shiftedZoom!, panelBox!)).toBe(false);
+    expect(shiftedZoom!.x).toBeLessThan(initialZoom!.x);
+    expect(shiftedAttribution).toEqual(initialAttribution);
   });
 
-  test("Sicht stays inside the remaining desktop map beside the focus panel", async ({
+  test("both centered fans stay inside a narrow remaining desktop map", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 800, height: 800 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.locator(".map-marker").first().click();
+    const panelBox = await page.getByTestId("context-panel").boundingBox();
+    expect(panelBox).not.toBeNull();
+
+    await page.getByTestId("tool-fan-trigger").click();
+    const toolMenuBox = await page.locator("#tool-fan-actions").boundingBox();
+    expect(toolMenuBox).not.toBeNull();
+    expect(toolMenuBox!.x).toBeGreaterThanOrEqual(0);
+    expect(toolMenuBox!.x + toolMenuBox!.width).toBeLessThanOrEqual(
+      panelBox!.x,
+    );
+
+    await page.getByTestId("governance-fan-trigger").click();
+    const governanceMenuBox = await page
+      .locator("#governance-fan-actions")
+      .boundingBox();
+    expect(governanceMenuBox).not.toBeNull();
+    expect(governanceMenuBox!.x).toBeGreaterThanOrEqual(0);
+    expect(governanceMenuBox!.x + governanceMenuBox!.width).toBeLessThanOrEqual(
+      panelBox!.x,
+    );
+  });
+
+  test("Karteninhalt stays inside the remaining desktop map", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 800, height: 800 });
@@ -109,37 +160,40 @@ test.describe("MapLibre control placement", () => {
     await expect(panel).toBeVisible();
 
     await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-sight").click();
-    const sight = page.getByTestId("filter-overlay");
-    await expect(sight).toBeVisible();
+    await page.getByTestId("tool-fan-map-content").click();
+    const lens = page.getByTestId("filter-overlay");
+    await expect(lens).toBeVisible();
 
-    const [sightBox, panelBox] = await Promise.all([
-      sight.boundingBox(),
+    const [lensBox, panelBox] = await Promise.all([
+      lens.boundingBox(),
       panel.boundingBox(),
     ]);
-    expect(sightBox).not.toBeNull();
+    expect(lensBox).not.toBeNull();
     expect(panelBox).not.toBeNull();
-    expect(sightBox!.x).toBeGreaterThanOrEqual(0);
-    expect(sightBox!.x + sightBox!.width).toBeLessThanOrEqual(panelBox!.x);
+    expect(lensBox!.x).toBeGreaterThanOrEqual(0);
+    expect(lensBox!.x + lensBox!.width).toBeLessThanOrEqual(panelBox!.x);
   });
 
-  test("opening Finden or Sicht returns zoom controls to the compact position", async ({
+  test("mobile focus sheet moves both corner controls above the sheet", async ({
     page,
   }) => {
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    const controls = page.locator(".maplibregl-ctrl-bottom-right").first();
-    const baseline = await controls.boundingBox();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator(".map-marker").first().click();
+    const panel = page.getByTestId("context-panel");
+    const zoom = page.locator(".maplibregl-ctrl-bottom-right").first();
+    const attribution = page.locator(".maplibregl-ctrl-bottom-left").first();
+    const [panelBox, zoomBox, attributionBox] = await Promise.all([
+      panel.boundingBox(),
+      zoom.boundingBox(),
+      attribution.boundingBox(),
+    ]);
 
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-find").click();
-    await expect(page.getByTestId("search-overlay")).toBeVisible();
-    const withSearchOpen = await controls.boundingBox();
-    expect(withSearchOpen).toEqual(baseline);
-
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-sight").click();
-    await expect(page.getByTestId("filter-overlay")).toBeVisible();
-    const withSichtOpen = await controls.boundingBox();
-    expect(withSichtOpen).toEqual(baseline);
+    expect(panelBox).not.toBeNull();
+    expect(zoomBox).not.toBeNull();
+    expect(attributionBox).not.toBeNull();
+    expect(zoomBox!.y + zoomBox!.height).toBeLessThan(panelBox!.y);
+    expect(attributionBox!.y + attributionBox!.height).toBeLessThan(
+      panelBox!.y,
+    );
   });
 });

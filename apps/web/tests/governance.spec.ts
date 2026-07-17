@@ -151,7 +151,7 @@ async function installGovernanceRoutes(
   };
 }
 
-test("Anträge is reachable as a secondary link inside the tool fan", async ({
+test("governance views fan out from the top center and stay separate from weaving", async ({
   page,
 }) => {
   await mockApiResponses(page, {
@@ -159,13 +159,108 @@ test("Anträge is reachable as a secondary link inside the tool fan", async ({
   });
   await page.goto("/map");
 
-  const link = page.getByTestId("tool-fan-proposals");
-  // Secondary access: not reachable while the fan is closed.
-  await expect(link).toHaveAttribute("tabindex", "-1");
+  const trigger = page.getByTestId("governance-fan-trigger");
+  const triggerBox = await trigger.boundingBox();
+  const viewport = page.viewportSize();
+  expect(triggerBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(
+    Math.abs(triggerBox!.x + triggerBox!.width / 2 - viewport!.width / 2),
+  ).toBeLessThan(2);
+
+  await trigger.click();
+  await expect(page.getByTestId("governance-fan-all")).toHaveAttribute(
+    "href",
+    "/antraege",
+  );
+  await expect(page.getByTestId("governance-fan-open")).toHaveAttribute(
+    "href",
+    "/antraege?status=consent",
+  );
+  await expect(page.getByTestId("governance-fan-vetoes")).toHaveAttribute(
+    "href",
+    "/antraege?ereignis=veto",
+  );
+  await expect(
+    page.getByTestId("governance-fan-conversations"),
+  ).toHaveAttribute("href", "/antraege?ereignis=gespraech");
+  await expect(page.getByTestId("governance-fan-voting")).toHaveAttribute(
+    "href",
+    "/antraege?status=voting",
+  );
 
   await page.getByTestId("tool-fan-trigger").click();
-  await expect(link).toBeVisible();
-  await expect(link).toHaveAttribute("href", "/antraege");
+  await expect(page.getByTestId("governance-fan")).toHaveAttribute(
+    "data-expanded",
+    "false",
+  );
+  await expect(page.getByTestId("tool-fan")).toHaveAttribute(
+    "data-expanded",
+    "true",
+  );
+  await expect(page.getByTestId("tool-fan-proposals")).toHaveCount(0);
+});
+
+test("the five governance actions stay usable on a 320 pixel viewport", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/map");
+  await page.getByTestId("governance-fan-trigger").click();
+
+  for (const testId of [
+    "governance-fan-all",
+    "governance-fan-open",
+    "governance-fan-vetoes",
+    "governance-fan-conversations",
+    "governance-fan-voting",
+  ]) {
+    const box = await page.getByTestId(testId).boundingBox();
+    expect(box, `${testId} has no visible box`).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test("veto and conversation links resolve to real filtered governance views", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  await installGovernanceRoutes(page, { initialStatus: "voting" });
+
+  await page.goto("/antraege?ereignis=veto");
+  await expect(
+    page.getByRole("heading", { name: "Anträge mit Veto" }),
+  ).toBeVisible();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
+
+  await page.goto("/antraege?ereignis=gespraech");
+  await expect(
+    page.getByRole("heading", { name: "Gesprächsphasen" }),
+  ).toBeVisible();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
+});
+
+test("a guest reaches the Weber application as a distinct weaving action", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: GUEST_ID, role: "gast" },
+  });
+  await page.goto("/map");
+  await page.getByTestId("tool-fan-trigger").click();
+  await page.getByTestId("tool-fan-weave").click();
+  await expect(page.getByTestId("tool-fan-create-proposal")).toHaveAttribute(
+    "href",
+    "/antraege#antrag-stellen",
+  );
 });
 
 test("guest can read everything and submit only the own Weber application", async ({

@@ -42,8 +42,11 @@
     return type.id === "Garnrolle" ? "Garnrollen" : nodeKindLabel(type.id);
   }
   function handleGlobalKeydown(e: KeyboardEvent) {
-    if ($isFilterOpen && !e.defaultPrevented && e.key === "Escape")
+    if (!$isFilterOpen || e.defaultPrevented || e.repeat) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
       closeFilter();
+    }
   }
 </script>
 
@@ -56,26 +59,28 @@
     class:panel-open={$contextPanelOpen}
     data-testid="filter-overlay"
     role="dialog"
-    aria-label="Sicht"
+    aria-label="Karteninhalt"
     aria-modal="false"
   >
     <div class="filter-header">
       <div>
         <span class="eyebrow">Kartenlinse</span>
-        <h3>Sicht</h3>
+        <h3>Karteninhalt</h3>
       </div>
       <button
         class="close-btn"
         bind:this={closeBtnEl}
         on:click={closeFilter}
-        aria-label="Sicht schließen">✕</button
+        aria-label="Karteninhalt schließen">✕</button
       >
     </div>
 
     <p class="filter-summary" aria-live="polite">
       {activeCount === 0
         ? `Alle ${filteredResults.length} Elemente auf der Karte`
-        : `${activeCount} Auswahl${activeCount === 1 ? "" : "en"} aktiv · ${filteredResults.length} Elemente auf der Karte`}
+        : activeCount === 1
+          ? `1 Auswahl aktiv · ${filteredResults.length} Elemente auf der Karte`
+          : `${activeCount} Auswahlen aktiv · ${filteredResults.length} Elemente auf der Karte`}
     </p>
 
     {#if availableTypes.length > 0}
@@ -238,10 +243,7 @@
   @media (min-width: 769px) {
     .filter-overlay.panel-open {
       right: calc(var(--context-panel-width) + 16px);
-      width: min(
-        380px,
-        calc(100vw - var(--context-panel-width) - 32px)
-      );
+      width: min(380px, calc(100vw - var(--context-panel-width) - 32px));
     }
   }
 
