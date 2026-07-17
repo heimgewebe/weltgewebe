@@ -208,10 +208,12 @@ class KubernetesHaContractTests(unittest.TestCase):
         image = self.ha.POSTGRES_IMAGE
         self.assertIn(":16.14@sha256:", image)
         self.assertNotIn("postgresql@sha256:", image)
-        catalog = (
-            ROOT / "platform/infrastructure/ha-data/postgres-image-catalog.yaml"
-        ).read_text()
-        self.assertIn(image, catalog)
+        catalog = next(
+            self.validator._documents(
+                ROOT / "platform/infrastructure/ha-data/postgres-image-catalog.yaml"
+            )
+        )
+        self.assertEqual(catalog["spec"]["images"], [{"major": 16, "image": image}])
         manifest = (ROOT / "platform/infrastructure/ha-data/postgres.yaml").read_text()
         self.assertNotIn("imageName:", manifest)
         self.assertIn("name: weltgewebe-postgres", manifest)
