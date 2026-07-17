@@ -1,0 +1,30 @@
+---
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: weltgewebe-ha-reference
+networking:
+  disableDefaultCNI: true
+  kubeProxyMode: none
+nodes:
+  - role: control-plane
+  - role: worker
+    kubeadmConfigPatches:
+      - |
+        kind: JoinConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "weltgewebe.net/data-node=true,topology.kubernetes.io/zone=zone-a"
+  - role: worker
+    kubeadmConfigPatches:
+      - |
+        kind: JoinConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "weltgewebe.net/data-node=true,topology.kubernetes.io/zone=zone-b"
+  - role: worker
+    kubeadmConfigPatches:
+      - |
+        kind: JoinConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "weltgewebe.net/data-node=true,topology.kubernetes.io/zone=zone-c"
