@@ -9,6 +9,7 @@
   } from "$lib/stores/uiView";
   import { isSearchOpen } from "$lib/stores/searchStore";
   import { isFilterOpen } from "$lib/stores/filterStore";
+  import { expandedMapFan } from "$lib/stores/mapChrome";
   import type {
     KompositionDraft,
     Selection,
@@ -72,8 +73,6 @@
     if (nextPanelIdentity !== previousPanelIdentity) {
       previousPanelIdentity = nextPanelIdentity;
       sheetStage = $systemState === "komposition" ? "full" : "preview";
-    } else if ($systemState === "komposition" && sheetStage !== "full") {
-      sheetStage = "full";
     }
   }
 
@@ -99,7 +98,8 @@
       event.key === "Escape" &&
       $contextPanelOpen &&
       !$isSearchOpen &&
-      !$isFilterOpen
+      !$isFilterOpen &&
+      !$expandedMapFan
     )
       closePanel();
   }
@@ -126,8 +126,7 @@
         <h2>{panelTitle}</h2>
       </div>
       <div class="header-actions">
-        {#if $systemState !== "komposition"}
-          <div class="sheet-controls" role="group" aria-label="Panelgröße">
+        <div class="sheet-controls" role="group" aria-label="Panelgröße">
             <button
               type="button"
               aria-label="Vorschau"
@@ -147,7 +146,6 @@
               on:click={() => (sheetStage = "full")}>Vollbild</button
             >
           </div>
-        {/if}
         <button class="close-btn" on:click={closePanel} aria-label="Schließen"
           >✕</button
         >
@@ -231,7 +229,8 @@
   }
 
   .sheet-controls button {
-    min-height: 36px;
+    min-width: 44px;
+    min-height: 44px;
     padding: 0 0.55rem;
     border: 1px solid transparent;
     border-radius: 9px;
@@ -283,8 +282,7 @@
     .context-panel.stage-half {
       height: 55dvh;
     }
-    .context-panel.stage-full,
-    .context-panel.composition {
+    .context-panel.stage-full {
       height: 88dvh;
     }
     .panel-header {

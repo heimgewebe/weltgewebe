@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
   import { authStore } from "$lib/auth/store";
@@ -20,9 +20,26 @@
   let summary = "";
   let submitting = false;
   let leaving = false;
+  let applicationSection: HTMLElement | null = null;
 
   $: selectedProposalId = $page.url.searchParams.get("id");
+  $: proposalView = $page.url.searchParams.get("sicht");
+  $: wantsToApply =
+    $page.url.searchParams.get("intent") === "stellen" ||
+    $page.url.hash === "#antrag-stellen";
   $: isGuest = $authStore.authenticated && $authStore.role === "gast";
+  $: visibleProposals =
+    proposalView === "offen"
+      ? proposals.filter((proposal) => proposal.status === "consent" || proposal.status === "voting")
+      : proposalView === "abstimmung"
+        ? proposals.filter((proposal) => proposal.status === "voting")
+        : proposals;
+  $: proposalListTitle =
+    proposalView === "offen"
+      ? "Offene Entscheidungen"
+      : proposalView === "abstimmung"
+        ? "Gespräch und Abstimmung"
+        : "Alle Anträge";
   $: hasOpenOwnProposal =
     isGuest &&
     proposals.some(
@@ -87,6 +104,10 @@
   onMount(async () => {
     await authStore.checkAuth();
     await refresh();
+    if (window.location.hash === "#antrag-stellen") {
+      await tick();
+      applicationSection?.focus();
+    }
   });
 </script>
 
@@ -108,25 +129,39 @@
     </p>
   </header>
 
-  {#if isGuest}
-    <section class="guest-card" aria-labelledby="weberstatus-heading">
-      <div>
-        <p class="eyebrow">Dein Status: Gast</p>
-        <h2 id="weberstatus-heading">Weberstatus beantragen</h2>
-        <p>Als Gast kannst du das gesamte Weltgewebe erkunden, hinterlässt aber keine Spuren. Mit einem angenommenen Antrag erhältst du deine Garnrolle und kannst weben.</p>
-      </div>
-      {#if hasOpenOwnProposal}
-        <p class="notice">Dein Weberantrag ist bereits offen.</p>
-      {:else}
-        <label for="application-summary">Kurze Vorstellung oder Begründung</label>
-        <textarea id="application-summary" bind:value={summary} maxlength="2000" rows="5" placeholder="Was möchtest du im Weltgewebe beitragen?"></textarea>
-        <button class="primary" on:click={applyForWeber} disabled={submitting}>
-          {submitting ? "Antrag wird gestellt…" : "Weberstatus beantragen"}
+  {#if isGuest || wantsToApply}
+    <section
+      id="antrag-stellen"
+      class="guest-card"
+      aria-labelledby="weberstatus-heading"
+      tabindex="-1"
+      bind:this={applicationSection}
+    >
+      {#if isGuest}
+        <div>
+          <p class="eyebrow">Dein Status: Gast</p>
+          <h2 id="weberstatus-heading">Weberstatus beantragen</h2>
+          <p>Als Gast kannst du das gesamte Weltgewebe erkunden, hinterlässt aber keine Spuren. Mit einem angenommenen Antrag erhältst du deine Garnrolle und kannst weben.</p>
+        </div>
+        {#if hasOpenOwnProposal}
+          <p class="notice">Dein Weberantrag ist bereits offen.</p>
+        {:else}
+          <label for="application-summary">Kurze Vorstellung oder Begründung</label>
+          <textarea id="application-summary" bind:value={summary} maxlength="2000" rows="5" placeholder="Was möchtest du im Weltgewebe beitragen?"></textarea>
+          <button class="primary" on:click={applyForWeber} disabled={submitting}>
+            {submitting ? "Antrag wird gestellt…" : "Weberstatus beantragen"}
+          </button>
+        {/if}
+        <button class="danger-link" on:click={leaveWeltgewebe} disabled={leaving}>
+          {leaving ? "Gastkonto wird aufgelöst…" : "Weltgewebe vollständig verlassen"}
         </button>
+      {:else}
+        <div>
+          <p class="eyebrow">Webungsaktion</p>
+          <h2 id="weberstatus-heading">Antrag stellen</h2>
+          <p>Aktuell unterstützt das System als neue Antragsart nur den Weberstatus-Antrag für Gäste. Weitere Antragsarten erscheinen hier erst, sobald sie fachlich und technisch freigeschaltet sind.</p>
+        </div>
       {/if}
-      <button class="danger-link" on:click={leaveWeltgewebe} disabled={leaving}>
-        {leaving ? "Gastkonto wird aufgelöst…" : "Weltgewebe vollständig verlassen"}
-      </button>
     </section>
   {/if}
 
@@ -134,17 +169,17 @@
 
   <section aria-labelledby="proposal-list-heading">
     <div class="section-heading">
-      <h2 id="proposal-list-heading">Alle Anträge</h2>
+      <h2 id="proposal-list-heading">{proposalListTitle}</h2>
       <button class="secondary" on:click={refresh} disabled={loading}>Aktualisieren</button>
     </div>
 
     {#if loading}
       <p class="muted">Anträge werden geladen…</p>
-    {:else if proposals.length === 0}
-      <p class="empty">Noch liegen keine Anträge vor.</p>
+    {:else if visibleProposals.length === 0}
+      <p class="empty">In dieser Ansicht liegen keine Anträge vor.</p>
     {:else}
       <div class="proposal-list">
-        {#each proposals as proposal}
+        {#each visibleProposals as proposal}
           <a class="proposal-card" href={`/antraege?id=${encodeURIComponent(proposal.id)}`}>
             <div class="proposal-topline">
               <span class:open={proposal.status === "consent" || proposal.status === "voting"}>{statusLabel(proposal.status)}</span>
@@ -177,6 +212,7 @@
   .guest-card, .proposal-card, .error, .empty { border: 1px solid rgba(24,37,31,.16); border-radius: 18px; background: rgba(255,255,255,.72); }
   .guest-card { display: grid; gap: 14px; padding: 24px; margin-bottom: 36px; }
   .guest-card .eyebrow { margin-top: 0; }
+  .guest-card:focus { outline: 3px solid #1f5b42; outline-offset: 4px; }
   label { font-weight: 700; }
   textarea { box-sizing: border-box; width: 100%; resize: vertical; border: 1px solid rgba(24,37,31,.28); border-radius: 12px; padding: 12px; font: inherit; background: #fff; }
   button { width: fit-content; border-radius: 999px; padding: 10px 16px; font: inherit; font-weight: 720; cursor: pointer; }

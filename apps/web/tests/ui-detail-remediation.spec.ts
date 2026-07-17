@@ -96,13 +96,11 @@ test.describe("UI detail remediation", () => {
     await expect(panel).not.toContainText("Art: event");
   });
 
-  test("Sicht never shows an automatic hit list, only type selection", async ({
+  test("Karteninhalt never shows an automatic hit list, only type selection", async ({
     page,
   }) => {
-    await activateToolFanAction(page, "sight");
-    await expect(
-      page.getByText(/^Alle \d+ Elemente auf der Karte/),
-    ).toBeVisible();
+    await activateToolFanAction(page, "content");
+    await expect(page.getByText(/^Alle \d+ Elemente sichtbar/)).toBeVisible();
     await expect(page.locator(".filter-result")).toHaveCount(0);
     await expect(page.locator(".filter-item")).not.toHaveCount(0);
   });

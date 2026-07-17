@@ -56,26 +56,28 @@
     class:panel-open={$contextPanelOpen}
     data-testid="filter-overlay"
     role="dialog"
-    aria-label="Sicht"
+    aria-label="Karteninhalt"
     aria-modal="false"
   >
     <div class="filter-header">
       <div>
         <span class="eyebrow">Kartenlinse</span>
-        <h3>Sicht</h3>
+        <h3>Karteninhalt</h3>
       </div>
       <button
         class="close-btn"
         bind:this={closeBtnEl}
         on:click={closeFilter}
-        aria-label="Sicht schließen">✕</button
+        aria-label="Karteninhalt schließen">✕</button
       >
     </div>
 
     <p class="filter-summary" aria-live="polite">
       {activeCount === 0
-        ? `Alle ${filteredResults.length} Elemente auf der Karte`
-        : `${activeCount} Auswahl${activeCount === 1 ? "" : "en"} aktiv · ${filteredResults.length} Elemente auf der Karte`}
+        ? `Alle ${filteredResults.length} Elemente sichtbar`
+        : activeCount === 1
+          ? `1 Auswahl aktiv · ${filteredResults.length} Elemente sichtbar`
+          : `${activeCount} Auswahlen aktiv · ${filteredResults.length} Elemente sichtbar`}
     </p>
 
     {#if availableTypes.length > 0}

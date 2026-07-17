@@ -151,7 +151,7 @@ async function installGovernanceRoutes(
   };
 }
 
-test("Anträge is reachable as a secondary link inside the tool fan", async ({
+test("Anträge is reachable from the separate governance fan", async ({
   page,
 }) => {
   await mockApiResponses(page, {
@@ -159,13 +159,25 @@ test("Anträge is reachable as a secondary link inside the tool fan", async ({
   });
   await page.goto("/map");
 
-  const link = page.getByTestId("tool-fan-proposals");
-  // Secondary access: not reachable while the fan is closed.
-  await expect(link).toHaveAttribute("tabindex", "-1");
+  const links = [
+    ["governance-fan-proposals", "/antraege"],
+    ["governance-fan-open", "/antraege?sicht=offen"],
+    ["governance-fan-voting", "/antraege?sicht=abstimmung"],
+  ] as const;
+  for (const [testId] of links) {
+    await expect(page.getByTestId(testId)).toHaveAttribute("tabindex", "-1");
+  }
 
-  await page.getByTestId("tool-fan-trigger").click();
-  await expect(link).toBeVisible();
-  await expect(link).toHaveAttribute("href", "/antraege");
+  await page.getByTestId("governance-fan-trigger").click();
+  for (const [testId, href] of links) {
+    const link = page.getByTestId(testId);
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute("tabindex", "0");
+    await expect(link).toHaveAttribute("href", href);
+  }
+  await expect(
+    page.getByTestId("tool-fan").getByText("Alle Anträge", { exact: true }),
+  ).toHaveCount(0);
 });
 
 test("guest can read everything and submit only the own Weber application", async ({

@@ -210,11 +210,11 @@ test.describe("Komposition Flow (gast/anonymous)", () => {
     await expect(weave).toBeDisabled();
     await expect(weave).toHaveAttribute(
       "aria-label",
-      "Weben – Weber-Garnrolle erforderlich",
+      "Knoten knüpfen – Weber-Garnrolle erforderlich",
     );
     await expect(weave).toHaveAttribute(
       "title",
-      "Zum Weben ist eine Weber-Garnrolle nötig",
+      "Zum Knüpfen ist eine Weber-Garnrolle nötig",
     );
     await weave.click({ force: true });
     await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);

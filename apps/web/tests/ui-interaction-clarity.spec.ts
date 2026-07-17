@@ -35,11 +35,11 @@ test.describe("Interaction Clarity & State Feedback", () => {
 
   test("entering komposition closes open filter overlay", async ({ page }) => {
     // Open filter overlay via the tool fan
-    await activateToolFanAction(page, "sight");
+    await activateToolFanAction(page, "content");
     const filterOverlay = page.locator('[data-testid="filter-overlay"]');
     await expect(filterOverlay).toBeVisible();
 
-    // Open the fan again and trigger "Weben" while Sicht is open
+    // Open the fan again and trigger "Weben" while Karteninhalt is open
     await activateToolFanAction(page, "weave");
 
     // Filter overlay must be closed
@@ -106,14 +106,14 @@ test.describe("Interaction Clarity & State Feedback", () => {
     await expect(trigger).not.toBeFocused();
   });
 
-  test("focus does not return to the tool fan trigger when entering komposition from Sicht", async ({
+  test("focus does not return to the tool fan trigger when entering komposition from Karteninhalt", async ({
     page,
   }) => {
     const trigger = page.getByTestId("tool-fan-trigger");
 
     // Open filter overlay (sets restore target to the tool fan trigger)
     await trigger.click();
-    await page.getByTestId("tool-fan-sight").click();
+    await page.getByTestId("tool-fan-content").click();
     const filterOverlay = page.locator('[data-testid="filter-overlay"]');
     await expect(filterOverlay).toBeVisible();
 

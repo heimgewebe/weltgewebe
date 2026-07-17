@@ -61,7 +61,7 @@ test.describe("ContextPanel mobile sheet stages", () => {
     expect(fullBox!.height).toBeGreaterThan(halfBox!.height);
   });
 
-  test("Komposition always opens the full stage, without a stage toggle", async ({
+  test("Komposition starts full and remains explicitly resizable", async ({
     page,
   }) => {
     await page.waitForSelector('[data-testid="tool-fan"]', {
@@ -74,7 +74,11 @@ test.describe("ContextPanel mobile sheet stages", () => {
     const panel = page.getByTestId("context-panel");
     await expect(panel).toBeVisible();
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
-    await expect(page.getByLabel("Panelgröße")).toHaveCount(0);
+    const stageControls = page.getByLabel("Panelgröße");
+    await expect(stageControls).toBeVisible();
+    await page.getByRole("button", { name: "Halbe Höhe" }).click();
+    await expect(panel).toHaveAttribute("data-sheet-stage", "half");
+    await expect(page.locator("#title")).toBeVisible();
   });
 
   test("orientation change keeps the open panel inside the viewport", async ({

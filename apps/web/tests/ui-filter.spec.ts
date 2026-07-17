@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 import { activateToolFanAction } from "./fixtures/toolFan";
 
-test.describe("Sicht mode", () => {
+test.describe("Karteninhalt mode", () => {
   test.beforeEach(async ({ page }) => {
     // 1. Load the base mock API to prevent CartoCDN errors, etc.
     await mockApiResponses(page);
@@ -99,10 +99,10 @@ test.describe("Sicht mode", () => {
     );
   });
 
-  test("Sicht narrows the map, and the narrowed marker stays selectable on the map", async ({
+  test("Karteninhalt narrows the map, and the narrowed marker stays selectable on the map", async ({
     page,
   }) => {
-    await activateToolFanAction(page, "sight");
+    await activateToolFanAction(page, "content");
 
     const sichtOverlay = page.getByTestId("filter-overlay");
     const garnrolleLabel = page.locator("label.filter-item", {
@@ -110,7 +110,7 @@ test.describe("Sicht mode", () => {
     });
     await garnrolleLabel.click();
 
-    // Sicht itself carries no automatic hit list — only the active count.
+    // Karteninhalt itself carries no automatic hit list — only the active count.
     await expect(sichtOverlay.getByText(/^1 Auswahl aktiv/)).toBeVisible();
     await expect(page.locator(".filter-result")).toHaveCount(0);
 
@@ -137,7 +137,7 @@ test.describe("Sicht mode", () => {
     });
   });
 
-  test("Case B & E: Active Sicht -> Search strictly bounded, and reset", async ({
+  test("Case B & E: Active Karteninhalt -> Search strictly bounded, and reset", async ({
     page,
   }) => {
     const markerSelector = ".map-marker, .marker-account";
@@ -145,8 +145,8 @@ test.describe("Sicht mode", () => {
     // Initial marker count is 3
     await expect(page.locator(markerSelector)).toHaveCount(3);
 
-    // Open Sicht
-    await activateToolFanAction(page, "sight");
+    // Open Karteninhalt
+    await activateToolFanAction(page, "content");
     const sichtOverlay = page.getByTestId("filter-overlay");
     await expect(sichtOverlay).toBeVisible();
 
@@ -159,7 +159,7 @@ test.describe("Sicht mode", () => {
     // Marker count drops strictly to 1
     await expect(page.locator(markerSelector)).toHaveCount(1);
 
-    // Open search, verify it strictly respects the active Sicht selection
+    // Open search, verify it strictly respects the active Karteninhalt selection
     await activateToolFanAction(page, "find");
     await expect(sichtOverlay).not.toBeVisible();
 
@@ -190,7 +190,7 @@ test.describe("Sicht mode", () => {
     );
 
     // Case E: reset restores the full marker count
-    await activateToolFanAction(page, "sight");
+    await activateToolFanAction(page, "content");
     const clearBtn = page.getByRole("button", { name: "Alles wieder zeigen" });
     await clearBtn.click();
     await expect(clearBtn).not.toBeVisible();
@@ -206,14 +206,14 @@ test.describe("Sicht mode", () => {
     await expect(searchOverlay).toBeVisible();
     await expect(sichtOverlay).not.toBeVisible();
 
-    // Open Sicht -> Search closes, focus should be inside Sicht
-    await activateToolFanAction(page, "sight");
+    // Open Karteninhalt -> Search closes, focus should be inside Karteninhalt
+    await activateToolFanAction(page, "content");
     await expect(sichtOverlay).toBeVisible();
     await expect(searchOverlay).not.toBeVisible();
     const firstCheckbox = page.locator('input[type="checkbox"]').first();
     await expect(firstCheckbox).toBeFocused();
 
-    // Open search -> Sicht closes, focus should be inside search
+    // Open search -> Karteninhalt closes, focus should be inside search
     await activateToolFanAction(page, "find");
     await expect(searchOverlay).toBeVisible();
     await expect(sichtOverlay).not.toBeVisible();
@@ -221,11 +221,11 @@ test.describe("Sicht mode", () => {
     await expect(searchInput).toBeFocused();
   });
 
-  test("Case D: Focus management for Sicht", async ({ page }) => {
+  test("Case D: Focus management for Karteninhalt", async ({ page }) => {
     const trigger = page.getByTestId("tool-fan-trigger");
 
-    // Open Sicht
-    await activateToolFanAction(page, "sight");
+    // Open Karteninhalt
+    await activateToolFanAction(page, "content");
     const sichtOverlay = page.getByTestId("filter-overlay");
     await expect(sichtOverlay).toBeVisible();
 
@@ -241,12 +241,14 @@ test.describe("Sicht mode", () => {
     await expect(trigger).toBeFocused();
   });
 
-  test("active type count and reset are visible in Sicht", async ({ page }) => {
-    await activateToolFanAction(page, "sight");
+  test("active type count and reset are visible in Karteninhalt", async ({
+    page,
+  }) => {
+    await activateToolFanAction(page, "content");
     const sichtOverlay = page.getByTestId("filter-overlay");
 
     await expect(
-      sichtOverlay.getByText(/^Alle \d+ Elemente auf der Karte/),
+      sichtOverlay.getByText(/^Alle \d+ Elemente sichtbar/),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Alles wieder zeigen" }),

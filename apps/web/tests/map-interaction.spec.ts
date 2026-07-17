@@ -11,9 +11,13 @@ test.describe("Map Interaction & Context Panel", () => {
   });
 
   test("displays explicit OSM/ODbL attribution", async ({ page }) => {
-    const attributionLink = page.locator(".maplibregl-ctrl-attrib-inner a", {
-      hasText: "OpenStreetMap",
-    });
+    const attribution = page.locator(".maplibregl-ctrl-attrib");
+    const attributionLink = attribution.locator(
+      ".maplibregl-ctrl-attrib-inner a",
+      {
+        hasText: "OpenStreetMap",
+      },
+    );
     await expect(attributionLink).toBeVisible();
     await expect(attributionLink).toHaveAttribute(
       "href",
@@ -120,7 +124,7 @@ test.describe("Map Interaction & Context Panel", () => {
     await activateToolFanAction(page, "weave");
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
-    await activateToolFanAction(page, "sight");
+    await activateToolFanAction(page, "content");
     const filterOverlay = page.locator('[data-testid="filter-overlay"]');
     await expect(filterOverlay).toBeVisible();
     await page.keyboard.press("Escape");

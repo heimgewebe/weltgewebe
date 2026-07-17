@@ -270,7 +270,9 @@ test.describe("Search mode", () => {
 
     const results = page.locator("li[role='option']");
     await expect(results).toHaveCount(6);
-    await expect(page.getByText("9 Treffer auf der Karte")).toBeVisible();
+    await expect(
+      page.getByText("9 Treffer in der aktuellen Kartensicht"),
+    ).toBeVisible();
 
     const showMore = page.getByRole("button", {
       name: "Alle 9 Vorschläge zeigen",

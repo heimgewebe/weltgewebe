@@ -1,48 +1,60 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
-test.describe("Tool Fan Layout", () => {
+async function box(locator: Locator) {
+  const value = await locator.boundingBox();
+  expect(value).not.toBeNull();
+  return value!;
+}
+
+async function expectInsideViewport(page: Page, testIds: string[]) {
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  for (const testId of testIds) {
+    const rect = await box(page.getByTestId(testId));
+    expect(rect.x, testId + " leaves the left edge").toBeGreaterThanOrEqual(0);
+    expect(rect.y, testId + " leaves the top edge").toBeGreaterThanOrEqual(0);
+    expect(
+      rect.x + rect.width,
+      testId + " leaves the right edge",
+    ).toBeLessThanOrEqual(viewport!.width);
+    expect(
+      rect.y + rect.height,
+      testId + " leaves the bottom edge",
+    ).toBeLessThanOrEqual(viewport!.height);
+  }
+}
+
+test.describe("separated map fans", () => {
   test.beforeEach(async ({ page }) => {
     await mockApiResponses(page, {
       auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
     });
+    await page.setViewportSize({ width: 1180, height: 820 });
     await page.goto("/map");
-    await page.waitForSelector('[data-testid="tool-fan"]', {
+    await page.waitForSelector('[data-testid="tool-fan"]', { timeout: 10000 });
+    await page.waitForSelector('[data-testid="governance-fan"]', {
       timeout: 10000,
     });
   });
 
-  test("root button is closed by default and shows a text label", async ({
+  test("places governance at top center and tools at bottom center", async ({
     page,
   }) => {
-    const trigger = page.getByTestId("tool-fan-trigger");
-    await expect(trigger).toBeVisible();
-    await expect(trigger).toHaveAttribute("aria-expanded", "false");
-    await expect(trigger).toHaveAttribute("aria-label", "Werkzeuge öffnen");
-    await expect(trigger).toContainText("Werkzeuge");
-
-    // The fan actions exist in the DOM but are not reachable while closed.
-    await expect(page.getByTestId("tool-fan-find")).toHaveAttribute(
-      "tabindex",
-      "-1",
-    );
-    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
-      "data-expanded",
-      "false",
-    );
+    const tool = await box(page.getByTestId("tool-fan-trigger"));
+    const governance = await box(page.getByTestId("governance-fan-trigger"));
+    expect(Math.abs(tool.x + tool.width / 2 - 590)).toBeLessThanOrEqual(2);
+    expect(
+      Math.abs(governance.x + governance.width / 2 - 590),
+    ).toBeLessThanOrEqual(2);
+    expect(governance.y).toBeLessThan(180);
+    expect(tool.y).toBeGreaterThan(700);
   });
 
-  test("opening the fan reveals actions in DOM order Finden, Sicht, Weben with text labels", async ({
-    page,
-  }) => {
+  test("keeps governance events out of the tool fan", async ({ page }) => {
     await page.getByTestId("tool-fan-trigger").click();
-    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
-      "data-expanded",
-      "true",
-    );
-
     const actions = page.locator("#tool-fan-actions .fan-action");
-    await expect(actions).toHaveCount(3);
+    await expect(actions).toHaveCount(4);
     await expect(actions.nth(0)).toHaveAttribute(
       "data-testid",
       "tool-fan-find",
@@ -50,188 +62,242 @@ test.describe("Tool Fan Layout", () => {
     await expect(actions.nth(0)).toContainText("Finden");
     await expect(actions.nth(1)).toHaveAttribute(
       "data-testid",
-      "tool-fan-sight",
+      "tool-fan-content",
     );
-    await expect(actions.nth(1)).toContainText("Sicht");
+    await expect(actions.nth(1)).toContainText("Karteninhalt");
     await expect(actions.nth(2)).toHaveAttribute(
       "data-testid",
       "tool-fan-weave",
     );
-    await expect(actions.nth(2)).toContainText("Weben");
+    await expect(actions.nth(2)).toContainText("Knoten knüpfen");
+    await expect(actions.nth(3)).toHaveAttribute(
+      "data-testid",
+      "tool-fan-apply",
+    );
+    await expect(actions.nth(3)).toContainText("Antrag stellen");
+    await expect(
+      page.getByTestId("tool-fan").getByText("Anträge", { exact: true }),
+    ).toHaveCount(0);
 
-    for (const action of [actions.nth(0), actions.nth(1), actions.nth(2)]) {
-      await expect(action).toHaveAttribute("tabindex", "0");
+    const governanceLinks = [
+      ["governance-fan-proposals", "/antraege", "Alle Anträge"],
+      ["governance-fan-open", "/antraege?sicht=offen", "Offene Entscheidungen"],
+      [
+        "governance-fan-voting",
+        "/antraege?sicht=abstimmung",
+        "Gespräch & Abstimmung",
+      ],
+    ] as const;
+    for (const [testId] of governanceLinks) {
+      await expect(page.getByTestId(testId)).toHaveAttribute("tabindex", "-1");
+    }
+    await page.getByTestId("governance-fan-trigger").click();
+    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
+      "data-expanded",
+      "false",
+    );
+    for (const [testId, href, label] of governanceLinks) {
+      const link = page.getByTestId(testId);
+      await expect(link).toHaveAttribute("tabindex", "0");
+      await expect(link).toHaveAttribute("href", href);
+      await expect(link).toContainText(label);
     }
   });
 
-  test("Tab follows the visible order Finden, Sicht, Weben, Anträge", async ({
-    page,
-  }) => {
-    const trigger = page.getByTestId("tool-fan-trigger");
-    await trigger.focus();
-    await trigger.press("Enter");
-
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-find")).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-sight")).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-weave")).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-proposals")).toBeFocused();
-  });
-
-  test("Anträge appears as a secondary link inside the opened fan", async ({
-    page,
-  }) => {
-    const link = page.getByTestId("tool-fan-proposals");
-    await expect(link).toHaveAttribute("tabindex", "-1");
-
+  test("fans and card lenses are mutually exclusive", async ({ page }) => {
     await page.getByTestId("tool-fan-trigger").click();
-    await expect(link).toHaveAttribute("href", "/antraege");
-    await expect(link).toHaveAttribute("tabindex", "0");
-    await expect(link).toContainText("Anträge");
-  });
-
-  test("Escape closes the fan and restores focus to the root button", async ({
-    page,
-  }) => {
-    const trigger = page.getByTestId("tool-fan-trigger");
-    await trigger.click();
     await expect(page.getByTestId("tool-fan")).toHaveAttribute(
       "data-expanded",
       "true",
     );
+    await page.getByTestId("governance-fan-trigger").click();
+    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
+      "data-expanded",
+      "false",
+    );
+    await expect(page.getByTestId("governance-fan")).toHaveAttribute(
+      "data-expanded",
+      "true",
+    );
 
+    await page.getByTestId("tool-fan-trigger").click();
+    await expect(page.getByTestId("governance-fan")).toHaveAttribute(
+      "data-expanded",
+      "false",
+    );
+    await page.getByTestId("tool-fan-find").click();
+    await expect(page.getByTestId("search-overlay")).toBeVisible();
+    await page.getByTestId("governance-fan-trigger").click();
+    await expect(page.getByTestId("search-overlay")).toBeHidden();
+    await expect(page.getByTestId("governance-fan")).toHaveAttribute(
+      "data-expanded",
+      "true",
+    );
+  });
+
+  test("closed branches are not tabbable and open tools follow their visible order", async ({
+    page,
+  }) => {
+    for (const testId of [
+      "tool-fan-find",
+      "tool-fan-content",
+      "tool-fan-weave",
+      "tool-fan-apply",
+    ]) {
+      await expect(page.getByTestId(testId)).toHaveAttribute("tabindex", "-1");
+    }
+    const trigger = page.getByTestId("tool-fan-trigger");
+    await trigger.focus();
+    await trigger.press("Enter");
+    for (const testId of [
+      "tool-fan-find",
+      "tool-fan-content",
+      "tool-fan-weave",
+      "tool-fan-apply",
+    ]) {
+      await page.keyboard.press("Tab");
+      await expect(page.getByTestId(testId)).toBeFocused();
+    }
+  });
+
+  test("Escape closes each fan and returns focus to its trigger", async ({
+    page,
+  }) => {
+    const toolTrigger = page.getByTestId("tool-fan-trigger");
+    await toolTrigger.click();
+    await page.getByTestId("tool-fan-content").focus();
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("tool-fan")).toHaveAttribute(
       "data-expanded",
       "false",
     );
-    await expect(trigger).toBeFocused();
-  });
+    await expect(toolTrigger).toBeFocused();
 
-  test("clicking outside the fan closes it", async ({ page }) => {
-    await page.getByTestId("tool-fan-trigger").click();
-    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
-      "data-expanded",
-      "true",
-    );
-
-    await page.mouse.click(20, 20);
-    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
+    const governanceTrigger = page.getByTestId("governance-fan-trigger");
+    await governanceTrigger.click();
+    await page.getByTestId("governance-fan-proposals").focus();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("governance-fan")).toHaveAttribute(
       "data-expanded",
       "false",
     );
+    await expect(governanceTrigger).toBeFocused();
   });
 
-  test("Weben moves keyboard focus into the opened composition panel", async ({
+  test("the Karteninhalt accessible name includes the active selection count", async ({
+    page,
+  }) => {
+    await page.getByTestId("tool-fan-trigger").click();
+    await page.getByTestId("tool-fan-content").click();
+    const choices = page
+      .getByTestId("filter-overlay")
+      .locator('input[type="checkbox"]');
+    expect(await choices.count()).toBeGreaterThanOrEqual(2);
+    await choices.nth(0).check();
+    await choices.nth(1).check();
+    await page.getByRole("button", { name: "Karteninhalt schließen" }).click();
+    await page.getByTestId("tool-fan-trigger").click();
+    await expect(page.getByTestId("tool-fan-content")).toHaveAccessibleName(
+      /Karteninhalt.*2 Auswahlen aktiv/,
+    );
+  });
+
+  test("Antrag stellen opens and focuses the real application target", async ({
+    page,
+  }) => {
+    await page.getByTestId("tool-fan-trigger").click();
+    await page.getByTestId("tool-fan-apply").click();
+    await expect(page).toHaveURL(/\/antraege\?intent=stellen#antrag-stellen$/);
+    const target = page.locator("#antrag-stellen");
+    await expect(target).toBeVisible();
+    await expect(target).toBeFocused();
+    await expect(target).toContainText(
+      "Aktuell unterstützt das System als neue Antragsart nur den Weberstatus-Antrag für Gäste",
+    );
+  });
+
+  test("Knoten knüpfen moves focus into the composition panel", async ({
     page,
   }) => {
     await page.getByTestId("tool-fan-trigger").click();
     await page.getByTestId("tool-fan-weave").click();
-
-    const panel = page.getByTestId("context-panel");
-    await expect(panel).toBeVisible();
-    await expect(panel.locator("#title")).toBeFocused();
+    await expect(page.getByTestId("context-panel")).toBeVisible();
+    await expect(page.locator("#title")).toBeFocused();
   });
 
-  test("all opened branches stay inside a 320 pixel viewport", async ({
+  for (const viewport of [
+    { name: "iPad landscape", width: 1180, height: 820 },
+    { name: "narrow mobile", width: 320, height: 568 },
+  ]) {
+    test("keeps each fan inside " + viewport.name, async ({ page }) => {
+      await page.setViewportSize({
+        width: viewport.width,
+        height: viewport.height,
+      });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.getByTestId("tool-fan-trigger").click();
+      await expectInsideViewport(page, [
+        "tool-fan-trigger",
+        "tool-fan-find",
+        "tool-fan-content",
+        "tool-fan-weave",
+        "tool-fan-apply",
+      ]);
+      await page.keyboard.press("Escape");
+      await page.getByTestId("governance-fan-trigger").click();
+      await expectInsideViewport(page, [
+        "governance-fan-trigger",
+        "governance-fan-proposals",
+        "governance-fan-open",
+        "governance-fan-voting",
+      ]);
+    });
+  }
+
+  test("all fan and sheet controls meet the 44px touch target", async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 320, height: 568 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.getByTestId("tool-fan-trigger").click();
-
     for (const testId of [
       "tool-fan-trigger",
       "tool-fan-find",
-      "tool-fan-sight",
+      "tool-fan-content",
       "tool-fan-weave",
-      "tool-fan-proposals",
+      "tool-fan-apply",
     ]) {
-      const box = await page.getByTestId(testId).boundingBox();
-      expect(box, `${testId} has no box`).not.toBeNull();
-      expect(box!.x, `${testId} leaves the left edge`).toBeGreaterThanOrEqual(
-        0,
-      );
-      expect(box!.y, `${testId} leaves the top edge`).toBeGreaterThanOrEqual(0);
-      expect(
-        box!.x + box!.width,
-        `${testId} leaves the right edge`,
-      ).toBeLessThanOrEqual(320);
-      expect(
-        box!.y + box!.height,
-        `${testId} leaves the bottom edge`,
-      ).toBeLessThanOrEqual(568);
+      const rect = await box(page.getByTestId(testId));
+      expect(rect.height, testId + " is too short").toBeGreaterThanOrEqual(44);
     }
-  });
-
-  test("outside click closes only the fan while search and focus stay open", async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.locator(".map-marker").first().click();
-    const panel = page.getByTestId("context-panel");
-    await expect(panel).toBeVisible();
-
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-find").click();
-    const search = page.getByTestId("search-overlay");
-    await expect(search).toBeVisible();
-
-    await page.getByTestId("tool-fan-trigger").click();
-    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
-      "data-expanded",
-      "true",
-    );
-    await search.getByRole("searchbox", { name: "Suchbegriff" }).click();
-
-    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
-      "data-expanded",
-      "false",
-    );
-    await expect(search).toBeVisible();
-    await expect(panel).toBeVisible();
-  });
-
-  test("respects reduced motion by disabling the fan open transition", async ({
-    page,
-  }) => {
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    const find = page.getByTestId("tool-fan-find");
-    const duration = await find.evaluate(
-      (el) => getComputedStyle(el).transitionDuration,
-    );
-    expect(duration).toMatch(/^0s(,\s*0s)*$/);
-  });
-
-  test("root button and fan actions meet the 44px touch target minimum", async ({
-    page,
-  }) => {
-    // Settle the open transform (scale 0.76 -> 1) instantly so the measured
-    // box reflects the final, resting size rather than a mid-animation frame.
-    await page.emulateMedia({ reducedMotion: "reduce" });
-
-    const trigger = page.getByTestId("tool-fan-trigger");
-    const triggerBox = await trigger.boundingBox();
-    expect(triggerBox?.height).toBeGreaterThanOrEqual(44);
-
-    await trigger.click();
+    await page.keyboard.press("Escape");
+    await page.getByTestId("governance-fan-trigger").click();
     for (const testId of [
-      "tool-fan-find",
-      "tool-fan-sight",
-      "tool-fan-weave",
-      "tool-fan-proposals",
+      "governance-fan-trigger",
+      "governance-fan-proposals",
+      "governance-fan-open",
+      "governance-fan-voting",
     ]) {
-      const box = await page.getByTestId(testId).boundingBox();
-      expect(box?.height).toBeGreaterThanOrEqual(44);
+      const rect = await box(page.getByTestId(testId));
+      expect(rect.height, testId + " is too short").toBeGreaterThanOrEqual(44);
+    }
+    await page.keyboard.press("Escape");
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator(".map-marker").first().click();
+    const sheetButtons = page
+      .getByTestId("context-panel")
+      .locator(".sheet-controls button:visible");
+    expect(await sheetButtons.count()).toBeGreaterThan(0);
+    for (let index = 0; index < (await sheetButtons.count()); index += 1) {
+      const rect = await box(sheetButtons.nth(index));
+      expect(rect.width).toBeGreaterThanOrEqual(44);
+      expect(rect.height).toBeGreaterThanOrEqual(44);
     }
   });
 });
 
-test.describe("Tool Fan Layout — guest role", () => {
-  test("Weben stays in place and disabled instead of shifting Finden/Sicht", async ({
+test.describe("tool fan guest role", () => {
+  test("keeps Knoten knüpfen disabled without removing Antrag stellen", async ({
     page,
   }) => {
     await mockApiResponses(page, {
@@ -240,42 +306,23 @@ test.describe("Tool Fan Layout — guest role", () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/map");
-    await page.waitForSelector('[data-testid="tool-fan"]', {
-      timeout: 10000,
-    });
     await page.getByTestId("tool-fan-trigger").click();
-
     const weave = page.getByTestId("tool-fan-weave");
-    await expect(weave).toBeVisible();
     await expect(weave).toBeDisabled();
     await expect(weave).toHaveAttribute("tabindex", "-1");
     await expect(weave).toHaveAttribute(
       "aria-label",
-      "Weben – Weber-Garnrolle erforderlich",
+      "Knoten knüpfen – Weber-Garnrolle erforderlich",
     );
-    await expect(weave).toContainText("Weben · Weberstatus nötig");
-    const weaveBox = await weave.boundingBox();
-    expect(weaveBox).not.toBeNull();
-    expect(weaveBox!.x).toBeGreaterThanOrEqual(0);
-    expect(weaveBox!.x + weaveBox!.width).toBeLessThanOrEqual(320);
-
-    const trigger = page.getByTestId("tool-fan-trigger");
-    await trigger.focus();
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-find")).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-sight")).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-proposals")).toBeFocused();
-
-    const find = page.getByTestId("tool-fan-find");
-    const sight = page.getByTestId("tool-fan-sight");
-    const findBox = await find.boundingBox();
-    const sightBox = await sight.boundingBox();
-
-    // Same anchored positions as the authenticated weber case.
-    expect(Math.round(findBox?.y ?? 0)).toBeGreaterThan(0);
-    expect(Math.round(sightBox?.y ?? 0)).toBeGreaterThan(0);
-    expect(findBox?.y).toBeLessThan(sightBox?.y ?? 0);
+    await expect(page.getByTestId("tool-fan-apply")).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+    await expectInsideViewport(page, [
+      "tool-fan-find",
+      "tool-fan-content",
+      "tool-fan-weave",
+      "tool-fan-apply",
+    ]);
   });
 });

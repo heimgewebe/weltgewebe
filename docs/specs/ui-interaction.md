@@ -43,7 +43,7 @@ Weltgewebe ist ein kartenbasiertes Koordinationsinterface. Die Karte ist der öf
 | -------------- | --------------------------------------------------- |
 | Karte          | räumlicher Überblick, Auswahl und sichtbares Gewebe |
 | Fokuspanel     | Details, Gespräche, Entscheidungen und Handlungen   |
-| Werkzeugfächer | Finden, Sicht, Weben und seltene Zugänge            |
+| Werkzeugfächer | Finden, Karteninhalt, Knoten knüpfen, Antrag stellen |
 
 Es gibt keinen zweiten Detail-Drawer, kein dauerhaftes Seitenmenü für Objektinhalte und keine frei schwebenden Hauptformulare über der Karte.
 
@@ -90,22 +90,23 @@ Tabs sind lokal. Sie werden erst Teil der URL, wenn ein eigener verbindlicher Ta
 Der Werkzeugfächer formuliert Absichten, ohne der Karte dauerhaft eine Leiste zu entziehen. Im Ruhezustand bleibt nur ein kompakter, beschrifteter Wurzelknopf sichtbar. Geöffnet besitzt er genau drei stabile Hauptäste:
 
 - **Finden** öffnet die Suchlinse;
-- **Sicht** öffnet die Auswahl der sichtbaren Kartenarten;
-- **Weben** beginnt eine Komposition, sofern die Rolle dazu berechtigt ist.
+- **Karteninhalt** öffnet die Auswahl der sichtbaren Kartenarten;
+- **Knoten knüpfen** beginnt eine Komposition, sofern die Rolle dazu berechtigt ist;
+- **Antrag stellen** öffnet die aktuell verfügbaren Antragsaktionen.
 
-Die Äste bleiben räumlich und in der Tastaturreihenfolge stabil. Rollenabhängige Berechtigungen dürfen die anderen Äste nicht verschieben. Seltene Zugänge wie Anträge dürfen nach dem bewussten Öffnen sekundär erscheinen, aber keine neue dauerhafte Kartenleiste bilden. Konto und eigene Garnrolle bleiben im Identitätszugang.
+Die Äste bleiben räumlich und in der Tastaturreihenfolge stabil. Rollenabhängige Berechtigungen dürfen die anderen Äste nicht verschieben. Der handlungsorientierte Werkzeugfächer öffnet unten mittig und enthält Finden, Karteninhalt, Knoten knüpfen sowie die eigenständige Webungsaktion Antrag stellen. Gemeinschaftliche Zustände und Ereignisse öffnen oben mittig in einem eigenen Gemeinschaftsfächer; dort liegen Anträge, offene Entscheidungen sowie Gespräch und Abstimmung. Konto und eigene Garnrolle bleiben im Identitätszugang. Beide Fächer sind gegenseitig exklusiv und bilden keine dauerhafte Kartenleiste.
 
 Der Werkzeugfächer schließt durch erneutes Betätigen, Escape oder Auswahl außerhalb. Beim Schließen kehrt der Tastaturfokus sinnvoll zum Wurzelknopf zurück. Animationen verwenden nur Transformation und Deckkraft und entfallen bei reduzierter Bewegung.
 
 ## Kartenlinsen
 
-Finden und Sicht sind lokale Kartenlinsen:
+Finden und Karteninhalt sind lokale Kartenlinsen:
 
 - sie verändern die sichtbare Szene;
 - sie erzeugen keinen neuen globalen Zustand;
 - sie schließen sich gegenseitig;
 - sie erscheinen kompakt oberhalb der Karte und reservieren keine dauerhafte untere Fläche;
-- die Karte bleibt die primäre Trefferfläche; Finden zeigt höchstens sechs automatische Vorschläge, weitere Treffer öffnen nur auf bewusste Anforderung; Sicht zeigt keine automatische Trefferliste, nur Typauswahl, aktive Anzahl und Rücksetzen;
+- die Karte bleibt die primäre Trefferfläche; Finden zeigt höchstens sechs automatische Vorschläge, weitere Treffer öffnen nur auf bewusste Anforderung; Karteninhalt zeigt keine automatische Trefferliste, nur Typauswahl, aktive Anzahl und Rücksetzen;
 - passende Knoten und Garnrollen werden auf der Karte hervorgehoben;
 - liegt ein Treffer außerhalb des nutzbaren Kartenausschnitts, zeigt ein Richtungsmarker am Bildschirmrand zu ihm;
 - Richtungsmarker bleiben außerhalb von Topbar, sichtbaren Kartenlinsen, Werkzeugfächer und Fokuspanel und besitzen mindestens 44 × 44 Pixel;
@@ -173,7 +174,7 @@ Die Hauptführung verwendet Produktbegriffe. Technische Namen bleiben in Diagnos
 ## Nicht erlaubt
 
 - mehrere konkurrierende Detailflächen;
-- Finden oder Sicht als globale Hauptzustände;
+- Finden oder Karteninhalt als globale Hauptzustände;
 - stille API-Fallbacks, die Fehler als Leere darstellen;
 - technische Feldnamen in der Nutzerführung;
 - ein Kompositionsformular ohne eindeutigen Abbruch- und Erfolgsweg.

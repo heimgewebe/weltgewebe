@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-export type ToolFanAction = "find" | "sight" | "weave";
+export type ToolFanAction = "find" | "content" | "weave";
 
 export async function activateToolFanAction(
   page: Page,

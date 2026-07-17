@@ -136,8 +136,8 @@
       {#if visibleResults.length > 0}
         <div class="result-meta" aria-live="polite">
           {filteredResults.length === 1
-            ? "1 Treffer auf der Karte"
-            : `${filteredResults.length} Treffer auf der Karte`}
+            ? "1 Treffer in der aktuellen Kartensicht"
+            : `${filteredResults.length} Treffer in der aktuellen Kartensicht`}
         </div>
         <ul
           class="results"
