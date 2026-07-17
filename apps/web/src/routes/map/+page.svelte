@@ -274,13 +274,20 @@
     })();
   }
 
-  $: {
+  // Search content changes only require a marker refresh. ResizeObserver already
+  // reports intrinsic overlay-size changes, so it must not be recycled per key.
+  $: if (map) {
     filteredResults;
-    $isSearchOpen;
     $searchQuery;
+    $isSearchOpen;
+    scheduleSearchDirectionIndicators();
+  }
+
+  // Rebind observers only when an observed surface is mounted or removed.
+  $: {
+    $isSearchOpen;
     $contextPanelOpen;
     $isFilterOpen;
-    searchViewportGeometryDirty = true;
     if (map) tick().then(refreshSearchViewportObservers);
   }
 
@@ -607,11 +614,10 @@
       );
       map.addControl(
         new maplibregl.AttributionControl({
-          compact: false,
           customAttribution:
             '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
         }),
-        "bottom-right",
+        "bottom-left",
       );
 
       // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, etc.) carry domain meaning.
@@ -888,14 +894,18 @@
 
   #map :global(.maplibregl-ctrl-bottom-right) {
     right: calc(
-      var(--tool-fan-collapsed-width) + var(--tool-fan-control-gap)
+      env(safe-area-inset-right) + var(--map-control-edge)
     ) !important;
-    bottom: calc(env(safe-area-inset-bottom) + 12px) !important;
-    transition: right var(--motion-ui) !important;
+    bottom: calc(
+      env(safe-area-inset-bottom) + var(--map-control-edge)
+    ) !important;
   }
 
-  :global(.tool-fan.expanded) ~ #map :global(.maplibregl-ctrl-bottom-right) {
-    right: var(--tool-fan-expanded-control-offset) !important;
+  #map :global(.maplibregl-ctrl-bottom-left) {
+    left: calc(env(safe-area-inset-left) + var(--map-control-edge)) !important;
+    bottom: calc(
+      env(safe-area-inset-bottom) + var(--map-control-edge)
+    ) !important;
   }
 
   #map :global(.maplibregl-ctrl-group button) {
@@ -906,33 +916,25 @@
   @media (min-width: 769px) {
     #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
       right: calc(
-        var(--context-panel-width) + var(--tool-fan-collapsed-width) +
-          var(--tool-fan-control-gap)
-      ) !important;
-      transition: none !important;
-    }
-
-    :global(.tool-fan.expanded.panel-open)
-      ~ #map.panel-open
-      :global(.maplibregl-ctrl-bottom-right) {
-      right: calc(
-        var(--context-panel-width) + var(--tool-fan-expanded-control-offset)
+        var(--context-panel-width) + env(safe-area-inset-right) +
+          var(--map-control-edge)
       ) !important;
     }
   }
 
   @media (max-width: 768px) {
-    #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
+    #map.panel-open :global(.maplibregl-ctrl-bottom-right),
+    #map.panel-open :global(.maplibregl-ctrl-bottom-left) {
       top: calc(env(safe-area-inset-top) + var(--toolbar-offset) + 8px);
-      right: 10px !important;
       bottom: auto !important;
-      transition: none !important;
     }
-  }
 
-  @media (prefers-reduced-motion: reduce) {
-    #map :global(.maplibregl-ctrl-bottom-right) {
-      transition: none !important;
+    #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
+      right: calc(env(safe-area-inset-right) + 10px) !important;
+    }
+
+    #map.panel-open :global(.maplibregl-ctrl-bottom-left) {
+      left: calc(env(safe-area-inset-left) + 10px) !important;
     }
   }
 

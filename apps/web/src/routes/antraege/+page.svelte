@@ -22,6 +22,11 @@
   let leaving = false;
 
   $: selectedProposalId = $page.url.searchParams.get("id");
+  $: statusFilter = $page.url.searchParams.get("status");
+  $: visibleProposals =
+    statusFilter === "consent" || statusFilter === "voting"
+      ? proposals.filter((proposal) => proposal.status === statusFilter)
+      : proposals;
   $: isGuest = $authStore.authenticated && $authStore.role === "gast";
   $: hasOpenOwnProposal =
     isGuest &&
@@ -109,7 +114,7 @@
   </header>
 
   {#if isGuest}
-    <section class="guest-card" aria-labelledby="weberstatus-heading">
+    <section id="antrag-stellen" class="guest-card" aria-labelledby="weberstatus-heading">
       <div>
         <p class="eyebrow">Dein Status: Gast</p>
         <h2 id="weberstatus-heading">Weberstatus beantragen</h2>
@@ -134,7 +139,14 @@
 
   <section aria-labelledby="proposal-list-heading">
     <div class="section-heading">
-      <h2 id="proposal-list-heading">Alle Anträge</h2>
+      <div>
+        <h2 id="proposal-list-heading">{statusFilter === "consent" ? "Offene Anträge" : statusFilter === "voting" ? "Abstimmungen" : "Alle Anträge"}</h2>
+        <nav class="proposal-filters" aria-label="Anträge filtern">
+          <a class:active={!statusFilter} href="/antraege">Alle</a>
+          <a class:active={statusFilter === "consent"} href="/antraege?status=consent">Offen</a>
+          <a class:active={statusFilter === "voting"} href="/antraege?status=voting">Abstimmungen</a>
+        </nav>
+      </div>
       <button class="secondary" on:click={refresh} disabled={loading}>Aktualisieren</button>
     </div>
 
@@ -142,9 +154,11 @@
       <p class="muted">Anträge werden geladen…</p>
     {:else if proposals.length === 0}
       <p class="empty">Noch liegen keine Anträge vor.</p>
+    {:else if visibleProposals.length === 0}
+      <p class="empty">Für diese Ansicht liegen keine Anträge vor.</p>
     {:else}
       <div class="proposal-list">
-        {#each proposals as proposal}
+        {#each visibleProposals as proposal}
           <a class="proposal-card" href={`/antraege?id=${encodeURIComponent(proposal.id)}`}>
             <div class="proposal-topline">
               <span class:open={proposal.status === "consent" || proposal.status === "voting"}>{statusLabel(proposal.status)}</span>
@@ -188,6 +202,9 @@
   .error { padding: 14px 16px; margin-bottom: 24px; color: #7f2424; background: #fff0f0; }
   .section-heading, .proposal-topline, .facts { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .section-heading { margin-bottom: 16px; }
+  .proposal-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .proposal-filters a { min-height: 44px; padding: 0 14px; border: 1px solid rgba(24,37,31,.2); border-radius: 999px; display: inline-flex; align-items: center; color: inherit; text-decoration: none; font-weight: 680; }
+  .proposal-filters a.active { border-color: #1f5b42; background: #dcecdf; color: #1f5b42; }
   .proposal-list { display: grid; gap: 12px; }
   .proposal-card { display: grid; gap: 12px; padding: 20px; color: inherit; text-decoration: none; transition: transform 120ms ease, border-color 120ms ease; }
   .proposal-card:hover, .proposal-card:focus-visible { transform: translateY(-2px); border-color: rgba(24,37,31,.45); }

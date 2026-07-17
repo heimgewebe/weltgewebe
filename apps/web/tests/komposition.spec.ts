@@ -200,7 +200,7 @@ test.describe("Komposition Flow (weber)", () => {
 });
 
 test.describe("Komposition Flow (gast/anonymous)", () => {
-  test("Guests get no functional write path: disabled Weben action, no longpress panel", async ({
+  test("Anonymous visitors get no node write path and no longpress panel", async ({
     page,
   }) => {
     await gotoMapAs(page, { authenticated: false, role: "gast" });
@@ -210,13 +210,8 @@ test.describe("Komposition Flow (gast/anonymous)", () => {
     await expect(weave).toBeDisabled();
     await expect(weave).toHaveAttribute(
       "aria-label",
-      "Weben – Weber-Garnrolle erforderlich",
+      "Weben – Anmeldung erforderlich",
     );
-    await expect(weave).toHaveAttribute(
-      "title",
-      "Zum Weben ist eine Weber-Garnrolle nötig",
-    );
-    await weave.click({ force: true });
     await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
 
     await longPressMapCenter(page);

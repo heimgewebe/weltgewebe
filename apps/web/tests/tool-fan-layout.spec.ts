@@ -1,6 +1,20 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
+const ROOT_ACTIONS = [
+  "tool-fan-find",
+  "tool-fan-map-content",
+  "tool-fan-weave",
+] as const;
+
+async function openToolFan(page: import("@playwright/test").Page) {
+  await page.getByTestId("tool-fan-trigger").click();
+  await expect(page.getByTestId("tool-fan")).toHaveAttribute(
+    "data-expanded",
+    "true",
+  );
+}
+
 test.describe("Tool Fan Layout", () => {
   test.beforeEach(async ({ page }) => {
     await mockApiResponses(page, {
@@ -12,7 +26,7 @@ test.describe("Tool Fan Layout", () => {
     });
   });
 
-  test("root button is closed by default and shows a text label", async ({
+  test("root button is closed by default and centered at the bottom", async ({
     page,
   }) => {
     const trigger = page.getByTestId("tool-fan-trigger");
@@ -21,88 +35,97 @@ test.describe("Tool Fan Layout", () => {
     await expect(trigger).toHaveAttribute("aria-label", "Werkzeuge öffnen");
     await expect(trigger).toContainText("Werkzeuge");
 
-    // The fan actions exist in the DOM but are not reachable while closed.
-    await expect(page.getByTestId("tool-fan-find")).toHaveAttribute(
-      "tabindex",
-      "-1",
-    );
-    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
-      "data-expanded",
-      "false",
-    );
+    const box = await trigger.boundingBox();
+    const viewport = page.viewportSize();
+    expect(box).not.toBeNull();
+    expect(viewport).not.toBeNull();
+    expect(
+      Math.abs(box!.x + box!.width / 2 - viewport!.width / 2),
+    ).toBeLessThan(2);
   });
 
-  test("opening the fan reveals actions in DOM order Finden, Sicht, Weben with text labels", async ({
+  test("opening reveals Finden, Karteninhalt and Weben in stable order", async ({
     page,
   }) => {
-    await page.getByTestId("tool-fan-trigger").click();
-    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
-      "data-expanded",
-      "true",
+    await openToolFan(page);
+    const actions = page.locator(
+      "#tool-fan-actions .fan-row--root .fan-action",
     );
-
-    const actions = page.locator("#tool-fan-actions .fan-action");
     await expect(actions).toHaveCount(3);
+
     await expect(actions.nth(0)).toHaveAttribute(
       "data-testid",
-      "tool-fan-find",
+      ROOT_ACTIONS[0],
     );
     await expect(actions.nth(0)).toContainText("Finden");
     await expect(actions.nth(1)).toHaveAttribute(
       "data-testid",
-      "tool-fan-sight",
+      ROOT_ACTIONS[1],
     );
-    await expect(actions.nth(1)).toContainText("Sicht");
+    await expect(actions.nth(1)).toContainText("Karteninhalt");
     await expect(actions.nth(2)).toHaveAttribute(
       "data-testid",
-      "tool-fan-weave",
+      ROOT_ACTIONS[2],
     );
     await expect(actions.nth(2)).toContainText("Weben");
 
-    for (const action of [actions.nth(0), actions.nth(1), actions.nth(2)]) {
-      await expect(action).toHaveAttribute("tabindex", "0");
+    for (const testId of ROOT_ACTIONS) {
+      await expect(page.getByTestId(testId)).toHaveAttribute("tabindex", "0");
     }
   });
 
-  test("Tab follows the visible order Finden, Sicht, Weben, Anträge", async ({
+  test("visible labels form the accessible name, including the filter badge", async ({
+    page,
+  }) => {
+    await openToolFan(page);
+    const mapContent = page.getByTestId("tool-fan-map-content");
+    await expect(mapContent).not.toHaveAttribute("aria-label", /.+/);
+    await expect(mapContent).toHaveAccessibleName("Karteninhalt");
+  });
+
+  test("Tab leaves the non-modal fan and closes it instead of trapping focus", async ({
     page,
   }) => {
     const trigger = page.getByTestId("tool-fan-trigger");
     await trigger.focus();
     await trigger.press("Enter");
 
+    for (const testId of ROOT_ACTIONS) {
+      await page.keyboard.press("Tab");
+      await expect(page.getByTestId(testId)).toBeFocused();
+    }
     await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-find")).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-sight")).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-weave")).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-proposals")).toBeFocused();
+    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
+      "data-expanded",
+      "false",
+    );
   });
 
-  test("Anträge appears as a secondary link inside the opened fan", async ({
+  test("Weben opens a second level and Knoten knüpfen starts composition", async ({
     page,
   }) => {
-    const link = page.getByTestId("tool-fan-proposals");
-    await expect(link).toHaveAttribute("tabindex", "-1");
+    await openToolFan(page);
+    await page.getByTestId("tool-fan-weave").click();
 
-    await page.getByTestId("tool-fan-trigger").click();
-    await expect(link).toHaveAttribute("href", "/antraege");
-    await expect(link).toHaveAttribute("tabindex", "0");
-    await expect(link).toContainText("Anträge");
+    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
+      "data-branch",
+      "weave",
+    );
+    await expect(page.getByTestId("tool-fan-create-node")).toBeEnabled();
+    await expect(page.getByTestId("tool-fan-create-proposal")).toBeDisabled();
+    await expect(page.getByTestId("tool-fan-create-node")).toBeFocused();
+
+    await page.getByTestId("tool-fan-create-node").click();
+    const panel = page.getByTestId("context-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel.locator("#title")).toBeFocused();
   });
 
-  test("Escape closes the fan and restores focus to the root button", async ({
+  test("Escape closes the fan and restores focus to the trigger", async ({
     page,
   }) => {
     const trigger = page.getByTestId("tool-fan-trigger");
-    await trigger.click();
-    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
-      "data-expanded",
-      "true",
-    );
-
+    await openToolFan(page);
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("tool-fan")).toHaveAttribute(
       "data-expanded",
@@ -111,171 +134,96 @@ test.describe("Tool Fan Layout", () => {
     await expect(trigger).toBeFocused();
   });
 
-  test("clicking outside the fan closes it", async ({ page }) => {
+  test("opening the tool fan closes an open map lens", async ({ page }) => {
+    await openToolFan(page);
+    await page.getByTestId("tool-fan-find").click();
+    await expect(page.getByTestId("search-overlay")).toBeVisible();
+
     await page.getByTestId("tool-fan-trigger").click();
+    await expect(page.getByTestId("search-overlay")).toHaveCount(0);
     await expect(page.getByTestId("tool-fan")).toHaveAttribute(
       "data-expanded",
       "true",
     );
-
-    await page.mouse.click(20, 20);
-    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
-      "data-expanded",
-      "false",
-    );
   });
 
-  test("Weben moves keyboard focus into the opened composition panel", async ({
-    page,
-  }) => {
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-weave").click();
-
-    const panel = page.getByTestId("context-panel");
-    await expect(panel).toBeVisible();
-    await expect(panel.locator("#title")).toBeFocused();
-  });
-
-  test("all opened branches stay inside a 320 pixel viewport", async ({
+  test("root and weave branches stay inside a 320 pixel viewport", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 320, height: 568 });
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.getByTestId("tool-fan-trigger").click();
+    await openToolFan(page);
 
+    for (const testId of ["tool-fan-trigger", ...ROOT_ACTIONS]) {
+      const box = await page.getByTestId(testId).boundingBox();
+      expect(box, `${testId} has no box`).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(568);
+    }
+
+    await page.getByTestId("tool-fan-weave").click();
     for (const testId of [
-      "tool-fan-trigger",
-      "tool-fan-find",
-      "tool-fan-sight",
-      "tool-fan-weave",
-      "tool-fan-proposals",
+      "tool-fan-back",
+      "tool-fan-create-node",
+      "tool-fan-create-proposal",
     ]) {
       const box = await page.getByTestId(testId).boundingBox();
       expect(box, `${testId} has no box`).not.toBeNull();
-      expect(box!.x, `${testId} leaves the left edge`).toBeGreaterThanOrEqual(
-        0,
-      );
-      expect(box!.y, `${testId} leaves the top edge`).toBeGreaterThanOrEqual(0);
-      expect(
-        box!.x + box!.width,
-        `${testId} leaves the right edge`,
-      ).toBeLessThanOrEqual(320);
-      expect(
-        box!.y + box!.height,
-        `${testId} leaves the bottom edge`,
-      ).toBeLessThanOrEqual(568);
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(568);
     }
   });
 
-  test("outside click closes only the fan while search and focus stay open", async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.locator(".map-marker").first().click();
-    const panel = page.getByTestId("context-panel");
-    await expect(panel).toBeVisible();
-
-    await page.getByTestId("tool-fan-trigger").click();
-    await page.getByTestId("tool-fan-find").click();
-    const search = page.getByTestId("search-overlay");
-    await expect(search).toBeVisible();
-
-    await page.getByTestId("tool-fan-trigger").click();
-    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
-      "data-expanded",
-      "true",
-    );
-    await search.getByRole("searchbox", { name: "Suchbegriff" }).click();
-
-    await expect(page.getByTestId("tool-fan")).toHaveAttribute(
-      "data-expanded",
-      "false",
-    );
-    await expect(search).toBeVisible();
-    await expect(panel).toBeVisible();
-  });
-
-  test("respects reduced motion by disabling the fan open transition", async ({
+  test("all interactive controls meet the 44px touch target minimum", async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
-    const find = page.getByTestId("tool-fan-find");
-    const duration = await find.evaluate(
-      (el) => getComputedStyle(el).transitionDuration,
-    );
-    expect(duration).toMatch(/^0s(,\s*0s)*$/);
-  });
-
-  test("root button and fan actions meet the 44px touch target minimum", async ({
-    page,
-  }) => {
-    // Settle the open transform (scale 0.76 -> 1) instantly so the measured
-    // box reflects the final, resting size rather than a mid-animation frame.
-    await page.emulateMedia({ reducedMotion: "reduce" });
-
     const trigger = page.getByTestId("tool-fan-trigger");
-    const triggerBox = await trigger.boundingBox();
-    expect(triggerBox?.height).toBeGreaterThanOrEqual(44);
+    expect((await trigger.boundingBox())?.height).toBeGreaterThanOrEqual(44);
 
-    await trigger.click();
-    for (const testId of [
-      "tool-fan-find",
-      "tool-fan-sight",
-      "tool-fan-weave",
-      "tool-fan-proposals",
-    ]) {
-      const box = await page.getByTestId(testId).boundingBox();
-      expect(box?.height).toBeGreaterThanOrEqual(44);
+    await openToolFan(page);
+    for (const testId of ROOT_ACTIONS) {
+      expect(
+        (await page.getByTestId(testId).boundingBox())?.height,
+      ).toBeGreaterThanOrEqual(44);
     }
+  });
+
+  test("respects reduced motion", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openToolFan(page);
+    const duration = await page
+      .locator("#tool-fan-actions")
+      .evaluate((el) => getComputedStyle(el).transitionDuration);
+    expect(duration).toMatch(/^0s(,\s*0s)*$/);
   });
 });
 
 test.describe("Tool Fan Layout — guest role", () => {
-  test("Weben stays in place and disabled instead of shifting Finden/Sicht", async ({
+  test("Weben exposes the real Weberantrag action without a wide disabled root button", async ({
     page,
   }) => {
     await mockApiResponses(page, {
-      auth: { authenticated: false, role: "gast" },
+      auth: { authenticated: true, account_id: "e2e-guest", role: "gast" },
     });
     await page.setViewportSize({ width: 320, height: 568 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/map");
-    await page.waitForSelector('[data-testid="tool-fan"]', {
-      timeout: 10000,
-    });
-    await page.getByTestId("tool-fan-trigger").click();
 
+    await openToolFan(page);
     const weave = page.getByTestId("tool-fan-weave");
-    await expect(weave).toBeVisible();
-    await expect(weave).toBeDisabled();
-    await expect(weave).toHaveAttribute("tabindex", "-1");
-    await expect(weave).toHaveAttribute(
-      "aria-label",
-      "Weben – Weber-Garnrolle erforderlich",
-    );
-    await expect(weave).toContainText("Weben · Weberstatus nötig");
-    const weaveBox = await weave.boundingBox();
-    expect(weaveBox).not.toBeNull();
-    expect(weaveBox!.x).toBeGreaterThanOrEqual(0);
-    expect(weaveBox!.x + weaveBox!.width).toBeLessThanOrEqual(320);
+    await expect(weave).toBeEnabled();
+    await expect(weave).toContainText("Weben");
+    expect((await weave.boundingBox())!.width).toBeLessThan(120);
 
-    const trigger = page.getByTestId("tool-fan-trigger");
-    await trigger.focus();
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-find")).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-sight")).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("tool-fan-proposals")).toBeFocused();
-
-    const find = page.getByTestId("tool-fan-find");
-    const sight = page.getByTestId("tool-fan-sight");
-    const findBox = await find.boundingBox();
-    const sightBox = await sight.boundingBox();
-
-    // Same anchored positions as the authenticated weber case.
-    expect(Math.round(findBox?.y ?? 0)).toBeGreaterThan(0);
-    expect(Math.round(sightBox?.y ?? 0)).toBeGreaterThan(0);
-    expect(findBox?.y).toBeLessThan(sightBox?.y ?? 0);
+    await weave.click();
+    await expect(page.getByTestId("tool-fan-create-node")).toBeDisabled();
+    const proposal = page.getByTestId("tool-fan-create-proposal");
+    await expect(proposal).toBeEnabled();
+    await expect(proposal).toHaveAttribute("href", "/antraege#antrag-stellen");
+    await expect(proposal).toBeFocused();
   });
 });

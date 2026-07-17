@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-ui
 owner: product-ui
-last_reviewed: 2026-07-11
+last_reviewed: 2026-07-17
 review_after: 2026-10-11
 depends_on:
   - specs.ui-state-machine
@@ -22,6 +22,8 @@ relations:
 verifies_with:
   - apps/web/src/lib/components/ContextPanel.svelte
   - apps/web/src/lib/components/ToolFan.svelte
+  - apps/web/src/lib/components/GovernanceFan.svelte
+  - apps/web/src/lib/stores/mapChrome.ts
   - apps/web/src/lib/components/SearchOverlay.svelte
   - apps/web/src/lib/components/FilterOverlay.svelte
   - apps/web/tests/map-interaction.spec.ts
@@ -39,11 +41,12 @@ Weltgewebe ist ein kartenbasiertes Koordinationsinterface. Die Karte ist der öf
 
 ## Drei Hauptflächen
 
-| Fläche         | Verantwortung                                       |
-| -------------- | --------------------------------------------------- |
-| Karte          | räumlicher Überblick, Auswahl und sichtbares Gewebe |
-| Fokuspanel     | Details, Gespräche, Entscheidungen und Handlungen   |
-| Werkzeugfächer | Finden, Sicht, Weben und seltene Zugänge            |
+| Fläche           | Verantwortung                                       |
+| ---------------- | --------------------------------------------------- |
+| Karte            | räumlicher Überblick, Auswahl und sichtbares Gewebe |
+| Fokuspanel       | Details, Gespräche, Entscheidungen und Handlungen   |
+| Werkzeugfächer   | Finden, Karteninhalt und Webungsaktionen            |
+| Governancefächer | Anträge und gemeinsame Entscheidungsereignisse      |
 
 Es gibt keinen zweiten Detail-Drawer, kein dauerhaftes Seitenmenü für Objektinhalte und keine frei schwebenden Hauptformulare über der Karte.
 
@@ -87,19 +90,34 @@ Tabs sind lokal. Sie werden erst Teil der URL, wenn ein eigener verbindlicher Ta
 
 ## Werkzeugfächer
 
-Der Werkzeugfächer formuliert Absichten, ohne der Karte dauerhaft eine Leiste zu entziehen. Im Ruhezustand bleibt nur ein kompakter, beschrifteter Wurzelknopf sichtbar. Geöffnet besitzt er genau drei stabile Hauptäste:
+Der Werkzeugfächer formuliert Absichten, ohne der Karte dauerhaft eine Leiste zu entziehen. Sein kompakter Wurzelknopf sitzt unten mittig. Geöffnet besitzt die erste Ebene genau drei stabile Hauptäste:
 
 - **Finden** öffnet die Suchlinse;
-- **Sicht** öffnet die Auswahl der sichtbaren Kartenarten;
-- **Weben** beginnt eine Komposition, sofern die Rolle dazu berechtigt ist.
+- **Karteninhalt** öffnet die Auswahl der sichtbaren Kartenarten;
+- **Weben** öffnet eine zweite, höchstens eine Ebene tiefe Auswahl realer Webungsaktionen.
 
-Die Äste bleiben räumlich und in der Tastaturreihenfolge stabil. Rollenabhängige Berechtigungen dürfen die anderen Äste nicht verschieben. Seltene Zugänge wie Anträge dürfen nach dem bewussten Öffnen sekundär erscheinen, aber keine neue dauerhafte Kartenleiste bilden. Konto und eigene Garnrolle bleiben im Identitätszugang.
+Die Webungsebene trennt die fachliche Kategorie von der konkreten Handlung. Der aktuelle Produktstand bietet dort:
 
-Der Werkzeugfächer schließt durch erneutes Betätigen, Escape oder Auswahl außerhalb. Beim Schließen kehrt der Tastaturfokus sinnvoll zum Wurzelknopf zurück. Animationen verwenden nur Transformation und Deckkraft und entfallen bei reduzierter Bewegung.
+- **Knoten knüpfen** für Weber und Administratoren;
+- **Antrag stellen** für Gäste als direkter Einstieg in den produktiv vorhandenen Weberantrag.
+
+Weitere Antragstypen dürfen erst erscheinen, wenn ihr Serververtrag tatsächlich produktiv ist. Eine deaktivierte oder beschriftete Oberfläche darf keine nicht vorhandene Schreibfähigkeit vortäuschen. Rollenabhängige Berechtigungen dürfen die drei Hauptäste nicht verschieben.
+
+Der Werkzeugfächer schließt durch erneutes Betätigen, Escape, Fokuswechsel nach außen oder Auswahl außerhalb. Er ist kein modaler Dialog und hält den Tastaturfokus daher nicht gefangen. Beim Schließen per Escape kehrt der Fokus zum Wurzelknopf zurück. Animationen verwenden Transformation und Deckkraft und entfallen bei reduzierter Bewegung.
+
+## Governancefächer
+
+Gemeinsame Entscheidungsereignisse besitzen einen getrennten Wurzelknopf oben mittig. Der Governancefächer öffnet nach unten und enthält ausschließlich reale Lese- und Navigationssichten, derzeit:
+
+- alle Anträge;
+- offene Konsentverfahren;
+- laufende Abstimmungen.
+
+Werkzeug- und Governancefächer sind gegenseitig exklusiv. Dadurch konkurrieren nicht zwei offene Menüs um dieselbe Kartenfläche. Das Stellen eines Antrags gehört nicht in den lesenden Governancefächer, sondern als Webungsaktion in die untere Webungsebene.
 
 ## Kartenlinsen
 
-Finden und Sicht sind lokale Kartenlinsen:
+Finden und Karteninhalt sind lokale Kartenlinsen:
 
 - sie verändern die sichtbare Szene;
 - sie erzeugen keinen neuen globalen Zustand;
@@ -173,7 +191,7 @@ Die Hauptführung verwendet Produktbegriffe. Technische Namen bleiben in Diagnos
 ## Nicht erlaubt
 
 - mehrere konkurrierende Detailflächen;
-- Finden oder Sicht als globale Hauptzustände;
+- Finden oder Karteninhalt als globale Hauptzustände;
 - stille API-Fallbacks, die Fehler als Leere darstellen;
 - technische Feldnamen in der Nutzerführung;
 - ein Kompositionsformular ohne eindeutigen Abbruch- und Erfolgsweg.

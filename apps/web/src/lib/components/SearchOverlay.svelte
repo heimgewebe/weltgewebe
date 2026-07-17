@@ -6,6 +6,7 @@
     closeSearch,
   } from "$lib/stores/searchStore";
   import { contextPanelOpen } from "$lib/stores/uiView";
+  import { activeFilters } from "$lib/stores/filterStore";
   import type { MapEntityViewModel } from "$lib/map/types";
   import { restoreTarget } from "$lib/utils/focusManager";
 
@@ -60,8 +61,11 @@
     closeSearch();
   }
   function handleGlobalKeydown(e: KeyboardEvent) {
-    if (!$isSearchOpen || e.defaultPrevented) return;
-    if (e.key === "Escape") closeSearch();
+    if (!$isSearchOpen || e.defaultPrevented || e.repeat) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeSearch();
+    }
   }
   function handleInputKeydown(e: KeyboardEvent) {
     if (!$isSearchOpen || visibleResults.length === 0) return;
@@ -135,9 +139,15 @@
     {#if $searchQuery.trim().length > 0}
       {#if visibleResults.length > 0}
         <div class="result-meta" aria-live="polite">
-          {filteredResults.length === 1
-            ? "1 Treffer auf der Karte"
-            : `${filteredResults.length} Treffer auf der Karte`}
+          {#if $activeFilters.size > 0}
+            {filteredResults.length === 1
+              ? "1 Treffer in der aktuellen Kartenansicht"
+              : `${filteredResults.length} Treffer in der aktuellen Kartenansicht`}
+          {:else}
+            {filteredResults.length === 1
+              ? "1 Treffer auf der Karte"
+              : `${filteredResults.length} Treffer auf der Karte`}
+          {/if}
         </div>
         <ul
           class="results"

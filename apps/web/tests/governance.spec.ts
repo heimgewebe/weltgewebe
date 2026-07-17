@@ -151,7 +151,7 @@ async function installGovernanceRoutes(
   };
 }
 
-test("Anträge is reachable as a secondary link inside the tool fan", async ({
+test("governance views fan out from the top center and stay separate from weaving", async ({
   page,
 }) => {
   await mockApiResponses(page, {
@@ -159,13 +159,54 @@ test("Anträge is reachable as a secondary link inside the tool fan", async ({
   });
   await page.goto("/map");
 
-  const link = page.getByTestId("tool-fan-proposals");
-  // Secondary access: not reachable while the fan is closed.
-  await expect(link).toHaveAttribute("tabindex", "-1");
+  const trigger = page.getByTestId("governance-fan-trigger");
+  const triggerBox = await trigger.boundingBox();
+  const viewport = page.viewportSize();
+  expect(triggerBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(
+    Math.abs(triggerBox!.x + triggerBox!.width / 2 - viewport!.width / 2),
+  ).toBeLessThan(2);
+
+  await trigger.click();
+  await expect(page.getByTestId("governance-fan-all")).toHaveAttribute(
+    "href",
+    "/antraege",
+  );
+  await expect(page.getByTestId("governance-fan-open")).toHaveAttribute(
+    "href",
+    "/antraege?status=consent",
+  );
+  await expect(page.getByTestId("governance-fan-voting")).toHaveAttribute(
+    "href",
+    "/antraege?status=voting",
+  );
 
   await page.getByTestId("tool-fan-trigger").click();
-  await expect(link).toBeVisible();
-  await expect(link).toHaveAttribute("href", "/antraege");
+  await expect(page.getByTestId("governance-fan")).toHaveAttribute(
+    "data-expanded",
+    "false",
+  );
+  await expect(page.getByTestId("tool-fan")).toHaveAttribute(
+    "data-expanded",
+    "true",
+  );
+  await expect(page.getByTestId("tool-fan-proposals")).toHaveCount(0);
+});
+
+test("a guest reaches the Weber application as a distinct weaving action", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: GUEST_ID, role: "gast" },
+  });
+  await page.goto("/map");
+  await page.getByTestId("tool-fan-trigger").click();
+  await page.getByTestId("tool-fan-weave").click();
+  await expect(page.getByTestId("tool-fan-create-proposal")).toHaveAttribute(
+    "href",
+    "/antraege#antrag-stellen",
+  );
 });
 
 test("guest can read everything and submit only the own Weber application", async ({
