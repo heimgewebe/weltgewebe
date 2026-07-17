@@ -254,13 +254,53 @@ test("a guest reaches the Weber application as a distinct weaving action", async
   await mockApiResponses(page, {
     auth: { authenticated: true, account_id: GUEST_ID, role: "gast" },
   });
+  await installGovernanceRoutes(page);
   await page.goto("/map");
   await page.getByTestId("tool-fan-trigger").click();
   await page.getByTestId("tool-fan-weave").click();
-  await expect(page.getByTestId("tool-fan-create-proposal")).toHaveAttribute(
+  const applicationAction = page.getByTestId("tool-fan-create-proposal");
+  await expect(applicationAction).toHaveAttribute(
     "href",
     "/antraege#antrag-stellen",
   );
+  await applicationAction.click();
+  await expect(page).toHaveURL(/\/antraege#antrag-stellen$/);
+  await expect(page.locator("#antrag-stellen")).toBeFocused();
+});
+
+test("client-side hash navigation focuses the Weber application without remounting", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: GUEST_ID, role: "gast" },
+  });
+  await installGovernanceRoutes(page);
+  await page.goto("/antraege");
+  await expect(
+    page.getByRole("heading", { name: "Weberstatus beantragen" }),
+  ).toBeVisible();
+
+  await page.evaluate(() => {
+    (window as Window & { __intraPageProbe?: string }).__intraPageProbe =
+      "preserved";
+    const link = document.createElement("a");
+    link.href = "/antraege#antrag-stellen";
+    link.textContent = "Zum Antrag";
+    link.dataset.testid = "intra-page-application-link";
+    document.body.appendChild(link);
+  });
+  await page.getByTestId("intra-page-application-link").click();
+
+  await expect(page).toHaveURL(/\/antraege#antrag-stellen$/);
+  await expect(page.locator("#antrag-stellen")).toBeFocused();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as Window & { __intraPageProbe?: string }).__intraPageProbe,
+      ),
+    )
+    .toBe("preserved");
 });
 
 test("guest can read everything and submit only the own Weber application", async ({

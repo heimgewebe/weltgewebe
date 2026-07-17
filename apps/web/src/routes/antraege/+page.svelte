@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
+  import { onMount, tick } from "svelte";
+  import { afterNavigate, goto } from "$app/navigation";
   import { page } from "$app/stores";
   import { authStore } from "$lib/auth/store";
   import ProposalDetail from "$lib/components/governance/ProposalDetail.svelte";
@@ -20,6 +20,7 @@
   let summary = "";
   let submitting = false;
   let leaving = false;
+  let applicationSection: HTMLElement | null = null;
 
   $: selectedProposalId = $page.url.searchParams.get("id");
   $: statusFilter = $page.url.searchParams.get("status");
@@ -104,9 +105,20 @@
     }
   }
 
+  async function focusApplicationSection(url: URL): Promise<void> {
+    if (url.hash !== "#antrag-stellen") return;
+    await tick();
+    applicationSection?.focus();
+  }
+
+  afterNavigate(({ to }) => {
+    if (to) void focusApplicationSection(to.url);
+  });
+
   onMount(async () => {
     await authStore.checkAuth();
     await refresh();
+    await focusApplicationSection($page.url);
   });
 </script>
 
@@ -129,7 +141,7 @@
   </header>
 
   {#if isGuest}
-    <section id="antrag-stellen" class="guest-card" aria-labelledby="weberstatus-heading">
+    <section id="antrag-stellen" class="guest-card" aria-labelledby="weberstatus-heading" tabindex="-1" bind:this={applicationSection}>
       <div>
         <p class="eyebrow">Dein Status: Gast</p>
         <h2 id="weberstatus-heading">Weberstatus beantragen</h2>
