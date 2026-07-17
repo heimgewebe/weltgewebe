@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
+  import { onMount, tick } from "svelte";
+  import { afterNavigate, goto } from "$app/navigation";
   import { page } from "$app/stores";
   import { authStore } from "$lib/auth/store";
   import ProposalDetail from "$lib/components/governance/ProposalDetail.svelte";
@@ -20,6 +20,10 @@
   let summary = "";
   let submitting = false;
   let leaving = false;
+  type ApplicationFocusRequest = "initial" | "navigation";
+
+  let applicationSection: HTMLElement | null = null;
+  let pendingApplicationFocus: ApplicationFocusRequest | null = null;
 
   $: selectedProposalId = $page.url.searchParams.get("id");
   $: statusFilter = $page.url.searchParams.get("status");
@@ -104,8 +108,41 @@
     }
   }
 
+  async function focusPendingApplicationSection(): Promise<boolean> {
+    const request = pendingApplicationFocus;
+    if (!request) return false;
+    await tick();
+    if (!applicationSection) return false;
+
+    if (request === "initial") {
+      const active = document.activeElement;
+      if (
+        active &&
+        active !== document.body &&
+        active !== document.documentElement
+      ) {
+        pendingApplicationFocus = null;
+        return false;
+      }
+    }
+
+    applicationSection.focus();
+    pendingApplicationFocus = null;
+    return document.activeElement === applicationSection;
+  }
+
+  afterNavigate(({ to, type }) => {
+    if (to?.url.hash !== "#antrag-stellen") {
+      pendingApplicationFocus = null;
+      return;
+    }
+    pendingApplicationFocus = type === "enter" ? "initial" : "navigation";
+    void focusPendingApplicationSection();
+  });
+
   onMount(async () => {
     await authStore.checkAuth();
+    await focusPendingApplicationSection();
     await refresh();
   });
 </script>
@@ -129,7 +166,7 @@
   </header>
 
   {#if isGuest}
-    <section id="antrag-stellen" class="guest-card" aria-labelledby="weberstatus-heading">
+    <section id="antrag-stellen" class="guest-card" aria-labelledby="weberstatus-heading" tabindex="-1" bind:this={applicationSection}>
       <div>
         <p class="eyebrow">Dein Status: Gast</p>
         <h2 id="weberstatus-heading">Weberstatus beantragen</h2>

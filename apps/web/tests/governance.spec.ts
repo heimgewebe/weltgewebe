@@ -40,9 +40,16 @@ async function installGovernanceRoutes(
   options: {
     initialStatus?: "consent" | "voting";
     existingApplicantId?: string;
+    deferListResponse?: boolean;
   } = {},
 ) {
   let currentStatus = options.initialStatus ?? "consent";
+  let resolveListResponse: (() => void) | null = null;
+  const listResponseGate = options.deferListResponse
+    ? new Promise<void>((resolve) => {
+        resolveListResponse = resolve;
+      })
+    : null;
   const requests: Array<{ method: string; pathname: string; body: unknown }> =
     [];
 
@@ -54,6 +61,7 @@ async function installGovernanceRoutes(
     requests.push({ method, pathname: url.pathname, body });
 
     if (url.pathname === "/api/proposals" && method === "GET") {
+      if (listResponseGate) await listResponseGate;
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -148,6 +156,7 @@ async function installGovernanceRoutes(
   return {
     requests,
     setStatus: (status: "consent" | "voting") => (currentStatus = status),
+    releaseListResponse: () => resolveListResponse?.(),
   };
 }
 
@@ -254,13 +263,97 @@ test("a guest reaches the Weber application as a distinct weaving action", async
   await mockApiResponses(page, {
     auth: { authenticated: true, account_id: GUEST_ID, role: "gast" },
   });
+  const governance = await installGovernanceRoutes(page, {
+    deferListResponse: true,
+  });
   await page.goto("/map");
   await page.getByTestId("tool-fan-trigger").click();
   await page.getByTestId("tool-fan-weave").click();
-  await expect(page.getByTestId("tool-fan-create-proposal")).toHaveAttribute(
+  const applicationAction = page.getByTestId("tool-fan-create-proposal");
+  await expect(applicationAction).toHaveAttribute(
     "href",
     "/antraege#antrag-stellen",
   );
+  await applicationAction.click();
+  await expect(page).toHaveURL(/\/antraege#antrag-stellen$/);
+  await expect(page.locator("#antrag-stellen")).toBeFocused({ timeout: 500 });
+  expect(
+    governance.requests.some(
+      (entry) => entry.method === "GET" && entry.pathname === "/api/proposals",
+    ),
+  ).toBe(true);
+  governance.releaseListResponse();
+});
+
+test("client-side hash navigation focuses the Weber application without remounting", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: GUEST_ID, role: "gast" },
+  });
+  await installGovernanceRoutes(page);
+  await page.goto("/antraege");
+  await expect(
+    page.getByRole("heading", { name: "Weberstatus beantragen" }),
+  ).toBeVisible();
+
+  await page.evaluate(() => {
+    (window as Window & { __intraPageProbe?: string }).__intraPageProbe =
+      "preserved";
+    const link = document.createElement("a");
+    link.href = "/antraege#antrag-stellen";
+    link.textContent = "Zum Antrag";
+    link.dataset.testid = "intra-page-application-link";
+    document.body.appendChild(link);
+  });
+  await page.getByTestId("intra-page-application-link").click();
+
+  await expect(page).toHaveURL(/\/antraege#antrag-stellen$/);
+  await expect(page.locator("#antrag-stellen")).toBeFocused();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as Window & { __intraPageProbe?: string }).__intraPageProbe,
+      ),
+    )
+    .toBe("preserved");
+});
+
+test("initial hash load does not steal focus after the user moves it", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: GUEST_ID, role: "gast" },
+  });
+  let releaseAuthResponse!: () => void;
+  const authResponseGate = new Promise<void>((resolve) => {
+    releaseAuthResponse = resolve;
+  });
+  await page.route("**/api/auth/me", async (route) => {
+    await authResponseGate;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        authenticated: true,
+        account_id: GUEST_ID,
+        role: "gast",
+      }),
+    });
+  });
+  await installGovernanceRoutes(page);
+  await page.goto("/antraege#antrag-stellen");
+
+  const backLink = page.getByRole("link", { name: "Zum Gewebe" });
+  await backLink.focus();
+  await expect(backLink).toBeFocused();
+  releaseAuthResponse();
+
+  await expect(
+    page.getByRole("heading", { name: "Weberstatus beantragen" }),
+  ).toBeVisible();
+  await expect(backLink).toBeFocused();
 });
 
 test("guest can read everything and submit only the own Weber application", async ({
