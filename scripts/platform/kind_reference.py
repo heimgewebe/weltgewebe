@@ -390,6 +390,16 @@ def validate_source_binding(
         raise ProofError("--source-commit must be a full lowercase Git object id")
 
 
+def validate_workspace_binding(
+    *, source_commit: str | None, workspace_commit: str
+) -> None:
+    if source_commit and source_commit != workspace_commit:
+        raise ProofError(
+            "--source-commit must equal the exact local workspace HEAD "
+            f"({workspace_commit})"
+        )
+
+
 def flux_source_document(
     *, branch: str | None = None, commit: str | None = None
 ) -> dict[str, Any]:
@@ -851,6 +861,14 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
         source_ref=args.source_ref,
         source_commit=args.source_commit,
     )
+    if output(["git", "status", "--porcelain"]):
+        raise ProofError("reference proof requires a clean, commit-bound worktree")
+    commit = output(["git", "rev-parse", "HEAD"])
+    validate_workspace_binding(
+        source_commit=args.source_commit,
+        workspace_commit=commit,
+    )
+    timestamp = output(["git", "show", "-s", "--format=%cI", "HEAD"])
     require_host_tools()
     receipt = tool_receipt()
     tools = receipt["tools"]
@@ -860,10 +878,6 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
     flux = tools["flux"]
     helm = tools["helm"]
     assert_available_cluster_name(kind, args.cluster)
-    if output(["git", "status", "--porcelain"]):
-        raise ProofError("reference proof requires a clean, commit-bound worktree")
-    commit = output(["git", "rev-parse", "HEAD"])
-    timestamp = output(["git", "show", "-s", "--format=%cI", "HEAD"])
     app_namespace = "weltgewebe"
     created = False
     try:

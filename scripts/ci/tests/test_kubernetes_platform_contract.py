@@ -109,6 +109,22 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                     mode, source_ref=source_ref, source_commit=source_commit
                 )
 
+    def test_commit_source_must_match_local_workspace_head(self) -> None:
+        commit = "0123456789abcdef0123456789abcdef01234567"
+        self.reference.validate_workspace_binding(
+            source_commit=None, workspace_commit=commit
+        )
+        self.reference.validate_workspace_binding(
+            source_commit=commit, workspace_commit=commit
+        )
+        with self.assertRaisesRegex(
+            self.reference.ProofError, "exact local workspace HEAD"
+        ):
+            self.reference.validate_workspace_binding(
+                source_commit="fedcba9876543210fedcba9876543210fedcba98",
+                workspace_commit=commit,
+            )
+
     def test_flux_source_can_bind_exact_commit_or_explicit_branch(self) -> None:
         commit = "0123456789abcdef0123456789abcdef01234567"
         by_commit = self.reference.flux_source_document(commit=commit)
