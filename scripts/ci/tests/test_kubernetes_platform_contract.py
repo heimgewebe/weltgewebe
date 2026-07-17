@@ -3,11 +3,14 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shlex
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -42,17 +45,45 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "pass")
 
     def test_ci_proof_binds_pull_requests_to_checked_out_merge_state(self) -> None:
-        workflow = (ROOT / ".github/workflows/kubernetes-platform.yml").read_text()
-        self.assertIn('if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then', workflow)
-        pull_request_branch, gitops_branch = workflow.split(
-            'if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then', 1
-        )[1].split("else", 1)
-        self.assertIn("--mode direct", pull_request_branch)
-        self.assertNotIn("--source-ref", pull_request_branch)
-        self.assertIn("--mode gitops", gitops_branch)
-        self.assertIn('--source-commit "$GITHUB_SHA"', gitops_branch)
-        self.assertNotIn("SOURCE_REF:", workflow)
-        self.assertNotIn("github.head_ref || github.ref_name", workflow)
+        workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
+        workflow_text = workflow_path.read_text()
+        workflow = yaml.safe_load(workflow_text)
+        steps = workflow["jobs"]["kind-gitops-proof"]["steps"]
+        named_steps = {step["name"]: step for step in steps if "name" in step}
+
+        direct = named_steps["Run pull-request direct reference proof"]
+        gitops = named_steps["Run commit-bound GitOps reference proof"]
+
+        self.assertEqual(direct["if"], "github.event_name == 'pull_request'")
+        self.assertEqual(gitops["if"], "github.event_name != 'pull_request'")
+        self.assertEqual(
+            shlex.split(direct["run"]),
+            [
+                "python",
+                "scripts/platform/kind_reference.py",
+                "proof",
+                "--cluster",
+                "$CLUSTER_NAME",
+                "--mode",
+                "direct",
+            ],
+        )
+        self.assertEqual(
+            shlex.split(gitops["run"]),
+            [
+                "python",
+                "scripts/platform/kind_reference.py",
+                "proof",
+                "--cluster",
+                "$CLUSTER_NAME",
+                "--mode",
+                "gitops",
+                "--source-commit",
+                "$GITHUB_SHA",
+            ],
+        )
+        self.assertNotIn("SOURCE_REF:", workflow_text)
+        self.assertNotIn("github.head_ref || github.ref_name", workflow_text)
 
     def test_cli_parser_accepts_exact_source_commit(self) -> None:
         commit = "0123456789abcdef0123456789abcdef01234567"
@@ -95,11 +126,13 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             "gitops", source_ref="main", source_commit=None
         )
         invalid = (
+            ("unsupported", None, commit, "unsupported proof mode"),
             ("direct", "main", None, "invalid for direct"),
             ("direct", None, commit, "invalid for direct"),
             ("gitops", None, None, "exactly one"),
             ("gitops", "main", commit, "exactly one"),
             ("gitops", None, "abc", "full lowercase"),
+            ("gitops", None, "A" * 40, "full lowercase"),
         )
         for mode, source_ref, source_commit, message in invalid:
             with self.subTest(mode=mode, source_ref=source_ref), self.assertRaisesRegex(

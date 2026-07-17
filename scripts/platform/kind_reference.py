@@ -6,6 +6,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -20,6 +21,7 @@ CACHE = ROOT / ".cache/weltgewebe-platform"
 MARKERS = CACHE / "clusters"
 KUBECONFIGS = CACHE / "kubeconfigs"
 DEFAULT_CLUSTER = "weltgewebe-reference"
+FULL_GIT_OBJECT_ID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 GATEWAY_API_ARTIFACTS = (
     "gateway_api_gatewayclasses",
     "gateway_api_gateways",
@@ -369,24 +371,27 @@ def namespace_document(name: str, *, data_client: bool = False) -> dict[str, Any
     }
 
 
+def has_exactly_one_value(*values: str | None) -> bool:
+    return sum(bool(value) for value in values) == 1
+
+
 def validate_source_binding(
     mode: str, *, source_ref: str | None, source_commit: str | None
 ) -> None:
+    if mode not in {"direct", "gitops"}:
+        raise ProofError(f"unsupported proof mode: {mode}")
     if mode == "direct":
         if source_ref or source_commit:
             raise ProofError(
                 "--source-ref and --source-commit are invalid for direct mode"
             )
         return
-    if bool(source_ref) == bool(source_commit):
+    if not has_exactly_one_value(source_ref, source_commit):
         raise ProofError(
             "exactly one of --source-ref or --source-commit is required "
             "for gitops mode"
         )
-    if source_commit and (
-        len(source_commit) not in (40, 64)
-        or any(character not in "0123456789abcdef" for character in source_commit)
-    ):
+    if source_commit and FULL_GIT_OBJECT_ID.fullmatch(source_commit) is None:
         raise ProofError("--source-commit must be a full lowercase Git object id")
 
 
@@ -403,7 +408,7 @@ def validate_workspace_binding(
 def flux_source_document(
     *, branch: str | None = None, commit: str | None = None
 ) -> dict[str, Any]:
-    if bool(branch) == bool(commit):
+    if not has_exactly_one_value(branch, commit):
         raise ProofError("exactly one Flux source branch or commit is required")
     document = yaml.safe_load((ROOT / "platform/clusters/local/source.yaml").read_text())
     document["spec"]["ref"] = {"branch": branch} if branch else {"commit": commit}
