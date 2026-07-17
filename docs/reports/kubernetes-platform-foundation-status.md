@@ -12,6 +12,8 @@ relations:
   - type: relates_to
     target: platform/README.md
   - type: relates_to
+    target: docs/tasks/board.md
+  - type: relates_to
     target: docs/reports/domain-postgres-instance-coherence-decision.md
   - type: verifies
     target: scripts/platform/validate_platform.py

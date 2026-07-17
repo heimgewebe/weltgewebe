@@ -1017,6 +1017,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/github-action-ref-pinning-audit.md
 - [relates_to] docs/reports/github-actions-node24-readiness.md
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
+- [relates_to] docs/reports/kubernetes-platform-foundation-status.md
 - [relates_to] docs/reports/proof-matrix-generalization-decision.md
 - [relates_to] docs/reports/repo-audit-2026-07-02.md
 - [relates_to] docs/reports/weltgewebe-os-foundation-status.md

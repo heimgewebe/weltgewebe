@@ -84,7 +84,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/github-action-ref-pinning-audit.md | report | active | active | audit | OPT-INF-002 | 2026-09-30 |  | 0 | 4 | 4 |  |  |
 | docs/reports/github-actions-node24-readiness.md | report | active | active | audit | OPT-CI-005 | 2026-09-29 |  | 2 | 4 | 5 |  |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | deprecated | archived | planning | DEPLOY-DNS-001 |  |  | 1 | 5 | 4 | review_after |  |
-| docs/reports/kubernetes-platform-foundation-status.md | status | active |  |  | WELTGEWEBE-OS-006 | 2026-08-16 |  | 0 | 5 | 5 | lifecycle, lifecycle_state |  |
+| docs/reports/kubernetes-platform-foundation-status.md | status | active |  |  | WELTGEWEBE-OS-006 | 2026-08-16 |  | 0 | 5 | 6 | lifecycle, lifecycle_state |  |
 | docs/reports/map-architekturkritik.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 4 | 5 | 2 |  |  |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | 2 | 6 | 6 |  |  |
 | docs/reports/map-status-matrix.md | status-matrix | deprecated | archived |  |  |  |  | 8 | 6 | 3 | lifecycle, owner_task, review_after |  |
@@ -157,7 +157,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/github-action-ref-pinning-audit.md | 4 | relates_to | docs/tasks/board.md, docs/tasks/index.json, scripts/ci/check_github_action_pinning.py, scripts/ci/tests/test_check_github_action_pinning.py |
 | docs/reports/github-actions-node24-readiness.md | 5 | relates_to | .github/workflows/opt-arc-001-db-proof-matrix.yml, docs/tasks/board.md, docs/tasks/index.json, scripts/ci/check_actions_node24_readiness.py, scripts/ci/tests/test_check_actions_node24_readiness.py |
 | docs/reports/inwx-zone-reconciliation-plan.md | 4 | relates_to | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md, docs/reports/domain-provider-role-finding.md, docs/runbooks/domain-mail-cutover.md, docs/tasks/board.md |
-| docs/reports/kubernetes-platform-foundation-status.md | 5 | depends_on, relates_to, verifies | docs/adr/ADR-0010__kubernetes-kanonische-plattform.md, docs/reports/domain-postgres-instance-coherence-decision.md, platform/README.md, scripts/platform/kind_reference.py, scripts/platform/validate_platform.py |
+| docs/reports/kubernetes-platform-foundation-status.md | 6 | depends_on, relates_to, verifies | docs/adr/ADR-0010__kubernetes-kanonische-plattform.md, docs/reports/domain-postgres-instance-coherence-decision.md, docs/tasks/board.md, platform/README.md, scripts/platform/kind_reference.py, scripts/platform/validate_platform.py |
 | docs/reports/map-architekturkritik.md | 2 | relates_to | docs/blueprints/kartenklarheit-roadmap.md, docs/reports/map-status-matrix.md |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | 6 | relates_to | .github/workflows/basemap-runtime-proof.yml, docs/blueprints/kartenklarheit-phase6.md, docs/blueprints/kartenklarheit-roadmap.md, docs/proofs/basemap-hamburg-artifact-proof.md, docs/reports/map-status-matrix.md, scripts/guard/basemap-runtime-proof.sh |
 | docs/reports/map-status-matrix.md | 3 | relates_to | docs/blueprints/kartenklarheit-roadmap.md, docs/blueprints/ui-interaction-doctrine.md, docs/reports/map-architekturkritik.md |
