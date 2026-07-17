@@ -16,23 +16,23 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 | Metric | Count |
 | --- | ---: |
-| files_total | 48 |
-| files_with_frontmatter | 48 |
+| files_total | 49 |
+| files_with_frontmatter | 49 |
 | files_without_frontmatter | 0 |
-| files_with_status | 48 |
+| files_with_status | 49 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 43 |
+| files_with_lifecycle_state | 44 |
 | files_missing_lifecycle_state | 5 |
-| files_with_lifecycle | 42 |
+| files_with_lifecycle | 43 |
 | files_missing_lifecycle | 6 |
-| files_with_owner_task | 44 |
+| files_with_owner_task | 45 |
 | files_missing_owner_task | 4 |
-| files_with_review_after | 35 |
+| files_with_review_after | 36 |
 | files_missing_review_after | 13 |
-| files_primary_referenced | 42 |
+| files_primary_referenced | 43 |
 | files_primary_unreferenced | 6 |
-| files_with_derived_references | 48 |
-| files_with_relations | 48 |
+| files_with_derived_references | 49 |
+| files_with_relations | 49 |
 | files_with_missing_supersession_target | 0 |
 
 ## Doc Type Distribution
@@ -41,7 +41,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | --- | ---: |
 | documentation | 1 |
 | reference | 1 |
-| report | 42 |
+| report | 43 |
 | status | 2 |
 | status-matrix | 2 |
 
@@ -74,8 +74,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-backfill-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 1 | 4 | 4 |  |  |
 | docs/reports/domain-edge-cache-limit-design.md | report | active | active | decision-prep | DOMAIN-PG-003 | 2026-09-29 |  | 0 | 4 | 5 |  |  |
 | docs/reports/domain-edge-create-semantics-preflight.md | report | deprecated | superseded | decision-prep | OPT-ARC-001 |  | docs/reports/domain-edge-write-path-proof.md | 1 | 6 | 7 | review_after |  |
+| docs/reports/domain-edge-faden-lifecycle-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-10-17 |  | 1 | 3 | 3 |  |  |
 | docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 2 | 4 | 6 |  |  |
-| docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 1 | 6 | 8 |  |  |
+| docs/reports/domain-edge-write-path-proof.md | report | deprecated | superseded | proof | OPT-ARC-001 | 2026-07-16 | docs/reports/domain-edge-faden-lifecycle-proof.md | 2 | 6 | 8 |  |  |
 | docs/reports/domain-node-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 6 |  |  |
 | docs/reports/domain-postgres-instance-coherence-decision.md | report | active | active | audit | WELTGEWEBE-OS-002 | 2027-01-16 |  | 6 | 6 | 10 |  |  |
 | docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | 4 | 4 | 3 |  |  |
@@ -147,6 +148,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-backfill-proof.md | 4 | relates_to | .github/workflows/api.yml, apps/api/tests/db_domain_backfill.rs, docs/blueprints/domain-data-postgres-cutover.md, docs/tasks/index.json |
 | docs/reports/domain-edge-cache-limit-design.md | 5 | relates_to | apps/api/src/domain_db.rs, apps/api/src/routes/edges.rs, docs/blueprints/domain-data-postgres-cutover.md, docs/tasks/board.md, docs/tasks/index.json |
 | docs/reports/domain-edge-create-semantics-preflight.md | 7 | relates_to | contracts/domain/edge.schema.json, docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-node-write-path-proof.md, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, docs/tasks/index.json |
+| docs/reports/domain-edge-faden-lifecycle-proof.md | 3 | relates_to, supersedes | contracts/domain/edge.schema.json, docs/reports/domain-edge-write-path-proof.md, docs/specs/garnrolle-knoten-faden.md |
 | docs/reports/domain-edge-reference-audit.md | 6 | relates_to | apps/api/migrations/20260531000002_create_domain_edges.up.sql, contracts/domain/edge.schema.json, docs/blueprints/domain-data-postgres-cutover.md, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, scripts/docmeta/audit_domain_edge_references.py |
 | docs/reports/domain-edge-write-path-proof.md | 8 | relates_to, supersedes | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-edge-create-semantics-preflight.md, docs/reports/domain-node-write-path-proof.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md, docs/tasks/index.json |
 | docs/reports/domain-node-write-path-proof.md | 6 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md, docs/tasks/index.json |
@@ -288,12 +290,16 @@ Primary references are exact path matches in canonical documentation surfaces. D
 - `docs/reports/domain-edge-create-semantics-preflight.md`
   - `docs/reports/domain-edge-write-path-proof.md`
 
+- `docs/reports/domain-edge-faden-lifecycle-proof.md`
+  - `docs/reports/domain-edge-write-path-proof.md`
+
 - `docs/reports/domain-edge-reference-audit.md`
   - `docs/reports/domain-runtime-data-source-reconciliation.md`
   - `docs/tasks/board.md`
 
 - `docs/reports/domain-edge-write-path-proof.md`
   - `docs/reports/domain-edge-create-semantics-preflight.md`
+  - `docs/reports/domain-edge-faden-lifecycle-proof.md`
 
 - `docs/reports/domain-node-write-path-proof.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
@@ -561,6 +567,11 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/report-lifecycle.md`
   - `docs/_generated/staleness-report.md`
   - `docs/_generated/supersession-map.md`
+
+- `docs/reports/domain-edge-faden-lifecycle-proof.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/domain-edge-reference-audit.md`
   - `docs/_generated/backlinks.md`

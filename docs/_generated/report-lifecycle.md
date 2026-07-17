@@ -16,10 +16,10 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Metric | Count |
 | --- | ---: |
-| files_scanned | 48 |
-| reports_checked | 42 |
+| files_scanned | 49 |
+| reports_checked | 43 |
 | reports_ignored_non_report | 6 |
-| reports_with_lifecycle_state | 42 |
+| reports_with_lifecycle_state | 43 |
 | reports_missing_lifecycle_state | 0 |
 | findings_total | 0 |
 
@@ -29,7 +29,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | --- | ---: |
 | active | 31 |
 | deferred | 0 |
-| superseded | 5 |
+| superseded | 6 |
 | archived | 6 |
 | missing | 0 |
 
@@ -61,8 +61,8 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/domain-account-write-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-backfill-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-edge-cache-limit-design.md | active | decision-prep | DOMAIN-PG-003 | 2026-09-29 |  |
+| docs/reports/domain-edge-faden-lifecycle-proof.md | active | proof | OPT-ARC-001 | 2026-10-17 |  |
 | docs/reports/domain-edge-reference-audit.md | active | audit | OPT-ARC-001 | 2026-07-16 |  |
-| docs/reports/domain-edge-write-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-node-write-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-postgres-instance-coherence-decision.md | active | audit | WELTGEWEBE-OS-002 | 2027-01-16 |  |
 | docs/reports/domain-provider-role-finding.md | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  |
@@ -90,6 +90,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/auth-persistence-readiness.md | deprecated | decision-prep | OPT-API-002 |  |  |
 | docs/reports/auth-persistence-runtime-proof.md | deprecated | proof | OPT-API-002 |  |  |
 | docs/reports/domain-edge-create-semantics-preflight.md | deprecated | decision-prep | OPT-ARC-001 |  |  |
+| docs/reports/domain-edge-write-path-proof.md | deprecated | proof | OPT-ARC-001 | 2026-07-16 |  |
 
 ## Archived Reports
 

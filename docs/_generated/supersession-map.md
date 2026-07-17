@@ -19,5 +19,6 @@ Generated automatically. Do not edit.
 - docs/konzepte/garnrolle.md → superseded by → docs/konzepte/garnrolle-und-verortung.md
 - docs/reports/auth-persistence-readiness.md → superseded by → docs/reports/auth-persistence-next-step.md
 - docs/reports/domain-edge-create-semantics-preflight.md → superseded by → docs/reports/domain-edge-write-path-proof.md
+- docs/reports/domain-edge-write-path-proof.md → superseded by → docs/reports/domain-edge-faden-lifecycle-proof.md
 - docs/reports/map-status-matrix.md → superseded by → docs/reports/map-status.md
 - docs/specs/privacy-ui.md → superseded by → docs/specs/garnrolle-knoten-faden.md
