@@ -8,7 +8,11 @@ metadata:
     app.kubernetes.io/component: database
 spec:
   instances: 3
-  imageName: ghcr.io/cloudnative-pg/postgresql:16.14@sha256:05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1
+  imageCatalogRef:
+    apiGroup: postgresql.cnpg.io
+    kind: ImageCatalog
+    name: weltgewebe-postgres
+    major: 16
   primaryUpdateStrategy: unsupervised
   failoverDelay: 0
   bootstrap:

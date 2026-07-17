@@ -359,7 +359,13 @@ def restore_cluster_document(target_time: str) -> dict[str, Any]:
         "apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
         "metadata": {"name": "postgres-restore", "namespace": "weltgewebe-data"},
         "spec": {
-            "instances": 3, "imageName": POSTGRES_IMAGE,
+            "instances": 3,
+            "imageCatalogRef": {
+                "apiGroup": "postgresql.cnpg.io",
+                "kind": "ImageCatalog",
+                "name": "weltgewebe-postgres",
+                "major": 16,
+            },
             "bootstrap": {
                 "recovery": {
                     "source": "postgres-ha",
@@ -510,6 +516,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         ref.apply_file(restore_kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml")
         apply_object_store_endpoint(restore_kubectl, object_store_address)
         install_cnpg(restore_kubectl, receipt["artifacts"]["cloudnative_pg_operator"])
+        ref.apply_file(
+            restore_kubectl,
+            ROOT / "platform/infrastructure/ha-data/postgres-image-catalog.yaml",
+        )
         restore_started = time.monotonic()
         ref.apply_yaml(restore_kubectl, restore_cluster_document(target_time))
         wait_cluster_ready(restore_kubectl, "postgres-restore", "20m")

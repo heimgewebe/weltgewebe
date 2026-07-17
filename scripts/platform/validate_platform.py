@@ -241,8 +241,19 @@ def _assert_ha_contract() -> None:
     spec = postgres.get("spec", {})
     if spec.get("instances") != 3:
         raise ContractError("HA PostgreSQL requires exactly three instances")
-    if spec.get("imageName") != lock["images"]["cloudnative_pg_postgresql"]:
-        raise ContractError("HA PostgreSQL image differs from the digest lock")
+    catalog_ref = spec.get("imageCatalogRef", {})
+    expected_catalog_ref = {
+        "apiGroup": "postgresql.cnpg.io",
+        "kind": "ImageCatalog",
+        "name": "weltgewebe-postgres",
+        "major": 16,
+    }
+    if catalog_ref != expected_catalog_ref or "imageName" in spec:
+        raise ContractError("HA PostgreSQL must resolve its major version through the pinned ImageCatalog")
+    catalog = next(_documents(PLATFORM / "infrastructure/ha-data/postgres-image-catalog.yaml"))
+    images = catalog.get("spec", {}).get("images", [])
+    if images != [{"major": 16, "image": lock["images"]["cloudnative_pg_postgresql"]}]:
+        raise ContractError("HA PostgreSQL ImageCatalog differs from the digest lock")
     affinity = spec.get("affinity", {})
     if affinity.get("podAntiAffinityType") != "required" or affinity.get("topologyKey") != "topology.kubernetes.io/zone":
         raise ContractError("HA PostgreSQL does not require zone anti-affinity")
