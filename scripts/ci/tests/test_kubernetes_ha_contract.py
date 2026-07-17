@@ -146,6 +146,15 @@ class KubernetesHaContractTests(unittest.TestCase):
             (ROOT / "scripts/platform/ha_reference.py").read_text(),
         )
 
+    def test_postgres_operand_keeps_version_and_digest(self) -> None:
+        image = self.ha.POSTGRES_IMAGE
+        self.assertIn(":16.14@sha256:", image)
+        self.assertNotIn("postgresql@sha256:", image)
+        manifest = (ROOT / "platform/infrastructure/ha-data/postgres.yaml").read_text()
+        self.assertIn(image, manifest)
+        lock = json.loads((ROOT / "platform/toolchain.lock.json").read_text())
+        self.assertEqual(lock["images"]["cloudnative_pg_postgresql"], image)
+
     def test_committed_ha_yaml_contains_no_secret(self) -> None:
         roots = (
             ROOT / "platform/infrastructure/ha-data",
