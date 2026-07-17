@@ -54,6 +54,35 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertNotIn("SOURCE_REF:", workflow)
         self.assertNotIn("github.head_ref || github.ref_name", workflow)
 
+    def test_cli_parser_accepts_exact_source_commit(self) -> None:
+        commit = "0123456789abcdef0123456789abcdef01234567"
+        args = self.reference.argument_parser().parse_args(
+            [
+                "proof",
+                "--cluster",
+                "reference",
+                "--mode",
+                "gitops",
+                "--source-commit",
+                commit,
+            ]
+        )
+        self.assertEqual(args.command, "proof")
+        self.assertEqual(args.source_commit, commit)
+        self.assertIsNone(args.source_ref)
+        with self.assertRaises(SystemExit):
+            self.reference.argument_parser().parse_args(
+                [
+                    "proof",
+                    "--mode",
+                    "gitops",
+                    "--source-ref",
+                    "main",
+                    "--source-commit",
+                    commit,
+                ]
+            )
+
     def test_source_binding_fails_before_cluster_work_for_invalid_modes(self) -> None:
         commit = "0123456789abcdef0123456789abcdef01234567"
         self.reference.validate_source_binding(

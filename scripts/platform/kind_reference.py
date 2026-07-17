@@ -941,17 +941,23 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
             delete_owned_cluster(kind, args.cluster)
 
 
-def main() -> int:
+def argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
     proof_parser = subparsers.add_parser("proof")
     proof_parser.add_argument("--cluster", default=DEFAULT_CLUSTER)
     proof_parser.add_argument("--mode", choices=("direct", "gitops"), default="direct")
-    proof_parser.add_argument("--source-ref")
+    source_group = proof_parser.add_mutually_exclusive_group()
+    source_group.add_argument("--source-ref")
+    source_group.add_argument("--source-commit")
     proof_parser.add_argument("--keep", action="store_true")
     down_parser = subparsers.add_parser("down")
     down_parser.add_argument("--cluster", default=DEFAULT_CLUSTER)
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    args = argument_parser().parse_args()
     try:
         receipt = tool_receipt()
         if args.command == "down":
