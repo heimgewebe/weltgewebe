@@ -90,6 +90,19 @@
       "url": "https://helm.cilium.io/cilium-1.19.5.tgz",
       "sha256": "56b60445a2c650b387ce2edb13cfd8d83219a9da693b0523915dba8be451a29e",
       "filename": "cilium-1.19.5.tgz"
+    },
+    "cloudnative_pg_operator": {
+      "version": "1.30.0",
+      "filename": "cnpg-1.30.0.yaml",
+      "url": "https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v1.30.0/cnpg-1.30.0.yaml",
+      "sha256": "f8bede43fe4ee0d478c2355b204a36876b2ae4faac60f2a9452280b293da3b88"
     }
+  },
+  "images": {
+    "cloudnative_pg_operator": "ghcr.io/cloudnative-pg/cloudnative-pg@sha256:a2701eb97cdd2a34b1fdb2cb51987f544b706e40bec72ae7146cd8580efefebb",
+    "cloudnative_pg_postgresql": "ghcr.io/cloudnative-pg/postgresql@sha256:05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1",
+    "nats": "nats@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0",
+    "nats_box": "natsio/nats-box@sha256:9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d",
+    "seaweedfs": "chrislusf/seaweedfs@sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d"
   }
 }

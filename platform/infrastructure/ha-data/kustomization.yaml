@@ -1,0 +1,9 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: weltgewebe-data
+resources:
+  - namespace.yaml
+  - object-store.yaml
+  - postgres.yaml
+  - nats.yaml

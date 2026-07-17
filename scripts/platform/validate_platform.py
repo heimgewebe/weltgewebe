@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PLATFORM = ROOT / "platform"
 PROMOTION_SENTINEL = "promotion-required"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
-OVERLAYS = ("local", "ci", "staging", "production")
+OVERLAYS = ("local", "ha", "ci", "staging", "production")
 NONLOCAL_OVERLAY_TARGETS = frozenset(
     f"platform/apps/weltgewebe/overlays/{name}"
     for name in ("ci", "staging", "production")
@@ -24,6 +24,11 @@ NONLOCAL_OVERLAY_TARGETS = frozenset(
 LOCAL_FIXTURE_SENTINELS = (
     "weltgewebe-local-fixture",
     "local-test-only-weltgewebe",
+)
+HA_TARGETS = (
+    "platform/apps/weltgewebe/overlays/ha",
+    "platform/apps/weltgewebe/migration/ha",
+    "platform/infrastructure/ha-data",
 )
 LOCAL_FIXTURE_ROOTS = (
     PLATFORM / "apps/weltgewebe/migration/local",
@@ -113,6 +118,19 @@ def _assert_images() -> None:
     node = lock["kubernetes"]["kind_node_image"]
     if "@sha256:" not in node or not HEX64.fullmatch(node.rsplit("@sha256:", 1)[1]):
         raise ContractError("kind node image is not digest-bound")
+    expected_images = {
+        "cloudnative_pg_operator",
+        "cloudnative_pg_postgresql",
+        "nats",
+        "nats_box",
+        "seaweedfs",
+    }
+    images = lock.get("images", {})
+    if set(images) != expected_images:
+        raise ContractError(f"unexpected HA image lock: {sorted(images)}")
+    for name, image in images.items():
+        if "@sha256:" not in image or not HEX64.fullmatch(image.rsplit("@sha256:", 1)[1]):
+            raise ContractError(f"{name} is not digest-bound")
     promotion = json.loads((PLATFORM / "image-promotion.contract.json").read_text())
     if promotion.get("status") != "blocked" or promotion.get("production_activation") is not False:
         raise ContractError("image promotion contract must remain blocked in T003")
@@ -215,6 +233,74 @@ def _assert_flux_chain() -> None:
             raise ContractError(f"{filename} dependencies {observed} != {dependencies}")
 
 
+def _assert_ha_contract() -> None:
+    lock = json.loads((PLATFORM / "toolchain.lock.json").read_text())
+    postgres = next(_documents(PLATFORM / "infrastructure/ha-data/postgres.yaml"))
+    if postgres.get("kind") != "Cluster" or postgres.get("apiVersion") != "postgresql.cnpg.io/v1":
+        raise ContractError("HA PostgreSQL must use CloudNativePG Cluster v1")
+    spec = postgres.get("spec", {})
+    if spec.get("instances") != 3:
+        raise ContractError("HA PostgreSQL requires exactly three instances")
+    if spec.get("imageName") != lock["images"]["cloudnative_pg_postgresql"]:
+        raise ContractError("HA PostgreSQL image differs from the digest lock")
+    affinity = spec.get("affinity", {})
+    if affinity.get("podAntiAffinityType") != "required" or affinity.get("topologyKey") != "topology.kubernetes.io/zone":
+        raise ContractError("HA PostgreSQL does not require zone anti-affinity")
+    backup = spec.get("backup", {}).get("barmanObjectStore", {})
+    if not str(backup.get("destinationPath", "")).startswith("s3://"):
+        raise ContractError("HA PostgreSQL lacks object-store backup")
+
+    nats_docs = list(_documents(PLATFORM / "infrastructure/ha-data/nats.yaml"))
+    stateful = next((item for item in nats_docs if item.get("kind") == "StatefulSet"), None)
+    budget = next((item for item in nats_docs if item.get("kind") == "PodDisruptionBudget"), None)
+    if stateful is None or stateful.get("spec", {}).get("replicas") != 3:
+        raise ContractError("HA NATS requires a three-replica StatefulSet")
+    container = stateful["spec"]["template"]["spec"]["containers"][0]
+    if container.get("image") != lock["images"]["nats"]:
+        raise ContractError("HA NATS image differs from the digest lock")
+    if budget is None or budget.get("spec", {}).get("minAvailable") != 2:
+        raise ContractError("HA NATS requires a quorum-preserving disruption budget")
+    config = next(item for item in nats_docs if item.get("kind") == "ConfigMap")["data"]["nats.conf"]
+    for marker in ("jetstream {", "routes:", "domain: weltgewebe-ha"):
+        if marker not in config:
+            raise ContractError(f"HA NATS config lacks {marker}")
+
+    patch_docs = list(_documents(PLATFORM / "apps/weltgewebe/overlays/ha/deployment-patch.yaml"))
+    api = next(item for item in patch_docs if item["metadata"]["name"] == "weltgewebe-api")
+    if api.get("spec", {}).get("replicas") != 3:
+        raise ContractError("HA API requires three replicas")
+    pod = api["spec"]["template"]["spec"]
+    spread = pod.get("topologySpreadConstraints", [])
+    if not spread or spread[0].get("topologyKey") != "topology.kubernetes.io/zone" or spread[0].get("whenUnsatisfiable") != "DoNotSchedule":
+        raise ContractError("HA API does not require zone spread")
+
+    object_store = next(_documents(PLATFORM / "infrastructure/ha-data/object-store.yaml"))
+    if object_store.get("kind") != "Service" or object_store.get("spec", {}).get("selector"):
+        raise ContractError("HA proof object store must be an external selectorless Service")
+
+    primary_kind = yaml.safe_load((PLATFORM / "clusters/ha/kind.yaml").read_text())
+    restore_kind = yaml.safe_load((PLATFORM / "clusters/ha/restore-kind.yaml").read_text())
+    for name, document in (("primary", primary_kind), ("restore", restore_kind)):
+        zones = []
+        for node in document.get("nodes", []):
+            for patch in node.get("kubeadmConfigPatches", []):
+                zones.extend(re.findall(r"topology\.kubernetes\.io/zone=(zone-[abc])", patch))
+        if sorted(zones) != ["zone-a", "zone-b", "zone-c"]:
+            raise ContractError(f"{name} HA kind cluster lacks three explicit zones")
+
+    proof = (ROOT / "scripts/platform/ha_reference.py").read_text()
+    required_markers = (
+        "docker", "stop", "postgres_rto_seconds", "nats_rto_seconds",
+        "recoveryTarget", "blank_kind_cluster", "production_changed",
+        "restore-kind.yaml", "PITR data comparison failed",
+    )
+    for marker in required_markers:
+        if marker not in proof:
+            raise ContractError(f"HA proof runner lacks {marker}")
+    if "kind: Secret" in "\n".join(path.read_text() for path in (PLATFORM / "infrastructure/ha-data").glob("*.yaml")):
+        raise ContractError("HA manifests commit a Secret")
+
+
 def _assert_compose_parity() -> None:
     config = next(_documents(PLATFORM / "apps/weltgewebe/base/config-map.yaml"))["data"]
     required = {
@@ -257,6 +343,7 @@ def _render_and_validate() -> dict[str, int]:
         *(f"platform/apps/weltgewebe/overlays/{name}" for name in OVERLAYS),
         "platform/infrastructure/local-data",
         "platform/apps/weltgewebe/migration/local",
+        *HA_TARGETS,
         "platform/infrastructure/gateway",
         "platform/clusters/local",
     ]
@@ -300,6 +387,12 @@ def validate(render: bool) -> dict[str, Any]:
         PLATFORM / "apps/weltgewebe/migration/local/job.yaml",
         PLATFORM / "infrastructure/gateway/kustomization.yaml",
         PLATFORM / "infrastructure/local-data/kustomization.yaml",
+        PLATFORM / "clusters/ha/kind.yaml",
+        PLATFORM / "clusters/ha/restore-kind.yaml",
+        PLATFORM / "apps/weltgewebe/overlays/ha/kustomization.yaml",
+        PLATFORM / "apps/weltgewebe/migration/ha/kustomization.yaml",
+        PLATFORM / "infrastructure/ha-data/kustomization.yaml",
+        ROOT / "scripts/platform/ha_reference.py",
     ]
     missing = [str(path.relative_to(ROOT)) for path in required_paths if not path.is_file()]
     if missing:
@@ -311,6 +404,7 @@ def validate(render: bool) -> dict[str, Any]:
     _assert_migration_job()
     _assert_flux_chain()
     _assert_compose_parity()
+    _assert_ha_contract()
     rendered = _render_and_validate() if render else {}
     return {"status": "pass", "rendered_documents": rendered}
 

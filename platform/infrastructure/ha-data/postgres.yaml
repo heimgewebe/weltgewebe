@@ -1,0 +1,53 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-ha
+  labels:
+    app.kubernetes.io/name: postgres-ha
+    app.kubernetes.io/component: database
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql@sha256:05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1
+  primaryUpdateStrategy: unsupervised
+  failoverDelay: 0
+  bootstrap:
+    initdb:
+      database: weltgewebe
+      owner: welt
+      secret:
+        name: weltgewebe-ha-app
+  storage:
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 150m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: required
+    topologyKey: topology.kubernetes.io/zone
+    nodeSelector:
+      weltgewebe.net/data-node: "true"
+  backup:
+    target: prefer-standby
+    retentionPolicy: 7d
+    barmanObjectStore:
+      destinationPath: s3://weltgewebe-postgres/
+      endpointURL: http://seaweedfs-s3.weltgewebe-data.svc.cluster.local:8333
+      s3Credentials:
+        accessKeyId:
+          name: weltgewebe-ha-s3
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: weltgewebe-ha-s3
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip
+        maxParallel: 2
+      data:
+        compression: gzip
+        jobs: 2
