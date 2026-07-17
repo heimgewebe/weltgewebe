@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import secrets
 import subprocess
 import sys
@@ -28,6 +29,13 @@ S3_BUCKET = "weltgewebe-postgres"
 
 def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def run_with_environment(argv: list[str], values: dict[str, str], *, timeout: int | None = None) -> None:
+    print("+", " ".join(argv), f"[env: {','.join(sorted(values))}]", flush=True)
+    environment = os.environ.copy()
+    environment.update(values)
+    subprocess.run(argv, cwd=ROOT, check=True, text=True, env=environment, timeout=timeout)
 
 
 def wait_until(description: str, probe, *, timeout_seconds: int = 600, interval: float = 2.0):
@@ -101,17 +109,22 @@ def start_external_object_store(cluster: str, commit: str, s3_secret_key: str) -
     if subprocess.run(["docker", "volume", "inspect", volume], capture_output=True).returncode == 0:
         raise ref.ProofError(f"external object-store volume already exists: {volume}")
     ref.run(["docker", "volume", "create", "--label", f"weltgewebe.net/proof-commit={commit}", volume])
-    ref.run(
+    run_with_environment(
         [
             "docker", "run", "--detach", "--name", container,
             "--label", f"weltgewebe.net/proof-commit={commit}",
             "--network", "kind",
-            "--env", f"AWS_ACCESS_KEY_ID={S3_ACCESS_KEY}",
-            "--env", f"AWS_SECRET_ACCESS_KEY={s3_secret_key}",
-            "--env", f"S3_BUCKET={S3_BUCKET}",
+            "--env", "AWS_ACCESS_KEY_ID",
+            "--env", "AWS_SECRET_ACCESS_KEY",
+            "--env", "S3_BUCKET",
             "--volume", f"{volume}:/data",
             SEAWEEDFS_IMAGE, "mini", "-dir=/data", "-ip=0.0.0.0",
         ],
+        {
+            "AWS_ACCESS_KEY_ID": S3_ACCESS_KEY,
+            "AWS_SECRET_ACCESS_KEY": s3_secret_key,
+            "S3_BUCKET": S3_BUCKET,
+        },
         timeout=120,
     )
     def address_probe() -> str | bool:
@@ -163,7 +176,7 @@ def apply_object_store_endpoint(kubectl: str, address: str) -> None:
 def install_cnpg(kubectl: str, artifact: str) -> None:
     source = Path(artifact).read_text(encoding="utf-8")
     tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
-    if source.count(tagged) != 1:
+    if source.count(tagged) != 2:
         raise ref.ProofError("CloudNativePG release image reference changed unexpectedly")
     ref.run([kubectl, "apply", "-f", "-"], input_text=source.replace(tagged, CNPG_OPERATOR_IMAGE))
     ref.run([kubectl, "wait", "--for=condition=Established", "crd/clusters.postgresql.cnpg.io", "--timeout=3m"])

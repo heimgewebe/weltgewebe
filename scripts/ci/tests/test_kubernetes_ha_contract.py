@@ -86,6 +86,22 @@ class KubernetesHaContractTests(unittest.TestCase):
             with self.assertRaisesRegex(self.ha.ref.ProofError, "foreign"):
                 self.ha.delete_external_object_store("proof", "expected-commit")
 
+    def test_sensitive_environment_values_never_enter_argv(self) -> None:
+        completed = mock.Mock(returncode=0)
+        with mock.patch.object(self.ha.subprocess, "run", return_value=completed) as run:
+            self.ha.run_with_environment(
+                ["docker", "run", "--env", "PROOF_SECRET"],
+                {"PROOF_SECRET": "ephemeral-sensitive-value"},
+            )
+        argv = run.call_args.args[0]
+        environment = run.call_args.kwargs["env"]
+        self.assertNotIn("ephemeral-sensitive-value", argv)
+        self.assertEqual(environment["PROOF_SECRET"], "ephemeral-sensitive-value")
+        self.assertNotIn(
+            "AWS_SECRET_ACCESS_KEY=",
+            (ROOT / "scripts/platform/ha_reference.py").read_text(),
+        )
+
     def test_committed_ha_yaml_contains_no_secret(self) -> None:
         roots = (
             ROOT / "platform/infrastructure/ha-data",
