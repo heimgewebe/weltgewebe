@@ -187,7 +187,8 @@ async fn weber_can_replace_shared_node_and_delete_node_cascade() -> Result<()> {
             target_type: Some("node".to_string()),
             edge_kind: "reference".to_string(),
             note: None,
-            created_at: Some("2026-01-01T00:00:00Z".to_string()),
+            created_at: Some("2026-01-01T00:00:00Z".to_string().into()),
+            expires_at: None,
         },
     );
     let (app, cookie) = authenticated_app(state.clone()).await;
@@ -317,7 +318,8 @@ async fn node_delete_jsonl_keeps_account_and_role_endpoint_collisions() -> Resul
                     target_type: Some(target_type.to_string()),
                     edge_kind: "reference".to_string(),
                     note: None,
-                    created_at: Some("2026-01-01T00:00:00Z".to_string()),
+                    created_at: Some("2026-01-01T00:00:00Z".to_string().into()),
+                    expires_at: None,
                 },
             );
         }
@@ -388,7 +390,8 @@ async fn node_delete_jsonl_deletes_unique_untyped_legacy_edge() -> Result<()> {
             target_type: Some("node".to_string()),
             edge_kind: "reference".to_string(),
             note: None,
-            created_at: Some("2026-01-01T00:00:00Z".to_string()),
+            created_at: Some("2026-01-01T00:00:00Z".to_string().into()),
+            expires_at: None,
         },
     );
     let (app, cookie) = authenticated_app(state.clone()).await;
@@ -460,7 +463,8 @@ async fn node_delete_jsonl_rejects_untyped_account_collision_without_partial_mut
             target_type: Some("node".to_string()),
             edge_kind: "reference".to_string(),
             note: None,
-            created_at: Some("2026-01-01T00:00:00Z".to_string()),
+            created_at: Some("2026-01-01T00:00:00Z".to_string().into()),
+            expires_at: None,
         },
     );
     let (app, cookie) = authenticated_app(state.clone()).await;
@@ -517,7 +521,8 @@ async fn node_delete_jsonl_rejects_untyped_role_collision_without_partial_mutati
                 target_type: Some("role".to_string()),
                 edge_kind: "reference".to_string(),
                 note: None,
-                created_at: Some("2026-01-01T00:00:00Z".to_string()),
+                created_at: Some("2026-01-01T00:00:00Z".to_string().into()),
+                expires_at: None,
             },
         );
         edges.insert(
@@ -530,7 +535,8 @@ async fn node_delete_jsonl_rejects_untyped_role_collision_without_partial_mutati
                 target_type: Some("node".to_string()),
                 edge_kind: "reference".to_string(),
                 note: None,
-                created_at: Some("2026-01-01T00:00:00Z".to_string()),
+                created_at: Some("2026-01-01T00:00:00Z".to_string().into()),
+                expires_at: None,
             },
         );
     }
@@ -587,7 +593,8 @@ async fn node_delete_jsonl_rejects_invalid_endpoint_type_without_partial_mutatio
             target_type: Some("node".to_string()),
             edge_kind: "reference".to_string(),
             note: None,
-            created_at: Some("2026-01-01T00:00:00Z".to_string()),
+            created_at: Some("2026-01-01T00:00:00Z".to_string().into()),
+            expires_at: None,
         },
     );
     let (app, cookie) = authenticated_app(state.clone()).await;
@@ -639,7 +646,8 @@ async fn concurrent_replace_and_delete_leave_one_coherent_jsonl_result() -> Resu
             target_type: Some("node".to_string()),
             edge_kind: "reference".to_string(),
             note: None,
-            created_at: Some("2026-01-01T00:00:00Z".to_string()),
+            created_at: Some("2026-01-01T00:00:00Z".to_string().into()),
+            expires_at: None,
         },
     );
     let (app, cookie) = authenticated_app(state.clone()).await;

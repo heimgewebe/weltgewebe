@@ -71,6 +71,10 @@
 
   import { NodesOverlay } from "$lib/map/overlay/nodes";
   import { updateEdges } from "$lib/map/overlay/edges";
+  import {
+    FADEN_PROJECTION_REFRESH_MS,
+    nextEdgeExpiryAt,
+  } from "$lib/map/edgeLifecycle";
   import { setupKompositionInteraction } from "$lib/map/overlay/komposition";
   import { setupFocusInteraction } from "$lib/map/overlay/focus";
 
@@ -115,6 +119,8 @@
   let map: MapLibreMap | null = null;
   let mapStyleReady = false;
   let isLoading = true;
+  let edgeProjectionNow = Date.now();
+  let edgeExpiryTimeout: ReturnType<typeof setTimeout> | undefined;
   let lastFocusedElement: HTMLElement | null = null;
 
   let nodesOverlay: NodesOverlay | null = null;
@@ -193,7 +199,9 @@
     const toolObstacle =
       toolFan?.dataset.expanded === "true"
         ? document.getElementById("tool-fan-actions")
-        : document.querySelector<HTMLElement>('[data-testid="tool-fan-trigger"]');
+        : document.querySelector<HTMLElement>(
+            '[data-testid="tool-fan-trigger"]',
+          );
     const toolRect = toolObstacle?.getBoundingClientRect();
     if (toolRect && toolRect.height > 0) {
       bottom = Math.min(bottom, toolRect.top - mapRect.top - edgeInset);
@@ -231,9 +239,9 @@
       '[data-testid="search-overlay"]',
       '[data-testid="filter-overlay"]',
       '[data-testid="governance-fan"]',
-      '#governance-fan-actions',
+      "#governance-fan-actions",
       '[data-testid="tool-fan"]',
-      '#tool-fan-actions',
+      "#tool-fan-actions",
       '[data-testid="context-panel"]',
     ]) {
       const element = document.querySelector<HTMLElement>(selector);
@@ -317,7 +325,35 @@
 
   // Reactive update for edges – only after map style is fully loaded
   $: if (map && mapStyleReady && edgesData && $view) {
-    updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
+    updateEdges(
+      map,
+      edgesData,
+      filteredMarkersData,
+      $view.showEdges,
+      edgeProjectionNow,
+    );
+  }
+
+  function scheduleNextEdgeExpiryRefresh(edges = edgesData) {
+    if (edgeExpiryTimeout !== undefined) {
+      clearTimeout(edgeExpiryTimeout);
+      edgeExpiryTimeout = undefined;
+    }
+    const nowMs = Date.now();
+    const nextExpiryAt = nextEdgeExpiryAt(edges, nowMs);
+    if (nextExpiryAt == null) return;
+    edgeExpiryTimeout = setTimeout(
+      () => {
+        edgeProjectionNow = Date.now();
+        scheduleNextEdgeExpiryRefresh(edgesData);
+      },
+      Math.max(0, nextExpiryAt - nowMs),
+    );
+  }
+
+  $: if (map) {
+    edgesData;
+    scheduleNextEdgeExpiryRefresh(edgesData);
   }
 
   function focusAndFlyToPoint(item: MapEntityViewModel) {
@@ -537,6 +573,11 @@
     // build a map, bind listeners and register protocols that nobody ever
     // removes. Every await in the initialiser therefore re-checks this flag.
     let destroyed = false;
+    // One minute changes a seven-day linear opacity by less than 0.0001.
+    // Exact expiry remains a separate timeout and is therefore not rounded.
+    const edgeDecayInterval = window.setInterval(() => {
+      edgeProjectionNow = Date.now();
+    }, FADEN_PROJECTION_REFRESH_MS);
     // Hoisted so the cleanup can clear it; otherwise a component destroyed
     // before the style loads leaves a 10s timer pointing at dead state.
     let loadingTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
@@ -685,6 +726,11 @@
       // Signals the async initialiser to stop at its next await boundary, so a
       // component destroyed mid-import never finishes building a map.
       destroyed = true;
+      window.clearInterval(edgeDecayInterval);
+      if (edgeExpiryTimeout !== undefined) {
+        clearTimeout(edgeExpiryTimeout);
+        edgeExpiryTimeout = undefined;
+      }
       if (loadingTimeout !== undefined) {
         clearTimeout(loadingTimeout);
         loadingTimeout = undefined;

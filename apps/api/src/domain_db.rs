@@ -17,7 +17,7 @@ use crate::routes::accounts::{
     map_json_to_public_account, AccountInternal, Location as AccountLocation,
 };
 use crate::routes::auth::MAX_EMAIL_LEN;
-use crate::routes::edges::Edge;
+use crate::routes::edges::{Edge, LifecycleTimestamp};
 use crate::routes::nodes::{Location, Node};
 use crate::state::OrderedCache;
 
@@ -190,7 +190,8 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
             target_type: payload_string(&payload, "target_type"),
             edge_kind,
             note: payload_string(&payload, "note"),
-            created_at: created_at.map(|t| t.to_rfc3339()),
+            created_at: created_at.map(LifecycleTimestamp::from_datetime),
+            expires_at: payload_string(&payload, "expires_at").map(LifecycleTimestamp::from),
         };
         cache.insert(id, edge);
         seen += 1;
@@ -596,7 +597,8 @@ fn edge_from_row(row: EdgeRow) -> Result<Edge, anyhow::Error> {
         target_type: payload_string(&payload, "target_type"),
         edge_kind,
         note: payload_string(&payload, "note"),
-        created_at: created_at.map(|t| t.to_rfc3339()),
+        created_at: created_at.map(LifecycleTimestamp::from_datetime),
+        expires_at: payload_string(&payload, "expires_at").map(LifecycleTimestamp::from),
     })
 }
 
@@ -1553,19 +1555,22 @@ impl NewDomainEdgeRow {
     ///
     /// - `created_at` must be present and RFC3339-parseable; otherwise mapping
     ///   fails and the route returns 500 without any DB or cache mutation.
-    /// - `payload` carries `source_type` / `target_type` (when present) and
-    ///   `note` only when `Some` — absent means omitted, never `null` —
+    /// - `payload` carries `source_type` / `target_type` (when present),
+    ///   `note` only when `Some`, and the server-owned `expires_at` when present —
     ///   matching what `load_edges_from_postgres` reads back.
-    /// - `expires_at`, `payload`, `metadata` create fields do not exist here:
-    ///   `CreateEdgeRequest` rejects them via `deny_unknown_fields`.
+    /// - client `expires_at`, `payload`, and `metadata` create fields do not exist
+    ///   in `CreateEdgeRequest`; `deny_unknown_fields` rejects them.
     pub fn from_edge(edge: &crate::routes::edges::Edge) -> Result<Self> {
-        let created_at_text = edge
+        let created_at_timestamp = edge
             .created_at
-            .as_deref()
+            .as_ref()
             .context("edge record is missing created_at")?;
-        let created_at = DateTime::parse_from_rfc3339(created_at_text)
-            .with_context(|| format!("edge created_at is not RFC3339: {created_at_text}"))?
-            .with_timezone(&Utc);
+        let created_at = created_at_timestamp.parsed().cloned().with_context(|| {
+            format!(
+                "edge created_at is not RFC3339: {}",
+                created_at_timestamp.as_str()
+            )
+        })?;
 
         let mut payload_map = Map::new();
         if let Some(source_type) = &edge.source_type {
@@ -1582,6 +1587,12 @@ impl NewDomainEdgeRow {
         }
         if let Some(note) = &edge.note {
             payload_map.insert("note".to_string(), Value::String(note.clone()));
+        }
+        if let Some(expires_at) = &edge.expires_at {
+            payload_map.insert(
+                "expires_at".to_string(),
+                Value::String(expires_at.as_str().to_owned()),
+            );
         }
         let payload = serde_json::to_string(&Value::Object(payload_map))
             .context("failed to serialise edge payload")?;
@@ -1749,7 +1760,8 @@ mod edge_write_path_tests {
             target_type: Some("account".to_string()),
             edge_kind: "reference".to_string(),
             note: None,
-            created_at: Some("2026-06-12T10:00:00+00:00".to_string()),
+            created_at: Some("2026-06-12T10:00:00+00:00".into()),
+            expires_at: Some("2026-06-19T10:00:00+00:00".into()),
         }
     }
 
@@ -1774,6 +1786,10 @@ mod edge_write_path_tests {
             Some("account")
         );
         assert_eq!(payload.get("note").and_then(|v| v.as_str()), Some("a note"));
+        assert_eq!(
+            payload.get("expires_at").and_then(|v| v.as_str()),
+            Some("2026-06-19T10:00:00+00:00")
+        );
     }
 
     #[test]
@@ -1797,7 +1813,7 @@ mod edge_write_path_tests {
     #[test]
     fn rejects_unparseable_created_at() {
         let mut edge = create_edge_value();
-        edge.created_at = Some("yesterday".to_string());
+        edge.created_at = Some("yesterday".into());
         let err = NewDomainEdgeRow::from_edge(&edge).unwrap_err();
         assert!(err.to_string().contains("not RFC3339"));
     }

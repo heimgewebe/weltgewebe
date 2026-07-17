@@ -14,6 +14,7 @@ import type {
   Node,
   Account,
   Edge,
+  MapEdge,
   MapEntityViewModel,
   MapEntityNode,
   MapEntityGarnrolle,
@@ -22,6 +23,7 @@ import type {
   MapDiagnostics,
 } from "$lib/map/types";
 import type { BasemapMode } from "$lib/map/config/basemap.current";
+import { normalizeEdgeLifecycle } from "$lib/map/edgeLifecycle";
 
 /**
  * MapSceneModel: the single source of truth for what the map should display.
@@ -29,7 +31,7 @@ import type { BasemapMode } from "$lib/map/config/basemap.current";
  */
 export type MapSceneModel = {
   entities: MapEntityViewModel[];
-  edges: Edge[];
+  edges: MapEdge[];
   loadState: MapLoadState;
   resourceStatus: MapResourceStatus[];
   diagnostics: MapDiagnostics;
@@ -112,7 +114,7 @@ export function buildMapScene(input: MapSceneInput): MapSceneModel {
 
   return {
     entities: [...nodeEntities, ...accountEntities],
-    edges: input.edges,
+    edges: input.edges.map(normalizeEdgeLifecycle),
     loadState: input.loadState,
     resourceStatus: input.resourceStatus,
     diagnostics: {

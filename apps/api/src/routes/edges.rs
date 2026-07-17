@@ -16,7 +16,8 @@ use axum::{
     http::StatusCode,
     Extension, Json,
 };
-use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Duration, SecondsFormat, Timelike, Utc};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -39,6 +40,76 @@ pub(crate) fn edge_create_persist_lock() -> &'static Mutex<()> {
     EDGE_CREATE_PERSIST.get_or_init(|| Mutex::new(()))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LifecycleTimestamp {
+    raw: String,
+    parsed: Option<DateTime<Utc>>,
+}
+
+impl LifecycleTimestamp {
+    fn from_raw(raw: String) -> Self {
+        let parsed = DateTime::parse_from_rfc3339(&raw)
+            .ok()
+            .map(|value| value.with_timezone(&Utc));
+        Self { raw, parsed }
+    }
+
+    pub fn from_datetime(value: DateTime<Utc>) -> Self {
+        let value = value
+            .with_nanosecond(value.timestamp_subsec_micros() * 1_000)
+            .expect("microsecond precision is always a valid nanosecond value");
+        Self {
+            raw: value.to_rfc3339_opts(SecondsFormat::Micros, true),
+            parsed: Some(value),
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.raw
+    }
+    pub fn parsed(&self) -> Option<&DateTime<Utc>> {
+        self.parsed.as_ref()
+    }
+}
+
+impl From<String> for LifecycleTimestamp {
+    fn from(value: String) -> Self {
+        Self::from_raw(value)
+    }
+}
+impl From<&str> for LifecycleTimestamp {
+    fn from(value: &str) -> Self {
+        Self::from_raw(value.to_owned())
+    }
+}
+impl std::ops::Deref for LifecycleTimestamp {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+impl std::fmt::Display for LifecycleTimestamp {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+impl Serialize for LifecycleTimestamp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+impl<'de> Deserialize<'de> for LifecycleTimestamp {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(Self::from_raw)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Edge {
     pub id: String,
@@ -49,7 +120,8 @@ pub struct Edge {
     #[serde(alias = "kind", alias = "edgeKind")]
     pub edge_kind: String,
     pub note: Option<String>,
-    pub created_at: Option<String>,
+    pub created_at: Option<LifecycleTimestamp>,
+    pub expires_at: Option<LifecycleTimestamp>,
 }
 
 /// Public edge projection. Free-text notes remain persisted authoring metadata
@@ -63,6 +135,7 @@ pub struct PublicEdge {
     pub target_type: Option<String>,
     pub edge_kind: String,
     pub created_at: Option<String>,
+    pub expires_at: Option<String>,
 }
 
 impl From<&Edge> for PublicEdge {
@@ -74,7 +147,14 @@ impl From<&Edge> for PublicEdge {
             target_id: edge.target_id.clone(),
             target_type: edge.target_type.clone(),
             edge_kind: edge.edge_kind.clone(),
-            created_at: edge.created_at.clone(),
+            created_at: edge
+                .created_at
+                .as_ref()
+                .map(|timestamp| timestamp.as_str().to_owned()),
+            expires_at: edge
+                .expires_at
+                .as_ref()
+                .map(|timestamp| timestamp.as_str().to_owned()),
         }
     }
 }
@@ -98,6 +178,72 @@ pub struct EdgeWithDetails {
 }
 
 pub(crate) const DEFAULT_MAX_EDGES_CACHE: usize = 500_000;
+/// Canonical lifetime of a newly derived, unverzwirnter Faden.
+///
+/// The durable Webungsaktion remains the source of truth; only this active
+/// projection expires. Legacy records without `expires_at` remain visible until
+/// a later, explicit Garn/legacy migration can classify them without guessing.
+pub(crate) const FADEN_LIFETIME_HOURS: i64 = 168;
+
+fn faden_expires_at(created_at: DateTime<Utc>) -> DateTime<Utc> {
+    created_at + Duration::hours(FADEN_LIFETIME_HOURS)
+}
+
+/// Active-read predicate for Faden projections.
+///
+/// `None` is the compatibility state for legacy records and a future explicit
+/// Garn representation. A present but malformed timestamp fails closed: it is
+/// never projected as an active Faden. The exact boundary is exclusive, so a
+/// Faden is gone at `now == expires_at`.
+pub(crate) fn edge_is_active_at(edge: &Edge, now: DateTime<Utc>) -> bool {
+    let Some(expires_at) = edge.expires_at.as_ref() else {
+        return true;
+    };
+    let Some(created_at) = edge.created_at.as_ref() else {
+        tracing::debug!(
+            edge_id = %edge.id,
+            expires_at = %expires_at,
+            "hiding expiring edge without created_at from active projection"
+        );
+        return false;
+    };
+
+    let (Some(created_at_value), Some(expires_at_value)) =
+        (created_at.parsed(), expires_at.parsed())
+    else {
+        tracing::debug!(
+            edge_id = %edge.id,
+            created_at_raw = %created_at,
+            expires_at_raw = %expires_at,
+            "hiding edge with invalid lifecycle timestamp from active projection"
+        );
+        return false;
+    };
+    if expires_at_value.signed_duration_since(created_at_value)
+        != Duration::hours(FADEN_LIFETIME_HOURS)
+    {
+        tracing::debug!(
+            edge_id = %edge.id,
+            created_at = %created_at_value,
+            expires_at = %expires_at_value,
+            "hiding edge with non-canonical Faden lifetime from active projection"
+        );
+        return false;
+    }
+
+    now >= *created_at_value && now < *expires_at_value
+}
+
+fn edge_matches_list_at(
+    edge: &Edge,
+    source_id: Option<&str>,
+    target_id: Option<&str>,
+    now: DateTime<Utc>,
+) -> bool {
+    source_id.is_none_or(|source_id| edge.source_id == source_id)
+        && target_id.is_none_or(|target_id| edge.target_id == target_id)
+        && edge_is_active_at(edge, now)
+}
 
 pub(crate) fn max_edges_cache_limit() -> usize {
     match std::env::var("MAX_EDGES_CACHE") {
@@ -175,25 +321,14 @@ pub async fn list_edges(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<ListResponse<PublicEdge>>, StatusCode> {
-    let src = params.get("source_id");
-    let dst = params.get("target_id");
+    let src = params.get("source_id").map(String::as_str);
+    let dst = params.get("target_id").map(String::as_str);
     let limit: usize = parse_usize_param(&params, "limit", 250)?.min(MAX_PAGE_SIZE);
     let (cursor_mode, after_id) = parse_cursor_params(&params)?;
     validate_cursor_limit(cursor_mode, limit)?;
 
-    let matches = |edge: &&Edge| {
-        if let Some(s) = src {
-            if edge.source_id != *s {
-                return false;
-            }
-        }
-        if let Some(d) = dst {
-            if edge.target_id != *d {
-                return false;
-            }
-        }
-        true
-    };
+    let now = Utc::now();
+    let matches = |edge: &&Edge| edge_matches_list_at(edge, src, dst, now);
 
     let cache = state.edges.read().await;
 
@@ -228,6 +363,9 @@ pub async fn get_edge(
 ) -> Result<Json<EdgeWithDetails>, StatusCode> {
     let cache = state.edges.read().await;
     let edge = cache.get(&id).cloned().ok_or(StatusCode::NOT_FOUND)?;
+    if !edge_is_active_at(&edge, Utc::now()) {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     let mut source_details = None;
     let mut target_details = None;
@@ -605,13 +743,14 @@ async fn inspect_edge_persistence_for_create(
 ///
 /// The returned `Edge` carries exactly the values that land in the cache and
 /// the JSONL line. `note` is only written to the record when present (absent
-/// means omitted, never `null`); `expires_at`, `payload`, and `metadata` are
-/// never written.
+/// means omitted, never `null`). `created_at` and `expires_at` are server-owned;
+/// client `expires_at`, `payload`, and `metadata` remain rejected.
 fn build_edge_record(
     validated: edge_create::ValidatedCreateEdge,
     id: String,
-    created_at: String,
+    created_at: DateTime<Utc>,
 ) -> (Edge, Value) {
+    let expires_at = faden_expires_at(created_at);
     let edge = Edge {
         id,
         source_id: validated.source_id,
@@ -620,7 +759,8 @@ fn build_edge_record(
         target_type: Some(validated.target_type),
         edge_kind: validated.edge_kind,
         note: validated.note,
-        created_at: Some(created_at),
+        created_at: Some(LifecycleTimestamp::from_datetime(created_at)),
+        expires_at: Some(LifecycleTimestamp::from_datetime(expires_at)),
     };
 
     let mut record = serde_json::Map::new();
@@ -631,6 +771,7 @@ fn build_edge_record(
     record.insert("target_type".into(), json!(edge.target_type));
     record.insert("edge_kind".into(), json!(edge.edge_kind));
     record.insert("created_at".into(), json!(edge.created_at));
+    record.insert("expires_at".into(), json!(edge.expires_at));
     if let Some(note) = &edge.note {
         record.insert("note".into(), json!(note));
     }
@@ -762,7 +903,7 @@ pub async fn create_edge(
         .id
         .clone()
         .unwrap_or_else(|| Uuid::new_v4().to_string());
-    let created_at = chrono::Utc::now().to_rfc3339();
+    let created_at = Utc::now();
     let (edge, mut record) = build_edge_record(validated, id, created_at);
     add_create_operation_metadata(&mut record, operation.as_ref());
 
@@ -896,8 +1037,8 @@ pub async fn create_edge(
 /// Locked semantics (see
 /// `docs/reports/domain-edge-create-semantics-preflight.md`):
 /// - `created_at` is not accepted from clients — the server owns the timestamp.
-/// - `expires_at` is not accepted — it must never be silently dropped, so it is
-///   rejected via `deny_unknown_fields` rather than ignored.
+/// - client `expires_at` is not accepted — the server derives it from `created_at`,
+///   so supplied values are rejected via `deny_unknown_fields` rather than ignored.
 /// - `payload` / `metadata` are not accepted (the edge contract forbids them).
 /// - any other unknown field is rejected instead of silently ignored.
 /// - `source_type` / `target_type` are required and enum-checked.
@@ -975,7 +1116,7 @@ mod edge_create {
 
     /// Accepted shape of a future internal derived-Faden projection request.
     ///
-    /// `created_at`, `expires_at`, `payload`, and `metadata` are intentionally
+    /// `created_at`, client `expires_at`, `payload`, and `metadata` are intentionally
     /// absent; together with `deny_unknown_fields` they are rejected rather than
     /// silently dropped. `source_type` and `target_type` are **required**,
     /// matching the domain contract. The remaining optional fields `id` and
@@ -1645,9 +1786,141 @@ mod edge_create {
 
 #[cfg(test)]
 mod tests {
-    use super::{max_edges_cache_limit, DEFAULT_MAX_EDGES_CACHE};
+    use super::{
+        build_edge_record, edge_create::ValidatedCreateEdge, edge_is_active_at,
+        edge_matches_list_at, faden_expires_at, max_edges_cache_limit, Edge, LifecycleTimestamp,
+        DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
+    };
     use crate::test_helpers::EnvGuard;
+    use chrono::{DateTime, Duration, TimeZone, Utc};
     use serial_test::serial;
+
+    fn lifecycle_edge(created_at: Option<&str>, expires_at: Option<&str>) -> Edge {
+        Edge {
+            id: "00000000-0000-0000-0000-0000000000e1".to_string(),
+            source_id: "00000000-0000-0000-0000-0000000000a1".to_string(),
+            source_type: Some("node".to_string()),
+            target_id: "00000000-0000-0000-0000-0000000000b1".to_string(),
+            target_type: Some("account".to_string()),
+            edge_kind: "reference".to_string(),
+            note: None,
+            created_at: created_at.map(LifecycleTimestamp::from),
+            expires_at: expires_at.map(LifecycleTimestamp::from),
+        }
+    }
+
+    #[test]
+    fn lifecycle_timestamp_preserves_wire_strings_and_invalid_legacy_values() {
+        let valid: LifecycleTimestamp = serde_json::from_str("\"2026-07-17T10:00:00Z\"").unwrap();
+        assert!(valid.parsed().is_some());
+        assert_eq!(valid.as_str(), "2026-07-17T10:00:00Z");
+        assert_eq!(
+            serde_json::to_string(&valid).unwrap(),
+            "\"2026-07-17T10:00:00Z\""
+        );
+
+        let invalid: LifecycleTimestamp = serde_json::from_str("\"yesterday\"").unwrap();
+        assert!(invalid.parsed().is_none());
+        assert_eq!(invalid.as_str(), "yesterday");
+        assert_eq!(serde_json::to_string(&invalid).unwrap(), "\"yesterday\"");
+    }
+
+    #[test]
+    fn new_faden_expires_exactly_after_168_hours_and_persists_both_timestamps() {
+        let created_at = DateTime::parse_from_rfc3339("2026-07-17T10:00:00.123456789Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(
+            faden_expires_at(created_at),
+            created_at + Duration::hours(FADEN_LIFETIME_HOURS)
+        );
+
+        let validated = ValidatedCreateEdge {
+            id: None,
+            source_id: "00000000-0000-0000-0000-0000000000a1".to_string(),
+            target_id: "00000000-0000-0000-0000-0000000000b1".to_string(),
+            edge_kind: "reference".to_string(),
+            source_type: "node".to_string(),
+            target_type: "account".to_string(),
+            note: None,
+            operation_id: None,
+        };
+        let (edge, record) = build_edge_record(
+            validated,
+            "00000000-0000-0000-0000-0000000000e1".to_string(),
+            created_at,
+        );
+        assert_eq!(
+            edge.created_at.as_deref(),
+            Some("2026-07-17T10:00:00.123456Z")
+        );
+        assert_eq!(
+            edge.expires_at.as_deref(),
+            Some("2026-07-24T10:00:00.123456Z")
+        );
+        assert_eq!(
+            record.get("created_at"),
+            Some(&serde_json::json!(edge.created_at))
+        );
+        assert_eq!(
+            record.get("expires_at"),
+            Some(&serde_json::json!(edge.expires_at))
+        );
+        let round_trip: Edge = serde_json::from_value(record).expect("JSONL round trip");
+        assert_eq!(round_trip.expires_at, edge.expires_at);
+    }
+
+    #[test]
+    fn active_projection_uses_exact_boundary_and_legacy_compatibility() {
+        let edge = lifecycle_edge(Some("2026-07-17T10:00:00Z"), Some("2026-07-24T10:00:00Z"));
+        let before_creation = Utc.with_ymd_and_hms(2026, 7, 17, 9, 59, 59).unwrap();
+        let created = Utc.with_ymd_and_hms(2026, 7, 17, 10, 0, 0).unwrap();
+        let before_expiry = Utc.with_ymd_and_hms(2026, 7, 24, 9, 59, 59).unwrap();
+        let at_expiry = Utc.with_ymd_and_hms(2026, 7, 24, 10, 0, 0).unwrap();
+        assert!(!edge_is_active_at(&edge, before_creation));
+        assert!(edge_is_active_at(&edge, created));
+        assert!(edge_is_active_at(&edge, before_expiry));
+        assert!(!edge_is_active_at(&edge, at_expiry));
+        assert!(edge_is_active_at(&lifecycle_edge(None, None), at_expiry));
+    }
+
+    #[test]
+    fn malformed_or_noncanonical_lifecycle_fails_closed() {
+        let now = Utc.with_ymd_and_hms(2026, 7, 18, 10, 0, 0).unwrap();
+        assert!(!edge_is_active_at(
+            &lifecycle_edge(Some("invalid"), Some("2026-07-24T10:00:00Z")),
+            now
+        ));
+        assert!(!edge_is_active_at(
+            &lifecycle_edge(None, Some("2026-07-24T10:00:00Z")),
+            now
+        ));
+        assert!(!edge_is_active_at(
+            &lifecycle_edge(Some("2026-07-17T10:00:00Z"), Some("2026-07-25T10:00:00Z"),),
+            now
+        ));
+    }
+
+    #[test]
+    fn expiry_filter_precedes_pagination() {
+        let now = Utc.with_ymd_and_hms(2026, 7, 24, 10, 0, 0).unwrap();
+        let expired = lifecycle_edge(Some("2026-07-17T10:00:00Z"), Some("2026-07-24T10:00:00Z"));
+        let mut active_one =
+            lifecycle_edge(Some("2026-07-18T10:00:00Z"), Some("2026-07-25T10:00:00Z"));
+        active_one.id = "active-one".to_string();
+        let mut active_two =
+            lifecycle_edge(Some("2026-07-19T10:00:00Z"), Some("2026-07-26T10:00:00Z"));
+        active_two.id = "active-two".to_string();
+        let edges = [expired, active_one, active_two];
+        let page: Vec<_> = edges
+            .iter()
+            .filter(|edge| edge_matches_list_at(edge, None, None, now))
+            .skip(1)
+            .take(1)
+            .map(|edge| edge.id.as_str())
+            .collect();
+        assert_eq!(page, vec!["active-two"]);
+    }
 
     #[test]
     #[serial]

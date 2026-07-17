@@ -12,7 +12,7 @@ Generated automatically. Do not edit.
 
 > This report is metadata-based. It does not infer semantic staleness from prose.
 
-Explicitly stale documents: **37**
+Explicitly stale documents: **38**
 
 | Document | status | lifecycle_state |
 | --- | --- | --- |
@@ -42,6 +42,7 @@ Explicitly stale documents: **37**
 | `docs/reports/auth-persistence-readiness.md` | deprecated | superseded |
 | `docs/reports/auth-persistence-runtime-proof.md` | deprecated | superseded |
 | `docs/reports/domain-edge-create-semantics-preflight.md` | deprecated | superseded |
+| `docs/reports/domain-edge-write-path-proof.md` | deprecated | superseded |
 | `docs/reports/inwx-zone-reconciliation-plan.md` | deprecated | archived |
 | `docs/reports/map-architekturkritik.md` | deprecated | archived |
 | `docs/reports/map-basemap-proof-gap-reconciliation.md` | deprecated | archived |

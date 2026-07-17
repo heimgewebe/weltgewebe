@@ -270,6 +270,59 @@ async fn edges_invalid_limit() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn expired_edges_are_hidden_before_pagination_and_from_single_get() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    write_lines(
+        &edges_path,
+        &[
+            r#"{"id":"e-expired","source_id":"n1","target_id":"n2","edge_kind":"reference","created_at":"2020-01-01T00:00:00Z","expires_at":"2020-01-08T00:00:00Z"}"#,
+            r#"{"id":"e-active","source_id":"n1","target_id":"n3","edge_kind":"reference"}"#,
+        ],
+    );
+
+    let state = test_state().await?;
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    let res = app
+        .clone()
+        .oneshot(Request::get("/edges?limit=1&offset=0").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let items: serde_json::Value = serde_json::from_slice(&body)?;
+    let items = items
+        .as_array()
+        .context("offset response must be an array")?;
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["id"], "e-active");
+
+    let res = app
+        .clone()
+        .oneshot(Request::get("/edges?pagination=cursor&limit=10").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let page: serde_json::Value = serde_json::from_slice(&body)?;
+    let items = page["items"]
+        .as_array()
+        .context("cursor response items must be an array")?;
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["id"], "e-active");
+
+    let res = app
+        .oneshot(Request::get("/edges/e-expired").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn edges_cursor_pagination_envelope_and_walk() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
@@ -770,7 +823,18 @@ async fn post_edges_creates_edge_in_jsonl_mode() -> Result<()> {
         .as_str()
         .context("created_at must be string")?
         .to_string();
-    chrono::DateTime::parse_from_rfc3339(&created_at).context("created_at must be RFC3339")?;
+    let created_at_parsed =
+        chrono::DateTime::parse_from_rfc3339(&created_at).context("created_at must be RFC3339")?;
+    let expires_at = v["expires_at"]
+        .as_str()
+        .context("expires_at must be string")?
+        .to_string();
+    let expires_at_parsed =
+        chrono::DateTime::parse_from_rfc3339(&expires_at).context("expires_at must be RFC3339")?;
+    assert_eq!(
+        expires_at_parsed.signed_duration_since(created_at_parsed),
+        chrono::Duration::hours(168)
+    );
     assert_eq!(v["source_type"], "node");
     assert_eq!(v["target_type"], "node");
     assert_eq!(v["source_id"], CREATE_SOURCE_ID);
@@ -789,13 +853,14 @@ async fn post_edges_creates_edge_in_jsonl_mode() -> Result<()> {
         lines[0].get("note").is_none(),
         "absent note must be omitted"
     );
-    assert!(lines[0].get("expires_at").is_none());
+    assert_eq!(lines[0]["expires_at"], expires_at.as_str());
 
     // Cache contains the edge.
     {
         let cache = state.edges.read().await;
         let cached = cache.get(&id).context("edge must be in cache")?;
         assert_eq!(cached.created_at.as_deref(), Some(created_at.as_str()));
+        assert_eq!(cached.expires_at.as_deref(), Some(expires_at.as_str()));
         assert_eq!(cached.source_type.as_deref(), Some("node"));
         assert_eq!(cached.target_type.as_deref(), Some("node"));
     }

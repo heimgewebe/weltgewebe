@@ -138,8 +138,9 @@ Generated automatically. Do not edit.
 | reports.domain-backfill-proof | Domain Backfill Proof | report | active | docs/reports/domain-backfill-proof.md |
 | reports.domain-edge-cache-limit-design | Domain Edge Cache-Limit Design — DOMAIN-PG-003 | report | active | docs/reports/domain-edge-cache-limit-design.md |
 | reports.domain-edge-create-semantics-preflight | Domain Edge Create Semantics Preflight — OPT-ARC-001 Phase E-C | report | deprecated | docs/reports/domain-edge-create-semantics-preflight.md |
+| reports.domain-edge-faden-lifecycle-proof | Domain Edge — Faden-Lifecycle-Proof | report | active | docs/reports/domain-edge-faden-lifecycle-proof.md |
 | reports.domain-edge-reference-audit | Domain Edge Reference Audit — OPT-ARC-001 Teilaufgabe 4 | report | active | docs/reports/domain-edge-reference-audit.md |
-| reports.domain-edge-write-path-proof | Domain Edge Write Path Proof | report | active | docs/reports/domain-edge-write-path-proof.md |
+| reports.domain-edge-write-path-proof | Domain Edge Write Path Proof | report | deprecated | docs/reports/domain-edge-write-path-proof.md |
 | reports.domain-node-write-path-proof | Domain Node Write Path Proof | report | active | docs/reports/domain-node-write-path-proof.md |
 | reports.domain-postgres-instance-coherence-decision | Domain PostgreSQL Instance Coherence Decision — DOMAIN-PG-002 | report | active | docs/reports/domain-postgres-instance-coherence-decision.md |
 | reports.domain-provider-role-finding | Finding: Aktuelle Domain- und Provider-Rollen | report | active | docs/reports/domain-provider-role-finding.md |

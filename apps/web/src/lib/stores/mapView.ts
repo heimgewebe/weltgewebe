@@ -160,10 +160,10 @@ function isEdge(e: unknown): e is Edge {
 }
 
 /** Edges whose endpoints are both currently visible markers. */
-export function deriveVisibleEdges(
-  edges: Edge[],
+export function deriveVisibleEdges<T extends Edge>(
+  edges: T[],
   filteredMarkers: MapEntityViewModel[],
-): Edge[] {
+): T[] {
   const validEdges = edges.filter(isEdge);
   const visibleIds = new Set(filteredMarkers.map((p) => p.id));
   return validEdges.filter(

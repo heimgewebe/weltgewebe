@@ -160,6 +160,7 @@ Generated automatically. Do not edit.
 ## contracts/domain/edge.schema.json
 
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
+- [relates_to] docs/reports/domain-edge-faden-lifecycle-proof.md
 - [relates_to] docs/reports/domain-edge-reference-audit.md
 
 ## docs/_generated/report-lifecycle-inventory.md
@@ -755,6 +756,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-runtime-data-source-reconciliation.md
 
+## docs/reports/domain-edge-write-path-proof.md
+
+- [supersedes] docs/reports/domain-edge-faden-lifecycle-proof.md
+
 ## docs/reports/domain-node-write-path-proof.md
 
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
@@ -957,6 +962,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 - [relates_to] docs/adr/ADR-0011__foederierte-gewebezellen.md
 - [relates_to] docs/policies/architecture-critique.md
+- [relates_to] docs/reports/domain-edge-faden-lifecycle-proof.md
 - [relates_to] docs/specs/federation-core.md
 - [relates_to] docs/specs/privacy-api.md
 - [relates_to] docs/vision.md

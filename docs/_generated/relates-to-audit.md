@@ -14,10 +14,10 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 619 |
+| Relationen gesamt | 622 |
 | — depends_on | 25 |
-| — relates_to | 580 |
-| — supersedes | 11 |
+| — relates_to | 582 |
+| — supersedes | 12 |
 | — verifies | 3 |
 | relates_to Anteil | 94% |
 
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (240 Dokumente):
+**Cluster 1** (241 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -175,6 +175,7 @@ _Keine Lücken erkannt._
 - `docs/reports/domain-backfill-proof.md`
 - `docs/reports/domain-edge-cache-limit-design.md`
 - `docs/reports/domain-edge-create-semantics-preflight.md`
+- `docs/reports/domain-edge-faden-lifecycle-proof.md`
 - `docs/reports/domain-edge-reference-audit.md`
 - `docs/reports/domain-edge-write-path-proof.md`
 - `docs/reports/domain-node-write-path-proof.md`
