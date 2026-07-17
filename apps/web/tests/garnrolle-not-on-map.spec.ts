@@ -25,7 +25,7 @@ async function gotoMapAsAccount(page: Page, accountId: string) {
     });
   });
   await page.goto("/map");
-  await page.waitForSelector(".action-bar", { timeout: 10000 });
+  await page.waitForSelector('[data-testid="tool-fan"]', { timeout: 10000 });
 }
 
 async function expectDirectSettingsEntry(page: Page) {

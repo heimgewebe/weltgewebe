@@ -7,7 +7,7 @@
 
   import TopBar from "$lib/components/TopBar.svelte";
   import ContextPanel from "$lib/components/ContextPanel.svelte";
-  import ActionBar from "$lib/components/ActionBar.svelte";
+  import ToolFan from "$lib/components/ToolFan.svelte";
   import SearchOverlay from "$lib/components/SearchOverlay.svelte";
   import SearchDirectionIndicators from "$lib/components/SearchDirectionIndicators.svelte";
   import FilterOverlay from "$lib/components/FilterOverlay.svelte";
@@ -119,6 +119,9 @@
   let nodesOverlay: NodesOverlay | null = null;
   let searchDirectionIndicators: SearchDirectionIndicator[] = [];
   let searchDirectionFrame: number | null = null;
+  let usableSearchViewportCache: ViewportBounds | null = null;
+  let searchViewportGeometryDirty = true;
+  let searchViewportResizeObserver: ResizeObserver | null = null;
 
   async function resolveInitialAuthStatus(
     timeoutMs = 2500,
@@ -142,7 +145,7 @@
     });
   }
 
-  function getUsableSearchViewport(): ViewportBounds | null {
+  function measureUsableSearchViewport(): ViewportBounds | null {
     if (!mapContainer) return null;
     const mapRect = mapContainer.getBoundingClientRect();
     const edgeInset = 28;
@@ -157,18 +160,25 @@
     if (topBarRect)
       top = Math.max(top, topBarRect.bottom - mapRect.top + edgeInset);
 
-    const actionBarRect = document
-      .querySelector<HTMLElement>(".action-bar")
-      ?.getBoundingClientRect();
-    if (actionBarRect && actionBarRect.height > 0) {
-      bottom = Math.min(bottom, actionBarRect.top - mapRect.top - edgeInset);
-    }
-
     const searchRect = document
       .querySelector<HTMLElement>('[data-testid="search-overlay"]')
       ?.getBoundingClientRect();
     if (searchRect) {
-      bottom = Math.min(bottom, searchRect.top - mapRect.top - edgeInset);
+      top = Math.max(top, searchRect.bottom - mapRect.top + edgeInset);
+    }
+
+    const filterRect = document
+      .querySelector<HTMLElement>('[data-testid="filter-overlay"]')
+      ?.getBoundingClientRect();
+    if (filterRect) {
+      top = Math.max(top, filterRect.bottom - mapRect.top + edgeInset);
+    }
+
+    const toolTriggerRect = document
+      .querySelector<HTMLElement>('[data-testid="tool-fan-trigger"]')
+      ?.getBoundingClientRect();
+    if (toolTriggerRect && toolTriggerRect.height > 0) {
+      bottom = Math.min(bottom, toolTriggerRect.top - mapRect.top - edgeInset);
     }
 
     const panelRect = document
@@ -179,6 +189,36 @@
     }
 
     return right > left && bottom > top ? { left, top, right, bottom } : null;
+  }
+
+  function getUsableSearchViewport(): ViewportBounds | null {
+    if (searchViewportGeometryDirty) {
+      usableSearchViewportCache = measureUsableSearchViewport();
+      searchViewportGeometryDirty = false;
+    }
+    return usableSearchViewportCache;
+  }
+
+  function invalidateSearchViewportGeometry() {
+    searchViewportGeometryDirty = true;
+    scheduleSearchDirectionIndicators();
+  }
+
+  function refreshSearchViewportObservers() {
+    if (!searchViewportResizeObserver || !mapContainer) return;
+    searchViewportResizeObserver.disconnect();
+    searchViewportResizeObserver.observe(mapContainer);
+    for (const selector of [
+      ".topbar",
+      '[data-testid="search-overlay"]',
+      '[data-testid="filter-overlay"]',
+      '[data-testid="tool-fan-trigger"]',
+      '[data-testid="context-panel"]',
+    ]) {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (element) searchViewportResizeObserver.observe(element);
+    }
+    invalidateSearchViewportGeometry();
   }
 
   function updateSearchDirectionIndicators() {
@@ -239,7 +279,9 @@
     $isSearchOpen;
     $searchQuery;
     $contextPanelOpen;
-    if (map) tick().then(scheduleSearchDirectionIndicators);
+    $isFilterOpen;
+    searchViewportGeometryDirty = true;
+    if (map) tick().then(refreshSearchViewportObservers);
   }
 
   // Reactive update for edges – only after map style is fully loaded
@@ -272,10 +314,6 @@
   }
 
   function handleSearchSelect(event: CustomEvent<MapEntityViewModel>) {
-    focusAndFlyToPoint(event.detail);
-  }
-
-  function handleFilterSelect(event: CustomEvent<MapEntityViewModel>) {
     focusAndFlyToPoint(event.detail);
   }
 
@@ -343,7 +381,7 @@
       closeFilter();
       enterKomposition({
         mode: parsed.compose === "garnrolle" ? "place-garnrolle" : "new-knoten",
-        source: "action-bar",
+        source: "tool-fan",
       });
       return;
     }
@@ -471,8 +509,11 @@
     // Hoisted so the cleanup can clear it; otherwise a component destroyed
     // before the style loads leaves a 10s timer pointing at dead state.
     let loadingTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
-    const handleSearchViewportChange = () => {
+    const handleSearchMapMove = () => {
       scheduleSearchDirectionIndicators();
+    };
+    const handleSearchMapResize = () => {
+      invalidateSearchViewportGeometry();
     };
     const handleMarkerClick = (e: Event) => {
       const target = e.target as HTMLElement;
@@ -501,6 +542,10 @@
       if (!container) {
         return;
       }
+      searchViewportResizeObserver = new ResizeObserver(() => {
+        invalidateSearchViewportGeometry();
+      });
+      refreshSearchViewportObservers();
 
       let transformRequestFn:
         | ((url: string, resourceType?: any) => { url: string })
@@ -577,8 +622,8 @@
         sysStateStr = val;
       });
       cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
-      map.on("move", handleSearchViewportChange);
-      map.on("resize", handleSearchViewportChange);
+      map.on("move", handleSearchMapMove);
+      map.on("resize", handleSearchMapResize);
 
       loadingTimeout = setTimeout(() => {
         isLoading = false;
@@ -588,7 +633,7 @@
         clearTimeout(loadingTimeout);
         isLoading = false;
         mapStyleReady = true;
-        scheduleSearchDirectionIndicators();
+        invalidateSearchViewportGeometry();
       };
 
       map.once("load", finishLoading);
@@ -600,6 +645,9 @@
       // Expose map for testing
       if (shouldExposeTestMap) {
         (window as any).__TEST_MAP__ = map;
+        (window as any).__TEST_SET_ACTIVE_FILTERS__ = (types: string[]) => {
+          activeFilters.set(new Set(types));
+        };
       }
     })();
 
@@ -613,10 +661,13 @@
       }
       if (shouldExposeTestMap) {
         delete (window as any).__TEST_MAP__;
+        delete (window as any).__TEST_SET_ACTIVE_FILTERS__;
       }
       cleanupKomposition?.();
       cleanupFocus?.();
       unsubscribeSysState?.();
+      searchViewportResizeObserver?.disconnect();
+      searchViewportResizeObserver = null;
       if (searchDirectionFrame !== null) {
         window.cancelAnimationFrame(searchDirectionFrame);
         searchDirectionFrame = null;
@@ -625,8 +676,8 @@
       nodesOverlay?.destroy();
       if (map) {
         map.off("zoom", updateGarnrolleMarkerScale);
-        map.off("move", handleSearchViewportChange);
-        map.off("resize", handleSearchViewportChange);
+        map.off("move", handleSearchMapMove);
+        map.off("resize", handleSearchMapResize);
         if (typeof map.remove === "function") map.remove();
       }
       mapContainer?.removeEventListener("click", handleMarkerClick);
@@ -675,12 +726,8 @@
     indicators={searchDirectionIndicators}
     on:select={handleSearchDirectionSelect}
   />
-  <FilterOverlay
-    {availableTypes}
-    filteredResults={filteredMarkersData}
-    on:select={handleFilterSelect}
-  />
-  <ActionBar />
+  <FilterOverlay {availableTypes} filteredResults={filteredMarkersData} />
+  <ToolFan />
   {#if import.meta.env.DEV || import.meta.env.MODE === "test"}
     <div class="debug-badge" data-testid="debug-badge">
       Nodes: {markerCounts.nodes} / Accounts: {markerCounts.accounts} / Edges: {edgesData.length}
@@ -840,8 +887,15 @@
   }
 
   #map :global(.maplibregl-ctrl-bottom-right) {
-    right: 12px !important;
-    bottom: calc(var(--map-bottom-ui-offset) + 12px) !important;
+    right: calc(
+      var(--tool-fan-collapsed-width) + var(--tool-fan-control-gap)
+    ) !important;
+    bottom: calc(env(safe-area-inset-bottom) + 12px) !important;
+    transition: right var(--motion-ui) !important;
+  }
+
+  :global(.tool-fan.expanded) ~ #map :global(.maplibregl-ctrl-bottom-right) {
+    right: var(--tool-fan-expanded-control-offset) !important;
   }
 
   #map :global(.maplibregl-ctrl-group button) {
@@ -849,22 +903,36 @@
     height: 44px;
   }
 
-  #map.search-open :global(.maplibregl-ctrl-bottom-right),
-  #map.filter-open :global(.maplibregl-ctrl-bottom-right) {
-    bottom: calc(50dvh + var(--map-bottom-ui-offset) + 12px) !important;
-  }
-
   @media (min-width: 769px) {
     #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
-      right: calc(var(--context-panel-width) + 12px) !important;
+      right: calc(
+        var(--context-panel-width) + var(--tool-fan-collapsed-width) +
+          var(--tool-fan-control-gap)
+      ) !important;
+      transition: none !important;
+    }
+
+    :global(.tool-fan.expanded.panel-open)
+      ~ #map.panel-open
+      :global(.maplibregl-ctrl-bottom-right) {
+      right: calc(
+        var(--context-panel-width) + var(--tool-fan-expanded-control-offset)
+      ) !important;
     }
   }
 
   @media (max-width: 768px) {
     #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
-      top: calc(env(safe-area-inset-top) + 60px);
+      top: calc(env(safe-area-inset-top) + var(--toolbar-offset) + 8px);
       right: 10px !important;
       bottom: auto !important;
+      transition: none !important;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #map :global(.maplibregl-ctrl-bottom-right) {
+      transition: none !important;
     }
   }
 
@@ -874,7 +942,7 @@
     background: var(--bg);
     display: grid;
     place-items: center;
-    z-index: 50;
+    z-index: var(--z-map-loading);
     transition: opacity 0.3s;
   }
   .spinner {
@@ -895,7 +963,7 @@
     position: absolute;
     top: 60px;
     right: 10px;
-    z-index: 20;
+    z-index: var(--z-map-debug);
     padding: 4px 8px;
     background: rgba(0, 0, 0, 0.7);
     color: #fff;

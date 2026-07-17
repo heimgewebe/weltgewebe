@@ -10,7 +10,7 @@ import { authStore } from "$lib/auth/store";
 /**
  * Only weber/admin may create nodes. A longpress by a gast/anonymous user
  * must not open an apparently-functional composition panel — it silently
- * does nothing, exactly like the (hidden) "Neuer Knoten" action-bar button.
+ * does nothing, exactly like the (disabled) "Weben" tool-fan action.
  */
 function canComposeOnMap(): boolean {
   const role = get(authStore).role;
