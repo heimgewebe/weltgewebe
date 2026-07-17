@@ -74,9 +74,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-backfill-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 1 | 4 | 4 |  |  |
 | docs/reports/domain-edge-cache-limit-design.md | report | active | active | decision-prep | DOMAIN-PG-003 | 2026-09-29 |  | 0 | 4 | 5 |  |  |
 | docs/reports/domain-edge-create-semantics-preflight.md | report | deprecated | superseded | decision-prep | OPT-ARC-001 |  | docs/reports/domain-edge-write-path-proof.md | 1 | 6 | 7 | review_after |  |
-| docs/reports/domain-edge-faden-lifecycle-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-10-17 |  | 1 | 3 | 3 |  |  |
+| docs/reports/domain-edge-faden-lifecycle-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-10-17 |  | 1 | 5 | 3 |  |  |
 | docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 2 | 4 | 6 |  |  |
-| docs/reports/domain-edge-write-path-proof.md | report | deprecated | superseded | proof | OPT-ARC-001 | 2026-07-16 | docs/reports/domain-edge-faden-lifecycle-proof.md | 2 | 6 | 8 |  |  |
+| docs/reports/domain-edge-write-path-proof.md | report | deprecated | superseded | proof | OPT-ARC-001 | 2026-07-16 | docs/reports/domain-edge-faden-lifecycle-proof.md | 2 | 7 | 8 |  |  |
 | docs/reports/domain-node-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 6 |  |  |
 | docs/reports/domain-postgres-instance-coherence-decision.md | report | active | active | audit | WELTGEWEBE-OS-002 | 2027-01-16 |  | 6 | 6 | 10 |  |  |
 | docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | 4 | 4 | 3 |  |  |
@@ -572,6 +572,8 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/report-lifecycle.md`
+  - `docs/_generated/supersession-map.md`
 
 - `docs/reports/domain-edge-reference-audit.md`
   - `docs/_generated/backlinks.md`
@@ -585,6 +587,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/relations-analysis.md`
   - `docs/_generated/report-lifecycle.md`
+  - `docs/_generated/staleness-report.md`
   - `docs/_generated/supersession-map.md`
 
 - `docs/reports/domain-node-write-path-proof.md`
