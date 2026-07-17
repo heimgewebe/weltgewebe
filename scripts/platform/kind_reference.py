@@ -443,53 +443,119 @@ def wait_apps(kubectl: str, namespace: str) -> None:
         raise ProofError(f"expected two available API replicas, got {available!r}")
 
 
-def api_version(kubectl: str, namespace: str) -> str:
-    pod = output(
-        [
-            kubectl,
-            "-n",
-            namespace,
-            "get",
-            "pod",
-            "-l",
-            "app.kubernetes.io/name=weltgewebe-api",
-            "-o",
-            "jsonpath={.items[0].metadata.name}",
-        ]
+def ready_api_pods(kubectl: str, namespace: str) -> list[tuple[str, str]]:
+    document = json.loads(
+        output(
+            [
+                kubectl,
+                "-n",
+                namespace,
+                "get",
+                "pod",
+                "-l",
+                "app.kubernetes.io/name=weltgewebe-api",
+                "-o",
+                "json",
+            ]
+        )
     )
-    command = [
-        kubectl,
-        "-n",
-        namespace,
-        "exec",
-        pod,
-        "--",
-        "wget",
-        "-qO-",
-        "-T",
-        "5",
-        "http://weltgewebe-api:8080/version",
-    ]
+    ready: list[tuple[str, str]] = []
+    for item in document.get("items", []):
+        metadata = item.get("metadata", {})
+        status = item.get("status", {})
+        if metadata.get("deletionTimestamp") is not None:
+            continue
+        if status.get("phase") != "Running":
+            continue
+        conditions = status.get("conditions", [])
+        if not any(
+            condition.get("type") == "Ready" and condition.get("status") == "True"
+            for condition in conditions
+        ):
+            continue
+        container_statuses = status.get("containerStatuses", [])
+        if not container_statuses or not all(
+            container.get("ready") is True for container in container_statuses
+        ):
+            continue
+        name = metadata.get("name")
+        uid = metadata.get("uid")
+        if isinstance(name, str) and name and isinstance(uid, str) and uid:
+            ready.append((name, uid))
+    return sorted(ready)
+
+
+def api_version(kubectl: str, namespace: str) -> str:
+    last_error: BaseException | None = None
     for attempt in range(30):
         try:
-            return output(command)
+            pods = ready_api_pods(kubectl, namespace)
         except subprocess.CalledProcessError as error:
-            if attempt == 29:
-                raise ProofError(
-                    "API service did not become reachable from an API pod"
-                ) from error
-            time.sleep(1)
+            pods = []
+            last_error = error
+        for pod, _ in pods:
+            try:
+                return output(
+                    [
+                        kubectl,
+                        "-n",
+                        namespace,
+                        "exec",
+                        pod,
+                        "--",
+                        "wget",
+                        "-qO-",
+                        "-T",
+                        "5",
+                        "http://weltgewebe-api:8080/version",
+                    ]
+                )
+            except subprocess.CalledProcessError as error:
+                last_error = error
+        if attempt == 29:
+            raise ProofError(
+                "API service did not become reachable from a current ready API pod"
+            ) from last_error
+        time.sleep(1)
     raise AssertionError("unreachable API service retry state")
 
 
+def ready_api_pod_uids(kubectl: str, namespace: str) -> set[str]:
+    pods = ready_api_pods(kubectl, namespace)
+    if len(pods) != 2:
+        raise ProofError(
+            f"expected exactly two current ready API pods, got {len(pods)}"
+        )
+    return {uid for _, uid in pods}
+
+
 def prove_restart(kubectl: str, namespace: str) -> dict[str, str]:
+    before_pods = ready_api_pod_uids(kubectl, namespace)
     before = api_version(kubectl, namespace)
     run([kubectl, "-n", namespace, "rollout", "restart", "deployment/weltgewebe-api"])
     wait_rollout(kubectl, namespace, "deployment/weltgewebe-api")
+    after_pods = ready_api_pod_uids(kubectl, namespace)
+    overlap = before_pods & after_pods
+    if overlap:
+        raise ProofError(
+            "API rollout did not replace every ready pod: "
+            + ", ".join(sorted(overlap))
+        )
     after = api_version(kubectl, namespace)
     if json.loads(before).get("git_commit") != json.loads(after).get("git_commit"):
         raise ProofError("API commit changed across restart")
-    return {"before": hashlib.sha256(before.encode()).hexdigest(), "after": hashlib.sha256(after.encode()).hexdigest()}
+    return {
+        "before": hashlib.sha256(before.encode()).hexdigest(),
+        "after": hashlib.sha256(after.encode()).hexdigest(),
+        "before_pods_sha256": hashlib.sha256(
+            "\n".join(sorted(before_pods)).encode()
+        ).hexdigest(),
+        "after_pods_sha256": hashlib.sha256(
+            "\n".join(sorted(after_pods)).encode()
+        ).hexdigest(),
+        "replaced_replicas": str(len(after_pods)),
+    }
+
 
 
 def prove_flux_drift(kubectl: str, flux: str, namespace: str) -> None:
@@ -534,26 +600,66 @@ def gateway_addresses(kubectl: str) -> list[str]:
     return addresses
 
 
-def gateway_node_port(kubectl: str, service: str) -> int:
-    raw = output(
-        [
-            kubectl,
-            "-n",
-            "weltgewebe-gateway",
-            "get",
-            "service",
-            service,
-            "-o",
-            "jsonpath={.spec.ports[0].nodePort}",
-        ]
+def gateway_listener_port(kubectl: str) -> int:
+    document = json.loads(
+        output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe-gateway",
+                "get",
+                "gateway",
+                "weltgewebe",
+                "-o",
+                "json",
+            ]
+        )
     )
-    try:
-        port = int(raw)
-    except ValueError as error:
-        raise ProofError(f"Gateway service has invalid NodePort: {raw!r}") from error
+    ports = [
+        listener.get("port")
+        for listener in document.get("spec", {}).get("listeners", [])
+        if listener.get("protocol") == "HTTP"
+    ]
+    if len(ports) != 1 or not isinstance(ports[0], int):
+        raise ProofError(f"Gateway must expose exactly one HTTP listener: {ports!r}")
+    port = ports[0]
     if not 1 <= port <= 65535:
-        raise ProofError(f"Gateway service NodePort is out of range: {port}")
+        raise ProofError(f"Gateway listener port is out of range: {port}")
     return port
+
+
+def gateway_service_listener_port(
+    kubectl: str, service: str, expected_port: int
+) -> int:
+    document = json.loads(
+        output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe-gateway",
+                "get",
+                "service",
+                service,
+                "-o",
+                "json",
+            ]
+        )
+    )
+    spec = document.get("spec", {})
+    if spec.get("type") != "LoadBalancer":
+        raise ProofError("Gateway service is not a LoadBalancer")
+    matches = [
+        port
+        for port in spec.get("ports", [])
+        if port.get("protocol", "TCP") == "TCP" and port.get("port") == expected_port
+    ]
+    if len(matches) != 1:
+        raise ProofError(
+            "Gateway LoadBalancer service does not expose its HTTP listener port: "
+            f"{expected_port}"
+        )
+    return expected_port
+
 
 
 def kind_nodes(kind: str, cluster: str) -> list[str]:
@@ -618,7 +724,7 @@ def probe_gateway_http(
                     last_error = error
         if time.monotonic() >= deadline:
             raise ProofError(
-                "Gateway NodePort did not serve node-local HTTP: "
+                "Gateway status address did not serve listener HTTP from a kind node: "
                 f"nodes={nodes!r} addresses={addresses!r} port={port}"
             ) from last_error
         time.sleep(1)
@@ -658,16 +764,18 @@ def prove_gateway(kubectl: str, kind: str, cluster: str) -> dict[str, str]:
     )
     if not service:
         raise ProofError("Gateway service was not created")
+    listener_port = gateway_listener_port(kubectl)
     probe_node, address, health, web = probe_gateway_http(
         kind,
         cluster,
         gateway_addresses(kubectl),
-        gateway_node_port(kubectl, service),
+        gateway_service_listener_port(kubectl, service, listener_port),
     )
     return {
         "service": service,
         "probe_node": probe_node,
         "address": address,
+        "listener_port": str(listener_port),
         "health_sha256": hashlib.sha256(health).hexdigest(),
         "web_prefix_sha256": hashlib.sha256(web).hexdigest(),
     }

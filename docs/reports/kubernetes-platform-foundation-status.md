@@ -36,7 +36,7 @@ relations:
 - Flux-Abhängigkeitskette `data → migration → app → gateway` mit Wait, Prune, Health Checks und Driftkorrektur;
 - isolierter kind-Lifecycle mit Besitzmarker und eigener Bereinigung;
 - deklarativer, completion-gesteuerter Migration-only-Job vor dem Start mehrerer API-Replikate;
-- Zwei-API-, Restart-, Gateway- und GitOps-Driftbeweis.
+- Zwei-API- und vollständiger Pod-Austausch beim Restart; Gateway-Listener-Readback innerhalb der kind-Zelle; GitOps-Driftbeweis.
 
 ## Nicht behauptet
 
@@ -45,6 +45,7 @@ relations:
 - PostgreSQL und JetStream im lokalen Overlay sind nicht hochverfügbar und nicht persistent.
 - Backup, Restore, PITR, RTO, RPO, Multi-Cluster und Föderation sind nicht belegt.
 - Der Compose-Produktionspfad bleibt unverändert.
+- Der lokale Gateway-Beweis behauptet keine Erreichbarkeit vom Docker-Host oder aus externen Netzen.
 
 ## Freigabefolge
 

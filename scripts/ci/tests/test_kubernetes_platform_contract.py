@@ -182,17 +182,131 @@ spec:
         )
         self.assertNotIn("RUN chmod +x /usr/local/bin/generate-demo-data", dockerfile)
 
-    def test_api_version_retries_service_propagation(self) -> None:
+    def test_ready_api_pods_exclude_terminating_and_unready_pods(self) -> None:
+        document = {
+            "items": [
+                {
+                    "metadata": {"name": "terminating", "uid": "uid-old", "deletionTimestamp": "now"},
+                    "status": {
+                        "phase": "Running",
+                        "conditions": [{"type": "Ready", "status": "True"}],
+                        "containerStatuses": [{"ready": True}],
+                    },
+                },
+                {
+                    "metadata": {"name": "unready", "uid": "uid-unready"},
+                    "status": {
+                        "phase": "Running",
+                        "conditions": [{"type": "Ready", "status": "False"}],
+                        "containerStatuses": [{"ready": False}],
+                    },
+                },
+                {
+                    "metadata": {"name": "current", "uid": "uid-current"},
+                    "status": {
+                        "phase": "Running",
+                        "conditions": [{"type": "Ready", "status": "True"}],
+                        "containerStatuses": [{"ready": True}],
+                    },
+                },
+            ]
+        }
+        with mock.patch.object(
+            self.reference, "output", return_value=json.dumps(document)
+        ):
+            self.assertEqual(
+                self.reference.ready_api_pods("kubectl", "weltgewebe"),
+                [("current", "uid-current")],
+            )
+
+    def test_api_version_reselects_current_ready_pod_after_failure(self) -> None:
         temporary_failure = subprocess.CalledProcessError(4, ["wget"])
         response = '{"git_commit":"0123456789abcdef0123456789abcdef01234567"}'
+        first = {
+            "items": [{
+                "metadata": {"name": "api-old", "uid": "uid-old"},
+                "status": {
+                    "phase": "Running",
+                    "conditions": [{"type": "Ready", "status": "True"}],
+                    "containerStatuses": [{"ready": True}],
+                },
+            }]
+        }
+        second = {
+            "items": [
+                {
+                    "metadata": {"name": "api-old", "uid": "uid-old", "deletionTimestamp": "now"},
+                    "status": {
+                        "phase": "Running",
+                        "conditions": [{"type": "Ready", "status": "True"}],
+                        "containerStatuses": [{"ready": True}],
+                    },
+                },
+                {
+                    "metadata": {"name": "api-new", "uid": "uid-new"},
+                    "status": {
+                        "phase": "Running",
+                        "conditions": [{"type": "Ready", "status": "True"}],
+                        "containerStatuses": [{"ready": True}],
+                    },
+                },
+            ]
+        }
         with mock.patch.object(
             self.reference,
             "output",
-            side_effect=["api-pod", temporary_failure, response],
-        ), mock.patch.object(self.reference.time, "sleep") as sleep:
+            side_effect=[
+                json.dumps(first),
+                temporary_failure,
+                json.dumps(second),
+                response,
+            ],
+        ) as output_mock, mock.patch.object(
+            self.reference.time, "sleep"
+        ) as sleep:
             observed = self.reference.api_version("kubectl", "weltgewebe")
         self.assertEqual(observed, response)
+        self.assertEqual(output_mock.call_args_list[1].args[0][4], "api-old")
+        self.assertEqual(output_mock.call_args_list[3].args[0][4], "api-new")
         sleep.assert_called_once_with(1)
+
+    def test_restart_proof_requires_complete_pod_replacement(self) -> None:
+        response = '{"git_commit":"0123456789abcdef0123456789abcdef01234567"}'
+        with (
+            mock.patch.object(
+                self.reference,
+                "ready_api_pod_uids",
+                side_effect=[{"old-a", "old-b"}, {"new-a", "new-b"}],
+            ),
+            mock.patch.object(
+                self.reference, "api_version", side_effect=[response, response]
+            ),
+            mock.patch.object(self.reference, "run"),
+            mock.patch.object(self.reference, "wait_rollout"),
+        ):
+            result = self.reference.prove_restart("kubectl", "weltgewebe")
+        self.assertEqual(result["before"], result["after"])
+        self.assertEqual(result["replaced_replicas"], "2")
+        self.assertNotEqual(
+            result["before_pods_sha256"], result["after_pods_sha256"]
+        )
+
+    def test_restart_proof_rejects_surviving_ready_pod(self) -> None:
+        response = '{"git_commit":"0123456789abcdef0123456789abcdef01234567"}'
+        with (
+            mock.patch.object(
+                self.reference,
+                "ready_api_pod_uids",
+                side_effect=[{"old-a", "old-b"}, {"old-a", "new-b"}],
+            ),
+            mock.patch.object(self.reference, "api_version", return_value=response),
+            mock.patch.object(self.reference, "run"),
+            mock.patch.object(self.reference, "wait_rollout"),
+        ):
+            with self.assertRaisesRegex(
+                self.reference.ProofError, "did not replace every ready pod"
+            ):
+                self.reference.prove_restart("kubectl", "weltgewebe")
 
     def test_reference_binds_cluster_access_after_cni_bootstrap(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()
@@ -332,15 +446,47 @@ spec:
         with mock.patch.object(self.reference, "output", return_value=json.dumps(document)):
             self.assertEqual(self.reference.gateway_addresses("kubectl"), ["172.22.0.3", "172.22.0.4"])
 
-    def test_gateway_node_port_requires_valid_integer(self) -> None:
-        with mock.patch.object(self.reference, "output", return_value="31293"):
+    def test_gateway_listener_port_requires_one_http_listener(self) -> None:
+        document = {
+            "spec": {"listeners": [{"protocol": "HTTP", "port": 80}]}
+        }
+        with mock.patch.object(
+            self.reference, "output", return_value=json.dumps(document)
+        ):
+            self.assertEqual(self.reference.gateway_listener_port("kubectl"), 80)
+        document["spec"]["listeners"].append({"protocol": "HTTP", "port": 8080})
+        with mock.patch.object(
+            self.reference, "output", return_value=json.dumps(document)
+        ):
+            with self.assertRaisesRegex(
+                self.reference.ProofError, "exactly one HTTP listener"
+            ):
+                self.reference.gateway_listener_port("kubectl")
+
+    def test_gateway_service_binds_load_balancer_listener_port(self) -> None:
+        document = {
+            "spec": {
+                "type": "LoadBalancer",
+                "ports": [{"protocol": "TCP", "port": 80, "nodePort": 31293}],
+            }
+        }
+        with mock.patch.object(
+            self.reference, "output", return_value=json.dumps(document)
+        ):
             self.assertEqual(
-                self.reference.gateway_node_port("kubectl", "gateway-service"),
-                31293,
+                self.reference.gateway_service_listener_port(
+                    "kubectl", "gateway-service", 80
+                ),
+                80,
             )
-        with mock.patch.object(self.reference, "output", return_value="not-a-port"):
-            with self.assertRaisesRegex(self.reference.ProofError, "invalid NodePort"):
-                self.reference.gateway_node_port("kubectl", "gateway-service")
+        document["spec"]["type"] = "NodePort"
+        with mock.patch.object(
+            self.reference, "output", return_value=json.dumps(document)
+        ):
+            with self.assertRaisesRegex(self.reference.ProofError, "not a LoadBalancer"):
+                self.reference.gateway_service_listener_port(
+                    "kubectl", "gateway-service", 80
+                )
 
     def test_kind_nodes_require_nonempty_cluster(self) -> None:
         with mock.patch.object(
@@ -356,7 +502,7 @@ spec:
             with self.assertRaisesRegex(self.reference.ProofError, "no nodes"):
                 self.reference.kind_nodes("kind", "cluster")
 
-    def test_gateway_http_probe_uses_node_local_nodeport(self) -> None:
+    def test_gateway_http_probe_uses_status_address_listener_port(self) -> None:
         health = subprocess.CompletedProcess(
             args=[], returncode=0, stdout=b"healthy", stderr=b""
         )
@@ -379,7 +525,7 @@ spec:
                 "kind",
                 "cluster",
                 ["172.22.0.3"],
-                31293,
+                80,
                 timeout_seconds=1,
             )
         self.assertEqual(
@@ -391,10 +537,10 @@ spec:
         self.assertIn("curl", argv)
         self.assertIn("--fail", argv)
         self.assertIn("--max-time", argv)
-        self.assertEqual(argv[-1], "http://172.22.0.3:31293/health/live")
+        self.assertEqual(argv[-1], "http://172.22.0.3:80/health/live")
         self.assertEqual(
             run_mock.call_args_list[1].args[0][-1],
-            "http://172.22.0.3:31293/",
+            "http://172.22.0.3:80/",
         )
 
     def test_gateway_policy_allows_only_cilium_ingress_identity(self) -> None:
@@ -413,8 +559,9 @@ spec:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()
         self.assertNotIn("def port_forward", source)
         self.assertNotIn('"port-forward"', source)
+        self.assertNotIn("gateway_node_port", source)
         self.assertIn(
-            "gateway_node_port(kubectl, service)", source
+            "gateway_service_listener_port(kubectl, service, listener_port)", source
         )
 
     def test_full_proof_uses_canonical_builder_signature(self) -> None:
