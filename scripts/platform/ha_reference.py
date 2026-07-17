@@ -255,6 +255,22 @@ def wait_cluster_ready(kubectl: str, cluster: str, timeout: str = "15m") -> None
     ref.wait_condition(kubectl, "weltgewebe-data", f"cluster/{cluster}", "Ready", timeout)
 
 
+def ha_diagnostic_snapshot(kubectl: str, name: str) -> None:
+    target = CACHE / "failures" / name
+    target.mkdir(parents=True, exist_ok=True)
+    commands = {
+        "cnpg-clusters.yaml": [kubectl, "get", "clusters.postgresql.cnpg.io", "-A", "-o", "yaml"],
+        "cnpg-pods-describe.txt": [kubectl, "-n", "weltgewebe-data", "describe", "pods", "-l", "cnpg.io/cluster"],
+        "cnpg-pods-logs.txt": [kubectl, "-n", "weltgewebe-data", "logs", "-l", "cnpg.io/cluster", "--all-containers=true", "--prefix=true", "--tail=2000"],
+        "cnpg-pods-previous-logs.txt": [kubectl, "-n", "weltgewebe-data", "logs", "-l", "cnpg.io/cluster", "--all-containers=true", "--prefix=true", "--previous=true", "--tail=2000"],
+        "cnpg-operator-logs.txt": [kubectl, "-n", "cnpg-system", "logs", "deployment/cnpg-controller-manager", "--tail=2000"],
+        "storage.txt": [kubectl, "get", "pv,pvc", "-A", "-o", "wide"],
+    }
+    for filename, argv in commands.items():
+        result = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True)
+        (target / filename).write_text(result.stdout + result.stderr, encoding="utf-8")
+
+
 def psql(kubectl: str, sql: str, *, cluster: str = "postgres-ha") -> str:
     primary = current_primary(kubectl, cluster)
     if not primary:
@@ -466,7 +482,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             raise ref.ProofError("JetStream did not acknowledge the baseline message")
 
         failure_started = time.monotonic()
-        ref.run(["docker", "stop", "--time", "10", stopped_node], timeout=60)
+        ref.run(["docker", "stop", "--timeout", "10", stopped_node], timeout=60)
         def new_primary_probe():
             candidate = current_primary(kubectl)
             return candidate if candidate and candidate != primary_before else False
@@ -486,6 +502,8 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         ref.run(["docker", "start", stopped_node], timeout=60)
         stopped_node = ""
         ref.run([kubectl, "wait", "--for=condition=Ready", f"node/{primary_topology['node']}", "--timeout=8m"])
+        ref.wait_rollout(kubectl, "kube-system", "daemonset/cilium", "8m")
+        ref.wait_rollout(kubectl, "kube-system", "daemonset/cilium-envoy", "8m")
         wait_cluster_ready(kubectl, "postgres-ha", "15m")
         ref.wait_rollout(kubectl, "weltgewebe-data", "statefulset/nats", "12m")
         wait_api_replicas(kubectl)
@@ -566,6 +584,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     except Exception:
         if created_primary:
             ref.configure_cluster_access(kind, args.cluster)
+            ha_diagnostic_snapshot(kubectl, args.cluster)
             ref.diagnostic_snapshot(kubectl, args.cluster)
         if created_restore:
             ref.configure_cluster_access(kind, restore_name)

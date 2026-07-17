@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -143,6 +144,43 @@ class KubernetesHaContractTests(unittest.TestCase):
         with mock.patch.object(self.ha.subprocess, "run", return_value=endpoint) as run:
             self.assertFalse(self.ha.cnpg_webhook_ready("kubectl"))
         self.assertEqual(run.call_count, 1)
+
+    def test_ha_diagnostic_snapshot_captures_cnpg_and_storage_evidence(self) -> None:
+        completed = mock.Mock(stdout="evidence\n", stderr="")
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            self.ha, "CACHE", Path(directory)
+        ), mock.patch.object(
+            self.ha.subprocess, "run", return_value=completed
+        ) as run:
+            self.ha.ha_diagnostic_snapshot("kubectl", "proof")
+            target = Path(directory) / "failures" / "proof"
+            self.assertEqual(
+                {path.name for path in target.iterdir()},
+                {
+                    "cnpg-clusters.yaml",
+                    "cnpg-pods-describe.txt",
+                    "cnpg-pods-logs.txt",
+                    "cnpg-pods-previous-logs.txt",
+                    "cnpg-operator-logs.txt",
+                    "storage.txt",
+                },
+            )
+        argv = [call.args[0] for call in run.call_args_list]
+        self.assertIn(
+            ["kubectl", "get", "clusters.postgresql.cnpg.io", "-A", "-o", "yaml"],
+            argv,
+        )
+        self.assertTrue(any("--previous=true" in call for call in argv))
+        self.assertTrue(any("deployment/cnpg-controller-manager" in call for call in argv))
+
+    def test_zone_rejoin_waits_for_cilium_before_database_readiness(self) -> None:
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        node_ready = source.index('f"node/{primary_topology[\'node\']}"')
+        cilium_ready = source.index('"daemonset/cilium"', node_ready)
+        postgres_ready = source.index('wait_cluster_ready(kubectl, "postgres-ha", "15m")', cilium_ready)
+        self.assertLess(node_ready, cilium_ready)
+        self.assertLess(cilium_ready, postgres_ready)
+        self.assertIn('["docker", "stop", "--timeout", "10", stopped_node]', source)
 
     def test_sensitive_environment_values_never_enter_argv(self) -> None:
         completed = mock.Mock(returncode=0)
