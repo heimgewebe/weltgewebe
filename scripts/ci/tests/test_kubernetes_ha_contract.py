@@ -150,8 +150,22 @@ class KubernetesHaContractTests(unittest.TestCase):
         image = self.ha.POSTGRES_IMAGE
         self.assertIn(":16.14@sha256:", image)
         self.assertNotIn("postgresql@sha256:", image)
+        catalog = (ROOT / "platform/infrastructure/ha-data/postgres-image-catalog.yaml").read_text()
+        self.assertIn(image, catalog)
         manifest = (ROOT / "platform/infrastructure/ha-data/postgres.yaml").read_text()
-        self.assertIn(image, manifest)
+        self.assertNotIn("imageName:", manifest)
+        self.assertIn("name: weltgewebe-postgres", manifest)
+        self.assertIn("major: 16", manifest)
+        restored = self.ha.restore_cluster_document("2026-07-17T12:00:00Z")
+        self.assertEqual(
+            restored["spec"]["imageCatalogRef"],
+            {
+                "apiGroup": "postgresql.cnpg.io",
+                "kind": "ImageCatalog",
+                "name": "weltgewebe-postgres",
+                "major": 16,
+            },
+        )
         lock = json.loads((ROOT / "platform/toolchain.lock.json").read_text())
         self.assertEqual(lock["images"]["cloudnative_pg_postgresql"], image)
 
