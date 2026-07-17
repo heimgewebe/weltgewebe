@@ -454,11 +454,11 @@ pub async fn get_account(
         edges
             .iter_in_order()
             .filter(|edge| {
-                edge_is_active_at(edge, now)
-                    && ((edge.source_id == id
-                        && matches!(edge.source_type.as_deref(), Some("account") | None))
-                        || (edge.target_id == id
-                            && matches!(edge.target_type.as_deref(), Some("account") | None)))
+                ((edge.source_id == id
+                    && matches!(edge.source_type.as_deref(), Some("account") | None))
+                    || (edge.target_id == id
+                        && matches!(edge.target_type.as_deref(), Some("account") | None)))
+                    && edge_is_active_at(edge, now)
             })
             .cloned()
             .collect::<Vec<_>>()
@@ -492,7 +492,11 @@ pub async fn get_account(
             });
         }
 
-        if let Some(date) = edge.created_at.clone() {
+        if let Some(date) = edge
+            .created_at
+            .as_ref()
+            .map(|timestamp| timestamp.as_str().to_owned())
+        {
             let event = if account_is_source {
                 format!("Hat den Knoten \"{}\" geknüpft.", node.title)
             } else {

@@ -68,6 +68,16 @@ export interface Edge {
   expires_at?: string | null;
 }
 
+export type EdgeLifecycle =
+  | { kind: "legacy" }
+  | { kind: "invalid" }
+  | { kind: "faden"; createdAtMs: number; expiresAtMs: number };
+
+/** Map-only edge model with lifecycle timestamps parsed exactly once. */
+export interface MapEdge extends Edge {
+  lifecycle: EdgeLifecycle;
+}
+
 // Phase 3: Discriminated union for map entities – eliminates semantic guesswork
 
 /** A node entity rendered on the map. */

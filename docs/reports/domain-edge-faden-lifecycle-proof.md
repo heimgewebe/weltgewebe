@@ -14,7 +14,7 @@ summary: >
   Lokaler, diffgebundener Implementierungs- und Regressionstest für den
   exakt 168 Stunden langen Lebenszyklus neu abgeleiteter, unverzwirnter Fäden.
   Belegt sind servereigene Ablaufzeit, JSONL-/PostgreSQL-Mapping, Filterung vor
-  Paginierung, 404 nach Ablauf, Account-Projektion und lineares Kartenverblassen.
+  Paginierung, 404 nach Ablauf, Account-Projektion und täglich abgetastetes lineares Kartenverblassen.
   Garn und Verzwirnung bleiben ein eigener, noch zu spezifizierender Vertrag.
 relations:
   - type: supersedes
@@ -43,9 +43,9 @@ persistierte Webungsaktion wird nicht gelöscht.
 | Dauer | Exakt 168 Stunden; keine Konfiguration und kein Refresh durch spätere Aktionen. |
 | JSONL | Beide Zeitstempel landen in derselben dauerhaften Zeile und im Cache. |
 | PostgreSQL | `created_at` bleibt Spalte; `expires_at` wird im bestehenden JSONB-Payload gespeichert und beim Reload rekonstruiert. |
-| Aktive Projektion | Filterung erfolgt vor Offset- und Cursor-Paginierung; Einzelabruf liefert nach Ablauf 404. |
+| Aktive Projektion | Filterung erfolgt vor Offset- und Cursor-Paginierung; Einzelabruf liefert nach Ablauf 404. Zeitstempel werden beim Laden oder Erzeugen einmal geparst; der Request-Hot-Path vergleicht nur vorgeparste Werte. |
 | Nebenprojektion | Account-Details verwenden denselben aktiven Fadenprädikat. |
-| Darstellung | Deckkraft fällt linear von 1 auf 0; der Kartenzeitpunkt wird minütlich aktualisiert. |
+| Darstellung | Die lineare Zieldeckkraft wird aus vorgeparsten Millisekunden berechnet und nur alle 24 Stunden als GeoJSON neu projiziert; ein separater Einmal-Timer entfernt den nächsten Faden exakt bei `expires_at`. |
 | Legacy | Datensätze ohne `expires_at` bleiben sichtbar; es wird keine rückwirkende Ablaufzeit geraten. |
 | Korruption | Fehlende, ungültige oder nicht exakt 168 Stunden auseinanderliegende Zeitstempel werden fail-closed ausgeblendet. |
 | Garn | Dauerhaft und ausgenommen, aber ohne geratenes Feld oder öffentliches CRUD; eigener Folgeauftrag. |
@@ -54,7 +54,7 @@ persistierte Webungsaktion wird nicht gelöscht.
 
 - Web-Produktionsbuild einschließlich Route-Performance-Budget: bestanden.
 - Web-CI: Budget-, Public-Asset-, Prettier-, ESLint- und Svelte-Checks bestanden.
-- Web-Unit-Tests: 159 bestanden, 0 fehlgeschlagen.
+- Web-Unit-Tests: 160 bestanden, 0 fehlgeschlagen; Lifecycle-Normalisierung, 24-Stunden-Refresh, Offsetgrenzen und exakte Ablaufplanung sind getrennt getestet.
 - API `cargo fmt`, `cargo clippy --all-targets --all-features -D warnings` und Build: bestanden.
 - API-Testkorpus: alle nicht ignorierten Unit- und Integrationstests bestanden;
   darunter 370 Library-Tests, 28 Edge-Tests, 13 Account-Tests und die neuen
@@ -71,5 +71,7 @@ persistierte Webungsaktion wird nicht gelöscht.
   Fadenvertrags und muss separat bereinigt oder eindeutig umgewidmet werden.
 - Garn und Verzwirnung benötigen einen eigenen Domänen-, Ereignis- und
   Persistenzvertrag.
+- Endpoint-/Ablaufindexierung für sehr große Edge-Bestände ist als Bureau-Ereignis 657 registriert; sie erfordert zuerst eine reproduzierbare 500k-Messung.
+- MapLibre-Feature-State ist als Bureau-Ereignis 658 registriert und bleibt profilinggebunden, weil der tägliche `setData`-Pfad derzeit keinen belegten Engpass darstellt.
 - Remote-CI- und Live-Evidence werden nach PR und Merge ergänzt; dieser Bericht
   behauptet bis dahin ausschließlich den lokal reproduzierten Stand.

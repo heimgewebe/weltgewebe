@@ -16,8 +16,8 @@ use axum::{
     http::StatusCode,
     Extension, Json,
 };
-use chrono::{DateTime, Duration, SecondsFormat, Utc};
-use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Duration, SecondsFormat, Timelike, Utc};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -40,6 +40,76 @@ pub(crate) fn edge_create_persist_lock() -> &'static Mutex<()> {
     EDGE_CREATE_PERSIST.get_or_init(|| Mutex::new(()))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LifecycleTimestamp {
+    raw: String,
+    parsed: Option<DateTime<Utc>>,
+}
+
+impl LifecycleTimestamp {
+    fn from_raw(raw: String) -> Self {
+        let parsed = DateTime::parse_from_rfc3339(&raw)
+            .ok()
+            .map(|value| value.with_timezone(&Utc));
+        Self { raw, parsed }
+    }
+
+    pub fn from_datetime(value: DateTime<Utc>) -> Self {
+        let value = value
+            .with_nanosecond(value.timestamp_subsec_micros() * 1_000)
+            .expect("microsecond precision is always a valid nanosecond value");
+        Self {
+            raw: value.to_rfc3339_opts(SecondsFormat::Micros, true),
+            parsed: Some(value),
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.raw
+    }
+    pub fn parsed(&self) -> Option<&DateTime<Utc>> {
+        self.parsed.as_ref()
+    }
+}
+
+impl From<String> for LifecycleTimestamp {
+    fn from(value: String) -> Self {
+        Self::from_raw(value)
+    }
+}
+impl From<&str> for LifecycleTimestamp {
+    fn from(value: &str) -> Self {
+        Self::from_raw(value.to_owned())
+    }
+}
+impl std::ops::Deref for LifecycleTimestamp {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+impl std::fmt::Display for LifecycleTimestamp {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+impl Serialize for LifecycleTimestamp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+impl<'de> Deserialize<'de> for LifecycleTimestamp {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(Self::from_raw)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Edge {
     pub id: String,
@@ -50,8 +120,8 @@ pub struct Edge {
     #[serde(alias = "kind", alias = "edgeKind")]
     pub edge_kind: String,
     pub note: Option<String>,
-    pub created_at: Option<String>,
-    pub expires_at: Option<String>,
+    pub created_at: Option<LifecycleTimestamp>,
+    pub expires_at: Option<LifecycleTimestamp>,
 }
 
 /// Public edge projection. Free-text notes remain persisted authoring metadata
@@ -77,8 +147,14 @@ impl From<&Edge> for PublicEdge {
             target_id: edge.target_id.clone(),
             target_type: edge.target_type.clone(),
             edge_kind: edge.edge_kind.clone(),
-            created_at: edge.created_at.clone(),
-            expires_at: edge.expires_at.clone(),
+            created_at: edge
+                .created_at
+                .as_ref()
+                .map(|timestamp| timestamp.as_str().to_owned()),
+            expires_at: edge
+                .expires_at
+                .as_ref()
+                .map(|timestamp| timestamp.as_str().to_owned()),
         }
     }
 }
@@ -120,10 +196,10 @@ fn faden_expires_at(created_at: DateTime<Utc>) -> DateTime<Utc> {
 /// never projected as an active Faden. The exact boundary is exclusive, so a
 /// Faden is gone at `now == expires_at`.
 pub(crate) fn edge_is_active_at(edge: &Edge, now: DateTime<Utc>) -> bool {
-    let Some(expires_at) = edge.expires_at.as_deref() else {
+    let Some(expires_at) = edge.expires_at.as_ref() else {
         return true;
     };
-    let Some(created_at) = edge.created_at.as_deref() else {
+    let Some(created_at) = edge.created_at.as_ref() else {
         tracing::debug!(
             edge_id = %edge.id,
             expires_at = %expires_at,
@@ -132,32 +208,30 @@ pub(crate) fn edge_is_active_at(edge: &Edge, now: DateTime<Utc>) -> bool {
         return false;
     };
 
-    let parsed = (
-        DateTime::parse_from_rfc3339(created_at),
-        DateTime::parse_from_rfc3339(expires_at),
-    );
-    let (Ok(created_at), Ok(expires_at)) = parsed else {
+    let (Some(created_at_value), Some(expires_at_value)) =
+        (created_at.parsed(), expires_at.parsed())
+    else {
         tracing::debug!(
             edge_id = %edge.id,
-            created_at = %created_at,
-            expires_at = %expires_at,
+            created_at_raw = %created_at,
+            expires_at_raw = %expires_at,
             "hiding edge with invalid lifecycle timestamp from active projection"
         );
         return false;
     };
-    let created_at = created_at.with_timezone(&Utc);
-    let expires_at = expires_at.with_timezone(&Utc);
-    if expires_at.signed_duration_since(created_at) != Duration::hours(FADEN_LIFETIME_HOURS) {
+    if expires_at_value.signed_duration_since(created_at_value)
+        != Duration::hours(FADEN_LIFETIME_HOURS)
+    {
         tracing::debug!(
             edge_id = %edge.id,
-            created_at = %created_at,
-            expires_at = %expires_at,
+            created_at = %created_at_value,
+            expires_at = %expires_at_value,
             "hiding edge with non-canonical Faden lifetime from active projection"
         );
         return false;
     }
 
-    now >= created_at && now < expires_at
+    now >= *created_at_value && now < *expires_at_value
 }
 
 fn edge_matches_list_at(
@@ -166,9 +240,9 @@ fn edge_matches_list_at(
     target_id: Option<&str>,
     now: DateTime<Utc>,
 ) -> bool {
-    edge_is_active_at(edge, now)
-        && source_id.is_none_or(|source_id| edge.source_id == source_id)
+    source_id.is_none_or(|source_id| edge.source_id == source_id)
         && target_id.is_none_or(|target_id| edge.target_id == target_id)
+        && edge_is_active_at(edge, now)
 }
 
 pub(crate) fn max_edges_cache_limit() -> usize {
@@ -685,8 +759,8 @@ fn build_edge_record(
         target_type: Some(validated.target_type),
         edge_kind: validated.edge_kind,
         note: validated.note,
-        created_at: Some(created_at.to_rfc3339_opts(SecondsFormat::Micros, true)),
-        expires_at: Some(expires_at.to_rfc3339_opts(SecondsFormat::Micros, true)),
+        created_at: Some(LifecycleTimestamp::from_datetime(created_at)),
+        expires_at: Some(LifecycleTimestamp::from_datetime(expires_at)),
     };
 
     let mut record = serde_json::Map::new();
@@ -1714,7 +1788,7 @@ mod edge_create {
 mod tests {
     use super::{
         build_edge_record, edge_create::ValidatedCreateEdge, edge_is_active_at,
-        edge_matches_list_at, faden_expires_at, max_edges_cache_limit, Edge,
+        edge_matches_list_at, faden_expires_at, max_edges_cache_limit, Edge, LifecycleTimestamp,
         DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
     };
     use crate::test_helpers::EnvGuard;
@@ -1730,9 +1804,25 @@ mod tests {
             target_type: Some("account".to_string()),
             edge_kind: "reference".to_string(),
             note: None,
-            created_at: created_at.map(str::to_string),
-            expires_at: expires_at.map(str::to_string),
+            created_at: created_at.map(LifecycleTimestamp::from),
+            expires_at: expires_at.map(LifecycleTimestamp::from),
         }
+    }
+
+    #[test]
+    fn lifecycle_timestamp_preserves_wire_strings_and_invalid_legacy_values() {
+        let valid: LifecycleTimestamp = serde_json::from_str("\"2026-07-17T10:00:00Z\"").unwrap();
+        assert!(valid.parsed().is_some());
+        assert_eq!(valid.as_str(), "2026-07-17T10:00:00Z");
+        assert_eq!(
+            serde_json::to_string(&valid).unwrap(),
+            "\"2026-07-17T10:00:00Z\""
+        );
+
+        let invalid: LifecycleTimestamp = serde_json::from_str("\"yesterday\"").unwrap();
+        assert!(invalid.parsed().is_none());
+        assert_eq!(invalid.as_str(), "yesterday");
+        assert_eq!(serde_json::to_string(&invalid).unwrap(), "\"yesterday\"");
     }
 
     #[test]

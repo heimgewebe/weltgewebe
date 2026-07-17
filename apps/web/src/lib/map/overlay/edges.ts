@@ -5,11 +5,11 @@ import type {
   Map as MapLibreMap,
 } from "maplibre-gl";
 import { edgeOpacityAt } from "$lib/map/edgeLifecycle";
-import type { Edge, MapEntityViewModel } from "$lib/map/types";
+import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
 import { LAYERS } from "./layers";
 
 export function buildEdgeFeatures(
-  edges: Edge[],
+  edges: MapEdge[],
   points: MapEntityViewModel[],
   showEdges: boolean,
   nowMs: number,
@@ -49,7 +49,7 @@ export function buildEdgeFeatures(
 
 export function updateEdges(
   map: MapLibreMap,
-  edges: Edge[],
+  edges: MapEdge[],
   points: MapEntityViewModel[],
   showEdges: boolean,
   nowMs = Date.now(),

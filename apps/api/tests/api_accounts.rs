@@ -461,7 +461,7 @@ async fn account_details_project_outgoing_relation_without_public_note() -> Resu
             target_type: Some("node".to_string()),
             edge_kind: "reference".to_string(),
             note: Some("nicht öffentlich".to_string()),
-            created_at: Some(CREATED_AT.to_string()),
+            created_at: Some(CREATED_AT.to_string().into()),
             expires_at: None,
         },
     );
@@ -512,8 +512,8 @@ async fn account_details_omit_expired_faden_projection() -> Result<()> {
             target_type: Some("node".to_string()),
             edge_kind: "reference".to_string(),
             note: None,
-            created_at: Some("2020-01-01T00:00:00Z".to_string()),
-            expires_at: Some("2020-01-08T00:00:00Z".to_string()),
+            created_at: Some("2020-01-01T00:00:00Z".to_string().into()),
+            expires_at: Some("2020-01-08T00:00:00Z".to_string().into()),
         },
     );
     state.edges = Arc::new(RwLock::new(edges));
@@ -555,7 +555,7 @@ async fn account_details_attribute_incoming_admin_relation_neutrally() -> Result
             target_type: Some("account".to_string()),
             edge_kind: "reference".to_string(),
             note: Some("interne Importnotiz".to_string()),
-            created_at: Some(CREATED_AT.to_string()),
+            created_at: Some(CREATED_AT.to_string().into()),
             expires_at: None,
         },
     );
@@ -604,7 +604,7 @@ async fn account_details_ignore_node_typed_account_id_collision() -> Result<()> 
             target_type: Some("node".to_string()),
             edge_kind: "reference".to_string(),
             note: None,
-            created_at: Some("2026-07-13T05:55:00+00:00".to_string()),
+            created_at: Some("2026-07-13T05:55:00+00:00".to_string().into()),
             expires_at: None,
         },
     );

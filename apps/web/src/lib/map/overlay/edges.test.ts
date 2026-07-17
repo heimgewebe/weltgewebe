@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { FADEN_LIFETIME_MS } from "$lib/map/edgeLifecycle";
+import {
+  FADEN_LIFETIME_MS,
+  normalizeEdgeLifecycle,
+} from "$lib/map/edgeLifecycle";
 import { buildEdgeFeatures } from "$lib/map/overlay/edges";
 import type { Edge, MapEntityViewModel } from "$lib/map/types";
 
@@ -8,7 +11,7 @@ const points = [
   { id: "source", lat: 53.5, lon: 9.9 },
   { id: "target", lat: 53.6, lon: 10.0 },
 ] as MapEntityViewModel[];
-const edge: Edge = {
+const rawEdge: Edge = {
   id: "edge-1",
   source_id: "source",
   target_id: "target",
@@ -16,6 +19,7 @@ const edge: Edge = {
   created_at: new Date(createdAt).toISOString(),
   expires_at: new Date(createdAt + FADEN_LIFETIME_MS).toISOString(),
 };
+const edge = normalizeEdgeLifecycle(rawEdge);
 
 describe("buildEdgeFeatures", () => {
   it("binds continuous opacity to the feature", () => {

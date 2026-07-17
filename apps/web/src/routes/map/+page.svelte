@@ -71,6 +71,10 @@
 
   import { NodesOverlay } from "$lib/map/overlay/nodes";
   import { updateEdges } from "$lib/map/overlay/edges";
+  import {
+    FADEN_PROJECTION_REFRESH_MS,
+    nextEdgeExpiryAt,
+  } from "$lib/map/edgeLifecycle";
   import { setupKompositionInteraction } from "$lib/map/overlay/komposition";
   import { setupFocusInteraction } from "$lib/map/overlay/focus";
 
@@ -116,6 +120,7 @@
   let mapStyleReady = false;
   let isLoading = true;
   let edgeProjectionNow = Date.now();
+  let edgeExpiryTimeout: ReturnType<typeof setTimeout> | undefined;
   let lastFocusedElement: HTMLElement | null = null;
 
   let nodesOverlay: NodesOverlay | null = null;
@@ -327,6 +332,28 @@
       $view.showEdges,
       edgeProjectionNow,
     );
+  }
+
+  function scheduleNextEdgeExpiryRefresh(edges = edgesData) {
+    if (edgeExpiryTimeout !== undefined) {
+      clearTimeout(edgeExpiryTimeout);
+      edgeExpiryTimeout = undefined;
+    }
+    const nowMs = Date.now();
+    const nextExpiryAt = nextEdgeExpiryAt(edges, nowMs);
+    if (nextExpiryAt == null) return;
+    edgeExpiryTimeout = setTimeout(
+      () => {
+        edgeProjectionNow = Date.now();
+        scheduleNextEdgeExpiryRefresh(edgesData);
+      },
+      Math.max(0, nextExpiryAt - nowMs),
+    );
+  }
+
+  $: if (map) {
+    edgesData;
+    scheduleNextEdgeExpiryRefresh(edgesData);
   }
 
   function focusAndFlyToPoint(item: MapEntityViewModel) {
@@ -546,9 +573,11 @@
     // build a map, bind listeners and register protocols that nobody ever
     // removes. Every await in the initialiser therefore re-checks this flag.
     let destroyed = false;
+    // Rebuilding the complete edge GeoJSON once per day is sufficient for the
+    // requested 24-hour fade cadence. Exact expiry remains a separate timeout.
     const edgeDecayInterval = window.setInterval(() => {
       edgeProjectionNow = Date.now();
-    }, 60_000);
+    }, FADEN_PROJECTION_REFRESH_MS);
     // Hoisted so the cleanup can clear it; otherwise a component destroyed
     // before the style loads leaves a 10s timer pointing at dead state.
     let loadingTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
@@ -698,6 +727,10 @@
       // component destroyed mid-import never finishes building a map.
       destroyed = true;
       window.clearInterval(edgeDecayInterval);
+      if (edgeExpiryTimeout !== undefined) {
+        clearTimeout(edgeExpiryTimeout);
+        edgeExpiryTimeout = undefined;
+      }
       if (loadingTimeout !== undefined) {
         clearTimeout(loadingTimeout);
         loadingTimeout = undefined;
