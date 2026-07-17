@@ -1,4 +1,4 @@
-import garnrolleIcon from "$lib/assets/garnrolle.png";
+import garnrolleIcon from "$lib/assets/garnrolle.webp";
 
 export const ICONS = {
   garnrolle: garnrolleIcon,

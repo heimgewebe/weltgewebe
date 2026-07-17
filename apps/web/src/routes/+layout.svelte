@@ -1,6 +1,5 @@
 <script lang="ts">
   import '../app.css';
-  import 'maplibre-gl/dist/maplibre-gl.css';
   import '$lib/styles/tokens.css';
   import { onMount } from 'svelte';
   import { ensureInertPolyfill } from '$lib/utils/inert-polyfill';
