@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
 import sys
 import unittest
@@ -133,6 +134,36 @@ class KubernetesHaContractTests(unittest.TestCase):
             spec["externalClusters"][0]["barmanObjectStore"]["serverName"],
             "postgres-ha",
         )
+
+    def test_degraded_proof_requires_the_failed_zone_to_stay_down(self) -> None:
+        with mock.patch.object(self.ha.ref, "output", return_value="false") as output:
+            self.ha.require_container_stopped("worker-zone-b")
+        output.assert_called_once_with(
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{.State.Running}}",
+                "worker-zone-b",
+            ]
+        )
+        with mock.patch.object(self.ha.ref, "output", return_value="true"):
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "unexpectedly running"):
+                self.ha.require_container_stopped("worker-zone-b")
+
+    def test_backup_and_restore_run_before_failed_zone_cleanup(self) -> None:
+        source = inspect.getsource(self.ha.prove)
+        checks = [
+            index
+            for index in range(len(source))
+            if source.startswith("require_container_stopped(stopped_node)", index)
+        ]
+        self.assertEqual(len(checks), 2)
+        self.assertLess(checks[0], source.index('backup_name = f"t004-'))
+        self.assertGreater(checks[1], source.index("PITR data comparison failed"))
+        self.assertNotIn('ref.run(["docker", "start", stopped_node]', source)
+        self.assertIn('"remained_unavailable_through_backup_and_restore": True', source)
+        self.assertIn('"automatic reintegration of the failed zone"', source)
 
     def test_zone_contract_requires_three_distinct_zones(self) -> None:
         valid = {

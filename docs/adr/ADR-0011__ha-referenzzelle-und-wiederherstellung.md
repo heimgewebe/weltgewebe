@@ -31,6 +31,7 @@ Die T004-Referenzzelle verwendet drei explizite Zonen und folgende Verträge:
 - einen ausschließlich für den Beweis verwendeten externen S3-kompatiblen SeaweedFS-Dienst,
 - dynamisch erzeugte kurzlebige Secrets statt eingecheckter Zugangsdaten,
 - einen kontrollierten Ausfall des Worker-Knotens, der den PostgreSQL-Primary trägt,
+- Backup und Point-in-Time-Restore, während diese Fehlerdomäne weiterhin ausgefallen ist,
 - einen neuen zweiten kind-Cluster für den Point-in-Time-Restore.
 
 Alle Drittimages und das CloudNativePG-Releaseartefakt sind per SHA-256 beziehungsweise OCI-Digest gebunden.
@@ -63,6 +64,7 @@ Der Referenzbeweis belegt nicht:
 - einen verwalteten, redundant replizierten Produktions-Objektstore,
 - SLOs unter Produktionslast,
 - den gleichzeitigen Verlust von zwei Fehlerdomänen,
-- einen Produktionscutover.
+- einen Produktionscutover,
+- die automatische Wiedereingliederung einer zurückkehrenden ausgefallenen Zone.
 
 Diese Grenzen bleiben im maschinenlesbaren Receipt erhalten.

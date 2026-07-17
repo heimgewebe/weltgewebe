@@ -35,10 +35,10 @@ Der Runner installiert Werkzeuge ausschließlich aus `platform/toolchain.lock.js
 4. Eine gültige `domain_nodes`-Mutation schreiben und über die API zurücklesen.
 5. Den Worker des PostgreSQL-Primary stoppen.
 6. PostgreSQL-Failover, API-Readback und JetStream-Quorum messen.
-7. Worker wieder aufnehmen und vollständige Bereitschaft abwarten.
-8. Basisbackup erstellen, PITR-Zeitpunkt festhalten und eine spätere Mutation schreiben.
+7. Die ausgefallene Zone bewusst weiter gestoppt lassen.
+8. Im degradierten Zwei-Zonen-Betrieb ein Basisbackup erstellen, den PITR-Zeitpunkt festhalten und eine spätere Mutation schreiben.
 9. Einen zweiten leeren kind-Cluster erzeugen.
-10. Datenbank auf den Zielzeitpunkt wiederherstellen und die Zeilengrenze vergleichen.
+10. Während die Ursprungszone weiterhin fehlt, die Datenbank auf den Zielzeitpunkt wiederherstellen und die Zeilengrenze vergleichen.
 
 ## Ergebnisse
 
@@ -50,7 +50,8 @@ Bei Erfolg entsteht unter `.cache/weltgewebe-platform/receipts/` ein JSON-Receip
 - gemessenen RTO-Werten,
 - Backup- und PITR-Zeitpunkt,
 - Datenvergleich des Restoreclusters,
-- expliziten Nichtaussagen.
+- dem Beleg, dass die Ausfallzone bis nach Backup und Restore gestoppt blieb,
+- expliziten Nichtaussagen einschließlich der nicht geprüften automatischen Wiedereingliederung der ausgefallenen Zone.
 
 ## Fehlerdiagnose
 

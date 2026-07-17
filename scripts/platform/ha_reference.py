@@ -486,6 +486,14 @@ def require_zones(
         )
 
 
+def require_container_stopped(name: str) -> None:
+    running = ref.output(["docker", "inspect", "--format", "{{.State.Running}}", name])
+    if running != "false":
+        raise ref.ProofError(
+            f"failure-domain container unexpectedly running during degraded proof: {name}"
+        )
+
+
 def wait_api_replicas(kubectl: str, expected: int = 3) -> None:
     ref.wait_rollout(kubectl, "weltgewebe", "deployment/weltgewebe-api", "10m")
     available = ref.output(
@@ -884,20 +892,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "JetStream lost an acknowledged message during zone failure"
             )
 
-        ref.run(["docker", "start", stopped_node], timeout=60)
-        stopped_node = ""
-        ref.run(
-            [
-                kubectl,
-                "wait",
-                "--for=condition=Ready",
-                f"node/{primary_topology['node']}",
-                "--timeout=8m",
-            ]
-        )
-        wait_cluster_ready(kubectl, "postgres-ha", "15m")
-        ref.wait_rollout(kubectl, "weltgewebe-data", "statefulset/nats", "12m")
-        wait_api_replicas(kubectl)
+        require_container_stopped(stopped_node)
 
         before_id = "00000000-0000-4000-8000-00000000b004"
         after_id = "00000000-0000-4000-8000-00000000c004"
@@ -1005,6 +1000,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         }
         if preserved != {marker: True, before_id: True, after_id: False}:
             raise ref.ProofError(f"PITR data comparison failed: {preserved}")
+        require_container_stopped(stopped_node)
 
         result = {
             "schema_version": 1,
@@ -1026,6 +1022,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "nats_rto_seconds": round(nats_rto, 3),
                 "acknowledged_domain_mutation_preserved": True,
                 "acknowledged_jetstream_messages": 2,
+                "remained_unavailable_through_backup_and_restore": True,
             },
             "backup": {
                 "name": backup_name,
@@ -1044,6 +1041,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "managed multi-region object-store durability",
                 "RTO or RPO under production load",
                 "survival of two simultaneous failure domains",
+                "automatic reintegration of the failed zone",
             ],
         }
         target = CACHE / "receipts"
