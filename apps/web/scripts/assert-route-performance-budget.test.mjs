@@ -7,6 +7,7 @@ import {
   collectInitialAssetReferences,
   measureRoute,
   resolveBuildDirectory,
+  validateEmittedAssetBudgets,
   validateRouteBudget,
 } from "./assert-route-performance-budget.mjs";
 
@@ -114,4 +115,34 @@ test("fails closed when initial asset discovery yields no JS or CSS", () => {
     "login.html: initial_js_asset_count 0 is below 1",
     "login.html: initial_css_asset_count 0 is below 1",
   ]);
+});
+
+test("enforces the emitted asset format and byte budget", () => {
+  const root = mkdtempSync(join(tmpdir(), "emitted-asset-budget-"));
+  const assetDirectory = join(root, "_app", "immutable", "assets");
+  mkdirSync(assetDirectory, { recursive: true });
+  writeFileSync(join(assetDirectory, "garnrolle.hash.webp"), "1234");
+
+  const budget = {
+    garnrolle: {
+      filename_prefix: "garnrolle.",
+      required_extension: ".webp",
+      forbid_extensions: [".png"],
+      max_bytes: 4,
+    },
+  };
+  assert.deepEqual(
+    validateEmittedAssetBudgets({ buildDir: root, budgets: budget }),
+    [],
+  );
+
+  writeFileSync(join(assetDirectory, "garnrolle.old.png"), "legacy");
+  writeFileSync(join(assetDirectory, "garnrolle.hash.webp"), "12345");
+  assert.deepEqual(
+    validateEmittedAssetBudgets({ buildDir: root, budgets: budget }),
+    [
+      "garnrolle: forbidden emitted asset garnrolle.old.png",
+      "garnrolle: emitted asset garnrolle.hash.webp is 5 bytes, exceeds 4",
+    ],
+  );
 });

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, extname, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
@@ -205,6 +205,115 @@ export function validateRouteBudget(metrics, budget) {
   return errors;
 }
 
+export function validateEmittedAssetBudgets({ buildDir, budgets = {} }) {
+  const errors = [];
+  const assetDirectory = resolve(buildDir, "_app", "immutable", "assets");
+  let filenames;
+  try {
+    filenames = readdirSync(assetDirectory);
+  } catch (error) {
+    return [
+      "emitted assets: cannot read " +
+        assetDirectory +
+        ": " +
+        (error instanceof Error ? error.message : String(error)),
+    ];
+  }
+
+  for (const [label, budget] of Object.entries(budgets)) {
+    const prefix = budget?.filename_prefix;
+    const requiredExtension = budget?.required_extension;
+    const forbiddenExtensions = budget?.forbid_extensions ?? [];
+    const maximum = budget?.max_bytes;
+
+    if (
+      typeof prefix !== "string" ||
+      prefix.length === 0 ||
+      prefix.includes("/") ||
+      prefix.includes("\\")
+    ) {
+      errors.push(
+        label + ": filename_prefix must be a safe non-empty filename prefix",
+      );
+      continue;
+    }
+    if (
+      typeof requiredExtension !== "string" ||
+      !requiredExtension.startsWith(".") ||
+      requiredExtension.includes("/") ||
+      requiredExtension.includes("\\")
+    ) {
+      errors.push(label + ": required_extension must be a safe file extension");
+      continue;
+    }
+    if (!Number.isInteger(maximum) || maximum < 0) {
+      errors.push(label + ": max_bytes must be a non-negative integer");
+      continue;
+    }
+    if (
+      !Array.isArray(forbiddenExtensions) ||
+      forbiddenExtensions.some(
+        (extension) =>
+          typeof extension !== "string" ||
+          !extension.startsWith(".") ||
+          extension.includes("/") ||
+          extension.includes("\\"),
+      )
+    ) {
+      errors.push(
+        label + ": forbid_extensions must contain safe file extensions",
+      );
+      continue;
+    }
+
+    const candidates = filenames.filter((filename) =>
+      filename.startsWith(prefix),
+    );
+    for (const extension of forbiddenExtensions) {
+      for (const filename of candidates.filter((name) =>
+        name.endsWith(extension),
+      )) {
+        errors.push(label + ": forbidden emitted asset " + filename);
+      }
+    }
+
+    const matches = candidates.filter((filename) =>
+      filename.endsWith(requiredExtension),
+    );
+    if (matches.length !== 1) {
+      errors.push(
+        label +
+          ": expected exactly one emitted " +
+          requiredExtension +
+          " asset, found " +
+          matches.length,
+      );
+      continue;
+    }
+
+    const assetPath = resolveAssetPath(assetDirectory, matches[0]);
+    const metadata = lstatSync(assetPath);
+    if (!metadata.isFile()) {
+      errors.push(
+        label + ": emitted asset is not a regular file: " + matches[0],
+      );
+      continue;
+    }
+    if (metadata.size > maximum) {
+      errors.push(
+        label +
+          ": emitted asset " +
+          matches[0] +
+          " is " +
+          metadata.size +
+          " bytes, exceeds " +
+          maximum,
+      );
+    }
+  }
+  return errors;
+}
+
 export function runBudgetCheck({
   buildDir,
   budgetPath = defaultBudgetPath,
@@ -241,6 +350,14 @@ export function runBudgetCheck({
       assets: metrics.assets,
     });
     if (!reportOnly) errors.push(...validateRouteBudget(metrics, budget));
+  }
+  if (!reportOnly) {
+    errors.push(
+      ...validateEmittedAssetBudgets({
+        buildDir: resolvedBuildDir,
+        budgets: parsed.emitted_assets ?? {},
+      }),
+    );
   }
 
   for (const report of reports) {

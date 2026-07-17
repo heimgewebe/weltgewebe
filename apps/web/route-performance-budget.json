@@ -26,5 +26,13 @@
       "min_initial_js_assets": 1,
       "min_initial_css_assets": 1
     }
+  },
+  "emitted_assets": {
+    "garnrolle": {
+      "filename_prefix": "garnrolle.",
+      "required_extension": ".webp",
+      "forbid_extensions": [".png"],
+      "max_bytes": 80000
+    }
   }
 }
