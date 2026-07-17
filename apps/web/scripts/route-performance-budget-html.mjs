@@ -100,7 +100,13 @@ function parseTagAttributes(tag) {
         index += 1;
       } else {
         const valueStart = index;
-        while (index < limit && !/[\s>]/.test(tag[index])) index += 1;
+        while (
+          index < limit &&
+          !/\s|>/.test(tag[index]) &&
+          !(tag[index] === "/" && tag[index + 1] === ">")
+        ) {
+          index += 1;
+        }
         value = tag.slice(valueStart, index);
         if (value.length === 0) {
           throw new Error("Missing value for <link> attribute " + name);

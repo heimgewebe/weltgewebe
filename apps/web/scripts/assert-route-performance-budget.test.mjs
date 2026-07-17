@@ -58,6 +58,7 @@ test("collects quoted and unquoted initial assets without parsing comments or sc
     <script>const fake = '<link rel="stylesheet" href="./ignored-script.css">';</script>
     <scripture><link rel="stylesheet" href="./scripture.css"></scripture>
     <link rel=modulepreload href=./_app/a.js>
+    <link rel=stylesheet href=./_app/self-closing.css/>
     <link href='./_app/a.js' rel='modulepreload'>
     <link rel="stylesheet" href="./_app/a>b.css?version=1">
     <link rel="icon" href="/favicon.svg">
@@ -65,6 +66,7 @@ test("collects quoted and unquoted initial assets without parsing comments or sc
   assert.deepEqual(collectInitialAssetReferences(html), [
     "./scripture.css",
     "./_app/a.js",
+    "./_app/self-closing.css",
     "./_app/a>b.css",
   ]);
 });
