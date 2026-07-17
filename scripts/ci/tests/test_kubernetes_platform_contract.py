@@ -41,6 +41,23 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         result = self.validator.validate(render=False)
         self.assertEqual(result["status"], "pass")
 
+    def test_nonlocal_overlays_reject_local_fixture_markers(self) -> None:
+        production = "platform/apps/weltgewebe/overlays/production"
+        for marker in self.validator.LOCAL_FIXTURE_SENTINELS:
+            with self.subTest(marker=marker), self.assertRaisesRegex(
+                self.validator.ContractError, "local-only fixture"
+            ):
+                self.validator._assert_nonlocal_overlay_fixture_boundary(
+                    production, marker
+                )
+        self.validator._assert_nonlocal_overlay_fixture_boundary(
+            "platform/apps/weltgewebe/overlays/local",
+            "\n".join(self.validator.LOCAL_FIXTURE_SENTINELS),
+        )
+        self.validator._assert_nonlocal_overlay_fixture_boundary(
+            production, "WELTGEWEBE_API_MIGRATION_ONLY"
+        )
+
     def test_toolchain_is_hash_bound(self) -> None:
         lock = json.loads((ROOT / "platform/toolchain.lock.json").read_text())
         self.assertEqual(lock["schema_version"], 1)
@@ -156,22 +173,19 @@ spec:
             dockerfile,
         )
 
-    def test_web_container_replaces_caddy_binary_before_nonroot_user(self) -> None:
+    def test_web_container_removes_caddy_capability_before_nonroot_user(self) -> None:
         dockerfile = (ROOT / "apps/web/Dockerfile").read_text()
         final_stage = dockerfile.index(
             "FROM caddy:2.7@sha256:"
             "236c6a30ccb84fa412a5360ca8b586d804faba0621ea182fb45902608cd8a563"
         )
-        copy_uncapped = dockerfile.index("RUN cp /usr/bin/caddy /usr/bin/caddy.uncapped")
-        move_uncapped = dockerfile.index("&& mv /usr/bin/caddy.uncapped /usr/bin/caddy")
-        chmod_uncapped = dockerfile.index("&& chmod 0755 /usr/bin/caddy")
+        remove_capability = dockerfile.index("RUN setcap -r /usr/bin/caddy")
         chmod_config = dockerfile.index("&& chmod 0444 /etc/caddy/Caddyfile")
         user = dockerfile.index("USER 10001:10001")
-        self.assertLess(final_stage, copy_uncapped)
-        self.assertLess(copy_uncapped, move_uncapped)
-        self.assertLess(move_uncapped, chmod_uncapped)
-        self.assertLess(chmod_uncapped, chmod_config)
+        self.assertLess(final_stage, remove_capability)
+        self.assertLess(remove_capability, chmod_config)
         self.assertLess(chmod_config, user)
+        self.assertNotIn("caddy.uncapped", dockerfile)
 
     def test_api_container_scripts_are_world_readable_and_executable(self) -> None:
         dockerfile = (ROOT / "apps/api/Dockerfile").read_text()
@@ -509,6 +523,9 @@ spec:
         web = subprocess.CompletedProcess(
             args=[], returncode=0, stdout=b"web", stderr=b""
         )
+        api_nodes = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=b"[]", stderr=b""
+        )
         with (
             mock.patch.object(
                 self.reference,
@@ -518,7 +535,7 @@ spec:
             mock.patch.object(
                 self.reference.subprocess,
                 "run",
-                side_effect=[health, web],
+                side_effect=[health, web, api_nodes],
             ) as run_mock,
         ):
             result = self.reference.probe_gateway_http(
@@ -530,7 +547,7 @@ spec:
             )
         self.assertEqual(
             result,
-            ("cluster-worker", "172.22.0.3", b"healthy", b"web"),
+            ("cluster-worker", "172.22.0.3", b"healthy", b"web", b"[]"),
         )
         argv = run_mock.call_args_list[0].args[0]
         self.assertEqual(argv[:3], ["docker", "exec", "cluster-worker"])
@@ -542,6 +559,48 @@ spec:
             run_mock.call_args_list[1].args[0][-1],
             "http://172.22.0.3:80/",
         )
+        self.assertEqual(
+            run_mock.call_args_list[2].args[0][-1],
+            "http://172.22.0.3:80/api/nodes",
+        )
+
+    def test_gateway_http_probe_rejects_broken_api_rewrite(self) -> None:
+        health = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=b"healthy", stderr=b""
+        )
+        web = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=b"web", stderr=b""
+        )
+        broken_api = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=b'{"not":"a-list"}', stderr=b""
+        )
+        with (
+            mock.patch.object(
+                self.reference,
+                "kind_nodes",
+                return_value=["cluster-worker"],
+            ),
+            mock.patch.object(
+                self.reference.subprocess,
+                "run",
+                side_effect=[health, web, broken_api],
+            ),
+            mock.patch.object(
+                self.reference.time,
+                "monotonic",
+                side_effect=[0, 1],
+            ),
+        ):
+            with self.assertRaisesRegex(
+                self.reference.ProofError, "did not serve listener HTTP"
+            ):
+                self.reference.probe_gateway_http(
+                    "kind",
+                    "cluster",
+                    ["172.22.0.3"],
+                    80,
+                    timeout_seconds=0,
+                )
 
     def test_gateway_policy_allows_only_cilium_ingress_identity(self) -> None:
         source = (

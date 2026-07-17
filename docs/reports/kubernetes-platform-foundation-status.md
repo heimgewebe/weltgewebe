@@ -36,7 +36,7 @@ relations:
 - Flux-Abhängigkeitskette `data → migration → app → gateway` mit Wait, Prune, Health Checks und Driftkorrektur;
 - isolierter kind-Lifecycle mit Besitzmarker und eigener Bereinigung;
 - deklarativer, completion-gesteuerter Migration-only-Job vor dem Start mehrerer API-Replikate;
-- Zwei-API- und vollständiger Pod-Austausch beim Restart; Gateway-Listener-Readback innerhalb der kind-Zelle; GitOps-Driftbeweis.
+- Zwei-API- und vollständiger Pod-Austausch beim Restart; Gateway-Listener-Readback einschließlich des öffentlichen `/api/nodes`-Rewrite-Pfads innerhalb der kind-Zelle; GitOps-Driftbeweis.
 
 ## Nicht behauptet
 

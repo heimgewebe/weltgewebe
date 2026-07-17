@@ -679,7 +679,7 @@ def probe_gateway_http(
     addresses: list[str],
     port: int,
     timeout_seconds: int = 30,
-) -> tuple[str, str, bytes, bytes]:
+) -> tuple[str, str, bytes, bytes, bytes]:
     nodes = kind_nodes(kind, cluster)
     deadline = time.monotonic() + timeout_seconds
     last_error: BaseException | None = None
@@ -714,12 +714,31 @@ def probe_gateway_http(
                         check=True,
                         timeout=15,
                     ).stdout[:1024]
+                    api_nodes = subprocess.run(
+                        [*common, f"http://{address}:{port}/api/nodes"],
+                        cwd=ROOT,
+                        text=False,
+                        capture_output=True,
+                        check=True,
+                        timeout=15,
+                    ).stdout
+                    try:
+                        api_payload = json.loads(api_nodes)
+                    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                        raise ProofError(
+                            "Gateway /api/nodes route did not return valid JSON"
+                        ) from error
+                    if not isinstance(api_payload, list):
+                        raise ProofError(
+                            "Gateway /api/nodes route did not preserve the API list contract"
+                        )
                     if health and web:
-                        return node, address, health, web
+                        return node, address, health, web, api_nodes
                     last_error = ProofError("Gateway route returned empty content")
                 except (
                     subprocess.CalledProcessError,
                     subprocess.TimeoutExpired,
+                    ProofError,
                 ) as error:
                     last_error = error
         if time.monotonic() >= deadline:
@@ -728,7 +747,6 @@ def probe_gateway_http(
                 f"nodes={nodes!r} addresses={addresses!r} port={port}"
             ) from last_error
         time.sleep(1)
-
 
 
 def prove_gateway(kubectl: str, kind: str, cluster: str) -> dict[str, str]:
@@ -765,7 +783,7 @@ def prove_gateway(kubectl: str, kind: str, cluster: str) -> dict[str, str]:
     if not service:
         raise ProofError("Gateway service was not created")
     listener_port = gateway_listener_port(kubectl)
-    probe_node, address, health, web = probe_gateway_http(
+    probe_node, address, health, web, api_nodes = probe_gateway_http(
         kind,
         cluster,
         gateway_addresses(kubectl),
@@ -778,6 +796,7 @@ def prove_gateway(kubectl: str, kind: str, cluster: str) -> dict[str, str]:
         "listener_port": str(listener_port),
         "health_sha256": hashlib.sha256(health).hexdigest(),
         "web_prefix_sha256": hashlib.sha256(web).hexdigest(),
+        "api_nodes_sha256": hashlib.sha256(api_nodes).hexdigest(),
     }
 
 

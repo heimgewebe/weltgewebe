@@ -17,6 +17,20 @@ PLATFORM = ROOT / "platform"
 PROMOTION_SENTINEL = "promotion-required"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 OVERLAYS = ("local", "ci", "staging", "production")
+NONLOCAL_OVERLAY_TARGETS = frozenset(
+    f"platform/apps/weltgewebe/overlays/{name}"
+    for name in ("ci", "staging", "production")
+)
+LOCAL_FIXTURE_SENTINELS = (
+    "weltgewebe-local-fixture",
+    "local-test-only-weltgewebe",
+)
+LOCAL_FIXTURE_ROOTS = (
+    PLATFORM / "apps/weltgewebe/migration/local",
+    PLATFORM / "apps/weltgewebe/overlays/local",
+    PLATFORM / "infrastructure/local-data",
+    PLATFORM / "clusters/local",
+)
 
 
 class ContractError(RuntimeError):
@@ -117,6 +131,32 @@ def _assert_images() -> None:
             if image.endswith(":latest") or ":latest@" in image:
                 raise ContractError(f"unbounded latest image in {path.relative_to(ROOT)}")
 
+
+def _assert_local_fixture_scope() -> None:
+    """Keep public disposable fixture credentials and names local."""
+    for path in sorted(PLATFORM.rglob("*")):
+        if not path.is_file() or path.suffix not in {".json", ".yaml", ".yml"}:
+            continue
+        source = path.read_text(encoding="utf-8")
+        observed = [item for item in LOCAL_FIXTURE_SENTINELS if item in source]
+        if not observed:
+            continue
+        if any(path.is_relative_to(root) for root in LOCAL_FIXTURE_ROOTS):
+            continue
+        raise ContractError(
+            f"local-only fixture marker(s) {observed} escaped into "
+            f"{path.relative_to(ROOT)}"
+        )
+
+
+def _assert_nonlocal_overlay_fixture_boundary(target: str, rendered: str) -> None:
+    if target not in NONLOCAL_OVERLAY_TARGETS:
+        return
+    observed = [item for item in LOCAL_FIXTURE_SENTINELS if item in rendered]
+    if observed:
+        raise ContractError(
+            f"{target} renders local-only fixture marker(s): {observed}"
+        )
 
 
 def _assert_migration_job() -> None:
@@ -225,6 +265,7 @@ def _render_and_validate() -> dict[str, int]:
         temp = Path(tmp)
         for target in targets:
             rendered = _run([kustomize, "build", target]).stdout
+            _assert_nonlocal_overlay_fixture_boundary(target, rendered)
             docs = [item for item in yaml.safe_load_all(rendered) if isinstance(item, dict)]
             if not docs:
                 raise ContractError(f"empty Kustomize output for {target}")
@@ -266,6 +307,7 @@ def validate(render: bool) -> dict[str, Any]:
     _assert_no_secrets()
     _assert_first_party_deployments()
     _assert_images()
+    _assert_local_fixture_scope()
     _assert_migration_job()
     _assert_flux_chain()
     _assert_compose_parity()

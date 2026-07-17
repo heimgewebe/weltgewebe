@@ -12,9 +12,10 @@ RUN printf '%s' "${GIT_COMMIT_SHA}" | grep -Eq '^[0-9a-f]{40}$'     && printf '%
 FROM caddy:2.7@sha256:236c6a30ccb84fa412a5360ca8b586d804faba0621ea182fb45902608cd8a563
 COPY apps/web/Caddyfile.container /etc/caddy/Caddyfile
 COPY --from=builder /workspace/build /srv/weltgewebe
-RUN cp /usr/bin/caddy /usr/bin/caddy.uncapped \
-    && mv /usr/bin/caddy.uncapped /usr/bin/caddy \
-    && chmod 0755 /usr/bin/caddy \
+# The upstream binary carries cap_net_bind_service for privileged ports. This
+# image listens on 8080, so remove that file capability before the non-root,
+# no-new-privileges runtime instead of rewriting the binary through a copy.
+RUN setcap -r /usr/bin/caddy \
     && chmod 0444 /etc/caddy/Caddyfile \
     && mkdir -p /data /config /tmp \
     && chown -R 10001:10001 /data /config /tmp /srv/weltgewebe
