@@ -95,6 +95,8 @@ class KubernetesHaContractTests(unittest.TestCase):
             with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
                 self.ha.ref, "wait_rollout"
             ), mock.patch.object(
+                self.ha, "wait_until"
+            ), mock.patch.object(
                 self.ha.ref, "output", return_value=self.ha.CNPG_OPERATOR_IMAGE
             ):
                 self.ha.install_cnpg("kubectl", str(artifact))
@@ -107,6 +109,26 @@ class KubernetesHaContractTests(unittest.TestCase):
             self.assertEqual(payload.count(self.ha.CNPG_OPERATOR_IMAGE), 2)
         finally:
             artifact.unlink(missing_ok=True)
+
+    def test_cnpg_webhook_probe_requires_endpoint_and_server_dry_run(self) -> None:
+        endpoint = mock.Mock(returncode=0, stdout="10.0.0.12")
+        dry_run = mock.Mock(returncode=0, stdout="cluster.postgresql.cnpg.io/probe serverside-applied")
+        with mock.patch.object(self.ha.subprocess, "run", side_effect=[endpoint, dry_run]) as run:
+            self.assertTrue(self.ha.cnpg_webhook_ready("kubectl"))
+        endpoint_argv = run.call_args_list[0].args[0]
+        dry_run_argv = run.call_args_list[1].args[0]
+        self.assertIn("cnpg-webhook-service", endpoint_argv)
+        self.assertIn("--dry-run=server", dry_run_argv)
+        self.assertIn("--server-side", dry_run_argv)
+        payload = json.loads(run.call_args_list[1].kwargs["input"])
+        self.assertEqual(payload["kind"], "Cluster")
+        self.assertEqual(payload["metadata"]["namespace"], "default")
+
+    def test_cnpg_webhook_probe_rejects_missing_endpoint(self) -> None:
+        endpoint = mock.Mock(returncode=0, stdout="")
+        with mock.patch.object(self.ha.subprocess, "run", return_value=endpoint) as run:
+            self.assertFalse(self.ha.cnpg_webhook_ready("kubectl"))
+        self.assertEqual(run.call_count, 1)
 
     def test_sensitive_environment_values_never_enter_argv(self) -> None:
         completed = mock.Mock(returncode=0)
