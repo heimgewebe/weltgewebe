@@ -7,11 +7,25 @@
     enterKomposition,
   } from "$lib/stores/uiView";
   import { isSearchOpen, closeSearch } from "$lib/stores/searchStore";
-  import { isFilterOpen, activeFilters, closeFilter } from "$lib/stores/filterStore";
-  import { toggleSearchExclusive, toggleFilterExclusive } from "$lib/stores/overlayManager";
-  import { setRestoreTarget, suppressNextRestore } from "$lib/utils/focusManager";
+  import {
+    isFilterOpen,
+    activeFilters,
+    closeFilter,
+  } from "$lib/stores/filterStore";
+  import {
+    toggleSearchExclusive,
+    toggleFilterExclusive,
+  } from "$lib/stores/overlayManager";
+  import {
+    setRestoreTarget,
+    suppressNextRestore,
+  } from "$lib/utils/focusManager";
   import { authStore } from "$lib/auth/store";
-  import { closeMapFan, expandedMapFan, toggleMapFan } from "$lib/stores/mapChrome";
+  import {
+    closeMapFan,
+    expandedMapFan,
+    toggleMapFan,
+  } from "$lib/stores/mapChrome";
   import FanAction from "./FanAction.svelte";
   import { TOOL_ACTION_IDS } from "./mapUiActions";
 
@@ -23,7 +37,9 @@
   $: activeFilterCount = $activeFilters.size;
 
   function announceGeometryChange() {
-    tick().then(() => window.dispatchEvent(new CustomEvent("map-ui-geometry-change")));
+    tick().then(() =>
+      window.dispatchEvent(new CustomEvent("map-ui-geometry-change")),
+    );
   }
 
   function closeFan(restoreFocus = false) {
@@ -92,7 +108,10 @@
   }
 </script>
 
-<svelte:window on:pointerdown={handleWindowPointerDown} on:keydown={handleWindowKeydown} />
+<svelte:window
+  on:pointerdown={handleWindowPointerDown}
+  on:keydown={handleWindowKeydown}
+/>
 
 <div
   class="tool-fan"
@@ -125,21 +144,59 @@
     aria-label="Webungswerkzeuge"
     aria-hidden={!open}
   >
-    <FanAction id={TOOL_ACTION_IDS.find} label="Finden" symbol="⌕" {open} active={$isSearchOpen} pressed={$isSearchOpen} on:activate={onFind} />
-    <FanAction id={TOOL_ACTION_IDS.content} label="Karteninhalt" symbol="◉" {open} active={$isFilterOpen} pressed={$isFilterOpen} count={activeFilterCount} on:activate={onContent} />
-    <FanAction
-      id={TOOL_ACTION_IDS.weave}
-      label={canCreateNode ? "Knoten knüpfen" : "Knoten knüpfen · Weberstatus nötig"}
-      symbol="⌁"
-      {open}
-      active={$systemState === "komposition"}
-      pressed={$systemState === "komposition"}
-      disabled={!canCreateNode}
-      ariaLabel={canCreateNode ? undefined : "Knoten knüpfen – Weber-Garnrolle erforderlich"}
-      title={canCreateNode ? "Knoten knüpfen" : "Zum Knüpfen ist eine Weber-Garnrolle nötig"}
-      on:activate={onWeave}
-    />
-    <FanAction id={TOOL_ACTION_IDS.apply} label="Antrag stellen" symbol="＋" {open} title="Verfügbare Antragsaktion öffnen" on:activate={onApply} />
+    <div class="fan-branch fan-branch--find">
+      <FanAction
+        id={TOOL_ACTION_IDS.find}
+        label="Finden"
+        symbol="⌕"
+        {open}
+        active={$isSearchOpen}
+        pressed={$isSearchOpen}
+        on:activate={onFind}
+      />
+    </div>
+    <div class="fan-branch fan-branch--content">
+      <FanAction
+        id={TOOL_ACTION_IDS.content}
+        label="Karteninhalt"
+        symbol="◉"
+        {open}
+        active={$isFilterOpen}
+        pressed={$isFilterOpen}
+        count={activeFilterCount}
+        on:activate={onContent}
+      />
+    </div>
+    <div class="fan-branch fan-branch--weave">
+      <FanAction
+        id={TOOL_ACTION_IDS.weave}
+        label={canCreateNode
+          ? "Knoten knüpfen"
+          : "Knoten knüpfen · Weberstatus nötig"}
+        symbol="⌁"
+        {open}
+        active={$systemState === "komposition"}
+        pressed={$systemState === "komposition"}
+        disabled={!canCreateNode}
+        ariaLabel={canCreateNode
+          ? undefined
+          : "Knoten knüpfen – Weber-Garnrolle erforderlich"}
+        title={canCreateNode
+          ? "Knoten knüpfen"
+          : "Zum Knüpfen ist eine Weber-Garnrolle nötig"}
+        on:activate={onWeave}
+      />
+    </div>
+    <div class="fan-branch fan-branch--apply">
+      <FanAction
+        id={TOOL_ACTION_IDS.apply}
+        label="Antrag stellen"
+        symbol="＋"
+        {open}
+        title="Verfügbare Antragsaktion öffnen"
+        on:activate={onApply}
+      />
+    </div>
   </div>
 </div>
 
@@ -177,10 +234,11 @@
     left: 50%;
     bottom: calc(100% + var(--map-fan-gap));
     width: min(var(--tool-fan-menu-max-width), calc(100vw - 24px));
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: end;
     gap: var(--map-fan-action-gap);
+    padding-top: 0.45rem;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -208,6 +266,21 @@
     pointer-events: auto;
     transform: translate(-50%, 0) scale(1);
     transition-delay: 0s;
+  }
+
+  .fan-branch {
+    display: flex;
+    transition: transform var(--motion-fan);
+  }
+
+  .fan-branch:nth-child(1),
+  .fan-branch:nth-child(4) {
+    transform: translateY(10px);
+  }
+
+  .fan-branch:nth-child(2),
+  .fan-branch:nth-child(3) {
+    transform: translateY(-6px);
   }
 
   .trigger-symbol {
@@ -238,8 +311,30 @@
     }
   }
 
+  @media (max-width: 620px) {
+    .fan-menu {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: stretch;
+      padding-top: 0;
+    }
+
+    .fan-branch,
+    .fan-branch:nth-child(1),
+    .fan-branch:nth-child(2),
+    .fan-branch:nth-child(3),
+    .fan-branch:nth-child(4) {
+      transform: none;
+    }
+
+    .fan-branch :global(.fan-action) {
+      width: 100%;
+    }
+  }
+
   @media (max-width: 420px) {
-    .trigger-label { font-size: 0.82rem; }
+    .trigger-label {
+      font-size: 0.82rem;
+    }
   }
 
   @media (prefers-reduced-transparency: reduce) {
@@ -251,6 +346,9 @@
 
   @media (prefers-reduced-motion: reduce) {
     .tool-fan,
-    .fan-menu { transition: none; }
+    .fan-menu,
+    .fan-branch {
+      transition: none;
+    }
   }
 </style>

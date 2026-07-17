@@ -42,8 +42,10 @@
     return type.id === "Garnrolle" ? "Garnrollen" : nodeKindLabel(type.id);
   }
   function handleGlobalKeydown(e: KeyboardEvent) {
-    if ($isFilterOpen && !e.defaultPrevented && e.key === "Escape")
-      closeFilter();
+    if (!$isFilterOpen || e.defaultPrevented || e.repeat || e.key !== "Escape")
+      return;
+    e.preventDefault();
+    closeFilter();
   }
 </script>
 
@@ -240,10 +242,7 @@
   @media (min-width: 769px) {
     .filter-overlay.panel-open {
       right: calc(var(--context-panel-width) + 16px);
-      width: min(
-        380px,
-        calc(100vw - var(--context-panel-width) - 32px)
-      );
+      width: min(380px, calc(100vw - var(--context-panel-width) - 32px));
     }
   }
 

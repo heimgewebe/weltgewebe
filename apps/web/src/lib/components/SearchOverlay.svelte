@@ -60,8 +60,10 @@
     closeSearch();
   }
   function handleGlobalKeydown(e: KeyboardEvent) {
-    if (!$isSearchOpen || e.defaultPrevented) return;
-    if (e.key === "Escape") closeSearch();
+    if (!$isSearchOpen || e.defaultPrevented || e.repeat || e.key !== "Escape")
+      return;
+    e.preventDefault();
+    closeSearch();
   }
   function handleInputKeydown(e: KeyboardEvent) {
     if (!$isSearchOpen || visibleResults.length === 0) return;

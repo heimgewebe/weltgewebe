@@ -7,6 +7,18 @@ async function box(locator: Locator) {
   return value!;
 }
 
+function overlaps(
+  first: { x: number; y: number; width: number; height: number },
+  second: { x: number; y: number; width: number; height: number },
+) {
+  return (
+    first.x < second.x + second.width &&
+    first.x + first.width > second.x &&
+    first.y < second.y + second.height &&
+    first.y + first.height > second.y
+  );
+}
+
 async function expectInsideViewport(page: Page, testIds: string[]) {
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
@@ -49,6 +61,35 @@ test.describe("separated map fans", () => {
     ).toBeLessThanOrEqual(2);
     expect(governance.y).toBeLessThan(180);
     expect(tool.y).toBeGreaterThan(700);
+  });
+
+  test("opens both action groups as shallow fans rather than flat bars", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.getByTestId("tool-fan-trigger").click();
+    const toolActions = await Promise.all(
+      ["find", "content", "weave", "apply"].map((id) =>
+        box(page.getByTestId("tool-fan-" + id)),
+      ),
+    );
+    expect(toolActions[0].x).toBeLessThan(toolActions[1].x);
+    expect(toolActions[1].x).toBeLessThan(toolActions[2].x);
+    expect(toolActions[2].x).toBeLessThan(toolActions[3].x);
+    expect(toolActions[1].y).toBeLessThan(toolActions[0].y - 8);
+    expect(toolActions[2].y).toBeLessThan(toolActions[3].y - 8);
+
+    await page.keyboard.press("Escape");
+    await page.getByTestId("governance-fan-trigger").click();
+    const governanceEvents = await Promise.all(
+      ["proposals", "open", "voting"].map((id) =>
+        box(page.getByTestId("governance-fan-" + id)),
+      ),
+    );
+    expect(governanceEvents[0].x).toBeLessThan(governanceEvents[1].x);
+    expect(governanceEvents[1].x).toBeLessThan(governanceEvents[2].x);
+    expect(governanceEvents[1].y).toBeGreaterThan(governanceEvents[0].y + 8);
+    expect(governanceEvents[1].y).toBeGreaterThan(governanceEvents[2].y + 8);
   });
 
   test("keeps governance events out of the tool fan", async ({ page }) => {
@@ -245,12 +286,22 @@ test.describe("separated map fans", () => {
       ]);
       await page.keyboard.press("Escape");
       await page.getByTestId("governance-fan-trigger").click();
-      await expectInsideViewport(page, [
+      const governanceIds = [
         "governance-fan-trigger",
         "governance-fan-proposals",
         "governance-fan-open",
         "governance-fan-voting",
-      ]);
+      ];
+      await expectInsideViewport(page, governanceIds);
+      if (viewport.width <= 620) {
+        const identity = await box(page.locator(".garnrolle-container"));
+        for (const testId of governanceIds) {
+          expect(
+            overlaps(await box(page.getByTestId(testId)), identity),
+            testId + " overlaps the identity access",
+          ).toBe(false);
+        }
+      }
     });
   }
 

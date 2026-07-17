@@ -38,11 +38,11 @@
   --z-map-lens: 40;
   --z-map-tool-fan: 50;
   --z-map-topbar: 60;
-  --z-map-governance-fan: 65;
-  --z-map-context-panel: 70;
-  --z-map-modal: 80;
-  --z-map-toast: 90;
-  --z-map-loading: 100;
+  --z-map-governance-fan: 70;
+  --z-map-context-panel: 80;
+  --z-map-modal: 100;
+  --z-map-toast: 110;
+  --z-map-loading: 120;
 
   /* Swipe-Edge Defaults (innenliegende Greifzonen, kollisionsarm mit OS-Gesten) */
   --edge-inset-x: 24px;

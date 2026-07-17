@@ -3,7 +3,11 @@
   import { isSearchOpen, closeSearch } from "$lib/stores/searchStore";
   import { isFilterOpen, closeFilter } from "$lib/stores/filterStore";
   import { suppressNextRestore } from "$lib/utils/focusManager";
-  import { closeMapFan, expandedMapFan, toggleMapFan } from "$lib/stores/mapChrome";
+  import {
+    closeMapFan,
+    expandedMapFan,
+    toggleMapFan,
+  } from "$lib/stores/mapChrome";
   import { GOVERNANCE_EVENTS } from "./mapUiActions";
 
   let fanEl: HTMLDivElement;
@@ -11,7 +15,9 @@
   $: open = $expandedMapFan === "governance";
 
   function announceGeometryChange() {
-    tick().then(() => window.dispatchEvent(new CustomEvent("map-ui-geometry-change")));
+    tick().then(() =>
+      window.dispatchEvent(new CustomEvent("map-ui-geometry-change")),
+    );
   }
 
   function closeFan(restoreFocus = false) {
@@ -55,15 +61,26 @@
   }
 </script>
 
-<svelte:window on:pointerdown={handleWindowPointerDown} on:keydown={handleWindowKeydown} />
+<svelte:window
+  on:pointerdown={handleWindowPointerDown}
+  on:keydown={handleWindowKeydown}
+/>
 
-<div class="governance-fan" bind:this={fanEl} data-testid="governance-fan" data-expanded={open ? "true" : "false"} on:focusout={handleFocusOut}>
+<div
+  class="governance-fan"
+  bind:this={fanEl}
+  data-testid="governance-fan"
+  data-expanded={open ? "true" : "false"}
+  on:focusout={handleFocusOut}
+>
   <button
     type="button"
     class="governance-trigger"
     bind:this={triggerEl}
     data-testid="governance-fan-trigger"
-    aria-label={open ? "Gemeinschaftsfächer schließen" : "Gemeinschaftsfächer öffnen"}
+    aria-label={open
+      ? "Gemeinschaftsfächer schließen"
+      : "Gemeinschaftsfächer öffnen"}
     aria-expanded={open}
     aria-controls="governance-fan-events"
     on:click={toggleFan}
@@ -81,7 +98,12 @@
     aria-hidden={!open}
   >
     {#each GOVERNANCE_EVENTS as event}
-      <a href={event.href} data-testid={"governance-fan-" + event.id} tabindex={open ? 0 : -1} on:click={() => closeFan()}>
+      <a
+        href={event.href}
+        data-testid={"governance-fan-" + event.id}
+        tabindex={open ? 0 : -1}
+        on:click={() => closeFan()}
+      >
         <span aria-hidden="true">{event.symbol}</span>
         <span>{event.label}</span>
       </a>
@@ -118,10 +140,11 @@
     top: calc(100% + var(--map-fan-gap));
     left: 50%;
     width: min(600px, calc(100vw - 24px));
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
     gap: var(--map-fan-action-gap);
+    padding-bottom: 0.55rem;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -168,6 +191,11 @@
     gap: 0.45rem;
     text-decoration: none;
     font-weight: 700;
+    transition: transform var(--motion-fan);
+  }
+
+  .governance-events a:nth-child(2) {
+    transform: translateY(12px);
   }
 
   .governance-trigger:hover,
@@ -184,8 +212,28 @@
     outline-offset: 3px;
   }
 
+  @media (max-width: 620px) {
+    .governance-events {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      padding-bottom: 0;
+    }
+
+    .governance-events a,
+    .governance-events a:nth-child(2) {
+      transform: none;
+    }
+
+    .governance-events a:nth-child(3) {
+      grid-column: 1 / -1;
+      justify-self: center;
+    }
+  }
+
   @media (max-width: 520px) {
-    .governance-trigger { padding-inline: 0.7rem; font-size: 0.82rem; }
+    .governance-trigger {
+      padding-inline: 0.7rem;
+      font-size: 0.82rem;
+    }
     .governance-events a {
       min-width: min(176px, calc(50vw - 16px));
       font-size: 0.82rem;
@@ -201,6 +249,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .governance-events { transition: none; }
+    .governance-events,
+    .governance-events a {
+      transition: none;
+    }
   }
 </style>
