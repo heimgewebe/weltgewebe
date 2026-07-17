@@ -1,0 +1,17 @@
+{
+    admin off
+    auto_https off
+}
+
+:8080 {
+    root * /srv/weltgewebe
+    encode zstd gzip
+    respond /healthz 200
+    try_files {path} {path}/ /index.html
+    file_server
+    header {
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        X-Content-Type-Options "nosniff"
+    }
+}

@@ -1,0 +1,7 @@
+---
+- op: replace
+  path: /spec/template/spec/containers/0/env/0/valueFrom
+  value:
+    configMapKeyRef:
+      name: weltgewebe-local-fixture
+      key: database-url

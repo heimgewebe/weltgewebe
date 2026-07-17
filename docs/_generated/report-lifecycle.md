@@ -16,9 +16,9 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Metric | Count |
 | --- | ---: |
-| files_scanned | 47 |
+| files_scanned | 48 |
 | reports_checked | 42 |
-| reports_ignored_non_report | 5 |
+| reports_ignored_non_report | 6 |
 | reports_with_lifecycle_state | 42 |
 | reports_missing_lifecycle_state | 0 |
 | findings_total | 0 |
@@ -128,6 +128,7 @@ Fields required by the currently implemented validator rules that are absent, in
 | --- | --- | --- |
 | docs/reports/agent-readiness-audit.md | documentation | active |
 | docs/reports/auth-status-matrix.md | reference | active |
+| docs/reports/kubernetes-platform-foundation-status.md | status | active |
 | docs/reports/map-status-matrix.md | status-matrix | deprecated |
 | docs/reports/optimierungsstatus.md | status-matrix | active |
 | docs/reports/weltgewebe-os-foundation-status.md | status | active |

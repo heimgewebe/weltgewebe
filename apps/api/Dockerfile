@@ -1,5 +1,5 @@
 # Use the same Rust version as defined in toolchain.versions.yml and compose.core.yml
-FROM rust:1.89.0-bookworm AS builder
+FROM rust:1.89.0-bookworm@sha256:948f9b08a66e7fe01b03a98ef1c7568292e07ec2e4fe90d88c07bb14563c84ff AS builder
 
 WORKDIR /app
 
@@ -38,7 +38,7 @@ RUN printf '%s' "${GIT_COMMIT_SHA}" | grep -Eq '^[0-9a-f]{40}$' \
        cargo build --release --locked --bin weltgewebe-api
 
 # Runner stage
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 
 WORKDIR /app
 
@@ -47,7 +47,7 @@ WORKDIR /app
 # jq is kept for demo/dev tooling and smoke-style JSON inspection; bootstrap-first-account.sh does not require jq.
 # libssl3 is required by OpenSSL-linked Rust dependencies such as webauthn-rs.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates wget jq libssl3 \
+    && apt-get install -y --no-install-recommends ca-certificates wget jq libssl3 passwd \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from builder
@@ -58,11 +58,16 @@ COPY --from=builder /app/target/release/weltgewebe-api /app/weltgewebe-api
 COPY scripts/dev/generate-demo-data.sh /usr/local/bin/generate-demo-data
 COPY scripts/dev/bootstrap-first-account.sh /usr/local/bin/bootstrap-first-account
 COPY apps/api/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/generate-demo-data /usr/local/bin/bootstrap-first-account /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/generate-demo-data /usr/local/bin/bootstrap-first-account /usr/local/bin/entrypoint.sh
+RUN groupadd --gid 10001 weltgewebe \
+    && useradd --uid 10001 --gid 10001 --home-dir /app --shell /usr/sbin/nologin weltgewebe \
+    && mkdir -p /data /tmp \
+    && chown -R 10001:10001 /app /data /tmp
 
 # Expose the port
 COPY policies /app/policies
 EXPOSE 8080
+USER 10001:10001
 
 # Use entrypoint to handle data initialization
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

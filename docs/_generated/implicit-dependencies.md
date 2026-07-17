@@ -18,6 +18,7 @@ Generated automatically. Do not edit.
 | Makefile (validate-tests) | unittest | `python3 -m unittest discover scripts/agent/tests/` | *unclear* |
 | Makefile (validate-tests) | unittest | `python3 -m unittest discover scripts/ci/tests/` | *unclear* |
 | Makefile (validate-tests) | scripts.docmeta.generate_claim_evidence_map | `python3 -m scripts.docmeta.generate_claim_evidence_map --check` | *unclear* |
+| Makefile (platform-check) | unittest | `python3 -m unittest scripts.ci.tests.test_kubernetes_platform_contract` | *unclear* |
 | Makefile (validate-core) | scripts.docmeta.validate_schema | `python3 -m scripts.docmeta.validate_schema` | *unclear* |
 | Makefile (validate-core) | scripts.docmeta.validate_relations | `python3 -m scripts.docmeta.validate_relations` | *unclear* |
 | Makefile (validate-core) | scripts.docmeta.check_repo_index_consistency | `python3 -m scripts.docmeta.check_repo_index_consistency` | *unclear* |
