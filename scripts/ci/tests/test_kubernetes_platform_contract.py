@@ -3,11 +3,14 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shlex
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -40,6 +43,131 @@ class KubernetesPlatformContractTests(unittest.TestCase):
     def test_static_platform_contract_passes(self) -> None:
         result = self.validator.validate(render=False)
         self.assertEqual(result["status"], "pass")
+
+    def test_ci_proof_binds_pull_requests_to_checked_out_merge_state(self) -> None:
+        workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
+        workflow_text = workflow_path.read_text()
+        workflow = yaml.safe_load(workflow_text)
+        steps = workflow["jobs"]["kind-gitops-proof"]["steps"]
+        named_steps = {step["name"]: step for step in steps if "name" in step}
+
+        direct = named_steps["Run pull-request direct reference proof"]
+        gitops = named_steps["Run commit-bound GitOps reference proof"]
+
+        self.assertEqual(direct["if"], "github.event_name == 'pull_request'")
+        self.assertEqual(gitops["if"], "github.event_name != 'pull_request'")
+        self.assertEqual(
+            shlex.split(direct["run"]),
+            [
+                "python",
+                "scripts/platform/kind_reference.py",
+                "proof",
+                "--cluster",
+                "$CLUSTER_NAME",
+                "--mode",
+                "direct",
+            ],
+        )
+        self.assertEqual(
+            shlex.split(gitops["run"]),
+            [
+                "python",
+                "scripts/platform/kind_reference.py",
+                "proof",
+                "--cluster",
+                "$CLUSTER_NAME",
+                "--mode",
+                "gitops",
+                "--source-commit",
+                "$GITHUB_SHA",
+            ],
+        )
+        self.assertNotIn("SOURCE_REF:", workflow_text)
+        self.assertNotIn("github.head_ref || github.ref_name", workflow_text)
+
+    def test_cli_parser_accepts_exact_source_commit(self) -> None:
+        commit = "0123456789abcdef0123456789abcdef01234567"
+        args = self.reference.argument_parser().parse_args(
+            [
+                "proof",
+                "--cluster",
+                "reference",
+                "--mode",
+                "gitops",
+                "--source-commit",
+                commit,
+            ]
+        )
+        self.assertEqual(args.command, "proof")
+        self.assertEqual(args.source_commit, commit)
+        self.assertIsNone(args.source_ref)
+        with self.assertRaises(SystemExit):
+            self.reference.argument_parser().parse_args(
+                [
+                    "proof",
+                    "--mode",
+                    "gitops",
+                    "--source-ref",
+                    "main",
+                    "--source-commit",
+                    commit,
+                ]
+            )
+
+    def test_source_binding_fails_before_cluster_work_for_invalid_modes(self) -> None:
+        commit = "0123456789abcdef0123456789abcdef01234567"
+        self.reference.validate_source_binding(
+            "direct", source_ref=None, source_commit=None
+        )
+        self.reference.validate_source_binding(
+            "gitops", source_ref=None, source_commit=commit
+        )
+        self.reference.validate_source_binding(
+            "gitops", source_ref="main", source_commit=None
+        )
+        invalid = (
+            ("unsupported", None, commit, "unsupported proof mode"),
+            ("direct", "main", None, "invalid for direct"),
+            ("direct", None, commit, "invalid for direct"),
+            ("gitops", None, None, "exactly one"),
+            ("gitops", "main", commit, "exactly one"),
+            ("gitops", None, "abc", "full lowercase"),
+            ("gitops", None, "A" * 40, "full lowercase"),
+        )
+        for mode, source_ref, source_commit, message in invalid:
+            with self.subTest(mode=mode, source_ref=source_ref), self.assertRaisesRegex(
+                self.reference.ProofError, message
+            ):
+                self.reference.validate_source_binding(
+                    mode, source_ref=source_ref, source_commit=source_commit
+                )
+
+    def test_commit_source_must_match_local_workspace_head(self) -> None:
+        commit = "0123456789abcdef0123456789abcdef01234567"
+        self.reference.validate_workspace_binding(
+            source_commit=None, workspace_commit=commit
+        )
+        self.reference.validate_workspace_binding(
+            source_commit=commit, workspace_commit=commit
+        )
+        with self.assertRaisesRegex(
+            self.reference.ProofError, "exact local workspace HEAD"
+        ):
+            self.reference.validate_workspace_binding(
+                source_commit="fedcba9876543210fedcba9876543210fedcba98",
+                workspace_commit=commit,
+            )
+
+    def test_flux_source_can_bind_exact_commit_or_explicit_branch(self) -> None:
+        commit = "0123456789abcdef0123456789abcdef01234567"
+        by_commit = self.reference.flux_source_document(commit=commit)
+        by_branch = self.reference.flux_source_document(branch="main")
+        self.assertEqual(by_commit["spec"]["ref"], {"commit": commit})
+        self.assertEqual(by_branch["spec"]["ref"], {"branch": "main"})
+        with self.assertRaisesRegex(self.reference.ProofError, "exactly one"):
+            self.reference.flux_source_document()
+        with self.assertRaisesRegex(self.reference.ProofError, "exactly one"):
+            self.reference.flux_source_document(branch="main", commit=commit)
 
     def test_nonlocal_overlays_reject_local_fixture_markers(self) -> None:
         production = "platform/apps/weltgewebe/overlays/production"

@@ -57,6 +57,9 @@ Ein Git-Branch muss bereits veröffentlicht sein:
 
 ```bash
 python3 scripts/platform/kind_reference.py proof   --cluster weltgewebe-reference-gitops   --mode gitops   --source-ref <branch>
+
+# Für einen unveränderlichen CI-/Releasebeweis statt eines beweglichen Branches:
+python3 scripts/platform/kind_reference.py proof   --cluster weltgewebe-reference-commit   --mode gitops   --source-commit <vollständiger-git-commit>
 ```
 
 Zusätzlich wird ein absichtlicher Replica-Drift gesetzt und durch Flux korrigiert.
