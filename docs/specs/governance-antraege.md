@@ -146,7 +146,7 @@ Der Sonderpfad ist für Weber und Administratoren gesperrt. Deren Austritt berü
 
 ## Anträge-Oberfläche
 
-Der Wurzelknopf **Gemeinsam** befindet sich im Kartenkopf oben mittig. Er fächert ausschließlich reale Governance-Sichten nach unten auf: alle Anträge, offene Konsentverfahren und laufende Abstimmungen. Das Stellen eines Antrags ist davon getrennt und erscheint als eigene Webungsaktion im unteren Werkzeugfächer. Die Oberfläche bietet:
+Der Wurzelknopf **Gemeinsam** befindet sich im Kartenkopf oben mittig. Er fächert ausschließlich reale Governance-Sichten nach unten auf: alle Anträge, offene Konsentverfahren, Vetos, Gesprächsphasen und laufende Abstimmungen. Das Stellen eines Antrags ist davon getrennt und erscheint als eigene Webungsaktion im unteren Werkzeugfächer. Die Oberfläche bietet:
 
 - Liste aller Anträge;
 - Status und verbleibende Zeit;

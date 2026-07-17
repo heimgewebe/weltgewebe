@@ -177,6 +177,13 @@ test("governance views fan out from the top center and stay separate from weavin
     "href",
     "/antraege?status=consent",
   );
+  await expect(page.getByTestId("governance-fan-vetoes")).toHaveAttribute(
+    "href",
+    "/antraege?ereignis=veto",
+  );
+  await expect(
+    page.getByTestId("governance-fan-conversations"),
+  ).toHaveAttribute("href", "/antraege?ereignis=gespraech");
   await expect(page.getByTestId("governance-fan-voting")).toHaveAttribute(
     "href",
     "/antraege?status=voting",
@@ -192,6 +199,53 @@ test("governance views fan out from the top center and stay separate from weavin
     "true",
   );
   await expect(page.getByTestId("tool-fan-proposals")).toHaveCount(0);
+});
+
+test("the five governance actions stay usable on a 320 pixel viewport", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/map");
+  await page.getByTestId("governance-fan-trigger").click();
+
+  for (const testId of [
+    "governance-fan-all",
+    "governance-fan-open",
+    "governance-fan-vetoes",
+    "governance-fan-conversations",
+    "governance-fan-voting",
+  ]) {
+    const box = await page.getByTestId(testId).boundingBox();
+    expect(box, `${testId} has no visible box`).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test("veto and conversation links resolve to real filtered governance views", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  await installGovernanceRoutes(page, { initialStatus: "voting" });
+
+  await page.goto("/antraege?ereignis=veto");
+  await expect(
+    page.getByRole("heading", { name: "Anträge mit Veto" }),
+  ).toBeVisible();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
+
+  await page.goto("/antraege?ereignis=gespraech");
+  await expect(
+    page.getByRole("heading", { name: "Gesprächsphasen" }),
+  ).toBeVisible();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
 });
 
 test("a guest reaches the Weber application as a distinct weaving action", async ({

@@ -96,7 +96,7 @@
     aria-label="Gemeinsame Entscheidungen"
     aria-hidden={!open}
   >
-    <div class="governance-slot governance-slot--left">
+    <div class="governance-slot governance-slot--outer-left">
       <FanAction
         label="Alle Anträge"
         symbol="◇"
@@ -106,7 +106,7 @@
         on:click={() => closeGovernanceFan()}
       />
     </div>
-    <div class="governance-slot governance-slot--center">
+    <div class="governance-slot governance-slot--inner-left">
       <FanAction
         label="Offene Anträge"
         symbol="◌"
@@ -116,7 +116,27 @@
         on:click={() => closeGovernanceFan()}
       />
     </div>
-    <div class="governance-slot governance-slot--right">
+    <div class="governance-slot governance-slot--center">
+      <FanAction
+        label="Vetos"
+        symbol="!"
+        testId="governance-fan-vetoes"
+        href="/antraege?ereignis=veto"
+        tabIndex={open ? 0 : -1}
+        on:click={() => closeGovernanceFan()}
+      />
+    </div>
+    <div class="governance-slot governance-slot--inner-right">
+      <FanAction
+        label="Gespräche"
+        symbol="…"
+        testId="governance-fan-conversations"
+        href="/antraege?ereignis=gespraech"
+        tabIndex={open ? 0 : -1}
+        on:click={() => closeGovernanceFan()}
+      />
+    </div>
+    <div class="governance-slot governance-slot--outer-right">
       <FanAction
         label="Abstimmungen"
         symbol="✓"
@@ -168,6 +188,7 @@
     box-shadow: var(--shadow);
     backdrop-filter: blur(var(--map-lens-blur));
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     justify-content: center;
     gap: 0.5rem;
@@ -190,9 +211,14 @@
     transition-delay: 0s;
   }
 
-  .governance-slot--left,
-  .governance-slot--right {
-    transform: translateY(10px);
+  .governance-slot--outer-left,
+  .governance-slot--outer-right {
+    transform: translateY(12px);
+  }
+
+  .governance-slot--inner-left,
+  .governance-slot--inner-right {
+    transform: translateY(5px);
   }
 
   .governance-trigger:focus-visible {

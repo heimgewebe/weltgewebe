@@ -45,6 +45,7 @@
     openSearchExclusive,
     openFilterExclusive,
   } from "$lib/stores/overlayManager";
+  import { mapChrome } from "$lib/stores/mapChrome";
   import {
     parseMapUrlState,
     type MapUrlFocus,
@@ -160,6 +161,18 @@
     if (topBarRect)
       top = Math.max(top, topBarRect.bottom - mapRect.top + edgeInset);
 
+    const governanceFan = document.querySelector<HTMLElement>(
+      '[data-testid="governance-fan"]',
+    );
+    const governanceObstacle =
+      governanceFan?.dataset.expanded === "true"
+        ? document.getElementById("governance-fan-actions")
+        : null;
+    const governanceRect = governanceObstacle?.getBoundingClientRect();
+    if (governanceRect && governanceRect.height > 0) {
+      top = Math.max(top, governanceRect.bottom - mapRect.top + edgeInset);
+    }
+
     const searchRect = document
       .querySelector<HTMLElement>('[data-testid="search-overlay"]')
       ?.getBoundingClientRect();
@@ -174,11 +187,16 @@
       top = Math.max(top, filterRect.bottom - mapRect.top + edgeInset);
     }
 
-    const toolTriggerRect = document
-      .querySelector<HTMLElement>('[data-testid="tool-fan-trigger"]')
-      ?.getBoundingClientRect();
-    if (toolTriggerRect && toolTriggerRect.height > 0) {
-      bottom = Math.min(bottom, toolTriggerRect.top - mapRect.top - edgeInset);
+    const toolFan = document.querySelector<HTMLElement>(
+      '[data-testid="tool-fan"]',
+    );
+    const toolObstacle =
+      toolFan?.dataset.expanded === "true"
+        ? document.getElementById("tool-fan-actions")
+        : document.querySelector<HTMLElement>('[data-testid="tool-fan-trigger"]');
+    const toolRect = toolObstacle?.getBoundingClientRect();
+    if (toolRect && toolRect.height > 0) {
+      bottom = Math.min(bottom, toolRect.top - mapRect.top - edgeInset);
     }
 
     const panelRect = document
@@ -212,7 +230,10 @@
       ".topbar",
       '[data-testid="search-overlay"]',
       '[data-testid="filter-overlay"]',
-      '[data-testid="tool-fan-trigger"]',
+      '[data-testid="governance-fan"]',
+      '#governance-fan-actions',
+      '[data-testid="tool-fan"]',
+      '#tool-fan-actions',
       '[data-testid="context-panel"]',
     ]) {
       const element = document.querySelector<HTMLElement>(selector);
@@ -288,6 +309,9 @@
     $isSearchOpen;
     $contextPanelOpen;
     $isFilterOpen;
+    $mapChrome.toolFanOpen;
+    $mapChrome.toolFanBranch;
+    $mapChrome.governanceFanOpen;
     if (map) tick().then(refreshSearchViewportObservers);
   }
 

@@ -23,10 +23,25 @@
 
   $: selectedProposalId = $page.url.searchParams.get("id");
   $: statusFilter = $page.url.searchParams.get("status");
+  $: eventFilter = $page.url.searchParams.get("ereignis");
   $: visibleProposals =
     statusFilter === "consent" || statusFilter === "voting"
       ? proposals.filter((proposal) => proposal.status === statusFilter)
-      : proposals;
+      : eventFilter === "veto"
+        ? proposals.filter((proposal) => proposal.veto_count > 0)
+        : eventFilter === "gespraech"
+          ? proposals.filter((proposal) => proposal.status === "voting")
+          : proposals;
+  $: proposalListTitle =
+    statusFilter === "consent"
+      ? "Offene Anträge"
+      : statusFilter === "voting"
+        ? "Abstimmungen"
+        : eventFilter === "veto"
+          ? "Anträge mit Veto"
+          : eventFilter === "gespraech"
+            ? "Gesprächsphasen"
+            : "Alle Anträge";
   $: isGuest = $authStore.authenticated && $authStore.role === "gast";
   $: hasOpenOwnProposal =
     isGuest &&
@@ -140,10 +155,12 @@
   <section aria-labelledby="proposal-list-heading">
     <div class="section-heading">
       <div>
-        <h2 id="proposal-list-heading">{statusFilter === "consent" ? "Offene Anträge" : statusFilter === "voting" ? "Abstimmungen" : "Alle Anträge"}</h2>
-        <nav class="proposal-filters" aria-label="Anträge filtern">
-          <a class:active={!statusFilter} href="/antraege">Alle</a>
+        <h2 id="proposal-list-heading">{proposalListTitle}</h2>
+        <nav class="proposal-filters" aria-label="Governance-Ereignisse filtern">
+          <a class:active={!statusFilter && !eventFilter} href="/antraege">Alle</a>
           <a class:active={statusFilter === "consent"} href="/antraege?status=consent">Offen</a>
+          <a class:active={eventFilter === "veto"} href="/antraege?ereignis=veto">Vetos</a>
+          <a class:active={eventFilter === "gespraech"} href="/antraege?ereignis=gespraech">Gespräche</a>
           <a class:active={statusFilter === "voting"} href="/antraege?status=voting">Abstimmungen</a>
         </nav>
       </div>

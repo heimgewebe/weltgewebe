@@ -111,6 +111,8 @@ Gemeinsame Entscheidungsereignisse besitzen einen getrennten Wurzelknopf oben mi
 
 - alle Anträge;
 - offene Konsentverfahren;
+- Anträge mit Veto;
+- laufende Gesprächsphasen;
 - laufende Abstimmungen.
 
 Werkzeug- und Governancefächer sind gegenseitig exklusiv. Dadurch konkurrieren nicht zwei offene Menüs um dieselbe Kartenfläche. Das Stellen eines Antrags gehört nicht in den lesenden Governancefächer, sondern als Webungsaktion in die untere Webungsebene.
