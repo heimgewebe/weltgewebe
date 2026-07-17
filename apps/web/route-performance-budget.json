@@ -1,8 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "measurement": "sum of unique modulepreload and stylesheet assets referenced by prerendered route HTML, gzip level 9",
+  "output_directories": ["build", ".vercel/output/static"],
   "routes": {
-    "login.html": {
+    "/login": {
       "max_initial_js_gzip_bytes": 46000,
       "max_initial_css_gzip_bytes": 2000,
       "forbid_css_markers": [".maplibregl-"],
@@ -10,7 +11,7 @@
       "min_initial_js_assets": 1,
       "min_initial_css_assets": 1
     },
-    "settings.html": {
+    "/settings": {
       "max_initial_js_gzip_bytes": 57000,
       "max_initial_css_gzip_bytes": 3600,
       "forbid_css_markers": [".maplibregl-"],
@@ -18,7 +19,7 @@
       "min_initial_js_assets": 1,
       "min_initial_css_assets": 1
     },
-    "map.html": {
+    "/map": {
       "max_initial_js_gzip_bytes": 80000,
       "max_initial_css_gzip_bytes": 18000,
       "forbid_css_markers": [],
@@ -29,6 +30,7 @@
   },
   "emitted_assets": {
     "garnrolle": {
+      "directory": "_app/immutable/assets",
       "filename_prefix": "garnrolle.",
       "required_extension": ".webp",
       "forbid_extensions": [".png"],
