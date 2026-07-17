@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { activateToolFanAction } from "./fixtures/toolFan";
 
 test.describe("UI detail remediation", () => {
   test.beforeEach(async ({ page }) => {
@@ -37,7 +38,7 @@ test.describe("UI detail remediation", () => {
     }
   });
 
-  test("hides the action bar while a mobile focus sheet is open", async ({
+  test("hides the tool fan while a mobile focus sheet is open", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -45,7 +46,7 @@ test.describe("UI detail remediation", () => {
       (document.querySelector(".map-marker") as HTMLElement)?.click(),
     );
     await expect(page.getByTestId("context-panel")).toBeVisible();
-    await expect(page.locator(".action-bar")).toBeHidden();
+    await expect(page.getByTestId("tool-fan")).toBeHidden();
   });
 
   test("uses 44 pixel interaction targets for markers, map controls and tabs", async ({
@@ -95,11 +96,14 @@ test.describe("UI detail remediation", () => {
     await expect(panel).not.toContainText("Art: event");
   });
 
-  test("keeps filter results hidden until a filter is selected", async ({
+  test("Sicht never shows an automatic hit list, only type selection", async ({
     page,
   }) => {
-    await page.getByRole("button", { name: "Filter" }).click();
-    await expect(page.getByText(/Wähle mindestens eine Art/)).toBeVisible();
+    await activateToolFanAction(page, "sight");
+    await expect(
+      page.getByText(/^Alle \d+ Elemente auf der Karte/),
+    ).toBeVisible();
     await expect(page.locator(".filter-result")).toHaveCount(0);
+    await expect(page.locator(".filter-item")).not.toHaveCount(0);
   });
 });

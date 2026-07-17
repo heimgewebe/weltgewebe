@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { activateToolFanAction } from "./fixtures/toolFan";
 
 test.describe("Interaction Clarity & State Feedback", () => {
   test.beforeEach(async ({ page }) => {
@@ -7,19 +8,19 @@ test.describe("Interaction Clarity & State Feedback", () => {
       auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
     });
     await page.goto("/map");
-    await page.waitForSelector(".action-bar", { timeout: 10000 });
+    await page.waitForSelector('[data-testid="tool-fan"]', {
+      timeout: 10000,
+    });
   });
 
   test("entering komposition closes open search overlay", async ({ page }) => {
-    // Open search overlay
-    await page.locator('.action-bar button[aria-label="Suche"]').click();
+    // Open search overlay via the tool fan
+    await activateToolFanAction(page, "find");
     const searchOverlay = page.locator('[data-testid="search-overlay"]');
     await expect(searchOverlay).toBeVisible();
 
-    // Click "Knoten knüpfen" while search is open
-    await page
-      .locator('.action-bar button[aria-label="Knoten knüpfen"]')
-      .click();
+    // Open the fan again and trigger "Weben" while search is open
+    await activateToolFanAction(page, "weave");
 
     // Search overlay must be closed
     await expect(searchOverlay).toHaveCount(0);
@@ -33,15 +34,13 @@ test.describe("Interaction Clarity & State Feedback", () => {
   });
 
   test("entering komposition closes open filter overlay", async ({ page }) => {
-    // Open filter overlay
-    await page.locator('.action-bar button[aria-label="Filter"]').click();
+    // Open filter overlay via the tool fan
+    await activateToolFanAction(page, "sight");
     const filterOverlay = page.locator('[data-testid="filter-overlay"]');
     await expect(filterOverlay).toBeVisible();
 
-    // Click "Knoten knüpfen" while filter is open
-    await page
-      .locator('.action-bar button[aria-label="Knoten knüpfen"]')
-      .click();
+    // Open the fan again and trigger "Weben" while Sicht is open
+    await activateToolFanAction(page, "weave");
 
     // Filter overlay must be closed
     await expect(filterOverlay).toHaveCount(0);
@@ -51,26 +50,25 @@ test.describe("Interaction Clarity & State Feedback", () => {
     await expect(panel).toBeVisible();
   });
 
-  test("'Knoten knüpfen' button shows active state in komposition mode", async ({
+  test("'Weben' action shows active state in komposition mode", async ({
     page,
   }) => {
-    const newNodeBtn = page.locator(
-      '.action-bar button[aria-label="Knoten knüpfen"]',
-    );
+    await page.getByTestId("tool-fan-trigger").click();
+    const weaveBtn = page.getByTestId("tool-fan-weave");
 
-    // Initially, button should NOT have active class
-    await expect(newNodeBtn).not.toHaveClass(/active/);
+    // Initially, the action should NOT have active state
+    await expect(weaveBtn).toHaveAttribute("aria-pressed", "false");
 
     // Enter komposition mode
-    await newNodeBtn.click();
+    await weaveBtn.click();
 
-    // Now button should have active class
-    await expect(newNodeBtn).toHaveClass(/active/);
+    // Now the action should report active state
+    await expect(weaveBtn).toHaveAttribute("aria-pressed", "true");
 
-    // Close panel → back to navigation → button should lose active
+    // Close panel → back to navigation → active state clears
     await page.keyboard.press("Escape");
     await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
-    await expect(newNodeBtn).not.toHaveClass(/active/);
+    await expect(weaveBtn).toHaveAttribute("aria-pressed", "false");
   });
 
   test("Garnrolle führt ohne Zwischenmenü direkt zu ihren Einstellungen", async ({
@@ -88,43 +86,43 @@ test.describe("Interaction Clarity & State Feedback", () => {
     await expect(page.locator(".garnrolle-container .menu")).toHaveCount(0);
   });
 
-  test("focus does not return to Search button when entering komposition", async ({
+  test("focus does not return to the tool fan trigger when entering komposition from Finden", async ({
     page,
   }) => {
-    const searchBtn = page.locator('.action-bar button[aria-label="Suche"]');
+    const trigger = page.getByTestId("tool-fan-trigger");
 
-    // Open search overlay (sets restore target to searchBtn)
-    await searchBtn.click();
+    // Open search overlay (sets restore target to the tool fan trigger)
+    await trigger.click();
+    await page.getByTestId("tool-fan-find").click();
     const searchOverlay = page.locator('[data-testid="search-overlay"]');
     await expect(searchOverlay).toBeVisible();
 
-    // Click "Knoten knüpfen" — suppressNextRestore should prevent focus restore
-    await page
-      .locator('.action-bar button[aria-label="Knoten knüpfen"]')
-      .click();
+    // Trigger "Weben" — suppressNextRestore should prevent focus restore
+    await trigger.click();
+    await page.getByTestId("tool-fan-weave").click();
     await expect(searchOverlay).toHaveCount(0);
 
-    // Focus must NOT be on the Search button
-    await expect(searchBtn).not.toBeFocused();
+    // Focus must NOT be on the tool fan trigger
+    await expect(trigger).not.toBeFocused();
   });
 
-  test("focus does not return to Filter button when entering komposition", async ({
+  test("focus does not return to the tool fan trigger when entering komposition from Sicht", async ({
     page,
   }) => {
-    const filterBtn = page.locator('.action-bar button[aria-label="Filter"]');
+    const trigger = page.getByTestId("tool-fan-trigger");
 
-    // Open filter overlay (sets restore target to filterBtn)
-    await filterBtn.click();
+    // Open filter overlay (sets restore target to the tool fan trigger)
+    await trigger.click();
+    await page.getByTestId("tool-fan-sight").click();
     const filterOverlay = page.locator('[data-testid="filter-overlay"]');
     await expect(filterOverlay).toBeVisible();
 
-    // Click "Knoten knüpfen" — suppressNextRestore should prevent focus restore
-    await page
-      .locator('.action-bar button[aria-label="Knoten knüpfen"]')
-      .click();
+    // Trigger "Weben" — suppressNextRestore should prevent focus restore
+    await trigger.click();
+    await page.getByTestId("tool-fan-weave").click();
     await expect(filterOverlay).toHaveCount(0);
 
-    // Focus must NOT be on the Filter button
-    await expect(filterBtn).not.toBeFocused();
+    // Focus must NOT be on the tool fan trigger
+    await expect(trigger).not.toBeFocused();
   });
 });

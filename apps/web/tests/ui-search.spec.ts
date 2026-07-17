@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { activateToolFanAction } from "./fixtures/toolFan";
 
 test.describe("Search mode", () => {
   test.beforeEach(async ({ page }) => {
@@ -53,9 +54,8 @@ test.describe("Search mode", () => {
     );
     await page.waitForSelector(".map-marker");
 
-    // Click search button
-    const searchBtn = page.locator('.action-bar button[aria-label="Suche"]');
-    await searchBtn.click();
+    // Open Finden via the tool fan
+    await activateToolFanAction(page, "find");
 
     // Verify search overlay appears
     const searchOverlay = page.locator('[data-testid="search-overlay"]');
@@ -82,16 +82,30 @@ test.describe("Search mode", () => {
 
     const direction = page.getByTestId("search-direction-node-mock-node-1");
     await expect(direction).toBeVisible();
-    await expect(direction).toHaveAttribute("data-side", "bottom");
     const directionBox = await direction.boundingBox();
     const searchBox = await searchOverlay.boundingBox();
     expect(directionBox).not.toBeNull();
     expect(searchBox).not.toBeNull();
     expect(directionBox!.width).toBeGreaterThanOrEqual(44);
     expect(directionBox!.height).toBeGreaterThanOrEqual(44);
-    expect(directionBox!.y + directionBox!.height).toBeLessThanOrEqual(
-      searchBox!.y + 1,
-    );
+    // The search capsule now sits above the map; a direction marker must stay
+    // clear of it regardless of which edge it points to.
+    const overlapsSearchBox =
+      directionBox!.y < searchBox!.y + searchBox!.height &&
+      directionBox!.y + directionBox!.height > searchBox!.y &&
+      directionBox!.x < searchBox!.x + searchBox!.width &&
+      directionBox!.x + directionBox!.width > searchBox!.x;
+    expect(overlapsSearchBox).toBe(false);
+    const toolTriggerBox = await page
+      .getByTestId("tool-fan-trigger")
+      .boundingBox();
+    expect(toolTriggerBox).not.toBeNull();
+    const overlapsToolTrigger =
+      directionBox!.y < toolTriggerBox!.y + toolTriggerBox!.height &&
+      directionBox!.y + directionBox!.height > toolTriggerBox!.y &&
+      directionBox!.x < toolTriggerBox!.x + toolTriggerBox!.width &&
+      directionBox!.x + directionBox!.width > toolTriggerBox!.x;
+    expect(overlapsToolTrigger).toBe(false);
 
     // Clear search and verify highlight and direction marker are removed
     await searchInput.fill("");
@@ -108,7 +122,7 @@ test.describe("Search mode", () => {
     await searchInput.press("ArrowDown");
 
     // Verify ARIA activedescendant is set
-    const firstResultId = `search-result-mock-node-1`;
+    const firstResultId = `search-option-node-mock-node-1`;
     await expect(searchInput).toHaveAttribute(
       "aria-activedescendant",
       firstResultId,
@@ -145,8 +159,131 @@ test.describe("Search mode", () => {
     );
 
     // Also verify search field was cleared
-    await searchBtn.click();
+    await activateToolFanAction(page, "find");
     await expect(searchInput).toHaveValue("");
+  });
+
+  test("resets keyboard selection when visible results change without a query change", async ({
+    page,
+  }) => {
+    await page.goto("/map");
+    await page.waitForSelector(".map-marker");
+    await activateToolFanAction(page, "find");
+    const input = page.getByLabel("Suchbegriff");
+    await input.fill("a");
+    await expect(page.getByRole("option").first()).toBeVisible();
+
+    await input.press("ArrowDown");
+    await input.press("ArrowDown");
+    await expect(input).toHaveAttribute("aria-activedescendant", /.+/);
+
+    await page.evaluate(() => {
+      const setActiveFilters = (window as any).__TEST_SET_ACTIVE_FILTERS__;
+      if (typeof setActiveFilters !== "function") {
+        throw new Error("test filter control is unavailable");
+      }
+      setActiveFilters(["Garnrolle"]);
+    });
+
+    await expect(input).not.toHaveAttribute("aria-activedescendant", /.+/);
+    await input.press("Enter");
+    await expect(page.getByTestId("context-panel")).toBeVisible();
+  });
+
+  test("zero results show one unambiguous status message", async ({ page }) => {
+    await page.goto("/map");
+    await page.waitForSelector(".map-marker");
+    await activateToolFanAction(page, "find");
+    await page
+      .getByRole("searchbox", { name: "Suchbegriff" })
+      .fill("Unauffindbar");
+
+    await expect(
+      page.getByText("Keine Treffer für „Unauffindbar“"),
+    ).toBeVisible();
+    await expect(page.getByText("0 Treffer auf der Karte")).toHaveCount(0);
+  });
+
+  test("node and Garnrolle with the same id keep unique option ids", async ({
+    page,
+  }) => {
+    await page.route("**/api/accounts", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "mock-node-1",
+            title: "Abendliches Stricken Garnrolle",
+            role: "weber",
+            public_pos: { lat: 51.01, lon: 10.01 },
+          },
+        ]),
+      });
+    });
+    await page.goto("/map");
+    await page.waitForSelector(".map-marker");
+    await activateToolFanAction(page, "find");
+    const input = page.getByRole("searchbox", { name: "Suchbegriff" });
+    await input.fill("Abendliches Stricken");
+
+    const options = page.getByRole("option");
+    await expect(options).toHaveCount(2);
+    const ids = await options.evaluateAll((elements) =>
+      elements.map((element) => element.id),
+    );
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toContain("search-option-node-mock-node-1");
+    expect(ids).toContain("search-option-garnrolle-mock-node-1");
+  });
+
+  test("shows at most 6 automatic suggestions with the map as the primary result surface", async ({
+    page,
+  }) => {
+    const manyNodes = Array.from({ length: 9 }, (_, i) => ({
+      id: `mock-node-${i}`,
+      title: `Strickabend ${i}`,
+      summary: "Wir stricken gemeinsam",
+      kind: "Treffen",
+      location: { lat: 51 + i * 0.001, lon: 10 + i * 0.001 },
+      modules: [],
+      created_at: new Date().toISOString(),
+    }));
+    await page.route("**/api/nodes", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(manyNodes),
+      });
+    });
+
+    await page.goto("/map");
+    await page.waitForFunction(
+      () => (window as any).__TEST_MAP__ !== undefined,
+      undefined,
+      { timeout: 15000 },
+    );
+    await activateToolFanAction(page, "find");
+
+    const searchInput = page.locator(".search-box input");
+    await searchInput.fill("Strick");
+
+    const results = page.locator("li[role='option']");
+    await expect(results).toHaveCount(6);
+    await expect(page.getByText("9 Treffer auf der Karte")).toBeVisible();
+
+    const showMore = page.getByRole("button", {
+      name: "Alle 9 Vorschläge zeigen",
+    });
+    await expect(showMore).toBeVisible();
+    await showMore.click();
+    await expect(results).toHaveCount(9);
+
+    // All matches stay highlighted on the map regardless of how many the
+    // capsule lists — the map remains the primary result surface.
+    await expect(
+      page.locator('.map-marker[data-search-match="true"]'),
+    ).toHaveCount(9);
   });
 
   test("offscreen direction marker opens and centers its search result", async ({
@@ -159,8 +296,8 @@ test.describe("Search mode", () => {
       { timeout: 15000 },
     );
 
-    await page.getByRole("button", { name: "Suche", exact: true }).click();
-    await page.getByRole("textbox", { name: "Suchbegriff" }).fill("Strick");
+    await activateToolFanAction(page, "find");
+    await page.getByRole("searchbox", { name: "Suchbegriff" }).fill("Strick");
 
     const direction = page.getByTestId("search-direction-node-mock-node-1");
     await expect(direction).toBeVisible();
@@ -187,7 +324,7 @@ test.describe("Search mode", () => {
     );
   });
 
-  test("focus restores to search button on Escape", async ({ page }) => {
+  test("focus restores to the tool fan trigger on Escape", async ({ page }) => {
     await page.goto("/map");
     // Wait for the map to be ready
     await page.waitForFunction(
@@ -197,8 +334,8 @@ test.describe("Search mode", () => {
     );
     await page.waitForSelector(".map-marker");
 
-    const searchBtn = page.locator('.action-bar button[aria-label="Suche"]');
-    await searchBtn.click();
+    const trigger = page.getByTestId("tool-fan-trigger");
+    await activateToolFanAction(page, "find");
 
     const searchOverlay = page.locator('[data-testid="search-overlay"]');
     await expect(searchOverlay).toBeVisible();
@@ -209,7 +346,7 @@ test.describe("Search mode", () => {
     await page.keyboard.press("Escape");
     await expect(searchOverlay).not.toBeVisible();
 
-    // Verify focus is restored back to the search button
-    await expect(searchBtn).toBeFocused();
+    // Verify focus is restored back to the tool fan trigger
+    await expect(trigger).toBeFocused();
   });
 });
