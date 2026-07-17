@@ -14,11 +14,11 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 613 |
-| — depends_on | 24 |
-| — relates_to | 577 |
+| Relationen gesamt | 619 |
+| — depends_on | 25 |
+| — relates_to | 580 |
 | — supersedes | 11 |
-| — verifies | 1 |
+| — verifies | 3 |
 | relates_to Anteil | 94% |
 
 ### Mögliche supersedes-Lücken
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (238 Dokumente):
+**Cluster 1** (240 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -185,6 +185,7 @@ _Keine Lücken erkannt._
 - `docs/reports/github-action-ref-pinning-audit.md`
 - `docs/reports/github-actions-node24-readiness.md`
 - `docs/reports/inwx-zone-reconciliation-plan.md`
+- `docs/reports/kubernetes-platform-foundation-status.md`
 - `docs/reports/map-architekturkritik.md`
 - `docs/reports/map-basemap-proof-gap-reconciliation.md`
 - `docs/reports/map-status-matrix.md`
@@ -234,6 +235,7 @@ _Keine Lücken erkannt._
 - `infra/caddy/Caddyfile.vps`
 - `infra/compose/compose.prod.override.yml`
 - `infra/compose/compose.vps.override.yml`
+- `platform/README.md`
 - `repo.meta.yaml`
 - `runbooks/README.md`
 - `scripts/agent/check_non_ideal_task.py`

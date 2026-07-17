@@ -1,0 +1,11 @@
+---
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: weltgewebe-reference
+networking:
+  disableDefaultCNI: true
+  kubeProxyMode: none
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker

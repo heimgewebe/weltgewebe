@@ -1,0 +1,25 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: weltgewebe-local-data
+  namespace: flux-system
+spec:
+  interval: 2m
+  retryInterval: 20s
+  timeout: 5m
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: weltgewebe
+  path: ./platform/infrastructure/local-data
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: postgres
+      namespace: weltgewebe-data
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: nats
+      namespace: weltgewebe-data

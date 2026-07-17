@@ -1,0 +1,21 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - service-account.yaml
+  - config-map.yaml
+  - api-deployment.yaml
+  - api-service.yaml
+  - api-pdb.yaml
+  - web-deployment.yaml
+  - web-service.yaml
+  - web-pdb.yaml
+  - network-policy-default-deny.yaml
+  - network-policy-same-namespace.yaml
+  - network-policy-dns.yaml
+  - network-policy-gateway-ingress.yaml
+  - network-policy-api-data-egress.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: weltgewebe
+      app.kubernetes.io/managed-by: kustomize

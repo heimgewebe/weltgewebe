@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "status": "blocked",
+  "required_images": [
+    "ghcr.io/heimgewebe/weltgewebe-api",
+    "ghcr.io/heimgewebe/weltgewebe-web"
+  ],
+  "activation_requirements": [
+    "multi-arch image digest exists in GHCR",
+    "provenance is bound to one merged commit",
+    "external secret path is configured",
+    "staging rollout proof is green"
+  ],
+  "production_activation": false
+}

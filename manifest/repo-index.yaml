@@ -25,10 +25,15 @@ zones:
     path: runtime/
     canonical_docs:
       - README.md
+  platform:
+    path: platform/
+    canonical_docs:
+      - README.md
   runbooks:
     path: runbooks/
     canonical_docs:
       - README.md
+      - kubernetes-local-reference.md
 
 checks:
   - scripts/docmeta/check_repo_index_consistency.py

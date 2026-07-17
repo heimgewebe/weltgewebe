@@ -1,0 +1,27 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: weltgewebe-runtime
+  labels:
+    app.kubernetes.io/name: weltgewebe-api
+data:
+  API_BIND: 0.0.0.0:8080
+  APP_BASE_URL: https://weltgewebe.invalid
+  AUTH_AUTO_PROVISION: "0"
+  AUTH_COOKIE_SECURE: "1"
+  AUTH_LOG_MAGIC_TOKEN: "0"
+  AUTH_PUBLIC_LOGIN: "0"
+  GEWEBE_IN_DIR: /data
+  GEWEBE_SEED_DEMO: "false"
+  GEWEBE_SEED_REAL: "false"
+  NATS_URL: nats://nats.weltgewebe-data.svc.cluster.local:4222
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.weltgewebe-observability.svc.cluster.local:4317
+  OTEL_SERVICE_NAME: weltgewebe-api
+  RUST_LOG: info
+  WELTGEWEBE_API_STARTUP_MIGRATIONS: verify-applied
+  WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE: postgres
+  WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE: postgres
+  WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE: postgres
+  WELTGEWEBE_DOMAIN_READ_SOURCE: postgres
+  WELTGEWEBE_PASSKEY_CREDENTIAL_SOURCE: postgres
