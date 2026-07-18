@@ -53,11 +53,14 @@ jedem abgeschlossenen Lauf erneut mit einem Abstand von zwei Minuten. Der Dienst
    `main` nicht weitergewandert ist;
 9. legt einen getrennten root-eigenen Release-Worktree unter
    `/opt/weltgewebe-releases/<commit>` an und prüft dessen Git-Integrität;
-10. bindet die kanonischen root-eigenen PMTiles schreibgeschützt ein und ruft
-    den vorhandenen fail-closed arbeitenden `weltgewebe-up`-Pfad auf;
-11. liest Frontend, API und beide Build-Header über begrenzte GET-Anfragen
+10. bindet die kanonischen root-eigenen PMTiles schreibgeschützt ein, führt
+    den idempotenten, API-begrenzten Migrations-Scope aus und prüft danach erneut,
+    dass `origin/main` unverändert ist;
+11. ruft erst anschließend den vollständigen fail-closed arbeitenden
+    `weltgewebe-up`-Pfad auf;
+12. liest Frontend, API und beide Build-Header über begrenzte GET-Anfragen
     öffentlich zurück;
-12. aktualisiert den Zeiger auf den verifizierten Stand nur, wenn ein letzter
+13. aktualisiert den Zeiger auf den verifizierten Stand nur, wenn ein letzter
     Remote-Readback weiterhin denselben `origin/main`-Commit ergibt.
 
 Der Produktionsserver benötigt dadurch weder den Heim-PC noch einen allgemein

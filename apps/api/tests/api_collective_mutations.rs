@@ -140,16 +140,118 @@ fn write_fixture(path: &Path, content: &str) {
     fs::write(path, content).expect("write fixture");
 }
 
-fn mutation_request(method: &str, uri: &str, cookie: &str, payload: &str) -> Request<body::Body> {
-    Request::builder()
+const INITIAL_NODE_ETAG: &str = "\"2026-01-01T00:00:00Z\"";
+
+fn mutation_request_with_etag(
+    method: &str,
+    uri: &str,
+    cookie: &str,
+    payload: &str,
+    etag: Option<&str>,
+) -> Request<body::Body> {
+    let mut request = Request::builder()
         .method(method)
         .uri(uri)
         .header("Content-Type", "application/json")
         .header("Cookie", cookie)
         .header("Host", "localhost")
-        .header("Origin", "http://localhost")
+        .header("Origin", "http://localhost");
+    if let Some(etag) = etag {
+        request = request.header("If-Match", etag);
+    }
+    request
         .body(body::Body::from(payload.to_string()))
         .expect("valid request")
+}
+
+fn mutation_request(method: &str, uri: &str, cookie: &str, payload: &str) -> Request<body::Body> {
+    let etag = matches!(method, "PUT" | "PATCH" | "DELETE").then_some(INITIAL_NODE_ETAG);
+    mutation_request_with_etag(method, uri, cookie, payload, etag)
+}
+
+#[tokio::test]
+#[serial]
+async fn node_replace_requires_current_if_match_version() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    write_fixture(
+        &nodes_path,
+        concat!(
+            r#"{"id":"n1","kind":"Werkstatt","title":"Alt","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+        ),
+    );
+    let _env = set_gewebe_in_dir(&in_dir);
+    let state = state_for_role(Role::Weber).await?;
+    let (app, cookie) = authenticated_app(state.clone()).await;
+    let payload = r#"{"title":"Neu","kind":"Werkstatt","address":"Neu 1","location":{"lat":53.55,"lon":10.05},"tags":[]}"#;
+
+    let missing = mutation_request_with_etag("PUT", "/nodes/n1", &cookie, payload, None);
+    let response = app.clone().oneshot(missing).await?;
+    assert_eq!(response.status(), StatusCode::PRECONDITION_REQUIRED);
+    let body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let current: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(current["updated_at"], "2026-01-01T00:00:00Z");
+
+    let stale = mutation_request_with_etag(
+        "PUT",
+        "/nodes/n1",
+        &cookie,
+        payload,
+        Some("\"2025-12-31T23:59:59Z\""),
+    );
+    let response = app.clone().oneshot(stale).await?;
+    assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
+    let body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let current: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(current["title"], "Alt");
+    assert_eq!(
+        state
+            .nodes
+            .read()
+            .await
+            .get("n1")
+            .map(|node| node.title.as_str()),
+        Some("Alt"),
+    );
+
+    // RFC 9110 normal request checks take precedence over preconditions: this
+    // endpoint cannot replace a missing node, so it remains a 404 rather than
+    // evaluating the supplied validator as a 412.
+    let missing_node = mutation_request_with_etag(
+        "PUT",
+        "/nodes/missing",
+        &cookie,
+        payload,
+        Some(INITIAL_NODE_ETAG),
+    );
+    assert_eq!(
+        app.clone().oneshot(missing_node).await?.status(),
+        StatusCode::NOT_FOUND,
+    );
+
+    let current = mutation_request_with_etag(
+        "PUT",
+        "/nodes/n1",
+        &cookie,
+        payload,
+        Some(INITIAL_NODE_ETAG),
+    );
+    let response = app.oneshot(current).await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        state
+            .nodes
+            .read()
+            .await
+            .get("n1")
+            .map(|node| node.title.as_str()),
+        Some("Neu"),
+    );
+    assert!(fs::read_to_string(nodes_path)?.contains(r#""title":"Neu""#));
+
+    Ok(())
 }
 
 #[tokio::test]
@@ -205,15 +307,22 @@ async fn weber_can_replace_shared_node_and_delete_node_cascade() -> Result<()> {
     let node: serde_json::Value = serde_json::from_slice(&bytes)?;
     assert_eq!(node["title"], "Gemeinsam gepflegt");
     assert_eq!(node["created_at"], "2026-01-01T00:00:00Z");
+    let current_etag = format!(
+        "\"{}\"",
+        node["updated_at"]
+            .as_str()
+            .expect("replace response has updated_at"),
+    );
 
     // PUT intentionally shares the create contract: coordinates are nested
     // under `location`. Flat `lat`/`lon` fields must fail rather than silently
     // drifting away from the TypeScript client contract.
-    let flat_location = mutation_request(
+    let flat_location = mutation_request_with_etag(
         "PUT",
         "/nodes/n1",
         &cookie,
         r#"{"title":"Falscher Vertrag","kind":"Werkstatt","address":"Neu 1","lat":53.55,"lon":10.05,"tags":[]}"#,
+        Some(&current_etag),
     );
     let response = app.clone().oneshot(flat_location).await?;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -227,7 +336,8 @@ async fn weber_can_replace_shared_node_and_delete_node_cascade() -> Result<()> {
         Some("Gemeinsam gepflegt")
     );
 
-    let delete_node = mutation_request("DELETE", "/nodes/n1", &cookie, "");
+    let delete_node =
+        mutation_request_with_etag("DELETE", "/nodes/n1", &cookie, "", Some(&current_etag));
     let response = app.clone().oneshot(delete_node).await?;
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
     assert!(state.nodes.read().await.get("n1").is_none());
@@ -664,15 +774,29 @@ async fn concurrent_replace_and_delete_leave_one_coherent_jsonl_result() -> Resu
     let replace_status = replace_response?.status();
     let delete_status = delete_response?.status();
 
-    assert_eq!(delete_status, StatusCode::NO_CONTENT);
-    assert!(matches!(
-        replace_status,
-        StatusCode::OK | StatusCode::NOT_FOUND
-    ));
-    assert!(state.nodes.read().await.get("n1").is_none());
-    assert!(state.edges.read().await.get("e1").is_none());
-    assert!(!fs::read_to_string(&nodes_path)?.contains(r#""id":"n1""#));
-    assert!(!fs::read_to_string(&edges_path)?.contains(r#""id":"e1""#));
+    match (replace_status, delete_status) {
+        (StatusCode::OK, StatusCode::PRECONDITION_FAILED) => {
+            assert_eq!(
+                state
+                    .nodes
+                    .read()
+                    .await
+                    .get("n1")
+                    .map(|node| node.title.as_str()),
+                Some("Parallel gepflegt"),
+            );
+            assert!(state.edges.read().await.get("e1").is_some());
+            assert!(fs::read_to_string(&nodes_path)?.contains("Parallel gepflegt"));
+            assert!(fs::read_to_string(&edges_path)?.contains(r#""id":"e1""#));
+        }
+        (StatusCode::NOT_FOUND, StatusCode::NO_CONTENT) => {
+            assert!(state.nodes.read().await.get("n1").is_none());
+            assert!(state.edges.read().await.get("e1").is_none());
+            assert!(!fs::read_to_string(&nodes_path)?.contains(r#""id":"n1""#));
+            assert!(!fs::read_to_string(&edges_path)?.contains(r#""id":"e1""#));
+        }
+        other => panic!("unexpected concurrent mutation result: {other:?}"),
+    }
 
     Ok(())
 }
@@ -691,6 +815,21 @@ async fn guest_cannot_mutate_shared_elements() -> Result<()> {
     let _env = set_gewebe_in_dir(&in_dir);
     let state = state_for_role(Role::Gast).await?;
     let (app, cookie) = authenticated_app(state).await;
+
+    let replace_without_precondition = mutation_request_with_etag(
+        "PUT",
+        "/nodes/n1",
+        &cookie,
+        r#"{"title":"Verboten","kind":"Werkstatt","address":"Neu 1","location":{"lat":53.55,"lon":10.05}}"#,
+        None,
+    );
+    assert_eq!(
+        app.clone()
+            .oneshot(replace_without_precondition)
+            .await?
+            .status(),
+        StatusCode::FORBIDDEN,
+    );
 
     let replace = mutation_request(
         "PUT",

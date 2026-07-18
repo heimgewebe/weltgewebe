@@ -38,6 +38,7 @@
   let formLat = "";
   let formLon = "";
   let formTags = "";
+  let conflictNode: NodeDetails | null = null;
 
   interface NodeDetails {
     id: string;
@@ -121,6 +122,7 @@
     formLon = location ? String(location.lon) : "";
     formTags = (nodeDetails?.tags || fallback?.tags || []).join(", ");
     mutationError = "";
+    conflictNode = null;
     editing = true;
   }
 
@@ -135,6 +137,9 @@
       }
       if (error.status === 409) {
         return "Der Knoten konnte wegen eines Datenkonflikts nicht geändert werden. Es wurde nichts verändert.";
+      }
+      if (error.status === 428) {
+        return "Die geladene Knotenversion ist unvollständig. Bitte öffne den Knoten erneut und versuche es noch einmal.";
       }
     }
     return "Die Änderung konnte nicht gespeichert werden.";
@@ -164,30 +169,50 @@
     saving = true;
     mutationError = "";
     try {
-      const updatedNode = await replaceNode(id, {
-        title: formTitle.trim(),
-        kind: formKind.trim(),
-        address: formAddress.trim(),
-        location: { lat, lon },
-        summary: formSummary.trim() || undefined,
-        info: formInfo.trim() || undefined,
-        tags: Array.from(
-          new Set(
-            formTags
-              .split(",")
-              .map((tag) => tag.trim())
-              .filter(Boolean),
+      const updatedNode = await replaceNode(
+        id,
+        {
+          title: formTitle.trim(),
+          kind: formKind.trim(),
+          address: formAddress.trim(),
+          location: { lat, lon },
+          summary: formSummary.trim() || undefined,
+          info: formInfo.trim() || undefined,
+          tags: Array.from(
+            new Set(
+              formTags
+                .split(",")
+                .map((tag) => tag.trim())
+                .filter(Boolean),
+            ),
           ),
-        ),
-      });
+        },
+        nodeDetails?.updated_at,
+      );
       detailsLoader.setDetails({
         ...(nodeDetails ?? {}),
         ...updatedNode,
       } as NodeDetails);
+      conflictNode = null;
       editing = false;
       dispatch("domainChanged", { kind: "node", id, action: "updated" });
     } catch (error) {
-      mutationError = mutationMessage(error);
+      if (
+        error instanceof ApiRequestError &&
+        error.status === 412 &&
+        error.body
+      ) {
+        const currentNode = error.body as NodeDetails;
+        mutationError =
+          "Der Knoten wurde in der Zwischenzeit geändert. Dein Entwurf bleibt erhalten. Vergleiche ihn mit dem aktuellen Stand und speichere anschließend erneut.";
+        conflictNode = currentNode;
+        detailsLoader.setDetails({
+          ...(nodeDetails ?? {}),
+          ...currentNode,
+        } as NodeDetails);
+      } else {
+        mutationError = mutationMessage(error);
+      }
     } finally {
       saving = false;
     }
@@ -204,10 +229,23 @@
     deleting = true;
     mutationError = "";
     try {
-      await deleteNode(id);
+      await deleteNode(id, nodeDetails?.updated_at);
       dispatch("domainChanged", { kind: "node", id, action: "deleted" });
     } catch (error) {
-      mutationError = mutationMessage(error);
+      if (
+        error instanceof ApiRequestError &&
+        error.status === 412 &&
+        error.body
+      ) {
+        mutationError =
+          "Der Knoten wurde in der Zwischenzeit geändert und konnte nicht gelöscht werden. Die Ansicht zeigt nun den aktuellen Stand.";
+        detailsLoader.setDetails({
+          ...(nodeDetails ?? {}),
+          ...(error.body as object),
+        } as NodeDetails);
+      } else {
+        mutationError = mutationMessage(error);
+      }
     } finally {
       deleting = false;
     }
@@ -256,6 +294,37 @@
       </label>
 
       {#if mutationError}<p class="error" role="alert">{mutationError}</p>{/if}
+      {#if conflictNode}
+        <section class="conflict-current" aria-label="Aktueller Serverstand">
+          <strong>Aktueller Stand im Weltgewebe</strong>
+          <dl>
+            <div>
+              <dt>Titel</dt>
+              <dd>{conflictNode.title}</dd>
+            </div>
+            <div>
+              <dt>Knotenart</dt>
+              <dd>{conflictNode.kind}</dd>
+            </div>
+            {#if conflictNode.summary}<div>
+                <dt>Kurzbeschreibung</dt>
+                <dd>{conflictNode.summary}</dd>
+              </div>{/if}
+            {#if conflictNode.info}<div>
+                <dt>Information</dt>
+                <dd>{conflictNode.info}</dd>
+              </div>{/if}
+            {#if conflictNode.address}<div>
+                <dt>Adresse</dt>
+                <dd>{conflictNode.address}</dd>
+              </div>{/if}
+            {#if conflictNode.tags?.length}<div>
+                <dt>Schlagwörter</dt>
+                <dd>{conflictNode.tags.join(", ")}</dd>
+              </div>{/if}
+          </dl>
+        </section>
+      {/if}
       <div class="form-actions">
         <button
           type="button"
@@ -509,6 +578,29 @@
     margin: 0;
     color: #a33;
     font-weight: 650;
+  }
+  .conflict-current {
+    border: 1px solid color-mix(in srgb, #a33 35%, transparent);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+  }
+  .conflict-current dl {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0.55rem 0 0;
+  }
+  .conflict-current dl div {
+    display: grid;
+    grid-template-columns: minmax(6rem, auto) 1fr;
+    gap: 0.65rem;
+  }
+  .conflict-current dt {
+    font-weight: 600;
+  }
+  .conflict-current dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
   }
   @media (max-width: 420px) {
     .coordinate-grid,

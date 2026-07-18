@@ -133,8 +133,11 @@ Beide begrenzten Pfade:
 - werden durch eine hostweite `flock`-Sperre gegen parallele Deployläufe geschützt;
 - behandeln `db`, `nats` und `caddy` als geschützte Dienste und brechen ab,
   wenn sich deren Containeridentität während des Laufs ändert;
-- verweigern den Start, wenn PostgreSQL oder NATS nicht bereits laufen; auf dem
-  VPS muss zusätzlich Caddy bereits laufen.
+- verweigern den Start, wenn PostgreSQL oder NATS nicht bereits laufen; der
+  API-Scope verlangt auf dem VPS zusätzlich ein laufendes Caddy. Der
+  Migration-Scope darf Caddy dagegen bereits fehlend vorfinden, damit er einen
+  durch eine ausstehende Migration verursachten Gesamtausfall beheben kann. Ein
+  vorhandenes Caddy bleibt in beiden Scopes identitätsgeschützt.
 
 Mit `--plan-only` wird der JSON-Plan erzeugt, ohne einen Container zu verändern.
 Der Scope `api` erzwingt `WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied`.

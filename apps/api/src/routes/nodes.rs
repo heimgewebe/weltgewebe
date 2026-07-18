@@ -2066,7 +2066,7 @@ pub async fn replace_node(
         .get(&id)
         .cloned()
         .ok_or(NodeMutationError::Status(StatusCode::NOT_FOUND))?;
-    let node = Node {
+    let mut node = Node {
         id: existing.id,
         kind: validated.kind,
         title: validated.title,
@@ -2096,13 +2096,16 @@ pub async fn replace_node(
                 .db_pool
                 .as_ref()
                 .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
-            replace_node_in_postgres(pool, &node).await.map_err(|error| match error {
-                NodeWriteError::NotFound => NodeMutationError::Status(StatusCode::NOT_FOUND),
-                other => {
-                    tracing::error!(%other, node_id = %id, "failed to replace node in PostgreSQL");
-                    NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
-                }
-            })?;
+            let persisted_updated_at = replace_node_in_postgres(pool, &node)
+                .await
+                .map_err(|error| match error {
+                    NodeWriteError::NotFound => NodeMutationError::Status(StatusCode::NOT_FOUND),
+                    other => {
+                        tracing::error!(%other, node_id = %id, "failed to replace node in PostgreSQL");
+                        NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                    }
+                })?;
+            node.updated_at = persisted_updated_at.to_rfc3339();
         }
     }
 

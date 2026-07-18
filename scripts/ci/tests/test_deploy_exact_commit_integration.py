@@ -142,7 +142,10 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 """\
                 #!/usr/bin/env bash
                 set -euo pipefail
-                if [[ "${ADVANCE_REMOTE_ON_DEPLOY:-0}" == "1" ]]; then
+                if [[ -n "${TEST_UP_LOG:-}" ]]; then
+                  printf '%s\n' "$*" >> "$TEST_UP_LOG"
+                fi
+                if [[ ("${ADVANCE_REMOTE_ON_MIGRATION:-0}" == "1" && " $* " == *" --deploy-scope migration "*) || ("${ADVANCE_REMOTE_ON_DEPLOY:-0}" == "1" && " $* " != *" --deploy-scope migration "*) ]]; then
                   work="$(mktemp -d)"
                   git clone --quiet "$TEST_REMOTE" "$work/repo"
                   git -C "$work/repo" config user.name "Integration Test"
@@ -404,11 +407,17 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             "TEST_COMMIT": self.commit,
             "TEST_REMOTE": str(self.remote),
             "TEST_WEB_ARTIFACT": str(self.artifact),
+            "TEST_UP_LOG": str(self.root / "weltgewebe-up.log"),
         }
 
-    def deploy(self, *, advance: bool) -> subprocess.CompletedProcess[str]:
+    def deploy(
+        self, *, advance: bool, advance_after_migration: bool = False
+    ) -> subprocess.CompletedProcess[str]:
         deploy_env = self.base_environment()
         deploy_env["ADVANCE_REMOTE_ON_DEPLOY"] = "1" if advance else "0"
+        deploy_env["ADVANCE_REMOTE_ON_MIGRATION"] = (
+            "1" if advance_after_migration else "0"
+        )
         argv = self.privileged(
             [
                 "env",
@@ -481,12 +490,31 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         result = self.deploy(advance=False)
         self.restore_test_ownership()
         self.assertEqual(result.returncode, 0, result.stderr)
+        deploy_calls = (self.root / "weltgewebe-up.log").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(deploy_calls), 2)
+        self.assertIn("--deploy-scope migration", deploy_calls[0])
+        self.assertNotIn("--with-caddy", deploy_calls[0])
+        self.assertIn("--with-caddy", deploy_calls[1])
+        self.assertNotIn("--deploy-scope migration", deploy_calls[1])
         receipt_path = self.state / "receipts" / f"{self.commit}.json"
         receipt = json.loads(receipt_path.read_text())
         self.assertEqual(receipt["result"], "verified")
         self.assertEqual(receipt["observed_main_after_deploy"], self.commit)
         current = (self.state / "current.json").resolve()
         self.assertEqual(current, receipt_path)
+
+    def test_main_advancing_after_migration_is_superseded_before_full_deploy(self) -> None:
+        result = self.deploy(advance=False, advance_after_migration=True)
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 75, result.stderr)
+        deploy_calls = (self.root / "weltgewebe-up.log").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(deploy_calls), 1)
+        self.assertIn("--deploy-scope migration", deploy_calls[0])
+        receipt_path = self.state / "receipts" / f"{self.commit}.json"
+        receipt = json.loads(receipt_path.read_text())
+        self.assertEqual(receipt["result"], "superseded_after_migration")
+        self.assertNotEqual(receipt["observed_main_after_deploy"], self.commit)
+        self.assertFalse((self.state / "current.json").exists())
 
     def test_main_advancing_during_deploy_is_not_marked_current(self) -> None:
         result = self.deploy(advance=True)

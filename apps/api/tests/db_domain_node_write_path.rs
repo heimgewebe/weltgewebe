@@ -85,6 +85,8 @@ const NODE_B: &str = "writepath-node-bbbbbbbbb";
 const NODE_404: &str = "writepath-node-not-found";
 const NODE_NULL_LOC: &str = "writepath-node-null-location";
 const NODE_BAD_PAYLOAD: &str = "writepath-node-bad-payload";
+const SEEDED_NODE_ETAG: &str = "\"2026-01-01T00:00:00+00:00\"";
+const JSONL_NODE_ETAG: &str = "\"2024-01-01T00:00:00Z\"";
 
 async fn clean(pool: &PgPool) {
     pool.execute("DELETE FROM domain_edges WHERE id LIKE 'writepath-edge-%'")
@@ -119,8 +121,10 @@ async fn seed_node(pool: &PgPool, id: &str, info: Option<&str>, steckbrief: Opti
         (None, None) => "{}".to_string(),
     };
     sqlx::query(
-        "INSERT INTO domain_nodes (id, kind, title, lat, lon, payload) \
-         VALUES ($1, 'test', 'Test Node', 53.5, 10.0, $2::jsonb)",
+        "INSERT INTO domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) \
+         VALUES ($1, 'test', 'Test Node', 53.5, 10.0, \
+                 '2026-01-01T00:00:00Z'::timestamptz, \
+                 '2026-01-01T00:00:00Z'::timestamptz, $2::jsonb)",
     )
     .bind(id)
     .bind(&payload)
@@ -259,7 +263,7 @@ async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, 
     Ok((app, cookie, state))
 }
 
-fn patch_node_req(cookie: &str, id: &str, json_body: &str) -> Request<body::Body> {
+fn patch_node_req(cookie: &str, id: &str, json_body: &str, etag: &str) -> Request<body::Body> {
     Request::builder()
         .method("PATCH")
         .uri(format!("/nodes/{id}"))
@@ -267,11 +271,12 @@ fn patch_node_req(cookie: &str, id: &str, json_body: &str) -> Request<body::Body
         .header("Host", "localhost")
         .header("Origin", "http://localhost")
         .header("Cookie", cookie)
+        .header("If-Match", etag)
         .body(body::Body::from(json_body.to_string()))
         .unwrap()
 }
 
-fn replace_node_req(cookie: &str, id: &str, title: &str) -> Request<body::Body> {
+fn replace_node_req(cookie: &str, id: &str, title: &str, etag: &str) -> Request<body::Body> {
     Request::builder()
         .method("PUT")
         .uri(format!("/nodes/{id}"))
@@ -279,6 +284,7 @@ fn replace_node_req(cookie: &str, id: &str, title: &str) -> Request<body::Body> 
         .header("Host", "localhost")
         .header("Origin", "http://localhost")
         .header("Cookie", cookie)
+        .header("If-Match", etag)
         .body(body::Body::from(
             serde_json::json!({
                 "title": title,
@@ -312,7 +318,12 @@ async fn postgres_node_patch_persists_and_reload_sees_change() -> Result<()> {
 
     let res = app
         .clone()
-        .oneshot(patch_node_req(&cookie, NODE_A, r#"{"info": "new info"}"#))
+        .oneshot(patch_node_req(
+            &cookie,
+            NODE_A,
+            r#"{"info": "new info"}"#,
+            SEEDED_NODE_ETAG,
+        ))
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
 
@@ -371,7 +382,12 @@ async fn postgres_node_patch_has_no_jsonl_side_effect() -> Result<()> {
         postgres_write_app(pool.clone(), "10000000-0000-0000-0000-000000000002").await?;
 
     let res = app
-        .oneshot(patch_node_req(&cookie, NODE_B, r#"{"info": "updated"}"#))
+        .oneshot(patch_node_req(
+            &cookie,
+            NODE_B,
+            r#"{"info": "updated"}"#,
+            SEEDED_NODE_ETAG,
+        ))
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
 
@@ -404,7 +420,12 @@ async fn postgres_node_patch_not_found_returns_404() -> Result<()> {
         postgres_write_app(pool.clone(), "10000000-0000-0000-0000-000000000003").await?;
 
     let res = app
-        .oneshot(patch_node_req(&cookie, NODE_404, r#"{"info": "ghost"}"#))
+        .oneshot(patch_node_req(
+            &cookie,
+            NODE_404,
+            r#"{"info": "ghost"}"#,
+            SEEDED_NODE_ETAG,
+        ))
         .await?;
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
 
@@ -513,7 +534,12 @@ async fn postgres_read_jsonl_node_write_is_blocked() -> Result<()> {
         .with_state(state.clone());
 
     let res = app
-        .oneshot(patch_node_req(&cookie, NODE_A, r#"{"info": "blocked"}"#))
+        .oneshot(patch_node_req(
+            &cookie,
+            NODE_A,
+            r#"{"info": "blocked"}"#,
+            SEEDED_NODE_ETAG,
+        ))
         .await?;
     assert_eq!(res.status(), StatusCode::CONFLICT);
 
@@ -562,7 +588,7 @@ async fn postgres_node_patch_removes_steckbrief() -> Result<()> {
 
     // Patch with no info change (no-op for info) — only steckbrief cleanup.
     let res = app
-        .oneshot(patch_node_req(&cookie, NODE_A, r#"{}"#))
+        .oneshot(patch_node_req(&cookie, NODE_A, r#"{}"#, SEEDED_NODE_ETAG))
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
 
@@ -695,6 +721,7 @@ async fn jsonl_default_node_patch_compiles_and_routes_correctly() -> Result<()> 
             &cookie,
             "writepath-node-jsonl-1",
             r#"{"info": "via jsonl"}"#,
+            JSONL_NODE_ETAG,
         ))
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
@@ -1504,7 +1531,138 @@ async fn delete_node_rejects_invalid_postgres_edge_type_without_partial_mutation
     Ok(())
 }
 
-/// R. Distinct-node mutations cannot consume the whole five-connection pool
+/// R. The ETag returned by a PostgreSQL PUT must match the persisted
+/// microsecond-precision timestamp and be reusable immediately.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_replace_response_etag_is_reusable() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+    seed_node(&pool, NODE_A, Some("before"), None).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, _state) =
+        postgres_write_app(pool.clone(), "10000000-0000-0000-0000-000000000096").await?;
+
+    let first_response = app
+        .clone()
+        .oneshot(replace_node_req(
+            &cookie,
+            NODE_A,
+            "First replace",
+            SEEDED_NODE_ETAG,
+        ))
+        .await?;
+    assert_eq!(first_response.status(), StatusCode::OK);
+    let first_body = body::to_bytes(first_response.into_body(), usize::MAX).await?;
+    let first_node: serde_json::Value = serde_json::from_slice(&first_body)?;
+    let reusable_etag = format!(
+        "\"{}\"",
+        first_node["updated_at"]
+            .as_str()
+            .expect("replace response has updated_at"),
+    );
+
+    let second_response = app
+        .oneshot(replace_node_req(
+            &cookie,
+            NODE_A,
+            "Second replace",
+            &reusable_etag,
+        ))
+        .await?;
+    assert_eq!(second_response.status(), StatusCode::OK);
+    let second_body = body::to_bytes(second_response.into_body(), usize::MAX).await?;
+    let second_node: serde_json::Value = serde_json::from_slice(&second_body)?;
+    assert_eq!(second_node["title"], "Second replace");
+
+    let persisted_updated_at: chrono::DateTime<chrono::Utc> =
+        sqlx::query_scalar("SELECT updated_at FROM domain_nodes WHERE id = $1")
+            .bind(NODE_A)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(second_node["updated_at"], persisted_updated_at.to_rfc3339(),);
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// S. A second API instance must compare `If-Match` against PostgreSQL,
+/// not against its stale process-local cache.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn stale_second_instance_cache_cannot_overwrite_newer_postgres_node() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+    seed_node(&pool, NODE_A, Some("before"), None).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (first_app, first_cookie, _first_state) =
+        postgres_write_app(pool.clone(), "10000000-0000-0000-0000-000000000097").await?;
+    let (second_app, second_cookie, second_state) =
+        postgres_write_app(pool.clone(), "10000000-0000-0000-0000-000000000098").await?;
+
+    assert_eq!(
+        second_state
+            .nodes
+            .read()
+            .await
+            .get(NODE_A)
+            .map(|node| node.updated_at.as_str()),
+        Some("2026-01-01T00:00:00+00:00"),
+    );
+
+    let first_response = first_app
+        .oneshot(patch_node_req(
+            &first_cookie,
+            NODE_A,
+            r#"{"info": "first instance wins"}"#,
+            SEEDED_NODE_ETAG,
+        ))
+        .await?;
+    assert_eq!(first_response.status(), StatusCode::OK);
+    let first_body = body::to_bytes(first_response.into_body(), usize::MAX).await?;
+    let first_node: serde_json::Value = serde_json::from_slice(&first_body)?;
+    assert_eq!(first_node["info"], "first instance wins");
+    assert_ne!(first_node["updated_at"], "2026-01-01T00:00:00+00:00");
+
+    let stale_response = second_app
+        .oneshot(patch_node_req(
+            &second_cookie,
+            NODE_A,
+            r#"{"info": "stale overwrite"}"#,
+            SEEDED_NODE_ETAG,
+        ))
+        .await?;
+    assert_eq!(stale_response.status(), StatusCode::PRECONDITION_FAILED);
+    let stale_body = body::to_bytes(stale_response.into_body(), usize::MAX).await?;
+    let current_node: serde_json::Value = serde_json::from_slice(&stale_body)?;
+    assert_eq!(current_node["info"], "first instance wins");
+    assert_eq!(current_node["updated_at"], first_node["updated_at"]);
+
+    let persisted_info: Option<String> =
+        sqlx::query_scalar("SELECT payload->>'info' FROM domain_nodes WHERE id = $1")
+            .bind(NODE_A)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(persisted_info.as_deref(), Some("first instance wins"));
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// T. Distinct-node mutations cannot consume the whole five-connection pool
 /// with advisory-lock transactions while every request waits for a second
 /// connection to perform its update.
 #[tokio::test]
@@ -1539,16 +1697,36 @@ async fn concurrent_distinct_node_replaces_preserve_pool_headroom() -> Result<()
 
     let requests = async {
         tokio::join!(
-            app.clone()
-                .oneshot(replace_node_req(&cookie, ids[0], "Parallel 1")),
-            app.clone()
-                .oneshot(replace_node_req(&cookie, ids[1], "Parallel 2")),
-            app.clone()
-                .oneshot(replace_node_req(&cookie, ids[2], "Parallel 3")),
-            app.clone()
-                .oneshot(replace_node_req(&cookie, ids[3], "Parallel 4")),
-            app.clone()
-                .oneshot(replace_node_req(&cookie, ids[4], "Parallel 5")),
+            app.clone().oneshot(replace_node_req(
+                &cookie,
+                ids[0],
+                "Parallel 1",
+                SEEDED_NODE_ETAG
+            )),
+            app.clone().oneshot(replace_node_req(
+                &cookie,
+                ids[1],
+                "Parallel 2",
+                SEEDED_NODE_ETAG
+            )),
+            app.clone().oneshot(replace_node_req(
+                &cookie,
+                ids[2],
+                "Parallel 3",
+                SEEDED_NODE_ETAG
+            )),
+            app.clone().oneshot(replace_node_req(
+                &cookie,
+                ids[3],
+                "Parallel 4",
+                SEEDED_NODE_ETAG
+            )),
+            app.clone().oneshot(replace_node_req(
+                &cookie,
+                ids[4],
+                "Parallel 5",
+                SEEDED_NODE_ETAG
+            )),
         )
     };
     let responses = tokio::time::timeout(Duration::from_secs(10), requests)
