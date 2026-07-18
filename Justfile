@@ -160,5 +160,8 @@ smoke-account-create:
 contracts-domain-check:
 	./scripts/contracts-domain-check.sh
 
+contracts-search-check:
+	python3 -m scripts.search.validate_relevance_goldset
+
 check-demo-data:
 	pnpm exec tsx scripts/verify-demo-data.ts
