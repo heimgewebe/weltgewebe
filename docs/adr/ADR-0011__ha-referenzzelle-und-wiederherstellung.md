@@ -32,6 +32,7 @@ Die T004-Referenzzelle verwendet drei explizite Zonen und folgende Verträge:
 - dynamisch erzeugte kurzlebige Secrets statt eingecheckter Zugangsdaten,
 - einen kontrollierten Ausfall des Worker-Knotens, der den PostgreSQL-Primary trägt,
 - Backup und Point-in-Time-Restore, während diese Fehlerdomäne weiterhin ausgefallen ist,
+- einen für diesen degradierten Beweis gezielt auf den neuen Primary gebundenen Backupauftrag,
 - einen neuen zweiten kind-Cluster für den Point-in-Time-Restore.
 
 Alle Drittimages und das CloudNativePG-Releaseartefakt sind per SHA-256 beziehungsweise OCI-Digest gebunden.

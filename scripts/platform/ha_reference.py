@@ -642,30 +642,101 @@ def nats_message_count(kubectl: str) -> int:
     return int(document.get("state", {}).get("messages", -1))
 
 
-def wait_backup_complete(kubectl: str, name: str) -> dict[str, Any]:
-    def probe():
-        document = json.loads(
-            ref.output(
-                [
-                    kubectl,
-                    "-n",
-                    "weltgewebe-data",
-                    "get",
-                    f"backup/{name}",
-                    "-o",
-                    "json",
-                ]
-            )
-        )
-        return (
-            document
-            if str(document.get("status", {}).get("phase", "")).lower() == "completed"
-            else False
-        )
+def backup_document(name: str) -> dict[str, Any]:
+    return {
+        "apiVersion": "postgresql.cnpg.io/v1",
+        "kind": "Backup",
+        "metadata": {"name": name, "namespace": "weltgewebe-data"},
+        "spec": {
+            "method": "barmanObjectStore",
+            "target": "primary",
+            "cluster": {"name": "postgres-ha"},
+        },
+    }
 
-    return wait_until(
-        f"CloudNativePG backup {name}", probe, timeout_seconds=1200, interval=5
+
+def wait_backup_complete(
+    kubectl: str,
+    name: str,
+    *,
+    timeout_seconds: int = 1200,
+    interval: float = 5,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    last_status: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        try:
+            document = json.loads(
+                ref.output(
+                    [
+                        kubectl,
+                        "-n",
+                        "weltgewebe-data",
+                        "get",
+                        f"backup/{name}",
+                        "-o",
+                        "json",
+                    ]
+                )
+            )
+        except (subprocess.CalledProcessError, json.JSONDecodeError):
+            time.sleep(interval)
+            continue
+        last_status = document.get("status", {})
+        phase = str(last_status.get("phase", "")).lower()
+        if phase == "completed":
+            return document
+        if phase in {"failed", "error"}:
+            raise ref.ProofError(
+                f"CloudNativePG backup {name} entered terminal phase {phase}: "
+                f"{json.dumps(last_status, sort_keys=True)}"
+            )
+        time.sleep(interval)
+    raise ref.ProofError(
+        f"timed out waiting for CloudNativePG backup {name}; "
+        f"last_status={json.dumps(last_status, sort_keys=True)}"
     )
+
+
+def ha_diagnostic_snapshot(kubectl: str, name: str) -> None:
+    ref.diagnostic_snapshot(kubectl, name)
+    target = CACHE / "failures" / name
+    target.mkdir(parents=True, exist_ok=True)
+    commands = {
+        "postgres-backup-and-cluster.yaml": [
+            kubectl,
+            "-n",
+            "weltgewebe-data",
+            "get",
+            "backups,clusters",
+            "-o",
+            "yaml",
+        ],
+        "cnpg-operator.log": [
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "logs",
+            "deployment/cnpg-controller-manager",
+            "--all-containers=true",
+            "--tail=2000",
+        ],
+        "postgres-instances.log": [
+            kubectl,
+            "-n",
+            "weltgewebe-data",
+            "logs",
+            "-l",
+            "cnpg.io/cluster",
+            "--all-containers=true",
+            "--prefix=true",
+            "--tail=2000",
+            "--max-log-requests=10",
+        ],
+    }
+    for filename, argv in commands.items():
+        result = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True)
+        (target / filename).write_text(result.stdout + result.stderr, encoding="utf-8")
 
 
 def restore_cluster_document(target_time: str) -> dict[str, Any]:
@@ -898,18 +969,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         after_id = "00000000-0000-4000-8000-00000000c004"
         insert_domain_node(kubectl, before_id, "T004 before PITR target")
         backup_name = f"t004-{commit[:8]}"
-        ref.apply_yaml(
-            kubectl,
-            {
-                "apiVersion": "postgresql.cnpg.io/v1",
-                "kind": "Backup",
-                "metadata": {"name": backup_name, "namespace": "weltgewebe-data"},
-                "spec": {
-                    "method": "barmanObjectStore",
-                    "cluster": {"name": "postgres-ha"},
-                },
-            },
-        )
+        ref.apply_yaml(kubectl, backup_document(backup_name))
         backup = wait_backup_complete(kubectl, backup_name)
         target_time = psql(
             kubectl,
@@ -1027,6 +1087,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             "backup": {
                 "name": backup_name,
                 "phase": backup.get("status", {}).get("phase"),
+                "target": backup.get("spec", {}).get("target"),
                 "target_time": target_time,
             },
             "restore": {
@@ -1056,10 +1117,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     except Exception:
         if created_primary:
             ref.configure_cluster_access(kind, args.cluster)
-            ref.diagnostic_snapshot(kubectl, args.cluster)
+            ha_diagnostic_snapshot(kubectl, args.cluster)
         if created_restore:
             ref.configure_cluster_access(kind, restore_name)
-            ref.diagnostic_snapshot(kubectl, restore_name)
+            ha_diagnostic_snapshot(kubectl, restore_name)
         raise
     finally:
         if stopped_node:

@@ -4,6 +4,7 @@ import importlib.util
 import inspect
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -135,6 +136,57 @@ class KubernetesHaContractTests(unittest.TestCase):
             "postgres-ha",
         )
 
+    def test_degraded_backup_targets_the_current_primary(self) -> None:
+        document = self.ha.backup_document("proof-backup")
+        self.assertEqual(document["metadata"]["name"], "proof-backup")
+        self.assertEqual(document["spec"]["method"], "barmanObjectStore")
+        self.assertEqual(document["spec"]["target"], "primary")
+        self.assertEqual(document["spec"]["cluster"], {"name": "postgres-ha"})
+
+    def test_backup_wait_reports_terminal_status(self) -> None:
+        failed = json.dumps(
+            {
+                "status": {
+                    "phase": "failed",
+                    "error": "object store unavailable",
+                }
+            }
+        )
+        with mock.patch.object(self.ha.ref, "output", return_value=failed):
+            with self.assertRaisesRegex(
+                self.ha.ref.ProofError, "object store unavailable"
+            ):
+                self.ha.wait_backup_complete("kubectl", "proof-backup")
+
+    def test_ha_failure_snapshot_captures_backup_and_cnpg_logs(self) -> None:
+        completed = mock.Mock(stdout="diagnostic", stderr="")
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory)
+            with (
+                mock.patch.object(self.ha, "CACHE", cache),
+                mock.patch.object(self.ha.ref, "diagnostic_snapshot") as base_snapshot,
+                mock.patch.object(
+                    self.ha.subprocess, "run", return_value=completed
+                ) as run,
+            ):
+                self.ha.ha_diagnostic_snapshot("kubectl", "proof-cluster")
+            base_snapshot.assert_called_once_with("kubectl", "proof-cluster")
+            target = cache / "failures" / "proof-cluster"
+            self.assertEqual(
+                {path.name for path in target.iterdir()},
+                {
+                    "postgres-backup-and-cluster.yaml",
+                    "cnpg-operator.log",
+                    "postgres-instances.log",
+                },
+            )
+            argv = [call.args[0] for call in run.call_args_list]
+            self.assertTrue(any("backups,clusters" in command for command in argv))
+            self.assertTrue(
+                any("deployment/cnpg-controller-manager" in command for command in argv)
+            )
+            self.assertTrue(any("cnpg.io/cluster" in command for command in argv))
+
     def test_degraded_proof_requires_the_failed_zone_to_stay_down(self) -> None:
         with mock.patch.object(self.ha.ref, "output", return_value="false") as output:
             self.ha.require_container_stopped("worker-zone-b")
@@ -163,6 +215,7 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertGreater(checks[1], source.index("PITR data comparison failed"))
         self.assertNotIn('ref.run(["docker", "start", stopped_node]', source)
         self.assertIn('"remained_unavailable_through_backup_and_restore": True', source)
+        self.assertIn('"target": backup.get("spec", {}).get("target")', source)
         self.assertIn('"automatic reintegration of the failed zone"', source)
 
     def test_zone_contract_requires_three_distinct_zones(self) -> None:
