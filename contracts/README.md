@@ -41,6 +41,22 @@ Das Script führt zwei Schritte aus:
 
 Sind alle Checks erfolgreich, ist der Stand kompatibel zur CI-Validierung.
 
+## Semantic-Search-Goldset validieren
+
+Der Vertrag unter `contracts/search/relevance-goldset.schema.json` beschreibt synthetische, sichtbarkeitsgebundene Relevanzfälle für die geplante hybride Knotensuche. Das eingecheckte Beispiel wird ohne externe Python-Abhängigkeit geprüft:
+
+```sh
+python3 -m scripts.search.validate_relevance_goldset
+```
+
+Oder über Just:
+
+```sh
+just contracts-search-check
+```
+
+Der Validator prüft Schemaform, eindeutige Fall-IDs, sichtbare relevante Knoten, unsichtbare Ausschlüsse und das Verbot E-Mail-ähnlicher Testdaten. Er bewertet noch keine reale Suchqualität; Baselines und Modellkandidaten folgen in T002.
+
 ### Typische Fehler & Hinweise
 
 - **„ajv: command not found“**

@@ -44,6 +44,7 @@ Diese Dokumente präzisieren Teilbereiche, sind aber nicht als eigene kanonische
 - [Weltgewebe OS](../architecture/weltgewebe-os.md)
 - [Architecture Overview](../architecture/overview.md)
 - [Security Architecture](../architecture/security.md)
+- [Semantic Search v1](../architecture/semantic-search.md)
 - [Techstack](techstack.md)
 - [Datenmodell](datenmodell.md)
 - [Repositorystruktur](architekturstruktur.md)

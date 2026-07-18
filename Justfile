@@ -66,6 +66,7 @@ check:     # quick hygiene check
 	just test
 	just check-demo-data
 	just contracts-domain-check
+	just contracts-search-check
 	cargo deny check
 
 # ---------- Compose ----------

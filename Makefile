@@ -28,6 +28,7 @@ validate-core:
 	python3 -m scripts.docmeta.export_docs_index
 	python3 -m scripts.docmeta.generate_audit_gaps
 	python3 -m scripts.docmeta.check_links
+	python3 -m scripts.search.validate_relevance_goldset
 
 generate-system-map:
 	python3 -m scripts.docmeta.generate_system_map
