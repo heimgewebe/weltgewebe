@@ -476,36 +476,46 @@ async fn two_instances_and_restart_share_truth_and_event_receipts() -> Result<()
     assert!(outbox::record_consumed_once(&pool, "test-consumer", 9_000_001).await?);
     assert!(!outbox::record_consumed_once(&pool, "test-consumer", 9_000_001).await?);
 
-    // Failed relay attempts are delayed and ultimately quarantined.
+    // Failed relay attempts are delayed and ultimately quarantined. Keep the
+    // synthetic event outside the live relays' claim window so this assertion
+    // tests failure handling rather than racing the two workers started above.
     let failed_id: i64 = sqlx::query_scalar(
         "INSERT INTO domain_outbox \
-         (aggregate_type, aggregate_id, event_type, payload) \
-         VALUES ('node', 'multi-instance-failed', 'domain.node.updated', '{}'::jsonb) \
+         (aggregate_type, aggregate_id, event_type, payload, attempt_count, available_at) \
+         VALUES ('node', 'multi-instance-failed', 'domain.node.updated', '{}'::jsonb, 1, \
+                 NOW() + INTERVAL '1 hour') \
          RETURNING id",
     )
     .fetch_one(&pool)
     .await?;
-    let claimed = outbox::claim_pending(&pool, 32).await?;
-    let failed = claimed
-        .iter()
-        .find(|event| event.id == failed_id)
-        .expect("synthetic event claimed");
-    assert!(!outbox::mark_failed(&pool, failed.id, failed.attempt_count, "temporary").await?);
-    assert!(outbox::mark_failed(&pool, failed.id, 10, "terminal").await?);
-    let quarantined: bool =
-        sqlx::query_scalar("SELECT quarantined_at IS NOT NULL FROM domain_outbox WHERE id = $1")
-            .bind(failed_id)
-            .fetch_one(&pool)
-            .await?;
-    assert!(quarantined);
-    assert!(outbox::requeue_quarantined(&pool, failed_id).await?);
-    let requeued: (bool, i32, bool) = sqlx::query_as(
-        "SELECT quarantined_at IS NULL, attempt_count, available_at <= NOW()          FROM domain_outbox WHERE id = $1",
+    assert!(!outbox::mark_failed(&pool, failed_id, 1, "temporary").await?);
+    let delayed: (bool, Option<String>, i32) = sqlx::query_as(
+        "SELECT available_at > NOW(), last_error, attempt_count \
+         FROM domain_outbox WHERE id = $1",
     )
     .bind(failed_id)
     .fetch_one(&pool)
     .await?;
-    assert_eq!(requeued, (true, 0, true));
+    assert_eq!(delayed, (true, Some("temporary".to_string()), 1));
+    assert!(outbox::mark_failed(&pool, failed_id, 10, "terminal").await?);
+    let quarantined: (bool, Option<String>) = sqlx::query_as(
+        "SELECT quarantined_at IS NOT NULL, last_error \
+         FROM domain_outbox WHERE id = $1",
+    )
+    .bind(failed_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(quarantined, (true, Some("terminal".to_string())));
+    assert!(outbox::requeue_quarantined(&pool, failed_id).await?);
+    let requeued: (bool, i32, bool, bool) = sqlx::query_as(
+        "SELECT quarantined_at IS NULL, attempt_count, available_at <= NOW(), \
+                last_error IS NULL \
+         FROM domain_outbox WHERE id = $1",
+    )
+    .bind(failed_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(requeued, (true, 0, true, true));
     assert!(!outbox::requeue_quarantined(&pool, failed_id).await?);
 
     reset(&pool).await;
