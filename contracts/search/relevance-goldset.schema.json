@@ -2,50 +2,256 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://weltgewebe.org/schemas/search/relevance-goldset.schema.json",
   "title": "Weltgewebe Semantic Search Relevance Goldset",
-  "description": "Synthetic, visibility-bound relevance cases for deterministic evaluation of hybrid node search.",
+  "description": "Synthetic node corpus and visibility-bound relevance cases for deterministic evaluation of hybrid node search.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "dataset_id", "description", "privacy_class", "cases"],
+  "required": [
+    "schema_version",
+    "dataset_id",
+    "description",
+    "privacy_class",
+    "document_revision",
+    "nodes",
+    "cases"
+  ],
   "properties": {
-    "schema_version": {"const": 1},
-    "dataset_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,79}$"},
-    "description": {"type": "string", "minLength": 1, "maxLength": 500},
-    "privacy_class": {"const": "synthetic"},
-    "cases": {
+    "schema_version": {
+      "const": 2
+    },
+    "dataset_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,79}$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "privacy_class": {
+      "const": "synthetic"
+    },
+    "document_revision": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,79}$"
+    },
+    "nodes": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 12,
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "language", "query", "visibility_context", "relevant_node_ids", "expected_rank_class", "excluded_node_ids", "rationale", "contains_personal_data"],
+        "required": [
+          "id",
+          "language",
+          "title",
+          "summary",
+          "body",
+          "tags",
+          "kind",
+          "status",
+          "visibility_scopes",
+          "contains_personal_data",
+          "synthetic_source"
+        ],
         "properties": {
-          "id": {"type": "string", "pattern": "^search-[a-z0-9][a-z0-9-]{2,79}$"},
-          "language": {"type": "string", "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$"},
-          "query": {"type": "string", "minLength": 1, "maxLength": 300},
+          "id": {
+            "type": "string",
+            "pattern": "^syn-node-[a-z0-9][a-z0-9-]{2,79}$"
+          },
+          "language": {
+            "type": "string",
+            "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "tags": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "status": {
+            "enum": [
+              "active",
+              "hidden",
+              "deleted"
+            ]
+          },
+          "visibility_scopes": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "public",
+                "local",
+                "neighbourhood"
+              ]
+            }
+          },
+          "contains_personal_data": {
+            "const": false
+          },
+          "synthetic_source": {
+            "const": "authored"
+          }
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "language",
+          "query",
+          "natural_language",
+          "visibility_context",
+          "relevant_node_ids",
+          "expected_rank_class",
+          "excluded_node_ids",
+          "rationale",
+          "contains_personal_data"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^search-[a-z0-9][a-z0-9-]{2,79}$"
+          },
+          "language": {
+            "type": "string",
+            "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$"
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "natural_language": {
+            "type": "boolean"
+          },
           "visibility_context": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["viewer_scope", "visible_node_ids", "active_filters"],
+            "required": [
+              "viewer_scope",
+              "visible_node_ids",
+              "active_filters"
+            ],
             "properties": {
-              "viewer_scope": {"enum": ["public", "local", "neighbourhood"]},
-              "visible_node_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^syn-node-[a-z0-9][a-z0-9-]{2,79}$"}},
+              "viewer_scope": {
+                "enum": [
+                  "public",
+                  "local",
+                  "neighbourhood"
+                ]
+              },
+              "visible_node_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^syn-node-[a-z0-9][a-z0-9-]{2,79}$"
+                }
+              },
               "active_filters": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["kinds", "tags", "languages"],
+                "required": [
+                  "kinds",
+                  "tags",
+                  "languages"
+                ],
                 "properties": {
-                  "kinds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
-                  "tags": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 64}},
-                  "languages": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$"}}
+                  "kinds": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "tags": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    }
+                  },
+                  "languages": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$"
+                    }
+                  }
                 }
               }
             }
           },
-          "relevant_node_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^syn-node-[a-z0-9][a-z0-9-]{2,79}$"}},
-          "expected_rank_class": {"enum": ["exact_title", "exact_tag", "title_prefix", "typo", "full_text", "semantic"]},
-          "excluded_node_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^syn-node-[a-z0-9][a-z0-9-]{2,79}$"}},
-          "rationale": {"type": "string", "minLength": 1, "maxLength": 1000},
-          "contains_personal_data": {"const": false}
+          "relevant_node_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^syn-node-[a-z0-9][a-z0-9-]{2,79}$"
+            }
+          },
+          "expected_rank_class": {
+            "enum": [
+              "exact_title",
+              "exact_tag",
+              "title_prefix",
+              "typo",
+              "full_text",
+              "semantic"
+            ]
+          },
+          "excluded_node_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^syn-node-[a-z0-9][a-z0-9-]{2,79}$"
+            }
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "contains_personal_data": {
+            "const": false
+          }
         }
       }
     }

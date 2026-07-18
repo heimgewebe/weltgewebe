@@ -15,7 +15,7 @@ Source: scripts/docmeta/generate_system_map.py
 
 |id|path|role|organ|status|last_reviewed|depends_on|verifies_with|missing_scripts|
 |---|---|---|---|---|---|---|---|---|
-|architecture.semantic-search|architecture/semantic-search.md|norm|product-domain|canonical|2026-07-18|overview, architecture.weltgewebe-os, specs.garnrolle-knoten-faden|contracts/search/examples/relevance-goldset.example.json, contracts/search/relevance-goldset.schema.json, scripts/ci/tests/test_semantic_search_contract.py, scripts/search/validate_relevance_goldset.py||
+|architecture.semantic-search|architecture/semantic-search.md|norm|product-domain|canonical|2026-07-18|overview, architecture.weltgewebe-os, specs.garnrolle-knoten-faden|contracts/search/examples/relevance-benchmark.heim-pc.json, contracts/search/examples/relevance-goldset.example.json, contracts/search/relevance-goldset.schema.json, scripts/ci/tests/test_semantic_search_contract.py, scripts/search/benchmark_relevance.py, scripts/search/validate_relevance_goldset.py||
 |architecture.weltgewebe-os|architecture/weltgewebe-os.md|norm|governance|canonical|2026-07-15|overview|||
 |docmeta.schema|architecture/docmeta.schema.md|norm|docmeta|canonical|2026-06-09||scripts/docmeta/check_doc_review_age.py, scripts/docmeta/check_repo_index_consistency.py, scripts/docmeta/generate_system_map.py, scripts/docmeta/validate_relations.py||
 |overview|architecture/overview.md|norm|governance|canonical|2026-07-11||||

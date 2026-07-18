@@ -1,0 +1,1684 @@
+{
+  "schema_version": 1,
+  "kind": "weltgewebe_semantic_search_relevance_benchmark",
+  "benchmark_revision": "semantic-search-benchmark-v1",
+  "measured_at": "2026-07-18T20:28:04.077903Z",
+  "dataset": {
+    "path": "contracts/search/examples/relevance-goldset.example.json",
+    "dataset_id": "weltgewebe-semantic-search-v1-synthetic-v2",
+    "document_revision": "node-document-v1",
+    "sha256": "e0cf7f362242bf13c3f69aa3cc1846c35bf615410cc5deee94be2e197bded56c",
+    "schema_sha256": "0643fec713e3f883896319701402645c987cc684ca35652feb75f0381395bdc0",
+    "node_count": 22,
+    "case_count": 24,
+    "privacy_class": "synthetic"
+  },
+  "benchmark_source_sha256": "ec6f9646aaf43b5cbf465280df9b67aa62c27125248e928a157a85be78d877fb",
+  "environment": {
+    "host_class": "heim-pc-local",
+    "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+    "python": "3.10.12",
+    "ollama_url": "http://127.0.0.1:11434",
+    "external_cost_usd": 0
+  },
+  "baselines": [
+    {
+      "name": "current_client_substring",
+      "quality": {
+        "case_count": 24,
+        "natural_case_count": 19,
+        "top1_relevant_count": 3,
+        "top1_relevant_rate": 0.125,
+        "top3_relevant_count": 3,
+        "top3_relevant_rate": 0.125,
+        "natural_top3_relevant_count": 0,
+        "natural_top3_relevant_rate": 0.0,
+        "false_top1_count": 0,
+        "no_result_count": 21,
+        "visibility_leak_count": 0,
+        "exact_guard_failures": [],
+        "per_expected_rank_class": {
+          "exact_title": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "exact_tag": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "title_prefix": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "typo": {
+            "count": 1,
+            "top1": 0,
+            "top3": 0
+          },
+          "full_text": {
+            "count": 3,
+            "top1": 0,
+            "top3": 0
+          },
+          "semantic": {
+            "count": 17,
+            "top1": 0,
+            "top3": 0
+          }
+        },
+        "cases": [
+          {
+            "case_id": "search-exact-title-community-garden",
+            "top3": [
+              "syn-node-community-garden"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-exact-tag-tool-sharing",
+            "top3": [
+              "syn-node-tool-library"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-title-prefix-neighbourhood-kitchen",
+            "top3": [
+              "syn-node-neighbourhood-kitchen"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-typo-bike-workshop",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-full-text-energy-rent",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-food-rescue",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-phone-help",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-clothes-circular",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-language-practice",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-elderly-company",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-drill-sharing",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-shared-childcare",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-rent-contract",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-clean-river",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-make-radio",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-radio-repair",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-cargo-bike",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-legal-first-step",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-seeds-spring",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-cook-together",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-prototype-machines",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-filter-workshops",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-visibility-hidden-bike",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-visibility-deleted-repair",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          }
+        ]
+      },
+      "performance": {
+        "median_ms": 0.026,
+        "p95_ms": 0.041,
+        "maximum_ms": 0.053
+      }
+    },
+    {
+      "name": "fts_trigram_reference",
+      "quality": {
+        "case_count": 24,
+        "natural_case_count": 19,
+        "top1_relevant_count": 15,
+        "top1_relevant_rate": 0.625,
+        "top3_relevant_count": 16,
+        "top3_relevant_rate": 0.666667,
+        "natural_top3_relevant_count": 11,
+        "natural_top3_relevant_rate": 0.578947,
+        "false_top1_count": 1,
+        "no_result_count": 8,
+        "visibility_leak_count": 0,
+        "exact_guard_failures": [],
+        "per_expected_rank_class": {
+          "exact_title": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "exact_tag": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "title_prefix": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "typo": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "full_text": {
+            "count": 3,
+            "top1": 3,
+            "top3": 3
+          },
+          "semantic": {
+            "count": 17,
+            "top1": 8,
+            "top3": 9
+          }
+        },
+        "cases": [
+          {
+            "case_id": "search-exact-title-community-garden",
+            "top3": [
+              "syn-node-community-garden",
+              "syn-node-elder-companionship"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-exact-tag-tool-sharing",
+            "top3": [
+              "syn-node-tool-library",
+              "syn-node-food-fridge",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-title-prefix-neighbourhood-kitchen",
+            "top3": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-community-radio"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-typo-bike-workshop",
+            "top3": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-full-text-energy-rent",
+            "top3": [
+              "syn-node-energy-advice",
+              "syn-node-housing-advice"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-food-rescue",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-phone-help",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-clothes-circular",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-language-practice",
+            "top3": [
+              "syn-node-language-cafe"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-elderly-company",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-drill-sharing",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-shared-childcare",
+            "top3": [
+              "syn-node-child-care-coop"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-rent-contract",
+            "top3": [
+              "syn-node-housing-advice"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-clean-river",
+            "top3": [
+              "syn-node-river-cleanup"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-make-radio",
+            "top3": [
+              "syn-node-community-radio"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-radio-repair",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-cargo-bike",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-legal-first-step",
+            "top3": [],
+            "relevant_rank": null,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-seeds-spring",
+            "top3": [
+              "syn-node-seed-library"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-cook-together",
+            "top3": [
+              "syn-node-neighbourhood-kitchen"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-prototype-machines",
+            "top3": [
+              "syn-node-maker-space"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-filter-workshops",
+            "top3": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-visibility-hidden-bike",
+            "top3": [
+              "syn-node-energy-advice",
+              "syn-node-bike-workshop"
+            ],
+            "relevant_rank": 2,
+            "top1_relevant": false,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-visibility-deleted-repair",
+            "top3": [
+              "syn-node-repair-cafe",
+              "syn-node-digital-help",
+              "syn-node-tool-library"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          }
+        ]
+      },
+      "performance": {
+        "median_ms": 1.791,
+        "p95_ms": 2.513,
+        "maximum_ms": 2.623
+      }
+    }
+  ],
+  "models": [
+    {
+      "model": {
+        "name": "qwen3-embedding:0.6b",
+        "digest": "sha256:ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
+        "size_bytes": 639150858,
+        "family": "qwen3",
+        "parameter_size": "595.78M",
+        "quantization_level": "Q8_0",
+        "dimensions": 1024
+      },
+      "quality": {
+        "case_count": 24,
+        "natural_case_count": 19,
+        "top1_relevant_count": 21,
+        "top1_relevant_rate": 0.875,
+        "top3_relevant_count": 23,
+        "top3_relevant_rate": 0.958333,
+        "natural_top3_relevant_count": 18,
+        "natural_top3_relevant_rate": 0.947368,
+        "false_top1_count": 3,
+        "no_result_count": 0,
+        "visibility_leak_count": 0,
+        "exact_guard_failures": [],
+        "per_expected_rank_class": {
+          "exact_title": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "exact_tag": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "title_prefix": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "typo": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "full_text": {
+            "count": 3,
+            "top1": 3,
+            "top3": 3
+          },
+          "semantic": {
+            "count": 17,
+            "top1": 14,
+            "top3": 16
+          }
+        },
+        "cases": [
+          {
+            "case_id": "search-exact-title-community-garden",
+            "top3": [
+              "syn-node-community-garden",
+              "syn-node-elder-companionship",
+              "syn-node-clothing-swap"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-exact-tag-tool-sharing",
+            "top3": [
+              "syn-node-tool-library",
+              "syn-node-food-fridge",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-title-prefix-neighbourhood-kitchen",
+            "top3": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-community-radio"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-typo-bike-workshop",
+            "top3": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-clothing-swap"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-full-text-energy-rent",
+            "top3": [
+              "syn-node-energy-advice",
+              "syn-node-housing-advice",
+              "syn-node-clothing-swap"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-food-rescue",
+            "top3": [
+              "syn-node-clothing-swap",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-legal-advice"
+            ],
+            "relevant_rank": 4,
+            "top1_relevant": false,
+            "top3_relevant": false,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-phone-help",
+            "top3": [
+              "syn-node-digital-help",
+              "syn-node-clothing-swap",
+              "syn-node-legal-advice"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-clothes-circular",
+            "top3": [
+              "syn-node-clothing-swap",
+              "syn-node-tool-library",
+              "syn-node-repair-cafe"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-language-practice",
+            "top3": [
+              "syn-node-language-cafe",
+              "syn-node-legal-advice",
+              "syn-node-clothing-swap"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-elderly-company",
+            "top3": [
+              "syn-node-elder-companionship",
+              "syn-node-clothing-swap",
+              "syn-node-community-garden"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-drill-sharing",
+            "top3": [
+              "syn-node-tool-library",
+              "syn-node-clothing-swap",
+              "syn-node-maker-space"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-shared-childcare",
+            "top3": [
+              "syn-node-child-care-coop",
+              "syn-node-elder-companionship",
+              "syn-node-clothing-swap"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-rent-contract",
+            "top3": [
+              "syn-node-housing-advice",
+              "syn-node-energy-advice",
+              "syn-node-legal-advice"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-clean-river",
+            "top3": [
+              "syn-node-river-cleanup",
+              "syn-node-clothing-swap",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-make-radio",
+            "top3": [
+              "syn-node-community-radio",
+              "syn-node-clothing-swap",
+              "syn-node-language-cafe"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-radio-repair",
+            "top3": [
+              "syn-node-repair-cafe",
+              "syn-node-clothing-swap",
+              "syn-node-community-radio"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-cargo-bike",
+            "top3": [
+              "syn-node-clothing-swap",
+              "syn-node-mobility-share",
+              "syn-node-tool-library"
+            ],
+            "relevant_rank": 2,
+            "top1_relevant": false,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-legal-first-step",
+            "top3": [
+              "syn-node-legal-advice",
+              "syn-node-housing-advice",
+              "syn-node-clothing-swap"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-seeds-spring",
+            "top3": [
+              "syn-node-seed-library",
+              "syn-node-clothing-swap",
+              "syn-node-community-garden"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-cook-together",
+            "top3": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-community-radio"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-prototype-machines",
+            "top3": [
+              "syn-node-maker-space",
+              "syn-node-tool-library",
+              "syn-node-clothing-swap"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-filter-workshops",
+            "top3": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-maker-space"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-visibility-hidden-bike",
+            "top3": [
+              "syn-node-energy-advice",
+              "syn-node-bike-workshop",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 2,
+            "top1_relevant": false,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-visibility-deleted-repair",
+            "top3": [
+              "syn-node-repair-cafe",
+              "syn-node-digital-help",
+              "syn-node-tool-library"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          }
+        ]
+      },
+      "performance": {
+        "document_embedding_total_ms": 233.995,
+        "query_embedding_total_ms": 200.474,
+        "ranking": {
+          "median_ms": 3.448,
+          "p95_ms": 3.785,
+          "maximum_ms": 3.79
+        },
+        "document_count": 19,
+        "query_count": 24
+      }
+    },
+    {
+      "model": {
+        "name": "qwen3-embedding:4b",
+        "digest": "sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907",
+        "size_bytes": 2496704041,
+        "family": "qwen3",
+        "parameter_size": "4.0B",
+        "quantization_level": "Q4_K_M",
+        "dimensions": 2560
+      },
+      "quality": {
+        "case_count": 24,
+        "natural_case_count": 19,
+        "top1_relevant_count": 22,
+        "top1_relevant_rate": 0.916667,
+        "top3_relevant_count": 24,
+        "top3_relevant_rate": 1.0,
+        "natural_top3_relevant_count": 19,
+        "natural_top3_relevant_rate": 1.0,
+        "false_top1_count": 2,
+        "no_result_count": 0,
+        "visibility_leak_count": 0,
+        "exact_guard_failures": [],
+        "per_expected_rank_class": {
+          "exact_title": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "exact_tag": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "title_prefix": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "typo": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "full_text": {
+            "count": 3,
+            "top1": 3,
+            "top3": 3
+          },
+          "semantic": {
+            "count": 17,
+            "top1": 15,
+            "top3": 17
+          }
+        },
+        "cases": [
+          {
+            "case_id": "search-exact-title-community-garden",
+            "top3": [
+              "syn-node-community-garden",
+              "syn-node-elder-companionship",
+              "syn-node-neighbourhood-kitchen"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-exact-tag-tool-sharing",
+            "top3": [
+              "syn-node-tool-library",
+              "syn-node-food-fridge",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-title-prefix-neighbourhood-kitchen",
+            "top3": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-community-radio"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-typo-bike-workshop",
+            "top3": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-full-text-energy-rent",
+            "top3": [
+              "syn-node-energy-advice",
+              "syn-node-housing-advice",
+              "syn-node-neighbourhood-kitchen"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-food-rescue",
+            "top3": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-food-fridge",
+              "syn-node-river-cleanup"
+            ],
+            "relevant_rank": 2,
+            "top1_relevant": false,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-phone-help",
+            "top3": [
+              "syn-node-digital-help",
+              "syn-node-legal-advice",
+              "syn-node-tool-library"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-clothes-circular",
+            "top3": [
+              "syn-node-clothing-swap",
+              "syn-node-repair-cafe",
+              "syn-node-food-fridge"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-language-practice",
+            "top3": [
+              "syn-node-language-cafe",
+              "syn-node-digital-help",
+              "syn-node-legal-advice"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-elderly-company",
+            "top3": [
+              "syn-node-elder-companionship",
+              "syn-node-child-care-coop",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-drill-sharing",
+            "top3": [
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-repair-cafe"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-shared-childcare",
+            "top3": [
+              "syn-node-child-care-coop",
+              "syn-node-mobility-share",
+              "syn-node-elder-companionship"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-rent-contract",
+            "top3": [
+              "syn-node-housing-advice",
+              "syn-node-energy-advice",
+              "syn-node-legal-advice"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-clean-river",
+            "top3": [
+              "syn-node-river-cleanup",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-make-radio",
+            "top3": [
+              "syn-node-community-radio",
+              "syn-node-mobility-share",
+              "syn-node-river-cleanup"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-radio-repair",
+            "top3": [
+              "syn-node-repair-cafe",
+              "syn-node-bike-workshop",
+              "syn-node-community-radio"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-cargo-bike",
+            "top3": [
+              "syn-node-mobility-share",
+              "syn-node-clothing-swap",
+              "syn-node-tool-library"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-legal-first-step",
+            "top3": [
+              "syn-node-legal-advice",
+              "syn-node-housing-advice",
+              "syn-node-digital-help"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-seeds-spring",
+            "top3": [
+              "syn-node-seed-library",
+              "syn-node-community-garden",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-cook-together",
+            "top3": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-food-fridge",
+              "syn-node-tool-library"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-prototype-machines",
+            "top3": [
+              "syn-node-maker-space",
+              "syn-node-tool-library",
+              "syn-node-bike-workshop"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-filter-workshops",
+            "top3": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-maker-space"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-visibility-hidden-bike",
+            "top3": [
+              "syn-node-energy-advice",
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe"
+            ],
+            "relevant_rank": 2,
+            "top1_relevant": false,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-visibility-deleted-repair",
+            "top3": [
+              "syn-node-repair-cafe",
+              "syn-node-digital-help",
+              "syn-node-tool-library"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          }
+        ]
+      },
+      "performance": {
+        "document_embedding_total_ms": 404.411,
+        "query_embedding_total_ms": 337.718,
+        "ranking": {
+          "median_ms": 5.845,
+          "p95_ms": 6.179,
+          "maximum_ms": 6.238
+        },
+        "document_count": 19,
+        "query_count": 24
+      }
+    },
+    {
+      "model": {
+        "name": "qwen3-embedding:8b",
+        "digest": "sha256:64b933495768fbd3b87c20583d379728a07471e0c66733a9df87cd1901b3c44b",
+        "size_bytes": 4676805193,
+        "family": "qwen3",
+        "parameter_size": "7.6B",
+        "quantization_level": "Q4_K_M",
+        "dimensions": 4096
+      },
+      "quality": {
+        "case_count": 24,
+        "natural_case_count": 19,
+        "top1_relevant_count": 23,
+        "top1_relevant_rate": 0.958333,
+        "top3_relevant_count": 24,
+        "top3_relevant_rate": 1.0,
+        "natural_top3_relevant_count": 19,
+        "natural_top3_relevant_rate": 1.0,
+        "false_top1_count": 1,
+        "no_result_count": 0,
+        "visibility_leak_count": 0,
+        "exact_guard_failures": [],
+        "per_expected_rank_class": {
+          "exact_title": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "exact_tag": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "title_prefix": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "typo": {
+            "count": 1,
+            "top1": 1,
+            "top3": 1
+          },
+          "full_text": {
+            "count": 3,
+            "top1": 3,
+            "top3": 3
+          },
+          "semantic": {
+            "count": 17,
+            "top1": 16,
+            "top3": 17
+          }
+        },
+        "cases": [
+          {
+            "case_id": "search-exact-title-community-garden",
+            "top3": [
+              "syn-node-community-garden",
+              "syn-node-elder-companionship",
+              "syn-node-neighbourhood-kitchen"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-exact-tag-tool-sharing",
+            "top3": [
+              "syn-node-tool-library",
+              "syn-node-food-fridge",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-title-prefix-neighbourhood-kitchen",
+            "top3": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-community-radio"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-typo-bike-workshop",
+            "top3": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-full-text-energy-rent",
+            "top3": [
+              "syn-node-energy-advice",
+              "syn-node-housing-advice",
+              "syn-node-neighbourhood-kitchen"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-food-rescue",
+            "top3": [
+              "syn-node-food-fridge",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-clothing-swap"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-phone-help",
+            "top3": [
+              "syn-node-digital-help",
+              "syn-node-legal-advice",
+              "syn-node-housing-advice"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-clothes-circular",
+            "top3": [
+              "syn-node-clothing-swap",
+              "syn-node-food-fridge",
+              "syn-node-repair-cafe"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-language-practice",
+            "top3": [
+              "syn-node-language-cafe",
+              "syn-node-legal-advice",
+              "syn-node-clothing-swap"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-elderly-company",
+            "top3": [
+              "syn-node-elder-companionship",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-radio"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-drill-sharing",
+            "top3": [
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-maker-space"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-shared-childcare",
+            "top3": [
+              "syn-node-child-care-coop",
+              "syn-node-elder-companionship",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-rent-contract",
+            "top3": [
+              "syn-node-housing-advice",
+              "syn-node-energy-advice",
+              "syn-node-legal-advice"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-clean-river",
+            "top3": [
+              "syn-node-river-cleanup",
+              "syn-node-food-fridge",
+              "syn-node-clothing-swap"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-make-radio",
+            "top3": [
+              "syn-node-community-radio",
+              "syn-node-legal-advice",
+              "syn-node-river-cleanup"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-radio-repair",
+            "top3": [
+              "syn-node-repair-cafe",
+              "syn-node-bike-workshop",
+              "syn-node-community-radio"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-cargo-bike",
+            "top3": [
+              "syn-node-mobility-share",
+              "syn-node-food-fridge",
+              "syn-node-clothing-swap"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-legal-first-step",
+            "top3": [
+              "syn-node-legal-advice",
+              "syn-node-housing-advice",
+              "syn-node-energy-advice"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-seeds-spring",
+            "top3": [
+              "syn-node-seed-library",
+              "syn-node-community-garden",
+              "syn-node-clothing-swap"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-cook-together",
+            "top3": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-food-fridge",
+              "syn-node-community-garden"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-semantic-prototype-machines",
+            "top3": [
+              "syn-node-maker-space",
+              "syn-node-tool-library",
+              "syn-node-repair-cafe"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-filter-workshops",
+            "top3": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-maker-space"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-visibility-hidden-bike",
+            "top3": [
+              "syn-node-energy-advice",
+              "syn-node-bike-workshop",
+              "syn-node-mobility-share"
+            ],
+            "relevant_rank": 2,
+            "top1_relevant": false,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          },
+          {
+            "case_id": "search-visibility-deleted-repair",
+            "top3": [
+              "syn-node-repair-cafe",
+              "syn-node-digital-help",
+              "syn-node-tool-library"
+            ],
+            "relevant_rank": 1,
+            "top1_relevant": true,
+            "top3_relevant": true,
+            "visibility_leaks": []
+          }
+        ]
+      },
+      "performance": {
+        "document_embedding_total_ms": 537.697,
+        "query_embedding_total_ms": 466.867,
+        "ranking": {
+          "median_ms": 8.871,
+          "p95_ms": 9.796,
+          "maximum_ms": 10.124
+        },
+        "document_count": 19,
+        "query_count": 24
+      }
+    }
+  ],
+  "decision": {
+    "outcome": "select_smallest_qualifying_local_model",
+    "selected_model": "qwen3-embedding:8b",
+    "reason": "The smallest local model meeting all gates and the minimum incremental relevance gain is selected for T003/T004 planning.",
+    "quality_thresholds": {
+      "natural_top3_rate": 0.85,
+      "minimum_gain_cases": 2
+    },
+    "assessed_models": [
+      {
+        "model": "qwen3-embedding:0.6b",
+        "qualifies": false,
+        "meaningful_incremental_gain": true,
+        "natural_top3_gain_cases": 7
+      },
+      {
+        "model": "qwen3-embedding:4b",
+        "qualifies": false,
+        "meaningful_incremental_gain": true,
+        "natural_top3_gain_cases": 8
+      },
+      {
+        "model": "qwen3-embedding:8b",
+        "qualifies": true,
+        "meaningful_incremental_gain": true,
+        "natural_top3_gain_cases": 8
+      }
+    ]
+  },
+  "does_not_establish": [
+    "production relevance",
+    "PostgreSQL FTS or pg_trgm parity",
+    "pgvector availability",
+    "runtime integration",
+    "public live proof",
+    "SemantAH archive authority"
+  ]
+}

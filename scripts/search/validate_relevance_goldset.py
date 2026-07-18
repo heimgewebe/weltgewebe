@@ -7,12 +7,14 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCHEMA = ROOT / "contracts/search/relevance-goldset.schema.json"
 DEFAULT_DATASET = ROOT / "contracts/search/examples/relevance-goldset.example.json"
 EMAIL_LIKE = re.compile(r"(?i)\b[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+\b")
+PHONE_LIKE = re.compile(r"(?<![\w-])(?:\+49|0049|0[1-9]\d{1,4})(?:[ /-]?\d){6,14}(?![\w-])")
+IPV4_LIKE = re.compile(r"(?<![\d.])(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?![\d.])")
 
 
 class ValidationError(ValueError):
@@ -101,7 +103,7 @@ def validate_schema_subset(instance: Any, schema: dict[str, Any], path: str = "$
             raise ValidationError(f"{path}: does not match pattern {pattern!r}")
 
 
-def _walk_strings(value: Any):
+def _walk_strings(value: Any) -> Iterator[str]:
     if isinstance(value, str):
         yield value
     elif isinstance(value, list):
@@ -112,12 +114,29 @@ def _walk_strings(value: Any):
             yield from _walk_strings(item)
 
 
+def _matches_filters(node: dict[str, Any], filters: dict[str, list[str]]) -> bool:
+    kinds = set(filters["kinds"])
+    tags = set(filters["tags"])
+    languages = set(filters["languages"])
+    return (
+        (not kinds or node["kind"] in kinds)
+        and (not tags or bool(tags.intersection(node["tags"])))
+        and (not languages or node["language"] in languages)
+    )
+
+
 def validate_goldset(dataset: dict[str, Any], schema: dict[str, Any]) -> None:
-    """Apply schema validation and visibility/privacy invariants."""
+    """Apply schema, referential, visibility and privacy invariants."""
 
     validate_schema_subset(dataset, schema)
-    case_ids: set[str] = set()
+    node_by_id: dict[str, dict[str, Any]] = {}
+    for index, node in enumerate(dataset["nodes"]):
+        node_id = node["id"]
+        if node_id in node_by_id:
+            raise ValidationError(f"$.nodes[{index}].id: duplicate node id {node_id!r}")
+        node_by_id[node_id] = node
 
+    case_ids: set[str] = set()
     for index, case in enumerate(dataset["cases"]):
         case_path = f"$.cases[{index}]"
         case_id = case["id"]
@@ -125,9 +144,14 @@ def validate_goldset(dataset: dict[str, Any], schema: dict[str, Any]) -> None:
             raise ValidationError(f"{case_path}.id: duplicate case id {case_id!r}")
         case_ids.add(case_id)
 
-        visible = set(case["visibility_context"]["visible_node_ids"])
+        context = case["visibility_context"]
+        visible = set(context["visible_node_ids"])
         relevant = set(case["relevant_node_ids"])
         excluded = set(case["excluded_node_ids"])
+        referenced = visible | relevant | excluded
+        unknown = sorted(referenced - set(node_by_id))
+        if unknown:
+            raise ValidationError(f"{case_path}: references unknown nodes: {unknown!r}")
 
         missing = sorted(relevant - visible)
         if missing:
@@ -139,9 +163,22 @@ def validate_goldset(dataset: dict[str, Any], schema: dict[str, Any]) -> None:
         if overlap:
             raise ValidationError(f"{case_path}: nodes cannot be both relevant and excluded: {overlap!r}")
 
+        for node_id in sorted(visible):
+            node = node_by_id[node_id]
+            if node["status"] != "active":
+                raise ValidationError(f"{case_path}: visible node {node_id!r} is not active")
+            if context["viewer_scope"] not in node["visibility_scopes"]:
+                raise ValidationError(f"{case_path}: visible node {node_id!r} is outside viewer scope")
+            if not _matches_filters(node, context["active_filters"]):
+                raise ValidationError(f"{case_path}: visible node {node_id!r} violates active filters")
+
     for text in _walk_strings(dataset):
         if EMAIL_LIKE.search(text):
             raise ValidationError("goldset contains an email-like value")
+        if PHONE_LIKE.search(text):
+            raise ValidationError("goldset contains a phone-like value")
+        if IPV4_LIKE.search(text):
+            raise ValidationError("goldset contains an IPv4-like value")
 
 
 def load_json_object(path: Path) -> dict[str, Any]:
