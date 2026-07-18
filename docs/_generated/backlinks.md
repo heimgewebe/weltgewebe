@@ -231,6 +231,7 @@ Generated automatically. Do not edit.
 
 ## docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
 
+- [relates_to] docs/adr/ADR-0011__ha-referenzzelle-und-wiederherstellung.md
 - [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
 - [depends_on] docs/reports/kubernetes-platform-foundation-status.md
 - [relates_to] docs/techstack.md
@@ -239,6 +240,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
 - [relates_to] docs/specs/federation-core.md
+
+## docs/adr/ADR-0011__ha-referenzzelle-und-wiederherstellung.md
+
+- [relates_to] docs/runbooks/kubernetes-ha-recovery-proof.md
 
 ## docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md
 
@@ -909,6 +914,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/runbooks/README.md
 - [relates_to] docs/runbooks/db-recovery.md
 - [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
+
+## docs/runbooks/kubernetes-ha-recovery-proof.md
+
+- [relates_to] docs/adr/ADR-0011__ha-referenzzelle-und-wiederherstellung.md
 
 ## docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
 

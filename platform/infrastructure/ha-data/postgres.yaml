@@ -1,0 +1,43 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-ha
+  labels:
+    app.kubernetes.io/name: postgres-ha
+    app.kubernetes.io/component: database
+spec:
+  instances: 3
+  imageCatalogRef:
+    apiGroup: postgresql.cnpg.io
+    kind: ImageCatalog
+    name: weltgewebe-postgres
+    major: 16
+  primaryUpdateStrategy: unsupervised
+  failoverDelay: 0
+  bootstrap:
+    initdb:
+      database: weltgewebe
+      owner: welt
+      secret:
+        name: weltgewebe-ha-app
+  storage:
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 150m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: required
+    topologyKey: topology.kubernetes.io/zone
+    nodeSelector:
+      weltgewebe.net/data-node: "true"
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: weltgewebe-ha-backup

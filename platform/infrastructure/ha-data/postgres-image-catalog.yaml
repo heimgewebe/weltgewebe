@@ -1,0 +1,12 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ImageCatalog
+metadata:
+  namespace: weltgewebe-data
+  name: weltgewebe-postgres
+spec:
+  images:
+    - major: 16
+      # yamllint disable rule:line-length
+      image: ghcr.io/cloudnative-pg/postgresql:16.14@sha256:05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1
+      # yamllint enable rule:line-length
