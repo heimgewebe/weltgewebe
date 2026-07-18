@@ -300,6 +300,22 @@ def _assert_ha_contract() -> None:
         if marker not in config:
             raise ContractError(f"HA NATS config lacks {marker}")
 
+    app_base = PLATFORM / "apps/weltgewebe/base"
+    app_budgets = {
+        document["metadata"]["name"]: document
+        for filename in ("api-pdb.yaml", "web-pdb.yaml")
+        for document in _documents(app_base / filename)
+    }
+    for name in ("weltgewebe-api", "weltgewebe-web"):
+        budget = app_budgets.get(name)
+        if budget is None or budget.get("kind") != "PodDisruptionBudget":
+            raise ContractError(f"HA application lacks disruption budget {name}")
+        if budget.get("spec", {}).get("minAvailable") != 1:
+            raise ContractError(f"HA application disruption budget {name} differs from the contract")
+        labels = budget.get("spec", {}).get("selector", {}).get("matchLabels", {})
+        if labels.get("app.kubernetes.io/name") != name:
+            raise ContractError(f"HA application disruption budget {name} selects the wrong pods")
+
     patch_docs = list(_documents(PLATFORM / "apps/weltgewebe/overlays/ha/deployment-patch.yaml"))
     api = next(item for item in patch_docs if item["metadata"]["name"] == "weltgewebe-api")
     api_spec = api.get("spec", {})
@@ -354,6 +370,23 @@ def _assert_ha_contract() -> None:
             raise ContractError(f"HA proof runner lacks {marker}")
     if "kind: Secret" in "\n".join(path.read_text() for path in (PLATFORM / "infrastructure/ha-data").glob("*.yaml")):
         raise ContractError("HA manifests commit a Secret")
+
+    workflow = yaml.safe_load((ROOT / ".github/workflows/kubernetes-platform.yml").read_text())
+    steps = workflow["jobs"]["kind-ha-recovery-proof"]["steps"]
+    cleanup = next(
+        (item for item in steps if item.get("name") == "Reconcile owned HA proof resources"),
+        None,
+    )
+    if cleanup is None or cleanup.get("if") != "always()":
+        raise ContractError("HA workflow lacks unconditional owned-resource reconciliation")
+    cleanup_command = cleanup.get("run", "")
+    for marker in (
+        "ha_reference.py down",
+        '--cluster "$CLUSTER_NAME"',
+        '--commit "$(git rev-parse HEAD)"',
+    ):
+        if marker not in cleanup_command:
+            raise ContractError(f"HA workflow cleanup lacks {marker}")
 
 
 def _assert_compose_parity() -> None:

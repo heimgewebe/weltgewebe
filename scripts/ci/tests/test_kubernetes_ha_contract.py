@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import sys
 import tempfile
@@ -227,7 +228,7 @@ class KubernetesHaContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             artifact = Path(directory) / "release.yaml"
             artifact.write_text(
-                "\n".join(f"image: {image}" for image in tagged) + "\n",
+                "".join(f"---\nimage: {image}\n" for image in tagged),
                 encoding="utf-8",
             )
             with mock.patch.object(self.ha.ref, "run") as run:
@@ -267,25 +268,27 @@ class KubernetesHaContractTests(unittest.TestCase):
             "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0"
         )
         encoded = self.ha.base64.b64encode(sidecar_tag.encode()).decode()
-        wrapped = "\n".join(
-            f"    {encoded[index:index + 72]}"
-            for index in range(0, len(encoded), 72)
-        )
         source = (
-            "apiVersion: v1\ndata:\n  SIDECAR_IMAGE: |\n"
-            f"{wrapped}\n---\nimage: "
-            "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0\n"
+            "apiVersion: v1\nkind: Secret\nmetadata:\n  name: sidecar\n"
+            f'data:\n  SIDECAR_IMAGE: "{encoded}"\n---\n'
+            "apiVersion: apps/v1\nkind: Deployment\nspec:\n  template:\n"
+            "    spec:\n      containers:\n        - name: controller\n"
+            "          image: ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0\n"
         )
         rendered = self.ha.render_barman_cloud_manifest(source)
-        self.assertNotIn(sidecar_tag, rendered)
-        self.assertNotIn(
-            "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0", rendered
+        documents = list(self.ha.yaml.safe_load_all(rendered))
+        secret = next(item for item in documents if item.get("kind") == "Secret")
+        deployment = next(
+            item for item in documents if item.get("kind") == "Deployment"
         )
-        self.assertIn(self.ha.BARMAN_CLOUD_PLUGIN_IMAGE, rendered)
-        digest_encoded = self.ha.base64.b64encode(
-            self.ha.BARMAN_CLOUD_SIDECAR_IMAGE.encode()
-        ).decode()
-        self.assertIn(f"SIDECAR_IMAGE: {digest_encoded}", rendered)
+        self.assertEqual(
+            self.ha.base64.b64decode(secret["data"]["SIDECAR_IMAGE"]).decode(),
+            self.ha.BARMAN_CLOUD_SIDECAR_IMAGE,
+        )
+        self.assertEqual(
+            deployment["spec"]["template"]["spec"]["containers"][0]["image"],
+            self.ha.BARMAN_CLOUD_PLUGIN_IMAGE,
+        )
 
     def test_barman_plugin_install_waits_and_verifies_digest_images(self) -> None:
         secret_payload = json.dumps(
@@ -322,7 +325,9 @@ class KubernetesHaContractTests(unittest.TestCase):
             "kubectl", "cnpg-system", "deployment/barman-cloud", "8m"
         )
 
-    def test_barman_instance_sidecars_are_verified_for_all_three_pods(self) -> None:
+    def test_barman_instance_sidecars_are_running_ready_and_digest_bound(self) -> None:
+        digest = self.ha.BARMAN_CLOUD_SIDECAR_IMAGE.rsplit("@", 1)[1]
+
         def pod(name: str) -> dict[str, object]:
             return {
                 "metadata": {"name": name},
@@ -335,7 +340,20 @@ class KubernetesHaContractTests(unittest.TestCase):
                     ],
                     "containers": [],
                 },
+                "status": {
+                    "initContainerStatuses": [
+                        {
+                            "name": "plugin-barman-cloud",
+                            "imageID": f"ghcr.io/cloudnative-pg/sidecar@{digest}",
+                            "ready": True,
+                            "state": {
+                                "running": {"startedAt": "2026-07-18T08:00:00Z"}
+                            },
+                        }
+                    ]
+                },
             }
+
         with mock.patch.object(
             self.ha.ref,
             "output",
@@ -346,9 +364,40 @@ class KubernetesHaContractTests(unittest.TestCase):
             observed = self.ha.verify_barman_sidecar_images(
                 "kubectl", "postgres-ha"
             )
-        self.assertEqual(
-            observed, [self.ha.BARMAN_CLOUD_SIDECAR_IMAGE] * 3
-        )
+        self.assertEqual(sorted(observed), ["postgres-1", "postgres-2", "postgres-3"])
+        self.assertTrue(all(item["ready"] is True for item in observed.values()))
+
+    def test_barman_instance_sidecar_validation_fails_closed_when_not_ready(self) -> None:
+        payload = {
+            "items": [
+                {
+                    "metadata": {"name": "postgres-1"},
+                    "spec": {
+                        "initContainers": [
+                            {
+                                "name": "plugin-barman-cloud",
+                                "image": self.ha.BARMAN_CLOUD_SIDECAR_IMAGE,
+                            }
+                        ]
+                    },
+                    "status": {
+                        "initContainerStatuses": [
+                            {
+                                "name": "plugin-barman-cloud",
+                                "imageID": self.ha.BARMAN_CLOUD_SIDECAR_IMAGE,
+                                "ready": False,
+                                "state": {"waiting": {"reason": "Starting"}},
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+        with mock.patch.object(
+            self.ha.ref, "output", return_value=json.dumps(payload)
+        ):
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "not running and ready"):
+                self.ha.verify_barman_sidecar_images("kubectl", "postgres-ha")
 
     def cnpg_release_fixture(self) -> str:
         tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
@@ -712,10 +761,72 @@ spec:
         environment = run.call_args.kwargs["env"]
         self.assertNotIn("ephemeral-sensitive-value", argv)
         self.assertEqual(environment["PROOF_SECRET"], "ephemeral-sensitive-value")
-        self.assertNotIn(
-            "AWS_SECRET_ACCESS_KEY=",
-            (ROOT / "scripts/platform/ha_reference.py").read_text(),
+
+    def test_pitr_boundary_uses_and_verifies_postgres_clock(self) -> None:
+        with mock.patch.object(self.ha, "psql", side_effect=["", "t"]) as psql:
+            self.ha.wait_for_pitr_boundary(
+                "kubectl", "2026-07-18T08:00:00.000000Z"
+            )
+        self.assertEqual(psql.call_args_list[0].args[1], "SELECT pg_sleep(2)")
+        self.assertIn("clock_timestamp()", psql.call_args_list[1].args[1])
+
+    def test_pitr_boundary_fails_closed_before_the_database_clock_crosses(self) -> None:
+        with mock.patch.object(self.ha, "psql", side_effect=["", "f"]):
+            with self.assertRaisesRegex(
+                self.ha.ref.ProofError, "did not cross PITR target"
+            ):
+                self.ha.wait_for_pitr_boundary(
+                    "kubectl", "2026-07-18T08:00:00.000000Z"
+                )
+
+    def test_cluster_context_binding_uses_cluster_specific_kubeconfig(self) -> None:
+        path = ROOT / ".cache/test-restore-kubeconfig.yaml"
+
+        def configure(_kind: str, _cluster: str) -> Path:
+            self.ha.os.environ["KUBECONFIG"] = str(path)
+            return path
+
+        with (
+            mock.patch.object(
+                self.ha.ref, "configure_cluster_access", side_effect=configure
+            ),
+            mock.patch.object(self.ha.ref, "output", return_value="kind-proof-restore"),
+            mock.patch.dict(self.ha.os.environ, {}, clear=False),
+        ):
+            self.assertEqual(
+                self.ha.require_active_cluster_context(
+                    "kind", "kubectl", "proof-restore"
+                ),
+                "kubectl",
+            )
+
+    def test_main_redacts_subprocess_output_and_logs_constant_success(self) -> None:
+        parser = mock.Mock()
+        parser.parse_args.return_value = self.ha.argparse.Namespace(
+            command="proof", cluster="proof", keep=False
         )
+        secret = "ephemeral-sensitive-value"
+        failure = self.ha.subprocess.CalledProcessError(
+            23, ["tool"], output=secret, stderr=secret
+        )
+        with (
+            mock.patch.object(self.ha, "argument_parser", return_value=parser),
+            mock.patch.object(self.ha.ref, "tool_receipt", return_value={}),
+            mock.patch.object(self.ha, "prove", side_effect=failure),
+            mock.patch("sys.stderr", new_callable=io.StringIO) as stderr,
+        ):
+            self.assertEqual(self.ha.main(), 1)
+        self.assertNotIn(secret, stderr.getvalue())
+        self.assertIn("status 23", stderr.getvalue())
+
+        with (
+            mock.patch.object(self.ha, "argument_parser", return_value=parser),
+            mock.patch.object(self.ha.ref, "tool_receipt", return_value={}),
+            mock.patch.object(self.ha, "prove", return_value={"secret": secret}),
+            mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            self.assertEqual(self.ha.main(), 0)
+        self.assertEqual(json.loads(stdout.getvalue()), {"status": "pass"})
 
     def test_postgres_operand_keeps_version_and_digest(self) -> None:
         image = self.ha.POSTGRES_IMAGE

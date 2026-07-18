@@ -138,3 +138,9 @@ jobs:
           path: .cache/weltgewebe-platform/failures/
           if-no-files-found: ignore
           retention-days: 14
+      - name: Reconcile owned HA proof resources
+        if: always()
+        run: >-
+          python scripts/platform/ha_reference.py down
+          --cluster "$CLUSTER_NAME"
+          --commit "$(git rev-parse HEAD)"

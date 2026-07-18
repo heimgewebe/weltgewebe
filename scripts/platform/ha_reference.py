@@ -6,7 +6,6 @@ import base64
 import hashlib
 import json
 import os
-import re
 import secrets
 import subprocess
 import sys
@@ -74,6 +73,22 @@ def create_kind_cluster(kind: str, name: str, image: str, config: str, commit: s
     except Exception:
         ref.delete_owned_cluster(kind, name)
         raise
+
+
+def require_active_cluster_context(kind: str, kubectl: str, cluster: str) -> str:
+    kubeconfig = ref.configure_cluster_access(kind, cluster)
+    expected_context = f"kind-{cluster}"
+    observed_context = ref.output([kubectl, "config", "current-context"])
+    if observed_context != expected_context:
+        raise ref.ProofError(
+            f"kubectl context mismatch for {cluster}: {observed_context!r}"
+        )
+    if os.environ.get("KUBECONFIG") != str(kubeconfig):
+        raise ref.ProofError(
+            f"kubectl kubeconfig mismatch for {cluster}: "
+            f"{os.environ.get('KUBECONFIG')!r}"
+        )
+    return kubectl
 
 
 def apply_secret_contracts(kubectl: str, app_password: str, s3_secret_key: str) -> None:
@@ -238,16 +253,79 @@ def cnpg_webhook_ready(kubectl: str) -> bool:
     return result.returncode == 0
 
 
+def _load_yaml_documents(source: str, release_name: str) -> list[Any]:
+    try:
+        documents = [
+            document
+            for document in yaml.safe_load_all(source)
+            if document is not None
+        ]
+    except yaml.YAMLError as error:
+        raise ref.ProofError(f"{release_name} is not valid YAML") from error
+    if not documents:
+        raise ref.ProofError(f"{release_name} contains no YAML documents")
+    return documents
+
+
+def _replace_exact_yaml_scalar(
+    value: Any, expected: str, replacement: str
+) -> tuple[Any, int]:
+    if isinstance(value, dict):
+        rewritten: dict[Any, Any] = {}
+        count = 0
+        for key, item in value.items():
+            rewritten_item, observed = _replace_exact_yaml_scalar(
+                item, expected, replacement
+            )
+            rewritten[key] = rewritten_item
+            count += observed
+        return rewritten, count
+    if isinstance(value, list):
+        rewritten_items: list[Any] = []
+        count = 0
+        for item in value:
+            rewritten_item, observed = _replace_exact_yaml_scalar(
+                item, expected, replacement
+            )
+            rewritten_items.append(rewritten_item)
+            count += observed
+        return rewritten_items, count
+    if value == expected:
+        return replacement, 1
+    return value, 0
+
+
+def rewrite_yaml_documents(
+    source: str,
+    replacements: dict[str, tuple[str, int]],
+    release_name: str,
+) -> list[Any]:
+    documents = _load_yaml_documents(source, release_name)
+    for tagged, (digest_bound, expected_count) in replacements.items():
+        rewritten_documents: list[Any] = []
+        observed_count = 0
+        for document in documents:
+            rewritten, observed = _replace_exact_yaml_scalar(
+                document, tagged, digest_bound
+            )
+            rewritten_documents.append(rewritten)
+            observed_count += observed
+        if observed_count != expected_count:
+            raise ref.ProofError(
+                f"{release_name} image reference changed unexpectedly: "
+                f"{tagged} occurred {observed_count} times, expected {expected_count}"
+            )
+        documents = rewritten_documents
+    return documents
+
+
 def render_cnpg_manifest(source: str) -> str:
     tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
-    if source.count(tagged) != 2:
-        raise ref.ProofError(
-            "CloudNativePG release image reference changed unexpectedly"
-        )
-    try:
-        documents = list(yaml.safe_load_all(source.replace(tagged, CNPG_OPERATOR_IMAGE)))
-    except yaml.YAMLError as exc:
-        raise ref.ProofError("CloudNativePG release manifest is invalid YAML") from exc
+    documents = rewrite_yaml_documents(
+        source,
+        {tagged: (CNPG_OPERATOR_IMAGE, 2)},
+        "CloudNativePG release",
+    )
     deployments = [
         document
         for document in documents
@@ -268,10 +346,7 @@ def render_cnpg_manifest(source: str) -> str:
         "type": "RollingUpdate",
         "rollingUpdate": {"maxSurge": 0, "maxUnavailable": 1},
     }
-    pod_spec = (
-        spec.setdefault("template", {})
-        .setdefault("spec", {})
-    )
+    pod_spec = spec.setdefault("template", {}).setdefault("spec", {})
     affinity = pod_spec.setdefault("affinity", {})
     pod_anti_affinity = affinity.setdefault("podAntiAffinity", {})
     required = pod_anti_affinity.setdefault(
@@ -284,17 +359,12 @@ def render_cnpg_manifest(source: str) -> str:
     required.append(
         {
             "labelSelector": {
-                "matchLabels": {
-                    "app.kubernetes.io/name": "cloudnative-pg"
-                }
+                "matchLabels": {"app.kubernetes.io/name": "cloudnative-pg"}
             },
             "topologyKey": "kubernetes.io/hostname",
         }
     )
-    return yaml.safe_dump_all(
-        documents, sort_keys=False, explicit_start=True
-    )
-
+    return yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
 
 def verify_cnpg_operator_ha(kubectl: str) -> list[str]:
     ref.wait_rollout(
@@ -401,11 +471,12 @@ def apply_digest_locked_manifest(
     artifact: str,
     replacements: dict[str, str],
 ) -> None:
-    source = Path(artifact).read_text(encoding="utf-8")
-    for tagged, digest in replacements.items():
-        if source.count(tagged) != 1:
-            raise ref.ProofError(f"release image reference changed unexpectedly: {tagged}")
-        source = source.replace(tagged, digest)
+    documents = rewrite_yaml_documents(
+        Path(artifact).read_text(encoding="utf-8"),
+        {tagged: (digest, 1) for tagged, digest in replacements.items()},
+        "digest-locked release",
+    )
+    source = yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
     ref.run(
         [
             kubectl,
@@ -418,7 +489,6 @@ def apply_digest_locked_manifest(
         ],
         input_text=source,
     )
-
 
 def install_cert_manager(kubectl: str, artifact: str) -> None:
     apply_digest_locked_manifest(kubectl, artifact, CERT_MANAGER_IMAGES)
@@ -477,46 +547,44 @@ def install_cert_manager(kubectl: str, artifact: str) -> None:
 
 
 def render_barman_cloud_manifest(source: str) -> str:
-    tagged = "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0"
-    if source.count(tagged) != 1:
+    controller_tagged = "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0"
+    documents = rewrite_yaml_documents(
+        source,
+        {controller_tagged: (BARMAN_CLOUD_PLUGIN_IMAGE, 1)},
+        "Barman Cloud release",
+    )
+    matching_secrets = [
+        document
+        for document in documents
+        if isinstance(document, dict)
+        and document.get("kind") == "Secret"
+        and isinstance(document.get("data"), dict)
+        and "SIDECAR_IMAGE" in document["data"]
+    ]
+    if len(matching_secrets) != 1:
         raise ref.ProofError(
-            "Barman Cloud release image reference changed unexpectedly"
+            "Barman Cloud sidecar secret changed unexpectedly: "
+            f"{len(matching_secrets)} matching Secrets"
         )
-    source = source.replace(tagged, BARMAN_CLOUD_PLUGIN_IMAGE)
+    secret = matching_secrets[0]
+    encoded = "".join(str(secret["data"]["SIDECAR_IMAGE"]).split())
+    try:
+        decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as error:
+        raise ref.ProofError(
+            "Barman Cloud sidecar secret is not valid UTF-8 base64"
+        ) from error
     sidecar_tagged = (
         "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0"
     )
-    pattern = re.compile(
-        r"(?m)^  SIDECAR_IMAGE: \|\n((?:    [A-Za-z0-9+/=]+\n)+)"
-    )
-    matches = list(pattern.finditer(source))
-    if len(matches) != 1:
-        raise ref.ProofError(
-            "Barman Cloud sidecar secret changed unexpectedly"
-        )
-    encoded = "".join(
-        line.strip() for line in matches[0].group(1).splitlines()
-    )
-    try:
-        decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise ref.ProofError(
-            "Barman Cloud sidecar secret is not valid UTF-8 base64"
-        ) from exc
     if decoded != sidecar_tagged:
         raise ref.ProofError(
             f"Barman Cloud sidecar reference changed unexpectedly: {decoded}"
         )
-    digest_encoded = base64.b64encode(
+    secret["data"]["SIDECAR_IMAGE"] = base64.b64encode(
         BARMAN_CLOUD_SIDECAR_IMAGE.encode("utf-8")
     ).decode("ascii")
-    match = matches[0]
-    return (
-        source[: match.start()]
-        + f"  SIDECAR_IMAGE: {digest_encoded}\n"
-        + source[match.end() :]
-    )
-
+    return yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
 
 def apply_barman_cloud_manifest(kubectl: str, artifact: str) -> None:
     source = render_barman_cloud_manifest(
@@ -602,7 +670,9 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
         raise ref.ProofError(f"Barman Cloud plugin image is not digest-bound: {observed}")
 
 
-def verify_barman_sidecar_images(kubectl: str, cluster: str) -> list[str]:
+def verify_barman_sidecar_images(
+    kubectl: str, cluster: str
+) -> dict[str, dict[str, object]]:
     payload = json.loads(
         ref.output(
             [
@@ -618,23 +688,66 @@ def verify_barman_sidecar_images(kubectl: str, cluster: str) -> list[str]:
             ]
         )
     )
-    images = []
+    expected_digest = BARMAN_CLOUD_SIDECAR_IMAGE.rsplit("@", 1)[1]
+    observed: dict[str, dict[str, object]] = {}
     for pod in payload.get("items", []):
-        containers = (
-            pod.get("spec", {}).get("initContainers", [])
-            + pod.get("spec", {}).get("containers", [])
-        )
-        images.extend(
-            container.get("image", "")
+        name = str(pod.get("metadata", {}).get("name", ""))
+        containers = [
+            *pod.get("spec", {}).get("initContainers", []),
+            *pod.get("spec", {}).get("containers", []),
+        ]
+        sidecars = [
+            container
             for container in containers
             if container.get("name") == "plugin-barman-cloud"
-        )
-    if len(images) != 3 or set(images) != {BARMAN_CLOUD_SIDECAR_IMAGE}:
+        ]
+        if len(sidecars) != 1:
+            raise ref.ProofError(
+                f"PostgreSQL pod {name} has {len(sidecars)} Barman sidecars"
+            )
+        declared_image = str(sidecars[0].get("image", ""))
+        if declared_image != BARMAN_CLOUD_SIDECAR_IMAGE:
+            raise ref.ProofError(
+                f"PostgreSQL pod {name} has an unbound Barman sidecar: "
+                f"{declared_image}"
+            )
+        statuses = [
+            *pod.get("status", {}).get("initContainerStatuses", []),
+            *pod.get("status", {}).get("containerStatuses", []),
+        ]
+        sidecar_statuses = [
+            status
+            for status in statuses
+            if status.get("name") == "plugin-barman-cloud"
+        ]
+        if len(sidecar_statuses) != 1:
+            raise ref.ProofError(
+                f"PostgreSQL pod {name} has {len(sidecar_statuses)} Barman statuses"
+            )
+        status = sidecar_statuses[0]
+        image_id = str(status.get("imageID", ""))
+        running = status.get("state", {}).get("running", {})
+        started_at = running.get("startedAt")
+        if not image_id.endswith(expected_digest):
+            raise ref.ProofError(
+                f"PostgreSQL pod {name} runs an unbound Barman image ID: {image_id}"
+            )
+        if status.get("ready") is not True or not started_at:
+            raise ref.ProofError(
+                f"PostgreSQL pod {name} Barman sidecar is not running and ready"
+            )
+        observed[name] = {
+            "declared_image": declared_image,
+            "image_id": image_id,
+            "ready": True,
+            "started_at": started_at,
+        }
+    if len(observed) != 3:
         raise ref.ProofError(
-            f"Barman Cloud instance sidecars are not digest-bound for {cluster}: {images}"
+            f"Barman Cloud requires exactly three ready instance sidecars for "
+            f"{cluster}: {sorted(observed)}"
         )
-    return sorted(images)
-
+    return observed
 
 def current_primary(kubectl: str, cluster: str = "postgres-ha") -> str:
     return ref.output([kubectl, "-n", "weltgewebe-data", "get", f"cluster/{cluster}", "-o", "jsonpath={.status.currentPrimary}"])
@@ -696,6 +809,19 @@ def psql(kubectl: str, sql: str, *, cluster: str = "postgres-ha") -> str:
     if not primary:
         raise ref.ProofError(f"PostgreSQL cluster {cluster} has no current primary")
     return ref.output([kubectl, "-n", "weltgewebe-data", "exec", primary, "--", "psql", "-d", "weltgewebe", "-Atqc", sql])
+
+
+def wait_for_pitr_boundary(kubectl: str, target_time: str) -> None:
+    psql(kubectl, "SELECT pg_sleep(2)")
+    escaped_target = target_time.replace("'", "''")
+    crossed = psql(
+        kubectl,
+        f"SELECT clock_timestamp() > '{escaped_target}'::timestamptz",
+    )
+    if crossed != "t":
+        raise ref.ProofError(
+            f"PostgreSQL clock did not cross PITR target {target_time}"
+        )
 
 
 def pod_topology(kubectl: str, namespace: str, selector: str) -> dict[str, dict[str, str]]:
@@ -1256,6 +1382,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     try:
         create_kind_cluster(kind, args.cluster, receipt["kubernetes"]["kind_node_image"], "platform/clusters/ha/kind.yaml", commit)
         created_primary = True
+        kubectl = require_active_cluster_context(kind, kubectl, args.cluster)
         image_ids = ref.build_images(kind, args.cluster, commit, timestamp)
         image_ids.update(
             prepare_api_upgrade_candidate(kind, args.cluster, commit)
@@ -1368,7 +1495,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         )
         backup = wait_backup_complete(kubectl, backup_name)
         target_time = psql(kubectl, "SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')")
-        time.sleep(2)
+        wait_for_pitr_boundary(kubectl, target_time)
         insert_domain_node(kubectl, after_id, "T004 after PITR target")
         primary_wal_archive = measure_wal_archive(
             kubectl, cluster="postgres-ha"
@@ -1376,7 +1503,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
 
         create_kind_cluster(kind, restore_name, receipt["kubernetes"]["kind_node_image"], "platform/clusters/ha/restore-kind.yaml", commit)
         created_restore = True
-        restore_kubectl = kubectl
+        restore_kubectl = require_active_cluster_context(
+            kind, kubectl, restore_name
+        )
         ref.run([restore_kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=8m"])
         ref.apply_file(restore_kubectl, ROOT / "platform/infrastructure/ha-data/namespace.yaml")
         apply_secret_contracts(restore_kubectl, app_password, s3_secret_key)
@@ -1538,16 +1667,18 @@ def main() -> int:
             delete_external_object_store(args.cluster, args.commit)
             print(json.dumps({"status": "deleted", "cluster": args.cluster}))
             return 0
-        result = prove(args)
+        prove(args)
     except (ref.ProofError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-        print(f"HA recovery proof failed: {error}", file=sys.stderr)
         if isinstance(error, subprocess.CalledProcessError):
-            print(error.stdout or "", file=sys.stderr)
-            print(error.stderr or "", file=sys.stderr)
+            detail = f"subprocess exited with status {error.returncode}"
+        elif isinstance(error, subprocess.TimeoutExpired):
+            detail = "subprocess timed out"
+        else:
+            detail = str(error)
+        print(f"HA recovery proof failed: {detail}", file=sys.stderr)
         return 1
-    print(json.dumps(result, sort_keys=True))
+    print(json.dumps({"status": "pass"}, sort_keys=True))
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
