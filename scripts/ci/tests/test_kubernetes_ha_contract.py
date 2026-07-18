@@ -130,6 +130,47 @@ class KubernetesHaContractTests(unittest.TestCase):
         marker.assert_called_once_with("proof", "commit")
         cleanup.assert_called_once_with("kind", "proof")
 
+    def test_ha_data_direct_apply_is_explicitly_namespaced(self) -> None:
+        path = ROOT / "platform/infrastructure/ha-data/postgres-image-catalog.yaml"
+        with mock.patch.object(self.ha.ref, "run") as run:
+            self.ha.apply_ha_data_file("kubectl", path)
+        run.assert_called_once_with(
+            [
+                "kubectl",
+                "-n",
+                "weltgewebe-data",
+                "apply",
+                "-f",
+                str(path),
+            ]
+        )
+
+    def test_restore_prerequisites_are_read_back_from_data_namespace(self) -> None:
+        with mock.patch.object(
+            self.ha.ref,
+            "output",
+            side_effect=[
+                "service/seaweedfs-s3",
+                "objectstore.barmancloud.cnpg.io/postgres-ha",
+                "imagecatalog.postgresql.cnpg.io/weltgewebe-postgres",
+            ],
+        ) as output:
+            self.ha.require_restore_prerequisites("kubectl")
+        self.assertEqual(output.call_count, 3)
+        self.assertTrue(
+            all(
+                call.args[0][1:3] == ["-n", "weltgewebe-data"]
+                for call in output.call_args_list
+            )
+        )
+
+    def test_restore_prerequisite_readback_fails_closed(self) -> None:
+        with mock.patch.object(self.ha.ref, "output", return_value=""):
+            with self.assertRaisesRegex(
+                self.ha.ref.ProofError, "restore prerequisite missing"
+            ):
+                self.ha.require_restore_prerequisites("kubectl")
+
     def test_failed_object_store_setup_cleans_only_owned_resources(self) -> None:
         absent = mock.Mock(returncode=1)
         with (

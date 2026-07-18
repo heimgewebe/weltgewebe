@@ -303,6 +303,42 @@ def delete_external_object_store(cluster: str, commit: str) -> None:
         ref.run(["docker", "volume", "rm", volume])
 
 
+def apply_ha_data_file(kubectl: str, path: Path) -> None:
+    ref.run(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe-data",
+            "apply",
+            "-f",
+            str(path),
+        ]
+    )
+
+
+def require_restore_prerequisites(kubectl: str) -> None:
+    for resource in (
+        "service/seaweedfs-s3",
+        "objectstore/postgres-ha",
+        "imagecatalog/weltgewebe-postgres",
+    ):
+        observed = ref.output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe-data",
+                "get",
+                resource,
+                "-o",
+                "name",
+            ]
+        )
+        if not observed:
+            raise ref.ProofError(
+                f"restore prerequisite missing from weltgewebe-data: {resource}"
+            )
+
+
 def apply_object_store_endpoint(kubectl: str, address: str) -> None:
     ref.apply_yaml(
         kubectl,
@@ -1360,7 +1396,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             restore_kubectl, ROOT / "platform/infrastructure/ha-data/namespace.yaml"
         )
         apply_secret_contracts(restore_kubectl, app_password, s3_secret_key)
-        ref.apply_file(
+        apply_ha_data_file(
             restore_kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml"
         )
         apply_object_store_endpoint(restore_kubectl, object_store_address)
@@ -1369,14 +1405,15 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         install_barman_cloud_plugin(
             restore_kubectl, receipt["artifacts"]["barman_cloud_plugin"]
         )
-        ref.apply_file(
+        apply_ha_data_file(
             restore_kubectl,
             ROOT / "platform/infrastructure/ha-data/barman-object-store.yaml",
         )
-        ref.apply_file(
+        apply_ha_data_file(
             restore_kubectl,
             ROOT / "platform/infrastructure/ha-data/postgres-image-catalog.yaml",
         )
+        require_restore_prerequisites(restore_kubectl)
         restore_started = time.monotonic()
         ref.apply_yaml(restore_kubectl, restore_cluster_document(target_time))
         wait_cluster_ready(restore_kubectl, "postgres-restore", "20m")
