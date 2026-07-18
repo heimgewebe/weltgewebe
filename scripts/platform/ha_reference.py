@@ -658,11 +658,16 @@ def barman_plugin_state(kubectl: str, *, require_three_nodes: bool) -> dict[str,
             (
                 container
                 for container in containers
-                if container.get("image") == BARMAN_CLOUD_PLUGIN_IMAGE
+                if container.get("name") == "barman-cloud"
+                and container.get("image") == BARMAN_CLOUD_PLUGIN_IMAGE
             ),
             None,
         )
         status = statuses.get(controller.get("name")) if controller else None
+        pod_conditions = {
+            condition.get("type"): condition.get("status")
+            for condition in item.get("status", {}).get("conditions", [])
+        }
         if (
             not name
             or not node
@@ -677,7 +682,7 @@ def barman_plugin_state(kubectl: str, *, require_three_nodes: bool) -> dict[str,
                 )
             continue
         observed[name] = node
-        if status.get("ready") is True:
+        if pod_conditions.get("Ready") == "True":
             ready_pods.add(name)
     if require_three_nodes and (
         len(observed) != 3 or len(set(observed.values())) != 3
@@ -1723,6 +1728,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         barman_leader_after_failure = wait_barman_plugin_leader_after_node_loss(
             kubectl, stopped_node
         )
+        barman_leader_rto = time.monotonic() - failure_started
         def new_primary_probe():
             candidate = current_primary(kubectl)
             return candidate if candidate and candidate != primary_before else False
@@ -1859,6 +1865,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             "zone_failure": {
                 "zone": failure_zone, "node": primary_topology["node"],
                 "postgres_primary_before": primary_before, "postgres_primary_after": primary_after,
+                "barman_leader_rto_seconds": round(barman_leader_rto, 3),
                 "barman_plugin_rto_seconds": round(barman_rto, 3),
                 "postgres_rto_seconds": round(postgres_rto, 3),
                 "api_rto_seconds": round(api_rto, 3), "nats_rto_seconds": round(nats_rto, 3),

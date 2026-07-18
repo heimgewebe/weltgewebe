@@ -313,7 +313,15 @@ class KubernetesHaContractTests(unittest.TestCase):
         required = deployment["spec"]["template"]["spec"]["affinity"][
             "podAntiAffinity"
         ]["requiredDuringSchedulingIgnoredDuringExecution"]
-        self.assertEqual(required[0]["topologyKey"], "kubernetes.io/hostname")
+        self.assertEqual(
+            required,
+            [
+                {
+                    "labelSelector": {"matchLabels": {"app": "barman-cloud"}},
+                    "topologyKey": "kubernetes.io/hostname",
+                }
+            ],
+        )
         self.assertFalse(
             any(item.get("kind") == "PodDisruptionBudget" for item in documents)
         )
@@ -344,6 +352,14 @@ class KubernetesHaContractTests(unittest.TestCase):
                                             "startedAt": "2026-07-18T11:32:39Z"
                                         }
                                     },
+                                }
+                            ],
+                            "conditions": [
+                                {
+                                    "type": "Ready",
+                                    "status": "True"
+                                    if index == leader_index
+                                    else "False",
                                 }
                             ],
                         },
@@ -384,6 +400,28 @@ class KubernetesHaContractTests(unittest.TestCase):
                 "kubectl", require_three_nodes=True
             )
         self.assertEqual(state["nodes"], ["worker-1", "worker-2", "worker-3"])
+        self.assertEqual(
+            state["leader"], {"pod": "barman-cloud-2", "node": "worker-2"}
+        )
+
+    def test_barman_plugin_state_ignores_stale_container_ready_after_node_loss(self) -> None:
+        pods = json.loads(self.barman_plugin_pod_payload(2))
+        old_leader = pods["items"][0]
+        old_leader["status"]["containerStatuses"][0]["ready"] = True
+        old_leader["status"]["conditions"] = [
+            {"type": "Ready", "status": "False"}
+        ]
+        with mock.patch.object(
+            self.ha.ref,
+            "output",
+            side_effect=[
+                json.dumps(pods),
+                self.barman_plugin_endpoint_payload(2),
+            ],
+        ):
+            state = self.ha.barman_plugin_state(
+                "kubectl", require_three_nodes=False
+            )
         self.assertEqual(
             state["leader"], {"pod": "barman-cloud-2", "node": "worker-2"}
         )
@@ -681,7 +719,15 @@ spec:
         required = spec["template"]["spec"]["affinity"]["podAntiAffinity"][
             "requiredDuringSchedulingIgnoredDuringExecution"
         ]
-        self.assertEqual(required[0]["topologyKey"], "kubernetes.io/hostname")
+        self.assertEqual(
+            required,
+            [
+                {
+                    "labelSelector": {"matchLabels": {"app.kubernetes.io/name": "cloudnative-pg"}},
+                    "topologyKey": "kubernetes.io/hostname",
+                }
+            ],
+        )
         self.assertNotIn(
             "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0", rendered
         )
