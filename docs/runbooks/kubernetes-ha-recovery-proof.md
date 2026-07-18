@@ -30,13 +30,13 @@ Der Runner installiert Werkzeuge ausschließlich aus `platform/toolchain.lock.js
 ## Beweisphasen
 
 1. Primärcluster mit drei Datenzonen erzeugen.
-2. Cilium, Gateway API, Flux und CloudNativePG installieren.
+2. Cilium, Gateway API, Flux, CloudNativePG, cert-manager und das Barman-Cloud-CNPG-I-Plugin aus fest gebundenen Releaseartefakten installieren.
 3. PostgreSQL, NATS JetStream und drei API-Replikate über die Zonen verteilen.
 4. Eine gültige `domain_nodes`-Mutation schreiben und über die API zurücklesen.
 5. Den Worker des PostgreSQL-Primary stoppen.
 6. PostgreSQL-Failover, API-Readback und JetStream-Quorum messen.
 7. Die ausgefallene Zone bewusst weiter gestoppt lassen.
-8. Im degradierten Zwei-Zonen-Betrieb ein Basisbackup gezielt auf dem neuen Primary erstellen, den PITR-Zeitpunkt festhalten und eine spätere Mutation schreiben.
+8. Im degradierten Zwei-Zonen-Betrieb über das Barman-Cloud-Plugin ein Basisbackup gezielt auf dem neuen Primary erstellen, den PITR-Zeitpunkt festhalten und eine spätere Mutation schreiben.
 9. Einen zweiten leeren kind-Cluster erzeugen.
 10. Während die Ursprungszone weiterhin fehlt, die Datenbank auf den Zielzeitpunkt wiederherstellen und die Zeilengrenze vergleichen.
 
@@ -48,14 +48,14 @@ Bei Erfolg entsteht unter `.cache/weltgewebe-platform/receipts/` ein JSON-Receip
 - Image-IDs,
 - Pod-, Knoten- und Zonenbelegung,
 - gemessenen RTO-Werten,
-- Backupziel, Backup- und PITR-Zeitpunkt,
+- Backupmethode, Plugin, Objektstore, Backupziel sowie Backup- und PITR-Zeitpunkt,
 - Datenvergleich des Restoreclusters,
 - dem Beleg, dass die Ausfallzone bis nach Backup und Restore gestoppt blieb,
 - expliziten Nichtaussagen einschließlich der nicht geprüften automatischen Wiedereingliederung der ausgefallenen Zone.
 
 ## Fehlerdiagnose
 
-Bei einem Fehler werden Clusterzustand, Pods, Events, Flux, Gateway, Backup- und Clusterressourcen sowie CloudNativePG-Operator- und Instanzlogs unter `.cache/weltgewebe-platform/failures/<cluster>/` gesichert. Der Runner startet einen gestoppten Knoten wieder und entfernt standardmäßig nur seine eigenen markierten Ressourcen.
+Bei einem Fehler werden Clusterzustand, Pods, Events, Flux, Gateway, Backup-, Cluster- und `ObjectStore`-Ressourcen sowie Logs von CloudNativePG, Barman Cloud und PostgreSQL unter `.cache/weltgewebe-platform/failures/<cluster>/` gesichert. Der Runner startet einen gestoppten Knoten wieder und entfernt standardmäßig nur seine eigenen markierten Ressourcen.
 
 ## Manuelles eigentumsgebundenes Cleanup
 

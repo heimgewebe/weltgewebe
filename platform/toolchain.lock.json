@@ -96,6 +96,18 @@
       "filename": "cnpg-1.30.0.yaml",
       "url": "https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v1.30.0/cnpg-1.30.0.yaml",
       "sha256": "f8bede43fe4ee0d478c2355b204a36876b2ae4faac60f2a9452280b293da3b88"
+    },
+    "cert_manager": {
+      "version": "1.21.0",
+      "filename": "cert-manager-v1.21.0.yaml",
+      "url": "https://github.com/cert-manager/cert-manager/releases/download/v1.21.0/cert-manager.yaml",
+      "sha256": "6e499c3f1ab356abe79a7853911f80cb09c213885bfdf81092fdff142ba63c4a"
+    },
+    "barman_cloud_plugin": {
+      "version": "0.13.0",
+      "filename": "plugin-barman-cloud-v0.13.0.yaml",
+      "url": "https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.13.0/manifest.yaml",
+      "sha256": "d2e71e7b06822448f1a421f05781846cfdb9cc621e7ef32eef5e20c5133213b0"
     }
   },
   "images": {
@@ -103,6 +115,10 @@
     "cloudnative_pg_postgresql": "ghcr.io/cloudnative-pg/postgresql:16.14@sha256:05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1",
     "nats": "nats@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0",
     "nats_box": "natsio/nats-box@sha256:9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d",
-    "seaweedfs": "chrislusf/seaweedfs@sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d"
+    "seaweedfs": "chrislusf/seaweedfs@sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d",
+    "barman_cloud_plugin": "ghcr.io/cloudnative-pg/plugin-barman-cloud@sha256:71589dbac582333442812b07b31f7ea4d00324a8358aac7ca507dabf9f4b6c96",
+    "cert_manager_cainjector": "quay.io/jetstack/cert-manager-cainjector@sha256:ad1dcc5b2fccc420f9b3fbee7ce8a869450c540fd4f2f41de2d95b1ca0c4d701",
+    "cert_manager_controller": "quay.io/jetstack/cert-manager-controller@sha256:e370f7800a53078e9d74324287a7d52b553864e55f5b4e521f911c3f6c7da203",
+    "cert_manager_webhook": "quay.io/jetstack/cert-manager-webhook@sha256:c33cca307541e2d58861a55b1af5f390b7e19c8741e48b433693b73a7cce88b3"
   }
 }

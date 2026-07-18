@@ -22,6 +22,12 @@ CNPG_OPERATOR_IMAGE = "ghcr.io/cloudnative-pg/cloudnative-pg@sha256:a2701eb97cdd
 POSTGRES_IMAGE = "ghcr.io/cloudnative-pg/postgresql:16.14@sha256:05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1"
 NATS_BOX_IMAGE = "natsio/nats-box@sha256:9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d"
 SEAWEEDFS_IMAGE = "chrislusf/seaweedfs@sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d"
+BARMAN_PLUGIN_IMAGE = "ghcr.io/cloudnative-pg/plugin-barman-cloud@sha256:71589dbac582333442812b07b31f7ea4d00324a8358aac7ca507dabf9f4b6c96"
+CERT_MANAGER_IMAGES = {
+    "quay.io/jetstack/cert-manager-cainjector:v1.21.0": "quay.io/jetstack/cert-manager-cainjector@sha256:ad1dcc5b2fccc420f9b3fbee7ce8a869450c540fd4f2f41de2d95b1ca0c4d701",
+    "quay.io/jetstack/cert-manager-controller:v1.21.0": "quay.io/jetstack/cert-manager-controller@sha256:e370f7800a53078e9d74324287a7d52b553864e55f5b4e521f911c3f6c7da203",
+    "quay.io/jetstack/cert-manager-webhook:v1.21.0": "quay.io/jetstack/cert-manager-webhook@sha256:c33cca307541e2d58861a55b1af5f390b7e19c8741e48b433693b73a7cce88b3",
+}
 APP_USER = "welt"
 S3_ACCESS_KEY = "weltgewebe-ha-proof"
 S3_BUCKET = "weltgewebe-postgres"
@@ -409,6 +415,110 @@ def install_cnpg(kubectl: str, artifact: str) -> None:
         )
 
 
+def apply_digest_bound_release(
+    kubectl: str, artifact: str, replacements: dict[str, str], release_name: str
+) -> None:
+    source = Path(artifact).read_text(encoding="utf-8")
+    for tagged, digest_bound in replacements.items():
+        if source.count(tagged) != 1:
+            raise ref.ProofError(
+                f"{release_name} image reference changed unexpectedly: {tagged}"
+            )
+        source = source.replace(tagged, digest_bound)
+    ref.run(
+        [
+            kubectl,
+            "apply",
+            "--server-side",
+            "--force-conflicts",
+            "--field-manager=weltgewebe-ha-proof",
+            "-f",
+            "-",
+        ],
+        input_text=source,
+        timeout=600,
+    )
+
+
+def install_cert_manager(kubectl: str, artifact: str) -> None:
+    apply_digest_bound_release(
+        kubectl, artifact, CERT_MANAGER_IMAGES, "cert-manager release"
+    )
+    ref.run(
+        [
+            kubectl,
+            "wait",
+            "--for=condition=Established",
+            "crd/certificates.cert-manager.io",
+            "--timeout=3m",
+        ]
+    )
+    deployments = ("cert-manager", "cert-manager-cainjector", "cert-manager-webhook")
+    for deployment in deployments:
+        ref.wait_rollout(kubectl, "cert-manager", f"deployment/{deployment}", "8m")
+    expected = {
+        "cert-manager": CERT_MANAGER_IMAGES[
+            "quay.io/jetstack/cert-manager-controller:v1.21.0"
+        ],
+        "cert-manager-cainjector": CERT_MANAGER_IMAGES[
+            "quay.io/jetstack/cert-manager-cainjector:v1.21.0"
+        ],
+        "cert-manager-webhook": CERT_MANAGER_IMAGES[
+            "quay.io/jetstack/cert-manager-webhook:v1.21.0"
+        ],
+    }
+    observed = {
+        name: ref.output(
+            [
+                kubectl,
+                "-n",
+                "cert-manager",
+                "get",
+                f"deployment/{name}",
+                "-o",
+                "jsonpath={.spec.template.spec.containers[0].image}",
+            ]
+        )
+        for name in deployments
+    }
+    if observed != expected:
+        raise ref.ProofError(
+            f"cert-manager release images are not digest-bound: {observed}"
+        )
+
+
+def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
+    tagged = "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0"
+    apply_digest_bound_release(
+        kubectl, artifact, {tagged: BARMAN_PLUGIN_IMAGE}, "Barman Cloud plugin release"
+    )
+    ref.run(
+        [
+            kubectl,
+            "wait",
+            "--for=condition=Established",
+            "crd/objectstores.barmancloud.cnpg.io",
+            "--timeout=3m",
+        ]
+    )
+    ref.wait_rollout(kubectl, "cnpg-system", "deployment/barman-cloud", "8m")
+    observed = ref.output(
+        [
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "get",
+            "deployment/barman-cloud",
+            "-o",
+            "jsonpath={.spec.template.spec.containers[0].image}",
+        ]
+    )
+    if observed != BARMAN_PLUGIN_IMAGE:
+        raise ref.ProofError(
+            f"Barman Cloud plugin image is not digest-bound: {observed}"
+        )
+
+
 def current_primary(kubectl: str, cluster: str = "postgres-ha") -> str:
     return ref.output(
         [
@@ -648,9 +758,10 @@ def backup_document(name: str) -> dict[str, Any]:
         "kind": "Backup",
         "metadata": {"name": name, "namespace": "weltgewebe-data"},
         "spec": {
-            "method": "barmanObjectStore",
+            "method": "plugin",
             "target": "primary",
             "cluster": {"name": "postgres-ha"},
+            "pluginConfiguration": {"name": "barman-cloud.cloudnative-pg.io"},
         },
     }
 
@@ -712,6 +823,24 @@ def ha_diagnostic_snapshot(kubectl: str, name: str) -> None:
             "-o",
             "yaml",
         ],
+        "barman-object-store.yaml": [
+            kubectl,
+            "-n",
+            "weltgewebe-data",
+            "get",
+            "objectstore/postgres-ha",
+            "-o",
+            "yaml",
+        ],
+        "barman-plugin.log": [
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "logs",
+            "deployment/barman-cloud",
+            "--all-containers=true",
+            "--tail=2000",
+        ],
         "cnpg-operator.log": [
             kubectl,
             "-n",
@@ -764,21 +893,12 @@ def restore_cluster_document(target_time: str) -> dict[str, Any]:
             "externalClusters": [
                 {
                     "name": "postgres-ha",
-                    "barmanObjectStore": {
-                        "destinationPath": f"s3://{S3_BUCKET}/",
-                        "endpointURL": "http://seaweedfs-s3.weltgewebe-data.svc.cluster.local:8333",
-                        "serverName": "postgres-ha",
-                        "s3Credentials": {
-                            "accessKeyId": {
-                                "name": "weltgewebe-ha-s3",
-                                "key": "ACCESS_KEY_ID",
-                            },
-                            "secretAccessKey": {
-                                "name": "weltgewebe-ha-s3",
-                                "key": "ACCESS_SECRET_KEY",
-                            },
+                    "plugin": {
+                        "name": "barman-cloud.cloudnative-pg.io",
+                        "parameters": {
+                            "barmanObjectName": "postgres-ha",
+                            "serverName": "postgres-ha",
                         },
-                        "wal": {"maxParallel": 2},
                     },
                 }
             ],
@@ -849,6 +969,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         )
         apply_object_store_endpoint(kubectl, object_store_address)
         install_cnpg(kubectl, receipt["artifacts"]["cloudnative_pg_operator"])
+        install_cert_manager(kubectl, receipt["artifacts"]["cert_manager"])
+        install_barman_cloud_plugin(
+            kubectl, receipt["artifacts"]["barman_cloud_plugin"]
+        )
         ref.apply_direct(kubectl, kustomize, "platform/infrastructure/ha-data")
         ref.wait_rollout(kubectl, "weltgewebe-data", "statefulset/nats", "12m")
         wait_cluster_ready(kubectl, "postgres-ha", "15m")
@@ -1037,6 +1161,14 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         )
         apply_object_store_endpoint(restore_kubectl, object_store_address)
         install_cnpg(restore_kubectl, receipt["artifacts"]["cloudnative_pg_operator"])
+        install_cert_manager(restore_kubectl, receipt["artifacts"]["cert_manager"])
+        install_barman_cloud_plugin(
+            restore_kubectl, receipt["artifacts"]["barman_cloud_plugin"]
+        )
+        ref.apply_file(
+            restore_kubectl,
+            ROOT / "platform/infrastructure/ha-data/barman-object-store.yaml",
+        )
         ref.apply_file(
             restore_kubectl,
             ROOT / "platform/infrastructure/ha-data/postgres-image-catalog.yaml",
@@ -1087,7 +1219,12 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             "backup": {
                 "name": backup_name,
                 "phase": backup.get("status", {}).get("phase"),
+                "method": backup.get("spec", {}).get("method"),
                 "target": backup.get("spec", {}).get("target"),
+                "plugin": backup.get("spec", {})
+                .get("pluginConfiguration", {})
+                .get("name"),
+                "object_store": "postgres-ha",
                 "target_time": target_time,
             },
             "restore": {

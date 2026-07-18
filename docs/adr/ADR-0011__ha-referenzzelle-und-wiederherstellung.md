@@ -27,6 +27,8 @@ Die T004-Referenzzelle verwendet drei explizite Zonen und folgende Verträge:
 
 - drei API-Replikate mit verpflichtender Zonenverteilung,
 - CloudNativePG mit drei PostgreSQL-Instanzen und verpflichtender Zonen-Anti-Affinität,
+- das offizielle Barman-Cloud-CNPG-I-Plugin für WAL-Archivierung, Basisbackups und PITR,
+- cert-manager für die gegenseitig abgesicherte Kommunikation zwischen CloudNativePG und Backup-Plugin,
 - NATS JetStream mit drei RAFT-Mitgliedern und `minAvailable: 2`,
 - einen ausschließlich für den Beweis verwendeten externen S3-kompatiblen SeaweedFS-Dienst,
 - dynamisch erzeugte kurzlebige Secrets statt eingecheckter Zugangsdaten,
@@ -35,7 +37,7 @@ Die T004-Referenzzelle verwendet drei explizite Zonen und folgende Verträge:
 - einen für diesen degradierten Beweis gezielt auf den neuen Primary gebundenen Backupauftrag,
 - einen neuen zweiten kind-Cluster für den Point-in-Time-Restore.
 
-Alle Drittimages und das CloudNativePG-Releaseartefakt sind per SHA-256 beziehungsweise OCI-Digest gebunden.
+Alle Drittimages sowie die Releaseartefakte von CloudNativePG, cert-manager und Barman Cloud sind per SHA-256 beziehungsweise OCI-Digest gebunden. Der mit CloudNativePG 1.30 entfernte eingebaute Barman-Pfad ist ausdrücklich ausgeschlossen.
 
 ## Messvertrag
 

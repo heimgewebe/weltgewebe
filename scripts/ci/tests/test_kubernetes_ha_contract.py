@@ -61,6 +61,10 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertEqual(
             set(lock["images"]),
             {
+                "barman_cloud_plugin",
+                "cert_manager_cainjector",
+                "cert_manager_controller",
+                "cert_manager_webhook",
                 "cloudnative_pg_operator",
                 "cloudnative_pg_postgresql",
                 "nats",
@@ -73,6 +77,16 @@ class KubernetesHaContractTests(unittest.TestCase):
 
         self.assertEqual(
             {
+                "barman_cloud_plugin": self.ha.BARMAN_PLUGIN_IMAGE,
+                "cert_manager_cainjector": self.ha.CERT_MANAGER_IMAGES[
+                    "quay.io/jetstack/cert-manager-cainjector:v1.21.0"
+                ],
+                "cert_manager_controller": self.ha.CERT_MANAGER_IMAGES[
+                    "quay.io/jetstack/cert-manager-controller:v1.21.0"
+                ],
+                "cert_manager_webhook": self.ha.CERT_MANAGER_IMAGES[
+                    "quay.io/jetstack/cert-manager-webhook:v1.21.0"
+                ],
                 "cloudnative_pg_operator": self.ha.CNPG_OPERATOR_IMAGE,
                 "cloudnative_pg_postgresql": self.ha.POSTGRES_IMAGE,
                 "nats_box": self.ha.NATS_BOX_IMAGE,
@@ -81,6 +95,10 @@ class KubernetesHaContractTests(unittest.TestCase):
             {
                 name: lock["images"][name]
                 for name in (
+                    "barman_cloud_plugin",
+                    "cert_manager_cainjector",
+                    "cert_manager_controller",
+                    "cert_manager_webhook",
                     "cloudnative_pg_operator",
                     "cloudnative_pg_postgresql",
                     "nats_box",
@@ -131,17 +149,25 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertEqual(recovery["source"], "postgres-ha")
         self.assertEqual(recovery["recoveryTarget"]["targetTime"], target)
         self.assertTrue(recovery["recoveryTarget"]["exclusive"])
+        plugin = spec["externalClusters"][0]["plugin"]
+        self.assertEqual(plugin["name"], "barman-cloud.cloudnative-pg.io")
         self.assertEqual(
-            spec["externalClusters"][0]["barmanObjectStore"]["serverName"],
-            "postgres-ha",
+            plugin["parameters"],
+            {"barmanObjectName": "postgres-ha", "serverName": "postgres-ha"},
         )
+        self.assertNotIn("barmanObjectStore", spec["externalClusters"][0])
 
     def test_degraded_backup_targets_the_current_primary(self) -> None:
         document = self.ha.backup_document("proof-backup")
         self.assertEqual(document["metadata"]["name"], "proof-backup")
-        self.assertEqual(document["spec"]["method"], "barmanObjectStore")
+        self.assertEqual(document["spec"]["method"], "plugin")
         self.assertEqual(document["spec"]["target"], "primary")
         self.assertEqual(document["spec"]["cluster"], {"name": "postgres-ha"})
+        self.assertEqual(
+            document["spec"]["pluginConfiguration"],
+            {"name": "barman-cloud.cloudnative-pg.io"},
+        )
+        self.assertNotIn("barmanObjectStore", json.dumps(document))
 
     def test_backup_wait_reports_terminal_status(self) -> None:
         failed = json.dumps(
@@ -176,12 +202,20 @@ class KubernetesHaContractTests(unittest.TestCase):
                 {path.name for path in target.iterdir()},
                 {
                     "postgres-backup-and-cluster.yaml",
+                    "barman-object-store.yaml",
+                    "barman-plugin.log",
                     "cnpg-operator.log",
                     "postgres-instances.log",
                 },
             )
             argv = [call.args[0] for call in run.call_args_list]
             self.assertTrue(any("backups,clusters" in command for command in argv))
+            self.assertTrue(
+                any("objectstore/postgres-ha" in command for command in argv)
+            )
+            self.assertTrue(
+                any("deployment/barman-cloud" in command for command in argv)
+            )
             self.assertTrue(
                 any("deployment/cnpg-controller-manager" in command for command in argv)
             )
@@ -215,7 +249,9 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertGreater(checks[1], source.index("PITR data comparison failed"))
         self.assertNotIn('ref.run(["docker", "start", stopped_node]', source)
         self.assertIn('"remained_unavailable_through_backup_and_restore": True', source)
+        self.assertIn('"method": backup.get("spec", {}).get("method")', source)
         self.assertIn('"target": backup.get("spec", {}).get("target")', source)
+        self.assertIn('"plugin": backup.get("spec", {})', source)
         self.assertIn('"automatic reintegration of the failed zone"', source)
 
     def test_zone_contract_requires_three_distinct_zones(self) -> None:
@@ -237,6 +273,49 @@ class KubernetesHaContractTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(self.ha.ref.ProofError, "foreign"):
                 self.ha.delete_external_object_store("proof", "expected-commit")
+
+    def test_digest_bound_release_rewrites_exact_image_tags(self) -> None:
+        artifact = ROOT / ".cache/test-digest-bound-release.yaml"
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        tagged = "example.invalid/operator:v1"
+        digest_bound = "example.invalid/operator@sha256:" + "a" * 64
+        artifact.write_text(f"image: {tagged}\n")
+        try:
+            with mock.patch.object(self.ha.ref, "run") as run:
+                self.ha.apply_digest_bound_release(
+                    "kubectl",
+                    str(artifact),
+                    {tagged: digest_bound},
+                    "test release",
+                )
+            argv = run.call_args.args[0]
+            self.assertIn("--server-side", argv)
+            self.assertIn("--force-conflicts", argv)
+            payload = run.call_args.kwargs["input_text"]
+            self.assertNotIn(tagged, payload)
+            self.assertEqual(payload.count(digest_bound), 1)
+        finally:
+            artifact.unlink(missing_ok=True)
+
+    def test_digest_bound_release_rejects_manifest_drift(self) -> None:
+        artifact = ROOT / ".cache/test-digest-bound-release-drift.yaml"
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text("image: example.invalid/operator:v2\n")
+        try:
+            with self.assertRaisesRegex(
+                self.ha.ref.ProofError, "image reference changed unexpectedly"
+            ):
+                self.ha.apply_digest_bound_release(
+                    "kubectl",
+                    str(artifact),
+                    {
+                        "example.invalid/operator:v1": "example.invalid/operator@sha256:"
+                        + "a" * 64
+                    },
+                    "test release",
+                )
+        finally:
+            artifact.unlink(missing_ok=True)
 
     def test_cnpg_release_uses_server_side_apply(self) -> None:
         artifact = ROOT / ".cache/test-cnpg-release.yaml"

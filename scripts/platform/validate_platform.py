@@ -119,6 +119,10 @@ def _assert_images() -> None:
     if "@sha256:" not in node or not HEX64.fullmatch(node.rsplit("@sha256:", 1)[1]):
         raise ContractError("kind node image is not digest-bound")
     expected_images = {
+        "barman_cloud_plugin",
+        "cert_manager_cainjector",
+        "cert_manager_controller",
+        "cert_manager_webhook",
         "cloudnative_pg_operator",
         "cloudnative_pg_postgresql",
         "nats",
@@ -257,9 +261,27 @@ def _assert_ha_contract() -> None:
     affinity = spec.get("affinity", {})
     if affinity.get("podAntiAffinityType") != "required" or affinity.get("topologyKey") != "topology.kubernetes.io/zone":
         raise ContractError("HA PostgreSQL does not require zone anti-affinity")
-    backup = spec.get("backup", {}).get("barmanObjectStore", {})
-    if not str(backup.get("destinationPath", "")).startswith("s3://"):
-        raise ContractError("HA PostgreSQL lacks object-store backup")
+    if "backup" in spec or "barmanObjectStore" in json.dumps(spec):
+        raise ContractError("HA PostgreSQL must not use removed in-tree Barman backup")
+    plugins = spec.get("plugins", [])
+    if plugins != [
+        {
+            "name": "barman-cloud.cloudnative-pg.io",
+            "isWALArchiver": True,
+            "parameters": {"barmanObjectName": "postgres-ha"},
+        }
+    ]:
+        raise ContractError("HA PostgreSQL lacks the Barman Cloud WAL plugin")
+    barman_store = next(
+        _documents(PLATFORM / "infrastructure/ha-data/barman-object-store.yaml")
+    )
+    if barman_store.get("kind") != "ObjectStore":
+        raise ContractError("HA PostgreSQL lacks the Barman ObjectStore")
+    configuration = barman_store.get("spec", {}).get("configuration", {})
+    if not str(configuration.get("destinationPath", "")).startswith("s3://"):
+        raise ContractError("HA Barman ObjectStore lacks an S3 destination")
+    if barman_store.get("spec", {}).get("retentionPolicy") != "7d":
+        raise ContractError("HA Barman ObjectStore lacks bounded retention")
 
     nats_docs = list(_documents(PLATFORM / "infrastructure/ha-data/nats.yaml"))
     stateful = next((item for item in nats_docs if item.get("kind") == "StatefulSet"), None)
