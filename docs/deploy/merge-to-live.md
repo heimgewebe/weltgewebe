@@ -54,10 +54,12 @@ jedem abgeschlossenen Lauf erneut mit einem Abstand von zwei Minuten. Der Dienst
 9. legt einen getrennten root-eigenen Release-Worktree unter
    `/opt/weltgewebe-releases/<commit>` an und prüft dessen Git-Integrität;
 10. bindet die kanonischen root-eigenen PMTiles schreibgeschützt ein, führt
-    den idempotenten, API-begrenzten Migrations-Scope aus und prüft danach erneut,
-    dass `origin/main` unverändert ist;
+    den idempotenten, API-begrenzten Migrations-Scope aus, hält dessen Abschluss
+    als nicht-terminalen Zeitstempel im bestehenden Deployment-Receipt fest und
+    prüft danach erneut, dass `origin/main` unverändert ist;
 11. ruft erst anschließend den vollständigen fail-closed arbeitenden
-    `weltgewebe-up`-Pfad auf;
+    `weltgewebe-up`-Pfad auf; ein späterer Wiederholungsversuch prüft die
+    Migration erneut und überspringt sie niemals allein aufgrund des Receipts;
 12. liest Frontend, API und beide Build-Header über begrenzte GET-Anfragen
     öffentlich zurück;
 13. aktualisiert den Zeiger auf den verifizierten Stand nur, wenn ein letzter
@@ -77,6 +79,13 @@ Merge noch Fast-Forward verändern den bestehenden Checkout.
 Der Git-Objektspeicher, die persistenten PMTiles, Releases und installierten
 Helfer müssen root-eigen und für Gruppe sowie Welt nicht beschreibbar sein.
 Release-Worktrees verweisen nur auf den kanonischen Kartenbestand.
+
+Dass der Migrations-Scope bei einem bereits fehlenden Caddy arbeiten darf, ist
+nur ein Wiederherstellungsverhalten für einen ausgefallenen Frontdoor-Pfad. Es
+ist keine zusätzliche Berechtigung: Der Produktionspfad bleibt root-, Lock-,
+Commit- und Artefakt-gebunden. Ein bloßer Environment-Schalter würde hier keine
+Sicherheitsgrenze schaffen, weil ein bereits zur Docker-Deploymentausführung
+berechtigter Aufrufer ihn selbst setzen könnte.
 
 Der Webbau läuft nicht direkt als Root auf dem Host. Stattdessen gilt:
 
