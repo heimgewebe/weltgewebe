@@ -1503,7 +1503,7 @@ def main() -> int:
             delete_external_object_store(args.cluster, args.commit)
             print(json.dumps({"status": "deleted", "cluster": args.cluster}))
             return 0
-        result = prove(args)
+        prove(args)
     except (
         ref.ProofError,
         subprocess.CalledProcessError,
@@ -1517,7 +1517,7 @@ def main() -> int:
             detail = str(error)
         print(f"HA recovery proof failed: {detail}", file=sys.stderr)
         return 1
-    print(json.dumps(result, sort_keys=True))
+    print(json.dumps({"status": "pass"}, sort_keys=True))
     return 0
 
 

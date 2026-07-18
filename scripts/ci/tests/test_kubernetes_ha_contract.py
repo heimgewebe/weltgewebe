@@ -522,6 +522,24 @@ class KubernetesHaContractTests(unittest.TestCase):
             self.assertFalse(self.ha.cnpg_webhook_ready("kubectl"))
         self.assertEqual(run.call_count, 1)
 
+    def test_main_logs_only_constant_success_summary(self) -> None:
+        parser = mock.Mock()
+        parser.parse_args.return_value = self.ha.argparse.Namespace(
+            command="proof", cluster="proof", keep=False
+        )
+        with (
+            mock.patch.object(self.ha, "argument_parser", return_value=parser),
+            mock.patch.object(self.ha.ref, "tool_receipt", return_value={}),
+            mock.patch.object(
+                self.ha,
+                "prove",
+                return_value={"status": "pass", "secret": "must-not-leak"},
+            ),
+            mock.patch("builtins.print") as output,
+        ):
+            self.assertEqual(self.ha.main(), 0)
+        output.assert_called_once_with('{"status": "pass"}')
+
     def test_main_does_not_log_subprocess_output(self) -> None:
         failure = subprocess.CalledProcessError(
             7,
