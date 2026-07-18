@@ -333,6 +333,11 @@ def _assert_ha_contract() -> None:
         "verify_barman_sidecar_images",
         "BARMAN_CLOUD_SIDECAR_IMAGE",
         "pg_stat_archiver", "pluginConfiguration",
+        "prove_api_upgrade_and_rollback", "UPGRADE_API_IMAGE",
+        "rollout", "undo", "compute_error_budget",
+        "zero-observed-outage", "within_budget",
+        "continued_wal_archiving", "continuity_validation_seconds",
+        "measured_archive_rpo_upper_bound_seconds",
     )
     for marker in required_markers:
         if marker not in proof:

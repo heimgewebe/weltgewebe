@@ -4,7 +4,7 @@ title: ADR-0011 — Hochverfügbare Referenzzelle und Wiederherstellungsbeweis
 doc_type: reference
 status: active
 summary: >
-  Definiert den nichtproduktiven Referenzvertrag für drei Fehlerdomänen, PostgreSQL- und JetStream-Quorum, kontrollierten Zonenausfall und Point-in-Time-Restore in einen leeren Cluster.
+  Definiert den nichtproduktiven Referenzvertrag für drei Fehlerdomänen, PostgreSQL- und JetStream-Quorum, Upgrade/Rollback, kontrollierten Zonenausfall und Point-in-Time-Restore in einen leeren Cluster.
 relations:
   - type: relates_to
     target: docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
@@ -33,8 +33,10 @@ Die T004-Referenzzelle verwendet drei explizite Zonen und folgende Verträge:
 - NATS JetStream mit drei RAFT-Mitgliedern und `minAvailable: 2`,
 - einen ausschließlich für den Beweis verwendeten externen S3-kompatiblen SeaweedFS-Dienst,
 - dynamisch erzeugte kurzlebige Secrets statt eingecheckter Zugangsdaten,
+- einen kontrollierten Kubernetes-Rollout auf ein getrenntes unveränderliches API-Artefakt und ein echtes `rollout undo` auf die vorherige Revision,
+- eine während Upgrade und Rollback sekündlich gemessene Gateway-Verfügbarkeit mit Null-Ausfall-Vertrag und ausgewiesenem Referenz-Fehlerbudget,
 - einen kontrollierten Ausfall des Worker-Knotens, der den PostgreSQL-Primary trägt,
-- einen neuen zweiten kind-Cluster für den Point-in-Time-Restore.
+- einen neuen zweiten kind-Cluster für den Point-in-Time-Restore, der nach dem Restore selbst wieder WAL archiviert.
 
 Alle Drittimages sowie die Releaseartefakte von CloudNativePG, cert-manager und Barman Cloud sind per SHA-256 beziehungsweise OCI-Digest gebunden. Dies umfasst auch das vom Barman-Plugin dynamisch in jede PostgreSQL-Instanz injizierte Sidecar-Image. Die PostgreSQL-Operanden bleiben minimale Standardimages; Sicherungswerkzeuge werden nicht in das Datenbankimage eingebaut.
 
@@ -45,10 +47,13 @@ Der Beweis erfasst getrennt:
 - Zeit bis zu einem neuen PostgreSQL-Primary,
 - Zeit bis zum erfolgreichen API-Readback einer bestätigten Fachmutation,
 - Zeit bis zu einer neuen bestätigten JetStream-Publikation,
-- Zeit bis zum vollständigen PostgreSQL-Restore im leeren Cluster,
+- Dauer eines vollständigen API-Upgrades und Rollbacks einschließlich vollständig ersetzter Pod-UIDs,
+- beobachtete Gateway-Ausfallzeit, Verfügbarkeitsstichproben und Verbrauch eines 99,9-Prozent-Referenz-Fehlerbudgets,
+- Zeit bis zum `Ready`-Zustand des wiederhergestellten PostgreSQL-Clusters; Sidecar- und WAL-Kontinuitätsprüfungen werden davon getrennt gemessen,
+- erzwungene WAL-Archivlatenz im Primär- und Restorecluster als Referenzobergrenze für den archivierungsgebundenen RPO,
 - Datenvergleich vor und nach dem gewählten PITR-Zeitpunkt.
 
-Eine Messung gilt nur, wenn die vor dem Ausfall bestätigte Domänenmutation und die JetStream-Nachricht erhalten bleiben.
+Eine Messung gilt nur, wenn Upgrade und Rollback keinen beobachteten Gateway-Ausfall erzeugen, alle drei API-Pods ersetzt werden und die vor dem Ausfall bestätigte Domänenmutation sowie die JetStream-Nachricht erhalten bleiben. Das Upgrade-Artefakt verwendet dieselben Runtime-Bits mit abweichender unveränderlicher Metadatenebene; damit wird der Kubernetes-Änderungspfad, nicht die semantische Kompatibilität einer neuen Anwendungsversion bewiesen.
 
 ## Sicherheitsgrenzen
 
@@ -66,6 +71,8 @@ Der Referenzbeweis belegt nicht:
 - einen verwalteten, redundant replizierten Produktions-Objektstore,
 - SLOs unter Produktionslast,
 - den gleichzeitigen Verlust von zwei Fehlerdomänen,
-- einen Produktionscutover.
+- einen Produktionscutover,
+- die semantische Kompatibilität einer eigenständigen neuen Anwendungsversion,
+- ein Produktions-Fehlerbudget unter repräsentativer Last.
 
 Diese Grenzen bleiben im maschinenlesbaren Receipt erhalten.

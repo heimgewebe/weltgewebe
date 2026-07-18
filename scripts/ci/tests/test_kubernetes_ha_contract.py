@@ -111,6 +111,18 @@ class KubernetesHaContractTests(unittest.TestCase):
                 "serverName": "postgres-ha",
             },
         )
+        self.assertEqual(
+            spec["plugins"],
+            [
+                {
+                    "name": "barman-cloud.cloudnative-pg.io",
+                    "isWALArchiver": True,
+                    "parameters": {
+                        "barmanObjectName": "weltgewebe-ha-backup"
+                    },
+                }
+            ],
+        )
 
     def test_barman_plugin_contract_replaces_native_backup(self) -> None:
         postgres = next(
@@ -518,6 +530,103 @@ spec:
         self.assertIn('"primary": primary_operator_nodes', source)
         self.assertIn('"restore": restore_operator_nodes', source)
 
+    def test_upgrade_candidate_is_distinct_and_loaded_into_kind(self) -> None:
+        baseline = "sha256:" + "a" * 64
+        candidate = "sha256:" + "b" * 64
+        with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
+            self.ha.ref, "output", side_effect=[baseline, candidate]
+        ):
+            observed = self.ha.prepare_api_upgrade_candidate(
+                "kind", "proof", "c" * 40
+            )
+        self.assertEqual(
+            observed,
+            {
+                "api_baseline": baseline,
+                "api_upgrade_candidate": candidate,
+            },
+        )
+        build = run.call_args_list[0]
+        self.assertEqual(build.args[0][:4], ["docker", "build", "--file", "-"])
+        self.assertIn("org.opencontainers.image.revision=" + "c" * 40, build.kwargs["input_text"])
+        self.assertEqual(
+            run.call_args_list[1].args[0],
+            [
+                "kind",
+                "load",
+                "docker-image",
+                "--name",
+                "proof",
+                self.ha.UPGRADE_API_IMAGE,
+            ],
+        )
+
+    def test_gateway_availability_sample_is_one_bounded_request(self) -> None:
+        completed = mock.Mock(
+            returncode=0,
+            stdout=json.dumps([{"id": "marker"}]),
+        )
+        with mock.patch.object(
+            self.ha.subprocess, "run", return_value=completed
+        ) as run:
+            self.assertTrue(
+                self.ha.gateway_projection_available(
+                    "kind-worker", "10.0.0.10", 80, "marker"
+                )
+            )
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[:3], ["docker", "exec", "kind-worker"])
+        self.assertIn("--max-time", argv)
+        self.assertEqual(run.call_args.kwargs["timeout"], 5)
+        self.assertFalse(run.call_args.kwargs["check"])
+
+    def test_error_budget_is_measured_from_upgrade_and_rollback(self) -> None:
+        budget = self.ha.compute_error_budget(
+            {
+                "duration_seconds": 20.0,
+                "observed_unavailable_seconds": 0.0,
+            },
+            {
+                "duration_seconds": 30.0,
+                "observed_unavailable_seconds": 0.0,
+            },
+        )
+        self.assertEqual(budget["measurement_window_seconds"], 50.0)
+        self.assertEqual(
+            budget["objective"], self.ha.REFERENCE_AVAILABILITY_OBJECTIVE
+        )
+        self.assertEqual(budget["consumed_ratio"], 0.0)
+        self.assertTrue(budget["within_budget"])
+
+    def test_change_management_contract_uses_rollout_undo_and_receipt_fields(self) -> None:
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        self.assertIn(
+            '"rollout",\n            "undo"', source
+        )
+        self.assertIn('"change_management": change_management', source)
+        self.assertIn('"failed_availability_samples"', source)
+        self.assertIn('"within_budget"', source)
+        self.assertIn('"measured_archive_rpo_upper_bound_seconds"', source)
+
+    def test_restore_rto_stops_before_continuity_validation(self) -> None:
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        ready = source.index(
+            'wait_cluster_ready(restore_kubectl, "postgres-restore", "20m")'
+        )
+        rto = source.index(
+            "restore_rto = time.monotonic() - restore_started", ready
+        )
+        sidecars = source.index(
+            "restore_barman_sidecars = verify_barman_sidecar_images(", rto
+        )
+        archive = source.index(
+            'restore_kubectl, cluster="postgres-restore"', sidecars
+        )
+        self.assertLess(ready, rto)
+        self.assertLess(rto, sidecars)
+        self.assertLess(sidecars, archive)
+        self.assertIn('"continuity_validation_seconds"', source)
+
     def test_zone_rejoin_waits_for_cilium_before_database_readiness(self) -> None:
         source = (ROOT / "scripts/platform/ha_reference.py").read_text()
         node_ready = source.index('f"node/{primary_topology[\'node\']}"')
@@ -538,8 +647,16 @@ spec:
             self.ha.wal_segment_position("not-a-wal")
         source = (ROOT / "scripts/platform/ha_reference.py").read_text()
         self.assertIn("SELECT pg_walfile_name(pg_switch_wal())", source)
-        self.assertIn('"required_archived_wal": required_wal', source)
-        self.assertIn('"observed_archived_wal": archived_wal', source)
+        self.assertIn(
+            '"required_archived_wal": primary_wal_archive["required_wal"]',
+            source,
+        )
+        self.assertIn(
+            '"observed_archived_wal": primary_wal_archive["observed_wal"]',
+            source,
+        )
+        self.assertIn('cluster="postgres-restore"', source)
+        self.assertIn('"continued_wal_archiving": restore_wal_archive', source)
         self.assertIn("FROM pg_stat_archiver", source)
         self.assertNotIn("status.lastArchivedWAL", source)
 

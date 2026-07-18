@@ -35,6 +35,9 @@ SEAWEEDFS_IMAGE = "chrislusf/seaweedfs@sha256:f898c91e42d7da5f4bb13f1efd424ff03b
 APP_USER = "welt"
 S3_ACCESS_KEY = "weltgewebe-ha-proof"
 S3_BUCKET = "weltgewebe-postgres"
+BASELINE_API_IMAGE = "weltgewebe-api:local"
+UPGRADE_API_IMAGE = "weltgewebe-api:ha-upgrade-candidate"
+REFERENCE_AVAILABILITY_OBJECTIVE = 0.999
 
 
 def sha256_text(value: str) -> str:
@@ -721,6 +724,404 @@ def wait_api_replicas(kubectl: str, expected: int = 3) -> None:
     ref.wait_rollout(kubectl, "weltgewebe", "deployment/weltgewebe-web", "10m")
 
 
+def prepare_api_upgrade_candidate(
+    kind: str, cluster: str, commit: str
+) -> dict[str, str]:
+    dockerfile = (
+        f"FROM {BASELINE_API_IMAGE}\n"
+        f"LABEL org.opencontainers.image.revision={commit}\n"
+        "LABEL weltgewebe.net/ha-proof-artifact=upgrade-candidate\n"
+    )
+    ref.run(
+        [
+            "docker",
+            "build",
+            "--file",
+            "-",
+            "--tag",
+            UPGRADE_API_IMAGE,
+            ".",
+        ],
+        input_text=dockerfile,
+        timeout=600,
+    )
+    ref.run(
+        [kind, "load", "docker-image", "--name", cluster, UPGRADE_API_IMAGE],
+        timeout=600,
+    )
+    baseline_id = ref.output(
+        ["docker", "image", "inspect", "--format", "{{.Id}}", BASELINE_API_IMAGE]
+    )
+    candidate_id = ref.output(
+        ["docker", "image", "inspect", "--format", "{{.Id}}", UPGRADE_API_IMAGE]
+    )
+    if baseline_id == candidate_id:
+        raise ref.ProofError("upgrade candidate must be a distinct immutable image")
+    return {
+        "api_baseline": baseline_id,
+        "api_upgrade_candidate": candidate_id,
+    }
+
+
+def ready_api_pod_uids(kubectl: str) -> set[str]:
+    payload = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe",
+                "get",
+                "pods",
+                "-l",
+                "app.kubernetes.io/name=weltgewebe-api",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    ready: set[str] = set()
+    for item in payload.get("items", []):
+        conditions = {
+            condition.get("type"): condition.get("status")
+            for condition in item.get("status", {}).get("conditions", [])
+        }
+        uid = item.get("metadata", {}).get("uid")
+        if (
+            item.get("metadata", {}).get("deletionTimestamp") is None
+            and item.get("status", {}).get("phase") == "Running"
+            and conditions.get("Ready") == "True"
+            and isinstance(uid, str)
+            and uid
+        ):
+            ready.add(uid)
+    if len(ready) != 3:
+        raise ref.ProofError(
+            f"expected exactly three ready API pod UIDs, got {sorted(ready)}"
+        )
+    return ready
+
+
+def api_deployment_image(kubectl: str) -> str:
+    return ref.output(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe",
+            "get",
+            "deployment/weltgewebe-api",
+            "-o",
+            "jsonpath={.spec.template.spec.containers[?(@.name==\"api\")].image}",
+        ]
+    )
+
+
+def api_rollout_complete(kubectl: str, expected_image: str) -> bool:
+    deployment = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe",
+                "get",
+                "deployment/weltgewebe-api",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    metadata = deployment.get("metadata", {})
+    spec = deployment.get("spec", {})
+    status = deployment.get("status", {})
+    images = {
+        container.get("name"): container.get("image")
+        for container in spec.get("template", {})
+        .get("spec", {})
+        .get("containers", [])
+    }
+    return (
+        images.get("api") == expected_image
+        and status.get("observedGeneration") == metadata.get("generation")
+        and status.get("updatedReplicas") == 3
+        and status.get("readyReplicas") == 3
+        and status.get("availableReplicas") == 3
+        and status.get("unavailableReplicas", 0) == 0
+    )
+
+
+def gateway_probe_target(
+    kubectl: str, kind: str, cluster: str
+) -> tuple[str, str, int]:
+    service = ref.output(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe-gateway",
+            "get",
+            "service",
+            "-l",
+            "gateway.networking.k8s.io/gateway-name=weltgewebe",
+            "-o",
+            "jsonpath={.items[0].metadata.name}",
+        ]
+    )
+    listener_port = ref.gateway_listener_port(kubectl)
+    service_port = ref.gateway_service_listener_port(
+        kubectl, service, listener_port
+    )
+    nodes = ref.kind_nodes(kind, cluster)
+    addresses = ref.gateway_addresses(kubectl)
+    return nodes[0], addresses[0], service_port
+
+
+def gateway_projection_available(
+    node: str, address: str, port: int, marker: str
+) -> bool:
+    result = subprocess.run(
+        [
+            "docker",
+            "exec",
+            node,
+            "curl",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--max-time",
+            "2",
+            f"http://{address}:{port}/api/nodes",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+    if result.returncode != 0:
+        return False
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False
+    return any(
+        isinstance(item, dict) and item.get("id") == marker for item in payload
+    )
+
+
+def measure_api_transition(
+    kubectl: str,
+    kind: str,
+    cluster: str,
+    marker: str,
+    expected_image: str,
+    action: list[str],
+    phase: str,
+) -> dict[str, Any]:
+    before_uids = ready_api_pod_uids(kubectl)
+    probe_node, probe_address, port = gateway_probe_target(
+        kubectl, kind, cluster
+    )
+    started = time.monotonic()
+    ref.run(action)
+    deadline = started + 600
+    samples = 0
+    failed_samples = 0
+    unavailable_seconds = 0.0
+    longest_unavailable_seconds = 0.0
+    outage_started: float | None = None
+    while time.monotonic() < deadline:
+        sampled_at = time.monotonic()
+        available = False
+        rollout_complete = False
+        try:
+            available = gateway_projection_available(
+                probe_node, probe_address, port, marker
+            )
+            if available:
+                rollout_complete = api_rollout_complete(
+                    kubectl, expected_image
+                )
+        except (
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            json.JSONDecodeError,
+            ref.ProofError,
+        ):
+            available = False
+            rollout_complete = False
+        samples += 1
+        if available:
+            if outage_started is not None:
+                outage = sampled_at - outage_started
+                unavailable_seconds += outage
+                longest_unavailable_seconds = max(
+                    longest_unavailable_seconds, outage
+                )
+                outage_started = None
+        else:
+            failed_samples += 1
+            if outage_started is None:
+                outage_started = sampled_at
+        if available and rollout_complete:
+            break
+        time.sleep(1)
+    else:
+        raise ref.ProofError(
+            f"timed out waiting for API {phase} rollout to {expected_image}"
+        )
+    finished = time.monotonic()
+    if outage_started is not None:
+        outage = finished - outage_started
+        unavailable_seconds += outage
+        longest_unavailable_seconds = max(longest_unavailable_seconds, outage)
+    after_uids = ready_api_pod_uids(kubectl)
+    overlap = before_uids & after_uids
+    if overlap:
+        raise ref.ProofError(
+            f"API {phase} did not replace every replica: {sorted(overlap)}"
+        )
+    if api_deployment_image(kubectl) != expected_image:
+        raise ref.ProofError(
+            f"API {phase} finished with unexpected image: "
+            f"{api_deployment_image(kubectl)}"
+        )
+    result = {
+        "phase": phase,
+        "image": expected_image,
+        "duration_seconds": round(finished - started, 3),
+        "availability_samples": samples,
+        "failed_availability_samples": failed_samples,
+        "observed_unavailable_seconds": round(unavailable_seconds, 3),
+        "longest_unavailable_seconds": round(longest_unavailable_seconds, 3),
+        "probe_node": probe_node,
+        "probe_address": probe_address,
+        "before_pods_sha256": sha256_text("\n".join(sorted(before_uids))),
+        "after_pods_sha256": sha256_text("\n".join(sorted(after_uids))),
+        "replaced_replicas": len(after_uids),
+    }
+    if failed_samples:
+        raise ref.ProofError(
+            f"API {phase} violated the zero-observed-outage contract: {result}"
+        )
+    return result
+
+
+def compute_error_budget(
+    upgrade: dict[str, Any], rollback: dict[str, Any]
+) -> dict[str, Any]:
+    window = float(upgrade["duration_seconds"]) + float(
+        rollback["duration_seconds"]
+    )
+    if window <= 0:
+        raise ref.ProofError("change-management measurement window is empty")
+    unavailable = float(upgrade["observed_unavailable_seconds"]) + float(
+        rollback["observed_unavailable_seconds"]
+    )
+    allowed = window * (1.0 - REFERENCE_AVAILABILITY_OBJECTIVE)
+    consumed_ratio = unavailable / allowed if allowed > 0 else float("inf")
+    availability = max(0.0, 1.0 - unavailable / window)
+    return {
+        "objective": REFERENCE_AVAILABILITY_OBJECTIVE,
+        "measurement_window_seconds": round(window, 3),
+        "allowed_unavailable_seconds": round(allowed, 6),
+        "observed_unavailable_seconds": round(unavailable, 3),
+        "observed_availability": round(availability, 9),
+        "consumed_ratio": round(consumed_ratio, 6),
+        "remaining_seconds": round(max(0.0, allowed - unavailable), 6),
+        "within_budget": unavailable <= allowed,
+    }
+
+
+def prove_api_upgrade_and_rollback(
+    kubectl: str, kind: str, cluster: str, marker: str
+) -> dict[str, Any]:
+    baseline = api_deployment_image(kubectl)
+    if baseline != BASELINE_API_IMAGE:
+        raise ref.ProofError(
+            f"API baseline image is unexpected before upgrade: {baseline}"
+        )
+    upgrade = measure_api_transition(
+        kubectl,
+        kind,
+        cluster,
+        marker,
+        UPGRADE_API_IMAGE,
+        [
+            kubectl,
+            "-n",
+            "weltgewebe",
+            "set",
+            "image",
+            "deployment/weltgewebe-api",
+            f"api={UPGRADE_API_IMAGE}",
+        ],
+        "upgrade",
+    )
+    rollback = measure_api_transition(
+        kubectl,
+        kind,
+        cluster,
+        marker,
+        baseline,
+        [
+            kubectl,
+            "-n",
+            "weltgewebe",
+            "rollout",
+            "undo",
+            "deployment/weltgewebe-api",
+        ],
+        "rollback",
+    )
+    budget = compute_error_budget(upgrade, rollback)
+    if not gateway_contains_node(kubectl, kind, cluster, marker):
+        raise ref.ProofError(
+            "acknowledged domain mutation was not preserved across upgrade/rollback"
+        )
+    return {
+        "artifact_scope": (
+            "distinct immutable metadata-layer image built from the exact "
+            "baseline runtime bits"
+        ),
+        "upgrade": upgrade,
+        "rollback": rollback,
+        "error_budget": budget,
+    }
+
+
+def measure_wal_archive(
+    kubectl: str, *, cluster: str
+) -> dict[str, Any]:
+    started = time.monotonic()
+    required = psql(
+        kubectl, "SELECT pg_walfile_name(pg_switch_wal())", cluster=cluster
+    )
+    wal_segment_position(required)
+
+    def archived_probe() -> str | bool:
+        observed = psql(
+            kubectl,
+            "SELECT COALESCE(last_archived_wal, '') FROM pg_stat_archiver",
+            cluster=cluster,
+        )
+        return (
+            observed
+            if observed and wal_archived_at_or_after(observed, required)
+            else False
+        )
+
+    observed = str(
+        wait_until(
+            f"{cluster} WAL archive at or after {required}",
+            archived_probe,
+            timeout_seconds=300,
+        )
+    )
+    return {
+        "required_wal": required,
+        "observed_wal": observed,
+        "latency_seconds": round(time.monotonic() - started, 3),
+    }
+
+
 def insert_domain_node(kubectl: str, node_id: str, title: str, *, cluster: str = "postgres-ha") -> None:
     payload = json.dumps({"summary": "HA recovery proof", "tags": ["ha-proof"]}, separators=(",", ":"))
     sql = (
@@ -817,6 +1218,13 @@ def restore_cluster_document(target_time: str) -> dict[str, Any]:
                     },
                 },
             }],
+            "plugins": [{
+                "name": "barman-cloud.cloudnative-pg.io",
+                "isWALArchiver": True,
+                "parameters": {
+                    "barmanObjectName": "weltgewebe-ha-backup"
+                },
+            }],
             "storage": {"size": "1Gi"},
             "resources": {"requests": {"cpu": "100m", "memory": "256Mi"}, "limits": {"cpu": "1", "memory": "1Gi"}},
             "affinity": {
@@ -849,6 +1257,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         create_kind_cluster(kind, args.cluster, receipt["kubernetes"]["kind_node_image"], "platform/clusters/ha/kind.yaml", commit)
         created_primary = True
         image_ids = ref.build_images(kind, args.cluster, commit, timestamp)
+        image_ids.update(
+            prepare_api_upgrade_candidate(kind, args.cluster, commit)
+        )
         ref.install_platform_components(kubectl, flux, helm, receipt["artifacts"], ref.control_plane_address(args.cluster))
         ref.run([kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=8m"])
         _, _, object_store_address = start_external_object_store(args.cluster, commit, s3_secret_key)
@@ -891,6 +1302,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         marker = "00000000-0000-4000-8000-00000000a004"
         insert_domain_node(kubectl, marker, "T004 acknowledged domain mutation")
         wait_until("domain mutation in API projection", lambda: gateway_contains_node(kubectl, kind, args.cluster, marker), timeout_seconds=180)
+        change_management = prove_api_upgrade_and_rollback(
+            kubectl, kind, args.cluster, marker
+        )
 
         primary_before = current_primary(kubectl)
         primary_topology = topology["postgres"].get(primary_before)
@@ -956,19 +1370,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         target_time = psql(kubectl, "SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')")
         time.sleep(2)
         insert_domain_node(kubectl, after_id, "T004 after PITR target")
-        required_wal = psql(kubectl, "SELECT pg_walfile_name(pg_switch_wal())")
-        wal_segment_position(required_wal)
-        def archived_wal_probe() -> str | bool:
-            observed = psql(
-                kubectl,
-                "SELECT COALESCE(last_archived_wal, '') FROM pg_stat_archiver",
-            )
-            return observed if observed and wal_archived_at_or_after(observed, required_wal) else False
-        archived_wal = str(wait_until(
-            f"WAL archive at or after {required_wal}",
-            archived_wal_probe,
-            timeout_seconds=300,
-        ))
+        primary_wal_archive = measure_wal_archive(
+            kubectl, cluster="postgres-ha"
+        )
 
         create_kind_cluster(kind, restore_name, receipt["kubernetes"]["kind_node_image"], "platform/clusters/ha/restore-kind.yaml", commit)
         created_restore = True
@@ -1001,10 +1405,15 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         restore_started = time.monotonic()
         ref.apply_yaml(restore_kubectl, restore_cluster_document(target_time))
         wait_cluster_ready(restore_kubectl, "postgres-restore", "20m")
+        restore_rto = time.monotonic() - restore_started
+        continuity_started = time.monotonic()
         restore_barman_sidecars = verify_barman_sidecar_images(
             restore_kubectl, "postgres-restore"
         )
-        restore_rto = time.monotonic() - restore_started
+        restore_wal_archive = measure_wal_archive(
+            restore_kubectl, cluster="postgres-restore"
+        )
+        continuity_validation_seconds = time.monotonic() - continuity_started
         restored_topology = pod_topology(restore_kubectl, "weltgewebe-data", "cnpg.io/cluster=postgres-restore")
         require_zones(restored_topology, 3, "restored postgres")
         preserved = {
@@ -1040,15 +1449,41 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "name": backup_name,
                 "phase": backup.get("status", {}).get("phase"),
                 "target_time": target_time,
-                "required_archived_wal": required_wal,
-                "observed_archived_wal": archived_wal,
+                "required_archived_wal": primary_wal_archive["required_wal"],
+                "observed_archived_wal": primary_wal_archive["observed_wal"],
+                "wal_archive_latency_seconds": primary_wal_archive["latency_seconds"],
             },
-            "restore": {"rto_seconds": round(restore_rto, 3), "pitr_comparison": preserved, "blank_kind_cluster": True},
+            "restore": {
+                "rto_seconds": round(restore_rto, 3),
+                "pitr_comparison": preserved,
+                "blank_kind_cluster": True,
+                "continued_wal_archiving": restore_wal_archive,
+                "continuity_validation_seconds": round(
+                    continuity_validation_seconds, 3
+                ),
+            },
+            "rpo": {
+                "acknowledged_domain_mutations_lost": 0,
+                "acknowledged_jetstream_messages_lost": 0,
+                "measured_archive_rpo_upper_bound_seconds": max(
+                    primary_wal_archive["latency_seconds"],
+                    restore_wal_archive["latency_seconds"],
+                ),
+                "measurement_model": (
+                    "maximum observed forced-WAL archive latency under the "
+                    "reference-cell workload"
+                ),
+                "primary_wal_archive_latency_seconds": primary_wal_archive["latency_seconds"],
+                "restore_wal_archive_latency_seconds": restore_wal_archive["latency_seconds"],
+            },
+            "change_management": change_management,
             "gateway_before": gateway_before,
             "production_changed": False,
             "does_not_establish": [
                 "production rollout", "managed multi-region object-store durability",
                 "RTO or RPO under production load", "survival of two simultaneous failure domains",
+                "semantic compatibility of a distinct application release",
+                "production error-budget consumption under representative traffic",
             ],
         }
         target = CACHE / "receipts"
