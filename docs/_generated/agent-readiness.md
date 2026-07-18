@@ -19,7 +19,7 @@ Generated automatically. Do not edit.
 
 | Dimension | Capability | Status | Hard | Evidence | Missing | Rationale |
 |---|---|---|---:|---|---|---|
-| discover | discover | pass | yes | `agent-contract.json`, `contracts/agent/agent-contract.schema.json`, `AGENTS.md`, `scripts/agent/validate_repo_agent_contract.py`, `scripts/docmeta/agent_entrypoint_smoke.py` | - | The repository must expose a deterministic machine contract, entry card, validator, and entrypoint smoke before planning. |
+| discover | discover | pass | yes | `agent-contract.json`, `contracts/agent/agent-contract.schema.json`, `AGENTS.md`, `scripts/agent/validate_repo_agent_contract.py`, `scripts/docmeta/agent_entrypoint_smoke.py` | - | The repository must expose a deterministic machine contract, entry card, validator, and entrypoint smoke before planning. The canonical contract validator and entrypoint smoke both pass. |
 | understand | agent_policy | pass | no | `AGENTS.md`, `agent-policy.yaml` | - | Agenten brauchen dokumentierte Grenzen und Schreibregeln. |
 | understand | agent_contracts | pass | yes | `contracts/agent/task.schema.json` | - | Contracts definieren maschinenlesbare Agent-Task-Grenzen. |
 | plan | dry_run_runner | pass | yes | `scripts/agent/run_task.py`, `scripts/agent/tests/test_run_task.py`, `tests/fixtures/agent/valid-doc-drift-task.json` | - | Dry-Run Runner prueft Agentenpfade ohne schreibende Seiteneffekte. Required files and the canonical dry-run smoke both pass. |

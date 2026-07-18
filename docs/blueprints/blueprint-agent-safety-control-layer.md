@@ -744,6 +744,8 @@ Der Übergang zur neuen Trennung von Repo-Validation und Extern-Execution erford
 ##### PR 10 — Migration: Akzeptanzkriterien
 
 - Der Agent-Contract definiert explizit `repo_role: repo_contract_authority` und `operator_role: external_operator_execution`.
+- Autoritätsdateien (`agent-contract.json`, `.wgx/generated-artifacts.yml`) sind ausdrücklich bewachte Schreibziele.
+- Trusted Generators dürfen ausschließlich Ziele unter `generated_artifacts.allowed_target_prefixes` erzeugen; `secrets/` und `snapshots/` sind ausgeschlossen.
 - `repo_generic_write_mode: rejected` ist manifestiert.
 - Freie Shell-Kommandos sind als deprecated / Übergangsformat dokumentiert.
 - Paralleler Betrieb ist durch Checks (z.B. Projection Drift) abgesichert.

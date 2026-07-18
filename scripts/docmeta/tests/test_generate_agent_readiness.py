@@ -113,6 +113,41 @@ class TestGenerateAgentReadiness(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
 
+    def _copy_discovery_capability(self) -> None:
+        source_root = Path(gen.REPO_ROOT).resolve()
+        required_paths = list(
+            dict.fromkeys(
+                [
+                    *gen.DISCOVERY_REQUIRED_FILES,
+                    "repo.meta.yaml",
+                    "agent-policy.yaml",
+                    "docs/policies/agent-reading-protocol.md",
+                    "README.md",
+                    "docs/index.md",
+                    "docs/tasks/README.md",
+                    "docs/roadmap.md",
+                    "scripts/docmeta/generate_task_index.py",
+                    ".github/workflows/task-index.yml",
+                    ".wgx/generated-artifacts.yml",
+                ]
+            )
+        )
+        for rel_path in required_paths:
+            source = (source_root / rel_path).resolve()
+            try:
+                source.relative_to(source_root)
+            except ValueError as exc:
+                raise AssertionError(
+                    f"discovery fixture dependency escapes repository root: {rel_path}"
+                ) from exc
+            if not source.is_file():
+                raise AssertionError(
+                    f"discovery fixture dependency is missing or not a file: {rel_path}"
+                )
+            target = self.root / rel_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+
     def _init_git_repo(self) -> None:
         subprocess_kwargs = {
             "cwd": self.root,
@@ -168,9 +203,7 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertIn("dry_run_runner", report)
 
     def test_all_hard_capabilities_present_yields_pass(self):
-        for rel_path in gen.DISCOVERY_REQUIRED_FILES:
-            self._touch(rel_path)
-        self._touch("agent-policy.yaml")
+        self._copy_discovery_capability()
         self._touch("scripts/agent/check_agent_preflight.py")
         self._touch("scripts/agent/tests/test_check_agent_preflight.py")
         self._touch(".github/workflows/agent-safety-preflight.yml")
@@ -222,8 +255,7 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertRegex(report, r"\| run_evidence_lite \| (pass|partial|open|fail) \|")
 
     def test_discovery_is_repo_capability_and_external_dependencies_are_explicit(self):
-        for rel_path in gen.DISCOVERY_REQUIRED_FILES:
-            self._touch(rel_path)
+        self._copy_discovery_capability()
 
         results = gen.evaluate_capabilities(self.root)
         status = self._status_map(results)
@@ -233,6 +265,41 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertIn("## External Operator Dependencies", report)
         self.assertIn("`workspace` / `workspace`", report)
         self.assertNotIn("discover` / `discover`", report)
+
+    def test_discovery_placeholders_fail_functional_smoke(self):
+        for rel_path in gen.DISCOVERY_REQUIRED_FILES:
+            self._touch(
+                rel_path, "{}\n" if rel_path.endswith(".json") else "# placeholder\n"
+            )
+
+        result = next(
+            item
+            for item in gen.evaluate_capabilities(self.root)
+            if item.id == "discover"
+        )
+
+        self.assertEqual(result.status, "fail")
+        self.assertIn("functional discovery smoke", result.missing)
+
+    def test_invalid_discovery_contract_fails_readiness(self):
+        self._copy_discovery_capability()
+        contract_path = self.root / "agent-contract.json"
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        contract["reading_order"] = ["repo.meta.yaml"]
+        contract_path.write_text(
+            json.dumps(contract, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        result = next(
+            item
+            for item in gen.evaluate_capabilities(self.root)
+            if item.id == "discover"
+        )
+
+        self.assertEqual(result.status, "fail")
+        self.assertIn("functional discovery smoke", result.missing)
+        self.assertIn("AGENT_CONTRACT", result.rationale)
 
     def test_missing_discovery_is_hard_gap(self):
         results = gen.evaluate_capabilities(self.root)

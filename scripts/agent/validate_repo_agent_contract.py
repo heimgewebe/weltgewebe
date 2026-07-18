@@ -74,6 +74,13 @@ ARCHITECTURE_REQUIRED = {
     "repo_generic_write_mode": "rejected",
 }
 
+AUTHORITY_GUARDED_PATHS = [
+    ".wgx/generated-artifacts.yml",
+    "agent-contract.json",
+]
+
+ALLOWED_GENERATED_TARGET_PREFIXES = ["docs/_generated/"]
+
 
 def _finding(code: str, path: str, message: str) -> dict[str, str]:
     return {"code": code, "path": path, "message": message}
@@ -184,6 +191,18 @@ def validate_semantic_invariants(
                 )
             )
 
+    guarded = contract.get("guarded_write_paths")
+    if isinstance(guarded, list):
+        for authority_path in AUTHORITY_GUARDED_PATHS:
+            if authority_path not in guarded:
+                findings.append(
+                    _finding(
+                        "AGENT_CONTRACT_AUTHORITY_GUARD",
+                        "$.guarded_write_paths",
+                        f"authority path must be guarded: {authority_path}",
+                    )
+                )
+
     forbidden = contract.get("forbidden_write_paths")
     if isinstance(forbidden, list) and "docs/_generated/" not in forbidden:
         findings.append(
@@ -221,6 +240,29 @@ def validate_semantic_invariants(
                 "only trusted generators may write derived artifacts",
             )
         )
+
+    allowed_target_prefixes = generated.get("allowed_target_prefixes")
+    if allowed_target_prefixes != ALLOWED_GENERATED_TARGET_PREFIXES:
+        findings.append(
+            _finding(
+                "AGENT_CONTRACT_GENERATED_TARGETS",
+                "$.generated_artifacts.allowed_target_prefixes",
+                (
+                    "allowed_target_prefixes must be exactly "
+                    f"{ALLOWED_GENERATED_TARGET_PREFIXES!r}"
+                ),
+            )
+        )
+    if isinstance(forbidden, list):
+        for prefix in ALLOWED_GENERATED_TARGET_PREFIXES:
+            if prefix not in forbidden:
+                findings.append(
+                    _finding(
+                        "AGENT_CONTRACT_GENERATED_TARGETS",
+                        "$.forbidden_write_paths",
+                        f"trusted generated target prefix must remain directly forbidden: {prefix}",
+                    )
+                )
 
     registry_path = generated.get("trusted_generator_registry")
     if not isinstance(registry_path, str) or not registry_path.strip():
@@ -289,7 +331,6 @@ def validate_semantic_invariants(
         return findings
 
     seen_paths: set[str] = set()
-    forbidden_list = forbidden if isinstance(forbidden, list) else ["docs/_generated/"]
 
     for index, artifact in enumerate(artifacts):
         base = f"{registry_path}:artifacts[{index}]"
@@ -336,12 +377,12 @@ def validate_semantic_invariants(
 
         kind = artifact.get("kind")
         if kind == "generated":
-            if not _is_generated_target(path, forbidden_list):
+            if not _is_generated_target(path, ALLOWED_GENERATED_TARGET_PREFIXES):
                 findings.append(
                     _finding(
                         "AGENT_CONTRACT_REGISTRY_ERROR",
                         f"{base}.path",
-                        "generated artifact must stay under a forbidden_write_paths prefix",
+                        "generated artifact must stay under an allowed_target_prefixes prefix",
                     )
                 )
 

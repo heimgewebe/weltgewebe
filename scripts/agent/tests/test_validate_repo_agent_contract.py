@@ -5,7 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.agent.validate_repo_agent_contract import validate_repo_agent_contract
+from scripts.agent.validate_repo_agent_contract import (
+    READING_ORDER_REQUIRED_PREFIX,
+    validate_repo_agent_contract,
+)
 
 VALID_CONTRACT = {
     "architecture": {
@@ -22,7 +25,11 @@ VALID_CONTRACT = {
         "docs/policies/agent-reading-protocol.md",
     ],
     "safe_read_paths": ["src/"],
-    "guarded_write_paths": ["src/"],
+    "guarded_write_paths": [
+        ".wgx/generated-artifacts.yml",
+        "agent-contract.json",
+        "src/",
+    ],
     "forbidden_write_paths": ["docs/_generated/"],
     "required_checks": ["just test"],
     "local_checks_before_patch": ["just check"],
@@ -30,6 +37,7 @@ VALID_CONTRACT = {
         "direct_agent_edit": "forbidden",
         "derived_write_authority": "trusted_generators_only",
         "trusted_generator_registry": ".wgx/generated-artifacts.yml",
+        "allowed_target_prefixes": ["docs/_generated/"],
     },
     "validation_profiles": {"generator_profile": {"named_checks": ["generator check"]}},
     "compatibility_projections": [
@@ -89,6 +97,22 @@ class TestValidateRepoAgentContract(unittest.TestCase):
 
     def write_json(self, rel_path, data):
         self.write_file(rel_path, json.dumps(data))
+
+    def test_repository_schema_requires_full_reading_order(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        schema = json.loads(
+            (repo_root / "contracts/agent/agent-contract.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            schema["properties"]["reading_order"]["minItems"],
+            len(READING_ORDER_REQUIRED_PREFIX),
+        )
+
+    def test_repository_contract_and_schema_validate_together(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        self.assertEqual(validate_repo_agent_contract(repo_root), [])
 
     def test_valid_contract(self):
         findings = validate_repo_agent_contract(self.repo_root)
@@ -197,9 +221,56 @@ class TestValidateRepoAgentContract(unittest.TestCase):
         findings = validate_repo_agent_contract(self.repo_root)
         self.assertTrue(
             any(
-                "must stay under a forbidden_write_paths prefix" in f["message"]
+                "must stay under an allowed_target_prefixes prefix" in f["message"]
                 for f in findings
             )
+        )
+
+    def test_generated_secret_target_is_rejected(self):
+        registry = """
+        artifacts:
+          - path: secrets/generated-token.txt
+            kind: generated
+            generator: ["python3", "gen.py"]
+        """
+        self.write_file(".wgx/generated-artifacts.yml", registry)
+        findings = validate_repo_agent_contract(self.repo_root)
+        self.assertTrue(
+            any(
+                f["code"] == "AGENT_CONTRACT_REGISTRY_ERROR"
+                and "allowed_target_prefixes" in f["message"]
+                for f in findings
+            )
+        )
+
+    def test_authority_files_must_be_guarded(self):
+        contract = dict(VALID_CONTRACT)
+        contract["guarded_write_paths"] = ["src/"]
+        self.write_json("agent-contract.json", contract)
+        findings = validate_repo_agent_contract(self.repo_root)
+        self.assertTrue(
+            any(
+                f["code"] == "AGENT_CONTRACT_AUTHORITY_GUARD"
+                and "agent-contract.json" in f["message"]
+                for f in findings
+            )
+        )
+        self.assertTrue(
+            any(
+                f["code"] == "AGENT_CONTRACT_AUTHORITY_GUARD"
+                and ".wgx/generated-artifacts.yml" in f["message"]
+                for f in findings
+            )
+        )
+
+    def test_generated_target_prefixes_are_fixed(self):
+        contract = dict(VALID_CONTRACT)
+        contract["generated_artifacts"] = dict(VALID_CONTRACT["generated_artifacts"])
+        contract["generated_artifacts"]["allowed_target_prefixes"] = ["secrets/"]
+        self.write_json("agent-contract.json", contract)
+        findings = validate_repo_agent_contract(self.repo_root)
+        self.assertTrue(
+            any(f["code"] == "AGENT_CONTRACT_GENERATED_TARGETS" for f in findings)
         )
 
     def test_duplicate_generator_write(self):

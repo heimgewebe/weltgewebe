@@ -13,6 +13,8 @@ safe_read_paths:
 
 guarded_write_paths:
   - .github/workflows/
+  - .wgx/generated-artifacts.yml
+  - agent-contract.json
   - apps/
   - contracts/
   - docs/

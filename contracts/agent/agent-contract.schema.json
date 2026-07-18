@@ -34,7 +34,7 @@
     },
     "reading_order": {
       "type": "array",
-      "minItems": 4,
+      "minItems": 5,
       "uniqueItems": true,
       "items": {
         "type": "string",
@@ -175,7 +175,8 @@
       "required": [
         "direct_agent_edit",
         "derived_write_authority",
-        "trusted_generator_registry"
+        "trusted_generator_registry",
+        "allowed_target_prefixes"
       ],
       "properties": {
         "direct_agent_edit": {
@@ -189,6 +190,16 @@
         "trusted_generator_registry": {
           "type": "string",
           "enum": [".wgx/generated-artifacts.yml"]
+        },
+        "allowed_target_prefixes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["docs/_generated/"]
+          }
         }
       }
     },

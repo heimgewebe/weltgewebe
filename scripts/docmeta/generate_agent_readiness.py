@@ -23,7 +23,8 @@ from scripts.agent.json_contract import (
     validate_instance,
 )
 from scripts.agent.validate_handoff import validate_handoff
-from scripts.docmeta import validate_claim_registry
+from scripts.agent.validate_repo_agent_contract import validate_repo_agent_contract
+from scripts.docmeta import agent_entrypoint_smoke, validate_claim_registry
 from scripts.docmeta.docmeta import REPO_ROOT
 
 
@@ -124,6 +125,59 @@ def _capability_failure(
         evidence=presence.evidence,
         missing=[missing_item],
         rationale=f"{presence.rationale} Functional smoke failed{suffix}",
+    )
+
+
+def _evaluate_discovery_contract(root: Path) -> CapabilityResult:
+    presence = _evaluate_required_files(
+        root=root,
+        cap_id="discover",
+        dimension="discover",
+        title="Repository discovery contract",
+        hard=True,
+        required_files=DISCOVERY_REQUIRED_FILES,
+        rationale=(
+            "The repository must expose a deterministic machine contract, "
+            "entry card, validator, and entrypoint smoke before planning."
+        ),
+    )
+    if presence.status != "pass":
+        return presence
+
+    try:
+        contract_findings = validate_repo_agent_contract(root)
+        entrypoint_findings = agent_entrypoint_smoke.run_checks(root)
+    except (OSError, RuntimeError, ValueError) as exc:
+        return _capability_failure(
+            presence, "functional discovery smoke", str(exc)
+        )
+
+    if contract_findings:
+        diagnostic = json.dumps(
+            contract_findings[:3], ensure_ascii=False, sort_keys=True
+        )
+        return _capability_failure(
+            presence, "functional discovery smoke", diagnostic
+        )
+    if entrypoint_findings:
+        return _capability_failure(
+            presence,
+            "functional discovery smoke",
+            "; ".join(entrypoint_findings[:3]),
+        )
+
+    return CapabilityResult(
+        id=presence.id,
+        dimension=presence.dimension,
+        title=presence.title,
+        hard=presence.hard,
+        status="pass",
+        evidence=presence.evidence,
+        missing=[],
+        rationale=(
+            f"{presence.rationale} The canonical contract validator and "
+            "entrypoint smoke both pass."
+        ),
     )
 
 
@@ -701,20 +755,7 @@ def _external_capability(cap_id: str, dimension: str, title: str) -> CapabilityR
 def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
     results: list[CapabilityResult] = []
 
-    results.append(
-        _evaluate_required_files(
-            root=repo_root,
-            cap_id="discover",
-            dimension="discover",
-            title="Repository discovery contract",
-            hard=True,
-            required_files=DISCOVERY_REQUIRED_FILES,
-            rationale=(
-                "The repository must expose a deterministic machine contract, "
-                "entry card, validator, and entrypoint smoke before planning."
-            ),
-        )
-    )
+    results.append(_evaluate_discovery_contract(repo_root))
 
     results.append(
         _evaluate_required_files(

@@ -25,6 +25,8 @@
   ],
   "guarded_write_paths": [
     ".github/workflows/",
+    ".wgx/generated-artifacts.yml",
+    "agent-contract.json",
     "apps/",
     "contracts/",
     "docs/",
@@ -79,7 +81,10 @@
   "generated_artifacts": {
     "direct_agent_edit": "forbidden",
     "derived_write_authority": "trusted_generators_only",
-    "trusted_generator_registry": ".wgx/generated-artifacts.yml"
+    "trusted_generator_registry": ".wgx/generated-artifacts.yml",
+    "allowed_target_prefixes": [
+      "docs/_generated/"
+    ]
   },
   "compatibility_projections": [
     {

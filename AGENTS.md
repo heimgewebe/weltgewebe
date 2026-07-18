@@ -22,7 +22,7 @@ All agents MUST follow the [Agent Reading Protocol](docs/policies/agent-reading-
 2. **Conflict Resolution:** Domain contracts and `agent-contract.json` lead for agent operability; broader truth precedence remains in `repo.meta.yaml` (`truth_model.precedence`).
 3. **No Interpolation:** Silent interpolation is FORBIDDEN. Explicitly name missing gaps.
 4. **Abort Rule:** Agents MUST abort if contradictions are unresolvable, necessary files are missing, or target proof is impossible.
-5. **Navigation vs Truth:** `docs/index.md` is strictly navigation. `docs/_generated/*` is diagnostic only; direct agent edits are forbidden. Declared trusted generators may refresh derived targets.
+5. **Navigation vs Truth:** `docs/index.md` is strictly navigation. `docs/_generated/*` is diagnostic only; direct agent edits are forbidden. Declared trusted generators may refresh only contract-allowlisted derived targets; `secrets/` and `snapshots/` are never generator targets.
 
 These core rules derive from `agent-contract.json`, `repo.meta.yaml`, and the Agent Reading Protocol.
 
@@ -56,7 +56,8 @@ python3 -m scripts.agent.validate_repo_agent_contract
 ## Generated Artifacts
 
 - Direct agent edits under generated/forbidden prefixes are forbidden.
-- Only generators declared in the registry referenced by the contract may write derived targets.
+- Only generators declared in the registry referenced by the contract may write targets under `generated_artifacts.allowed_target_prefixes` (currently only `docs/_generated/`).
+- `secrets/` and `snapshots/` remain forbidden for both direct edits and generator output.
 - Prefer named validation profiles over free-form shell authority; task `validation_commands` remain transitional fixtures until profile migration completes.
 
 ## Task-Scoped Documents
