@@ -337,7 +337,7 @@ async fn import_edges(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
 ///
 /// JSONL uses "type" for kind (matching AccountPublic serialisation).
 /// location lat/lon are the private residence coordinates, stored in
-/// location_lat/location_lon — not the jittered public_pos.
+/// location_lat/location_lon — never the public radius projection.
 /// Duplicate emails are audited and reported but not blocked (Phase B policy).
 async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
     let mut report = BackfillReport::default();
@@ -741,8 +741,9 @@ async fn domain_backfill_edges_deterministic_and_idempotent() {
     pool.close().await;
 }
 
-/// Proves that two legacy account fixtures normalize to canonical Garnrollen
-/// with correct map states and re-import idempotently.
+/// Proves that two legacy account fixtures normalize to canonical Garnrollen,
+/// with an unbound historical radius account failing closed, and re-import
+/// idempotently.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn domain_backfill_accounts_deterministic_and_idempotent() {
@@ -766,7 +767,9 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
         "no duplicate emails in clean fixture"
     );
 
-    // Field mapping for a legacy approximate account.
+    // Field mapping for a legacy approximate account. Historical records have
+    // no private random projection, so the import must preserve the residence
+    // privately but suppress the public radius state.
     type AccountProjectionRow = (
         String,
         Option<String>,
@@ -788,7 +791,7 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
 
     assert_eq!(kind, "garnrolle");
     assert_eq!(mode, None);
-    assert_eq!(map_state, "radius");
+    assert_eq!(map_state, "not_on_map");
     assert_eq!(role, "weber");
     assert_eq!(email.as_deref(), Some("alpha@proof.example"));
     assert!(
@@ -816,13 +819,13 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
         "hidden account must have NULL location_lon"
     );
 
-    // radius_m type: stored as BIGINT, bound as i64
+    // Unsafe historical radius is cleared while private coordinates remain.
     let (radius_m,): (i64,) = sqlx::query_as("SELECT radius_m FROM domain_accounts WHERE id = $1")
         .bind("backfill-proof-account-alpha")
         .fetch_one(&pool)
         .await
         .expect("radius_m must be readable");
-    assert_eq!(radius_m, 100);
+    assert_eq!(radius_m, 0);
 
     // Second import (idempotency)
     let r2 = import_accounts(&pool, ACCOUNT_FIXTURE).await;
@@ -1100,15 +1103,15 @@ async fn domain_backfill_legacy_account_semantics() {
     assert_eq!(mode, None);
     assert_eq!(map_state, "not_on_map");
 
-    // legacy-approximate: visibility: "approximate" + zero radius
+    // legacy-approximate: no private projection binding, therefore fail closed
     let (radius_m, map_state): (i64, String) = sqlx::query_as(
         "SELECT radius_m, map_state FROM domain_accounts WHERE id = 'legacy-approximate'",
     )
     .fetch_one(&pool)
     .await
     .expect("legacy-approximate must exist");
-    assert_eq!(radius_m, 250);
-    assert_eq!(map_state, "radius");
+    assert_eq!(radius_m, 0);
+    assert_eq!(map_state, "not_on_map");
 
     sqlx::query("DELETE FROM domain_accounts WHERE id LIKE 'legacy-%'")
         .execute(&pool)

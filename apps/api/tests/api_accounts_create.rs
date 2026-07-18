@@ -320,6 +320,41 @@ async fn invalid_input_returns_400() -> Result<()> {
         .await?;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 
+    // Radius below the supported privacy range.
+    let res = app
+        .clone()
+        .oneshot(post_accounts(
+            Some(&cookie),
+            r#"{"title":"X","location":{"lat":1.0,"lon":2.0},"radius_m":49}"#,
+        ))
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    // Radius above the supported privacy range.
+    let res = app
+        .clone()
+        .oneshot(post_accounts(
+            Some(&cookie),
+            r#"{"title":"X","location":{"lat":1.0,"lon":2.0},"radius_m":5001}"#,
+        ))
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    // Boundary values remain valid.
+    for radius_m in [50_u32, 5_000_u32] {
+        let id = uuid::Uuid::new_v4();
+        let response = app
+            .clone()
+            .oneshot(post_accounts(
+                Some(&cookie),
+                &format!(
+                    r#"{{"id":"{id}","title":"Boundary","location":{{"lat":1.0,"lon":2.0}},"radius_m":{radius_m}}}"#
+                ),
+            ))
+            .await?;
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
     // Missing location.
     let res = app
         .clone()
@@ -492,12 +527,11 @@ async fn radius_m_zero_public_pos_is_exact() -> Result<()> {
     Ok(())
 }
 
-/// radius_m>0: public_pos must be deterministically jittered — not the exact
-/// input location. This proves radius_m is not a fake field: the API actually
-/// applies obfuscation rather than accepting the value and silently ignoring it.
+/// radius_m>0: the API creates a private random projection, exposes only its
+/// public point and keeps that point inside the declared geodesic radius.
 #[tokio::test]
 #[serial]
-async fn radius_m_positive_jitters_public_pos() -> Result<()> {
+async fn radius_m_positive_uses_private_projection_inside_true_radius() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let in_dir = tmp.path().join("in");
     std::fs::create_dir_all(&in_dir)?;
@@ -505,7 +539,6 @@ async fn radius_m_positive_jitters_public_pos() -> Result<()> {
 
     let (app, cookie, _state) = app_with_operator(&in_dir, "admin1", Role::Admin).await?;
 
-    // Use a fixed id so the jitter is deterministic across test runs.
     let id = "33333333-3333-4333-8333-333333333333";
     let lat = 53.5503_f64;
     let lon = 9.9932_f64;
@@ -516,7 +549,7 @@ async fn radius_m_positive_jitters_public_pos() -> Result<()> {
         .oneshot(post_accounts(
             Some(&cookie),
             &format!(
-                r#"{{"id":"{id}","title":"Jittered","location":{{"lat":{lat},"lon":{lon}}},"radius_m":{radius_m}}}"#
+                r#"{{"id":"{id}","title":"Radius","location":{{"lat":{lat},"lon":{lon}}},"radius_m":{radius_m}}}"#
             ),
         ))
         .await?;
@@ -524,59 +557,53 @@ async fn radius_m_positive_jitters_public_pos() -> Result<()> {
 
     let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
     let created: serde_json::Value = serde_json::from_slice(&bytes)?;
-
-    let jitter_lat = created["public_pos"]["lat"]
+    let public_lat = created["public_pos"]["lat"]
         .as_f64()
         .context("public_pos.lat must be a number")?;
-    let jitter_lon = created["public_pos"]["lon"]
+    let public_lon = created["public_pos"]["lon"]
         .as_f64()
         .context("public_pos.lon must be a number")?;
 
-    // location must never be exposed publicly.
+    assert_eq!(created["map_state"], "radius");
+    assert_eq!(created["radius_m"], radius_m);
     assert!(created.get("location").is_none());
+    assert!(created.get("radius_projection").is_none());
+    assert!(created.get("anchor").is_none());
 
-    // radius_m>0 => public_pos must NOT equal the exact submitted location.
-    // (The jitter algorithm derives r1, r2 from a djb2 hash: r1 = (hash & 0xFFFF)/65535*2-1.
-    // r1==0 would require hash & 0xFFFF == 32767.5 — impossible for integers — so
-    // jitter is guaranteed non-zero for any id.)
-    assert_ne!(
-        jitter_lat, lat,
-        "radius_m>0: public_pos.lat must differ from exact location.lat (jitter not applied)"
+    fn great_circle_distance_m(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+        const EARTH_RADIUS_M: f64 = 6_371_008.8;
+        let lat1 = lat1.to_radians();
+        let lat2 = lat2.to_radians();
+        let delta_lat = lat2 - lat1;
+        let delta_lon = (lon2 - lon1).to_radians();
+        let haversine = (delta_lat / 2.0).sin().powi(2)
+            + lat1.cos() * lat2.cos() * (delta_lon / 2.0).sin().powi(2);
+        2.0 * EARTH_RADIUS_M * haversine.clamp(0.0, 1.0).sqrt().asin()
+    }
+
+    let distance_m = great_circle_distance_m(lat, lon, public_lat, public_lon);
+    assert!(
+        distance_m > 0.0,
+        "radius projection must not expose the exact residence"
     );
-    assert_ne!(
-        jitter_lon, lon,
-        "radius_m>0: public_pos.lon must differ from exact location.lon (jitter not applied)"
+    assert!(
+        distance_m <= f64::from(radius_m) + 0.05,
+        "public point is {distance_m}m away, outside the declared {radius_m}m radius"
     );
 
-    // The jitter must stay within the declared radius (square bounding box in degrees).
-    let max_deg = radius_m as f64 / 111_000.0;
-    assert!(
-        (jitter_lat - lat).abs() <= max_deg + 1e-9,
-        "public_pos.lat jitter exceeds radius bound: |{jitter_lat} - {lat}| > {max_deg}"
-    );
-    // longitude bound is scaled by 1/cos(lat) near equator; use generous tolerance.
-    let cos_lat = lat.to_radians().cos().max(1e-3);
-    let max_deg_lon = max_deg / cos_lat;
-    let lon_delta = {
-        let d = (jitter_lon - lon).abs();
-        if d > 180.0 {
-            360.0 - d
-        } else {
-            d
-        }
-    };
-    assert!(
-        lon_delta <= max_deg_lon + 1e-9,
-        "public_pos.lon jitter exceeds radius bound: lon_delta={lon_delta} > {max_deg_lon}"
-    );
+    let persisted = std::fs::read_to_string(in_dir.join("demo.accounts.jsonl"))?;
+    let record: serde_json::Value = serde_json::from_str(persisted.trim())?;
+    assert!(record.get("radius_projection").is_some());
+    assert_eq!(record["location"]["lat"], lat);
+    assert_eq!(record["location"]["lon"], lon);
     Ok(())
 }
 
-/// radius_m>0 with the same id and location produces the same public_pos on every
-/// request (deterministic jitter, stable across GET).
+/// The random point is generated once and persisted privately. Reads of the
+/// same account reuse that binding instead of deriving a point from public data.
 #[tokio::test]
 #[serial]
-async fn radius_m_positive_public_pos_is_deterministic() -> Result<()> {
+async fn radius_m_positive_public_pos_is_stable_after_persistence() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let in_dir = tmp.path().join("in");
     std::fs::create_dir_all(&in_dir)?;
@@ -589,48 +616,30 @@ async fn radius_m_positive_public_pos_is_deterministic() -> Result<()> {
     let lon = 9.99_f64;
     let radius_m = 250_u32;
 
-    // POST: create the account and record the public_pos from the 201 response.
     let res = app
         .clone()
         .oneshot(post_accounts(
             Some(&cookie),
             &format!(
-                r#"{{"id":"{id}","title":"Det","location":{{"lat":{lat},"lon":{lon}}},"radius_m":{radius_m}}}"#
+                r#"{{"id":"{id}","title":"Stable","location":{{"lat":{lat},"lon":{lon}}},"radius_m":{radius_m}}}"#
             ),
         ))
         .await?;
     assert_eq!(res.status(), StatusCode::CREATED);
     let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
     let created: serde_json::Value = serde_json::from_slice(&bytes)?;
-    let post_lat = created["public_pos"]["lat"]
-        .as_f64()
-        .context("public_pos.lat")?;
-    let post_lon = created["public_pos"]["lon"]
-        .as_f64()
-        .context("public_pos.lon")?;
+    let post_pos = created["public_pos"].clone();
 
-    // GET /accounts/{id}: the same public_pos must be returned.
     let res = app
         .oneshot(axum::http::Request::get(format!("/accounts/{id}")).body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
     let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
     let fetched: serde_json::Value = serde_json::from_slice(&bytes)?;
-    let get_lat = fetched["public_pos"]["lat"]
-        .as_f64()
-        .context("public_pos.lat in GET")?;
-    let get_lon = fetched["public_pos"]["lon"]
-        .as_f64()
-        .context("public_pos.lon in GET")?;
 
-    assert_eq!(
-        post_lat, get_lat,
-        "public_pos.lat must be deterministic: POST={post_lat}, GET={get_lat}"
-    );
-    assert_eq!(
-        post_lon, get_lon,
-        "public_pos.lon must be deterministic: POST={post_lon}, GET={get_lon}"
-    );
+    assert_eq!(post_pos, fetched["public_pos"]);
+    assert!(fetched.get("location").is_none());
+    assert!(fetched.get("radius_projection").is_none());
     Ok(())
 }
 
@@ -740,6 +749,104 @@ async fn weber_updates_only_own_jsonl_garnrolle_and_reads_private_profile() -> R
     let own = cache.get(own_id).context("own account in cache")?;
     assert_eq!(own.public.title, "Meine gesetzte Garnrolle");
     assert_eq!(own.public.map_state, GarnrolleMapState::Exact);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn weber_radius_profile_keeps_projection_binding_private_and_stable() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let account_id = "weber-radius-profile-1";
+    std::fs::write(
+        in_dir.join("demo.accounts.jsonl"),
+        serde_json::json!({
+            "id": account_id,
+            "type": "garnrolle",
+            "title": "Radius Garnrolle",
+            "role": "weber",
+            "map_state": "not_on_map",
+            "radius_m": 0
+        })
+        .to_string()
+            + "\n",
+    )?;
+    let (app, cookie, _state) = app_with_operator(&in_dir, account_id, Role::Weber).await?;
+
+    let radius_body = r#"{
+      "title":"Radius Garnrolle",
+      "summary":"Privat gebunden",
+      "tags":["interest:Commons"],
+      "address":"Poelsweg 2, Hamburg",
+      "map_state":"radius",
+      "radius_m":250,
+      "location":{"lat":53.5604,"lon":10.0630}
+    }"#;
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(Some(&cookie), radius_body))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let profile: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(profile["map_state"], "radius");
+    assert_eq!(profile["radius_m"], 250);
+    assert!(profile.get("radius_projection").is_none());
+    assert!(profile.get("public_pos").is_none());
+
+    let read_latest_binding = || -> Result<serde_json::Value> {
+        let contents = std::fs::read_to_string(in_dir.join("demo.accounts.jsonl"))?;
+        let record = contents
+            .lines()
+            .rev()
+            .map(serde_json::from_str::<serde_json::Value>)
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .find(|record| record["id"] == account_id)
+            .context("latest radius profile record")?;
+        Ok(record["radius_projection"].clone())
+    };
+    let initial_binding = read_latest_binding()?;
+    assert_eq!(initial_binding["version"], 1);
+    assert_eq!(initial_binding["radius_m"], 250);
+
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(
+            Some(&cookie),
+            r#"{
+              "title":"Radius Garnrolle",
+              "summary":"Privat gebunden",
+              "tags":["interest:Commons"],
+              "address":"Poelsweg 2, Hamburg",
+              "map_state":"not_on_map"
+            }"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(read_latest_binding()?, initial_binding);
+
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(Some(&cookie), radius_body))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(read_latest_binding()?, initial_binding);
+
+    let response = app
+        .oneshot(
+            Request::get("/accounts/me/profile")
+                .header("Cookie", &cookie)
+                .body(body::Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let reloaded: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert!(reloaded.get("radius_projection").is_none());
+    assert!(reloaded.get("public_pos").is_none());
     Ok(())
 }
 

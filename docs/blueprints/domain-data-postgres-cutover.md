@@ -189,11 +189,14 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
   `private_payload jsonb` oder über klar benannte Einzelspalten.
 - Explizite Spalten: `radius_m`, `role`, `email`, `webauthn_user_id`,
   Statusfelder wie `disabled`, dazu `created_at` und `updated_at`.
-- `public_pos` ist **keine gespeicherte Spalte**. Sie ist eine deterministische
-  Laufzeit-Projektion aus `location_lat`, `location_lon`, `radius_m` und `id`
-  via `calculate_jittered_pos` (verifiziert in `apps/api/src/routes/accounts.rs`).
-  Eine spätere Migration kann eine materialisierte Spalte ergänzen, wenn der
-  Lese-Aufwand das rechtfertigt; das ist aber eine explizite Folge-Entscheidung.
+- `public_pos` ist **keine gespeicherte Spalte**. Bei `map_state=exact` wird
+  sie aus der privaten Position projiziert. Bei `map_state=radius` stammt sie
+  aus einer kryptografisch zufälligen, typisierten Bindung im
+  `private_payload`. Diese Bindung bleibt bei unverändertem Ort und Radius
+  stabil, wird bei deren Änderung ersetzt und erscheint nie in öffentlichen
+  Antworten oder Domain-Events. Historische Radiuszeilen ohne gültige Bindung
+  werden seit Migration `20260718000001_radius_projection_privacy` fail-closed
+  als `not_on_map` behandelt.
 - Schreibpfad-Abdeckung: Der Cutover muss nicht nur Account-Erzeugung,
   sondern auch spätere Account-Mutationen abdecken, insbesondere
   Step-up-E-Mail-Änderungen und WebAuthn-Credential-Writeback. Die Spalte

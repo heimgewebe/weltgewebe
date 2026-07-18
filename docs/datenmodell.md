@@ -89,8 +89,12 @@ verarbeiten können.
 | Restfelder | `public_payload`, `private_payload` |
 
 E-Mail-Adressen besitzen einen trim-/case-normalisierten partiellen Unique-Index.
-`public_pos` wird nicht gespeichert, sondern aus privater Position, Radius und
-ID deterministisch abgeleitet.
+Bei `map_state=radius` wird `public_pos` aus einer kryptografisch zufälligen,
+privat persistierten Projektionsbindung gelesen. Sie bleibt bei unverändertem Ort
+und Radius stabil, auch nach zeitweisem Ausblenden, und wird erst bei Änderung
+eines dieser Werte ersetzt. Fehlt eine gültige Bindung, wird die Garnrolle
+fail-closed als `not_on_map` projiziert. Die private Position und die Bindung
+erscheinen nie in der öffentlichen Account-Antwort.
 
 `kind` ist auf `garnrolle` begrenzt. `map_state` enthält `not_on_map`, `exact`
 oder `radius`. Die frühere Spalte `mode` ist nullable, besitzt keinen Default und
