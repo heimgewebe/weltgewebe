@@ -6,6 +6,7 @@ zones:
       - overview.md
       - weltgewebe-os.md
       - security.md
+      - semantic-search.md
       - docmeta.schema.md
   policy:
     path: docs/policies/

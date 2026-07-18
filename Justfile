@@ -66,6 +66,7 @@ check:     # quick hygiene check
 	just test
 	just check-demo-data
 	just contracts-domain-check
+	just contracts-search-check
 	cargo deny check
 
 # ---------- Compose ----------
@@ -158,6 +159,9 @@ smoke-account-create:
 # ---------- Contracts ----------
 contracts-domain-check:
 	./scripts/contracts-domain-check.sh
+
+contracts-search-check:
+	python3 -m scripts.search.validate_relevance_goldset
 
 check-demo-data:
 	pnpm exec tsx scripts/verify-demo-data.ts

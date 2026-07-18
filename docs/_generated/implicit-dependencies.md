@@ -28,6 +28,7 @@ Generated automatically. Do not edit.
 | Makefile (validate-core) | scripts.docmeta.export_docs_index | `python3 -m scripts.docmeta.export_docs_index` | *unclear* |
 | Makefile (validate-core) | scripts.docmeta.generate_audit_gaps | `python3 -m scripts.docmeta.generate_audit_gaps` | *unclear* |
 | Makefile (validate-core) | scripts.docmeta.check_links | `python3 -m scripts.docmeta.check_links` | *unclear* |
+| Makefile (validate-core) | scripts.search.validate_relevance_goldset | `python3 -m scripts.search.validate_relevance_goldset` | *unclear* |
 | Makefile (generate-system-map) | scripts.docmeta.generate_system_map | `python3 -m scripts.docmeta.generate_system_map` | *unclear* |
 | Makefile (validate-guards) | scripts/docmeta/repo-structure-guard.sh | `bash scripts/docmeta/repo-structure-guard.sh` | *unclear* |
 | Makefile (validate-guards) | scripts/docmeta/docs-relations-guard.sh | `bash scripts/docmeta/docs-relations-guard.sh` | *unclear* |

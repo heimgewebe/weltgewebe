@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "dataset_id": "weltgewebe-semantic-search-v1-synthetic",
+  "description": "Synthetische Relevanz- und Sichtbarkeitsfälle für den Semantic-Search-v1-Vertrag.",
+  "privacy_class": "synthetic",
+  "cases": [
+    {
+      "id": "search-exact-title-community-garden",
+      "language": "de",
+      "query": "Gemeinschaftsgarten Altona",
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": ["syn-node-community-garden", "syn-node-seed-library", "syn-node-repair-cafe"],
+        "active_filters": {"kinds": [], "tags": [], "languages": ["de"]}
+      },
+      "relevant_node_ids": ["syn-node-community-garden"],
+      "expected_rank_class": "exact_title",
+      "excluded_node_ids": ["syn-node-private-garden"],
+      "rationale": "Ein exakter Titel muss unabhängig von semantischer Ähnlichkeit Rang eins belegen.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-exact-tag-tool-sharing",
+      "language": "de",
+      "query": "werkzeug-teilen",
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": ["syn-node-tool-library", "syn-node-repair-cafe", "syn-node-seed-library"],
+        "active_filters": {"kinds": [], "tags": ["werkzeug-teilen"], "languages": ["de"]}
+      },
+      "relevant_node_ids": ["syn-node-tool-library"],
+      "expected_rank_class": "exact_tag",
+      "excluded_node_ids": ["syn-node-private-workshop"],
+      "rationale": "Ein exaktes Tag bleibt vor Volltext- und Vektorsignalen priorisiert.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-typo-repair-workshop",
+      "language": "de",
+      "query": "Fahrrad Reparatur Werstatt",
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": ["syn-node-bike-workshop", "syn-node-tool-library", "syn-node-community-garden"],
+        "active_filters": {"kinds": ["Werkstatt"], "tags": [], "languages": ["de"]}
+      },
+      "relevant_node_ids": ["syn-node-bike-workshop"],
+      "expected_rank_class": "typo",
+      "excluded_node_ids": ["syn-node-hidden-bike-cellar"],
+      "rationale": "Trigramme sollen einen einfachen Schreibfehler ohne semantische Vorrangnahme auffangen.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-shared-bike-repair",
+      "language": "de",
+      "query": "Wo kann ich mein kaputtes Fahrrad gemeinsam reparieren?",
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": ["syn-node-bike-workshop", "syn-node-tool-library", "syn-node-community-garden"],
+        "active_filters": {"kinds": [], "tags": [], "languages": ["de"]}
+      },
+      "relevant_node_ids": ["syn-node-bike-workshop"],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": ["syn-node-private-bike-help"],
+      "rationale": "Die natürliche Anfrage darf semantisch ergänzt werden, ohne unsichtbare Hilfsangebote als Kandidaten zu verwenden.",
+      "contains_personal_data": false
+    }
+  ]
+}
