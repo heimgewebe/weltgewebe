@@ -79,6 +79,23 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertEqual(lock["artifacts"]["cert_manager"]["version"], "1.21.0")
         self.assertEqual(lock["artifacts"]["barman_cloud_plugin"]["version"], "0.13.0")
 
+    def test_cnpg_plugin_tool_matches_operator_version(self) -> None:
+        lock = json.loads((ROOT / "platform/toolchain.lock.json").read_text())
+        self.assertEqual(
+            lock["tools"]["kubectl_cnpg"],
+            {
+                "version": "1.30.0",
+                "url": "https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v1.30.0/kubectl-cnpg_1.30.0_linux_x86_64.tar.gz",
+                "sha256": "33784dc3b61edb0ddb1a68db6ef045bd32daace5db2ec1f0a02e0e8185eef7eb",
+                "format": "tar.gz",
+                "binary": "kubectl-cnpg",
+            },
+        )
+        self.assertEqual(
+            lock["tools"]["kubectl_cnpg"]["version"],
+            lock["artifacts"]["cloudnative_pg_operator"]["version"],
+        )
+
     def test_ha_migration_reads_runtime_database_url_from_secret(self) -> None:
         job = next(
             self.validator._documents(
@@ -432,31 +449,98 @@ class KubernetesHaContractTests(unittest.TestCase):
                     "kubectl", require_three_nodes=True
                 )
 
-    def test_barman_plugin_leader_alignment_deletes_non_target_pods(self) -> None:
-        before = {
+    def test_barman_plugin_backup_proves_completed_plugin_rpc(self) -> None:
+        completed = {
+            "status": {
+                "phase": "completed",
+                "method": "plugin",
+                "instanceID": {"podName": "postgres-ha-2"},
+            }
+        }
+        with mock.patch.object(self.ha.ref, "apply_yaml") as apply_yaml, mock.patch.object(
+            self.ha, "wait_backup_complete", return_value=completed
+        ) as wait_backup:
+            result = self.ha.prove_barman_plugin_backup(
+                "kubectl", "postgres-ha", "probe-backup"
+            )
+        document = apply_yaml.call_args.args[1]
+        self.assertEqual(document["spec"]["method"], "plugin")
+        self.assertEqual(document["spec"]["target"], "primary")
+        self.assertEqual(
+            document["spec"]["pluginConfiguration"]["name"],
+            "barman-cloud.cloudnative-pg.io",
+        )
+        wait_backup.assert_called_once_with("kubectl", "probe-backup")
+        self.assertEqual(
+            result,
+            {
+                "name": "probe-backup",
+                "phase": "completed",
+                "method": "plugin",
+                "pod": "postgres-ha-2",
+            },
+        )
+
+    def test_postgres_primary_alignment_promotes_to_existing_barman_leader(self) -> None:
+        plugin_state = {
             "nodes": ["worker-1", "worker-2", "worker-3"],
             "pods": {
                 "barman-cloud-1": "worker-1",
                 "barman-cloud-2": "worker-2",
                 "barman-cloud-3": "worker-3",
             },
-            "leader": {"pod": "barman-cloud-1", "node": "worker-1"},
-        }
-        aligned = {
-            **before,
             "leader": {"pod": "barman-cloud-2", "node": "worker-2"},
         }
+        topology = {
+            "postgres-ha-1": {"node": "worker-1", "zone": "zone-a"},
+            "postgres-ha-2": {"node": "worker-2", "zone": "zone-b"},
+            "postgres-ha-3": {"node": "worker-3", "zone": "zone-c"},
+        }
+        communication = {
+            "name": "probe-backup",
+            "phase": "completed",
+            "method": "plugin",
+            "pod": "postgres-ha-2",
+        }
         with mock.patch.object(
-            self.ha, "verify_barman_plugin_ha", return_value=before
+            self.ha, "verify_barman_plugin_ha", side_effect=[plugin_state, plugin_state]
         ), mock.patch.object(
-            self.ha, "barman_plugin_state", return_value=aligned
-        ), mock.patch.object(self.ha.ref, "run") as run:
-            result = self.ha.align_barman_plugin_leader("kubectl", "worker-2")
-        argv = run.call_args.args[0]
-        self.assertIn("barman-cloud-1", argv)
-        self.assertIn("barman-cloud-3", argv)
-        self.assertNotIn("barman-cloud-2", argv)
-        self.assertEqual(result["aligned"], aligned["leader"])
+            self.ha, "current_primary", side_effect=["postgres-ha-1", "postgres-ha-2"]
+        ), mock.patch.object(
+            self.ha, "wait_until", return_value="postgres-ha-2"
+        ) as wait_until, mock.patch.object(
+            self.ha, "wait_cluster_ready"
+        ) as wait_ready, mock.patch.object(
+            self.ha, "prove_barman_plugin_backup", return_value=communication
+        ) as prove_backup, mock.patch.object(self.ha.ref, "run") as run:
+            result = self.ha.align_postgres_primary_with_barman_leader(
+                "kubectl-cnpg",
+                "kubectl",
+                "postgres-ha",
+                topology,
+                "probe-backup",
+            )
+        run.assert_called_once_with(
+            [
+                "kubectl-cnpg",
+                "--namespace",
+                "weltgewebe-data",
+                "promote",
+                "postgres-ha",
+                "postgres-ha-2",
+            ],
+            timeout=60,
+        )
+        self.assertNotIn("delete", run.call_args.args[0])
+        wait_until.assert_called_once()
+        wait_ready.assert_called_once_with("kubectl", "postgres-ha", "10m")
+        prove_backup.assert_called_once_with(
+            "kubectl", "postgres-ha", "probe-backup"
+        )
+        self.assertEqual(result["target_node"], "worker-2")
+        self.assertEqual(result["postgres_primary_before"], "postgres-ha-1")
+        self.assertEqual(result["postgres_primary_aligned"], "postgres-ha-2")
+        self.assertEqual(result["communication"], communication)
 
     def test_barman_plugin_leader_after_node_loss_must_move(self) -> None:
         surviving = {

@@ -725,40 +725,102 @@ def verify_barman_plugin_ha(kubectl: str) -> dict[str, Any]:
     )
 
 
-def align_barman_plugin_leader(kubectl: str, target_node: str) -> dict[str, Any]:
-    before = verify_barman_plugin_ha(kubectl)
-    target_pods = [
-        pod for pod, node in before["pods"].items() if node == target_node
-    ]
-    if len(target_pods) != 1:
+def prove_barman_plugin_backup(
+    kubectl: str,
+    cluster: str,
+    name: str,
+) -> dict[str, str]:
+    ref.apply_yaml(
+        kubectl,
+        {
+            "apiVersion": "postgresql.cnpg.io/v1",
+            "kind": "Backup",
+            "metadata": {"name": name, "namespace": "weltgewebe-data"},
+            "spec": {
+                "method": "plugin",
+                "target": "primary",
+                "cluster": {"name": cluster},
+                "pluginConfiguration": {
+                    "name": "barman-cloud.cloudnative-pg.io"
+                },
+            },
+        },
+    )
+    backup = wait_backup_complete(kubectl, name)
+    status = backup.get("status", {})
+    phase = str(status.get("phase") or "")
+    method = str(status.get("method") or "")
+    pod = str(status.get("instanceID", {}).get("podName") or "")
+    if phase.lower() != "completed" or method.lower() != "plugin" or not pod:
         raise ref.ProofError(
-            f"Barman Cloud has no unique standby on target node {target_node}: {before}"
+            "Barman Cloud plugin backup lacks completed plugin-bound evidence: "
+            f"phase={phase!r}, method={method!r}, pod={pod!r}"
         )
+    return {"name": name, "phase": phase, "method": method, "pod": pod}
+
+
+def align_postgres_primary_with_barman_leader(
+    kubectl_cnpg: str,
+    kubectl: str,
+    cluster: str,
+    postgres_topology: dict[str, dict[str, str]],
+    probe_name: str,
+) -> dict[str, Any]:
+    before_plugin = verify_barman_plugin_ha(kubectl)
+    target_node = before_plugin["leader"]["node"]
+    target_instances = sorted(
+        pod
+        for pod, placement in postgres_topology.items()
+        if placement.get("node") == target_node
+    )
+    if len(target_instances) != 1:
+        raise ref.ProofError(
+            "PostgreSQL has no unique instance on the Barman Cloud leader node "
+            f"{target_node}: {postgres_topology}"
+        )
+    target_primary = target_instances[0]
+    before_primary = current_primary(kubectl, cluster)
     started = time.monotonic()
-    if before["leader"]["node"] != target_node:
-        delete_pods = [
-            pod for pod, node in before["pods"].items() if node != target_node
-        ]
+    if before_primary != target_primary:
         ref.run(
-            [kubectl, "-n", "cnpg-system", "delete", "pod", *delete_pods, "--wait=false"],
+            [
+                kubectl_cnpg,
+                "--namespace",
+                "weltgewebe-data",
+                "promote",
+                cluster,
+                target_primary,
+            ],
             timeout=60,
         )
-
-    def aligned_probe():
-        state = barman_plugin_state(kubectl, require_three_nodes=True)
-        return state if state["leader"]["node"] == target_node else False
-
-    aligned = dict(
         wait_until(
-            f"Barman Cloud leader on {target_node}",
-            aligned_probe,
+            f"PostgreSQL primary {target_primary} on Barman Cloud leader node",
+            lambda: target_primary
+            if current_primary(kubectl, cluster) == target_primary
+            else False,
             timeout_seconds=240,
         )
-    )
+    wait_cluster_ready(kubectl, cluster, "10m")
+    aligned_primary = current_primary(kubectl, cluster)
+    if aligned_primary != target_primary:
+        raise ref.ProofError(
+            f"PostgreSQL primary did not align with Barman Cloud leader: "
+            f"expected={target_primary}, observed={aligned_primary}"
+        )
+    after_plugin = verify_barman_plugin_ha(kubectl)
+    if after_plugin["leader"]["node"] != target_node:
+        raise ref.ProofError(
+            "Barman Cloud leader moved during PostgreSQL alignment: "
+            f"before={before_plugin['leader']}, after={after_plugin['leader']}"
+        )
+    communication = prove_barman_plugin_backup(kubectl, cluster, probe_name)
     return {
         "target_node": target_node,
-        "before": before["leader"],
-        "aligned": aligned["leader"],
+        "plugin_leader_before": before_plugin["leader"],
+        "plugin_leader_after": after_plugin["leader"],
+        "postgres_primary_before": before_primary,
+        "postgres_primary_aligned": aligned_primary,
+        "communication": communication,
         "duration_seconds": round(time.monotonic() - started, 3),
     }
 
@@ -1558,7 +1620,17 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     ref.require_host_tools()
     receipt = ref.tool_receipt()
     tools = receipt["tools"]
-    kind, kubectl, kustomize, flux, helm = (tools[name] for name in ("kind", "kubectl", "kustomize", "flux", "helm"))
+    kind, kubectl, kubectl_cnpg, kustomize, flux, helm = (
+        tools[name]
+        for name in (
+            "kind",
+            "kubectl",
+            "kubectl_cnpg",
+            "kustomize",
+            "flux",
+            "helm",
+        )
+    )
     restore_name = f"{args.cluster}-restore"
     ref.assert_available_cluster_name(kind, args.cluster)
     ref.assert_available_cluster_name(kind, restore_name)
@@ -1621,14 +1693,24 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             kubectl, kind, args.cluster, marker
         )
 
-        primary_before = current_primary(kubectl)
+        barman_leader_alignment = align_postgres_primary_with_barman_leader(
+            kubectl_cnpg,
+            kubectl,
+            "postgres-ha",
+            topology["postgres"],
+            f"t004-align-{commit[:8]}",
+        )
+        primary_before = barman_leader_alignment["postgres_primary_aligned"]
         primary_topology = topology["postgres"].get(primary_before)
         if not primary_topology:
             raise ref.ProofError(f"primary pod missing from topology: {primary_before}")
         failure_zone = primary_topology["zone"]
         stopped_node = primary_topology["node"]
-        barman_leader_alignment = align_barman_plugin_leader(kubectl, stopped_node)
-        wait_cluster_ready(kubectl, "postgres-ha", "10m")
+        if stopped_node != barman_leader_alignment["target_node"]:
+            raise ref.ProofError(
+                "PostgreSQL primary and Barman Cloud leader are not co-located "
+                f"before failure: {barman_leader_alignment}"
+            )
         alternate_zone = next(zone for zone in ("zone-a", "zone-b", "zone-c") if zone != failure_zone)
         create_nats_box(kubectl, alternate_zone)
         nats(kubectl, ["stream", "add", "WG_PROOF", "--subjects", "wg.proof", "--storage", "file", "--replicas", "3", "--retention", "limits", "--max-msgs", "100", "--defaults"])
@@ -1641,12 +1723,17 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         barman_leader_after_failure = wait_barman_plugin_leader_after_node_loss(
             kubectl, stopped_node
         )
-        barman_rto = time.monotonic() - failure_started
         def new_primary_probe():
             candidate = current_primary(kubectl)
             return candidate if candidate and candidate != primary_before else False
         primary_after = str(wait_until("PostgreSQL primary failover", new_primary_probe, timeout_seconds=180))
         postgres_rto = time.monotonic() - failure_started
+        barman_communication_after_failure = prove_barman_plugin_backup(
+            kubectl,
+            "postgres-ha",
+            f"t004-failover-{commit[:8]}",
+        )
+        barman_rto = time.monotonic() - failure_started
         wait_until("acknowledged domain mutation after failover", lambda: node_exists(kubectl, marker), timeout_seconds=60)
         wait_until("API projection after zone failure", lambda: gateway_contains_node(kubectl, kind, args.cluster, marker), timeout_seconds=180)
         api_rto = time.monotonic() - failure_started
@@ -1760,6 +1847,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "primary_initial": primary_barman_plugin_state,
                 "leader_alignment": barman_leader_alignment,
                 "leader_after_zone_failure": barman_leader_after_failure,
+                "communication_after_zone_failure": barman_communication_after_failure,
                 "primary_recovered": primary_barman_plugin_recovered,
                 "restore": restore_barman_plugin_state,
             },
