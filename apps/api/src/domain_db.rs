@@ -14,8 +14,9 @@ use uuid::Uuid;
 use crate::auth::accounts::AccountStore;
 use crate::auth::role::Role;
 use crate::routes::accounts::{
-    ensure_radius_projection_value, map_json_to_public_account, radius_projection_public_pos,
-    AccountInternal, Location as AccountLocation, RADIUS_PROJECTION_KEY,
+    ensure_radius_projection_value, map_json_to_public_account, radius_projection_matches_location,
+    radius_projection_public_pos, AccountInternal, Location as AccountLocation, MAX_RADIUS_M,
+    MIN_RADIUS_M, RADIUS_PROJECTION_KEY,
 };
 use crate::routes::auth::MAX_EMAIL_LEN;
 use crate::routes::edges::{Edge, LifecycleTimestamp};
@@ -1142,17 +1143,23 @@ impl NewDomainAccountRow {
             || v.get("suppress_public_pos")
                 .and_then(|value| value.as_bool())
                 .unwrap_or(false);
-        let mut radius_m: i64 = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
+        let radius_raw = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0);
+        let mut radius_m = i64::try_from(radius_raw).unwrap_or(0);
+        let invalid_radius = radius_raw > 0
+            && u32::try_from(radius_raw)
+                .ok()
+                .is_none_or(|radius_m| !(MIN_RADIUS_M..=MAX_RADIUS_M).contains(&radius_m));
         let explicit_map_state = v.get("map_state").and_then(|v| v.as_str());
         if let Some(state) = explicit_map_state {
             if !matches!(state, "not_on_map" | "exact" | "radius") {
                 anyhow::bail!("invalid account map_state: {state}");
             }
         }
-        let radius_requested = explicit_map_state == Some("radius")
+        let radius_requested = invalid_radius
+            || explicit_map_state == Some("radius")
             || visibility == Some("approximate")
             || radius_m > 0;
-        if radius_requested && radius_m == 0 {
+        if radius_requested && radius_m == 0 && !invalid_radius {
             radius_m = 250;
         }
         let private_location = match (location_lat, location_lon) {
@@ -1162,7 +1169,7 @@ impl NewDomainAccountRow {
         let valid_radius_projection = if radius_requested {
             u32::try_from(radius_m)
                 .ok()
-                .filter(|radius_m| (50..=5_000).contains(radius_m))
+                .filter(|radius_m| (MIN_RADIUS_M..=MAX_RADIUS_M).contains(radius_m))
                 .and_then(|radius_m| {
                     private_location.as_ref().and_then(|location| {
                         radius_projection_public_pos(
@@ -1443,13 +1450,18 @@ pub async fn update_account_profile_in_postgres(
     if let Some(address) = &update.address {
         private_map.insert("address".to_string(), Value::String(address.clone()));
     }
-    if let Some(existing_projection) = existing_private_payload.get(RADIUS_PROJECTION_KEY) {
-        // Preserve the old binding while hidden so re-enabling the same private
-        // location and radius does not create a sequence of intersectable points.
-        private_map.insert(
-            RADIUS_PROJECTION_KEY.to_string(),
-            existing_projection.clone(),
-        );
+    if let (Some(existing_projection), Some(location)) = (
+        existing_private_payload.get(RADIUS_PROJECTION_KEY),
+        effective_location.as_ref(),
+    ) {
+        // Preserve the old binding while hidden only when it still belongs to
+        // the current private location. A private move discards the stale anchor.
+        if radius_projection_matches_location(Some(existing_projection), location) {
+            private_map.insert(
+                RADIUS_PROJECTION_KEY.to_string(),
+                existing_projection.clone(),
+            );
+        }
     }
     if update.map_state == "radius" {
         let location = effective_location
@@ -1480,7 +1492,7 @@ pub async fn update_account_profile_in_postgres(
            location_lat = COALESCE($5, location_lat), \
            location_lon = COALESCE($6, location_lon), \
            public_payload = (public_payload - 'summary' - 'tags') || $7::jsonb, \
-           private_payload = (private_payload - 'address' - 'visibility' - 'suppress_public_pos' - 'ron_flag') || $8::jsonb, \
+           private_payload = (private_payload - 'address' - 'visibility' - 'suppress_public_pos' - 'ron_flag' - 'radius_projection') || $8::jsonb, \
            updated_at = now() \
          WHERE id = $1 \
          RETURNING id, kind, title, mode, map_state, radius_m, disabled, \
@@ -1998,6 +2010,22 @@ mod write_path_tests {
             "location": { "lat": 53.5, "lon": 10.0 },
             "visibility": "approximate",
             "radius_m": 0
+        });
+        let row = NewDomainAccountRow::from_jsonl_record(&record).expect("map");
+        assert_eq!(row.map_state, "not_on_map");
+        assert_eq!(row.radius_m, 0);
+        assert_eq!(row.location_lat, Some(53.5));
+        assert_eq!(row.location_lon, Some(10.0));
+    }
+
+    #[test]
+    fn oversized_radius_fails_closed_without_integer_wraparound() {
+        let record = json!({
+            "id": "writepath-unit-oversized-radius",
+            "type": "garnrolle",
+            "title": "Oversized radius",
+            "location": { "lat": 53.5, "lon": 10.0 },
+            "radius_m": u64::MAX
         });
         let row = NewDomainAccountRow::from_jsonl_record(&record).expect("map");
         assert_eq!(row.map_state, "not_on_map");

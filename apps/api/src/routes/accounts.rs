@@ -37,10 +37,13 @@ use uuid::Uuid;
 
 const EARTH_RADIUS_M: f64 = 6_371_008.8;
 const LOCATION_MATCH_EPSILON_DEGREES: f64 = 1e-9;
+const POLE_COSINE_EPSILON: f64 = 1e-12;
 const RADIUS_DISTANCE_EPSILON_M: f64 = 0.05;
 const MIN_RADIUS_PUBLIC_OFFSET_M: f64 = 0.01;
-const MIN_RADIUS_M: u32 = 50;
-const MAX_RADIUS_M: u32 = 5_000;
+const UNIT_F64_SHIFT: u32 = 11;
+const UNIT_F64_SCALE: f64 = 9_007_199_254_740_992.0; // 2^53
+pub(crate) const MIN_RADIUS_M: u32 = 50;
+pub(crate) const MAX_RADIUS_M: u32 = 5_000;
 const RADIUS_PROJECTION_VERSION: u8 = 1;
 pub(crate) const RADIUS_PROJECTION_KEY: &str = "radius_projection";
 
@@ -210,6 +213,7 @@ fn great_circle_distance_m(a: &Location, b: &Location) -> f64 {
 }
 
 fn destination_point(anchor: &Location, distance_m: f64, bearing_rad: f64) -> Location {
+    let bearing_rad = bearing_rad.rem_euclid(std::f64::consts::TAU);
     let angular_distance = distance_m / EARTH_RADIUS_M;
     let lat1 = anchor.lat.to_radians();
     let lon1 = anchor.lon.to_radians();
@@ -221,7 +225,7 @@ fn destination_point(anchor: &Location, distance_m: f64, bearing_rad: f64) -> Lo
     // The usual initial-bearing formula becomes 0/0 at the exact poles.
     // Handle those coordinates explicitly so longitude still carries the
     // random angular component instead of collapsing to the anchor meridian.
-    if cos_lat1.abs() < 1e-12 {
+    if cos_lat1.abs() < POLE_COSINE_EPSILON {
         let lat2 = if anchor.lat.is_sign_positive() {
             std::f64::consts::FRAC_PI_2 - angular_distance
         } else {
@@ -257,10 +261,12 @@ fn cryptographic_unit_pair() -> (f64, f64) {
     let mut second = [0_u8; 8];
     first.copy_from_slice(&digest[..8]);
     second.copy_from_slice(&digest[8..16]);
-    let denominator = (u64::MAX as f64) + 1.0;
-    let u = (u64::from_be_bytes(first) as f64 + 0.5) / denominator;
-    let v = (u64::from_be_bytes(second) as f64 + 0.5) / denominator;
-    (u.clamp(f64::EPSILON, 1.0), v.clamp(0.0, 1.0))
+    // IEEE-754 f64 has 53 bits of integer precision. Taking the upper
+    // 53 bits avoids rounding a u64 to 1.0 or introducing uneven buckets.
+    let u =
+        ((u64::from_be_bytes(first) >> UNIT_F64_SHIFT) as f64 / UNIT_F64_SCALE).max(f64::EPSILON);
+    let v = (u64::from_be_bytes(second) >> UNIT_F64_SHIFT) as f64 / UNIT_F64_SCALE;
+    (u, v)
 }
 
 fn generate_radius_projection(location: &Location, radius_m: u32) -> RadiusProjectionBinding {
@@ -292,6 +298,8 @@ fn validated_radius_projection(
     }
     let binding = parse_radius_projection(value?)?;
     let distance_m = great_circle_distance_m(location, &binding.public_pos);
+    // Unknown binding versions remain fail-closed. A future format needs an
+    // explicit migration or compatibility decoder, never a broad <= acceptance.
     if binding.version != RADIUS_PROJECTION_VERSION
         || binding.radius_m != radius_m
         || !location_is_valid(&binding.anchor)
@@ -311,6 +319,16 @@ pub(crate) fn radius_projection_public_pos(
     radius_m: u32,
 ) -> Option<Location> {
     validated_radius_projection(value, location, radius_m).map(|binding| binding.public_pos)
+}
+
+pub(crate) fn radius_projection_matches_location(
+    value: Option<&Value>,
+    location: &Location,
+) -> bool {
+    let Some(binding) = value.and_then(parse_radius_projection) else {
+        return false;
+    };
+    validated_radius_projection(value, location, binding.radius_m).is_some()
 }
 
 pub(crate) fn ensure_radius_projection_value(
@@ -402,7 +420,8 @@ pub(crate) fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         (Some(lat), Some(lon)) => Some(Location { lat, lon }),
         _ => None,
     };
-    let radius_requested = explicit_map_state == Some("radius")
+    let radius_requested = invalid_radius
+        || explicit_map_state == Some("radius")
         || radius_m > 0
         || legacy_visibility == Some("approximate");
     let radius_public_pos = if radius_requested && !invalid_radius {
@@ -869,6 +888,15 @@ fn update_jsonl_profile_record(
             StatusCode::BAD_REQUEST,
             "a map location is required for this visibility".to_string(),
         ));
+    }
+    if update.map_state != "radius" {
+        let binding_matches_current_location =
+            effective_location.as_ref().is_some_and(|location| {
+                radius_projection_matches_location(object.get(RADIUS_PROJECTION_KEY), location)
+            });
+        if !binding_matches_current_location {
+            object.remove(RADIUS_PROJECTION_KEY);
+        }
     }
     if update.map_state == "radius" {
         let location = effective_location
@@ -1473,6 +1501,22 @@ mod tests {
     }
 
     #[test]
+    fn oversized_radius_without_explicit_state_fails_closed() {
+        let input = json!({
+            "id": "oversized-radius",
+            "type": "garnrolle",
+            "title": "Oversized radius",
+            "location": { "lat": 53.5, "lon": 10.0 },
+            "radius_m": u64::MAX,
+        });
+
+        let account = map_json_to_public_account(&input).expect("valid account");
+        assert_eq!(account.map_state, GarnrolleMapState::NotOnMap);
+        assert_eq!(account.radius_m, 0);
+        assert!(account.public_pos.is_none());
+    }
+
+    #[test]
     fn private_projection_is_reused_and_never_serialized_publicly() {
         let location = Location {
             lat: 53.5585,
@@ -1522,6 +1566,63 @@ mod tests {
         assert!(radius_projection_public_pos(Some(&resized), &first_location, 750).is_some());
         assert!(radius_projection_public_pos(Some(&first), &moved_location, 500).is_none());
         assert!(radius_projection_public_pos(Some(&first), &first_location, 750).is_none());
+    }
+
+    #[test]
+    fn cryptographic_samples_use_half_open_unit_interval() {
+        for _ in 0..1_024 {
+            let (radial, angular) = cryptographic_unit_pair();
+            assert!(radial > 0.0 && radial < 1.0);
+            assert!((0.0..1.0).contains(&angular));
+        }
+    }
+
+    #[test]
+    fn radius_boundary_tolerance_is_small_and_geometrically_sufficient() {
+        let anchors = [
+            Location {
+                lat: 53.5585,
+                lon: 10.058,
+            },
+            Location {
+                lat: 89.9999,
+                lon: 179.9999,
+            },
+            Location {
+                lat: 90.0,
+                lon: 42.0,
+            },
+            Location {
+                lat: 0.0,
+                lon: 179.9999,
+            },
+        ];
+        let radius_m = MAX_RADIUS_M;
+        for anchor in anchors {
+            let boundary = RadiusProjectionBinding {
+                version: RADIUS_PROJECTION_VERSION,
+                anchor: anchor.clone(),
+                radius_m,
+                public_pos: destination_point(&anchor, f64::from(radius_m), 1.2345),
+            };
+            let boundary_value = serde_json::to_value(boundary).expect("boundary binding");
+            assert!(
+                validated_radius_projection(Some(&boundary_value), &anchor, radius_m).is_some()
+            );
+
+            let outside = RadiusProjectionBinding {
+                version: RADIUS_PROJECTION_VERSION,
+                anchor: anchor.clone(),
+                radius_m,
+                public_pos: destination_point(
+                    &anchor,
+                    f64::from(radius_m) + RADIUS_DISTANCE_EPSILON_M + 0.10,
+                    1.2345,
+                ),
+            };
+            let outside_value = serde_json::to_value(outside).expect("outside binding");
+            assert!(validated_radius_projection(Some(&outside_value), &anchor, radius_m).is_none());
+        }
     }
 
     #[test]
@@ -1769,6 +1870,39 @@ mod profile_update_tests {
         assert_eq!(updated["address"], "Neue Adresse");
         assert_eq!(effective_location.unwrap().lat, 53.5);
         assert_eq!(updated["location"]["lat"], 53.5);
+    }
+
+    #[test]
+    fn jsonl_update_discards_binding_after_private_location_change() {
+        let old_location = Location {
+            lat: 53.5,
+            lon: 10.0,
+        };
+        let projection = ensure_radius_projection_value(None, &old_location, 250);
+        let mut record = json!({
+            "id": "own-account",
+            "type": "garnrolle",
+            "title": "Alt",
+            "role": "weber",
+            "map_state": "not_on_map",
+            "radius_m": 0,
+            "location": old_location
+        });
+        record[RADIUS_PROJECTION_KEY] = projection;
+        let update = validate_profile_update(request(
+            GarnrolleMapState::NotOnMap,
+            None,
+            Some(Location {
+                lat: 53.6,
+                lon: 10.1,
+            }),
+        ))
+        .expect("not-on-map profile with new private location");
+
+        let (updated, _) = update_jsonl_profile_record(record, &update).expect("update record");
+        assert!(updated.get(RADIUS_PROJECTION_KEY).is_none());
+        assert_eq!(updated["location"]["lat"], 53.6);
+        assert_eq!(updated["location"]["lon"], 10.1);
     }
 
     #[test]

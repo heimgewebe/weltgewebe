@@ -6,11 +6,20 @@
 -- fail-closed cutover for every currently mapped radius account instead of
 -- restoring or retaining a public radius state. Private locations remain
 -- available for a later safe reactivation.
-UPDATE domain_accounts
-SET map_state = 'not_on_map',
-    radius_m = 0,
-    private_payload = private_payload - 'radius_projection' - 'visibility',
-    updated_at = NOW()
-WHERE map_state = 'radius'
-   OR radius_m > 0
-   OR private_payload->>'visibility' = 'approximate';
+DO $$
+DECLARE
+    affected_rows BIGINT;
+BEGIN
+    UPDATE domain_accounts
+    SET map_state = 'not_on_map',
+        radius_m = 0,
+        private_payload = private_payload - 'radius_projection' - 'visibility',
+        updated_at = NOW()
+    WHERE map_state = 'radius'
+       OR radius_m > 0
+       OR private_payload->>'visibility' = 'approximate';
+
+    GET DIAGNOSTICS affected_rows = ROW_COUNT;
+    RAISE NOTICE 'radius projection privacy rollback hid % account(s)', affected_rows;
+END
+$$;

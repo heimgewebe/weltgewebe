@@ -1145,6 +1145,36 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
     assert_eq!(rotated_account.public.map_state, GarnrolleMapState::Radius);
     assert_eq!(rotated_account.public.radius_m, 450);
 
+    // Moving the private location while hidden must discard the old binding.
+    // Otherwise private storage would retain an obsolete residence anchor.
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(
+            &cookie,
+            r#"{
+              "title":"Meine PostgreSQL Garnrolle",
+              "summary":"Dauerhaft gespeichert",
+              "tags":["skill:Kochen","interest:Commons"],
+              "map_state":"not_on_map",
+              "location":{"lat":53.5700,"lon":10.0700}
+            }"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let moved_private_text: String =
+        sqlx::query_scalar("SELECT private_payload::text FROM domain_accounts WHERE id = $1")
+            .bind(PROFILE_ID)
+            .fetch_one(&pool)
+            .await?;
+    let moved_private: serde_json::Value = serde_json::from_str(&moved_private_text)?;
+    assert!(moved_private.get("radius_projection").is_none());
+    let moved_reload = load_accounts_from_postgres(&pool).await?;
+    let moved_account = moved_reload
+        .get(PROFILE_ID)
+        .context("moved hidden reload")?;
+    assert_eq!(moved_account.public.map_state, GarnrolleMapState::NotOnMap);
+    assert!(moved_account.public.public_pos.is_none());
+
     clean(&pool).await;
     Ok(())
 }
