@@ -722,6 +722,7 @@ Gefährliche Statuslügen werden blockiert.
 Der ursprünglich geplante generische repo-eigene `--write`-Runner wird **verworfen**.
 
 **Architekturentscheidung:**
+
 - **Das Repository** besitzt Contract, Validator und Prüfprofile (Validation-Profiles). Es entscheidet, *was* erlaubt ist und *wie* es geprüft wird.
 - **Grabowski** (oder ein kompatibler externer Operator) besitzt Workspace, Lease, Mutation, Review, Veröffentlichung, Recovery und Cleanup.
 
