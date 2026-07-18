@@ -271,7 +271,8 @@ class KubernetesHaContractTests(unittest.TestCase):
         source = (
             "apiVersion: v1\nkind: Secret\nmetadata:\n  name: sidecar\n"
             f'data:\n  SIDECAR_IMAGE: "{encoded}"\n---\n'
-            "apiVersion: apps/v1\nkind: Deployment\nspec:\n  template:\n"
+            "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n"
+            "  name: barman-cloud\n  namespace: cnpg-system\nspec:\n  template:\n"
             "    spec:\n      containers:\n        - name: controller\n"
             "          image: ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0\n"
         )
@@ -288,6 +289,58 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertEqual(
             deployment["spec"]["template"]["spec"]["containers"][0]["image"],
             self.ha.BARMAN_CLOUD_PLUGIN_IMAGE,
+        )
+        self.assertEqual(deployment["spec"]["replicas"], 3)
+        self.assertEqual(
+            deployment["spec"]["strategy"],
+            {
+                "type": "RollingUpdate",
+                "rollingUpdate": {"maxSurge": 0, "maxUnavailable": 1},
+            },
+        )
+        required = deployment["spec"]["template"]["spec"]["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]
+        self.assertEqual(required[0]["topologyKey"], "kubernetes.io/hostname")
+        budget = next(item for item in documents if item.get("kind") == "PodDisruptionBudget")
+        self.assertEqual(budget["spec"]["maxUnavailable"], 1)
+        self.assertEqual(budget["spec"]["selector"]["matchLabels"], {"app": "barman-cloud"})
+
+    def barman_plugin_pod_payload(self) -> str:
+        return json.dumps(
+            {
+                "items": [
+                    {
+                        "metadata": {"name": f"barman-cloud-{index}"},
+                        "spec": {
+                            "nodeName": f"worker-{index}",
+                            "containers": [{"name": "barman-cloud", "image": self.ha.BARMAN_CLOUD_PLUGIN_IMAGE}],
+                        },
+                        "status": {
+                            "phase": "Running",
+                            "conditions": [{"type": "Ready", "status": "True"}],
+                            "containerStatuses": [{"name": "barman-cloud", "ready": True}],
+                        },
+                    }
+                    for index in range(1, 4)
+                ]
+            }
+        )
+
+    @staticmethod
+    def barman_plugin_endpoint_payload(*indexes: int) -> str:
+        return json.dumps(
+            {
+                "subsets": [
+                    {
+                        "addresses": [
+                            {
+                                "ip": f"10.0.0.{index}",
+                                "targetRef": {"name": f"barman-cloud-{index}"},
+                            }
+                            for index in indexes
+                        ]
+                    }
+                ]
+            }
         )
 
     def test_barman_plugin_install_waits_and_verifies_digest_images(self) -> None:
@@ -315,15 +368,37 @@ class KubernetesHaContractTests(unittest.TestCase):
         ) as wait_rollout, mock.patch.object(
             self.ha.ref,
             "output",
-            side_effect=[secret_payload, self.ha.BARMAN_CLOUD_PLUGIN_IMAGE],
+            side_effect=[
+                "3",
+                self.barman_plugin_pod_payload(),
+                self.barman_plugin_endpoint_payload(1, 2, 3),
+                secret_payload,
+                self.ha.BARMAN_CLOUD_PLUGIN_IMAGE,
+            ],
         ):
-            self.ha.install_barman_cloud_plugin("kubectl", "barman.yaml")
+            nodes = self.ha.install_barman_cloud_plugin("kubectl", "barman.yaml")
         apply_manifest.assert_called_once_with("kubectl", "barman.yaml")
         self.assertIn("crd/objectstores.barmancloud.cnpg.io", run.call_args.args[0])
         self.assertEqual(wait_condition.call_count, 2)
         wait_rollout.assert_called_once_with(
             "kubectl", "cnpg-system", "deployment/barman-cloud", "8m"
         )
+        self.assertEqual(nodes, ["worker-1", "worker-2", "worker-3"])
+
+    def test_barman_plugin_ha_fails_closed_when_service_loses_a_replica(self) -> None:
+        with mock.patch.object(self.ha.ref, "wait_rollout"), mock.patch.object(
+            self.ha.ref,
+            "output",
+            side_effect=[
+                "3",
+                self.barman_plugin_pod_payload(),
+                self.barman_plugin_endpoint_payload(1, 2),
+            ],
+        ):
+            with self.assertRaisesRegex(
+                self.ha.ref.ProofError, "does not expose all three ready replicas"
+            ):
+                self.ha.verify_barman_plugin_ha("kubectl")
 
     def test_barman_instance_sidecars_are_running_ready_and_digest_bound(self) -> None:
         digest = self.ha.BARMAN_CLOUD_SIDECAR_IMAGE.rsplit("@", 1)[1]
@@ -553,6 +628,9 @@ spec:
                     "cnpg-operator-deployment.yaml",
                     "cnpg-operator-replicasets.yaml",
                     "cnpg-operator-logs.txt",
+                    "barman-plugin-deployment.yaml",
+                    "barman-plugin-pods-describe.txt",
+                    "barman-plugin-endpoints.yaml",
                     "barman-plugin-logs.txt",
                     "barman-objectstores.yaml",
                     "certificates.yaml",

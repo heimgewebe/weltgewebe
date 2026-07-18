@@ -356,6 +356,7 @@ def _assert_ha_contract() -> None:
         "restore-kind.yaml", "PITR data comparison failed",
         "install_cert_manager", "install_barman_cloud_plugin",
         "render_cnpg_manifest", "verify_cnpg_operator_ha",
+        "verify_barman_plugin_ha", "barman_plugin_nodes",
         "verify_barman_sidecar_images",
         "BARMAN_CLOUD_SIDECAR_IMAGE",
         "pg_stat_archiver", "pluginConfiguration",

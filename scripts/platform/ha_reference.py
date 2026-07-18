@@ -584,6 +584,67 @@ def render_barman_cloud_manifest(source: str) -> str:
     secret["data"]["SIDECAR_IMAGE"] = base64.b64encode(
         BARMAN_CLOUD_SIDECAR_IMAGE.encode("utf-8")
     ).decode("ascii")
+
+    deployments = [
+        document
+        for document in documents
+        if isinstance(document, dict)
+        and document.get("kind") == "Deployment"
+        and document.get("metadata", {}).get("name") == "barman-cloud"
+        and document.get("metadata", {}).get("namespace") == "cnpg-system"
+    ]
+    if len(deployments) != 1:
+        raise ref.ProofError("Barman Cloud controller deployment changed unexpectedly")
+    deployment = deployments[0]
+    spec = deployment.setdefault("spec", {})
+    spec["replicas"] = 3
+    spec["strategy"] = {
+        "type": "RollingUpdate",
+        "rollingUpdate": {"maxSurge": 0, "maxUnavailable": 1},
+    }
+    pod_spec = spec.setdefault("template", {}).setdefault("spec", {})
+    affinity = pod_spec.setdefault("affinity", {})
+    pod_anti_affinity = affinity.setdefault("podAntiAffinity", {})
+    required = pod_anti_affinity.setdefault(
+        "requiredDuringSchedulingIgnoredDuringExecution", []
+    )
+    if required:
+        raise ref.ProofError(
+            "Barman Cloud release already defines required pod anti-affinity"
+        )
+    required.append(
+        {
+            "labelSelector": {"matchLabels": {"app": "barman-cloud"}},
+            "topologyKey": "kubernetes.io/hostname",
+        }
+    )
+    existing_budgets = [
+        document
+        for document in documents
+        if isinstance(document, dict)
+        and document.get("kind") == "PodDisruptionBudget"
+        and document.get("metadata", {}).get("name") == "barman-cloud"
+        and document.get("metadata", {}).get("namespace") == "cnpg-system"
+    ]
+    if existing_budgets:
+        raise ref.ProofError(
+            "Barman Cloud release unexpectedly defines its own disruption budget"
+        )
+    documents.append(
+        {
+            "apiVersion": "policy/v1",
+            "kind": "PodDisruptionBudget",
+            "metadata": {
+                "name": "barman-cloud",
+                "namespace": "cnpg-system",
+                "labels": {"app": "barman-cloud"},
+            },
+            "spec": {
+                "maxUnavailable": 1,
+                "selector": {"matchLabels": {"app": "barman-cloud"}},
+            },
+        }
+    )
     return yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
 
 def apply_barman_cloud_manifest(kubectl: str, artifact: str) -> None:
@@ -604,7 +665,81 @@ def apply_barman_cloud_manifest(kubectl: str, artifact: str) -> None:
     )
 
 
-def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
+def verify_barman_plugin_ha(kubectl: str) -> list[str]:
+    ref.wait_rollout(kubectl, "cnpg-system", "deployment/barman-cloud", "8m")
+    replicas = ref.output(
+        [kubectl, "-n", "cnpg-system", "get", "deployment/barman-cloud", "-o", "jsonpath={.status.availableReplicas}"]
+    )
+    if replicas != "3":
+        raise ref.ProofError(
+            f"Barman Cloud plugin does not have three available replicas: {replicas}"
+        )
+    payload = json.loads(
+        ref.output(
+            [kubectl, "-n", "cnpg-system", "get", "pods", "-l", "app=barman-cloud", "-o", "json"]
+        )
+    )
+    observed: dict[str, str] = {}
+    for item in payload.get("items", []):
+        name = str(item.get("metadata", {}).get("name") or "")
+        node = str(item.get("spec", {}).get("nodeName") or "")
+        containers = item.get("spec", {}).get("containers", [])
+        statuses = {
+            status.get("name"): status
+            for status in item.get("status", {}).get("containerStatuses", [])
+        }
+        controller = next(
+            (container for container in containers if container.get("image") == BARMAN_CLOUD_PLUGIN_IMAGE),
+            None,
+        )
+        status = statuses.get(controller.get("name")) if controller else None
+        ready_condition = next(
+            (
+                condition
+                for condition in item.get("status", {}).get("conditions", [])
+                if condition.get("type") == "Ready"
+            ),
+            None,
+        )
+        if (
+            not name
+            or not node
+            or item.get("status", {}).get("phase") != "Running"
+            or controller is None
+            or not status
+            or status.get("ready") is not True
+            or not ready_condition
+            or ready_condition.get("status") != "True"
+        ):
+            raise ref.ProofError(
+                f"Barman Cloud plugin pod is not running and ready: {name or '<unknown>'}"
+            )
+        observed[name] = node
+    if len(observed) != 3 or len(set(observed.values())) != 3:
+        raise ref.ProofError(
+            "Barman Cloud plugin replicas are not ready on three distinct nodes: "
+            f"{observed}"
+        )
+    endpoints = json.loads(
+        ref.output(
+            [kubectl, "-n", "cnpg-system", "get", "endpoints/barman-cloud", "-o", "json"]
+        )
+    )
+    endpoint_pods = {
+        str(address.get("targetRef", {}).get("name") or "")
+        for subset in endpoints.get("subsets", [])
+        for address in subset.get("addresses", [])
+        if address.get("ip")
+    }
+    if endpoint_pods != set(observed):
+        raise ref.ProofError(
+            "Barman Cloud service does not expose all three ready replicas: "
+            f"pods={sorted(observed)}, endpoints={sorted(endpoint_pods)}"
+        )
+    return sorted(set(observed.values()))
+
+
+def install_barman_cloud_plugin(kubectl: str, artifact: str) -> list[str]:
     apply_barman_cloud_manifest(kubectl, artifact)
     ref.run(
         [
@@ -623,7 +758,7 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
             "Ready",
             "5m",
         )
-    ref.wait_rollout(kubectl, "cnpg-system", "deployment/barman-cloud", "8m")
+    plugin_nodes = verify_barman_plugin_ha(kubectl)
     secrets_payload = json.loads(
         ref.output(
             [
@@ -668,6 +803,7 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
     )
     if observed != BARMAN_CLOUD_PLUGIN_IMAGE:
         raise ref.ProofError(f"Barman Cloud plugin image is not digest-bound: {observed}")
+    return plugin_nodes
 
 
 def verify_barman_sidecar_images(
@@ -779,7 +915,19 @@ def ha_diagnostic_snapshot(kubectl: str, name: str) -> None:
             "-l", "app.kubernetes.io/name=cloudnative-pg",
             "--all-containers=true", "--prefix=true", "--tail=2000",
         ],
-        "barman-plugin-logs.txt": [kubectl, "-n", "cnpg-system", "logs", "deployment/barman-cloud", "--tail=2000"],
+        "barman-plugin-deployment.yaml": [
+            kubectl, "-n", "cnpg-system", "get", "deployment/barman-cloud", "-o", "yaml",
+        ],
+        "barman-plugin-pods-describe.txt": [
+            kubectl, "-n", "cnpg-system", "describe", "pods", "-l", "app=barman-cloud",
+        ],
+        "barman-plugin-endpoints.yaml": [
+            kubectl, "-n", "cnpg-system", "get", "endpoints/barman-cloud", "-o", "yaml",
+        ],
+        "barman-plugin-logs.txt": [
+            kubectl, "-n", "cnpg-system", "logs", "-l", "app=barman-cloud",
+            "--all-containers=true", "--prefix=true", "--tail=2000",
+        ],
         "barman-objectstores.yaml": [kubectl, "get", "objectstores.barmancloud.cnpg.io", "-A", "-o", "yaml"],
         "certificates.yaml": [kubectl, "get", "certificates.cert-manager.io", "-A", "-o", "yaml"],
         "storage.txt": [kubectl, "get", "pv,pvc", "-A", "-o", "wide"],
@@ -1399,7 +1547,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         primary_operator_nodes = install_cnpg(
             kubectl, receipt["artifacts"]["cloudnative_pg_operator"]
         )
-        install_barman_cloud_plugin(
+        primary_barman_plugin_nodes = install_barman_cloud_plugin(
             kubectl,
             receipt["artifacts"]["barman_cloud_plugin"],
         )
@@ -1519,7 +1667,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             restore_kubectl,
             receipt["artifacts"]["cloudnative_pg_operator"],
         )
-        install_barman_cloud_plugin(
+        restore_barman_plugin_nodes = install_barman_cloud_plugin(
             restore_kubectl,
             receipt["artifacts"]["barman_cloud_plugin"],
         )
@@ -1560,6 +1708,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             "operator_nodes": {
                 "primary": primary_operator_nodes,
                 "restore": restore_operator_nodes,
+            },
+            "barman_plugin_nodes": {
+                "primary": primary_barman_plugin_nodes,
+                "restore": restore_barman_plugin_nodes,
             },
             "barman_sidecar_images": {
                 "primary": primary_barman_sidecars,
