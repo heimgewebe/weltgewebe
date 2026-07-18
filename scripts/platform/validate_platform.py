@@ -302,9 +302,19 @@ def _assert_ha_contract() -> None:
 
     patch_docs = list(_documents(PLATFORM / "apps/weltgewebe/overlays/ha/deployment-patch.yaml"))
     api = next(item for item in patch_docs if item["metadata"]["name"] == "weltgewebe-api")
-    if api.get("spec", {}).get("replicas") != 3:
+    api_spec = api.get("spec", {})
+    if api_spec.get("replicas") != 3:
         raise ContractError("HA API requires three replicas")
-    pod = api["spec"]["template"]["spec"]
+    rolling = api_spec.get("strategy", {}).get("rollingUpdate", {})
+    if (
+        api_spec.get("strategy", {}).get("type") != "RollingUpdate"
+        or rolling.get("maxSurge") != 0
+        or rolling.get("maxUnavailable") != 1
+    ):
+        raise ContractError(
+            "HA API rollout must replace one zoned replica without a surge pod"
+        )
+    pod = api_spec["template"]["spec"]
     spread = pod.get("topologySpreadConstraints", [])
     if not spread or spread[0].get("topologyKey") != "topology.kubernetes.io/zone" or spread[0].get("whenUnsatisfiable") != "DoNotSchedule":
         raise ContractError("HA API does not require zone spread")

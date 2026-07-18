@@ -530,6 +530,34 @@ spec:
         self.assertIn('"primary": primary_operator_nodes', source)
         self.assertIn('"restore": restore_operator_nodes', source)
 
+    def test_ha_api_rollout_is_schedulable_on_three_zoned_workers(self) -> None:
+        documents = list(
+            self.ha.yaml.safe_load_all(
+                (
+                    ROOT
+                    / "platform/apps/weltgewebe/overlays/ha/deployment-patch.yaml"
+                ).read_text()
+            )
+        )
+        api = next(
+            item
+            for item in documents
+            if item.get("metadata", {}).get("name") == "weltgewebe-api"
+        )
+        spec = api["spec"]
+        self.assertEqual(spec["replicas"], 3)
+        self.assertEqual(spec["strategy"]["type"], "RollingUpdate")
+        self.assertEqual(spec["strategy"]["rollingUpdate"]["maxSurge"], 0)
+        self.assertEqual(
+            spec["strategy"]["rollingUpdate"]["maxUnavailable"], 1
+        )
+        required = spec["template"]["spec"]["affinity"][
+            "podAntiAffinity"
+        ]["requiredDuringSchedulingIgnoredDuringExecution"]
+        self.assertEqual(
+            required[0]["topologyKey"], "topology.kubernetes.io/zone"
+        )
+
     def test_upgrade_candidate_is_distinct_and_loaded_into_kind(self) -> None:
         baseline = "sha256:" + "a" * 64
         candidate = "sha256:" + "b" * 64
