@@ -7,7 +7,7 @@ summary: >
   Führt den eigentumsgebundenen T004-Beweis für Zonenverteilung, PostgreSQL- und JetStream-Failover sowie PITR in einen leeren kind-Cluster aus.
 relations:
   - type: relates_to
-    target: adr/ADR-0011__ha-referenzzelle-und-wiederherstellung.md
+    target: docs/adr/ADR-0011__ha-referenzzelle-und-wiederherstellung.md
 ---
 
 # Kubernetes-HA- und Recovery-Beweis
@@ -30,13 +30,13 @@ Der Runner installiert Werkzeuge ausschließlich aus `platform/toolchain.lock.js
 ## Beweisphasen
 
 1. Primärcluster mit drei Datenzonen erzeugen.
-2. Cilium, Gateway API, Flux, CloudNativePG, cert-manager und das Barman-Cloud-CNPG-I-Plugin aus fest gebundenen Releaseartefakten installieren.
+2. Cilium, Gateway API, Flux, CloudNativePG, cert-manager sowie Controller und PostgreSQL-Sidecar des Barman-Cloud-CNPG-I-Plugins aus fest gebundenen Releaseartefakten installieren.
 3. PostgreSQL, NATS JetStream und drei API-Replikate über die Zonen verteilen.
 4. Eine gültige `domain_nodes`-Mutation schreiben und über die API zurücklesen.
 5. Den Worker des PostgreSQL-Primary stoppen.
 6. PostgreSQL-Failover, API-Readback und JetStream-Quorum messen.
 7. Die ausgefallene Zone bewusst weiter gestoppt lassen.
-8. Im degradierten Zwei-Zonen-Betrieb über das Barman-Cloud-Plugin ein Basisbackup gezielt auf dem neuen Primary erstellen, den PITR-Zeitpunkt festhalten und eine spätere Mutation schreiben.
+8. Im degradierten Zwei-Zonen-Betrieb über das Barman-Cloud-Plugin ein Basisbackup gezielt auf dem neuen Primary erstellen, den PITR-Zeitpunkt festhalten, eine spätere Mutation schreiben und den anschließenden WAL-Fortschritt über PostgreSQLs eigene Sicht `pg_stat_archiver` belegen.
 9. Einen zweiten leeren kind-Cluster erzeugen.
 10. Während die Ursprungszone weiterhin fehlt, die Datenbank auf den Zielzeitpunkt wiederherstellen und die Zeilengrenze vergleichen.
 
@@ -49,6 +49,8 @@ Bei Erfolg entsteht unter `.cache/weltgewebe-platform/receipts/` ein JSON-Receip
 - Pod-, Knoten- und Zonenbelegung,
 - gemessenen RTO-Werten,
 - Backupmethode, Plugin, Objektstore, Backupziel sowie Backup- und PITR-Zeitpunkt,
+- deklarierte und tatsächlich laufende Digest-IDs der Barman-Sidecars,
+- PostgreSQLs Archiverzustand vor und nach dem erzwungenen WAL-Wechsel,
 - Datenvergleich des Restoreclusters,
 - dem Beleg, dass die Ausfallzone bis nach Backup und Restore gestoppt blieb,
 - expliziten Nichtaussagen einschließlich der nicht geprüften automatischen Wiedereingliederung der ausgefallenen Zone.

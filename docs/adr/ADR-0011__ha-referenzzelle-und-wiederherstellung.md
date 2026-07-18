@@ -7,9 +7,9 @@ summary: >
   Definiert den nichtproduktiven Referenzvertrag für drei Fehlerdomänen, PostgreSQL- und JetStream-Quorum, kontrollierten Zonenausfall und Point-in-Time-Restore in einen leeren Cluster.
 relations:
   - type: relates_to
-    target: adr/ADR-0010__kubernetes-kanonische-plattform.md
+    target: docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
   - type: relates_to
-    target: runbooks/kubernetes-ha-recovery-proof.md
+    target: docs/runbooks/kubernetes-ha-recovery-proof.md
 ---
 
 # ADR-0011 — Hochverfügbare Referenzzelle und Wiederherstellungsbeweis
@@ -37,7 +37,7 @@ Die T004-Referenzzelle verwendet drei explizite Zonen und folgende Verträge:
 - einen für diesen degradierten Beweis gezielt auf den neuen Primary gebundenen Backupauftrag,
 - einen neuen zweiten kind-Cluster für den Point-in-Time-Restore.
 
-Alle Drittimages sowie die Releaseartefakte von CloudNativePG, cert-manager und Barman Cloud sind per SHA-256 beziehungsweise OCI-Digest gebunden. Der mit CloudNativePG 1.30 entfernte eingebaute Barman-Pfad ist ausdrücklich ausgeschlossen.
+Alle Drittimages sowie die Releaseartefakte von CloudNativePG, cert-manager und Barman Cloud sind per SHA-256 beziehungsweise OCI-Digest gebunden. Das schließt den vom Plugin in jeden PostgreSQL-Pod injizierten Barman-Sidecar ein, der die eigentliche WAL-Archivierung und die Backups ausführt. Der mit CloudNativePG 1.30 entfernte eingebaute Barman-Pfad ist ausdrücklich ausgeschlossen.
 
 ## Messvertrag
 

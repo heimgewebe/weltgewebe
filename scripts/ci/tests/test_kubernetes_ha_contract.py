@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import importlib.util
 import inspect
 import json
@@ -62,6 +63,7 @@ class KubernetesHaContractTests(unittest.TestCase):
             set(lock["images"]),
             {
                 "barman_cloud_plugin",
+                "barman_cloud_sidecar",
                 "cert_manager_cainjector",
                 "cert_manager_controller",
                 "cert_manager_webhook",
@@ -78,6 +80,7 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertEqual(
             {
                 "barman_cloud_plugin": self.ha.BARMAN_PLUGIN_IMAGE,
+                "barman_cloud_sidecar": self.ha.BARMAN_PLUGIN_SIDECAR_IMAGE,
                 "cert_manager_cainjector": self.ha.CERT_MANAGER_IMAGES[
                     "quay.io/jetstack/cert-manager-cainjector:v1.21.0"
                 ],
@@ -96,6 +99,7 @@ class KubernetesHaContractTests(unittest.TestCase):
                 name: lock["images"][name]
                 for name in (
                     "barman_cloud_plugin",
+                    "barman_cloud_sidecar",
                     "cert_manager_cainjector",
                     "cert_manager_controller",
                     "cert_manager_webhook",
@@ -253,6 +257,10 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertIn('"target": backup.get("spec", {}).get("target")', source)
         self.assertIn('"plugin": backup.get("spec", {})', source)
         self.assertIn('"automatic reintegration of the failed zone"', source)
+        self.assertIn("postgres_archiver_state(kubectl)", source)
+        self.assertNotIn("lastArchivedWAL", source)
+        helper_source = inspect.getsource(self.ha.postgres_archiver_state)
+        self.assertIn("pg_stat_archiver", helper_source)
 
     def test_zone_contract_requires_three_distinct_zones(self) -> None:
         valid = {
@@ -273,6 +281,151 @@ class KubernetesHaContractTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(self.ha.ref.ProofError, "foreign"):
                 self.ha.delete_external_object_store("proof", "expected-commit")
+
+    def test_barman_release_binds_controller_and_sidecar_images(self) -> None:
+        artifact = ROOT / ".cache/test-barman-plugin-release.yaml"
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        sidecar_tagged = "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0"
+        encoded = base64.b64encode(sidecar_tagged.encode()).decode()
+        artifact.write_text(
+            "apiVersion: v1\ndata:\n  SIDECAR_IMAGE: |\n"
+            f"    {encoded}\nkind: Secret\n---\n"
+            "image: ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0\n"
+        )
+        try:
+            payload = self.ha.barman_cloud_release_source(str(artifact))
+            self.assertIn(self.ha.BARMAN_PLUGIN_IMAGE, payload)
+            self.assertNotIn(sidecar_tagged, payload)
+            lines = payload.splitlines()
+            marker = lines.index("  SIDECAR_IMAGE: |")
+            encoded_result = "".join(
+                line.strip() for line in lines[marker + 1 :] if line.startswith("    ")
+            )
+            self.assertEqual(
+                base64.b64decode(encoded_result).decode(),
+                self.ha.BARMAN_PLUGIN_SIDECAR_IMAGE,
+            )
+        finally:
+            artifact.unlink(missing_ok=True)
+
+    def test_barman_release_rejects_sidecar_manifest_drift(self) -> None:
+        artifact = ROOT / ".cache/test-barman-plugin-sidecar-drift.yaml"
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        encoded = base64.b64encode(b"example.invalid/sidecar:v2").decode()
+        artifact.write_text(
+            "apiVersion: v1\ndata:\n  SIDECAR_IMAGE: |\n"
+            f"    {encoded}\nkind: Secret\n---\n"
+            "image: ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0\n"
+        )
+        try:
+            with self.assertRaisesRegex(
+                self.ha.ref.ProofError, "sidecar image reference changed"
+            ):
+                self.ha.barman_cloud_release_source(str(artifact))
+        finally:
+            artifact.unlink(missing_ok=True)
+
+    def test_postgres_archiver_progress_is_plugin_neutral(self) -> None:
+        before = {
+            "archived_count": 4,
+            "last_archived_wal": "000000010000000000000004",
+            "failed_count": 0,
+            "stats_reset": "2026-07-18T00:00:00.000000Z",
+        }
+        after = {
+            **before,
+            "archived_count": 5,
+            "last_archived_wal": "000000010000000000000005",
+        }
+        with mock.patch.object(self.ha, "postgres_archiver_state", return_value=after):
+            self.assertEqual(
+                self.ha.wait_postgres_archive_progress(
+                    "kubectl", before, timeout_seconds=1, interval=0
+                ),
+                after,
+            )
+
+    def test_postgres_archiver_progress_rejects_new_failures(self) -> None:
+        before = {
+            "archived_count": 4,
+            "last_archived_wal": "000000010000000000000004",
+            "failed_count": 0,
+            "stats_reset": "2026-07-18T00:00:00.000000Z",
+        }
+        failed = {**before, "failed_count": 1, "last_failed_wal": "broken"}
+        with mock.patch.object(self.ha, "postgres_archiver_state", return_value=failed):
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "new failure"):
+                self.ha.wait_postgres_archive_progress(
+                    "kubectl", before, timeout_seconds=1, interval=0
+                )
+
+    def test_postgres_archiver_progress_rejects_stats_reset(self) -> None:
+        before = {
+            "archived_count": 4,
+            "last_archived_wal": "000000010000000000000004",
+            "failed_count": 0,
+            "stats_reset": "2026-07-18T00:00:00.000000Z",
+        }
+        reset = {**before, "stats_reset": "2026-07-18T00:01:00.000000Z"}
+        with mock.patch.object(self.ha, "postgres_archiver_state", return_value=reset):
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "statistics reset"):
+                self.ha.wait_postgres_archive_progress(
+                    "kubectl", before, timeout_seconds=1, interval=0
+                )
+
+    def test_runtime_barman_sidecars_are_digest_bound(self) -> None:
+        pods = {
+            "items": [
+                {
+                    "metadata": {"name": f"postgres-ha-{index}"},
+                    "spec": {
+                        "initContainers": [
+                            {
+                                "name": "plugin-barman-cloud",
+                                "image": self.ha.BARMAN_PLUGIN_SIDECAR_IMAGE,
+                            }
+                        ]
+                    },
+                    "status": {
+                        "initContainerStatuses": [
+                            {
+                                "name": "plugin-barman-cloud",
+                                "imageID": "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar@sha256:"
+                                + str(index) * 64,
+                                "ready": True,
+                                "state": {
+                                    "running": {"startedAt": "2026-07-18T05:00:00Z"}
+                                },
+                            }
+                        ]
+                    },
+                }
+                for index in range(1, 4)
+            ]
+        }
+        with mock.patch.object(self.ha.ref, "output", return_value=json.dumps(pods)):
+            observed = self.ha.barman_sidecar_images("kubectl", "postgres-ha")
+        self.assertEqual(len(observed), 3)
+        self.assertTrue(
+            all(
+                item["declared_image"] == self.ha.BARMAN_PLUGIN_SIDECAR_IMAGE
+                for item in observed.values()
+            )
+        )
+        self.assertTrue(all(item["ready"] for item in observed.values()))
+        self.assertTrue(all(item["running_started_at"] for item in observed.values()))
+
+        not_running = json.loads(json.dumps(pods))
+        status = not_running["items"][0]["status"]["initContainerStatuses"][0]
+        status["ready"] = False
+        status["state"] = {"waiting": {"reason": "CrashLoopBackOff"}}
+        with mock.patch.object(
+            self.ha.ref, "output", return_value=json.dumps(not_running)
+        ):
+            with self.assertRaisesRegex(
+                self.ha.ref.ProofError, "not ready and running"
+            ):
+                self.ha.barman_sidecar_images("kubectl", "postgres-ha")
 
     def test_digest_bound_release_rewrites_exact_image_tags(self) -> None:
         artifact = ROOT / ".cache/test-digest-bound-release.yaml"

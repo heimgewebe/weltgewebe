@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 622 |
+| Relationen gesamt | 625 |
 | — depends_on | 25 |
-| — relates_to | 582 |
+| — relates_to | 585 |
 | — supersedes | 12 |
 | — verifies | 3 |
 | relates_to Anteil | 94% |
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (241 Dokumente):
+**Cluster 1** (243 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -73,6 +73,7 @@ _Keine Lücken erkannt._
 - `docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md`
 - `docs/adr/ADR-0010__kubernetes-kanonische-plattform.md`
 - `docs/adr/ADR-0011__foederierte-gewebezellen.md`
+- `docs/adr/ADR-0011__ha-referenzzelle-und-wiederherstellung.md`
 - `docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md`
 - `docs/architecture/weltgewebe-os-convergence-adapter.md`
 - `docs/architekturstruktur.md`
@@ -207,6 +208,7 @@ _Keine Lücken erkannt._
 - `docs/runbooks/db-recovery.md`
 - `docs/runbooks/domain-mail-cutover.md`
 - `docs/runbooks/incident-response.md`
+- `docs/runbooks/kubernetes-ha-recovery-proof.md`
 - `docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md`
 - `docs/runbooks/uv-tooling.md`
 - `docs/runbooks/weltgewebe-ddns-runtime-verification.md`

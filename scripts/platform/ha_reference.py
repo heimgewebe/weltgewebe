@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -23,6 +24,7 @@ POSTGRES_IMAGE = "ghcr.io/cloudnative-pg/postgresql:16.14@sha256:05eae7037dc6a70
 NATS_BOX_IMAGE = "natsio/nats-box@sha256:9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d"
 SEAWEEDFS_IMAGE = "chrislusf/seaweedfs@sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d"
 BARMAN_PLUGIN_IMAGE = "ghcr.io/cloudnative-pg/plugin-barman-cloud@sha256:71589dbac582333442812b07b31f7ea4d00324a8358aac7ca507dabf9f4b6c96"
+BARMAN_PLUGIN_SIDECAR_IMAGE = "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar@sha256:990361af3319f9e23aafa0f6d7981f99bf1f69b4e6a85cf1bc7d71d6f09bb288"
 CERT_MANAGER_IMAGES = {
     "quay.io/jetstack/cert-manager-cainjector:v1.21.0": "quay.io/jetstack/cert-manager-cainjector@sha256:ad1dcc5b2fccc420f9b3fbee7ce8a869450c540fd4f2f41de2d95b1ca0c4d701",
     "quay.io/jetstack/cert-manager-controller:v1.21.0": "quay.io/jetstack/cert-manager-controller@sha256:e370f7800a53078e9d74324287a7d52b553864e55f5b4e521f911c3f6c7da203",
@@ -487,10 +489,62 @@ def install_cert_manager(kubectl: str, artifact: str) -> None:
         )
 
 
-def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
-    tagged = "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0"
-    apply_digest_bound_release(
-        kubectl, artifact, {tagged: BARMAN_PLUGIN_IMAGE}, "Barman Cloud plugin release"
+def barman_cloud_release_source(artifact: str) -> str:
+    source = Path(artifact).read_text(encoding="utf-8")
+    controller_tagged = "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0"
+    if source.count(controller_tagged) != 1:
+        raise ref.ProofError(
+            "Barman Cloud plugin controller image reference changed unexpectedly"
+        )
+
+    lines = source.splitlines(keepends=True)
+    markers = [
+        index for index, line in enumerate(lines) if line.strip() == "SIDECAR_IMAGE: |"
+    ]
+    if len(markers) != 1:
+        raise ref.ProofError(
+            f"Barman Cloud plugin sidecar image secret changed unexpectedly: {len(markers)} markers"
+        )
+    start = markers[0] + 1
+    end = start
+    while end < len(lines) and lines[end].startswith("    "):
+        end += 1
+    encoded = "".join(line.strip() for line in lines[start:end])
+    try:
+        observed = base64.b64decode(encoded, validate=True).decode("utf-8")
+    except Exception as error:
+        raise ref.ProofError(
+            "Barman Cloud plugin sidecar image secret is not valid base64 UTF-8"
+        ) from error
+    sidecar_tagged = "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0"
+    if observed != sidecar_tagged:
+        raise ref.ProofError(
+            f"Barman Cloud plugin sidecar image reference changed unexpectedly: {observed}"
+        )
+    replacement = base64.b64encode(BARMAN_PLUGIN_SIDECAR_IMAGE.encode("utf-8")).decode(
+        "ascii"
+    )
+    lines[start:end] = [
+        f"    {replacement[offset : offset + 76]}\n"
+        for offset in range(0, len(replacement), 76)
+    ]
+    return "".join(lines).replace(controller_tagged, BARMAN_PLUGIN_IMAGE, 1)
+
+
+def install_barman_cloud_plugin(kubectl: str, artifact: str) -> dict[str, str]:
+    source = barman_cloud_release_source(artifact)
+    ref.run(
+        [
+            kubectl,
+            "apply",
+            "--server-side",
+            "--force-conflicts",
+            "--field-manager=weltgewebe-ha-proof",
+            "-f",
+            "-",
+        ],
+        input_text=source,
+        timeout=600,
     )
     ref.run(
         [
@@ -502,21 +556,63 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
         ]
     )
     ref.wait_rollout(kubectl, "cnpg-system", "deployment/barman-cloud", "8m")
-    observed = ref.output(
+    deployment = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "cnpg-system",
+                "get",
+                "deployment/barman-cloud",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    container = deployment["spec"]["template"]["spec"]["containers"][0]
+    observed_controller = container.get("image", "")
+    if observed_controller != BARMAN_PLUGIN_IMAGE:
+        raise ref.ProofError(
+            f"Barman Cloud plugin image is not digest-bound: {observed_controller}"
+        )
+    try:
+        secret_name = next(
+            item["valueFrom"]["secretKeyRef"]["name"]
+            for item in container.get("env", [])
+            if item.get("name") == "SIDECAR_IMAGE"
+        )
+    except (KeyError, StopIteration, TypeError) as error:
+        raise ref.ProofError(
+            "Barman Cloud plugin deployment lacks its sidecar image secret reference"
+        ) from error
+    encoded_sidecar = ref.output(
         [
             kubectl,
             "-n",
             "cnpg-system",
             "get",
-            "deployment/barman-cloud",
+            f"secret/{secret_name}",
             "-o",
-            "jsonpath={.spec.template.spec.containers[0].image}",
+            "jsonpath={.data.SIDECAR_IMAGE}",
         ]
     )
-    if observed != BARMAN_PLUGIN_IMAGE:
-        raise ref.ProofError(
-            f"Barman Cloud plugin image is not digest-bound: {observed}"
+    try:
+        observed_sidecar = base64.b64decode(encoded_sidecar, validate=True).decode(
+            "utf-8"
         )
+    except Exception as error:
+        raise ref.ProofError(
+            "Barman Cloud plugin sidecar image secret is unreadable"
+        ) from error
+    if observed_sidecar != BARMAN_PLUGIN_SIDECAR_IMAGE:
+        raise ref.ProofError(
+            f"Barman Cloud plugin sidecar image is not digest-bound: {observed_sidecar}"
+        )
+    return {
+        "controller_image": observed_controller,
+        "sidecar_image": observed_sidecar,
+        "sidecar_secret": secret_name,
+    }
 
 
 def current_primary(kubectl: str, cluster: str = "postgres-ha") -> str:
@@ -558,6 +654,141 @@ def psql(kubectl: str, sql: str, *, cluster: str = "postgres-ha") -> str:
             sql,
         ]
     )
+
+
+def postgres_archiver_state(
+    kubectl: str, *, cluster: str = "postgres-ha"
+) -> dict[str, Any]:
+    sql = (
+        "SELECT json_build_object("
+        "'archived_count',archived_count,"
+        "'last_archived_wal',last_archived_wal,"
+        "'last_archived_time',to_char(last_archived_time AT TIME ZONE 'UTC',"
+        '\'YYYY-MM-DD"T"HH24:MI:SS.US"Z"\'),'
+        "'failed_count',failed_count,"
+        "'last_failed_wal',last_failed_wal,"
+        "'last_failed_time',to_char(last_failed_time AT TIME ZONE 'UTC',"
+        '\'YYYY-MM-DD"T"HH24:MI:SS.US"Z"\'),'
+        "'stats_reset',to_char(stats_reset AT TIME ZONE 'UTC',"
+        '\'YYYY-MM-DD"T"HH24:MI:SS.US"Z"\'))::text '
+        "FROM pg_stat_archiver"
+    )
+    document = json.loads(psql(kubectl, sql, cluster=cluster))
+    required = {"archived_count", "failed_count", "stats_reset"}
+    if not isinstance(document, dict) or not required.issubset(document):
+        raise ref.ProofError(f"invalid pg_stat_archiver payload: {document!r}")
+    document["archived_count"] = int(document["archived_count"])
+    document["failed_count"] = int(document["failed_count"])
+    return document
+
+
+def wait_postgres_archive_progress(
+    kubectl: str,
+    before: dict[str, Any],
+    *,
+    cluster: str = "postgres-ha",
+    timeout_seconds: int = 300,
+    interval: float = 2.0,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        try:
+            last = postgres_archiver_state(kubectl, cluster=cluster)
+        except (subprocess.CalledProcessError, json.JSONDecodeError):
+            time.sleep(interval)
+            continue
+        if last.get("stats_reset") != before.get("stats_reset"):
+            raise ref.ProofError(
+                "PostgreSQL archiver statistics reset during the WAL proof"
+            )
+        if int(last["failed_count"]) > int(before["failed_count"]):
+            raise ref.ProofError(
+                "PostgreSQL WAL archiving reported a new failure: "
+                f"before={before!r}; after={last!r}"
+            )
+        if (
+            int(last["archived_count"]) > int(before["archived_count"])
+            and last.get("last_archived_wal")
+            and last.get("last_archived_wal") != before.get("last_archived_wal")
+        ):
+            return last
+        time.sleep(interval)
+    raise ref.ProofError(
+        "timed out waiting for PostgreSQL WAL archive progress; "
+        f"before={before!r}; last={last!r}"
+    )
+
+
+def barman_sidecar_images(kubectl: str, cluster: str) -> dict[str, dict[str, object]]:
+    document = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe-data",
+                "get",
+                "pods",
+                "-l",
+                f"cnpg.io/cluster={cluster}",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    result: dict[str, dict[str, object]] = {}
+    for pod in document.get("items", []):
+        name = pod.get("metadata", {}).get("name", "")
+        spec = pod.get("spec", {})
+        containers = [
+            *spec.get("initContainers", []),
+            *spec.get("containers", []),
+        ]
+        sidecars = [
+            item for item in containers if item.get("name") == "plugin-barman-cloud"
+        ]
+        if len(sidecars) != 1:
+            raise ref.ProofError(
+                f"PostgreSQL pod {name} has {len(sidecars)} Barman sidecars"
+            )
+        declared = sidecars[0].get("image", "")
+        if declared != BARMAN_PLUGIN_SIDECAR_IMAGE:
+            raise ref.ProofError(
+                f"PostgreSQL pod {name} has an unbound Barman sidecar: {declared}"
+            )
+        statuses = [
+            *pod.get("status", {}).get("initContainerStatuses", []),
+            *pod.get("status", {}).get("containerStatuses", []),
+        ]
+        status = next(
+            (item for item in statuses if item.get("name") == "plugin-barman-cloud"),
+            {},
+        )
+        image_id = str(status.get("imageID", ""))
+        if "@sha256:" not in image_id:
+            raise ref.ProofError(
+                f"PostgreSQL pod {name} lacks a digest runtime image ID: {image_id}"
+            )
+        ready = status.get("ready") is True
+        running = status.get("state", {}).get("running")
+        started_at = (
+            str(running.get("startedAt", "")) if isinstance(running, dict) else ""
+        )
+        if not ready or not started_at:
+            raise ref.ProofError(
+                f"PostgreSQL pod {name} Barman sidecar is not ready and running: {status}"
+            )
+        result[name] = {
+            "declared_image": declared,
+            "runtime_image_id": image_id,
+            "ready": ready,
+            "running_started_at": started_at,
+        }
+    if len(result) != 3:
+        raise ref.ProofError(
+            f"expected three digest-bound Barman sidecars for {cluster}, got {result}"
+        )
+    return result
 
 
 def pod_topology(
@@ -970,12 +1201,13 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         apply_object_store_endpoint(kubectl, object_store_address)
         install_cnpg(kubectl, receipt["artifacts"]["cloudnative_pg_operator"])
         install_cert_manager(kubectl, receipt["artifacts"]["cert_manager"])
-        install_barman_cloud_plugin(
+        plugin_release = install_barman_cloud_plugin(
             kubectl, receipt["artifacts"]["barman_cloud_plugin"]
         )
         ref.apply_direct(kubectl, kustomize, "platform/infrastructure/ha-data")
         ref.wait_rollout(kubectl, "weltgewebe-data", "statefulset/nats", "12m")
         wait_cluster_ready(kubectl, "postgres-ha", "15m")
+        primary_sidecars = barman_sidecar_images(kubectl, "postgres-ha")
         ref.apply_file(
             kubectl, ROOT / "platform/apps/weltgewebe/migration/ha/namespace.yaml"
         )
@@ -1101,37 +1333,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         )
         time.sleep(2)
         insert_domain_node(kubectl, after_id, "T004 after PITR target")
-        archived_before = ref.output(
-            [
-                kubectl,
-                "-n",
-                "weltgewebe-data",
-                "get",
-                "cluster/postgres-ha",
-                "-o",
-                "jsonpath={.status.lastArchivedWAL}",
-            ]
-        )
+        archiver_before = postgres_archiver_state(kubectl)
         psql(kubectl, "SELECT pg_switch_wal()")
-        wait_until(
-            "WAL archive after PITR marker",
-            lambda: (
-                lambda value: value if value and value != archived_before else False
-            )(
-                ref.output(
-                    [
-                        kubectl,
-                        "-n",
-                        "weltgewebe-data",
-                        "get",
-                        "cluster/postgres-ha",
-                        "-o",
-                        "jsonpath={.status.lastArchivedWAL}",
-                    ]
-                )
-            ),
-            timeout_seconds=300,
-        )
+        archiver_after = wait_postgres_archive_progress(kubectl, archiver_before)
 
         create_kind_cluster(
             kind,
@@ -1176,6 +1380,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         restore_started = time.monotonic()
         ref.apply_yaml(restore_kubectl, restore_cluster_document(target_time))
         wait_cluster_ready(restore_kubectl, "postgres-restore", "20m")
+        restore_sidecars = barman_sidecar_images(restore_kubectl, "postgres-restore")
         restore_rto = time.monotonic() - restore_started
         restored_topology = pod_topology(
             restore_kubectl, "weltgewebe-data", "cnpg.io/cluster=postgres-restore"
@@ -1226,11 +1431,15 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 .get("name"),
                 "object_store": "postgres-ha",
                 "target_time": target_time,
+                "plugin_release": plugin_release,
+                "sidecar_images": primary_sidecars,
+                "wal_archive": {"before": archiver_before, "after": archiver_after},
             },
             "restore": {
                 "rto_seconds": round(restore_rto, 3),
                 "pitr_comparison": preserved,
                 "blank_kind_cluster": True,
+                "sidecar_images": restore_sidecars,
             },
             "gateway_before": gateway_before,
             "production_changed": False,

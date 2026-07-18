@@ -120,6 +120,7 @@ def _assert_images() -> None:
         raise ContractError("kind node image is not digest-bound")
     expected_images = {
         "barman_cloud_plugin",
+        "barman_cloud_sidecar",
         "cert_manager_cainjector",
         "cert_manager_controller",
         "cert_manager_webhook",
