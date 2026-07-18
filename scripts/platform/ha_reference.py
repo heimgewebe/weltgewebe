@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import yaml
 
 import kind_reference as ref
 
@@ -234,42 +235,65 @@ def cnpg_webhook_ready(kubectl: str) -> bool:
     return result.returncode == 0
 
 
-def configure_cnpg_operator_ha(kubectl: str) -> list[str]:
-    patch = {
-        "spec": {
-            "replicas": 3,
-            "template": {
-                "spec": {
-                    "affinity": {
-                        "podAntiAffinity": {
-                            "requiredDuringSchedulingIgnoredDuringExecution": [
-                                {
-                                    "labelSelector": {
-                                        "matchLabels": {
-                                            "app.kubernetes.io/name": "cloudnative-pg"
-                                        }
-                                    },
-                                    "topologyKey": "kubernetes.io/hostname",
-                                }
-                            ]
-                        }
-                    }
+def render_cnpg_manifest(source: str) -> str:
+    tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
+    if source.count(tagged) != 2:
+        raise ref.ProofError(
+            "CloudNativePG release image reference changed unexpectedly"
+        )
+    try:
+        documents = list(yaml.safe_load_all(source.replace(tagged, CNPG_OPERATOR_IMAGE)))
+    except yaml.YAMLError as exc:
+        raise ref.ProofError("CloudNativePG release manifest is invalid YAML") from exc
+    deployments = [
+        document
+        for document in documents
+        if isinstance(document, dict)
+        and document.get("kind") == "Deployment"
+        and document.get("metadata", {}).get("name")
+        == "cnpg-controller-manager"
+        and document.get("metadata", {}).get("namespace") == "cnpg-system"
+    ]
+    if len(deployments) != 1:
+        raise ref.ProofError(
+            "CloudNativePG controller deployment changed unexpectedly"
+        )
+    deployment = deployments[0]
+    spec = deployment.setdefault("spec", {})
+    spec["replicas"] = 3
+    spec["strategy"] = {
+        "type": "RollingUpdate",
+        "rollingUpdate": {"maxSurge": 0, "maxUnavailable": 1},
+    }
+    pod_spec = (
+        spec.setdefault("template", {})
+        .setdefault("spec", {})
+    )
+    affinity = pod_spec.setdefault("affinity", {})
+    pod_anti_affinity = affinity.setdefault("podAntiAffinity", {})
+    required = pod_anti_affinity.setdefault(
+        "requiredDuringSchedulingIgnoredDuringExecution", []
+    )
+    if required:
+        raise ref.ProofError(
+            "CloudNativePG release already defines required pod anti-affinity"
+        )
+    required.append(
+        {
+            "labelSelector": {
+                "matchLabels": {
+                    "app.kubernetes.io/name": "cloudnative-pg"
                 }
             },
+            "topologyKey": "kubernetes.io/hostname",
         }
-    }
-    ref.run(
-        [
-            kubectl,
-            "-n",
-            "cnpg-system",
-            "patch",
-            "deployment/cnpg-controller-manager",
-            "--type=merge",
-            "--patch",
-            json.dumps(patch, separators=(",", ":")),
-        ]
     )
+    return yaml.safe_dump_all(
+        documents, sort_keys=False, explicit_start=True
+    )
+
+
+def verify_cnpg_operator_ha(kubectl: str) -> list[str]:
     ref.wait_rollout(
         kubectl,
         "cnpg-system",
@@ -309,7 +333,8 @@ def configure_cnpg_operator_ha(kubectl: str) -> list[str]:
     nodes = {
         item.get("spec", {}).get("nodeName")
         for item in pods.get("items", [])
-        if item.get("spec", {}).get("nodeName")
+        if item.get("status", {}).get("phase") == "Running"
+        and item.get("spec", {}).get("nodeName")
     }
     if len(nodes) != 3:
         raise ref.ProofError(
@@ -319,10 +344,9 @@ def configure_cnpg_operator_ha(kubectl: str) -> list[str]:
 
 
 def install_cnpg(kubectl: str, artifact: str) -> list[str]:
-    source = Path(artifact).read_text(encoding="utf-8")
-    tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
-    if source.count(tagged) != 2:
-        raise ref.ProofError("CloudNativePG release image reference changed unexpectedly")
+    source = render_cnpg_manifest(
+        Path(artifact).read_text(encoding="utf-8")
+    )
     ref.run(
         [
             kubectl,
@@ -333,19 +357,39 @@ def install_cnpg(kubectl: str, artifact: str) -> list[str]:
             "-f",
             "-",
         ],
-        input_text=source.replace(tagged, CNPG_OPERATOR_IMAGE),
+        input_text=source,
     )
-    ref.run([kubectl, "wait", "--for=condition=Established", "crd/clusters.postgresql.cnpg.io", "--timeout=3m"])
-    operator_nodes = configure_cnpg_operator_ha(kubectl)
+    ref.run(
+        [
+            kubectl,
+            "wait",
+            "--for=condition=Established",
+            "crd/clusters.postgresql.cnpg.io",
+            "--timeout=3m",
+        ]
+    )
+    operator_nodes = verify_cnpg_operator_ha(kubectl)
     wait_until(
         "CloudNativePG admission webhook",
         lambda: cnpg_webhook_ready(kubectl),
         timeout_seconds=180,
         interval=2,
     )
-    observed = ref.output([kubectl, "-n", "cnpg-system", "get", "deployment/cnpg-controller-manager", "-o", "jsonpath={.spec.template.spec.containers[0].image}"])
+    observed = ref.output(
+        [
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "get",
+            "deployment/cnpg-controller-manager",
+            "-o",
+            "jsonpath={.spec.template.spec.containers[0].image}",
+        ]
+    )
     if observed != CNPG_OPERATOR_IMAGE:
-        raise ref.ProofError(f"CloudNativePG operator image is not digest-bound: {observed}")
+        raise ref.ProofError(
+            f"CloudNativePG operator image is not digest-bound: {observed}"
+        )
     return operator_nodes
 
 
@@ -605,6 +649,15 @@ def ha_diagnostic_snapshot(kubectl: str, name: str) -> None:
         "cnpg-pods-describe.txt": [kubectl, "-n", "weltgewebe-data", "describe", "pods", "-l", "cnpg.io/cluster"],
         "cnpg-pods-logs.txt": [kubectl, "-n", "weltgewebe-data", "logs", "-l", "cnpg.io/cluster", "--all-containers=true", "--prefix=true", "--tail=2000"],
         "cnpg-pods-previous-logs.txt": [kubectl, "-n", "weltgewebe-data", "logs", "-l", "cnpg.io/cluster", "--all-containers=true", "--prefix=true", "--previous=true", "--tail=2000"],
+        "cnpg-operator-deployment.yaml": [
+            kubectl, "-n", "cnpg-system", "get",
+            "deployment/cnpg-controller-manager", "-o", "yaml",
+        ],
+        "cnpg-operator-replicasets.yaml": [
+            kubectl, "-n", "cnpg-system", "get",
+            "replicasets", "-l", "app.kubernetes.io/name=cloudnative-pg",
+            "-o", "yaml",
+        ],
         "cnpg-operator-logs.txt": [
             kubectl, "-n", "cnpg-system", "logs",
             "-l", "app.kubernetes.io/name=cloudnative-pg",

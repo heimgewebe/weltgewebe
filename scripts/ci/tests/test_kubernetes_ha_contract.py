@@ -338,31 +338,88 @@ class KubernetesHaContractTests(unittest.TestCase):
             observed, [self.ha.BARMAN_CLOUD_SIDECAR_IMAGE] * 3
         )
 
+    def cnpg_release_fixture(self) -> str:
+        tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
+        return f"""---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cnpg-controller-manager
+  namespace: cnpg-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudnative-pg
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudnative-pg
+    spec:
+      containers:
+        - name: manager
+          image: {tagged}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cnpg-bootstrap
+spec:
+  template:
+    spec:
+      containers:
+        - name: bootstrap
+          image: {tagged}
+      restartPolicy: Never
+"""
+
+    def test_cnpg_manifest_is_ha_before_first_apply(self) -> None:
+        rendered = self.ha.render_cnpg_manifest(self.cnpg_release_fixture())
+        documents = list(self.ha.yaml.safe_load_all(rendered))
+        deployment = next(
+            item for item in documents if item.get("kind") == "Deployment"
+        )
+        spec = deployment["spec"]
+        self.assertEqual(spec["replicas"], 3)
+        self.assertEqual(spec["strategy"]["rollingUpdate"]["maxSurge"], 0)
+        self.assertEqual(spec["strategy"]["rollingUpdate"]["maxUnavailable"], 1)
+        required = spec["template"]["spec"]["affinity"]["podAntiAffinity"][
+            "requiredDuringSchedulingIgnoredDuringExecution"
+        ]
+        self.assertEqual(required[0]["topologyKey"], "kubernetes.io/hostname")
+        self.assertNotIn(
+            "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0", rendered
+        )
+        self.assertEqual(rendered.count(self.ha.CNPG_OPERATOR_IMAGE), 2)
+
     def test_cnpg_release_uses_server_side_apply(self) -> None:
         artifact = ROOT / ".cache/test-cnpg-release.yaml"
         artifact.parent.mkdir(parents=True, exist_ok=True)
-        tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
-        artifact.write_text(f"image: {tagged}\ndefault: {tagged}\n")
+        artifact.write_text(self.cnpg_release_fixture())
         try:
             with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
                 self.ha,
-                "configure_cnpg_operator_ha",
+                "verify_cnpg_operator_ha",
                 return_value=["node-a", "node-b", "node-c"],
-            ) as configure_ha, mock.patch.object(
+            ) as verify_ha, mock.patch.object(
                 self.ha, "wait_until"
             ), mock.patch.object(
                 self.ha.ref, "output", return_value=self.ha.CNPG_OPERATOR_IMAGE
             ):
                 observed_nodes = self.ha.install_cnpg("kubectl", str(artifact))
-            configure_ha.assert_called_once_with("kubectl")
+            verify_ha.assert_called_once_with("kubectl")
             self.assertEqual(observed_nodes, ["node-a", "node-b", "node-c"])
             apply_argv = run.call_args_list[0].args[0]
             self.assertIn("--server-side", apply_argv)
             self.assertIn("--force-conflicts", apply_argv)
             self.assertIn("--field-manager=weltgewebe-ha-proof", apply_argv)
             payload = run.call_args_list[0].kwargs["input_text"]
-            self.assertNotIn(tagged, payload)
-            self.assertEqual(payload.count(self.ha.CNPG_OPERATOR_IMAGE), 2)
+            deployment = next(
+                item
+                for item in self.ha.yaml.safe_load_all(payload)
+                if item.get("kind") == "Deployment"
+            )
+            self.assertEqual(deployment["spec"]["replicas"], 3)
         finally:
             artifact.unlink(missing_ok=True)
 
@@ -370,27 +427,28 @@ class KubernetesHaContractTests(unittest.TestCase):
         pods = json.dumps(
             {
                 "items": [
-                    {"spec": {"nodeName": "node-a"}},
-                    {"spec": {"nodeName": "node-b"}},
-                    {"spec": {"nodeName": "node-c"}},
+                    {
+                        "spec": {"nodeName": "node-a"},
+                        "status": {"phase": "Running"},
+                    },
+                    {
+                        "spec": {"nodeName": "node-b"},
+                        "status": {"phase": "Running"},
+                    },
+                    {
+                        "spec": {"nodeName": "node-c"},
+                        "status": {"phase": "Running"},
+                    },
                 ]
             }
         )
-        with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
+        with mock.patch.object(
             self.ha.ref, "wait_rollout"
         ) as wait_rollout, mock.patch.object(
             self.ha.ref, "output", side_effect=["3", pods]
         ):
-            observed_nodes = self.ha.configure_cnpg_operator_ha("kubectl")
+            observed_nodes = self.ha.verify_cnpg_operator_ha("kubectl")
         self.assertEqual(observed_nodes, ["node-a", "node-b", "node-c"])
-        patch_argv = run.call_args.args[0]
-        self.assertIn("deployment/cnpg-controller-manager", patch_argv)
-        patch = json.loads(patch_argv[patch_argv.index("--patch") + 1])
-        self.assertEqual(patch["spec"]["replicas"], 3)
-        anti_affinity = patch["spec"]["template"]["spec"]["affinity"][
-            "podAntiAffinity"
-        ]["requiredDuringSchedulingIgnoredDuringExecution"]
-        self.assertEqual(anti_affinity[0]["topologyKey"], "kubernetes.io/hostname")
         wait_rollout.assert_called_once_with(
             "kubectl", "cnpg-system", "deployment/cnpg-controller-manager", "8m"
         )
@@ -431,6 +489,8 @@ class KubernetesHaContractTests(unittest.TestCase):
                     "cnpg-pods-describe.txt",
                     "cnpg-pods-logs.txt",
                     "cnpg-pods-previous-logs.txt",
+                    "cnpg-operator-deployment.yaml",
+                    "cnpg-operator-replicasets.yaml",
                     "cnpg-operator-logs.txt",
                     "barman-plugin-logs.txt",
                     "barman-objectstores.yaml",
