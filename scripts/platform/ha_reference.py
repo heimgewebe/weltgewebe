@@ -1509,10 +1509,13 @@ def main() -> int:
         subprocess.CalledProcessError,
         subprocess.TimeoutExpired,
     ) as error:
-        print(f"HA recovery proof failed: {error}", file=sys.stderr)
         if isinstance(error, subprocess.CalledProcessError):
-            print(error.stdout or "", file=sys.stderr)
-            print(error.stderr or "", file=sys.stderr)
+            detail = f"subprocess exited with status {error.returncode}"
+        elif isinstance(error, subprocess.TimeoutExpired):
+            detail = "subprocess timed out"
+        else:
+            detail = str(error)
+        print(f"HA recovery proof failed: {detail}", file=sys.stderr)
         return 1
     print(json.dumps(result, sort_keys=True))
     return 0

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import base64
+import io
 import importlib.util
 import inspect
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
 
@@ -518,6 +521,30 @@ class KubernetesHaContractTests(unittest.TestCase):
         with mock.patch.object(self.ha.subprocess, "run", return_value=endpoint) as run:
             self.assertFalse(self.ha.cnpg_webhook_ready("kubectl"))
         self.assertEqual(run.call_count, 1)
+
+    def test_main_does_not_log_subprocess_output(self) -> None:
+        failure = subprocess.CalledProcessError(
+            7,
+            ["kubectl", "apply"],
+            output="sensitive-stdout",
+            stderr="sensitive-stderr",
+        )
+        parser = mock.Mock()
+        parser.parse_args.return_value = self.ha.argparse.Namespace(
+            command="proof", cluster="proof", keep=False
+        )
+        stream = io.StringIO()
+        with (
+            mock.patch.object(self.ha, "argument_parser", return_value=parser),
+            mock.patch.object(self.ha.ref, "tool_receipt", return_value={}),
+            mock.patch.object(self.ha, "prove", side_effect=failure),
+            redirect_stderr(stream),
+        ):
+            self.assertEqual(self.ha.main(), 1)
+        message = stream.getvalue()
+        self.assertIn("subprocess exited with status 7", message)
+        self.assertNotIn("sensitive-stdout", message)
+        self.assertNotIn("sensitive-stderr", message)
 
     def test_sensitive_environment_values_never_enter_argv(self) -> None:
         completed = mock.Mock(returncode=0)
