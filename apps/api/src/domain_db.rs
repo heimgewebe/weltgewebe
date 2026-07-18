@@ -5,7 +5,7 @@
 //! mixed-source writes and silent fallback.
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Timelike, Utc};
 use futures_util::TryStreamExt;
 use serde_json::{json, Map, Value};
 use sqlx::PgPool;
@@ -24,6 +24,15 @@ use crate::routes::nodes::{Location, Node};
 use crate::state::OrderedCache;
 
 const DEFAULT_TIMESTAMP: &str = "1970-01-01T00:00:00Z";
+
+/// PostgreSQL stores `timestamptz` with microsecond precision. Canonicalising
+/// before persistence keeps response/cache versions byte-identical to a later
+/// authoritative database read, which is required for stable `If-Match` tags.
+fn postgres_timestamp_precision(value: DateTime<Utc>) -> DateTime<Utc> {
+    value
+        .with_nanosecond(value.timestamp_subsec_micros() * 1_000)
+        .expect("microsecond timestamp is always valid")
+}
 
 /// One client-generated create operation, scoped to the authenticated account.
 /// Resource ids and timestamps remain server-owned; this key only identifies a
@@ -624,6 +633,28 @@ fn serialize_node_payload(node: &Node) -> Result<String, serde_json::Error> {
     serde_json::to_string(&Value::Object(payload_map))
 }
 
+/// Load one node from PostgreSQL for an authoritative mutation precondition check.
+///
+/// Callers must hold the per-node mutation guard while comparing the returned
+/// `updated_at` value and performing the subsequent mutation.
+pub async fn load_node_from_postgres(
+    pool: &PgPool,
+    id: &str,
+) -> Result<Option<Node>, NodeWriteError> {
+    let row: Option<NodeRow> = sqlx::query_as(
+        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text \
+         FROM domain_nodes WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(NodeWriteError::Database)?;
+
+    row.map(node_from_row)
+        .transpose()
+        .map_err(NodeWriteError::Mapping)
+}
+
 /// Apply a patch to one `domain_nodes` row inside a transaction.
 ///
 /// Semantics:
@@ -697,7 +728,7 @@ pub async fn patch_node_in_postgres(
         serde_json::to_string(&payload).map_err(NodeWriteError::Serialization)?;
 
     let new_updated_at = if has_changes {
-        let now = chrono::Utc::now();
+        let now = postgres_timestamp_precision(chrono::Utc::now());
         sqlx::query(
             "UPDATE domain_nodes \
              SET payload = $2::jsonb, updated_at = $3 \
@@ -733,10 +764,13 @@ pub async fn patch_node_in_postgres(
     Ok(final_node)
 }
 
-pub async fn replace_node_in_postgres(pool: &PgPool, node: &Node) -> Result<(), NodeWriteError> {
+pub async fn replace_node_in_postgres(
+    pool: &PgPool,
+    node: &Node,
+) -> Result<DateTime<Utc>, NodeWriteError> {
     let payload = serialize_node_payload(node).map_err(NodeWriteError::Serialization)?;
     let updated_at = DateTime::parse_from_rfc3339(&node.updated_at)
-        .map(|value| value.with_timezone(&Utc))
+        .map(|value| postgres_timestamp_precision(value.with_timezone(&Utc)))
         .map_err(|error| NodeWriteError::Mapping(anyhow::Error::new(error)))?;
     let result = sqlx::query(
         "UPDATE domain_nodes \
@@ -756,7 +790,7 @@ pub async fn replace_node_in_postgres(pool: &PgPool, node: &Node) -> Result<(), 
     if result.rows_affected() == 0 {
         return Err(NodeWriteError::NotFound);
     }
-    Ok(())
+    Ok(updated_at)
 }
 
 pub async fn delete_node_with_edges_in_postgres(

@@ -6,10 +6,12 @@ import type { GarnrolleMapState, Location, Node } from "$lib/map/types";
  */
 export class ApiRequestError extends Error {
   status: number;
-  constructor(status: number) {
+  body?: unknown;
+  constructor(status: number, body?: unknown) {
     super(`API request failed with status ${status}`);
     this.name = "ApiRequestError";
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -17,15 +19,22 @@ async function requestJson<T>(
   path: string,
   method: "POST" | "PATCH" | "PUT",
   payload: unknown,
+  etag?: string,
 ): Promise<T> {
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  if (etag) {
+    headers["If-Match"] = `"${etag}"`;
+  }
   const res = await fetch(path, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(payload),
     credentials: "include",
   });
   if (!res.ok) {
-    throw new ApiRequestError(res.status);
+    const body =
+      res.status === 412 ? await res.json().catch(() => undefined) : undefined;
+    throw new ApiRequestError(res.status, body);
   }
   return res.json();
 }
@@ -34,21 +43,36 @@ async function postJson<T>(path: string, payload: unknown): Promise<T> {
   return requestJson<T>(path, "POST", payload);
 }
 
-async function patchJson<T>(path: string, payload: unknown): Promise<T> {
-  return requestJson<T>(path, "PATCH", payload);
+async function patchJson<T>(
+  path: string,
+  payload: unknown,
+  etag?: string,
+): Promise<T> {
+  return requestJson<T>(path, "PATCH", payload, etag);
 }
 
-async function putJson<T>(path: string, payload: unknown): Promise<T> {
-  return requestJson<T>(path, "PUT", payload);
+async function putJson<T>(
+  path: string,
+  payload: unknown,
+  etag?: string,
+): Promise<T> {
+  return requestJson<T>(path, "PUT", payload, etag);
 }
 
-async function deleteResource(path: string): Promise<void> {
+async function deleteResource(path: string, etag?: string): Promise<void> {
+  const headers: HeadersInit = {};
+  if (etag) {
+    headers["If-Match"] = `"${etag}"`;
+  }
   const res = await fetch(path, {
     method: "DELETE",
+    headers,
     credentials: "include",
   });
   if (!res.ok) {
-    throw new ApiRequestError(res.status);
+    const body =
+      res.status === 412 ? await res.json().catch(() => undefined) : undefined;
+    throw new ApiRequestError(res.status, body);
   }
 }
 
@@ -122,11 +146,12 @@ export interface ReplaceNodePayload {
 export function replaceNode(
   id: string,
   payload: ReplaceNodePayload,
+  etag?: string,
 ): Promise<Node> {
-  return putJson<Node>(`/api/nodes/${encodeURIComponent(id)}`, payload);
+  return putJson<Node>(`/api/nodes/${encodeURIComponent(id)}`, payload, etag);
 }
 
 /** DELETE /api/nodes/:id — delete a node and its derived connected edges. */
-export function deleteNode(id: string): Promise<void> {
-  return deleteResource(`/api/nodes/${encodeURIComponent(id)}`);
+export function deleteNode(id: string, etag?: string): Promise<void> {
+  return deleteResource(`/api/nodes/${encodeURIComponent(id)}`, etag);
 }

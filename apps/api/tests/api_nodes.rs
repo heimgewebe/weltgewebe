@@ -129,6 +129,15 @@ fn write_lines(path: &PathBuf, lines: &[&str]) {
     fs::write(path, lines.join("\n")).unwrap();
 }
 
+fn node_etag(node: &serde_json::Value) -> String {
+    format!(
+        "\"{}\"",
+        node["updated_at"]
+            .as_str()
+            .expect("node response must contain updated_at"),
+    )
+}
+
 /// Helper: Ensures correct setup order (File Write -> Env -> State Init)
 async fn app_with_nodes(in_dir: &std::path::Path, lines: &[&str]) -> (Router, EnvGuard) {
     let nodes_path = in_dir.join("demo.nodes.jsonl");
@@ -265,22 +274,32 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         .layer(axum::middleware::from_fn(require_csrf))
         .with_state(state);
 
+    let req = Request::get("/nodes/n1").body(body::Body::empty())?;
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let initial: serde_json::Value = serde_json::from_slice(&body)?;
+    let mut current_etag = node_etag(&initial);
+
     // 1. Update info -> "New Info"
     // Note: We MUST provide Origin or Referer because a session cookie is present,
-    // otherwise CSRF middleware will block it.
+    // otherwise CSRF middleware will block it. The latest node version is also
+    // required so an older browser cannot silently overwrite a newer mutation.
     let req = Request::patch("/nodes/n1")
         .header("Content-Type", "application/json")
         .header("Cookie", &cookie_val)
         .header("Host", "localhost")
         .header("Origin", "http://localhost")
+        .header("If-Match", &current_etag)
         .body(body::Body::from(r#"{"info":"New Info"}"#))?;
     let res = app.clone().oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
 
-    // Check response
+    // Check response and carry its exact version into the next mutation.
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;
     let v: serde_json::Value = serde_json::from_slice(&body)?;
     assert_eq!(v["info"], "New Info");
+    current_etag = node_etag(&v);
 
     // Check persistence by reading via GET
     let req = Request::get("/nodes/n1").body(body::Body::empty())?;
@@ -295,12 +314,14 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         .header("Cookie", &cookie_val)
         .header("Host", "localhost")
         .header("Origin", "http://localhost")
+        .header("If-Match", &current_etag)
         .body(body::Body::from(r#"{}"#))?;
     let res = app.clone().oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;
     let v: serde_json::Value = serde_json::from_slice(&body)?;
     assert_eq!(v["info"], "New Info"); // Still there
+    current_etag = node_etag(&v);
 
     // 3. Set info to null -> Info removed
     let req = Request::patch("/nodes/n1")
@@ -308,6 +329,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         .header("Cookie", &cookie_val)
         .header("Host", "localhost")
         .header("Origin", "http://localhost")
+        .header("If-Match", &current_etag)
         .body(body::Body::from(r#"{"info":null}"#))?;
     let res = app.clone().oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
@@ -368,6 +390,8 @@ async fn postgres_read_source_blocks_node_patch_without_persisting() -> anyhow::
         .layer(axum::middleware::from_fn(require_csrf))
         .with_state(state.clone());
 
+    // No If-Match on purpose: the storage-mode guard is a normal request
+    // applicability check and must reject this mutation before preconditions.
     let req = Request::patch("/nodes/n1")
         .header("Content-Type", "application/json")
         .header("Cookie", &cookie_val)
