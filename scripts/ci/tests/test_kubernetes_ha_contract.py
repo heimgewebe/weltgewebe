@@ -345,14 +345,17 @@ class KubernetesHaContractTests(unittest.TestCase):
         artifact.write_text(f"image: {tagged}\ndefault: {tagged}\n")
         try:
             with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
-                self.ha, "configure_cnpg_operator_ha"
+                self.ha,
+                "configure_cnpg_operator_ha",
+                return_value=["node-a", "node-b", "node-c"],
             ) as configure_ha, mock.patch.object(
                 self.ha, "wait_until"
             ), mock.patch.object(
                 self.ha.ref, "output", return_value=self.ha.CNPG_OPERATOR_IMAGE
             ):
-                self.ha.install_cnpg("kubectl", str(artifact))
+                observed_nodes = self.ha.install_cnpg("kubectl", str(artifact))
             configure_ha.assert_called_once_with("kubectl")
+            self.assertEqual(observed_nodes, ["node-a", "node-b", "node-c"])
             apply_argv = run.call_args_list[0].args[0]
             self.assertIn("--server-side", apply_argv)
             self.assertIn("--force-conflicts", apply_argv)
@@ -378,7 +381,8 @@ class KubernetesHaContractTests(unittest.TestCase):
         ) as wait_rollout, mock.patch.object(
             self.ha.ref, "output", side_effect=["3", pods]
         ):
-            self.ha.configure_cnpg_operator_ha("kubectl")
+            observed_nodes = self.ha.configure_cnpg_operator_ha("kubectl")
+        self.assertEqual(observed_nodes, ["node-a", "node-b", "node-c"])
         patch_argv = run.call_args.args[0]
         self.assertIn("deployment/cnpg-controller-manager", patch_argv)
         patch = json.loads(patch_argv[patch_argv.index("--patch") + 1])
@@ -447,6 +451,12 @@ class KubernetesHaContractTests(unittest.TestCase):
                 for call in argv
             )
         )
+
+    def test_success_receipt_records_operator_node_distribution(self) -> None:
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        self.assertIn('"operator_nodes": {', source)
+        self.assertIn('"primary": primary_operator_nodes', source)
+        self.assertIn('"restore": restore_operator_nodes', source)
 
     def test_zone_rejoin_waits_for_cilium_before_database_readiness(self) -> None:
         source = (ROOT / "scripts/platform/ha_reference.py").read_text()

@@ -234,7 +234,7 @@ def cnpg_webhook_ready(kubectl: str) -> bool:
     return result.returncode == 0
 
 
-def configure_cnpg_operator_ha(kubectl: str) -> None:
+def configure_cnpg_operator_ha(kubectl: str) -> list[str]:
     patch = {
         "spec": {
             "replicas": 3,
@@ -315,9 +315,10 @@ def configure_cnpg_operator_ha(kubectl: str) -> None:
         raise ref.ProofError(
             f"CloudNativePG operator replicas are not spread across three nodes: {sorted(nodes)}"
         )
+    return sorted(nodes)
 
 
-def install_cnpg(kubectl: str, artifact: str) -> None:
+def install_cnpg(kubectl: str, artifact: str) -> list[str]:
     source = Path(artifact).read_text(encoding="utf-8")
     tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
     if source.count(tagged) != 2:
@@ -335,7 +336,7 @@ def install_cnpg(kubectl: str, artifact: str) -> None:
         input_text=source.replace(tagged, CNPG_OPERATOR_IMAGE),
     )
     ref.run([kubectl, "wait", "--for=condition=Established", "crd/clusters.postgresql.cnpg.io", "--timeout=3m"])
-    configure_cnpg_operator_ha(kubectl)
+    operator_nodes = configure_cnpg_operator_ha(kubectl)
     wait_until(
         "CloudNativePG admission webhook",
         lambda: cnpg_webhook_ready(kubectl),
@@ -345,6 +346,7 @@ def install_cnpg(kubectl: str, artifact: str) -> None:
     observed = ref.output([kubectl, "-n", "cnpg-system", "get", "deployment/cnpg-controller-manager", "-o", "jsonpath={.spec.template.spec.containers[0].image}"])
     if observed != CNPG_OPERATOR_IMAGE:
         raise ref.ProofError(f"CloudNativePG operator image is not digest-bound: {observed}")
+    return operator_nodes
 
 
 def apply_digest_locked_manifest(
@@ -803,7 +805,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         ref.apply_file(kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml")
         apply_object_store_endpoint(kubectl, object_store_address)
         install_cert_manager(kubectl, receipt["artifacts"]["cert_manager"])
-        install_cnpg(kubectl, receipt["artifacts"]["cloudnative_pg_operator"])
+        primary_operator_nodes = install_cnpg(
+            kubectl, receipt["artifacts"]["cloudnative_pg_operator"]
+        )
         install_barman_cloud_plugin(
             kubectl,
             receipt["artifacts"]["barman_cloud_plugin"],
@@ -925,7 +929,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             restore_kubectl,
             receipt["artifacts"]["cert_manager"],
         )
-        install_cnpg(
+        restore_operator_nodes = install_cnpg(
             restore_kubectl,
             receipt["artifacts"]["cloudnative_pg_operator"],
         )
@@ -962,6 +966,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             "schema_version": 1, "status": "pass", "commit": commit,
             "primary_cluster": args.cluster, "restore_cluster": restore_name,
             "tool_lock_sha256": receipt["lock_sha256"], "image_ids": image_ids,
+            "operator_nodes": {
+                "primary": primary_operator_nodes,
+                "restore": restore_operator_nodes,
+            },
             "barman_sidecar_images": {
                 "primary": primary_barman_sidecars,
                 "restore": restore_barman_sidecars,
