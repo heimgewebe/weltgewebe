@@ -28,6 +28,18 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn('api_body_file="$(mktemp', script)
         self.assertIn("awk -F':'", script)
 
+    def test_deploy_helper_runs_bounded_migrations_before_full_deploy(self) -> None:
+        script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
+        migration = script.index("run_release_deploy migration")
+        post_migration_main = script.index('remote_main="$(fetch_main)"', migration)
+        full = script.index("run_release_deploy full", post_migration_main)
+        public_readback = script.index('api_headers="$(mktemp', full)
+        self.assertLess(migration, post_migration_main)
+        self.assertLess(post_migration_main, full)
+        self.assertLess(full, public_readback)
+        self.assertIn("origin/main advanced after the migration phase", script)
+        self.assertIn("--deploy-scope migration", script)
+
     def test_deploy_helper_preserves_legacy_checkout_and_binds_main(self) -> None:
         script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
         self.assertIn("+refs/heads/main:refs/remotes/origin/main", script)

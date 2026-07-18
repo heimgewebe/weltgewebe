@@ -142,7 +142,10 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 """\
                 #!/usr/bin/env bash
                 set -euo pipefail
-                if [[ "${ADVANCE_REMOTE_ON_DEPLOY:-0}" == "1" ]]; then
+                if [[ -n "${TEST_UP_LOG:-}" ]]; then
+                  printf '%s\n' "$*" >> "$TEST_UP_LOG"
+                fi
+                if [[ "${ADVANCE_REMOTE_ON_DEPLOY:-0}" == "1" && " $* " != *" --deploy-scope migration "* ]]; then
                   work="$(mktemp -d)"
                   git clone --quiet "$TEST_REMOTE" "$work/repo"
                   git -C "$work/repo" config user.name "Integration Test"
@@ -404,6 +407,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             "TEST_COMMIT": self.commit,
             "TEST_REMOTE": str(self.remote),
             "TEST_WEB_ARTIFACT": str(self.artifact),
+            "TEST_UP_LOG": str(self.root / "weltgewebe-up.log"),
         }
 
     def deploy(self, *, advance: bool) -> subprocess.CompletedProcess[str]:
@@ -481,6 +485,12 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         result = self.deploy(advance=False)
         self.restore_test_ownership()
         self.assertEqual(result.returncode, 0, result.stderr)
+        deploy_calls = (self.root / "weltgewebe-up.log").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(deploy_calls), 2)
+        self.assertIn("--deploy-scope migration", deploy_calls[0])
+        self.assertNotIn("--with-caddy", deploy_calls[0])
+        self.assertIn("--with-caddy", deploy_calls[1])
+        self.assertNotIn("--deploy-scope migration", deploy_calls[1])
         receipt_path = self.state / "receipts" / f"{self.commit}.json"
         receipt = json.loads(receipt_path.read_text())
         self.assertEqual(receipt["result"], "verified")

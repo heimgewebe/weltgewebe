@@ -39,6 +39,24 @@ fail() {
   exit 1
 }
 
+run_release_deploy() {
+  local scope="$1"
+  local -a arguments=(--no-pull --force-build --no-build-web)
+  case "$scope" in
+    migration)
+      arguments+=(--deploy-scope migration)
+      ;;
+    full)
+      arguments+=(--with-caddy)
+      ;;
+    *)
+      fail "unsupported release deployment scope: $scope"
+      ;;
+  esac
+  DEPLOY_TARGET=vps ENV_FILE="$RUNTIME_ENV" \
+    "$release_dir/scripts/weltgewebe-up" "${arguments[@]}"
+}
+
 require_command() {
   command -v "$1" > /dev/null 2>&1 || fail "required command not found: $1"
 }
@@ -292,9 +310,20 @@ last_observed_main="$remote_main"
 started_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
 write_deploy_receipt "deploying" "" "" "" "$remote_main"
 receipt_started=true
-DEPLOY_TARGET=vps ENV_FILE="$RUNTIME_ENV" \
-  "$release_dir/scripts/weltgewebe-up" \
-  --no-pull --force-build --no-build-web --with-caddy
+
+# Apply all pending embedded migrations through the existing bounded API-only
+# path before the full stack is reconciled. The migration scope restores the
+# API to verify-applied itself and leaves PostgreSQL, NATS and any existing
+# Caddy container untouched. This is intentionally idempotent when no migration
+# is pending.
+run_release_deploy migration
+
+remote_main="$(fetch_main)"
+last_observed_main="$remote_main"
+[[ "$remote_main" == "$COMMIT" ]] ||
+  fail "origin/main advanced after the migration phase: expected $COMMIT, got $remote_main"
+
+run_release_deploy full
 
 api_headers="$(mktemp "$STATE_ROOT/.api-headers.XXXXXX")"
 api_body_file="$(mktemp "$STATE_ROOT/.api-body.XXXXXX")"

@@ -1833,8 +1833,8 @@ else
         exit 1
       fi
     done
-    if [[ "$DEPLOY_TARGET" == "vps" && (-z "${PROTECTED_IDS_BEFORE[caddy]}" || "${PROTECTED_IDS_BEFORE[caddy]}" == "__not_configured__") ]]; then
-      echo "ERROR: bounded VPS deploy requires the protected caddy service to be running." >&2
+    if [[ "$DEPLOY_TARGET" == "vps" && "$DEPLOY_SCOPE" == "api" && (-z "${PROTECTED_IDS_BEFORE[caddy]}" || "${PROTECTED_IDS_BEFORE[caddy]}" == "__not_configured__") ]]; then
+      echo "ERROR: bounded VPS API deploy requires the protected caddy service to be running." >&2
       exit 1
     fi
   fi

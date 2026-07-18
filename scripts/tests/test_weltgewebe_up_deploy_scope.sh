@@ -271,6 +271,32 @@ PY
 assert_contains "$out_migration" "Running automatic migration-mode restore"
 echo "PASS: migration scope is API-only and automatically restores verify-applied"
 
+# Migration recovery must remain possible when Caddy is already absent. Existing
+# DB and NATS containers are still mandatory and protected.
+repo_migration_no_caddy="$(new_repo migration-no-caddy)"
+state_migration_no_caddy="$WORK_ROOT/migration-no-caddy-state"
+mkdir -p "$state_migration_no_caddy"
+mock_bin_migration_no_caddy="$(setup_mocks "$state_migration_no_caddy")"
+out_migration_no_caddy="$( (cd "$repo_migration_no_caddy" && PATH="$mock_bin_migration_no_caddy:/usr/bin:/bin" MOCK_STATE="$state_migration_no_caddy" WELTGEWEBE_DEPLOY_LOCK_FILE="$state_migration_no_caddy/deploy.lock" MOCK_MISSING_SERVICE=caddy REPO_DIR="$repo_migration_no_caddy" ENV_FILE="$repo_migration_no_caddy/.env" DEPLOY_TARGET=vps WELTGEWEBE_STATE_DIR="$repo_migration_no_caddy/.ops" WELTGEWEBE_SCOPED_API_HEALTH_TIMEOUT_SECONDS=2 bash scripts/weltgewebe-up --no-pull --no-build --deploy-scope migration) 2>&1)"
+[[ "$(wc -l < "$state_migration_no_caddy/compose-up.log")" -eq 2 ]] || fail "migration recovery without caddy should execute two API-only compose calls"
+assert_contains "$out_migration_no_caddy" "Running automatic migration-mode restore"
+assert_not_contains "$out_migration_no_caddy" "requires the protected caddy service"
+echo "PASS: migration scope can recover an API when Caddy is already absent"
+
+# The ordinary API scope must keep its stricter VPS dependency on Caddy.
+repo_api_no_caddy="$(new_repo api-no-caddy)"
+state_api_no_caddy="$WORK_ROOT/api-no-caddy-state"
+mkdir -p "$state_api_no_caddy"
+mock_bin_api_no_caddy="$(setup_mocks "$state_api_no_caddy")"
+set +e
+out_api_no_caddy="$( (cd "$repo_api_no_caddy" && PATH="$mock_bin_api_no_caddy:/usr/bin:/bin" MOCK_STATE="$state_api_no_caddy" WELTGEWEBE_DEPLOY_LOCK_FILE="$state_api_no_caddy/deploy.lock" MOCK_MISSING_SERVICE=caddy REPO_DIR="$repo_api_no_caddy" ENV_FILE="$repo_api_no_caddy/.env" DEPLOY_TARGET=vps WELTGEWEBE_STATE_DIR="$repo_api_no_caddy/.ops" bash scripts/weltgewebe-up --no-pull --no-build --deploy-scope api) 2>&1)"
+rc_api_no_caddy=$?
+set -e
+[[ "$rc_api_no_caddy" -ne 0 ]] || fail "API scope without Caddy should fail"
+[[ ! -s "$state_api_no_caddy/mutation.log" ]] || fail "API scope without Caddy still mutated compose"
+assert_contains "$out_api_no_caddy" "requires the protected caddy service"
+echo "PASS: API scope still rejects a missing VPS Caddy before mutation"
+
 # A failed migration-active API start must still attempt an API-only verify-applied restore.
 repo_migration_failure="$(new_repo migration-failure)"
 state_migration_failure="$WORK_ROOT/migration-failure-state"
