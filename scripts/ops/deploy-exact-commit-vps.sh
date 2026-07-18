@@ -320,8 +320,13 @@ run_release_deploy migration
 
 remote_main="$(fetch_main)"
 last_observed_main="$remote_main"
-[[ "$remote_main" == "$COMMIT" ]] ||
-  fail "origin/main advanced after the migration phase: expected $COMMIT, got $remote_main"
+if [[ "$remote_main" != "$COMMIT" ]]; then
+  completed_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
+  write_deploy_receipt "superseded_after_migration" "$completed_at" "$api_commit" "$frontend_commit" "$remote_main"
+  receipt_terminal=true
+  echo "production_deployment=superseded_after_migration commit=$COMMIT current=$remote_main" >&2
+  exit 75
+fi
 
 run_release_deploy full
 

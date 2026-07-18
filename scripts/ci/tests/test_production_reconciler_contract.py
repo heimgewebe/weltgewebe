@@ -37,7 +37,9 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertLess(migration, post_migration_main)
         self.assertLess(post_migration_main, full)
         self.assertLess(full, public_readback)
-        self.assertIn("origin/main advanced after the migration phase", script)
+        self.assertIn('write_deploy_receipt "superseded_after_migration"', script)
+        self.assertIn("production_deployment=superseded_after_migration", script)
+        self.assertIn("exit 75", script)
         self.assertIn("--deploy-scope migration", script)
 
     def test_deploy_helper_preserves_legacy_checkout_and_binds_main(self) -> None:
