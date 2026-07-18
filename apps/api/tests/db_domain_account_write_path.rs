@@ -90,6 +90,17 @@ const WEBAUTHN_STABLE_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000004";
 const STEP_UP_EMAIL_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000030";
 const STEP_UP_EMAIL_DUP_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000031";
 
+fn great_circle_distance_m(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    const EARTH_RADIUS_M: f64 = 6_371_008.8;
+    let lat1 = lat1.to_radians();
+    let lat2 = lat2.to_radians();
+    let delta_lat = lat2 - lat1;
+    let delta_lon = (lon2 - lon1).to_radians();
+    let haversine =
+        (delta_lat / 2.0).sin().powi(2) + lat1.cos() * lat2.cos() * (delta_lon / 2.0).sin().powi(2);
+    2.0 * EARTH_RADIUS_M * haversine.clamp(0.0, 1.0).sqrt().asin()
+}
+
 type PersistedProfileRow = (
     String,
     String,
@@ -377,13 +388,13 @@ async fn account_create_persists_stable_webauthn_user_id_across_reload() -> Resu
     Ok(())
 }
 
-/// Privacy-sensitive proof: a non-zero radius persists the REAL residence and
-/// radius (never the jittered public_pos), the response is obfuscated, and the
-/// loader reproduces the exact same deterministic jitter on reload.
+/// Privacy-sensitive proof: a non-zero radius persists the real residence and
+/// one private random projection binding. The public response never contains
+/// either private value, and the loader reuses the persisted point after reload.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
-async fn postgres_account_create_radius_persists_obfuscated_public_pos() -> Result<()> {
+async fn postgres_account_create_radius_persists_private_projection() -> Result<()> {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
     clean(&pool).await;
@@ -410,43 +421,70 @@ async fn postgres_account_create_radius_persists_obfuscated_public_pos() -> Resu
 
     let pub_lat = created["public_pos"]["lat"].as_f64().context("pub lat")?;
     let pub_lon = created["public_pos"]["lon"].as_f64().context("pub lon")?;
-    // radius_m>0 => public_pos must be jittered, not the exact residence.
-    assert_ne!(pub_lat, lat, "radius>0 must obfuscate latitude");
-    assert_ne!(pub_lon, lon, "radius>0 must obfuscate longitude");
+    assert_eq!(created["map_state"], "radius");
+    assert_eq!(created["radius_m"], radius_m);
     assert!(created.get("location").is_none());
+    assert!(created.get("radius_projection").is_none());
+    assert!(created.get("anchor").is_none());
+    let distance_m = great_circle_distance_m(lat, lon, pub_lat, pub_lon);
+    assert!(
+        distance_m > 0.0,
+        "radius projection must not expose the exact residence"
+    );
+    assert!(distance_m <= f64::from(radius_m) + 0.05);
 
-    // DB stores the real residence and radius — never the jittered public_pos.
-    let (db_lat, db_lon, radius): (Option<f64>, Option<f64>, i64) = sqlx::query_as(
-        "SELECT location_lat, location_lon, radius_m FROM domain_accounts WHERE id = $1",
+    let (db_lat, db_lon, radius, private_text, public_text): (
+        Option<f64>,
+        Option<f64>,
+        i64,
+        String,
+        String,
+    ) = sqlx::query_as(
+        "SELECT location_lat, location_lon, radius_m, private_payload::text, public_payload::text \
+         FROM domain_accounts WHERE id = $1",
     )
     .bind(id)
     .fetch_one(&pool)
     .await
     .expect("radius account row");
-    assert!(
-        (db_lat.unwrap() - lat).abs() < 1e-9,
-        "DB must store the real residence latitude"
-    );
-    assert!(
-        (db_lon.unwrap() - lon).abs() < 1e-9,
-        "DB must store the real residence longitude"
-    );
+    assert!((db_lat.unwrap() - lat).abs() < 1e-9);
+    assert!((db_lon.unwrap() - lon).abs() < 1e-9);
     assert_eq!(radius, 500);
+    let private_payload: serde_json::Value = serde_json::from_str(&private_text)?;
+    let public_payload: serde_json::Value = serde_json::from_str(&public_text)?;
+    let binding = private_payload
+        .get("radius_projection")
+        .context("private radius projection binding")?;
+    assert_eq!(binding["version"], 1);
+    assert_eq!(binding["radius_m"], radius_m);
+    assert_eq!(binding["anchor"]["lat"], lat);
+    assert_eq!(binding["anchor"]["lon"], lon);
+    assert!(public_payload.get("radius_projection").is_none());
 
-    // Loader reproduces the exact same deterministic jitter (stable by id).
+    let outbox_text: String = sqlx::query_scalar(
+        "SELECT payload::text FROM domain_outbox
+         WHERE aggregate_type = 'account' AND aggregate_id = $1
+         ORDER BY id DESC LIMIT 1",
+    )
+    .bind(id)
+    .fetch_one(&pool)
+    .await
+    .expect("account outbox event");
+    let outbox_payload: serde_json::Value = serde_json::from_str(&outbox_text)?;
+    assert_eq!(outbox_payload["aggregate_id"], id);
+    assert!(outbox_payload.get("radius_projection").is_none());
+    assert!(outbox_payload.get("location").is_none());
+    assert!(outbox_payload.get("public_pos").is_none());
+    assert!(!outbox_text.contains(&lat.to_string()));
+    assert!(!outbox_text.contains(&lon.to_string()));
+
     let reloaded = load_accounts_from_postgres(&pool)
         .await
         .expect("reload accounts");
     let internal = reloaded.get(id).expect("radius account reloaded");
     let pos = internal.public.public_pos.as_ref().expect("public_pos");
-    assert!(
-        (pos.lat - pub_lat).abs() < 1e-9,
-        "loader must reproduce the POST jitter latitude"
-    );
-    assert!(
-        (pos.lon - pub_lon).abs() < 1e-9,
-        "loader must reproduce the POST jitter longitude"
-    );
+    assert!((pos.lat - pub_lat).abs() < 1e-9);
+    assert!((pos.lon - pub_lon).abs() < 1e-9);
 
     assert!(!in_dir.join("demo.accounts.jsonl").exists());
 
@@ -943,6 +981,9 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
     assert_eq!(public_payload["summary"], "Dauerhaft gespeichert");
     assert_eq!(public_payload["tags"][0], "skill:Kochen");
     assert_eq!(private_payload["address"], "Poelsweg 2, Hamburg");
+    let initial_projection = private_payload["radius_projection"].clone();
+    assert_eq!(initial_projection["version"], 1);
+    assert_eq!(initial_projection["radius_m"], 300);
     assert_eq!(row.7.as_deref(), Some("profile-owner@example.test"));
     assert_eq!(row.8.as_deref(), Some(WEBAUTHN_ID));
 
@@ -961,6 +1002,11 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
     assert_eq!(reloaded_account.public.title, "Meine PostgreSQL Garnrolle");
     assert_eq!(reloaded_account.public.map_state, GarnrolleMapState::Radius);
     assert_eq!(reloaded_account.public.radius_m, 300);
+    let initial_public_pos = reloaded_account
+        .public
+        .public_pos
+        .clone()
+        .context("initial radius public position")?;
     assert_eq!(
         reloaded_account.email.as_deref(),
         Some("profile-owner@example.test")
@@ -1026,6 +1072,78 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
     let hidden_account = hidden_reload.get(PROFILE_ID).context("hidden account")?;
     assert_eq!(hidden_account.public.map_state, GarnrolleMapState::NotOnMap);
     assert!(hidden_account.public.public_pos.is_none());
+    let hidden_private_text: String =
+        sqlx::query_scalar("SELECT private_payload::text FROM domain_accounts WHERE id = $1")
+            .bind(PROFILE_ID)
+            .fetch_one(&pool)
+            .await?;
+    let hidden_private: serde_json::Value = serde_json::from_str(&hidden_private_text)?;
+    assert_eq!(hidden_private["radius_projection"], initial_projection);
+
+    // Re-enable the same location and radius. The private binding and public
+    // point must remain stable, preventing intersection attacks through toggles.
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(
+            &cookie,
+            r#"{
+              "title":"Meine PostgreSQL Garnrolle",
+              "summary":"Dauerhaft gespeichert",
+              "tags":["skill:Kochen","interest:Commons"],
+              "address":"Poelsweg 2, Hamburg",
+              "map_state":"radius",
+              "radius_m":300,
+              "location":{"lat":53.5604,"lon":10.0630}
+            }"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let same_reload = load_accounts_from_postgres(&pool).await?;
+    let same_account = same_reload.get(PROFILE_ID).context("same radius reload")?;
+    assert_eq!(
+        same_account.public.public_pos.as_ref(),
+        Some(&initial_public_pos)
+    );
+    let same_private_text: String =
+        sqlx::query_scalar("SELECT private_payload::text FROM domain_accounts WHERE id = $1")
+            .bind(PROFILE_ID)
+            .fetch_one(&pool)
+            .await?;
+    let same_private: serde_json::Value = serde_json::from_str(&same_private_text)?;
+    assert_eq!(same_private["radius_projection"], initial_projection);
+
+    // A radius change rotates the binding exactly once and the new value stays
+    // stable on reload.
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(
+            &cookie,
+            r#"{
+              "title":"Meine PostgreSQL Garnrolle",
+              "summary":"Dauerhaft gespeichert",
+              "tags":["skill:Kochen","interest:Commons"],
+              "address":"Poelsweg 2, Hamburg",
+              "map_state":"radius",
+              "radius_m":450,
+              "location":{"lat":53.5604,"lon":10.0630}
+            }"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let rotated_private_text: String =
+        sqlx::query_scalar("SELECT private_payload::text FROM domain_accounts WHERE id = $1")
+            .bind(PROFILE_ID)
+            .fetch_one(&pool)
+            .await?;
+    let rotated_private: serde_json::Value = serde_json::from_str(&rotated_private_text)?;
+    assert_ne!(rotated_private["radius_projection"], initial_projection);
+    assert_eq!(rotated_private["radius_projection"]["radius_m"], 450);
+    let rotated_reload = load_accounts_from_postgres(&pool).await?;
+    let rotated_account = rotated_reload
+        .get(PROFILE_ID)
+        .context("rotated radius reload")?;
+    assert_eq!(rotated_account.public.map_state, GarnrolleMapState::Radius);
+    assert_eq!(rotated_account.public.radius_m, 450);
 
     clean(&pool).await;
     Ok(())

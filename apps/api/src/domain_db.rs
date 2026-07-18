@@ -14,7 +14,8 @@ use uuid::Uuid;
 use crate::auth::accounts::AccountStore;
 use crate::auth::role::Role;
 use crate::routes::accounts::{
-    map_json_to_public_account, AccountInternal, Location as AccountLocation,
+    ensure_radius_projection_value, map_json_to_public_account, radius_projection_public_pos,
+    AccountInternal, Location as AccountLocation, RADIUS_PROJECTION_KEY,
 };
 use crate::routes::auth::MAX_EMAIL_LEN;
 use crate::routes::edges::{Edge, LifecycleTimestamp};
@@ -405,6 +406,9 @@ fn account_row_to_internal(row: AccountRow) -> Option<AccountInternal> {
     }
     if let (Some(lat), Some(lon)) = (location_lat, location_lon) {
         record.insert("location".to_string(), json!({ "lat": lat, "lon": lon }));
+    }
+    if let Some(projection) = private_payload.get(RADIUS_PROJECTION_KEY) {
+        record.insert(RADIUS_PROJECTION_KEY.to_string(), projection.clone());
     }
     record.insert(
         "radius_m".to_string(),
@@ -1059,13 +1063,12 @@ impl NewDomainAccountRow {
     /// - `map_state` is `not_on_map`, `exact`, or `radius`; legacy `ron` fields
     ///   only force the privacy-safe `not_on_map` state
     /// - the deprecated database `mode` column receives NULL for new writes
-    /// - `radius_m` is bumped to 250 when `visibility == "approximate"` and 0
-    ///   (idempotent with the loader, which only adjusts when the stored radius
-    ///   is still 0)
-    /// - `private_payload` preserves only `visibility` and
-    ///   `suppress_public_pos` where needed for compatibility. Phase E-A
-    ///   `POST /accounts` does not accept `suppress_public_pos` in the request
-    ///   payload; privacy on create uses `visibility=private` (or loader defaults).
+    /// - `radius_m` is accepted only from 50 through 5,000 metres for a
+    ///   radius projection; historical approximate records without a valid
+    ///   private binding fail closed as `not_on_map`
+    /// - `private_payload` preserves legacy visibility fields where needed and
+    ///   the typed private `radius_projection` binding. The binding is never
+    ///   copied into `AccountPublic` or an outbox payload.
     /// - `created_at` / `updated_at` are taken from the record if present, else
     ///   NULL. The current create path never sets them, so account-create rows
     ///   store NULL — identical to JSONL-create followed by Phase C backfill.
@@ -1146,21 +1149,45 @@ impl NewDomainAccountRow {
                 anyhow::bail!("invalid account map_state: {state}");
             }
         }
+        let radius_requested = explicit_map_state == Some("radius")
+            || visibility == Some("approximate")
+            || radius_m > 0;
+        if radius_requested && radius_m == 0 {
+            radius_m = 250;
+        }
+        let private_location = match (location_lat, location_lon) {
+            (Some(lat), Some(lon)) => Some(AccountLocation { lat, lon }),
+            _ => None,
+        };
+        let valid_radius_projection = if radius_requested {
+            u32::try_from(radius_m)
+                .ok()
+                .filter(|radius_m| (50..=5_000).contains(radius_m))
+                .and_then(|radius_m| {
+                    private_location.as_ref().and_then(|location| {
+                        radius_projection_public_pos(
+                            v.get(RADIUS_PROJECTION_KEY),
+                            location,
+                            radius_m,
+                        )
+                    })
+                })
+        } else {
+            None
+        };
         let map_state = if legacy_not_on_map
             || explicit_map_state == Some("not_on_map")
-            || location_lat.is_none()
-            || location_lon.is_none()
+            || private_location.is_none()
         {
             radius_m = 0;
             "not_on_map".to_string()
-        } else if explicit_map_state == Some("radius")
-            || visibility == Some("approximate")
-            || radius_m > 0
-        {
-            if radius_m == 0 {
-                radius_m = 250;
+        } else if radius_requested {
+            if valid_radius_projection.is_some() {
+                "radius".to_string()
+            } else {
+                radius_m = 0;
+                "not_on_map".to_string()
             }
-            "radius".to_string()
         } else {
             radius_m = 0;
             "exact".to_string()
@@ -1182,6 +1209,9 @@ impl NewDomainAccountRow {
             if vis == "private" {
                 priv_map.insert("suppress_public_pos".to_string(), Value::Bool(true));
             }
+        }
+        if let Some(projection) = v.get(RADIUS_PROJECTION_KEY) {
+            priv_map.insert(RADIUS_PROJECTION_KEY.to_string(), projection.clone());
         }
         let private_payload = if priv_map.is_empty() {
             "{}".to_string()
@@ -1375,16 +1405,18 @@ pub async fn update_account_profile_in_postgres(
         .begin()
         .await
         .map_err(AccountProfileUpdateError::Database)?;
-    let existing: Option<(Option<f64>, Option<f64>)> = sqlx::query_as(
-        "SELECT location_lat, location_lon FROM domain_accounts WHERE id = $1 FOR UPDATE",
+    let existing: Option<(Option<f64>, Option<f64>, String)> = sqlx::query_as(
+        "SELECT location_lat, location_lon, private_payload::text \
+         FROM domain_accounts WHERE id = $1 FOR UPDATE",
     )
     .bind(account_id)
     .fetch_optional(&mut *tx)
     .await
     .map_err(AccountProfileUpdateError::Database)?;
-    let Some((existing_lat, existing_lon)) = existing else {
+    let Some((existing_lat, existing_lon, existing_private_text)) = existing else {
         return Err(AccountProfileUpdateError::NotFound);
     };
+    let existing_private_payload = parse_payload(&existing_private_text);
 
     let effective_location = update
         .location
@@ -1410,6 +1442,27 @@ pub async fn update_account_profile_in_postgres(
     let mut private_map = Map::new();
     if let Some(address) = &update.address {
         private_map.insert("address".to_string(), Value::String(address.clone()));
+    }
+    if let Some(existing_projection) = existing_private_payload.get(RADIUS_PROJECTION_KEY) {
+        // Preserve the old binding while hidden so re-enabling the same private
+        // location and radius does not create a sequence of intersectable points.
+        private_map.insert(
+            RADIUS_PROJECTION_KEY.to_string(),
+            existing_projection.clone(),
+        );
+    }
+    if update.map_state == "radius" {
+        let location = effective_location
+            .as_ref()
+            .ok_or(AccountProfileUpdateError::MissingLocation)?;
+        let radius_m =
+            u32::try_from(update.radius_m).map_err(|_| AccountProfileUpdateError::Mapping)?;
+        let projection = ensure_radius_projection_value(
+            existing_private_payload.get(RADIUS_PROJECTION_KEY),
+            location,
+            radius_m,
+        );
+        private_map.insert(RADIUS_PROJECTION_KEY.to_string(), projection);
     }
     let private_payload = serde_json::to_string(&Value::Object(private_map))
         .map_err(AccountProfileUpdateError::Serialization)?;
@@ -1830,7 +1883,11 @@ mod write_path_tests {
 
     /// The create route builds exactly this record shape before persistence.
     fn create_record() -> Value {
-        json!({
+        let location = AccountLocation {
+            lat: 53.5,
+            lon: 10.0,
+        };
+        let mut record = json!({
             "id": "writepath-unit-1",
             "type": "garnrolle",
             "map_state": "radius",
@@ -1838,10 +1895,12 @@ mod write_path_tests {
             "summary": "A summary",
             "tags": ["x", "y"],
             "role": "weber",
-            "location": { "lat": 53.5, "lon": 10.0 },
+            "location": { "lat": location.lat, "lon": location.lon },
             "radius_m": 250,
             "email": "unit@example.test"
-        })
+        });
+        record[RADIUS_PROJECTION_KEY] = ensure_radius_projection_value(None, &location, 250);
+        record
     }
 
     #[test]
@@ -1874,6 +1933,7 @@ mod write_path_tests {
         assert!(private.get("mode").is_none());
         assert!(private.get("visibility").is_none());
         assert!(private.get("ron_flag").is_none());
+        assert!(private.get(RADIUS_PROJECTION_KEY).is_some());
     }
 
     #[test]
@@ -1930,7 +1990,7 @@ mod write_path_tests {
     }
 
     #[test]
-    fn approximate_zero_radius_becomes_250() {
+    fn legacy_approximate_without_binding_fails_closed() {
         let record = json!({
             "id": "writepath-unit-approx",
             "type": "garnrolle",
@@ -1940,7 +2000,10 @@ mod write_path_tests {
             "radius_m": 0
         });
         let row = NewDomainAccountRow::from_jsonl_record(&record).expect("map");
-        assert_eq!(row.radius_m, 250);
+        assert_eq!(row.map_state, "not_on_map");
+        assert_eq!(row.radius_m, 0);
+        assert_eq!(row.location_lat, Some(53.5));
+        assert_eq!(row.location_lon, Some(10.0));
     }
 
     #[test]

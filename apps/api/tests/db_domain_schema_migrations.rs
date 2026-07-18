@@ -217,6 +217,127 @@ async fn domain_schema_tables_exist_after_migration() {
     pool.close().await;
 }
 
+/// Security cutover proof: an historical radius row is never re-exposed by
+/// the new migration or its intentionally irreversible down migration.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn radius_privacy_migration_hides_legacy_rows_irreversibly() {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+
+    sqlx::query("DELETE FROM domain_accounts WHERE id IN ('radius-migration-legacy', 'radius-migration-exact')")
+        .execute(&pool)
+        .await
+        .expect("pre-test cleanup failed");
+    sqlx::query(
+        "INSERT INTO domain_accounts (
+             id, kind, title, mode, map_state, radius_m, role,
+             location_lat, location_lon, public_payload, private_payload
+         ) VALUES
+         ('radius-migration-legacy', 'garnrolle', 'Legacy radius', NULL, 'radius', 500, 'weber',
+          53.5, 10.0, '{}'::jsonb,
+          '{\"visibility\":\"approximate\",\"radius_projection\":{\"legacy\":true},\"keep\":\"yes\"}'::jsonb),
+         ('radius-migration-exact', 'garnrolle', 'Exact', NULL, 'exact', 0, 'weber',
+          53.6, 10.1, '{}'::jsonb, '{\"keep\":\"exact\"}'::jsonb)",
+    )
+    .execute(&pool)
+    .await
+    .expect("insert migration fixtures");
+
+    sqlx::raw_sql(include_str!(
+        "../migrations/20260718000001_radius_projection_privacy.up.sql"
+    ))
+    .execute(&pool)
+    .await
+    .expect("apply radius privacy migration");
+
+    let (map_state, radius_m, lat, lon, private_text): (
+        String,
+        i64,
+        Option<f64>,
+        Option<f64>,
+        String,
+    ) = sqlx::query_as(
+        "SELECT map_state, radius_m, location_lat, location_lon, private_payload::text
+         FROM domain_accounts WHERE id = 'radius-migration-legacy'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("read migrated radius row");
+    assert_eq!(map_state, "not_on_map");
+    assert_eq!(radius_m, 0);
+    assert_eq!(lat, Some(53.5));
+    assert_eq!(lon, Some(10.0));
+    let private_payload: serde_json::Value =
+        serde_json::from_str(&private_text).expect("private payload json");
+    assert_eq!(private_payload["keep"], "yes");
+    assert!(private_payload.get("visibility").is_none());
+    assert!(private_payload.get("radius_projection").is_none());
+
+    let (exact_state, exact_radius, exact_private): (String, i64, String) = sqlx::query_as(
+        "SELECT map_state, radius_m, private_payload::text
+         FROM domain_accounts WHERE id = 'radius-migration-exact'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("read exact control row");
+    assert_eq!(exact_state, "exact");
+    assert_eq!(exact_radius, 0);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&exact_private).unwrap()["keep"],
+        "exact"
+    );
+
+    // Simulate a safe radius binding created after the forward migration. A
+    // rollback must hide this row as well, because old application code would
+    // otherwise ignore the private binding and expose the reversible legacy
+    // projection again.
+    sqlx::query(
+        r#"UPDATE domain_accounts
+         SET map_state = 'radius', radius_m = 250,
+             private_payload = private_payload ||
+               '{"radius_projection":{"version":1,"anchor":{"lat":53.6,"lon":10.1},"radius_m":250,"public_pos":{"lat":53.6005,"lon":10.1}}}'::jsonb
+         WHERE id = 'radius-migration-exact'"#,
+    )
+    .execute(&pool)
+    .await
+    .expect("create post-cutover safe radius row");
+
+    sqlx::raw_sql(include_str!(
+        "../migrations/20260718000001_radius_projection_privacy.down.sql"
+    ))
+    .execute(&pool)
+    .await
+    .expect("apply irreversible down migration");
+    for id in ["radius-migration-legacy", "radius-migration-exact"] {
+        let (state_after_down, radius_after_down, lat_after_down, private_after_down): (
+            String,
+            i64,
+            Option<f64>,
+            String,
+        ) = sqlx::query_as(
+            "SELECT map_state, radius_m, location_lat, private_payload::text
+             FROM domain_accounts WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .expect("read row after down migration");
+        assert_eq!(state_after_down, "not_on_map");
+        assert_eq!(radius_after_down, 0);
+        assert!(lat_after_down.is_some(), "private location must remain");
+        let private_after_down: serde_json::Value =
+            serde_json::from_str(&private_after_down).expect("private payload after down");
+        assert!(private_after_down.get("radius_projection").is_none());
+    }
+
+    sqlx::query("DELETE FROM domain_accounts WHERE id IN ('radius-migration-legacy', 'radius-migration-exact')")
+        .execute(&pool)
+        .await
+        .expect("post-test cleanup failed");
+    pool.close().await;
+}
+
 /// Verifies that a row can be inserted into and read back from domain_nodes,
 /// domain_edges, and domain_accounts using the schema defined in Phase B.
 ///
