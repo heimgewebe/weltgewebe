@@ -156,6 +156,12 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                   git -C "$work/repo" push --quiet origin HEAD:main
                   rm -rf "$work"
                 fi
+                if [[ "${BREAK_REMOTE_ON_MIGRATION:-0}" == "1" && " $* " == *" --deploy-scope migration "* ]]; then
+                  mv "$TEST_REMOTE" "${TEST_REMOTE}.offline"
+                fi
+                if [[ "${FAIL_FULL_DEPLOY:-0}" == "1" && " $* " != *" --deploy-scope migration "* ]]; then
+                  exit 42
+                fi
                 """
             ),
             encoding="utf-8",
@@ -411,13 +417,22 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         }
 
     def deploy(
-        self, *, advance: bool, advance_after_migration: bool = False
+        self,
+        *,
+        advance: bool,
+        advance_after_migration: bool = False,
+        break_remote_after_migration: bool = False,
+        fail_full: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         deploy_env = self.base_environment()
         deploy_env["ADVANCE_REMOTE_ON_DEPLOY"] = "1" if advance else "0"
         deploy_env["ADVANCE_REMOTE_ON_MIGRATION"] = (
             "1" if advance_after_migration else "0"
         )
+        deploy_env["BREAK_REMOTE_ON_MIGRATION"] = (
+            "1" if break_remote_after_migration else "0"
+        )
+        deploy_env["FAIL_FULL_DEPLOY"] = "1" if fail_full else "0"
         argv = self.privileged(
             [
                 "env",
@@ -490,7 +505,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         result = self.deploy(advance=False)
         self.restore_test_ownership()
         self.assertEqual(result.returncode, 0, result.stderr)
-        deploy_calls = (self.root / "weltgewebe-up.log").read_text(encoding="utf-8").splitlines()
+        deploy_calls = (self.root / "weltgewebe-up.log").read_text(
+            encoding="utf-8"
+        ).splitlines()
         self.assertEqual(len(deploy_calls), 2)
         self.assertIn("--deploy-scope migration", deploy_calls[0])
         self.assertNotIn("--with-caddy", deploy_calls[0])
@@ -499,6 +516,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt_path = self.state / "receipts" / f"{self.commit}.json"
         receipt = json.loads(receipt_path.read_text())
         self.assertEqual(receipt["result"], "verified")
+        self.assertIsInstance(receipt["migration_completed_at"], str)
         self.assertEqual(receipt["observed_main_after_deploy"], self.commit)
         current = (self.state / "current.json").resolve()
         self.assertEqual(current, receipt_path)
@@ -507,13 +525,56 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         result = self.deploy(advance=False, advance_after_migration=True)
         self.restore_test_ownership()
         self.assertEqual(result.returncode, 75, result.stderr)
-        deploy_calls = (self.root / "weltgewebe-up.log").read_text(encoding="utf-8").splitlines()
+        deploy_calls = (self.root / "weltgewebe-up.log").read_text(
+            encoding="utf-8"
+        ).splitlines()
         self.assertEqual(len(deploy_calls), 1)
         self.assertIn("--deploy-scope migration", deploy_calls[0])
         receipt_path = self.state / "receipts" / f"{self.commit}.json"
         receipt = json.loads(receipt_path.read_text())
         self.assertEqual(receipt["result"], "superseded_after_migration")
+        self.assertIsInstance(receipt["migration_completed_at"], str)
+        self.assertIsNone(receipt["api_commit"])
+        self.assertIsNone(receipt["frontend_commit"])
         self.assertNotEqual(receipt["observed_main_after_deploy"], self.commit)
+        self.assertFalse((self.state / "current.json").exists())
+
+    def test_full_deploy_failure_after_migration_records_completed_phase(self) -> None:
+        result = self.deploy(advance=False, fail_full=True)
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 42, result.stderr)
+        deploy_calls = (self.root / "weltgewebe-up.log").read_text(
+            encoding="utf-8"
+        ).splitlines()
+        self.assertEqual(len(deploy_calls), 2)
+        self.assertIn("--deploy-scope migration", deploy_calls[0])
+        self.assertIn("--with-caddy", deploy_calls[1])
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["result"], "failed")
+        self.assertIsInstance(receipt["migration_completed_at"], str)
+        self.assertIsNone(receipt["api_commit"])
+        self.assertIsNone(receipt["frontend_commit"])
+        self.assertFalse((self.state / "current.json").exists())
+
+    def test_main_fetch_failure_after_migration_records_completed_phase(self) -> None:
+        result = self.deploy(advance=False, break_remote_after_migration=True)
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0, result.stderr)
+        self.assertNotEqual(result.returncode, 75, result.stderr)
+        deploy_calls = (self.root / "weltgewebe-up.log").read_text(
+            encoding="utf-8"
+        ).splitlines()
+        self.assertEqual(len(deploy_calls), 1)
+        self.assertIn("--deploy-scope migration", deploy_calls[0])
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["result"], "failed")
+        self.assertIsInstance(receipt["migration_completed_at"], str)
+        self.assertIsNone(receipt["api_commit"])
+        self.assertIsNone(receipt["frontend_commit"])
         self.assertFalse((self.state / "current.json").exists())
 
     def test_main_advancing_during_deploy_is_not_marked_current(self) -> None:
@@ -532,7 +593,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         receipt_path = self.state / "receipts" / f"{self.commit}.json"
         receipt = json.loads(receipt_path.read_text())
+        self.assertEqual(receipt["schema_version"], 3)
         self.assertEqual(receipt["result"], "verified_observed")
+        self.assertIsNone(receipt["migration_completed_at"])
         self.assertIsNone(receipt["web_artifact_sha256"])
         self.assertIn("original web artifact hash", receipt["evidence_boundary"])
         self.assertEqual((self.state / "current.json").resolve(), receipt_path)

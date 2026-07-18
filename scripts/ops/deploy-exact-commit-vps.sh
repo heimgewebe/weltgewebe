@@ -10,6 +10,7 @@ FRONTEND_URL="${WELTGEWEBE_FRONTEND_VERSION_URL:-https://weltgewebe.net/_app/ver
 API_URL="${WELTGEWEBE_API_VERSION_URL:-https://weltgewebe.net/api/version}"
 ARCHIVE_VALIDATOR="${WELTGEWEBE_ARCHIVE_VALIDATOR:-/usr/local/libexec/weltgewebe-validate-web-deploy-archive}"
 LOCK_FILE="${STATE_ROOT}/deploy.lock"
+readonly EX_TEMPFAIL=75
 
 COMMIT=""
 WEB_ARTIFACT=""
@@ -22,6 +23,7 @@ release_dir=""
 api_commit=""
 frontend_commit=""
 last_observed_main=""
+migration_completed_at=""
 receipt_started=false
 receipt_terminal=false
 
@@ -96,7 +98,7 @@ write_deploy_receipt() {
   local observed_main="$5"
   local receipt="$STATE_ROOT/receipts/$COMMIT.json"
   python3 - "$receipt" "$COMMIT" "$WEB_SHA256" "$started_at" "$completed_at" \
-    "$api_commit_value" "$frontend_commit_value" "$observed_main" "$result" << 'PY'
+    "$api_commit_value" "$frontend_commit_value" "$observed_main" "$migration_completed_at" "$result" << 'PY'
 import json
 import os
 import sys
@@ -104,7 +106,7 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 payload = {
-    "schema_version": 2,
+    "schema_version": 3,
     "environment": "production",
     "commit": sys.argv[2],
     "web_artifact_sha256": sys.argv[3],
@@ -113,7 +115,8 @@ payload = {
     "api_commit": sys.argv[6] or None,
     "frontend_commit": sys.argv[7] or None,
     "observed_main_after_deploy": sys.argv[8] or None,
-    "result": sys.argv[9],
+    "migration_completed_at": sys.argv[9] or None,
+    "result": sys.argv[10],
 }
 temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
 with temporary.open("w", encoding="utf-8") as handle:
@@ -315,20 +318,27 @@ receipt_started=true
 # path before the full stack is reconciled. The migration scope restores the
 # API to verify-applied itself and leaves PostgreSQL, NATS and any existing
 # Caddy container untouched. This is intentionally idempotent when no migration
-# is pending.
+# is pending. The receipt records completion for diagnosis, but never authorizes
+# a later retry to skip database verification.
+echo "production_deployment_phase=migration state=starting commit=$COMMIT" >&2
 run_release_deploy migration
+migration_completed_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
+write_deploy_receipt "deploying" "" "" "" "$last_observed_main"
+echo "production_deployment_phase=migration state=completed commit=$COMMIT checking_origin_main=true" >&2
 
 remote_main="$(fetch_main)"
 last_observed_main="$remote_main"
 if [[ "$remote_main" != "$COMMIT" ]]; then
   completed_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
-  write_deploy_receipt "superseded_after_migration" "$completed_at" "$api_commit" "$frontend_commit" "$remote_main"
+  write_deploy_receipt "superseded_after_migration" "$completed_at" "" "" "$remote_main"
   receipt_terminal=true
   echo "production_deployment=superseded_after_migration commit=$COMMIT current=$remote_main" >&2
-  exit 75
+  exit "$EX_TEMPFAIL"
 fi
 
+echo "production_deployment_phase=full state=starting commit=$COMMIT" >&2
 run_release_deploy full
+echo "production_deployment_phase=full state=completed commit=$COMMIT" >&2
 
 api_headers="$(mktemp "$STATE_ROOT/.api-headers.XXXXXX")"
 api_body_file="$(mktemp "$STATE_ROOT/.api-body.XXXXXX")"
@@ -366,7 +376,7 @@ if [[ "$post_deploy_main" != "$COMMIT" ]]; then
   write_deploy_receipt "superseded_after_deploy" "$completed_at" "$api_commit" "$frontend_commit" "$post_deploy_main"
   receipt_terminal=true
   echo "production_deployment=superseded commit=$COMMIT current=$post_deploy_main" >&2
-  exit 75
+  exit "$EX_TEMPFAIL"
 fi
 
 write_deploy_receipt "verified" "$completed_at" "$api_commit" "$frontend_commit" "$post_deploy_main"

@@ -122,7 +122,7 @@ if preserve:
     raise SystemExit(0)
 
 payload = {
-    "schema_version": 2,
+    "schema_version": 3,
     "environment": "production",
     "commit": commit,
     "web_artifact_sha256": None,
@@ -131,6 +131,7 @@ payload = {
     "api_commit": api.get("commit"),
     "frontend_commit": frontend.get("commit"),
     "observed_main_after_deploy": commit,
+    "migration_completed_at": None,
     "result": "verified_observed",
     "evidence_boundary": (
         "Recovered from exact public readback; original web artifact hash and "
