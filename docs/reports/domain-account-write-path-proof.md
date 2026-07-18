@@ -34,6 +34,13 @@ relations:
 
 # Domain Account Write Path Proof
 
+> **Sicherheitsnachtrag 2026-07-18:** Die in diesem historischen Phase-E-A-Beleg
+> beschriebene ID-deterministische Radiusprojektion ist durch Issue #1464 und
+> Migration `20260718000001_radius_projection_privacy` abgelöst. Radiuspunkte
+> stammen nun aus einer privat persistierten kryptografischen Zufallsbindung;
+> Altbestände ohne gültige Bindung werden fail-closed ausgeblendet. Die übrigen
+> Aussagen dieses Berichts bleiben historische Evidenz ihres damaligen Stands.
+
 ## Scope
 
 Dieser Proof dokumentiert OPT-ARC-001 **Phase E-A** als bewusst engen,
@@ -168,12 +175,11 @@ Neue PostgreSQL-Account-Create-Zeilen persistieren damit eine stabile
 `load_accounts_from_postgres` nach einem Reload wiederherstellt. Bestehende
 NULL-Werte bleiben über den Legacy-Fallback unterstützt.
 
-`public_pos` ist **keine** gespeicherte Spalte: Sie wird beim Lesen
-deterministisch aus `location_lat`/`location_lon`/`radius_m`/`id` berechnet.
-Das private Feld `location` wird nie serialisiert. `public_pos` ist die
-öffentliche Projektion; bei `radius_m = 0` kann sie exakt den eingereichten
-Koordinaten entsprechen, bei `radius_m > 0` wird sie deterministisch
-gejittert.
+`public_pos` ist **keine** eigene Tabellenspalte. Bei `radius_m = 0` kann sie
+exakt den eingereichten Koordinaten entsprechen. Seit dem Sicherheitsnachtrag
+2026-07-18 wird sie bei Radiusdarstellung aus einer privaten, persistierten
+Zufallsbindung gelesen. Weder die exakte Position noch diese Bindung werden
+öffentlich serialisiert.
 
 ## Validierung
 
@@ -205,9 +211,10 @@ Testfälle:
   Erfolg (201), korrekte Spalten/Payloads, Cache enthält den Account sofort,
   kein JSONL-Append; DB, Cache und `load_accounts_from_postgres` verwenden
   dieselbe parsebare `webauthn_user_id`.
-- `postgres_account_create_radius_persists_obfuscated_public_pos`:
-  Bei `radius_m>0` speichert die DB die reale Residenz und den Radius, die
-  Antwort ist gejittert, der Loader reproduziert exakt denselben Jitter.
+- `postgres_account_create_radius_persists_private_projection`:
+  Bei `radius_m>0` speichert die DB die reale Residenz, den Radius und die
+  private Zufallsbindung. Die Antwort enthält nur den Punkt innerhalb des
+  geodätischen Radius; Loader und mehrere Instanzen lesen dieselbe Bindung.
 - `postgres_account_create_duplicate_id_conflicts_without_side_effects`:
   Primärschlüsselkollision → `409`, keine Überschreibung, kein Cache-Update,
   kein JSONL.

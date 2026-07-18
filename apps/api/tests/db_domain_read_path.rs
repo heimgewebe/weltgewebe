@@ -151,28 +151,42 @@ async fn accounts_loader_respects_mode_column_ron_even_with_location() {
 #[tokio::test]
 #[ignore]
 #[serial]
-async fn accounts_loader_approximate_radius_zero_becomes_250() {
+async fn accounts_loader_requires_valid_private_radius_binding() {
     let pool = prepare_pool().await;
     sqlx::query(
         "INSERT INTO domain_accounts \
          (id, kind, title, mode, map_state, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
          VALUES \
-         ('rp-account-approximate', 'garnrolle', 'Approximate', 'verortet', 'exact', 0, false, 53.55, 9.99, 'gast', '{}'::jsonb, '{\"visibility\":\"approximate\"}'::jsonb)",
+         ('rp-account-approximate', 'garnrolle', 'Legacy approximate', 'verortet', 'radius', 250, false, 53.55, 9.99, 'gast', '{}'::jsonb, '{\"visibility\":\"approximate\"}'::jsonb), \
+         ('rp-account-safe-radius', 'garnrolle', 'Safe radius', NULL, 'radius', 250, false, 53.55, 9.99, 'gast', '{}'::jsonb, \
+          '{\"radius_projection\":{\"version\":1,\"anchor\":{\"lat\":53.55,\"lon\":9.99},\"radius_m\":250,\"public_pos\":{\"lat\":53.5505,\"lon\":9.99}}}'::jsonb)",
     )
     .execute(&pool)
     .await
-    .expect("insert approximate account");
+    .expect("insert radius accounts");
 
     let store = load_accounts_from_postgres(&pool)
         .await
         .expect("load accounts");
-    let account = store
+    let legacy = store
         .get("rp-account-approximate")
-        .expect("approximate account present");
+        .expect("legacy approximate account present");
+    let safe = store
+        .get("rp-account-safe-radius")
+        .expect("safe radius account present");
 
-    assert_eq!(account.public.map_state, GarnrolleMapState::Radius);
-    assert_eq!(account.public.radius_m, 250);
-    assert!(account.public.public_pos.is_some());
+    assert_eq!(legacy.public.map_state, GarnrolleMapState::NotOnMap);
+    assert_eq!(legacy.public.radius_m, 0);
+    assert!(legacy.public.public_pos.is_none());
+
+    assert_eq!(safe.public.map_state, GarnrolleMapState::Radius);
+    assert_eq!(safe.public.radius_m, 250);
+    let public_pos = safe.public.public_pos.as_ref().expect("safe public point");
+    assert!((public_pos.lat - 53.5505).abs() < 1e-9);
+    assert!((public_pos.lon - 9.99).abs() < 1e-9);
+    let public_json = serde_json::to_value(&safe.public).expect("serialize safe account");
+    assert!(public_json.get("radius_projection").is_none());
+    assert!(public_json.get("location").is_none());
     clean(&pool).await;
 }
 

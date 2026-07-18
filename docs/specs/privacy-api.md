@@ -55,6 +55,14 @@ Die öffentliche Ansicht darf nur die gewählte Sichtbarkeit zeigen:
 Die interne Adresse und die exakten Koordinaten bleiben getrennt von der
 öffentlichen Projektion, sofern nicht exakt sichtbare Anzeige gewählt wurde.
 
+Für `radius` erzeugt der Server einmalig einen kryptografisch zufälligen Punkt
+innerhalb eines echten geodätischen Kreises von 50 bis 5.000 Metern. Die dazu
+gehörige Bindung wird ausschließlich privat persistiert. Sie bleibt bei
+unverändertem Ort und Radius auch nach zeitweisem Ausblenden stabil, damit kein
+neuer Punkt eine Schnittmengenattacke ermöglicht. Erst eine Änderung des
+privaten Orts oder Radius erzeugt eine neue Bindung. Fehlt eine gültige Bindung,
+wird die Garnrolle ohne öffentliche Position als `not_on_map` behandelt.
+
 ## Zielendpunkte
 
 Die endgültigen Namen sind noch offen. Semantisch braucht das System:

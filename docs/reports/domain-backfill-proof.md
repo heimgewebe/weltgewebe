@@ -24,6 +24,11 @@ relations:
 
 # Domain Backfill Proof
 
+> **Sicherheitsnachtrag 2026-07-18:** Historische Radius-/Approximate-Datensätze
+> ohne private Zufallsbindung werden beim Import nicht mehr öffentlich
+> rekonstruiert. Private Koordinaten bleiben erhalten, während `map_state` und
+> `radius_m` fail-closed auf `not_on_map` beziehungsweise `0` gesetzt werden.
+
 ## Scope
 
 Phase C only: deterministic JSONL→PostgreSQL import proof for domain data (nodes, edges, accounts).
@@ -94,7 +99,7 @@ These paths are unchanged. JSONL is the active runtime truth until Phase D/E.
 | `mode` | `mode` | `"verortet"` or `"ron"` |
 | `radius_m` | `radius_m` (BIGINT) | Bound as `i64`; default 0 |
 | `disabled` | `disabled` | Default: `false` |
-| `location.lat` | `location_lat` | Private residence; not the jittered `public_pos` |
+| `location.lat` | `location_lat` | Private residence; never the public radius projection |
 | `location.lon` | `location_lon` | Private residence |
 | `role` | `role` | Default: `"gast"` |
 | `email` | `email` | Optional |
@@ -102,7 +107,7 @@ These paths are unchanged. JSONL is the active runtime truth until Phase D/E.
 | `created_at` | `created_at` (TIMESTAMPTZ) | Optional |
 | `updated_at` | `updated_at` (TIMESTAMPTZ) | Optional |
 | `summary`, `tags` | `public_payload` (JSONB) | Public fields not in explicit columns |
-| — | `private_payload` (JSONB) | Preserves legacy operational fields such as visibility, ron_flag, explicit mode and suppress_public_pos for Phase-D reconstruction |
+| `radius_projection` und Legacy-Felder | `private_payload` (JSONB) | Sichere Bindungen bleiben privat; Legacy-Radius ohne gültige Bindung wird nicht öffentlich reaktiviert |
 
 ## Idempotency Contract
 
