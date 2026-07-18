@@ -30,6 +30,7 @@ from scripts.docmeta.docmeta import REPO_ROOT
 @dataclass(frozen=True)
 class CapabilityResult:
     id: str
+    dimension: str
     title: str
     hard: bool
     status: str
@@ -61,6 +62,14 @@ DRY_RUN_REQUIRED_FILES = [
     "scripts/agent/tests/test_run_task.py",
     DRY_RUN_TASK_FILE,
 ]
+DISCOVERY_REQUIRED_FILES = [
+    "agent-contract.json",
+    "contracts/agent/agent-contract.schema.json",
+    "AGENTS.md",
+    "scripts/agent/validate_repo_agent_contract.py",
+    "scripts/docmeta/agent_entrypoint_smoke.py",
+]
+
 RUN_EVIDENCE_REQUIRED_FILES = [
     "contracts/agent/validation.schema.json",
     "contracts/agent/run-result.schema.json",
@@ -87,6 +96,7 @@ def _handoff_failure(
     suffix = f": {diagnostic}" if diagnostic else "."
     return CapabilityResult(
         id=presence.id,
+        dimension=presence.dimension,
         title=presence.title,
         hard=presence.hard,
         status="fail",
@@ -107,6 +117,7 @@ def _capability_failure(
     suffix = f": {diagnostic}" if diagnostic else "."
     return CapabilityResult(
         id=presence.id,
+        dimension=presence.dimension,
         title=presence.title,
         hard=presence.hard,
         status="fail",
@@ -120,6 +131,7 @@ def _evaluate_handoff_validation(root: Path) -> CapabilityResult:
     presence = _evaluate_required_files(
         root=root,
         cap_id="handoff_validation",
+        dimension="validate",
         title="Handoff validation",
         hard=True,
         required_files=HANDOFF_REQUIRED_FILES,
@@ -173,6 +185,7 @@ def _evaluate_handoff_validation(root: Path) -> CapabilityResult:
 
     return CapabilityResult(
         id=presence.id,
+        dimension=presence.dimension,
         title=presence.title,
         hard=presence.hard,
         status="pass",
@@ -295,6 +308,7 @@ def _evaluate_dry_run_runner(root: Path) -> CapabilityResult:
     presence = _evaluate_required_files(
         root=root,
         cap_id="dry_run_runner",
+        dimension="plan",
         title="Dry-run runner",
         hard=True,
         required_files=DRY_RUN_REQUIRED_FILES,
@@ -366,6 +380,7 @@ def _evaluate_dry_run_runner(root: Path) -> CapabilityResult:
 
     return CapabilityResult(
         id=presence.id,
+        dimension=presence.dimension,
         title=presence.title,
         hard=presence.hard,
         status="pass",
@@ -382,6 +397,7 @@ def _evaluate_run_evidence_lite(root: Path) -> CapabilityResult:
     presence = _evaluate_required_files(
         root=root,
         cap_id="run_evidence_lite",
+        dimension="validate",
         title="Run evidence lite",
         hard=True,
         required_files=RUN_EVIDENCE_REQUIRED_FILES,
@@ -566,6 +582,7 @@ def _evaluate_run_evidence_lite(root: Path) -> CapabilityResult:
 
     return CapabilityResult(
         id=presence.id,
+        dimension=presence.dimension,
         title=presence.title,
         hard=presence.hard,
         status="pass",
@@ -610,6 +627,7 @@ def _files_for_regex(root: Path, search_roots: Iterable[str], regex: str) -> lis
 def _evaluate_required_files(
     root: Path,
     cap_id: str,
+    dimension: str,
     title: str,
     hard: bool,
     required_files: list[str],
@@ -622,6 +640,7 @@ def _evaluate_required_files(
         if path.exists() and not path.is_file():
             return CapabilityResult(
                 id=cap_id,
+                dimension=dimension,
                 title=title,
                 hard=hard,
                 status="fail",
@@ -643,12 +662,39 @@ def _evaluate_required_files(
 
     return CapabilityResult(
         id=cap_id,
+        dimension=dimension,
         title=title,
         hard=hard,
         status=status,
         evidence=evidence,
         missing=missing,
         rationale=rationale,
+    )
+
+DIMENSIONS = [
+    "discover",
+    "understand",
+    "plan",
+    "workspace",
+    "write",
+    "validate",
+    "review",
+    "publish",
+    "deploy",
+    "cleanup",
+    "recovery",
+]
+
+def _external_capability(cap_id: str, dimension: str, title: str) -> CapabilityResult:
+    return CapabilityResult(
+        id=cap_id,
+        dimension=dimension,
+        title=title,
+        hard=False,
+        status="open",
+        evidence=[],
+        missing=["external_operator_execution"],
+        rationale="Capability resides with the external operator (Grabowski).",
     )
 
 
@@ -658,7 +704,23 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
     results.append(
         _evaluate_required_files(
             root=repo_root,
+            cap_id="discover",
+            dimension="discover",
+            title="Repository discovery contract",
+            hard=True,
+            required_files=DISCOVERY_REQUIRED_FILES,
+            rationale=(
+                "The repository must expose a deterministic machine contract, "
+                "entry card, validator, and entrypoint smoke before planning."
+            ),
+        )
+    )
+
+    results.append(
+        _evaluate_required_files(
+            root=repo_root,
             cap_id="agent_policy",
+            dimension="understand",
             title="Agent policy baseline",
             hard=False,
             required_files=["AGENTS.md", "agent-policy.yaml"],
@@ -669,7 +731,25 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
     results.append(
         _evaluate_required_files(
             root=repo_root,
+            cap_id="agent_contracts",
+            dimension="understand",
+            title="Agent contracts",
+            hard=True,
+            required_files=["contracts/agent/task.schema.json"],
+            rationale="Contracts definieren maschinenlesbare Agent-Task-Grenzen.",
+        )
+    )
+
+    results.append(_evaluate_dry_run_runner(repo_root))
+
+    results.append(_external_capability("workspace", "workspace", "Workspace Management"))
+    results.append(_external_capability("write", "write", "Code Mutation"))
+
+    results.append(
+        _evaluate_required_files(
+            root=repo_root,
             cap_id="safety_preflight",
+            dimension="validate",
             title="Safety preflight guard",
             hard=False,
             required_files=[
@@ -686,6 +766,7 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
         _evaluate_required_files(
             root=repo_root,
             cap_id="claim_evidence_spine",
+            dimension="validate",
             title="Claim evidence spine",
             hard=True,
             required_files=[
@@ -696,23 +777,13 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
         )
     )
 
-    results.append(
-        _evaluate_required_files(
-            root=repo_root,
-            cap_id="agent_contracts",
-            title="Agent contracts",
-            hard=True,
-            required_files=["contracts/agent/task.schema.json"],
-            rationale="Contracts definieren maschinenlesbare Agent-Task-Grenzen.",
-        )
-    )
-
     results.append(_evaluate_handoff_validation(repo_root))
 
     results.append(
         _evaluate_required_files(
             root=repo_root,
             cap_id="non_ideal_guard",
+            dimension="validate",
             title="Non-ideal guard",
             hard=True,
             required_files=[
@@ -723,8 +794,13 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
         )
     )
 
-    results.append(_evaluate_dry_run_runner(repo_root))
     results.append(_evaluate_run_evidence_lite(repo_root))
+
+    results.append(_external_capability("review", "review", "Review and Approval"))
+    results.append(_external_capability("publish", "publish", "Publish Artifacts"))
+    results.append(_external_capability("deploy", "deploy", "Deploy Changes"))
+    results.append(_external_capability("cleanup", "cleanup", "Cleanup Workspaces"))
+    results.append(_external_capability("recovery", "recovery", "State Recovery"))
 
     for result in results:
         if result.status not in VALID_STATUSES:
@@ -739,7 +815,6 @@ def determine_overall_status(
     hard_gaps = [r.id for r in results if r.hard and r.status != "pass"]
     failing = [r.id for r in results if r.status == "fail"]
     passing = [r.id for r in results if r.status == "pass"]
-    partial = [r.id for r in results if r.status == "partial"]
 
     if failing:
         reason = f"Inconsistent capability state detected: {', '.join(failing)}"
@@ -747,21 +822,21 @@ def determine_overall_status(
 
     if hard_gaps:
         reason = f"Hard capabilities are still missing: {', '.join(hard_gaps)}"
-        return "partial", reason, hard_gaps
+        return "not_execution_ready", reason, hard_gaps
 
-    if len(passing) == len(results):
-        return (
-            "pass",
-            "All capabilities declared in the readiness matrix passed their configured checks.",
-            [],
-        )
-
-    if not passing and not partial:
-        return (
-            "open",
-            "No capability evidence detected yet.",
-            [r.id for r in results if r.hard],
-        )
+    if all(r.status in ["pass", "open"] for r in results):
+        if any(r.status == "pass" for r in results):
+            return (
+                "plan_ready",
+                "Repository logic supports planning and validation. Execution relies on external operator.",
+                [],
+            )
+        else:
+            return (
+                "open",
+                "No capability evidence detected yet.",
+                [r.id for r in results if r.hard],
+            )
 
     return "partial", "Capabilities are partially implemented.", hard_gaps
 
@@ -792,11 +867,15 @@ def render_report(
     lines.append("")
     lines.append("## Capability Matrix")
     lines.append("")
-    lines.append("| Capability | Status | Hard | Evidence | Missing | Rationale |")
-    lines.append("|---|---|---:|---|---|---|")
+    lines.append("| Dimension | Capability | Status | Hard | Evidence | Missing | Rationale |")
+    lines.append("|---|---|---|---:|---|---|---|")
 
     handoff_evidence: list[str] = []
-    for result in results:
+
+    # Sort results by DIMENSIONS order
+    sorted_results = sorted(results, key=lambda r: DIMENSIONS.index(r.dimension))
+
+    for result in sorted_results:
         if result.id == "handoff_validation":
             handoff_evidence = result.evidence
             evidence = "See Handoff Evidence"
@@ -811,7 +890,7 @@ def render_report(
         )
         hard = "yes" if result.hard else "no"
         lines.append(
-            f"| {result.id} | {result.status} | {hard} | {evidence} | "
+            f"| {result.dimension} | {result.id} | {result.status} | {hard} | {evidence} | "
             f"{missing} | {result.rationale} |"
         )
 
@@ -830,7 +909,25 @@ def render_report(
         for capability in hard_gaps:
             lines.append(f"- Hard capability missing: {capability}")
     else:
-        lines.append("- No residual hard gaps detected.")
+        lines.append("- No residual hard repository gaps detected.")
+
+    lines.append("")
+    lines.append("## External Operator Dependencies")
+    lines.append("")
+    external_dependencies = [
+        result
+        for result in sorted_results
+        if result.status == "open"
+        and "external_operator_execution" in result.missing
+    ]
+    if external_dependencies:
+        for result in external_dependencies:
+            lines.append(
+                f"- `{result.dimension}` / `{result.id}`: "
+                "provided by the external operator (Grabowski), not by this repository."
+            )
+    else:
+        lines.append("- No external operator dependencies detected.")
 
     lines.append("")
     lines.append("## Interpretation Rule")

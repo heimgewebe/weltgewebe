@@ -31,6 +31,7 @@ cognitive_modules:
     - docs/policies/architecture-critique.md
 
 canonical_sources:
+  - agent-contract.json
   - repo.meta.yaml
   - manifest/repo-index.yaml
   - AGENTS.md
@@ -79,9 +80,16 @@ generated_artifacts:
   - docs/_generated/report-lifecycle.md
   - docs/_generated/report-lifecycle-inventory.md
 
+# Compatibility Projection of agent-contract.json for path/check fields below.
+# Not an independent authority for agent write scope. Exact parity is enforced
+# by scripts/agent/validate_repo_agent_contract.py.
 safe_read_paths:
-  - README.md
+  - agent-contract.json
+  - repo.meta.yaml
   - AGENTS.md
+  - agent-policy.yaml
+  - docs/policies/agent-reading-protocol.md
+  - README.md
   - docs/
 
 guarded_write_paths:
@@ -95,6 +103,8 @@ guarded_write_paths:
 
 forbidden_write_paths:
   - docs/_generated/
+  - secrets/
+  - snapshots/
 
 required_checks:
   - repo-structure-guard
@@ -123,9 +133,12 @@ keywords:
 
 agent_reading:
   protocol: docs/policies/agent-reading-protocol.md
+  machine_norm: agent-contract.json
 
 truth_model:
   # The canonical machine truth is defined in the precedence array below.
+  # Agent path/check authority lives in agent-contract.json; overlapping fields
+  # above are a Compatibility Projection only.
   abort_on_conflict: true
   interpolation_allowed: false
   precedence:
@@ -133,6 +146,7 @@ truth_model:
       paths: ["contracts/domain/*.schema.json"]
     - class: canonical_policies
       paths:
+        - "agent-contract.json"
         - "repo.meta.yaml"
         - "AGENTS.md"
         - "agent-policy.yaml"

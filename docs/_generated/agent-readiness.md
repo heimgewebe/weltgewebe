@@ -12,21 +12,29 @@ Generated automatically. Do not edit.
 
 ## Overall Status
 
-- **Overall:** pass
-- **Reason:** All capabilities declared in the readiness matrix passed their configured checks.
+- **Overall:** plan_ready
+- **Reason:** Repository logic supports planning and validation. Execution relies on external operator.
 
 ## Capability Matrix
 
-| Capability | Status | Hard | Evidence | Missing | Rationale |
-|---|---|---:|---|---|---|
-| agent_policy | pass | no | `AGENTS.md`, `agent-policy.yaml` | - | Agenten brauchen dokumentierte Grenzen und Schreibregeln. |
-| safety_preflight | pass | no | `scripts/agent/check_agent_preflight.py`, `scripts/agent/tests/test_check_agent_preflight.py`, `.github/workflows/agent-safety-preflight.yml`, `docs/security/agent-write-scope-baseline.md` | - | Report-only Preflight schafft belastbare Baseline vor Blocking. |
-| claim_evidence_spine | pass | yes | `docs/claims/registry.yml`, `scripts/docmeta/validate_claim_registry.py` | - | Ohne Claim-Registry und Validator fehlt maschinenlesbare Evidenzbindung. |
-| agent_contracts | pass | yes | `contracts/agent/task.schema.json` | - | Contracts definieren maschinenlesbare Agent-Task-Grenzen. |
-| handoff_validation | pass | yes | See Handoff Evidence | - | Handoff-Checks begrenzen unvollstaendige oder unsichere Uebergaben. Required files and the canonical CLI smoke both pass. |
-| non_ideal_guard | pass | yes | `scripts/agent/check_non_ideal_task.py`, `scripts/agent/tests/test_check_non_ideal_task.py` | - | Non-Ideal-Guard erkennt riskante Ausnahmefaelle vor Ausfuehrung. |
-| dry_run_runner | pass | yes | `scripts/agent/run_task.py`, `scripts/agent/tests/test_run_task.py`, `tests/fixtures/agent/valid-doc-drift-task.json` | - | Dry-Run Runner prueft Agentenpfade ohne schreibende Seiteneffekte. Required files and the canonical dry-run smoke both pass. |
-| run_evidence_lite | pass | yes | `contracts/agent/validation.schema.json`, `contracts/agent/run-result.schema.json`, `scripts/agent/json_contract.py`, `scripts/agent/run_task.py`, `scripts/agent/tests/test_json_contract.py`, `scripts/agent/tests/test_run_task.py`, `scripts/agent/validate_agent_contracts.py`, `scripts/contracts-agent-check.sh`, `docs/reference/agent-run-evidence-lite.md`, `tests/fixtures/agent/validation-valid.json`, `tests/fixtures/agent/run-result-valid.json`, `tests/fixtures/agent/valid-doc-drift-task.json` | - | Erfolgreiche geplante Dry-Runs muessen ein schema-valides, task- und revisionsgebundenes Evidenzbuendel atomar publizieren. Required files and the functional persistence smoke both pass. |
+| Dimension | Capability | Status | Hard | Evidence | Missing | Rationale |
+|---|---|---|---:|---|---|---|
+| discover | discover | pass | yes | `agent-contract.json`, `contracts/agent/agent-contract.schema.json`, `AGENTS.md`, `scripts/agent/validate_repo_agent_contract.py`, `scripts/docmeta/agent_entrypoint_smoke.py` | - | The repository must expose a deterministic machine contract, entry card, validator, and entrypoint smoke before planning. |
+| understand | agent_policy | pass | no | `AGENTS.md`, `agent-policy.yaml` | - | Agenten brauchen dokumentierte Grenzen und Schreibregeln. |
+| understand | agent_contracts | pass | yes | `contracts/agent/task.schema.json` | - | Contracts definieren maschinenlesbare Agent-Task-Grenzen. |
+| plan | dry_run_runner | pass | yes | `scripts/agent/run_task.py`, `scripts/agent/tests/test_run_task.py`, `tests/fixtures/agent/valid-doc-drift-task.json` | - | Dry-Run Runner prueft Agentenpfade ohne schreibende Seiteneffekte. Required files and the canonical dry-run smoke both pass. |
+| workspace | workspace | open | no | - | `external_operator_execution` | Capability resides with the external operator (Grabowski). |
+| write | write | open | no | - | `external_operator_execution` | Capability resides with the external operator (Grabowski). |
+| validate | safety_preflight | pass | no | `scripts/agent/check_agent_preflight.py`, `scripts/agent/tests/test_check_agent_preflight.py`, `.github/workflows/agent-safety-preflight.yml`, `docs/security/agent-write-scope-baseline.md` | - | Report-only Preflight schafft belastbare Baseline vor Blocking. |
+| validate | claim_evidence_spine | pass | yes | `docs/claims/registry.yml`, `scripts/docmeta/validate_claim_registry.py` | - | Ohne Claim-Registry und Validator fehlt maschinenlesbare Evidenzbindung. |
+| validate | handoff_validation | pass | yes | See Handoff Evidence | - | Handoff-Checks begrenzen unvollstaendige oder unsichere Uebergaben. Required files and the canonical CLI smoke both pass. |
+| validate | non_ideal_guard | pass | yes | `scripts/agent/check_non_ideal_task.py`, `scripts/agent/tests/test_check_non_ideal_task.py` | - | Non-Ideal-Guard erkennt riskante Ausnahmefaelle vor Ausfuehrung. |
+| validate | run_evidence_lite | pass | yes | `contracts/agent/validation.schema.json`, `contracts/agent/run-result.schema.json`, `scripts/agent/json_contract.py`, `scripts/agent/run_task.py`, `scripts/agent/tests/test_json_contract.py`, `scripts/agent/tests/test_run_task.py`, `scripts/agent/validate_agent_contracts.py`, `scripts/contracts-agent-check.sh`, `docs/reference/agent-run-evidence-lite.md`, `tests/fixtures/agent/validation-valid.json`, `tests/fixtures/agent/run-result-valid.json`, `tests/fixtures/agent/valid-doc-drift-task.json` | - | Erfolgreiche geplante Dry-Runs muessen ein schema-valides, task- und revisionsgebundenes Evidenzbuendel atomar publizieren. Required files and the functional persistence smoke both pass. |
+| review | review | open | no | - | `external_operator_execution` | Capability resides with the external operator (Grabowski). |
+| publish | publish | open | no | - | `external_operator_execution` | Capability resides with the external operator (Grabowski). |
+| deploy | deploy | open | no | - | `external_operator_execution` | Capability resides with the external operator (Grabowski). |
+| cleanup | cleanup | open | no | - | `external_operator_execution` | Capability resides with the external operator (Grabowski). |
+| recovery | recovery | open | no | - | `external_operator_execution` | Capability resides with the external operator (Grabowski). |
 
 ## Handoff Evidence
 
@@ -44,7 +52,17 @@ Generated automatically. Do not edit.
 
 ## Residual Gaps
 
-- No residual hard gaps detected.
+- No residual hard repository gaps detected.
+
+## External Operator Dependencies
+
+- `workspace` / `workspace`: provided by the external operator (Grabowski), not by this repository.
+- `write` / `write`: provided by the external operator (Grabowski), not by this repository.
+- `review` / `review`: provided by the external operator (Grabowski), not by this repository.
+- `publish` / `publish`: provided by the external operator (Grabowski), not by this repository.
+- `deploy` / `deploy`: provided by the external operator (Grabowski), not by this repository.
+- `cleanup` / `cleanup`: provided by the external operator (Grabowski), not by this repository.
+- `recovery` / `recovery`: provided by the external operator (Grabowski), not by this repository.
 
 ## Interpretation Rule
 

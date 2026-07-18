@@ -1,0 +1,249 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://weltgewebe.org/schemas/agent/agent-contract.schema.json",
+  "title": "Repository Agent Contract",
+  "description": "Canonical machine-readable repository agent norm for Weltgewebe. Strict JSON only; YAML projections are non-authoritative mirrors.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "contract_id",
+    "architecture",
+    "reading_order",
+    "safe_read_paths",
+    "guarded_write_paths",
+    "forbidden_write_paths",
+    "required_checks",
+    "local_checks_before_patch",
+    "validation_profiles",
+    "generated_artifacts",
+    "compatibility_projections",
+    "format_rationale"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1"]
+    },
+    "contract_id": {
+      "type": "string",
+      "enum": ["weltgewebe.repo.agent-contract"]
+    },
+    "architecture": {
+      "$ref": "#/definitions/architecture"
+    },
+    "reading_order": {
+      "type": "array",
+      "minItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "safe_read_paths": {
+      "$ref": "#/definitions/pathList"
+    },
+    "guarded_write_paths": {
+      "$ref": "#/definitions/pathList"
+    },
+    "forbidden_write_paths": {
+      "$ref": "#/definitions/pathList"
+    },
+    "required_checks": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "local_checks_before_patch": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "validation_profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent_contract",
+        "agent_safety",
+        "docs_guards"
+      ],
+      "properties": {
+        "agent_contract": {
+          "$ref": "#/definitions/validationProfile"
+        },
+        "agent_safety": {
+          "$ref": "#/definitions/validationProfile"
+        },
+        "docs_guards": {
+          "$ref": "#/definitions/validationProfile"
+        }
+      }
+    },
+    "generated_artifacts": {
+      "$ref": "#/definitions/generatedArtifacts"
+    },
+    "compatibility_projections": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/compatibilityProjection"
+      }
+    },
+    "format_rationale": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    }
+  },
+  "definitions": {
+    "pathList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "architecture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo_role",
+        "operator_role",
+        "operator_name",
+        "repo_generic_write_mode"
+      ],
+      "properties": {
+        "repo_role": {
+          "type": "string",
+          "enum": ["repo_contract_authority"]
+        },
+        "operator_role": {
+          "type": "string",
+          "enum": ["external_operator_execution"]
+        },
+        "operator_name": {
+          "type": "string",
+          "enum": ["grabowski"]
+        },
+        "repo_generic_write_mode": {
+          "type": "string",
+          "enum": ["rejected"]
+        }
+      }
+    },
+    "validationProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "named_checks"],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "named_checks": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        }
+      }
+    },
+    "generatedArtifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "direct_agent_edit",
+        "derived_write_authority",
+        "trusted_generator_registry"
+      ],
+      "properties": {
+        "direct_agent_edit": {
+          "type": "string",
+          "enum": ["forbidden"]
+        },
+        "derived_write_authority": {
+          "type": "string",
+          "enum": ["trusted_generators_only"]
+        },
+        "trusted_generator_registry": {
+          "type": "string",
+          "enum": [".wgx/generated-artifacts.yml"]
+        }
+      }
+    },
+
+    "compatibilityProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "role", "projected_fields"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["compatibility_projection"]
+        },
+        "projected_fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "safe_read_paths",
+            "guarded_write_paths",
+            "forbidden_write_paths"
+          ],
+          "properties": {
+            "safe_read_paths": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "guarded_write_paths": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "forbidden_write_paths": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "required_checks": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "local_checks_before_patch": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            }
+          }
+        }
+      }
+    }
+  }
+}

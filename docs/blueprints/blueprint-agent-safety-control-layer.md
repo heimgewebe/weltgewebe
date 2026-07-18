@@ -717,54 +717,41 @@ Gefährliche Statuslügen werden blockiert.
 - Blueprint `active` ohne verified Claim-Gruppe scheitert.
 - Modus startet warn, wird später blocking.
 
-### Welle 6 — Gated Write Mode
+### Welle 6 — External Operator Execution (Migration & Delegation)
 
-#### PR 10 — agent/write-mode-opt-in
+Der ursprünglich geplante generische repo-eigene `--write`-Runner wird **verworfen**.
 
-##### PR 10 — agent/write-mode-opt-in: Zweck
+**Architekturentscheidung:**
+- **Das Repository** besitzt Contract, Validator und Prüfprofile (Validation-Profiles). Es entscheidet, *was* erlaubt ist und *wie* es geprüft wird.
+- **Grabowski** (oder ein kompatibler externer Operator) besitzt Workspace, Lease, Mutation, Review, Veröffentlichung, Recovery und Cleanup.
 
-Echte Agent-Writes werden möglich, aber nur streng begrenzt.
+Das Repository ist nicht der ausführende Agent, sondern die normative Definitions- und Validierungsschicht.
 
-##### PR 10 — agent/write-mode-opt-in: Voraussetzungen
+#### PR 10 — Migration zu External Operator Execution
 
-- Safety Preflight pass
-- Readiness hard fail aktiv
-- Minimal Claim Spine pass
-- Impl Registry Critical pass
-- Minimal Contracts + Guard pass
-- Dry-Run Runner pass
-- Run Evidence Lite pass
+##### Phasenweiser Migrationsplan
 
-##### PR 10 — agent/write-mode-opt-in: Befehl
+Der Übergang zur neuen Trennung von Repo-Validation und Extern-Execution erfordert einen strikten, phasenweisen Migrationsplan. Nichts darf gelöscht werden, bevor Consumer und Tests migriert sind.
 
-```bash
-python scripts/agent/run_task.py --write tasks/WG-TASK-....yml
-```
+1. **Paralleler Betrieb:** Der neue `agent-contract.json` Validator (`validate_repo_agent_contract.py`) und der bestehende Preflight laufen doppelt in CI (`agent-safety-preflight.yml`).
+2. **YAML-Projektionen:** Die alten `agent-policy.yaml` und `repo.meta.yaml` werden als "Compatibility Projections" geführt. Der Contract-Validator prüft auf Drift.
+3. **Ausführungsprofile:** Freie task-gesteuerte Shell-Kommandos (`validation_commands`) sind nur ein Übergangsformat. Sie besitzen künftig keine Ausführungsautorität mehr. Zukünftige Ausführungen müssen benannte, geprüfte Profile (`validation_profiles`) aus dem Contract nutzen.
+4. **Rückbaukriterien:**
+   - Der doppelte Preflight darf erst zurückgebaut werden, wenn alle Consumer auf den Strict-JSON Contract und die Profil-Validierung umgestellt haben und alle Paritätstests (`validate_projection_parity`) dauerhaft grün bleiben.
+   - Der YAML-Minimalparser und manuelle Taskprojektionen werden erst entfernt, wenn Grabowski/Operator nachweislich den JSON-Contract nativ nutzt.
 
-##### PR 10 — agent/write-mode-opt-in: Einschränkungen
+##### PR 10 — Migration: Akzeptanzkriterien
 
-- nur `allowed_paths`
-- kein `docs/_generated` direkt
-- kein delete ohne `delete_allowed`
-- kein workflow ohne `task_type=ci_change`
-- kein infra ohne `task_type=infra_change` und `proof_ref`
-- kein roadmap done ohne `claim.status=verified`
+- Der Agent-Contract definiert explizit `repo_role: repo_contract_authority` und `operator_role: external_operator_execution`.
+- `repo_generic_write_mode: rejected` ist manifestiert.
+- Freie Shell-Kommandos sind als deprecated / Übergangsformat dokumentiert.
+- Paralleler Betrieb ist durch Checks (z.B. Projection Drift) abgesichert.
 
-##### PR 10 — agent/write-mode-opt-in: Akzeptanzkriterien
+#### PR 11 — run-evidence-full (Operator-Driven)
 
-- Ein kleiner Doku-Code-Drift-Fix läuft end-to-end.
-- Patch wird erzeugt.
-- Validation läuft.
-- Run-Artefakt wird erzeugt.
-- Status bleibt partial, bis CI/Claim-Evidence grün ist.
+Vollständige Observability wird vom externen Operator getrieben.
 
-#### PR 11 — agent/run-evidence-full
-
-##### PR 11 — agent/run-evidence-full: Zweck
-
-Vollständige Agent-Observability.
-
-##### PR 11 — agent/run-evidence-full: Artefakte
+##### Artefakte
 
 ```text
 artifacts/agent-runs/<run-id>/
@@ -777,26 +764,7 @@ artifacts/agent-runs/<run-id>/
   run-result.json
 ```
 
-##### PR 11 — agent/run-evidence-full: Regel
-
-Agent darf:
-
-```yaml
-decision: pass_proposed
-```
-
-Agent darf nicht:
-
-```yaml
-repo-status: done
-```
-
-##### PR 11 — agent/run-evidence-full: Akzeptanzkriterien
-
-- Dry-Run und Write-Run erzeugen vollständige, schema-valide Evidence.
-- `decision.yml` verweist auf Claims, Validation und Residual Gaps.
-- `changed-files.txt` stimmt mit tatsächlichem Diff überein.
-- Evidence kann von Claim-Checks gelesen werden.
+Der externe Operator schreibt die Artefakte und nutzt die repo-eigenen Profil-Validatoren, um den Handoff-Status auf `pass_proposed` zu setzen.
 
 ### Welle 7 — Skalierung
 
