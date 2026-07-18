@@ -312,6 +312,21 @@ implementations:
       - scripts/ci/tests/test_kubernetes_platform_contract.py
       - .github/workflows/kubernetes-platform.yml
 
+  - id: impl.workflow.production-migration-reconcile
+    path: scripts/ops/deploy-exact-commit-vps.sh
+    impl_type: workflow
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - docs/deploy/merge-to-live.md
+      - docs/deployment.md
+    verified_by:
+      - scripts/ci/tests/test_production_reconciler_contract.py
+      - scripts/ci/tests/test_deploy_exact_commit_integration.py
+      - scripts/tests/test_weltgewebe_up_deploy_scope.sh
+      - .github/workflows/production-live-contract.yml
+
   - id: impl.guard.kubernetes-platform
     path: scripts/platform/validate_platform.py
     impl_type: guard
