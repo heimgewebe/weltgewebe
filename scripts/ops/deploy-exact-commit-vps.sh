@@ -85,9 +85,12 @@ with path.open("wb") as handle:
 }
 
 fetch_main() {
+  # An unreachable origin must never fall back to a stale local remote-tracking
+  # ref. Shell errexit is not reliable inside every command-substitution
+  # context, so propagate both Git failures explicitly.
   git -C "$SOURCE_CHECKOUT" fetch --no-tags origin \
-    "+refs/heads/main:refs/remotes/origin/main"
-  git -C "$SOURCE_CHECKOUT" rev-parse refs/remotes/origin/main
+    "+refs/heads/main:refs/remotes/origin/main" || return 1
+  git -C "$SOURCE_CHECKOUT" rev-parse refs/remotes/origin/main || return 1
 }
 
 write_deploy_receipt() {

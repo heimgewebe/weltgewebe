@@ -47,6 +47,8 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("production_deployment_phase=full state=starting", script)
         self.assertIn('exit "$EX_TEMPFAIL"', script)
         self.assertIn("--deploy-scope migration", script)
+        self.assertIn('"+refs/heads/main:refs/remotes/origin/main" || return 1', script)
+        self.assertIn("rev-parse refs/remotes/origin/main || return 1", script)
 
     def test_deploy_helper_preserves_legacy_checkout_and_binds_main(self) -> None:
         script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
