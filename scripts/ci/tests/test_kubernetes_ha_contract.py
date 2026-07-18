@@ -49,6 +49,7 @@ class KubernetesHaContractTests(unittest.TestCase):
                 "cert_manager_cainjector",
                 "cert_manager_webhook",
                 "barman_cloud_plugin",
+                "barman_cloud_sidecar",
                 "nats",
                 "nats_box",
                 "seaweedfs",
@@ -70,6 +71,7 @@ class KubernetesHaContractTests(unittest.TestCase):
                 "quay.io/jetstack/cert-manager-webhook:v1.21.0"
             ],
             "barman_cloud_plugin": self.ha.BARMAN_CLOUD_PLUGIN_IMAGE,
+            "barman_cloud_sidecar": self.ha.BARMAN_CLOUD_SIDECAR_IMAGE,
         }
         for name, image in expected.items():
             self.assertEqual(lock["images"][name], image, name)
@@ -248,9 +250,47 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertEqual(wait_rollout.call_count, 3)
         wait_until.assert_called_once()
 
-    def test_barman_plugin_install_waits_and_verifies_digest_image(self) -> None:
+    def test_barman_manifest_pins_operator_and_sidecar_images(self) -> None:
+        sidecar_tag = (
+            "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0"
+        )
+        encoded = self.ha.base64.b64encode(sidecar_tag.encode()).decode()
+        wrapped = "\n".join(
+            f"    {encoded[index:index + 72]}"
+            for index in range(0, len(encoded), 72)
+        )
+        source = (
+            "apiVersion: v1\ndata:\n  SIDECAR_IMAGE: |\n"
+            f"{wrapped}\n---\nimage: "
+            "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0\n"
+        )
+        rendered = self.ha.render_barman_cloud_manifest(source)
+        self.assertNotIn(sidecar_tag, rendered)
+        self.assertNotIn(
+            "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0", rendered
+        )
+        self.assertIn(self.ha.BARMAN_CLOUD_PLUGIN_IMAGE, rendered)
+        digest_encoded = self.ha.base64.b64encode(
+            self.ha.BARMAN_CLOUD_SIDECAR_IMAGE.encode()
+        ).decode()
+        self.assertIn(f"SIDECAR_IMAGE: {digest_encoded}", rendered)
+
+    def test_barman_plugin_install_waits_and_verifies_digest_images(self) -> None:
+        secret_payload = json.dumps(
+            {
+                "items": [
+                    {
+                        "data": {
+                            "SIDECAR_IMAGE": self.ha.base64.b64encode(
+                                self.ha.BARMAN_CLOUD_SIDECAR_IMAGE.encode()
+                            ).decode()
+                        }
+                    }
+                ]
+            }
+        )
         with mock.patch.object(
-            self.ha, "apply_digest_locked_manifest"
+            self.ha, "apply_barman_cloud_manifest"
         ) as apply_manifest, mock.patch.object(
             self.ha.ref, "run"
         ) as run, mock.patch.object(
@@ -258,21 +298,44 @@ class KubernetesHaContractTests(unittest.TestCase):
         ) as wait_condition, mock.patch.object(
             self.ha.ref, "wait_rollout"
         ) as wait_rollout, mock.patch.object(
-            self.ha.ref, "output", return_value=self.ha.BARMAN_CLOUD_PLUGIN_IMAGE
+            self.ha.ref,
+            "output",
+            side_effect=[secret_payload, self.ha.BARMAN_CLOUD_PLUGIN_IMAGE],
         ):
             self.ha.install_barman_cloud_plugin("kubectl", "barman.yaml")
-        apply_manifest.assert_called_once_with(
-            "kubectl",
-            "barman.yaml",
-            {
-                "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0":
-                    self.ha.BARMAN_CLOUD_PLUGIN_IMAGE
-            },
-        )
+        apply_manifest.assert_called_once_with("kubectl", "barman.yaml")
         self.assertIn("crd/objectstores.barmancloud.cnpg.io", run.call_args.args[0])
         self.assertEqual(wait_condition.call_count, 2)
         wait_rollout.assert_called_once_with(
             "kubectl", "cnpg-system", "deployment/barman-cloud", "8m"
+        )
+
+    def test_barman_instance_sidecars_are_verified_for_all_three_pods(self) -> None:
+        def pod(name: str) -> dict[str, object]:
+            return {
+                "metadata": {"name": name},
+                "spec": {
+                    "initContainers": [
+                        {
+                            "name": "plugin-barman-cloud",
+                            "image": self.ha.BARMAN_CLOUD_SIDECAR_IMAGE,
+                        }
+                    ],
+                    "containers": [],
+                },
+            }
+        with mock.patch.object(
+            self.ha.ref,
+            "output",
+            return_value=json.dumps(
+                {"items": [pod("postgres-1"), pod("postgres-2"), pod("postgres-3")]}
+            ),
+        ):
+            observed = self.ha.verify_barman_sidecar_images(
+                "kubectl", "postgres-ha"
+            )
+        self.assertEqual(
+            observed, [self.ha.BARMAN_CLOUD_SIDECAR_IMAGE] * 3
         )
 
     def test_cnpg_release_uses_server_side_apply(self) -> None:
@@ -282,13 +345,14 @@ class KubernetesHaContractTests(unittest.TestCase):
         artifact.write_text(f"image: {tagged}\ndefault: {tagged}\n")
         try:
             with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
-                self.ha.ref, "wait_rollout"
-            ), mock.patch.object(
+                self.ha, "configure_cnpg_operator_ha"
+            ) as configure_ha, mock.patch.object(
                 self.ha, "wait_until"
             ), mock.patch.object(
                 self.ha.ref, "output", return_value=self.ha.CNPG_OPERATOR_IMAGE
             ):
                 self.ha.install_cnpg("kubectl", str(artifact))
+            configure_ha.assert_called_once_with("kubectl")
             apply_argv = run.call_args_list[0].args[0]
             self.assertIn("--server-side", apply_argv)
             self.assertIn("--force-conflicts", apply_argv)
@@ -298,6 +362,34 @@ class KubernetesHaContractTests(unittest.TestCase):
             self.assertEqual(payload.count(self.ha.CNPG_OPERATOR_IMAGE), 2)
         finally:
             artifact.unlink(missing_ok=True)
+
+    def test_cnpg_operator_ha_requires_three_available_nodes(self) -> None:
+        pods = json.dumps(
+            {
+                "items": [
+                    {"spec": {"nodeName": "node-a"}},
+                    {"spec": {"nodeName": "node-b"}},
+                    {"spec": {"nodeName": "node-c"}},
+                ]
+            }
+        )
+        with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
+            self.ha.ref, "wait_rollout"
+        ) as wait_rollout, mock.patch.object(
+            self.ha.ref, "output", side_effect=["3", pods]
+        ):
+            self.ha.configure_cnpg_operator_ha("kubectl")
+        patch_argv = run.call_args.args[0]
+        self.assertIn("deployment/cnpg-controller-manager", patch_argv)
+        patch = json.loads(patch_argv[patch_argv.index("--patch") + 1])
+        self.assertEqual(patch["spec"]["replicas"], 3)
+        anti_affinity = patch["spec"]["template"]["spec"]["affinity"][
+            "podAntiAffinity"
+        ]["requiredDuringSchedulingIgnoredDuringExecution"]
+        self.assertEqual(anti_affinity[0]["topologyKey"], "kubernetes.io/hostname")
+        wait_rollout.assert_called_once_with(
+            "kubectl", "cnpg-system", "deployment/cnpg-controller-manager", "8m"
+        )
 
     def test_cnpg_webhook_probe_requires_endpoint_and_server_dry_run(self) -> None:
         endpoint = mock.Mock(returncode=0, stdout="10.0.0.12")
@@ -348,7 +440,13 @@ class KubernetesHaContractTests(unittest.TestCase):
             argv,
         )
         self.assertTrue(any("--previous=true" in call for call in argv))
-        self.assertTrue(any("deployment/cnpg-controller-manager" in call for call in argv))
+        self.assertTrue(
+            any(
+                "app.kubernetes.io/name=cloudnative-pg" in call
+                and "--all-containers=true" in call
+                for call in argv
+            )
+        )
 
     def test_zone_rejoin_waits_for_cilium_before_database_readiness(self) -> None:
         source = (ROOT / "scripts/platform/ha_reference.py").read_text()

@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -25,6 +27,7 @@ CERT_MANAGER_IMAGES = {
     "quay.io/jetstack/cert-manager-webhook:v1.21.0": "quay.io/jetstack/cert-manager-webhook@sha256:c33cca307541e2d58861a55b1af5f390b7e19c8741e48b433693b73a7cce88b3",
 }
 BARMAN_CLOUD_PLUGIN_IMAGE = "ghcr.io/cloudnative-pg/plugin-barman-cloud@sha256:71589dbac582333442812b07b31f7ea4d00324a8358aac7ca507dabf9f4b6c96"
+BARMAN_CLOUD_SIDECAR_IMAGE = "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar@sha256:990361af3319f9e23aafa0f6d7981f99bf1f69b4e6a85cf1bc7d71d6f09bb288"
 POSTGRES_IMAGE = "ghcr.io/cloudnative-pg/postgresql:16.14@sha256:05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1"
 NATS_BOX_IMAGE = "natsio/nats-box@sha256:9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d"
 SEAWEEDFS_IMAGE = "chrislusf/seaweedfs@sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d"
@@ -231,6 +234,89 @@ def cnpg_webhook_ready(kubectl: str) -> bool:
     return result.returncode == 0
 
 
+def configure_cnpg_operator_ha(kubectl: str) -> None:
+    patch = {
+        "spec": {
+            "replicas": 3,
+            "template": {
+                "spec": {
+                    "affinity": {
+                        "podAntiAffinity": {
+                            "requiredDuringSchedulingIgnoredDuringExecution": [
+                                {
+                                    "labelSelector": {
+                                        "matchLabels": {
+                                            "app.kubernetes.io/name": "cloudnative-pg"
+                                        }
+                                    },
+                                    "topologyKey": "kubernetes.io/hostname",
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+        }
+    }
+    ref.run(
+        [
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "patch",
+            "deployment/cnpg-controller-manager",
+            "--type=merge",
+            "--patch",
+            json.dumps(patch, separators=(",", ":")),
+        ]
+    )
+    ref.wait_rollout(
+        kubectl,
+        "cnpg-system",
+        "deployment/cnpg-controller-manager",
+        "8m",
+    )
+    replicas = ref.output(
+        [
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "get",
+            "deployment/cnpg-controller-manager",
+            "-o",
+            "jsonpath={.status.availableReplicas}",
+        ]
+    )
+    if replicas != "3":
+        raise ref.ProofError(
+            f"CloudNativePG operator does not have three available replicas: {replicas}"
+        )
+    pods = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "cnpg-system",
+                "get",
+                "pods",
+                "-l",
+                "app.kubernetes.io/name=cloudnative-pg",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    nodes = {
+        item.get("spec", {}).get("nodeName")
+        for item in pods.get("items", [])
+        if item.get("spec", {}).get("nodeName")
+    }
+    if len(nodes) != 3:
+        raise ref.ProofError(
+            f"CloudNativePG operator replicas are not spread across three nodes: {sorted(nodes)}"
+        )
+
+
 def install_cnpg(kubectl: str, artifact: str) -> None:
     source = Path(artifact).read_text(encoding="utf-8")
     tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
@@ -249,7 +335,7 @@ def install_cnpg(kubectl: str, artifact: str) -> None:
         input_text=source.replace(tagged, CNPG_OPERATOR_IMAGE),
     )
     ref.run([kubectl, "wait", "--for=condition=Established", "crd/clusters.postgresql.cnpg.io", "--timeout=3m"])
-    ref.wait_rollout(kubectl, "cnpg-system", "deployment/cnpg-controller-manager", "8m")
+    configure_cnpg_operator_ha(kubectl)
     wait_until(
         "CloudNativePG admission webhook",
         lambda: cnpg_webhook_ready(kubectl),
@@ -341,13 +427,68 @@ def install_cert_manager(kubectl: str, artifact: str) -> None:
     )
 
 
-def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
+def render_barman_cloud_manifest(source: str) -> str:
     tagged = "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0"
-    apply_digest_locked_manifest(
-        kubectl,
-        artifact,
-        {tagged: BARMAN_CLOUD_PLUGIN_IMAGE},
+    if source.count(tagged) != 1:
+        raise ref.ProofError(
+            "Barman Cloud release image reference changed unexpectedly"
+        )
+    source = source.replace(tagged, BARMAN_CLOUD_PLUGIN_IMAGE)
+    sidecar_tagged = (
+        "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0"
     )
+    pattern = re.compile(
+        r"(?m)^  SIDECAR_IMAGE: \|\n((?:    [A-Za-z0-9+/=]+\n)+)"
+    )
+    matches = list(pattern.finditer(source))
+    if len(matches) != 1:
+        raise ref.ProofError(
+            "Barman Cloud sidecar secret changed unexpectedly"
+        )
+    encoded = "".join(
+        line.strip() for line in matches[0].group(1).splitlines()
+    )
+    try:
+        decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ref.ProofError(
+            "Barman Cloud sidecar secret is not valid UTF-8 base64"
+        ) from exc
+    if decoded != sidecar_tagged:
+        raise ref.ProofError(
+            f"Barman Cloud sidecar reference changed unexpectedly: {decoded}"
+        )
+    digest_encoded = base64.b64encode(
+        BARMAN_CLOUD_SIDECAR_IMAGE.encode("utf-8")
+    ).decode("ascii")
+    match = matches[0]
+    return (
+        source[: match.start()]
+        + f"  SIDECAR_IMAGE: {digest_encoded}\n"
+        + source[match.end() :]
+    )
+
+
+def apply_barman_cloud_manifest(kubectl: str, artifact: str) -> None:
+    source = render_barman_cloud_manifest(
+        Path(artifact).read_text(encoding="utf-8")
+    )
+    ref.run(
+        [
+            kubectl,
+            "apply",
+            "--server-side",
+            "--force-conflicts",
+            "--field-manager=weltgewebe-ha-proof",
+            "-f",
+            "-",
+        ],
+        input_text=source,
+    )
+
+
+def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
+    apply_barman_cloud_manifest(kubectl, artifact)
     ref.run(
         [
             kubectl,
@@ -366,6 +507,37 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
             "5m",
         )
     ref.wait_rollout(kubectl, "cnpg-system", "deployment/barman-cloud", "8m")
+    secrets_payload = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "cnpg-system",
+                "get",
+                "secrets",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    sidecar_images = []
+    for item in secrets_payload.get("items", []):
+        encoded = item.get("data", {}).get("SIDECAR_IMAGE")
+        if not encoded:
+            continue
+        try:
+            sidecar_images.append(
+                base64.b64decode(encoded, validate=True).decode("utf-8")
+            )
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise ref.ProofError(
+                "installed Barman Cloud sidecar secret is invalid"
+            ) from exc
+    if sidecar_images != [BARMAN_CLOUD_SIDECAR_IMAGE]:
+        raise ref.ProofError(
+            "Barman Cloud sidecar image is not digest-bound: "
+            f"{sidecar_images}"
+        )
     observed = ref.output(
         [
             kubectl,
@@ -379,6 +551,40 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
     )
     if observed != BARMAN_CLOUD_PLUGIN_IMAGE:
         raise ref.ProofError(f"Barman Cloud plugin image is not digest-bound: {observed}")
+
+
+def verify_barman_sidecar_images(kubectl: str, cluster: str) -> list[str]:
+    payload = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe-data",
+                "get",
+                "pods",
+                "-l",
+                f"cnpg.io/cluster={cluster}",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    images = []
+    for pod in payload.get("items", []):
+        containers = (
+            pod.get("spec", {}).get("initContainers", [])
+            + pod.get("spec", {}).get("containers", [])
+        )
+        images.extend(
+            container.get("image", "")
+            for container in containers
+            if container.get("name") == "plugin-barman-cloud"
+        )
+    if len(images) != 3 or set(images) != {BARMAN_CLOUD_SIDECAR_IMAGE}:
+        raise ref.ProofError(
+            f"Barman Cloud instance sidecars are not digest-bound for {cluster}: {images}"
+        )
+    return sorted(images)
 
 
 def current_primary(kubectl: str, cluster: str = "postgres-ha") -> str:
@@ -397,7 +603,11 @@ def ha_diagnostic_snapshot(kubectl: str, name: str) -> None:
         "cnpg-pods-describe.txt": [kubectl, "-n", "weltgewebe-data", "describe", "pods", "-l", "cnpg.io/cluster"],
         "cnpg-pods-logs.txt": [kubectl, "-n", "weltgewebe-data", "logs", "-l", "cnpg.io/cluster", "--all-containers=true", "--prefix=true", "--tail=2000"],
         "cnpg-pods-previous-logs.txt": [kubectl, "-n", "weltgewebe-data", "logs", "-l", "cnpg.io/cluster", "--all-containers=true", "--prefix=true", "--previous=true", "--tail=2000"],
-        "cnpg-operator-logs.txt": [kubectl, "-n", "cnpg-system", "logs", "deployment/cnpg-controller-manager", "--tail=2000"],
+        "cnpg-operator-logs.txt": [
+            kubectl, "-n", "cnpg-system", "logs",
+            "-l", "app.kubernetes.io/name=cloudnative-pg",
+            "--all-containers=true", "--prefix=true", "--tail=2000",
+        ],
         "barman-plugin-logs.txt": [kubectl, "-n", "cnpg-system", "logs", "deployment/barman-cloud", "--tail=2000"],
         "barman-objectstores.yaml": [kubectl, "get", "objectstores.barmancloud.cnpg.io", "-A", "-o", "yaml"],
         "certificates.yaml": [kubectl, "get", "certificates.cert-manager.io", "-A", "-o", "yaml"],
@@ -601,6 +811,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         ref.apply_direct(kubectl, kustomize, "platform/infrastructure/ha-data")
         ref.wait_rollout(kubectl, "weltgewebe-data", "statefulset/nats", "12m")
         wait_cluster_ready(kubectl, "postgres-ha", "15m")
+        primary_barman_sidecars = verify_barman_sidecar_images(
+            kubectl, "postgres-ha"
+        )
         ref.apply_file(kubectl, ROOT / "platform/apps/weltgewebe/migration/ha/namespace.yaml")
         apply_runtime_secret(kubectl, app_password)
         ref.apply_direct(kubectl, kustomize, "platform/apps/weltgewebe/migration/ha")
@@ -731,6 +944,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         restore_started = time.monotonic()
         ref.apply_yaml(restore_kubectl, restore_cluster_document(target_time))
         wait_cluster_ready(restore_kubectl, "postgres-restore", "20m")
+        restore_barman_sidecars = verify_barman_sidecar_images(
+            restore_kubectl, "postgres-restore"
+        )
         restore_rto = time.monotonic() - restore_started
         restored_topology = pod_topology(restore_kubectl, "weltgewebe-data", "cnpg.io/cluster=postgres-restore")
         require_zones(restored_topology, 3, "restored postgres")
@@ -746,6 +962,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             "schema_version": 1, "status": "pass", "commit": commit,
             "primary_cluster": args.cluster, "restore_cluster": restore_name,
             "tool_lock_sha256": receipt["lock_sha256"], "image_ids": image_ids,
+            "barman_sidecar_images": {
+                "primary": primary_barman_sidecars,
+                "restore": restore_barman_sidecars,
+            },
             "topology": topology, "restored_topology": restored_topology,
             "zone_failure": {
                 "zone": failure_zone, "node": primary_topology["node"],

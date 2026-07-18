@@ -30,8 +30,8 @@ Der Runner installiert Werkzeuge ausschließlich aus `platform/toolchain.lock.js
 ## Beweisphasen
 
 1. Primärcluster mit drei Datenzonen erzeugen.
-2. Cilium, Gateway API, Flux, cert-manager, CloudNativePG und das Barman-Cloud-Plugin installieren.
-3. Den pluginbasierten `ObjectStore` anwenden und PostgreSQL, NATS JetStream sowie drei API-Replikate über die Zonen verteilen.
+2. Cilium, Gateway API, Flux, cert-manager, drei auf unterschiedliche Knoten verteilte CloudNativePG-Operatorreplikate und das Barman-Cloud-Plugin installieren.
+3. Das Plugin- und Instanz-Sidecar-Image digestgebunden zurücklesen, den pluginbasierten `ObjectStore` anwenden und PostgreSQL, NATS JetStream sowie drei API-Replikate über die Zonen verteilen.
 4. Eine gültige `domain_nodes`-Mutation schreiben und über die API zurücklesen.
 5. Den Worker des PostgreSQL-Primary stoppen.
 6. PostgreSQL-Failover, API-Readback und JetStream-Quorum messen.
@@ -46,8 +46,8 @@ Der Runner installiert Werkzeuge ausschließlich aus `platform/toolchain.lock.js
 Bei Erfolg entsteht unter `.cache/weltgewebe-platform/receipts/` ein JSON-Receipt mit:
 
 - Commit und Tool-Lock-Hash,
-- Image-IDs,
-- Pod-, Knoten- und Zonenbelegung,
+- Image-IDs einschließlich der in Haupt- und Restorecluster injizierten Barman-Sidecars,
+- Pod-, Knoten- und Zonenbelegung einschließlich der verteilten CloudNativePG-Operatorreplikate,
 - gemessenen RTO-Werten,
 - Backup- und PITR-Zeitpunkt,
 - erforderliches und über PostgreSQLs `pg_stat_archiver` tatsächlich bestätigtes WAL-Segment,

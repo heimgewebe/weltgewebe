@@ -26,6 +26,7 @@ Generated automatically. Do not edit.
 | adr.ADR-0009__garnrolle-verortung-sichtbarkeit | ADR-0009 — Garnrolle, Verortung und Sichtbarkeit | reference | active | docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md |
 | adr.ADR-0010__kubernetes-kanonische-plattform | ADR-0010 — Kubernetes als kanonische Zielplattform | reference | active | docs/adr/ADR-0010__kubernetes-kanonische-plattform.md |
 | adr.ADR-0011__foederierte-gewebezellen | ADR-0011 — Föderierte Gewebe-Zellen | reference | active | docs/adr/ADR-0011__foederierte-gewebezellen.md |
+| adr.ADR-0011__ha-referenzzelle-und-wiederherstellung | ADR-0011 — Hochverfügbare Referenzzelle und Wiederherstellungsbeweis | reference | active | docs/adr/ADR-0011__ha-referenzzelle-und-wiederherstellung.md |
 | adr.ADR-0012__ereignisrueckgrat-transactional-outbox | ADR-0012 — Ereignisrückgrat mit Transactional Outbox | reference | active | docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md |
 | blueprint-doc-structure-task-control | Weltgewebe Dokumentationsstruktur und Task-Steuerung | blueprint | draft | docs/blueprints/doc-structure-task-control.md |
 | blueprint-doc-structure-task-control-examples | Dokumentationsstruktur und Task-Steuerung Beispiele | reference | draft | docs/blueprints/doc-structure-task-control-examples.md |
@@ -156,6 +157,7 @@ Generated automatically. Do not edit.
 | reports.proof-matrix-generalization-decision | Proof-Matrix-Generalisierung — DOCMETA-PROOF-001 | report | active | docs/reports/proof-matrix-generalization-decision.md |
 | reports.repo-audit-2026-07-02 | Repo-Komplettaudit 2026-07-02 | report | active | docs/reports/repo-audit-2026-07-02.md |
 | reports.report-lifecycle-restbestand-triage | Report Lifecycle Restbestand Triage | report | deprecated | docs/reports/report-lifecycle-restbestand-triage.md |
+| runbook.kubernetes-ha-recovery-proof | Kubernetes-HA- und Recovery-Beweis | runbook | active | docs/runbooks/kubernetes-ha-recovery-proof.md |
 | runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |
 | runbooks.codespaces-recovery | Codespaces Recovery | reference | active | docs/runbooks/codespaces-recovery.md |
 | runbooks.db-recovery | DB Recovery Runbook | runbook | active | docs/runbooks/db-recovery.md |

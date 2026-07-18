@@ -27,7 +27,8 @@ Die T004-Referenzzelle verwendet drei explizite Zonen und folgende Verträge:
 
 - drei API-Replikate mit verpflichtender Zonenverteilung,
 - CloudNativePG mit drei PostgreSQL-Instanzen und verpflichtender Zonen-Anti-Affinität,
-- cert-manager und das Barman-Cloud-Plugin als getrennte, digestgebundene Sicherungskomponenten,
+- drei CloudNativePG-Operatorreplikate mit verpflichtender Verteilung über unterschiedliche Knoten,
+- cert-manager und das Barman-Cloud-Plugin einschließlich des injizierten Instanz-Sidecars als getrennte, digestgebundene Sicherungskomponenten,
 - einen pluginbasierten `ObjectStore` für WAL-Archivierung, Basisbackup und PITR statt der auslaufenden nativen Barman-Integration,
 - NATS JetStream mit drei RAFT-Mitgliedern und `minAvailable: 2`,
 - einen ausschließlich für den Beweis verwendeten externen S3-kompatiblen SeaweedFS-Dienst,
@@ -35,7 +36,7 @@ Die T004-Referenzzelle verwendet drei explizite Zonen und folgende Verträge:
 - einen kontrollierten Ausfall des Worker-Knotens, der den PostgreSQL-Primary trägt,
 - einen neuen zweiten kind-Cluster für den Point-in-Time-Restore.
 
-Alle Drittimages sowie die Releaseartefakte von CloudNativePG, cert-manager und Barman Cloud sind per SHA-256 beziehungsweise OCI-Digest gebunden. Die PostgreSQL-Operanden bleiben minimale Standardimages; Sicherungswerkzeuge werden nicht in das Datenbankimage eingebaut.
+Alle Drittimages sowie die Releaseartefakte von CloudNativePG, cert-manager und Barman Cloud sind per SHA-256 beziehungsweise OCI-Digest gebunden. Dies umfasst auch das vom Barman-Plugin dynamisch in jede PostgreSQL-Instanz injizierte Sidecar-Image. Die PostgreSQL-Operanden bleiben minimale Standardimages; Sicherungswerkzeuge werden nicht in das Datenbankimage eingebaut.
 
 ## Messvertrag
 

@@ -125,6 +125,7 @@ def _assert_images() -> None:
         "cert_manager_cainjector",
         "cert_manager_webhook",
         "barman_cloud_plugin",
+        "barman_cloud_sidecar",
         "nats",
         "nats_box",
         "seaweedfs",
@@ -328,6 +329,8 @@ def _assert_ha_contract() -> None:
         "recoveryTarget", "blank_kind_cluster", "production_changed",
         "restore-kind.yaml", "PITR data comparison failed",
         "install_cert_manager", "install_barman_cloud_plugin",
+        "configure_cnpg_operator_ha", "verify_barman_sidecar_images",
+        "BARMAN_CLOUD_SIDECAR_IMAGE",
         "pg_stat_archiver", "pluginConfiguration",
     )
     for marker in required_markers:
