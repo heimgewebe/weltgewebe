@@ -2,7 +2,7 @@ use std::{future::Future, sync::OnceLock};
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{header::IF_MATCH, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Extension, Json,
 };
@@ -12,11 +12,12 @@ use tokio::sync::{Mutex, MutexGuard, Semaphore, SemaphorePermit};
 
 use crate::{
     config::{DomainNodeWriteSource, DomainReadSource},
+    domain_db,
     middleware::auth::AuthContext,
     state::ApiState,
 };
 
-use super::nodes;
+use super::{domain_write_guard::reject_node_patch_unless_writable, nodes};
 
 // PostgreSQL node mutations are serialized per node id across API instances.
 // A bounded process-local stripe queue prevents same-node waiters from occupying
@@ -35,7 +36,9 @@ static LOCAL_NODE_LOCKS: OnceLock<Vec<Mutex<()>>> = OnceLock::new();
 static POSTGRES_NODE_MUTATION_SLOTS: OnceLock<Semaphore> = OnceLock::new();
 
 enum NodeMutationGuard {
-    None,
+    Local {
+        _guard: MutexGuard<'static, ()>,
+    },
     Postgres {
         _guard: MutexGuard<'static, ()>,
         _slot: SemaphorePermit<'static>,
@@ -78,19 +81,18 @@ async fn acquire_node_mutation_guard(
     state: &ApiState,
     node_id: &str,
 ) -> Result<NodeMutationGuard, Response> {
-    // JSONL handlers already serialize their whole-file writes through
-    // `state.nodes_persist`; adding another global lock would only duplicate
-    // contention. PostgreSQL creates use server-generated ids and their own
-    // idempotency/uniqueness transaction, so only existing-node mutations need
-    // this cross-instance guard.
+    // Every existing-node mutation takes the same process-local stripe. For
+    // JSONL this makes the version check atomic with the existing handler's
+    // file/cache mutation. PostgreSQL additionally takes a cross-instance
+    // advisory lock below.
+    let guard = local_node_lock(node_id).lock().await;
     if !uses_postgres_node_persistence(state) {
-        return Ok(NodeMutationGuard::None);
+        return Ok(NodeMutationGuard::Local { _guard: guard });
     }
 
-    // Take the per-node stripe first so same-node waiters do not consume the
-    // global pool budget. The slot then guarantees enough free connections for
-    // the mutation helper and unrelated database traffic.
-    let guard = local_node_lock(node_id).lock().await;
+    // Same-node waiters do not consume the global pool budget. The slot then
+    // guarantees enough free connections for the authoritative version read,
+    // the mutation helper, and unrelated database traffic.
     let slot = postgres_node_mutation_slots()
         .acquire()
         .await
@@ -143,7 +145,7 @@ async fn acquire_node_mutation_guard(
 
 async fn release_node_mutation_guard(guard: NodeMutationGuard) {
     match guard {
-        NodeMutationGuard::None => {}
+        NodeMutationGuard::Local { _guard } => {}
         NodeMutationGuard::Postgres {
             _guard,
             _slot,
@@ -163,6 +165,13 @@ async fn run_node_mutation<F>(state: &ApiState, node_id: &str, mutation: F) -> R
 where
     F: Future<Output = Response>,
 {
+    // Applicability and storage-mode errors take precedence over HTTP
+    // preconditions. This preserves the existing fail-closed write contract
+    // and avoids reading or locking a node for a mutation that cannot run.
+    if let Err((status, message)) = reject_node_patch_unless_writable(state) {
+        return (status, message).into_response();
+    }
+
     let guard = match acquire_node_mutation_guard(state, node_id).await {
         Ok(guard) => guard,
         Err(response) => return response,
@@ -182,14 +191,79 @@ pub async fn create_node_serialized(
         .into_response()
 }
 
+async fn current_node_for_precondition(
+    state: &ApiState,
+    id: &str,
+) -> Result<Option<nodes::Node>, Response> {
+    if uses_postgres_node_persistence(state) {
+        let pool = state.db_pool.as_ref().ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "PostgreSQL pool unavailable for collective node precondition",
+            )
+                .into_response()
+        })?;
+        return domain_db::load_node_from_postgres(pool, id)
+            .await
+            .map_err(|error| {
+                tracing::error!(%error, node_id = %id, "failed to load authoritative node version");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "failed to verify collective node write precondition",
+                )
+                    .into_response()
+            });
+    }
+
+    let cache = state.nodes.read().await;
+    Ok(cache.get(id).cloned())
+}
+
+fn check_node_precondition(
+    node: Option<nodes::Node>,
+    id: &str,
+    headers: &HeaderMap,
+) -> Result<(), Box<Response>> {
+    let Some(node) = node else {
+        return Ok(()); // Let the underlying handler return 404
+    };
+
+    let if_match = headers.get(IF_MATCH).and_then(|h| h.to_str().ok());
+    let expected_etag = format!("\"{}\"", node.updated_at);
+
+    match if_match {
+        Some(etag) if etag == expected_etag => Ok(()),
+        Some(_) => {
+            tracing::info!(node_id = %id, provided = ?if_match, expected = %expected_etag, "Precondition failed: concurrent modification detected");
+            Err(Box::new(
+                (StatusCode::PRECONDITION_FAILED, Json(node)).into_response(),
+            ))
+        }
+        None => {
+            tracing::info!(node_id = %id, "Precondition required: missing If-Match header");
+            Err(Box::new(
+                (StatusCode::PRECONDITION_REQUIRED, Json(node)).into_response(),
+            ))
+        }
+    }
+}
+
 pub async fn patch_node_serialized(
     State(state): State<ApiState>,
     Path(id): Path<String>,
+    headers: HeaderMap,
     Json(payload): Json<nodes::UpdateNode>,
 ) -> Response {
     let mutation_state = state.clone();
     let mutation_id = id.clone();
     run_node_mutation(&state, &id, async move {
+        let node = match current_node_for_precondition(&mutation_state, &mutation_id).await {
+            Ok(node) => node,
+            Err(response) => return response,
+        };
+        if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
+            return *response;
+        }
         nodes::patch_node(State(mutation_state), Path(mutation_id), Json(payload))
             .await
             .into_response()
@@ -200,11 +274,19 @@ pub async fn patch_node_serialized(
 pub async fn replace_node_serialized(
     State(state): State<ApiState>,
     Path(id): Path<String>,
+    headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Response {
     let mutation_state = state.clone();
     let mutation_id = id.clone();
     run_node_mutation(&state, &id, async move {
+        let node = match current_node_for_precondition(&mutation_state, &mutation_id).await {
+            Ok(node) => node,
+            Err(response) => return response,
+        };
+        if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
+            return *response;
+        }
         nodes::replace_node(State(mutation_state), Path(mutation_id), Json(payload))
             .await
             .into_response()
@@ -215,10 +297,18 @@ pub async fn replace_node_serialized(
 pub async fn delete_node_serialized(
     State(state): State<ApiState>,
     Path(id): Path<String>,
+    headers: HeaderMap,
 ) -> Response {
     let mutation_state = state.clone();
     let mutation_id = id.clone();
     run_node_mutation(&state, &id, async move {
+        let node = match current_node_for_precondition(&mutation_state, &mutation_id).await {
+            Ok(node) => node,
+            Err(response) => return response,
+        };
+        if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
+            return *response;
+        }
         nodes::delete_node(State(mutation_state), Path(mutation_id))
             .await
             .into_response()
@@ -260,5 +350,66 @@ mod tests {
             stripes.len() > 1,
             "different node ids must not all share one process-local lock"
         );
+    }
+
+    #[test]
+    fn precondition_missing_yields_428() {
+        let headers = HeaderMap::new();
+        let node = nodes::Node {
+            id: "1".into(),
+            kind: "test".into(),
+            title: "Test".into(),
+            created_at: "2026".into(),
+            updated_at: "2026-07-18T12:00:00Z".into(),
+            summary: None,
+            info: None,
+            tags: vec![],
+            address: None,
+            location: nodes::Location { lat: 0.0, lon: 0.0 },
+        };
+
+        let err = check_node_precondition(Some(node), "1", &headers).unwrap_err();
+        assert_eq!(err.status(), StatusCode::PRECONDITION_REQUIRED);
+    }
+
+    #[test]
+    fn precondition_mismatch_yields_412() {
+        let mut headers = HeaderMap::new();
+        headers.insert(IF_MATCH, "\"old-time\"".parse().unwrap());
+        let node = nodes::Node {
+            id: "1".into(),
+            kind: "test".into(),
+            title: "Test".into(),
+            created_at: "2026".into(),
+            updated_at: "2026-07-18T12:00:00Z".into(),
+            summary: None,
+            info: None,
+            tags: vec![],
+            address: None,
+            location: nodes::Location { lat: 0.0, lon: 0.0 },
+        };
+
+        let err = check_node_precondition(Some(node), "1", &headers).unwrap_err();
+        assert_eq!(err.status(), StatusCode::PRECONDITION_FAILED);
+    }
+
+    #[test]
+    fn precondition_match_yields_ok() {
+        let mut headers = HeaderMap::new();
+        headers.insert(IF_MATCH, "\"2026-07-18T12:00:00Z\"".parse().unwrap());
+        let node = nodes::Node {
+            id: "1".into(),
+            kind: "test".into(),
+            title: "Test".into(),
+            created_at: "2026".into(),
+            updated_at: "2026-07-18T12:00:00Z".into(),
+            summary: None,
+            info: None,
+            tags: vec![],
+            address: None,
+            location: nodes::Location { lat: 0.0, lon: 0.0 },
+        };
+
+        assert!(check_node_precondition(Some(node), "1", &headers).is_ok());
     }
 }

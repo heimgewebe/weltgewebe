@@ -46,6 +46,7 @@ test.describe("Knoten bearbeiten und löschen", () => {
     );
     await panel.getByRole("button", { name: "Änderungen speichern" }).click();
     const putRequest = await putRequestPromise;
+    expect(putRequest.headers()["if-match"]).toMatch(/^".+"$/);
     expect(putRequest.postDataJSON()).toMatchObject({
       title: "Gemeinsam gepflegter Knoten",
       summary: "Aktualisierte öffentliche Kurzbeschreibung",
@@ -68,7 +69,8 @@ test.describe("Knoten bearbeiten und löschen", () => {
         /\/api\/nodes\/[^/]+$/.test(new URL(request.url()).pathname),
     );
     await panel.getByRole("button", { name: "Knoten löschen" }).click();
-    await deleteRequestPromise;
+    const deleteRequest = await deleteRequestPromise;
+    expect(deleteRequest.headers()["if-match"]).toMatch(/^".+"$/);
 
     await expect(panel).toHaveCount(0);
     await expect(page.locator(".map-marker")).toHaveCount(
@@ -92,6 +94,83 @@ test.describe("Knoten bearbeiten und löschen", () => {
     );
     await expect(
       panel.getByRole("button", { name: "Knoten löschen" }),
+    ).toHaveCount(0);
+  });
+
+  test("bewahrt den Entwurf bei 412 und speichert nach bewusstem Vergleich erneut", async ({
+    page,
+  }) => {
+    await mockApiResponses(page, {
+      auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
+    });
+
+    const observedIfMatch: string[] = [];
+    let putAttempt = 0;
+    await page.route("**/api/nodes/*", async (route, request) => {
+      if (request.method() !== "PUT") {
+        await route.fallback();
+        return;
+      }
+      observedIfMatch.push(request.headers()["if-match"] ?? "");
+      putAttempt += 1;
+      if (putAttempt === 1) {
+        await route.fulfill({
+          status: 412,
+          contentType: "application/json",
+          body: JSON.stringify({
+            id: "fake-id",
+            title: "Neuer Titel vom Server",
+            kind: "Ort",
+            summary: "Neue Kurzbeschreibung vom Server",
+            address: "Adresse",
+            location: { lat: 0, lon: 0 },
+            tags: ["server"],
+            updated_at: "2026-07-18T10:00:00Z",
+          }),
+        });
+        return;
+      }
+
+      const payload = request.postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "fake-id",
+          ...payload,
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-07-18T10:01:00Z",
+        }),
+      });
+    });
+
+    await page.goto("/map");
+    const panel = await openFirstNode(page);
+    await panel.getByRole("button", { name: "Bearbeiten" }).click();
+    await panel.getByLabel("Titel").fill("Mein Konflikt");
+    await panel.getByRole("button", { name: "Änderungen speichern" }).click();
+
+    expect(observedIfMatch[0]).toMatch(/^".+"$/);
+    await expect(
+      panel.getByText(
+        "Der Knoten wurde in der Zwischenzeit geändert. Dein Entwurf bleibt erhalten. Vergleiche ihn mit dem aktuellen Stand und speichere anschließend erneut.",
+      ),
+    ).toBeVisible();
+    await expect(panel.getByLabel("Titel")).toHaveValue("Mein Konflikt");
+    const current = panel.getByRole("region", {
+      name: "Aktueller Serverstand",
+    });
+    await expect(current).toContainText("Neuer Titel vom Server");
+    await expect(current).toContainText("Neue Kurzbeschreibung vom Server");
+    await expect(
+      panel.getByRole("button", { name: "Änderungen speichern" }),
+    ).toBeVisible();
+
+    await panel.getByRole("button", { name: "Änderungen speichern" }).click();
+    expect(observedIfMatch[1]).toBe('"2026-07-18T10:00:00Z"');
+    await expect(panel.locator("h3")).toHaveText("Mein Konflikt");
+    await expect(
+      panel.getByRole("button", { name: "Änderungen speichern" }),
     ).toHaveCount(0);
   });
 });
