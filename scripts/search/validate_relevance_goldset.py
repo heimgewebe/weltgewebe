@@ -7,12 +7,14 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCHEMA = ROOT / "contracts/search/relevance-goldset.schema.json"
 DEFAULT_DATASET = ROOT / "contracts/search/examples/relevance-goldset.example.json"
 EMAIL_LIKE = re.compile(r"(?i)\b[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+\b")
+PHONE_LIKE = re.compile(r"(?<![\w-])(?:\+49|0049|0[1-9]\d{1,4})(?:[ /-]?\d){6,14}(?![\w-])")
+IPV4_LIKE = re.compile(r"(?<![\d.])(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?![\d.])")
 
 
 class ValidationError(ValueError):
@@ -101,7 +103,7 @@ def validate_schema_subset(instance: Any, schema: dict[str, Any], path: str = "$
             raise ValidationError(f"{path}: does not match pattern {pattern!r}")
 
 
-def _walk_strings(value: Any):
+def _walk_strings(value: Any) -> Iterator[str]:
     if isinstance(value, str):
         yield value
     elif isinstance(value, list):
@@ -112,22 +114,48 @@ def _walk_strings(value: Any):
             yield from _walk_strings(item)
 
 
+def _matches_filters(node: dict[str, Any], filters: dict[str, list[str]]) -> bool:
+    kinds = set(filters["kinds"])
+    tags = set(filters["tags"])
+    languages = set(filters["languages"])
+    return (
+        (not kinds or node["kind"] in kinds)
+        and (not tags or bool(tags.intersection(node["tags"])))
+        and (not languages or node["language"] in languages)
+    )
+
+
 def validate_goldset(dataset: dict[str, Any], schema: dict[str, Any]) -> None:
-    """Apply schema validation and visibility/privacy invariants."""
+    """Apply schema, referential, visibility and privacy invariants."""
 
     validate_schema_subset(dataset, schema)
-    case_ids: set[str] = set()
+    node_by_id: dict[str, dict[str, Any]] = {}
+    for index, node in enumerate(dataset["nodes"]):
+        node_id = node["id"]
+        if node_id in node_by_id:
+            raise ValidationError(f"$.nodes[{index}].id: duplicate node id {node_id!r}")
+        node_by_id[node_id] = node
 
+    case_ids: set[str] = set()
+    natural_case_count = 0
+    expected_rank_classes: set[str] = set()
     for index, case in enumerate(dataset["cases"]):
         case_path = f"$.cases[{index}]"
         case_id = case["id"]
         if case_id in case_ids:
             raise ValidationError(f"{case_path}.id: duplicate case id {case_id!r}")
         case_ids.add(case_id)
+        natural_case_count += int(case["natural_language"])
+        expected_rank_classes.add(case["expected_rank_class"])
 
-        visible = set(case["visibility_context"]["visible_node_ids"])
+        context = case["visibility_context"]
+        visible = set(context["visible_node_ids"])
         relevant = set(case["relevant_node_ids"])
         excluded = set(case["excluded_node_ids"])
+        referenced = visible | relevant | excluded
+        unknown = sorted(referenced - set(node_by_id))
+        if unknown:
+            raise ValidationError(f"{case_path}: references unknown nodes: {unknown!r}")
 
         missing = sorted(relevant - visible)
         if missing:
@@ -139,14 +167,51 @@ def validate_goldset(dataset: dict[str, Any], schema: dict[str, Any]) -> None:
         if overlap:
             raise ValidationError(f"{case_path}: nodes cannot be both relevant and excluded: {overlap!r}")
 
+        for node_id in sorted(visible):
+            node = node_by_id[node_id]
+            if node["status"] != "active":
+                raise ValidationError(f"{case_path}: visible node {node_id!r} is not active")
+            if context["viewer_scope"] not in node["visibility_scopes"]:
+                raise ValidationError(f"{case_path}: visible node {node_id!r} is outside viewer scope")
+            if not _matches_filters(node, context["active_filters"]):
+                raise ValidationError(f"{case_path}: visible node {node_id!r} violates active filters")
+
+    if natural_case_count == 0:
+        raise ValidationError("goldset requires at least one natural-language case")
+    required_rank_classes = {"exact_title", "exact_tag", "title_prefix", "typo", "full_text", "semantic"}
+    missing_rank_classes = sorted(required_rank_classes - expected_rank_classes)
+    if missing_rank_classes:
+        raise ValidationError(f"goldset is missing required rank classes: {missing_rank_classes!r}")
+
     for text in _walk_strings(dataset):
         if EMAIL_LIKE.search(text):
             raise ValidationError("goldset contains an email-like value")
+        if PHONE_LIKE.search(text):
+            raise ValidationError("goldset contains a phone-like value")
+        if IPV4_LIKE.search(text):
+            raise ValidationError("goldset contains an IPv4-like value")
+
+
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValidationError(f"duplicate JSON property: {key!r}")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite_json(value: str) -> None:
+    raise ValidationError(f"non-finite JSON number is forbidden: {value}")
 
 
 def load_json_object(path: Path) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=_strict_json_object,
+            parse_constant=_reject_nonfinite_json,
+        )
     except (OSError, json.JSONDecodeError) as error:
         raise ValidationError(f"{path}: cannot load JSON: {error}") from error
     if not isinstance(value, dict):
