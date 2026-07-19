@@ -147,6 +147,40 @@ PY
   state_result="$result"
 }
 
+read_deploy_terminal_result() {
+  local commit="$1"
+  local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$commit.json"
+  [[ -f "$deployment_receipt" && ! -L "$deployment_receipt" ]] ||
+    fail "terminal deployment receipt is missing or unsafe: $deployment_receipt"
+  [[ "$(stat --format=%u "$deployment_receipt")" == "0" ]] ||
+    fail "terminal deployment receipt is not root-owned: $deployment_receipt"
+  local receipt_mode
+  receipt_mode="$(stat --format=%a "$deployment_receipt")"
+  (((8#$receipt_mode & 022) == 0)) ||
+    fail "terminal deployment receipt is group- or world-writable: $deployment_receipt"
+
+  python3 - "$deployment_receipt" "$commit" << 'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+commit = sys.argv[2]
+try:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError) as exc:
+    raise SystemExit(f"terminal deployment receipt is unreadable: {exc}") from exc
+if not isinstance(payload, dict):
+    raise SystemExit("terminal deployment receipt is not an object")
+if payload.get("commit") != commit:
+    raise SystemExit("terminal deployment receipt targets another commit")
+result = payload.get("result")
+if result not in {"superseded_after_migration", "superseded_after_deploy"}:
+    raise SystemExit(f"unexpected terminal deployment result: {result!r}")
+print(result)
+PY
+}
+
 repair_observed_deployment_state() {
   local verification_receipt="$1"
   local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$target_commit.json"
@@ -443,19 +477,34 @@ fi
 
 set +e
 WELTGEWEBE_PRODUCTION_LOCK_FD="$PRODUCTION_LOCK_FD" \
-WELTGEWEBE_PRODUCTION_LOCK_DOMAIN="$PRODUCTION_LOCK_DOMAIN" \
-WELTGEWEBE_PRODUCTION_LOCK_OWNER_ENTRYPOINT="reconciler" \
-"$DEPLOY_HELPER" \
+  WELTGEWEBE_PRODUCTION_LOCK_DOMAIN="$PRODUCTION_LOCK_DOMAIN" \
+  WELTGEWEBE_PRODUCTION_LOCK_OWNER_ENTRYPOINT="reconciler" \
+  "$DEPLOY_HELPER" \
   --commit "$target_commit" \
   --web-artifact "$artifact" \
   --web-sha256 "$artifact_sha"
 deploy_rc=$?
 set -e
 if ((deploy_rc == 75)); then
+  deploy_result="$(read_deploy_terminal_result "$target_commit")"
   current_main="$(fetch_main)"
-  write_state "superseded_after_deploy" "$current_main" "deploy completed after main advanced"
+  case "$deploy_result" in
+    superseded_after_migration)
+      write_state \
+        "superseded_after_migration" \
+        "$current_main" \
+        "migration completed; full deploy skipped after main advanced"
+      echo "production_reconcile=superseded_after_migration migrated=$target_commit current=$current_main"
+      ;;
+    superseded_after_deploy)
+      write_state \
+        "superseded_after_deploy" \
+        "$current_main" \
+        "full deploy completed after main advanced"
+      echo "production_reconcile=superseded_after_deploy deployed=$target_commit current=$current_main"
+      ;;
+  esac
   prune_artifacts
-  echo "production_reconcile=superseded deployed=$target_commit current=$current_main"
   exit 0
 fi
 ((deploy_rc == 0)) || fail "deploy helper failed with exit code $deploy_rc"

@@ -116,10 +116,11 @@ Das Webarchiv wird vor einer Root-Extraktion unabhängig geprüft:
 
 ## Nebenläufigkeit und Weiterwanderung
 
-Ein Host-Lock erlaubt nur einen Reconcile-Lauf gleichzeitig. Zusätzlich
-verwendet der eigentliche Deploypfad einen eigenen Deploy-Lock. `origin/main`
-wird nach Build, unmittelbar vor Deployment und nach öffentlichem Readback neu
-abgerufen.
+Eine gemeinsame Kernel-Sperre erlaubt nur einen Produktionsvorgang gleichzeitig.
+Der Reconciler hält sie durch Build, Migration, Deployment und öffentlichen
+Readback; der innere Deploy-Helfer verwendet denselben geerbten Deskriptor.
+`origin/main` wird nach Build, unmittelbar vor Deployment und nach öffentlichem
+Readback neu abgerufen.
 
 Wandert `main` während des Builds weiter, wird das alte Artefakt nicht
 installiert. Wandert `main` während oder unmittelbar nach dem Deployment weiter,
