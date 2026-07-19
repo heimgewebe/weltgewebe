@@ -22,7 +22,9 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertLess(post_check, verified_link)
         self.assertIn("superseded_after_deploy", script)
         self.assertIn("readonly EX_TEMPFAIL=75", script)
-        self.assertIn('exit "$EX_TEMPFAIL"', script)
+        self.assertIn("readonly EXIT_SUPERSEDED_AFTER_MIGRATION=79", script)
+        self.assertIn("readonly EXIT_SUPERSEDED_AFTER_DEPLOY=80", script)
+        self.assertIn('exit "$EXIT_SUPERSEDED_AFTER_DEPLOY"', script)
         self.assertNotIn("curl -fsSI", script)
         self.assertIn("--max-filesize 1048576", script)
         self.assertIn("write_bounded_response", script)
@@ -45,7 +47,7 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("production_deployment_phase=migration state=starting", script)
         self.assertIn("production_deployment_phase=migration state=completed", script)
         self.assertIn("production_deployment_phase=full state=starting", script)
-        self.assertIn('exit "$EX_TEMPFAIL"', script)
+        self.assertIn('exit "$EXIT_SUPERSEDED_AFTER_MIGRATION"', script)
         self.assertIn("--deploy-scope migration", script)
         self.assertIn('"+refs/heads/main:refs/remotes/origin/main" || return 1', script)
         self.assertIn("rev-parse refs/remotes/origin/main || return 1", script)
@@ -63,6 +65,7 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("WELTGEWEBE_PRODUCTION_LOCK_FD", script)
         self.assertIn('lock_handoff="inherited"', script)
         self.assertIn("production_deployment=already_running", script)
+        self.assertIn('"$release_dir/scripts/weltgewebe-up" "${arguments[@]}" 9>&-', script)
         self.assertNotIn('${STATE_ROOT}/deploy.lock', script)
         self.assertIn("ARCHIVE_VALIDATOR", script)
         self.assertIn("validate_release_tree", script)
@@ -119,6 +122,12 @@ class ProductionReconcilerContractTests(unittest.TestCase):
             script,
         )
         self.assertIn("production_reconcile=already_running", script)
+        self.assertIn("readonly EX_TEMPFAIL=75", script)
+        self.assertIn("readonly EXIT_SUPERSEDED_AFTER_MIGRATION=79", script)
+        self.assertIn("readonly EXIT_SUPERSEDED_AFTER_DEPLOY=80", script)
+        self.assertIn('case "$deploy_rc" in', script)
+        self.assertIn("temporary failure under inherited production lock", script)
+        self.assertIn("unexpected superseded reason", script)
         self.assertIn(
             'WELTGEWEBE_PRODUCTION_LOCK_OWNER_ENTRYPOINT="reconciler"',
             script,

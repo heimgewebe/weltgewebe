@@ -13,6 +13,8 @@ readonly PRODUCTION_LOCK_DOMAIN="weltgewebe-production-deployment-v1"
 readonly PRODUCTION_LOCK_FILE="${STATE_ROOT}/production-deployment.lock"
 readonly PRODUCTION_LOCK_FD=9
 readonly EX_TEMPFAIL=75
+readonly EXIT_SUPERSEDED_AFTER_MIGRATION=79
+readonly EXIT_SUPERSEDED_AFTER_DEPLOY=80
 
 COMMIT=""
 WEB_ARTIFACT=""
@@ -60,7 +62,7 @@ run_release_deploy() {
       ;;
   esac
   DEPLOY_TARGET=vps ENV_FILE="$RUNTIME_ENV" \
-    "$release_dir/scripts/weltgewebe-up" "${arguments[@]}"
+    "$release_dir/scripts/weltgewebe-up" "${arguments[@]}" 9>&-
 }
 
 require_command() {
@@ -438,7 +440,7 @@ if [[ "$remote_main" != "$COMMIT" ]]; then
   write_deploy_receipt "superseded_after_migration" "$completed_at" "" "" "$remote_main"
   receipt_terminal=true
   echo "production_deployment=superseded_after_migration commit=$COMMIT current=$remote_main" >&2
-  exit "$EX_TEMPFAIL"
+  exit "$EXIT_SUPERSEDED_AFTER_MIGRATION"
 fi
 
 echo "production_deployment_phase=full state=starting commit=$COMMIT" >&2
@@ -481,7 +483,7 @@ if [[ "$post_deploy_main" != "$COMMIT" ]]; then
   write_deploy_receipt "superseded_after_deploy" "$completed_at" "$api_commit" "$frontend_commit" "$post_deploy_main"
   receipt_terminal=true
   echo "production_deployment=superseded commit=$COMMIT current=$post_deploy_main" >&2
-  exit "$EX_TEMPFAIL"
+  exit "$EXIT_SUPERSEDED_AFTER_DEPLOY"
 fi
 
 write_deploy_receipt "verified" "$completed_at" "$api_commit" "$frontend_commit" "$post_deploy_main"

@@ -141,12 +141,16 @@ Der Reconciler übergibt seinen bereits gesperrten Dateideskriptor an
 `weltgewebe-deploy-exact-commit`. Der Helfer prüft Domäne, Deskriptornummer und
 das tatsächliche `/proc`-Ziel, bevor er die geerbte Sperre verwendet. So bleibt
 die gesamte Kette atomar, ohne dass der innere Helfer dieselbe Sperre nochmals
-unabhängig anfordert und sich selbst blockiert.
+unabhängig anfordert und sich selbst blockiert. Der Helfer schließt den
+Lock-Deskriptor gezielt für `weltgewebe-up`; dadurch können dessen mögliche
+Hintergrundprozesse die Produktionssperre nicht unbeabsichtigt festhalten.
 
 Ein ausdrücklich unterstützter direkter Recovery-Aufruf des Deploy-Helfers erwirbt
 dieselbe Sperre selbst. Bei Konkurrenz verändert der abgewiesene Lauf weder
 Container noch öffentliche Zustände. Der Reconciler endet geordnet mit Exit 0;
-der direkte Helfer verwendet `EX_TEMPFAIL` 75. Beide schreiben atomare
+der direkte Helfer verwendet bei Konkurrenz `EX_TEMPFAIL` 75. Fachliche
+Überholung nach Migration beziehungsweise Volldeploy verwendet intern die
+getrennten Codes 79 und 80. Beide Einstiegspfade schreiben atomare
 `already_running`-Belege als `last-contention.json` in die bereits kanonischen
 Receipt-Verzeichnisse. Diese Belege sind Diagnoseflächen, keine zweite
 Zustandswahrheit. Maßgeblich für Besitz ist ausschließlich die vom Kernel gehaltene

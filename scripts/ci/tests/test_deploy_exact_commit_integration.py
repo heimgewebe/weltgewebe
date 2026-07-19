@@ -142,6 +142,10 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 """\
                 #!/usr/bin/env bash
                 set -euo pipefail
+                if [[ -e /proc/$$/fd/9 ]]; then
+                  printf 'production lock descriptor leaked into weltgewebe-up\n' >&2
+                  exit 94
+                fi
                 if [[ -n "${TEST_UP_LOG:-}" ]]; then
                   printf '%s\n' "$*" >> "$TEST_UP_LOG"
                 fi
@@ -409,6 +413,12 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         forbidden_deploy.write_text("#!/usr/bin/env bash\nexit 99\n", encoding="utf-8")
         forbidden_deploy.chmod(0o755)
 
+        tempfail_deploy = self.bin / "tempfail-deploy"
+        tempfail_deploy.write_text(
+            "#!/usr/bin/env bash\nexit 75\n", encoding="utf-8"
+        )
+        tempfail_deploy.chmod(0o755)
+
         successful_deploy = self.bin / "successful-deploy"
         successful_deploy.write_text(
             "#!/usr/bin/env bash\nset -euo pipefail\n"
@@ -495,13 +505,14 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         *,
         advance_after_migration: bool = False,
         advance_during_deploy: bool = False,
+        deploy_helper: Path = DEPLOY_SCRIPT,
     ) -> subprocess.CompletedProcess[str]:
         reconcile_env = self.base_environment()
         reconcile_env.update(
             {
                 "WELTGEWEBE_BUILD_USER": "root",
                 "WELTGEWEBE_LIVE_VERIFIER": str(self.bin / "verify-public"),
-                "WELTGEWEBE_DEPLOY_HELPER": str(DEPLOY_SCRIPT),
+                "WELTGEWEBE_DEPLOY_HELPER": str(deploy_helper),
                 "WELTGEWEBE_MIN_FREE_KIB": "1",
                 "PUBLIC_COMMIT": "0" * 40,
                 "TEST_DEPLOY_MARKER": str(self.root / "deploy-complete"),
@@ -575,6 +586,23 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         deploy_calls = (self.root / "weltgewebe-up.log").read_text().splitlines()
         self.assertEqual(len(deploy_calls), 2)
         self.assertTrue((self.root / "deploy-complete").exists())
+
+    def test_reconciler_rejects_unbound_tempfail_without_supersession(self) -> None:
+        result = self.reconcile_stale_public_commit(
+            deploy_helper=self.bin / "tempfail-deploy"
+        )
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "temporary failure under inherited production lock", result.stderr
+        )
+        receipt = json.loads(
+            (self.state / "reconcile-receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["result"], "failed")
+        self.assertFalse(
+            (self.state / "receipts" / f"{self.commit}.json").exists()
+        )
 
     def start_blocking_reconciler(self) -> tuple[subprocess.Popen[str], Path]:
         ready = self.root / "lock-owner-ready"
@@ -710,7 +738,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
     def test_main_advancing_after_migration_is_superseded_before_full_deploy(self) -> None:
         result = self.deploy(advance=False, advance_after_migration=True)
         self.restore_test_ownership()
-        self.assertEqual(result.returncode, 75, result.stderr)
+        self.assertEqual(result.returncode, 79, result.stderr)
         deploy_calls = (self.root / "weltgewebe-up.log").read_text(
             encoding="utf-8"
         ).splitlines()
@@ -766,7 +794,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
     def test_main_advancing_during_deploy_is_not_marked_current(self) -> None:
         result = self.deploy(advance=True)
         self.restore_test_ownership()
-        self.assertEqual(result.returncode, 75, result.stderr)
+        self.assertEqual(result.returncode, 80, result.stderr)
         receipt_path = self.state / "receipts" / f"{self.commit}.json"
         receipt = json.loads(receipt_path.read_text())
         self.assertEqual(receipt["result"], "superseded_after_deploy")

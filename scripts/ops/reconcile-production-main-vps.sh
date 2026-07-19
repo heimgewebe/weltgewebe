@@ -17,6 +17,9 @@ ARCHIVE_VALIDATOR="${WELTGEWEBE_ARCHIVE_VALIDATOR:-/usr/local/libexec/weltgewebe
 readonly PRODUCTION_LOCK_DOMAIN="weltgewebe-production-deployment-v1"
 readonly PRODUCTION_LOCK_FILE="$STATE_ROOT/production-deployment.lock"
 readonly PRODUCTION_LOCK_FD=9
+readonly EX_TEMPFAIL=75
+readonly EXIT_SUPERSEDED_AFTER_MIGRATION=79
+readonly EXIT_SUPERSEDED_AFTER_DEPLOY=80
 ARTIFACT_ROOT="$STATE_ROOT/artifacts"
 RECEIPT_ROOT="$STATE_ROOT/reconcile-receipts"
 DEPLOY_RECEIPT_ROOT="$STATE_ROOT/receipts"
@@ -485,8 +488,29 @@ WELTGEWEBE_PRODUCTION_LOCK_FD="$PRODUCTION_LOCK_FD" \
   --web-sha256 "$artifact_sha"
 deploy_rc=$?
 set -e
-if ((deploy_rc == 75)); then
-  deploy_result="$(read_deploy_terminal_result "$target_commit")"
+deploy_result=""
+case "$deploy_rc" in
+  0) ;;
+
+  "$EXIT_SUPERSEDED_AFTER_MIGRATION")
+    deploy_result="$(read_deploy_terminal_result "$target_commit")"
+    [[ "$deploy_result" == "superseded_after_migration" ]] ||
+      fail "deploy helper exit/result mismatch: exit=$deploy_rc result=$deploy_result"
+    ;;
+  "$EXIT_SUPERSEDED_AFTER_DEPLOY")
+    deploy_result="$(read_deploy_terminal_result "$target_commit")"
+    [[ "$deploy_result" == "superseded_after_deploy" ]] ||
+      fail "deploy helper exit/result mismatch: exit=$deploy_rc result=$deploy_result"
+    ;;
+  "$EX_TEMPFAIL")
+    fail "deploy helper returned temporary failure under inherited production lock"
+    ;;
+  *)
+    fail "deploy helper failed with exit code $deploy_rc"
+    ;;
+esac
+
+if [[ -n "$deploy_result" ]]; then
   current_main="$(fetch_main)"
   case "$deploy_result" in
     superseded_after_migration)
@@ -503,11 +527,13 @@ if ((deploy_rc == 75)); then
         "full deploy completed after main advanced"
       echo "production_reconcile=superseded_after_deploy deployed=$target_commit current=$current_main"
       ;;
+    *)
+      fail "unexpected superseded reason: $deploy_result"
+      ;;
   esac
   prune_artifacts
   exit 0
 fi
-((deploy_rc == 0)) || fail "deploy helper failed with exit code $deploy_rc"
 
 final_receipt="$RECEIPT_ROOT/public-$target_commit.json"
 "$LIVE_VERIFIER" \
