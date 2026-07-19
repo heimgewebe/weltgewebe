@@ -25,7 +25,13 @@ name: agent-safety-preflight
       - "docs/_generated/agent-readiness.md"
       - "agent-policy.yaml"
       - "AGENTS.md"
+      - "agent-contract.json"
       - "repo.meta.yaml"
+      - ".wgx/generated-artifacts.yml"
+      - "README.md"
+      - "docs/policies/agent-reading-protocol.md"
+      - "scripts/docmeta/agent_entrypoint_smoke.py"
+      - "scripts/docmeta/tests/test_agent_entrypoint_smoke.py"
       - ".github/workflows/agent-safety-preflight.yml"
   workflow_dispatch: {}
 
@@ -50,6 +56,9 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # tag: v5
         with:
           python-version-file: '.python-version'
+
+      - name: Install dependencies
+        run: pip install PyYAML==6.0.2
 
       - name: Run agent unit and CLI contract tests
         run: python3 -m unittest discover scripts/agent/tests/ -v
@@ -145,8 +154,15 @@ jobs:
             scripts.docmeta.tests.test_agent_readiness_smoke_contract \
             -v
 
+      - name: Run agent entrypoint smoke tests
+        run: |
+          python3 -m scripts.docmeta.agent_entrypoint_smoke
+          python3 -m unittest scripts.docmeta.tests.test_agent_entrypoint_smoke -v
+
       - name: Validate agent contracts (Python)
-        run: python3 -m scripts.agent.validate_agent_contracts
+        run: |
+          python3 -m scripts.agent.validate_agent_contracts
+          python3 -m scripts.agent.validate_repo_agent_contract
 
       - name: Check handoff fixture digest is fresh
         run: python3 -m scripts.agent.update_handoff_fixtures --check
