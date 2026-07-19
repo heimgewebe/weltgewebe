@@ -287,6 +287,13 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(gespraechTab).toHaveAttribute("aria-selected", "true");
     await expect(panel.locator("#panel-gespraech")).toBeVisible();
 
+    // ArrowLeft from the middle tab proves reverse adjacent navigation.
+    await page.keyboard.press("ArrowLeft");
+    await expect(uebersichtTab).toBeFocused();
+    await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
+
+    await page.keyboard.press("ArrowRight");
+    await expect(gespraechTab).toBeFocused();
     await page.keyboard.press("ArrowRight");
     const verlaufTab = panel.locator('button[role="tab"]', {
       hasText: "Verlauf",
@@ -295,17 +302,21 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
     await expect(panel.locator("#panel-verlauf")).toBeVisible();
 
-    // End remains on the last productive tab.
-    await page.keyboard.press("End");
-    await expect(verlaufTab).toBeFocused();
-
-    // Press Home -> Should move back to "Übersicht"
-    await page.keyboard.press("Home");
+    // ArrowRight from the last tab wraps to the first tab.
+    await page.keyboard.press("ArrowRight");
     await expect(uebersichtTab).toBeFocused();
     await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
 
-    // Press ArrowLeft -> Should wrap around to "Verlauf"
+    // ArrowLeft from the first tab wraps back to the last tab.
     await page.keyboard.press("ArrowLeft");
+    await expect(verlaufTab).toBeFocused();
+    await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
+
+    // Home and End address the first and last productive tabs explicitly.
+    await page.keyboard.press("Home");
+    await expect(uebersichtTab).toBeFocused();
+    await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("End");
     await expect(verlaufTab).toBeFocused();
     await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
   });
