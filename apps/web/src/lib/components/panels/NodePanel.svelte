@@ -13,6 +13,7 @@
   } from "$lib/panels/panelDetails";
   import { formatDate } from "$lib/utils/formatDate";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
+  import NodeConversation from "./NodeConversation.svelte";
 
   type DomainChanged = {
     kind: "node";
@@ -84,7 +85,7 @@
     $authStore.authenticated &&
     ($authStore.role === "weber" || $authStore.role === "admin");
 
-  const tabs = ["uebersicht", "verlauf"];
+  const tabs = ["uebersicht", "gespraech", "verlauf"];
   function setTab(tab: string) {
     activeTab = tab;
   }
@@ -350,6 +351,16 @@
         tabindex={activeTab === "uebersicht" ? 0 : -1}>Übersicht</button
       >
       <button
+        class:active={activeTab === "gespraech"}
+        on:click={() => setTab("gespraech")}
+        on:keydown={handleKeydown}
+        role="tab"
+        aria-selected={activeTab === "gespraech"}
+        aria-controls="panel-gespraech"
+        id="tab-gespraech"
+        tabindex={activeTab === "gespraech" ? 0 : -1}>Gespräch</button
+      >
+      <button
         class:active={activeTab === "verlauf"}
         on:click={() => setTab("verlauf")}
         on:keydown={handleKeydown}
@@ -410,6 +421,14 @@
               </div>
             {/if}
           {/if}
+        </div>
+      {:else if activeTab === "gespraech"}
+        <div
+          id="panel-gespraech"
+          role="tabpanel"
+          aria-labelledby="tab-gespraech"
+        >
+          <NodeConversation nodeId={nodeDetails?.id || $selection?.id || ""} />
         </div>
       {:else}
         <div id="panel-verlauf" role="tabpanel" aria-labelledby="tab-verlauf">

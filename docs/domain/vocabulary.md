@@ -21,8 +21,8 @@ relations:
 | Kartenstatus | `map_state` | `not_on_map`, `exact` oder `radius`; Eigenschaft der Garnrolle, kein Kontotyp | produktiv migriert; Legacy-`mode` bleibt Rollbackbrücke |
 | Knoten | Node, `/nodes` | Ort, Kollektivgut, Ressource oder Vorhaben | API- und Browser-Schreibpfad produktiv belegt |
 | Faden | Edge, `/edges` | Beziehung zwischen Garnrollen und/oder Knoten | API- und Browser-Schreibpfad produktiv belegt |
-| Gesprächsraum | Conversation, `/conversations` | Diskussions- oder Entscheidungsraum | Contract vorhanden, kein vollständiger Produktpfad |
-| Beitrag | Message, `/conversations/{id}/messages` | Inhalt in einem Gesprächsraum | Contract vorhanden, kein vollständiger Produktpfad |
+| Gesprächsraum | Conversation, `/conversations` | Öffentlicher Diskussionsraum eines Knotens; weitere Gesprächstypen geplant | Knotengespräch produktiv |
+| Beitrag | Message, `/conversations/{id}/messages` | Klartextbeitrag mit Autoren-Snapshot und Tombstone | Knotengespräch produktiv |
 | Berechtigungsrolle | `role` (`gast`, `weber`, `admin`) | technische Autorisierung, nicht die Identität der Person | implementiert |
 
 ## Legacybegriffe

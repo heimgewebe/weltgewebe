@@ -40,7 +40,7 @@ Produktionsfallback.
 | Fäden | JSONL lesen und anhängen | PostgreSQL lesen; `POST` schreibt | `domain_edges` |
 | Sitzungen | In-Memory ohne `DATABASE_URL` | PostgreSQL bei verpflichtender `DATABASE_URL` | `sessions` |
 | Passkeys | In-Memory | PostgreSQL als Produktionsdefault | `passkey_credentials` |
-| Gespräche/Nachrichten | kein vollständiger produktiver Pfad | kein vollständiger produktiver Pfad | nur Contracts, keine Tabellen |
+| Öffentliche Knotengespräche | kein JSONL-Pfad | PostgreSQL lesen und schreiben | `domain_conversations`, `domain_messages` |
 
 PostgreSQL-Schreiben verlangt PostgreSQL-Lesen. Die API verweigert ungültige
 Mischzustände, damit Änderungen nach einem Neustart nicht unsichtbar werden.
@@ -166,13 +166,17 @@ Mehrprozessdatenbank. In Produktion darf JSONL nur als dokumentierter Import-,
 Export- oder Rollbackpfad eingesetzt werden, nie als stiller Ersatz für einen
 fehlgeschlagenen PostgreSQL-Pfad.
 
-## Contracts ohne produktive Tabellen
+## Gesprächs- und Rollenverträge
 
-`conversation.schema.json`, `message.schema.json` und `role.schema.json`
-beschreiben fachliche beziehungsweise geplante Objekte. Die aktuelle
-Migrationshistorie enthält keine `conversations`, `messages`, `roles`, `outbox`
-oder Projektionsviews. Dokumente dürfen diese Objekte daher nicht als bereits
-persistierte PostgreSQL-Fläche darstellen.
+`conversation.schema.json` und `message.schema.json` spiegeln den produktiven,
+öffentlichen Knotengesprächsschnitt. Genau ein `domain_conversations`-Datensatz
+gehört zu jedem PostgreSQL-Knoten; `domain_messages` speichert Klartextbeiträge,
+Autoren-Snapshots, Idempotenz und Tombstones. Conversation-/Message-Ereignisse
+landen atomar in `domain_outbox`, erhöhen aber nicht die Kartenprojektion.
+
+`role.schema.json` beschreibt weiterhin ein geplantes Objekt ohne produktive
+`roles`-Tabelle. Private Gespräche, Anhänge und föderierte Zustellung sind nicht
+Teil des heutigen Datenmodells.
 
 ## Cutover-Regeln
 

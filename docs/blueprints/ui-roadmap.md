@@ -79,12 +79,12 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 ### [x] Roadmap PR 3 — NodePanel mit echten Inhalten ausbauen
 
-> Aktueller Stand: Fokus-Panels wurden inhaltlich auf geladene Domänendaten umgestellt. Die Anbindung erfolgt zur Vermeidung von Build-Konflikten lokal dynamisch via `/api/node/[id]` und remote gegen das reguläre Listen-Backend via `/api/nodes/[id]`. Diese laden die echten Teilnehmer und den korrekten Verlauf in die Panel-Ansicht. Die "Gespräch"- und "Anträge"-Tabs wurden explizit als Scaffold belassen, um Feature Creep zu vermeiden (diese benötigen noch komplexere Backend-Integrationen in zukünftigen Schritten).
+> Aktueller Stand: Fokus-Panels wurden inhaltlich auf geladene Domänendaten umgestellt. Die Anbindung erfolgt zur Vermeidung von Build-Konflikten lokal dynamisch via `/api/node/[id]` und remote gegen das reguläre Listen-Backend via `/api/nodes/[id]`. Diese laden die echten Teilnehmer und den korrekten Verlauf in die Panel-Ansicht. Der Gespräch-Tab ist nun an den öffentlichen PostgreSQL-Knotengesprächspfad angebunden. Der Anträge-Tab bleibt bewusst offen, um Governance nicht in diesen Schnitt hineinzuziehen.
 
 - [x] Übersicht mit Beschreibung/Beteiligten/Aktivität (echte Daten) (Integration im Fokuspfad umgesetzt)
 - [x] Verlauf-Tab mit Timeline/Chronik (Echte Daten aus der History eingebunden)
 - [x] Relevante Datenquellen/API-Pfade klären (Lokal: `/api/node/[id]` zur Vermeidung von Static-Build-Konflikten, Remote: `/api/nodes/[id]`)
-- [ ] Gesprächs-Tab mit echter Gesprächsansicht (Scaffold bewusst erhalten, Integration auf später verschoben)
+- [x] Gesprächs-Tab mit öffentlicher Gesprächsansicht, begrenzter Pagination und konfliktgeschützten Weberaktionen
 - [ ] Anträge-Tab mit Vorschlägen/Abstimmungen (Scaffold bewusst erhalten, Integration auf später verschoben)
 
 ### [x] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen

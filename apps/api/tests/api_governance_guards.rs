@@ -209,6 +209,9 @@ async fn governance_reads_fail_closed_without_database() {
         "/proposals",
         &format!("/proposals/{PROPOSAL_ID}"),
         &format!("/proposals/{PROPOSAL_ID}/messages"),
+        "/nodes/node-a/conversation",
+        &format!("/conversations/{PROPOSAL_ID}"),
+        &format!("/conversations/{PROPOSAL_ID}/messages"),
     ] {
         let response = app
             .clone()
@@ -327,6 +330,22 @@ async fn guest_webungsaktionen_are_forbidden() {
         "guests must not post to the conversation"
     );
 
+    let node_message = app
+        .clone()
+        .oneshot(request(
+            "POST",
+            &format!("/conversations/{PROPOSAL_ID}/messages"),
+            Some(&gast_cookie),
+            Some(r#"{"content":"Hallo"}"#),
+        ))
+        .await
+        .expect("response");
+    assert_eq!(
+        node_message.status(),
+        StatusCode::FORBIDDEN,
+        "guests must not post to node conversations"
+    );
+
     // Gäste hinterlassen auch über die Domänenpfade keine Spuren.
     let node = app
         .clone()
@@ -360,6 +379,21 @@ async fn anonymous_webungsaktionen_are_unauthorized() {
             "POST",
             format!("/proposals/{PROPOSAL_ID}/messages"),
             r#"{"body":"Hallo"}"#,
+        ),
+        (
+            "POST",
+            format!("/conversations/{PROPOSAL_ID}/messages"),
+            r#"{"content":"Hallo"}"#,
+        ),
+        (
+            "PATCH",
+            format!("/conversations/{PROPOSAL_ID}/messages/{PROPOSAL_ID}"),
+            r#"{"content":"Hallo"}"#,
+        ),
+        (
+            "DELETE",
+            format!("/conversations/{PROPOSAL_ID}/messages/{PROPOSAL_ID}"),
+            "{}",
         ),
     ] {
         let response = app

@@ -61,19 +61,21 @@ Ein produktiver Laufzeit-SSR-Server ist nicht der aktuelle Standard.
 
 - HTTP-API mit Axum,
 - Magic-Link-, Passkey- und Sitzungslogik,
-- Accounts, Knoten und Fäden,
-- JSONL- und opt-in PostgreSQL-Pfade,
+- Accounts, Knoten, Fäden und öffentliche Knotengespräche,
+- JSONL- und opt-in PostgreSQL-Pfade; Gespräche ausschließlich in PostgreSQL,
 - Health- und Metrikendpunkte.
 
-Es gibt derzeit keinen produktiven Outbox-Relay, keinen Projector-Worker und
-keine implementierte Gesprächs- oder Nachrichtenpersistenz.
+Es gibt derzeit keinen produktiven Outbox-Relay und keinen Projector-Worker.
+Öffentliche Knotengespräche sind persistiert; private Nachrichten und allgemeine
+Gesprächstypen sind nicht implementiert.
 
 ### `contracts/domain`
 
 Die Contracts beschreiben aktuelle und teilweise geplante Fachobjekte. Ein
 vorhandenes Schema beweist nicht automatisch einen API-, Datenbank- oder
-UI-Pfad. Besonders Gespräch, Nachricht und historische Rolle müssen daher als
-Vertragsvorbereitung und nicht als fertiges Subsystem gelesen werden.
+UI-Pfad. Conversation und Message beschreiben den produktiven öffentlichen
+Knotengesprächsschnitt. Private Gesprächstypen und historische Rollen bleiben
+Vertragsvorbereitung und dürfen nicht als fertiges Subsystem gelesen werden.
 
 ### `infra`
 
