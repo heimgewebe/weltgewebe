@@ -162,6 +162,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 if [[ "${FAIL_FULL_DEPLOY:-0}" == "1" && " $* " != *" --deploy-scope migration "* ]]; then
                   exit 42
                 fi
+                if [[ -n "${TEST_DEPLOY_MARKER:-}" && " $* " != *" --deploy-scope migration "* ]]; then
+                  touch "$TEST_DEPLOY_MARKER"
+                fi
                 """
             ),
             encoding="utf-8",
@@ -309,6 +312,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                   fi
                 done
                 public_commit="${PUBLIC_COMMIT:-$TEST_COMMIT}"
+                if [[ -n "${TEST_DEPLOY_MARKER:-}" && -e "$TEST_DEPLOY_MARKER" ]]; then
+                  public_commit="$TEST_COMMIT"
+                fi
                 if [[ "$url" == *"/api/version" ]]; then
                   if [[ -n "$headers" ]]; then
                     {
@@ -381,6 +387,23 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             encoding="utf-8",
         )
         verifier.chmod(0o755)
+
+        blocking_verifier = self.bin / "blocking-verify-public"
+        blocking_verifier.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env bash
+                set -euo pipefail
+                : > "$TEST_LOCK_OWNER_READY"
+                while [[ ! -e "$TEST_LOCK_OWNER_RELEASE" ]]; do
+                  sleep 0.02
+                done
+                exec "$TEST_VERIFY_PUBLIC" "$@"
+                """
+            ),
+            encoding="utf-8",
+        )
+        blocking_verifier.chmod(0o755)
 
         forbidden_deploy = self.bin / "forbidden-deploy"
         forbidden_deploy.write_text("#!/usr/bin/env bash\nexit 99\n", encoding="utf-8")
@@ -473,7 +496,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             {
                 "WELTGEWEBE_BUILD_USER": "root",
                 "WELTGEWEBE_LIVE_VERIFIER": str(self.bin / "verify-public"),
-                "WELTGEWEBE_DEPLOY_HELPER": str(self.bin / "successful-deploy"),
+                "WELTGEWEBE_DEPLOY_HELPER": str(DEPLOY_SCRIPT),
                 "WELTGEWEBE_MIN_FREE_KIB": "1",
                 "PUBLIC_COMMIT": "0" * 40,
                 "TEST_DEPLOY_MARKER": str(self.root / "deploy-complete"),
@@ -500,6 +523,119 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             (self.state / "reconcile-receipts" / f"{self.commit}.json").read_text()
         )
         self.assertEqual(receipt["result"], "verified")
+        deployment_receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(deployment_receipt["lock_domain"], "weltgewebe-production-deployment-v1")
+        self.assertEqual(deployment_receipt["lock_owner_entrypoint"], "reconciler")
+        self.assertEqual(deployment_receipt["lock_handoff"], "inherited")
+
+    def start_blocking_reconciler(self) -> tuple[subprocess.Popen[str], Path]:
+        ready = self.root / "lock-owner-ready"
+        release = self.root / "lock-owner-release"
+        reconcile_env = self.base_environment()
+        reconcile_env.update(
+            {
+                "WELTGEWEBE_BUILD_USER": "root",
+                "WELTGEWEBE_LIVE_VERIFIER": str(self.bin / "blocking-verify-public"),
+                "WELTGEWEBE_DEPLOY_HELPER": str(self.bin / "forbidden-deploy"),
+                "WELTGEWEBE_MIN_FREE_KIB": "1",
+                "TEST_LOCK_OWNER_READY": str(ready),
+                "TEST_LOCK_OWNER_RELEASE": str(release),
+                "TEST_VERIFY_PUBLIC": str(self.bin / "verify-public"),
+            }
+        )
+        argv = self.privileged(
+            [
+                "env",
+                *[f"{key}={value}" for key, value in reconcile_env.items()],
+                str(RECONCILE_SCRIPT),
+            ]
+        )
+        process = subprocess.Popen(
+            argv,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        for _ in range(250):
+            if ready.exists():
+                return process, release
+            if process.poll() is not None:
+                stdout, stderr = process.communicate()
+                raise AssertionError(
+                    f"blocking reconciler exited early ({process.returncode})\n"
+                    f"stdout:\n{stdout}\nstderr:\n{stderr}"
+                )
+            __import__("time").sleep(0.02)
+        process.terminate()
+        process.wait(timeout=5)
+        raise AssertionError("blocking reconciler did not acquire the production lock")
+
+    def finish_blocking_reconciler(
+        self, process: subprocess.Popen[str], release: Path
+    ) -> tuple[str, str]:
+        release.write_text("release\n", encoding="utf-8")
+        try:
+            stdout, stderr = process.communicate(timeout=15)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            stdout, stderr = process.communicate(timeout=5)
+            raise AssertionError(
+                f"blocking reconciler did not finish\nstdout:\n{stdout}\nstderr:\n{stderr}"
+            )
+        self.assertEqual(process.returncode, 0, stderr)
+        return stdout, stderr
+
+    def test_timer_and_installer_reconcile_starts_share_one_owner(self) -> None:
+        owner, release = self.start_blocking_reconciler()
+        try:
+            contender = self.reconcile_existing_public_commit()
+            self.assertEqual(contender.returncode, 0, contender.stderr)
+            self.assertIn("production_reconcile=already_running", contender.stdout)
+        finally:
+            self.finish_blocking_reconciler(owner, release)
+        self.restore_test_ownership()
+        receipt = json.loads(
+            (self.state / "reconcile-receipts" / "last-contention.json").read_text()
+        )
+        self.assertEqual(receipt["kind"], "weltgewebe_production_lock_contention")
+        self.assertEqual(receipt["entrypoint"], "reconciler")
+        self.assertEqual(receipt["result"], "already_running")
+        self.assertEqual(receipt["lock_domain"], "weltgewebe-production-deployment-v1")
+        self.assertFalse((self.root / "weltgewebe-up.log").exists())
+
+    def test_reconciler_owner_rejects_direct_helper_without_deploy_effects(self) -> None:
+        owner, release = self.start_blocking_reconciler()
+        try:
+            contender = self.deploy(advance=False)
+            self.assertEqual(contender.returncode, 75, contender.stderr)
+            self.assertIn("production_deployment=already_running", contender.stderr)
+        finally:
+            self.finish_blocking_reconciler(owner, release)
+        self.restore_test_ownership()
+        receipt = json.loads(
+            (self.state / "receipts" / "last-contention.json").read_text()
+        )
+        self.assertEqual(receipt["kind"], "weltgewebe_production_lock_contention")
+        self.assertEqual(receipt["entrypoint"], "deploy-helper")
+        self.assertEqual(receipt["requested_commit"], self.commit)
+        self.assertEqual(receipt["result"], "already_running")
+        self.assertEqual(receipt["lock_domain"], "weltgewebe-production-deployment-v1")
+        self.assertFalse((self.root / "weltgewebe-up.log").exists())
+
+    def test_stale_lock_file_without_owner_does_not_block_deploy(self) -> None:
+        lock_path = self.state / "production-deployment.lock"
+        run(self.privileged(["touch", str(lock_path)]))
+        run(self.privileged(["chmod", "0600", str(lock_path)]))
+        result = self.deploy(advance=False)
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["result"], "verified")
+        self.assertEqual(receipt["lock_handoff"], "direct")
 
     def test_success_marks_exact_commit_current(self) -> None:
         result = self.deploy(advance=False)
@@ -516,6 +652,10 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt_path = self.state / "receipts" / f"{self.commit}.json"
         receipt = json.loads(receipt_path.read_text())
         self.assertEqual(receipt["result"], "verified")
+        self.assertEqual(receipt["schema_version"], 4)
+        self.assertEqual(receipt["lock_domain"], "weltgewebe-production-deployment-v1")
+        self.assertEqual(receipt["lock_owner_entrypoint"], "deploy-helper")
+        self.assertEqual(receipt["lock_handoff"], "direct")
         self.assertIsInstance(receipt["migration_completed_at"], str)
         self.assertEqual(receipt["observed_main_after_deploy"], self.commit)
         current = (self.state / "current.json").resolve()
@@ -593,8 +733,11 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         receipt_path = self.state / "receipts" / f"{self.commit}.json"
         receipt = json.loads(receipt_path.read_text())
-        self.assertEqual(receipt["schema_version"], 3)
+        self.assertEqual(receipt["schema_version"], 4)
         self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["lock_domain"], "weltgewebe-production-deployment-v1")
+        self.assertEqual(receipt["lock_owner_entrypoint"], "reconciler")
+        self.assertEqual(receipt["lock_handoff"], "public-observation")
         self.assertIsNone(receipt["migration_completed_at"])
         self.assertIsNone(receipt["web_artifact_sha256"])
         self.assertIn("original web artifact hash", receipt["evidence_boundary"])

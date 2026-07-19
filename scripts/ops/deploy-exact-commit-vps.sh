@@ -9,7 +9,9 @@ ARTIFACT_ROOT="$STATE_ROOT/artifacts"
 FRONTEND_URL="${WELTGEWEBE_FRONTEND_VERSION_URL:-https://weltgewebe.net/_app/version.json}"
 API_URL="${WELTGEWEBE_API_VERSION_URL:-https://weltgewebe.net/api/version}"
 ARCHIVE_VALIDATOR="${WELTGEWEBE_ARCHIVE_VALIDATOR:-/usr/local/libexec/weltgewebe-validate-web-deploy-archive}"
-LOCK_FILE="${STATE_ROOT}/deploy.lock"
+readonly PRODUCTION_LOCK_DOMAIN="weltgewebe-production-deployment-v1"
+readonly PRODUCTION_LOCK_FILE="${STATE_ROOT}/production-deployment.lock"
+readonly PRODUCTION_LOCK_FD=9
 readonly EX_TEMPFAIL=75
 
 COMMIT=""
@@ -24,6 +26,8 @@ api_commit=""
 frontend_commit=""
 last_observed_main=""
 migration_completed_at=""
+lock_owner_entrypoint="${WELTGEWEBE_PRODUCTION_LOCK_OWNER_ENTRYPOINT:-deploy-helper}"
+lock_handoff=""
 receipt_started=false
 receipt_terminal=false
 
@@ -61,6 +65,101 @@ run_release_deploy() {
 
 require_command() {
   command -v "$1" > /dev/null 2>&1 || fail "required command not found: $1"
+}
+
+write_lock_contention_receipt() {
+  local receipt="$STATE_ROOT/receipts/last-contention.json"
+  python3 - "$receipt" "$PRODUCTION_LOCK_DOMAIN" "$PRODUCTION_LOCK_FILE" \
+    "$lock_owner_entrypoint" "$COMMIT" << 'PY'
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+path = Path(sys.argv[1])
+payload = {
+    "schema_version": 1,
+    "kind": "weltgewebe_production_lock_contention",
+    "environment": "production",
+    "lock_domain": sys.argv[2],
+    "lock_file": sys.argv[3],
+    "entrypoint": sys.argv[4],
+    "requested_commit": sys.argv[5] or None,
+    "result": "already_running",
+    "recorded_at": datetime.now(timezone.utc).isoformat(),
+}
+temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+with temporary.open("w", encoding="utf-8") as handle:
+    json.dump(payload, handle, sort_keys=True, indent=2)
+    handle.write("\n")
+    handle.flush()
+    os.fsync(handle.fileno())
+os.replace(temporary, path)
+directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+try:
+    os.fsync(directory_fd)
+finally:
+    os.close(directory_fd)
+PY
+  printf '%s\n' "$receipt"
+}
+
+prepare_production_lock_file() {
+  if [[ -e "$PRODUCTION_LOCK_FILE" || -L "$PRODUCTION_LOCK_FILE" ]]; then
+    [[ -f "$PRODUCTION_LOCK_FILE" && ! -L "$PRODUCTION_LOCK_FILE" ]] ||
+      fail "production deployment lock is not a regular file"
+  else
+    (umask 077 && : > "$PRODUCTION_LOCK_FILE")
+  fi
+  [[ "$(stat --format=%u "$PRODUCTION_LOCK_FILE")" == "0" ]] ||
+    fail "production deployment lock is not root-owned"
+  local lock_mode
+  lock_mode="$(stat --format=%a "$PRODUCTION_LOCK_FILE")"
+  (((8#$lock_mode & 022) == 0)) ||
+    fail "production deployment lock is group- or world-writable"
+}
+
+acquire_production_lock() {
+  local inherited_fd="${WELTGEWEBE_PRODUCTION_LOCK_FD:-}"
+  local inherited_domain="${WELTGEWEBE_PRODUCTION_LOCK_DOMAIN:-}"
+  local expected_lock
+  local inherited_lock
+  local contention_receipt
+
+  prepare_production_lock_file
+  expected_lock="$(realpath "$PRODUCTION_LOCK_FILE")"
+
+  if [[ -n "$inherited_fd" ]]; then
+    [[ "$inherited_fd" == "$PRODUCTION_LOCK_FD" ]] ||
+      fail "inherited production lock descriptor is invalid"
+    [[ "$inherited_domain" == "$PRODUCTION_LOCK_DOMAIN" ]] ||
+      fail "inherited production lock domain is invalid"
+    [[ "$lock_owner_entrypoint" == "reconciler" ]] ||
+      fail "inherited production lock owner is invalid"
+    [[ -e "/proc/$$/fd/$PRODUCTION_LOCK_FD" ]] ||
+      fail "inherited production lock descriptor is not open"
+    inherited_lock="$(readlink -f "/proc/$$/fd/$PRODUCTION_LOCK_FD")"
+    [[ "$inherited_lock" == "$expected_lock" ]] ||
+      fail "inherited production lock targets an unexpected file"
+    if ! flock -n "$PRODUCTION_LOCK_FD"; then
+      contention_receipt="$(write_lock_contention_receipt)"
+      echo "production_deployment=already_running lock_domain=$PRODUCTION_LOCK_DOMAIN receipt=$contention_receipt" >&2
+      exit "$EX_TEMPFAIL"
+    fi
+    lock_handoff="inherited"
+    return 0
+  fi
+
+  [[ "$lock_owner_entrypoint" == "deploy-helper" ]] ||
+    fail "direct production lock owner is invalid"
+  exec 9<> "$PRODUCTION_LOCK_FILE"
+  if ! flock -n "$PRODUCTION_LOCK_FD"; then
+    contention_receipt="$(write_lock_contention_receipt)"
+    echo "production_deployment=already_running lock_domain=$PRODUCTION_LOCK_DOMAIN receipt=$contention_receipt" >&2
+    exit "$EX_TEMPFAIL"
+  fi
+  lock_handoff="direct"
 }
 
 write_bounded_response() {
@@ -101,7 +200,8 @@ write_deploy_receipt() {
   local observed_main="$5"
   local receipt="$STATE_ROOT/receipts/$COMMIT.json"
   python3 - "$receipt" "$COMMIT" "$WEB_SHA256" "$started_at" "$completed_at" \
-    "$api_commit_value" "$frontend_commit_value" "$observed_main" "$migration_completed_at" "$result" << 'PY'
+    "$api_commit_value" "$frontend_commit_value" "$observed_main" "$migration_completed_at" \
+    "$PRODUCTION_LOCK_DOMAIN" "$lock_owner_entrypoint" "$lock_handoff" "$result" << 'PY'
 import json
 import os
 import sys
@@ -109,7 +209,7 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 payload = {
-    "schema_version": 3,
+    "schema_version": 4,
     "environment": "production",
     "commit": sys.argv[2],
     "web_artifact_sha256": sys.argv[3],
@@ -119,7 +219,10 @@ payload = {
     "frontend_commit": sys.argv[7] or None,
     "observed_main_after_deploy": sys.argv[8] or None,
     "migration_completed_at": sys.argv[9] or None,
-    "result": sys.argv[10],
+    "lock_domain": sys.argv[10],
+    "lock_owner_entrypoint": sys.argv[11],
+    "lock_handoff": sys.argv[12],
+    "result": sys.argv[13],
 }
 temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
 with temporary.open("w", encoding="utf-8") as handle:
@@ -231,8 +334,7 @@ git_common_dir="$(git -C "$SOURCE_CHECKOUT" rev-parse --git-common-dir)"
 git_common_dir="$(readlink -f "$git_common_dir")"
 unsafe_git_path="$(find "$git_common_dir" -xdev \( ! -user root -o -perm /022 \) -print -quit)"
 [[ -z "$unsafe_git_path" ]] || fail "Git object store is not entirely root-owned and non-writable by group/world: $unsafe_git_path"
-exec 9> "$LOCK_FILE"
-flock -n 9 || fail "another production deployment is already active"
+acquire_production_lock
 
 actual_artifact_sha="$(sha256sum "$artifact_real" | awk '{print $1}')"
 [[ "$actual_artifact_sha" == "$WEB_SHA256" ]] ||

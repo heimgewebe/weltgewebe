@@ -127,6 +127,36 @@ wird ein `superseded_after_deploy`- oder `superseded_after_verify`-Beleg
 geschrieben. Der alte Commit wird nicht als aktueller Produktionsstand markiert;
 der nächste Lauf nimmt den neuen Commit auf.
 
+## Gemeinsame Produktionssperre
+
+Alle unterstützten Produktions-Einstiege gehören zur Lock-Domäne
+`weltgewebe-production-deployment-v1`. Der Reconciler öffnet und hält
+`/var/lib/weltgewebe-main-reconciler/production-deployment.lock` vom ersten
+Zustandsreadback bis zum abschließenden öffentlichen Beleg. Timer und Installer
+starten ausschließlich dieselbe systemd-Unit; sie besitzen keinen separaten
+Deploypfad.
+
+Der Reconciler übergibt seinen bereits gesperrten Dateideskriptor an
+`weltgewebe-deploy-exact-commit`. Der Helfer prüft Domäne, Deskriptornummer und
+das tatsächliche `/proc`-Ziel, bevor er die geerbte Sperre verwendet. So bleibt
+die gesamte Kette atomar, ohne dass der innere Helfer dieselbe Sperre nochmals
+unabhängig anfordert und sich selbst blockiert.
+
+Ein ausdrücklich unterstützter direkter Recovery-Aufruf des Deploy-Helfers erwirbt
+dieselbe Sperre selbst. Bei Konkurrenz verändert der abgewiesene Lauf weder
+Container noch öffentliche Zustände. Der Reconciler endet geordnet mit Exit 0;
+der direkte Helfer verwendet `EX_TEMPFAIL` 75. Beide schreiben atomare
+`already_running`-Belege als `last-contention.json` in die bereits kanonischen
+Receipt-Verzeichnisse. Diese Belege sind Diagnoseflächen, keine zweite
+Zustandswahrheit. Maßgeblich für Besitz ist ausschließlich die vom Kernel gehaltene
+`flock`-Sperre. Eine liegengebliebene Lockdatei ohne offenen Besitzer blockiert
+daher keinen späteren Lauf.
+
+Die früheren Dateien `reconcile.lock` und `deploy.lock` werden nicht mehr gelesen.
+Ihre bloße Existenz besitzt keine Semantik. Die innere Compose-Wirkungssperre von
+`scripts/weltgewebe-up` bleibt als untergeordneter Schutz gegen konkurrierende
+Compose-Effekte bestehen; sie ersetzt nicht die gemeinsame Produktionsdomäne.
+
 ## Speicherlebenszyklus
 
 Quellarchive werden unmittelbar nach dem Containerbau gelöscht. Webarchive
@@ -156,9 +186,10 @@ hoch. Ein stiller Zustand `main != live` ist damit nicht grün.
 
 ## Belege und Vertragsgrenze
 
-Root-eigene Deploymentbelege liegen unter
-`/var/lib/weltgewebe-main-reconciler/receipts/`. Reconcile-Zustände und
-öffentliche Readbacks liegen unter
+Root-eigene Deploymentbelege einschließlich des letzten direkten
+Lock-Konflikts liegen unter
+`/var/lib/weltgewebe-main-reconciler/receipts/`. Reconcile-Zustände, der letzte
+Reconciler-Konflikt und öffentliche Readbacks liegen unter
 `/var/lib/weltgewebe-main-reconciler/reconcile-receipts/`. Das
 Installationsmanifest bindet die installierten Helfer und Units zusätzlich an
 SHA-256.
