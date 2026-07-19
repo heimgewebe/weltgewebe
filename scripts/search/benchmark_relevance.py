@@ -571,6 +571,7 @@ def validate_result_shape(result: dict[str, Any]) -> None:
             "measured_at",
             "dataset",
             "benchmark_source_sha256",
+            "validator_source_sha256",
             "environment",
             "baselines",
             "models",
@@ -694,6 +695,7 @@ def build_result(dataset_path: Path, schema_path: Path, models: list[str], ollam
             "privacy_class": dataset["privacy_class"],
         },
         "benchmark_source_sha256": sha256_path(Path(__file__)),
+        "validator_source_sha256": sha256_path(ROOT / "scripts/search/validate_relevance_goldset.py"),
         "environment": {
             "host_class": "heim-pc-local",
             "platform": platform.platform(),
@@ -724,6 +726,8 @@ def check_result(result_path: Path, dataset_path: Path, schema_path: Path) -> No
         raise ValidationError("benchmark revision is stale")
     if result.get("benchmark_source_sha256") != sha256_path(Path(__file__)):
         raise ValidationError("benchmark source hash is stale")
+    if result.get("validator_source_sha256") != sha256_path(ROOT / "scripts/search/validate_relevance_goldset.py"):
+        raise ValidationError("goldset validator source hash is stale")
     schema = load_json_object(schema_path)
     dataset = load_json_object(dataset_path)
     validate_goldset(dataset, schema)

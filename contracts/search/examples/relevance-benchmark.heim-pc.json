@@ -2,7 +2,7 @@
   "schema_version": 1,
   "kind": "weltgewebe_semantic_search_relevance_benchmark",
   "benchmark_revision": "semantic-search-benchmark-v1",
-  "measured_at": "2026-07-19T05:44:54.056127Z",
+  "measured_at": "2026-07-19T06:02:40.427897Z",
   "dataset": {
     "path": "contracts/search/examples/relevance-goldset.example.json",
     "dataset_id": "weltgewebe-semantic-search-v1-synthetic-v2",
@@ -13,7 +13,8 @@
     "case_count": 24,
     "privacy_class": "synthetic"
   },
-  "benchmark_source_sha256": "d5bde8aff4c49d1281daff58a653ea307c7d1cde1de09a03d9a5a44aa02706b0",
+  "benchmark_source_sha256": "7bb7e6308d369d59c2c028622e76e0cf4d974342cfe18ea7048873a23f9c7971",
+  "validator_source_sha256": "02ba55986fdc1c92beaa93c2919c7a77f85e67f4131f7a78cd264d94467d983f",
   "environment": {
     "host_class": "heim-pc-local",
     "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
@@ -301,9 +302,9 @@
         ]
       },
       "performance": {
-        "median_ms": 0.023,
-        "p95_ms": 0.026,
-        "maximum_ms": 0.03
+        "median_ms": 0.024,
+        "p95_ms": 0.029,
+        "maximum_ms": 0.032
       }
     },
     {
@@ -662,9 +663,9 @@
         ]
       },
       "performance": {
-        "median_ms": 1.59,
-        "p95_ms": 1.932,
-        "maximum_ms": 2.12
+        "median_ms": 1.642,
+        "p95_ms": 1.859,
+        "maximum_ms": 1.936
       }
     }
   ],
@@ -1297,12 +1298,12 @@
         ]
       },
       "performance": {
-        "document_embedding_total_ms": 1282.238,
-        "query_embedding_total_ms": 205.663,
+        "document_embedding_total_ms": 1286.805,
+        "query_embedding_total_ms": 202.184,
         "ranking": {
-          "median_ms": 3.35,
-          "p95_ms": 3.54,
-          "maximum_ms": 3.586
+          "median_ms": 3.262,
+          "p95_ms": 3.535,
+          "maximum_ms": 3.74
         },
         "document_count": 19,
         "query_count": 24
@@ -1936,12 +1937,12 @@
         ]
       },
       "performance": {
-        "document_embedding_total_ms": 1928.358,
-        "query_embedding_total_ms": 350.002,
+        "document_embedding_total_ms": 1917.434,
+        "query_embedding_total_ms": 348.557,
         "ranking": {
-          "median_ms": 6.216,
-          "p95_ms": 7.194,
-          "maximum_ms": 7.219
+          "median_ms": 5.954,
+          "p95_ms": 6.58,
+          "maximum_ms": 6.839
         },
         "document_count": 19,
         "query_count": 24
@@ -2575,12 +2576,12 @@
         ]
       },
       "performance": {
-        "document_embedding_total_ms": 2063.087,
-        "query_embedding_total_ms": 467.874,
+        "document_embedding_total_ms": 2304.247,
+        "query_embedding_total_ms": 466.344,
         "ranking": {
-          "median_ms": 8.246,
-          "p95_ms": 8.748,
-          "maximum_ms": 8.772
+          "median_ms": 8.31,
+          "p95_ms": 9.126,
+          "maximum_ms": 9.761
         },
         "document_count": 19,
         "query_count": 24

@@ -21,7 +21,7 @@ from scripts.search.benchmark_relevance import (
     validate_result_shape,
     verify_quality_evidence,
 )
-from scripts.search.validate_relevance_goldset import ValidationError, validate_goldset
+from scripts.search.validate_relevance_goldset import ValidationError, load_json_object, validate_goldset
 
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMA_PATH = ROOT / "contracts/search/relevance-goldset.schema.json"
@@ -36,6 +36,19 @@ class SemanticSearchContractTests(unittest.TestCase):
         cls.dataset = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
         cls.result = json.loads(DEFAULT_RESULT.read_text(encoding="utf-8"))
         cls.case_by_id = {case["id"]: case for case in cls.dataset["cases"]}
+
+    def test_json_loader_rejects_duplicate_keys_and_non_finite_numbers(self) -> None:
+        samples = (
+            ('{"value": 1, "value": 2}', "duplicate JSON property"),
+            ('{"value": NaN}', "non-finite JSON number"),
+            ('{"value": Infinity}', "non-finite JSON number"),
+        )
+        for payload, message in samples:
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "fixture.json"
+                path.write_text(payload, encoding="utf-8")
+                with self.assertRaisesRegex(ValidationError, message):
+                    load_json_object(path)
 
     def test_checked_in_goldset_is_valid_and_synthetic(self) -> None:
         validate_goldset(self.dataset, self.schema)
@@ -176,6 +189,15 @@ class SemanticSearchContractTests(unittest.TestCase):
         result["environment"]["payload"] = [0.1] * 32
         with self.assertRaisesRegex(ValidationError, "invalid shape"):
             validate_result_shape(result)
+
+    def test_result_checker_binds_goldset_validator_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            result = copy.deepcopy(self.result)
+            result["validator_source_sha256"] = "0" * 64
+            path = Path(temporary) / "result.json"
+            path.write_text(json.dumps(result), encoding="utf-8")
+            with self.assertRaisesRegex(ValidationError, "validator source hash"):
+                check_result(path, DATASET_PATH, SCHEMA_PATH)
 
     def test_result_checker_binds_model_size_order_and_measurement_counts(self) -> None:
         mutations = (

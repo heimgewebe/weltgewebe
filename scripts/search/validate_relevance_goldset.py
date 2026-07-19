@@ -192,9 +192,26 @@ def validate_goldset(dataset: dict[str, Any], schema: dict[str, Any]) -> None:
             raise ValidationError("goldset contains an IPv4-like value")
 
 
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValidationError(f"duplicate JSON property: {key!r}")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite_json(value: str) -> None:
+    raise ValidationError(f"non-finite JSON number is forbidden: {value}")
+
+
 def load_json_object(path: Path) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=_strict_json_object,
+            parse_constant=_reject_nonfinite_json,
+        )
     except (OSError, json.JSONDecodeError) as error:
         raise ValidationError(f"{path}: cannot load JSON: {error}") from error
     if not isinstance(value, dict):
