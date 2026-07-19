@@ -33,14 +33,19 @@
       "$ref": "#/definitions/architecture"
     },
     "reading_order": {
+      "description": "Exact canonical reading sequence for schema version 1. Extensions require a schema-version bump.",
       "type": "array",
       "minItems": 5,
+      "maxItems": 5,
       "uniqueItems": true,
-      "items": {
-        "type": "string",
-        "minLength": 1,
-        "pattern": "\\S"
-      }
+      "items": [
+        {"type": "string", "enum": ["agent-contract.json"]},
+        {"type": "string", "enum": ["repo.meta.yaml"]},
+        {"type": "string", "enum": ["AGENTS.md"]},
+        {"type": "string", "enum": ["agent-policy.yaml"]},
+        {"type": "string", "enum": ["docs/policies/agent-reading-protocol.md"]}
+      ],
+      "additionalItems": false
     },
     "safe_read_paths": {
       "$ref": "#/definitions/pathList"
@@ -192,6 +197,7 @@
           "enum": [".wgx/generated-artifacts.yml"]
         },
         "allowed_target_prefixes": {
+          "description": "Exact generated target set for schema version 1. New prefixes require a schema-version bump and security review.",
           "type": "array",
           "minItems": 1,
           "maxItems": 1,

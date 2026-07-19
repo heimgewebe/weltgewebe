@@ -5,6 +5,9 @@ name: agent-safety-preflight
   pull_request:
     paths:
       - "scripts/agent/**"
+      - "tools/py/pyproject.toml"
+      - "tools/py/uv.lock"
+      - "toolchain.versions.yml"
       - "scripts/contracts-agent-check.sh"
       - "scripts/docmeta/generate_agent_readiness.py"
       - "scripts/docmeta/tests/test_generate_agent_readiness.py"
@@ -57,17 +60,36 @@ jobs:
         with:
           python-version-file: '.python-version'
 
-      - name: Install dependencies
-        run: pip install PyYAML==6.0.2
+      - name: Read uv version
+        id: uv-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          UV_VERSION=$(grep '^uv:' toolchain.versions.yml | cut -d '"' -f2)
+          if [ -z "${UV_VERSION}" ]; then
+            echo "failed to parse uv version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'uv_version=%s\n' "${UV_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # tag: v8.3.2
+        with:
+          version: ${{ steps.uv-version.outputs.uv_version }}
+
+      - name: Validate reviewed agent dependency lock
+        run: python -m scripts.agent.validate_agent_tooling_lock
+
+      - name: Sync hash-locked agent dependencies
+        run: uv sync --project tools/py --locked
 
       - name: Run agent unit and CLI contract tests
-        run: python3 -m unittest discover scripts/agent/tests/ -v
+        run: uv run --project tools/py --locked python -m unittest discover scripts/agent/tests/ -v
 
       - name: Smoke-check CLI (report-only, missing task file)
         run: |
           set -euo pipefail
           set +e
-          python3 -m scripts.agent.check_agent_preflight \
+          uv run --project tools/py --locked python -m scripts.agent.check_agent_preflight \
             --task-file /nonexistent/task.yaml 2>/dev/null
           rc=$?
           set -e
@@ -89,7 +111,7 @@ jobs:
           expected_evidence:
             - docs/security/agent-write-scope-baseline.md
           YAML
-          python3 -m scripts.agent.check_agent_preflight \
+          uv run --project tools/py --locked python -m scripts.agent.check_agent_preflight \
             --task-file /tmp/agent-task.yaml \
             --changed-paths docs/security/agent-write-scope-baseline.md \
             --mode report-only
@@ -97,7 +119,7 @@ jobs:
       - name: Smoke-check handoff validator (valid fixture)
         run: |
           set -euo pipefail
-          python3 -m scripts.agent.validate_handoff \
+          uv run --project tools/py --locked python -m scripts.agent.validate_handoff \
             --task-file tests/fixtures/agent/handoff-task.json \
             --handoff-file tests/fixtures/agent/handoff-valid.json
 
@@ -106,7 +128,7 @@ jobs:
           set -euo pipefail
 
           repository_state() {
-            python3 - <<'PY'
+            uv run --project tools/py --locked python - <<'PY'
           from pathlib import Path
 
           from scripts.agent.run_task import repository_state_bytes
@@ -119,17 +141,17 @@ jobs:
           OUT="$(mktemp -d)"
           trap 'rm -rf -- "$OUT"' EXIT
 
-          python3 -m scripts.agent.run_task \
+          uv run --project tools/py --locked python -m scripts.agent.run_task \
             --dry-run \
             --output-dir "$OUT/doc-drift" \
             tests/fixtures/agent/valid-doc-drift-task.json
 
-          python3 -m scripts.agent.run_task \
+          uv run --project tools/py --locked python -m scripts.agent.run_task \
             --dry-run \
             --output-dir "$OUT/roadmap" \
             tests/fixtures/agent/valid-roadmap-claim-task.json
 
-          python3 -m scripts.agent.run_task \
+          uv run --project tools/py --locked python -m scripts.agent.run_task \
             --dry-run \
             --output-dir "$OUT/generated-refresh" \
             tests/fixtures/agent/valid-generated-refresh-task.json
@@ -149,20 +171,20 @@ jobs:
 
       - name: Run agent readiness tests
         run: |
-          python3 -m unittest \
+          uv run --project tools/py --locked python -m unittest \
             scripts.docmeta.tests.test_generate_agent_readiness \
             scripts.docmeta.tests.test_agent_readiness_smoke_contract \
             -v
 
       - name: Run agent entrypoint smoke tests
         run: |
-          python3 -m scripts.docmeta.agent_entrypoint_smoke
-          python3 -m unittest scripts.docmeta.tests.test_agent_entrypoint_smoke -v
+          uv run --project tools/py --locked python -m scripts.docmeta.agent_entrypoint_smoke
+          uv run --project tools/py --locked python -m unittest scripts.docmeta.tests.test_agent_entrypoint_smoke -v
 
       - name: Validate agent contracts (Python)
         run: |
-          python3 -m scripts.agent.validate_agent_contracts
-          python3 -m scripts.agent.validate_repo_agent_contract
+          uv run --project tools/py --locked python -m scripts.agent.validate_agent_contracts
+          uv run --project tools/py --locked python -m scripts.agent.validate_repo_agent_contract
 
       - name: Check handoff fixture digest is fresh
-        run: python3 -m scripts.agent.update_handoff_fixtures --check
+        run: uv run --project tools/py --locked python -m scripts.agent.update_handoff_fixtures --check

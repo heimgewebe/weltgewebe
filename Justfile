@@ -74,7 +74,8 @@ check:     # quick hygiene check (no writes)
 
 # Validate the canonical repository agent contract (strict JSON + projection parity).
 agent-contract-check:
-	python3 -m scripts.agent.validate_repo_agent_contract
+	uv run --project tools/py --locked python -m scripts.agent.validate_agent_tooling_lock
+	uv run --project tools/py --locked python -m scripts.agent.validate_repo_agent_contract
 
 # ---------- Compose ----------
 up:        # dev stack up (dev profile)

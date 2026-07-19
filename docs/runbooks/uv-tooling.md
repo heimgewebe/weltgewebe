@@ -32,29 +32,32 @@ Erweiterungen sich anbieten.
 - **Dokumentation im Root-README:** Das Getting-Started beschreibt, dass `uv`
   im Devcontainer bereitgestellt wird und dass Lockfiles (`uv.lock`) eingecheckt
   werden sollen.
-- **Python-Tooling-Workspace:** Unter `tools/py` liegt ein `pyproject.toml` mit
-  Basiskonfiguration für Python-Helfer; zusätzliche Dependencies würden hier via
-  `uv add` gepflegt.
+- **Python-Tooling-Workspace:** Unter `tools/py` liegt das zentrale
+  `pyproject.toml` für Repository-Helfer. `PyYAML==6.0.2` ist dort als erste
+  Tooling-Abhängigkeit deklariert; `tools/py/uv.lock` bindet die zugelassenen
+  Distributionsartefakte an SHA-256-Hashes.
+- **Agent-Contract-Ausführung:** `just agent-contract-check` nutzt
+  `uv run --project tools/py --locked`. Lokal und in CI gilt damit dieselbe
+  Abhängigkeitsauflösung; ein veraltetes oder manipuliertes Lockfile blockiert.
 
-Damit ist `uv` bereits für Tooling-Aufgaben vorbereitet, benötigt aber aktuell
-noch keine Abhängigkeiten.
+Damit ist `uv` der reproduzierbare Dependency-Pfad für das Agent-Contract-Tooling.
 
 ## Potenzial für Verbesserungen
 
-1. **Lockfile etablieren:** Sobald der erste Dependency-Eintrag erfolgt, sollte
-   `uv lock` ausgeführt und das entstehende `uv.lock` versioniert werden. Ein
-   leeres Lockfile kann auch jetzt schon erzeugt werden, um den Workflow zu
-   testen und künftige Änderungen leichter reviewen zu können.
-2. **Just-Integration:** Ein `just`-Target (z. B. `just uv-sync`) würde das
-   Synchronisieren des Tooling-Environments standardisieren – sowohl lokal als
-   auch in CI.
-3. **CI-Checks:** Ein optionaler Workflow-Schritt könnte `uv sync --locked`
-   ausführen, um zu prüfen, dass das Lockfile konsistent ist, sobald Python-Tasks
-   relevant werden.
-4. **Fallback für lokale Maschinen:** Außerhalb des Devcontainers sollte das
-   README kurz beschreiben, wie `uv` manuell installiert wird (z. B. per
-   Installscript oder Paketmanager), damit Contributor:innen ohne Devcontainer
-   den gleichen Setup-Pfad nutzen.
+1. **Dependency-Update:** Den Pin in `tools/py/pyproject.toml` ändern und mit der
+   in `toolchain.versions.yml` gepinnten uv-Version `uv lock --project tools/py`
+   ausführen. Danach den vollständigen PyYAML-Artefaktsatz und seine SHA-256-Hashes
+   reviewen; nie ein ungebundenes `pip install` ergänzen.
+2. **Lock-Beweis:** `uv sync --project tools/py --locked` sowie die negativen
+   Lock-Fixtures aus `scripts/agent/tests/test_agent_tooling_lock.py` ausführen.
+   Falsche oder fehlende Hashes und eine vom Lock abweichende Version müssen
+   fail-closed enden.
+3. **Weitere Tooling-Abhängigkeiten:** Nur in demselben Workspace ergänzen und das
+   Lockfile im gleichen Commit aktualisieren. Separate Workflow-Pins würden wieder
+   konkurrierende Dependency-Wahrheiten erzeugen.
+4. **Fallback für lokale Maschinen:** Außerhalb des Devcontainers stellt
+   `scripts/tools/uv-pin.sh ensure` die in `toolchain.versions.yml` dokumentierte
+   uv-Version bereit.
 
 Diese Punkte lassen sich unabhängig voneinander umsetzen und sorgen dafür, dass
 `uv` vom vorbereiteten Tooling-Baustein zu einem reproduzierbaren Bestandteil
