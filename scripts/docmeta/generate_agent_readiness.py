@@ -738,6 +738,16 @@ DIMENSIONS = [
     "cleanup",
     "recovery",
 ]
+DIMENSION_ORDER = {dimension: index for index, dimension in enumerate(DIMENSIONS)}
+
+
+def _dimension_rank(result: CapabilityResult) -> int:
+    try:
+        return DIMENSION_ORDER[result.dimension]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown capability dimension for {result.id}: {result.dimension}"
+        ) from exc
 
 def _external_capability(cap_id: str, dimension: str, title: str) -> CapabilityResult:
     return CapabilityResult(
@@ -914,7 +924,7 @@ def render_report(
     handoff_evidence: list[str] = []
 
     # Sort results by DIMENSIONS order
-    sorted_results = sorted(results, key=lambda r: DIMENSIONS.index(r.dimension))
+    sorted_results = sorted(results, key=_dimension_rank)
 
     for result in sorted_results:
         if result.id == "handoff_validation":

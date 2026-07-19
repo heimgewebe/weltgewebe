@@ -54,11 +54,44 @@ def parse_recipes(content: str) -> dict[str, Recipe]:
     }
 
 
+def strip_unquoted_comment(raw_line: str) -> str:
+    """Remove a shell comment without treating quoted or escaped # as comments."""
+    quote: str | None = None
+    escaped = False
+    output: list[str] = []
+
+    for char in raw_line:
+        if escaped:
+            output.append(char)
+            escaped = False
+            continue
+        if char == "\\" and quote != "'":
+            output.append(char)
+            escaped = True
+            continue
+        if quote is not None:
+            output.append(char)
+            if char == quote:
+                quote = None
+            continue
+        if char in {"'", '"'}:
+            output.append(char)
+            quote = char
+            continue
+        if char == "#" and (
+            not output or output[-1].isspace() or output[-1] in ";|&()<>"
+        ):
+            break
+        output.append(char)
+
+    return "".join(output).strip()
+
+
 def logical_commands(lines: list[str]) -> list[str]:
     commands: list[str] = []
     pending = ""
     for raw_line in lines:
-        line = raw_line.split("#", 1)[0].strip()
+        line = strip_unquoted_comment(raw_line)
         if not line:
             continue
         if pending:
@@ -108,6 +141,28 @@ class TestJustCheckSafety(unittest.TestCase):
         self.assertEqual(
             logical_commands(["command || \\", "exit 0"]),
             ["command || exit 0"],
+        )
+
+    def test_shell_hashes_inside_quotes_or_escapes_are_preserved(self):
+        self.assertEqual(
+            logical_commands(
+                [
+                    'echo "Fix #123" # trailing comment',
+                    "curl 'https://example.invalid/#anchor' # trailing comment",
+                    r"echo value\#fragment # trailing comment",
+                    "echo issue#123 # trailing comment",
+                    "echo ${name#prefix} # trailing comment",
+                    "echo done;# trailing comment",
+                ]
+            ),
+            [
+                'echo "Fix #123"',
+                "curl 'https://example.invalid/#anchor'",
+                r"echo value\#fragment",
+                "echo issue#123",
+                "echo ${name#prefix}",
+                "echo done;",
+            ],
         )
 
     def test_soft_failure_patterns_are_detected(self):

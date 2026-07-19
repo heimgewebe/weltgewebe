@@ -4,14 +4,17 @@
 
 ```bash
 cd tools/py
-uv sync        # erstellt venv, installiert deps (aktuell leer)
-uv run python -V
+uv sync --locked
+uv run --locked python -c "import yaml; print(yaml.__version__)"
 ```
 
 ## Abhängigkeiten hinzufügen
 
 ```bash
-uv add ruff black
+uv add <paket>
 ```
 
-Das erzeugt/aktualisiert `uv.lock` – damit sind Builds in CI reproduzierbar.
+`PyYAML==6.0.2` ist die erste produktiv genutzte Tooling-Abhängigkeit. Das
+Lockfile bindet die zugelassenen Distributionsartefakte an SHA-256-Hashes.
+Änderungen werden mit der in `toolchain.versions.yml` gepinnten uv-Version
+erzeugt und anschließend mit `uv sync --locked` geprüft.

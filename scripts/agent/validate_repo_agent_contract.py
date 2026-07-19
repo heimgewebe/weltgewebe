@@ -59,7 +59,7 @@ from scripts.docmeta.docmeta import REPO_ROOT
 CONTRACT_REL = "agent-contract.json"
 SCHEMA_REL = "contracts/agent/agent-contract.schema.json"
 
-READING_ORDER_REQUIRED_PREFIX = [
+READING_ORDER_REQUIRED = [
     "agent-contract.json",
     "repo.meta.yaml",
     "AGENTS.md",
@@ -114,8 +114,8 @@ def _path_is_under_prefix(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(prefix + "/")
 
 
-def _is_generated_target(path: str, forbidden_write_paths: list[str]) -> bool:
-    for prefix in forbidden_write_paths:
+def _is_generated_target(path: str, target_prefixes: list[str]) -> bool:
+    for prefix in target_prefixes:
         if _path_is_under_prefix(path, prefix):
             return True
     return False
@@ -156,21 +156,12 @@ def validate_semantic_invariants(
             )
         )
     else:
-        prefix = READING_ORDER_REQUIRED_PREFIX
-        if reading_order[: len(prefix)] != prefix:
+        if reading_order != READING_ORDER_REQUIRED:
             findings.append(
                 _finding(
                     "AGENT_CONTRACT_READING_ORDER",
                     "$.reading_order",
-                    "reading_order must start with the canonical agent entry sequence",
-                )
-            )
-        if "agent-contract.json" not in reading_order:
-            findings.append(
-                _finding(
-                    "AGENT_CONTRACT_READING_ORDER",
-                    "$.reading_order",
-                    "agent-contract.json must appear in reading_order",
+                    "reading_order must equal the canonical schema-version-1 sequence",
                 )
             )
 

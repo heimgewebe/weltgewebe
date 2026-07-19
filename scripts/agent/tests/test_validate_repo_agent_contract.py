@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from scripts.agent.validate_repo_agent_contract import (
-    READING_ORDER_REQUIRED_PREFIX,
+    READING_ORDER_REQUIRED,
     validate_repo_agent_contract,
 )
 
@@ -105,9 +105,13 @@ class TestValidateRepoAgentContract(unittest.TestCase):
                 encoding="utf-8"
             )
         )
+        reading_schema = schema["properties"]["reading_order"]
+        self.assertEqual(reading_schema["minItems"], len(READING_ORDER_REQUIRED))
+        self.assertEqual(reading_schema["maxItems"], len(READING_ORDER_REQUIRED))
+        self.assertFalse(reading_schema["additionalItems"])
         self.assertEqual(
-            schema["properties"]["reading_order"]["minItems"],
-            len(READING_ORDER_REQUIRED_PREFIX),
+            [item["enum"][0] for item in reading_schema["items"]],
+            READING_ORDER_REQUIRED,
         )
 
     def test_repository_contract_and_schema_validate_together(self):
@@ -168,6 +172,28 @@ class TestValidateRepoAgentContract(unittest.TestCase):
         self.assertTrue(
             any(f["code"] == "AGENT_CONTRACT_READING_ORDER" for f in findings)
         )
+
+    def test_trailing_reading_order_entry_is_rejected(self):
+        contract = dict(VALID_CONTRACT)
+        contract["reading_order"] = [*READING_ORDER_REQUIRED, "docs/roadmap.md"]
+        self.write_json("agent-contract.json", contract)
+        findings = validate_repo_agent_contract(self.repo_root)
+        self.assertTrue(
+            any(f["code"] == "AGENT_CONTRACT_READING_ORDER" for f in findings)
+        )
+
+    def test_generated_target_prefix_schema_is_intentionally_v1_exact(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        schema = json.loads(
+            (repo_root / "contracts/agent/agent-contract.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        prefix_schema = schema["definitions"]["generatedArtifacts"]["properties"][
+            "allowed_target_prefixes"
+        ]
+        self.assertEqual(prefix_schema["maxItems"], 1)
+        self.assertIn("schema-version bump", prefix_schema["description"])
 
     def test_projection_drift_repo_meta(self):
         self.write_file("repo.meta.yaml", VALID_REPO_META.replace("src/", "docs/"))

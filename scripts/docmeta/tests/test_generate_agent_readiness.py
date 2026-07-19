@@ -440,6 +440,23 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertIn("- Hard capability missing: claim_evidence_spine", report)
 
 
+    def test_render_report_rejects_unknown_dimension_explicitly(self):
+        result = gen.CapabilityResult(
+            id="unexpected",
+            dimension="unknown-dimension",
+            title="Unexpected",
+            hard=False,
+            status="open",
+            evidence=[],
+            missing=[],
+            rationale="fixture",
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Unknown capability dimension for unexpected: unknown-dimension",
+        ):
+            gen.render_report([result], "open", "fixture", [])
+
     def test_check_detects_drift_without_writing(self):
         out_file = gen.generate(self.root)
         self.assertEqual(gen.check(self.root), [])
