@@ -361,6 +361,7 @@ def _assert_ha_contract() -> None:
         "wait_barman_plugin_leader_after_node_loss", "barman_leader_rto_seconds",
         "barman_plugin_rto_seconds",
         "verify_barman_sidecar_images",
+        "configure_cluster_dns_ha", "cluster_dns",
         "BARMAN_CLOUD_SIDECAR_IMAGE",
         "pg_stat_archiver", "pluginConfiguration",
         "prove_api_upgrade_and_rollback", "UPGRADE_API_IMAGE",

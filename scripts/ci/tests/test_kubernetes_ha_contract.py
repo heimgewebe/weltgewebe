@@ -207,6 +207,75 @@ class KubernetesHaContractTests(unittest.TestCase):
         with self.assertRaisesRegex(self.ha.ref.ProofError, "not spread"):
             self.ha.require_zones(invalid, 3, "test")
 
+    def test_cluster_dns_is_scaled_and_spread_across_three_zones(self) -> None:
+        topology = {
+            "coredns-a": {"node": "node-a", "zone": "zone-a"},
+            "coredns-b": {"node": "node-b", "zone": "zone-b"},
+            "coredns-c": {"node": "node-c", "zone": "zone-c"},
+        }
+        with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
+            self.ha.ref, "wait_rollout"
+        ) as wait_rollout, mock.patch.object(
+            self.ha, "pod_topology", return_value=topology
+        ) as pod_topology:
+            observed = self.ha.configure_cluster_dns_ha("kubectl")
+
+        self.assertEqual(observed, topology)
+        argv = run.call_args.args[0]
+        self.assertEqual(
+            argv[:6],
+            [
+                "kubectl",
+                "-n",
+                "kube-system",
+                "patch",
+                "deployment/coredns",
+                "--type=strategic",
+            ],
+        )
+        patch = json.loads(argv[argv.index("--patch") + 1])
+        self.assertEqual(patch["spec"]["replicas"], 3)
+        pod = patch["spec"]["template"]["spec"]
+        self.assertEqual(
+            pod["nodeSelector"],
+            {
+                "kubernetes.io/os": "linux",
+                "weltgewebe.net/data-node": "true",
+            },
+        )
+        required = pod["affinity"]["podAntiAffinity"][
+            "requiredDuringSchedulingIgnoredDuringExecution"
+        ]
+        self.assertEqual(
+            required,
+            [
+                {
+                    "labelSelector": {
+                        "matchLabels": {"k8s-app": "kube-dns"}
+                    },
+                    "topologyKey": "topology.kubernetes.io/zone",
+                }
+            ],
+        )
+        wait_rollout.assert_called_once_with(
+            "kubectl", "kube-system", "deployment/coredns", "8m"
+        )
+        pod_topology.assert_called_once_with(
+            "kubectl", "kube-system", "k8s-app=kube-dns"
+        )
+
+    def test_cluster_dns_rejects_a_single_node_failure_domain(self) -> None:
+        topology = {
+            "coredns-a": {"node": "node-a", "zone": "zone-a"},
+            "coredns-b": {"node": "node-a", "zone": "zone-a"},
+            "coredns-c": {"node": "node-b", "zone": "zone-b"},
+        }
+        with mock.patch.object(self.ha.ref, "run"), mock.patch.object(
+            self.ha.ref, "wait_rollout"
+        ), mock.patch.object(self.ha, "pod_topology", return_value=topology):
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "not spread"):
+                self.ha.configure_cluster_dns_ha("kubectl")
+
     def test_external_object_store_cleanup_is_ownership_bound(self) -> None:
         inspect = mock.Mock(return_value=mock.Mock(returncode=0))
         with mock.patch.object(self.ha.subprocess, "run", inspect), mock.patch.object(
@@ -839,6 +908,9 @@ spec:
                     "barman-plugin-logs.txt",
                     "barman-objectstores.yaml",
                     "certificates.yaml",
+                    "cluster-dns-deployment.yaml",
+                    "cluster-dns-pods-describe.txt",
+                    "cluster-dns-logs.txt",
                     "storage.txt",
                 },
             )
@@ -861,6 +933,13 @@ spec:
         self.assertIn('"operator_nodes": {', source)
         self.assertIn('"primary": primary_operator_nodes', source)
         self.assertIn('"restore": restore_operator_nodes', source)
+
+    def test_success_receipt_records_cluster_dns_distribution(self) -> None:
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        self.assertEqual(source.count("configure_cluster_dns_ha("), 3)
+        self.assertIn('"cluster_dns": {', source)
+        self.assertIn('"primary": primary_dns_topology', source)
+        self.assertIn('"restore": restore_dns_topology', source)
 
     def test_ha_api_rollout_is_schedulable_on_three_zoned_workers(self) -> None:
         documents = list(

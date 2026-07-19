@@ -1037,6 +1037,16 @@ def ha_diagnostic_snapshot(kubectl: str, name: str) -> None:
         ],
         "barman-objectstores.yaml": [kubectl, "get", "objectstores.barmancloud.cnpg.io", "-A", "-o", "yaml"],
         "certificates.yaml": [kubectl, "get", "certificates.cert-manager.io", "-A", "-o", "yaml"],
+        "cluster-dns-deployment.yaml": [
+            kubectl, "-n", "kube-system", "get", "deployment/coredns", "-o", "yaml",
+        ],
+        "cluster-dns-pods-describe.txt": [
+            kubectl, "-n", "kube-system", "describe", "pods", "-l", "k8s-app=kube-dns",
+        ],
+        "cluster-dns-logs.txt": [
+            kubectl, "-n", "kube-system", "logs", "-l", "k8s-app=kube-dns",
+            "--all-containers=true", "--prefix=true", "--tail=2000",
+        ],
         "storage.txt": [kubectl, "get", "pv,pvc", "-A", "-o", "wide"],
     }
     for filename, argv in commands.items():
@@ -1095,6 +1105,55 @@ def require_zones(topology: dict[str, dict[str, str]], expected: int, component:
     zones = {item["zone"] for item in topology.values() if item["zone"]}
     if len(topology) < expected or len(zones) != expected:
         raise ref.ProofError(f"{component} is not spread across {expected} zones: {topology}")
+
+
+def configure_cluster_dns_ha(kubectl: str) -> dict[str, dict[str, str]]:
+    patch = {
+        "spec": {
+            "replicas": 3,
+            "template": {
+                "spec": {
+                    "nodeSelector": {
+                        "kubernetes.io/os": "linux",
+                        "weltgewebe.net/data-node": "true",
+                    },
+                    "affinity": {
+                        "podAntiAffinity": {
+                            "requiredDuringSchedulingIgnoredDuringExecution": [
+                                {
+                                    "labelSelector": {
+                                        "matchLabels": {"k8s-app": "kube-dns"}
+                                    },
+                                    "topologyKey": "topology.kubernetes.io/zone",
+                                }
+                            ]
+                        }
+                    },
+                }
+            },
+        }
+    }
+    ref.run(
+        [
+            kubectl,
+            "-n",
+            "kube-system",
+            "patch",
+            "deployment/coredns",
+            "--type=strategic",
+            "--patch",
+            json.dumps(patch, separators=(",", ":"), sort_keys=True),
+        ],
+        timeout=120,
+    )
+    ref.wait_rollout(kubectl, "kube-system", "deployment/coredns", "8m")
+    topology = pod_topology(kubectl, "kube-system", "k8s-app=kube-dns")
+    if len(topology) != 3:
+        raise ref.ProofError(
+            f"cluster DNS requires exactly three replicas: {topology}"
+        )
+    require_zones(topology, 3, "cluster DNS")
+    return topology
 
 
 def wait_api_replicas(kubectl: str, expected: int = 3) -> None:
@@ -1654,6 +1713,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         )
         ref.install_platform_components(kubectl, flux, helm, receipt["artifacts"], ref.control_plane_address(args.cluster))
         ref.run([kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=8m"])
+        primary_dns_topology = configure_cluster_dns_ha(kubectl)
         _, _, object_store_address = start_external_object_store(args.cluster, commit, s3_secret_key)
         object_store_created = True
         ref.apply_file(kubectl, ROOT / "platform/infrastructure/ha-data/namespace.yaml")
@@ -1795,6 +1855,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             kind, kubectl, restore_name
         )
         ref.run([restore_kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=8m"])
+        restore_dns_topology = configure_cluster_dns_ha(restore_kubectl)
         ref.apply_file(restore_kubectl, ROOT / "platform/infrastructure/ha-data/namespace.yaml")
         apply_secret_contracts(restore_kubectl, app_password, s3_secret_key)
         ref.apply_file(restore_kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml")
@@ -1848,6 +1909,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             "operator_nodes": {
                 "primary": primary_operator_nodes,
                 "restore": restore_operator_nodes,
+            },
+            "cluster_dns": {
+                "primary": primary_dns_topology,
+                "restore": restore_dns_topology,
             },
             "barman_plugin": {
                 "primary_initial": primary_barman_plugin_state,
