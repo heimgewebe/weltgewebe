@@ -2,7 +2,7 @@
   "schema_version": 1,
   "kind": "weltgewebe_semantic_search_relevance_benchmark",
   "benchmark_revision": "semantic-search-benchmark-v1",
-  "measured_at": "2026-07-18T20:28:04.077903Z",
+  "measured_at": "2026-07-19T05:44:54.056127Z",
   "dataset": {
     "path": "contracts/search/examples/relevance-goldset.example.json",
     "dataset_id": "weltgewebe-semantic-search-v1-synthetic-v2",
@@ -13,7 +13,7 @@
     "case_count": 24,
     "privacy_class": "synthetic"
   },
-  "benchmark_source_sha256": "ec6f9646aaf43b5cbf465280df9b67aa62c27125248e928a157a85be78d877fb",
+  "benchmark_source_sha256": "d5bde8aff4c49d1281daff58a653ea307c7d1cde1de09a03d9a5a44aa02706b0",
   "environment": {
     "host_class": "heim-pc-local",
     "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
@@ -72,6 +72,9 @@
         "cases": [
           {
             "case_id": "search-exact-title-community-garden",
+            "ranked_node_ids": [
+              "syn-node-community-garden"
+            ],
             "top3": [
               "syn-node-community-garden"
             ],
@@ -82,6 +85,9 @@
           },
           {
             "case_id": "search-exact-tag-tool-sharing",
+            "ranked_node_ids": [
+              "syn-node-tool-library"
+            ],
             "top3": [
               "syn-node-tool-library"
             ],
@@ -92,6 +98,9 @@
           },
           {
             "case_id": "search-title-prefix-neighbourhood-kitchen",
+            "ranked_node_ids": [
+              "syn-node-neighbourhood-kitchen"
+            ],
             "top3": [
               "syn-node-neighbourhood-kitchen"
             ],
@@ -102,6 +111,7 @@
           },
           {
             "case_id": "search-typo-bike-workshop",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -110,6 +120,7 @@
           },
           {
             "case_id": "search-full-text-energy-rent",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -118,6 +129,7 @@
           },
           {
             "case_id": "search-semantic-food-rescue",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -126,6 +138,7 @@
           },
           {
             "case_id": "search-semantic-phone-help",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -134,6 +147,7 @@
           },
           {
             "case_id": "search-semantic-clothes-circular",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -142,6 +156,7 @@
           },
           {
             "case_id": "search-semantic-language-practice",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -150,6 +165,7 @@
           },
           {
             "case_id": "search-semantic-elderly-company",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -158,6 +174,7 @@
           },
           {
             "case_id": "search-semantic-drill-sharing",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -166,6 +183,7 @@
           },
           {
             "case_id": "search-semantic-shared-childcare",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -174,6 +192,7 @@
           },
           {
             "case_id": "search-semantic-rent-contract",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -182,6 +201,7 @@
           },
           {
             "case_id": "search-semantic-clean-river",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -190,6 +210,7 @@
           },
           {
             "case_id": "search-semantic-make-radio",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -198,6 +219,7 @@
           },
           {
             "case_id": "search-semantic-radio-repair",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -206,6 +228,7 @@
           },
           {
             "case_id": "search-semantic-cargo-bike",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -214,6 +237,7 @@
           },
           {
             "case_id": "search-semantic-legal-first-step",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -222,6 +246,7 @@
           },
           {
             "case_id": "search-semantic-seeds-spring",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -230,6 +255,7 @@
           },
           {
             "case_id": "search-semantic-cook-together",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -238,6 +264,7 @@
           },
           {
             "case_id": "search-semantic-prototype-machines",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -246,6 +273,7 @@
           },
           {
             "case_id": "search-filter-workshops",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -254,6 +282,7 @@
           },
           {
             "case_id": "search-visibility-hidden-bike",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -262,6 +291,7 @@
           },
           {
             "case_id": "search-visibility-deleted-repair",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -271,9 +301,9 @@
         ]
       },
       "performance": {
-        "median_ms": 0.026,
-        "p95_ms": 0.041,
-        "maximum_ms": 0.053
+        "median_ms": 0.023,
+        "p95_ms": 0.026,
+        "maximum_ms": 0.03
       }
     },
     {
@@ -326,6 +356,10 @@
         "cases": [
           {
             "case_id": "search-exact-title-community-garden",
+            "ranked_node_ids": [
+              "syn-node-community-garden",
+              "syn-node-elder-companionship"
+            ],
             "top3": [
               "syn-node-community-garden",
               "syn-node-elder-companionship"
@@ -337,6 +371,14 @@
           },
           {
             "case_id": "search-exact-tag-tool-sharing",
+            "ranked_node_ids": [
+              "syn-node-tool-library",
+              "syn-node-food-fridge",
+              "syn-node-mobility-share",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-child-care-coop",
+              "syn-node-community-garden"
+            ],
             "top3": [
               "syn-node-tool-library",
               "syn-node-food-fridge",
@@ -349,6 +391,11 @@
           },
           {
             "case_id": "search-title-prefix-neighbourhood-kitchen",
+            "ranked_node_ids": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-community-radio"
+            ],
             "top3": [
               "syn-node-neighbourhood-kitchen",
               "syn-node-community-garden",
@@ -361,6 +408,10 @@
           },
           {
             "case_id": "search-typo-bike-workshop",
+            "ranked_node_ids": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe"
+            ],
             "top3": [
               "syn-node-bike-workshop",
               "syn-node-repair-cafe"
@@ -372,6 +423,10 @@
           },
           {
             "case_id": "search-full-text-energy-rent",
+            "ranked_node_ids": [
+              "syn-node-energy-advice",
+              "syn-node-housing-advice"
+            ],
             "top3": [
               "syn-node-energy-advice",
               "syn-node-housing-advice"
@@ -383,6 +438,7 @@
           },
           {
             "case_id": "search-semantic-food-rescue",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -391,6 +447,7 @@
           },
           {
             "case_id": "search-semantic-phone-help",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -399,6 +456,7 @@
           },
           {
             "case_id": "search-semantic-clothes-circular",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -407,6 +465,9 @@
           },
           {
             "case_id": "search-semantic-language-practice",
+            "ranked_node_ids": [
+              "syn-node-language-cafe"
+            ],
             "top3": [
               "syn-node-language-cafe"
             ],
@@ -417,6 +478,7 @@
           },
           {
             "case_id": "search-semantic-elderly-company",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -425,6 +487,7 @@
           },
           {
             "case_id": "search-semantic-drill-sharing",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -433,6 +496,9 @@
           },
           {
             "case_id": "search-semantic-shared-childcare",
+            "ranked_node_ids": [
+              "syn-node-child-care-coop"
+            ],
             "top3": [
               "syn-node-child-care-coop"
             ],
@@ -443,6 +509,9 @@
           },
           {
             "case_id": "search-semantic-rent-contract",
+            "ranked_node_ids": [
+              "syn-node-housing-advice"
+            ],
             "top3": [
               "syn-node-housing-advice"
             ],
@@ -453,6 +522,9 @@
           },
           {
             "case_id": "search-semantic-clean-river",
+            "ranked_node_ids": [
+              "syn-node-river-cleanup"
+            ],
             "top3": [
               "syn-node-river-cleanup"
             ],
@@ -463,6 +535,9 @@
           },
           {
             "case_id": "search-semantic-make-radio",
+            "ranked_node_ids": [
+              "syn-node-community-radio"
+            ],
             "top3": [
               "syn-node-community-radio"
             ],
@@ -473,6 +548,7 @@
           },
           {
             "case_id": "search-semantic-radio-repair",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -481,6 +557,7 @@
           },
           {
             "case_id": "search-semantic-cargo-bike",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -489,6 +566,7 @@
           },
           {
             "case_id": "search-semantic-legal-first-step",
+            "ranked_node_ids": [],
             "top3": [],
             "relevant_rank": null,
             "top1_relevant": false,
@@ -497,6 +575,9 @@
           },
           {
             "case_id": "search-semantic-seeds-spring",
+            "ranked_node_ids": [
+              "syn-node-seed-library"
+            ],
             "top3": [
               "syn-node-seed-library"
             ],
@@ -507,6 +588,9 @@
           },
           {
             "case_id": "search-semantic-cook-together",
+            "ranked_node_ids": [
+              "syn-node-neighbourhood-kitchen"
+            ],
             "top3": [
               "syn-node-neighbourhood-kitchen"
             ],
@@ -517,6 +601,9 @@
           },
           {
             "case_id": "search-semantic-prototype-machines",
+            "ranked_node_ids": [
+              "syn-node-maker-space"
+            ],
             "top3": [
               "syn-node-maker-space"
             ],
@@ -527,6 +614,10 @@
           },
           {
             "case_id": "search-filter-workshops",
+            "ranked_node_ids": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe"
+            ],
             "top3": [
               "syn-node-bike-workshop",
               "syn-node-repair-cafe"
@@ -538,6 +629,10 @@
           },
           {
             "case_id": "search-visibility-hidden-bike",
+            "ranked_node_ids": [
+              "syn-node-energy-advice",
+              "syn-node-bike-workshop"
+            ],
             "top3": [
               "syn-node-energy-advice",
               "syn-node-bike-workshop"
@@ -549,6 +644,11 @@
           },
           {
             "case_id": "search-visibility-deleted-repair",
+            "ranked_node_ids": [
+              "syn-node-repair-cafe",
+              "syn-node-digital-help",
+              "syn-node-tool-library"
+            ],
             "top3": [
               "syn-node-repair-cafe",
               "syn-node-digital-help",
@@ -562,9 +662,9 @@
         ]
       },
       "performance": {
-        "median_ms": 1.791,
-        "p95_ms": 2.513,
-        "maximum_ms": 2.623
+        "median_ms": 1.59,
+        "p95_ms": 1.932,
+        "maximum_ms": 2.12
       }
     }
   ],
@@ -627,6 +727,18 @@
         "cases": [
           {
             "case_id": "search-exact-title-community-garden",
+            "ranked_node_ids": [
+              "syn-node-community-garden",
+              "syn-node-elder-companionship",
+              "syn-node-clothing-swap",
+              "syn-node-seed-library",
+              "syn-node-mobility-share",
+              "syn-node-river-cleanup",
+              "syn-node-tool-library",
+              "syn-node-legal-advice",
+              "syn-node-language-cafe",
+              "syn-node-neighbourhood-kitchen"
+            ],
             "top3": [
               "syn-node-community-garden",
               "syn-node-elder-companionship",
@@ -639,6 +751,18 @@
           },
           {
             "case_id": "search-exact-tag-tool-sharing",
+            "ranked_node_ids": [
+              "syn-node-tool-library",
+              "syn-node-food-fridge",
+              "syn-node-mobility-share",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-child-care-coop",
+              "syn-node-community-garden",
+              "syn-node-clothing-swap",
+              "syn-node-repair-cafe",
+              "syn-node-maker-space",
+              "syn-node-bike-workshop"
+            ],
             "top3": [
               "syn-node-tool-library",
               "syn-node-food-fridge",
@@ -651,6 +775,18 @@
           },
           {
             "case_id": "search-title-prefix-neighbourhood-kitchen",
+            "ranked_node_ids": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-community-radio",
+              "syn-node-clothing-swap",
+              "syn-node-housing-advice",
+              "syn-node-elder-companionship",
+              "syn-node-mobility-share",
+              "syn-node-tool-library",
+              "syn-node-legal-advice",
+              "syn-node-language-cafe"
+            ],
             "top3": [
               "syn-node-neighbourhood-kitchen",
               "syn-node-community-garden",
@@ -663,6 +799,18 @@
           },
           {
             "case_id": "search-typo-bike-workshop",
+            "ranked_node_ids": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-clothing-swap",
+              "syn-node-mobility-share",
+              "syn-node-tool-library",
+              "syn-node-legal-advice",
+              "syn-node-seed-library",
+              "syn-node-digital-help",
+              "syn-node-language-cafe",
+              "syn-node-elder-companionship"
+            ],
             "top3": [
               "syn-node-bike-workshop",
               "syn-node-repair-cafe",
@@ -675,6 +823,18 @@
           },
           {
             "case_id": "search-full-text-energy-rent",
+            "ranked_node_ids": [
+              "syn-node-energy-advice",
+              "syn-node-housing-advice",
+              "syn-node-clothing-swap",
+              "syn-node-repair-cafe",
+              "syn-node-tool-library",
+              "syn-node-maker-space",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-legal-advice",
+              "syn-node-mobility-share",
+              "syn-node-food-fridge"
+            ],
             "top3": [
               "syn-node-energy-advice",
               "syn-node-housing-advice",
@@ -687,6 +847,18 @@
           },
           {
             "case_id": "search-semantic-food-rescue",
+            "ranked_node_ids": [
+              "syn-node-clothing-swap",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-legal-advice",
+              "syn-node-food-fridge",
+              "syn-node-seed-library",
+              "syn-node-mobility-share",
+              "syn-node-housing-advice",
+              "syn-node-community-garden",
+              "syn-node-elder-companionship",
+              "syn-node-repair-cafe"
+            ],
             "top3": [
               "syn-node-clothing-swap",
               "syn-node-neighbourhood-kitchen",
@@ -699,6 +871,18 @@
           },
           {
             "case_id": "search-semantic-phone-help",
+            "ranked_node_ids": [
+              "syn-node-digital-help",
+              "syn-node-clothing-swap",
+              "syn-node-legal-advice",
+              "syn-node-tool-library",
+              "syn-node-housing-advice",
+              "syn-node-mobility-share",
+              "syn-node-repair-cafe",
+              "syn-node-language-cafe",
+              "syn-node-elder-companionship",
+              "syn-node-seed-library"
+            ],
             "top3": [
               "syn-node-digital-help",
               "syn-node-clothing-swap",
@@ -711,6 +895,18 @@
           },
           {
             "case_id": "search-semantic-clothes-circular",
+            "ranked_node_ids": [
+              "syn-node-clothing-swap",
+              "syn-node-tool-library",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share",
+              "syn-node-river-cleanup",
+              "syn-node-seed-library",
+              "syn-node-food-fridge",
+              "syn-node-legal-advice",
+              "syn-node-elder-companionship",
+              "syn-node-community-garden"
+            ],
             "top3": [
               "syn-node-clothing-swap",
               "syn-node-tool-library",
@@ -723,6 +919,18 @@
           },
           {
             "case_id": "search-semantic-language-practice",
+            "ranked_node_ids": [
+              "syn-node-language-cafe",
+              "syn-node-legal-advice",
+              "syn-node-clothing-swap",
+              "syn-node-housing-advice",
+              "syn-node-tool-library",
+              "syn-node-community-radio",
+              "syn-node-repair-cafe",
+              "syn-node-elder-companionship",
+              "syn-node-energy-advice",
+              "syn-node-community-garden"
+            ],
             "top3": [
               "syn-node-language-cafe",
               "syn-node-legal-advice",
@@ -735,6 +943,18 @@
           },
           {
             "case_id": "search-semantic-elderly-company",
+            "ranked_node_ids": [
+              "syn-node-elder-companionship",
+              "syn-node-clothing-swap",
+              "syn-node-community-garden",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-housing-advice",
+              "syn-node-child-care-coop",
+              "syn-node-community-radio",
+              "syn-node-language-cafe"
+            ],
             "top3": [
               "syn-node-elder-companionship",
               "syn-node-clothing-swap",
@@ -747,6 +967,18 @@
           },
           {
             "case_id": "search-semantic-drill-sharing",
+            "ranked_node_ids": [
+              "syn-node-tool-library",
+              "syn-node-clothing-swap",
+              "syn-node-maker-space",
+              "syn-node-legal-advice",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share",
+              "syn-node-language-cafe",
+              "syn-node-bike-workshop",
+              "syn-node-housing-advice",
+              "syn-node-energy-advice"
+            ],
             "top3": [
               "syn-node-tool-library",
               "syn-node-clothing-swap",
@@ -759,6 +991,18 @@
           },
           {
             "case_id": "search-semantic-shared-childcare",
+            "ranked_node_ids": [
+              "syn-node-child-care-coop",
+              "syn-node-elder-companionship",
+              "syn-node-clothing-swap",
+              "syn-node-mobility-share",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-tool-library",
+              "syn-node-housing-advice",
+              "syn-node-legal-advice",
+              "syn-node-repair-cafe"
+            ],
             "top3": [
               "syn-node-child-care-coop",
               "syn-node-elder-companionship",
@@ -771,6 +1015,18 @@
           },
           {
             "case_id": "search-semantic-rent-contract",
+            "ranked_node_ids": [
+              "syn-node-housing-advice",
+              "syn-node-energy-advice",
+              "syn-node-legal-advice",
+              "syn-node-clothing-swap",
+              "syn-node-tool-library",
+              "syn-node-repair-cafe",
+              "syn-node-language-cafe",
+              "syn-node-mobility-share",
+              "syn-node-community-radio",
+              "syn-node-neighbourhood-kitchen"
+            ],
             "top3": [
               "syn-node-housing-advice",
               "syn-node-energy-advice",
@@ -783,6 +1039,18 @@
           },
           {
             "case_id": "search-semantic-clean-river",
+            "ranked_node_ids": [
+              "syn-node-river-cleanup",
+              "syn-node-clothing-swap",
+              "syn-node-mobility-share",
+              "syn-node-repair-cafe",
+              "syn-node-tool-library",
+              "syn-node-community-garden",
+              "syn-node-legal-advice",
+              "syn-node-food-fridge",
+              "syn-node-seed-library",
+              "syn-node-maker-space"
+            ],
             "top3": [
               "syn-node-river-cleanup",
               "syn-node-clothing-swap",
@@ -795,6 +1063,18 @@
           },
           {
             "case_id": "search-semantic-make-radio",
+            "ranked_node_ids": [
+              "syn-node-community-radio",
+              "syn-node-clothing-swap",
+              "syn-node-language-cafe",
+              "syn-node-legal-advice",
+              "syn-node-repair-cafe",
+              "syn-node-river-cleanup",
+              "syn-node-elder-companionship",
+              "syn-node-housing-advice",
+              "syn-node-tool-library",
+              "syn-node-maker-space"
+            ],
             "top3": [
               "syn-node-community-radio",
               "syn-node-clothing-swap",
@@ -807,6 +1087,18 @@
           },
           {
             "case_id": "search-semantic-radio-repair",
+            "ranked_node_ids": [
+              "syn-node-repair-cafe",
+              "syn-node-clothing-swap",
+              "syn-node-community-radio",
+              "syn-node-bike-workshop",
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-seed-library",
+              "syn-node-elder-companionship",
+              "syn-node-energy-advice",
+              "syn-node-digital-help"
+            ],
             "top3": [
               "syn-node-repair-cafe",
               "syn-node-clothing-swap",
@@ -819,6 +1111,18 @@
           },
           {
             "case_id": "search-semantic-cargo-bike",
+            "ranked_node_ids": [
+              "syn-node-clothing-swap",
+              "syn-node-mobility-share",
+              "syn-node-tool-library",
+              "syn-node-legal-advice",
+              "syn-node-repair-cafe",
+              "syn-node-elder-companionship",
+              "syn-node-bike-workshop",
+              "syn-node-housing-advice",
+              "syn-node-seed-library",
+              "syn-node-energy-advice"
+            ],
             "top3": [
               "syn-node-clothing-swap",
               "syn-node-mobility-share",
@@ -831,6 +1135,18 @@
           },
           {
             "case_id": "search-semantic-legal-first-step",
+            "ranked_node_ids": [
+              "syn-node-legal-advice",
+              "syn-node-housing-advice",
+              "syn-node-clothing-swap",
+              "syn-node-tool-library",
+              "syn-node-energy-advice",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share",
+              "syn-node-language-cafe",
+              "syn-node-bike-workshop",
+              "syn-node-river-cleanup"
+            ],
             "top3": [
               "syn-node-legal-advice",
               "syn-node-housing-advice",
@@ -843,6 +1159,18 @@
           },
           {
             "case_id": "search-semantic-seeds-spring",
+            "ranked_node_ids": [
+              "syn-node-seed-library",
+              "syn-node-clothing-swap",
+              "syn-node-community-garden",
+              "syn-node-tool-library",
+              "syn-node-legal-advice",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-elder-companionship",
+              "syn-node-food-fridge",
+              "syn-node-mobility-share",
+              "syn-node-river-cleanup"
+            ],
             "top3": [
               "syn-node-seed-library",
               "syn-node-clothing-swap",
@@ -855,6 +1183,18 @@
           },
           {
             "case_id": "search-semantic-cook-together",
+            "ranked_node_ids": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-community-radio",
+              "syn-node-food-fridge",
+              "syn-node-clothing-swap",
+              "syn-node-tool-library",
+              "syn-node-elder-companionship",
+              "syn-node-mobility-share",
+              "syn-node-housing-advice",
+              "syn-node-seed-library"
+            ],
             "top3": [
               "syn-node-neighbourhood-kitchen",
               "syn-node-community-garden",
@@ -867,6 +1207,18 @@
           },
           {
             "case_id": "search-semantic-prototype-machines",
+            "ranked_node_ids": [
+              "syn-node-maker-space",
+              "syn-node-tool-library",
+              "syn-node-clothing-swap",
+              "syn-node-repair-cafe",
+              "syn-node-language-cafe",
+              "syn-node-bike-workshop",
+              "syn-node-mobility-share",
+              "syn-node-community-radio",
+              "syn-node-legal-advice",
+              "syn-node-digital-help"
+            ],
             "top3": [
               "syn-node-maker-space",
               "syn-node-tool-library",
@@ -879,6 +1231,11 @@
           },
           {
             "case_id": "search-filter-workshops",
+            "ranked_node_ids": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-maker-space"
+            ],
             "top3": [
               "syn-node-bike-workshop",
               "syn-node-repair-cafe",
@@ -891,6 +1248,18 @@
           },
           {
             "case_id": "search-visibility-hidden-bike",
+            "ranked_node_ids": [
+              "syn-node-energy-advice",
+              "syn-node-bike-workshop",
+              "syn-node-mobility-share",
+              "syn-node-clothing-swap",
+              "syn-node-repair-cafe",
+              "syn-node-tool-library",
+              "syn-node-legal-advice",
+              "syn-node-digital-help",
+              "syn-node-language-cafe",
+              "syn-node-housing-advice"
+            ],
             "top3": [
               "syn-node-energy-advice",
               "syn-node-bike-workshop",
@@ -903,6 +1272,18 @@
           },
           {
             "case_id": "search-visibility-deleted-repair",
+            "ranked_node_ids": [
+              "syn-node-repair-cafe",
+              "syn-node-digital-help",
+              "syn-node-tool-library",
+              "syn-node-bike-workshop",
+              "syn-node-clothing-swap",
+              "syn-node-housing-advice",
+              "syn-node-legal-advice",
+              "syn-node-maker-space",
+              "syn-node-mobility-share",
+              "syn-node-seed-library"
+            ],
             "top3": [
               "syn-node-repair-cafe",
               "syn-node-digital-help",
@@ -916,12 +1297,12 @@
         ]
       },
       "performance": {
-        "document_embedding_total_ms": 233.995,
-        "query_embedding_total_ms": 200.474,
+        "document_embedding_total_ms": 1282.238,
+        "query_embedding_total_ms": 205.663,
         "ranking": {
-          "median_ms": 3.448,
-          "p95_ms": 3.785,
-          "maximum_ms": 3.79
+          "median_ms": 3.35,
+          "p95_ms": 3.54,
+          "maximum_ms": 3.586
         },
         "document_count": 19,
         "query_count": 24
@@ -985,6 +1366,18 @@
         "cases": [
           {
             "case_id": "search-exact-title-community-garden",
+            "ranked_node_ids": [
+              "syn-node-community-garden",
+              "syn-node-elder-companionship",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-mobility-share",
+              "syn-node-seed-library",
+              "syn-node-tool-library",
+              "syn-node-river-cleanup",
+              "syn-node-community-radio",
+              "syn-node-repair-cafe",
+              "syn-node-food-fridge"
+            ],
             "top3": [
               "syn-node-community-garden",
               "syn-node-elder-companionship",
@@ -997,6 +1390,18 @@
           },
           {
             "case_id": "search-exact-tag-tool-sharing",
+            "ranked_node_ids": [
+              "syn-node-tool-library",
+              "syn-node-food-fridge",
+              "syn-node-mobility-share",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-child-care-coop",
+              "syn-node-community-garden",
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-maker-space",
+              "syn-node-clothing-swap"
+            ],
             "top3": [
               "syn-node-tool-library",
               "syn-node-food-fridge",
@@ -1009,6 +1414,18 @@
           },
           {
             "case_id": "search-title-prefix-neighbourhood-kitchen",
+            "ranked_node_ids": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-community-radio",
+              "syn-node-mobility-share",
+              "syn-node-elder-companionship",
+              "syn-node-housing-advice",
+              "syn-node-child-care-coop",
+              "syn-node-tool-library",
+              "syn-node-food-fridge",
+              "syn-node-legal-advice"
+            ],
             "top3": [
               "syn-node-neighbourhood-kitchen",
               "syn-node-community-garden",
@@ -1021,6 +1438,18 @@
           },
           {
             "case_id": "search-typo-bike-workshop",
+            "ranked_node_ids": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share",
+              "syn-node-tool-library",
+              "syn-node-food-fridge",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-digital-help",
+              "syn-node-maker-space",
+              "syn-node-seed-library"
+            ],
             "top3": [
               "syn-node-bike-workshop",
               "syn-node-repair-cafe",
@@ -1033,6 +1462,18 @@
           },
           {
             "case_id": "search-full-text-energy-rent",
+            "ranked_node_ids": [
+              "syn-node-energy-advice",
+              "syn-node-housing-advice",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-tool-library",
+              "syn-node-repair-cafe",
+              "syn-node-food-fridge",
+              "syn-node-legal-advice",
+              "syn-node-digital-help",
+              "syn-node-language-cafe",
+              "syn-node-mobility-share"
+            ],
             "top3": [
               "syn-node-energy-advice",
               "syn-node-housing-advice",
@@ -1045,6 +1486,18 @@
           },
           {
             "case_id": "search-semantic-food-rescue",
+            "ranked_node_ids": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-food-fridge",
+              "syn-node-river-cleanup",
+              "syn-node-mobility-share",
+              "syn-node-legal-advice",
+              "syn-node-digital-help",
+              "syn-node-repair-cafe",
+              "syn-node-tool-library",
+              "syn-node-community-garden",
+              "syn-node-elder-companionship"
+            ],
             "top3": [
               "syn-node-neighbourhood-kitchen",
               "syn-node-food-fridge",
@@ -1057,6 +1510,18 @@
           },
           {
             "case_id": "search-semantic-phone-help",
+            "ranked_node_ids": [
+              "syn-node-digital-help",
+              "syn-node-legal-advice",
+              "syn-node-tool-library",
+              "syn-node-housing-advice",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share",
+              "syn-node-bike-workshop",
+              "syn-node-child-care-coop",
+              "syn-node-food-fridge",
+              "syn-node-energy-advice"
+            ],
             "top3": [
               "syn-node-digital-help",
               "syn-node-legal-advice",
@@ -1069,6 +1534,18 @@
           },
           {
             "case_id": "search-semantic-clothes-circular",
+            "ranked_node_ids": [
+              "syn-node-clothing-swap",
+              "syn-node-repair-cafe",
+              "syn-node-food-fridge",
+              "syn-node-mobility-share",
+              "syn-node-tool-library",
+              "syn-node-river-cleanup",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-child-care-coop",
+              "syn-node-bike-workshop",
+              "syn-node-legal-advice"
+            ],
             "top3": [
               "syn-node-clothing-swap",
               "syn-node-repair-cafe",
@@ -1081,6 +1558,18 @@
           },
           {
             "case_id": "search-semantic-language-practice",
+            "ranked_node_ids": [
+              "syn-node-language-cafe",
+              "syn-node-digital-help",
+              "syn-node-legal-advice",
+              "syn-node-child-care-coop",
+              "syn-node-clothing-swap",
+              "syn-node-elder-companionship",
+              "syn-node-repair-cafe",
+              "syn-node-river-cleanup",
+              "syn-node-tool-library",
+              "syn-node-mobility-share"
+            ],
             "top3": [
               "syn-node-language-cafe",
               "syn-node-digital-help",
@@ -1093,6 +1582,18 @@
           },
           {
             "case_id": "search-semantic-elderly-company",
+            "ranked_node_ids": [
+              "syn-node-elder-companionship",
+              "syn-node-child-care-coop",
+              "syn-node-mobility-share",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-tool-library",
+              "syn-node-community-garden",
+              "syn-node-legal-advice",
+              "syn-node-repair-cafe",
+              "syn-node-digital-help",
+              "syn-node-housing-advice"
+            ],
             "top3": [
               "syn-node-elder-companionship",
               "syn-node-child-care-coop",
@@ -1105,6 +1606,18 @@
           },
           {
             "case_id": "search-semantic-drill-sharing",
+            "ranked_node_ids": [
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-repair-cafe",
+              "syn-node-bike-workshop",
+              "syn-node-digital-help",
+              "syn-node-legal-advice",
+              "syn-node-housing-advice",
+              "syn-node-maker-space",
+              "syn-node-clothing-swap",
+              "syn-node-energy-advice"
+            ],
             "top3": [
               "syn-node-tool-library",
               "syn-node-mobility-share",
@@ -1117,6 +1630,18 @@
           },
           {
             "case_id": "search-semantic-shared-childcare",
+            "ranked_node_ids": [
+              "syn-node-child-care-coop",
+              "syn-node-mobility-share",
+              "syn-node-elder-companionship",
+              "syn-node-legal-advice",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-clothing-swap",
+              "syn-node-digital-help",
+              "syn-node-repair-cafe",
+              "syn-node-tool-library",
+              "syn-node-housing-advice"
+            ],
             "top3": [
               "syn-node-child-care-coop",
               "syn-node-mobility-share",
@@ -1129,6 +1654,18 @@
           },
           {
             "case_id": "search-semantic-rent-contract",
+            "ranked_node_ids": [
+              "syn-node-housing-advice",
+              "syn-node-energy-advice",
+              "syn-node-legal-advice",
+              "syn-node-digital-help",
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-child-care-coop",
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-neighbourhood-kitchen"
+            ],
             "top3": [
               "syn-node-housing-advice",
               "syn-node-energy-advice",
@@ -1141,6 +1678,18 @@
           },
           {
             "case_id": "search-semantic-clean-river",
+            "ranked_node_ids": [
+              "syn-node-river-cleanup",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-food-fridge",
+              "syn-node-clothing-swap",
+              "syn-node-tool-library",
+              "syn-node-bike-workshop",
+              "syn-node-community-garden",
+              "syn-node-legal-advice"
+            ],
             "top3": [
               "syn-node-river-cleanup",
               "syn-node-repair-cafe",
@@ -1153,6 +1702,18 @@
           },
           {
             "case_id": "search-semantic-make-radio",
+            "ranked_node_ids": [
+              "syn-node-community-radio",
+              "syn-node-mobility-share",
+              "syn-node-river-cleanup",
+              "syn-node-tool-library",
+              "syn-node-digital-help",
+              "syn-node-repair-cafe",
+              "syn-node-bike-workshop",
+              "syn-node-child-care-coop",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-legal-advice"
+            ],
             "top3": [
               "syn-node-community-radio",
               "syn-node-mobility-share",
@@ -1165,6 +1726,18 @@
           },
           {
             "case_id": "search-semantic-radio-repair",
+            "ranked_node_ids": [
+              "syn-node-repair-cafe",
+              "syn-node-bike-workshop",
+              "syn-node-community-radio",
+              "syn-node-digital-help",
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-clothing-swap",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-food-fridge",
+              "syn-node-maker-space"
+            ],
             "top3": [
               "syn-node-repair-cafe",
               "syn-node-bike-workshop",
@@ -1177,6 +1750,18 @@
           },
           {
             "case_id": "search-semantic-cargo-bike",
+            "ranked_node_ids": [
+              "syn-node-mobility-share",
+              "syn-node-clothing-swap",
+              "syn-node-tool-library",
+              "syn-node-child-care-coop",
+              "syn-node-digital-help",
+              "syn-node-legal-advice",
+              "syn-node-bike-workshop",
+              "syn-node-river-cleanup",
+              "syn-node-repair-cafe",
+              "syn-node-neighbourhood-kitchen"
+            ],
             "top3": [
               "syn-node-mobility-share",
               "syn-node-clothing-swap",
@@ -1189,6 +1774,18 @@
           },
           {
             "case_id": "search-semantic-legal-first-step",
+            "ranked_node_ids": [
+              "syn-node-legal-advice",
+              "syn-node-housing-advice",
+              "syn-node-digital-help",
+              "syn-node-energy-advice",
+              "syn-node-language-cafe",
+              "syn-node-tool-library",
+              "syn-node-clothing-swap",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share",
+              "syn-node-bike-workshop"
+            ],
             "top3": [
               "syn-node-legal-advice",
               "syn-node-housing-advice",
@@ -1201,6 +1798,18 @@
           },
           {
             "case_id": "search-semantic-seeds-spring",
+            "ranked_node_ids": [
+              "syn-node-seed-library",
+              "syn-node-community-garden",
+              "syn-node-mobility-share",
+              "syn-node-clothing-swap",
+              "syn-node-child-care-coop",
+              "syn-node-tool-library",
+              "syn-node-food-fridge",
+              "syn-node-river-cleanup",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-bike-workshop"
+            ],
             "top3": [
               "syn-node-seed-library",
               "syn-node-community-garden",
@@ -1213,6 +1822,18 @@
           },
           {
             "case_id": "search-semantic-cook-together",
+            "ranked_node_ids": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-food-fridge",
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-repair-cafe",
+              "syn-node-community-garden",
+              "syn-node-child-care-coop",
+              "syn-node-river-cleanup",
+              "syn-node-clothing-swap",
+              "syn-node-elder-companionship"
+            ],
             "top3": [
               "syn-node-neighbourhood-kitchen",
               "syn-node-food-fridge",
@@ -1225,6 +1846,18 @@
           },
           {
             "case_id": "search-semantic-prototype-machines",
+            "ranked_node_ids": [
+              "syn-node-maker-space",
+              "syn-node-tool-library",
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-digital-help",
+              "syn-node-mobility-share",
+              "syn-node-river-cleanup",
+              "syn-node-community-radio",
+              "syn-node-legal-advice",
+              "syn-node-neighbourhood-kitchen"
+            ],
             "top3": [
               "syn-node-maker-space",
               "syn-node-tool-library",
@@ -1237,6 +1870,11 @@
           },
           {
             "case_id": "search-filter-workshops",
+            "ranked_node_ids": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-maker-space"
+            ],
             "top3": [
               "syn-node-bike-workshop",
               "syn-node-repair-cafe",
@@ -1249,6 +1887,18 @@
           },
           {
             "case_id": "search-visibility-hidden-bike",
+            "ranked_node_ids": [
+              "syn-node-energy-advice",
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share",
+              "syn-node-tool-library",
+              "syn-node-digital-help",
+              "syn-node-legal-advice",
+              "syn-node-housing-advice",
+              "syn-node-child-care-coop",
+              "syn-node-neighbourhood-kitchen"
+            ],
             "top3": [
               "syn-node-energy-advice",
               "syn-node-bike-workshop",
@@ -1261,6 +1911,18 @@
           },
           {
             "case_id": "search-visibility-deleted-repair",
+            "ranked_node_ids": [
+              "syn-node-repair-cafe",
+              "syn-node-digital-help",
+              "syn-node-tool-library",
+              "syn-node-bike-workshop",
+              "syn-node-maker-space",
+              "syn-node-river-cleanup",
+              "syn-node-legal-advice",
+              "syn-node-food-fridge",
+              "syn-node-clothing-swap",
+              "syn-node-neighbourhood-kitchen"
+            ],
             "top3": [
               "syn-node-repair-cafe",
               "syn-node-digital-help",
@@ -1274,12 +1936,12 @@
         ]
       },
       "performance": {
-        "document_embedding_total_ms": 404.411,
-        "query_embedding_total_ms": 337.718,
+        "document_embedding_total_ms": 1928.358,
+        "query_embedding_total_ms": 350.002,
         "ranking": {
-          "median_ms": 5.845,
-          "p95_ms": 6.179,
-          "maximum_ms": 6.238
+          "median_ms": 6.216,
+          "p95_ms": 7.194,
+          "maximum_ms": 7.219
         },
         "document_count": 19,
         "query_count": 24
@@ -1343,6 +2005,18 @@
         "cases": [
           {
             "case_id": "search-exact-title-community-garden",
+            "ranked_node_ids": [
+              "syn-node-community-garden",
+              "syn-node-elder-companionship",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-seed-library",
+              "syn-node-tool-library",
+              "syn-node-community-radio",
+              "syn-node-mobility-share",
+              "syn-node-food-fridge",
+              "syn-node-river-cleanup",
+              "syn-node-bike-workshop"
+            ],
             "top3": [
               "syn-node-community-garden",
               "syn-node-elder-companionship",
@@ -1355,6 +2029,18 @@
           },
           {
             "case_id": "search-exact-tag-tool-sharing",
+            "ranked_node_ids": [
+              "syn-node-tool-library",
+              "syn-node-food-fridge",
+              "syn-node-mobility-share",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-child-care-coop",
+              "syn-node-community-garden",
+              "syn-node-bike-workshop",
+              "syn-node-maker-space",
+              "syn-node-repair-cafe",
+              "syn-node-clothing-swap"
+            ],
             "top3": [
               "syn-node-tool-library",
               "syn-node-food-fridge",
@@ -1367,6 +2053,18 @@
           },
           {
             "case_id": "search-title-prefix-neighbourhood-kitchen",
+            "ranked_node_ids": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-community-radio",
+              "syn-node-food-fridge",
+              "syn-node-elder-companionship",
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-seed-library",
+              "syn-node-language-cafe",
+              "syn-node-housing-advice"
+            ],
             "top3": [
               "syn-node-neighbourhood-kitchen",
               "syn-node-community-garden",
@@ -1379,6 +2077,18 @@
           },
           {
             "case_id": "search-typo-bike-workshop",
+            "ranked_node_ids": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share",
+              "syn-node-tool-library",
+              "syn-node-community-garden",
+              "syn-node-clothing-swap",
+              "syn-node-maker-space",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-seed-library",
+              "syn-node-river-cleanup"
+            ],
             "top3": [
               "syn-node-bike-workshop",
               "syn-node-repair-cafe",
@@ -1391,6 +2101,18 @@
           },
           {
             "case_id": "search-full-text-energy-rent",
+            "ranked_node_ids": [
+              "syn-node-energy-advice",
+              "syn-node-housing-advice",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-food-fridge",
+              "syn-node-legal-advice",
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-community-garden",
+              "syn-node-community-radio",
+              "syn-node-repair-cafe"
+            ],
             "top3": [
               "syn-node-energy-advice",
               "syn-node-housing-advice",
@@ -1403,6 +2125,18 @@
           },
           {
             "case_id": "search-semantic-food-rescue",
+            "ranked_node_ids": [
+              "syn-node-food-fridge",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-clothing-swap",
+              "syn-node-mobility-share",
+              "syn-node-legal-advice",
+              "syn-node-community-garden",
+              "syn-node-river-cleanup",
+              "syn-node-seed-library",
+              "syn-node-elder-companionship",
+              "syn-node-energy-advice"
+            ],
             "top3": [
               "syn-node-food-fridge",
               "syn-node-neighbourhood-kitchen",
@@ -1415,6 +2149,18 @@
           },
           {
             "case_id": "search-semantic-phone-help",
+            "ranked_node_ids": [
+              "syn-node-digital-help",
+              "syn-node-legal-advice",
+              "syn-node-housing-advice",
+              "syn-node-mobility-share",
+              "syn-node-tool-library",
+              "syn-node-clothing-swap",
+              "syn-node-repair-cafe",
+              "syn-node-food-fridge",
+              "syn-node-bike-workshop",
+              "syn-node-energy-advice"
+            ],
             "top3": [
               "syn-node-digital-help",
               "syn-node-legal-advice",
@@ -1427,6 +2173,18 @@
           },
           {
             "case_id": "search-semantic-clothes-circular",
+            "ranked_node_ids": [
+              "syn-node-clothing-swap",
+              "syn-node-food-fridge",
+              "syn-node-repair-cafe",
+              "syn-node-mobility-share",
+              "syn-node-river-cleanup",
+              "syn-node-tool-library",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-seed-library",
+              "syn-node-bike-workshop",
+              "syn-node-legal-advice"
+            ],
             "top3": [
               "syn-node-clothing-swap",
               "syn-node-food-fridge",
@@ -1439,6 +2197,18 @@
           },
           {
             "case_id": "search-semantic-language-practice",
+            "ranked_node_ids": [
+              "syn-node-language-cafe",
+              "syn-node-legal-advice",
+              "syn-node-clothing-swap",
+              "syn-node-elder-companionship",
+              "syn-node-mobility-share",
+              "syn-node-tool-library",
+              "syn-node-community-radio",
+              "syn-node-food-fridge",
+              "syn-node-river-cleanup",
+              "syn-node-community-garden"
+            ],
             "top3": [
               "syn-node-language-cafe",
               "syn-node-legal-advice",
@@ -1451,6 +2221,18 @@
           },
           {
             "case_id": "search-semantic-elderly-company",
+            "ranked_node_ids": [
+              "syn-node-elder-companionship",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-radio",
+              "syn-node-community-garden",
+              "syn-node-child-care-coop",
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-housing-advice",
+              "syn-node-food-fridge",
+              "syn-node-legal-advice"
+            ],
             "top3": [
               "syn-node-elder-companionship",
               "syn-node-neighbourhood-kitchen",
@@ -1463,6 +2245,18 @@
           },
           {
             "case_id": "search-semantic-drill-sharing",
+            "ranked_node_ids": [
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-maker-space",
+              "syn-node-clothing-swap",
+              "syn-node-repair-cafe",
+              "syn-node-legal-advice",
+              "syn-node-energy-advice",
+              "syn-node-food-fridge",
+              "syn-node-housing-advice",
+              "syn-node-bike-workshop"
+            ],
             "top3": [
               "syn-node-tool-library",
               "syn-node-mobility-share",
@@ -1475,6 +2269,18 @@
           },
           {
             "case_id": "search-semantic-shared-childcare",
+            "ranked_node_ids": [
+              "syn-node-child-care-coop",
+              "syn-node-elder-companionship",
+              "syn-node-mobility-share",
+              "syn-node-legal-advice",
+              "syn-node-clothing-swap",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-food-fridge",
+              "syn-node-tool-library",
+              "syn-node-community-garden",
+              "syn-node-housing-advice"
+            ],
             "top3": [
               "syn-node-child-care-coop",
               "syn-node-elder-companionship",
@@ -1487,6 +2293,18 @@
           },
           {
             "case_id": "search-semantic-rent-contract",
+            "ranked_node_ids": [
+              "syn-node-housing-advice",
+              "syn-node-energy-advice",
+              "syn-node-legal-advice",
+              "syn-node-digital-help",
+              "syn-node-mobility-share",
+              "syn-node-tool-library",
+              "syn-node-child-care-coop",
+              "syn-node-food-fridge",
+              "syn-node-elder-companionship",
+              "syn-node-clothing-swap"
+            ],
             "top3": [
               "syn-node-housing-advice",
               "syn-node-energy-advice",
@@ -1499,6 +2317,18 @@
           },
           {
             "case_id": "search-semantic-clean-river",
+            "ranked_node_ids": [
+              "syn-node-river-cleanup",
+              "syn-node-food-fridge",
+              "syn-node-clothing-swap",
+              "syn-node-mobility-share",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-community-garden",
+              "syn-node-repair-cafe",
+              "syn-node-legal-advice",
+              "syn-node-tool-library",
+              "syn-node-elder-companionship"
+            ],
             "top3": [
               "syn-node-river-cleanup",
               "syn-node-food-fridge",
@@ -1511,6 +2341,18 @@
           },
           {
             "case_id": "search-semantic-make-radio",
+            "ranked_node_ids": [
+              "syn-node-community-radio",
+              "syn-node-legal-advice",
+              "syn-node-river-cleanup",
+              "syn-node-tool-library",
+              "syn-node-mobility-share",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-elder-companionship",
+              "syn-node-food-fridge",
+              "syn-node-maker-space",
+              "syn-node-repair-cafe"
+            ],
             "top3": [
               "syn-node-community-radio",
               "syn-node-legal-advice",
@@ -1523,6 +2365,18 @@
           },
           {
             "case_id": "search-semantic-radio-repair",
+            "ranked_node_ids": [
+              "syn-node-repair-cafe",
+              "syn-node-bike-workshop",
+              "syn-node-community-radio",
+              "syn-node-clothing-swap",
+              "syn-node-tool-library",
+              "syn-node-food-fridge",
+              "syn-node-digital-help",
+              "syn-node-mobility-share",
+              "syn-node-legal-advice",
+              "syn-node-maker-space"
+            ],
             "top3": [
               "syn-node-repair-cafe",
               "syn-node-bike-workshop",
@@ -1535,6 +2389,18 @@
           },
           {
             "case_id": "search-semantic-cargo-bike",
+            "ranked_node_ids": [
+              "syn-node-mobility-share",
+              "syn-node-food-fridge",
+              "syn-node-clothing-swap",
+              "syn-node-legal-advice",
+              "syn-node-tool-library",
+              "syn-node-bike-workshop",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-river-cleanup",
+              "syn-node-elder-companionship",
+              "syn-node-child-care-coop"
+            ],
             "top3": [
               "syn-node-mobility-share",
               "syn-node-food-fridge",
@@ -1547,6 +2413,18 @@
           },
           {
             "case_id": "search-semantic-legal-first-step",
+            "ranked_node_ids": [
+              "syn-node-legal-advice",
+              "syn-node-housing-advice",
+              "syn-node-energy-advice",
+              "syn-node-digital-help",
+              "syn-node-food-fridge",
+              "syn-node-language-cafe",
+              "syn-node-mobility-share",
+              "syn-node-clothing-swap",
+              "syn-node-tool-library",
+              "syn-node-elder-companionship"
+            ],
             "top3": [
               "syn-node-legal-advice",
               "syn-node-housing-advice",
@@ -1559,6 +2437,18 @@
           },
           {
             "case_id": "search-semantic-seeds-spring",
+            "ranked_node_ids": [
+              "syn-node-seed-library",
+              "syn-node-community-garden",
+              "syn-node-clothing-swap",
+              "syn-node-child-care-coop",
+              "syn-node-food-fridge",
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-mobility-share",
+              "syn-node-tool-library",
+              "syn-node-river-cleanup",
+              "syn-node-elder-companionship"
+            ],
             "top3": [
               "syn-node-seed-library",
               "syn-node-community-garden",
@@ -1571,6 +2461,18 @@
           },
           {
             "case_id": "search-semantic-cook-together",
+            "ranked_node_ids": [
+              "syn-node-neighbourhood-kitchen",
+              "syn-node-food-fridge",
+              "syn-node-community-garden",
+              "syn-node-elder-companionship",
+              "syn-node-tool-library",
+              "syn-node-community-radio",
+              "syn-node-mobility-share",
+              "syn-node-clothing-swap",
+              "syn-node-river-cleanup",
+              "syn-node-repair-cafe"
+            ],
             "top3": [
               "syn-node-neighbourhood-kitchen",
               "syn-node-food-fridge",
@@ -1583,6 +2485,18 @@
           },
           {
             "case_id": "search-semantic-prototype-machines",
+            "ranked_node_ids": [
+              "syn-node-maker-space",
+              "syn-node-tool-library",
+              "syn-node-repair-cafe",
+              "syn-node-community-radio",
+              "syn-node-digital-help",
+              "syn-node-bike-workshop",
+              "syn-node-mobility-share",
+              "syn-node-clothing-swap",
+              "syn-node-legal-advice",
+              "syn-node-food-fridge"
+            ],
             "top3": [
               "syn-node-maker-space",
               "syn-node-tool-library",
@@ -1595,6 +2509,11 @@
           },
           {
             "case_id": "search-filter-workshops",
+            "ranked_node_ids": [
+              "syn-node-bike-workshop",
+              "syn-node-repair-cafe",
+              "syn-node-maker-space"
+            ],
             "top3": [
               "syn-node-bike-workshop",
               "syn-node-repair-cafe",
@@ -1607,6 +2526,18 @@
           },
           {
             "case_id": "search-visibility-hidden-bike",
+            "ranked_node_ids": [
+              "syn-node-energy-advice",
+              "syn-node-bike-workshop",
+              "syn-node-mobility-share",
+              "syn-node-legal-advice",
+              "syn-node-repair-cafe",
+              "syn-node-tool-library",
+              "syn-node-clothing-swap",
+              "syn-node-digital-help",
+              "syn-node-housing-advice",
+              "syn-node-food-fridge"
+            ],
             "top3": [
               "syn-node-energy-advice",
               "syn-node-bike-workshop",
@@ -1619,6 +2550,18 @@
           },
           {
             "case_id": "search-visibility-deleted-repair",
+            "ranked_node_ids": [
+              "syn-node-repair-cafe",
+              "syn-node-digital-help",
+              "syn-node-tool-library",
+              "syn-node-bike-workshop",
+              "syn-node-legal-advice",
+              "syn-node-clothing-swap",
+              "syn-node-food-fridge",
+              "syn-node-maker-space",
+              "syn-node-mobility-share",
+              "syn-node-river-cleanup"
+            ],
             "top3": [
               "syn-node-repair-cafe",
               "syn-node-digital-help",
@@ -1632,12 +2575,12 @@
         ]
       },
       "performance": {
-        "document_embedding_total_ms": 537.697,
-        "query_embedding_total_ms": 466.867,
+        "document_embedding_total_ms": 2063.087,
+        "query_embedding_total_ms": 467.874,
         "ranking": {
-          "median_ms": 8.871,
-          "p95_ms": 9.796,
-          "maximum_ms": 10.124
+          "median_ms": 8.246,
+          "p95_ms": 8.748,
+          "maximum_ms": 8.772
         },
         "document_count": 19,
         "query_count": 24
@@ -1679,6 +2622,8 @@
     "pgvector availability",
     "runtime integration",
     "public live proof",
-    "SemantAH archive authority"
+    "SemantAH archive authority",
+    "independent reproduction of Ollama outputs in CI",
+    "performance timings as deterministic CI evidence"
   ]
 }

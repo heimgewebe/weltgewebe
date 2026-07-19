@@ -53,6 +53,17 @@ STOP_WORDS = {
     "vor", "was", "wenn", "wer", "wie", "will", "wir", "wo", "zu", "zum", "zur",
 }
 RAW_VECTOR_KEYS = {"embedding", "embeddings", "vector", "vectors"}
+MAX_OLLAMA_RESPONSE_BYTES = 32 * 1024 * 1024
+DOES_NOT_ESTABLISH = (
+    "production relevance",
+    "PostgreSQL FTS or pg_trgm parity",
+    "pgvector availability",
+    "runtime integration",
+    "public live proof",
+    "SemantAH archive authority",
+    "independent reproduction of Ollama outputs in CI",
+    "performance timings as deterministic CI evidence",
+)
 
 
 def sha256_path(path: Path) -> str:
@@ -230,6 +241,13 @@ def quality_report(dataset: dict[str, Any], rankings: dict[str, list[str]]) -> d
 
     for case in dataset["cases"]:
         ranked = rankings[case["id"]]
+        if (
+            not isinstance(ranked, list)
+            or len(ranked) > 10
+            or len(ranked) != len(set(ranked))
+            or any(not isinstance(node_id, str) for node_id in ranked)
+        ):
+            raise ValueError(f"invalid ranking evidence for {case['id']}")
         relevant = set(case["relevant_node_ids"])
         visible = set(case["visibility_context"]["visible_node_ids"])
         excluded = set(case["excluded_node_ids"])
@@ -256,6 +274,7 @@ def quality_report(dataset: dict[str, Any], rankings: dict[str, list[str]]) -> d
         cases.append(
             {
                 "case_id": case["id"],
+                "ranked_node_ids": ranked,
                 "top3": ranked[:3],
                 "relevant_rank": relevant_rank,
                 "top1_relevant": top1_relevant,
@@ -282,6 +301,48 @@ def quality_report(dataset: dict[str, Any], rankings: dict[str, list[str]]) -> d
     }
 
 
+def verify_quality_evidence(dataset: dict[str, Any], quality: dict[str, Any]) -> None:
+    """Recompute every aggregate from the complete stored per-case rankings."""
+
+    records = quality.get("cases")
+    if not isinstance(records, list):
+        raise ValidationError("model quality evidence requires case records")
+    rankings: dict[str, list[str]] = {}
+    required_fields = {
+        "case_id",
+        "ranked_node_ids",
+        "top3",
+        "relevant_rank",
+        "top1_relevant",
+        "top3_relevant",
+        "visibility_leaks",
+    }
+    for record in records:
+        if not isinstance(record, dict) or set(record) != required_fields:
+            raise ValidationError("model quality case evidence has an invalid shape")
+        case_id = record.get("case_id")
+        ranked = record.get("ranked_node_ids")
+        if not isinstance(case_id, str) or case_id in rankings:
+            raise ValidationError("model quality case ids are invalid or duplicated")
+        if (
+            not isinstance(ranked, list)
+            or len(ranked) > 10
+            or len(ranked) != len(set(ranked))
+            or any(not isinstance(node_id, str) for node_id in ranked)
+        ):
+            raise ValidationError(f"model ranking evidence is invalid for {case_id!r}")
+        rankings[case_id] = ranked
+    expected_case_ids = {case["id"] for case in dataset["cases"]}
+    if set(rankings) != expected_case_ids:
+        raise ValidationError("model result does not cover the exact goldset cases")
+    try:
+        expected = quality_report(dataset, rankings)
+    except (KeyError, ValueError) as error:
+        raise ValidationError(f"model ranking evidence is invalid: {error}") from error
+    if quality != expected:
+        raise ValidationError("model quality aggregates or case evidence are inconsistent")
+
+
 def timed_rankings(dataset: dict[str, Any], ranker: Any) -> tuple[dict[str, list[str]], dict[str, float]]:
     durations: list[float] = []
     rankings: dict[str, list[str]] = {}
@@ -304,12 +365,17 @@ def latency_report(values: Iterable[float]) -> dict[str, float]:
     }
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
+        return None
+
+
 class OllamaClient:
     def __init__(self, base_url: str, timeout_seconds: int = 900) -> None:
         parsed = urlsplit(base_url)
         if (
             parsed.scheme != "http"
-            or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
+            or parsed.hostname not in {"127.0.0.1", "::1"}
             or parsed.username is not None
             or parsed.password is not None
             or parsed.path not in {"", "/"}
@@ -319,7 +385,7 @@ class OllamaClient:
             raise ValueError("Ollama benchmark URL must be an unauthenticated loopback HTTP origin")
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
-        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirectHandler())
 
     def _request(self, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         body = None if payload is None else json.dumps(payload).encode("utf-8")
@@ -331,7 +397,10 @@ class OllamaClient:
         )
         try:
             with self.opener.open(request, timeout=self.timeout_seconds) as response:
-                value = json.loads(response.read().decode("utf-8"))
+                payload = response.read(MAX_OLLAMA_RESPONSE_BYTES + 1)
+                if len(payload) > MAX_OLLAMA_RESPONSE_BYTES:
+                    raise RuntimeError(f"Ollama response exceeds {MAX_OLLAMA_RESPONSE_BYTES} bytes")
+                value = json.loads(payload.decode("utf-8"))
         except (OSError, urllib.error.URLError, json.JSONDecodeError) as error:
             raise RuntimeError(f"Ollama request failed for {path}: {error}") from error
         if not isinstance(value, dict):
@@ -371,7 +440,11 @@ class OllamaClient:
             raise RuntimeError("Ollama returned an unexpected embedding count")
         vectors: list[list[float]] = []
         for vector in embeddings:
-            if not isinstance(vector, list) or not vector or not all(isinstance(item, (int, float)) for item in vector):
+            if (
+                not isinstance(vector, list)
+                or not vector
+                or not all(type(item) in {int, float} and math.isfinite(float(item)) for item in vector)
+            ):
                 raise RuntimeError("Ollama returned an invalid embedding vector")
             vectors.append([float(item) for item in vector])
         dimensions = {len(vector) for vector in vectors}
@@ -387,6 +460,9 @@ def evaluate_model(dataset: dict[str, Any], model: str, client: OllamaClient) ->
     identity = client.identity(model)
     document_vectors, document_elapsed = client.embed(model, documents)
     query_vectors, query_elapsed = client.embed(model, queries)
+    identity_after = client.identity(model)
+    if identity_after != identity:
+        raise RuntimeError(f"Ollama model identity changed during measurement: {model}")
     node_vectors = {node["id"]: vector for node, vector in zip(active_nodes, document_vectors, strict=True)}
     dimensions = len(document_vectors[0])
     rankings: dict[str, list[str]] = {}
@@ -414,7 +490,7 @@ def choose_decision(lexical: dict[str, Any], models: list[dict[str, Any]]) -> di
     minimum_gain_cases = 2
     baseline_quality = lexical["quality"]
     assessed: list[dict[str, Any]] = []
-    for item in sorted(models, key=lambda entry: int(entry["model"]["size_bytes"] or 0)):
+    for item in models:
         quality = item["quality"]
         gain = quality["natural_top3_relevant_count"] - baseline_quality["natural_top3_relevant_count"]
         qualifies = (
@@ -458,8 +534,138 @@ def contains_raw_vectors(value: Any) -> bool:
             if contains_raw_vectors(item):
                 return True
     elif isinstance(value, list):
+        if len(value) >= 32 and all(type(item) in {int, float} for item in value):
+            return True
         return any(contains_raw_vectors(item) for item in value)
     return False
+
+
+def _require_exact_keys(value: Any, expected: set[str], label: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != expected:
+        raise ValidationError(f"{label} has an invalid shape")
+    return value
+
+
+def _require_nonnegative_number(value: Any, label: str) -> float:
+    if type(value) not in {int, float} or not math.isfinite(float(value)) or float(value) < 0.0:
+        raise ValidationError(f"{label} must be a finite non-negative number")
+    return float(value)
+
+
+def _validate_latency(value: Any, label: str) -> None:
+    latency = _require_exact_keys(value, {"median_ms", "p95_ms", "maximum_ms"}, label)
+    median = _require_nonnegative_number(latency["median_ms"], f"{label}.median_ms")
+    p95 = _require_nonnegative_number(latency["p95_ms"], f"{label}.p95_ms")
+    maximum = _require_nonnegative_number(latency["maximum_ms"], f"{label}.maximum_ms")
+    if not median <= p95 <= maximum:
+        raise ValidationError(f"{label} latency order is invalid")
+
+
+def validate_result_shape(result: dict[str, Any]) -> None:
+    _require_exact_keys(
+        result,
+        {
+            "schema_version",
+            "kind",
+            "benchmark_revision",
+            "measured_at",
+            "dataset",
+            "benchmark_source_sha256",
+            "environment",
+            "baselines",
+            "models",
+            "decision",
+            "does_not_establish",
+        },
+        "benchmark result",
+    )
+    if result["schema_version"] != 1:
+        raise ValidationError("benchmark result schema version is invalid")
+    measured_at = result["measured_at"]
+    try:
+        parsed_time = datetime.fromisoformat(str(measured_at).removesuffix("Z") + "+00:00")
+    except ValueError as error:
+        raise ValidationError("benchmark measured_at is invalid") from error
+    if not isinstance(measured_at, str) or not measured_at.endswith("Z") or parsed_time.tzinfo is None:
+        raise ValidationError("benchmark measured_at is invalid")
+
+    _require_exact_keys(
+        result["dataset"],
+        {"path", "dataset_id", "document_revision", "sha256", "schema_sha256", "node_count", "case_count", "privacy_class"},
+        "benchmark dataset identity",
+    )
+    environment = _require_exact_keys(
+        result["environment"],
+        {"host_class", "platform", "python", "ollama_url", "external_cost_usd"},
+        "benchmark environment",
+    )
+    if environment["host_class"] != "heim-pc-local":
+        raise ValidationError("benchmark host class is invalid")
+    for key in ("platform", "python", "ollama_url"):
+        if not isinstance(environment[key], str) or not environment[key].strip():
+            raise ValidationError(f"benchmark environment {key} is invalid")
+    try:
+        OllamaClient(environment["ollama_url"])
+    except (TypeError, ValueError) as error:
+        raise ValidationError("benchmark environment is not loopback-bound") from error
+    if environment["external_cost_usd"] != 0:
+        raise ValidationError("benchmark claims non-zero external cost")
+
+    baselines = result["baselines"]
+    if not isinstance(baselines, list) or len(baselines) != 2:
+        raise ValidationError("benchmark requires exactly two baselines")
+    for index, baseline in enumerate(baselines):
+        entry = _require_exact_keys(baseline, {"name", "quality", "performance"}, f"baseline[{index}]")
+        _validate_latency(entry["performance"], f"baseline[{index}].performance")
+
+    models = result["models"]
+    if not isinstance(models, list) or len(models) != len(DEFAULT_MODELS):
+        raise ValidationError("benchmark requires the exact local model count")
+    for index, item in enumerate(models):
+        entry = _require_exact_keys(item, {"model", "quality", "performance"}, f"model[{index}]")
+        model = _require_exact_keys(
+            entry["model"],
+            {"name", "digest", "size_bytes", "family", "parameter_size", "quantization_level", "dimensions"},
+            f"model[{index}].identity",
+        )
+        for key in ("name", "digest", "family", "parameter_size", "quantization_level"):
+            if not isinstance(model[key], str) or not model[key].strip():
+                raise ValidationError(f"model[{index}] {key} is invalid")
+        if not isinstance(model["size_bytes"], int) or isinstance(model["size_bytes"], bool) or model["size_bytes"] <= 0:
+            raise ValidationError(f"model[{index}] size is invalid")
+        if not isinstance(model["dimensions"], int) or isinstance(model["dimensions"], bool) or model["dimensions"] <= 0:
+            raise ValidationError(f"model[{index}] dimension is invalid")
+        performance = _require_exact_keys(
+            entry["performance"],
+            {"document_embedding_total_ms", "query_embedding_total_ms", "ranking", "document_count", "query_count"},
+            f"model[{index}].performance",
+        )
+        _require_nonnegative_number(performance["document_embedding_total_ms"], f"model[{index}].document_embedding_total_ms")
+        _require_nonnegative_number(performance["query_embedding_total_ms"], f"model[{index}].query_embedding_total_ms")
+        _validate_latency(performance["ranking"], f"model[{index}].ranking")
+        for key in ("document_count", "query_count"):
+            if not isinstance(performance[key], int) or isinstance(performance[key], bool) or performance[key] <= 0:
+                raise ValidationError(f"model[{index}].{key} is invalid")
+
+    decision = _require_exact_keys(
+        result["decision"],
+        {"outcome", "selected_model", "reason", "quality_thresholds", "assessed_models"},
+        "benchmark decision",
+    )
+    _require_exact_keys(decision["quality_thresholds"], {"natural_top3_rate", "minimum_gain_cases"}, "decision thresholds")
+    assessed = decision["assessed_models"]
+    if not isinstance(assessed, list) or len(assessed) != len(DEFAULT_MODELS):
+        raise ValidationError("decision assessed model set is invalid")
+    for index, item in enumerate(assessed):
+        _require_exact_keys(
+            item,
+            {"model", "qualifies", "meaningful_incremental_gain", "natural_top3_gain_cases"},
+            f"decision.assessed_models[{index}]",
+        )
+    if result["does_not_establish"] != list(DOES_NOT_ESTABLISH):
+        raise ValidationError("benchmark non-claims are stale or incomplete")
+    if contains_raw_vectors(result):
+        raise ValidationError("benchmark result contains raw-vector-like data")
 
 
 def build_result(dataset_path: Path, schema_path: Path, models: list[str], ollama_url: str) -> dict[str, Any]:
@@ -498,14 +704,7 @@ def build_result(dataset_path: Path, schema_path: Path, models: list[str], ollam
         "baselines": [substring, lexical],
         "models": model_results,
         "decision": choose_decision(lexical, model_results),
-        "does_not_establish": [
-            "production relevance",
-            "PostgreSQL FTS or pg_trgm parity",
-            "pgvector availability",
-            "runtime integration",
-            "public live proof",
-            "SemantAH archive authority",
-        ],
+        "does_not_establish": list(DOES_NOT_ESTABLISH),
     }
     if contains_raw_vectors(result):
         raise RuntimeError("benchmark result would contain raw vectors")
@@ -518,8 +717,7 @@ def _strip_performance(value: dict[str, Any]) -> dict[str, Any]:
 
 def check_result(result_path: Path, dataset_path: Path, schema_path: Path) -> None:
     result = load_json_object(result_path)
-    if contains_raw_vectors(result):
-        raise ValidationError("benchmark result contains raw vectors")
+    validate_result_shape(result)
     if result.get("kind") != "weltgewebe_semantic_search_relevance_benchmark":
         raise ValidationError("benchmark result has an unexpected kind")
     if result.get("benchmark_revision") != BENCHMARK_REVISION:
@@ -529,9 +727,19 @@ def check_result(result_path: Path, dataset_path: Path, schema_path: Path) -> No
     schema = load_json_object(schema_path)
     dataset = load_json_object(dataset_path)
     validate_goldset(dataset, schema)
-    identity = result.get("dataset", {})
-    if identity.get("sha256") != sha256_path(dataset_path) or identity.get("schema_sha256") != sha256_path(schema_path):
-        raise ValidationError("benchmark dataset or schema hash is stale")
+    identity = result["dataset"]
+    expected_identity = {
+        "path": str(dataset_path.relative_to(ROOT)),
+        "dataset_id": dataset["dataset_id"],
+        "document_revision": dataset["document_revision"],
+        "sha256": sha256_path(dataset_path),
+        "schema_sha256": sha256_path(schema_path),
+        "node_count": len(dataset["nodes"]),
+        "case_count": len(dataset["cases"]),
+        "privacy_class": dataset["privacy_class"],
+    }
+    if identity != expected_identity:
+        raise ValidationError("benchmark dataset identity is stale")
     substring_rankings, _ = timed_rankings(dataset, current_substring_rank)
     lexical_rankings, _ = timed_rankings(dataset, lexical_reference_rank)
     expected = [
@@ -550,7 +758,10 @@ def check_result(result_path: Path, dataset_path: Path, schema_path: Path) -> No
     digests = [item.get("model", {}).get("digest") for item in models]
     if len(digests) != len(set(digests)):
         raise ValidationError("benchmark result contains duplicate model digests")
-    case_ids = {case["id"] for case in dataset["cases"]}
+    sizes = [item["model"]["size_bytes"] for item in models]
+    if sizes != sorted(sizes) or len(sizes) != len(set(sizes)):
+        raise ValidationError("benchmark model sizes are not strictly increasing")
+    active_document_count = sum(node["status"] == "active" for node in dataset["nodes"])
     for item in models:
         model = item.get("model", {})
         quality = item.get("quality", {})
@@ -559,17 +770,18 @@ def check_result(result_path: Path, dataset_path: Path, schema_path: Path) -> No
             raise ValidationError("model digest is missing or invalid")
         if not isinstance(model.get("dimensions"), int) or model["dimensions"] <= 0:
             raise ValidationError("model dimension is missing or invalid")
-        measured_case_ids = {case.get("case_id") for case in quality.get("cases", [])}
-        if measured_case_ids != case_ids:
-            raise ValidationError("model result does not cover the exact goldset cases")
+        performance = item["performance"]
+        if performance["document_count"] != active_document_count:
+            raise ValidationError("model document count is stale")
+        if performance["query_count"] != len(dataset["cases"]):
+            raise ValidationError("model query count is stale")
+        verify_quality_evidence(dataset, quality)
         if quality.get("visibility_leak_count") != 0:
             raise ValidationError("model result contains a visibility leak")
     lexical = next(item for item in result["baselines"] if item["name"] == "fts_trigram_reference")
     expected_decision = choose_decision(lexical, models)
     if result.get("decision") != expected_decision:
         raise ValidationError("model selection decision is stale or inconsistent")
-    if result.get("environment", {}).get("external_cost_usd") != 0:
-        raise ValidationError("benchmark claims non-zero external cost")
 
 
 def build_parser() -> argparse.ArgumentParser:

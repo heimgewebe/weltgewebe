@@ -137,12 +137,16 @@ def validate_goldset(dataset: dict[str, Any], schema: dict[str, Any]) -> None:
         node_by_id[node_id] = node
 
     case_ids: set[str] = set()
+    natural_case_count = 0
+    expected_rank_classes: set[str] = set()
     for index, case in enumerate(dataset["cases"]):
         case_path = f"$.cases[{index}]"
         case_id = case["id"]
         if case_id in case_ids:
             raise ValidationError(f"{case_path}.id: duplicate case id {case_id!r}")
         case_ids.add(case_id)
+        natural_case_count += int(case["natural_language"])
+        expected_rank_classes.add(case["expected_rank_class"])
 
         context = case["visibility_context"]
         visible = set(context["visible_node_ids"])
@@ -171,6 +175,13 @@ def validate_goldset(dataset: dict[str, Any], schema: dict[str, Any]) -> None:
                 raise ValidationError(f"{case_path}: visible node {node_id!r} is outside viewer scope")
             if not _matches_filters(node, context["active_filters"]):
                 raise ValidationError(f"{case_path}: visible node {node_id!r} violates active filters")
+
+    if natural_case_count == 0:
+        raise ValidationError("goldset requires at least one natural-language case")
+    required_rank_classes = {"exact_title", "exact_tag", "title_prefix", "typo", "full_text", "semantic"}
+    missing_rank_classes = sorted(required_rank_classes - expected_rank_classes)
+    if missing_rank_classes:
+        raise ValidationError(f"goldset is missing required rank classes: {missing_rank_classes!r}")
 
     for text in _walk_strings(dataset):
         if EMAIL_LIKE.search(text):
