@@ -60,14 +60,21 @@ test:      # run tests (PostgreSQL-backed tests are skipped; see note below)
 	@echo "note: DB-backed tests (#[ignore]) were skipped — they need a live PostgreSQL."
 	@echo "      CI runs them with --include-ignored (.github/workflows/api.yml)."
 
-check:     # quick hygiene check
-	just fmt
+# Write-free hygiene check. Formatting that mutates sources is `just fmt`.
+# This recipe must not invoke formatters or generators in write mode.
+check:     # quick hygiene check (no writes)
+	cargo fmt --all -- --check
 	just clippy
 	just test
 	just check-demo-data
 	just contracts-domain-check
 	just contracts-search-check
+	just agent-contract-check
 	cargo deny check
+
+# Validate the canonical repository agent contract (strict JSON + projection parity).
+agent-contract-check:
+	python3 -m scripts.agent.validate_repo_agent_contract
 
 # ---------- Compose ----------
 up:        # dev stack up (dev profile)
@@ -158,10 +165,10 @@ smoke-account-create:
 
 # ---------- Contracts ----------
 contracts-domain-check:
-	./scripts/contracts-domain-check.sh
+	./scripts/contracts-domain-check.sh --check
 
 contracts-search-check:
 	python3 -m scripts.search.validate_relevance_goldset
 
 check-demo-data:
-	pnpm exec tsx scripts/verify-demo-data.ts
+	pnpm exec tsx scripts/verify-demo-data.ts --dry-run

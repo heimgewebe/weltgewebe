@@ -15,16 +15,17 @@ import scripts.docmeta.agent_entrypoint_smoke as smoke
 CONSISTENT = {
     "README.md": (
         "# Demo\n\n"
-        "Wahrheit folgt `repo.meta.yaml` und dem Agent Reading Protocol. "
+        "Wahrheit folgt `agent-contract.json`, `repo.meta.yaml` und dem Agent Reading Protocol. "
         "`docs/index.md` ist Navigation, keine Wahrheitsschicht. "
         "`docs/_generated/*` ist Diagnose, nicht Ursprung.\n\n"
         "## Für Agents\n\n"
         "Verbindliche Leseordnung vor jedem Patch:\n\n"
-        "1. `repo.meta.yaml`\n"
-        "2. `AGENTS.md`\n"
-        "3. `agent-policy.yaml`\n"
-        "4. `docs/policies/agent-reading-protocol.md`\n"
-        "5. `docs/index.md`\n\n"
+        "1. `agent-contract.json`\n"
+        "2. `repo.meta.yaml`\n"
+        "3. `AGENTS.md`\n"
+        "4. `agent-policy.yaml`\n"
+        "5. `docs/policies/agent-reading-protocol.md`\n"
+        "6. `docs/index.md`\n\n"
         "## Task-Control\n\n"
         "Task-Index-Check-Modus (`generate_task_index.py --check`) und CI-Guard "
         "(`.github/workflows/task-index.yml`) sind vorhanden.\n\n"
@@ -36,8 +37,8 @@ CONSISTENT = {
         "# AGENTS\n\n"
         "All agents MUST follow the Agent Reading Protocol "
         "(docs/policies/agent-reading-protocol.md).\n\n"
-        "Reading Order: `repo.meta.yaml` -> `AGENTS.md` -> `agent-policy.yaml` -> "
-        "`docs/policies/agent-reading-protocol.md`.\n"
+        "Reading Order: `agent-contract.json` -> `repo.meta.yaml` -> `AGENTS.md` -> "
+        "`agent-policy.yaml` -> `docs/policies/agent-reading-protocol.md`.\n"
     ),
     "docs/index.md": (
         "---\nid: docs.index\ntitle: Index\nstatus: active\nsummary: test\n---\n\n"
@@ -58,7 +59,8 @@ CONSISTENT = {
         "summary: test\n---\n\n"
         "# Agent Reading Protocol\n\n"
         "## Lesereihenfolge\n\n"
-        "1. `repo.meta.yaml`\n2. `AGENTS.md`\n3. `agent-policy.yaml`\n\n"
+        "1. `agent-contract.json`\n2. `repo.meta.yaml`\n3. `AGENTS.md`\n"
+        "4. `agent-policy.yaml`\n\n"
         "## _generated\n\n"
         "`docs/_generated/*` ist Diagnose, nicht Ursprung.\n"
     ),
@@ -197,7 +199,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
     def test_missing_reading_order_entry_fails(self):
         self._write(
             "README.md",
-            CONSISTENT["README.md"].replace("4. `docs/policies/agent-reading-protocol.md`\n", ""),
+            CONSISTENT["README.md"].replace("5. `docs/policies/agent-reading-protocol.md`\n", ""),
         )
         errors = smoke.run_checks(self.root)
         self.assertTrue(
@@ -289,7 +291,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
         self._write(
             "README.md",
             CONSISTENT["README.md"].replace(
-                "4. `docs/policies/agent-reading-protocol.md`\n",
+                "5. `docs/policies/agent-reading-protocol.md`\n",
                 "",
             )
             + "\nQuick link: `docs/policies/agent-reading-protocol.md`\n",
@@ -308,8 +310,33 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
         self._write(
             "README.md",
             CONSISTENT["README.md"].replace(
-                "2. `AGENTS.md`\n3. `agent-policy.yaml`\n",
-                "2. `agent-policy.yaml`\n3. `AGENTS.md`\n",
+                "3. `AGENTS.md`\n4. `agent-policy.yaml`\n",
+                "3. `agent-policy.yaml`\n4. `AGENTS.md`\n",
+            ),
+        )
+        errors = smoke.run_checks(self.root)
+        self.assertTrue(
+            any("README.md: reading order is out of sequence" in e for e in errors),
+            errors,
+        )
+
+    def test_missing_agent_contract_json_fails(self):
+        self._write(
+            "README.md",
+            CONSISTENT["README.md"].replace("1. `agent-contract.json`\n", ""),
+        )
+        errors = smoke.run_checks(self.root)
+        self.assertTrue(
+            any("README.md: missing reading-order entry: agent-contract.json" in e for e in errors),
+            errors,
+        )
+
+    def test_agent_contract_json_out_of_sequence_fails(self):
+        self._write(
+            "README.md",
+            CONSISTENT["README.md"].replace(
+                "1. `agent-contract.json`\n2. `repo.meta.yaml`\n",
+                "1. `repo.meta.yaml`\n2. `agent-contract.json`\n",
             ),
         )
         errors = smoke.run_checks(self.root)

@@ -4,10 +4,13 @@ title: AGENTS
 doc_type: policy
 status: active
 canonicality: canonical
-summary: Agent configuration and operational boundaries for Weltgewebe.
+summary: Progressive agent entry card for Weltgewebe; machine authority lives in agent-contract.json.
 ---
 
 # AGENTS
+
+Canonical entry card and orientation guide for agents working in this repository.
+While **`agent-contract.json`** defines the strict machine-readable path, check, and generator authority, this document canonically defines the progressive entry sequence and human-facing context.
 
 ## Binding Reading Protocol
 
@@ -15,182 +18,72 @@ All agents MUST follow the [Agent Reading Protocol](docs/policies/agent-reading-
 
 **Core Rules (Strictly Binding):**
 
-1. **Reading Order:** `repo.meta.yaml` -> `AGENTS.md` -> `agent-policy.yaml` -> `docs/policies/agent-reading-protocol.md`
-2. **Conflict Resolution:** Kanonisch und vollständig definiert in `repo.meta.yaml` (`truth_model.precedence`).
+1. **Reading Order:** `agent-contract.json` -> `repo.meta.yaml` -> `AGENTS.md` -> `agent-policy.yaml` -> `docs/policies/agent-reading-protocol.md`
+2. **Conflict Resolution:** Domain contracts and `agent-contract.json` lead for agent operability; broader truth precedence remains in `repo.meta.yaml` (`truth_model.precedence`).
 3. **No Interpolation:** Silent interpolation is FORBIDDEN. Explicitly name missing gaps.
 4. **Abort Rule:** Agents MUST abort if contradictions are unresolvable, necessary files are missing, or target proof is impossible.
-5. **Navigation vs Truth:** `docs/index.md` is strictly navigation (`navigational_indices`). `docs/_generated/*` is strictly diagnostic (`generated_diagnostics`).
+5. **Navigation vs Truth:** `docs/index.md` is strictly navigation. `docs/_generated/*` is diagnostic only; direct agent edits are forbidden. Declared trusted generators may refresh only contract-allowlisted derived targets; `secrets/` and `snapshots/` are never generator targets.
 
-These core rules derive from the canonical definitions in `repo.meta.yaml` and the `Agent Reading Protocol`. They override implicit interpretation.
-
-## Purpose
-
-Agent configuration, operational boundaries, and strict coding guidelines for Weltgewebe. This document defines how agents navigate the repository, canonical files, and the rules for CI-ready code contributions.
-
-## Read This First
-
-1. Begin with `repo.meta.yaml` and `docs/policies/agent-reading-protocol.md` to understand the truth structure. Navigation can be found in `docs/index.md`.
-2. Read the "Coding Guidelines" below. Sie definieren, wie Code-Snippets syntaktisch korrekt, ausführbar und CI-tauglich vorgeschlagen werden müssen – statt nur „so ungefähr“ zu passen.
+These core rules derive from `agent-contract.json`, `repo.meta.yaml`, and the Agent Reading Protocol.
 
 ## Canonical Sources
 
-- `repo.meta.yaml`
-- `AGENTS.md`
-- `agent-policy.yaml`
-- `docs/policies/agent-reading-protocol.md`
-- `docs/policies/architecture-critique.md` (cognitive module; canonical, but excluded from default reading order; activated via protocol rules)
+| Source | Role |
+|---|---|
+| `agent-contract.json` | Canonical machine agent norm (paths, checks, generators, architecture roles) |
+| `repo.meta.yaml` | Repo truth model; overlapping path/check fields are a Compatibility Projection |
+| `AGENTS.md` | This progressive entry card |
+| `agent-policy.yaml` | Compatibility Projection of write-scope fields plus human-review hints |
+| `docs/policies/agent-reading-protocol.md` | Binding read/abort protocol |
+| `docs/policies/architecture-critique.md` | Cognitive module; not default reading order |
 
-## Discovery Rules
+## Architecture Split
+
+- **Repository role:** `repo_contract_authority` — portable contracts, validators, readiness, and CI checks.
+- **Operator role:** `external_operator_execution` (Grabowski) — workspace, lease, execution, review, publish, recovery, cleanup.
+- **Rejected:** a second generic repository-owned write operator / free-form write mode.
+
+## Safe / Guarded / Forbidden (summary)
+
+Authoritative arrays live only in `agent-contract.json`; use Validator/CLI.
+
+Validate with:
+
+```bash
+python3 -m scripts.agent.validate_repo_agent_contract
+```
+
+## Generated Artifacts
+
+- Direct agent edits under generated/forbidden prefixes are forbidden.
+- Only generators declared in the registry referenced by the contract may write targets under `generated_artifacts.allowed_target_prefixes` (currently only `docs/_generated/`).
+- `secrets/` and `snapshots/` remain forbidden for both direct edits and generator output.
+- Prefer named validation profiles over free-form shell authority; task `validation_commands` remain transitional fixtures until profile migration completes.
+
+## Task-Scoped Documents
+
+Load only what the task needs:
+
+- Roadmap / status / auth / UI / map / deploy / agent-operability: `docs/roadmap.md`, the relevant sub-roadmap, and the matching status matrix or report
+- Agent safety architecture: `docs/blueprints/blueprint-agent-safety-control-layer.md`
+- Write-scope baseline: `docs/security/agent-write-scope-baseline.md`
+
+## Coding Safety
+
+- Inspect the real file before proposing or changing code; do not invent repository structure or APIs.
+- Keep snippets syntactically valid and directly executable. Show complete affected blocks; mark omissions explicitly.
+- Preserve literal shell syntax, quoting, spacing, paths, and redirections. Do not compress commands into pseudo-tokens.
+- Emit success only after the relevant operation succeeded. Mandatory checks must not hide failures with `|| true`, `|| echo`, or equivalent fallbacks.
+- Reject non-finite frontend numbers with `Number.isFinite` and apply domain bounds before values reach rendering, coordinates, opacity, widths, radii, or sizes.
+- State uncertainty explicitly and verify CI-relevant behavior with the real build, lint, or test command instead of assuming success.
+
+## Discovery
 
 Scan `.github/workflows/`, `apps/`, `contracts/`, `docs/`, `infra/`, `scripts/`, and `tests/` for changes.
 
-## Roadmap Synchronization
-
-For tasks that change roadmap, status, auth, UI, map, deployment, or
-agent-operability documents, agents MUST also consult:
-
-1. `docs/roadmap.md` — coordination layer
-2. the relevant sub-roadmap, for example `docs/blueprints/auth-roadmap.md`
-3. the relevant status matrix or report, for example
-   `docs/reports/auth-status-matrix.md`
-
-`docs/roadmap.md` is not a higher-precedence truth source. It is a
-synchronization surface. If it diverges from a sub-roadmap or status matrix,
-the sub-roadmap or status matrix leads and `docs/roadmap.md` must be updated
-or the drift must be explicitly documented.
-
-Only update `docs/roadmap.md` when the relevant sub-roadmap or status report
-already documents and substantiates the status change.
-
-## Generated Files
-
-Files in `docs/_generated/` are automatically generated and protected.
-
-## Safe Read Paths
-
-- `README.md`
-- `AGENTS.md`
-- `docs/`
-
-## Guarded / Risky Paths
-
-- `.github/workflows/`
-- `apps/`
-- `contracts/`
-- `docs/`
-- `infra/`
-- `scripts/`
-
-## Required Checks
-
-- `repo-structure-guard`
-- `docs-relations-guard`
-- `generated-files-guard`
-- `coverage-guard`
-
 ## Common Traps
 
-Do not manually edit `docs/_generated/` files. Ensure new code or docs are linked.
-
-## Open Gaps
-
-Ensure that critical infrastructure changes are added to `audit/impl-registry.yaml`.
-
-## Coding Guidelines
-
-### 1. Allgemeine Arbeitsweise
-
-- Immer echte Dateien bevorzugen: Bevor du Code vorschlägst oder analysierst, musst du nach der realen Datei im Repo suchen und von dort aus arbeiten. Rate nicht frei, wenn die Datei existiert.
-- Keine „stilisierten“ Snippets: Verwende keine verkürzten Schreibweisen wie SECONDS end oder zerstückelte Redirections (devtcpHOSTPORT). Alles, was du zeigst, muss so in einer echten Datei kompilierbar bzw. ausführbar sein.
-- Vollständige Blöcke: Wenn du Funktionen oder Skripte änderst, zeige immer den ganzen betroffenen Block (z.B. komplette Funktion, komplettes Skript), nicht nur einzelne zerhackte Zeilen.
-- Kennzeichnung von Auslassungen: Wenn du Teile weglässt, markiere das explizit mit Kommentaren wie // ... oder # ... ohne die Syntax zu zerstören.
-
-### 2. Regeln für Node-/JS-Snippets (z.B. assert-web-budget.mjs)
-
-- Erfolgsmeldungen nur bei tatsächlichem Erfolg:
-  `console.log('Frontend performance budget matches expected thresholds')` oder ähnliche Erfolgsmeldungen dürfen nur ausgeführt werden, wenn vorher kein Fehler geworfen wurde.
-- Wenn du throw verwendest, achte darauf, dass die Logik so strukturiert ist, dass bei Fehlern kein „Alles ok“ im CI-Log erscheint.
-- Saubere Fehlermeldungen: Keine überflüssigen Zeichen am Ende von Template Strings, z.B. kein abschließendes Komma nach ${actual}.
-- Fehlermeldungen müssen klar, einzeilig und ohne überflüssige Interpunktion sein.
-- Strikte Typprüfungen: Wenn du Performance-Budgets oder Konfigwerte prüfst, nutze Muster wie:
-
-```javascript
-if (typeof actual !== 'number' || Number.isNaN(actual)) {
-  throw new Error(`Performance budget value ${key} must be a number`)
-}
-```
-
-- Vergleiche erwartete und tatsächliche Werte explizit und wirf Fehler mit verständlicher Botschaft:
-
-```javascript
-if (actual !== expectedValue) {
-  throw new Error(
-    `Performance budget key ${key} expected ${expectedValue} but found ${actual}`
-  )
-}
-```
-
-### 3. Regeln für Shell-Skripte (z.B. db-wait.sh)
-
-- POSIX- oder Bash-Syntax niemals „optisch vereinfachen“.
-- [ und ] brauchen immer Leerzeichen:
-
-```bash
-while [ "$SECONDS" -lt "$end" ]; do
-```
-
-- Redirections brauchen echte Pfade und Slashes:
-
-```bash
-echo >"/dev/tcp/$HOST/$PORT" 2>/dev/null
-```
-
-- Keine pseudo-kompakten, zusammengeklebten Tokens (z.B. SECONDS end, devtcpHOSTPORT, devnull).
-- Variablen und Defaults: Verwende klare Standardwerte mit ${VAR:-default} und weise sie oben zu, z.B.:
-
-```bash
-HOST=${PGHOST:-localhost}
-PORT=${PGPORT:-5432}
-TIMEOUT=${DB_WAIT_TIMEOUT:-60}
-INTERVAL=${DB_WAIT_INTERVAL:-2}
-```
-
-- Zeit-Logik korrekt schreiben. Integer-Deklaration sauber:
-
-```bash
-declare -i end=$SECONDS+$TIMEOUT
-```
-
-- Timeout-Schleife:
-
-```bash
-while [ "$SECONDS" -lt "$end" ]; do
-  if echo >"/dev/tcp/$HOST/$PORT" 2>/dev/null; then
-    printf 'Postgres is available at %s:%s\n' "$HOST" "$PORT"
-    exit 0
-  fi
-  sleep "$INTERVAL"
-done
-
-printf 'Timed out waiting for Postgres at %s:%s after %s seconds\n' \
-  "$HOST" "$PORT" "$TIMEOUT" >&2
-exit 1
-```
-
-- Kein Pseudocode in echten Skripten: Wenn du ein Snippet als Beispiel zeigst, das nicht 1:1 lauffähig ist, musst du das ausdrücklich als Pseudocode markieren. In echten Dateien darfst du nur ausführbaren Code vorschlagen.
-
-### 4. Verhalten bei Unsicherheit
-
-- Wenn du dir bei einer Datei, Syntax oder Semantik nicht sicher bist, sage das explizit und schlage eine mögliche Variante vor.
-- Bitte darum, den realen Build- oder Lint-Fehler zu posten, statt so zu tun, als wäre alles sicher.
-- Bevor du Änderungen an CI-relevanten Skripten vorschlägst (Node, Bash, YAML), simuliere gedanklich mindestens:
-  - Läuft das Skript von set -e / errexit umgeben sauber durch?
-  - Sind alle Erfolgsmeldungen wirklich nur im Erfolgsfall sichtbar?
-
-### 5. Zielbild
-
-- Code-Vorschläge aus dieser Umgebung sollen direkt lauffähig, syntaktisch korrekt und CI-tauglich sein – ohne händische Nachkorrekturen von offensichtlichen Tipp- und Syntaxfehlern.
-
-### 6. Frontend Numeric Validation
-
-When mapping numeric data to frontend visual properties or coordinates, first reject non-finite values with `typeof value === 'number' && Number.isFinite(value)` so `NaN` and `Infinity` cannot reach WebGL/rendering code. Then apply domain-specific bounds before rendering or map movement, for example latitude/longitude ranges for coordinates, `0..1` for opacity, and non-negative bounded values for weights, widths, radii, or sizes.
+- Do not manually edit `docs/_generated/`.
+- Do not treat Compatibility Projections as a second authority.
+- Do not treat readiness `plan` pass as write/publish/deploy readiness.
+- Critical infrastructure changes belong in `audit/impl-registry.yaml`.

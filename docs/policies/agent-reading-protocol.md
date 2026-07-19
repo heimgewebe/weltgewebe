@@ -41,12 +41,13 @@ Ziel:
 
 Agenten MÜSSEN in dieser Reihenfolge lesen:
 
-1. `repo.meta.yaml`
-2. `AGENTS.md`
-3. `agent-policy.yaml`
-4. die in `manifest/repo-index.yaml` registrierten kanonischen Dokumente sowie einschlägige Contracts und ADRs
-5. `docs/index.md` (nur Navigation)
-6. `docs/_generated/*` (nur Diagnose)
+1. `agent-contract.json` (kanonische maschinenlesbare Agent-Norm)
+2. `repo.meta.yaml` (Repo-Truth-Model; Pfad-/Check-Felder sind Compatibility Projection)
+3. `AGENTS.md` (progressive menschliche Eintrittskarte)
+4. `agent-policy.yaml` (Compatibility Projection der Schreibgrenzen)
+5. die in `manifest/repo-index.yaml` registrierten kanonischen Dokumente sowie einschlägige Contracts und ADRs
+6. `docs/index.md` (nur Navigation)
+7. `docs/_generated/*` (nur Diagnose; direkte Agent-Edits verboten)
 
 ---
 
@@ -75,6 +76,8 @@ Artefakte unter `docs/_generated/*`:
 - spiegeln Zustand
 - zeigen Drift
 - sind NICHT kanonisch
+- dürfen von Agents nicht direkt editiert werden
+- dürfen nur durch in `agent-contract.json` deklarierte trusted generators geschrieben werden
 
 ---
 
