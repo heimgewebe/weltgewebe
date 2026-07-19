@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -190,6 +192,95 @@ class ProductionReconcilerContractTests(unittest.TestCase):
             "systemctl start weltgewebe-production-reconcile.service", script
         )
 
+    def test_installer_deferred_update_is_atomic_and_non_recursive(self) -> None:
+        script = self.read("scripts/ops/install-production-reconciler.sh")
+        self.assertIn("--defer-reconcile", script)
+        self.assertIn(
+            "deferred installation requires an existing enabled and active production reconcile timer",
+            script,
+        )
+        self.assertIn("atomic_install()", script)
+        self.assertIn("mv -fT --", script)
+        self.assertIn("require_matching_sha256", script)
+        for installed_path in (
+            "/usr/local/libexec/weltgewebe-deploy-exact-commit",
+            "/usr/local/libexec/weltgewebe-reconcile-production-main",
+            "/usr/local/libexec/weltgewebe-validate-web-deploy-archive",
+            "/usr/local/libexec/weltgewebe-verify-public-release",
+            "/etc/systemd/system/weltgewebe-production-reconcile.service",
+            "/etc/systemd/system/weltgewebe-production-reconcile.timer",
+        ):
+            self.assertIn(installed_path, script)
+        staged_verify = script.index("systemd-analyze verify")
+        self.assertIn(
+            '"$staging/weltgewebe-production-reconcile.service"',
+            script[staged_verify:],
+        )
+        first_binary_install = script.index(
+            'atomic_install "$staging/weltgewebe-deploy-exact-commit"'
+        )
+        first_unit_install = script.index(
+            'atomic_install "$staging/weltgewebe-production-reconcile.service"'
+        )
+        self.assertLess(first_binary_install, staged_verify)
+        self.assertLess(staged_verify, first_unit_install)
+        deferred = script.index(
+            "if ((DEFER_RECONCILE == 1)); then",
+            script.index("systemctl daemon-reload"),
+        )
+        normal_start = script.index("else", deferred)
+        deferred_branch = script[deferred:normal_start]
+        self.assertIn("systemctl is-enabled --quiet", deferred_branch)
+        self.assertIn("systemctl is-active --quiet", deferred_branch)
+        self.assertNotIn("systemctl start", deferred_branch)
+        self.assertIn("mode=$install_mode", script)
+
+    def test_release_activation_is_exact_path_bound_and_precedes_docker(self) -> None:
+        activator = self.read(
+            "scripts/ops/activate-production-reconciler-from-release.sh"
+        )
+        up = self.read("scripts/weltgewebe-up")
+        self.assertIn("production reconciler activation must run as root", activator)
+        self.assertIn(
+            '"$release_dir_real" == "$release_root_real/$COMMIT"', activator
+        )
+        self.assertIn("require_root_safe_directory", activator)
+        self.assertIn("require_root_safe_regular_file", activator)
+        self.assertIn('release_head" == "$COMMIT', activator)
+        self.assertIn("--defer-reconcile", activator)
+        self.assertIn(
+            'if [[ "$DEPLOY_TARGET" == "vps" && "$PLAN_ONLY" == "0" ]]; then',
+            up,
+        )
+        activation = up.index(">> Production reconciler contract activation:")
+        bake = up.index("# --- Bake Configuration ---")
+        docker_config = up.index('docker compose "${BASE_ARGS[@]}" config', bake)
+        self.assertLess(activation, bake)
+        self.assertLess(bake, docker_config)
+
+    def test_release_activator_rejects_non_root_execution(self) -> None:
+        if os.geteuid() == 0:
+            self.skipTest("non-root guard requires a non-root test process")
+        completed = subprocess.run(
+            [
+                str(
+                    ROOT
+                    / "scripts"
+                    / "ops"
+                    / "activate-production-reconciler-from-release.sh"
+                ),
+                "--release-dir",
+                "/tmp/not-a-production-release",
+                "--commit",
+                "0" * 40,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("must run as root", completed.stderr)
+
     def test_github_contract_serializes_main_observers(self) -> None:
         workflow = self.read(".github/workflows/production-live-contract.yml")
         self.assertIn("production-live-main", workflow)
@@ -203,6 +294,15 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn('git diff --binary "$BASE_SHA...$HEAD_SHA"', workflow)
         self.assertIn("review-diff-manifest.txt", workflow)
         self.assertIn("review-diff-pr-", workflow)
+        self.assertIn(
+            '"scripts/ops/activate-production-reconciler-from-release.sh"', workflow
+        )
+        self.assertIn('"scripts/weltgewebe-up"', workflow)
+        self.assertIn(
+            "bash -n scripts/ops/activate-production-reconciler-from-release.sh",
+            workflow,
+        )
+        self.assertIn("bash -n scripts/weltgewebe-up", workflow)
 
 
 if __name__ == "__main__":

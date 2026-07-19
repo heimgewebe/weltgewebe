@@ -4,7 +4,7 @@ title: Merge-to-Live-Vertrag
 status: active
 doc_type: runbook
 summary: Verbindlicher Pfad von origin/main bis zum öffentlich verifizierten Produktionsstand.
-last_reviewed: "2026-07-16"
+last_reviewed: "2026-07-19"
 relations:
   - type: relates_to
     target: docs/deployment.md
@@ -14,6 +14,8 @@ relations:
     target: scripts/ops/reconcile-production-main-vps.sh
   - type: relates_to
     target: scripts/ops/deploy-exact-commit-vps.sh
+  - type: relates_to
+    target: scripts/ops/activate-production-reconciler-from-release.sh
 ---
 
 # Merge-to-Live-Vertrag
@@ -67,6 +69,17 @@ jedem abgeschlossenen Lauf erneut mit einem Abstand von zwei Minuten. Der Dienst
 
 Der Produktionsserver benötigt dadurch weder den Heim-PC noch einen allgemein
 berechtigten GitHub-Runner, um einen gemergten Stand auszuliefern.
+
+Vor der ersten Containerwirkung eines commitgebundenen VPS-Releases aktiviert
+`scripts/weltgewebe-up` außerdem den Operatorvertrag aus genau diesem Release.
+Der Aktivator akzeptiert nur den vollständigen root-eigenen Pfad
+`/opt/weltgewebe-releases/<commit>`, prüft dessen Git-HEAD und ruft den offiziellen
+Installer im verzögerten Modus auf. „Verzögert“ bedeutet: Helfer, Units,
+Environment-Datei und Hashmanifest werden atomar ersetzt und unmittelbar
+hashgeprüft, der bereits aktive Timer bleibt erhalten, aber es wird kein zweiter
+Reconciler innerhalb des laufenden Deployments gestartet. Der nächste reguläre
+Timerlauf verwendet damit den neu gemergten Operatorvertrag. Reine
+`--plan-only`-Läufe bleiben ohne diese Betriebsänderung.
 
 ## Sicherheitsgrenze
 
@@ -209,7 +222,7 @@ erfunden.
 Karteninhalt bleiben bewusst außerhalb dieser Commitidentität; ihre Belegung
 erfolgt über die bestehenden Produktions- und Kartenmanifeste.
 
-## Einmalige Installation
+## Initiale Installation
 
 Nach Merge und exakter Review wird der Reconciler auf dem VPS einmalig aus dem
 vollständigen geprüften `main`-Commit installiert:
@@ -224,7 +237,9 @@ Der Installer liest die Helfer nicht aus dem möglicherweise veränderten
 Arbeitsbaum, sondern direkt aus dem angegebenen Git-Objekt, prüft, dass dieser
 Commit weiterhin `origin/main` ist, kompiliert und validiert die Dateien und
 schreibt ein root-eigenes Hashmanifest. Danach übernimmt der VPS-Timer alle
-weiteren `main`-Abgleiche selbständig.
+weiteren `main`-Abgleiche selbständig. Spätere Releases aktualisieren diesen
+installierten Operatorvertrag über den oben beschriebenen Release-Aktivator;
+ein erneuter manueller Installerlauf ist dafür nicht erforderlich.
 
 ## Bedrohungsmodell und Beweisgrenzen
 

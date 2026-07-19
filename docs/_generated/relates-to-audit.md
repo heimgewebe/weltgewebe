@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 625 |
+| Relationen gesamt | 626 |
 | — depends_on | 25 |
-| — relates_to | 585 |
+| — relates_to | 586 |
 | — supersedes | 12 |
 | — verifies | 3 |
 | relates_to Anteil | 94% |
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (243 Dokumente):
+**Cluster 1** (244 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -264,6 +264,7 @@ _Keine Lücken erkannt._
 - `scripts/docmeta/validate_report_lifecycle.py`
 - `scripts/guard/basemap-runtime-proof.sh`
 - `scripts/guard/domain-multi-instance-guard.sh`
+- `scripts/ops/activate-production-reconciler-from-release.sh`
 - `scripts/ops/check_public_live_readiness.py`
 - `scripts/ops/check_vps_db_migration_history_shape.py`
 - `scripts/ops/check_vps_migration_safe_runtime_env.py`

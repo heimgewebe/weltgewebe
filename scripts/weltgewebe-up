@@ -371,6 +371,26 @@ else
   export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
 fi
 
+if [[ "$DEPLOY_TARGET" == "vps" && "$PLAN_ONLY" == "0" ]]; then
+  release_root="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
+  case "$REPO_DIR" in
+    "$release_root"/*)
+      release_commit="${REPO_DIR##*/}"
+      reconciler_activator="$REPO_DIR/scripts/ops/activate-production-reconciler-from-release.sh"
+      if [[ ! -f "$reconciler_activator" || -L "$reconciler_activator" || ! -x "$reconciler_activator" ]]; then
+        echo "ERROR: production reconciler activator is missing or unsafe: $reconciler_activator" >&2
+        exit 1
+      fi
+      echo
+      echo ">> Production reconciler contract activation:"
+      "$reconciler_activator" \
+        --release-dir "$REPO_DIR" \
+        --commit "$release_commit" \
+        --build-user "${WELTGEWEBE_BUILD_USER:-alex}"
+      ;;
+  esac
+fi
+
 # --- Bake Configuration ---
 # If running in 'auto' mode and /apps is missing, we disable bake to prevent
 # "resolve : lstat /apps: no such file or directory" errors in environments
