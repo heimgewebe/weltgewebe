@@ -278,7 +278,15 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(uebersichtTab).toBeFocused();
     await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
 
-    // Press ArrowRight -> Should move to "Verlauf"
+    // Press ArrowRight -> Should move through the three productive tabs in order.
+    await page.keyboard.press("ArrowRight");
+    const gespraechTab = panel.locator('button[role="tab"]', {
+      hasText: "Gespräch",
+    });
+    await expect(gespraechTab).toBeFocused();
+    await expect(gespraechTab).toHaveAttribute("aria-selected", "true");
+    await expect(panel.locator("#panel-gespraech")).toBeVisible();
+
     await page.keyboard.press("ArrowRight");
     const verlaufTab = panel.locator('button[role="tab"]', {
       hasText: "Verlauf",
