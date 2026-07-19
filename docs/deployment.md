@@ -130,7 +130,10 @@ Beide begrenzten Pfade:
   gewählten Dateinamen innerhalb desselben Zustandsverzeichnisses;
 - rufen Compose ausschließlich mit `--no-deps ... api` auf;
 - verwenden bewusst kein `--remove-orphans`;
-- werden durch eine hostweite `flock`-Sperre gegen parallele Deployläufe geschützt;
+- werden durch die untergeordnete Compose-Wirkungssperre gegen parallele
+  Containeränderungen geschützt; der produktive Merge-to-live-Pfad besitzt
+  zusätzlich die gemeinsame Lock-Domäne
+  `weltgewebe-production-deployment-v1`;
 - behandeln `db`, `nats` und `caddy` als geschützte Dienste und brechen ab,
   wenn sich deren Containeridentität während des Laufs ändert;
 - verweigern den Start, wenn PostgreSQL oder NATS nicht bereits laufen; der

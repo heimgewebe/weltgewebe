@@ -22,7 +22,9 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertLess(post_check, verified_link)
         self.assertIn("superseded_after_deploy", script)
         self.assertIn("readonly EX_TEMPFAIL=75", script)
-        self.assertIn('exit "$EX_TEMPFAIL"', script)
+        self.assertIn("readonly EXIT_SUPERSEDED_AFTER_MIGRATION=79", script)
+        self.assertIn("readonly EXIT_SUPERSEDED_AFTER_DEPLOY=80", script)
+        self.assertIn('exit "$EXIT_SUPERSEDED_AFTER_DEPLOY"', script)
         self.assertNotIn("curl -fsSI", script)
         self.assertIn("--max-filesize 1048576", script)
         self.assertIn("write_bounded_response", script)
@@ -45,7 +47,7 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("production_deployment_phase=migration state=starting", script)
         self.assertIn("production_deployment_phase=migration state=completed", script)
         self.assertIn("production_deployment_phase=full state=starting", script)
-        self.assertIn('exit "$EX_TEMPFAIL"', script)
+        self.assertIn('exit "$EXIT_SUPERSEDED_AFTER_MIGRATION"', script)
         self.assertIn("--deploy-scope migration", script)
         self.assertIn('"+refs/heads/main:refs/remotes/origin/main" || return 1', script)
         self.assertIn("rev-parse refs/remotes/origin/main || return 1", script)
@@ -56,7 +58,15 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn('worktree add --detach "$release_dir" "$COMMIT"', script)
         for forbidden in ("git reset", "git clean", "git switch", "git pull"):
             self.assertNotIn(forbidden, script)
-        self.assertIn("flock -n 9", script)
+        self.assertIn(
+            'PRODUCTION_LOCK_FILE="${STATE_ROOT}/production-deployment.lock"',
+            script,
+        )
+        self.assertIn("WELTGEWEBE_PRODUCTION_LOCK_FD", script)
+        self.assertIn('lock_handoff="inherited"', script)
+        self.assertIn("production_deployment=already_running", script)
+        self.assertIn('"$release_dir/scripts/weltgewebe-up" "${arguments[@]}" 9>&-', script)
+        self.assertNotIn('${STATE_ROOT}/deploy.lock', script)
         self.assertIn("ARCHIVE_VALIDATOR", script)
         self.assertIn("validate_release_tree", script)
         self.assertIn("release contains unexpected state", script)
@@ -107,6 +117,22 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn('DOCKER_CONFIG="$STATE_ROOT/docker-config"', script)
         self.assertIn("export DOCKER_CONFIG", script)
         self.assertIn('"$DEPLOY_RECEIPT_ROOT" "$DOCKER_CONFIG"', script)
+        self.assertIn(
+            'PRODUCTION_LOCK_FILE="$STATE_ROOT/production-deployment.lock"',
+            script,
+        )
+        self.assertIn("production_reconcile=already_running", script)
+        self.assertIn("readonly EX_TEMPFAIL=75", script)
+        self.assertIn("readonly EXIT_SUPERSEDED_AFTER_MIGRATION=79", script)
+        self.assertIn("readonly EXIT_SUPERSEDED_AFTER_DEPLOY=80", script)
+        self.assertIn('case "$deploy_rc" in', script)
+        self.assertIn("temporary failure under inherited production lock", script)
+        self.assertIn("unexpected superseded reason", script)
+        self.assertIn(
+            'WELTGEWEBE_PRODUCTION_LOCK_OWNER_ENTRYPOINT="reconciler"',
+            script,
+        )
+        self.assertNotIn('$STATE_ROOT/reconcile.lock', script)
 
     def test_reconciler_build_cannot_write_release_or_source(self) -> None:
         script = self.read("scripts/ops/reconcile-production-main-vps.sh")
@@ -145,6 +171,11 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("OnUnitInactiveSec=2min", timer)
         self.assertNotIn("OnUnitActiveSec", timer)
         self.assertNotIn("Persistent=true", timer)
+        self.assertIn(
+            "ExecStart=/usr/local/libexec/weltgewebe-reconcile-production-main",
+            service,
+        )
+        self.assertIn("Unit=weltgewebe-production-reconcile.service", timer)
 
     def test_installer_is_exact_commit_bound_and_parameterizes_build_user(self) -> None:
         script = self.read("scripts/ops/install-production-reconciler.sh")
@@ -155,6 +186,9 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("installed-contract.sha256", script)
         self.assertIn("/var/lib/weltgewebe-main-reconciler/docker-config", script)
         self.assertNotIn("Environment=WELTGEWEBE_BUILD_USER=alex", script)
+        self.assertIn(
+            "systemctl start weltgewebe-production-reconcile.service", script
+        )
 
     def test_github_contract_serializes_main_observers(self) -> None:
         workflow = self.read(".github/workflows/production-live-contract.yml")
