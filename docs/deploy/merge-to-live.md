@@ -70,8 +70,9 @@ jedem abgeschlossenen Lauf erneut mit einem Abstand von zwei Minuten. Der Dienst
 Der Produktionsserver benötigt dadurch weder den Heim-PC noch einen allgemein
 berechtigten GitHub-Runner, um einen gemergten Stand auszuliefern.
 
-Vor der ersten Containerwirkung eines commitgebundenen VPS-Releases aktiviert
-`scripts/weltgewebe-up` außerdem den Operatorvertrag aus genau diesem Release.
+Vor dem Start oder der Änderung von Docker-Containern eines commitgebundenen
+VPS-Releases aktiviert `scripts/weltgewebe-up` außerdem den Operatorvertrag aus
+genau diesem Release.
 Der Aktivator akzeptiert nur den vollständigen root-eigenen Pfad
 `/opt/weltgewebe-releases/<commit>`, prüft dessen Git-HEAD und ruft den offiziellen
 Installer im verzögerten Modus auf. „Verzögert“ bedeutet: Helfer, Units,

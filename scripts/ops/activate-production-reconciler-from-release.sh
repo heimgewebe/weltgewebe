@@ -56,8 +56,14 @@ done
 
 require_root_safe_directory "$RELEASE_ROOT" "release root"
 require_root_safe_directory "$RELEASE_DIR" "release directory"
-release_root_real="$(realpath "$RELEASE_ROOT")"
-release_dir_real="$(realpath "$RELEASE_DIR")"
+if ! release_root_real="$(realpath -- "$RELEASE_ROOT" 2> /dev/null)"; then
+  fail "release root cannot be resolved: $RELEASE_ROOT"
+fi
+if ! release_dir_real="$(realpath -- "$RELEASE_DIR" 2> /dev/null)"; then
+  fail "release directory cannot be resolved: $RELEASE_DIR"
+fi
+require_root_safe_directory "$release_root_real" "resolved release root"
+require_root_safe_directory "$release_dir_real" "resolved release directory"
 [[ "$release_dir_real" == "$release_root_real/$COMMIT" ]] ||
   fail "release directory is not the exact commit path: $release_dir_real"
 
@@ -67,7 +73,9 @@ installer="$release_dir_real/scripts/ops/install-production-reconciler.sh"
 require_root_safe_regular_file "$installer" "release installer"
 [[ -x "$installer" ]] || fail "release installer is not executable: $installer"
 
-release_head="$(git -c core.hooksPath=/dev/null -C "$release_dir_real" rev-parse HEAD)"
+if ! release_head="$(git -c core.hooksPath=/dev/null -C "$release_dir_real" rev-parse --verify 'HEAD^{commit}' 2> /dev/null)"; then
+  fail "release directory is not a valid Git repository: $release_dir_real"
+fi
 [[ "$release_head" == "$COMMIT" ]] ||
   fail "release HEAD does not match commit: expected $COMMIT, got $release_head"
 

@@ -373,18 +373,39 @@ fi
 
 if [[ "$DEPLOY_TARGET" == "vps" && "$PLAN_ONLY" == "0" ]]; then
   release_root="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
-  case "$REPO_DIR" in
+  release_root="${release_root%/}"
+  release_dir="${REPO_DIR%/}"
+  case "$release_dir" in
     "$release_root"/*)
-      release_commit="${REPO_DIR##*/}"
-      reconciler_activator="$REPO_DIR/scripts/ops/activate-production-reconciler-from-release.sh"
+      release_commit="$(basename -- "$release_dir")"
+      reconciler_activator="$release_dir/scripts/ops/activate-production-reconciler-from-release.sh"
+      activation_owner_uid="$(id -u)"
+      for activation_dir in "$release_root" "$release_dir" "$release_dir/scripts" "$release_dir/scripts/ops"; do
+        if [[ ! -d "$activation_dir" || -L "$activation_dir" ]]; then
+          echo "ERROR: production reconciler activation directory is missing or unsafe: $activation_dir" >&2
+          exit 1
+        fi
+        activation_mode="$(stat --format=%a -- "$activation_dir")"
+        if [[ "$(stat --format=%u -- "$activation_dir")" != "$activation_owner_uid" ]] ||
+          ((8#$activation_mode & 022)); then
+          echo "ERROR: production reconciler activation directory has unsafe ownership or mode: $activation_dir" >&2
+          exit 1
+        fi
+      done
       if [[ ! -f "$reconciler_activator" || -L "$reconciler_activator" || ! -x "$reconciler_activator" ]]; then
         echo "ERROR: production reconciler activator is missing or unsafe: $reconciler_activator" >&2
+        exit 1
+      fi
+      activation_mode="$(stat --format=%a -- "$reconciler_activator")"
+      if [[ "$(stat --format=%u -- "$reconciler_activator")" != "$activation_owner_uid" ]] ||
+        ((8#$activation_mode & 022)); then
+        echo "ERROR: production reconciler activator has unsafe ownership or mode: $reconciler_activator" >&2
         exit 1
       fi
       echo
       echo ">> Production reconciler contract activation:"
       "$reconciler_activator" \
-        --release-dir "$REPO_DIR" \
+        --release-dir "$release_dir" \
         --commit "$release_commit" \
         --build-user "${WELTGEWEBE_BUILD_USER:-alex}"
       ;;
