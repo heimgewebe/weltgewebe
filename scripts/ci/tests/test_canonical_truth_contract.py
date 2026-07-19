@@ -130,12 +130,16 @@ class CanonicalTruthContractTests(unittest.TestCase):
         self.assertIn("Compose bleibt bis zum belegten Cutover der reale Betriebsweg", text)
         self.assertIn("Nomad als neue Primärzielrichtung", text)
 
-    def test_data_model_names_actual_sources_and_absent_tables(self) -> None:
+    def test_data_model_names_actual_sources_and_table_truth(self) -> None:
         text = (ROOT / "docs/datenmodell.md").read_text(encoding="utf-8")
         compose_prod = (ROOT / "infra/compose/compose.prod.yml").read_text(
             encoding="utf-8"
         )
         env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+        migrations = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted((ROOT / "apps/api/migrations").glob("*.up.sql"))
+        )
 
         self.assertIn("Repository-Produktionsvertrag", text)
         self.assertIn("JSONL bleibt der lokale, testbare Code-Default", text)
@@ -150,9 +154,22 @@ class CanonicalTruthContractTests(unittest.TestCase):
             "domain_nodes",
             "domain_edges",
             "passkey_credentials",
+            "domain_conversations",
+            "domain_messages",
+            "domain_outbox",
         ):
             self.assertIn(f"`{table}`", text)
-        self.assertIn("keine `conversations`, `messages`, `roles`, `outbox`", text)
+        for table in ("domain_conversations", "domain_messages", "domain_outbox"):
+            self.assertRegex(
+                migrations,
+                rf"(?im)^CREATE TABLE {table} \(",
+                f"{table} must remain backed by a PostgreSQL migration",
+            )
+        self.assertIn("ohne produktive\n`roles`-Tabelle", text)
+        self.assertNotRegex(
+            migrations,
+            r"(?im)^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?roles\b",
+        )
         self.assertNotIn("Domänendaten bleibt JSONL der Standard", text)
         self.assertNotIn("PostgreSQL ist die alleinige Quelle der Wahrheit", text)
 
