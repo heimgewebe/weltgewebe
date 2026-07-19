@@ -507,7 +507,7 @@ async fn node_conversation_vertical_slice() {
     )
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
-    assert_eq!(forbidden["code"], "message_owner_required");
+    assert_eq!(forbidden["code"], "message_author_required");
 
     let (status, required) = json_response(
         &app,
@@ -554,7 +554,7 @@ async fn node_conversation_vertical_slice() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(updated["content"], "Eigene Änderung");
 
-    let (status, admin_updated) = json_response(
+    let (status, admin_edit_forbidden) = json_response(
         &app,
         request(
             "PATCH",
@@ -566,17 +566,18 @@ async fn node_conversation_vertical_slice() {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(admin_edit_forbidden["code"], "message_author_required");
 
     let (status, tombstone) = json_response(
         &app,
         request(
             "DELETE",
             &item_path,
-            Some(&author),
+            Some(&admin),
             None,
             None,
-            admin_updated["updated_at"].as_str(),
+            updated["updated_at"].as_str(),
         ),
     )
     .await;

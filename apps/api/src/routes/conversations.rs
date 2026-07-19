@@ -277,6 +277,17 @@ async fn load_message_for_update(
     })
 }
 
+fn require_author(auth: &AuthContext, message: &MessageView) -> Result<(), ConversationApiError> {
+    if auth.account_id.as_deref() == Some(message.author_account_id.as_str()) {
+        return Ok(());
+    }
+    Err(ConversationApiError::new(
+        StatusCode::FORBIDDEN,
+        "message_author_required",
+        "only the message author may edit this message",
+    ))
+}
+
 fn require_author_or_admin(
     auth: &AuthContext,
     message: &MessageView,
@@ -289,7 +300,7 @@ fn require_author_or_admin(
     Err(ConversationApiError::new(
         StatusCode::FORBIDDEN,
         "message_owner_required",
-        "only the message author or an administrator may change this message",
+        "only the message author or an administrator may remove this message",
     ))
 }
 
@@ -631,7 +642,7 @@ pub async fn update_message(
         .await
         .map_err(|error| database_error("begin message update", error))?;
     let current = load_message_for_update(&mut tx, &conversation_id, &message_id).await?;
-    require_author_or_admin(&auth, &current)?;
+    require_author(&auth, &current)?;
     check_precondition(&headers, &current)?;
     if current.deleted_at.is_some() {
         return Err(ConversationApiError::new(
