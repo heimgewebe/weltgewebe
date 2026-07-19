@@ -1,0 +1,500 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weltgewebe.org/contracts/search/postgres-foundation-receipt.schema.json",
+  "title": "Weltgewebe Semantic Search PostgreSQL Foundation Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "task_id",
+    "measured_at",
+    "source",
+    "environment",
+    "postgres",
+    "schema",
+    "quality",
+    "integrity",
+    "decision",
+    "does_not_establish"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "weltgewebe_semantic_search_postgres_foundation"
+    },
+    "task_id": {
+      "const": "WELTGEWEBE-SEMANTIC-SEARCH-V1-T003"
+    },
+    "measured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_head_at_measurement",
+        "measurement_source_mode",
+        "worktree_dirty_at_measurement",
+        "dataset_path",
+        "source_files",
+        "source_manifest_sha256"
+      ],
+      "properties": {
+        "repository_head_at_measurement": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "measurement_source_mode": {
+          "const": "repository_base_plus_hash_bound_worktree_sources"
+        },
+        "worktree_dirty_at_measurement": {
+          "const": true
+        },
+        "dataset_path": {
+          "const": "contracts/search/examples/relevance-goldset.example.json"
+        },
+        "source_files": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contracts/search/examples/relevance-goldset.example.json",
+            "contracts/search/relevance-goldset.schema.json",
+            "contracts/search/examples/relevance-benchmark.heim-pc.json",
+            "apps/api/migrations/20260531000001_create_domain_nodes.up.sql",
+            "contracts/search/postgres-foundation.up.sql",
+            "contracts/search/postgres-foundation.down.sql",
+            "scripts/search/probe_postgres_foundation.py",
+            "contracts/search/postgres-foundation-receipt.schema.json"
+          ],
+          "properties": {
+            "contracts/search/examples/relevance-goldset.example.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "contracts/search/relevance-goldset.schema.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "contracts/search/examples/relevance-benchmark.heim-pc.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "apps/api/migrations/20260531000001_create_domain_nodes.up.sql": {
+              "$ref": "#/$defs/sha256"
+            },
+            "scripts/search/probe_postgres_foundation.py": {
+              "$ref": "#/$defs/sha256"
+            },
+            "contracts/search/postgres-foundation-receipt.schema.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "contracts/search/postgres-foundation.up.sql": {
+              "$ref": "#/$defs/sha256"
+            },
+            "contracts/search/postgres-foundation.down.sql": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "source_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_class",
+        "platform",
+        "python",
+        "external_cost_usd",
+        "docker_client_version",
+        "docker_server_version",
+        "postgres_image",
+        "postgres_image_id",
+        "postgres_repo_digests"
+      ],
+      "properties": {
+        "host_class": {
+          "const": "heim-pc-local-disposable-container"
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "python": {
+          "type": "string",
+          "minLength": 1
+        },
+        "external_cost_usd": {
+          "const": 0
+        },
+        "docker_client_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "docker_server_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "postgres_image": {
+          "type": "string",
+          "pattern": "^postgres:16@sha256:[0-9a-f]{64}$"
+        },
+        "postgres_image_id": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "postgres_repo_digests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "postgres": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "server_version",
+        "server_version_num",
+        "extensions",
+        "pgvector_decision"
+      ],
+      "properties": {
+        "server_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "server_version_num": {
+          "type": "integer",
+          "minimum": 160000,
+          "maximum": 169999
+        },
+        "extensions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pgcrypto",
+            "pg_trgm",
+            "vector"
+          ],
+          "properties": {
+            "pgcrypto": {
+              "$ref": "#/$defs/extension"
+            },
+            "pg_trgm": {
+              "$ref": "#/$defs/extension"
+            },
+            "vector": {
+              "$ref": "#/$defs/extension"
+            }
+          }
+        },
+        "pgvector_decision": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generation_identity_fields",
+        "projection_identity_fields",
+        "hard_candidate_boundaries",
+        "ann_or_hnsw_present",
+        "embedding_dimension_rejected"
+      ],
+      "properties": {
+        "generation_identity_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 6,
+          "uniqueItems": true
+        },
+        "projection_identity_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 4,
+          "uniqueItems": true
+        },
+        "hard_candidate_boundaries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 5,
+          "uniqueItems": true
+        },
+        "ann_or_hnsw_present": {
+          "const": false
+        },
+        "embedding_dimension_rejected": {
+          "const": true
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "postgres_fts_pg_trgm",
+        "performance",
+        "t002_reference_summary",
+        "parity"
+      ],
+      "properties": {
+        "postgres_fts_pg_trgm": {
+          "$ref": "#/$defs/quality"
+        },
+        "performance": {
+          "$ref": "#/$defs/latency"
+        },
+        "t002_reference_summary": {
+          "type": "object"
+        },
+        "parity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "identical_top10_case_count",
+            "case_count",
+            "cases"
+          ],
+          "properties": {
+            "identical_top10_case_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "case_count": {
+              "const": 24
+            },
+            "cases": {
+              "type": "array",
+              "minItems": 24,
+              "maxItems": 24,
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "visibility_leak_count",
+        "hidden_or_deleted_excluded_with_all_ids_authorized",
+        "empty_authorization_returns_no_candidates",
+        "inactive_generation_returns_no_candidates",
+        "active_generation_count",
+        "multi_instance",
+        "regeneration",
+        "backup_restore"
+      ],
+      "properties": {
+        "visibility_leak_count": {
+          "const": 0
+        },
+        "hidden_or_deleted_excluded_with_all_ids_authorized": {
+          "const": true
+        },
+        "empty_authorization_returns_no_candidates": {
+          "const": true
+        },
+        "inactive_generation_returns_no_candidates": {
+          "const": true
+        },
+        "active_generation_count": {
+          "const": 1
+        },
+        "multi_instance": {
+          "type": "object"
+        },
+        "regeneration": {
+          "$ref": "#/$defs/digest_identity"
+        },
+        "backup_restore": {
+          "type": "object"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "postgres_is_canonical_search_projection_store",
+        "pg_trgm_ready",
+        "pgvector_ready_on_canonical_image",
+        "embedding_runtime_allowed",
+        "next_required_step"
+      ],
+      "properties": {
+        "postgres_is_canonical_search_projection_store": {
+          "const": true
+        },
+        "pg_trgm_ready": {
+          "const": true
+        },
+        "pgvector_ready_on_canonical_image": {
+          "type": "boolean"
+        },
+        "embedding_runtime_allowed": {
+          "const": false
+        },
+        "next_required_step": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "does_not_establish": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 7,
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "extension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "available_version",
+        "installed",
+        "installed_version"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "available_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "installed_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "latency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "median_ms",
+        "p95_ms",
+        "maximum_ms"
+      ],
+      "properties": {
+        "scope": {
+          "const": "docker_exec_psql_roundtrip_not_database_only"
+        },
+        "median_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p95_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maximum_ms": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "required": [
+        "case_count",
+        "natural_case_count",
+        "natural_top3_relevant_count",
+        "natural_top3_relevant_rate",
+        "false_top1_count",
+        "visibility_leak_count",
+        "cases"
+      ],
+      "properties": {
+        "case_count": {
+          "const": 24
+        },
+        "natural_case_count": {
+          "const": 19
+        },
+        "natural_top3_relevant_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 19
+        },
+        "natural_top3_relevant_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "false_top1_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "visibility_leak_count": {
+          "const": 0
+        },
+        "cases": {
+          "type": "array",
+          "minItems": 24,
+          "maxItems": 24,
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "digest_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "before_sha256",
+        "after_sha256",
+        "identical"
+      ],
+      "properties": {
+        "before_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "after_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "identical": {
+          "const": true
+        }
+      }
+    }
+  }
+}

@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-domain
 owner: product-domain
-last_reviewed: 2026-07-18
+last_reviewed: 2026-07-19
 review_after: 2026-10-18
 depends_on:
   - overview
@@ -29,6 +29,12 @@ verifies_with:
   - scripts/search/validate_relevance_goldset.py
   - scripts/search/benchmark_relevance.py
   - scripts/ci/tests/test_semantic_search_contract.py
+  - contracts/search/postgres-foundation-receipt.schema.json
+  - contracts/search/examples/postgres-foundation.heim-pc.json
+  - scripts/search/probe_postgres_foundation.py
+  - scripts/ci/tests/test_semantic_search_postgres_foundation.py
+  - contracts/search/postgres-foundation.up.sql
+  - contracts/search/postgres-foundation.down.sql
 ---
 
 # Semantic Search v1
@@ -203,7 +209,30 @@ Die lexikalische Referenz besitzt einen falschen Top-1-Treffer. Deshalb scheiden
 
 Diese Auswahl bindet für T003 und T004 nur den derzeitigen lokalen Referenzkandidaten samt Digest und Dimension. Sie ist keine Produktionsfreigabe, kein Nachweis realer Nutzerrelevanz, keine Aussage über PostgreSQL- oder `pgvector`-Betrieb und keine Freigabe zur SemantAH-Stilllegung. Änderungen an Goldset, Dokumentbildung, Modell-Digest, Quantisierung oder Rankingrevision verlangen eine neue vollständige Messung.
 
-## 11. Generationen und Dimensionssicherheit
+## 11. T003-Livebeleg: PostgreSQL-Grundlage
+
+Der ausführbare T003-SQL-Vertrag liegt bewusst unter `contracts/search` und nicht im automatisch ausgerollten SQLx-Migrationspfad. Ein Merge von T003 führt daher keine Suchmigration gegen Produktion aus. T003 wurde ausschließlich gegen einen wegwerfbaren lokalen Container aus dem bereits im Repository gepinnten Image `postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c` gemessen. Es wurden nur synthetische T002-Daten verwendet; externe Kosten, Cloud-APIs und Produktionseffekte betragen null. Der Lauf nennt den Repository-Basiscommit ausdrücklich, kennzeichnet den Messworktree als dirty und bindet die acht tatsächlich ausgeführten Quelldateien einzeln sowie gemeinsam über SHA-256. Er behauptet daher keinen bereits commitgebundenen Lauf.
+
+Der receipt-gebundene Lauf belegt:
+
+- PostgreSQL 16.14 (`server_version_num` 160014);
+- `pgcrypto` 1.3 ist verfügbar, wird von T003 aber nicht installiert; `pg_trgm` 1.6 ist verfügbar und im Proof installiert;
+- pgvector ist im kanonischen PostgreSQL-Image nicht verfügbar und nicht installiert;
+- eine aktive Generation bindet Provider, Modell-ID, Modellrevision, Dimension, Dokumentrevision und Normalisierungsrevision;
+- Projektionen binden Quellversion, Quellrevision und `content_sha256`;
+- Sichtbarkeit, Löschstatus, aktive Generation, explizit autorisierte Knoten-IDs und Filter begrenzen die Kandidatenmenge vor jedem Ranking;
+- parallele Schreibversuche werden pro Generation und Knoten serialisiert; veraltete Versionen werden verworfen, identische Wiederholungen bleiben idempotent und gleichversionige Identitätskonflikte werden abgelehnt;
+- ein vollständiger Neuaufbau erzeugt denselben Projektions-Digest;
+- `pg_dump`/`pg_restore` erhält Projektions-Digest und aktive Generation; die Down-Migration entfernt nur die Suchprojektion und lässt `domain_nodes` bestehen;
+- weder HNSW noch IVFFlat oder ein anderer ANN-Index wird angelegt.
+
+Die reale PostgreSQL-Rangfolge aus FTS und `pg_trgm` erreicht im synthetischen T002-Korpus 14 von 19 natürlichen Top-3-Treffern, 0 falsche Top-1-Treffer und 0 Sichtbarkeitslecks. Die frühere rein synthetische FTS-/Trigramm-Referenz erreichte 11 von 19, einen falschen Top-1-Treffer und ebenfalls 0 Lecks. 14 von 24 vollständigen begrenzten Rangfolgen sind identisch. Die Abweichung entsteht vor allem durch PostgreSQLs deutsche Lexemanalyse, parallele einfache Tokenvektoren, Fachbegriffsabdeckung und `word_similarity`; sie ist als reale PostgreSQL-Messung dokumentiert und kein Beleg realer Nutzerqualität.
+
+Die gespeicherten Laufzeiten messen den vollständigen `docker exec`-/`psql`-Roundtrip je Anfrage. Sie sind ausdrücklich keine reine Datenbanklatenz und kein Produktions-SLO.
+
+Da pgvector im kanonischen Image fehlt, ist die Embedding-Runtime fail-closed: Vor T004 muss entweder pgvector explizit paketiert, versions- und image-digest-gebunden belegt werden oder ein anderer exakter Speicherpfad einen eigenen Vertrag erhalten. `DOUBLE PRECISION[]` bleibt in T003 nur eine dimensionsgeprüfte Referenzablage ohne Runtime-Verbraucher. Es gibt keine Search-API, keinen Worker, keinen Backfill, keine Webintegration, keinen Produktionsrollout und keine SemantAH-Stilllegung.
+
+## 12. Generationen und Dimensionssicherheit
 
 Eine aktive Indexgeneration bindet mindestens:
 
@@ -219,7 +248,7 @@ Ein Wechsel eines dieser Merkmale erzeugt eine vollständige neue Generation. Ve
 
 Eine neue Generation wird vollständig aufgebaut und geprüft, bevor sie atomar aktiviert wird. Ein Rückwechsel aktiviert nur eine vollständig konsistente vorherige Generation oder baut sie neu auf.
 
-## 12. Projektion und Worker
+## 13. Projektion und Worker
 
 Der spätere Worker ist idempotent und revisionsgebunden:
 
@@ -234,7 +263,7 @@ Der spätere Worker ist idempotent und revisionsgebunden:
 
 Mehrere API- oder Worker-Instanzen dürfen denselben Auftrag wiederholen, ohne doppelte fachliche Wirkung oder Rückwärtslauf.
 
-## 13. Vorgesehene interne Codegrenze
+## 14. Vorgesehene interne Codegrenze
 
 Die reale Codeorganisation wird in T004 bis T006 schrittweise ergänzt. Der bevorzugte Zuschnitt liegt innerhalb von `apps/api`, nicht in einer neuen Runtime:
 
@@ -257,7 +286,7 @@ apps/api/src/bin/search-evaluate.rs
 
 Die genaue Dateigrenze darf an bestehende Rust-Module angepasst werden. Verboten bleibt eine separate `apps/semantic-service`-Runtime.
 
-## 14. Goldset-Vertrag
+## 15. Goldset-Vertrag
 
 `contracts/search/relevance-goldset.schema.json` definiert ein maschinenlesbares Format. Das eingecheckte Beispiel ist ausschließlich synthetisch.
 
@@ -277,7 +306,7 @@ Relevante IDs müssen sichtbar sein. Ausgeschlossene IDs dürfen nicht sichtbar 
 
 Das Goldset misst Retrievalqualität, nicht gesellschaftliche Wahrheit. Bewertungen müssen begründet und bei fachlichen Änderungen versioniert werden.
 
-## 15. Qualitäts- und Freigabegates
+## 16. Qualitäts- und Freigabegates
 
 Vor T008 müssen mindestens belegt sein:
 
@@ -296,7 +325,7 @@ Vor T008 müssen mindestens belegt sein:
 
 Basis und Kandidaten werden getrennt berichtet. Ein gemittelter Gesamtscore darf Regressionen bei exakten Treffern oder Sichtbarkeit nicht verdecken.
 
-## 16. Betrieb und Beobachtbarkeit
+## 17. Betrieb und Beobachtbarkeit
 
 Später mindestens beobachtbar sind:
 
@@ -312,7 +341,7 @@ Später mindestens beobachtbar sind:
 
 Metriken enthalten keine Rohqueries, privaten Texte oder Embeddings, solange dafür kein eigener Datenschutzvertrag besteht.
 
-## 17. Hard Cut und Nichtziele
+## 18. Hard Cut und Nichtziele
 
 Nicht Bestandteil der Zielarchitektur sind:
 
@@ -331,11 +360,11 @@ Nicht Bestandteil der Zielarchitektur sind:
 
 Brauchbare SemantAH-Konzepte wie Providergrenzen, Dimensionsprüfung, Normalisierung, deterministische Cosinus-Referenzsuche, Benchmarks und Tests dürfen zielgerichtet neu implementiert werden. SemantAH-Code wird nicht als dauerhafte Abhängigkeit übernommen.
 
-## 18. Taskgrenzen
+## 19. Taskgrenzen
 
 - **T001:** Architekturvertrag, Goldset-Format, synthetisches Beispiel und Validator.
 - **T002:** Relevanzbasis und Modellvergleich.
-- **T003:** PostgreSQL-Suchschema, Volltext, Trigramme und belegte `pgvector`-Fähigkeit.
+- **T003:** PostgreSQL-Suchschema, Volltext und Trigramme belegt; fehlendes `pgvector` als harte Stopbedingung dokumentiert.
 - **T004:** interner Embedding- und Rankingkern.
 - **T005:** idempotente Projektion, Worker, Backfill und Löschfortpflanzung.
 - **T006:** hybride serverseitige Such-API.
@@ -345,7 +374,7 @@ Brauchbare SemantAH-Konzepte wie Providergrenzen, Dimensionsprüfung, Normalisie
 
 Erst nach erfolgreichem T008-Beweis darf T009 `SEMANTAH-USEFULNESS-V1`, `SEMANTAH-INDEXD-SCALING-V1` und `SEMANTAH-E2E-PORTABILITY-V1` superseden oder schließen.
 
-## 19. Stopbedingungen
+## 20. Stopbedingungen
 
 Die Initiative wird gestoppt oder neu geschnitten, wenn:
 
@@ -356,7 +385,7 @@ Die Initiative wird gestoppt oder neu geschnitten, wenn:
 - der Betriebsaufwand den gemessenen Relevanzgewinn überwiegt oder
 - die Suche eine zweite fachliche Wahrheit oder automatische Beziehungssemantik erzeugen würde.
 
-## 20. Nicht behaupteter Zustand
+## 21. Nicht behaupteter Zustand
 
 Dieser Vertrag belegt nicht:
 
