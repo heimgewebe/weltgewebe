@@ -79,6 +79,23 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertEqual(lock["artifacts"]["cert_manager"]["version"], "1.21.0")
         self.assertEqual(lock["artifacts"]["barman_cloud_plugin"]["version"], "0.13.0")
 
+    def test_cnpg_plugin_tool_matches_operator_version(self) -> None:
+        lock = json.loads((ROOT / "platform/toolchain.lock.json").read_text())
+        self.assertEqual(
+            lock["tools"]["kubectl_cnpg"],
+            {
+                "version": "1.30.0",
+                "url": "https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v1.30.0/kubectl-cnpg_1.30.0_linux_x86_64.tar.gz",
+                "sha256": "33784dc3b61edb0ddb1a68db6ef045bd32daace5db2ec1f0a02e0e8185eef7eb",
+                "format": "tar.gz",
+                "binary": "kubectl-cnpg",
+            },
+        )
+        self.assertEqual(
+            lock["tools"]["kubectl_cnpg"]["version"],
+            lock["artifacts"]["cloudnative_pg_operator"]["version"],
+        )
+
     def test_ha_migration_reads_runtime_database_url_from_secret(self) -> None:
         job = next(
             self.validator._documents(
@@ -190,6 +207,141 @@ class KubernetesHaContractTests(unittest.TestCase):
         with self.assertRaisesRegex(self.ha.ref.ProofError, "not spread"):
             self.ha.require_zones(invalid, 3, "test")
 
+    def test_pod_topology_excludes_terminating_and_unready_pods(self) -> None:
+        pods = {
+            "items": [
+                {
+                    "metadata": {
+                        "name": "coredns-old",
+                        "deletionTimestamp": "2026-07-19T04:04:30Z",
+                    },
+                    "spec": {"nodeName": "control-plane"},
+                    "status": {
+                        "phase": "Running",
+                        "conditions": [{"type": "Ready", "status": "True"}],
+                    },
+                },
+                {
+                    "metadata": {"name": "coredns-unready"},
+                    "spec": {"nodeName": "control-plane"},
+                    "status": {
+                        "phase": "Running",
+                        "conditions": [{"type": "Ready", "status": "False"}],
+                    },
+                },
+                *[
+                    {
+                        "metadata": {"name": f"coredns-{suffix}"},
+                        "spec": {"nodeName": f"worker-{suffix}"},
+                        "status": {
+                            "phase": "Running",
+                            "conditions": [{"type": "Ready", "status": "True"}],
+                        },
+                    }
+                    for suffix in ("a", "b", "c")
+                ],
+            ]
+        }
+        nodes = {
+            "items": [
+                {
+                    "metadata": {
+                        "name": f"worker-{suffix}",
+                        "labels": {"topology.kubernetes.io/zone": f"zone-{suffix}"},
+                    }
+                }
+                for suffix in ("a", "b", "c")
+            ]
+        }
+        with mock.patch.object(
+            self.ha.ref,
+            "output",
+            side_effect=[json.dumps(pods), json.dumps(nodes)],
+        ):
+            topology = self.ha.pod_topology(
+                "kubectl", "kube-system", "k8s-app=kube-dns"
+            )
+
+        self.assertEqual(
+            topology,
+            {
+                f"coredns-{suffix}": {
+                    "node": f"worker-{suffix}",
+                    "zone": f"zone-{suffix}",
+                }
+                for suffix in ("a", "b", "c")
+            },
+        )
+
+    def test_cluster_dns_is_scaled_and_spread_across_three_zones(self) -> None:
+        topology = {
+            "coredns-a": {"node": "node-a", "zone": "zone-a"},
+            "coredns-b": {"node": "node-b", "zone": "zone-b"},
+            "coredns-c": {"node": "node-c", "zone": "zone-c"},
+        }
+        with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
+            self.ha.ref, "wait_rollout"
+        ) as wait_rollout, mock.patch.object(
+            self.ha, "pod_topology", return_value=topology
+        ) as pod_topology:
+            observed = self.ha.configure_cluster_dns_ha("kubectl")
+
+        self.assertEqual(observed, topology)
+        argv = run.call_args.args[0]
+        self.assertEqual(
+            argv[:6],
+            [
+                "kubectl",
+                "-n",
+                "kube-system",
+                "patch",
+                "deployment/coredns",
+                "--type=strategic",
+            ],
+        )
+        patch = json.loads(argv[argv.index("--patch") + 1])
+        self.assertEqual(patch["spec"]["replicas"], 3)
+        pod = patch["spec"]["template"]["spec"]
+        self.assertEqual(
+            pod["nodeSelector"],
+            {
+                "kubernetes.io/os": "linux",
+                "weltgewebe.net/data-node": "true",
+            },
+        )
+        required = pod["affinity"]["podAntiAffinity"][
+            "requiredDuringSchedulingIgnoredDuringExecution"
+        ]
+        self.assertEqual(
+            required,
+            [
+                {
+                    "labelSelector": {
+                        "matchLabels": {"k8s-app": "kube-dns"}
+                    },
+                    "topologyKey": "topology.kubernetes.io/zone",
+                }
+            ],
+        )
+        wait_rollout.assert_called_once_with(
+            "kubectl", "kube-system", "deployment/coredns", "8m"
+        )
+        pod_topology.assert_called_once_with(
+            "kubectl", "kube-system", "k8s-app=kube-dns"
+        )
+
+    def test_cluster_dns_rejects_a_single_node_failure_domain(self) -> None:
+        topology = {
+            "coredns-a": {"node": "node-a", "zone": "zone-a"},
+            "coredns-b": {"node": "node-a", "zone": "zone-a"},
+            "coredns-c": {"node": "node-b", "zone": "zone-b"},
+        }
+        with mock.patch.object(self.ha.ref, "run"), mock.patch.object(
+            self.ha.ref, "wait_rollout"
+        ), mock.patch.object(self.ha, "pod_topology", return_value=topology):
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "not spread"):
+                self.ha.configure_cluster_dns_ha("kubectl")
+
     def test_external_object_store_cleanup_is_ownership_bound(self) -> None:
         inspect = mock.Mock(return_value=mock.Mock(returncode=0))
         with mock.patch.object(self.ha.subprocess, "run", inspect), mock.patch.object(
@@ -271,7 +423,9 @@ class KubernetesHaContractTests(unittest.TestCase):
         source = (
             "apiVersion: v1\nkind: Secret\nmetadata:\n  name: sidecar\n"
             f'data:\n  SIDECAR_IMAGE: "{encoded}"\n---\n'
-            "apiVersion: apps/v1\nkind: Deployment\nspec:\n  template:\n"
+            "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n"
+            "  name: barman-cloud\n  namespace: cnpg-system\nspec:\n"
+            "  replicas: 1\n  strategy:\n    type: Recreate\n  template:\n"
             "    spec:\n      containers:\n        - name: controller\n"
             "          image: ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0\n"
         )
@@ -289,6 +443,123 @@ class KubernetesHaContractTests(unittest.TestCase):
             deployment["spec"]["template"]["spec"]["containers"][0]["image"],
             self.ha.BARMAN_CLOUD_PLUGIN_IMAGE,
         )
+        self.assertEqual(deployment["spec"]["replicas"], 3)
+        self.assertEqual(deployment["spec"]["strategy"], {"type": "Recreate"})
+        required = deployment["spec"]["template"]["spec"]["affinity"][
+            "podAntiAffinity"
+        ]["requiredDuringSchedulingIgnoredDuringExecution"]
+        self.assertEqual(
+            required,
+            [
+                {
+                    "labelSelector": {"matchLabels": {"app": "barman-cloud"}},
+                    "topologyKey": "kubernetes.io/hostname",
+                }
+            ],
+        )
+        self.assertFalse(
+            any(item.get("kind") == "PodDisruptionBudget" for item in documents)
+        )
+
+    def barman_plugin_pod_payload(self, leader_index: int = 1) -> str:
+        return json.dumps(
+            {
+                "items": [
+                    {
+                        "metadata": {"name": f"barman-cloud-{index}"},
+                        "spec": {
+                            "nodeName": f"worker-{index}",
+                            "containers": [
+                                {
+                                    "name": "barman-cloud",
+                                    "image": self.ha.BARMAN_CLOUD_PLUGIN_IMAGE,
+                                }
+                            ],
+                        },
+                        "status": {
+                            "phase": "Running",
+                            "containerStatuses": [
+                                {
+                                    "name": "barman-cloud",
+                                    "ready": index == leader_index,
+                                    "state": {
+                                        "running": {
+                                            "startedAt": "2026-07-18T11:32:39Z"
+                                        }
+                                    },
+                                }
+                            ],
+                            "conditions": [
+                                {
+                                    "type": "Ready",
+                                    "status": "True"
+                                    if index == leader_index
+                                    else "False",
+                                }
+                            ],
+                        },
+                    }
+                    for index in range(1, 4)
+                ]
+            }
+        )
+
+    @staticmethod
+    def barman_plugin_endpoint_payload(*indexes: int) -> str:
+        return json.dumps(
+            {
+                "subsets": [
+                    {
+                        "addresses": [
+                            {
+                                "ip": f"10.0.0.{index}",
+                                "targetRef": {"name": f"barman-cloud-{index}"},
+                            }
+                            for index in indexes
+                        ]
+                    }
+                ]
+            }
+        )
+
+    def test_barman_plugin_state_models_one_elected_leader(self) -> None:
+        with mock.patch.object(
+            self.ha.ref,
+            "output",
+            side_effect=[
+                self.barman_plugin_pod_payload(2),
+                self.barman_plugin_endpoint_payload(2),
+            ],
+        ):
+            state = self.ha.barman_plugin_state(
+                "kubectl", require_three_nodes=True
+            )
+        self.assertEqual(state["nodes"], ["worker-1", "worker-2", "worker-3"])
+        self.assertEqual(
+            state["leader"], {"pod": "barman-cloud-2", "node": "worker-2"}
+        )
+
+    def test_barman_plugin_state_ignores_stale_container_ready_after_node_loss(self) -> None:
+        pods = json.loads(self.barman_plugin_pod_payload(2))
+        old_leader = pods["items"][0]
+        old_leader["status"]["containerStatuses"][0]["ready"] = True
+        old_leader["status"]["conditions"] = [
+            {"type": "Ready", "status": "False"}
+        ]
+        with mock.patch.object(
+            self.ha.ref,
+            "output",
+            side_effect=[
+                json.dumps(pods),
+                self.barman_plugin_endpoint_payload(2),
+            ],
+        ):
+            state = self.ha.barman_plugin_state(
+                "kubectl", require_three_nodes=False
+            )
+        self.assertEqual(
+            state["leader"], {"pod": "barman-cloud-2", "node": "worker-2"}
+        )
 
     def test_barman_plugin_install_waits_and_verifies_digest_images(self) -> None:
         secret_payload = json.dumps(
@@ -304,6 +575,15 @@ class KubernetesHaContractTests(unittest.TestCase):
                 ]
             }
         )
+        state = {
+            "nodes": ["worker-1", "worker-2", "worker-3"],
+            "pods": {
+                "barman-cloud-1": "worker-1",
+                "barman-cloud-2": "worker-2",
+                "barman-cloud-3": "worker-3",
+            },
+            "leader": {"pod": "barman-cloud-1", "node": "worker-1"},
+        }
         with mock.patch.object(
             self.ha, "apply_barman_cloud_manifest"
         ) as apply_manifest, mock.patch.object(
@@ -311,19 +591,146 @@ class KubernetesHaContractTests(unittest.TestCase):
         ) as run, mock.patch.object(
             self.ha.ref, "wait_condition"
         ) as wait_condition, mock.patch.object(
-            self.ha.ref, "wait_rollout"
-        ) as wait_rollout, mock.patch.object(
+            self.ha, "verify_barman_plugin_ha", return_value=state
+        ) as verify_ha, mock.patch.object(
             self.ha.ref,
             "output",
             side_effect=[secret_payload, self.ha.BARMAN_CLOUD_PLUGIN_IMAGE],
         ):
-            self.ha.install_barman_cloud_plugin("kubectl", "barman.yaml")
+            observed = self.ha.install_barman_cloud_plugin(
+                "kubectl", "barman.yaml"
+            )
         apply_manifest.assert_called_once_with("kubectl", "barman.yaml")
         self.assertIn("crd/objectstores.barmancloud.cnpg.io", run.call_args.args[0])
         self.assertEqual(wait_condition.call_count, 2)
-        wait_rollout.assert_called_once_with(
-            "kubectl", "cnpg-system", "deployment/barman-cloud", "8m"
+        verify_ha.assert_called_once_with("kubectl")
+        self.assertEqual(observed, state)
+
+    def test_barman_plugin_state_rejects_multiple_service_leaders(self) -> None:
+        with mock.patch.object(
+            self.ha.ref,
+            "output",
+            side_effect=[
+                self.barman_plugin_pod_payload(1),
+                self.barman_plugin_endpoint_payload(1, 2),
+            ],
+        ):
+            with self.assertRaisesRegex(
+                self.ha.ref.ProofError, "exactly its elected ready leader"
+            ):
+                self.ha.barman_plugin_state(
+                    "kubectl", require_three_nodes=True
+                )
+
+    def test_barman_plugin_backup_proves_completed_plugin_rpc(self) -> None:
+        completed = {
+            "status": {
+                "phase": "completed",
+                "method": "plugin",
+                "instanceID": {"podName": "postgres-ha-2"},
+            }
+        }
+        with mock.patch.object(self.ha.ref, "apply_yaml") as apply_yaml, mock.patch.object(
+            self.ha, "wait_backup_complete", return_value=completed
+        ) as wait_backup:
+            result = self.ha.prove_barman_plugin_backup(
+                "kubectl", "postgres-ha", "probe-backup"
+            )
+        document = apply_yaml.call_args.args[1]
+        self.assertEqual(document["spec"]["method"], "plugin")
+        self.assertEqual(document["spec"]["target"], "primary")
+        self.assertEqual(
+            document["spec"]["pluginConfiguration"]["name"],
+            "barman-cloud.cloudnative-pg.io",
         )
+        wait_backup.assert_called_once_with("kubectl", "probe-backup")
+        self.assertEqual(
+            result,
+            {
+                "name": "probe-backup",
+                "phase": "completed",
+                "method": "plugin",
+                "pod": "postgres-ha-2",
+            },
+        )
+
+    def test_postgres_primary_alignment_promotes_to_existing_barman_leader(self) -> None:
+        plugin_state = {
+            "nodes": ["worker-1", "worker-2", "worker-3"],
+            "pods": {
+                "barman-cloud-1": "worker-1",
+                "barman-cloud-2": "worker-2",
+                "barman-cloud-3": "worker-3",
+            },
+            "leader": {"pod": "barman-cloud-2", "node": "worker-2"},
+        }
+        topology = {
+            "postgres-ha-1": {"node": "worker-1", "zone": "zone-a"},
+            "postgres-ha-2": {"node": "worker-2", "zone": "zone-b"},
+            "postgres-ha-3": {"node": "worker-3", "zone": "zone-c"},
+        }
+        communication = {
+            "name": "probe-backup",
+            "phase": "completed",
+            "method": "plugin",
+            "pod": "postgres-ha-2",
+        }
+        with mock.patch.object(
+            self.ha, "verify_barman_plugin_ha", side_effect=[plugin_state, plugin_state]
+        ), mock.patch.object(
+            self.ha, "current_primary", side_effect=["postgres-ha-1", "postgres-ha-2"]
+        ), mock.patch.object(
+            self.ha, "wait_until", return_value="postgres-ha-2"
+        ) as wait_until, mock.patch.object(
+            self.ha, "wait_cluster_ready"
+        ) as wait_ready, mock.patch.object(
+            self.ha, "prove_barman_plugin_backup", return_value=communication
+        ) as prove_backup, mock.patch.object(self.ha.ref, "run") as run:
+            result = self.ha.align_postgres_primary_with_barman_leader(
+                "kubectl-cnpg",
+                "kubectl",
+                "postgres-ha",
+                topology,
+                "probe-backup",
+            )
+        run.assert_called_once_with(
+            [
+                "kubectl-cnpg",
+                "--namespace",
+                "weltgewebe-data",
+                "promote",
+                "postgres-ha",
+                "postgres-ha-2",
+            ],
+            timeout=60,
+        )
+        self.assertNotIn("delete", run.call_args.args[0])
+        wait_until.assert_called_once()
+        wait_ready.assert_called_once_with("kubectl", "postgres-ha", "10m")
+        prove_backup.assert_called_once_with(
+            "kubectl", "postgres-ha", "probe-backup"
+        )
+        self.assertEqual(result["target_node"], "worker-2")
+        self.assertEqual(result["postgres_primary_before"], "postgres-ha-1")
+        self.assertEqual(result["postgres_primary_aligned"], "postgres-ha-2")
+        self.assertEqual(result["communication"], communication)
+
+    def test_barman_plugin_leader_after_node_loss_must_move(self) -> None:
+        surviving = {
+            "nodes": ["worker-1", "worker-2"],
+            "pods": {
+                "barman-cloud-1": "worker-1",
+                "barman-cloud-2": "worker-2",
+            },
+            "leader": {"pod": "barman-cloud-2", "node": "worker-2"},
+        }
+        with mock.patch.object(
+            self.ha, "barman_plugin_state", return_value=surviving
+        ):
+            leader = self.ha.wait_barman_plugin_leader_after_node_loss(
+                "kubectl", "worker-3"
+            )
+        self.assertEqual(leader, surviving["leader"])
 
     def test_barman_instance_sidecars_are_running_ready_and_digest_bound(self) -> None:
         digest = self.ha.BARMAN_CLOUD_SIDECAR_IMAGE.rsplit("@", 1)[1]
@@ -447,7 +854,15 @@ spec:
         required = spec["template"]["spec"]["affinity"]["podAntiAffinity"][
             "requiredDuringSchedulingIgnoredDuringExecution"
         ]
-        self.assertEqual(required[0]["topologyKey"], "kubernetes.io/hostname")
+        self.assertEqual(
+            required,
+            [
+                {
+                    "labelSelector": {"matchLabels": {"app.kubernetes.io/name": "cloudnative-pg"}},
+                    "topologyKey": "kubernetes.io/hostname",
+                }
+            ],
+        )
         self.assertNotIn(
             "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0", rendered
         )
@@ -553,9 +968,15 @@ spec:
                     "cnpg-operator-deployment.yaml",
                     "cnpg-operator-replicasets.yaml",
                     "cnpg-operator-logs.txt",
+                    "barman-plugin-deployment.yaml",
+                    "barman-plugin-pods-describe.txt",
+                    "barman-plugin-endpoints.yaml",
                     "barman-plugin-logs.txt",
                     "barman-objectstores.yaml",
                     "certificates.yaml",
+                    "cluster-dns-deployment.yaml",
+                    "cluster-dns-pods-describe.txt",
+                    "cluster-dns-logs.txt",
                     "storage.txt",
                 },
             )
@@ -578,6 +999,13 @@ spec:
         self.assertIn('"operator_nodes": {', source)
         self.assertIn('"primary": primary_operator_nodes', source)
         self.assertIn('"restore": restore_operator_nodes', source)
+
+    def test_success_receipt_records_cluster_dns_distribution(self) -> None:
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        self.assertEqual(source.count("configure_cluster_dns_ha("), 3)
+        self.assertIn('"cluster_dns": {', source)
+        self.assertIn('"primary": primary_dns_topology', source)
+        self.assertIn('"restore": restore_dns_topology', source)
 
     def test_ha_api_rollout_is_schedulable_on_three_zoned_workers(self) -> None:
         documents = list(
