@@ -20,6 +20,13 @@
       "format": "binary",
       "binary": "kubectl"
     },
+    "kubectl_cnpg": {
+      "version": "1.30.0",
+      "url": "https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v1.30.0/kubectl-cnpg_1.30.0_linux_x86_64.tar.gz",
+      "sha256": "33784dc3b61edb0ddb1a68db6ef045bd32daace5db2ec1f0a02e0e8185eef7eb",
+      "format": "tar.gz",
+      "binary": "kubectl-cnpg"
+    },
     "kustomize": {
       "version": "5.8.1",
       "url": "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.8.1/kustomize_v5.8.1_linux_amd64.tar.gz",
