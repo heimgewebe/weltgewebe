@@ -7,7 +7,10 @@ BUILD_USER="${WELTGEWEBE_BUILD_USER:-alex}"
 RELEASE_DIR=""
 COMMIT=""
 
-fail() { echo "ERROR: $*" >&2; exit 1; }
+fail() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
 
 require_root_safe_directory() {
   local path="$1" label="$2" mode
