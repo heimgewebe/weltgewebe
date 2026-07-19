@@ -1,0 +1,112 @@
+{
+  "schema_version": "1",
+  "contract_id": "weltgewebe.repo.agent-contract",
+  "architecture": {
+    "repo_role": "repo_contract_authority",
+    "operator_role": "external_operator_execution",
+    "operator_name": "grabowski",
+    "repo_generic_write_mode": "rejected"
+  },
+  "reading_order": [
+    "agent-contract.json",
+    "repo.meta.yaml",
+    "AGENTS.md",
+    "agent-policy.yaml",
+    "docs/policies/agent-reading-protocol.md"
+  ],
+  "safe_read_paths": [
+    "agent-contract.json",
+    "repo.meta.yaml",
+    "AGENTS.md",
+    "agent-policy.yaml",
+    "docs/policies/agent-reading-protocol.md",
+    "README.md",
+    "docs/"
+  ],
+  "guarded_write_paths": [
+    ".github/workflows/",
+    ".wgx/generated-artifacts.yml",
+    "agent-contract.json",
+    "apps/",
+    "contracts/",
+    "docs/",
+    "infra/",
+    "platform/",
+    "scripts/"
+  ],
+  "forbidden_write_paths": [
+    "docs/_generated/",
+    "secrets/",
+    "snapshots/"
+  ],
+  "required_checks": [
+    "repo-structure-guard",
+    "docs-relations-guard",
+    "generated-files-guard",
+    "coverage-guard"
+  ],
+  "local_checks_before_patch": [
+    "repo-structure-guard",
+    "docs-relations-guard",
+    "generated-files-guard",
+    "coverage-guard",
+    "lint",
+    "test"
+  ],
+  "validation_profiles": {
+    "agent_contract": {
+      "description": "Validate the canonical repository agent contract and its schema-bound fixtures.",
+      "named_checks": [
+        "repo-agent-contract",
+        "agent-contracts"
+      ]
+    },
+    "agent_safety": {
+      "description": "Existing agent-safety preflight, handoff, dry-run, and readiness checks.",
+      "named_checks": [
+        "agent-safety-preflight",
+        "agent-readiness-check"
+      ]
+    },
+    "docs_guards": {
+      "description": "Repository structure and documentation guard profile.",
+      "named_checks": [
+        "repo-structure-guard",
+        "docs-relations-guard",
+        "generated-files-guard",
+        "coverage-guard"
+      ]
+    }
+  },
+  "generated_artifacts": {
+    "direct_agent_edit": "forbidden",
+    "derived_write_authority": "trusted_generators_only",
+    "trusted_generator_registry": ".wgx/generated-artifacts.yml",
+    "allowed_target_prefixes": [
+      "docs/_generated/"
+    ]
+  },
+  "compatibility_projections": [
+    {
+      "path": "repo.meta.yaml",
+      "role": "compatibility_projection",
+      "projected_fields": {
+        "safe_read_paths": "safe_read_paths",
+        "guarded_write_paths": "guarded_write_paths",
+        "forbidden_write_paths": "forbidden_write_paths",
+        "required_checks": "required_checks"
+      }
+    },
+    {
+      "path": "agent-policy.yaml",
+      "role": "compatibility_projection",
+      "projected_fields": {
+        "safe_read_paths": "safe_read_paths",
+        "guarded_write_paths": "guarded_write_paths",
+        "forbidden_write_paths": "forbidden_write_paths",
+        "local_checks_before_patch": "required_checks_before_patch"
+      }
+    }
+  ],
+  "format_rationale": "Strict JSON is canonical; PyYAML with duplicate-key rejection is used only to read existing compatibility and generator registries; no YAML mini-parser and no second authority."
+}

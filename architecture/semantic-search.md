@@ -25,7 +25,9 @@ relations:
 verifies_with:
   - contracts/search/relevance-goldset.schema.json
   - contracts/search/examples/relevance-goldset.example.json
+  - contracts/search/examples/relevance-benchmark.heim-pc.json
   - scripts/search/validate_relevance_goldset.py
+  - scripts/search/benchmark_relevance.py
   - scripts/ci/tests/test_semantic_search_contract.py
 ---
 
@@ -177,7 +179,31 @@ OpenRouter-Free ist nur zulässig:
 
 Cloud gewinnt nur bei einem klaren, praktisch relevanten Qualitätsvorsprung und nach ausdrücklicher Kostenfreigabe. Andernfalls gewinnt das kleinste lokale Modell, das die Qualitätsgates erfüllt.
 
-## 10. Generationen und Dimensionssicherheit
+## 10. T002-Messung und begrenzte Modellentscheidung
+
+Die T002-Messung verwendet ausschließlich den eingecheckten synthetischen Korpus mit 22 Knoten und 24 deutschen Suchfällen. 19 Fälle sind natürliche Anfragen. Zwei Knoten sind verborgen, ein Knoten ist gelöscht; alle Retrievalpfade erhalten ausschließlich die pro Fall zulässige sichtbare Kandidatenmenge. Es wurden keine realen oder pseudonymisierten Daten, keine Cloud-API und kein OpenRouter-Endpunkt verwendet. Die externen Kosten betragen null.
+
+Der reproduzierbare Beleg liegt in `contracts/search/examples/relevance-benchmark.heim-pc.json`. Er bindet Dataset, Schema, Benchmarkquellcode, Goldset-Validator, Ollama-Modell-Digest, Dimension und Dokumentrevision. Für jeden Fall speichert er die vollständige begrenzte Rangfolge; der Offline-Checker berechnet daraus sämtliche Qualitätsaggregate und die Modellentscheidung neu. Die Modellidentität wird vor und nach beiden Embedding-Aufrufen gelesen und muss unverändert bleiben. Rohvektoren und Rohproviderantworten werden weder eingecheckt noch als Metrik gespeichert.
+
+CI prüft Struktur, Hashbindungen, vollständige Fallabdeckung, Rangfolgen, Aggregate, Nichtbehauptungen und Entscheidung deterministisch. CI erzeugt die Ollama-Embeddings nicht unabhängig neu; eine Änderung von Goldset, Benchmarkquelle, Modell-Digest oder Dokumentbildung erzwingt deshalb eine neue receipt-gebundene lokale Messung. Laufzeitwerte bleiben beobachtende Heim-PC-Metadaten und sind kein Auswahlkriterium oder deterministischer CI-Beleg.
+
+Die Messung trennt drei Ebenen:
+
+1. Die reale heutige Client-Teilstringsuche erreicht bei natürlichen Anfragen 0 von 19 relevanten Top-3-Treffern.
+2. Die deterministische FTS-/Trigramm-Referenz erreicht 11 von 19 natürlichen Top-3-Treffern. Sie ist eine Offline-Näherung und belegt ausdrücklich keine Parität zu PostgreSQL-FTS oder `pg_trgm`.
+3. Lokale hybride Kandidaten behalten die harten lexikalischen Vorrangklassen bei und ergänzen nur Fälle ohne stärkeres lexikalisches Signal.
+
+| Lokaler Kandidat | Dimension | Natürliche Top-3 | Falsche Top-1 | Sichtbarkeitslecks | Gate |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `qwen3-embedding:0.6b` | 1024 | 18/19 | 3 | 0 | nicht qualifiziert |
+| `qwen3-embedding:4b` | 2560 | 19/19 | 2 | 0 | nicht qualifiziert |
+| `qwen3-embedding:8b` | 4096 | 19/19 | 1 | 0 | qualifiziert |
+
+Die lexikalische Referenz besitzt einen falschen Top-1-Treffer. Deshalb scheiden 0,6B und 4B trotz hoher Top-3-Abdeckung aus: Sie verschlechtern dieses harte Gate auf drei beziehungsweise zwei falsche Top-1-Treffer. `qwen3-embedding:8b` hält den Referenzwert, wahrt exakte Titel- und Tagtreffer und erreicht 19 von 19 natürlichen Top-3-Treffern. Es ist damit der kleinste der vollständig gemessenen lokalen Kandidaten, der alle T002-Gates erfüllt.
+
+Diese Auswahl bindet für T003 und T004 nur den derzeitigen lokalen Referenzkandidaten samt Digest und Dimension. Sie ist keine Produktionsfreigabe, kein Nachweis realer Nutzerrelevanz, keine Aussage über PostgreSQL- oder `pgvector`-Betrieb und keine Freigabe zur SemantAH-Stilllegung. Änderungen an Goldset, Dokumentbildung, Modell-Digest, Quantisierung oder Rankingrevision verlangen eine neue vollständige Messung.
+
+## 11. Generationen und Dimensionssicherheit
 
 Eine aktive Indexgeneration bindet mindestens:
 
@@ -193,7 +219,7 @@ Ein Wechsel eines dieser Merkmale erzeugt eine vollständige neue Generation. Ve
 
 Eine neue Generation wird vollständig aufgebaut und geprüft, bevor sie atomar aktiviert wird. Ein Rückwechsel aktiviert nur eine vollständig konsistente vorherige Generation oder baut sie neu auf.
 
-## 11. Projektion und Worker
+## 12. Projektion und Worker
 
 Der spätere Worker ist idempotent und revisionsgebunden:
 
@@ -208,7 +234,7 @@ Der spätere Worker ist idempotent und revisionsgebunden:
 
 Mehrere API- oder Worker-Instanzen dürfen denselben Auftrag wiederholen, ohne doppelte fachliche Wirkung oder Rückwärtslauf.
 
-## 12. Vorgesehene interne Codegrenze
+## 13. Vorgesehene interne Codegrenze
 
 Die reale Codeorganisation wird in T004 bis T006 schrittweise ergänzt. Der bevorzugte Zuschnitt liegt innerhalb von `apps/api`, nicht in einer neuen Runtime:
 
@@ -231,7 +257,7 @@ apps/api/src/bin/search-evaluate.rs
 
 Die genaue Dateigrenze darf an bestehende Rust-Module angepasst werden. Verboten bleibt eine separate `apps/semantic-service`-Runtime.
 
-## 13. Goldset-Vertrag
+## 14. Goldset-Vertrag
 
 `contracts/search/relevance-goldset.schema.json` definiert ein maschinenlesbares Format. Das eingecheckte Beispiel ist ausschließlich synthetisch.
 
@@ -251,7 +277,7 @@ Relevante IDs müssen sichtbar sein. Ausgeschlossene IDs dürfen nicht sichtbar 
 
 Das Goldset misst Retrievalqualität, nicht gesellschaftliche Wahrheit. Bewertungen müssen begründet und bei fachlichen Änderungen versioniert werden.
 
-## 14. Qualitäts- und Freigabegates
+## 15. Qualitäts- und Freigabegates
 
 Vor T008 müssen mindestens belegt sein:
 
@@ -270,7 +296,7 @@ Vor T008 müssen mindestens belegt sein:
 
 Basis und Kandidaten werden getrennt berichtet. Ein gemittelter Gesamtscore darf Regressionen bei exakten Treffern oder Sichtbarkeit nicht verdecken.
 
-## 15. Betrieb und Beobachtbarkeit
+## 16. Betrieb und Beobachtbarkeit
 
 Später mindestens beobachtbar sind:
 
@@ -286,7 +312,7 @@ Später mindestens beobachtbar sind:
 
 Metriken enthalten keine Rohqueries, privaten Texte oder Embeddings, solange dafür kein eigener Datenschutzvertrag besteht.
 
-## 16. Hard Cut und Nichtziele
+## 17. Hard Cut und Nichtziele
 
 Nicht Bestandteil der Zielarchitektur sind:
 
@@ -305,7 +331,7 @@ Nicht Bestandteil der Zielarchitektur sind:
 
 Brauchbare SemantAH-Konzepte wie Providergrenzen, Dimensionsprüfung, Normalisierung, deterministische Cosinus-Referenzsuche, Benchmarks und Tests dürfen zielgerichtet neu implementiert werden. SemantAH-Code wird nicht als dauerhafte Abhängigkeit übernommen.
 
-## 17. Taskgrenzen
+## 18. Taskgrenzen
 
 - **T001:** Architekturvertrag, Goldset-Format, synthetisches Beispiel und Validator.
 - **T002:** Relevanzbasis und Modellvergleich.
@@ -319,7 +345,7 @@ Brauchbare SemantAH-Konzepte wie Providergrenzen, Dimensionsprüfung, Normalisie
 
 Erst nach erfolgreichem T008-Beweis darf T009 `SEMANTAH-USEFULNESS-V1`, `SEMANTAH-INDEXD-SCALING-V1` und `SEMANTAH-E2E-PORTABILITY-V1` superseden oder schließen.
 
-## 18. Stopbedingungen
+## 19. Stopbedingungen
 
 Die Initiative wird gestoppt oder neu geschnitten, wenn:
 
@@ -330,7 +356,7 @@ Die Initiative wird gestoppt oder neu geschnitten, wenn:
 - der Betriebsaufwand den gemessenen Relevanzgewinn überwiegt oder
 - die Suche eine zweite fachliche Wahrheit oder automatische Beziehungssemantik erzeugen würde.
 
-## 19. Nicht behaupteter Zustand
+## 20. Nicht behaupteter Zustand
 
 Dieser Vertrag belegt nicht:
 

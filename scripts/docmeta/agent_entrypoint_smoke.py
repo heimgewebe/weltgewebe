@@ -10,12 +10,13 @@ It deliberately verifies only a few hard, deterministic invariants — robust te
 markers, not semantic full-text analysis — so that legitimate doc rewrites are
 not punished:
 
-  1. README.md spells out the binding reading order (repo.meta.yaml, AGENTS.md,
-     agent-policy.yaml, docs/policies/agent-reading-protocol.md, docs/index.md).
+  1. README.md spells out the binding reading order (agent-contract.json,
+     repo.meta.yaml, AGENTS.md, agent-policy.yaml,
+     docs/policies/agent-reading-protocol.md, docs/index.md).
   2. AGENTS.md references the Agent Reading Protocol and carries the reading
-     order (repo.meta.yaml before agent-policy.yaml).
+     order (agent-contract.json before repo.meta.yaml before agent-policy.yaml).
   3. docs/policies/agent-reading-protocol.md carries the same start order
-     (repo.meta.yaml, AGENTS.md, agent-policy.yaml).
+     (agent-contract.json, repo.meta.yaml, AGENTS.md, agent-policy.yaml).
   4. docs/index.md marks itself as navigation, not a truth layer.
   5. docs/tasks/README.md frames docs/tasks/ as work control (not a second truth
      layer) and describes `generate_task_index.py --check` as a write-free drift
@@ -55,6 +56,7 @@ TASK_INDEX_WORKFLOW = ".github/workflows/task-index.yml"
 
 # Reading-order entries that README.md must reference explicitly.
 READING_ORDER_TOKENS = (
+    "agent-contract.json",
     "repo.meta.yaml",
     "agents.md",
     "agent-policy.yaml",
@@ -180,12 +182,27 @@ def check_agents_reading_protocol(repo_root):
         errors.append("AGENTS.md: missing reference to the Agent Reading Protocol")
     if "reading order" not in norm and "lesereihenfolge" not in norm:
         errors.append("AGENTS.md: missing 'Reading Order' section marker")
-    for token in ("repo.meta.yaml", "agent-policy.yaml", "agent-reading-protocol.md"):
+    for token in (
+        "agent-contract.json",
+        "repo.meta.yaml",
+        "agent-policy.yaml",
+        "agent-reading-protocol.md",
+    ):
         if token not in norm:
             errors.append(f"AGENTS.md: reading order does not mention {token}")
     body = _norm(_strip_frontmatter(text))
+    contract_idx = _first_index(body, "agent-contract.json")
     meta_idx = _first_index(body, "repo.meta.yaml")
     policy_idx = _first_index(body, "agent-policy.yaml")
+    if (
+        contract_idx != -1
+        and meta_idx != -1
+        and contract_idx > meta_idx
+    ):
+        errors.append(
+            "AGENTS.md: reading order is out of sequence "
+            "(agent-contract.json must precede repo.meta.yaml)"
+        )
     if meta_idx != -1 and policy_idx != -1 and meta_idx > policy_idx:
         errors.append(
             "AGENTS.md: reading order is out of sequence "
@@ -202,14 +219,29 @@ def check_protocol_reading_order(repo_root):
     errors = []
     if "reading order" not in norm and "lesereihenfolge" not in norm:
         errors.append("docs/policies/agent-reading-protocol.md: missing reading-order section marker")
-    for token in ("repo.meta.yaml", "agents.md", "agent-policy.yaml"):
+    for token in (
+        "agent-contract.json",
+        "repo.meta.yaml",
+        "agents.md",
+        "agent-policy.yaml",
+    ):
         if token not in norm:
             errors.append(
                 f"docs/policies/agent-reading-protocol.md: start order does not mention {token}"
             )
     body = _norm(_strip_frontmatter(text))
+    contract_idx = _first_index(body, "agent-contract.json")
     meta_idx = _first_index(body, "repo.meta.yaml")
     policy_idx = _first_index(body, "agent-policy.yaml")
+    if (
+        contract_idx != -1
+        and meta_idx != -1
+        and contract_idx > meta_idx
+    ):
+        errors.append(
+            "docs/policies/agent-reading-protocol.md: start order is out of sequence "
+            "(agent-contract.json must precede repo.meta.yaml)"
+        )
     if meta_idx != -1 and policy_idx != -1 and meta_idx > policy_idx:
         errors.append(
             "docs/policies/agent-reading-protocol.md: start order is out of sequence "

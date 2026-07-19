@@ -584,6 +584,40 @@ def render_barman_cloud_manifest(source: str) -> str:
     secret["data"]["SIDECAR_IMAGE"] = base64.b64encode(
         BARMAN_CLOUD_SIDECAR_IMAGE.encode("utf-8")
     ).decode("ascii")
+
+    deployments = [
+        document
+        for document in documents
+        if isinstance(document, dict)
+        and document.get("kind") == "Deployment"
+        and document.get("metadata", {}).get("name") == "barman-cloud"
+        and document.get("metadata", {}).get("namespace") == "cnpg-system"
+    ]
+    if len(deployments) != 1:
+        raise ref.ProofError("Barman Cloud controller deployment changed unexpectedly")
+    deployment = deployments[0]
+    spec = deployment.setdefault("spec", {})
+    if spec.get("replicas") != 1 or spec.get("strategy") != {"type": "Recreate"}:
+        raise ref.ProofError(
+            "Barman Cloud controller replica or update strategy changed unexpectedly"
+        )
+    spec["replicas"] = 3
+    pod_spec = spec.setdefault("template", {}).setdefault("spec", {})
+    affinity = pod_spec.setdefault("affinity", {})
+    pod_anti_affinity = affinity.setdefault("podAntiAffinity", {})
+    required = pod_anti_affinity.setdefault(
+        "requiredDuringSchedulingIgnoredDuringExecution", []
+    )
+    if required:
+        raise ref.ProofError(
+            "Barman Cloud release already defines required pod anti-affinity"
+        )
+    required.append(
+        {
+            "labelSelector": {"matchLabels": {"app": "barman-cloud"}},
+            "topologyKey": "kubernetes.io/hostname",
+        }
+    )
     return yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
 
 def apply_barman_cloud_manifest(kubectl: str, artifact: str) -> None:
@@ -604,7 +638,215 @@ def apply_barman_cloud_manifest(kubectl: str, artifact: str) -> None:
     )
 
 
-def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
+def barman_plugin_state(kubectl: str, *, require_three_nodes: bool) -> dict[str, Any]:
+    payload = json.loads(
+        ref.output(
+            [kubectl, "-n", "cnpg-system", "get", "pods", "-l", "app=barman-cloud", "-o", "json"]
+        )
+    )
+    observed: dict[str, str] = {}
+    ready_pods: set[str] = set()
+    for item in payload.get("items", []):
+        name = str(item.get("metadata", {}).get("name") or "")
+        node = str(item.get("spec", {}).get("nodeName") or "")
+        containers = item.get("spec", {}).get("containers", [])
+        statuses = {
+            status.get("name"): status
+            for status in item.get("status", {}).get("containerStatuses", [])
+        }
+        controller = next(
+            (
+                container
+                for container in containers
+                if container.get("name") == "barman-cloud"
+                and container.get("image") == BARMAN_CLOUD_PLUGIN_IMAGE
+            ),
+            None,
+        )
+        status = statuses.get(controller.get("name")) if controller else None
+        pod_conditions = {
+            condition.get("type"): condition.get("status")
+            for condition in item.get("status", {}).get("conditions", [])
+        }
+        if (
+            not name
+            or not node
+            or item.get("status", {}).get("phase") != "Running"
+            or controller is None
+            or not status
+            or not status.get("state", {}).get("running", {}).get("startedAt")
+        ):
+            if require_three_nodes:
+                raise ref.ProofError(
+                    f"Barman Cloud plugin process is not running: {name or '<unknown>'}"
+                )
+            continue
+        observed[name] = node
+        if pod_conditions.get("Ready") == "True":
+            ready_pods.add(name)
+    if require_three_nodes and (
+        len(observed) != 3 or len(set(observed.values())) != 3
+    ):
+        raise ref.ProofError(
+            "Barman Cloud plugin processes are not running on three distinct nodes: "
+            f"{observed}"
+        )
+    endpoints = json.loads(
+        ref.output(
+            [kubectl, "-n", "cnpg-system", "get", "endpoints/barman-cloud", "-o", "json"]
+        )
+    )
+    endpoint_pods = {
+        str(address.get("targetRef", {}).get("name") or "")
+        for subset in endpoints.get("subsets", [])
+        for address in subset.get("addresses", [])
+        if address.get("ip")
+    }
+    if len(endpoint_pods) != 1 or endpoint_pods != ready_pods:
+        raise ref.ProofError(
+            "Barman Cloud service must expose exactly its elected ready leader: "
+            f"ready={sorted(ready_pods)}, endpoints={sorted(endpoint_pods)}"
+        )
+    leader_pod = next(iter(endpoint_pods))
+    leader_node = observed.get(leader_pod)
+    if not leader_node:
+        raise ref.ProofError(
+            f"Barman Cloud leader is not a running digest-bound process: {leader_pod}"
+        )
+    return {
+        "nodes": sorted(set(observed.values())),
+        "pods": dict(sorted(observed.items())),
+        "leader": {"pod": leader_pod, "node": leader_node},
+    }
+
+
+def verify_barman_plugin_ha(kubectl: str) -> dict[str, Any]:
+    return dict(
+        wait_until(
+            "three distributed Barman Cloud processes and one elected service leader",
+            lambda: barman_plugin_state(kubectl, require_three_nodes=True),
+            timeout_seconds=480,
+        )
+    )
+
+
+def prove_barman_plugin_backup(
+    kubectl: str,
+    cluster: str,
+    name: str,
+) -> dict[str, str]:
+    ref.apply_yaml(
+        kubectl,
+        {
+            "apiVersion": "postgresql.cnpg.io/v1",
+            "kind": "Backup",
+            "metadata": {"name": name, "namespace": "weltgewebe-data"},
+            "spec": {
+                "method": "plugin",
+                "target": "primary",
+                "cluster": {"name": cluster},
+                "pluginConfiguration": {
+                    "name": "barman-cloud.cloudnative-pg.io"
+                },
+            },
+        },
+    )
+    backup = wait_backup_complete(kubectl, name)
+    status = backup.get("status", {})
+    phase = str(status.get("phase") or "")
+    method = str(status.get("method") or "")
+    pod = str(status.get("instanceID", {}).get("podName") or "")
+    if phase.lower() != "completed" or method.lower() != "plugin" or not pod:
+        raise ref.ProofError(
+            "Barman Cloud plugin backup lacks completed plugin-bound evidence: "
+            f"phase={phase!r}, method={method!r}, pod={pod!r}"
+        )
+    return {"name": name, "phase": phase, "method": method, "pod": pod}
+
+
+def align_postgres_primary_with_barman_leader(
+    kubectl_cnpg: str,
+    kubectl: str,
+    cluster: str,
+    postgres_topology: dict[str, dict[str, str]],
+    probe_name: str,
+) -> dict[str, Any]:
+    before_plugin = verify_barman_plugin_ha(kubectl)
+    target_node = before_plugin["leader"]["node"]
+    target_instances = sorted(
+        pod
+        for pod, placement in postgres_topology.items()
+        if placement.get("node") == target_node
+    )
+    if len(target_instances) != 1:
+        raise ref.ProofError(
+            "PostgreSQL has no unique instance on the Barman Cloud leader node "
+            f"{target_node}: {postgres_topology}"
+        )
+    target_primary = target_instances[0]
+    before_primary = current_primary(kubectl, cluster)
+    started = time.monotonic()
+    if before_primary != target_primary:
+        ref.run(
+            [
+                kubectl_cnpg,
+                "--namespace",
+                "weltgewebe-data",
+                "promote",
+                cluster,
+                target_primary,
+            ],
+            timeout=60,
+        )
+        wait_until(
+            f"PostgreSQL primary {target_primary} on Barman Cloud leader node",
+            lambda: target_primary
+            if current_primary(kubectl, cluster) == target_primary
+            else False,
+            timeout_seconds=240,
+        )
+    wait_cluster_ready(kubectl, cluster, "10m")
+    aligned_primary = current_primary(kubectl, cluster)
+    if aligned_primary != target_primary:
+        raise ref.ProofError(
+            f"PostgreSQL primary did not align with Barman Cloud leader: "
+            f"expected={target_primary}, observed={aligned_primary}"
+        )
+    after_plugin = verify_barman_plugin_ha(kubectl)
+    if after_plugin["leader"]["node"] != target_node:
+        raise ref.ProofError(
+            "Barman Cloud leader moved during PostgreSQL alignment: "
+            f"before={before_plugin['leader']}, after={after_plugin['leader']}"
+        )
+    communication = prove_barman_plugin_backup(kubectl, cluster, probe_name)
+    return {
+        "target_node": target_node,
+        "plugin_leader_before": before_plugin["leader"],
+        "plugin_leader_after": after_plugin["leader"],
+        "postgres_primary_before": before_primary,
+        "postgres_primary_aligned": aligned_primary,
+        "communication": communication,
+        "duration_seconds": round(time.monotonic() - started, 3),
+    }
+
+
+def wait_barman_plugin_leader_after_node_loss(
+    kubectl: str, failed_node: str
+) -> dict[str, str]:
+    def surviving_leader_probe():
+        state = barman_plugin_state(kubectl, require_three_nodes=False)
+        leader = state["leader"]
+        return leader if leader["node"] != failed_node else False
+
+    return dict(
+        wait_until(
+            "Barman Cloud leader after node loss",
+            surviving_leader_probe,
+            timeout_seconds=180,
+        )
+    )
+
+def install_barman_cloud_plugin(kubectl: str, artifact: str) -> dict[str, Any]:
     apply_barman_cloud_manifest(kubectl, artifact)
     ref.run(
         [
@@ -623,7 +865,7 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
             "Ready",
             "5m",
         )
-    ref.wait_rollout(kubectl, "cnpg-system", "deployment/barman-cloud", "8m")
+    plugin_nodes = verify_barman_plugin_ha(kubectl)
     secrets_payload = json.loads(
         ref.output(
             [
@@ -668,6 +910,7 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> None:
     )
     if observed != BARMAN_CLOUD_PLUGIN_IMAGE:
         raise ref.ProofError(f"Barman Cloud plugin image is not digest-bound: {observed}")
+    return plugin_nodes
 
 
 def verify_barman_sidecar_images(
@@ -779,9 +1022,31 @@ def ha_diagnostic_snapshot(kubectl: str, name: str) -> None:
             "-l", "app.kubernetes.io/name=cloudnative-pg",
             "--all-containers=true", "--prefix=true", "--tail=2000",
         ],
-        "barman-plugin-logs.txt": [kubectl, "-n", "cnpg-system", "logs", "deployment/barman-cloud", "--tail=2000"],
+        "barman-plugin-deployment.yaml": [
+            kubectl, "-n", "cnpg-system", "get", "deployment/barman-cloud", "-o", "yaml",
+        ],
+        "barman-plugin-pods-describe.txt": [
+            kubectl, "-n", "cnpg-system", "describe", "pods", "-l", "app=barman-cloud",
+        ],
+        "barman-plugin-endpoints.yaml": [
+            kubectl, "-n", "cnpg-system", "get", "endpoints/barman-cloud", "-o", "yaml",
+        ],
+        "barman-plugin-logs.txt": [
+            kubectl, "-n", "cnpg-system", "logs", "-l", "app=barman-cloud",
+            "--all-containers=true", "--prefix=true", "--tail=2000",
+        ],
         "barman-objectstores.yaml": [kubectl, "get", "objectstores.barmancloud.cnpg.io", "-A", "-o", "yaml"],
         "certificates.yaml": [kubectl, "get", "certificates.cert-manager.io", "-A", "-o", "yaml"],
+        "cluster-dns-deployment.yaml": [
+            kubectl, "-n", "kube-system", "get", "deployment/coredns", "-o", "yaml",
+        ],
+        "cluster-dns-pods-describe.txt": [
+            kubectl, "-n", "kube-system", "describe", "pods", "-l", "k8s-app=kube-dns",
+        ],
+        "cluster-dns-logs.txt": [
+            kubectl, "-n", "kube-system", "logs", "-l", "k8s-app=kube-dns",
+            "--all-containers=true", "--prefix=true", "--tail=2000",
+        ],
         "storage.txt": [kubectl, "get", "pv,pvc", "-A", "-o", "wide"],
     }
     for filename, argv in commands.items():
@@ -830,9 +1095,19 @@ def pod_topology(kubectl: str, namespace: str, selector: str) -> dict[str, dict[
     zones = {item["metadata"]["name"]: item["metadata"].get("labels", {}).get("topology.kubernetes.io/zone", "") for item in nodes["items"]}
     result: dict[str, dict[str, str]] = {}
     for item in pods["items"]:
+        metadata = item.get("metadata", {})
+        status = item.get("status", {})
+        if metadata.get("deletionTimestamp") or status.get("phase") != "Running":
+            continue
+        ready = any(
+            condition.get("type") == "Ready" and condition.get("status") == "True"
+            for condition in status.get("conditions", [])
+        )
+        if not ready:
+            continue
         node = item.get("spec", {}).get("nodeName", "")
         if node:
-            result[item["metadata"]["name"]] = {"node": node, "zone": zones.get(node, "")}
+            result[metadata["name"]] = {"node": node, "zone": zones.get(node, "")}
     return result
 
 
@@ -840,6 +1115,55 @@ def require_zones(topology: dict[str, dict[str, str]], expected: int, component:
     zones = {item["zone"] for item in topology.values() if item["zone"]}
     if len(topology) < expected or len(zones) != expected:
         raise ref.ProofError(f"{component} is not spread across {expected} zones: {topology}")
+
+
+def configure_cluster_dns_ha(kubectl: str) -> dict[str, dict[str, str]]:
+    patch = {
+        "spec": {
+            "replicas": 3,
+            "template": {
+                "spec": {
+                    "nodeSelector": {
+                        "kubernetes.io/os": "linux",
+                        "weltgewebe.net/data-node": "true",
+                    },
+                    "affinity": {
+                        "podAntiAffinity": {
+                            "requiredDuringSchedulingIgnoredDuringExecution": [
+                                {
+                                    "labelSelector": {
+                                        "matchLabels": {"k8s-app": "kube-dns"}
+                                    },
+                                    "topologyKey": "topology.kubernetes.io/zone",
+                                }
+                            ]
+                        }
+                    },
+                }
+            },
+        }
+    }
+    ref.run(
+        [
+            kubectl,
+            "-n",
+            "kube-system",
+            "patch",
+            "deployment/coredns",
+            "--type=strategic",
+            "--patch",
+            json.dumps(patch, separators=(",", ":"), sort_keys=True),
+        ],
+        timeout=120,
+    )
+    ref.wait_rollout(kubectl, "kube-system", "deployment/coredns", "8m")
+    topology = pod_topology(kubectl, "kube-system", "k8s-app=kube-dns")
+    if len(topology) != 3:
+        raise ref.ProofError(
+            f"cluster DNS requires exactly three replicas: {topology}"
+        )
+    require_zones(topology, 3, "cluster DNS")
+    return topology
 
 
 def wait_api_replicas(kubectl: str, expected: int = 3) -> None:
@@ -1370,7 +1694,17 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     ref.require_host_tools()
     receipt = ref.tool_receipt()
     tools = receipt["tools"]
-    kind, kubectl, kustomize, flux, helm = (tools[name] for name in ("kind", "kubectl", "kustomize", "flux", "helm"))
+    kind, kubectl, kubectl_cnpg, kustomize, flux, helm = (
+        tools[name]
+        for name in (
+            "kind",
+            "kubectl",
+            "kubectl_cnpg",
+            "kustomize",
+            "flux",
+            "helm",
+        )
+    )
     restore_name = f"{args.cluster}-restore"
     ref.assert_available_cluster_name(kind, args.cluster)
     ref.assert_available_cluster_name(kind, restore_name)
@@ -1389,6 +1723,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         )
         ref.install_platform_components(kubectl, flux, helm, receipt["artifacts"], ref.control_plane_address(args.cluster))
         ref.run([kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=8m"])
+        primary_dns_topology = configure_cluster_dns_ha(kubectl)
         _, _, object_store_address = start_external_object_store(args.cluster, commit, s3_secret_key)
         object_store_created = True
         ref.apply_file(kubectl, ROOT / "platform/infrastructure/ha-data/namespace.yaml")
@@ -1399,7 +1734,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         primary_operator_nodes = install_cnpg(
             kubectl, receipt["artifacts"]["cloudnative_pg_operator"]
         )
-        install_barman_cloud_plugin(
+        primary_barman_plugin_state = install_barman_cloud_plugin(
             kubectl,
             receipt["artifacts"]["barman_cloud_plugin"],
         )
@@ -1433,12 +1768,24 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             kubectl, kind, args.cluster, marker
         )
 
-        primary_before = current_primary(kubectl)
+        barman_leader_alignment = align_postgres_primary_with_barman_leader(
+            kubectl_cnpg,
+            kubectl,
+            "postgres-ha",
+            topology["postgres"],
+            f"t004-align-{commit[:8]}",
+        )
+        primary_before = barman_leader_alignment["postgres_primary_aligned"]
         primary_topology = topology["postgres"].get(primary_before)
         if not primary_topology:
             raise ref.ProofError(f"primary pod missing from topology: {primary_before}")
         failure_zone = primary_topology["zone"]
         stopped_node = primary_topology["node"]
+        if stopped_node != barman_leader_alignment["target_node"]:
+            raise ref.ProofError(
+                "PostgreSQL primary and Barman Cloud leader are not co-located "
+                f"before failure: {barman_leader_alignment}"
+            )
         alternate_zone = next(zone for zone in ("zone-a", "zone-b", "zone-c") if zone != failure_zone)
         create_nats_box(kubectl, alternate_zone)
         nats(kubectl, ["stream", "add", "WG_PROOF", "--subjects", "wg.proof", "--storage", "file", "--replicas", "3", "--retention", "limits", "--max-msgs", "100", "--defaults"])
@@ -1448,11 +1795,21 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
 
         failure_started = time.monotonic()
         ref.run(["docker", "stop", "--timeout", "10", stopped_node], timeout=60)
+        barman_leader_after_failure = wait_barman_plugin_leader_after_node_loss(
+            kubectl, stopped_node
+        )
+        barman_leader_rto = time.monotonic() - failure_started
         def new_primary_probe():
             candidate = current_primary(kubectl)
             return candidate if candidate and candidate != primary_before else False
         primary_after = str(wait_until("PostgreSQL primary failover", new_primary_probe, timeout_seconds=180))
         postgres_rto = time.monotonic() - failure_started
+        barman_communication_after_failure = prove_barman_plugin_backup(
+            kubectl,
+            "postgres-ha",
+            f"t004-failover-{commit[:8]}",
+        )
+        barman_rto = time.monotonic() - failure_started
         wait_until("acknowledged domain mutation after failover", lambda: node_exists(kubectl, marker), timeout_seconds=60)
         wait_until("API projection after zone failure", lambda: gateway_contains_node(kubectl, kind, args.cluster, marker), timeout_seconds=180)
         api_rto = time.monotonic() - failure_started
@@ -1469,6 +1826,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         ref.run([kubectl, "wait", "--for=condition=Ready", f"node/{primary_topology['node']}", "--timeout=8m"])
         ref.wait_rollout(kubectl, "kube-system", "daemonset/cilium", "8m")
         ref.wait_rollout(kubectl, "kube-system", "daemonset/cilium-envoy", "8m")
+        primary_barman_plugin_recovered = verify_barman_plugin_ha(kubectl)
         wait_cluster_ready(kubectl, "postgres-ha", "15m")
         ref.wait_rollout(kubectl, "weltgewebe-data", "statefulset/nats", "12m")
         wait_api_replicas(kubectl)
@@ -1507,6 +1865,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             kind, kubectl, restore_name
         )
         ref.run([restore_kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=8m"])
+        restore_dns_topology = configure_cluster_dns_ha(restore_kubectl)
         ref.apply_file(restore_kubectl, ROOT / "platform/infrastructure/ha-data/namespace.yaml")
         apply_secret_contracts(restore_kubectl, app_password, s3_secret_key)
         ref.apply_file(restore_kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml")
@@ -1519,7 +1878,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             restore_kubectl,
             receipt["artifacts"]["cloudnative_pg_operator"],
         )
-        install_barman_cloud_plugin(
+        restore_barman_plugin_state = install_barman_cloud_plugin(
             restore_kubectl,
             receipt["artifacts"]["barman_cloud_plugin"],
         )
@@ -1561,6 +1920,18 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "primary": primary_operator_nodes,
                 "restore": restore_operator_nodes,
             },
+            "cluster_dns": {
+                "primary": primary_dns_topology,
+                "restore": restore_dns_topology,
+            },
+            "barman_plugin": {
+                "primary_initial": primary_barman_plugin_state,
+                "leader_alignment": barman_leader_alignment,
+                "leader_after_zone_failure": barman_leader_after_failure,
+                "communication_after_zone_failure": barman_communication_after_failure,
+                "primary_recovered": primary_barman_plugin_recovered,
+                "restore": restore_barman_plugin_state,
+            },
             "barman_sidecar_images": {
                 "primary": primary_barman_sidecars,
                 "restore": restore_barman_sidecars,
@@ -1569,6 +1940,8 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             "zone_failure": {
                 "zone": failure_zone, "node": primary_topology["node"],
                 "postgres_primary_before": primary_before, "postgres_primary_after": primary_after,
+                "barman_leader_rto_seconds": round(barman_leader_rto, 3),
+                "barman_plugin_rto_seconds": round(barman_rto, 3),
                 "postgres_rto_seconds": round(postgres_rto, 3),
                 "api_rto_seconds": round(api_rto, 3), "nats_rto_seconds": round(nats_rto, 3),
                 "acknowledged_domain_mutation_preserved": True,

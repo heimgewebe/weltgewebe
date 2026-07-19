@@ -1,67 +1,1512 @@
 {
-  "schema_version": 1,
-  "dataset_id": "weltgewebe-semantic-search-v1-synthetic",
-  "description": "Synthetische Relevanz- und Sichtbarkeitsfälle für den Semantic-Search-v1-Vertrag.",
+  "schema_version": 2,
+  "dataset_id": "weltgewebe-semantic-search-v1-synthetic-v2",
+  "description": "Ausschließlich synthetischer deutscher Knotenkorpus für T002-Relevanz-, Sichtbarkeits- und Modellmessungen.",
   "privacy_class": "synthetic",
+  "document_revision": "node-document-v1",
+  "nodes": [
+    {
+      "id": "syn-node-community-garden",
+      "language": "de",
+      "title": "Gemeinschaftsgarten Altona",
+      "summary": "Offener Nachbarschaftsgarten mit Hochbeeten und Pflanzentausch.",
+      "body": "Menschen gärtnern gemeinsam, teilen Wissen über Gemüse und pflegen eine öffentlich zugängliche Grünfläche.",
+      "tags": [
+        "urban-gardening",
+        "nachbarschaft",
+        "pflanzen-tauschen"
+      ],
+      "kind": "Garten",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-seed-library",
+      "language": "de",
+      "title": "Saatgutbibliothek",
+      "summary": "Samen ausleihen, vermehren und nach der Ernte zurückbringen.",
+      "body": "Die Bibliothek bewahrt samenfeste Sorten und unterstützt den Tausch von Saatgut für Gemüse, Kräuter und Blumen.",
+      "tags": [
+        "saatgut",
+        "pflanzen-tauschen",
+        "vielfalt"
+      ],
+      "kind": "Bibliothek",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-repair-cafe",
+      "language": "de",
+      "title": "Reparaturcafé Mitte",
+      "summary": "Gemeinsam defekte Alltagsgeräte, Radios und Kleidung reparieren.",
+      "body": "Ehrenamtliche helfen bei Diagnose und Reparatur. Das Angebot ersetzt keine gewerbliche Werkstatt und fördert Wiederverwendung.",
+      "tags": [
+        "reparieren",
+        "wiederverwenden",
+        "elektronik"
+      ],
+      "kind": "Werkstatt",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-tool-library",
+      "language": "de",
+      "title": "Werkzeugbibliothek",
+      "summary": "Bohrmaschine, Säge und Handwerkzeug gemeinschaftlich ausleihen.",
+      "body": "Selten benötigte Geräte müssen nicht gekauft werden. Mitglieder teilen Werkzeug und praktische Einweisungen.",
+      "tags": [
+        "werkzeug-teilen",
+        "ausleihen",
+        "selbermachen"
+      ],
+      "kind": "Bibliothek",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-bike-workshop",
+      "language": "de",
+      "title": "Offene Fahrradwerkstatt",
+      "summary": "Fahrräder mit Unterstützung selbst warten und reparieren.",
+      "body": "Die Werkstatt bietet Montageständer, Ersatzteile und gemeinsame Hilfe bei Bremsen, Reifen und Schaltung.",
+      "tags": [
+        "fahrrad",
+        "reparieren",
+        "mobilität"
+      ],
+      "kind": "Werkstatt",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-food-fridge",
+      "language": "de",
+      "title": "Fairteiler Kühlschrank",
+      "summary": "Überschüssige Lebensmittel kostenlos weitergeben und retten.",
+      "body": "Der öffentliche Kühlschrank nimmt genießbares Essen auf, damit es nicht weggeworfen wird.",
+      "tags": [
+        "lebensmittel-retten",
+        "foodsharing",
+        "teilen"
+      ],
+      "kind": "Versorgung",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-language-cafe",
+      "language": "de",
+      "title": "Sprachcafé Deutsch",
+      "summary": "Deutsch in lockerer Runde sprechen und voneinander lernen.",
+      "body": "Menschen mit unterschiedlichen Erstsprachen üben Alltagssprache ohne Prüfung und ohne Kursgebühr.",
+      "tags": [
+        "sprache",
+        "deutsch-üben",
+        "begegnung"
+      ],
+      "kind": "Bildung",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-child-care-coop",
+      "language": "de",
+      "title": "Kinderbetreuung im Wechsel",
+      "summary": "Familien organisieren gegenseitige stundenweise Betreuung.",
+      "body": "Eltern teilen verlässlich Betreuungstermine und entlasten sich nach gemeinsam vereinbarten Regeln.",
+      "tags": [
+        "kinder",
+        "betreuung",
+        "familien"
+      ],
+      "kind": "Fürsorge",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-energy-advice",
+      "language": "de",
+      "title": "Energieberatung für Mietwohnungen",
+      "summary": "Unabhängige Hilfe zu Stromverbrauch, Heizung und Nebenkosten.",
+      "body": "Die Beratung erklärt Abrechnungen, findet Einsparmöglichkeiten und empfiehlt kleine Maßnahmen ohne Umbau.",
+      "tags": [
+        "energie",
+        "strom-sparen",
+        "miete"
+      ],
+      "kind": "Beratung",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-clothing-swap",
+      "language": "de",
+      "title": "Kleidertausch ohne Geld",
+      "summary": "Gut erhaltene Kleidung bringen, tauschen und weitertragen.",
+      "body": "Textilien bleiben im Gebrauch, ohne Verkauf und ohne feste Gegenleistung.",
+      "tags": [
+        "kleidung",
+        "tauschen",
+        "wiederverwenden"
+      ],
+      "kind": "Tausch",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-neighbourhood-kitchen",
+      "language": "de",
+      "title": "Nachbarschaftsküche Nord",
+      "summary": "Gemeinsam kochen, essen und Küchenerfahrung teilen.",
+      "body": "Die offene Küche organisiert regelmäßige Mahlzeiten und verarbeitet auch gerettete Zutaten.",
+      "tags": [
+        "kochen",
+        "nachbarschaft",
+        "lebensmittel-retten"
+      ],
+      "kind": "Versorgung",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-housing-advice",
+      "language": "de",
+      "title": "Wohn- und Mietberatung",
+      "summary": "Orientierung bei Mietvertrag, Nebenkosten und Konflikten im Haus.",
+      "body": "Die erste Beratung hilft Unterlagen zu verstehen und verweist bei Bedarf an zuständige Fachstellen.",
+      "tags": [
+        "miete",
+        "wohnen",
+        "beratung"
+      ],
+      "kind": "Beratung",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-digital-help",
+      "language": "de",
+      "title": "Digitale Alltagshilfe",
+      "summary": "Unterstützung bei Smartphone, Computer und Online-Formularen.",
+      "body": "Geduldige Begleitung erklärt Geräte, sichere Einstellungen und digitale Behördengänge Schritt für Schritt.",
+      "tags": [
+        "digital",
+        "smartphone",
+        "computer"
+      ],
+      "kind": "Bildung",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-mobility-share",
+      "language": "de",
+      "title": "Lastenrad teilen",
+      "summary": "Lastenräder gemeinschaftlich reservieren und nutzen.",
+      "body": "Das Angebot erleichtert Einkäufe und Transporte ohne eigenes Auto.",
+      "tags": [
+        "lastenrad",
+        "teilen",
+        "mobilität"
+      ],
+      "kind": "Mobilität",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-river-cleanup",
+      "language": "de",
+      "title": "Sauberes Flussufer",
+      "summary": "Gemeinsame Sammelaktionen gegen Müll an Ufer und Wegen.",
+      "body": "Freiwillige reinigen öffentliche Flächen und dokumentieren Fundarten für die Abfallvermeidung.",
+      "tags": [
+        "müll-sammeln",
+        "umwelt",
+        "fluss"
+      ],
+      "kind": "Umwelt",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-elder-companionship",
+      "language": "de",
+      "title": "Zeit füreinander",
+      "summary": "Besuche, Spaziergänge und Gespräche mit älteren Menschen.",
+      "body": "Nachbarn wirken Einsamkeit entgegen und vermitteln regelmäßige soziale Begleitung.",
+      "tags": [
+        "senioren",
+        "besuche",
+        "gemeinschaft"
+      ],
+      "kind": "Fürsorge",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-legal-advice",
+      "language": "de",
+      "title": "Offene Rechtsorientierung",
+      "summary": "Kostenlose erste Orientierung bei alltäglichen Rechtsfragen.",
+      "body": "Das Angebot ordnet ein Problem ein und nennt mögliche nächste Stellen, ersetzt aber keine anwaltliche Vertretung.",
+      "tags": [
+        "recht",
+        "erstberatung",
+        "beratung"
+      ],
+      "kind": "Beratung",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-community-radio",
+      "language": "de",
+      "title": "Nachbarschaftsradio",
+      "summary": "Lokale Sendungen gemeinsam planen, aufnehmen und ausstrahlen.",
+      "body": "Bewohner lernen Audiotechnik, führen Interviews und gestalten ein nichtkommerzielles Radioprogramm.",
+      "tags": [
+        "radio",
+        "medien",
+        "selbermachen"
+      ],
+      "kind": "Medien",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-maker-space",
+      "language": "de",
+      "title": "Offene Werkstatt für Prototypen",
+      "summary": "3D-Druck, Laserschneiden und Elektronik gemeinsam nutzen.",
+      "body": "Der Makerspace bietet Maschinen, Einführung und Raum für technische Eigenbauprojekte.",
+      "tags": [
+        "3d-druck",
+        "lasercutter",
+        "elektronik"
+      ],
+      "kind": "Werkstatt",
+      "status": "active",
+      "visibility_scopes": [
+        "public",
+        "local",
+        "neighbourhood"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-private-garden",
+      "language": "de",
+      "title": "Privater Innenhofgarten",
+      "summary": "Nicht öffentliches Gartentreffen einer geschlossenen Hausgruppe.",
+      "body": "Nur eingeladene Hausbewohner dürfen den Innenhof nutzen.",
+      "tags": [
+        "garten",
+        "intern"
+      ],
+      "kind": "Garten",
+      "status": "hidden",
+      "visibility_scopes": [
+        "local"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-hidden-bike-cellar",
+      "language": "de",
+      "title": "Verborgene Fahrrad-Hilfe",
+      "summary": "Nicht öffentliches Hilfsangebot in einem internen Keller.",
+      "body": "Der Ort und seine Termine sind nicht für öffentliche Suche freigegeben.",
+      "tags": [
+        "fahrrad",
+        "intern"
+      ],
+      "kind": "Werkstatt",
+      "status": "hidden",
+      "visibility_scopes": [
+        "local"
+      ],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    },
+    {
+      "id": "syn-node-deleted-repair-archive",
+      "language": "de",
+      "title": "Reparaturtreff Archiv",
+      "summary": "Historischer und gelöschter Eintrag eines früheren Reparaturangebots.",
+      "body": "Dieser Knoten darf in keiner aktiven Suche erscheinen.",
+      "tags": [
+        "reparieren",
+        "archiv"
+      ],
+      "kind": "Werkstatt",
+      "status": "deleted",
+      "visibility_scopes": [],
+      "contains_personal_data": false,
+      "synthetic_source": "authored"
+    }
+  ],
   "cases": [
     {
       "id": "search-exact-title-community-garden",
       "language": "de",
       "query": "Gemeinschaftsgarten Altona",
+      "natural_language": false,
       "visibility_context": {
         "viewer_scope": "public",
-        "visible_node_ids": ["syn-node-community-garden", "syn-node-seed-library", "syn-node-repair-cafe"],
-        "active_filters": {"kinds": [], "tags": [], "languages": ["de"]}
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
       },
-      "relevant_node_ids": ["syn-node-community-garden"],
+      "relevant_node_ids": [
+        "syn-node-community-garden"
+      ],
       "expected_rank_class": "exact_title",
-      "excluded_node_ids": ["syn-node-private-garden"],
-      "rationale": "Ein exakter Titel muss unabhängig von semantischer Ähnlichkeit Rang eins belegen.",
+      "excluded_node_ids": [
+        "syn-node-private-garden"
+      ],
+      "rationale": "Synthetischer T002-Fall für exact title.",
       "contains_personal_data": false
     },
     {
       "id": "search-exact-tag-tool-sharing",
       "language": "de",
       "query": "werkzeug-teilen",
+      "natural_language": false,
       "visibility_context": {
         "viewer_scope": "public",
-        "visible_node_ids": ["syn-node-tool-library", "syn-node-repair-cafe", "syn-node-seed-library"],
-        "active_filters": {"kinds": [], "tags": ["werkzeug-teilen"], "languages": ["de"]}
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
       },
-      "relevant_node_ids": ["syn-node-tool-library"],
+      "relevant_node_ids": [
+        "syn-node-tool-library"
+      ],
       "expected_rank_class": "exact_tag",
-      "excluded_node_ids": ["syn-node-private-workshop"],
-      "rationale": "Ein exaktes Tag bleibt vor Volltext- und Vektorsignalen priorisiert.",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für exact tag.",
       "contains_personal_data": false
     },
     {
-      "id": "search-typo-repair-workshop",
+      "id": "search-title-prefix-neighbourhood-kitchen",
+      "language": "de",
+      "query": "Nachbarschaftskü",
+      "natural_language": false,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-neighbourhood-kitchen"
+      ],
+      "expected_rank_class": "title_prefix",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für title prefix.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-typo-bike-workshop",
       "language": "de",
       "query": "Fahrrad Reparatur Werstatt",
+      "natural_language": false,
       "visibility_context": {
         "viewer_scope": "public",
-        "visible_node_ids": ["syn-node-bike-workshop", "syn-node-tool-library", "syn-node-community-garden"],
-        "active_filters": {"kinds": ["Werkstatt"], "tags": [], "languages": ["de"]}
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
       },
-      "relevant_node_ids": ["syn-node-bike-workshop"],
+      "relevant_node_ids": [
+        "syn-node-bike-workshop"
+      ],
       "expected_rank_class": "typo",
-      "excluded_node_ids": ["syn-node-hidden-bike-cellar"],
-      "rationale": "Trigramme sollen einen einfachen Schreibfehler ohne semantische Vorrangnahme auffangen.",
+      "excluded_node_ids": [
+        "syn-node-hidden-bike-cellar"
+      ],
+      "rationale": "Synthetischer T002-Fall für typo.",
       "contains_personal_data": false
     },
     {
-      "id": "search-semantic-shared-bike-repair",
+      "id": "search-full-text-energy-rent",
       "language": "de",
-      "query": "Wo kann ich mein kaputtes Fahrrad gemeinsam reparieren?",
+      "query": "Stromverbrauch Heizung Nebenkosten",
+      "natural_language": false,
       "visibility_context": {
         "viewer_scope": "public",
-        "visible_node_ids": ["syn-node-bike-workshop", "syn-node-tool-library", "syn-node-community-garden"],
-        "active_filters": {"kinds": [], "tags": [], "languages": ["de"]}
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
       },
-      "relevant_node_ids": ["syn-node-bike-workshop"],
+      "relevant_node_ids": [
+        "syn-node-energy-advice"
+      ],
+      "expected_rank_class": "full_text",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für full text.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-food-rescue",
+      "language": "de",
+      "query": "Wohin mit zu viel gutem Essen?",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-food-fridge"
+      ],
       "expected_rank_class": "semantic",
-      "excluded_node_ids": ["syn-node-private-bike-help"],
-      "rationale": "Die natürliche Anfrage darf semantisch ergänzt werden, ohne unsichtbare Hilfsangebote als Kandidaten zu verwenden.",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-phone-help",
+      "language": "de",
+      "query": "Jemand soll mir geduldig mein neues Handy erklären.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-digital-help"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-clothes-circular",
+      "language": "de",
+      "query": "Sachen zum Anziehen weitergeben statt wegwerfen.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-clothing-swap"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-language-practice",
+      "language": "de",
+      "query": "Mit anderen ohne Prüfung Deutsch sprechen üben.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-language-cafe"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-elderly-company",
+      "language": "de",
+      "query": "Ältere Nachbarn besuchen, damit sie nicht allein sind.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-elder-companionship"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-drill-sharing",
+      "language": "de",
+      "query": "Ich brauche nur einmal eine Bohrmaschine und will keine kaufen.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-tool-library"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-shared-childcare",
+      "language": "de",
+      "query": "Familien möchten die Betreuung abwechselnd organisieren.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-child-care-coop"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-rent-contract",
+      "language": "de",
+      "query": "Wer hilft mir, meinen Mietvertrag und die Abrechnung zu verstehen?",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-housing-advice"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-clean-river",
+      "language": "de",
+      "query": "Gemeinsam das Ufer von Abfall befreien.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-river-cleanup"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-make-radio",
+      "language": "de",
+      "query": "Ich möchte selbst eine lokale Sendung aufnehmen.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-community-radio"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-radio-repair",
+      "language": "de",
+      "query": "Mein altes Radio ist kaputt und soll repariert werden.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-repair-cafe"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-cargo-bike",
+      "language": "de",
+      "query": "Einen großen Einkauf ohne Auto nach Hause bringen.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-mobility-share"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-legal-first-step",
+      "language": "de",
+      "query": "Kostenloser erster Rat bei einem Rechtsproblem.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-legal-advice"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-seeds-spring",
+      "language": "de",
+      "query": "Samen für das nächste Frühjahr tauschen.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-seed-library"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-cook-together",
+      "language": "de",
+      "query": "Mit Nachbarn aus geretteten Zutaten gemeinsam kochen.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-neighbourhood-kitchen"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-semantic-prototype-machines",
+      "language": "de",
+      "query": "Einen Prototyp mit 3D-Druck und Laserschneider bauen.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-maker-space"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-filter-workshops",
+      "language": "de",
+      "query": "Gemeinsam etwas reparieren.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-repair-cafe",
+          "syn-node-bike-workshop",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [
+            "Werkstatt"
+          ],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-repair-cafe",
+        "syn-node-bike-workshop"
+      ],
+      "expected_rank_class": "full_text",
+      "excluded_node_ids": [],
+      "rationale": "Synthetischer T002-Fall für full text.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-visibility-hidden-bike",
+      "language": "de",
+      "query": "Hilfe bei einer kaputten Fahrradschaltung.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-bike-workshop"
+      ],
+      "expected_rank_class": "semantic",
+      "excluded_node_ids": [
+        "syn-node-hidden-bike-cellar"
+      ],
+      "rationale": "Synthetischer T002-Fall für semantic.",
+      "contains_personal_data": false
+    },
+    {
+      "id": "search-visibility-deleted-repair",
+      "language": "de",
+      "query": "Reparaturtreff für defekte Geräte.",
+      "natural_language": true,
+      "visibility_context": {
+        "viewer_scope": "public",
+        "visible_node_ids": [
+          "syn-node-community-garden",
+          "syn-node-seed-library",
+          "syn-node-repair-cafe",
+          "syn-node-tool-library",
+          "syn-node-bike-workshop",
+          "syn-node-food-fridge",
+          "syn-node-language-cafe",
+          "syn-node-child-care-coop",
+          "syn-node-energy-advice",
+          "syn-node-clothing-swap",
+          "syn-node-neighbourhood-kitchen",
+          "syn-node-housing-advice",
+          "syn-node-digital-help",
+          "syn-node-mobility-share",
+          "syn-node-river-cleanup",
+          "syn-node-elder-companionship",
+          "syn-node-legal-advice",
+          "syn-node-community-radio",
+          "syn-node-maker-space"
+        ],
+        "active_filters": {
+          "kinds": [],
+          "tags": [],
+          "languages": [
+            "de"
+          ]
+        }
+      },
+      "relevant_node_ids": [
+        "syn-node-repair-cafe"
+      ],
+      "expected_rank_class": "full_text",
+      "excluded_node_ids": [
+        "syn-node-deleted-repair-archive"
+      ],
+      "rationale": "Synthetischer T002-Fall für full text.",
       "contains_personal_data": false
     }
   ]

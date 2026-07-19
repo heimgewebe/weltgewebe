@@ -49,19 +49,20 @@ aktualisiert und sind keine eigenständige Wahrheits- oder Entscheidungsschicht.
 | Welche Dokumente und Wissensbereiche existieren? | [`docs/index.md`](docs/index.md) |
 | Wie wird deployt? | [`docs/deploy/README.md`](docs/deploy/README.md) |
 | Welche Begriffe gelten fachlich? | [`docs/domain/vocabulary.md`](docs/domain/vocabulary.md) |
-| Welche Quellen haben Vorrang? | [`repo.meta.yaml`](repo.meta.yaml) |
+| Welche Quellen haben Vorrang? | [`repo.meta.yaml`](repo.meta.yaml), Agent-Norm: [`agent-contract.json`](agent-contract.json) |
 
 ## Für Agents
 
 Vor Änderungen gilt diese Leseordnung:
 
-1. [`repo.meta.yaml`](repo.meta.yaml)
-2. [`AGENTS.md`](AGENTS.md)
-3. [`agent-policy.yaml`](agent-policy.yaml)
-4. [`docs/policies/agent-reading-protocol.md`](docs/policies/agent-reading-protocol.md)
-5. [`docs/index.md`](docs/index.md) als Navigation, nicht als Wahrheitsquelle
-6. die betroffenen Contracts, Migrationen, Runtime-Konfigurationen und Tests
-7. erst danach Planungsdokumente und historische Berichte
+1. [`agent-contract.json`](agent-contract.json)
+2. [`repo.meta.yaml`](repo.meta.yaml)
+3. [`AGENTS.md`](AGENTS.md)
+4. [`agent-policy.yaml`](agent-policy.yaml)
+5. [`docs/policies/agent-reading-protocol.md`](docs/policies/agent-reading-protocol.md)
+6. [`docs/index.md`](docs/index.md) als Navigation, nicht als Wahrheitsquelle
+7. die betroffenen Contracts, Migrationen, Runtime-Konfigurationen und Tests
+8. erst danach Planungsdokumente und historische Berichte
 
 Bei einem Widerspruch zwischen Statusdokument und ausführbarem Vertrag wird
 nicht interpoliert. Der Widerspruch wird benannt und aufgelöst.
