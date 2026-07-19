@@ -14,7 +14,12 @@ NODE_BUILD_IMAGE="${WELTGEWEBE_NODE_BUILD_IMAGE:-docker.io/library/node@sha256:8
 DEPLOY_HELPER="${WELTGEWEBE_DEPLOY_HELPER:-/usr/local/libexec/weltgewebe-deploy-exact-commit}"
 LIVE_VERIFIER="${WELTGEWEBE_LIVE_VERIFIER:-/usr/local/libexec/weltgewebe-verify-public-release}"
 ARCHIVE_VALIDATOR="${WELTGEWEBE_ARCHIVE_VALIDATOR:-/usr/local/libexec/weltgewebe-validate-web-deploy-archive}"
-LOCK_FILE="$STATE_ROOT/reconcile.lock"
+readonly PRODUCTION_LOCK_DOMAIN="weltgewebe-production-deployment-v1"
+readonly PRODUCTION_LOCK_FILE="$STATE_ROOT/production-deployment.lock"
+readonly PRODUCTION_LOCK_FD=9
+readonly EX_TEMPFAIL=75
+readonly EXIT_SUPERSEDED_AFTER_MIGRATION=79
+readonly EXIT_SUPERSEDED_AFTER_DEPLOY=80
 ARTIFACT_ROOT="$STATE_ROOT/artifacts"
 RECEIPT_ROOT="$STATE_ROOT/reconcile-receipts"
 DEPLOY_RECEIPT_ROOT="$STATE_ROOT/receipts"
@@ -33,6 +38,69 @@ fail() {
 
 require_command() {
   command -v "$1" > /dev/null 2>&1 || fail "required command not found: $1"
+}
+
+write_lock_contention_receipt() {
+  local receipt="$RECEIPT_ROOT/last-contention.json"
+  python3 - "$receipt" "$PRODUCTION_LOCK_DOMAIN" "$PRODUCTION_LOCK_FILE" << 'PY'
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+path = Path(sys.argv[1])
+payload = {
+    "schema_version": 1,
+    "kind": "weltgewebe_production_lock_contention",
+    "environment": "production",
+    "lock_domain": sys.argv[2],
+    "lock_file": sys.argv[3],
+    "entrypoint": "reconciler",
+    "requested_commit": None,
+    "result": "already_running",
+    "recorded_at": datetime.now(timezone.utc).isoformat(),
+}
+temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+with temporary.open("w", encoding="utf-8") as handle:
+    json.dump(payload, handle, sort_keys=True, indent=2)
+    handle.write("\n")
+    handle.flush()
+    os.fsync(handle.fileno())
+os.replace(temporary, path)
+directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+try:
+    os.fsync(directory_fd)
+finally:
+    os.close(directory_fd)
+PY
+  printf '%s\n' "$receipt"
+}
+
+prepare_production_lock_file() {
+  if [[ -e "$PRODUCTION_LOCK_FILE" || -L "$PRODUCTION_LOCK_FILE" ]]; then
+    [[ -f "$PRODUCTION_LOCK_FILE" && ! -L "$PRODUCTION_LOCK_FILE" ]] ||
+      fail "production deployment lock is not a regular file"
+  else
+    (umask 077 && : > "$PRODUCTION_LOCK_FILE")
+  fi
+  [[ "$(stat --format=%u "$PRODUCTION_LOCK_FILE")" == "0" ]] ||
+    fail "production deployment lock is not root-owned"
+  local lock_mode
+  lock_mode="$(stat --format=%a "$PRODUCTION_LOCK_FILE")"
+  (((8#$lock_mode & 022) == 0)) ||
+    fail "production deployment lock is group- or world-writable"
+}
+
+acquire_production_lock() {
+  local contention_receipt
+  prepare_production_lock_file
+  exec 9<> "$PRODUCTION_LOCK_FILE"
+  if ! flock -n "$PRODUCTION_LOCK_FD"; then
+    contention_receipt="$(write_lock_contention_receipt)"
+    echo "production_reconcile=already_running lock_domain=$PRODUCTION_LOCK_DOMAIN receipt=$contention_receipt"
+    exit 0
+  fi
 }
 
 fetch_main() {
@@ -56,12 +124,14 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 payload = {
-    "schema_version": 2,
+    "schema_version": 3,
     "target_commit": sys.argv[2],
     "result": sys.argv[3],
     "web_artifact_sha256": sys.argv[4] or None,
     "observed_main": sys.argv[5] or None,
     "detail": sys.argv[6] or None,
+    "lock_domain": "weltgewebe-production-deployment-v1",
+    "lock_owner_entrypoint": "reconciler",
     "recorded_at": datetime.now(timezone.utc).isoformat(),
 }
 temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
@@ -78,6 +148,40 @@ finally:
     os.close(directory_fd)
 PY
   state_result="$result"
+}
+
+read_deploy_terminal_result() {
+  local commit="$1"
+  local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$commit.json"
+  [[ -f "$deployment_receipt" && ! -L "$deployment_receipt" ]] ||
+    fail "terminal deployment receipt is missing or unsafe: $deployment_receipt"
+  [[ "$(stat --format=%u "$deployment_receipt")" == "0" ]] ||
+    fail "terminal deployment receipt is not root-owned: $deployment_receipt"
+  local receipt_mode
+  receipt_mode="$(stat --format=%a "$deployment_receipt")"
+  (((8#$receipt_mode & 022) == 0)) ||
+    fail "terminal deployment receipt is group- or world-writable: $deployment_receipt"
+
+  python3 - "$deployment_receipt" "$commit" << 'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+commit = sys.argv[2]
+try:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError) as exc:
+    raise SystemExit(f"terminal deployment receipt is unreadable: {exc}") from exc
+if not isinstance(payload, dict):
+    raise SystemExit("terminal deployment receipt is not an object")
+if payload.get("commit") != commit:
+    raise SystemExit("terminal deployment receipt targets another commit")
+result = payload.get("result")
+if result not in {"superseded_after_migration", "superseded_after_deploy"}:
+    raise SystemExit(f"unexpected terminal deployment result: {result!r}")
+print(result)
+PY
 }
 
 repair_observed_deployment_state() {
@@ -122,7 +226,7 @@ if preserve:
     raise SystemExit(0)
 
 payload = {
-    "schema_version": 3,
+    "schema_version": 4,
     "environment": "production",
     "commit": commit,
     "web_artifact_sha256": None,
@@ -132,6 +236,9 @@ payload = {
     "frontend_commit": frontend.get("commit"),
     "observed_main_after_deploy": commit,
     "migration_completed_at": None,
+    "lock_domain": "weltgewebe-production-deployment-v1",
+    "lock_owner_entrypoint": "reconciler",
+    "lock_handoff": "public-observation",
     "result": "verified_observed",
     "evidence_boundary": (
         "Recovered from exact public readback; original web artifact hash and "
@@ -271,11 +378,7 @@ install -d -o root -g root -m 0711 "$STATE_ROOT"
 install -d -o root -g root -m 0700 \
   "$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT" "$DOCKER_CONFIG"
 install -d -o root -g root -m 0755 "$RELEASE_ROOT"
-exec 9> "$LOCK_FILE"
-if ! flock -n 9; then
-  echo "production_reconcile=skipped reason=already-running"
-  exit 0
-fi
+acquire_production_lock
 
 available_kib="$(df -Pk "$ARTIFACT_ROOT" | awk 'NR==2 {print $4}')"
 [[ "$available_kib" =~ ^[0-9]+$ ]] || fail "could not determine free disk space"
@@ -376,20 +479,61 @@ if [[ "$current_main" != "$target_commit" ]]; then
 fi
 
 set +e
-"$DEPLOY_HELPER" \
+WELTGEWEBE_PRODUCTION_LOCK_FD="$PRODUCTION_LOCK_FD" \
+  WELTGEWEBE_PRODUCTION_LOCK_DOMAIN="$PRODUCTION_LOCK_DOMAIN" \
+  WELTGEWEBE_PRODUCTION_LOCK_OWNER_ENTRYPOINT="reconciler" \
+  "$DEPLOY_HELPER" \
   --commit "$target_commit" \
   --web-artifact "$artifact" \
   --web-sha256 "$artifact_sha"
 deploy_rc=$?
 set -e
-if ((deploy_rc == 75)); then
+deploy_result=""
+case "$deploy_rc" in
+  0) ;;
+
+  "$EXIT_SUPERSEDED_AFTER_MIGRATION")
+    deploy_result="$(read_deploy_terminal_result "$target_commit")"
+    [[ "$deploy_result" == "superseded_after_migration" ]] ||
+      fail "deploy helper exit/result mismatch: exit=$deploy_rc result=$deploy_result"
+    ;;
+  "$EXIT_SUPERSEDED_AFTER_DEPLOY")
+    deploy_result="$(read_deploy_terminal_result "$target_commit")"
+    [[ "$deploy_result" == "superseded_after_deploy" ]] ||
+      fail "deploy helper exit/result mismatch: exit=$deploy_rc result=$deploy_result"
+    ;;
+  "$EX_TEMPFAIL")
+    fail "deploy helper returned temporary failure under inherited production lock"
+    ;;
+  *)
+    fail "deploy helper failed with exit code $deploy_rc"
+    ;;
+esac
+
+if [[ -n "$deploy_result" ]]; then
   current_main="$(fetch_main)"
-  write_state "superseded_after_deploy" "$current_main" "deploy completed after main advanced"
+  case "$deploy_result" in
+    superseded_after_migration)
+      write_state \
+        "superseded_after_migration" \
+        "$current_main" \
+        "migration completed; full deploy skipped after main advanced"
+      echo "production_reconcile=superseded_after_migration migrated=$target_commit current=$current_main"
+      ;;
+    superseded_after_deploy)
+      write_state \
+        "superseded_after_deploy" \
+        "$current_main" \
+        "full deploy completed after main advanced"
+      echo "production_reconcile=superseded_after_deploy deployed=$target_commit current=$current_main"
+      ;;
+    *)
+      fail "unexpected superseded reason: $deploy_result"
+      ;;
+  esac
   prune_artifacts
-  echo "production_reconcile=superseded deployed=$target_commit current=$current_main"
   exit 0
 fi
-((deploy_rc == 0)) || fail "deploy helper failed with exit code $deploy_rc"
 
 final_receipt="$RECEIPT_ROOT/public-$target_commit.json"
 "$LIVE_VERIFIER" \
