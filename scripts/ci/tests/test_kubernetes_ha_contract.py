@@ -207,6 +207,72 @@ class KubernetesHaContractTests(unittest.TestCase):
         with self.assertRaisesRegex(self.ha.ref.ProofError, "not spread"):
             self.ha.require_zones(invalid, 3, "test")
 
+    def test_pod_topology_excludes_terminating_and_unready_pods(self) -> None:
+        pods = {
+            "items": [
+                {
+                    "metadata": {
+                        "name": "coredns-old",
+                        "deletionTimestamp": "2026-07-19T04:04:30Z",
+                    },
+                    "spec": {"nodeName": "control-plane"},
+                    "status": {
+                        "phase": "Running",
+                        "conditions": [{"type": "Ready", "status": "True"}],
+                    },
+                },
+                {
+                    "metadata": {"name": "coredns-unready"},
+                    "spec": {"nodeName": "control-plane"},
+                    "status": {
+                        "phase": "Running",
+                        "conditions": [{"type": "Ready", "status": "False"}],
+                    },
+                },
+                *[
+                    {
+                        "metadata": {"name": f"coredns-{suffix}"},
+                        "spec": {"nodeName": f"worker-{suffix}"},
+                        "status": {
+                            "phase": "Running",
+                            "conditions": [{"type": "Ready", "status": "True"}],
+                        },
+                    }
+                    for suffix in ("a", "b", "c")
+                ],
+            ]
+        }
+        nodes = {
+            "items": [
+                {
+                    "metadata": {
+                        "name": f"worker-{suffix}",
+                        "labels": {"topology.kubernetes.io/zone": f"zone-{suffix}"},
+                    }
+                }
+                for suffix in ("a", "b", "c")
+            ]
+        }
+        with mock.patch.object(
+            self.ha.ref,
+            "output",
+            side_effect=[json.dumps(pods), json.dumps(nodes)],
+        ):
+            topology = self.ha.pod_topology(
+                "kubectl", "kube-system", "k8s-app=kube-dns"
+            )
+
+        self.assertEqual(
+            topology,
+            {
+                f"coredns-{suffix}": {
+                    "node": f"worker-{suffix}",
+                    "zone": f"zone-{suffix}",
+                }
+                for suffix in ("a", "b", "c")
+            },
+        )
+
     def test_cluster_dns_is_scaled_and_spread_across_three_zones(self) -> None:
         topology = {
             "coredns-a": {"node": "node-a", "zone": "zone-a"},

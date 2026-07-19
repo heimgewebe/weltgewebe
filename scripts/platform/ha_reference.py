@@ -1095,9 +1095,19 @@ def pod_topology(kubectl: str, namespace: str, selector: str) -> dict[str, dict[
     zones = {item["metadata"]["name"]: item["metadata"].get("labels", {}).get("topology.kubernetes.io/zone", "") for item in nodes["items"]}
     result: dict[str, dict[str, str]] = {}
     for item in pods["items"]:
+        metadata = item.get("metadata", {})
+        status = item.get("status", {})
+        if metadata.get("deletionTimestamp") or status.get("phase") != "Running":
+            continue
+        ready = any(
+            condition.get("type") == "Ready" and condition.get("status") == "True"
+            for condition in status.get("conditions", [])
+        )
+        if not ready:
+            continue
         node = item.get("spec", {}).get("nodeName", "")
         if node:
-            result[item["metadata"]["name"]] = {"node": node, "zone": zones.get(node, "")}
+            result[metadata["name"]] = {"node": node, "zone": zones.get(node, "")}
     return result
 
 
