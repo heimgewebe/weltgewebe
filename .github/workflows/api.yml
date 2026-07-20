@@ -642,6 +642,13 @@ jobs:
               --test db_node_conversations \
               -- --include-ignored --test-threads=1
 
+      - name: Run governance conversation target proof (direct PostgreSQL, --include-ignored)
+        run: |
+          DATABASE_URL="postgres://${PGUSER}:${PGPASSWORD}@localhost:5432/${PGDATABASE}" \
+            cargo test --locked -p weltgewebe-api \
+              --test db_governance_conversation_target \
+              -- --include-ignored --test-threads=1
+
   db-domain-edge-write-path-proof:
     name: db domain edge write path proof (phase e-c)
     runs-on: ubuntu-latest
