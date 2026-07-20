@@ -942,6 +942,8 @@ pub async fn delete_node_with_edges_in_postgres(
 pub enum NodeCreateError {
     #[error("node id already exists")]
     DuplicateId,
+    #[error("node creator account is missing or disabled")]
+    CreatorAccountUnavailable,
     #[error("failed to map existing node row: {0}")]
     Mapping(#[source] anyhow::Error),
     #[error("failed to serialize node payload: {0}")]
@@ -977,6 +979,27 @@ pub async fn insert_domain_node(
         .map_err(NodeCreateError::InvalidTimestamp)?;
 
     let mut tx = pool.begin().await.map_err(NodeCreateError::Database)?;
+
+    // Bind creator identity to a live canonical account for the full create
+    // transaction. `FOR KEY SHARE` is compatible with unrelated account
+    // updates, but conflicts with the `FOR UPDATE` lock taken by guest exit.
+    // Therefore exactly one ordering wins:
+    // - create commits first, then exit sees and anonymises the node;
+    // - exit commits first, then create observes no active account and fails.
+    if let Some(creator_account_id) = node.created_by_account_id.as_deref() {
+        let active_creator: Option<String> = sqlx::query_scalar(
+            "SELECT id FROM domain_accounts \
+             WHERE id = $1 AND disabled = FALSE FOR KEY SHARE",
+        )
+        .bind(creator_account_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(NodeCreateError::Database)?;
+        if active_creator.is_none() {
+            tx.rollback().await.ok();
+            return Err(NodeCreateError::CreatorAccountUnavailable);
+        }
+    }
 
     if let Some(operation) = operation {
         let lock_key = crate::advisory_lock::stable_advisory_lock_key(

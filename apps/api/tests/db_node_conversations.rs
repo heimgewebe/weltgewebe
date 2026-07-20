@@ -606,6 +606,36 @@ async fn node_conversation_vertical_slice() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(forbidden["code"], "message_author_required");
 
+    let (status, guest_edit_forbidden) = json_response(
+        &app,
+        request(
+            "PATCH",
+            &item_path,
+            Some(&guest),
+            Some(r#"{"content":"Gast ändert fremden Beitrag"}"#),
+            None,
+            first["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(guest_edit_forbidden["code"], "message_author_required");
+
+    let (status, guest_delete_forbidden) = json_response(
+        &app,
+        request(
+            "DELETE",
+            &item_path,
+            Some(&guest),
+            None,
+            None,
+            first["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(guest_delete_forbidden["code"], "message_owner_required");
+
     let (status, required) = json_response(
         &app,
         request(

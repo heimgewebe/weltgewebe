@@ -862,6 +862,12 @@ pub async fn create_node(
                 Err(NodeCreateError::DuplicateId) => {
                     return Err((StatusCode::CONFLICT, "node id already exists".to_string()));
                 }
+                Err(NodeCreateError::CreatorAccountUnavailable) => {
+                    return Err((
+                        StatusCode::UNAUTHORIZED,
+                        "creator account is no longer active".to_string(),
+                    ));
+                }
                 Err(e) => {
                     tracing::error!(error = %e, "failed to insert node into domain_nodes");
                     return Err((
