@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy } from "svelte";
+  import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { selection } from "$lib/stores/uiView";
   import { authStore } from "$lib/auth/store";
   import {
@@ -29,6 +29,9 @@
   type NodeTab = "uebersicht" | "gespraech" | "verlauf" | "bearbeiten";
   let activeTab: NodeTab = "uebersicht";
   let tabs: NodeTab[] = ["uebersicht", "gespraech", "verlauf"];
+  let overviewTab: HTMLButtonElement | null = null;
+  let editTab: HTMLButtonElement | null = null;
+  let titleInput: HTMLInputElement | null = null;
   let editing = false;
   let saving = false;
   let deleting = false;
@@ -91,8 +94,17 @@
     ? ["uebersicht", "gespraech", "verlauf", "bearbeiten"]
     : ["uebersicht", "gespraech", "verlauf"];
   $: if (!canMutate) {
+    const shouldRestoreFocus = activeTab === "bearbeiten" || editing;
     if (activeTab === "bearbeiten") activeTab = "uebersicht";
     if (editing) editing = false;
+    if (shouldRestoreFocus) void focusAfterRender(() => overviewTab);
+  }
+
+  async function focusAfterRender(
+    resolveTarget: () => HTMLElement | null,
+  ): Promise<void> {
+    await tick();
+    resolveTarget()?.focus();
   }
 
   function setTab(tab: NodeTab) {
@@ -134,6 +146,12 @@
     mutationError = "";
     conflictNode = null;
     editing = true;
+    void focusAfterRender(() => titleInput);
+  }
+
+  function cancelEdit() {
+    editing = false;
+    void focusAfterRender(() => editTab);
   }
 
   function mutationMessage(error: unknown): string {
@@ -206,6 +224,7 @@
       conflictNode = null;
       editing = false;
       activeTab = "uebersicht";
+      void focusAfterRender(() => overviewTab);
       dispatch("domainChanged", { kind: "node", id, action: "updated" });
     } catch (error) {
       if (
@@ -271,7 +290,12 @@
     <form class="edit-form" on:submit|preventDefault={saveNode}>
       <label>
         Titel
-        <input bind:value={formTitle} maxlength="200" required />
+        <input
+          bind:this={titleInput}
+          bind:value={formTitle}
+          maxlength="200"
+          required
+        />
       </label>
       <label>
         Knotenart
@@ -340,7 +364,7 @@
         <button
           type="button"
           class="secondary"
-          on:click={() => (editing = false)}
+          on:click={cancelEdit}
           disabled={saving}>Abbrechen</button
         >
         <button type="submit" class="primary" disabled={saving}
@@ -358,6 +382,7 @@
         aria-selected={activeTab === "uebersicht"}
         aria-controls="panel-uebersicht"
         id="tab-uebersicht"
+        bind:this={overviewTab}
         tabindex={activeTab === "uebersicht" ? 0 : -1}>Übersicht</button
       >
       <button
@@ -389,6 +414,7 @@
           aria-selected={activeTab === "bearbeiten"}
           aria-controls="panel-bearbeiten"
           id="tab-bearbeiten"
+          bind:this={editTab}
           tabindex={activeTab === "bearbeiten" ? 0 : -1}>Bearbeiten</button
         >
       {/if}
@@ -401,6 +427,7 @@
           id="panel-uebersicht"
           role="tabpanel"
           aria-labelledby="tab-uebersicht"
+          tabindex="0"
         >
           {#if isLoadingDetails}<p class="ghost">Lade Details…</p>
           {:else}
@@ -457,7 +484,12 @@
           {/key}
         </div>
       {:else if activeTab === "verlauf"}
-        <div id="panel-verlauf" role="tabpanel" aria-labelledby="tab-verlauf">
+        <div
+          id="panel-verlauf"
+          role="tabpanel"
+          aria-labelledby="tab-verlauf"
+          tabindex="0"
+        >
           {#if isLoadingDetails}<p class="ghost">Lade Verlauf…</p>
           {:else if nodeDetails?.history?.length}<ul class="timeline">
               {#each nodeDetails.history as event}<li>
@@ -479,7 +511,7 @@
             </ul>
           {:else}<p class="ghost">Noch kein Verlauf.</p>{/if}
         </div>
-      {:else if canMutate}
+      {:else if activeTab === "bearbeiten" && canMutate}
         <div
           class="mutation-actions"
           id="panel-bearbeiten"

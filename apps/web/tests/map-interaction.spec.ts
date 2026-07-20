@@ -277,6 +277,15 @@ test.describe("Map Interaction & Context Panel", () => {
     await uebersichtTab.focus();
     await expect(uebersichtTab).toBeFocused();
     await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
+    await expect(uebersichtTab).toHaveAttribute(
+      "aria-controls",
+      "panel-uebersicht",
+    );
+    await expect(uebersichtTab).toHaveAttribute("tabindex", "0");
+    await expect(panel.locator("#panel-uebersicht")).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
 
     // Press ArrowRight -> Should move through the three productive tabs in order.
     await page.keyboard.press("ArrowRight");
@@ -300,7 +309,14 @@ test.describe("Map Interaction & Context Panel", () => {
     });
     await expect(verlaufTab).toBeFocused();
     await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
+    await expect(verlaufTab).toHaveAttribute("aria-controls", "panel-verlauf");
+    await expect(verlaufTab).toHaveAttribute("tabindex", "0");
+    await expect(uebersichtTab).toHaveAttribute("tabindex", "-1");
     await expect(panel.locator("#panel-verlauf")).toBeVisible();
+    await expect(panel.locator("#panel-verlauf")).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
 
     const bearbeitenTab = panel.getByRole("tab", { name: "Bearbeiten" });
 
@@ -308,6 +324,12 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.keyboard.press("ArrowRight");
     await expect(bearbeitenTab).toBeFocused();
     await expect(bearbeitenTab).toHaveAttribute("aria-selected", "true");
+    await expect(bearbeitenTab).toHaveAttribute(
+      "aria-controls",
+      "panel-bearbeiten",
+    );
+    await expect(bearbeitenTab).toHaveAttribute("tabindex", "0");
+    await expect(verlaufTab).toHaveAttribute("tabindex", "-1");
     await expect(panel.locator("#panel-bearbeiten")).toBeVisible();
 
     // ArrowRight from the last tab wraps to the first tab.
