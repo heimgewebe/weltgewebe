@@ -514,10 +514,32 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
     .execute(&mut *tx)
     .await?;
 
+    let ambiguous_legacy_endpoint: bool = sqlx::query_scalar(
+        "SELECT EXISTS (\
+             SELECT 1 FROM domain_edges e \
+             WHERE EXISTS (SELECT 1 FROM domain_nodes n WHERE n.id = $1) \
+               AND (\
+                    (e.source_id = $1 AND NULLIF(e.payload ->> 'source_type', '') IS NULL) \
+                 OR (e.target_id = $1 AND NULLIF(e.payload ->> 'target_type', '') IS NULL)\
+               )\
+         )",
+    )
+    .bind(account_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if ambiguous_legacy_endpoint {
+        return Err(sqlx::Error::Protocol(
+            "guest exit cannot classify an untyped legacy edge endpoint because a node uses the same id"
+                .to_string(),
+        ));
+    }
+
     sqlx::query(
         "DELETE FROM domain_edges \
-         WHERE (source_id = $1 AND payload ->> 'source_type' = 'account') \
-            OR (target_id = $1 AND payload ->> 'target_type' = 'account')",
+         WHERE (source_id = $1 AND (payload ->> 'source_type' = 'account' \
+                 OR NULLIF(payload ->> 'source_type', '') IS NULL)) \
+            OR (target_id = $1 AND (payload ->> 'target_type' = 'account' \
+                 OR NULLIF(payload ->> 'target_type', '') IS NULL))",
     )
     .bind(account_id)
     .execute(&mut *tx)

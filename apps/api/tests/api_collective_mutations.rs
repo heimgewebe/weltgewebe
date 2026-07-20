@@ -818,7 +818,7 @@ async fn guest_can_create_and_mutate_own_node_with_server_owned_creator() -> Res
         "POST",
         "/nodes",
         &cookie,
-        r#"{"title":"Gastknoten","kind":"Werkstatt","address":"Gastweg 1","location":{"lat":53.5,"lon":10.0},"tags":[]}"#,
+        r#"{"title":"Gastknoten","kind":"Werkstatt","address":"Gastweg 1","location":{"lat":53.5,"lon":10.0},"tags":[],"operation_id":"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"}"#,
     );
     let response = app.clone().oneshot(create).await?;
     let status = response.status();

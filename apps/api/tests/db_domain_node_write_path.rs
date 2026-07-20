@@ -44,7 +44,10 @@ use weltgewebe_api::{
         NodeWriteError,
     },
     governance::delete_guest_account,
-    middleware::{auth::auth_middleware, csrf::require_csrf},
+    middleware::{
+        auth::auth_middleware, csrf::require_csrf,
+        domain_projection::ensure_current_domain_projection,
+    },
     routes::{
         accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
@@ -856,12 +859,19 @@ async fn postgres_node_patch_non_object_payload_is_rejected_without_commit() -> 
 // ── POST /nodes PostgreSQL write path ───────────────────────────────────────
 
 fn post_node_req(cookie: &str, json_body: &str) -> Request<body::Body> {
+    let mut payload: serde_json::Value =
+        serde_json::from_str(json_body).expect("node test request must be JSON");
+    if let Some(object) = payload.as_object_mut() {
+        object
+            .entry("operation_id")
+            .or_insert_with(|| serde_json::Value::String(uuid::Uuid::new_v4().to_string()));
+    }
     Request::post("/nodes")
         .header("Content-Type", "application/json")
         .header("Host", "localhost")
         .header("Origin", "http://localhost")
         .header("Cookie", cookie)
-        .body(body::Body::from(json_body.to_string()))
+        .body(body::Body::from(payload.to_string()))
         .unwrap()
 }
 
@@ -1216,6 +1226,75 @@ async fn postgres_node_create_rejects_creator_deleted_by_inflight_exit() -> Resu
     );
 
     clean(&pool).await;
+    Ok(())
+}
+
+/// K2b. The production projection middleware holds a read guard for the whole
+/// request. Guest exit must finish without attempting a read-to-write lock
+/// upgrade; the following request performs the lazy projection refresh.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_guest_exit_completes_under_projection_middleware() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000098";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
+        .bind(ACTOR_ID)
+        .execute(&pool)
+        .await?;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+    sqlx::query("UPDATE domain_accounts SET role = 'gast' WHERE id = $1")
+        .bind(ACTOR_ID)
+        .execute(&pool)
+        .await?;
+    let mut guest = admin_operator(ACTOR_ID);
+    guest.role = Role::Gast;
+    state.accounts.write().await.insert(guest);
+
+    let app = app.layer(from_fn_with_state(
+        state.clone(),
+        ensure_current_domain_projection,
+    ));
+    let exit_request = Request::post("/accounts/me/exit")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .header("Cookie", &cookie)
+        .body(body::Body::empty())?;
+    let exit_response =
+        tokio::time::timeout(Duration::from_secs(5), app.clone().oneshot(exit_request))
+            .await
+            .context("guest exit must not deadlock under projection middleware")??;
+    assert_eq!(exit_response.status(), StatusCode::OK);
+
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_accounts WHERE id = $1)")
+            .bind(ACTOR_ID)
+            .fetch_one(&pool)
+            .await?;
+    assert!(!exists, "canonical guest account must be deleted");
+
+    let refresh_request = Request::get("/nodes")
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+    let refresh_response =
+        tokio::time::timeout(Duration::from_secs(5), app.oneshot(refresh_request))
+            .await
+            .context("next request must refresh projection after exit")??;
+    assert_eq!(refresh_response.status(), StatusCode::OK);
+    assert!(
+        state.accounts.read().await.get(ACTOR_ID).is_none(),
+        "lazy projection refresh must remove exited guest from runtime cache"
+    );
+
     Ok(())
 }
 
