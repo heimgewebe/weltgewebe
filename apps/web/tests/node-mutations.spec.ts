@@ -33,7 +33,13 @@ test.describe("Knoten bearbeiten und löschen", () => {
     await page.goto("/map");
 
     const panel = await openFirstNode(page);
-    await panel.getByRole("button", { name: "Bearbeiten" }).click();
+    await expect(
+      panel.getByRole("button", { name: "Bearbeiten", exact: true }),
+    ).toHaveCount(0);
+    await panel.getByRole("tab", { name: "Bearbeiten" }).click();
+    await panel
+      .getByRole("button", { name: "Bearbeiten", exact: true })
+      .click();
     await panel.getByLabel("Titel").fill("Gemeinsam gepflegter Knoten");
     await panel
       .getByLabel("Kurzbeschreibung")
@@ -58,6 +64,11 @@ test.describe("Knoten bearbeiten und löschen", () => {
     ).toBeVisible();
     const markerCountBeforeDelete = await page.locator(".map-marker").count();
 
+    await expect(panel.getByRole("tab", { name: "Übersicht" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await panel.getByRole("tab", { name: "Bearbeiten" }).click();
     page.once("dialog", async (dialog) => {
       expect(dialog.type()).toBe("confirm");
       expect(dialog.message()).toContain("Knoten wirklich löschen");
@@ -89,9 +100,10 @@ test.describe("Knoten bearbeiten und löschen", () => {
     await page.goto("/map");
 
     const panel = await openFirstNode(page);
-    await expect(panel.getByRole("button", { name: "Bearbeiten" })).toHaveCount(
-      0,
-    );
+    await expect(panel.getByRole("tab", { name: "Bearbeiten" })).toHaveCount(0);
+    await expect(
+      panel.getByRole("button", { name: "Bearbeiten", exact: true }),
+    ).toHaveCount(0);
     await expect(
       panel.getByRole("button", { name: "Knoten löschen" }),
     ).toHaveCount(0);
@@ -146,7 +158,10 @@ test.describe("Knoten bearbeiten und löschen", () => {
 
     await page.goto("/map");
     const panel = await openFirstNode(page);
-    await panel.getByRole("button", { name: "Bearbeiten" }).click();
+    await panel.getByRole("tab", { name: "Bearbeiten" }).click();
+    await panel
+      .getByRole("button", { name: "Bearbeiten", exact: true })
+      .click();
     await panel.getByLabel("Titel").fill("Mein Konflikt");
     await panel.getByRole("button", { name: "Änderungen speichern" }).click();
 

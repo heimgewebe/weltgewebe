@@ -26,7 +26,9 @@
     domainChanged: DomainChanged;
   }>();
 
-  let activeTab = "uebersicht";
+  type NodeTab = "uebersicht" | "gespraech" | "verlauf" | "bearbeiten";
+  let activeTab: NodeTab = "uebersicht";
+  let tabs: NodeTab[] = ["uebersicht", "gespraech", "verlauf"];
   let editing = false;
   let saving = false;
   let deleting = false;
@@ -85,8 +87,15 @@
     $authStore.authenticated &&
     ($authStore.role === "weber" || $authStore.role === "admin");
 
-  const tabs = ["uebersicht", "gespraech", "verlauf"];
-  function setTab(tab: string) {
+  $: tabs = canMutate
+    ? ["uebersicht", "gespraech", "verlauf", "bearbeiten"]
+    : ["uebersicht", "gespraech", "verlauf"];
+  $: if (!canMutate) {
+    if (activeTab === "bearbeiten") activeTab = "uebersicht";
+    if (editing) editing = false;
+  }
+
+  function setTab(tab: NodeTab) {
     activeTab = tab;
   }
 
@@ -196,6 +205,7 @@
       } as NodeDetails);
       conflictNode = null;
       editing = false;
+      activeTab = "uebersicht";
       dispatch("domainChanged", { kind: "node", id, action: "updated" });
     } catch (error) {
       if (
@@ -370,6 +380,18 @@
         id="tab-verlauf"
         tabindex={activeTab === "verlauf" ? 0 : -1}>Verlauf</button
       >
+      {#if canMutate}
+        <button
+          class:active={activeTab === "bearbeiten"}
+          on:click={() => setTab("bearbeiten")}
+          on:keydown={handleKeydown}
+          role="tab"
+          aria-selected={activeTab === "bearbeiten"}
+          aria-controls="panel-bearbeiten"
+          id="tab-bearbeiten"
+          tabindex={activeTab === "bearbeiten" ? 0 : -1}>Bearbeiten</button
+        >
+      {/if}
     </div>
 
     <div class="tab-content">
@@ -434,7 +456,7 @@
             />
           {/key}
         </div>
-      {:else}
+      {:else if activeTab === "verlauf"}
         <div id="panel-verlauf" role="tabpanel" aria-labelledby="tab-verlauf">
           {#if isLoadingDetails}<p class="ghost">Lade Verlauf…</p>
           {:else if nodeDetails?.history?.length}<ul class="timeline">
@@ -457,29 +479,33 @@
             </ul>
           {:else}<p class="ghost">Noch kein Verlauf.</p>{/if}
         </div>
+      {:else if canMutate}
+        <div
+          class="mutation-actions"
+          id="panel-bearbeiten"
+          role="tabpanel"
+          aria-labelledby="tab-bearbeiten"
+        >
+          {#if mutationError}<p class="error" role="alert">
+              {mutationError}
+            </p>{/if}
+          <button type="button" class="secondary" on:click={beginEdit}
+            >Bearbeiten</button
+          >
+          <button
+            type="button"
+            class="danger"
+            on:click={removeNode}
+            disabled={deleting}
+            >{deleting ? "Löscht…" : "Knoten löschen"}</button
+          >
+          <p class="collective-note">
+            Knoten gehören zum gemeinsamen Gewebe und können von allen Webern
+            gepflegt werden.
+          </p>
+        </div>
       {/if}
     </div>
-
-    {#if canMutate}
-      <div class="mutation-actions" aria-label="Knoten bearbeiten">
-        {#if mutationError}<p class="error" role="alert">
-            {mutationError}
-          </p>{/if}
-        <button type="button" class="secondary" on:click={beginEdit}
-          >Bearbeiten</button
-        >
-        <button
-          type="button"
-          class="danger"
-          on:click={removeNode}
-          disabled={deleting}>{deleting ? "Löscht…" : "Knoten löschen"}</button
-        >
-        <p class="collective-note">
-          Knoten gehören zum gemeinsamen Gewebe und können von allen Webern
-          gepflegt werden.
-        </p>
-      </div>
-    {/if}
   {/if}
 </div>
 
@@ -505,11 +531,13 @@
   .long-info {
     white-space: pre-wrap;
   }
-  .participants,
-  .mutation-actions {
+  .participants {
     margin-top: 1rem;
     padding-top: 1rem;
     border-top: 1px solid var(--panel-border);
+  }
+  .mutation-actions {
+    padding-top: 0.25rem;
   }
   .participants p,
   .collective-note {
