@@ -13,6 +13,7 @@ review_after: 2026-10-20
 last_reviewed: 2026-07-20
 depends_on:
   - docs.specs.federation-core
+verifies_with: []
 relations:
   - type: relates_to
     target: docs/specs/federation-core.md
