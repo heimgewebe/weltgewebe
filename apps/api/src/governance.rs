@@ -127,7 +127,7 @@ pub struct Veto {
 #[derive(Clone, Debug, Serialize)]
 pub struct ProposalMessage {
     pub id: String,
-    pub author_account_id: String,
+    pub author_account_id: Option<String>,
     pub author_title: String,
     pub body: String,
     pub created_at: DateTime<Utc>,
@@ -140,7 +140,7 @@ pub struct FinalizationOutcome {
     pub applicant_account_id: String,
     pub status: ProposalStatus,
     /// `true` genau dann, wenn diese Transaktion die bestehende Gastidentität
-    /// als Weber-Garnrolle aktiviert hat.
+    /// auf die Berechtigungsrolle `weber` angehoben hat.
     pub promoted: bool,
 }
 
@@ -453,19 +453,66 @@ pub async fn add_message(
 
     Ok(ProposalMessage {
         id,
-        author_account_id: author_account_id.to_string(),
+        author_account_id: Some(author_account_id.to_string()),
         author_title: author_title.to_string(),
         body: body.to_string(),
         created_at: now,
     })
 }
 
-/// Lösche ein Gastkonto vollständig aus der kanonischen PostgreSQL-Wahrheit.
-/// Eigene Weberanträge und ihre abhängigen Datensätze, Passkeys und Sessions
-/// werden in derselben Transaktion entfernt. Die Rollenbedingung schützt gegen
-/// versehentliches Löschen eines Webers oder Admins.
+/// Lösche ein Gastkonto aus der kanonischen PostgreSQL-Wahrheit, ohne bereits
+/// gemeinschaftlich sichtbare Beiträge oder Knoten zu vernichten.
+///
+/// - Eigene Weberanträge und ihre abhängigen Verfahrensdaten werden entfernt.
+/// - Knoten bleiben bestehen, verlieren aber die aktive Urheberbindung.
+/// - Von der gelöschten Garnrolle ausgehende oder zu ihr führende Fäden werden
+///   entfernt, weil ihr Account-Endpunkt nicht mehr existiert.
+/// - Beiträge in fremden Anträgen behalten Text und Anzeigenamen, verlieren
+///   aber die live Account-ID.
+/// - Passkeys, Sessions und die Gastidentität werden atomar entfernt.
+///
+/// Die Rollenbedingung schützt gegen versehentliches Löschen eines Webers oder
+/// Administrators.
 pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
+
+    // Lock and verify the exact active guest before touching durable traces.
+    let role: Option<String> = sqlx::query_scalar(
+        "SELECT role FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
+    )
+    .bind(account_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    if role.as_deref() != Some("gast") {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    sqlx::query(
+        "UPDATE domain_nodes \
+         SET payload = payload - 'created_by_account_id', updated_at = NOW() \
+         WHERE payload ->> 'created_by_account_id' = $1",
+    )
+    .bind(account_id)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        "DELETE FROM domain_edges \
+         WHERE (source_id = $1 AND payload ->> 'source_type' = 'account') \
+            OR (target_id = $1 AND payload ->> 'target_type' = 'account')",
+    )
+    .bind(account_id)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        "UPDATE governance_messages SET author_account_id = NULL \
+         WHERE author_account_id = $1",
+    )
+    .bind(account_id)
+    .execute(&mut *tx)
+    .await?;
+
     sqlx::query("DELETE FROM governance_proposals WHERE applicant_account_id = $1")
         .bind(account_id)
         .execute(&mut *tx)
@@ -786,11 +833,10 @@ async fn finalize_one(
 }
 
 /// Vollziehe die Aufnahme in derselben Transaktion wie den Statuswechsel:
-/// Antrag wird `accepted`, und die bereits kanonisch gespeicherte
-/// Gastidentität wird mit `role = 'weber'` als Garnrolle aktiviert. Über den
-/// Primärschlüssel existiert dabei genau eine Garnrolle je Account. Fehlt die
-/// Gastidentität, bricht die Transaktion fail-closed ab. Replays sind No-ops
-/// (Rolle bereits `weber`), Admin-Rollen werden nie herabgestuft.
+/// Antrag wird `accepted`, und die bereits kanonisch gespeicherte Garnrolle
+/// erhält `role = 'weber'`. Profil, Verortung und Identität bleiben unverändert.
+/// Fehlt die Gastidentität, bricht die Transaktion fail-closed ab. Replays sind
+/// No-ops (Rolle bereits `weber`), Admin-Rollen werden nie herabgestuft.
 async fn accept_weber_proposal(
     tx: &mut Transaction<'_, Postgres>,
     proposal_id: &str,

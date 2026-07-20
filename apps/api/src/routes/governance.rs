@@ -1,10 +1,9 @@
 //! HTTP-Oberfläche des Antragssystems (`docs/specs/governance-antraege.md`).
 //!
-//! Leserechte sind öffentlich: Gäste sehen Liste, Detail, Vetos und
-//! Gesprächsraum. Zustandsändernd sind für Gäste ausschließlich der eigene
-//! Weberantrag (`POST /proposals`) und der eigene Austritt
-//! (`POST /accounts/me/exit`). Veto, Stimme und Gesprächsraum-Beiträge sind
-//! Webungsaktionen und über `require_write` (kein Gast) geschützt.
+//! Leserechte sind öffentlich. Angemeldete Gäste dürfen den eigenen
+//! Weberantrag stellen, in offenen Gesprächsräumen mitreden und den eigenen
+//! Account auflösen. Formale Vetos und Stimmen bleiben Webern und
+//! Administratoren vorbehalten.
 //!
 //! PostgreSQL ist kanonisch: ohne konfigurierten Pool antworten alle
 //! Governance-Endpunkte fail-closed mit 503 — es gibt keinen JSONL- oder
@@ -22,7 +21,9 @@ use serde_json::Value;
 use sqlx::PgPool;
 
 use crate::auth::role::Role;
-use crate::config::{DomainAccountWriteSource, DomainReadSource};
+use crate::config::{
+    DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource, DomainReadSource,
+};
 use crate::governance::{
     self, CreateProposalError, MessageError, ProposalMessage, ProposalStatus, ProposalWithCounts,
     Veto, VetoError, VoteChoice, VoteError, MESSAGE_BODY_MAX_CHARS, SUMMARY_MAX_CHARS,
@@ -47,6 +48,24 @@ fn require_pool(state: &ApiState) -> Result<&PgPool, ApiError> {
     state.db_pool.as_ref().ok_or((
         StatusCode::SERVICE_UNAVAILABLE,
         "governance requires a configured PostgreSQL database".to_string(),
+    ))
+}
+
+fn require_guest_exit_pool(state: &ApiState) -> Result<&PgPool, ApiError> {
+    if state.config.domain_read_source != DomainReadSource::Postgres
+        || state.config.domain_account_write_source != DomainAccountWriteSource::Postgres
+        || state.config.domain_node_write_source != DomainNodeWriteSource::Postgres
+        || state.config.domain_edge_write_source != DomainEdgeWriteSource::Postgres
+    {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "guest exit requires PostgreSQL as the canonical account, node and edge source"
+                .to_string(),
+        ));
+    }
+    state.db_pool.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "guest exit requires a configured PostgreSQL database".to_string(),
     ))
 }
 
@@ -412,8 +431,8 @@ pub async fn list_proposal_messages(
     Ok(Json(messages))
 }
 
-/// POST /proposals/{id}/messages — Beitrag als Webungsaktion
-/// (`require_write`-geschützt: Gäste hinterlassen keine sichtbaren Spuren).
+/// POST /proposals/{id}/messages — öffentlicher Beitrag eines angemeldeten
+/// Accounts während einer offenen Phase.
 pub async fn post_proposal_message(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
@@ -452,6 +471,7 @@ pub async fn post_proposal_message(
 /// Weltgewebe. Nur Gäste dürfen diesen Sonderpfad nutzen. Er entfernt ihre
 /// Authentifizierungsidentität samt eigenen Weberanträgen und Anmeldedaten aus
 /// der kanonischen Datenbank, aus der Laufzeitprojektion und aus allen Sessions.
+/// Gemeinschaftliche Knoten und Beiträge bleiben anonymisiert erhalten.
 pub async fn exit_own_account(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
@@ -463,28 +483,29 @@ pub async fn exit_own_account(
             "only guest accounts can use the guest exit path".to_string(),
         ));
     }
-    let pool = require_pool(&state)?;
+    let pool = require_guest_exit_pool(&state)?;
 
     governance::delete_guest_account(pool, &account_id)
         .await
         .map_err(internal_error("delete_guest_account"))?;
 
-    {
-        let mut accounts = state.accounts.write().await;
-        accounts.remove(&account_id);
-    }
+    let session_cleanup = state.sessions.delete_all_by_account(&account_id).await;
+    let projection_refresh = state.refresh_domain_projection_if_stale().await;
 
-    state
-        .sessions
-        .delete_all_by_account(&account_id)
-        .await
-        .map_err(|error| {
-            tracing::error!(error = %error, "failed to end sessions after guest exit");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "guest exit recorded but session cleanup failed".to_string(),
-            )
-        })?;
+    if let Err(error) = session_cleanup {
+        tracing::error!(error = %error, "failed to end sessions after guest exit");
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "guest exit recorded but session cleanup failed".to_string(),
+        ));
+    }
+    if let Err(error) = projection_refresh {
+        tracing::error!(error = %error, "failed to refresh domain projection after guest exit");
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "guest exit recorded but domain projection refresh failed".to_string(),
+        ));
+    }
 
     tracing::info!(event = "governance.guest.exited", "Guest account deleted");
 

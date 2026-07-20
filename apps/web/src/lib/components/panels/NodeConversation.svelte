@@ -40,9 +40,7 @@
   let refreshController: AbortController | null = null;
   let destroyed = false;
 
-  $: canWrite =
-    $authStore.authenticated &&
-    ($authStore.role === "weber" || $authStore.role === "admin");
+  $: canWrite = $authStore.authenticated;
 
   function mergeMessages(incoming: ConversationMessage[]) {
     const merged = new Map(messages.map((message) => [message.id, message]));
@@ -390,8 +388,7 @@
       >
     </form>
   {:else}<p class="guest-note">
-      Als Gast kannst du den Gesprächsraum lesen. Schreiben beginnt mit dem
-      Weberstatus.
+      Melde dich an, um im Gesprächsraum mitzuschreiben.
     </p>{/if}
 </section>
 

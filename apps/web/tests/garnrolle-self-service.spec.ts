@@ -106,7 +106,9 @@ test.describe("Eigene Garnrolle speichern", () => {
     });
   });
 
-  test("keeps the form read-only for a guest account", async ({ page }) => {
+  test("guest account can describe and save the own Garnrolle", async ({
+    page,
+  }) => {
     await mockApiResponses(page, {
       auth: {
         authenticated: true,
@@ -118,10 +120,24 @@ test.describe("Eigene Garnrolle speichern", () => {
     const section = page.locator('[data-testid="my-garnrolle-section"]');
     await expect(
       section.locator('[data-testid="garnrolle-role-warning"]'),
-    ).toContainText("keine Weber-Berechtigung");
+    ).toHaveCount(0);
+    await section.getByLabel("Anzeigename").fill("Mitwebende Gastgarnrolle");
+    await section.getByLabel("Noch nicht auf der Karte").check();
+    const save = section.locator('[data-testid="save-garnrolle"]');
+    await expect(save).toBeEnabled();
+    const requestPromise = page.waitForRequest(
+      (request) =>
+        request.url().endsWith("/api/accounts/me/profile") &&
+        request.method() === "PATCH",
+    );
+    await save.click();
+    expect((await requestPromise).postDataJSON()).toMatchObject({
+      title: "Mitwebende Gastgarnrolle",
+      map_state: "not_on_map",
+    });
     await expect(
-      section.locator('[data-testid="save-garnrolle"]'),
-    ).toBeDisabled();
+      section.locator('[data-testid="garnrolle-success"]'),
+    ).toContainText("gespeichert");
   });
 
   test("saves a not-on-map profile and reloads the persisted values", async ({

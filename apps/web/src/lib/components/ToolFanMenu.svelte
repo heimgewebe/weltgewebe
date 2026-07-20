@@ -100,10 +100,10 @@
         tabIndex={open && canCreateNode ? 0 : -1}
         ariaLabel={canCreateNode
           ? undefined
-          : "Knoten knüpfen – Weber-Garnrolle erforderlich"}
+          : "Knoten knüpfen – Anmeldung erforderlich"}
         title={canCreateNode
           ? "Neuen Knoten auf der Karte knüpfen"
-          : "Zum Knotenknüpfen ist eine Weber-Garnrolle nötig"}
+          : "Zum Knotenknüpfen musst du angemeldet sein"}
         on:click={() => dispatch("createNode")}
       />
       <FanAction
