@@ -24,6 +24,7 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+use crate::advisory_lock::node_mutation_lock_key;
 use crate::auth::accounts::AccountStore;
 use crate::auth::role::Role;
 
@@ -485,6 +486,23 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
     .await?;
     if role.as_deref() != Some("gast") {
         return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Existing node mutations acquire this same advisory lock before reading
+    // or changing ownership. Lock every guest-owned node in deterministic id
+    // order so account exit cannot race an already authorized edit or delete.
+    let owned_node_ids: Vec<String> = sqlx::query_scalar(
+        "SELECT id FROM domain_nodes \
+         WHERE payload ->> 'created_by_account_id' = $1 ORDER BY id",
+    )
+    .bind(account_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    for node_id in owned_node_ids {
+        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+            .bind(node_mutation_lock_key(&node_id))
+            .execute(&mut *tx)
+            .await?;
     }
 
     sqlx::query(

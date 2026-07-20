@@ -11,6 +11,7 @@ use sqlx::{Postgres, Transaction};
 use tokio::sync::{Mutex, MutexGuard, Semaphore, SemaphorePermit};
 
 use crate::{
+    advisory_lock::node_mutation_lock_key,
     auth::role::Role,
     config::{DomainNodeWriteSource, DomainReadSource},
     domain_db,
@@ -25,7 +26,6 @@ use super::{domain_write_guard::reject_node_patch_unless_writable, nodes};
 // the connection pool while the first request owns the database advisory lock.
 // Different node ids can proceed concurrently; rare stripe collisions only
 // reduce local parallelism and never weaken correctness.
-const NODE_MUTATION_LOCK_NAMESPACE: &str = "weltgewebe:node-mutation:v1";
 const LOCAL_NODE_LOCK_STRIPES: usize = 64;
 // Each PostgreSQL mutation temporarily needs two pool connections: one holds
 // the advisory-lock transaction and one performs the existing mutation helper.
@@ -55,10 +55,6 @@ fn local_node_locks() -> &'static [Mutex<()>] {
                 .collect()
         })
         .as_slice()
-}
-
-fn node_mutation_lock_key(node_id: &str) -> i64 {
-    crate::advisory_lock::stable_advisory_lock_key(NODE_MUTATION_LOCK_NAMESPACE, &[node_id])
 }
 
 fn local_node_lock_index(node_id: &str) -> usize {
