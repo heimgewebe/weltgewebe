@@ -729,6 +729,25 @@ async fn finalize_one(
 ) -> Result<Option<FinalizationOutcome>, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
+    // Account exit locks account -> proposal. Finalization must use the same
+    // order, otherwise the two transactions can deadlock. The first read only
+    // discovers the immutable applicant id; all decisions use the row re-read
+    // below after both locks are held.
+    let Some(applicant_account_id) = sqlx::query_scalar::<_, String>(
+        "SELECT applicant_account_id FROM governance_proposals WHERE id = $1::uuid",
+    )
+    .bind(proposal_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    sqlx::query("SELECT id FROM domain_accounts WHERE id = $1 FOR UPDATE")
+        .bind(&applicant_account_id)
+        .execute(&mut *tx)
+        .await?;
+
     let Some(row) = sqlx::query(
         "SELECT status, applicant_account_id, consent_until, voting_until \
          FROM governance_proposals WHERE id = $1::uuid FOR UPDATE",
@@ -741,7 +760,8 @@ async fn finalize_one(
     };
 
     let status = ProposalStatus::from_db(row.try_get::<String, _>("status")?.as_str())?;
-    let applicant_account_id: String = row.try_get("applicant_account_id")?;
+    let locked_applicant_account_id: String = row.try_get("applicant_account_id")?;
+    debug_assert_eq!(applicant_account_id, locked_applicant_account_id);
     let consent_until: DateTime<Utc> = row.try_get("consent_until")?;
     let voting_until: Option<DateTime<Utc>> = row.try_get("voting_until")?;
 
