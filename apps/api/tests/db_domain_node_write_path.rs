@@ -1127,6 +1127,97 @@ async fn postgres_node_create_rejects_invalid_payload_without_side_effects() -> 
     Ok(())
 }
 
+/// K2. A PostgreSQL node create cannot race past guest-account deletion.
+/// The create must wait for the account row lock and then fail once the exit
+/// transaction has removed the canonical identity.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_create_rejects_creator_deleted_by_inflight_exit() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let creator_id = "writepath-node-creator-race";
+    let node_id = "writepath-node-race-create";
+    sqlx::query(
+        "INSERT INTO domain_accounts \
+         (id, kind, title, mode, map_state, radius_m, disabled, role, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', 'Race Guest', 'ron', 'not_on_map', 0, FALSE, 'gast', '{}', '{}')",
+    )
+    .bind(creator_id)
+    .execute(&pool)
+    .await
+    .context("seed race creator account")?;
+
+    let node = Node {
+        id: node_id.to_string(),
+        kind: "Werkstatt".to_string(),
+        title: "Race-konsistenter Gastknoten".to_string(),
+        created_at: "2026-07-20T15:00:00+00:00".to_string(),
+        updated_at: "2026-07-20T15:00:00+00:00".to_string(),
+        created_by_account_id: Some(creator_id.to_string()),
+        summary: None,
+        info: None,
+        tags: vec![],
+        address: Some("Somewhere 2".to_string()),
+        location: Location {
+            lat: 53.5,
+            lon: 10.0,
+        },
+    };
+
+    let mut exit_tx = pool.begin().await.context("begin simulated guest exit")?;
+    let locked_creator: String = sqlx::query_scalar(
+        "SELECT id FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
+    )
+    .bind(creator_id)
+    .fetch_one(&mut *exit_tx)
+    .await
+    .context("lock creator as guest exit does")?;
+    assert_eq!(locked_creator, creator_id);
+
+    let create_pool = pool.clone();
+    let mut create_task =
+        tokio::spawn(async move { insert_domain_node(&create_pool, &node, None).await });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut create_task)
+            .await
+            .is_err(),
+        "node create must wait while guest exit owns the account row lock"
+    );
+
+    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
+        .bind(creator_id)
+        .execute(&mut *exit_tx)
+        .await
+        .context("delete creator inside guest exit transaction")?;
+    exit_tx
+        .commit()
+        .await
+        .context("commit simulated guest exit")?;
+
+    let create_result = create_task.await.context("join blocked node create")?;
+    match create_result {
+        Err(NodeCreateError::CreatorAccountUnavailable) => {}
+        Err(error) => panic!("unexpected stale node create error: {error}"),
+        Ok(_) => panic!("stale node create must not succeed after guest exit"),
+    }
+    let node_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+            .bind(node_id)
+            .fetch_one(&pool)
+            .await
+            .context("check race node absence")?;
+    assert!(
+        !node_exists,
+        "guest exit race must not leave an orphaned node"
+    );
+
+    clean(&pool).await;
+    Ok(())
+}
+
 /// L. Direct write-path proof: a primary-key collision at the database level
 /// is classified as `DuplicateId` and leaves the existing row untouched.
 #[tokio::test]
