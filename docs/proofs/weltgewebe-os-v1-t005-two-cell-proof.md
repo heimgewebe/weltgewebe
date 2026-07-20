@@ -1,3 +1,26 @@
+---
+id: proofs.weltgewebe-os-v1-t005-two-cell-proof
+title: WELTGEWEBE-OS-V1-T005 — Zwei-Zellen-Beweis
+doc_type: report
+status: active
+created: 2026-07-20
+lang: de
+summary: >
+  Belegt den signierten Föderationskern v1 mit zwei logisch unabhängigen Zellen,
+  Trennung, kontrollierter Konvergenz, PostgreSQL-Persistenz, Browserprüfung und
+  fail-closed Quarantäne ungültiger oder kollidierender Ereignisse.
+depends_on:
+  - docs/specs/federation-core.md
+  - docs/specs/federation-wire-v1.md
+relations:
+  - type: verifies
+    target: docs/specs/federation-core.md
+  - type: verifies
+    target: docs/specs/federation-wire-v1.md
+  - type: relates_to
+    target: docs/adr/ADR-0011__foederierte-gewebezellen.md
+---
+
 # WELTGEWEBE-OS-V1-T005 – Zwei-Zellen-Beweis
 
 Datum: 2026-07-20

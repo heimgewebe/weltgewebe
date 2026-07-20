@@ -1,3 +1,27 @@
+---
+id: docs.specs.federation-wire-v1
+title: Föderations-Drahtvertrag v1
+doc_type: specification
+status: canonical
+summary: "Definiert die öffentliche, signierte HTTP- und JSON-Grenze zwischen unabhängig betriebenen Weltgewebe-Zellen."
+role: norm
+organ: platform
+canonicality: normative
+lifecycle_state: active
+owner: platform
+review_after: 2026-10-20
+last_reviewed: 2026-07-20
+depends_on:
+  - docs.specs.federation-core
+relations:
+  - type: relates_to
+    target: docs/specs/federation-core.md
+  - type: relates_to
+    target: docs/adr/ADR-0011__foederierte-gewebezellen.md
+  - type: verified_by
+    target: docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
+---
+
 # Föderations-Drahtvertrag v1
 
 Status: implementiert und durch automatisierte Vertrags-, API-, Browser- und Persistenztests prüfbar.
