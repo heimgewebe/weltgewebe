@@ -655,6 +655,43 @@ async fn ensure_node_created_faden(
             "authenticated account context missing".to_string(),
         )
     })?;
+    // Keep the canonical account row locked until the derived Faden is durable.
+    // Guest exit takes the same row lock first, so either exit completes before
+    // this projection starts (and we reject it), or exit waits and subsequently
+    // removes the just-created account-bound Faden. This closes the otherwise
+    // possible gap between durable node creation and the second edge write.
+    let mut account_guard = if let Some(pool) = state.db_pool.as_ref() {
+        let mut tx = pool.begin().await.map_err(|error| {
+            tracing::error!(%error, account_id = %account_id, "failed to begin node Faden account guard");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to guard creator account for derived Faden".to_string(),
+            )
+        })?;
+        let active_account: Option<String> = sqlx::query_scalar(
+            "SELECT id FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
+        )
+        .bind(account_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, account_id = %account_id, "failed to lock creator account for node Faden");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to guard creator account for derived Faden".to_string(),
+            )
+        })?;
+        if active_account.is_none() {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                "creator account is no longer active".to_string(),
+            ));
+        }
+        Some(tx)
+    } else {
+        None
+    };
+
     let projection_operation_id = node_operation_id.unwrap_or(node.id.as_str());
     let payload = json!({
         "source_id": account_id,
@@ -678,11 +715,22 @@ async fn ensure_node_created_faden(
                 "Node is durable but its derived Faden projection failed"
             );
             (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "node was stored but its derived Faden could not be projected; retry the same operation"
-                .to_string(),
-        )
-        })
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "node was stored but its derived Faden could not be projected; retry the same operation"
+                    .to_string(),
+            )
+        })?;
+
+    if let Some(tx) = account_guard.take() {
+        tx.commit().await.map_err(|error| {
+            tracing::error!(%error, account_id = %account_id, node_id = %node.id, "failed to commit node Faden account guard");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to finalize derived Faden account guard".to_string(),
+            )
+        })?;
+    }
+    Ok(())
 }
 
 /// Create a node.

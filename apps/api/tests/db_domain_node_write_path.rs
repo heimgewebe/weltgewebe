@@ -43,6 +43,7 @@ use weltgewebe_api::{
         patch_node_in_postgres, replace_node_in_postgres, NodeCreateError, NodePatchInput,
         NodeWriteError,
     },
+    governance::delete_guest_account,
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
@@ -1215,6 +1216,159 @@ async fn postgres_node_create_rejects_creator_deleted_by_inflight_exit() -> Resu
     );
 
     clean(&pool).await;
+    Ok(())
+}
+
+/// K3. The real HTTP node-create path keeps the guest account locked until
+/// its derived Faden is durable. A concurrent exit therefore cannot delete the
+/// account between the node INSERT and the later edge INSERT.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_create_faden_projection_serializes_with_guest_exit() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000099";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
+        .bind(ACTOR_ID)
+        .execute(&pool)
+        .await?;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+    sqlx::query("UPDATE domain_accounts SET role = 'gast' WHERE id = $1")
+        .bind(ACTOR_ID)
+        .execute(&pool)
+        .await?;
+    let mut guest = admin_operator(ACTOR_ID);
+    guest.role = Role::Gast;
+    state.accounts.write().await.insert(guest);
+
+    // Stop only the derived edge INSERT. Node persistence can complete first,
+    // reproducing the exact historical gap between the two durable writes.
+    let mut edge_blocker = pool.begin().await.context("begin edge blocker")?;
+    sqlx::query("LOCK TABLE domain_edges IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *edge_blocker)
+        .await
+        .context("lock edge table")?;
+
+    let request = post_node_req(
+        &cookie,
+        r#"{"title":"Exit Race Node","kind":"Werkstatt","address":"Race 1","location":{"lat":53.55,"lon":9.99}}"#,
+    );
+    let create_app = app.clone();
+    let create_task = tokio::spawn(async move { create_app.oneshot(request).await });
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let exists: bool = sqlx::query_scalar(
+                "SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1)",
+            )
+            .bind(ACTOR_ID)
+            .fetch_one(&pool)
+            .await
+            .expect("probe created node");
+            if exists {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .context("node must become durable before Faden blocker is released")?;
+
+    // Observe the real account-row guard rather than relying on scheduler
+    // timing. A NOWAIT probe succeeds until the node request owns the row lock;
+    // lock_not_available (55P03) proves the guard is held before exit starts.
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let mut probe = pool.begin().await.expect("begin account lock probe");
+            let result =
+                sqlx::query("SELECT id FROM domain_accounts WHERE id = $1 FOR UPDATE NOWAIT")
+                    .bind(ACTOR_ID)
+                    .execute(&mut *probe)
+                    .await;
+            match result {
+                Ok(_) => {
+                    probe
+                        .rollback()
+                        .await
+                        .expect("rollback successful account probe");
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                }
+                Err(sqlx::Error::Database(error)) if error.code().as_deref() == Some("55P03") => {
+                    probe.rollback().await.ok();
+                    break;
+                }
+                Err(error) => panic!("unexpected account lock probe error: {error}"),
+            }
+        }
+    })
+    .await
+    .context("node request must acquire account guard before exit starts")?;
+
+    let exit_pool = pool.clone();
+    let mut exit_task =
+        tokio::spawn(async move { delete_guest_account(&exit_pool, ACTOR_ID).await });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut exit_task)
+            .await
+            .is_err(),
+        "guest exit must wait until the derived Faden write releases the account row"
+    );
+
+    edge_blocker
+        .commit()
+        .await
+        .context("release edge blocker")?;
+    let create_response = tokio::time::timeout(Duration::from_secs(5), create_task)
+        .await
+        .context("node request completes")?
+        .context("join node request")??;
+    let create_status = create_response.status();
+    let create_body = body::to_bytes(create_response.into_body(), usize::MAX).await?;
+    assert_eq!(
+        create_status,
+        StatusCode::CREATED,
+        "node create body: {}",
+        String::from_utf8_lossy(&create_body)
+    );
+    tokio::time::timeout(Duration::from_secs(5), exit_task)
+        .await
+        .context("guest exit completes after Faden projection")??
+        .context("delete guest account")?;
+
+    let account_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_accounts WHERE id = $1)")
+            .bind(ACTOR_ID)
+            .fetch_one(&pool)
+            .await?;
+    let orphan_edges: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 OR target_id = $1",
+    )
+    .bind(ACTOR_ID)
+    .fetch_one(&pool)
+    .await?;
+    let owned_nodes: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1",
+    )
+    .bind(ACTOR_ID)
+    .fetch_one(&pool)
+    .await?;
+    assert!(!account_exists);
+    assert_eq!(
+        orphan_edges, 0,
+        "exit must remove every account-bound Faden"
+    );
+    assert_eq!(owned_nodes, 0, "retained node must be anonymized");
+
+    clean_all_nodes(&pool).await;
     Ok(())
 }
 
