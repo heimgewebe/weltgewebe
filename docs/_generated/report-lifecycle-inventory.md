@@ -16,23 +16,23 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 | Metric | Count |
 | --- | ---: |
-| files_total | 49 |
-| files_with_frontmatter | 49 |
+| files_total | 50 |
+| files_with_frontmatter | 50 |
 | files_without_frontmatter | 0 |
-| files_with_status | 49 |
+| files_with_status | 50 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 44 |
+| files_with_lifecycle_state | 45 |
 | files_missing_lifecycle_state | 5 |
-| files_with_lifecycle | 43 |
+| files_with_lifecycle | 44 |
 | files_missing_lifecycle | 6 |
-| files_with_owner_task | 45 |
+| files_with_owner_task | 46 |
 | files_missing_owner_task | 4 |
-| files_with_review_after | 36 |
+| files_with_review_after | 37 |
 | files_missing_review_after | 13 |
 | files_primary_referenced | 43 |
-| files_primary_unreferenced | 6 |
-| files_with_derived_references | 49 |
-| files_with_relations | 49 |
+| files_primary_unreferenced | 7 |
+| files_with_derived_references | 50 |
+| files_with_relations | 50 |
 | files_with_missing_supersession_target | 0 |
 
 ## Doc Type Distribution
@@ -41,7 +41,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | --- | ---: |
 | documentation | 1 |
 | reference | 1 |
-| report | 43 |
+| report | 44 |
 | status | 2 |
 | status-matrix | 2 |
 
@@ -98,6 +98,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/repo-audit-2026-07-02.md | report | active | active | audit | REPO-AUDIT-001 | 2026-10-31 |  | 1 | 4 | 4 |  |  |
 | docs/reports/report-lifecycle-restbestand-triage.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  | 0 | 5 | 3 | review_after |  |
 | docs/reports/weltgewebe-os-foundation-status.md | status | active |  |  | WELTGEWEBE-OS-001 | 2026-08-15 |  | 2 | 4 | 4 | lifecycle, lifecycle_state |  |
+| docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md | report | active | active | planning | WELTGEWEBE-OS-001 | 2026-10-20 |  | 0 | 4 | 7 |  |  |
 
 ## Absent Core Lifecycle Metadata
 
@@ -172,6 +173,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/repo-audit-2026-07-02.md | 4 | relates_to | docs/policies/agent-reading-protocol.md, docs/policies/architecture-critique.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md |
 | docs/reports/report-lifecycle-restbestand-triage.md | 3 | relates_to | docs/process/report-lifecycle.md, docs/tasks/index.json, scripts/docmeta/validate_report_lifecycle.py |
 | docs/reports/weltgewebe-os-foundation-status.md | 4 | depends_on, relates_to | architecture/weltgewebe-os.md, docs/blueprints/weltgewebe-os-masterplan.md, docs/reports/domain-postgres-instance-coherence-decision.md, docs/tasks/board.md |
+| docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md | 7 | relates_to | apps/api/src/governance.rs, apps/api/src/routes/conversations.rs, apps/web/src/lib/components/governance/ProposalDetail.svelte, contracts/domain/conversation.schema.json, contracts/domain/message.schema.json, docs/datenmodell.md, docs/specs/governance-antraege.md |
 
 ## Primary Referenced Reports
 
@@ -731,6 +733,12 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
 
+- `docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/report-lifecycle.md`
+
 ## Primary Unreferenced Reports
 
 - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
@@ -739,6 +747,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 - `docs/reports/github-action-ref-pinning-audit.md`
 - `docs/reports/kubernetes-platform-foundation-status.md`
 - `docs/reports/report-lifecycle-restbestand-triage.md`
+- `docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md`
 
 ## Supersession Target Diagnostics
 
