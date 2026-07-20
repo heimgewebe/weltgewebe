@@ -6,7 +6,7 @@ const CONVERSATION_ID = "d3a6c9b1-8c4f-4e6b-a02a-2c9d6a5b6c3a";
 interface MockMessage {
   id: string;
   conversation_id: string;
-  author_account_id: string;
+  author_account_id: string | null;
   author_title: string;
   content: string | null;
   created_at: string;
@@ -29,11 +29,13 @@ async function openFirstNodeConversation(page: Page) {
 async function installConversationApi(
   page: Page,
   messages: MockMessage[],
-  options: { failFirstCreate?: boolean } = {},
+  options: { failFirstCreate?: boolean; delaySecondList?: boolean } = {},
 ) {
   let listRequests = 0;
   let createAttempts = 0;
   const idempotencyKeys: string[] = [];
+  let releaseDelayedList: (() => void) | null = null;
+  let delayedListStarted = false;
 
   await page.route("**/api/**", async (route: Route) => {
     const request = route.request();
@@ -61,11 +63,18 @@ async function installConversationApi(
       method === "GET"
     ) {
       listRequests += 1;
+      const snapshot = messages.map((message) => ({ ...message }));
+      if (options.delaySecondList && listRequests === 2) {
+        delayedListStarted = true;
+        await new Promise<void>((resolve) => {
+          releaseDelayedList = resolve;
+        });
+      }
       return route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          items: messages,
+          items: snapshot,
           page: { limit: 50, next_cursor: null, has_more: false },
         }),
       });
@@ -136,6 +145,8 @@ async function installConversationApi(
 
   return {
     listRequestCount: () => listRequests,
+    delayedListHasStarted: () => delayedListStarted,
+    releaseDelayedList: () => releaseDelayedList?.(),
     idempotencyKeys,
   };
 }
@@ -177,7 +188,7 @@ test("Weber behält Entwürfe, bearbeitet eigene Beiträge und tombstoned sie", 
   expect(api.idempotencyKeys).toHaveLength(2);
   expect(api.idempotencyKeys[0]).toBe(api.idempotencyKeys[1]);
 
-  const messageList = panel.getByRole("list", { name: "Gesprächsbeiträge" });
+  const messageList = panel.getByRole("log", { name: "Gesprächsbeiträge" });
   await messageList.getByRole("button", { name: "Bearbeiten" }).click();
   await panel.getByLabel("Beitrag bearbeiten").fill("Überarbeiteter Beitrag");
   await panel.getByRole("button", { name: "Änderung speichern" }).click();
@@ -187,6 +198,50 @@ test("Weber behält Entwürfe, bearbeitet eigene Beiträge und tombstoned sie", 
   await messageList.getByRole("button", { name: "Entfernen" }).click();
   await expect(panel.getByText("Beitrag entfernt.")).toBeVisible();
   await expect(panel.getByText("Überarbeiteter Beitrag")).toHaveCount(0);
+});
+
+test("Ein geänderter Entwurf beginnt nach unklarem Fehler eine neue idempotente Operation", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
+  });
+  const api = await installConversationApi(page, [], {
+    failFirstCreate: true,
+  });
+  const panel = await openFirstNodeConversation(page);
+  const draft = panel.getByLabel("Neuer Beitrag");
+  await draft.fill("Erster Entwurf");
+  await panel.getByRole("button", { name: "Beitrag veröffentlichen" }).click();
+  await expect(panel.getByText(/Entwurf bleibt erhalten/)).toBeVisible();
+
+  await draft.fill("Geänderter Entwurf");
+  await panel.getByRole("button", { name: "Beitrag veröffentlichen" }).click();
+  await expect(panel.getByText("Geänderter Entwurf")).toBeVisible();
+  expect(api.idempotencyKeys).toHaveLength(2);
+  expect(api.idempotencyKeys[0]).not.toBe(api.idempotencyKeys[1]);
+});
+
+test("Eine verspätete Polling-Antwort überschreibt keinen gerade veröffentlichten Beitrag", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
+  });
+  const api = await installConversationApi(page, [], {
+    delaySecondList: true,
+  });
+  const panel = await openFirstNodeConversation(page);
+  await expect(panel.getByText(/Noch keine Beiträge/)).toBeVisible();
+
+  await expect.poll(api.delayedListHasStarted, { timeout: 7_000 }).toBe(true);
+  await panel.getByLabel("Neuer Beitrag").fill("Neuer Stand");
+  await panel.getByRole("button", { name: "Beitrag veröffentlichen" }).click();
+  await expect(panel.getByText("Neuer Stand")).toBeVisible();
+
+  api.releaseDelayedList();
+  await page.waitForTimeout(250);
+  await expect(panel.getByText("Neuer Stand")).toBeVisible();
 });
 
 test("Polling läuft nur im sichtbaren aktiven Gesprächstab", async ({

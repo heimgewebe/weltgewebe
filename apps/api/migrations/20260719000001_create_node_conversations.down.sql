@@ -1,3 +1,9 @@
+ALTER TABLE domain_accounts
+    DROP CONSTRAINT IF EXISTS domain_accounts_conversation_author_title;
+
+DROP TRIGGER IF EXISTS domain_nodes_protect_conversation_history ON domain_nodes;
+DROP FUNCTION IF EXISTS weltgewebe_protect_node_conversation_history();
+
 DROP TRIGGER IF EXISTS domain_nodes_create_conversation ON domain_nodes;
 DROP FUNCTION IF EXISTS weltgewebe_create_node_conversation();
 

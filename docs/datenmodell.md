@@ -171,8 +171,13 @@ fehlgeschlagenen PostgreSQL-Pfad.
 `conversation.schema.json` und `message.schema.json` spiegeln den produktiven,
 öffentlichen Knotengesprächsschnitt. Genau ein `domain_conversations`-Datensatz
 gehört zu jedem PostgreSQL-Knoten; `domain_messages` speichert Klartextbeiträge,
-Autoren-Snapshots, Idempotenz und Tombstones. Conversation-/Message-Ereignisse
-landen atomar in `domain_outbox`, erhöhen aber nicht die Kartenprojektion.
+Autoren-Snapshots, Idempotenz und Tombstones. Beim Löschen eines Accounts wird
+die bearbeitungsberechtigte Account-Referenz entfernt, während der öffentliche
+Namens-Snapshot erhalten bleibt; eine später wiederverwendete Account-ID kann
+damit keine alten Beiträge übernehmen. Knoten mit vorhandenen Beiträgen dürfen
+nicht hart gelöscht werden, weil sonst fremde Gesprächsgeschichte per Kaskade
+verschwände. Conversation-/Message-Ereignisse landen atomar in `domain_outbox`,
+erhöhen aber nicht die Kartenprojektion.
 
 `role.schema.json` beschreibt weiterhin ein geplantes Objekt ohne produktive
 `roles`-Tabelle. Private Gespräche, Anhänge und föderierte Zustellung sind nicht

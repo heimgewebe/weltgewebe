@@ -13,7 +13,10 @@
 
 use axum::{
     extract::{Path, Query, State},
-    http::{header::IF_MATCH, HeaderMap, StatusCode},
+    http::{
+        header::{IF_MATCH, RETRY_AFTER},
+        HeaderMap, HeaderValue, StatusCode,
+    },
     response::{IntoResponse, Response},
     Extension, Json,
 };
@@ -47,7 +50,7 @@ type ConversationRow = (
 type MessageRow = (
     String,
     String,
-    String,
+    Option<String>,
     String,
     Option<String>,
     DateTime<Utc>,
@@ -70,7 +73,7 @@ pub struct ConversationView {
 pub struct MessageView {
     pub id: String,
     pub conversation_id: String,
-    pub author_account_id: String,
+    pub author_account_id: Option<String>,
     pub author_title: String,
     pub content: Option<String>,
     pub created_at: String,
@@ -97,6 +100,7 @@ pub struct ConversationApiError {
     code: &'static str,
     message: &'static str,
     current: Option<Value>,
+    retry_after_seconds: Option<u64>,
 }
 
 impl ConversationApiError {
@@ -106,6 +110,7 @@ impl ConversationApiError {
             code,
             message,
             current: None,
+            retry_after_seconds: None,
         }
     }
 
@@ -113,10 +118,16 @@ impl ConversationApiError {
         self.current = Some(json!(message));
         self
     }
+
+    fn retry_after(mut self, seconds: u64) -> Self {
+        self.retry_after_seconds = Some(seconds);
+        self
+    }
 }
 
 impl IntoResponse for ConversationApiError {
     fn into_response(self) -> Response {
+        let retry_after_seconds = self.retry_after_seconds;
         let mut body = json!({
             "code": self.code,
             "message": self.message,
@@ -124,7 +135,13 @@ impl IntoResponse for ConversationApiError {
         if let Some(current) = self.current {
             body["current"] = current;
         }
-        (self.status, Json(body)).into_response()
+        let mut response = (self.status, Json(body)).into_response();
+        if let Some(seconds) = retry_after_seconds {
+            if let Ok(value) = HeaderValue::from_str(&seconds.to_string()) {
+                response.headers_mut().insert(RETRY_AFTER, value);
+            }
+        }
+        response
     }
 }
 
@@ -206,6 +223,43 @@ fn validate_content(content: &str) -> Result<String, ConversationApiError> {
     Ok(content.to_string())
 }
 
+fn validate_author_title(title: &str) -> Result<String, ConversationApiError> {
+    let title = title.trim();
+    let length = title.chars().count();
+    if length == 0 || length > 200 {
+        return Err(ConversationApiError::new(
+            StatusCode::CONFLICT,
+            "author_title_invalid",
+            "the canonical account title must contain between 1 and 200 characters",
+        ));
+    }
+    Ok(title.to_string())
+}
+
+fn parse_conversation_id(value: &str) -> Result<String, ConversationApiError> {
+    Uuid::parse_str(value)
+        .map(|id| id.to_string())
+        .map_err(|_| {
+            ConversationApiError::new(
+                StatusCode::NOT_FOUND,
+                "conversation_not_found",
+                "the node conversation does not exist",
+            )
+        })
+}
+
+fn parse_message_id(value: &str) -> Result<String, ConversationApiError> {
+    Uuid::parse_str(value)
+        .map(|id| id.to_string())
+        .map_err(|_| {
+            ConversationApiError::new(
+                StatusCode::NOT_FOUND,
+                "message_not_found",
+                "the message does not exist in this conversation",
+            )
+        })
+}
+
 fn parse_idempotency_key(headers: &HeaderMap) -> Result<String, ConversationApiError> {
     let raw = headers
         .get("Idempotency-Key")
@@ -278,7 +332,11 @@ async fn load_message_for_update(
 }
 
 fn require_author(auth: &AuthContext, message: &MessageView) -> Result<(), ConversationApiError> {
-    if auth.account_id.as_deref() == Some(message.author_account_id.as_str()) {
+    if auth
+        .account_id
+        .as_deref()
+        .is_some_and(|account_id| message.author_account_id.as_deref() == Some(account_id))
+    {
         return Ok(());
     }
     Err(ConversationApiError::new(
@@ -293,7 +351,10 @@ fn require_author_or_admin(
     message: &MessageView,
 ) -> Result<(), ConversationApiError> {
     if auth.role == Role::Admin
-        || auth.account_id.as_deref() == Some(message.author_account_id.as_str())
+        || auth
+            .account_id
+            .as_deref()
+            .is_some_and(|account_id| message.author_account_id.as_deref() == Some(account_id))
     {
         return Ok(());
     }
@@ -333,6 +394,7 @@ pub async fn get_conversation(
     Path(id): Path<String>,
 ) -> Result<Json<ConversationView>, ConversationApiError> {
     let pool = require_pool(&state)?;
+    let id = parse_conversation_id(&id)?;
     let row: Option<ConversationRow> = sqlx::query_as(
         "SELECT id::text, node_id, conversation_type, visibility, \
                 created_at, updated_at, deleted_at \
@@ -364,13 +426,7 @@ pub async fn list_messages(
     Query(query): Query<MessageListQuery>,
 ) -> Result<Json<MessagePage>, ConversationApiError> {
     let pool = require_pool(&state)?;
-    Uuid::parse_str(&conversation_id).map_err(|_| {
-        ConversationApiError::new(
-            StatusCode::NOT_FOUND,
-            "conversation_not_found",
-            "the node conversation does not exist",
-        )
-    })?;
+    let conversation_id = parse_conversation_id(&conversation_id)?;
     let exists: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM domain_conversations \
          WHERE id = $1::uuid AND deleted_at IS NULL)",
@@ -417,7 +473,7 @@ pub async fn list_messages(
         _ => None,
     };
 
-    let rows: Vec<MessageRow> = if let Some(cursor_id) = cursor_id.as_deref() {
+    let rows: Vec<MessageRow> = if let Some(cursor_id) = cursor_id {
         let cursor_position: Option<(DateTime<Utc>, String)> = sqlx::query_as(
             "SELECT created_at, id::text FROM domain_messages \
              WHERE id = $1::uuid AND conversation_id = $2::uuid",
@@ -466,6 +522,8 @@ pub async fn list_messages(
     let has_more = rows.len() > limit;
     let mut items: Vec<MessageView> = rows.into_iter().take(limit).map(message_from_row).collect();
     items.reverse();
+    // The page is returned oldest-first for the UI, so the first item is the
+    // oldest row in this page and therefore the boundary for the next older page.
     let next_cursor = if has_more {
         items.first().map(|message| encode_cursor(&message.id))
     } else {
@@ -499,13 +557,7 @@ pub async fn create_message(
     let author_account_id = account_id(&auth)?.to_string();
     let idempotency_key = parse_idempotency_key(&headers)?;
     let content = validate_content(&request.content)?;
-    Uuid::parse_str(&conversation_id).map_err(|_| {
-        ConversationApiError::new(
-            StatusCode::NOT_FOUND,
-            "conversation_not_found",
-            "the node conversation does not exist",
-        )
-    })?;
+    let conversation_id = parse_conversation_id(&conversation_id)?;
 
     let mut tx = pool
         .begin()
@@ -540,6 +592,7 @@ pub async fn create_message(
             "the authenticated account is not present in the canonical domain store",
         )
     })?;
+    let author_title = validate_author_title(&author_title)?;
 
     let rate_limit_key =
         format!("node-conversation-message-rate:{conversation_id}:{author_account_id}");
@@ -595,7 +648,8 @@ pub async fn create_message(
             StatusCode::TOO_MANY_REQUESTS,
             "message_rate_limited",
             "at most 10 new messages per minute are allowed in one conversation",
-        ));
+        )
+        .retry_after(60));
     }
 
     let message_id = Uuid::new_v4().to_string();
@@ -637,6 +691,8 @@ pub async fn update_message(
 ) -> Result<Json<MessageView>, ConversationApiError> {
     let pool = require_pool(&state)?;
     let content = validate_content(&request.content)?;
+    let conversation_id = parse_conversation_id(&conversation_id)?;
+    let message_id = parse_message_id(&message_id)?;
     let mut tx = pool
         .begin()
         .await
@@ -678,6 +734,8 @@ pub async fn delete_message(
     headers: HeaderMap,
 ) -> Result<Json<MessageView>, ConversationApiError> {
     let pool = require_pool(&state)?;
+    let conversation_id = parse_conversation_id(&conversation_id)?;
+    let message_id = parse_message_id(&message_id)?;
     let mut tx = pool
         .begin()
         .await
@@ -735,7 +793,7 @@ mod tests {
         let message = MessageView {
             id: Uuid::new_v4().to_string(),
             conversation_id: Uuid::new_v4().to_string(),
-            author_account_id: "account-a".to_string(),
+            author_account_id: Some("account-a".to_string()),
             author_title: "A".to_string(),
             content: Some("Hallo".to_string()),
             created_at: "2026-07-19T12:00:00Z".to_string(),

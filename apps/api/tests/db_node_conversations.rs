@@ -7,7 +7,7 @@ use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use axum::{
     body,
-    http::{Request, StatusCode},
+    http::{HeaderMap, Request, StatusCode},
     middleware::from_fn_with_state,
     Router,
 };
@@ -22,6 +22,7 @@ use weltgewebe_api::{
         AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
         DomainReadSource,
     },
+    domain_db::{delete_node_with_edges_in_postgres, NodeWriteError},
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
@@ -230,12 +231,13 @@ fn request(
     builder.body(body::Body::empty()).expect("request")
 }
 
-async fn json_response(
+async fn json_response_with_headers(
     app: &Router,
     request: Request<body::Body>,
-) -> (StatusCode, serde_json::Value) {
+) -> (StatusCode, HeaderMap, serde_json::Value) {
     let response = app.clone().oneshot(request).await.expect("response");
     let status = response.status();
+    let headers = response.headers().clone();
     let bytes = body::to_bytes(response.into_body(), usize::MAX)
         .await
         .expect("response body");
@@ -244,6 +246,14 @@ async fn json_response(
     } else {
         serde_json::from_slice(&bytes).expect("JSON response")
     };
+    (status, headers, value)
+}
+
+async fn json_response(
+    app: &Router,
+    request: Request<body::Body>,
+) -> (StatusCode, serde_json::Value) {
+    let (status, _, value) = json_response_with_headers(app, request).await;
     (status, value)
 }
 
@@ -266,6 +276,14 @@ async fn cleanup(pool: &sqlx::PgPool) {
             .expect("derive conversation id for cleanup");
     aggregate_ids.push(conversation_id);
     aggregate_ids.push(NODE_ID.to_string());
+    sqlx::query(
+        "DELETE FROM domain_messages
+         WHERE conversation_id IN (SELECT id FROM domain_conversations WHERE node_id = $1)",
+    )
+    .bind(NODE_ID)
+    .execute(pool)
+    .await
+    .expect("clean messages before guarded node deletion");
     sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
         .bind(NODE_ID)
         .execute(pool)
@@ -292,6 +310,20 @@ async fn node_conversation_vertical_slice() {
     seed_account(&pool, OTHER_ID, "Anderer Weber", "weber").await;
     seed_account(&pool, ADMIN_ID, "Administration", "admin").await;
     seed_account(&pool, GUEST_ID, "Gast", "gast").await;
+
+    let invalid_author_title = sqlx::query(
+        "INSERT INTO domain_accounts
+         (id, kind, title, map_state, radius_m, disabled, role, public_payload, private_payload)
+         VALUES ('conversation-proof-invalid-title', 'garnrolle', $1, 'not_on_map', 0, FALSE,
+                 'weber', '{}', '{}')",
+    )
+    .bind("x".repeat(201))
+    .execute(&pool)
+    .await;
+    assert!(
+        invalid_author_title.is_err(),
+        "new canonical accounts must satisfy the author snapshot title contract"
+    );
 
     let version_before_node: i64 =
         sqlx::query_scalar("SELECT version FROM domain_projection_state WHERE singleton")
@@ -356,6 +388,24 @@ async fn node_conversation_vertical_slice() {
         "an active message with NULL content must be rejected by PostgreSQL"
     );
 
+    let whitespace_only = sqlx::query(
+        "INSERT INTO domain_messages (
+             id, conversation_id, author_account_id, author_title, content, idempotency_key
+         ) VALUES (
+             '71000000-0000-4000-8000-000000000003'::uuid, $1::uuid, $2, 'Autorin', $3,
+             '71000000-0000-4000-8000-000000000004'::uuid
+         )",
+    )
+    .bind(&conversation_id)
+    .bind(AUTHOR_ID)
+    .bind("\n\t")
+    .execute(&pool)
+    .await;
+    assert!(
+        whitespace_only.is_err(),
+        "an active message containing only whitespace must be rejected by PostgreSQL"
+    );
+
     let (app, author, other, admin, guest) = app(pool.clone()).await;
     let (status, conversation) = json_response(
         &app,
@@ -372,6 +422,34 @@ async fn node_conversation_vertical_slice() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(conversation["id"], conversation_id);
     assert_eq!(conversation["visibility"], "public");
+
+    for (method, path, body) in [
+        ("GET", "/conversations/not-a-uuid", None),
+        ("GET", "/conversations/not-a-uuid/messages", None),
+        (
+            "PATCH",
+            &format!("/conversations/{conversation_id}/messages/not-a-uuid"),
+            Some(r#"{"content":"Ungültig"}"#),
+        ),
+    ] {
+        let (status, _) = json_response(
+            &app,
+            request(
+                method,
+                path,
+                Some(&author),
+                body,
+                None,
+                Some("2026-01-01T00:00:00Z"),
+            ),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::NOT_FOUND,
+            "invalid UUID paths must fail closed"
+        );
+    }
 
     let message_path = format!("/conversations/{conversation_id}/messages");
     let (status, _) = json_response(
@@ -631,7 +709,7 @@ async fn node_conversation_vertical_slice() {
         .await;
         assert_eq!(status, StatusCode::CREATED);
     }
-    let (status, limited) = json_response(
+    let (status, headers, limited) = json_response_with_headers(
         &app,
         request(
             "POST",
@@ -644,6 +722,12 @@ async fn node_conversation_vertical_slice() {
     )
     .await;
     assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(
+        headers
+            .get("retry-after")
+            .and_then(|value| value.to_str().ok()),
+        Some("60")
+    );
     assert_eq!(limited["code"], "message_rate_limited");
 
     let (status, replay_after_limit) = json_response(
@@ -709,14 +793,16 @@ async fn node_conversation_vertical_slice() {
         .await
         .expect("account deletion must not be blocked by existing messages");
     assert_eq!(deleted_author.rows_affected(), 1);
-    let (surviving_messages, surviving_title): (i64, String) = sqlx::query_as(
-        "SELECT count(*), min(author_title) \
-         FROM domain_messages WHERE author_account_id = $1",
-    )
-    .bind(AUTHOR_ID)
-    .fetch_one(&pool)
-    .await
-    .expect("messages survive author deletion");
+    let (surviving_messages, surviving_title, all_author_ids_cleared): (i64, String, bool) =
+        sqlx::query_as(
+            "SELECT count(*), min(author_title), bool_and(author_account_id IS NULL)
+             FROM domain_messages
+             WHERE conversation_id = $1::uuid AND author_title = 'Autorin'",
+        )
+        .bind(&conversation_id)
+        .fetch_one(&pool)
+        .await
+        .expect("messages survive author deletion");
     assert_eq!(
         surviving_messages, author_messages_before,
         "contributions survive the deleted account instead of cascading away"
@@ -725,6 +811,58 @@ async fn node_conversation_vertical_slice() {
         surviving_title, "Autorin",
         "the author snapshot title is preserved after the account is gone"
     );
+    assert!(
+        all_author_ids_cleared,
+        "deleted identities must lose ownership of every historical contribution"
+    );
+
+    seed_account(&pool, AUTHOR_ID, "Neu verwendete Kennung", "weber").await;
+    let reclaim_target: (String, chrono::DateTime<chrono::Utc>) = sqlx::query_as(
+        "SELECT id::text, updated_at FROM domain_messages
+         WHERE conversation_id = $1::uuid AND content = 'Zweiter'",
+    )
+    .bind(&conversation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("message for reused-id ownership proof");
+    let reclaim_path = format!("{message_path}/{}", reclaim_target.0);
+    let (status, reclaim_denied) = json_response(
+        &app,
+        request(
+            "PATCH",
+            &reclaim_path,
+            Some(&author),
+            Some(r#"{"content":"Unrechtmäßige Übernahme"}"#),
+            None,
+            Some(&reclaim_target.1.to_rfc3339()),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(reclaim_denied["code"], "message_author_required");
+
+    let guarded_delete = delete_node_with_edges_in_postgres(&pool, NODE_ID)
+        .await
+        .expect_err("node deletion must preserve a non-empty public conversation");
+    assert!(matches!(
+        guarded_delete,
+        NodeWriteError::ConversationNotEmpty
+    ));
+    let raw_delete = sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
+        .bind(NODE_ID)
+        .execute(&pool)
+        .await;
+    assert!(
+        raw_delete.is_err(),
+        "the database trigger must block deletion even outside the API helper"
+    );
+    let node_still_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+            .bind(NODE_ID)
+            .fetch_one(&pool)
+            .await
+            .expect("read node after rejected deletion");
+    assert!(node_still_exists);
 
     cleanup(&pool).await;
     pool.close().await;

@@ -5,6 +5,16 @@
 -- later node insert, so node + conversation + both outbox records commit (or
 -- roll back) together regardless of which application path inserted the node.
 
+-- New and updated account titles must already satisfy the public author
+-- snapshot contract. NOT VALID avoids turning pre-existing legacy rows into a
+-- deployment blocker while still enforcing the rule for later writes.
+ALTER TABLE domain_accounts
+    ADD CONSTRAINT domain_accounts_conversation_author_title
+    CHECK (
+        char_length(title) BETWEEN 1 AND 200
+        AND title ~ '[^[:space:]]'
+    ) NOT VALID;
+
 CREATE TABLE domain_conversations (
     id                UUID        PRIMARY KEY,
     node_id           TEXT        NOT NULL UNIQUE
@@ -24,15 +34,11 @@ CREATE TABLE domain_messages (
     id                UUID        PRIMARY KEY,
     conversation_id   UUID        NOT NULL
                                   REFERENCES domain_conversations (id) ON DELETE CASCADE,
-    -- author_account_id is a procedural snapshot, not a live foreign key. Like
-    -- governance_messages.author_account_id it deliberately carries no FK to
-    -- domain_accounts: deleting an account (see governance::delete_guest_account,
-    -- a hard DELETE that never touches this table) must not be blocked by, nor
-    -- cascade through, old public contributions. The author_title snapshot keeps
-    -- the history readable after the account is gone; the id then survives as a
-    -- historical reference that no longer resolves. The existing account
-    -- semantics never null such a reference, so it stays NOT NULL here too.
-    author_account_id TEXT        NOT NULL,
+    -- The live account reference is nulled on account deletion. This prevents a
+    -- later account that happens to reuse the same textual id from inheriting
+    -- edit/remove authority over historical contributions. author_title remains
+    -- the durable public snapshot that keeps the contribution readable.
+    author_account_id TEXT        REFERENCES domain_accounts (id) ON DELETE SET NULL,
     author_title      TEXT        NOT NULL
                                   CHECK (char_length(btrim(author_title)) BETWEEN 1 AND 200),
     content           TEXT,
@@ -47,7 +53,8 @@ CREATE TABLE domain_messages (
         UNIQUE (conversation_id, author_account_id, idempotency_key),
     CHECK (
         (deleted_at IS NULL AND content IS NOT NULL
-         AND char_length(btrim(content)) BETWEEN 1 AND 4000)
+         AND char_length(content) BETWEEN 1 AND 4000
+         AND content ~ '[^[:space:]]')
         OR (deleted_at IS NOT NULL AND content IS NULL)
     ),
     CHECK (updated_at >= created_at),
@@ -196,3 +203,38 @@ $$;
 CREATE TRIGGER domain_nodes_create_conversation
 AFTER INSERT ON domain_nodes
 FOR EACH ROW EXECUTE FUNCTION weltgewebe_create_node_conversation();
+
+-- A node may be removed while its generated conversation is still empty. Once
+-- public contributions exist, deletion must not bypass message ownership and
+-- tombstone semantics by cascading the complete history away. Locking the
+-- conversation row also serializes this decision against concurrent inserts:
+-- the message foreign-key lock and this FOR UPDATE lock cannot pass each other.
+CREATE OR REPLACE FUNCTION weltgewebe_protect_node_conversation_history()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    conversation_identifier UUID;
+BEGIN
+    SELECT id INTO conversation_identifier
+    FROM domain_conversations
+    WHERE node_id = OLD.id
+    FOR UPDATE;
+
+    IF conversation_identifier IS NOT NULL AND EXISTS (
+        SELECT 1 FROM domain_messages
+        WHERE conversation_id = conversation_identifier
+    ) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '23503',
+            CONSTRAINT = 'domain_nodes_conversation_history_guard',
+            MESSAGE = 'node deletion blocked by existing conversation messages';
+    END IF;
+
+    RETURN OLD;
+END;
+$$;
+
+CREATE TRIGGER domain_nodes_protect_conversation_history
+BEFORE DELETE ON domain_nodes
+FOR EACH ROW EXECUTE FUNCTION weltgewebe_protect_node_conversation_history();

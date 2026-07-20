@@ -11,7 +11,7 @@ export interface NodeConversation {
 export interface ConversationMessage {
   id: string;
   conversation_id: string;
-  author_account_id: string;
+  author_account_id: string | null;
   author_title: string;
   content: string | null;
   created_at: string;
@@ -32,6 +32,20 @@ interface ErrorPayload {
   code?: unknown;
   message?: unknown;
   current?: unknown;
+}
+
+function canonicalUtcTimestamp(value: string): string {
+  const match = value.match(
+    /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$/,
+  );
+  if (!match) return value;
+  return `${match[1]}.${(match[2] ?? "").padEnd(9, "0")}Z`;
+}
+
+export function compareApiTimestamps(left: string, right: string): number {
+  return canonicalUtcTimestamp(left).localeCompare(
+    canonicalUtcTimestamp(right),
+  );
 }
 
 export class NodeConversationApiError extends Error {
@@ -69,20 +83,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function getNodeConversation(nodeId: string): Promise<NodeConversation> {
+export function getNodeConversation(
+  nodeId: string,
+  signal?: AbortSignal,
+): Promise<NodeConversation> {
   return request<NodeConversation>(
     `/api/nodes/${encodeURIComponent(nodeId)}/conversation`,
+    { signal },
   );
 }
 
 export function listConversationMessages(
   conversationId: string,
   cursor?: string | null,
+  signal?: AbortSignal,
 ): Promise<MessagePage> {
   const query = new URLSearchParams({ limit: "50" });
   if (cursor) query.set("cursor", cursor);
   return request<MessagePage>(
     `/api/conversations/${encodeURIComponent(conversationId)}/messages?${query}`,
+    { signal },
   );
 }
 

@@ -3,6 +3,7 @@
   import { authStore } from "$lib/auth/store";
   import { formatDate } from "$lib/utils/formatDate";
   import {
+    compareApiTimestamps,
     createConversationMessage,
     getNodeConversation,
     listConversationMessages,
@@ -26,13 +27,17 @@
   let loadError = "";
   let draft = "";
   let draftOperationId = "";
+  let lastSubmittedDraft = "";
   let posting = false;
   let mutationError = "";
   let editingId = "";
   let editDraft = "";
   let savingId = "";
   let tombstoningId = "";
-  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  let pollGeneration = 0;
+  let mutationGeneration = 0;
+  let refreshController: AbortController | null = null;
   let destroyed = false;
 
   $: canWrite =
@@ -41,12 +46,25 @@
 
   function mergeMessages(incoming: ConversationMessage[]) {
     const merged = new Map(messages.map((message) => [message.id, message]));
-    for (const message of incoming) merged.set(message.id, message);
+    for (const message of incoming) {
+      const current = merged.get(message.id);
+      if (
+        !current ||
+        compareApiTimestamps(message.updated_at, current.updated_at) >= 0
+      ) {
+        merged.set(message.id, message);
+      }
+    }
     messages = Array.from(merged.values()).sort(
       (left, right) =>
-        left.created_at.localeCompare(right.created_at) ||
+        compareApiTimestamps(left.created_at, right.created_at) ||
         left.id.localeCompare(right.id),
     );
+  }
+
+  function mergeMutationMessages(incoming: ConversationMessage[]) {
+    mutationGeneration += 1;
+    mergeMessages(incoming);
   }
 
   function messageForError(error: unknown): string {
@@ -66,36 +84,82 @@
       if (error.code === "message_rate_limited") {
         return "Zu viele neue Beiträge in kurzer Zeit. Bitte versuche es in einer Minute erneut.";
       }
+      if (error.code === "idempotency_key_conflict") {
+        return "Dieser Sendeversuch gehört zu einem anderen Entwurf. Bitte sende den aktuellen Text erneut.";
+      }
     }
     return "Das Gespräch konnte nicht gespeichert werden. Dein Entwurf bleibt erhalten.";
   }
 
-  async function refresh() {
+  async function refresh(generation: number) {
+    refreshController?.abort();
+    const controller = new AbortController();
+    refreshController = controller;
+    const requestedNodeId = nodeId;
+    const startedMutationGeneration = mutationGeneration;
     try {
       const currentConversation =
-        conversation ?? (await getNodeConversation(nodeId));
-      if (destroyed) return;
+        conversation ??
+        (await getNodeConversation(requestedNodeId, controller.signal));
+      if (
+        destroyed ||
+        controller.signal.aborted ||
+        generation !== pollGeneration ||
+        nodeId !== requestedNodeId
+      )
+        return;
       conversation = currentConversation;
-      const page = await listConversationMessages(currentConversation.id);
-      if (destroyed) return;
+      const page = await listConversationMessages(
+        currentConversation.id,
+        null,
+        controller.signal,
+      );
+      if (
+        destroyed ||
+        controller.signal.aborted ||
+        generation !== pollGeneration ||
+        nodeId !== requestedNodeId ||
+        mutationGeneration !== startedMutationGeneration
+      )
+        return;
       mergeMessages(page.items);
       if (!loadedOlder) olderCursor = page.page.next_cursor;
       loadError = "";
     } catch (error) {
-      if (!destroyed) {
+      if (
+        !destroyed &&
+        !controller.signal.aborted &&
+        refreshController === controller &&
+        generation === pollGeneration &&
+        nodeId === requestedNodeId &&
+        (error as { name?: string } | null)?.name !== "AbortError"
+      ) {
         loadError = "Das Gespräch kann gerade nicht geladen werden.";
         console.error(error);
       }
     } finally {
-      if (!destroyed) loading = false;
+      const isCurrent =
+        refreshController === controller &&
+        generation === pollGeneration &&
+        nodeId === requestedNodeId;
+      if (refreshController === controller) refreshController = null;
+      if (!destroyed && isCurrent) loading = false;
     }
   }
 
   async function loadOlder() {
     if (!conversation || !olderCursor || loadingOlder) return;
+    const requestedConversationId = conversation.id;
+    const startedMutationGeneration = mutationGeneration;
     loadingOlder = true;
     try {
       const page = await listConversationMessages(conversation.id, olderCursor);
+      if (
+        destroyed ||
+        conversation?.id !== requestedConversationId ||
+        mutationGeneration !== startedMutationGeneration
+      )
+        return;
       mergeMessages(page.items);
       olderCursor = page.page.next_cursor;
       loadedOlder = true;
@@ -110,18 +174,23 @@
 
   async function submitMessage() {
     if (!conversation || !draft.trim() || posting) return;
+    const submittedDraft = draft.trim();
     posting = true;
     mutationError = "";
-    if (!draftOperationId) draftOperationId = crypto.randomUUID();
+    if (!draftOperationId || submittedDraft !== lastSubmittedDraft) {
+      draftOperationId = crypto.randomUUID();
+      lastSubmittedDraft = submittedDraft;
+    }
     try {
       const created = await createConversationMessage(
         conversation.id,
-        draft.trim(),
+        submittedDraft,
         draftOperationId,
       );
-      mergeMessages([created]);
+      mergeMutationMessages([created]);
       draft = "";
       draftOperationId = "";
+      lastSubmittedDraft = "";
     } catch (error) {
       mutationError = messageForError(error);
     } finally {
@@ -146,12 +215,12 @@
         editDraft.trim(),
         message.updated_at,
       );
-      mergeMessages([updated]);
+      mergeMutationMessages([updated]);
       editingId = "";
       editDraft = "";
     } catch (error) {
       if (error instanceof NodeConversationApiError && error.current) {
-        mergeMessages([error.current]);
+        mergeMutationMessages([error.current]);
       }
       mutationError = messageForError(error);
     } finally {
@@ -161,7 +230,7 @@
 
   async function tombstone(message: ConversationMessage) {
     if (!conversation || tombstoningId) return;
-    if (!window.confirm("Eigenen Beitrag wirklich entfernen?")) return;
+    if (!window.confirm("Beitrag wirklich entfernen?")) return;
     tombstoningId = message.id;
     mutationError = "";
     try {
@@ -170,14 +239,14 @@
         message.id,
         message.updated_at,
       );
-      mergeMessages([removed]);
+      mergeMutationMessages([removed]);
       if (editingId === message.id) {
         editingId = "";
         editDraft = "";
       }
     } catch (error) {
       if (error instanceof NodeConversationApiError && error.current) {
-        mergeMessages([error.current]);
+        mergeMutationMessages([error.current]);
       }
       mutationError = messageForError(error);
     } finally {
@@ -186,15 +255,29 @@
   }
 
   function stopPolling() {
-    if (pollTimer) clearInterval(pollTimer);
+    pollGeneration += 1;
+    if (pollTimer) clearTimeout(pollTimer);
     pollTimer = null;
+    refreshController?.abort();
+    refreshController = null;
+  }
+
+  async function poll(generation: number) {
+    await refresh(generation);
+    if (
+      destroyed ||
+      generation !== pollGeneration ||
+      document.visibilityState !== "visible"
+    )
+      return;
+    pollTimer = setTimeout(() => void poll(generation), POLL_INTERVAL_MS);
   }
 
   function syncPolling() {
     stopPolling();
     if (document.visibilityState !== "visible") return;
-    void refresh();
-    pollTimer = setInterval(() => void refresh(), POLL_INTERVAL_MS);
+    const generation = pollGeneration;
+    void poll(generation);
   }
 
   onMount(() => {
@@ -225,7 +308,13 @@
         disabled={loadingOlder}
         >{loadingOlder ? "Lädt…" : "Ältere Beiträge laden"}</button
       >{/if}
-    <ol class="messages" aria-label="Gesprächsbeiträge">
+    <ol
+      class="messages"
+      role="log"
+      aria-live="polite"
+      aria-relevant="additions text"
+      aria-label="Gesprächsbeiträge"
+    >
       {#each messages as message (message.id)}<li
           class:deleted={message.deleted_at !== null}
         >

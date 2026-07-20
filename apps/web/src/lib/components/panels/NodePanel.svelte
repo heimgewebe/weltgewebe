@@ -428,7 +428,11 @@
           role="tabpanel"
           aria-labelledby="tab-gespraech"
         >
-          <NodeConversation nodeId={nodeDetails?.id || $selection?.id || ""} />
+          {#key nodeDetails?.id || $selection?.id || ""}
+            <NodeConversation
+              nodeId={nodeDetails?.id || $selection?.id || ""}
+            />
+          {/key}
         </div>
       {:else}
         <div id="panel-verlauf" role="tabpanel" aria-labelledby="tab-verlauf">

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  compareApiTimestamps,
   createConversationMessage,
   listConversationMessages,
   tombstoneConversationMessage,
@@ -9,6 +10,24 @@ import {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("node conversation API", () => {
+  it("orders UTC timestamps exactly across optional fractional precision", () => {
+    expect(
+      compareApiTimestamps("2026-07-19T12:00:00.1Z", "2026-07-19T12:00:00Z"),
+    ).toBeGreaterThan(0);
+    expect(
+      compareApiTimestamps(
+        "2026-07-19T12:00:00.123457Z",
+        "2026-07-19T12:00:00.123456Z",
+      ),
+    ).toBeGreaterThan(0);
+    expect(
+      compareApiTimestamps(
+        "2026-07-19T12:00:00.100000Z",
+        "2026-07-19T12:00:00.1Z",
+      ),
+    ).toBe(0);
+  });
+
   it("uses bounded cursor pagination", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
