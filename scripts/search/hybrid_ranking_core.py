@@ -17,12 +17,13 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, Sequence
 
 NORMALIZATION_REVISION = "weltgewebe-search-normalization-v1"
-RANKING_REVISION = "weltgewebe-hybrid-ranking-v1"
+RANKING_REVISION = "weltgewebe-hybrid-ranking-v2"
 MAX_DIMENSIONS = 8192
 MAX_CANDIDATES = 1000
 MAX_TEXT_CHARACTERS = 65536
 SEMANTIC_MINIMUM_COSINE = 0.55
 SEMANTIC_MINIMUM_MARGIN = 0.015
+SEMANTIC_APPEND_LIMIT = 1
 
 RANK_EXACT_TITLE = 0
 RANK_EXACT_TAG = 1
@@ -645,6 +646,9 @@ def rank_hybrid(
         score = cosine_similarity(query_values, checked_vectors[document.node_id])
         semantic.append((score, document.node_id))
 
+    # Semantic ties are resolved explicitly by ascending node id. The confidence
+    # gate proves only the best candidate, so fail closed and append that one
+    # candidate rather than inflating the result set with unproven neighbours.
     semantic.sort(key=lambda item: (-item[0], item[1]))
     semantic_ids: list[str] = []
     if semantic:
@@ -655,11 +659,7 @@ def rank_hybrid(
             and top_score - runner_up >= semantic_minimum_margin
         )
         if confident:
-            semantic_ids = [
-                node_id
-                for score, node_id in semantic
-                if score >= semantic_minimum_cosine
-            ]
+            semantic_ids = [node_id for _, node_id in semantic[:SEMANTIC_APPEND_LIMIT]]
 
     ranked = list(lexical_ids)
     ranked.extend(node_id for node_id in semantic_ids if node_id not in ranked)
@@ -752,5 +752,6 @@ DOES_NOT_ESTABLISH = (
     "production deployment",
     "real-user relevance",
     "public live proof",
+    "hybrid ranking in production",
     "SemantAH archive authority",
 )
