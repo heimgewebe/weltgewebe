@@ -220,10 +220,10 @@ test.describe("Tool Fan Layout — guest role", () => {
     expect((await weave.boundingBox())!.width).toBeLessThan(120);
 
     await weave.click();
-    await expect(page.getByTestId("tool-fan-create-node")).toBeDisabled();
+    await expect(page.getByTestId("tool-fan-create-node")).toBeEnabled();
     const proposal = page.getByTestId("tool-fan-create-proposal");
     await expect(proposal).toBeEnabled();
     await expect(proposal).toHaveAttribute("href", "/antraege#antrag-stellen");
-    await expect(proposal).toBeFocused();
+    await expect(page.getByTestId("tool-fan-create-node")).toBeFocused();
   });
 });
