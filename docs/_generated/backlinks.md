@@ -259,7 +259,9 @@ Generated automatically. Do not edit.
 ## docs/adr/ADR-0011__foederierte-gewebezellen.md
 
 - [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
+- [relates_to] docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
 - [relates_to] docs/specs/federation-core.md
+- [relates_to] docs/specs/federation-wire-v1.md
 
 ## docs/adr/ADR-0011__ha-referenzzelle-und-wiederherstellung.md
 
@@ -986,6 +988,12 @@ Generated automatically. Do not edit.
 ## docs/specs/federation-core.md
 
 - [relates_to] docs/architecture/weltgewebe-os-convergence-adapter.md
+- [verifies] docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
+- [relates_to] docs/specs/federation-wire-v1.md
+
+## docs/specs/federation-wire-v1.md
+
+- [verifies] docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
 
 ## docs/specs/garnrolle-knoten-faden.md
 

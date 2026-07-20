@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 632 |
+| Relationen gesamt | 637 |
 | — depends_on | 25 |
-| — relates_to | 592 |
+| — relates_to | 595 |
 | — supersedes | 12 |
-| — verifies | 3 |
-| relates_to Anteil | 94% |
+| — verifies | 5 |
+| relates_to Anteil | 93% |
 
 ### Mögliche supersedes-Lücken
 
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (249 Dokumente):
+**Cluster 1** (251 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -150,6 +150,7 @@ _Keine Lücken erkannt._
 - `docs/proofs/basemap-hamburg-artifact-proof.md`
 - `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
 - `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`
+- `docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md`
 - `docs/quickstart-gate-c.md`
 - `docs/reference/agent-dry-run-runner.md`
 - `docs/reference/agent-handoff-contract.md`
@@ -225,6 +226,7 @@ _Keine Lücken erkannt._
 - `docs/specs/auth-ui.md`
 - `docs/specs/contract.md`
 - `docs/specs/federation-core.md`
+- `docs/specs/federation-wire-v1.md`
 - `docs/specs/garnrolle-knoten-faden.md`
 - `docs/specs/governance-antraege.md`
 - `docs/specs/list-pagination-api.md`
