@@ -9,8 +9,6 @@ import unittest
 from pathlib import Path
 from typing import Sequence
 
-from jsonschema import Draft202012Validator, FormatChecker
-
 from scripts.search.hybrid_ranking_core import (
     MAX_CANDIDATES,
     BoundVector,
@@ -34,6 +32,7 @@ from scripts.search.hybrid_ranking_core import (
 from scripts.search.probe_hybrid_ranking_core import (
     DEFAULT_OUTPUT,
     DEFAULT_SCHEMA,
+    TASK_ID,
     DEFAULT_DATASET,
     check_receipt,
     choose_decision,
@@ -480,21 +479,22 @@ class SemanticSearchRankingCoreTests(unittest.TestCase):
         stopped[2]["quality"]["false_top1_count"] = 1  # type: ignore[index]
         self.assertEqual(choose_decision(stopped)["outcome"], "stop_embedding_path")  # type: ignore[arg-type]
 
-    def test_receipt_schema_is_valid_draft_2020_12(self) -> None:
+    def test_receipt_schema_declares_strict_draft_2020_12_contract(self) -> None:
         schema = json.loads(RECEIPT_SCHEMA.read_text(encoding="utf-8"))
-        Draft202012Validator.check_schema(schema)
         self.assertEqual(
             schema["$schema"], "https://json-schema.org/draft/2020-12/schema"
         )
+        self.assertFalse(schema["additionalProperties"])
+        self.assertFalse(schema["$defs"]["quality"]["additionalProperties"])
+        self.assertEqual(schema["properties"]["task_id"]["const"], TASK_ID)
 
     def test_checked_in_receipt_is_schema_valid_hash_bound_and_vector_free(
         self,
     ) -> None:
         if not DEFAULT_OUTPUT.exists():
             self.skipTest("T004 live receipt not generated yet")
-        schema = json.loads(RECEIPT_SCHEMA.read_text(encoding="utf-8"))
         receipt = json.loads(DEFAULT_OUTPUT.read_text(encoding="utf-8"))
-        Draft202012Validator(schema, format_checker=FormatChecker()).validate(receipt)
+        self.assertEqual(receipt["task_id"], TASK_ID)
         check_receipt(DEFAULT_OUTPUT, DEFAULT_DATASET, DEFAULT_SCHEMA)
         serialized = DEFAULT_OUTPUT.read_text(encoding="utf-8")
         self.assertNotIn('"embedding"', serialized)

@@ -2,9 +2,9 @@
   "schema_version": 1,
   "kind": "weltgewebe_semantic_search_hybrid_ranking_core",
   "task_id": "WELTGEWEBE-SEMANTIC-SEARCH-V1-T004",
-  "measured_at": "2026-07-20T01:33:14.376446Z",
+  "measured_at": "2026-07-20T01:56:57.179195Z",
   "source": {
-    "repository_head_at_measurement": "76c26e9b670a0b5b9b663cd91556ab7851fd42e2",
+    "repository_head_at_measurement": "8d55700fc7cb581a4bd36ad1cf90e874d9c2a4f7",
     "measurement_source_mode": "repository_base_plus_hash_bound_worktree_sources",
     "worktree_dirty_at_measurement": true,
     "source_files": {
@@ -16,9 +16,9 @@
       "contracts/search/hybrid-ranking-core-receipt.schema.json": "6b445f845aa47f3fcd22d403447a6c92d92b9e27622bd9720d79b9ac106d79a4",
       "scripts/search/hybrid_ranking_core.py": "0efd3ce7270eceeb7788c9fdb8e1442e104b0e0a55be18f1d19b6c77230084b4",
       "scripts/search/probe_hybrid_ranking_core.py": "f12377b9c79eb8dc4adedc2934fadd57eeb05589519149cd2fd588efc130f31a",
-      "scripts/ci/tests/test_semantic_search_ranking_core.py": "016bb830ff7cdbb5cdbb1e788788f90cd883d47acfe173a18e398a180561aca1"
+      "scripts/ci/tests/test_semantic_search_ranking_core.py": "5b477c5979078c298eea0a200f8a8d09119fea0fc7c31089884532abbbfa8398"
     },
-    "source_manifest_sha256": "5270087f4edc47454776ee3ee9c0b9a857db6fb2978bba83f2008e9335ecb4ef"
+    "source_manifest_sha256": "5427d1872ff600813298b3182a4515c1d5e891a9fb3427b720919b85798943ec"
   },
   "dataset": {
     "path": "contracts/search/examples/relevance-goldset.example.json",
@@ -828,12 +828,12 @@
         ]
       },
       "performance": {
-        "document_embedding_total_ms": 1389.381,
-        "query_embedding_total_ms": 204.141,
+        "document_embedding_total_ms": 1312.718,
+        "query_embedding_total_ms": 203.094,
         "ranking": {
-          "median_ms": 5.853,
-          "p95_ms": 6.078,
-          "maximum_ms": 6.6
+          "median_ms": 5.79,
+          "p95_ms": 5.957,
+          "maximum_ms": 6.388
         },
         "document_count": 19,
         "query_count": 24
@@ -1250,12 +1250,12 @@
         ]
       },
       "performance": {
-        "document_embedding_total_ms": 1687.593,
-        "query_embedding_total_ms": 353.978,
+        "document_embedding_total_ms": 1404.642,
+        "query_embedding_total_ms": 355.298,
         "ranking": {
-          "median_ms": 15.723,
-          "p95_ms": 16.228,
-          "maximum_ms": 16.521
+          "median_ms": 14.211,
+          "p95_ms": 14.467,
+          "maximum_ms": 14.82
         },
         "document_count": 19,
         "query_count": 24
@@ -1684,12 +1684,12 @@
         ]
       },
       "performance": {
-        "document_embedding_total_ms": 2829.483,
-        "query_embedding_total_ms": 476.317,
+        "document_embedding_total_ms": 1791.058,
+        "query_embedding_total_ms": 470.477,
         "ranking": {
-          "median_ms": 20.078,
-          "p95_ms": 20.678,
-          "maximum_ms": 20.814
+          "median_ms": 18.884,
+          "p95_ms": 19.259,
+          "maximum_ms": 19.31
         },
         "document_count": 19,
         "query_count": 24
