@@ -350,11 +350,11 @@
               </div>
             </form>
           {:else}<p class="content">{message.content}</p>
-            {#if message.author_account_id === $authStore.account_id || $authStore.role === "admin"}<div
+            {#if (message.author_account_id !== null && message.author_account_id === $authStore.account_id) || $authStore.role === "admin"}<div
                 class="message-actions"
                 aria-label={`Beitrag von ${message.author_title}`}
               >
-                {#if message.author_account_id === $authStore.account_id}<button
+                {#if message.author_account_id !== null && message.author_account_id === $authStore.account_id}<button
                     type="button"
                     class="link"
                     on:click={() => beginEdit(message)}>Bearbeiten</button

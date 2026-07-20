@@ -167,6 +167,33 @@ test("Gast liest den leeren Knotengesprächsraum ohne Schreibaktionen", async ({
   await expect(panel.getByLabel("Neuer Beitrag")).toHaveCount(0);
 });
 
+test("Eine gelöschte Autorzuordnung verleiht Anonymen keine Eigentümeraktionen", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: false, role: "gast" },
+  });
+  await installConversationApi(page, [
+    {
+      id: "d4a7d0c2-9d5a-4f7c-b13a-3d0e7a6c7d4b",
+      conversation_id: CONVERSATION_ID,
+      author_account_id: null,
+      author_title: "Ehemalige Garnrolle",
+      content: "Historischer Beitrag",
+      created_at: "2026-07-19T10:00:00Z",
+      updated_at: "2026-07-19T10:00:00Z",
+      deleted_at: null,
+    },
+  ]);
+
+  const panel = await openFirstNodeConversation(page);
+  await expect(panel.getByText("Historischer Beitrag")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Bearbeiten" })).toHaveCount(
+    0,
+  );
+  await expect(panel.getByRole("button", { name: "Entfernen" })).toHaveCount(0);
+});
+
 test("Weber behält Entwürfe, bearbeitet eigene Beiträge und tombstoned sie", async ({
   page,
 }) => {
