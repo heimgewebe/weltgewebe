@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://weltgewebe.org/contracts/search/hybrid-ranking-core-receipt.schema.json",
-  "title": "Weltgewebe Semantic Search T004 Hybrid Ranking Core Receipt",
+  "title": "Weltgewebe Semantic Search T004 Hybrid Ranking Core Receipt v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -20,7 +20,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 1
+      "const": 2
     },
     "kind": {
       "const": "weltgewebe_semantic_search_hybrid_ranking_core"
@@ -195,7 +195,10 @@
         "semantic_minimum_margin",
         "max_dimensions",
         "max_candidates",
-        "hard_precedence",
+        "lexical_ranking_source",
+        "fusion_order",
+        "semantic_tie_breaker",
+        "semantic_append_limit",
         "fallback_condition",
         "raw_vectors_persisted"
       ],
@@ -204,7 +207,7 @@
           "const": "weltgewebe-search-normalization-v1"
         },
         "ranking_revision": {
-          "const": "weltgewebe-hybrid-ranking-v1"
+          "const": "weltgewebe-hybrid-ranking-v2"
         },
         "semantic_minimum_cosine": {
           "type": "number",
@@ -226,22 +229,26 @@
           "minimum": 1,
           "maximum": 1000
         },
-        "hard_precedence": {
-          "const": [
-            "exact_title",
-            "exact_tag",
-            "title_prefix",
-            "typo",
-            "full_text",
-            "semantic",
-            "node_id"
-          ]
-        },
         "fallback_condition": {
           "const": "ProviderUnavailableError only"
         },
         "raw_vectors_persisted": {
           "const": false
+        },
+        "lexical_ranking_source": {
+          "const": "t003_postgresql_precomputed_authorized"
+        },
+        "fusion_order": {
+          "const": [
+            "lexical_input_order",
+            "single_confident_semantic_match"
+          ]
+        },
+        "semantic_tie_breaker": {
+          "const": "node_id_ascending"
+        },
+        "semantic_append_limit": {
+          "const": 1
         }
       }
     },
@@ -249,40 +256,24 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "t003_postgresql",
-        "t004_lexical_core"
+        "t003_postgresql"
       ],
       "properties": {
         "t003_postgresql": {
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "natural_top3_relevant_count",
-            "natural_case_count",
-            "false_top1_count",
-            "visibility_leak_count",
-            "receipt_sha256"
+            "receipt_sha256",
+            "quality"
           ],
           "properties": {
-            "natural_top3_relevant_count": {
-              "const": 14
-            },
-            "natural_case_count": {
-              "const": 19
-            },
-            "false_top1_count": {
-              "const": 0
-            },
-            "visibility_leak_count": {
-              "const": 0
-            },
             "receipt_sha256": {
               "$ref": "#/$defs/sha256"
+            },
+            "quality": {
+              "$ref": "#/$defs/quality"
             }
           }
-        },
-        "t004_lexical_core": {
-          "$ref": "#/$defs/quality"
         }
       }
     },
@@ -415,7 +406,7 @@
     },
     "does_not_establish": {
       "type": "array",
-      "minItems": 10,
+      "minItems": 12,
       "uniqueItems": true,
       "items": {
         "type": "string",
@@ -537,7 +528,7 @@
           "const": "weltgewebe-search-normalization-v1"
         },
         "ranking_revision": {
-          "const": "weltgewebe-hybrid-ranking-v1"
+          "const": "weltgewebe-hybrid-ranking-v2"
         }
       }
     },

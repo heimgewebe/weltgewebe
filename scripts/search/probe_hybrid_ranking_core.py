@@ -30,6 +30,7 @@ from scripts.search.hybrid_ranking_core import (
     RANKING_REVISION,
     SEMANTIC_MINIMUM_COSINE,
     SEMANTIC_MINIMUM_MARGIN,
+    SEMANTIC_APPEND_LIMIT,
     GenerationIdentity,
     LocalEmbeddingProvider,
     ModelIdentity,
@@ -177,6 +178,23 @@ def t003_postgres_rankings(dataset: dict[str, Any]) -> dict[str, list[str]]:
     return {item["case_id"]: list(item["ranked_node_ids"]) for item in quality["cases"]}
 
 
+def t003_postgres_baseline(
+    dataset: dict[str, Any], postgres_rankings: dict[str, list[str]]
+) -> dict[str, Any]:
+    quality = quality_report(dataset, postgres_rankings)
+    if (
+        quality["natural_top3_relevant_count"] != T003_NATURAL_TOP3
+        or quality["natural_case_count"] != 19
+        or quality["false_top1_count"] != T003_FALSE_TOP1
+        or quality["visibility_leak_count"] != T003_VISIBILITY_LEAKS
+    ):
+        raise ValidationError("T003 PostgreSQL baseline aggregates are inconsistent")
+    return {
+        "receipt_sha256": sha256_path(T003_RECEIPT),
+        "quality": quality,
+    }
+
+
 def measure_model(
     dataset: dict[str, Any],
     documents: list[SearchDocument],
@@ -318,7 +336,7 @@ def build_receipt(
         for item in reference_models()
     ]
     receipt = {
-        "schema_version": 1,
+        "schema_version": 2,
         "kind": KIND,
         "task_id": TASK_ID,
         "measured_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -351,27 +369,18 @@ def build_receipt(
             "semantic_minimum_margin": SEMANTIC_MINIMUM_MARGIN,
             "max_dimensions": MAX_DIMENSIONS,
             "max_candidates": MAX_CANDIDATES,
-            "hard_precedence": [
-                "exact_title",
-                "exact_tag",
-                "title_prefix",
-                "typo",
-                "full_text",
-                "semantic",
-                "node_id",
+            "lexical_ranking_source": "t003_postgresql_precomputed_authorized",
+            "fusion_order": [
+                "lexical_input_order",
+                "single_confident_semantic_match",
             ],
+            "semantic_tie_breaker": "node_id_ascending",
+            "semantic_append_limit": SEMANTIC_APPEND_LIMIT,
             "fallback_condition": "ProviderUnavailableError only",
             "raw_vectors_persisted": False,
         },
         "baseline": {
-            "t003_postgresql": {
-                "natural_top3_relevant_count": T003_NATURAL_TOP3,
-                "natural_case_count": 19,
-                "false_top1_count": T003_FALSE_TOP1,
-                "visibility_leak_count": T003_VISIBILITY_LEAKS,
-                "receipt_sha256": sha256_path(T003_RECEIPT),
-            },
-            "t004_lexical_core": quality_report(dataset, postgres_rankings),
+            "t003_postgresql": t003_postgres_baseline(dataset, postgres_rankings),
         },
         "models": models,
         "decision": choose_decision(models),
@@ -385,7 +394,7 @@ def build_receipt(
 def check_receipt(receipt_path: Path, dataset_path: Path, schema_path: Path) -> None:
     receipt = load_json_object(receipt_path)
     if (
-        receipt.get("schema_version") != 1
+        receipt.get("schema_version") != 2
         or receipt.get("kind") != KIND
         or receipt.get("task_id") != TASK_ID
     ):
@@ -431,15 +440,13 @@ def check_receipt(receipt_path: Path, dataset_path: Path, schema_path: Path) -> 
         "semantic_minimum_margin": SEMANTIC_MINIMUM_MARGIN,
         "max_dimensions": MAX_DIMENSIONS,
         "max_candidates": MAX_CANDIDATES,
-        "hard_precedence": [
-            "exact_title",
-            "exact_tag",
-            "title_prefix",
-            "typo",
-            "full_text",
-            "semantic",
-            "node_id",
+        "lexical_ranking_source": "t003_postgresql_precomputed_authorized",
+        "fusion_order": [
+            "lexical_input_order",
+            "single_confident_semantic_match",
         ],
+        "semantic_tie_breaker": "node_id_ascending",
+        "semantic_append_limit": SEMANTIC_APPEND_LIMIT,
         "fallback_condition": "ProviderUnavailableError only",
         "raw_vectors_persisted": False,
     }
@@ -447,14 +454,7 @@ def check_receipt(receipt_path: Path, dataset_path: Path, schema_path: Path) -> 
         raise ValidationError("T004 ranking contract is stale")
     postgres_rankings = t003_postgres_rankings(dataset)
     expected_baseline = {
-        "t003_postgresql": {
-            "natural_top3_relevant_count": T003_NATURAL_TOP3,
-            "natural_case_count": 19,
-            "false_top1_count": T003_FALSE_TOP1,
-            "visibility_leak_count": T003_VISIBILITY_LEAKS,
-            "receipt_sha256": sha256_path(T003_RECEIPT),
-        },
-        "t004_lexical_core": quality_report(dataset, postgres_rankings),
+        "t003_postgresql": t003_postgres_baseline(dataset, postgres_rankings),
     }
     if receipt.get("baseline") != expected_baseline:
         raise ValidationError("T004 PostgreSQL baseline is stale")
