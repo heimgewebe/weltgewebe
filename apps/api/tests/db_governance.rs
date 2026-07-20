@@ -636,3 +636,89 @@ async fn finalization_locks_account_before_proposal() {
 
     cleanup(&pool).await;
 }
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn guest_exit_removes_untyped_legacy_account_edges_when_unambiguous() {
+    const ACCOUNT: &str = "gov-proof-legacy-untyped-edge";
+    const EDGE: &str = "gov-proof-legacy-untyped-edge-id";
+
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, ACCOUNT, "gast").await;
+    sqlx::query(
+        "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ($1, $2, 'legacy-target', 'reference', NOW(), '{}'::jsonb)",
+    )
+    .bind(EDGE)
+    .bind(ACCOUNT)
+    .execute(&pool)
+    .await
+    .expect("seed untyped legacy edge");
+
+    delete_guest_account(&pool, ACCOUNT)
+        .await
+        .expect("unambiguous legacy account edge must be removable");
+    let edge_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = $1)")
+            .bind(EDGE)
+            .fetch_one(&pool)
+            .await
+            .expect("check legacy edge");
+    assert!(!edge_exists);
+
+    cleanup(&pool).await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn guest_exit_fails_closed_for_ambiguous_untyped_legacy_endpoint() {
+    const ACCOUNT: &str = "gov-proof-legacy-ambiguous";
+    const EDGE: &str = "gov-proof-legacy-ambiguous-edge";
+
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, ACCOUNT, "gast").await;
+    seed_guest_node(&pool, "different-creator", ACCOUNT).await;
+    sqlx::query(
+        "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ($1, $2, 'legacy-target', 'reference', NOW(), '{}'::jsonb)",
+    )
+    .bind(EDGE)
+    .bind(ACCOUNT)
+    .execute(&pool)
+    .await
+    .expect("seed ambiguous untyped edge");
+
+    let error = delete_guest_account(&pool, ACCOUNT)
+        .await
+        .expect_err("ambiguous endpoint must fail closed");
+    assert!(error
+        .to_string()
+        .contains("cannot classify an untyped legacy edge endpoint"));
+
+    let account_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_accounts WHERE id = $1)")
+            .bind(ACCOUNT)
+            .fetch_one(&pool)
+            .await
+            .expect("check rollback account");
+    let edge_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = $1)")
+            .bind(EDGE)
+            .fetch_one(&pool)
+            .await
+            .expect("check rollback edge");
+    assert!(
+        account_exists,
+        "failed exit must roll back account deletion"
+    );
+    assert!(
+        edge_exists,
+        "failed exit must leave ambiguous edge untouched"
+    );
+
+    cleanup(&pool).await;
+}

@@ -977,7 +977,7 @@ async fn nodes_post_creates_persists_and_reloads() -> anyhow::Result<()> {
     )
     .await;
 
-    let body = r#"{"title":"New Node","kind":"Werkstatt","address":"Musterstraße 1, 12345 Musterstadt","location":{"lat":53.55,"lon":9.99},"summary":"Short summary","tags":["a","b"]}"#;
+    let body = r#"{"title":"New Node","kind":"Werkstatt","address":"Musterstraße 1, 12345 Musterstadt","location":{"lat":53.55,"lon":9.99},"summary":"Short summary","tags":["a","b"],"operation_id":"10000000-0000-0000-0000-000000000010"}"#;
     let res = app
         .clone()
         .oneshot(post_node_req(Some(&cookie), body))
@@ -1156,7 +1156,7 @@ async fn nodes_post_allows_gast_and_binds_creator() -> anyhow::Result<()> {
 
     let (app, cookie, state, _env) = app_with_account(&in_dir, gast_account(guest_id)).await;
 
-    let body = r#"{"title":"Gastknoten","kind":"Werkstatt","address":"Somewhere","location":{"lat":53.55,"lon":9.99}}"#;
+    let body = r#"{"title":"Gastknoten","kind":"Werkstatt","address":"Somewhere","location":{"lat":53.55,"lon":9.99},"operation_id":"10000000-0000-0000-0000-000000000011"}"#;
     let res = app.oneshot(post_node_req(Some(&cookie), body)).await?;
     assert_eq!(res.status(), StatusCode::CREATED);
     let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
