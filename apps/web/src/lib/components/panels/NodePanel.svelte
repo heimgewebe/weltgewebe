@@ -13,6 +13,7 @@
   } from "$lib/panels/panelDetails";
   import { formatDate } from "$lib/utils/formatDate";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
+  import NodeConversation from "./NodeConversation.svelte";
 
   type DomainChanged = {
     kind: "node";
@@ -25,9 +26,9 @@
     domainChanged: DomainChanged;
   }>();
 
-  type NodeTab = "uebersicht" | "verlauf" | "bearbeiten";
+  type NodeTab = "uebersicht" | "gespraech" | "verlauf" | "bearbeiten";
   let activeTab: NodeTab = "uebersicht";
-  let tabs: NodeTab[] = ["uebersicht", "verlauf"];
+  let tabs: NodeTab[] = ["uebersicht", "gespraech", "verlauf"];
   let overviewTab: HTMLButtonElement | null = null;
   let editTab: HTMLButtonElement | null = null;
   let titleInput: HTMLInputElement | null = null;
@@ -90,8 +91,8 @@
     ($authStore.role === "weber" || $authStore.role === "admin");
 
   $: tabs = canMutate
-    ? ["uebersicht", "verlauf", "bearbeiten"]
-    : ["uebersicht", "verlauf"];
+    ? ["uebersicht", "gespraech", "verlauf", "bearbeiten"]
+    : ["uebersicht", "gespraech", "verlauf"];
   $: if (!canMutate) {
     const shouldRestoreFocus = activeTab === "bearbeiten" || editing;
     if (activeTab === "bearbeiten") activeTab = "uebersicht";
@@ -385,6 +386,16 @@
         tabindex={activeTab === "uebersicht" ? 0 : -1}>Übersicht</button
       >
       <button
+        class:active={activeTab === "gespraech"}
+        on:click={() => setTab("gespraech")}
+        on:keydown={handleKeydown}
+        role="tab"
+        aria-selected={activeTab === "gespraech"}
+        aria-controls="panel-gespraech"
+        id="tab-gespraech"
+        tabindex={activeTab === "gespraech" ? 0 : -1}>Gespräch</button
+      >
+      <button
         class:active={activeTab === "verlauf"}
         on:click={() => setTab("verlauf")}
         on:keydown={handleKeydown}
@@ -459,6 +470,18 @@
               </div>
             {/if}
           {/if}
+        </div>
+      {:else if activeTab === "gespraech"}
+        <div
+          id="panel-gespraech"
+          role="tabpanel"
+          aria-labelledby="tab-gespraech"
+        >
+          {#key nodeDetails?.id || $selection?.id || ""}
+            <NodeConversation
+              nodeId={nodeDetails?.id || $selection?.id || ""}
+            />
+          {/key}
         </div>
       {:else if activeTab === "verlauf"}
         <div

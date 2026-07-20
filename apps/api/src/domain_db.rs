@@ -570,6 +570,8 @@ pub enum NodeWriteError {
     NotFound,
     #[error("invalid edge reference blocks node deletion: {0}")]
     InvalidEdgeReference(String),
+    #[error("node deletion is blocked because its public conversation has messages")]
+    ConversationNotEmpty,
     #[error("failed to map node row: {0}")]
     Mapping(#[source] anyhow::Error),
     #[error("failed to serialize node payload: {0}")]
@@ -814,6 +816,27 @@ pub async fn delete_node_with_edges_in_postgres(
     if node_id.is_none() {
         tx.rollback().await.ok();
         return Err(NodeWriteError::NotFound);
+    }
+
+    let conversation_id: Option<String> = sqlx::query_scalar(
+        "SELECT id::text FROM domain_conversations WHERE node_id = $1 FOR UPDATE",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(NodeWriteError::Database)?;
+    if let Some(conversation_id) = conversation_id {
+        let conversation_has_messages: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM domain_messages WHERE conversation_id = $1::uuid)",
+        )
+        .bind(conversation_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(NodeWriteError::Database)?;
+        if conversation_has_messages {
+            tx.rollback().await.ok();
+            return Err(NodeWriteError::ConversationNotEmpty);
+        }
     }
 
     let account_collision_exists: bool =

@@ -287,7 +287,22 @@ test.describe("Map Interaction & Context Panel", () => {
       "0",
     );
 
-    // Press ArrowRight -> Should move to "Verlauf"
+    // Press ArrowRight -> Should move through the three productive tabs in order.
+    await page.keyboard.press("ArrowRight");
+    const gespraechTab = panel.locator('button[role="tab"]', {
+      hasText: "Gespräch",
+    });
+    await expect(gespraechTab).toBeFocused();
+    await expect(gespraechTab).toHaveAttribute("aria-selected", "true");
+    await expect(panel.locator("#panel-gespraech")).toBeVisible();
+
+    // ArrowLeft from the middle tab proves reverse adjacent navigation.
+    await page.keyboard.press("ArrowLeft");
+    await expect(uebersichtTab).toBeFocused();
+    await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
+
+    await page.keyboard.press("ArrowRight");
+    await expect(gespraechTab).toBeFocused();
     await page.keyboard.press("ArrowRight");
     const verlaufTab = panel.locator('button[role="tab"]', {
       hasText: "Verlauf",
@@ -303,9 +318,10 @@ test.describe("Map Interaction & Context Panel", () => {
       "0",
     );
 
-    // Press End -> Should move to the final "Bearbeiten" tab.
-    await page.keyboard.press("End");
     const bearbeitenTab = panel.getByRole("tab", { name: "Bearbeiten" });
+
+    // ArrowRight reaches the new final edit tab.
+    await page.keyboard.press("ArrowRight");
     await expect(bearbeitenTab).toBeFocused();
     await expect(bearbeitenTab).toHaveAttribute("aria-selected", "true");
     await expect(bearbeitenTab).toHaveAttribute(
@@ -316,13 +332,26 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(verlaufTab).toHaveAttribute("tabindex", "-1");
     await expect(panel.locator("#panel-bearbeiten")).toBeVisible();
 
-    // Press Home -> Should move back to "Übersicht"
-    await page.keyboard.press("Home");
+    // ArrowRight from the last tab wraps to the first tab.
+    await page.keyboard.press("ArrowRight");
     await expect(uebersichtTab).toBeFocused();
     await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
 
-    // Press ArrowLeft -> Should wrap around to "Bearbeiten"
+    // ArrowLeft from the first tab wraps back to the last tab.
     await page.keyboard.press("ArrowLeft");
+    await expect(bearbeitenTab).toBeFocused();
+    await expect(bearbeitenTab).toHaveAttribute("aria-selected", "true");
+
+    // Reverse adjacent navigation returns from editing to history.
+    await page.keyboard.press("ArrowLeft");
+    await expect(verlaufTab).toBeFocused();
+    await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
+
+    // Home and End address the first and last productive tabs explicitly.
+    await page.keyboard.press("Home");
+    await expect(uebersichtTab).toBeFocused();
+    await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("End");
     await expect(bearbeitenTab).toBeFocused();
     await expect(bearbeitenTab).toHaveAttribute("aria-selected", "true");
   });

@@ -118,7 +118,9 @@ test.describe("Sicht mode", () => {
     await expect(page.locator(".map-marker, .marker-account")).toHaveCount(1);
     const marker = page.getByTestId("marker-garnrolle-account-1");
     await expect(marker).toBeVisible();
-    await marker.click({ force: true });
+    await marker.focus();
+    await expect(marker).toBeFocused();
+    await page.keyboard.press("Enter");
 
     const contextPanel = page.getByTestId("context-panel");
     await expect(contextPanel).toBeVisible();
