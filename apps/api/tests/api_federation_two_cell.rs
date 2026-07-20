@@ -104,6 +104,81 @@ async fn get_object(app: &Router, encoded_address: &str) -> Result<(StatusCode, 
 }
 
 #[tokio::test]
+async fn event_endpoint_rejects_noncanonical_envelopes_as_bad_request() -> Result<()> {
+    let sender = service("cell-a", 11);
+    let event = publish(
+        &sender,
+        "wg://cell-a/node/strict-envelope",
+        "node",
+        1,
+        None,
+        json!({"title": "Strict"}),
+    )
+    .await;
+    let app = router(service("cell-b", 22));
+
+    let mut missing_required = serde_json::to_value(&event)?;
+    missing_required
+        .as_object_mut()
+        .expect("event object")
+        .remove("neighbourhood_targets");
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/federation/v1/events")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&missing_required)?))?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let mut unknown_field = serde_json::to_value(&event)?;
+    unknown_field
+        .as_object_mut()
+        .expect("event object")
+        .insert("unsigned_extension".to_string(), json!(true));
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/federation/v1/events")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&unknown_field)?))?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let mut noncanonical_timestamp = serde_json::to_value(&event)?;
+    noncanonical_timestamp["created_at"] = json!("2026-07-20T10:00:00+02:00");
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/federation/v1/events")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&noncanonical_timestamp)?))?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/federation/v1/events").body(Body::from(serde_json::to_vec(&event)?))?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+
+    let response = app
+        .oneshot(
+            Request::post("/federation/v1/events")
+                .header("content-type", "application/json")
+                .body(Body::from(vec![b'x'; 256 * 1024 + 1]))?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    Ok(())
+}
+
+#[tokio::test]
 async fn two_cells_exchange_objects_survive_partition_and_converge() -> Result<()> {
     let identity_a = identity("cell-a", 11);
     let identity_b = identity("cell-b", 22);
@@ -339,6 +414,9 @@ async fn invalid_scope_version_signature_and_blocked_peer_are_quarantined() -> R
     let (status, outcome) = deliver(&app_b, &stale).await?;
     assert_eq!(status, StatusCode::ACCEPTED);
     assert!(outcome.reason.unwrap().contains("stale"));
+    let (status, outcome) = deliver(&app_b, &stale).await?;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    assert!(outcome.reason.unwrap().contains("stale"));
 
     cell_b
         .install_peer(peer_policy(&identity_a, "blocked"))
@@ -357,7 +435,7 @@ async fn invalid_scope_version_signature_and_blocked_peer_are_quarantined() -> R
     assert!(outcome.reason.unwrap().contains("blocked"));
 
     let quarantine = cell_b.quarantined().await?;
-    assert_eq!(quarantine.len(), 5);
+    assert_eq!(quarantine.len(), 2);
     assert!(quarantine
         .iter()
         .all(|entry| entry.envelope_sha256.len() == 64));
@@ -366,9 +444,17 @@ async fn invalid_scope_version_signature_and_blocked_peer_are_quarantined() -> R
 }
 
 #[tokio::test]
-async fn public_receive_endpoint_limits_quarantine_storage_amplification() -> Result<()> {
-    let sender = service("cell-a", 71);
-    let app = router(service("cell-b", 72));
+async fn public_receive_endpoint_limits_authenticated_peer_amplification() -> Result<()> {
+    let sender_identity = identity("cell-a", 71);
+    let sender = FederationService::new(
+        sender_identity.clone(),
+        Arc::new(MemoryFederationRepository::new()),
+    );
+    let receiver = service("cell-b", 72);
+    receiver
+        .install_peer(peer_policy(&sender_identity, "trusted"))
+        .await?;
+    let app = router(receiver);
 
     for index in 0..=120 {
         let event = publish(
@@ -389,7 +475,7 @@ async fn public_receive_endpoint_limits_quarantine_storage_amplification() -> Re
             )
             .await?;
         if index < 120 {
-            assert_eq!(response.status(), StatusCode::ACCEPTED);
+            assert_eq!(response.status(), StatusCode::CREATED);
         } else {
             assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
             assert_eq!(

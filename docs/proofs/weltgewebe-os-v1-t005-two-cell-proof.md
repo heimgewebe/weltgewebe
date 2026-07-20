@@ -168,6 +168,18 @@ Geprüft wurden:
 
 Der Container wurde nach dem Readback entfernt; die zugehörige Grabowski-Lease wurde freigegeben.
 
+## R3-Review-Härtung
+
+Zwei unabhängige Vorabreviews wurden zunächst mit `FAIL` abgeschlossen. Die Befunde wurden vor einer erneuten Attestierung umgesetzt:
+
+- Die Wire-Struktur ist strikt: unbekannte Felder, fehlende Pflichtfelder und fehlerhaftes JSON ergeben `400 Bad Request`; fehlender oder falscher JSON-Content-Type ergibt `415 Unsupported Media Type`.
+- Signaturbytes werden sprachneutral nach RFC 8785/JCS gebildet. Ein fester Ed25519-Interoperabilitätsvektor bindet öffentlichen Schlüssel, kanonischen SHA-256 und Signatur an die veröffentlichte Fixture.
+- Nichtkanonische RFC-3339-Varianten wie Zeitzonenoffsets oder abweichende Sekundenbruchlängen werden vor der Fachlogik als `400 Bad Request` abgewiesen; damit rekonstruieren alle Implementierungen dieselben JCS-Signaturbytes.
+- Eine aktualisierte Peer-Policy deaktiviert ausgelassene historische Schlüssel fail-closed; alte Schlüssel bleiben nur bei ausdrücklicher erneuter Aufnahme aktiv.
+- Strukturell ungültige, unbekannte oder falsch signierte Umschläge erzeugen keine persistenten Quarantäneeinträge.
+- Signaturverifizierte Ablehnungen sind über Ereignis-ID, Umschlag-Digest und Grund idempotent; wiederholte Replays vergrößern die Quarantäne nicht.
+- Die Quarantäne ist je Ursprung auf 1.000 Einträge und 30 Tage begrenzt; Konfliktprüfung, Quarantäneeintrag und Bereinigung bleiben transaktional serialisiert.
+
 ## Sicherheits- und Betriebsgrenzen
 
 ### Belegt

@@ -4,7 +4,7 @@ test.describe("Federation diagnostics", () => {
   test("shows the public cell identity and resolves a global object", async ({
     page,
   }) => {
-    await page.route("**/federation/v1/cell", async (route) => {
+    await page.route("**/api/federation/v1/cell", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -27,7 +27,7 @@ test.describe("Federation diagnostics", () => {
         }),
       });
     });
-    await page.route("**/federation/v1/objects?**", async (route) => {
+    await page.route("**/api/federation/v1/objects?**", async (route) => {
       const requestUrl = new URL(route.request().url());
       expect(requestUrl.searchParams.get("address")).toBe(
         "wg://cell-a.example/shared-room/harvest-2026",
@@ -78,7 +78,7 @@ test.describe("Federation diagnostics", () => {
   test("reports a disabled federation boundary without inventing state", async ({
     page,
   }) => {
-    await page.route("**/federation/v1/cell", async (route) => {
+    await page.route("**/api/federation/v1/cell", async (route) => {
       await route.fulfill({ status: 404, body: "Not Found" });
     });
 
@@ -92,7 +92,7 @@ test.describe("Federation diagnostics", () => {
   test("does not display neighbourhood-only or missing objects", async ({
     page,
   }) => {
-    await page.route("**/federation/v1/cell", async (route) => {
+    await page.route("**/api/federation/v1/cell", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -109,7 +109,7 @@ test.describe("Federation diagnostics", () => {
         }),
       });
     });
-    await page.route("**/federation/v1/objects?**", async (route) => {
+    await page.route("**/api/federation/v1/objects?**", async (route) => {
       await route.fulfill({
         status: 404,
         contentType: "application/json",

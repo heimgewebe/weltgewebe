@@ -41,6 +41,7 @@ class FederationContractTests(unittest.TestCase):
             r"^wg://[a-z0-9.-]+/(node|edge|shared-room)/[A-Za-z0-9._~-]+$",
         )
         self.assertEqual(len(self.event_example["signature"]), 86)
+        self.assertNotEqual(self.event_example["signature"], "A" * 86)
         self.assertEqual(len(self.cell_example["active_key"]["public_key"]), 43)
 
     def test_event_schema_is_closed_and_scope_is_explicit(self) -> None:
@@ -69,6 +70,19 @@ class FederationContractTests(unittest.TestCase):
         self.assertIn("TOO_MANY_REQUESTS", source)
         self.assertIn("pg_advisory_xact_lock", source)
         self.assertIn("peer key is inactive", source)
+        self.assertIn("#[serde(deny_unknown_fields)]", source)
+        self.assertIn("JsonRejection", source)
+        self.assertIn("serde_jcs::to_vec", source)
+
+    def test_wire_signature_is_language_neutral_and_fixture_bound(self) -> None:
+        wire = (ROOT / "docs/specs/federation-wire-v1.md").read_text()
+        self.assertIn("RFC 8785", wire)
+        self.assertIn("JSON Canonicalization Scheme", wire)
+        self.assertIn(
+            "d0e9fde82180c8e1585f2a3654807853d0b84b8b5dc78ffc741366591b592fb6",
+            wire,
+        )
+        self.assertIn(self.event_example["signature"], wire)
 
     def test_public_router_is_outside_browser_auth_and_csrf_layers(self) -> None:
         source = (ROOT / "apps/api/src/lib.rs").read_text()
@@ -103,6 +117,7 @@ class FederationContractTests(unittest.TestCase):
             migration,
             re.compile(r"federation_peer_keys.*PRIMARY KEY \(remote_cell_id, key_id\)", re.S),
         )
+        self.assertIn("UNIQUE (event_id, envelope_sha256, reason)", migration)
 
     def test_implementation_registry_binds_runtime_browser_and_database_proofs(self) -> None:
         registry = (ROOT / "audit/impl-registry.yaml").read_text()

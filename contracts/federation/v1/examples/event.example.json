@@ -14,8 +14,12 @@
   "neighbourhood_targets": ["cell-b.example"],
   "payload": {
     "title": "Harvest 2026",
-    "members": ["cell-a.example", "cell-b.example"]
+    "members": ["cell-a.example", "cell-b.example"],
+    "details": {
+      "unicode": "Gewebe ☀",
+      "count": 2
+    }
   },
   "key_id": "key-2026-07",
-  "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  "signature": "K1oizQlxat51Gqo8kd-vXpbBut7L2wq6eAqaue7d09gd7feuZ8bR1JDx7jSomACnbwjo5kS0nd0WGavP2pNHDQ"
 }

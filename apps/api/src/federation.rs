@@ -8,16 +8,16 @@ use std::{
 use anyhow::{bail, Context};
 use async_trait::async_trait;
 use axum::{
-    extract::{DefaultBodyLimit, Query, State},
+    extract::{rejection::JsonRejection, DefaultBodyLimit, Query, State},
     http::{header::RETRY_AFTER, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Row};
@@ -36,6 +36,8 @@ const SCOPE_GLOBAL: &str = "global";
 const RECEIVE_RATE_WINDOW: StdDuration = StdDuration::from_secs(60);
 const RECEIVE_RATE_PER_ORIGIN: u32 = 120;
 const RECEIVE_RATE_GLOBAL: u32 = 600;
+const QUARANTINE_RETENTION_DAYS: i64 = 30;
+const QUARANTINE_MAX_PER_ORIGIN: usize = 1_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CellKeyDescriptor {
@@ -54,6 +56,7 @@ pub struct CellDescriptor {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct FederationEvent {
     pub protocol_version: String,
     pub schema_version: u16,
@@ -65,9 +68,9 @@ pub struct FederationEvent {
     pub object_kind: String,
     pub object_version: i64,
     pub previous_version: Option<i64>,
+    #[serde(deserialize_with = "deserialize_canonical_utc")]
     pub created_at: DateTime<Utc>,
     pub scope: String,
-    #[serde(default)]
     pub neighbourhood_targets: Vec<String>,
     pub payload: Value,
     pub key_id: String,
@@ -292,7 +295,7 @@ impl FederationService {
         self.identity.descriptor()
     }
 
-    async fn allow_receive(&self, claimed_origin: &str) -> bool {
+    async fn allow_receive_global(&self) -> bool {
         let mut state = self.receive_rate_state.lock().await;
         if state.window_started.elapsed() >= RECEIVE_RATE_WINDOW {
             *state = ReceiveRateState::default();
@@ -300,17 +303,23 @@ impl FederationService {
         if state.global_count >= RECEIVE_RATE_GLOBAL {
             return false;
         }
-        let bucket = if validate_cell_id(claimed_origin).is_ok() {
-            claimed_origin
-        } else {
-            "<invalid>"
-        };
-        let origin_count = state.per_origin.entry(bucket.to_string()).or_default();
+        state.global_count += 1;
+        true
+    }
+
+    async fn allow_authenticated_origin(&self, origin_cell_id: &str) -> bool {
+        let mut state = self.receive_rate_state.lock().await;
+        if state.window_started.elapsed() >= RECEIVE_RATE_WINDOW {
+            *state = ReceiveRateState::default();
+        }
+        let origin_count = state
+            .per_origin
+            .entry(origin_cell_id.to_string())
+            .or_default();
         if *origin_count >= RECEIVE_RATE_PER_ORIGIN {
             return false;
         }
         *origin_count += 1;
-        state.global_count += 1;
         true
     }
 
@@ -369,13 +378,13 @@ impl FederationService {
 
     pub async fn receive(&self, event: FederationEvent) -> anyhow::Result<ReceiveOutcome> {
         if let Err(error) = validate_event_shape(&event, Some(&self.identity.cell_id)) {
-            return self.repository.quarantine(&event, &error.to_string()).await;
+            return Ok(ReceiveOutcome::quarantined(&event, error.to_string()));
         }
         if event.origin_cell_id == self.identity.cell_id {
-            return self
-                .repository
-                .quarantine(&event, "loopback event from local cell")
-                .await;
+            return Ok(ReceiveOutcome::quarantined(
+                &event,
+                "loopback event from local cell",
+            ));
         }
 
         let Some(peer) = self
@@ -383,12 +392,15 @@ impl FederationService {
             .resolve_peer(&event.origin_cell_id, &event.key_id)
             .await?
         else {
-            return self
-                .repository
-                .quarantine(&event, "unknown cell or key")
-                .await;
+            return Ok(ReceiveOutcome::quarantined(&event, "unknown cell or key"));
         };
 
+        if let Err(error) = verify_signature(&event, peer.public_key) {
+            return Ok(ReceiveOutcome::quarantined(&event, error.to_string()));
+        }
+        if !self.allow_authenticated_origin(&event.origin_cell_id).await {
+            return Err(ReceiveRateLimitExceeded.into());
+        }
         if peer.state == "blocked" {
             return self.repository.quarantine(&event, "peer is blocked").await;
         }
@@ -409,9 +421,6 @@ impl FederationService {
                 .repository
                 .quarantine(&event, "neighbourhood scope is not allowed for this peer")
                 .await;
-        }
-        if let Err(error) = verify_signature(&event, peer.public_key) {
-            return self.repository.quarantine(&event, &error.to_string()).await;
         }
 
         self.repository.accept_verified(&event).await
@@ -440,6 +449,47 @@ struct MemoryState {
     quarantine: Vec<QuarantinedEvent>,
 }
 
+fn push_memory_quarantine_once(
+    state: &mut MemoryState,
+    event: &FederationEvent,
+    reason: &str,
+    digest: String,
+) {
+    let cutoff = Utc::now() - Duration::days(QUARANTINE_RETENTION_DAYS);
+    state.quarantine.retain(|entry| entry.received_at >= cutoff);
+    if state.quarantine.iter().any(|entry| {
+        entry.event_id == event.event_id
+            && entry.envelope_sha256 == digest
+            && entry.reason == reason
+    }) {
+        return;
+    }
+    state.quarantine.push(QuarantinedEvent {
+        event_id: event.event_id,
+        origin_cell_id: event.origin_cell_id.clone(),
+        reason: reason.to_string(),
+        envelope_sha256: digest,
+        received_at: Utc::now(),
+    });
+    while state
+        .quarantine
+        .iter()
+        .filter(|entry| entry.origin_cell_id == event.origin_cell_id)
+        .count()
+        > QUARANTINE_MAX_PER_ORIGIN
+    {
+        let oldest = state
+            .quarantine
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| entry.origin_cell_id == event.origin_cell_id)
+            .min_by_key(|(_, entry)| entry.received_at)
+            .map(|(index, _)| index)
+            .expect("quarantine origin count is non-zero");
+        state.quarantine.remove(oldest);
+    }
+}
+
 #[derive(Default)]
 pub struct MemoryFederationRepository {
     state: RwLock<MemoryState>,
@@ -455,11 +505,16 @@ impl MemoryFederationRepository {
 impl FederationRepository for MemoryFederationRepository {
     async fn install_peer(&self, policy: PeerPolicy) -> anyhow::Result<()> {
         let mut state = self.state.write().await;
-        for ((cell_id, _), peer) in state.peers.iter_mut() {
+        let supplied_key_ids: HashSet<_> =
+            policy.keys.iter().map(|key| key.key_id.clone()).collect();
+        for ((cell_id, key_id), peer) in state.peers.iter_mut() {
             if cell_id == &policy.remote_cell_id {
                 peer.state = policy.state.clone();
                 peer.allow_neighbourhood = policy.allow_neighbourhood;
                 peer.allowed_event_types = policy.allowed_event_types.clone();
+                if !supplied_key_ids.contains(key_id) {
+                    peer.key_active = false;
+                }
             }
         }
         for key in policy.keys {
@@ -497,13 +552,8 @@ impl FederationRepository for MemoryFederationRepository {
         reason: &str,
     ) -> anyhow::Result<ReceiveOutcome> {
         let mut state = self.state.write().await;
-        state.quarantine.push(QuarantinedEvent {
-            event_id: event.event_id,
-            origin_cell_id: event.origin_cell_id.clone(),
-            reason: reason.to_string(),
-            envelope_sha256: envelope_sha256(event)?,
-            received_at: Utc::now(),
-        });
+        let digest = envelope_sha256(event)?;
+        push_memory_quarantine_once(&mut state, event, reason, digest);
         Ok(ReceiveOutcome::quarantined(event, reason))
     }
 
@@ -514,13 +564,12 @@ impl FederationRepository for MemoryFederationRepository {
             if existing_digest == &digest {
                 return Ok(ReceiveOutcome::duplicate(event));
             }
-            state.quarantine.push(QuarantinedEvent {
-                event_id: event.event_id,
-                origin_cell_id: event.origin_cell_id.clone(),
-                reason: "event id collision with different envelope".to_string(),
-                envelope_sha256: digest,
-                received_at: Utc::now(),
-            });
+            push_memory_quarantine_once(
+                &mut state,
+                event,
+                "event id collision with different envelope",
+                digest,
+            );
             return Ok(ReceiveOutcome::quarantined(
                 event,
                 "event id collision with different envelope",
@@ -528,13 +577,7 @@ impl FederationRepository for MemoryFederationRepository {
         }
         if let Some(reason) = transition_rejection(state.objects.get(&event.object_address), event)
         {
-            state.quarantine.push(QuarantinedEvent {
-                event_id: event.event_id,
-                origin_cell_id: event.origin_cell_id.clone(),
-                reason: reason.clone(),
-                envelope_sha256: digest,
-                received_at: Utc::now(),
-            });
+            push_memory_quarantine_once(&mut state, event, &reason, digest);
             return Ok(ReceiveOutcome::quarantined(event, reason));
         }
         apply_event(&mut state.objects, event);
@@ -607,6 +650,16 @@ impl FederationRepository for PostgresFederationRepository {
         .bind(serde_json::to_value(event_types)?)
         .execute(&mut *tx)
         .await?;
+        let supplied_key_ids: Vec<_> = policy.keys.iter().map(|key| key.key_id.clone()).collect();
+        sqlx::query(
+            "UPDATE federation_peer_keys SET active = FALSE, \
+             retired_at = COALESCE(retired_at, NOW()) \
+             WHERE remote_cell_id = $1 AND NOT (key_id = ANY($2::text[]))",
+        )
+        .bind(&policy.remote_cell_id)
+        .bind(&supplied_key_ids)
+        .execute(&mut *tx)
+        .await?;
         for key in policy.keys {
             sqlx::query(
                 "INSERT INTO federation_peer_keys \
@@ -669,19 +722,10 @@ impl FederationRepository for PostgresFederationRepository {
         event: &FederationEvent,
         reason: &str,
     ) -> anyhow::Result<ReceiveOutcome> {
-        let envelope = serde_json::to_value(event)?;
-        sqlx::query(
-            "INSERT INTO federation_quarantine \
-             (event_id, origin_cell_id, reason, envelope_sha256, envelope) \
-             VALUES ($1, $2, $3, $4, $5)",
-        )
-        .bind(event.event_id)
-        .bind(&event.origin_cell_id)
-        .bind(reason)
-        .bind(envelope_sha256(event)?)
-        .bind(envelope)
-        .execute(&self.pool)
-        .await?;
+        let mut tx = self.pool.begin().await?;
+        let digest = envelope_sha256(event)?;
+        quarantine_verified_in_tx(&mut tx, event, reason, &digest).await?;
+        tx.commit().await?;
         Ok(ReceiveOutcome::quarantined(event, reason))
     }
 
@@ -702,10 +746,10 @@ impl FederationRepository for PostgresFederationRepository {
                 tx.rollback().await?;
                 return Ok(ReceiveOutcome::duplicate(event));
             }
-            tx.rollback().await?;
-            return self
-                .quarantine(event, "event id collision with different envelope")
-                .await;
+            let reason = "event id collision with different envelope";
+            quarantine_verified_in_tx(&mut tx, event, reason, &digest).await?;
+            tx.commit().await?;
+            return Ok(ReceiveOutcome::quarantined(event, reason));
         }
 
         let current = sqlx::query(
@@ -718,8 +762,9 @@ impl FederationRepository for PostgresFederationRepository {
         .await?;
         let current = current.map(row_to_object).transpose()?;
         if let Some(reason) = transition_rejection(current.as_ref(), event) {
-            tx.rollback().await?;
-            return self.quarantine(event, &reason).await;
+            quarantine_verified_in_tx(&mut tx, event, &reason, &digest).await?;
+            tx.commit().await?;
+            return Ok(ReceiveOutcome::quarantined(event, reason));
         }
 
         upsert_object(&mut tx, event).await?;
@@ -821,6 +866,55 @@ impl FederationRepository for PostgresFederationRepository {
             })
             .collect()
     }
+}
+
+async fn quarantine_verified_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    event: &FederationEvent,
+    reason: &str,
+    digest: &str,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "SELECT pg_advisory_xact_lock(\
+         hashtextextended('federation-quarantine:' || $1::text, 0))",
+    )
+    .bind(&event.origin_cell_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM federation_quarantine \
+         WHERE origin_cell_id = $1 \
+           AND received_at < NOW() - make_interval(days => $2)",
+    )
+    .bind(&event.origin_cell_id)
+    .bind(i32::try_from(QUARANTINE_RETENTION_DAYS)?)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO federation_quarantine \
+         (event_id, origin_cell_id, reason, envelope_sha256, envelope) \
+         VALUES ($1, $2, $3, $4, $5) \
+         ON CONFLICT (event_id, envelope_sha256, reason) DO NOTHING",
+    )
+    .bind(event.event_id)
+    .bind(&event.origin_cell_id)
+    .bind(reason)
+    .bind(digest)
+    .bind(serde_json::to_value(event)?)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM federation_quarantine WHERE id IN (\
+           SELECT id FROM federation_quarantine \
+           WHERE origin_cell_id = $1 \
+           ORDER BY received_at DESC, id DESC OFFSET $2\
+         )",
+    )
+    .bind(&event.origin_cell_id)
+    .bind(i64::try_from(QUARANTINE_MAX_PER_ORIGIN)?)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 async fn lock_event_receipt(
@@ -954,8 +1048,25 @@ struct SigningPayload<'a> {
     key_id: &'a str,
 }
 
+fn deserialize_canonical_utc<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = String::deserialize(deserializer)?;
+    let parsed = DateTime::parse_from_rfc3339(&raw)
+        .map_err(serde::de::Error::custom)?
+        .with_timezone(&Utc);
+    let canonical = parsed.to_rfc3339_opts(SecondsFormat::AutoSi, true);
+    if raw != canonical {
+        return Err(serde::de::Error::custom(
+            "created_at must use canonical UTC RFC3339 form",
+        ));
+    }
+    Ok(parsed)
+}
+
 fn signing_bytes(event: &FederationEvent) -> anyhow::Result<Vec<u8>> {
-    Ok(serde_json::to_vec(&SigningPayload {
+    Ok(serde_jcs::to_vec(&SigningPayload {
         protocol_version: &event.protocol_version,
         schema_version: event.schema_version,
         event_id: event.event_id,
@@ -975,7 +1086,7 @@ fn signing_bytes(event: &FederationEvent) -> anyhow::Result<Vec<u8>> {
 }
 
 fn envelope_sha256(event: &FederationEvent) -> anyhow::Result<String> {
-    let bytes = serde_json::to_vec(event)?;
+    let bytes = serde_jcs::to_vec(event)?;
     Ok(hex::encode(Sha256::digest(bytes)))
 }
 
@@ -1162,14 +1273,36 @@ async fn cell_descriptor(State(service): State<FederationService>) -> Json<CellD
     Json(service.descriptor())
 }
 
+#[derive(Debug)]
+struct ReceiveRateLimitExceeded;
+
+impl std::fmt::Display for ReceiveRateLimitExceeded {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("federation receive rate limit exceeded")
+    }
+}
+
+impl std::error::Error for ReceiveRateLimitExceeded {}
+
 async fn receive_event(
     State(service): State<FederationService>,
-    Json(event): Json<FederationEvent>,
+    payload: Result<Json<FederationEvent>, JsonRejection>,
 ) -> Result<(StatusCode, Json<ReceiveOutcome>), ApiError> {
-    if !service.allow_receive(&event.origin_cell_id).await {
+    let Json(event) = payload.map_err(|rejection| match rejection.status() {
+        StatusCode::UNSUPPORTED_MEDIA_TYPE => ApiError::unsupported_media_type(),
+        StatusCode::PAYLOAD_TOO_LARGE => ApiError::payload_too_large(),
+        _ => ApiError::bad_request("invalid federation event envelope"),
+    })?;
+    if !service.allow_receive_global().await {
         return Err(ApiError::too_many_requests());
     }
-    let outcome = service.receive(event).await.map_err(ApiError::internal)?;
+    let outcome = match service.receive(event).await {
+        Ok(outcome) => outcome,
+        Err(error) if error.downcast_ref::<ReceiveRateLimitExceeded>().is_some() => {
+            return Err(ApiError::too_many_requests());
+        }
+        Err(error) => return Err(ApiError::internal(error)),
+    };
     let status = match outcome.status {
         ReceiveStatus::Applied => StatusCode::CREATED,
         ReceiveStatus::Duplicate => StatusCode::OK,
@@ -1202,6 +1335,20 @@ impl ApiError {
         Self {
             status: StatusCode::BAD_REQUEST,
             message: error.to_string(),
+        }
+    }
+
+    fn unsupported_media_type() -> Self {
+        Self {
+            status: StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            message: "federation event content type must be application/json".to_string(),
+        }
+    }
+
+    fn payload_too_large() -> Self {
+        Self {
+            status: StatusCode::PAYLOAD_TOO_LARGE,
+            message: "federation event envelope exceeds the size limit".to_string(),
         }
     }
 
@@ -1376,6 +1523,50 @@ mod tests {
         .expect("test identity")
     }
 
+    #[test]
+    fn rfc8785_interoperability_vector_is_stable() {
+        let mut event = FederationEvent {
+            protocol_version: FEDERATION_PROTOCOL_VERSION.to_string(),
+            schema_version: FEDERATION_SCHEMA_VERSION,
+            event_id: Uuid::parse_str("018f7b1a-4bb5-7cc3-a1b2-334455667788").unwrap(),
+            event_type: EVENT_UPSERTED.to_string(),
+            origin_cell_id: "cell-a.example".to_string(),
+            actor: "account:public-weber-42".to_string(),
+            object_address: "wg://cell-a.example/shared-room/harvest-2026".to_string(),
+            object_kind: "shared-room".to_string(),
+            object_version: 1,
+            previous_version: None,
+            created_at: DateTime::parse_from_rfc3339("2026-07-20T08:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            scope: SCOPE_NEIGHBOURHOOD.to_string(),
+            neighbourhood_targets: vec!["cell-b.example".to_string()],
+            payload: serde_json::json!({
+                "title": "Harvest 2026",
+                "members": ["cell-a.example", "cell-b.example"],
+                "details": {"unicode": "Gewebe ☀", "count": 2}
+            }),
+            key_id: "key-2026-07".to_string(),
+            signature: String::new(),
+        };
+        let bytes = signing_bytes(&event).unwrap();
+        let key = SigningKey::from_bytes(&[7; 32]);
+        event.signature = URL_SAFE_NO_PAD.encode(key.sign(&bytes).to_bytes());
+        assert_eq!(
+            hex::encode(Sha256::digest(&bytes)),
+            "d0e9fde82180c8e1585f2a3654807853d0b84b8b5dc78ffc741366591b592fb6"
+        );
+        assert_eq!(
+            URL_SAFE_NO_PAD.encode(key.verifying_key().as_bytes()),
+            "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
+        );
+        assert_eq!(
+            event.signature,
+            "K1oizQlxat51Gqo8kd-vXpbBut7L2wq6eAqaue7d09gd7feuZ8bR1JDx7jSomACnbwjo5kS0nd0WGavP2pNHDQ"
+        );
+        verify_signature(&event, *key.verifying_key().as_bytes()).unwrap();
+    }
+
     #[tokio::test]
     async fn historical_peer_key_remains_valid_after_rotation() {
         let old_identity =
@@ -1386,13 +1577,14 @@ mod tests {
             identity("cell-b", 5),
             Arc::new(MemoryFederationRepository::new()),
         );
+        let old_peer_key = old_identity.peer_key();
         receiver
             .install_peer(PeerPolicy {
                 remote_cell_id: "cell-a".to_string(),
                 state: "trusted".to_string(),
                 allow_neighbourhood: true,
                 allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
-                keys: vec![old_identity.peer_key()],
+                keys: vec![old_peer_key.clone()],
             })
             .await
             .unwrap();
@@ -1419,7 +1611,7 @@ mod tests {
                 state: "trusted".to_string(),
                 allow_neighbourhood: true,
                 allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
-                keys: vec![new_identity.peer_key()],
+                keys: vec![old_peer_key, new_identity.peer_key()],
             })
             .await
             .unwrap();
@@ -1448,6 +1640,57 @@ mod tests {
             receiver.receive(new_event).await.unwrap().status,
             ReceiveStatus::Applied
         );
+    }
+
+    #[tokio::test]
+    async fn omitted_peer_key_is_retired_fail_closed() {
+        let old_identity =
+            CellIdentity::new("cell-a", "https://cell-a.example.test", "key-old", [8; 32]).unwrap();
+        let new_identity =
+            CellIdentity::new("cell-a", "https://cell-a.example.test", "key-new", [9; 32]).unwrap();
+        let receiver = FederationService::new(
+            identity("cell-b", 10),
+            Arc::new(MemoryFederationRepository::new()),
+        );
+        receiver
+            .install_peer(PeerPolicy {
+                remote_cell_id: "cell-a".to_string(),
+                state: "trusted".to_string(),
+                allow_neighbourhood: true,
+                allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
+                keys: vec![old_identity.peer_key()],
+            })
+            .await
+            .unwrap();
+        let old_sender =
+            FederationService::new(old_identity, Arc::new(MemoryFederationRepository::new()));
+        receiver
+            .install_peer(PeerPolicy {
+                remote_cell_id: "cell-a".to_string(),
+                state: "trusted".to_string(),
+                allow_neighbourhood: true,
+                allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
+                keys: vec![new_identity.peer_key()],
+            })
+            .await
+            .unwrap();
+        let event = old_sender
+            .publish_local(PublishRequest {
+                actor: "system:omitted-key-test".to_string(),
+                event_type: EVENT_UPSERTED.to_string(),
+                object_address: "wg://cell-a/node/retired-key".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: SCOPE_GLOBAL.to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"title": "Retired"}),
+            })
+            .await
+            .unwrap();
+        let outcome = receiver.receive(event).await.unwrap();
+        assert_eq!(outcome.status, ReceiveStatus::Quarantined);
+        assert!(outcome.reason.unwrap().contains("inactive"));
     }
 
     #[tokio::test]

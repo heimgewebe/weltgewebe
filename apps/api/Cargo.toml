@@ -38,6 +38,7 @@ thiserror = "2.0.18"
 tower-http = { version = "0.7.0", features = ["request-id", "util"] }
 webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
 url = "2"
+serde_jcs = "0.1"
 
 [features]
 # Enables test-helper APIs (e.g. token introspection) used by integration tests.

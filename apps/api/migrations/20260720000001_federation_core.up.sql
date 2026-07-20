@@ -56,7 +56,8 @@ CREATE TABLE federation_quarantine (
     reason TEXT NOT NULL,
     envelope_sha256 TEXT NOT NULL CHECK (length(envelope_sha256) = 64),
     envelope JSONB NOT NULL,
-    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (event_id, envelope_sha256, reason)
 );
 
 CREATE INDEX federation_quarantine_origin_received

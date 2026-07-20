@@ -64,7 +64,7 @@
     descriptorState = "loading";
     descriptor = null;
     try {
-      const response = await fetch("/federation/v1/cell", {
+      const response = await fetch("/api/federation/v1/cell", {
         cache: "no-store",
       });
       if (!response.ok) {
@@ -90,7 +90,7 @@
     object = null;
     try {
       const response = await fetch(
-        `/federation/v1/objects?address=${encodeURIComponent(trimmed)}`,
+        `/api/federation/v1/objects?address=${encodeURIComponent(trimmed)}`,
         { cache: "no-store" },
       );
       if (response.status === 404) {

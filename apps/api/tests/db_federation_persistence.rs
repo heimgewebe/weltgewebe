@@ -33,7 +33,7 @@ struct SigningPayload<'a> {
 }
 
 fn resign(event: &mut FederationEvent, seed: u8) -> Result<()> {
-    let bytes = serde_json::to_vec(&SigningPayload {
+    let bytes = serde_jcs::to_vec(&SigningPayload {
         protocol_version: &event.protocol_version,
         schema_version: event.schema_version,
         event_id: event.event_id,
@@ -145,8 +145,7 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
         .unwrap_or_default()
         .contains("signature"));
     let quarantine = restarted.quarantined().await?;
-    assert_eq!(quarantine.len(), 1);
-    assert_eq!(quarantine[0].envelope_sha256.len(), 64);
+    assert!(quarantine.is_empty());
 
     // Two independently signed first versions race for the same address.
     // The address-bound transaction lock must serialize the transition so
@@ -205,7 +204,7 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
         1
     );
     let quarantine = restarted.quarantined().await?;
-    assert_eq!(quarantine.len(), 2);
+    assert_eq!(quarantine.len(), 1);
 
     // Two valid envelopes with the same event id but different object locks
     // must also serialize. One receipt applies; the conflicting envelope is
@@ -257,7 +256,7 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
             .count(),
         1
     );
-    assert_eq!(restarted.quarantined().await?.len(), 3);
+    assert_eq!(restarted.quarantined().await?.len(), 2);
 
     // Explicitly inactive means revoked for new deliveries. Rotation without
     // revocation remains possible by retaining the old verification key active.
@@ -299,7 +298,58 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
         .as_deref()
         .unwrap_or_default()
         .contains("inactive"));
-    assert_eq!(restarted.quarantined().await?.len(), 4);
+    assert_eq!(restarted.quarantined().await?.len(), 3);
+
+    sqlx::query(
+        "INSERT INTO federation_quarantine \
+         (event_id, origin_cell_id, reason, envelope_sha256, envelope, received_at) \
+         VALUES ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'cell-a', \
+                 'retention-fixture', repeat('f', 64), '{}'::jsonb, \
+                 NOW() - INTERVAL '31 days')",
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO federation_quarantine \
+         (event_id, origin_cell_id, reason, envelope_sha256, envelope) \
+         SELECT ('00000000-0000-0000-0000-' || lpad(value::text, 12, '0'))::uuid, \
+                'cell-a', 'capacity-fixture', \
+                md5(value::text) || md5(value::text), \
+                jsonb_build_object('fixture', value) \
+         FROM generate_series(1, 1001) AS value",
+    )
+    .execute(&pool)
+    .await?;
+    let capacity_event = revoked_sender
+        .publish_local(PublishRequest {
+            actor: "system:postgres-quarantine-bound-proof".to_string(),
+            event_type: "object.upserted".to_string(),
+            object_address: "wg://cell-a/node/quarantine-bound".to_string(),
+            object_kind: "node".to_string(),
+            object_version: 1,
+            previous_version: None,
+            scope: "global".to_string(),
+            neighbourhood_targets: vec![],
+            payload: json!({"title": "Bounded"}),
+        })
+        .await?;
+    assert_eq!(
+        restarted.receive(capacity_event).await?.status,
+        ReceiveStatus::Quarantined
+    );
+    let quarantine_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM federation_quarantine WHERE origin_cell_id = 'cell-a'",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(quarantine_count, 1_000);
+    let expired_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM federation_quarantine \
+         WHERE origin_cell_id = 'cell-a' AND reason = 'retention-fixture'",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(expired_count, 0);
 
     let local = restarted
         .publish_local(PublishRequest {

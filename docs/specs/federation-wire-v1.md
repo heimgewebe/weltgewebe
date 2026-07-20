@@ -69,13 +69,15 @@ Antworten:
 - `201 Created`: Signatur und Übergang sind gültig; das Ereignis wurde angewandt.
 - `200 OK`: derselbe signierte Umschlag wurde bereits angewandt.
 - `202 Accepted`: der Umschlag wurde nicht angewandt und getrennt quarantänisiert.
-- `400 Bad Request`: der HTTP-/JSON-Umschlag ist nicht als Föderationsereignis lesbar.
-- `429 Too Many Requests`: das feste Prozess- oder Ursprungszellenfenster ist ausgeschöpft; `Retry-After: 60` begrenzt Quarantäne- und Speicherverstärkung.
+- `400 Bad Request`: der JSON-Umschlag ist syntaktisch oder strukturell nicht als Föderationsereignis lesbar.
+- `413 Payload Too Large`: der Umschlag überschreitet 256 KiB.
+- `415 Unsupported Media Type`: der Eingang trägt keinen unterstützten `application/json`-Content-Type.
+- `429 Too Many Requests`: das feste Prozess- oder authentifizierte Peerfenster ist ausgeschöpft; `Retry-After: 60` begrenzt Quarantäne- und Speicherverstärkung.
 - `500 Internal Server Error`: die lokale Persistenz konnte keinen verlässlichen Abschluss liefern.
 
-Der Eingang erlaubt pro Minute höchstens 120 Umschläge je behaupteter Ursprungszelle und 600 Umschläge je API-Prozess. Das ist ein letzter lokaler Schutzzaun; ein späterer Auslieferungsworker muss zusätzlich pro Peer mit Backoff und Jitter arbeiten.
+Der Eingang erlaubt pro Minute höchstens 600 syntaktisch lesbare Umschläge je API-Prozess. Nach erfolgreicher Signaturprüfung gelten zusätzlich höchstens 120 Umschläge je authentifizierter Ursprungszelle. Frei behauptete Zell-IDs bilden keine Vertrauens- oder Rate-Limit-Identität. Ein späterer Auslieferungsworker muss zusätzlich pro Peer mit Backoff und Jitter arbeiten.
 
-`202` bedeutet ausdrücklich nicht Zustimmung. Es ermöglicht dem Absender eine transportseitig erfolgreiche Zustellung, ohne eine fachlich ungültige Nachricht still zu verwerfen oder anzuwenden.
+`202` bedeutet ausdrücklich nicht Zustimmung. Nur Umschläge mit verifizierter Signatur werden dauerhaft quarantänisiert. Strukturell unlesbare, unbekannte oder falsch signierte Umschläge werden mit demselben fachlichen Ergebnis verworfen, aber nicht persistiert; dadurch kann unauthentifizierter Verkehr die Quarantäne nicht füllen.
 
 ### `GET /federation/v1/objects?address=<wg-address>`
 
@@ -99,7 +101,7 @@ Wesentliche Felder:
 | `object_kind` | `node`, `edge` oder `shared-room` |
 | `object_version` | streng monotone Version ab `1` |
 | `previous_version` | vorherige Version oder `null` bei Version `1` |
-| `created_at` | UTC-Zeitstempel; maximal fünf Minuten in der Zukunft |
+| `created_at` | kanonischer RFC-3339-UTC-Zeitstempel mit `Z`; Sekundenbruchteile fehlen oder haben exakt 3, 6 oder 9 Stellen; maximal fünf Minuten in der Zukunft |
 | `scope` | `global` oder `neighbourhood` |
 | `neighbourhood_targets` | explizite Zielzellen bei Nachbarschaftsreichweite |
 | `payload` | Objektinhalt; bei Löschung zwingend `null` |
@@ -108,14 +110,21 @@ Wesentliche Felder:
 
 ## 4. Signatur
 
-Signiert wird eine deterministische JSON-Repräsentation aller Ereignisfelder außer `signature` in der im Rust-Typ `SigningPayload` festgelegten Reihenfolge. Der Empfänger rekonstruiert dieselben Bytes und verifiziert sie gegen den historischen öffentlichen Schlüssel aus `(origin_cell_id, key_id)`.
+Signiert werden alle Ereignisfelder außer `signature` als UTF-8-Bytes nach RFC 8785, JSON Canonicalization Scheme (JCS). Schlüssel werden rekursiv lexikografisch sortiert, es gibt keine unbedeutenden Leerzeichen, und `created_at` muss bereits in der kanonischen UTC-Schreibweise mit `Z` sowie 0, 3, 6 oder 9 Nachkommastellen vorliegen. Der Empfänger rekonstruiert exakt diese Bytes und verifiziert sie gegen den öffentlichen Schlüssel aus `(origin_cell_id, key_id)`. Fehlende Pflichtfelder und unbekannte Felder werden vor der Fachlogik als `400 Bad Request` abgewiesen.
+
+Interoperabilitätsvektor für `contracts/federation/v1/examples/event.example.json`:
+
+- Testschlüssel: 32 Bytes mit dem Wert `0x07` ausschließlich als öffentliche Fixture, niemals als Betreibergeheimnis;
+- öffentlicher Ed25519-Schlüssel, base64url: `6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw`;
+- SHA-256 der kanonischen Signaturbytes: `d0e9fde82180c8e1585f2a3654807853d0b84b8b5dc78ffc741366591b592fb6`;
+- Signatur, base64url: `K1oizQlxat51Gqo8kd-vXpbBut7L2wq6eAqaue7d09gd7feuZ8bR1JDx7jSomACnbwjo5kS0nd0WGavP2pNHDQ`.
 
 Folgen:
 
 - Jede Änderung an Nutzlast, Adresse, Version, Reichweite oder Zeitstempel macht die Signatur ungültig.
-- Schlüsselrotation löscht ausgelassene alte Prüfschlüssel nicht. Solange sie ausdrücklich aktiv bleiben, können verzögert zugestellte historische Ereignisse weiter geprüft werden.
+- Eine aktualisierte Peer-Policy deaktiviert alle zuvor bekannten Schlüssel, die nicht erneut ausdrücklich aufgeführt werden. Verzögert zugestellte historische Ereignisse bleiben nur prüfbar, wenn der alte Schlüssel weiterhin explizit und aktiv enthalten ist.
 - `active: false` bedeutet Widerruf: Neue Zustellungen mit diesem Schlüssel werden unabhängig von ihrem behaupteten Zeitstempel quarantänisiert. Ein kompromittierter Schlüssel kann Zeitstempel selbst signieren und darf daher nicht durch Rückdatierung wieder gültig werden.
-- Ein unbekannter Schlüssel wird nicht automatisch aus dem Netz übernommen; er landet in Quarantäne, bis eine Betreiberentscheidung die Peer-Beziehung aktualisiert.
+- Ein unbekannter Schlüssel wird nicht automatisch aus dem Netz übernommen und erzeugt keinen persistenten Quarantäneeintrag.
 
 ## 5. Versionen, Replay und Konvergenz
 
@@ -128,6 +137,7 @@ Für jedes Objekt gilt:
 5. Derselbe `event_id` plus derselbe Umschlag ist ein harmloses Duplikat.
 6. Derselbe `event_id` mit anderem Umschlag ist eine Kollision und wird quarantänisiert.
 7. Veraltete, übersprungene oder anders verzweigte Versionen werden nicht angewandt.
+8. Wiederholte Ablehnungen desselben signierten Umschlags erzeugen höchstens einen Quarantäneeintrag.
 
 Damit arbeiten Zellen während einer Netztrennung mit ihrer lokalen Wahrheit weiter. Nach Wiederverbindung werden fehlende, lückenlose Ereignisse kontrolliert nachgeliefert. PostgreSQL serialisiert jeden Objektübergang zusätzlich mit einer transaktionsgebundenen Sperre aus der Objektadresse; zwei gleichzeitige erste Versionen können daher nicht beide als angewandt bestätigt werden. Die Implementierung erfindet keine Konfliktauflösung zwischen mehreren Ursprüngen, weil eine globale Adresse genau einer Ursprungszelle gehört.
 
@@ -135,7 +145,7 @@ Damit arbeiten Zellen während einer Netztrennung mit ihrer lokalen Wahrheit wei
 
 - `global`: darf an vertrauenswürdige Peers zugestellt und öffentlich aufgelöst werden.
 - `neighbourhood`: darf nur an explizit genannte Zielzellen zugestellt werden, wenn die lokale Peer-Regel Nachbarschaftsereignisse erlaubt.
-- `local` und `private`: sind niemals extern föderierbar und werden am öffentlichen Eingang quarantänisiert.
+- `local` und `private`: sind niemals extern föderierbar und werden am öffentlichen Eingang ohne Persistenz verworfen.
 
 Die Browserdiagnose unter `/federation` zeigt daher nur die öffentliche Zellbeschreibung und globale Objekte.
 
@@ -150,18 +160,16 @@ Die Quarantäne ist eine getrennte Tabelle und kein Statuswert in der angewandte
 - unveränderten JSON-Umschlag;
 - Empfangszeitpunkt.
 
-Typische Gründe:
+Persistiert werden nur signaturverifizierte Ablehnungen. Typische Gründe:
 
-- unbekannte oder blockierte Zelle;
-- unbekannter oder ausdrücklich inaktiver Schlüssel;
-- ungültige Signatur;
+- blockierte Zelle;
+- ausdrücklich inaktiver Schlüssel;
 - unzulässige Reichweite oder nicht adressierte Nachbarschaft;
 - nicht erlaubter Ereignistyp;
-- Schema- oder Protokollversion unbekannt;
 - Version veraltet, lückenhaft oder kollidierend;
 - Ursprung oder Objektart wechselt.
 
-Quarantäne erzeugt keine automatische Freigabe und keine Rückschreibung.
+Quarantäne erzeugt keine automatische Freigabe und keine Rückschreibung. Die Kombination aus Ereignis-ID, Umschlag-Digest und Ablehnungsgrund ist eindeutig; identische Replays vergrößern die Tabelle nicht. Je Ursprungszelle werden höchstens 1.000 Einträge und nur die letzten 30 Tage aufbewahrt; Bereinigung und Einfügung laufen unter einer zellgebundenen Transaktionssperre.
 
 ## 8. Aktivierung
 
