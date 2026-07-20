@@ -283,11 +283,11 @@ async fn governance_writes_fail_closed_without_database() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Unberechtigte Gastwrites
+// 2. Gastgespräch und formale Weberrechte
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn guest_webungsaktionen_are_forbidden() {
+async fn guest_can_discuss_but_cannot_veto_or_vote() {
     let (app, gast_cookie, _) = app_without_database().await;
 
     let veto = app
@@ -326,8 +326,8 @@ async fn guest_webungsaktionen_are_forbidden() {
         .expect("response");
     assert_eq!(
         message.status(),
-        StatusCode::FORBIDDEN,
-        "guests must not post to the conversation"
+        StatusCode::SERVICE_UNAVAILABLE,
+        "guest discussion must pass authorization and fail closed only at the missing database"
     );
 
     let node_message = app
@@ -342,22 +342,9 @@ async fn guest_webungsaktionen_are_forbidden() {
         .expect("response");
     assert_eq!(
         node_message.status(),
-        StatusCode::FORBIDDEN,
-        "guests must not post to node conversations"
+        StatusCode::SERVICE_UNAVAILABLE,
+        "guest node discussion must pass authorization and fail closed only at the missing database"
     );
-
-    // Gäste hinterlassen auch über die Domänenpfade keine Spuren.
-    let node = app
-        .clone()
-        .oneshot(request(
-            "POST",
-            "/nodes",
-            Some(&gast_cookie),
-            Some(r#"{"title":"Knoten"}"#),
-        ))
-        .await
-        .expect("response");
-    assert_eq!(node.status(), StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]

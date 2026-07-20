@@ -56,6 +56,7 @@
     location?: { lat: number; lon: number };
     created_at?: string;
     updated_at?: string;
+    created_by_account_id?: string | null;
     kind?: string;
     participants?: {
       account_title?: string;
@@ -86,9 +87,14 @@
   $: isLoadingDetails = $isLoadingDetailsStore;
   $: summary = nodeDetails?.summary || $selection?.data?.summary;
   $: kind = nodeKindLabel(nodeDetails?.kind || $selection?.data?.kind);
+  $: nodeCreator =
+    nodeDetails?.created_by_account_id ||
+    ($selection?.data?.created_by_account_id as string | undefined);
   $: canMutate =
     $authStore.authenticated &&
-    ($authStore.role === "weber" || $authStore.role === "admin");
+    ($authStore.role === "weber" ||
+      $authStore.role === "admin" ||
+      (!!nodeCreator && nodeCreator === $authStore.account_id));
 
   $: tabs = canMutate
     ? ["uebersicht", "gespraech", "verlauf", "bearbeiten"]
@@ -532,8 +538,8 @@
             >{deleting ? "Löscht…" : "Knoten löschen"}</button
           >
           <p class="collective-note">
-            Knoten gehören zum gemeinsamen Gewebe und können von allen Webern
-            gepflegt werden.
+            Eigene Knoten kannst du selbst pflegen. Weber können zusätzlich
+            gemeinschaftliche Knoten weiterentwickeln.
           </p>
         </div>
       {/if}

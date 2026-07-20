@@ -33,7 +33,7 @@ export interface ProposalDetail extends Proposal {
 
 export interface ProposalMessage {
   id: string;
-  author_account_id: string;
+  author_account_id: string | null;
   author_title: string;
   body: string;
   created_at: string;

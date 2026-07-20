@@ -18,6 +18,8 @@ const GUEST_B: &str = "gov-proof-guest-b";
 const GUEST_C: &str = "gov-proof-guest-c";
 const WEBER_A: &str = "gov-proof-weber-a";
 const WEBER_B: &str = "gov-proof-weber-b";
+const GUEST_NODE: &str = "gov-proof-guest-node";
+const GUEST_EDGE: &str = "gov-proof-guest-edge";
 
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL")
@@ -45,6 +47,14 @@ async fn pool() -> sqlx::PgPool {
 }
 
 async fn cleanup(pool: &sqlx::PgPool) {
+    sqlx::query("DELETE FROM domain_edges WHERE id LIKE 'gov-proof-%'")
+        .execute(pool)
+        .await
+        .expect("clean edges");
+    sqlx::query("DELETE FROM domain_nodes WHERE id LIKE 'gov-proof-%'")
+        .execute(pool)
+        .await
+        .expect("clean nodes");
     sqlx::query("DELETE FROM governance_proposals WHERE applicant_account_id LIKE 'gov-proof-%'")
         .execute(pool)
         .await
@@ -281,6 +291,54 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
     )
     .await
     .expect("new proposal after rejection");
+
+    seed_account(&pool, GUEST_B, "gast").await;
+    let foreign_proposal = create_weber_proposal(
+        &pool,
+        GUEST_B,
+        "Gast B",
+        Some("fremder Antrag"),
+        t0 + Duration::days(15),
+    )
+    .await
+    .expect("create foreign proposal");
+    let retained_message = add_message(
+        &pool,
+        &foreign_proposal.id,
+        GUEST_C,
+        "Gast C",
+        "Dieser Beitrag bleibt erhalten.",
+        t0 + Duration::days(16),
+    )
+    .await
+    .expect("guest contribution to foreign proposal");
+
+    sqlx::query(
+        "INSERT INTO domain_nodes \
+         (id, kind, title, lat, lon, created_at, updated_at, payload) \
+         VALUES ($1, 'Ort', 'Gastknoten', 53.5, 10.0, $2, $2, \
+                 jsonb_build_object('created_by_account_id', $3::text))",
+    )
+    .bind(GUEST_NODE)
+    .bind(t0)
+    .bind(GUEST_C)
+    .execute(&pool)
+    .await
+    .expect("seed guest node");
+    sqlx::query(
+        "INSERT INTO domain_edges \
+         (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ($1, $2, $3, 'reference', $4, \
+                 jsonb_build_object('source_type', 'account', 'target_type', 'node'))",
+    )
+    .bind(GUEST_EDGE)
+    .bind(GUEST_C)
+    .bind(GUEST_NODE)
+    .bind(t0)
+    .execute(&pool)
+    .await
+    .expect("seed guest edge");
+
     delete_guest_account(&pool, GUEST_C)
         .await
         .expect("delete guest");
@@ -297,8 +355,41 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
             .fetch_one(&pool)
             .await
             .expect("proposal existence");
+    let node_creator: Option<String> = sqlx::query_scalar(
+        "SELECT payload ->> 'created_by_account_id' FROM domain_nodes WHERE id = $1",
+    )
+    .bind(GUEST_NODE)
+    .fetch_one(&pool)
+    .await
+    .expect("retained node creator");
+    let edge_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM domain_edges WHERE id = $1)")
+            .bind(GUEST_EDGE)
+            .fetch_one(&pool)
+            .await
+            .expect("edge existence");
+    let retained_author: Option<String> =
+        sqlx::query_scalar("SELECT author_account_id FROM governance_messages WHERE id = $1::uuid")
+            .bind(&retained_message.id)
+            .fetch_one(&pool)
+            .await
+            .expect("retained message author");
+    let retained_body: String =
+        sqlx::query_scalar("SELECT body FROM governance_messages WHERE id = $1::uuid")
+            .bind(&retained_message.id)
+            .fetch_one(&pool)
+            .await
+            .expect("retained message body");
+
     assert!(!account_exists);
     assert!(!proposal_exists);
+    assert_eq!(node_creator, None, "retained node must be anonymized");
+    assert!(!edge_exists, "account-bound Faden must be removed");
+    assert_eq!(
+        retained_author, None,
+        "foreign contribution must be anonymized"
+    );
+    assert_eq!(retained_body, "Dieser Beitrag bleibt erhalten.");
 
     cleanup(&pool).await;
 }

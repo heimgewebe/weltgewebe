@@ -117,8 +117,8 @@ async function installGovernanceRoutes(
         contentType: "application/json",
         body: JSON.stringify({
           id: "message-new",
-          author_account_id: WEBER_ID,
-          author_title: "Weber im Test",
+          author_account_id: GUEST_ID,
+          author_title: "Gast im Test",
           body: (body as { body: string }).body,
           created_at: "2026-07-15T12:00:00Z",
         }),
@@ -410,8 +410,20 @@ test("guest can read everything and submit only the own Weber application", asyn
   await expect(
     page.getByText("Willkommen im öffentlichen Gesprächsraum."),
   ).toBeVisible();
+  const discussion = page.getByLabel("Beitrag verfassen");
+  await expect(discussion).toBeVisible();
+  await discussion.fill("Ich erläutere meinen Antrag als Gast.");
+  await page.getByRole("button", { name: "Beitrag senden" }).click();
+  const messageRequest = governance.requests.find(
+    (entry) =>
+      entry.method === "POST" &&
+      entry.pathname === `/api/proposals/${PROPOSAL_ID}/messages`,
+  );
+  expect(messageRequest?.body).toEqual({
+    body: "Ich erläutere meinen Antrag als Gast.",
+  });
   await expect(
-    page.getByText(/Als Gast kannst du den Gesprächsraum lesen/),
+    page.getByText("Ich erläutere meinen Antrag als Gast."),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Veto einlegen" })).toHaveCount(
     0,

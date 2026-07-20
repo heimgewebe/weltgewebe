@@ -1148,20 +1148,25 @@ async fn nodes_post_requires_authentication() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
-async fn nodes_post_forbidden_for_gast() -> anyhow::Result<()> {
+async fn nodes_post_allows_gast_and_binds_creator() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
     std::fs::create_dir_all(&in_dir)?;
+    let guest_id = "eeeeeeee-eeee-4eee-8eee-000000000003";
 
-    let (app, cookie, state, _env) = app_with_account(&in_dir, gast_account("gast1")).await;
+    let (app, cookie, state, _env) = app_with_account(&in_dir, gast_account(guest_id)).await;
 
-    let body = r#"{"title":"New Node","kind":"Werkstatt","address":"Somewhere","location":{"lat":53.55,"lon":9.99}}"#;
+    let body = r#"{"title":"Gastknoten","kind":"Werkstatt","address":"Somewhere","location":{"lat":53.55,"lon":9.99}}"#;
     let res = app.oneshot(post_node_req(Some(&cookie), body)).await?;
-    assert_eq!(res.status(), StatusCode::FORBIDDEN);
-    assert!(
-        state.nodes.read().await.is_empty(),
-        "a forbidden request must not create a node"
-    );
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let created: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(created["created_by_account_id"], guest_id);
+
+    let id = created["id"].as_str().context("created node id")?;
+    let nodes = state.nodes.read().await;
+    let node = nodes.get(id).context("guest node in cache")?;
+    assert_eq!(node.created_by_account_id.as_deref(), Some(guest_id));
 
     Ok(())
 }

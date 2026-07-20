@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-domain
 owner: product-domain
-last_reviewed: 2026-07-17
+last_reviewed: 2026-07-20
 review_after: 2026-10-12
 depends_on: []
 relations:
@@ -34,175 +34,160 @@ verifies_with:
 ---
 # Garnrolle, Knoten und Faden
 
-## Grundmodell
+## Grundsatz
 
-Eine registrierte E-Mail-Adresse erzeugt zunächst eine **Gastidentität**, nicht bereits eine Garnrolle. Der Gast kann das Weltgewebe vollständig wahrnehmen, aber noch nicht daran weben.
+Jeder registrierte Account besitzt genau eine Garnrolle. Die Garnrolle ist der
+persönliche Ausgangspunkt im Weltgewebe; die Berechtigungsrolle `gast`, `weber`
+oder `admin` beschreibt dagegen, welche Verantwortung der Account übernehmen
+darf. Sichtbarkeit und Kartenposition werden ausschließlich durch `map_state`
+gesteuert.
 
-Erst ein angenommener Weberantrag aktiviert dieselbe Accountidentität als genau eine Garnrolle. Die Garnrolle ist damit kein Synonym für jeden technischen Account, sondern der sichtbare und handlungsfähige Ausgangspunkt eines Webers.
+Ein Account beginnt als `gast`. Gäste dürfen bereits weben: die eigene
+Garnrolle beschreiben und verankern, Knoten knüpfen, zulässige Fäden auslösen
+und in offenen Gesprächen mitreden. Der Weberstatus ist keine technische
+Freischaltung der ersten Garnrolle, sondern die gemeinschaftlich bestätigte
+Befugnis, auch fremde beziehungsweise gemeinschaftliche Inhalte zu pflegen und
+an formalen Entscheidungen mitzuwirken.
 
-| Produktbegriff | technischer Begriff | Bedeutung |
-|---|---|---|
-| Gastidentität | Account mit Rolle `gast` | Zugang ohne sichtbare Spur und ohne Webungsrechte |
-| Garnrolle | Account mit Rolle `weber` oder `admin` | sichtbarer und handlungsfähiger Ausgangspunkt |
-| Knoten | Node | Ort, Commons, Ressource, Vorhaben, Bedarf oder Angebot |
-| Webungsaktion | Domain action | gemeinschaftlich relevante Handlung eines Webers |
-| Faden | Edge/Projektion | automatisch abgeleitete Visualisierung einer Webungsaktion |
-| Gesprächsraum | Conversation | eigener Diskussions- oder Entscheidungsraum |
-| Beitrag | Message | Inhalt eines Gesprächsraums und selbst eine Webungsaktion |
+## Rollen und Fähigkeiten
 
-`thread` ist als technischer Sammelbegriff verboten. Eine Graphprojektion ist ein `edge`, ein Gesprächsraum eine `conversation`.
+| Fähigkeit | Gast | Weber | Admin |
+|---|---:|---:|---:|
+| Eigene Garnrolle beschreiben und verankern | ja | ja | ja |
+| Knoten knüpfen | ja | ja | ja |
+| Eigenen Knoten bearbeiten oder entfernen | ja | ja | ja |
+| Fremden oder eigentümerlosen Knoten pflegen | nein | ja | ja |
+| In offenen Knoten- und Antragsgesprächen schreiben | ja | ja | ja |
+| Eigenen Gesprächsbeitrag bearbeiten | ja | ja | ja |
+| Veto und Stimme im Weberverfahren | nein | ja | ja |
+| Moderativ fremde Beiträge entfernen | nein | nein | ja |
 
-## Gastidentität
-
-Ein Gast darf:
-
-- das gesamte öffentliche Weltgewebe ansehen;
-- suchen und filtern;
-- Garnrollen, Knoten, Fäden, Anträge und Gesprächsräume lesen;
-- den eigenen Weberstatus beantragen;
-- den eigenen Gaststatus vollständig auflösen.
-
-Ein Gast besitzt keine Garnrolle, erscheint nicht in öffentlichen Garnrollenlisten und kann nicht auf der Karte verortet werden. Er darf keine Webungsaktion ausführen und hinterlässt keine reguläre Spur.
-
-Die beiden zustandsändernden Gastvorgänge sind Sonderpfade:
-
-1. Weberstatus beantragen;
-2. Gastidentität auflösen und das Weltgewebe verlassen.
-
-Die Aufnahme als Weber folgt `docs/specs/governance-antraege.md`.
+Nicht angemeldete Besucher dürfen öffentliche Inhalte lesen, aber keine
+Webungsaktion ausführen.
 
 ## Garnrolle
 
-Eine angenommene Aufnahme aktiviert genau eine Garnrolle. Sie kann enthalten:
+Die Garnrolle ist der Account selbst. Es gibt weder einen zweiten
+Garnrollen-Datensatz nach der Aufnahme als Weber noch einen getrennten
+Gastmodus der Identität.
 
-- Anzeigename und Kurzbeschreibung;
-- Fähigkeiten, Güter, Interessen und Tags;
-- optional eine interne reale Position;
-- optional eine öffentliche Kartenprojektion;
-- geknüpfte Knoten;
-- aus Webungsaktionen abgeleitete Fäden.
+Jede neue Garnrolle beginnt datenschutzsicher mit:
 
-Die Rollen `weber` und `admin` regeln technische Rechte. Die Garnrolle bleibt die fachliche Darstellung des webenden Accounts.
+```text
+map_state = not_on_map
+```
 
-Garnrollen-Schreibwege sind strikt eigenbezogen: Eine angemeldete Garnrolle darf nur ihr eigenes Profil und ihre eigene Kartenprojektion bearbeiten. Andere Garnrollen dürfen über öffentliche Account-/Garnrollen-Schreibwege weder bearbeitet noch gelöscht werden.
+Der Account kann anschließend bewusst wählen:
 
-## Verortung und Sichtbarkeit
+- `not_on_map`: keine öffentliche Position;
+- `exact`: ausdrücklich bestätigte genaue Position;
+- `radius`: stabile, abgeleitete ungefähre Position innerhalb des gewählten
+  Radius.
 
-Die Nutzerhandlung lautet:
-
-> Garnrolle auf die Karte setzen
-
-Die öffentliche Darstellung kennt genau drei Zustände:
-
-| Nutzertext | API-Wert | Wirkung |
-|---|---|---|
-| Noch nicht auf der Karte | `not_on_map` | keine öffentliche Position |
-| Exakt sichtbar | `exact` | öffentliche Position entspricht der gewählten Position |
-| Im Umkreis sichtbar | `radius` | öffentliche Position wird angenähert dargestellt |
-
-Regeln:
-
-1. Eine Garnrolle beginnt nach der Aufnahme im Zustand `not_on_map`.
-2. Eine Garnrolle kann ohne öffentliche Position bestehen.
-3. Exakte Sichtbarkeit ist ein regulärer, positiv formulierter Fall.
-4. Nur `radius` verlangt ein Radiusfeld.
-5. `not_on_map` darf auch bei intern vorhandener Position keine öffentliche Koordinate ausgeben.
-6. Alte RoN- und `mode`-Felder sind nur Migrationskontext und keine Produktsprache.
+Nur der angemeldete Account darf sein Garnrollenprofil verändern. Interne
+Positionen und private Projektionsbindungen erscheinen nie in öffentlichen
+Antworten.
 
 ## Knoten
 
-Ein Knoten ist ein fachlich fassbares Bündel. Er kann verortet oder ortsunabhängig sein. Beispiele:
+Knoten beschreiben Orte, Kollektivgüter, Ressourcen, Vorhaben, Bedürfnisse oder
+Angebote. Jeder neu erzeugte Knoten erhält serverseitig eine unveränderliche
+Urheberbindung:
 
-- Commons-Ort;
-- Projekt oder Initiative;
-- Werkzeug oder Ressource;
-- Angebot oder Bedarf;
-- Veranstaltung;
-- Idee, Frage oder Beschlussgegenstand.
+```text
+created_by_account_id = Account-ID der authentifizierten Sitzung
+```
 
-Knoten werden durch die Webungsaktion **Knoten knüpfen** aus einer angemeldeten Garnrolle heraus angelegt. Seed- oder Demo-Inhalte dürfen den organischen Produktpfad nicht ersetzen.
+Der Client darf diese Bindung weder vorgeben noch ändern. Beim Ersetzen oder
+Bearbeiten eines Knotens bleibt sie erhalten.
 
-Knoten gehören anschließend zum gemeinsamen Gewebe und nicht dauerhaft einer einzelnen Garnrolle. Weber und Administratoren dürfen ihre fachlichen Felder unmittelbar bearbeiten oder einen Knoten unmittelbar löschen. Gäste dürfen diese Änderungen weder ausführen noch simulieren.
+Für bestehende Knoten, deren Urheber historisch nicht belegt ist, wird keine
+Urheberschaft erfunden. Sie besitzen keine `created_by_account_id`. Daraus folgt:
 
-Knotenänderungen und Knotenlöschungen sind direkte Webprozesse. Sie dürfen nicht als Governance-Anträge modelliert, umgedeutet oder verzögert werden.
+- Gäste dürfen solche Knoten nicht bearbeiten oder entfernen;
+- Weber dürfen sie gemeinschaftlich pflegen;
+- Administratoren behalten den moderativen Pfad.
 
-Für Bearbeitung und Löschung gelten folgende Integritätsregeln:
-
-1. Der Server validiert und speichert Änderungen vollständig; der Browser verändert keine lokale Nebenwahrheit.
-2. Technische Identität und Erstellungszeit des Knotens bleiben bei einer Bearbeitung erhalten.
-3. Eine Löschung entfernt den Knoten und alle daraus betroffenen Fadenprojektionen als serverseitig serialisierten Vorgang.
-4. Das Entfernen der Fadenprojektionen ist eine serverseitige Folge der Knotenlöschung und kein direkter Fadenlöschweg.
-5. Knoten- und Fadenpersistenz müssen für die Löschung dieselbe kanonische Quelle verwenden; gemischte Schreibquellen werden fail-closed abgelehnt.
-
-## Webungsaktionen
-
-Webungsaktionen verändern oder erweitern das gemeinsame Gewebe und werden nach erfolgreicher Servervalidierung unmittelbar ausgeführt. Dazu gehören unter anderem:
-
-- Knoten knüpfen;
-- Knoten bearbeiten;
-- Knoten löschen;
-- kommunizieren;
-- Anträge stellen;
-- ein begründetes Veto einlegen;
-- abstimmen;
-- später weitere ausdrücklich spezifizierte Gemeinschaftshandlungen.
-
-Die jeweilige fachliche Aktion ist die Quelle der Wahrheit. Sie wird vollständig validiert, autorisiert und dauerhaft gespeichert. Eine sichtbare Fadenprojektion darf niemals die eigentliche Handlung ersetzen.
+Ein Gast darf einen vorhandenen Knoten nur verändern, wenn dessen gespeicherte
+Urheberbindung exakt der Account-ID seiner aktuellen Sitzung entspricht. Diese
+Prüfung erfolgt auf dem Server und gilt unabhängig von der sichtbaren
+Oberfläche. Versionsvorbedingungen (`If-Match`) schützen zusätzlich gegen
+überschriebene Paralleländerungen.
 
 ## Fäden
 
-Ein Faden ist **kein direkt bearbeitbares Fachobjekt**. Nutzer können Fäden weder erstellen noch ändern noch löschen.
+Fäden sind Beziehungen zwischen Garnrollen und Knoten. Der produktive
+Webungsweg erzeugt sie serverseitig als Folge einer fachlichen Handlung, etwa
+wenn ein angemeldeter Account einen Knoten knüpft. Ein Client darf dabei keine
+fremde Garnrolle als handelnden Ausgangspunkt vortäuschen.
 
-Ein Faden entsteht ausschließlich als automatisch abgeleitete Visualisierung einer erfolgreichen Webungsaktion. Fäden bleiben abgeleitete Projektionen ohne öffentliche CRUD-Routen. Daraus folgen vier harte Regeln:
+Dieser Schnitt eröffnet bewusst keinen allgemeinen manuellen
+`POST /edges`-Editor. Ein solcher Editor benötigt einen eigenen Vertrag für
+Fadenarten, Eigentum, Änderung, Entfernung und Missbrauchsschutz. Bis dahin
+bleiben Fäden aus den belegten Webungsaktionen abgeleitete, öffentlich lesbare
+Projektionen.
 
-1. Es gibt keinen öffentlichen `POST`, `PUT`, `PATCH` oder `DELETE`-Pfad für Fäden.
-2. Die Benutzeroberfläche bietet keinen Fadeneditor und keine Aktion „Faden ohne zugrunde liegende Handlung erzeugen“.
-3. Der Server erzeugt oder repariert die Projektion mit einer stabilen Operations-ID, damit Wiederholungen keine doppelten Fäden anlegen.
-4. Aus der Projektion muss auf die belegte Webungsaktion zurückgeführt werden können; Fäden besitzen keine von ihr unabhängige Wahrheit.
+Freie interne Fadennotizen gehören nicht zur öffentlichen Projektion.
 
-Beim Knotenknüpfen erzeugt der Server nach der dauerhaften Knotenanlage den zugehörigen Garnrolle-Knoten-Faden. Schlägt die Projektion nach der Knotenanlage fehl, meldet der Server den Gesamtvorgang als noch nicht erfolgreich. Eine Wiederholung derselben Operations-ID repariert die fehlende Projektion; der Browser darf weder selbst einen Faden schreiben noch „ohne Faden fortfahren“.
+## Gespräche
 
-Anträge, Vetos, Abstimmungen und Gesprächsbeiträge sind als eigene dauerhafte Governance-Datensätze belegt. Ihr Darstellungskontext ist die Informationsseite des jeweiligen Antrags: Der Antrag steht im Zentrum; Antragstellung, Vetos, Gesprächsbeiträge und Stimmen werden als nicht bearbeitbare Fadenbündel darum angeordnet. Die Projektion wird bei jedem Laden ausschließlich aus den Governance-Datensätzen berechnet und nicht als zweiter Domain-Edge-Bestand gespeichert.
+Jeder PostgreSQL-Knoten besitzt genau einen öffentlichen Gesprächsraum.
+Angemeldete Gäste, Weber und Administratoren dürfen während des offenen
+Lebenszyklus Beiträge verfassen. Ein Beitrag besitzt einen Autoren-Snapshot und
+eine aktive Accountbindung:
 
-Die geografische Karte zeigt diese Governance-Fäden nicht, weil ein Antrag keinen räumlichen Ort besitzt. Exakte Aktionszahlen bleiben als Text sichtbar; nur die Zahl gleichzeitig gezeichneter paralleler Linien darf zur Renderbegrenzung gedeckelt werden. Es entsteht dafür kein manueller Fadenschreibweg.
+- nur der Autor darf den eigenen Beitrag bearbeiten;
+- Autor oder Administrator dürfen ihn entfernen;
+- beim Löschen eines Accounts wird die aktive Accountbindung entfernt, der
+  historische Anzeigename und der Beitrag bleiben erhalten.
 
-### Auflösung unverzwirnter Fäden
+## Aufnahme als Weber
 
-Jeder neu abgeleitete, unverzwirnte Faden besitzt ab seiner Entstehung eine eigene Lebensdauer von exakt **168 Stunden**. Der Server setzt `expires_at` ausschließlich aus dem servereigenen `created_at`; ein Client darf weder Beginn noch Ende vorgeben.
+Die Aufnahme folgt `docs/specs/governance-antraege.md`. Ein angenommener
+Weberantrag ändert die Berechtigungsrolle von `gast` auf `weber`. Er erzeugt
+keine neue Garnrolle und verändert weder Profil noch Kartenstatus, Position,
+Urheberschaft eigener Knoten oder bisherige Gesprächsbeiträge.
 
-1. Die sichtbare Stärke nimmt zwischen `created_at` und `expires_at` kontinuierlich und linear von vollständig sichtbar auf unsichtbar ab. Die Karte projiziert den Wert minütlich neu; bei einer Lebensdauer von sieben Tagen beträgt der maximale Deckkraftschritt weniger als 0,0001. Die exakte Ablaufgrenze wird unabhängig davon terminiert.
-2. Bei `now == expires_at` gehört der Faden nicht mehr zur aktiven Projektion. Listen, Einzelabrufe und Karte geben ihn dann nicht mehr aus.
-3. Eine spätere Webungsaktion verlängert keinen bestehenden Faden. Sie erzeugt, sofern fachlich vorgesehen, eine neue Projektion mit eigener Uhr.
-4. Die zugrunde liegende Webungsaktion und ihre Chronik bleiben dauerhaft erhalten. Aufgelöst wird nur die abgeleitete Fadenprojektion.
-5. Bestehende Datensätze ohne `expires_at` bleiben aus Kompatibilitätsgründen sichtbar. Sie dürfen nicht durch eine rückwirkend geratene Ablaufzeit gelöscht werden.
-6. Ein vorhandener, aber ungültiger oder nicht exakt 168 Stunden langer Ablaufvertrag wird in aktiven Projektionen fail-closed ausgeblendet.
+Der zusätzliche Weberstatus verleiht:
 
-Ein verzwirnter, dauerhafter Zusammenhang heißt **Garn** und ist vom Fadenverfall ausgenommen. Die Verzwirnungsaktion und ihre technische Garnrepräsentation sind nicht Bestandteil dieses Vertragsstands; bis zu ihrer eigenen kanonischen Spezifikation darf dafür weder ein öffentliches CRUD noch ein geratenes Edge-Feld eingeführt werden. `expires_at = null` ist deshalb kein regulärer Erzeugungswert für neue Fäden, sondern ausschließlich ein Legacy- und späterer expliziter Garn-Kompatibilitätspfad.
+- gemeinschaftliche Pflege fremder oder historisch eigentümerloser Knoten;
+- formale Veto- und Stimmrechte im Weberverfahren;
+- die Verantwortung, Veränderungen am gemeinsamen Gewebe nachvollziehbar und
+  konfliktgeschützt vorzunehmen.
 
-## Erster organischer Produktfluss
+## Gast-Austritt
 
-1. E-Mail-Adresse anmelden oder registrieren.
-2. Als Gast das Weltgewebe erkunden.
-3. Weberstatus beantragen.
-4. Nach Annahme genau eine Garnrolle erhalten.
-5. Garnrolle beschreiben und optional auf die Karte setzen.
-6. Ersten Knoten knüpfen.
-7. Der Server leitet den passenden Faden aus derselben Webungsaktion ab.
-8. Garnrolle, Knoten und abgeleitete Projektion nach Neuladen wiederfinden.
+Ein Gast darf den eigenen Account löschen. Der Austritt ist ein atomarer
+PostgreSQL-Vorgang:
 
-Dieser vertikale Schnitt muss ohne Demo-Fallback und mit eindeutigem Persistenzpfad funktionieren.
+- eigene Weberanträge und deren abhängige Verfahrensdaten werden entfernt;
+- Passkeys und Sitzungen werden entfernt;
+- die Garnrolle wird entfernt;
+- eigene, inzwischen gemeinschaftlich sichtbare Knoten bleiben bestehen und
+  verlieren ihre aktive Urheberbindung;
+- Fäden mit der gelöschten Garnrolle als Account-Endpunkt werden entfernt;
+- Beiträge in fremden Anträgen und Knotengesprächen bleiben mit ihrem
+  Anzeigenamen erhalten, verlieren aber die Account-ID.
 
-## Produktsprache
+Der Austritt ist nur verfügbar, wenn Accounts, Knoten und Fäden kanonisch in
+PostgreSQL gelesen und geschrieben werden. Ein Mischbetrieb wird fail-closed
+abgewiesen, damit keine Spuren in einer zweiten Datenquelle zurückbleiben.
 
-Nutzertexte verwenden Gast, Weber, Garnrolle, Knoten, Faden, knüpfen, weben, Sichtbarkeit, Antrag und Gesprächsraum. Interne Begriffe wie Account, Node, Edge, Credential, Token oder WebAuthn erscheinen nicht in der Hauptführung.
+## Typischer Ablauf
 
-## Nicht-Ziele
+1. Registrierung erzeugt eine Gast-Garnrolle im Zustand `not_on_map`.
+2. Der Gast beschreibt und verankert die eigene Garnrolle freiwillig.
+3. Der Gast knüpft einen Knoten; der Server bindet dessen Urheberschaft an den
+   Account und erzeugt die zulässigen abgeleiteten Fäden.
+4. Der Gast kommuniziert in Knoten- und Antragsgesprächen.
+5. Der Gast kann den Weberstatus beantragen.
+6. Bei Annahme bleibt die gesamte bisherige Identität unverändert; nur die
+   gemeinschaftlichen Pflege- und Entscheidungsrechte kommen hinzu.
 
-- kein Trust-Score;
-- keine automatische Weberbeförderung nach Zeit oder Aktivität;
-- keine Garnrolle für Gäste;
-- kein direkter Fadeneditor;
-- kein anonymer Alternativaccount neben der Gastidentität;
-- kein Privacy-Modus als Accountart;
-- keine künstliche Währung;
-- kein Demo-Datensatz als Ersatz für echte Webungsaktionen.
+## Nicht-Ziele dieses Schnitts
+
+- kein allgemeiner manueller Fadeneditor;
+- keine freie Übertragung von Knoten-Eigentum;
+- keine automatische Beförderung nach Aktivität oder Zeit;
+- keine Bearbeitung fremder Gesprächsbeiträge außer administrativer Entfernung;
+- keine erfundene Urheberschaft für Altbestand.

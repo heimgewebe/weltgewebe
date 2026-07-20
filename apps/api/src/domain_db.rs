@@ -156,6 +156,7 @@ pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node
             title,
             created_at,
             updated_at,
+            created_by_account_id: payload_string(&payload, "created_by_account_id"),
             summary: payload_string(&payload, "summary"),
             info: payload_string(&payload, "info"),
             tags: payload_string_array(&payload, "tags"),
@@ -594,6 +595,7 @@ fn node_from_row(row: NodeRow) -> Result<Node, anyhow::Error> {
         title,
         created_at,
         updated_at,
+        created_by_account_id: payload_string(&payload, "created_by_account_id"),
         summary: payload_string(&payload, "summary"),
         info: payload_string(&payload, "info"),
         tags: payload_string_array(&payload, "tags"),
@@ -620,6 +622,12 @@ fn edge_from_row(row: EdgeRow) -> Result<Edge, anyhow::Error> {
 
 fn serialize_node_payload(node: &Node) -> Result<String, serde_json::Error> {
     let mut payload_map = Map::new();
+    if let Some(created_by_account_id) = &node.created_by_account_id {
+        payload_map.insert(
+            "created_by_account_id".to_string(),
+            json!(created_by_account_id),
+        );
+    }
     if let Some(summary) = &node.summary {
         payload_map.insert("summary".to_string(), json!(summary));
     }

@@ -200,6 +200,18 @@ test.describe("Komposition Flow (weber)", () => {
 });
 
 test.describe("Komposition Flow (gast/anonymous)", () => {
+  test("Authenticated guests can open the node composer", async ({ page }) => {
+    await gotoMapAs(page, {
+      authenticated: true,
+      account_id: "guest-e2e-1",
+      role: "gast",
+    });
+    await activateToolFanAction(page, "weave");
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+    await expect(panel.getByLabel("Name")).toBeFocused();
+  });
+
   test("Anonymous visitors get no node write path and no longpress panel", async ({
     page,
   }) => {
