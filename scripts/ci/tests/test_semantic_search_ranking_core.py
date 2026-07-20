@@ -11,6 +11,8 @@ from typing import Sequence
 
 from scripts.search.hybrid_ranking_core import (
     MAX_CANDIDATES,
+    MAX_TEXT_CHARACTERS,
+    SEMANTIC_APPEND_LIMIT,
     BoundVector,
     GenerationIdentity,
     GenerationMismatchError,
@@ -201,6 +203,17 @@ class SemanticSearchRankingCoreTests(unittest.TestCase):
                 language="de",
             )
 
+    def test_text_length_boundary_accepts_exact_limit_and_rejects_overflow(
+        self,
+    ) -> None:
+        exact = "a" * MAX_TEXT_CHARACTERS
+        self.assertEqual(SearchQuery(exact).text, exact)
+        self.assertEqual(document("node", "Titel", body=exact).body, exact)
+        with self.assertRaisesRegex(SearchCoreError, "exceeds"):
+            SearchQuery(exact + "a")
+        with self.assertRaisesRegex(SearchCoreError, "exceeds"):
+            document("node", "Titel", body=exact + "a")
+
     def test_content_hash_binds_normalized_search_fields(self) -> None:
         first = document("node", "Café Werkstatt", tags=("Hilfe",))
         equivalent = document("node", "CAFÉ—WERKSTATT", tags=("HILFE",))
@@ -367,6 +380,52 @@ class SemanticSearchRankingCoreTests(unittest.TestCase):
                     **kwargs,
                 )
 
+    def test_threshold_boundaries_are_inclusive_and_semantic_append_is_top_only(
+        self,
+    ) -> None:
+        generation = GenerationIdentity.build(identity(), "document-v1")
+        candidates = [
+            document("lexical", "Lexikalisch"),
+            document("top", "Semantisch eins"),
+            document("runner", "Semantisch zwei"),
+            document("lower", "Semantisch drei"),
+        ]
+
+        def vector_for_cosine(score: float) -> BoundVector:
+            return BoundVector.build(
+                generation, [score, math.sqrt(1.0 - score * score)]
+            )
+
+        result = rank_hybrid(
+            SearchQuery("synthetische Grenzanfrage"),
+            candidates,
+            generation,
+            BoundVector.build(generation, [1.0, 0.0]),
+            {
+                "lexical": vector_for_cosine(0.1),
+                "top": vector_for_cosine(1.0),
+                "runner": vector_for_cosine(0.985),
+                "lower": vector_for_cosine(0.9),
+            },
+            lexical_ranked_node_ids=("lexical",),
+            semantic_minimum_cosine=1.0,
+            semantic_minimum_margin=0.015,
+        )
+        self.assertEqual(SEMANTIC_APPEND_LIMIT, 1)
+        self.assertEqual(result.ranked_node_ids, ("lexical", "top"))
+
+        below = math.nextafter(0.55, 0.0)
+        rejected = rank_hybrid(
+            SearchQuery("synthetische Grenzanfrage"),
+            [document("below", "Unter Grenze")],
+            generation,
+            BoundVector.build(generation, [1.0, 0.0]),
+            {"below": vector_for_cosine(below)},
+            lexical_ranked_node_ids=(),
+            semantic_minimum_cosine=0.55,
+        )
+        self.assertEqual(rejected.ranked_node_ids, ())
+
     def test_precomputed_postgres_ranking_is_authoritative_and_scope_checked(
         self,
     ) -> None:
@@ -413,7 +472,7 @@ class SemanticSearchRankingCoreTests(unittest.TestCase):
             lexical_ranked_node_ids=(),
             semantic_minimum_margin=0.0,
         )
-        self.assertEqual(result.ranked_node_ids, ("node-a", "node-b"))
+        self.assertEqual(result.ranked_node_ids, ("node-a",))
 
     def test_only_explicit_provider_unavailability_falls_back_lexically(self) -> None:
         candidates = [document("exact", "Werkstatt"), document("other", "Treffpunkt")]
@@ -427,6 +486,31 @@ class SemanticSearchRankingCoreTests(unittest.TestCase):
         self.assertEqual(result.mode, "lexical_fallback")
         self.assertEqual(result.ranked_node_ids[0], "exact")
         self.assertIn("unavailable", result.fallback_reason or "")
+        limited = rank_with_provider(
+            UnavailableProvider(),
+            SearchQuery("Werkstatt"),
+            candidates,
+            document_revision="document-v1",
+            lexical_ranked_node_ids=("exact", "other"),
+            limit=1,
+        )
+        self.assertEqual(limited.ranked_node_ids, ("exact",))
+        empty = rank_with_provider(
+            UnavailableProvider(),
+            SearchQuery("Werkstatt"),
+            candidates,
+            document_revision="document-v1",
+            lexical_ranked_node_ids=(),
+        )
+        self.assertEqual(empty.ranked_node_ids, ())
+        with self.assertRaisesRegex(SearchCoreError, "duplicate"):
+            rank_with_provider(
+                UnavailableProvider(),
+                SearchQuery("Werkstatt"),
+                candidates,
+                document_revision="document-v1",
+                lexical_ranked_node_ids=("exact", "exact"),
+            )
         with self.assertRaises(ProviderBoundaryError):
             rank_with_provider(
                 BrokenBoundaryProvider(),
@@ -435,6 +519,20 @@ class SemanticSearchRankingCoreTests(unittest.TestCase):
                 document_revision="document-v1",
                 lexical_ranked_node_ids=("exact",),
             )
+
+    def test_empty_candidate_sets_return_empty_rankings(self) -> None:
+        query = SearchQuery("synthetische Anfrage")
+        self.assertEqual(rank_lexical(query, ()).ranked_node_ids, ())
+        generation = GenerationIdentity.build(identity(), "document-v1")
+        result = rank_hybrid(
+            query,
+            (),
+            generation,
+            BoundVector.build(generation, [1.0, 0.0]),
+            {},
+            lexical_ranked_node_ids=(),
+        )
+        self.assertEqual(result.ranked_node_ids, ())
 
     def test_candidate_limit_and_duplicate_ids_are_rejected(self) -> None:
         duplicate = [document("same", "Alpha"), document("same", "Beta")]
@@ -487,14 +585,68 @@ class SemanticSearchRankingCoreTests(unittest.TestCase):
         self.assertFalse(schema["additionalProperties"])
         self.assertFalse(schema["$defs"]["quality"]["additionalProperties"])
         self.assertEqual(schema["properties"]["task_id"]["const"], TASK_ID)
+        self.assertEqual(schema["properties"]["schema_version"]["const"], 2)
+        ranking = schema["properties"]["ranking_contract"]["properties"]
+        self.assertEqual(ranking["semantic_append_limit"]["const"], 1)
+        self.assertEqual(ranking["semantic_tie_breaker"]["const"], "node_id_ascending")
+        self.assertNotIn("hard_precedence", ranking)
+        self.assertEqual(
+            schema["properties"]["baseline"]["required"], ["t003_postgresql"]
+        )
+
+    def test_receipt_quality_aggregates_distinguish_all_cases_from_natural_subset(
+        self,
+    ) -> None:
+        receipt = json.loads(DEFAULT_OUTPUT.read_text(encoding="utf-8"))
+        dataset = json.loads(DEFAULT_DATASET.read_text(encoding="utf-8"))
+        cases = {item["id"]: item for item in dataset["cases"]}
+        qualities = [
+            receipt["baseline"]["t003_postgresql"]["quality"],
+            *(item["quality"] for item in receipt["models"]),
+        ]
+        for quality in qualities:
+            with self.subTest(natural=quality["natural_top3_relevant_count"]):
+                self.assertEqual(
+                    sum(
+                        bucket["top3"]
+                        for bucket in quality["per_expected_rank_class"].values()
+                    ),
+                    quality["top3_relevant_count"],
+                )
+                self.assertEqual(
+                    sum(item["top3_relevant"] for item in quality["cases"]),
+                    quality["top3_relevant_count"],
+                )
+                self.assertEqual(
+                    sum(
+                        item["top3_relevant"]
+                        and cases[item["case_id"]]["natural_language"]
+                        for item in quality["cases"]
+                    ),
+                    quality["natural_top3_relevant_count"],
+                )
+
+        four_b = next(
+            item["quality"]
+            for item in receipt["models"]
+            if item["model"]["model_id"] == "qwen3-embedding:4b"
+        )
+        self.assertEqual(four_b["top3_relevant_count"], 23)
+        self.assertEqual(four_b["natural_top3_relevant_count"], 18)
+        self.assertEqual(four_b["per_expected_rank_class"]["semantic"]["top3"], 16)
 
     def test_checked_in_receipt_is_schema_valid_hash_bound_and_vector_free(
         self,
     ) -> None:
         if not DEFAULT_OUTPUT.exists():
             self.skipTest("T004 live receipt not generated yet")
+        schema = json.loads(RECEIPT_SCHEMA.read_text(encoding="utf-8"))
         receipt = json.loads(DEFAULT_OUTPUT.read_text(encoding="utf-8"))
         self.assertEqual(receipt["task_id"], TASK_ID)
+        self.assertEqual(receipt["schema_version"], 2)
+        self.assertEqual(set(receipt["baseline"]), {"t003_postgresql"})
+        self.assertEqual(receipt["ranking_contract"]["semantic_append_limit"], 1)
+        self.assertIn("hybrid ranking in production", receipt["does_not_establish"])
         check_receipt(DEFAULT_OUTPUT, DEFAULT_DATASET, DEFAULT_SCHEMA)
         serialized = DEFAULT_OUTPUT.read_text(encoding="utf-8")
         self.assertNotIn('"embedding"', serialized)
@@ -504,11 +656,12 @@ class SemanticSearchRankingCoreTests(unittest.TestCase):
         text = ARCHITECTURE.read_text(encoding="utf-8")
         required = (
             "T004-Livebeleg",
-            "weltgewebe-hybrid-ranking-v1",
+            "weltgewebe-hybrid-ranking-v2",
             "ProviderUnavailableError",
             "keine persistente Projektion",
             "keine Search-API",
             "keine Webintegration",
+            "kein hybrides Ranking in Produktion",
             "keine SemantAH-Stilllegung",
         )
         for phrase in required:
