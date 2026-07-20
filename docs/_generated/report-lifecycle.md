@@ -16,10 +16,10 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Metric | Count |
 | --- | ---: |
-| files_scanned | 49 |
-| reports_checked | 43 |
+| files_scanned | 50 |
+| reports_checked | 44 |
 | reports_ignored_non_report | 6 |
-| reports_with_lifecycle_state | 43 |
+| reports_with_lifecycle_state | 44 |
 | reports_missing_lifecycle_state | 0 |
 | findings_total | 0 |
 
@@ -27,7 +27,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | lifecycle_state | Count |
 | --- | ---: |
-| active | 31 |
+| active | 32 |
 | deferred | 0 |
 | superseded | 6 |
 | archived | 6 |
@@ -74,6 +74,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/optimierungsbericht.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
 | docs/reports/proof-matrix-generalization-decision.md | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  |
 | docs/reports/repo-audit-2026-07-02.md | active | audit | REPO-AUDIT-001 | 2026-10-31 |  |
+| docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md | active | planning | WELTGEWEBE-OS-001 | 2026-10-20 |  |
 
 ## Deferred Reports
 
