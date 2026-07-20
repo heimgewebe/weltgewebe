@@ -579,3 +579,60 @@ async fn owned_node_mutation_waits_for_guest_exit_and_then_loses_ownership() {
 
     cleanup(&pool).await;
 }
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn finalization_locks_account_before_proposal() {
+    const ACCOUNT: &str = "gov-proof-lock-order";
+
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, ACCOUNT, "gast").await;
+    let t0 = Utc.with_ymd_and_hms(2026, 7, 1, 12, 0, 0).unwrap();
+    let proposal = create_weber_proposal(&pool, ACCOUNT, "Lock Order", None, t0)
+        .await
+        .expect("create proposal");
+
+    let mut account_blocker = pool.begin().await.expect("begin account blocker");
+    sqlx::query("SELECT id FROM domain_accounts WHERE id = $1 FOR UPDATE")
+        .bind(ACCOUNT)
+        .execute(&mut *account_blocker)
+        .await
+        .expect("lock account");
+
+    let finalizer_pool = pool.clone();
+    let finalizer = tokio::spawn(async move {
+        finalize_due_proposals(&finalizer_pool, t0 + Duration::days(7)).await
+    });
+    sleep(TokioDuration::from_millis(150)).await;
+    assert!(
+        !finalizer.is_finished(),
+        "finalizer must wait for account lock"
+    );
+
+    let mut proposal_probe = pool.begin().await.expect("begin proposal probe");
+    sqlx::query("SELECT id FROM governance_proposals WHERE id = $1::uuid FOR UPDATE NOWAIT")
+        .bind(&proposal.id)
+        .execute(&mut *proposal_probe)
+        .await
+        .expect("proposal must remain unlocked while account is blocked");
+    proposal_probe
+        .rollback()
+        .await
+        .expect("rollback proposal probe");
+
+    account_blocker
+        .commit()
+        .await
+        .expect("release account lock");
+    let outcomes = timeout(TokioDuration::from_secs(5), finalizer)
+        .await
+        .expect("finalizer completes")
+        .expect("finalizer task")
+        .expect("finalize proposal");
+    assert_eq!(outcomes.len(), 1);
+    assert_eq!(outcomes[0].status, ProposalStatus::Accepted);
+
+    cleanup(&pool).await;
+}
