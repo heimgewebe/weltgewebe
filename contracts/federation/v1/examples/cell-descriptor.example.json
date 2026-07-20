@@ -1,0 +1,17 @@
+{
+  "protocol_version": "wg-federation/1",
+  "cell_id": "cell-a.example",
+  "public_base_url": "https://cell-a.example/federation/v1",
+  "active_key": {
+    "key_id": "key-2026-07",
+    "algorithm": "Ed25519",
+    "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  "capabilities": [
+    "signed-events",
+    "origin-owned-objects",
+    "neighbourhood-scope",
+    "shared-rooms",
+    "quarantine"
+  ]
+}

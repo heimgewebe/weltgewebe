@@ -71,3 +71,17 @@ Der Validator prüft Schemaform, eindeutige Fall-IDs, sichtbare relevante Knoten
 
 Er verhindert Schema-Drift: Weltgewebe ist ein eigenständiges Projekt, aber die Domain-Contracts sind eine
 stabile, externe Schnittstelle. Durch lokale Validierung bleibt alles synchron zu CI und Dokumentation.
+
+## Föderationsvertrag v1 prüfen
+
+Die öffentliche Grenze zwischen unabhängig betriebenen Weltgewebe-Zellen ist unter `contracts/federation/v1/` beschrieben. Sie umfasst die öffentliche Zellbeschreibung und signierte Objekt-Ereignisse für Knoten, Kanten und gemeinsame Räume.
+
+Die statische Prüfung läuft ohne zusätzliche Python-Abhängigkeiten:
+
+```sh
+python3 -m unittest scripts.ci.tests.test_federation_contract
+```
+
+Die Prüfung bestätigt geschlossene Schemas, vollständige Beispiele, die Trennung von angewandter Inbox und Quarantäne sowie die öffentliche HTTP-Grenze ohne NATS-, Datenbank- oder Kubernetes-Begriffe. Kryptografische Signatur-, Replay-, Versions-, Partitions- und Persistenzbeweise liegen in den Rust-Tests unter `apps/api/tests/`.
+
+Der normative Ablauf ist in `docs/specs/federation-wire-v1.md` dokumentiert. Beispielschlüssel und -signaturen sind ausschließlich formale Schemafixtures und keine verwendbaren Betreibergeheimnisse.
