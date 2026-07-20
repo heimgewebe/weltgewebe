@@ -17,11 +17,12 @@ interface MockMessage {
 async function openFirstNodeConversation(page: Page) {
   await page.goto("/map");
   await page.waitForSelector(".map-marker");
-  await page
-    .locator(".map-marker:not(.marker-account)")
-    .first()
-    .click({ force: true });
+  const marker = page.locator(".map-marker:not(.marker-account)").first();
+  await marker.focus();
+  await expect(marker).toBeFocused();
+  await page.keyboard.press("Enter");
   const panel = page.getByTestId("context-panel");
+  await expect(panel).toBeVisible();
   await panel.getByRole("tab", { name: "Gespräch" }).click();
   return panel;
 }
