@@ -466,6 +466,21 @@ async fn node_conversation_vertical_slice() {
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 
+    let (status, invalid_content) = json_response(
+        &app,
+        request(
+            "POST",
+            &message_path,
+            Some(&author),
+            Some(r#"{"content":"   \n\t"}"#),
+            Some("70000000-0000-4000-8000-000000000099"),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(invalid_content["code"], "invalid_message_content");
+
     let first_key = "70000000-0000-4000-8000-000000000002";
     let (status, first) = json_response(
         &app,
@@ -563,6 +578,8 @@ async fn node_conversation_vertical_slice() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(page_two["items"].as_array().map(Vec::len), Some(1));
+    assert_eq!(page_two["page"]["has_more"], false);
+    assert!(page_two["page"]["next_cursor"].is_null());
     let first_page_ids: Vec<&str> = page_one["items"]
         .as_array()
         .expect("first page")
@@ -670,6 +687,65 @@ async fn node_conversation_vertical_slice() {
     .await
     .expect("persisted tombstone");
     assert_eq!(persisted, (None, true));
+
+    let (status, repeated_tombstone) = json_response(
+        &app,
+        request(
+            "DELETE",
+            &item_path,
+            Some(&admin),
+            None,
+            None,
+            tombstone["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(repeated_tombstone["updated_at"], tombstone["updated_at"]);
+
+    let (status, edit_tombstone) = json_response(
+        &app,
+        request(
+            "PATCH",
+            &item_path,
+            Some(&author),
+            Some(r#"{"content":"Wiederbelebung"}"#),
+            None,
+            tombstone["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(edit_tombstone["code"], "message_deleted");
+
+    let author_delete_target: (String, chrono::DateTime<chrono::Utc>) = sqlx::query_as(
+        "SELECT id::text, updated_at FROM domain_messages
+         WHERE conversation_id = $1::uuid AND content = 'Dritter'",
+    )
+    .bind(&conversation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("message for author tombstone proof");
+    let author_delete_path = format!("{message_path}/{}", author_delete_target.0);
+    let (status, author_tombstone) = json_response(
+        &app,
+        request(
+            "DELETE",
+            &author_delete_path,
+            Some(&author),
+            None,
+            None,
+            Some(
+                &author_delete_target
+                    .1
+                    .to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true),
+            ),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(author_tombstone["content"].is_null());
+    assert!(author_tombstone["deleted_at"].is_string());
 
     let version_after_messages: i64 =
         sqlx::query_scalar("SELECT version FROM domain_projection_state WHERE singleton")
