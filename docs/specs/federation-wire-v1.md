@@ -18,8 +18,6 @@ relations:
     target: docs/specs/federation-core.md
   - type: relates_to
     target: docs/adr/ADR-0011__foederierte-gewebezellen.md
-  - type: verified_by
-    target: docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
 ---
 
 # Föderations-Drahtvertrag v1
