@@ -37,9 +37,9 @@ Kernfläche besteht aus:
 5. PostgreSQL für Sitzungen und ausgewählte Auth-/Domänenpfade,
 6. NATS als im Produktions-Compose vorhandener, optional genutzter Eventkanal.
 
-Gespräche, Nachrichten, föderale Governance und Gewebekonten sind teilweise als
-Contracts oder Konzepte vorhanden, aber nicht als vollständige produktive
-Ende-zu-Ende-Systeme.
+Öffentliche Knotengespräche sind als PostgreSQL-, API- und Webpfad vorhanden.
+Private Nachrichten, föderale Gespräche, allgemeine Moderationsabläufe und
+Gewebekonten sind weiterhin nur teilweise als Contracts oder Konzepte vorhanden.
 
 ## Kanonische Zielrichtung
 
@@ -52,8 +52,8 @@ Der PostgreSQL-Mehrinstanzvertrag ist seit dem 16. Juli 2026 belegt und durch ei
 | Komponente | Pfad | heutige Verantwortung |
 |---|---|---|
 | Web | `apps/web` | Karte, Login, Einstellungen, Account- und Knotenansichten, statischer Build |
-| API | `apps/api` | Authentifizierung, Sitzungen, Accounts, Knoten, Fäden, Health und Metriken |
-| Domain-Contracts | `contracts/domain` | JSON-Schema-Verträge für Account, Knoten, Faden sowie noch nicht vollständig implementierte Gesprächsobjekte |
+| API | `apps/api` | Authentifizierung, Sitzungen, Accounts, Knoten, Fäden, öffentliche Knotengespräche, Health und Metriken |
+| Domain-Contracts | `contracts/domain` | JSON-Schema-Verträge für Account, Knoten, Faden sowie den produktiven öffentlichen Knotengesprächsschnitt |
 | Caddy | `infra/caddy` | TLS-/Host-Routing, Proxygrenze, Sicherheitsheader und Web-Upstream |
 | Compose | `infra/compose` | lokale, produktive und zielbezogene Servicezusammenstellung |
 | PostgreSQL | `apps/api/migrations` | Sitzungen, Domain-Tabellen und Passkey-Credentials; Nutzung hängt von expliziten Quellschaltern ab |
@@ -113,8 +113,8 @@ darstellen.
 - Neue Accounts und öffentliche Projektionen verwenden nur noch Garnrolle plus
   `map_state`. Legacy-RoN wird lesend auf `not_on_map` normalisiert; die nullable
   DB-Spalte `mode` bleibt bis zum belegten Produktionscutover als Rollbackbrücke.
-- Gesprächs- und Nachrichtencontracts bedeuten noch keine produktive
-  Persistenzfläche.
+- Der produktive Gesprächspfad ist auf genau einen öffentlichen Raum je
+  PostgreSQL-Knoten begrenzt; private Räume, Anhänge und Föderation fehlen.
 - NATS im Stack bedeutet noch keinen belegten Transactional-Outbox-Betrieb.
 - Kubernetes als Zielplattform bedeutet noch keinen laufenden Cluster oder HA-Beleg.
 - Föderationsverträge bedeuten noch keine öffentliche Zellföderation.

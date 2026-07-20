@@ -2214,6 +2214,10 @@ pub async fn delete_node(
                     StatusCode::CONFLICT,
                     "node deletion blocked by ambiguous edge endpoint".to_string(),
                 ),
+                NodeWriteError::ConversationNotEmpty => NodeMutationError::Message(
+                    StatusCode::CONFLICT,
+                    "node deletion blocked because its public conversation contains contributions".to_string(),
+                ),
                 other => {
                     tracing::error!(%other, node_id = %id, "failed to delete node in PostgreSQL");
                     NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -2276,6 +2280,10 @@ async fn patch_node_postgres(
             NodeWriteError::NotFound => NodeMutationError::Status(StatusCode::NOT_FOUND),
             NodeWriteError::InvalidEdgeReference(err) => {
                 tracing::error!(%err, node_id = %id, "node patch blocked by edge reference integrity error");
+                NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            NodeWriteError::ConversationNotEmpty => {
+                tracing::error!(node_id = %id, "unexpected conversation guard during node patch");
                 NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
             }
             NodeWriteError::Mapping(err) => {

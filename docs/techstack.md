@@ -87,7 +87,7 @@ werden.
 - PgBouncer im Core-Profil
 - Prometheus-Konfiguration und optionale Observability-Profile
 - PWA-/Offline-nahe Webbestandteile
-- Gesprächs-, Nachrichten- und Rollencontracts
+- Rollencontract sowie private und föderierte Gesprächstypen
 
 Für diese Punkte ist jeweils ein eigener Runtime- oder Ende-zu-Ende-Beleg nötig.
 
@@ -105,7 +105,7 @@ Diese Punkte sind durch `architecture/weltgewebe-os.md` und ADR-0010 bis ADR-001
 ## Geplant oder noch unvollständig
 
 - Entfernung der nullable Legacy-`mode`-Rollbackspalte nach eigenem Post-Cutover-Beleg
-- Gespräche und Nachrichten
+- private Nachrichten, Anhänge und föderierte Gespräche
 - föderierte Identitäten, Zellbeziehungen und gemeinsame Räume
 - normalisierte Geoabfragen beziehungsweise PostGIS
 - verlässliche Eventprojektionen und Transactional Outbox

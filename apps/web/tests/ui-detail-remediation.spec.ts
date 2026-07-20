@@ -84,13 +84,13 @@ test.describe("UI detail remediation", () => {
     );
   });
 
-  test("does not expose unfinished node tabs or raw coordinates", async ({
+  test("exposes the finished conversation tab but no unfinished proposal tab or raw coordinates", async ({
     page,
   }) => {
     const node = page.locator(".map-marker:not(.marker-account)").first();
     await node.click({ force: true });
     const panel = page.getByTestId("context-panel");
-    await expect(panel.getByRole("tab", { name: "Gespräch" })).toHaveCount(0);
+    await expect(panel.getByRole("tab", { name: "Gespräch" })).toBeVisible();
     await expect(panel.getByRole("tab", { name: "Anträge" })).toHaveCount(0);
     await expect(panel).not.toContainText("Koordinaten:");
     await expect(panel).not.toContainText("Art: event");

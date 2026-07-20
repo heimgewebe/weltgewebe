@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://weltgewebe.org/schemas/domain/conversation.schema.json",
   "title": "Conversation",
-  "description": "A conversation space.",
+  "description": "The single public conversation space belonging to a node.",
   "type": "object",
   "properties": {
     "id": {
@@ -11,21 +11,15 @@
     },
     "conversation_type": {
       "type": "string",
-      "enum": ["node", "webrat", "naehstuebchen", "private"]
+      "const": "node"
     },
-    "subject_id": {
-      "type": ["string", "null"],
-      "format": "uuid"
-    },
-    "author_role_id": {
+    "node_id": {
       "type": "string",
-      "format": "uuid",
-      "description": "Role that created the conversation."
+      "minLength": 1
     },
-    "title": {
+    "visibility": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 200
+      "const": "public"
     },
     "created_at": {
       "type": "string",
@@ -34,15 +28,20 @@
     "updated_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "deleted_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
     }
   },
   "required": [
     "id",
     "conversation_type",
-    "author_role_id",
-    "title",
+    "node_id",
+    "visibility",
     "created_at",
-    "updated_at"
+    "updated_at",
+    "deleted_at"
   ],
   "additionalProperties": false
 }

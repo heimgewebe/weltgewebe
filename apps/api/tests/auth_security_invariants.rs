@@ -395,6 +395,15 @@ const CSRF_COVERED_MUTATING_ROUTES: &[(&str, &str)] = &[
     ("PUT", "/nodes/{id}"),
     ("DELETE", "/nodes/{id}"),
     ("POST", "/nodes"),
+    ("POST", "/conversations/{id}/messages"),
+    (
+        "PATCH",
+        "/conversations/{conversation_id}/messages/{message_id}",
+    ),
+    (
+        "DELETE",
+        "/conversations/{conversation_id}/messages/{message_id}",
+    ),
     ("POST", "/accounts"),
     ("PATCH", "/accounts/me/profile"),
     ("POST", "/proposals"),
