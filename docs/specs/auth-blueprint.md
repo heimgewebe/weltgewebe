@@ -50,7 +50,7 @@ relations:
 - **ADR-0005 (Auth & Rollen)**
   - Cookie-basierte Sessions (kein JWT-first)
   - Rollen: `Gast`, `Weber`, `Admin`
-  - Gast = read-only
+  - Gast = angemeldeter Mitwirkender mit eigenen Webungsrechten
 - **Auth-Middleware existiert**, ist aber explizit **Platzhalter** (lässt alles durch)
 - **Keine `/auth/*`-Routen**
 - Schreibpfade (z. B. `PATCH /nodes/:id`) sind aktuell **ungeschützt**
@@ -81,9 +81,10 @@ Verhindern, dass spätere Implementierung bestehende Architektur bricht.
    - `SameSite = Strict`
    - `Secure = true` (immer! Dev läuft über HTTPS oder localhost)
 3. **Rollenmodell**
-   - `Gast` → lesen
-   - `Weber` → schreiben
-   - `Admin` → administrativ
+   - nicht angemeldet → öffentlich lesen
+   - `Gast` → eigene Webungsaktionen und eigene Inhalte pflegen
+   - `Weber` → zusätzlich fremde gemeinschaftliche Inhalte pflegen und formal entscheiden
+   - `Admin` → administrativ und moderativ
 4. **Privacy bleibt erhalten**
    - `/auth/me` liefert **keine** internen Account-Felder
    - Orientierung an `AccountPublic` oder Minimal-Subset
@@ -213,9 +214,10 @@ Login hat **reale Konsequenzen**.
   - Origin/Referer-Check für state-changing Requests
 
 - Regel:
-  - **401 Unauthorized** → kein gültiger Session-Cookie
-  - **403 Forbidden** → authentifiziert als `Gast` (read-only)
-  - `Weber/Admin` → erlaubt
+  - **401 Unauthorized** → keine gültige angemeldete Sitzung
+  - **403 Forbidden** → authentifiziert, aber für die konkrete fremde oder formale Handlung nicht berechtigt
+  - gewöhnliche Webungsaktionen → jeder angemeldete Account
+  - fremde gemeinschaftliche Pflege, Veto und Stimme → `Weber/Admin`
 
 ### Ergebnis: Autorisierung
 

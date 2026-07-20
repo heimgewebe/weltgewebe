@@ -452,7 +452,7 @@ async fn node_conversation_vertical_slice() {
     }
 
     let message_path = format!("/conversations/{conversation_id}/messages");
-    let (status, _) = json_response(
+    let (status, guest_message) = json_response(
         &app,
         request(
             "POST",
@@ -464,7 +464,9 @@ async fn node_conversation_vertical_slice() {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(guest_message["author_account_id"], GUEST_ID);
+    assert_eq!(guest_message["author_title"], "Gast");
 
     let (status, invalid_content) = json_response(
         &app,
@@ -577,7 +579,7 @@ async fn node_conversation_vertical_slice() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(page_two["items"].as_array().map(Vec::len), Some(1));
+    assert_eq!(page_two["items"].as_array().map(Vec::len), Some(2));
     assert_eq!(page_two["page"]["has_more"], false);
     assert!(page_two["page"]["next_cursor"].is_null());
     let first_page_ids: Vec<&str> = page_one["items"]

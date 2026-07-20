@@ -135,6 +135,7 @@ export async function mockApiResponses(
         location,
         created_at: now,
         updated_at: now,
+        created_by_account_id: currentAccountId,
       };
       createdNodes.push(node);
       if (currentAccountId) {
@@ -171,11 +172,17 @@ export async function mockApiResponses(
         });
       }
 
-      if (!isAuthenticated || currentRole === "gast") {
-        return route.fulfill({ status: 403 });
+      if (!isAuthenticated || !currentAccountId) {
+        return route.fulfill({ status: 401 });
       }
       if (!node) {
         return route.fulfill({ status: 404 });
+      }
+      if (
+        currentRole === "gast" &&
+        node.created_by_account_id !== currentAccountId
+      ) {
+        return route.fulfill({ status: 403 });
       }
 
       if (method === "PUT") {

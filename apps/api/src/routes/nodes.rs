@@ -81,6 +81,9 @@ pub struct Node {
     pub title: String,
     pub created_at: String,
     pub updated_at: String,
+    /// Server-owned, immutable creator binding. Legacy records remain `None`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by_account_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -148,6 +151,8 @@ struct NodeDto {
     created_at: Option<String>,
     #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
     updated_at: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
+    created_by_account_id: Option<String>,
     #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
     summary: Option<String>,
     #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
@@ -249,6 +254,7 @@ impl From<NodeDto> for Node {
             title: dto.title.unwrap_or_else(|| DEFAULT_TITLE.to_string()),
             created_at,
             updated_at,
+            created_by_account_id: dto.created_by_account_id,
             summary: dto.summary,
             info: dto.info,
             tags: dto.tags,
@@ -323,6 +329,11 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
         .unwrap_or(default_timestamp)
         .to_string();
 
+    let created_by_account_id = v
+        .get("created_by_account_id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
     let summary = v
         .get("summary")
         .and_then(|v| v.as_str())
@@ -354,6 +365,7 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
         title,
         created_at,
         updated_at,
+        created_by_account_id,
         summary,
         info,
         tags,
@@ -563,6 +575,7 @@ fn build_node_record(
     validated: node_create::ValidatedCreateNode,
     id: String,
     now: String,
+    created_by_account_id: String,
 ) -> (Node, Value) {
     let node = Node {
         id,
@@ -570,6 +583,7 @@ fn build_node_record(
         title: validated.title,
         created_at: now.clone(),
         updated_at: now,
+        created_by_account_id: Some(created_by_account_id),
         summary: validated.summary,
         info: validated.info,
         tags: validated.tags,
@@ -586,6 +600,9 @@ fn build_node_record(
     record.insert("title".into(), json!(node.title));
     record.insert("created_at".into(), json!(node.created_at));
     record.insert("updated_at".into(), json!(node.updated_at));
+    if let Some(created_by_account_id) = &node.created_by_account_id {
+        record.insert("created_by_account_id".into(), json!(created_by_account_id));
+    }
     if let Some(summary) = &node.summary {
         record.insert("summary".into(), json!(summary));
     }
@@ -689,6 +706,16 @@ pub async fn create_node(
     Json(payload): Json<Value>,
 ) -> Result<(StatusCode, Json<Node>), (StatusCode, String)> {
     reject_node_create_unless_writable(&state)?;
+    let creator_account_id = auth
+        .account_id
+        .clone()
+        .filter(|_| auth.authenticated)
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                "authenticated account context missing".to_string(),
+            )
+        })?;
 
     // Deserialize manually (instead of extracting Json<CreateNodeRequest>) so
     // contract violations (unknown fields, missing required fields and explicit
@@ -729,7 +756,7 @@ pub async fn create_node(
 
     let id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
-    let (node, mut record) = build_node_record(validated, id.clone(), now);
+    let (node, mut record) = build_node_record(validated, id.clone(), now, creator_account_id);
     add_create_operation_metadata(&mut record, operation.as_ref());
 
     match state.config.domain_node_write_source {
@@ -1392,6 +1419,14 @@ fn set_node_record_fields(record: &mut Value, node: &Node) -> std::io::Result<()
     object.insert("title".to_string(), json!(node.title));
     object.insert("created_at".to_string(), json!(node.created_at));
     object.insert("updated_at".to_string(), json!(node.updated_at));
+    if let Some(created_by_account_id) = &node.created_by_account_id {
+        object.insert(
+            "created_by_account_id".to_string(),
+            json!(created_by_account_id),
+        );
+    } else {
+        object.remove("created_by_account_id");
+    }
     object.insert(
         "location".to_string(),
         json!({ "lat": node.location.lat, "lon": node.location.lon }),
@@ -2072,6 +2107,7 @@ pub async fn replace_node(
         title: validated.title,
         created_at: existing.created_at,
         updated_at: chrono::Utc::now().to_rfc3339(),
+        created_by_account_id: existing.created_by_account_id,
         summary: validated.summary,
         info: validated.info,
         tags: validated.tags,

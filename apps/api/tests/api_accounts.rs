@@ -619,7 +619,7 @@ async fn account_details_ignore_node_typed_account_id_collision() -> Result<()> 
 }
 
 #[tokio::test]
-async fn guest_identity_is_not_a_public_garnrolle() -> Result<()> {
+async fn guest_account_is_a_public_garnrolle_without_public_position() -> Result<()> {
     let mut state = test_state().await?;
     let mut accounts = AccountStore::new();
     let mut guest = seed_account("guest-hidden");
@@ -637,13 +637,16 @@ async fn guest_identity_is_not_a_public_garnrolle() -> Result<()> {
     assert_eq!(list.status(), StatusCode::OK);
     let bytes = body::to_bytes(list.into_body(), usize::MAX).await?;
     let accounts: serde_json::Value = serde_json::from_slice(&bytes)?;
-    assert_eq!(accounts.as_array().map(Vec::len), Some(1));
-    assert_eq!(accounts[0]["id"], "weber-visible");
+    assert_eq!(accounts.as_array().map(Vec::len), Some(2));
+    assert_eq!(accounts[0]["id"], "guest-hidden");
+    assert_eq!(accounts[0]["map_state"], "not_on_map");
+    assert!(accounts[0].get("public_pos").is_none());
+    assert_eq!(accounts[1]["id"], "weber-visible");
 
     let detail = app
         .oneshot(Request::get("/accounts/guest-hidden").body(body::Body::empty())?)
         .await?;
-    assert_eq!(detail.status(), StatusCode::NOT_FOUND);
+    assert_eq!(detail.status(), StatusCode::OK);
 
     Ok(())
 }
