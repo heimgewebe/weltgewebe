@@ -157,6 +157,7 @@ Generated automatically. Do not edit.
 | reports.proof-matrix-generalization-decision | Proof-Matrix-Generalisierung — DOCMETA-PROOF-001 | report | active | docs/reports/proof-matrix-generalization-decision.md |
 | reports.repo-audit-2026-07-02 | Repo-Komplettaudit 2026-07-02 | report | active | docs/reports/repo-audit-2026-07-02.md |
 | reports.report-lifecycle-restbestand-triage | Report Lifecycle Restbestand Triage | report | deprecated | docs/reports/report-lifecycle-restbestand-triage.md |
+| reports.weltgewebe-os-v1-t018-conversation-convergence-plan | WELTGEWEBE-OS-V1-T018: Governance- und Knotengespräche kontrolliert konvergieren | report | active | docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md |
 | runbook.kubernetes-ha-recovery-proof | Kubernetes-HA- und Recovery-Beweis | runbook | active | docs/runbooks/kubernetes-ha-recovery-proof.md |
 | runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |
 | runbooks.codespaces-recovery | Codespaces Recovery | reference | active | docs/runbooks/codespaces-recovery.md |

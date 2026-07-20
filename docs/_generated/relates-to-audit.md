@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 625 |
+| Relationen gesamt | 632 |
 | — depends_on | 25 |
-| — relates_to | 585 |
+| — relates_to | 592 |
 | — supersedes | 12 |
 | — verifies | 3 |
 | relates_to Anteil | 94% |
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (243 Dokumente):
+**Cluster 1** (249 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -44,14 +44,17 @@ _Keine Lücken erkannt._
 - `apps/api/src/auth/accounts.rs`
 - `apps/api/src/auth/ephemeral_db.rs`
 - `apps/api/src/domain_db.rs`
+- `apps/api/src/governance.rs`
 - `apps/api/src/outbox.rs`
 - `apps/api/src/routes/accounts.rs`
+- `apps/api/src/routes/conversations.rs`
 - `apps/api/src/routes/edges.rs`
 - `apps/api/src/routes/nodes.rs`
 - `apps/api/src/state.rs`
 - `apps/api/tests/db_domain_account_write_path.rs`
 - `apps/api/tests/db_domain_backfill.rs`
 - `apps/api/tests/db_multi_instance_foundation.rs`
+- `apps/web/src/lib/components/governance/ProposalDetail.svelte`
 - `architecture/overview.md`
 - `architecture/weltgewebe-os.md`
 - `audit/impl-registry.yaml`
@@ -59,7 +62,9 @@ _Keine Lücken erkannt._
 - `contracts/agent/run-result.schema.json`
 - `contracts/agent/task.schema.json`
 - `contracts/agent/validation.schema.json`
+- `contracts/domain/conversation.schema.json`
 - `contracts/domain/edge.schema.json`
+- `contracts/domain/message.schema.json`
 - `docs/_generated/report-lifecycle-inventory.md`
 - `docs/adr/0043-edge-vs-conversation.md`
 - `docs/adr/ADR-0001__clean-slate-docs-monorepo.md`
@@ -200,6 +205,7 @@ _Keine Lücken erkannt._
 - `docs/reports/repo-audit-2026-07-02.md`
 - `docs/reports/report-lifecycle-restbestand-triage.md`
 - `docs/reports/weltgewebe-os-foundation-status.md`
+- `docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md`
 - `docs/roadmap.md`
 - `docs/runbook.md`
 - `docs/runbook.observability.md`
