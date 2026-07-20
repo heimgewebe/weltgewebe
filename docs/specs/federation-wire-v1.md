@@ -74,7 +74,7 @@ Antworten:
 - `429 Too Many Requests`: das feste Prozess- oder authentifizierte Peerfenster ist ausgeschöpft; `Retry-After: 60` begrenzt Quarantäne- und Speicherverstärkung.
 - `500 Internal Server Error`: die lokale Persistenz konnte keinen verlässlichen Abschluss liefern.
 
-Der Eingang erlaubt pro Minute höchstens 600 syntaktisch lesbare Umschläge je API-Prozess. Nach erfolgreicher Signaturprüfung gelten zusätzlich höchstens 120 Umschläge je authentifizierter Ursprungszelle. Frei behauptete Zell-IDs bilden keine Vertrauens- oder Rate-Limit-Identität. Ein späterer Auslieferungsworker muss zusätzlich pro Peer mit Backoff und Jitter arbeiten.
+Der Eingang erlaubt pro Minute höchstens 600 syntaktisch lesbare Umschläge je API-Prozess. Nach erfolgreicher Signaturprüfung gelten zusätzlich höchstens 120 Umschläge je authentifizierter Ursprungszelle. Frei behauptete Zell-IDs bilden keine Vertrauens- oder Rate-Limit-Identität. Bei horizontaler Skalierung werden diese Zähler in v1 nicht zwischen Replikas aggregiert; ein verteiltes Rate-Limit ist bewusst nicht Teil dieses Kerns. Ein späterer Auslieferungsworker muss zusätzlich pro Peer mit Backoff und Jitter arbeiten.
 
 `202` bedeutet ausdrücklich nicht Zustimmung. Nur Umschläge mit verifizierter Signatur werden dauerhaft quarantänisiert. Strukturell unlesbare, unbekannte oder falsch signierte Umschläge werden mit demselben fachlichen Ergebnis verworfen, aber nicht persistiert; dadurch kann unauthentifizierter Verkehr die Quarantäne nicht füllen.
 
@@ -110,6 +110,8 @@ Wesentliche Felder:
 ## 4. Signatur
 
 Signiert werden alle Ereignisfelder außer `signature` als UTF-8-Bytes nach RFC 8785, JSON Canonicalization Scheme (JCS). Schlüssel werden rekursiv lexikografisch sortiert, es gibt keine unbedeutenden Leerzeichen, und `created_at` muss bereits in der kanonischen UTC-Schreibweise mit `Z` sowie 0, 3, 6 oder 9 Nachkommastellen vorliegen. Der Empfänger rekonstruiert exakt diese Bytes und verifiziert sie gegen den öffentlichen Schlüssel aus `(origin_cell_id, key_id)`. Fehlende Pflichtfelder, unbekannte Felder, nichtkanonische `event_id`-Schreibweisen sowie andere strukturell vertragswidrige Felder werden vor der Vertrauens- und Fachlogik als `400 Bad Request` abgewiesen.
+
+Signaturdomäne und Umschlagidentität sind absichtlich getrennt: `signing_bytes` umfasst alle Drahtfelder außer `signature`; `envelope_sha256` hasht dagegen den vollständigen signierten Umschlag einschließlich `signature`. Der Umschlag-Digest ist daher kein Signatur-Payload-Hash, sondern dient ausschließlich der exakten Replay-, Duplikat- und Kollisionsidentität. Eine geänderte Signatur verändert den Umschlag-Digest, ohne die signierten Nutzdaten umzudefinieren.
 
 Interoperabilitätsvektor für `contracts/federation/v1/examples/event.example.json`:
 

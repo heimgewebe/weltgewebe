@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     env,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration as StdDuration, Instant},
 };
 
@@ -21,7 +21,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Row};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use url::Url;
 use uuid::Uuid;
 
@@ -296,8 +296,11 @@ impl FederationService {
         self.identity.descriptor()
     }
 
-    async fn allow_receive_global(&self) -> bool {
-        let mut state = self.receive_rate_state.lock().await;
+    fn allow_receive_global(&self) -> bool {
+        let mut state = self
+            .receive_rate_state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if state.window_started.elapsed() >= RECEIVE_RATE_WINDOW {
             *state = ReceiveRateState::default();
         }
@@ -308,8 +311,11 @@ impl FederationService {
         true
     }
 
-    async fn allow_authenticated_origin(&self, origin_cell_id: &str) -> bool {
-        let mut state = self.receive_rate_state.lock().await;
+    fn allow_authenticated_origin(&self, origin_cell_id: &str) -> bool {
+        let mut state = self
+            .receive_rate_state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if state.window_started.elapsed() >= RECEIVE_RATE_WINDOW {
             *state = ReceiveRateState::default();
         }
@@ -370,7 +376,7 @@ impl FederationService {
             key_id: self.identity.key_id.clone(),
             signature: String::new(),
         };
-        validate_event_shape(&event, None)?;
+        validate_event_shape(&event, None, true)?;
         let signature = self.identity.signing_key.sign(&signing_bytes(&event)?);
         event.signature = URL_SAFE_NO_PAD.encode(signature.to_bytes());
         self.repository.persist_local(&event).await?;
@@ -378,7 +384,21 @@ impl FederationService {
     }
 
     pub async fn receive(&self, event: FederationEvent) -> anyhow::Result<ReceiveOutcome> {
-        if let Err(error) = validate_event_shape(&event, Some(&self.identity.cell_id)) {
+        self.receive_with_size_policy(event, true).await
+    }
+
+    async fn receive_body_limited(&self, event: FederationEvent) -> anyhow::Result<ReceiveOutcome> {
+        self.receive_with_size_policy(event, false).await
+    }
+
+    async fn receive_with_size_policy(
+        &self,
+        event: FederationEvent,
+        enforce_size_limit: bool,
+    ) -> anyhow::Result<ReceiveOutcome> {
+        if let Err(error) =
+            validate_event_shape(&event, Some(&self.identity.cell_id), enforce_size_limit)
+        {
             return Err(InvalidFederationEvent(error.to_string()).into());
         }
         if event.origin_cell_id == self.identity.cell_id {
@@ -399,7 +419,7 @@ impl FederationService {
         if let Err(error) = verify_signature(&event, peer.public_key) {
             return Ok(ReceiveOutcome::quarantined(&event, error.to_string()));
         }
-        if !self.allow_authenticated_origin(&event.origin_cell_id).await {
+        if !self.allow_authenticated_origin(&event.origin_cell_id) {
             return Err(ReceiveRateLimitExceeded.into());
         }
 
@@ -454,13 +474,12 @@ fn push_memory_quarantine_once(
         envelope_sha256: digest,
         received_at: Utc::now(),
     });
-    while state
+    let origin_count = state
         .quarantine
         .iter()
         .filter(|entry| entry.origin_cell_id == event.origin_cell_id)
-        .count()
-        > QUARANTINE_MAX_PER_ORIGIN
-    {
+        .count();
+    if origin_count > QUARANTINE_MAX_PER_ORIGIN {
         let oldest = state
             .quarantine
             .iter()
@@ -1127,6 +1146,9 @@ where
     Ok(parsed)
 }
 
+// Signature domain: every wire field except `signature`, canonically encoded with JCS.
+// This is intentionally distinct from `envelope_sha256`, which identifies the exact
+// signed envelope including the signature for replay/collision bookkeeping.
 fn signing_bytes(event: &FederationEvent) -> anyhow::Result<Vec<u8>> {
     Ok(serde_jcs::to_vec(&SigningPayload {
         protocol_version: &event.protocol_version,
@@ -1147,6 +1169,7 @@ fn signing_bytes(event: &FederationEvent) -> anyhow::Result<Vec<u8>> {
     })?)
 }
 
+// Envelope identity: hash the complete signed envelope, including `signature`.
 fn envelope_sha256(event: &FederationEvent) -> anyhow::Result<String> {
     let bytes = serde_jcs::to_vec(event)?;
     Ok(hex::encode(Sha256::digest(bytes)))
@@ -1183,6 +1206,7 @@ fn peer_policy_rejection(peer: &ResolvedPeer, event: &FederationEvent) -> Option
 fn validate_event_shape(
     event: &FederationEvent,
     receiver_cell_id: Option<&str>,
+    enforce_size_limit: bool,
 ) -> anyhow::Result<()> {
     if event.protocol_version != FEDERATION_PROTOCOL_VERSION {
         bail!("unsupported protocol version");
@@ -1214,7 +1238,7 @@ fn validate_event_shape(
     if event.created_at > Utc::now() + Duration::seconds(MAX_CLOCK_SKEW_SECONDS) {
         bail!("event creation time is too far in the future");
     }
-    if serde_json::to_vec(event)?.len() > MAX_EVENT_BYTES {
+    if enforce_size_limit && serde_json::to_vec(event)?.len() > MAX_EVENT_BYTES {
         bail!("event exceeds maximum envelope size");
     }
     match event.scope.as_str() {
@@ -1382,10 +1406,10 @@ async fn receive_event(
         StatusCode::PAYLOAD_TOO_LARGE => ApiError::payload_too_large(),
         _ => ApiError::bad_request("invalid federation event envelope"),
     })?;
-    if !service.allow_receive_global().await {
+    if !service.allow_receive_global() {
         return Err(ApiError::too_many_requests());
     }
-    let outcome = match service.receive(event).await {
+    let outcome = match service.receive_body_limited(event).await {
         Ok(outcome) => outcome,
         Err(error) if error.downcast_ref::<InvalidFederationEvent>().is_some() => {
             return Err(ApiError::bad_request("invalid federation event"));
@@ -1657,6 +1681,16 @@ mod tests {
             "K1oizQlxat51Gqo8kd-vXpbBut7L2wq6eAqaue7d09gd7feuZ8bR1JDx7jSomACnbwjo5kS0nd0WGavP2pNHDQ"
         );
         verify_signature(&event, *key.verifying_key().as_bytes()).unwrap();
+
+        let signing_domain = signing_bytes(&event).unwrap();
+        let envelope_digest = envelope_sha256(&event).unwrap();
+        let mut signature_variant = event.clone();
+        signature_variant.signature.push('A');
+        assert_eq!(signing_bytes(&signature_variant).unwrap(), signing_domain);
+        assert_ne!(
+            envelope_sha256(&signature_variant).unwrap(),
+            envelope_digest
+        );
     }
 
     #[tokio::test]

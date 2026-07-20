@@ -192,6 +192,33 @@ async fn event_endpoint_rejects_noncanonical_envelopes_as_bad_request() -> Resul
 }
 
 #[tokio::test]
+async fn event_endpoint_accepts_valid_envelope_near_body_limit() -> Result<()> {
+    let sender = service("cell-a", 11);
+    let event = publish(
+        &sender,
+        "wg://cell-a/node/near-body-limit",
+        "node",
+        1,
+        None,
+        json!({"blob": "x".repeat(250 * 1024)}),
+    )
+    .await;
+    let body = serde_json::to_vec(&event)?;
+    assert!(body.len() > 240 * 1024);
+    assert!(body.len() < 256 * 1024);
+
+    let response = router(service("cell-b", 22))
+        .oneshot(
+            Request::post("/federation/v1/events")
+                .header("content-type", "application/json")
+                .body(Body::from(body))?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    Ok(())
+}
+
+#[tokio::test]
 async fn api_prefixed_fallback_serves_public_federation_boundary() -> Result<()> {
     let public = router(service("cell-b", 22));
     let existing_api = Router::new().route(
