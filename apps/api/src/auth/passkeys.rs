@@ -869,6 +869,7 @@ impl PasskeyRegistrationGrantStore {
 mod tests {
     use super::*;
     use serde_json::json;
+    use serial_test::serial;
 
     fn test_webauthn() -> Arc<Webauthn> {
         let origin = Url::parse("http://localhost:3000").unwrap();
@@ -917,6 +918,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn build_webauthn_returns_none_when_unconfigured() {
         let config = AppConfig::load_from_str(
             "fade_days: 7\nron_days: 84\nanonymize_opt_in: true\ndelegation_expire_days: 28\n",
@@ -930,6 +932,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn build_webauthn_succeeds_with_valid_config() {
         let yaml = "\
 fade_days: 7\n\
@@ -944,6 +947,7 @@ webauthn_rp_origin: \"http://localhost:3000\"\n";
     }
 
     #[test]
+    #[serial]
     fn build_webauthn_fails_when_only_rp_id_set() {
         let yaml = "\
 fade_days: 7\n\
