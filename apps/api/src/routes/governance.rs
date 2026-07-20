@@ -490,7 +490,6 @@ pub async fn exit_own_account(
         .map_err(internal_error("delete_guest_account"))?;
 
     let session_cleanup = state.sessions.delete_all_by_account(&account_id).await;
-    let projection_refresh = state.refresh_domain_projection_if_stale().await;
 
     if let Err(error) = session_cleanup {
         tracing::error!(error = %error, "failed to end sessions after guest exit");
@@ -499,13 +498,10 @@ pub async fn exit_own_account(
             "guest exit recorded but session cleanup failed".to_string(),
         ));
     }
-    if let Err(error) = projection_refresh {
-        tracing::error!(error = %error, "failed to refresh domain projection after guest exit");
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "guest exit recorded but domain projection refresh failed".to_string(),
-        ));
-    }
+    // In PostgreSQL mode the projection middleware holds a read guard for the
+    // whole request. Refreshing here would try to upgrade that guard to a write
+    // lock and deadlock against ourselves. The next domain request observes the
+    // incremented database generation and refreshes before taking its read guard.
 
     tracing::info!(event = "governance.guest.exited", "Guest account deleted");
 

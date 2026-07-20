@@ -785,22 +785,28 @@ pub async fn create_node(
         )
     })?;
     let semantic_request = validated.clone();
-
-    let operation = match validated.operation_id.as_ref() {
-        Some(operation_id) => {
-            let actor_id = auth.account_id.clone().ok_or_else(|| {
-                (
-                    StatusCode::UNAUTHORIZED,
-                    "authenticated account context missing".to_string(),
-                )
-            })?;
-            Some(CreateOperationKey {
-                actor_id,
-                operation_id: operation_id.clone(),
-            })
-        }
-        None => None,
-    };
+    let operation_id = validated
+        .require_operation_id_for_create()
+        .map_err(|error| {
+            (
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "invalid node create request: {}",
+                    node_create_error_message(&error)
+                ),
+            )
+        })?
+        .to_string();
+    let actor_id = auth.account_id.clone().ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            "authenticated account context missing".to_string(),
+        )
+    })?;
+    let operation = Some(CreateOperationKey {
+        actor_id,
+        operation_id,
+    });
 
     let id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
@@ -956,8 +962,9 @@ pub async fn create_node(
 /// request. `id`, `created_at`, `updated_at` are server-owned and therefore
 /// absent from the request type; combined with `deny_unknown_fields` a client
 /// that supplies them gets a deterministic 400 instead of a silently dropped
-/// field. `operation_id` may be omitted, but when present must be a non-null
-/// UUID and identifies only one account-scoped create action.
+/// field. `operation_id` is required and must be a non-null UUID so a client
+/// can safely replay the same account-scoped create action when the derived
+/// Faden projection fails after the node itself became durable.
 mod node_create {
     use serde::{de, Deserialize, Deserializer};
     use uuid::Uuid;
@@ -1071,6 +1078,18 @@ mod node_create {
         Ok(())
     }
 
+    impl ValidatedCreateNode {
+        pub(super) fn require_operation_id_for_create(
+            &self,
+        ) -> Result<&str, NodeCreateValidationError> {
+            self.operation_id
+                .as_deref()
+                .ok_or(NodeCreateValidationError::MissingOrEmptyField(
+                    "operation_id",
+                ))
+        }
+    }
+
     impl CreateNodeRequest {
         /// Validate into a `ValidatedCreateNode` without mutating values
         /// beyond trimming required string fields. Order: (1) required fields
@@ -1169,13 +1188,13 @@ mod node_create {
                 summary: None,
                 info: None,
                 tags: None,
-                operation_id: None,
+                operation_id: Some("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa".to_string()),
             }
         }
 
         #[test]
         fn accepts_minimal_payload() {
-            let json = r#"{"title":"A Node","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0}}"#;
+            let json = r#"{"title":"A Node","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0},"operation_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}"#;
             let req = serde_json::from_str::<CreateNodeRequest>(json)
                 .expect("minimal request must deserialize");
             let validated = req.validate().expect("minimal request must validate");
@@ -1191,13 +1210,29 @@ mod node_create {
 
         #[test]
         fn accepts_full_payload() {
-            let json = r#"{"title":"A Node","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0},"summary":"Short","info":"Long text","tags":["a","b"]}"#;
+            let json = r#"{"title":"A Node","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0},"summary":"Short","info":"Long text","tags":["a","b"],"operation_id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}"#;
             let req = serde_json::from_str::<CreateNodeRequest>(json)
                 .expect("full request must deserialize");
             let validated = req.validate().expect("full request must validate");
             assert_eq!(validated.summary.as_deref(), Some("Short"));
             assert_eq!(validated.info.as_deref(), Some("Long text"));
             assert_eq!(validated.tags, vec!["a".to_string(), "b".to_string()]);
+        }
+
+        #[test]
+        fn rejects_missing_operation_id() {
+            let json = r#"{"title":"A Node","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.5,"lon":10.0}}"#;
+            let req = serde_json::from_str::<CreateNodeRequest>(json)
+                .expect("request shape without operation id still deserializes deterministically");
+            let validated = req
+                .validate()
+                .expect("shared create/replace payload validation must succeed");
+            assert_eq!(
+                validated.require_operation_id_for_create(),
+                Err(NodeCreateValidationError::MissingOrEmptyField(
+                    "operation_id"
+                ))
+            );
         }
 
         #[test]
