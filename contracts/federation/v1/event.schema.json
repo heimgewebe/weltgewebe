@@ -25,7 +25,11 @@
   "properties": {
     "protocol_version": { "const": "wg-federation/1" },
     "schema_version": { "const": 1 },
-    "event_id": { "type": "string", "format": "uuid" },
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
     "event_type": { "enum": ["object.upserted", "object.deleted"] },
     "origin_cell_id": {
       "type": "string",

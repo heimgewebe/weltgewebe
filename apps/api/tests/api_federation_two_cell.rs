@@ -159,6 +159,19 @@ async fn event_endpoint_rejects_noncanonical_envelopes_as_bad_request() -> Resul
         .await?;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
+    let mut noncanonical_event_id = serde_json::to_value(&event)?;
+    noncanonical_event_id["event_id"] =
+        json!(event.event_id.hyphenated().to_string().to_ascii_uppercase());
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/federation/v1/events")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&noncanonical_event_id)?))?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
     let response = app
         .clone()
         .oneshot(
@@ -175,6 +188,37 @@ async fn event_endpoint_rejects_noncanonical_envelopes_as_bad_request() -> Resul
         )
         .await?;
     assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    Ok(())
+}
+
+#[tokio::test]
+async fn api_prefixed_fallback_serves_public_federation_boundary() -> Result<()> {
+    let public = router(service("cell-b", 22));
+    let existing_api = Router::new().route(
+        "/existing",
+        axum::routing::get(|| async { StatusCode::NO_CONTENT }),
+    );
+    let app = Router::new()
+        .nest("/api", existing_api)
+        .nest("/api", public.clone())
+        .merge(public);
+
+    let existing = app
+        .clone()
+        .oneshot(Request::get("/api/existing").body(Body::empty())?)
+        .await?;
+    assert_eq!(existing.status(), StatusCode::NO_CONTENT);
+
+    let prefixed = app
+        .clone()
+        .oneshot(Request::get("/api/federation/v1/cell").body(Body::empty())?)
+        .await?;
+    assert_eq!(prefixed.status(), StatusCode::OK);
+
+    let direct = app
+        .oneshot(Request::get("/federation/v1/cell").body(Body::empty())?)
+        .await?;
+    assert_eq!(direct.status(), StatusCode::OK);
     Ok(())
 }
 
@@ -381,17 +425,28 @@ async fn invalid_scope_version_signature_and_blocked_peer_are_quarantined() -> R
     let mut unsupported_schema = valid.clone();
     unsupported_schema.event_id = uuid::Uuid::new_v4();
     unsupported_schema.schema_version = 99;
-    let (status, outcome) = deliver(&app_b, &unsupported_schema).await?;
-    assert_eq!(status, StatusCode::ACCEPTED);
-    assert_eq!(outcome.status, ReceiveStatus::Quarantined);
-    assert!(outcome.reason.unwrap().contains("schema version"));
+    let response = app_b
+        .clone()
+        .oneshot(
+            Request::post("/federation/v1/events")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&unsupported_schema)?))?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
     let mut local_scope = valid.clone();
     local_scope.event_id = uuid::Uuid::new_v4();
     local_scope.scope = "local".to_string();
-    let (status, outcome) = deliver(&app_b, &local_scope).await?;
-    assert_eq!(status, StatusCode::ACCEPTED);
-    assert!(outcome.reason.unwrap().contains("not externally federable"));
+    let response = app_b
+        .clone()
+        .oneshot(
+            Request::post("/federation/v1/events")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&local_scope)?))?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
     let mut tampered = valid.clone();
     tampered.event_id = uuid::Uuid::new_v4();

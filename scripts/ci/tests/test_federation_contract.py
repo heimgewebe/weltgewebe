@@ -56,6 +56,10 @@ class FederationContractTests(unittest.TestCase):
             self.event_schema["properties"]["event_type"]["enum"],
             ["object.upserted", "object.deleted"],
         )
+        self.assertEqual(
+            self.event_schema["properties"]["event_id"]["pattern"],
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        )
 
     def test_public_boundary_uses_http_contract_not_internal_fabric(self) -> None:
         source = (ROOT / "apps/api/src/federation.rs").read_text()
@@ -73,6 +77,8 @@ class FederationContractTests(unittest.TestCase):
         self.assertIn("#[serde(deny_unknown_fields)]", source)
         self.assertIn("JsonRejection", source)
         self.assertIn("serde_jcs::to_vec", source)
+        self.assertIn("deserialize_canonical_uuid", source)
+        self.assertIn("FOR SHARE OF r, k", source)
 
     def test_wire_signature_is_language_neutral_and_fixture_bound(self) -> None:
         wire = (ROOT / "docs/specs/federation-wire-v1.md").read_text()
@@ -93,6 +99,7 @@ class FederationContractTests(unittest.TestCase):
         self.assertLess(protected_router, with_state)
         self.assertIn("auth_middleware", source[protected_router:with_state])
         self.assertIn("require_csrf", source[protected_router:with_state])
+        self.assertIn('.nest("/api", federation_router.clone())', source[with_state:])
 
     def test_storage_separates_applied_inbox_from_quarantine(self) -> None:
         migration = (
@@ -140,8 +147,8 @@ class FederationContractTests(unittest.TestCase):
             "shared-room",
             "Duplicate",
             "signature",
-            "schema version",
-            "not externally federable",
+            "noncanonical_event_id",
+            "StatusCode::BAD_REQUEST",
             "stale",
             "blocked",
             "tombstone",

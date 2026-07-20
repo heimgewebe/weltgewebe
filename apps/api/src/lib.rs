@@ -397,6 +397,9 @@ pub async fn run() -> anyhow::Result<()> {
         .merge(meta_routes())
         .route("/metrics", get(metrics_handler))
         .with_state(state)
+        // Caddy strips /api in production, while the Vite/direct fallback does not.
+        // Serve the same public federation boundary under both paths.
+        .nest("/api", federation_router.clone())
         .merge(federation_router)
         .layer(
             ServiceBuilder::new()

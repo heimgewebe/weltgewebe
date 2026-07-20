@@ -1,4 +1,4 @@
-use std::{collections::HashSet, env, sync::Arc};
+use std::{collections::HashSet, env, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
@@ -258,6 +258,53 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
     );
     assert_eq!(restarted.quarantined().await?.len(), 2);
 
+    // Reproduce the revocation TOCTOU window deterministically. The receive
+    // path first observes the still-committed active key, then blocks on the
+    // final in-transaction policy lock while a revocation is uncommitted. Once
+    // revocation commits, acceptance must re-read the now-inactive key and
+    // quarantine the event without mutating object state.
+    let revocation_race_event = race_sender_one
+        .publish_local(PublishRequest {
+            actor: "system:postgres-revocation-race-proof".to_string(),
+            event_type: "object.upserted".to_string(),
+            object_address: "wg://cell-a/node/revocation-race".to_string(),
+            object_kind: "node".to_string(),
+            object_version: 1,
+            previous_version: None,
+            scope: "global".to_string(),
+            neighbourhood_targets: vec![],
+            payload: json!({"title": "Must lose to committed revocation"}),
+        })
+        .await?;
+    let mut revocation_tx = pool.begin().await?;
+    sqlx::query(
+        "UPDATE federation_peer_keys SET active = FALSE, retired_at = NOW() \
+         WHERE remote_cell_id = 'cell-a' AND key_id = 'key-a'",
+    )
+    .execute(&mut *revocation_tx)
+    .await?;
+    let race_receiver = restarted.clone();
+    let receive_task =
+        tokio::spawn(async move { race_receiver.receive(revocation_race_event).await });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(
+        !receive_task.is_finished(),
+        "receive must wait for the in-flight peer-key policy update"
+    );
+    revocation_tx.commit().await?;
+    let revocation_race_outcome = receive_task.await??;
+    assert_eq!(revocation_race_outcome.status, ReceiveStatus::Quarantined);
+    assert!(revocation_race_outcome
+        .reason
+        .as_deref()
+        .unwrap_or_default()
+        .contains("inactive"));
+    assert!(restarted
+        .object("wg://cell-a/node/revocation-race")
+        .await?
+        .is_none());
+    assert_eq!(restarted.quarantined().await?.len(), 3);
+
     // Explicitly inactive means revoked for new deliveries. Rotation without
     // revocation remains possible by retaining the old verification key active.
     let mut inactive_key = identity_a.peer_key();
@@ -298,7 +345,7 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
         .as_deref()
         .unwrap_or_default()
         .contains("inactive"));
-    assert_eq!(restarted.quarantined().await?.len(), 3);
+    assert_eq!(restarted.quarantined().await?.len(), 4);
 
     sqlx::query(
         "INSERT INTO federation_quarantine \

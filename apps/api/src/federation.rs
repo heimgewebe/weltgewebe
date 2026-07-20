@@ -60,6 +60,7 @@ pub struct CellDescriptor {
 pub struct FederationEvent {
     pub protocol_version: String,
     pub schema_version: u16,
+    #[serde(deserialize_with = "deserialize_canonical_uuid")]
     pub event_id: Uuid,
     pub event_type: String,
     pub origin_cell_id: String,
@@ -378,7 +379,7 @@ impl FederationService {
 
     pub async fn receive(&self, event: FederationEvent) -> anyhow::Result<ReceiveOutcome> {
         if let Err(error) = validate_event_shape(&event, Some(&self.identity.cell_id)) {
-            return Ok(ReceiveOutcome::quarantined(&event, error.to_string()));
+            return Err(InvalidFederationEvent(error.to_string()).into());
         }
         if event.origin_cell_id == self.identity.cell_id {
             return Ok(ReceiveOutcome::quarantined(
@@ -401,28 +402,10 @@ impl FederationService {
         if !self.allow_authenticated_origin(&event.origin_cell_id).await {
             return Err(ReceiveRateLimitExceeded.into());
         }
-        if peer.state == "blocked" {
-            return self.repository.quarantine(&event, "peer is blocked").await;
-        }
-        if !peer.key_active {
-            return self
-                .repository
-                .quarantine(&event, "peer key is inactive")
-                .await;
-        }
-        if !peer.allowed_event_types.contains(&event.event_type) {
-            return self
-                .repository
-                .quarantine(&event, "event type is not allowed for this peer")
-                .await;
-        }
-        if event.scope == SCOPE_NEIGHBOURHOOD && !peer.allow_neighbourhood {
-            return self
-                .repository
-                .quarantine(&event, "neighbourhood scope is not allowed for this peer")
-                .await;
-        }
 
+        // The repository re-resolves and locks the current peer/key policy before
+        // object mutation. This closes the revocation/blocking TOCTOU window
+        // between the optimistic signature check above and durable acceptance.
         self.repository.accept_verified(&event).await
     }
 
@@ -558,8 +541,27 @@ impl FederationRepository for MemoryFederationRepository {
     }
 
     async fn accept_verified(&self, event: &FederationEvent) -> anyhow::Result<ReceiveOutcome> {
+        // Hold the same write lock used by install_peer so a policy/key update
+        // cannot commit between this final authorization check and acceptance.
         let mut state = self.state.write().await;
+        let Some(peer) = state
+            .peers
+            .get(&(event.origin_cell_id.clone(), event.key_id.clone()))
+            .cloned()
+        else {
+            return Ok(ReceiveOutcome::quarantined(event, "unknown cell or key"));
+        };
+        if verify_signature(event, peer.public_key).is_err() {
+            return Ok(ReceiveOutcome::quarantined(
+                event,
+                "event signature no longer verifies against current peer key",
+            ));
+        }
         let digest = envelope_sha256(event)?;
+        if let Some(reason) = peer_policy_rejection(&peer, event) {
+            push_memory_quarantine_once(&mut state, event, reason, digest);
+            return Ok(ReceiveOutcome::quarantined(event, reason));
+        }
         if let Some(existing_digest) = state.inbox.get(&event.event_id) {
             if existing_digest == &digest {
                 return Ok(ReceiveOutcome::duplicate(event));
@@ -731,9 +733,54 @@ impl FederationRepository for PostgresFederationRepository {
 
     async fn accept_verified(&self, event: &FederationEvent) -> anyhow::Result<ReceiveOutcome> {
         let mut tx = self.pool.begin().await?;
+
+        // Lock the current relationship and key in shared mode. Peer policy
+        // updates need row-update locks, so their commit is ordered before or
+        // after this acceptance transaction rather than racing through it.
+        let peer_row = sqlx::query(
+            "SELECT r.state, r.allow_neighbourhood, r.allowed_event_types, k.public_key, k.active \
+             FROM federation_peer_relationships r \
+             JOIN federation_peer_keys k ON k.remote_cell_id = r.remote_cell_id \
+             WHERE r.remote_cell_id = $1 AND k.key_id = $2 \
+             FOR SHARE OF r, k",
+        )
+        .bind(&event.origin_cell_id)
+        .bind(&event.key_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(peer_row) = peer_row else {
+            tx.rollback().await?;
+            return Ok(ReceiveOutcome::quarantined(event, "unknown cell or key"));
+        };
+        let public_key: Vec<u8> = peer_row.try_get("public_key")?;
+        let public_key: [u8; 32] = public_key
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("stored peer public key is not 32 bytes"))?;
+        let event_types: Value = peer_row.try_get("allowed_event_types")?;
+        let event_types: Vec<String> = serde_json::from_value(event_types)?;
+        let peer = ResolvedPeer {
+            state: peer_row.try_get("state")?,
+            allow_neighbourhood: peer_row.try_get("allow_neighbourhood")?,
+            allowed_event_types: event_types.into_iter().collect(),
+            public_key,
+            key_active: peer_row.try_get("active")?,
+        };
+        if verify_signature(event, peer.public_key).is_err() {
+            tx.rollback().await?;
+            return Ok(ReceiveOutcome::quarantined(
+                event,
+                "event signature no longer verifies against current peer key",
+            ));
+        }
+        let digest = envelope_sha256(event)?;
+        if let Some(reason) = peer_policy_rejection(&peer, event) {
+            quarantine_verified_in_tx(&mut tx, event, reason, &digest).await?;
+            tx.commit().await?;
+            return Ok(ReceiveOutcome::quarantined(event, reason));
+        }
+
         lock_event_receipt(&mut tx, event.event_id).await?;
         lock_object_transition(&mut tx, &event.object_address).await?;
-        let digest = envelope_sha256(event)?;
         let existing = sqlx::query(
             "SELECT envelope_sha256 FROM federation_inbox WHERE event_id = $1 FOR UPDATE",
         )
@@ -1048,6 +1095,21 @@ struct SigningPayload<'a> {
     key_id: &'a str,
 }
 
+fn deserialize_canonical_uuid<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = String::deserialize(deserializer)?;
+    let parsed = Uuid::parse_str(&raw).map_err(serde::de::Error::custom)?;
+    let canonical = parsed.hyphenated().to_string();
+    if raw != canonical {
+        return Err(serde::de::Error::custom(
+            "event_id must use lowercase hyphenated UUID form",
+        ));
+    }
+    Ok(parsed)
+}
+
 fn deserialize_canonical_utc<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
 where
     D: Deserializer<'de>,
@@ -1100,6 +1162,22 @@ fn verify_signature(event: &FederationEvent, public_key: [u8; 32]) -> anyhow::Re
     verifying_key
         .verify(&signing_bytes(event)?, &signature)
         .context("event signature verification failed")
+}
+
+fn peer_policy_rejection(peer: &ResolvedPeer, event: &FederationEvent) -> Option<&'static str> {
+    if peer.state == "blocked" {
+        return Some("peer is blocked");
+    }
+    if !peer.key_active {
+        return Some("peer key is inactive");
+    }
+    if !peer.allowed_event_types.contains(&event.event_type) {
+        return Some("event type is not allowed for this peer");
+    }
+    if event.scope == SCOPE_NEIGHBOURHOOD && !peer.allow_neighbourhood {
+        return Some("neighbourhood scope is not allowed for this peer");
+    }
+    None
 }
 
 fn validate_event_shape(
@@ -1274,6 +1352,17 @@ async fn cell_descriptor(State(service): State<FederationService>) -> Json<CellD
 }
 
 #[derive(Debug)]
+struct InvalidFederationEvent(String);
+
+impl std::fmt::Display for InvalidFederationEvent {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for InvalidFederationEvent {}
+
+#[derive(Debug)]
 struct ReceiveRateLimitExceeded;
 
 impl std::fmt::Display for ReceiveRateLimitExceeded {
@@ -1298,6 +1387,9 @@ async fn receive_event(
     }
     let outcome = match service.receive(event).await {
         Ok(outcome) => outcome,
+        Err(error) if error.downcast_ref::<InvalidFederationEvent>().is_some() => {
+            return Err(ApiError::bad_request("invalid federation event"));
+        }
         Err(error) if error.downcast_ref::<ReceiveRateLimitExceeded>().is_some() => {
             return Err(ApiError::too_many_requests());
         }

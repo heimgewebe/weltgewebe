@@ -91,7 +91,7 @@ Wesentliche Felder:
 | --- | --- |
 | `protocol_version` | feste Drahtversion `wg-federation/1` |
 | `schema_version` | Ereignisschema, aktuell `1` |
-| `event_id` | globale UUID für Idempotenz und Kollisionsprüfung |
+| `event_id` | globale UUID für Idempotenz und Kollisionsprüfung, zwingend lowercase und hypheniert (`8-4-4-4-12`) |
 | `event_type` | `object.upserted` oder `object.deleted` |
 | `origin_cell_id` | autoritative Ursprungszelle |
 | `actor` | ursprungsseitige Akteurreferenz, keine lokale Berechtigung |
@@ -108,7 +108,7 @@ Wesentliche Felder:
 
 ## 4. Signatur
 
-Signiert werden alle Ereignisfelder außer `signature` als UTF-8-Bytes nach RFC 8785, JSON Canonicalization Scheme (JCS). Schlüssel werden rekursiv lexikografisch sortiert, es gibt keine unbedeutenden Leerzeichen, und `created_at` muss bereits in der kanonischen UTC-Schreibweise mit `Z` sowie 0, 3, 6 oder 9 Nachkommastellen vorliegen. Der Empfänger rekonstruiert exakt diese Bytes und verifiziert sie gegen den öffentlichen Schlüssel aus `(origin_cell_id, key_id)`. Fehlende Pflichtfelder und unbekannte Felder werden vor der Fachlogik als `400 Bad Request` abgewiesen.
+Signiert werden alle Ereignisfelder außer `signature` als UTF-8-Bytes nach RFC 8785, JSON Canonicalization Scheme (JCS). Schlüssel werden rekursiv lexikografisch sortiert, es gibt keine unbedeutenden Leerzeichen, und `created_at` muss bereits in der kanonischen UTC-Schreibweise mit `Z` sowie 0, 3, 6 oder 9 Nachkommastellen vorliegen. Der Empfänger rekonstruiert exakt diese Bytes und verifiziert sie gegen den öffentlichen Schlüssel aus `(origin_cell_id, key_id)`. Fehlende Pflichtfelder, unbekannte Felder, nichtkanonische `event_id`-Schreibweisen sowie andere strukturell vertragswidrige Felder werden vor der Vertrauens- und Fachlogik als `400 Bad Request` abgewiesen.
 
 Interoperabilitätsvektor für `contracts/federation/v1/examples/event.example.json`:
 
