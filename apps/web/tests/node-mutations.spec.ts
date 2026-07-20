@@ -40,6 +40,13 @@ test.describe("Knoten bearbeiten und löschen", () => {
     await panel
       .getByRole("button", { name: "Bearbeiten", exact: true })
       .click();
+    await expect(panel.getByLabel("Titel")).toBeFocused();
+    await panel.getByRole("button", { name: "Abbrechen" }).click();
+    await expect(panel.getByRole("tab", { name: "Bearbeiten" })).toBeFocused();
+    await panel
+      .getByRole("button", { name: "Bearbeiten", exact: true })
+      .click();
+    await expect(panel.getByLabel("Titel")).toBeFocused();
     await panel.getByLabel("Titel").fill("Gemeinsam gepflegter Knoten");
     await panel
       .getByLabel("Kurzbeschreibung")
@@ -68,6 +75,7 @@ test.describe("Knoten bearbeiten und löschen", () => {
       "aria-selected",
       "true",
     );
+    await expect(panel.getByRole("tab", { name: "Übersicht" })).toBeFocused();
     await panel.getByRole("tab", { name: "Bearbeiten" }).click();
     page.once("dialog", async (dialog) => {
       expect(dialog.type()).toBe("confirm");
@@ -107,6 +115,18 @@ test.describe("Knoten bearbeiten und löschen", () => {
     await expect(
       panel.getByRole("button", { name: "Knoten löschen" }),
     ).toHaveCount(0);
+
+    const uebersichtTab = panel.getByRole("tab", { name: "Übersicht" });
+    const verlaufTab = panel.getByRole("tab", { name: "Verlauf" });
+    await uebersichtTab.focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(verlaufTab).toBeFocused();
+    await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
+    await expect(verlaufTab).toHaveAttribute("tabindex", "0");
+    await expect(uebersichtTab).toHaveAttribute("tabindex", "-1");
+    await page.keyboard.press("ArrowRight");
+    await expect(uebersichtTab).toBeFocused();
+    await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
   });
 
   test("bewahrt den Entwurf bei 412 und speichert nach bewusstem Vergleich erneut", async ({
