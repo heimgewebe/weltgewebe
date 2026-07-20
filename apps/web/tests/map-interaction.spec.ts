@@ -287,19 +287,22 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
     await expect(panel.locator("#panel-verlauf")).toBeVisible();
 
-    // End remains on the last productive tab.
+    // Press End -> Should move to the final "Bearbeiten" tab.
     await page.keyboard.press("End");
-    await expect(verlaufTab).toBeFocused();
+    const bearbeitenTab = panel.getByRole("tab", { name: "Bearbeiten" });
+    await expect(bearbeitenTab).toBeFocused();
+    await expect(bearbeitenTab).toHaveAttribute("aria-selected", "true");
+    await expect(panel.locator("#panel-bearbeiten")).toBeVisible();
 
     // Press Home -> Should move back to "Übersicht"
     await page.keyboard.press("Home");
     await expect(uebersichtTab).toBeFocused();
     await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
 
-    // Press ArrowLeft -> Should wrap around to "Verlauf"
+    // Press ArrowLeft -> Should wrap around to "Bearbeiten"
     await page.keyboard.press("ArrowLeft");
-    await expect(verlaufTab).toBeFocused();
-    await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
+    await expect(bearbeitenTab).toBeFocused();
+    await expect(bearbeitenTab).toHaveAttribute("aria-selected", "true");
   });
 
   test("AccountPanel keyboard navigation allows arrow keys, Home, and End", async ({
