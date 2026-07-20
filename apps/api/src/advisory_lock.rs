@@ -1,5 +1,11 @@
 use sha2::{Digest, Sha256};
 
+pub(crate) const NODE_MUTATION_LOCK_NAMESPACE: &str = "weltgewebe:node-mutation:v1";
+
+pub(crate) fn node_mutation_lock_key(node_id: &str) -> i64 {
+    stable_advisory_lock_key(NODE_MUTATION_LOCK_NAMESPACE, &[node_id])
+}
+
 /// Derive one stable 64-bit PostgreSQL advisory-lock key from application-owned
 /// inputs. Length-prefixing each part avoids ambiguous concatenations, while a
 /// versioned namespace keeps unrelated lock domains separate.

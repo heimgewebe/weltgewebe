@@ -7,7 +7,9 @@ use std::{path::PathBuf, str::FromStr};
 
 use chrono::{Duration, TimeZone, Utc};
 use serial_test::serial;
+use sha2::{Digest, Sha256};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use tokio::time::{sleep, timeout, Duration as TokioDuration};
 use weltgewebe_api::governance::{
     add_message, add_veto, create_weber_proposal, delete_guest_account, finalize_due_proposals,
     get_proposal, upsert_vote, CreateProposalError, MessageError, ProposalStatus, VoteChoice,
@@ -34,7 +36,7 @@ fn direct_database_url() -> String {
 async fn pool() -> sqlx::PgPool {
     let options = PgConnectOptions::from_str(&direct_database_url()).expect("valid DATABASE_URL");
     let pool = PgPoolOptions::new()
-        .max_connections(2)
+        .max_connections(4)
         .connect_with(options)
         .await
         .expect("connect PostgreSQL");
@@ -71,6 +73,29 @@ async fn cleanup(pool: &sqlx::PgPool) {
         .execute(pool)
         .await
         .expect("clean accounts");
+}
+
+fn node_mutation_lock_key(node_id: &str) -> i64 {
+    let mut hasher = Sha256::new();
+    hasher.update(b"weltgewebe:node-mutation:v1");
+    hasher.update((node_id.len() as u64).to_be_bytes());
+    hasher.update(node_id.as_bytes());
+    let digest = hasher.finalize();
+    i64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"))
+}
+
+async fn seed_guest_node(pool: &sqlx::PgPool, account_id: &str, node_id: &str) {
+    sqlx::query(
+        "INSERT INTO domain_nodes \
+         (id, kind, title, lat, lon, created_at, updated_at, payload) \
+         VALUES ($1, 'Ort', 'Rennknoten', 53.5, 10.0, NOW(), NOW(), \
+                 jsonb_build_object('created_by_account_id', $2::text))",
+    )
+    .bind(node_id)
+    .bind(account_id)
+    .execute(pool)
+    .await
+    .expect("seed guest node");
 }
 
 async fn seed_account(pool: &sqlx::PgPool, id: &str, role: &str) {
@@ -390,6 +415,167 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
         "foreign contribution must be anonymized"
     );
     assert_eq!(retained_body, "Dieser Beitrag bleibt erhalten.");
+
+    cleanup(&pool).await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn guest_exit_waits_for_an_inflight_owned_node_mutation() {
+    const ACCOUNT: &str = "gov-proof-race-mutation-first";
+    const NODE: &str = "gov-proof-race-node-mutation-first";
+
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, ACCOUNT, "gast").await;
+    seed_guest_node(&pool, ACCOUNT, NODE).await;
+
+    let mut mutation = pool.begin().await.expect("begin mutation");
+    sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+        .bind(node_mutation_lock_key(NODE))
+        .execute(&mut *mutation)
+        .await
+        .expect("lock node mutation");
+
+    let exit_pool = pool.clone();
+    let exit = tokio::spawn(async move { delete_guest_account(&exit_pool, ACCOUNT).await });
+    sleep(TokioDuration::from_millis(150)).await;
+    assert!(
+        !exit.is_finished(),
+        "exit must wait for the active node mutation"
+    );
+
+    sqlx::query("UPDATE domain_nodes SET title = 'Bearbeitung gewinnt' WHERE id = $1")
+        .bind(NODE)
+        .execute(&mut *mutation)
+        .await
+        .expect("finish node mutation");
+    mutation.commit().await.expect("commit node mutation");
+
+    timeout(TokioDuration::from_secs(5), exit)
+        .await
+        .expect("exit completes after mutation lock release")
+        .expect("exit task")
+        .expect("delete guest");
+
+    let row: (String, Option<String>) = sqlx::query_as(
+        "SELECT title, payload ->> 'created_by_account_id' FROM domain_nodes WHERE id = $1",
+    )
+    .bind(NODE)
+    .fetch_one(&pool)
+    .await
+    .expect("read retained node");
+    assert_eq!(row.0, "Bearbeitung gewinnt");
+    assert_eq!(row.1, None, "exit anonymizes after the mutation commits");
+
+    cleanup(&pool).await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn owned_node_mutation_waits_for_guest_exit_and_then_loses_ownership() {
+    const ACCOUNT: &str = "gov-proof-race-exit-first";
+    const NODE: &str = "gov-proof-race-node-exit-first";
+    const EDGE: &str = "gov-proof-race-edge-exit-first";
+
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, ACCOUNT, "gast").await;
+    seed_guest_node(&pool, ACCOUNT, NODE).await;
+    sqlx::query(
+        "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ($1, $2, $3, 'reference', NOW(), \
+                 jsonb_build_object('source_type', 'account', 'target_type', 'node'))",
+    )
+    .bind(EDGE)
+    .bind(ACCOUNT)
+    .bind(NODE)
+    .execute(&pool)
+    .await
+    .expect("seed blocking edge");
+
+    let mut edge_blocker = pool.begin().await.expect("begin edge blocker");
+    sqlx::query("SELECT id FROM domain_edges WHERE id = $1 FOR UPDATE")
+        .bind(EDGE)
+        .execute(&mut *edge_blocker)
+        .await
+        .expect("lock edge so exit remains open");
+
+    let exit_pool = pool.clone();
+    let exit = tokio::spawn(async move { delete_guest_account(&exit_pool, ACCOUNT).await });
+
+    let key = node_mutation_lock_key(NODE);
+    timeout(TokioDuration::from_secs(5), async {
+        loop {
+            let mut probe = pool.begin().await.expect("begin advisory probe");
+            let acquired: bool = sqlx::query_scalar("SELECT pg_try_advisory_xact_lock($1::bigint)")
+                .bind(key)
+                .fetch_one(&mut *probe)
+                .await
+                .expect("probe node lock");
+            probe.rollback().await.expect("rollback advisory probe");
+            if !acquired {
+                break;
+            }
+            sleep(TokioDuration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("exit acquires node lock before edge deletion");
+
+    let mutation_pool = pool.clone();
+    let mutation = tokio::spawn(async move {
+        let mut tx = mutation_pool.begin().await.expect("begin late mutation");
+        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+            .bind(key)
+            .execute(&mut *tx)
+            .await
+            .expect("wait for node lock");
+        let affected = sqlx::query(
+            "UPDATE domain_nodes SET title = 'Darf nicht gewinnen' \
+             WHERE id = $1 AND payload ->> 'created_by_account_id' = $2",
+        )
+        .bind(NODE)
+        .bind(ACCOUNT)
+        .execute(&mut *tx)
+        .await
+        .expect("attempt ownership-bound mutation")
+        .rows_affected();
+        tx.commit().await.expect("commit late mutation");
+        affected
+    });
+    sleep(TokioDuration::from_millis(150)).await;
+    assert!(
+        !mutation.is_finished(),
+        "late mutation must wait for guest exit"
+    );
+
+    edge_blocker.commit().await.expect("release exit blocker");
+    timeout(TokioDuration::from_secs(5), exit)
+        .await
+        .expect("exit completes")
+        .expect("exit task")
+        .expect("delete guest");
+    let affected = timeout(TokioDuration::from_secs(5), mutation)
+        .await
+        .expect("late mutation completes")
+        .expect("mutation task");
+    assert_eq!(
+        affected, 0,
+        "post-exit ownership check must reject mutation"
+    );
+
+    let row: (String, Option<String>) = sqlx::query_as(
+        "SELECT title, payload ->> 'created_by_account_id' FROM domain_nodes WHERE id = $1",
+    )
+    .bind(NODE)
+    .fetch_one(&pool)
+    .await
+    .expect("read retained node");
+    assert_eq!(row.0, "Rennknoten");
+    assert_eq!(row.1, None);
 
     cleanup(&pool).await;
 }
