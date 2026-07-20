@@ -35,6 +35,11 @@ verifies_with:
   - scripts/ci/tests/test_semantic_search_postgres_foundation.py
   - contracts/search/postgres-foundation.up.sql
   - contracts/search/postgres-foundation.down.sql
+  - contracts/search/hybrid-ranking-core-receipt.schema.json
+  - contracts/search/examples/hybrid-ranking-core.heim-pc.json
+  - scripts/search/hybrid_ranking_core.py
+  - scripts/search/probe_hybrid_ranking_core.py
+  - scripts/ci/tests/test_semantic_search_ranking_core.py
 ---
 
 # Semantic Search v1
@@ -230,9 +235,32 @@ Die reale PostgreSQL-Rangfolge aus FTS und `pg_trgm` erreicht im synthetischen T
 
 Die gespeicherten Laufzeiten messen den vollständigen `docker exec`-/`psql`-Roundtrip je Anfrage. Sie sind ausdrücklich keine reine Datenbanklatenz und kein Produktions-SLO.
 
-Da pgvector im kanonischen Image fehlt, ist die Embedding-Runtime fail-closed: Vor T004 muss entweder pgvector explizit paketiert, versions- und image-digest-gebunden belegt werden oder ein anderer exakter Speicherpfad einen eigenen Vertrag erhalten. `DOUBLE PRECISION[]` bleibt in T003 nur eine dimensionsgeprüfte Referenzablage ohne Runtime-Verbraucher. Es gibt keine Search-API, keinen Worker, keinen Backfill, keine Webintegration, keinen Produktionsrollout und keine SemantAH-Stilllegung.
+Da pgvector im kanonischen Image fehlt, bleibt jede persistente Embedding-Projektion fail-closed. T004 darf unabhängig davon einen rein flüchtigen, testgebundenen Embedding- und Rankingkern gegen synthetische Daten ausführen, solange weder Vektoren noch Providerantworten persistiert werden. Vor T005 muss pgvector explizit paketiert, versions- und image-digest-gebunden belegt werden oder ein anderer exakter Speicherpfad einen eigenen Vertrag erhalten. `DOUBLE PRECISION[]` bleibt in T003 nur eine dimensionsgeprüfte Referenzablage ohne Runtime-Verbraucher. Es gibt keine Search-API, keinen Worker, keinen Backfill, keine Webintegration, keinen Produktionsrollout und keine SemantAH-Stilllegung.
 
-## 12. Generationen und Dimensionssicherheit
+## 12. T004-Livebeleg: interner Embedding- und Hybrid-Rankingkern
+
+T004 implementiert den internen Referenzkern in `scripts/search/hybrid_ranking_core.py`. Er ist keine neue Runtime und kein fachlicher Schreibpfad. Die reale PostgreSQL-Rangfolge aus T003 bleibt die führende lexikalische Wahrheit: T004 übernimmt eine bereits sichtbarkeitsgefilterte und autorisierte Reihenfolge, prüft ihre Knoten-IDs gegen die exakte Kandidatenmenge und ergänzt nur bislang nicht lexikalisch gerankte Kandidaten semantisch. Damit entsteht keine zweite Python-Volltextwahrheit.
+
+Die Normalisierung ist als `weltgewebe-search-normalization-v1` gebunden; die Fusion als `weltgewebe-hybrid-ranking-v1`. Eine Generation bindet lokalen Provider, Modell-ID, Modellrevision, Laufzeitidentität, Dimension, Dokumentrevision, Normalisierungsrevision und Rankingrevision in einer deterministischen `generation_id`. Mischung verschiedener Generationen, falsche Dimensionen, leere oder übergroße Vektoren, Bool-Werte, nichtendliche Zahlen und Nullvektoren werden abgelehnt.
+
+Nur der Namensraum `local:` ist zulässig. Die Live-Messung verwendet den proxyfreien Loopback-Endpunkt, Ollama 0.12.6 und exakt die bereits in T002 gebundenen Modelldigests. Die Identität wird vor und nach beiden Embedding-Aufrufen gelesen und muss unverändert bleiben. Nur `ProviderUnavailableError` aktiviert den lexikalischen Fallback. Identitäts-, Datenschutz-, Dimensions- und Generationsfehler bleiben fail-closed.
+
+Das synthetische T002-Goldset wurde gegen die vollständigen T003-PostgreSQL-Rangfolgen gemessen. Exakte Titel-, Tag- und Präfixtreffer sowie die gesamte T003-Reihenfolge bleiben unverändert vor semantischen Ergänzungen.
+
+| Pfad | Natürliche Top-3 | Falsche Top-1 | Sichtbarkeitslecks | Entscheidung |
+| --- | ---: | ---: | ---: | --- |
+| T003 PostgreSQL-FTS/`pg_trgm` | 14/19 | 0 | 0 | lexikalische Basis |
+| `qwen3-embedding:0.6b` + T003 | 14/19 | 0 | 0 | kein Zusatznutzen |
+| `qwen3-embedding:4b` + T003 | 18/19 | 0 | 0 | kleinster qualifizierter Kandidat |
+| `qwen3-embedding:8b` + T003 | 19/19 | 0 | 0 | Qualitätsobergrenze, nicht erforderlich |
+
+`qwen3-embedding:4b` ist der kleinste gemessene lokale Kandidat, der mindestens 85 Prozent natürliche Top-3, null falsche Top-1, null Sichtbarkeitslecks, unveränderte exakte Vorrangklassen und mindestens zwei zusätzliche natürliche Top-3-Fälle gegenüber T003 erfüllt. Diese T004-Entscheidung ersetzt die vorsichtigere T002-Referenzwahl von 8B nur für den realen T003-plus-T004-Fusionsvertrag. Sie ist weiterhin keine Produktionsfreigabe.
+
+Der Beleg liegt in `contracts/search/examples/hybrid-ranking-core.heim-pc.json`. Er bindet Architektur, Dataset, T002-Modellidentitäten, T003-Receipt, Kern, Probe, Regressionstests und Receipt-Schema über Einzelhashes und einen gemeinsamen Quellmanifest-Hash. Er speichert vollständige begrenzte Rangfolgen und Aggregate, aber keine Rohvektoren oder Providerrohdaten. Externe Kosten betragen null.
+
+T004 erzeugt keine persistente Projektion, keine `pgvector`-Migration, keinen Worker, keinen Backfill, keine Search-API, keine Webintegration, kein Deployment und keine SemantAH-Stilllegung. Der Python-Kern ist eine ausführbare Referenz und ein Beweisvertrag. Eine spätere produktive Rust-Integration bleibt T005/T006 vorbehalten und muss denselben Generationen-, Datenschutz-, Fallback- und Rankingvertrag neu belegen.
+
+## 13. Generationen und Dimensionssicherheit
 
 Eine aktive Indexgeneration bindet mindestens:
 
@@ -248,7 +276,7 @@ Ein Wechsel eines dieser Merkmale erzeugt eine vollständige neue Generation. Ve
 
 Eine neue Generation wird vollständig aufgebaut und geprüft, bevor sie atomar aktiviert wird. Ein Rückwechsel aktiviert nur eine vollständig konsistente vorherige Generation oder baut sie neu auf.
 
-## 13. Projektion und Worker
+## 14. Projektion und Worker
 
 Der spätere Worker ist idempotent und revisionsgebunden:
 
@@ -263,9 +291,9 @@ Der spätere Worker ist idempotent und revisionsgebunden:
 
 Mehrere API- oder Worker-Instanzen dürfen denselben Auftrag wiederholen, ohne doppelte fachliche Wirkung oder Rückwärtslauf.
 
-## 14. Vorgesehene interne Codegrenze
+## 15. Vorgesehene interne Codegrenze
 
-Die reale Codeorganisation wird in T004 bis T006 schrittweise ergänzt. Der bevorzugte Zuschnitt liegt innerhalb von `apps/api`, nicht in einer neuen Runtime:
+T004 bleibt als ausführbare, nichtproduktive Referenz unter `scripts/search`, damit weder API noch Persistenz vorweggenommen werden. Die reale Produktorganisation wird ab T005/T006 innerhalb von `apps/api` ergänzt, nicht in einer neuen Runtime:
 
 ```text
 apps/api/src/search/
@@ -286,7 +314,7 @@ apps/api/src/bin/search-evaluate.rs
 
 Die genaue Dateigrenze darf an bestehende Rust-Module angepasst werden. Verboten bleibt eine separate `apps/semantic-service`-Runtime.
 
-## 15. Goldset-Vertrag
+## 16. Goldset-Vertrag
 
 `contracts/search/relevance-goldset.schema.json` definiert ein maschinenlesbares Format. Das eingecheckte Beispiel ist ausschließlich synthetisch.
 
@@ -306,7 +334,7 @@ Relevante IDs müssen sichtbar sein. Ausgeschlossene IDs dürfen nicht sichtbar 
 
 Das Goldset misst Retrievalqualität, nicht gesellschaftliche Wahrheit. Bewertungen müssen begründet und bei fachlichen Änderungen versioniert werden.
 
-## 16. Qualitäts- und Freigabegates
+## 17. Qualitäts- und Freigabegates
 
 Vor T008 müssen mindestens belegt sein:
 
@@ -325,7 +353,7 @@ Vor T008 müssen mindestens belegt sein:
 
 Basis und Kandidaten werden getrennt berichtet. Ein gemittelter Gesamtscore darf Regressionen bei exakten Treffern oder Sichtbarkeit nicht verdecken.
 
-## 17. Betrieb und Beobachtbarkeit
+## 18. Betrieb und Beobachtbarkeit
 
 Später mindestens beobachtbar sind:
 
@@ -341,7 +369,7 @@ Später mindestens beobachtbar sind:
 
 Metriken enthalten keine Rohqueries, privaten Texte oder Embeddings, solange dafür kein eigener Datenschutzvertrag besteht.
 
-## 18. Hard Cut und Nichtziele
+## 19. Hard Cut und Nichtziele
 
 Nicht Bestandteil der Zielarchitektur sind:
 
@@ -360,12 +388,12 @@ Nicht Bestandteil der Zielarchitektur sind:
 
 Brauchbare SemantAH-Konzepte wie Providergrenzen, Dimensionsprüfung, Normalisierung, deterministische Cosinus-Referenzsuche, Benchmarks und Tests dürfen zielgerichtet neu implementiert werden. SemantAH-Code wird nicht als dauerhafte Abhängigkeit übernommen.
 
-## 19. Taskgrenzen
+## 20. Taskgrenzen
 
 - **T001:** Architekturvertrag, Goldset-Format, synthetisches Beispiel und Validator.
 - **T002:** Relevanzbasis und Modellvergleich.
 - **T003:** PostgreSQL-Suchschema, Volltext und Trigramme belegt; fehlendes `pgvector` als harte Stopbedingung dokumentiert.
-- **T004:** interner Embedding- und Rankingkern.
+- **T004:** interner Embedding- und Rankingkern belegt; `qwen3-embedding:4b` ist der kleinste lokale Testkandidat für den T003-plus-T004-Fusionsvertrag.
 - **T005:** idempotente Projektion, Worker, Backfill und Löschfortpflanzung.
 - **T006:** hybride serverseitige Such-API.
 - **T007:** Webintegration und getrennte „Ähnliche Knoten“.
@@ -374,7 +402,7 @@ Brauchbare SemantAH-Konzepte wie Providergrenzen, Dimensionsprüfung, Normalisie
 
 Erst nach erfolgreichem T008-Beweis darf T009 `SEMANTAH-USEFULNESS-V1`, `SEMANTAH-INDEXD-SCALING-V1` und `SEMANTAH-E2E-PORTABILITY-V1` superseden oder schließen.
 
-## 20. Stopbedingungen
+## 21. Stopbedingungen
 
 Die Initiative wird gestoppt oder neu geschnitten, wenn:
 
@@ -385,12 +413,12 @@ Die Initiative wird gestoppt oder neu geschnitten, wenn:
 - der Betriebsaufwand den gemessenen Relevanzgewinn überwiegt oder
 - die Suche eine zweite fachliche Wahrheit oder automatische Beziehungssemantik erzeugen würde.
 
-## 21. Nicht behaupteter Zustand
+## 22. Nicht behaupteter Zustand
 
 Dieser Vertrag belegt nicht:
 
 - installierte oder produktionsfähige `pgvector`-Unterstützung
-- eine gewählte Embedding-Modell-ID
+- eine produktiv freigegebene Embedding-Modell-ID
 - eine vorhandene Search-API
 - laufende Worker oder Backfills
 - verbesserte reale Relevanz
