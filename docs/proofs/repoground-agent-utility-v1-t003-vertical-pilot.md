@@ -3,7 +3,7 @@ id: docs.proofs.repoground-agent-utility-v1-t003-vertical-pilot
 title: RepoGround Agent Utility V1 T003 Vertical Pilot
 doc_type: proof
 status: active
-summary: Revisionsgebundener Weltgewebe-Pilot für RepoGround Change Capsules; der Kompaktheits-Gate besteht, die Default-Promotion bleibt wegen eines zu großen Call-Graph-Artefakts blockiert.
+summary: Revisionsgebundener Weltgewebe-Pilot nach T007; der Kompaktheits-Gate besteht und der große Call-Graph ist begrenzt nutzbar, die Default-Promotion bleibt wegen fehlender Contract-, Runtime-Proof- und Rollback-Evidenz blockiert.
 relations:
   - type: relates_to
     target: scripts/ci/fixtures/repoground_vertical_pilot.v1.json
@@ -19,68 +19,98 @@ relations:
 
 ## Zweck
 
-Dieser Proof misst eine RepoGround Change Capsule gegen denselben heutigen Grabowski-/RepoGround-Kontextweg ohne Capsule. Er verändert weder Produktion noch Compose/Kubernetes-Runtime.
+Dieser Proof misst eine RepoGround Change Capsule gegen denselben Grabowski-/RepoGround-Kontextweg ohne Capsule. Er verändert weder Produktion noch Compose- oder Kubernetes-Runtime.
 
 Die Baseline ist `repoground_context_pack`; die Capsule ist `repoground_context_compose`. Beide verwenden je Fall dieselbe Query und das Task-Profil `change_impact`. Die Capsule ist zusätzlich an exakte Basis-/Ziel-Commits und den daraus berechneten `git_tree_delta_v1`-SHA-256 gebunden.
 
+Diese Nachmessung wurde nach den T007-Härtungen für großen Call-Graph-Zugriff, begrenzte Relationsquellen und evidenzgebundene `related_tests` ausgeführt.
+
 ## Gebundene Identitäten
 
-- Weltgewebe-Pilotbasis / beim Messlauf aktueller `main`: `929dc002c5317e0d85abb24811cf11d5e330d41b`
-- RepoGround-Bundle: `heimgewebe__weltgewebe__main-max-260721-0745`
-- Bundle-Manifest SHA-256: `34f6ac4682db840efba13e56164d0847a6d3099d16cfb2a6047e8eac6c19f31f`
+- Weltgewebe-`main` beim Messlauf: `2959e2725c3b2e27e7d1b97f7040aac205d103f7`
+- RepoGround-Bundle: `heimgewebe__weltgewebe__main-max-260721-2115`
+- Bundle-Manifest SHA-256: `03d811956a34e1f925075fe69f4accd730711b8df047db64fe0393cf1d4e8b30`
 - Bundle-Frische beim Lauf: `fresh_exact`
-- Gemessene Grabowski-Runtime: `e5ec3f699499efcfd36d4b320fb9339988e18368`
+- RepoGround-Generator-Commit: `733443de4aa63d5d2480e6c3fade469ba3303b34`
+- Gemessene Grabowski-Runtime: `1d37e67a6f3f2270a8e754a6d25a809448a0e2de`
 - Kontextbudget der Capsule: `12000` Byte
+- Rohmessung SHA-256: `0bc11f61085410b0d46256b59ed12e45be8b65e633c30b734654a195e0b90567`
 - Maschinenlesbare Evidenz: `scripts/ci/fixtures/repoground_vertical_pilot.v1.json`
 
 ## Goldfälle und kontrollierter Livefall
 
 | Profil | Referenz | Baseline | Capsule | Reduktion | Kritische Direktpfade | Status |
 |---|---|---:|---:|---:|---:|---|
-| Datenbank/Auth | PR #1295, PostgreSQL Passkey Store | 42.848 B | 11.738 B | 72,606 % | 5/5 | degraded |
-| Web/Karte | PR #1514, Map Fan Surfaces | 7.713 B | 1.449 B | 81,214 % | 3/3 | degraded |
-| Deployment/Kubernetes | PR #1458, exakte Workflow-Proof-Bindung | 16.781 B | 6.091 B | 63,703 % | 5/5 | degraded |
-| kontrolliert live | beim Messlauf aktueller `main` `929dc002…` | 7.739 B | 1.449 B | 81,277 % | 3/3 | degraded |
+| Datenbank/Auth | PR #1295, PostgreSQL Passkey Store | 16.359 B | 6.377 B | 61,018 % | 5/5 | available |
+| Web/Karte | PR #1514, Map Fan Surfaces | 7.759 B | 1.446 B | 81,364 % | 3/3 | available |
+| Deployment/Kubernetes | PR #1458, exakte Workflow-Proof-Bindung | 7.819 B | 5.207 B | 33,406 % | 5/5 | degraded: budget only |
+| kontrolliert live | `6dd58674…` → `2959e272…`, aktuelle Kartenänderungen | 7.759 B | 1.804 B | 76,750 % | 7/7 | available |
 
-Alle vier Fälle waren diff-gebunden und nutzten eine frische RepoGround-Publikation. Die vorher festgelegten kritischen Direktpfade blieben vollständig enthalten. Die mechanische T003-Schwelle von mindestens 20 Prozent Kontextreduktion in mindestens zwei Goldfällen wird damit in allen drei Goldfällen erreicht.
+Alle vier Fälle sind diff-gebunden und nutzen eine frische RepoGround-Publikation. Die vorher festgelegten kritischen Direktpfade bleiben vollständig enthalten. Die mechanische T003-Schwelle von mindestens 20 Prozent Kontextreduktion in mindestens zwei Goldfällen wird in allen drei Goldfällen erreicht.
 
-Die Laufzeit wurde **nicht** verbessert: Die Baseline-Läufe lagen bei rund 394–435 ms, die Capsule-Läufe bei rund 627–694 ms. Der gemessene Nutzen liegt damit derzeit in der Kontextverdichtung, nicht in geringerer Berechnungszeit.
+Die Capsule ist weiterhin langsamer zu erzeugen als das allgemeine Kontextpaket; der gemessene Nutzen liegt in der Kontextverdichtung, nicht in geringerer Berechnungszeit.
 
-## Gefundener Blocker
+## T007-Nachweis: großer Call-Graph ist begrenzt nutzbar
 
-Alle vier Capsules melden denselben Impact-Blocker:
+Der aktuelle Weltgewebe-Call-Graph ist weiterhin größer als die frühere sichere Vollartefakt-Lesegrenze:
 
 - Artefaktrolle: `python_call_graph_json`
-- Artefaktgröße: `22.127.878` Byte
-- sichere Grenze des Read-only-Adapters: `16.777.216` Byte (16 MiB)
-- Überschreitung: `5.350.662` Byte
-- Fehlercode: `artifact_too_large`
+- Artefaktgröße: `22.411.587` Byte
+- frühere Read-only-Grenze: `16.777.216` Byte (16 MiB)
+- Überschreitung: `5.634.371` Byte
+- Artefakt-SHA-256: `96e213bddb538ca0ae183879ec3924d356fb08d5172b9be2653af5eab15e3c30`
 
-Es existiert nur eine gesunde aktuelle Weltgewebe-Publikation; ein kleineres alternatives gesundes Bundle steht nicht zur Auswahl. Deshalb ist der Fehler kein Auswahlproblem.
+Trotz dieser Größe tritt in keinem der vier Pilotfälle `artifact_too_large` auf. Der Zugriff bleibt begrenzt und hash-/manifestgebunden. Der Deployment/Kubernetes-Fall liefert sechs Ziel-Symbole. Reine Namensvermutungen werden nicht mehr als `related_tests` ausgegeben; der Heuristikzähler ist in allen vier Fällen null.
 
-Folge: Die Capsule bleibt `degraded`; automatische `related_tests`, `target_symbols` und die Call-Graph-Lane sind nicht belastbar verfügbar. Die Lücke wird explizit ausgegeben und nicht als Vollständigkeit geglättet.
+Damit ist der frühere T007-Skalierungsblocker für diesen Größenbereich beseitigt. Das beweist jedoch weder vollständige Call-Graph-Abdeckung noch, dass jeder Änderungstyp Call-Graph-Evidenz haben muss.
+
+## Verbleibende Delivery-Chain-Lücke
+
+T003 fordert mehr als Kompaktheit. Die Capsule soll Änderung, betroffene Pfade/Symbole, Tests, Contracts, CI, Deployment, Runtime-Proof und Rückfallrisiken verbinden, ohne Repository- und Runtime-Wahrheit zu vermischen.
+
+**Belegt:**
+
+- exakte Änderungsidentität und Diff-Bindung;
+- 100 Prozent Abdeckung der vorab festgelegten kritischen Direktpfade;
+- reale Testdateien in den gewählten Goldfällen;
+- CI- und Deployment-Oberflächen in den revisionsgebundenen Änderungen;
+- Ziel-Symbole im Python-basierten Deployment/Kubernetes-Fall;
+- frische RepoGround-Publikation und bestandene Bundle-Gates;
+- keine erneute `artifact_too_large`-Lücke;
+- keine heuristischen `related_tests`.
+
+**Noch nicht durch die Capsule etabliert:**
+
+- eine explizite Kette zu normativen Contracts;
+- ein ausgeführter Runtime-Proof;
+- evidenzgebundene Rückfall-, Recovery- oder Rollback-Risiken.
+
+Ein Workflow, Runbook oder Proof-Dokument im Repository ist Repository-Wahrheit. Seine bloße Auffindbarkeit beweist nicht, dass ein Runtime-Proof tatsächlich ausgeführt wurde. Diese Trennung bleibt absichtlich erhalten.
 
 ## Bewertung der T003-Akzeptanz
 
-- **Drei Änderungsklassen:** bestanden. Je ein revisionsgebundener Goldfall für Datenbank/Auth, Web/Karte und Deployment/Kubernetes liegt vor.
-- **Gepaarte Baseline:** bestanden. Jeder Fall wurde mit identischer Query und identischem Task-Profil gegen `repoground_context_pack` gemessen.
-- **Qualität/Freshness:** begrenzt bestanden. Kritische Direktpfade: 100 %, Diff-Bindung: verifiziert, Bundle-Frische: `fresh`. Die fehlende Impact-Tiefe bleibt ausdrücklich als Gap sichtbar.
-- **Mechanischer Promotion-Gate:** bestanden. Kontextreduktion beträgt in allen drei Goldfällen deutlich mehr als 20 Prozent.
-- **Delivery Chain:** **blockiert**. Die automatische Kette über betroffene Symbole und Related Tests ist wegen des übergroßen Call-Graphs nicht vollständig belegt.
-- **Delivery/PR/CI:** nicht durch die Messfixture selbst bewiesen. PR-Head, vollständiger Diff, Review und CI werden separat als delivery-gebundene Evidenz geführt; auch deren Erfolg autorisiert keine Default-Promotion.
+- **Drei Änderungsklassen:** bestanden.
+- **Gepaarte Baseline:** bestanden.
+- **Qualität/Freshness:** bestanden innerhalb der expliziten Nicht-Vollständigkeitsgrenzen; kritische Direktpfade 100 %, Diff-Bindung verifiziert, Bundle-Frische `fresh`.
+- **Mechanischer Promotion-Gate:** bestanden; alle drei Goldfälle reduzieren den Kontext um mindestens 20 Prozent.
+- **Delivery Chain:** **blockiert**. Contract-Evidenz, ausgeführter Runtime-Proof und Rollback-/Risikoevidenz sind noch nicht durch die Capsule verbunden.
+- **Delivery/PR/CI:** wird für diesen Proof-Branch separat an Head, Diff, Review und CI gebunden; selbst ein erfolgreicher Merge autorisiert keine Default-Promotion.
 
 ## Entscheidung
 
 **Default-Promotion wird zurückgehalten.**
 
-Der Pilot belegt einen deutlichen Kompaktheitsvorteil ohne Verlust der vorher festgelegten kritischen Direktpfade. Er belegt aber noch nicht die vollständige Änderungsauswirkungskette, die T003 für eine Generalisierung voraussetzt. Der Call-Graph-Skalierungsbruch muss separat behoben und der Pilot danach erneut ausgeführt werden.
+T007 ist technisch wirksam: Der 22,4-MB-Call-Graph blockiert den Pilot nicht mehr, und unbelegte Testpfade werden nicht mehr als verwandte Tests ausgegeben. T003 bleibt dennoch blockiert, weil die geforderte Delivery Chain noch nicht vollständig belegt ist.
+
+Der nächste Schritt ist deshalb kein breiter Plattformausbau, sondern ein enger Folgeschnitt für Contract-, ausgeführte Runtime-Proof- und Rollback-/Risikoevidenz. Erst danach darf T003 erneut über Abschluss und eine mögliche Phase-3-Generalisation entscheiden.
 
 ## Nicht bewiesen
 
 - semantische Vollständigkeit der Capsule
-- automatische Vollständigkeit verwandter Tests
-- automatische Vollständigkeit betroffener Symbole
+- automatische Test-Suffizienz
+- vollständige Symbol- oder Call-Graph-Abdeckung
+- Runtime-Korrektheit oder tatsächlich ausgeführter Runtime-Proof allein aus Repository-Artefakten
+- Rollback-Sicherheit
 - Patch-Korrektheit oder Merge-Reife einer beliebigen Änderung
-- Runtime-Korrektheit oder Regressionsfreiheit
 - Berechtigung, RepoGround standardmäßig zu routen
 - Berechtigung, Phase 3 allein aufgrund der Kontextreduktion zu starten

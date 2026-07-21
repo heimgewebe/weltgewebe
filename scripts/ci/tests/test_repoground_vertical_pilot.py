@@ -44,13 +44,35 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         errors = self.validator.validate(mutated)
         self.assertIn("default promotion must remain withheld", errors)
 
-    def test_call_graph_blocker_requires_real_size_overrun(self) -> None:
+    def test_t007_proof_requires_real_legacy_limit_overrun_and_bounded_access(self) -> None:
         mutated = copy.deepcopy(self.evidence)
-        blocker = mutated["call_graph_blocker"]
-        blocker["artifact_bytes"] = blocker["readonly_adapter_max_bytes"]
-        blocker["over_limit_bytes"] = 0
+        access = mutated["call_graph_access"]
+        access["artifact_bytes"] = access["legacy_readonly_limit_bytes"]
+        access["over_limit_bytes"] = 0
+        access["bounded_access_status"] = "blocked"
         errors = self.validator.validate(mutated)
-        self.assertTrue(any("above the safe adapter limit" in error for error in errors))
+        self.assertTrue(any("larger than the legacy read limit" in error for error in errors))
+        self.assertIn("bounded call graph access must pass", errors)
+
+    def test_reintroduced_artifact_too_large_is_rejected(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = mutated["cases"][0]
+        case["capsule"]["artifact_too_large_present"] = True
+        mutated["call_graph_access"]["artifact_too_large_case_ids"] = [case["id"]]
+        errors = self.validator.validate(mutated)
+        self.assertTrue(any("artifact_too_large must be absent" in error for error in errors))
+        self.assertIn("post-T007 pilot must have no artifact_too_large cases", errors)
+
+    def test_heuristic_related_test_is_rejected(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = mutated["cases"][1]
+        case["capsule"]["heuristic_related_test_count"] = 1
+        case["capsule"]["related_tests"] = [
+            {"path": "tests/test_guess.py", "evidence_type": "heuristic"}
+        ]
+        errors = self.validator.validate(mutated)
+        self.assertTrue(any("heuristic related tests must be zero" in error for error in errors))
+        self.assertTrue(any("accepted evidence" in error for error in errors))
 
     def test_forged_reduction_cannot_pass_mechanical_gate(self) -> None:
         mutated = copy.deepcopy(self.evidence)
@@ -69,6 +91,18 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         errors = self.validator.validate(mutated)
         self.assertTrue(any("paired baseline must be available" in error for error in errors))
         self.assertTrue(any("capsule must be available" in error for error in errors))
+
+    def test_delivery_chain_cannot_be_marked_complete_without_missing_evidence(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["delivery_chain_assessment"]["status"] = "pass"
+        mutated["delivery_chain_assessment"]["missing"].pop("runtime_proof")
+        mutated["acceptance"]["delivery_chain"] = "pass"
+        mutated["overall_status"] = "verified"
+        errors = self.validator.validate(mutated)
+        self.assertTrue(any("delivery chain must remain blocked" in error for error in errors))
+        self.assertTrue(any("contracts, runtime_proof and rollback_risks" in error for error in errors))
+        self.assertTrue(any("narrowed post-T007 blocker" in error for error in errors))
+        self.assertTrue(any("overall_status must remain blocked" in error for error in errors))
 
 
 if __name__ == "__main__":

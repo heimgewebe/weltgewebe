@@ -1,19 +1,20 @@
 {
   "acceptance": {
-    "delivery": "not_established_by_fixture",
-    "delivery_chain": "blocked_call_graph_artifact_too_large",
+    "delivery": "pending_pr_review_and_ci",
+    "delivery_chain": "blocked_missing_contract_runtime_rollback_evidence",
     "paired_baseline": "pass",
-    "promotion_gate": "pass_mechanical_compactness",
-    "quality": "pass_with_explicit_degradation",
+    "promotion_gate": "pass",
+    "quality": "pass",
     "three_classes": "pass"
   },
-  "call_graph_blocker": {
-    "artifact_bytes": 22127878,
+  "call_graph_access": {
+    "artifact_bytes": 22411587,
     "artifact_role": "python_call_graph_json",
-    "effect": "agent impact context degraded; automatic related_tests, target_symbols and call_graph lanes unavailable",
-    "error_code": "artifact_too_large",
-    "over_limit_bytes": 5350662,
-    "readonly_adapter_max_bytes": 16777216
+    "artifact_sha256": "96e213bddb538ca0ae183879ec3924d356fb08d5172b9be2653af5eab15e3c30",
+    "artifact_too_large_case_ids": [],
+    "bounded_access_status": "pass",
+    "legacy_readonly_limit_bytes": 16777216,
+    "over_limit_bytes": 5634371
   },
   "cases": [
     {
@@ -21,13 +22,17 @@
       "base_revision": "8c57c1debf43bfe5a1eb7d09100907cfa2473228",
       "baseline": {
         "available": true,
-        "duration_ms": 435.475,
-        "payload_bytes": 42848,
-        "status": null
+        "duration_ms": 434.644,
+        "payload_bytes": 16359
       },
       "capsule": {
+        "artifact_too_large_present": false,
+        "authority_ordered_rules": [],
         "available": true,
-        "context_bytes": 11738,
+        "call_graph_used": false,
+        "causal_relation_count": 0,
+        "coherent_call_graph_relation_count": 0,
+        "context_bytes": 6377,
         "diff_binding_verified": true,
         "does_not_establish": [
           "truth",
@@ -40,47 +45,72 @@
           "runtime_behavior",
           "regression_absence"
         ],
-        "duration_ms": 665.914,
+        "duration_ms": 706.989,
+        "extra_context_paths": [
+          "docs/tasks/board.md"
+        ],
         "freshness_status": "fresh",
         "gaps": [
           {
-            "reason": "source_unavailable",
-            "source": "python_call_graph_json",
-            "status": "blocked"
-          },
-          {
-            "reason": "required_source_untrusted",
-            "source": "artifact_coherence",
-            "sources": [
-              {
-                "error_code": "artifact_too_large",
-                "source": "python_call_graph_json",
-                "status": "blocked"
-              }
+            "paths": [
+              ".github/workflows/api.yml",
+              "apps/api/migrations/20260630000001_create_passkey_credentials.down.sql",
+              "apps/api/migrations/20260630000001_create_passkey_credentials.up.sql",
+              "apps/api/src/auth/mod.rs",
+              "apps/api/src/auth/passkeys_db.rs",
+              "apps/api/tests/db_passkey_store_persistence.rs",
+              "docs/reports/auth-pg-002-passkey-db-store.md",
+              "docs/reports/auth-status-matrix.md",
+              "docs/tasks/index.json"
             ],
-            "status": "blocked"
+            "reason": "target_path_not_present_as_graph_node",
+            "source": "architecture_graph_json",
+            "status": "missing_target"
           }
         ],
-        "general_context_pack_bytes_reported": 42848,
-        "ratio": 0.273945,
-        "reduction_pct": 72.606,
+        "gate_evidence": [
+          {
+            "authority": "repoground_preflight",
+            "gate": "agent_consumption_preflight",
+            "status": "not_applicable"
+          },
+          {
+            "authority": "bundle_status",
+            "gate": "post_emit_health",
+            "status": "pass"
+          },
+          {
+            "authority": "bundle_status",
+            "gate": "bundle_surface_validation",
+            "status": "pass"
+          },
+          {
+            "authority": "bundle_status",
+            "gate": "output_health",
+            "status": "pass"
+          }
+        ],
+        "general_context_pack_bytes_reported": 16359,
+        "heuristic_related_test_count": 0,
+        "ratio": 0.389816,
+        "reduction_pct": 61.018,
         "related_tests": [],
         "retrieval_lanes": {
           "skipped": [
             "pr_delta_cards",
+            "symbol_navigation",
             "call_graph"
           ],
           "used": [
             "direct_changes",
             "agent_impact",
             "query_context",
-            "symbol_navigation",
             "citation",
             "live_evidence",
             "entry_manifest"
           ]
         },
-        "status": "degraded",
+        "status": "available",
         "stop_criteria": {
           "available": [
             "diff_sha256_mismatch",
@@ -88,12 +118,9 @@
             "impact_context_blocked",
             "budget_exhausted"
           ],
-          "triggered": [
-            "impact_context_blocked",
-            "budget_exhausted"
-          ]
+          "triggered": []
         },
-        "target_symbols": []
+        "target_symbol_count": 0
       },
       "changed_path_count": 9,
       "critical_path_coverage": 1.0,
@@ -121,7 +148,7 @@
       "pr": 1295,
       "profile": "database_auth",
       "quality_pass": true,
-      "query": "PostgreSQL passkey credential store auth migrations persistence tests CI",
+      "query": "PostgreSQL passkey credential store auth migrations persistence tests CI runtime proof rollback",
       "target_commit": "38d3ac5dff4edda574e4ccf4298362235c2c4def",
       "target_revision": "38d3ac5dff4edda574e4ccf4298362235c2c4def"
     },
@@ -130,13 +157,17 @@
       "base_revision": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
       "baseline": {
         "available": true,
-        "duration_ms": 393.589,
-        "payload_bytes": 7713,
-        "status": null
+        "duration_ms": 400.378,
+        "payload_bytes": 7759
       },
       "capsule": {
+        "artifact_too_large_present": false,
+        "authority_ordered_rules": [],
         "available": true,
-        "context_bytes": 1449,
+        "call_graph_used": false,
+        "causal_relation_count": 0,
+        "coherent_call_graph_relation_count": 0,
+        "context_bytes": 1446,
         "diff_binding_verified": true,
         "does_not_establish": [
           "truth",
@@ -149,47 +180,64 @@
           "runtime_behavior",
           "regression_absence"
         ],
-        "duration_ms": 627.248,
+        "duration_ms": 665.009,
+        "extra_context_paths": [],
         "freshness_status": "fresh",
         "gaps": [
           {
-            "reason": "source_unavailable",
-            "source": "python_call_graph_json",
-            "status": "blocked"
-          },
-          {
-            "reason": "required_source_untrusted",
-            "source": "artifact_coherence",
-            "sources": [
-              {
-                "error_code": "artifact_too_large",
-                "source": "python_call_graph_json",
-                "status": "blocked"
-              }
+            "paths": [
+              "apps/web/src/lib/components/GovernanceFan.svelte",
+              "apps/web/src/lib/components/ToolFanMenu.svelte",
+              "apps/web/tests/map-fan-surface-clarity.spec.ts"
             ],
-            "status": "blocked"
+            "reason": "target_path_not_present_as_graph_node",
+            "source": "architecture_graph_json",
+            "status": "missing_target"
           }
         ],
-        "general_context_pack_bytes_reported": 7713,
-        "ratio": 0.187865,
-        "reduction_pct": 81.214,
+        "gate_evidence": [
+          {
+            "authority": "repoground_preflight",
+            "gate": "agent_consumption_preflight",
+            "status": "not_applicable"
+          },
+          {
+            "authority": "bundle_status",
+            "gate": "post_emit_health",
+            "status": "pass"
+          },
+          {
+            "authority": "bundle_status",
+            "gate": "bundle_surface_validation",
+            "status": "pass"
+          },
+          {
+            "authority": "bundle_status",
+            "gate": "output_health",
+            "status": "pass"
+          }
+        ],
+        "general_context_pack_bytes_reported": 7759,
+        "heuristic_related_test_count": 0,
+        "ratio": 0.186364,
+        "reduction_pct": 81.364,
         "related_tests": [],
         "retrieval_lanes": {
           "skipped": [
             "pr_delta_cards",
+            "symbol_navigation",
             "call_graph",
+            "citation",
             "live_evidence"
           ],
           "used": [
             "direct_changes",
             "agent_impact",
             "query_context",
-            "symbol_navigation",
-            "citation",
             "entry_manifest"
           ]
         },
-        "status": "degraded",
+        "status": "available",
         "stop_criteria": {
           "available": [
             "diff_sha256_mismatch",
@@ -197,11 +245,9 @@
             "impact_context_blocked",
             "budget_exhausted"
           ],
-          "triggered": [
-            "impact_context_blocked"
-          ]
+          "triggered": []
         },
-        "target_symbols": []
+        "target_symbol_count": 0
       },
       "changed_path_count": 3,
       "critical_path_coverage": 1.0,
@@ -221,7 +267,7 @@
       "pr": 1514,
       "profile": "web_map",
       "quality_pass": true,
-      "query": "map fan surfaces governance tool fan clarity tests",
+      "query": "map fan surfaces governance tool fan clarity tests runtime proof rollback",
       "target_commit": "e9bbe2320b41b988972035553349c4b4eab6beac",
       "target_revision": "e9bbe2320b41b988972035553349c4b4eab6beac"
     },
@@ -230,13 +276,17 @@
       "base_revision": "b73bbfe00db9739fa2555e299556def0a809e395",
       "baseline": {
         "available": true,
-        "duration_ms": 434.097,
-        "payload_bytes": 16781,
-        "status": null
+        "duration_ms": 394.924,
+        "payload_bytes": 7819
       },
       "capsule": {
+        "artifact_too_large_present": false,
+        "authority_ordered_rules": [],
         "available": true,
-        "context_bytes": 6091,
+        "call_graph_used": false,
+        "causal_relation_count": 1,
+        "coherent_call_graph_relation_count": 0,
+        "context_bytes": 5207,
         "diff_binding_verified": true,
         "does_not_establish": [
           "truth",
@@ -249,44 +299,63 @@
           "runtime_behavior",
           "regression_absence"
         ],
-        "duration_ms": 694.391,
+        "duration_ms": 2517.095,
+        "extra_context_paths": [
+          "docs/_generated/impl-index.md"
+        ],
         "freshness_status": "fresh",
         "gaps": [
           {
-            "reason": "source_unavailable",
-            "source": "python_call_graph_json",
-            "status": "blocked"
-          },
-          {
-            "reason": "required_source_untrusted",
-            "source": "artifact_coherence",
-            "sources": [
-              {
-                "error_code": "artifact_too_large",
-                "source": "python_call_graph_json",
-                "status": "blocked"
-              }
+            "paths": [
+              ".github/workflows/kubernetes-platform.yml",
+              "platform/README.md",
+              "runbooks/kubernetes-local-reference.md"
             ],
-            "status": "blocked"
+            "reason": "target_path_not_present_as_graph_node",
+            "source": "architecture_graph_json",
+            "status": "missing_target"
           }
         ],
-        "general_context_pack_bytes_reported": 16781,
-        "ratio": 0.36297,
-        "reduction_pct": 63.703,
+        "gate_evidence": [
+          {
+            "authority": "repoground_preflight",
+            "gate": "agent_consumption_preflight",
+            "status": "not_applicable"
+          },
+          {
+            "authority": "bundle_status",
+            "gate": "post_emit_health",
+            "status": "pass"
+          },
+          {
+            "authority": "bundle_status",
+            "gate": "bundle_surface_validation",
+            "status": "pass"
+          },
+          {
+            "authority": "bundle_status",
+            "gate": "output_health",
+            "status": "pass"
+          }
+        ],
+        "general_context_pack_bytes_reported": 7819,
+        "heuristic_related_test_count": 0,
+        "ratio": 0.665942,
+        "reduction_pct": 33.406,
         "related_tests": [],
         "retrieval_lanes": {
           "skipped": [
+            "entry_manifest",
             "pr_delta_cards",
-            "call_graph"
+            "call_graph",
+            "citation",
+            "live_evidence"
           ],
           "used": [
             "direct_changes",
             "agent_impact",
             "query_context",
-            "symbol_navigation",
-            "citation",
-            "live_evidence",
-            "entry_manifest"
+            "symbol_navigation"
           ]
         },
         "status": "degraded",
@@ -298,10 +367,10 @@
             "budget_exhausted"
           ],
           "triggered": [
-            "impact_context_blocked"
+            "budget_exhausted"
           ]
         },
-        "target_symbols": []
+        "target_symbol_count": 6
       },
       "changed_path_count": 5,
       "critical_path_coverage": 1.0,
@@ -325,22 +394,26 @@
       "pr": 1458,
       "profile": "deployment_kubernetes",
       "quality_pass": true,
-      "query": "Kubernetes platform proof exact workflow state kind reference CI contract",
+      "query": "Kubernetes platform proof exact workflow state kind reference CI deployment runtime proof rollback risk",
       "target_commit": "3aec6e270a10b28e39639cac7791820031b3e348",
       "target_revision": "3aec6e270a10b28e39639cac7791820031b3e348"
     },
     {
-      "base_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
-      "base_revision": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "base_commit": "6dd58674eb11c37e505ad2e6843955b4d5dfe51a",
+      "base_revision": "6dd58674eb11c37e505ad2e6843955b4d5dfe51a",
       "baseline": {
         "available": true,
-        "duration_ms": 393.688,
-        "payload_bytes": 7739,
-        "status": null
+        "duration_ms": 393.114,
+        "payload_bytes": 7759
       },
       "capsule": {
+        "artifact_too_large_present": false,
+        "authority_ordered_rules": [],
         "available": true,
-        "context_bytes": 1449,
+        "call_graph_used": false,
+        "causal_relation_count": 0,
+        "coherent_call_graph_relation_count": 0,
+        "context_bytes": 1804,
         "diff_binding_verified": true,
         "does_not_establish": [
           "truth",
@@ -353,47 +426,68 @@
           "runtime_behavior",
           "regression_absence"
         ],
-        "duration_ms": 626.984,
+        "duration_ms": 631.312,
+        "extra_context_paths": [],
         "freshness_status": "fresh",
         "gaps": [
           {
-            "reason": "source_unavailable",
-            "source": "python_call_graph_json",
-            "status": "blocked"
-          },
-          {
-            "reason": "required_source_untrusted",
-            "source": "artifact_coherence",
-            "sources": [
-              {
-                "error_code": "artifact_too_large",
-                "source": "python_call_graph_json",
-                "status": "blocked"
-              }
+            "paths": [
+              "apps/web/src/lib/map/overlay/nodes.test.ts",
+              "apps/web/src/lib/map/overlay/nodes.ts",
+              "apps/web/src/lib/map/searchIndex.test.ts",
+              "apps/web/src/lib/map/searchIndex.ts",
+              "apps/web/src/lib/stores/mapView.test.ts",
+              "apps/web/src/lib/stores/mapView.ts",
+              "apps/web/src/routes/map/+page.svelte"
             ],
-            "status": "blocked"
+            "reason": "target_path_not_present_as_graph_node",
+            "source": "architecture_graph_json",
+            "status": "missing_target"
           }
         ],
-        "general_context_pack_bytes_reported": 7739,
-        "ratio": 0.187233,
-        "reduction_pct": 81.277,
+        "gate_evidence": [
+          {
+            "authority": "repoground_preflight",
+            "gate": "agent_consumption_preflight",
+            "status": "not_applicable"
+          },
+          {
+            "authority": "bundle_status",
+            "gate": "post_emit_health",
+            "status": "pass"
+          },
+          {
+            "authority": "bundle_status",
+            "gate": "bundle_surface_validation",
+            "status": "pass"
+          },
+          {
+            "authority": "bundle_status",
+            "gate": "output_health",
+            "status": "pass"
+          }
+        ],
+        "general_context_pack_bytes_reported": 7759,
+        "heuristic_related_test_count": 0,
+        "ratio": 0.232504,
+        "reduction_pct": 76.75,
         "related_tests": [],
         "retrieval_lanes": {
           "skipped": [
             "pr_delta_cards",
+            "symbol_navigation",
             "call_graph",
+            "citation",
             "live_evidence"
           ],
           "used": [
             "direct_changes",
             "agent_impact",
             "query_context",
-            "symbol_navigation",
-            "citation",
             "entry_manifest"
           ]
         },
-        "status": "degraded",
+        "status": "available",
         "stop_criteria": {
           "available": [
             "diff_sha256_mismatch",
@@ -401,47 +495,72 @@
             "impact_context_blocked",
             "budget_exhausted"
           ],
-          "triggered": [
-            "impact_context_blocked"
-          ]
+          "triggered": []
         },
-        "target_symbols": []
+        "target_symbol_count": 0
       },
-      "changed_path_count": 3,
+      "changed_path_count": 7,
       "critical_path_coverage": 1.0,
-      "diff_sha256": "9daea9873b61522e4405d035444f076cc056886c816efd359947aed937648c6f",
+      "diff_sha256": "e9b04bd03c9ee1799936db0b31e6756c74106861291c3c23e532bf2490a4142c",
       "direct_change_paths": [
-        "apps/web/src/lib/components/GovernanceFan.svelte",
-        "apps/web/src/lib/components/ToolFanMenu.svelte",
-        "apps/web/tests/map-fan-surface-clarity.spec.ts"
+        "apps/web/src/lib/map/overlay/nodes.test.ts",
+        "apps/web/src/lib/map/overlay/nodes.ts",
+        "apps/web/src/lib/map/searchIndex.test.ts",
+        "apps/web/src/lib/map/searchIndex.ts",
+        "apps/web/src/lib/stores/mapView.test.ts",
+        "apps/web/src/lib/stores/mapView.ts",
+        "apps/web/src/routes/map/+page.svelte"
       ],
       "expected_critical_paths": [
-        "apps/web/src/lib/components/GovernanceFan.svelte",
-        "apps/web/src/lib/components/ToolFanMenu.svelte",
-        "apps/web/tests/map-fan-surface-clarity.spec.ts"
+        "apps/web/src/lib/map/overlay/nodes.test.ts",
+        "apps/web/src/lib/map/overlay/nodes.ts",
+        "apps/web/src/lib/map/searchIndex.test.ts",
+        "apps/web/src/lib/map/searchIndex.ts",
+        "apps/web/src/lib/stores/mapView.test.ts",
+        "apps/web/src/lib/stores/mapView.ts",
+        "apps/web/src/routes/map/+page.svelte"
       ],
       "id": "live_current_main",
       "missing_critical_paths": [],
-      "pr": 1514,
+      "pr": 1516,
       "profile": "controlled_live",
       "quality_pass": true,
-      "query": "current main map fan surfaces governance tool fan clarity tests",
-      "target_commit": "929dc002c5317e0d85abb24811cf11d5e330d41b",
-      "target_revision": "929dc002c5317e0d85abb24811cf11d5e330d41b"
+      "query": "current main map marker search index updates tests runtime proof rollback",
+      "target_commit": "2959e2725c3b2e27e7d1b97f7040aac205d103f7",
+      "target_revision": "2959e2725c3b2e27e7d1b97f7040aac205d103f7"
     }
   ],
   "context_budget_bytes": 12000,
+  "delivery_chain_assessment": {
+    "established": {
+      "affected_paths": "pass",
+      "change_identity": "pass",
+      "ci": "pass",
+      "deployment": "pass",
+      "symbols": "pass_in_deployment_kubernetes_case",
+      "tests": "pass"
+    },
+    "missing": {
+      "contracts": "not_established_by_capsule",
+      "rollback_risks": "not_established_by_capsule",
+      "runtime_proof": "not_established_by_capsule"
+    },
+    "reason": "The post-T007 capsules preserve change identity, critical paths, actual tests, CI and deployment surfaces, and expose target symbols for the Python Kubernetes case. They do not surface an explicit contract chain, executed runtime proof, or rollback-risk evidence. Repository workflow/runbook paths are not treated as runtime truth.",
+    "repo_runtime_separation": "pass",
+    "status": "blocked"
+  },
   "does_not_establish": [
     "semantic completeness",
-    "automatic related-test coverage",
-    "automatic symbol impact coverage",
+    "automatic test sufficiency",
     "runtime correctness",
+    "executed runtime proof",
+    "rollback safety",
     "merge readiness",
     "default RepoGround routing authority"
   ],
-  "generated_at": "2026-07-21T12:05:00+02:00",
-  "grabowski_runtime_commit": "e5ec3f699499efcfd36d4b320fb9339988e18368",
-  "measurement_source_sha256": "b5c919cabb6f60ed222b9530ee2c34455b8f9746e0bea9d5fcdc91d0a797b92d",
+  "generated_at": "2026-07-21T23:18:00+02:00",
+  "grabowski_runtime_commit": "1d37e67a6f3f2270a8e754a6d25a809448a0e2de",
+  "measurement_source_sha256": "0bc11f61085410b0d46256b59ed12e45be8b65e633c30b734654a195e0b90567",
   "mechanical_promotion_gate": {
     "passed": true,
     "qualifying_case_ids": [
@@ -453,14 +572,15 @@
   },
   "overall_status": "blocked",
   "promotion_recommendation": "withhold_default_promotion",
-  "reason": "Mechanical compactness gate passes, but all four capsules are degraded by the same oversized call-graph artifact, so the full impact delivery chain is not proven.",
+  "reason": "T007 removes the oversized call-graph access blocker and the mechanical compactness gate passes in all three gold cases. T003 remains blocked because the capsule delivery chain does not yet establish contracts, executed runtime proof, and rollback-risk evidence.",
   "repo": "weltgewebe",
-  "schema_version": 1,
+  "schema_version": 2,
   "source_bundle": {
     "freshness": "fresh_exact",
-    "git_commit": "929dc002c5317e0d85abb24811cf11d5e330d41b",
-    "manifest_sha256": "34f6ac4682db840efba13e56164d0847a6d3099d16cfb2a6047e8eac6c19f31f",
-    "stem": "heimgewebe__weltgewebe__main-max-260721-0745"
+    "generator_runtime_commit": "733443de4aa63d5d2480e6c3fade469ba3303b34",
+    "git_commit": "2959e2725c3b2e27e7d1b97f7040aac205d103f7",
+    "manifest_sha256": "03d811956a34e1f925075fe69f4accd730711b8df047db64fe0393cf1d4e8b30",
+    "stem": "heimgewebe__weltgewebe__main-max-260721-2115"
   },
   "task_profile": "change_impact"
 }
