@@ -397,7 +397,7 @@ pub async fn add_veto(
     .execute(&mut *tx)
     .await
     .map_err(|error| {
-        if is_unique_violation(&error, "governance_vetoes_proposal_actor_key") {
+        if is_unique_violation(&error, "governance_vetoes_pkey") {
             VetoError::AlreadyVetoed
         } else {
             VetoError::Database(error)

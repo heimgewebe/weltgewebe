@@ -213,6 +213,18 @@ async fn veto_opens_exact_second_phase_and_yes_must_exceed_no() {
     )
     .await
     .expect("Weber veto on guest application");
+
+    let duplicate_veto = add_veto(
+        &pool,
+        &accepted.id,
+        WEBER_A,
+        "Weber A",
+        "Zweites Veto darf nicht als Datenbankfehler erscheinen",
+        t0 + Duration::days(2),
+    )
+    .await;
+    assert!(matches!(duplicate_veto, Err(VetoError::AlreadyVetoed)));
+
     let first_phase = finalize_due_proposals(&pool, t0 + Duration::days(7))
         .await
         .expect("open voting");
