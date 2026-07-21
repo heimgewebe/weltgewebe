@@ -259,7 +259,9 @@ Generated automatically. Do not edit.
 ## docs/adr/ADR-0011__foederierte-gewebezellen.md
 
 - [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
+- [relates_to] docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
 - [relates_to] docs/specs/federation-core.md
+- [relates_to] docs/specs/federation-wire-v1.md
 
 ## docs/adr/ADR-0011__ha-referenzzelle-und-wiederherstellung.md
 
@@ -587,6 +589,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
 - [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
 - [relates_to] docs/policies/architecture-critique.md
+- [relates_to] docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md
 - [relates_to] docs/reports/agent-readiness-audit.md
 - [relates_to] docs/reports/optimierungsbericht.md
 - [relates_to] docs/reports/optimierungsstatus.md
@@ -986,6 +989,12 @@ Generated automatically. Do not edit.
 ## docs/specs/federation-core.md
 
 - [relates_to] docs/architecture/weltgewebe-os-convergence-adapter.md
+- [verifies] docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
+- [relates_to] docs/specs/federation-wire-v1.md
+
+## docs/specs/federation-wire-v1.md
+
+- [verifies] docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
 
 ## docs/specs/garnrolle-knoten-faden.md
 
@@ -1192,6 +1201,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/github-action-ref-pinning-audit.md
 
+## scripts/ci/fixtures/repoground_vertical_pilot.v1.json
+
+- [relates_to] docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md
+
 ## scripts/ci/tests/test_check_actions_node24_readiness.py
 
 - [relates_to] docs/reports/github-actions-node24-readiness.md
@@ -1203,6 +1216,14 @@ Generated automatically. Do not edit.
 ## scripts/ci/tests/test_reconcile_public_login_smtp_env.py
 
 - [relates_to] docs/deploy/vps.md
+
+## scripts/ci/tests/test_repoground_vertical_pilot.py
+
+- [relates_to] docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md
+
+## scripts/ci/validate_repoground_vertical_pilot.py
+
+- [relates_to] docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md
 
 ## scripts/docmeta/audit_account_email_uniqueness.py
 
@@ -1244,6 +1265,10 @@ Generated automatically. Do not edit.
 ## scripts/guard/domain-multi-instance-guard.sh
 
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
+
+## scripts/ops/activate-production-reconciler-from-release.sh
+
+- [relates_to] docs/deploy/merge-to-live.md
 
 ## scripts/ops/check_public_live_readiness.py
 

@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 632 |
+| Relationen gesamt | 642 |
 | — depends_on | 25 |
-| — relates_to | 592 |
+| — relates_to | 600 |
 | — supersedes | 12 |
-| — verifies | 3 |
-| relates_to Anteil | 94% |
+| — verifies | 5 |
+| relates_to Anteil | 93% |
 
 ### Mögliche supersedes-Lücken
 
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (249 Dokumente):
+**Cluster 1** (256 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -148,8 +148,10 @@ _Keine Lücken erkannt._
 - `docs/process/report-lifecycle.md`
 - `docs/process/sprache.md`
 - `docs/proofs/basemap-hamburg-artifact-proof.md`
+- `docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md`
 - `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
 - `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`
+- `docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md`
 - `docs/quickstart-gate-c.md`
 - `docs/reference/agent-dry-run-runner.md`
 - `docs/reference/agent-handoff-contract.md`
@@ -225,6 +227,7 @@ _Keine Lücken erkannt._
 - `docs/specs/auth-ui.md`
 - `docs/specs/contract.md`
 - `docs/specs/federation-core.md`
+- `docs/specs/federation-wire-v1.md`
 - `docs/specs/garnrolle-knoten-faden.md`
 - `docs/specs/governance-antraege.md`
 - `docs/specs/list-pagination-api.md`
@@ -257,9 +260,12 @@ _Keine Lücken erkannt._
 - `scripts/basemap/build-hamburg-pmtiles.sh`
 - `scripts/ci/check_actions_node24_readiness.py`
 - `scripts/ci/check_github_action_pinning.py`
+- `scripts/ci/fixtures/repoground_vertical_pilot.v1.json`
 - `scripts/ci/tests/test_check_actions_node24_readiness.py`
 - `scripts/ci/tests/test_check_github_action_pinning.py`
 - `scripts/ci/tests/test_reconcile_public_login_smtp_env.py`
+- `scripts/ci/tests/test_repoground_vertical_pilot.py`
+- `scripts/ci/validate_repoground_vertical_pilot.py`
 - `scripts/docmeta/audit_account_email_uniqueness.py`
 - `scripts/docmeta/audit_domain_edge_references.py`
 - `scripts/docmeta/check_planning_registration.py`
@@ -270,6 +276,7 @@ _Keine Lücken erkannt._
 - `scripts/docmeta/validate_report_lifecycle.py`
 - `scripts/guard/basemap-runtime-proof.sh`
 - `scripts/guard/domain-multi-instance-guard.sh`
+- `scripts/ops/activate-production-reconciler-from-release.sh`
 - `scripts/ops/check_public_live_readiness.py`
 - `scripts/ops/check_vps_db_migration_history_shape.py`
 - `scripts/ops/check_vps_migration_safe_runtime_env.py`

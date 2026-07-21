@@ -103,6 +103,7 @@
   $: markerCounts = deriveMarkerCounts(markersData);
   $: availableTypes = deriveAvailableFilterTypes(markersData);
   $: filteredMarkersData = deriveFilteredMarkers(markersData, $activeFilters);
+  $: showNodes = $view.showNodes;
   // Search is scoped to the currently visible markers (filtered set when a
   // filter is active, otherwise the full set) so it never reaches hidden ones.
   $: searchBaseMarkers =
@@ -292,18 +293,18 @@
     );
   }
 
-  // Reactive update for markers and search highlight strictly handled in overlay update
-  $: if (nodesOverlay && filteredMarkersData && $view) {
-    (async () => {
-      await nodesOverlay.update(
-        filteredMarkersData,
-        $view.showNodes,
-        searchMatchIds,
-      );
-    })();
+  // Marker data and search highlighting have separate update paths. Filtering or
+  // scene changes may touch the full marker set; search changes only toggle the
+  // small delta between the previous and next (maximum ten) search matches.
+  $: if (nodesOverlay && filteredMarkersData) {
+    nodesOverlay.update(filteredMarkersData, showNodes);
   }
 
-  // Search content changes only require a marker refresh. ResizeObserver already
+  $: if (nodesOverlay) {
+    nodesOverlay.updateSearchMatches(searchMatchIds);
+  }
+
+  // Search content changes only require indicator and highlight refreshes. ResizeObserver already
   // reports intrinsic overlay-size changes, so it must not be recycled per key.
   $: if (map) {
     filteredResults;
@@ -686,7 +687,7 @@
       );
 
       // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, etc.) carry domain meaning.
-      nodesOverlay = new NodesOverlay(map);
+      nodesOverlay = new NodesOverlay(map, maplibregl.Marker);
       cleanupKomposition = setupKompositionInteraction(map);
       let sysStateStr = "";
       unsubscribeSysState = systemState.subscribe((val) => {

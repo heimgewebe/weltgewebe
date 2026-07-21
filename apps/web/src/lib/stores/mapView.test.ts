@@ -141,6 +141,67 @@ describe("mapView presentation helpers", () => {
     expect(deriveSearchMatchIds(results).has("node-1")).toBe(true);
   });
 
+  it("stops scanning once the ten-result search limit is satisfied", () => {
+    const matches: MapEntityViewModel[] = Array.from(
+      { length: 10 },
+      (_, index) => ({
+        type: "node",
+        id: `node-${index}`,
+        title: `Needle ${index}`,
+        kind: "Werkstatt",
+        tags: [],
+        created_at: "2025-01-01T00:00:00Z",
+        lat: 53.5 + index * 0.001,
+        lon: 10 + index * 0.001,
+      }),
+    );
+    const sentinel = {
+      ...matches[0],
+      id: "must-not-be-scanned",
+      title: "placeholder",
+    };
+    Object.defineProperty(sentinel, "title", {
+      get() {
+        throw new Error("search scanned beyond its ten-result limit");
+      },
+    });
+
+    const results = deriveSearchResults([...matches, sentinel], "needle", true);
+    expect(results).toHaveLength(10);
+    expect(results.map((item) => item.id)).toEqual(
+      matches.map((item) => item.id),
+    );
+  });
+
+  it("reuses lifecycle-bound normalized search terms for repeated queries", () => {
+    const scene = sceneFrom([makeNode({ title: "Hammer Park" })], []);
+    const marker = scene.entities[0];
+
+    expect(deriveSearchResults(scene.entities, "hammer", true)).toHaveLength(1);
+    Object.defineProperty(marker, "title", {
+      get() {
+        throw new Error("search recomputed an already indexed title");
+      },
+    });
+
+    expect(deriveSearchResults(scene.entities, "hammer", true)).toHaveLength(1);
+  });
+
+  it("keeps search fields separate instead of matching across field boundaries", () => {
+    const scene = sceneFrom(
+      [makeNode({ title: "Park", tags: ["Commons"] })],
+      [],
+    );
+
+    expect(deriveSearchResults(scene.entities, "park", true)).toHaveLength(1);
+    expect(deriveSearchResults(scene.entities, "commons", true)).toHaveLength(
+      1,
+    );
+    expect(
+      deriveSearchResults(scene.entities, "parkcommons", true),
+    ).toHaveLength(0);
+  });
+
   it("finds Garnrollen by semantic type, plural and profile tags", () => {
     const scene = sceneFrom(
       [],

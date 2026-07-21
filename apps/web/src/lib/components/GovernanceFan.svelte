@@ -84,8 +84,7 @@
     aria-controls="governance-fan-actions"
     on:click={handleTrigger}
   >
-    <span aria-hidden="true">⌘</span>
-    <span>Gemeinsam</span>
+    <span>Mitentscheiden</span>
   </button>
 
   <div
@@ -180,13 +179,8 @@
     position: absolute;
     top: calc(100% + 10px);
     left: 50%;
-    width: min(var(--governance-fan-menu-width), calc(100vw - 24px));
-    padding: 0.65rem;
-    border: 1px solid var(--panel-border);
-    border-radius: 18px;
-    background: rgba(15, 17, 21, 0.92);
-    box-shadow: var(--shadow);
-    backdrop-filter: blur(var(--map-lens-blur));
+    width: max-content;
+    max-width: min(var(--governance-fan-menu-width), calc(100vw - 24px));
     display: flex;
     flex-wrap: wrap;
     align-items: flex-start;
@@ -206,9 +200,12 @@
   .governance-menu.open {
     opacity: 1;
     visibility: visible;
-    pointer-events: auto;
     transform: translateX(-50%) translateY(0) scale(1);
     transition-delay: 0s;
+  }
+
+  .governance-menu :global(.fan-action) {
+    pointer-events: auto;
   }
 
   .governance-slot--outer-left,
@@ -227,26 +224,57 @@
   }
 
   @media (max-width: 900px) {
+    .governance-menu {
+      width: min(292px, calc(100vw - 24px));
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .governance-slot {
+      min-width: 0;
+      grid-column: span 2;
+    }
+
+    .governance-slot--inner-right {
+      grid-column: 2 / span 2;
+    }
+
+    .governance-slot--outer-right {
+      grid-column: 4 / span 2;
+    }
+
     .governance-menu :global(.fan-action) {
       min-width: 0;
-      width: 92px;
+      width: 100%;
       padding-inline: 0.5rem;
       font-size: 0.76rem;
       white-space: normal;
       text-align: left;
     }
+
+    .governance-menu :global(.fan-label) {
+      overflow-wrap: anywhere;
+      hyphens: auto;
+      text-overflow: clip;
+    }
+
+    .governance-slot--outer-left,
+    .governance-slot--outer-right,
+    .governance-slot--inner-left,
+    .governance-slot--inner-right {
+      transform: none;
+    }
   }
 
   @media (max-width: 520px) {
     .governance-menu {
-      width: min(304px, calc(100vw - 16px));
+      width: min(288px, calc(100vw - 16px));
       gap: 0.35rem;
     }
   }
 
   @media (prefers-reduced-transparency: reduce) {
-    .governance-trigger,
-    .governance-menu {
+    .governance-trigger {
       background: var(--panel-solid);
       backdrop-filter: none;
     }

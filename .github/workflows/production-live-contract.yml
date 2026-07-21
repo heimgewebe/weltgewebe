@@ -11,6 +11,8 @@ name: Production live contract
       - "scripts/ops/deploy-exact-commit-vps.sh"
       - "scripts/ops/reconcile-production-main-vps.sh"
       - "scripts/ops/install-production-reconciler.sh"
+      - "scripts/ops/activate-production-reconciler-from-release.sh"
+      - "scripts/weltgewebe-up"
       - "scripts/ci/tests/test_generate_version_env.py"
       - "scripts/ci/tests/test_verify_public_release_commit.py"
       - "scripts/ci/tests/test_validate_web_deploy_archive.py"
@@ -44,8 +46,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version-file: ".python-version"
       - name: Compile Python tools
@@ -57,10 +59,14 @@ jobs:
           bash -n scripts/ops/deploy-exact-commit-vps.sh
           bash -n scripts/ops/reconcile-production-main-vps.sh
           bash -n scripts/ops/install-production-reconciler.sh
+          bash -n scripts/ops/activate-production-reconciler-from-release.sh
+          bash -n scripts/weltgewebe-up
           shellcheck \
             scripts/ops/deploy-exact-commit-vps.sh \
             scripts/ops/reconcile-production-main-vps.sh \
-            scripts/ops/install-production-reconciler.sh
+            scripts/ops/install-production-reconciler.sh \
+            scripts/ops/activate-production-reconciler-from-release.sh \
+            scripts/weltgewebe-up
       - name: Verify systemd units
         run: |
           sudo install -d -m 0755 /usr/local/libexec
@@ -89,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
       - name: Generate exact binary patch
@@ -131,11 +137,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: main
           fetch-depth: 1
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version-file: ".python-version"
       - name: Resolve exact main commit

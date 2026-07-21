@@ -27,6 +27,7 @@
   id="tool-fan-actions"
   class="fan-panel"
   class:open
+  class:root={branch === TOOL_FAN_BRANCH.root}
   role="group"
   aria-label={branch === TOOL_FAN_BRANCH.root
     ? "Werkzeugfächer"
@@ -166,6 +167,27 @@
     transition-delay: 0s;
   }
 
+  .fan-panel.root {
+    width: max-content;
+    max-width: min(var(--tool-fan-menu-width), calc(100vw - 24px));
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .fan-panel.root.open {
+    pointer-events: none;
+  }
+
+  .fan-panel.root .fan-row--root :global(.fan-action) {
+    min-width: 104px;
+    min-height: 44px;
+    padding-inline: 0.7rem;
+    pointer-events: auto;
+  }
+
   .fan-row {
     display: flex;
     align-items: flex-end;
@@ -252,11 +274,17 @@
       padding: 0.6rem;
     }
 
+    .fan-panel.root {
+      width: max-content;
+      max-width: min(304px, calc(100vw - 16px));
+      padding: 0;
+    }
+
     .fan-row {
       gap: 0.35rem;
     }
 
-    .fan-row--root :global(.fan-action) {
+    .fan-panel.root .fan-row--root :global(.fan-action) {
       min-width: 0;
       width: 92px;
       padding-inline: 0.55rem;
@@ -270,7 +298,7 @@
   }
 
   @media (prefers-reduced-transparency: reduce) {
-    .fan-panel {
+    .fan-panel:not(.root) {
       background: var(--panel-solid);
       backdrop-filter: none;
     }

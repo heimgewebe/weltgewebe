@@ -4,6 +4,7 @@ set -Eeuo pipefail
 REPO_DIR="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 BUILD_USER="${WELTGEWEBE_BUILD_USER:-alex}"
 COMMIT=""
+DEFER_RECONCILE=0
 staging=""
 
 fail() {
@@ -33,6 +34,10 @@ while [[ $# -gt 0 ]]; do
       BUILD_USER="$2"
       shift 2
       ;;
+    --defer-reconcile)
+      DEFER_RECONCILE=1
+      shift
+      ;;
     *) fail "unknown argument: $1" ;;
   esac
 done
@@ -60,8 +65,39 @@ remote_main="$(git -C "$REPO_DIR" rev-parse refs/remotes/origin/main)"
   fail "installation commit is not current origin/main: expected $COMMIT, got $remote_main"
 git -C "$REPO_DIR" cat-file -e "$COMMIT^{commit}"
 
+timer_was_enabled=0
+timer_was_active=0
+if systemctl is-enabled --quiet weltgewebe-production-reconcile.timer; then
+  timer_was_enabled=1
+fi
+if systemctl is-active --quiet weltgewebe-production-reconcile.timer; then
+  timer_was_active=1
+fi
+if ((DEFER_RECONCILE == 1)) &&
+  ((timer_was_enabled != 1 || timer_was_active != 1)); then
+  fail "deferred installation requires an existing enabled and active production reconcile timer"
+fi
+
 staging="$(mktemp -d /run/weltgewebe-reconciler-install.XXXXXX)"
 chmod 0700 "$staging"
+
+atomic_install() {
+  local source_path="$1"
+  local target_path="$2"
+  local mode="$3"
+  local target_directory target_name temporary
+  target_directory="$(dirname "$target_path")"
+  target_name="$(basename "$target_path")"
+  temporary="$(mktemp "$target_directory/.${target_name}.XXXXXX")"
+  if ! install -o root -g root -m "$mode" "$source_path" "$temporary"; then
+    rm -f -- "$temporary"
+    return 1
+  fi
+  if ! mv -fT -- "$temporary" "$target_path"; then
+    rm -f -- "$temporary"
+    return 1
+  fi
+}
 
 stage_file() {
   local source_path="$1"
@@ -69,6 +105,16 @@ stage_file() {
   local mode="$3"
   git -C "$REPO_DIR" show "$COMMIT:$source_path" > "$staging/$target_name"
   chmod "$mode" "$staging/$target_name"
+}
+
+require_matching_sha256() {
+  local source_path="$1"
+  local target_path="$2"
+  local expected observed
+  expected="$(sha256sum "$source_path" | awk '{print $1}')"
+  observed="$(sha256sum "$target_path" | awk '{print $1}')"
+  [[ "$observed" == "$expected" ]] ||
+    fail "installed contract hash mismatch: $target_path"
 }
 
 stage_file scripts/ops/deploy-exact-commit-vps.sh weltgewebe-deploy-exact-commit 0755
@@ -85,27 +131,40 @@ python3 -m py_compile \
   "$staging/weltgewebe-verify-public-release"
 
 install -d -o root -g root -m 0755 /usr/local/libexec
-install -o root -g root -m 0755 "$staging/weltgewebe-deploy-exact-commit" \
+atomic_install "$staging/weltgewebe-deploy-exact-commit" \
+  /usr/local/libexec/weltgewebe-deploy-exact-commit 0755
+atomic_install "$staging/weltgewebe-reconcile-production-main" \
+  /usr/local/libexec/weltgewebe-reconcile-production-main 0755
+atomic_install "$staging/weltgewebe-validate-web-deploy-archive" \
+  /usr/local/libexec/weltgewebe-validate-web-deploy-archive 0755
+atomic_install "$staging/weltgewebe-verify-public-release" \
+  /usr/local/libexec/weltgewebe-verify-public-release 0755
+require_matching_sha256 "$staging/weltgewebe-deploy-exact-commit" \
   /usr/local/libexec/weltgewebe-deploy-exact-commit
-install -o root -g root -m 0755 "$staging/weltgewebe-reconcile-production-main" \
+require_matching_sha256 "$staging/weltgewebe-reconcile-production-main" \
   /usr/local/libexec/weltgewebe-reconcile-production-main
-install -o root -g root -m 0755 "$staging/weltgewebe-validate-web-deploy-archive" \
+require_matching_sha256 "$staging/weltgewebe-validate-web-deploy-archive" \
   /usr/local/libexec/weltgewebe-validate-web-deploy-archive
-install -o root -g root -m 0755 "$staging/weltgewebe-verify-public-release" \
+require_matching_sha256 "$staging/weltgewebe-verify-public-release" \
   /usr/local/libexec/weltgewebe-verify-public-release
-install -o root -g root -m 0644 "$staging/weltgewebe-production-reconcile.service" \
-  /etc/systemd/system/weltgewebe-production-reconcile.service
-install -o root -g root -m 0644 "$staging/weltgewebe-production-reconcile.timer" \
-  /etc/systemd/system/weltgewebe-production-reconcile.timer
-
 systemd-analyze verify \
-  /etc/systemd/system/weltgewebe-production-reconcile.service \
+  "$staging/weltgewebe-production-reconcile.service" \
+  "$staging/weltgewebe-production-reconcile.timer"
+
+atomic_install "$staging/weltgewebe-production-reconcile.service" \
+  /etc/systemd/system/weltgewebe-production-reconcile.service 0644
+atomic_install "$staging/weltgewebe-production-reconcile.timer" \
+  /etc/systemd/system/weltgewebe-production-reconcile.timer 0644
+
+require_matching_sha256 "$staging/weltgewebe-production-reconcile.service" \
+  /etc/systemd/system/weltgewebe-production-reconcile.service
+require_matching_sha256 "$staging/weltgewebe-production-reconcile.timer" \
   /etc/systemd/system/weltgewebe-production-reconcile.timer
 
 install -d -o root -g root -m 0700 /etc/weltgewebe
 printf 'WELTGEWEBE_BUILD_USER=%s\n' "$BUILD_USER" > "$staging/production-reconciler.env"
-install -o root -g root -m 0600 "$staging/production-reconciler.env" \
-  /etc/weltgewebe/production-reconciler.env
+atomic_install "$staging/production-reconciler.env" \
+  /etc/weltgewebe/production-reconciler.env 0600
 
 install -d -o root -g root -m 0711 /var/lib/weltgewebe-main-reconciler
 install -d -o root -g root -m 0700 \
@@ -126,10 +185,19 @@ manifest="/var/lib/weltgewebe-main-reconciler/installed-contract.sha256"
     /etc/systemd/system/weltgewebe-production-reconcile.service \
     /etc/systemd/system/weltgewebe-production-reconcile.timer
 } > "$staging/installed-contract.sha256"
-install -o root -g root -m 0600 "$staging/installed-contract.sha256" "$manifest"
+atomic_install "$staging/installed-contract.sha256" "$manifest" 0600
 
 systemctl daemon-reload
-systemctl enable --now weltgewebe-production-reconcile.timer
-systemctl start weltgewebe-production-reconcile.service
+if ((DEFER_RECONCILE == 1)); then
+  systemctl is-enabled --quiet weltgewebe-production-reconcile.timer ||
+    fail "production reconcile timer lost its enabled state during deferred installation"
+  systemctl is-active --quiet weltgewebe-production-reconcile.timer ||
+    fail "production reconcile timer lost its active state during deferred installation"
+  install_mode="deferred"
+else
+  systemctl enable --now weltgewebe-production-reconcile.timer
+  systemctl start weltgewebe-production-reconcile.service
+  install_mode="started"
+fi
 
-echo "production_reconciler=installed commit=$COMMIT build_user=$BUILD_USER manifest=$manifest"
+echo "production_reconciler=installed commit=$COMMIT build_user=$BUILD_USER mode=$install_mode manifest=$manifest"
