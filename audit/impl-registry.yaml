@@ -339,3 +339,21 @@ implementations:
     verified_by:
       - scripts/ci/tests/test_kubernetes_platform_contract.py
       - .github/workflows/kubernetes-platform.yml
+
+  - id: impl.api.federation-core-v1
+    path: apps/api/src/federation.rs
+    impl_type: service
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - docs/specs/federation-core.md
+      - docs/specs/federation-wire-v1.md
+      - docs/adr/ADR-0011__foederierte-gewebezellen.md
+      - docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
+    verified_by:
+      - apps/api/tests/api_federation_two_cell.rs
+      - apps/api/tests/db_federation_persistence.rs
+      - apps/web/tests/federation-pilot.spec.ts
+      - scripts/ci/tests/test_federation_contract.py
+      - .github/workflows/ci.yml

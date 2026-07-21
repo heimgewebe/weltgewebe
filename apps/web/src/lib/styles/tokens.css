@@ -16,7 +16,7 @@
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
   /* Layout-Defaults: Die Karte reserviert keinen dauerhaften unteren Balken. */
   --toolbar-offset: 52px;
-  --context-panel-width: 400px;
+  --context-panel-width: clamp(320px, 30vw, 400px);
   --tool-fan-size: 52px;
   --tool-fan-collapsed-width: 116px;
   --tool-fan-edge: 16px;
