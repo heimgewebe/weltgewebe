@@ -141,6 +141,38 @@ describe("mapView presentation helpers", () => {
     expect(deriveSearchMatchIds(results).has("node-1")).toBe(true);
   });
 
+  it("stops scanning once the ten-result search limit is satisfied", () => {
+    const matches: MapEntityViewModel[] = Array.from(
+      { length: 10 },
+      (_, index) => ({
+        type: "node",
+        id: `node-${index}`,
+        title: `Needle ${index}`,
+        kind: "Werkstatt",
+        tags: [],
+        created_at: "2025-01-01T00:00:00Z",
+        lat: 53.5 + index * 0.001,
+        lon: 10 + index * 0.001,
+      }),
+    );
+    const sentinel = {
+      ...matches[0],
+      id: "must-not-be-scanned",
+      title: "placeholder",
+    };
+    Object.defineProperty(sentinel, "title", {
+      get() {
+        throw new Error("search scanned beyond its ten-result limit");
+      },
+    });
+
+    const results = deriveSearchResults([...matches, sentinel], "needle", true);
+    expect(results).toHaveLength(10);
+    expect(results.map((item) => item.id)).toEqual(
+      matches.map((item) => item.id),
+    );
+  });
+
   it("finds Garnrollen by semantic type, plural and profile tags", () => {
     const scene = sceneFrom(
       [],

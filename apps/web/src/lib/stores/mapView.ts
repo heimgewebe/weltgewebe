@@ -121,25 +121,28 @@ export function deriveSearchResults(
     return [];
   }
   const q = query.trim().toLocaleLowerCase("de-DE");
-  return visibleMarkers
-    .filter((marker) => {
-      const semanticTerms =
-        marker.type === "node"
-          ? ["Knoten", marker.kind]
-          : ["Garnrolle", "Garnrollen"];
-      const searchableTerms = [
-        marker.title,
-        marker.summary,
-        ...(marker.tags ?? []),
-        ...semanticTerms,
-      ];
-      return searchableTerms.some(
-        (term) =>
-          typeof term === "string" &&
-          term.toLocaleLowerCase("de-DE").includes(q),
-      );
-    })
-    .slice(0, 10);
+  const results: MapEntityViewModel[] = [];
+  for (const marker of visibleMarkers) {
+    const semanticTerms =
+      marker.type === "node"
+        ? ["Knoten", marker.kind]
+        : ["Garnrolle", "Garnrollen"];
+    const searchableTerms = [
+      marker.title,
+      marker.summary,
+      ...(marker.tags ?? []),
+      ...semanticTerms,
+    ];
+    const matches = searchableTerms.some(
+      (term) =>
+        typeof term === "string" && term.toLocaleLowerCase("de-DE").includes(q),
+    );
+    if (!matches) continue;
+
+    results.push(marker);
+    if (results.length === 10) break;
+  }
+  return results;
 }
 
 /** Ids of the current search matches, for marker highlighting. */
