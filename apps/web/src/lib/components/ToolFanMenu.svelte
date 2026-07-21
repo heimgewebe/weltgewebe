@@ -181,7 +181,7 @@
     pointer-events: none;
   }
 
-  .fan-panel.root :global(.fan-action) {
+  .fan-panel.root .fan-row--root :global(.fan-action) {
     min-width: 104px;
     min-height: 44px;
     padding-inline: 0.7rem;
@@ -284,7 +284,7 @@
       gap: 0.35rem;
     }
 
-    .fan-panel.root :global(.fan-action) {
+    .fan-panel.root .fan-row--root :global(.fan-action) {
       min-width: 0;
       width: 92px;
       padding-inline: 0.55rem;
