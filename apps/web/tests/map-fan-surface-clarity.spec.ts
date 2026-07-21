@@ -70,6 +70,80 @@ test.describe("Map fan surface clarity", () => {
     );
   });
 
+  test("root tool actions stay compact without shrinking below touch-target size", async ({
+    page,
+  }) => {
+    await page.getByTestId("tool-fan-trigger").click();
+
+    for (const testId of [
+      "tool-fan-find",
+      "tool-fan-map-content",
+      "tool-fan-weave",
+    ]) {
+      const box = await page.getByTestId(testId).boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+    }
+
+    const findBox = await page.getByTestId("tool-fan-find").boundingBox();
+    expect(findBox).not.toBeNull();
+    expect(findBox!.width).toBeLessThanOrEqual(106);
+  });
+
+  for (const viewportWidth of [900, 520, 320] as const) {
+    test(`five governance actions form an ordered 3 plus 2 layout at ${viewportWidth}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: viewportWidth, height: 800 });
+      await page.getByTestId("governance-fan-trigger").click();
+
+      const boxes = await Promise.all(
+        [
+          "governance-fan-all",
+          "governance-fan-open",
+          "governance-fan-vetoes",
+          "governance-fan-conversations",
+          "governance-fan-voting",
+        ].map((testId) => page.getByTestId(testId).boundingBox()),
+      );
+      expect(boxes.every(Boolean)).toBe(true);
+
+      const positionedBoxes = boxes.map((box) => box!);
+      const rows: Array<{ y: number; count: number }> = [];
+      const rowTolerancePx = 4;
+
+      for (const box of [...positionedBoxes].sort((a, b) => a.y - b.y)) {
+        const matchingRow = rows.find(
+          (row) => Math.abs(row.y - box.y) <= rowTolerancePx,
+        );
+        if (matchingRow) {
+          matchingRow.count += 1;
+        } else {
+          rows.push({ y: box.y, count: 1 });
+        }
+      }
+
+      expect(rows.map((row) => row.count)).toEqual([3, 2]);
+      for (const box of positionedBoxes.slice(0, 3)) {
+        expect(Math.abs(box.y - rows[0].y)).toBeLessThanOrEqual(rowTolerancePx);
+      }
+      for (const box of positionedBoxes.slice(3)) {
+        expect(Math.abs(box.y - rows[1].y)).toBeLessThanOrEqual(rowTolerancePx);
+      }
+
+      const menuBox = await page
+        .locator("#governance-fan-actions")
+        .boundingBox();
+      expect(menuBox).not.toBeNull();
+      expect(menuBox!.x).toBeGreaterThanOrEqual(0);
+      expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(viewportWidth);
+      for (const box of positionedBoxes) {
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(viewportWidth);
+      }
+    });
+  }
+
   test("the explanatory weaving branch keeps a readable panel surface", async ({
     page,
   }) => {

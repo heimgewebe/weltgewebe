@@ -224,19 +224,45 @@
   }
 
   @media (max-width: 900px) {
+    .governance-menu {
+      width: min(292px, calc(100vw - 24px));
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .governance-slot {
+      min-width: 0;
+      grid-column: span 2;
+    }
+
+    .governance-slot--inner-right {
+      grid-column: 2 / span 2;
+    }
+
+    .governance-slot--outer-right {
+      grid-column: 4 / span 2;
+    }
+
     .governance-menu :global(.fan-action) {
       min-width: 0;
-      width: 92px;
+      width: 100%;
       padding-inline: 0.5rem;
       font-size: 0.76rem;
       white-space: normal;
       text-align: left;
     }
+
+    .governance-slot--outer-left,
+    .governance-slot--outer-right,
+    .governance-slot--inner-left,
+    .governance-slot--inner-right {
+      transform: none;
+    }
   }
 
   @media (max-width: 520px) {
     .governance-menu {
-      max-width: min(304px, calc(100vw - 16px));
+      width: min(288px, calc(100vw - 16px));
       gap: 0.35rem;
     }
   }
