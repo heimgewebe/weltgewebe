@@ -292,18 +292,20 @@
     );
   }
 
-  // Reactive update for markers and search highlight strictly handled in overlay update
+  // Marker data and search highlighting have separate update paths. Filtering or
+  // scene changes may touch the full marker set; search changes only toggle the
+  // small delta between the previous and next (maximum ten) search matches.
   $: if (nodesOverlay && filteredMarkersData && $view) {
     (async () => {
-      await nodesOverlay.update(
-        filteredMarkersData,
-        $view.showNodes,
-        searchMatchIds,
-      );
+      await nodesOverlay.update(filteredMarkersData, $view.showNodes);
     })();
   }
 
-  // Search content changes only require a marker refresh. ResizeObserver already
+  $: if (nodesOverlay) {
+    nodesOverlay.updateSearchMatches(searchMatchIds);
+  }
+
+  // Search content changes only require indicator and highlight refreshes. ResizeObserver already
   // reports intrinsic overlay-size changes, so it must not be recycled per key.
   $: if (map) {
     filteredResults;

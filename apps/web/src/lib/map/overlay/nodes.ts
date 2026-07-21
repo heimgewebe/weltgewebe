@@ -13,6 +13,23 @@ function hasRenderablePosition(item: MapEntityViewModel): boolean {
   );
 }
 
+export function diffSearchMatchIds(
+  previous: ReadonlySet<string>,
+  next: ReadonlySet<string>,
+): { added: string[]; removed: string[] } {
+  const added: string[] = [];
+  const removed: string[] = [];
+
+  for (const id of next) {
+    if (!previous.has(id)) added.push(id);
+  }
+  for (const id of previous) {
+    if (!next.has(id)) removed.push(id);
+  }
+
+  return { added, removed };
+}
+
 export class NodesOverlay {
   private activeMarkers = new Map<
     string,
@@ -23,6 +40,7 @@ export class NodesOverlay {
       cleanup: () => void;
     }
   >();
+  private searchMatchIds = new Set<string>();
 
   constructor(private map: MapLibreMap) {}
 
@@ -32,11 +50,7 @@ export class NodesOverlay {
     return type === "garnrolle" ? "account" : "node";
   }
 
-  public async update(
-    points: MapEntityViewModel[],
-    showNodes: boolean,
-    searchMatchIds: Set<string> = new Set(),
-  ) {
+  public async update(points: MapEntityViewModel[], showNodes: boolean) {
     if (!this.map) return;
     const maplibregl = await import("maplibre-gl");
 
@@ -97,14 +111,6 @@ export class NodesOverlay {
           element.setAttribute("aria-label", item.title);
         }
         element.dataset.testid = `marker-${item.type}-${item.id}`;
-
-        if (searchMatchIds.has(item.id)) {
-          element.classList.add("search-highlight");
-          element.dataset.searchMatch = "true";
-        } else {
-          element.classList.remove("search-highlight");
-          delete element.dataset.searchMatch;
-        }
       } else {
         // Create new
         const element = document.createElement("button");
@@ -153,7 +159,7 @@ export class NodesOverlay {
         element.setAttribute("aria-label", item.title);
         element.title = item.title;
 
-        if (searchMatchIds.has(item.id)) {
+        if (this.searchMatchIds.has(item.id)) {
           element.classList.add("search-highlight");
           element.dataset.searchMatch = "true";
         }
@@ -178,6 +184,31 @@ export class NodesOverlay {
     }
   }
 
+  private setSearchMatch(id: string, highlighted: boolean) {
+    const entry = this.activeMarkers.get(id);
+    if (!entry) return;
+
+    if (highlighted) {
+      entry.element.classList.add("search-highlight");
+      entry.element.dataset.searchMatch = "true";
+    } else {
+      entry.element.classList.remove("search-highlight");
+      delete entry.element.dataset.searchMatch;
+    }
+  }
+
+  public updateSearchMatches(nextSearchMatchIds: ReadonlySet<string>) {
+    const { added, removed } = diffSearchMatchIds(
+      this.searchMatchIds,
+      nextSearchMatchIds,
+    );
+
+    for (const id of removed) this.setSearchMatch(id, false);
+    for (const id of added) this.setSearchMatch(id, true);
+
+    this.searchMatchIds = new Set(nextSearchMatchIds);
+  }
+
   public getActiveMarker(id: string) {
     return this.activeMarkers.get(id);
   }
@@ -185,5 +216,6 @@ export class NodesOverlay {
   public destroy() {
     this.activeMarkers.forEach(({ cleanup }) => cleanup());
     this.activeMarkers.clear();
+    this.searchMatchIds.clear();
   }
 }
