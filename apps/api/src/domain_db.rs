@@ -1062,7 +1062,8 @@ pub async fn insert_domain_node_with_creator_limit(
         let max_i64 = i64::try_from(max).unwrap_or(i64::MAX);
         let owned_count: i64 = sqlx::query_scalar(
             "SELECT count(*) FROM domain_nodes \
-             WHERE payload ->> 'created_by_account_id' = $1",
+             WHERE payload ? 'created_by_account_id' \
+               AND payload ->> 'created_by_account_id' = $1",
         )
         .bind(creator_account_id)
         .fetch_one(&mut *tx)

@@ -115,10 +115,10 @@ pub struct ProposalWithCounts {
     pub abstain_votes: i64,
 }
 
-/// Begründetes Veto eines angemeldeten Accounts (öffentlich sichtbare Webungsaktion).
+/// Begründetes Veto eines Webers oder Administrators (öffentlich sichtbare Webungsaktion).
 #[derive(Clone, Debug, Serialize)]
 pub struct Veto {
-    pub weber_account_id: Option<String>,
+    pub weber_account_id: String,
     pub weber_title: String,
     pub reason: String,
     pub created_at: DateTime<Utc>,
@@ -407,7 +407,7 @@ pub async fn add_veto(
     tx.commit().await.map_err(VetoError::Database)?;
 
     Ok(Veto {
-        weber_account_id: Some(weber_account_id.to_string()),
+        weber_account_id: weber_account_id.to_string(),
         weber_title: weber_title.to_string(),
         reason: reason.to_string(),
         created_at: now,
@@ -574,7 +574,8 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
     // order so account exit cannot race an already authorized edit or delete.
     let owned_node_ids: Vec<String> = sqlx::query_scalar(
         "SELECT id FROM domain_nodes \
-         WHERE payload ->> 'created_by_account_id' = $1 ORDER BY id",
+         WHERE payload ? 'created_by_account_id' \
+           AND payload ->> 'created_by_account_id' = $1 ORDER BY id",
     )
     .bind(account_id)
     .fetch_all(&mut *tx)
@@ -601,7 +602,8 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
     sqlx::query(
         "UPDATE domain_nodes \
          SET payload = payload - 'created_by_account_id', updated_at = NOW() \
-         WHERE payload ->> 'created_by_account_id' = $1",
+         WHERE payload ? 'created_by_account_id' \
+           AND payload ->> 'created_by_account_id' = $1",
     )
     .bind(account_id)
     .execute(&mut *tx)
@@ -638,22 +640,6 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
     sqlx::query(
         "UPDATE governance_messages SET author_account_id = NULL \
          WHERE author_account_id = $1",
-    )
-    .bind(account_id)
-    .execute(&mut *tx)
-    .await?;
-
-    sqlx::query(
-        "UPDATE governance_vetoes SET weber_account_id = NULL \
-         WHERE weber_account_id = $1",
-    )
-    .bind(account_id)
-    .execute(&mut *tx)
-    .await?;
-
-    sqlx::query(
-        "UPDATE governance_votes SET voter_account_id = NULL \
-         WHERE voter_account_id = $1",
     )
     .bind(account_id)
     .execute(&mut *tx)
@@ -752,7 +738,7 @@ pub async fn list_vetoes(pool: &PgPool, proposal_id: &str) -> Result<Vec<Veto>, 
     rows.iter()
         .map(|row| {
             Ok(Veto {
-                weber_account_id: row.try_get::<Option<String>, _>("weber_account_id")?,
+                weber_account_id: row.try_get("weber_account_id")?,
                 weber_title: row.try_get("weber_title")?,
                 reason: row.try_get("reason")?,
                 created_at: row.try_get("created_at")?,

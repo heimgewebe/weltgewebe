@@ -170,10 +170,8 @@ Jeder Antrag besitzt einen öffentlichen, lesbaren Gesprächsraum.
   Phase Beiträge verfassen.
 - Nach Abschluss bleibt der Gesprächsraum als Verfahrensnachweis lesbar, aber
   geschlossen.
-- Beim Löschen eines Gastaccounts bleiben Beiträge erhalten. Historische Vetos
-  oder Stimmen eines früher berechtigten beziehungsweise aus Altdaten stammenden
-  Accounts werden als Verfahrensspur ebenfalls erhalten; aktive Accountbindungen
-  werden entfernt, ohne historische Zählungen zu verändern.
+- Beim Löschen eines Gastaccounts bleiben Beiträge als Verfahrensspur erhalten;
+  die aktive Accountbindung des Beitrags wird entfernt.
 
 Mitreden ist ein Webungsrecht jedes angemeldeten Accounts. Formale Vetos und
 Stimmen setzen Weber- oder Administratorstatus voraus. Die Selbstentscheidung

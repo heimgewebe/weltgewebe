@@ -201,6 +201,14 @@ fn admin_operator(id: &str) -> AccountInternal {
 }
 
 async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, String, ApiState)> {
+    postgres_write_app_with_guest_limit(pool, operator_id, 1_000).await
+}
+
+async fn postgres_write_app_with_guest_limit(
+    pool: PgPool,
+    operator_id: &str,
+    max_guest_owned_nodes: usize,
+) -> Result<(Router, String, ApiState)> {
     let operator = admin_operator(operator_id);
     sqlx::query(
         "INSERT INTO domain_accounts (id, kind, title, mode, role, disabled, webauthn_user_id) \
@@ -228,7 +236,7 @@ async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, 
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
-        max_guest_owned_nodes: 1_000,
+        max_guest_owned_nodes,
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source: DomainAccountWriteSource::Postgres,
         domain_node_write_source: DomainNodeWriteSource::Postgres,
@@ -1505,13 +1513,13 @@ async fn guest_node_limit_allows_replay_but_rejects_new_operation() -> Result<()
     let pool = connect_pool().await;
     run_migrations(&pool).await;
     clean_all_nodes(&pool).await;
-    let _guest_limit = EnvVarGuard::set("MAX_GUEST_OWNED_NODES", "1");
 
     let tmp = tempfile::tempdir()?;
     let in_dir = tmp.path().join("in");
     std::fs::create_dir_all(&in_dir)?;
     let _env = set_gewebe_in_dir(&in_dir);
-    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+    let (app, cookie, state) =
+        postgres_write_app_with_guest_limit(pool.clone(), ACTOR_ID, 1).await?;
     sqlx::query("UPDATE domain_accounts SET role = 'gast' WHERE id = $1")
         .bind(ACTOR_ID)
         .execute(&pool)

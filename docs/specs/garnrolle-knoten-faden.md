@@ -47,8 +47,8 @@ Garnrolle beschreiben und verankern, Knoten knüpfen, zulässige Fäden auslöse
 und in offenen Gesprächen mitreden. Der Weberstatus ist keine technische
 Freischaltung der ersten Garnrolle, sondern die gemeinschaftlich bestätigte
 Befugnis, auch fremde beziehungsweise gemeinschaftliche Inhalte zu pflegen.
-Formale Veto- und Stimmrechte stehen allen angemeldeten Accounts bei fremden
-Weberanträgen zu; über den eigenen Antrag darf niemand selbst entscheiden.
+Formale Veto- und Stimmrechte stehen ausschließlich Webern und Administratoren
+bei fremden Weberanträgen zu; über den eigenen Antrag darf niemand selbst entscheiden.
 
 ## Rollen und Fähigkeiten
 
@@ -60,7 +60,7 @@ Weberanträgen zu; über den eigenen Antrag darf niemand selbst entscheiden.
 | Fremden oder eigentümerlosen Knoten pflegen | nein | ja | ja |
 | In offenen Knoten- und Antragsgesprächen schreiben | ja | ja | ja |
 | Eigenen Gesprächsbeitrag bearbeiten | ja | ja | ja |
-| Veto und Stimme zu fremden Weberanträgen | ja | ja | ja |
+| Veto und Stimme zu fremden Weberanträgen | nein | ja | ja |
 | Moderativ fremde Beiträge entfernen | nein | nein | ja |
 
 Nicht angemeldete Besucher dürfen öffentliche Inhalte lesen, aber keine
@@ -205,8 +205,8 @@ keine neue Garnrolle und verändert weder Profil noch Kartenstatus, Position,
 Urheberschaft eigener Knoten oder bisherige Gesprächsbeiträge.
 
 Der zusätzliche Weberstatus verleiht die gemeinschaftliche Pflege fremder oder
-historisch eigentümerloser Knoten. Veto und Stimme bei fremden Weberanträgen
-sind bereits Rechte jedes angemeldeten Accounts.
+historisch eigentümerloser Knoten sowie formale Veto- und Stimmrechte bei
+fremden Weberanträgen.
 
 ## Gast-Austritt
 

@@ -16,7 +16,7 @@ use axum::{
     Router,
 };
 
-use crate::middleware::authz::{require_admin, require_authenticated};
+use crate::middleware::authz::{require_admin, require_authenticated, require_write};
 use crate::state::ApiState;
 
 use self::{
@@ -98,17 +98,17 @@ pub fn api_router() -> Router<ApiState> {
         // und `POST /accounts/me/exit` sind bewusst nicht über eine allgemeine
         // Rollen-Middleware geschützt: der eigene Weberantrag und der eigene
         // Austritt sind eng begrenzte Gast-Sonderwege; die Handler prüfen die
-        // Authentifizierung selbst. Gesprächsbeiträge, Veto und Stimme zu
-        // fremden Weberanträgen sind für alle angemeldeten Accounts offen.
+        // Authentifizierung selbst. Gesprächsbeiträge sind für alle angemeldeten
+        // Accounts offen; formale Vetos und Stimmen bleiben Weber/Admin vorbehalten.
         .route("/proposals", get(list_proposals).post(create_proposal))
         .route("/proposals/{id}", get(get_proposal))
         .route(
             "/proposals/{id}/veto",
-            post(veto_proposal).route_layer(from_fn(require_authenticated)),
+            post(veto_proposal).route_layer(from_fn(require_write)),
         )
         .route(
             "/proposals/{id}/vote",
-            axum::routing::put(vote_proposal).route_layer(from_fn(require_authenticated)),
+            axum::routing::put(vote_proposal).route_layer(from_fn(require_write)),
         )
         .route(
             "/proposals/{id}/messages",

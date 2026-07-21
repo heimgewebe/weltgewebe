@@ -6,9 +6,9 @@
 //! 1. **Fail closed:** Ohne konfigurierten Pool antworten alle
 //!    Governance-Endpunkte mit 503 — es gibt keinen JSONL- oder
 //!    In-Memory-Fallback für Anträge.
-//! 2. **Unberechtigte Gastwrites:** Veto, Stimme und Gesprächsraum-Beiträge
-//!    sind Webungsaktionen; Gäste erhalten 403, Unangemeldete 401 — noch vor
-//!    jedem Datenbankzugriff.
+//! 2. **Gast-Governance-Grenze:** Gesprächsraum-Beiträge sind für Gäste erlaubt;
+//!    formale Vetos und Stimmen werden für Gäste mit 403 abgewiesen — noch vor
+//!    jedem Datenbankzugriff. Unangemeldete erhalten 401.
 //! 3. **Keine direkte Fadenmutation:** Fäden besitzen keinen öffentlichen
 //!    POST-, PATCH-, PUT- oder DELETE-Pfad. Sie entstehen ausschließlich als
 //!    serverseitige Projektion einer Webungsaktion.

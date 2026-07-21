@@ -381,40 +381,6 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
     .await
     .expect("guest contribution to foreign proposal");
     sqlx::query(
-        "INSERT INTO governance_vetoes \
-         (proposal_id, weber_account_id, weber_title, reason, created_at) \
-         VALUES ($1::uuid, $2, $3, $4, $5)",
-    )
-    .bind(&foreign_proposal.id)
-    .bind(GUEST_C)
-    .bind("Gast C")
-    .bind("Dieser Einwand bleibt als Verfahrensspur erhalten.")
-    .bind(t0 + Duration::days(16))
-    .execute(&pool)
-    .await
-    .expect("seed historical guest veto for exit anonymization proof");
-    sqlx::query(
-        "UPDATE governance_proposals SET status = 'voting', voting_until = $2 \
-         WHERE id = $1::uuid",
-    )
-    .bind(&foreign_proposal.id)
-    .bind(t0 + Duration::days(29))
-    .execute(&pool)
-    .await
-    .expect("open foreign proposal voting phase for exit proof");
-    sqlx::query(
-        "INSERT INTO governance_votes \
-         (proposal_id, voter_account_id, choice, updated_at) \
-         VALUES ($1::uuid, $2, 'ja', $3)",
-    )
-    .bind(&foreign_proposal.id)
-    .bind(GUEST_C)
-    .bind(t0 + Duration::days(23))
-    .execute(&pool)
-    .await
-    .expect("seed historical guest vote for exit anonymization proof");
-
-    sqlx::query(
         "INSERT INTO domain_nodes \
          (id, kind, title, lat, lon, created_at, updated_at, payload) \
          VALUES ($1, 'Ort', 'Gastknoten', 53.5, 10.0, $2, $2, \
@@ -481,28 +447,6 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
             .fetch_one(&pool)
             .await
             .expect("retained message body");
-    let retained_veto_actor: Option<String> = sqlx::query_scalar(
-        "SELECT weber_account_id FROM governance_vetoes \
-         WHERE proposal_id = $1::uuid AND reason = $2",
-    )
-    .bind(&foreign_proposal.id)
-    .bind("Dieser Einwand bleibt als Verfahrensspur erhalten.")
-    .fetch_one(&pool)
-    .await
-    .expect("retained veto actor");
-    let retained_vote_actor: Option<String> = sqlx::query_scalar(
-        "SELECT voter_account_id FROM governance_votes \
-         WHERE proposal_id = $1::uuid AND choice = 'ja'",
-    )
-    .bind(&foreign_proposal.id)
-    .fetch_one(&pool)
-    .await
-    .expect("retained vote actor");
-    let foreign_counts = get_proposal(&pool, &foreign_proposal.id)
-        .await
-        .expect("foreign proposal after guest exit")
-        .expect("foreign proposal remains");
-
     assert!(!account_exists);
     assert!(!proposal_exists);
     assert_eq!(node_creator, None, "retained node must be anonymized");
@@ -512,16 +456,6 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
         "foreign contribution must be anonymized"
     );
     assert_eq!(retained_body, "Dieser Beitrag bleibt erhalten.");
-    assert_eq!(retained_veto_actor, None, "foreign veto must be anonymized");
-    assert_eq!(retained_vote_actor, None, "foreign vote must be anonymized");
-    assert_eq!(
-        foreign_counts.veto_count, 1,
-        "anonymized veto remains in tally"
-    );
-    assert_eq!(
-        foreign_counts.yes_votes, 1,
-        "anonymized vote remains in tally"
-    );
 
     cleanup(&pool).await;
 }

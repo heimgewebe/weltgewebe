@@ -4,19 +4,6 @@ import { activateToolFanAction } from "./fixtures/toolFan";
 
 const WEBER_ACCOUNT_ID = "weber-e2e-1";
 
-async function mockAuthRole(
-  page: Page,
-  auth: { authenticated: boolean; account_id?: string; role: string },
-) {
-  await page.route("**/api/auth/me", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(auth),
-    }),
-  );
-}
-
 async function mockMapTiles(page: Page) {
   await page.route("https://demotiles.maplibre.org/style.json", (route) => {
     route.fulfill({
@@ -31,8 +18,7 @@ async function gotoMapAs(
   page: Page,
   auth: { authenticated: boolean; account_id?: string; role: string },
 ) {
-  await mockApiResponses(page);
-  await mockAuthRole(page, auth);
+  await mockApiResponses(page, { auth });
   await mockMapTiles(page);
   await page.goto("/map");
   await page.waitForSelector('[data-testid="tool-fan"]', { timeout: 10000 });

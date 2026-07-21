@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS domain_messages_author_account_id_idx;
+DROP INDEX IF EXISTS governance_messages_author_account_id_idx;

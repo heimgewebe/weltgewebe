@@ -279,10 +279,11 @@ pub async fn patch_node_serialized(
             Ok(node) => node,
             Err(response) => return response,
         };
-        if let Some(current) = node.as_ref() {
-            if let Err((status, message)) = authorize_node_mutation(&auth, current) {
-                return (status, message).into_response();
-            }
+        let Some(current) = node.as_ref() else {
+            return StatusCode::NOT_FOUND.into_response();
+        };
+        if let Err((status, message)) = authorize_node_mutation(&auth, current) {
+            return (status, message).into_response();
         }
         if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
             return *response;
@@ -308,10 +309,11 @@ pub async fn replace_node_serialized(
             Ok(node) => node,
             Err(response) => return response,
         };
-        if let Some(current) = node.as_ref() {
-            if let Err((status, message)) = authorize_node_mutation(&auth, current) {
-                return (status, message).into_response();
-            }
+        let Some(current) = node.as_ref() else {
+            return StatusCode::NOT_FOUND.into_response();
+        };
+        if let Err((status, message)) = authorize_node_mutation(&auth, current) {
+            return (status, message).into_response();
         }
         if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
             return *response;
@@ -336,10 +338,11 @@ pub async fn delete_node_serialized(
             Ok(node) => node,
             Err(response) => return response,
         };
-        if let Some(current) = node.as_ref() {
-            if let Err((status, message)) = authorize_node_mutation(&auth, current) {
-                return (status, message).into_response();
-            }
+        let Some(current) = node.as_ref() else {
+            return StatusCode::NOT_FOUND.into_response();
+        };
+        if let Err((status, message)) = authorize_node_mutation(&auth, current) {
+            return (status, message).into_response();
         }
         if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
             return *response;

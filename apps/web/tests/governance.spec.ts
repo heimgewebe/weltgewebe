@@ -454,7 +454,9 @@ test("guest can discuss but cannot veto or vote on another account's Weber appli
   });
   await page.goto(`/antraege?id=${PROPOSAL_ID}`);
 
-  await expect(page.getByRole("button", { name: "Veto einlegen" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Veto einlegen" })).toHaveCount(
+    0,
+  );
   await expect(page.getByRole("button", { name: "Ja" })).toHaveCount(0);
   await expect(
     page.getByPlaceholder("Konkreter Einwand und mögliche Lösung"),
@@ -462,7 +464,8 @@ test("guest can discuss but cannot veto or vote on another account's Weber appli
 
   expect(
     governance.requests.filter(
-      (entry) => entry.pathname.endsWith("/veto") || entry.pathname.endsWith("/vote"),
+      (entry) =>
+        entry.pathname.endsWith("/veto") || entry.pathname.endsWith("/vote"),
     ),
   ).toEqual([]);
 });

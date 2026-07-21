@@ -34,6 +34,19 @@ use crate::state::ApiState;
 
 type ApiError = (StatusCode, String);
 
+fn record_guest_exit_session_cleanup(
+    account_id: &str,
+    cleanup: crate::auth::session::SessionResult<()>,
+) {
+    if let Err(error) = cleanup {
+        tracing::warn!(
+            error = %error,
+            account_id,
+            "guest exit committed; secondary session backend cleanup failed"
+        );
+    }
+}
+
 /// Fail-closed-Torwächter: Governance existiert nur mit PostgreSQL.
 fn require_pool(state: &ApiState) -> Result<&PgPool, ApiError> {
     if state.config.domain_read_source != DomainReadSource::Postgres
@@ -535,14 +548,7 @@ pub async fn exit_own_account(
         })?;
 
     let session_cleanup = state.sessions.delete_all_by_account(&account_id).await;
-
-    if let Err(error) = session_cleanup {
-        tracing::error!(error = %error, "failed to end sessions after guest exit");
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "guest exit recorded but session cleanup failed".to_string(),
-        ));
-    }
+    record_guest_exit_session_cleanup(&account_id, session_cleanup);
     // In PostgreSQL mode the projection middleware holds a read guard for the
     // whole request. Refreshing here would try to upgrade that guard to a write
     // lock and deadlock against ourselves. The next domain request observes the
@@ -551,4 +557,18 @@ pub async fn exit_own_account(
     tracing::info!(event = "governance.guest.exited", "Guest account deleted");
 
     Ok(Json(serde_json::json!({ "status": "exited" })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::record_guest_exit_session_cleanup;
+    use crate::auth::session::SessionBackendError;
+
+    #[test]
+    fn failed_secondary_session_cleanup_does_not_fail_committed_guest_exit() {
+        record_guest_exit_session_cleanup(
+            "guest-already-deleted",
+            Err(SessionBackendError::Unavailable),
+        );
+    }
 }
