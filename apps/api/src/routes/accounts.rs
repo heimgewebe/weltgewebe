@@ -1153,8 +1153,8 @@ pub async fn create_account(
         .and_then(|v| v.as_str())
         .map(str::trim)
         .unwrap_or("");
-    if title.is_empty() {
-        return Err(bad("title is required"));
+    if title.is_empty() || title.chars().count() > 200 {
+        return Err(bad("title must contain between 1 and 200 characters"));
     }
 
     // --- type (v0: garnrolle only) ---

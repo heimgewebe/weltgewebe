@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy } from "svelte";
+  import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { selection } from "$lib/stores/uiView";
   import { authStore } from "$lib/auth/store";
   import {
@@ -13,6 +13,7 @@
   } from "$lib/panels/panelDetails";
   import { formatDate } from "$lib/utils/formatDate";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
+  import NodeConversation from "./NodeConversation.svelte";
 
   type DomainChanged = {
     kind: "node";
@@ -25,7 +26,12 @@
     domainChanged: DomainChanged;
   }>();
 
-  let activeTab = "uebersicht";
+  type NodeTab = "uebersicht" | "gespraech" | "verlauf" | "bearbeiten";
+  let activeTab: NodeTab = "uebersicht";
+  let tabs: NodeTab[] = ["uebersicht", "gespraech", "verlauf"];
+  let overviewTab: HTMLButtonElement | null = null;
+  let editTab: HTMLButtonElement | null = null;
+  let titleInput: HTMLInputElement | null = null;
   let editing = false;
   let saving = false;
   let deleting = false;
@@ -84,8 +90,24 @@
     $authStore.authenticated &&
     ($authStore.role === "weber" || $authStore.role === "admin");
 
-  const tabs = ["uebersicht", "verlauf"];
-  function setTab(tab: string) {
+  $: tabs = canMutate
+    ? ["uebersicht", "gespraech", "verlauf", "bearbeiten"]
+    : ["uebersicht", "gespraech", "verlauf"];
+  $: if (!canMutate) {
+    const shouldRestoreFocus = activeTab === "bearbeiten" || editing;
+    if (activeTab === "bearbeiten") activeTab = "uebersicht";
+    if (editing) editing = false;
+    if (shouldRestoreFocus) void focusAfterRender(() => overviewTab);
+  }
+
+  async function focusAfterRender(
+    resolveTarget: () => HTMLElement | null,
+  ): Promise<void> {
+    await tick();
+    resolveTarget()?.focus();
+  }
+
+  function setTab(tab: NodeTab) {
     activeTab = tab;
   }
 
@@ -124,6 +146,12 @@
     mutationError = "";
     conflictNode = null;
     editing = true;
+    void focusAfterRender(() => titleInput);
+  }
+
+  function cancelEdit() {
+    editing = false;
+    void focusAfterRender(() => editTab);
   }
 
   function mutationMessage(error: unknown): string {
@@ -195,6 +223,8 @@
       } as NodeDetails);
       conflictNode = null;
       editing = false;
+      activeTab = "uebersicht";
+      void focusAfterRender(() => overviewTab);
       dispatch("domainChanged", { kind: "node", id, action: "updated" });
     } catch (error) {
       if (
@@ -260,7 +290,12 @@
     <form class="edit-form" on:submit|preventDefault={saveNode}>
       <label>
         Titel
-        <input bind:value={formTitle} maxlength="200" required />
+        <input
+          bind:this={titleInput}
+          bind:value={formTitle}
+          maxlength="200"
+          required
+        />
       </label>
       <label>
         Knotenart
@@ -329,7 +364,7 @@
         <button
           type="button"
           class="secondary"
-          on:click={() => (editing = false)}
+          on:click={cancelEdit}
           disabled={saving}>Abbrechen</button
         >
         <button type="submit" class="primary" disabled={saving}
@@ -347,7 +382,18 @@
         aria-selected={activeTab === "uebersicht"}
         aria-controls="panel-uebersicht"
         id="tab-uebersicht"
+        bind:this={overviewTab}
         tabindex={activeTab === "uebersicht" ? 0 : -1}>Übersicht</button
+      >
+      <button
+        class:active={activeTab === "gespraech"}
+        on:click={() => setTab("gespraech")}
+        on:keydown={handleKeydown}
+        role="tab"
+        aria-selected={activeTab === "gespraech"}
+        aria-controls="panel-gespraech"
+        id="tab-gespraech"
+        tabindex={activeTab === "gespraech" ? 0 : -1}>Gespräch</button
       >
       <button
         class:active={activeTab === "verlauf"}
@@ -359,6 +405,19 @@
         id="tab-verlauf"
         tabindex={activeTab === "verlauf" ? 0 : -1}>Verlauf</button
       >
+      {#if canMutate}
+        <button
+          class:active={activeTab === "bearbeiten"}
+          on:click={() => setTab("bearbeiten")}
+          on:keydown={handleKeydown}
+          role="tab"
+          aria-selected={activeTab === "bearbeiten"}
+          aria-controls="panel-bearbeiten"
+          id="tab-bearbeiten"
+          bind:this={editTab}
+          tabindex={activeTab === "bearbeiten" ? 0 : -1}>Bearbeiten</button
+        >
+      {/if}
     </div>
 
     <div class="tab-content">
@@ -368,6 +427,7 @@
           id="panel-uebersicht"
           role="tabpanel"
           aria-labelledby="tab-uebersicht"
+          tabindex="0"
         >
           {#if isLoadingDetails}<p class="ghost">Lade Details…</p>
           {:else}
@@ -411,8 +471,25 @@
             {/if}
           {/if}
         </div>
-      {:else}
-        <div id="panel-verlauf" role="tabpanel" aria-labelledby="tab-verlauf">
+      {:else if activeTab === "gespraech"}
+        <div
+          id="panel-gespraech"
+          role="tabpanel"
+          aria-labelledby="tab-gespraech"
+        >
+          {#key nodeDetails?.id || $selection?.id || ""}
+            <NodeConversation
+              nodeId={nodeDetails?.id || $selection?.id || ""}
+            />
+          {/key}
+        </div>
+      {:else if activeTab === "verlauf"}
+        <div
+          id="panel-verlauf"
+          role="tabpanel"
+          aria-labelledby="tab-verlauf"
+          tabindex="0"
+        >
           {#if isLoadingDetails}<p class="ghost">Lade Verlauf…</p>
           {:else if nodeDetails?.history?.length}<ul class="timeline">
               {#each nodeDetails.history as event}<li>
@@ -434,29 +511,33 @@
             </ul>
           {:else}<p class="ghost">Noch kein Verlauf.</p>{/if}
         </div>
+      {:else if activeTab === "bearbeiten" && canMutate}
+        <div
+          class="mutation-actions"
+          id="panel-bearbeiten"
+          role="tabpanel"
+          aria-labelledby="tab-bearbeiten"
+        >
+          {#if mutationError}<p class="error" role="alert">
+              {mutationError}
+            </p>{/if}
+          <button type="button" class="secondary" on:click={beginEdit}
+            >Bearbeiten</button
+          >
+          <button
+            type="button"
+            class="danger"
+            on:click={removeNode}
+            disabled={deleting}
+            >{deleting ? "Löscht…" : "Knoten löschen"}</button
+          >
+          <p class="collective-note">
+            Knoten gehören zum gemeinsamen Gewebe und können von allen Webern
+            gepflegt werden.
+          </p>
+        </div>
       {/if}
     </div>
-
-    {#if canMutate}
-      <div class="mutation-actions" aria-label="Knoten bearbeiten">
-        {#if mutationError}<p class="error" role="alert">
-            {mutationError}
-          </p>{/if}
-        <button type="button" class="secondary" on:click={beginEdit}
-          >Bearbeiten</button
-        >
-        <button
-          type="button"
-          class="danger"
-          on:click={removeNode}
-          disabled={deleting}>{deleting ? "Löscht…" : "Knoten löschen"}</button
-        >
-        <p class="collective-note">
-          Knoten gehören zum gemeinsamen Gewebe und können von allen Webern
-          gepflegt werden.
-        </p>
-      </div>
-    {/if}
   {/if}
 </div>
 
@@ -482,11 +563,13 @@
   .long-info {
     white-space: pre-wrap;
   }
-  .participants,
-  .mutation-actions {
+  .participants {
     margin-top: 1rem;
     padding-top: 1rem;
     border-top: 1px solid var(--panel-border);
+  }
+  .mutation-actions {
+    padding-top: 0.25rem;
   }
   .participants p,
   .collective-note {

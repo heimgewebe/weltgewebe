@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 179 |
-| Dokumente mit ausgehenden Relationen | 178 |
+| Dokumente gesamt | 180 |
+| Dokumente mit ausgehenden Relationen | 179 |
 | Dokumente als Ziel referenziert | 137 |
-| Relationen gesamt | 626 |
+| Relationen gesamt | 633 |
 | — depends_on | 25 |
-| — relates_to | 586 |
+| — relates_to | 593 |
 | — supersedes | 12 |
 | — verifies | 3 |
 | Isolierte Dokumente | 0 |

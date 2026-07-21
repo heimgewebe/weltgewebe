@@ -81,6 +81,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-edge-cache-limit-design.md
 
+## apps/api/src/governance.rs
+
+- [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
+
 ## apps/api/src/outbox.rs
 
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
@@ -89,6 +93,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
 - [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
+
+## apps/api/src/routes/conversations.rs
+
+- [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
 
 ## apps/api/src/routes/edges.rs
 
@@ -115,6 +123,10 @@ Generated automatically. Do not edit.
 ## apps/api/tests/db_multi_instance_foundation.rs
 
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
+
+## apps/web/src/lib/components/governance/ProposalDetail.svelte
+
+- [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
 
 ## architecture/overview.md
 
@@ -157,11 +169,19 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reference/agent-run-evidence-lite.md
 
+## contracts/domain/conversation.schema.json
+
+- [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
+
 ## contracts/domain/edge.schema.json
 
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
 - [relates_to] docs/reports/domain-edge-faden-lifecycle-proof.md
 - [relates_to] docs/reports/domain-edge-reference-audit.md
+
+## contracts/domain/message.schema.json
+
+- [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
 
 ## docs/_generated/report-lifecycle-inventory.md
 
@@ -402,6 +422,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/domain-scale-foundation.md
 - [relates_to] docs/domain/vocabulary.md
 - [relates_to] docs/reports/optimierungsbericht.md
+- [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
 - [relates_to] docs/runbooks/db-recovery.md
 - [relates_to] docs/specs/contract.md
 - [relates_to] docs/techstack.md
@@ -978,6 +999,7 @@ Generated automatically. Do not edit.
 
 ## docs/specs/governance-antraege.md
 
+- [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
 - [relates_to] docs/specs/garnrolle-knoten-faden.md
 
 ## docs/specs/list-pagination-api.md

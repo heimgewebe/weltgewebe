@@ -1,6 +1,7 @@
 pub mod accounts;
 pub mod auth;
 mod collective_write_guard;
+pub mod conversations;
 mod domain_write_guard;
 pub mod edges;
 pub mod governance;
@@ -33,6 +34,10 @@ use self::{
         create_node_serialized, delete_node_serialized, patch_node_serialized,
         replace_node_serialized,
     },
+    conversations::{
+        create_message, delete_message, get_conversation, get_node_conversation, list_messages,
+        update_message,
+    },
     edges::{get_edge, list_edges},
     governance::{
         create_proposal, exit_own_account, get_proposal, list_proposal_messages, list_proposals,
@@ -59,6 +64,18 @@ pub fn api_router() -> Router<ApiState> {
                     axum::routing::delete(delete_node_serialized)
                         .route_layer(from_fn(require_write)),
                 ),
+        )
+        .route("/nodes/{id}/conversation", get(get_node_conversation))
+        .route("/conversations/{id}", get(get_conversation))
+        .route(
+            "/conversations/{id}/messages",
+            get(list_messages).merge(post(create_message).route_layer(from_fn(require_write))),
+        )
+        .route(
+            "/conversations/{conversation_id}/messages/{message_id}",
+            axum::routing::patch(update_message)
+                .delete(delete_message)
+                .route_layer(from_fn(require_write)),
         )
         .route("/edges", get(list_edges))
         .route("/edges/{id}", get(get_edge))

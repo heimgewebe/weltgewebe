@@ -1,0 +1,894 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weltgewebe.org/contracts/search/hybrid-ranking-core-receipt.schema.json",
+  "title": "Weltgewebe Semantic Search T004 Hybrid Ranking Core Receipt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "task_id",
+    "measured_at",
+    "source",
+    "dataset",
+    "environment",
+    "ranking_contract",
+    "baseline",
+    "models",
+    "decision",
+    "does_not_establish"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "kind": {
+      "const": "weltgewebe_semantic_search_hybrid_ranking_core"
+    },
+    "task_id": {
+      "const": "WELTGEWEBE-SEMANTIC-SEARCH-V1-T004"
+    },
+    "measured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_head_at_measurement",
+        "measurement_source_mode",
+        "worktree_dirty_at_measurement",
+        "source_files",
+        "source_manifest_sha256"
+      ],
+      "properties": {
+        "repository_head_at_measurement": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "measurement_source_mode": {
+          "const": "repository_base_plus_hash_bound_worktree_sources"
+        },
+        "worktree_dirty_at_measurement": {
+          "const": true
+        },
+        "source_files": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "architecture/semantic-search.md",
+            "contracts/search/examples/relevance-goldset.example.json",
+            "contracts/search/relevance-goldset.schema.json",
+            "contracts/search/examples/relevance-benchmark.heim-pc.json",
+            "contracts/search/examples/postgres-foundation.heim-pc.json",
+            "contracts/search/hybrid-ranking-core-receipt.schema.json",
+            "scripts/search/hybrid_ranking_core.py",
+            "scripts/search/probe_hybrid_ranking_core.py",
+            "scripts/ci/tests/test_semantic_search_ranking_core.py"
+          ],
+          "properties": {
+            "contracts/search/examples/relevance-goldset.example.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "contracts/search/relevance-goldset.schema.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "contracts/search/examples/relevance-benchmark.heim-pc.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "contracts/search/examples/postgres-foundation.heim-pc.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "contracts/search/hybrid-ranking-core-receipt.schema.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "scripts/search/hybrid_ranking_core.py": {
+              "$ref": "#/$defs/sha256"
+            },
+            "scripts/search/probe_hybrid_ranking_core.py": {
+              "$ref": "#/$defs/sha256"
+            },
+            "architecture/semantic-search.md": {
+              "$ref": "#/$defs/sha256"
+            },
+            "scripts/ci/tests/test_semantic_search_ranking_core.py": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "source_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "dataset_id",
+        "document_revision",
+        "sha256",
+        "schema_sha256",
+        "privacy_class",
+        "node_count",
+        "active_document_count",
+        "case_count",
+        "natural_case_count"
+      ],
+      "properties": {
+        "path": {
+          "const": "contracts/search/examples/relevance-goldset.example.json"
+        },
+        "dataset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "document_revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "privacy_class": {
+          "const": "synthetic"
+        },
+        "node_count": {
+          "type": "integer",
+          "minimum": 20
+        },
+        "active_document_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "case_count": {
+          "const": 24
+        },
+        "natural_case_count": {
+          "const": 19
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_class",
+        "platform",
+        "python",
+        "ollama_url",
+        "external_cost_usd"
+      ],
+      "properties": {
+        "host_class": {
+          "const": "heim-pc-local"
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "python": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ollama_url": {
+          "type": "string",
+          "pattern": "^http://(?:127\\.0\\.0\\.1|\\[::1\\]):[0-9]{1,5}$"
+        },
+        "external_cost_usd": {
+          "const": 0
+        }
+      }
+    },
+    "ranking_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "normalization_revision",
+        "ranking_revision",
+        "semantic_minimum_cosine",
+        "semantic_minimum_margin",
+        "max_dimensions",
+        "max_candidates",
+        "lexical_ranking_source",
+        "fusion_order",
+        "semantic_tie_breaker",
+        "semantic_append_limit",
+        "fallback_condition",
+        "raw_vectors_persisted"
+      ],
+      "properties": {
+        "normalization_revision": {
+          "const": "weltgewebe-search-normalization-v1"
+        },
+        "ranking_revision": {
+          "const": "weltgewebe-hybrid-ranking-v2"
+        },
+        "semantic_minimum_cosine": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "semantic_minimum_margin": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "max_dimensions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "max_candidates": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "fallback_condition": {
+          "const": "ProviderUnavailableError only"
+        },
+        "raw_vectors_persisted": {
+          "const": false
+        },
+        "lexical_ranking_source": {
+          "const": "t003_postgresql_precomputed_authorized"
+        },
+        "fusion_order": {
+          "const": [
+            "lexical_input_order",
+            "single_confident_semantic_match"
+          ]
+        },
+        "semantic_tie_breaker": {
+          "const": "node_id_ascending"
+        },
+        "semantic_append_limit": {
+          "const": 1
+        }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "t003_postgresql"
+      ],
+      "properties": {
+        "t003_postgresql": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "receipt_sha256",
+            "quality"
+          ],
+          "properties": {
+            "receipt_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "quality": {
+              "$ref": "#/$defs/quality"
+            }
+          }
+        }
+      }
+    },
+    "models": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "model",
+          "generation",
+          "quality",
+          "performance"
+        ],
+        "properties": {
+          "model": {
+            "$ref": "#/$defs/model"
+          },
+          "generation": {
+            "$ref": "#/$defs/generation"
+          },
+          "quality": {
+            "$ref": "#/$defs/quality"
+          },
+          "performance": {
+            "$ref": "#/$defs/model_performance"
+          }
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "selected_model",
+        "reason",
+        "quality_thresholds",
+        "assessed_models"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "select_smallest_qualifying_local_model",
+            "stop_embedding_path"
+          ]
+        },
+        "selected_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quality_thresholds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "natural_top3_rate",
+            "maximum_false_top1",
+            "maximum_visibility_leaks",
+            "minimum_gain_cases"
+          ],
+          "properties": {
+            "natural_top3_rate": {
+              "const": 0.85
+            },
+            "maximum_false_top1": {
+              "const": 0
+            },
+            "maximum_visibility_leaks": {
+              "const": 0
+            },
+            "minimum_gain_cases": {
+              "const": 2
+            }
+          }
+        },
+        "assessed_models": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "model_id",
+              "model_revision",
+              "size_bytes",
+              "qualifies",
+              "meaningful_incremental_gain",
+              "natural_top3_gain_cases",
+              "false_top1_count"
+            ],
+            "properties": {
+              "model_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "model_revision": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "size_bytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "qualifies": {
+                "type": "boolean"
+              },
+              "meaningful_incremental_gain": {
+                "type": "boolean"
+              },
+              "natural_top3_gain_cases": {
+                "type": "integer"
+              },
+              "false_top1_count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "does_not_establish": {
+      "type": "array",
+      "minItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "model_id",
+        "model_revision",
+        "runtime_id",
+        "dimensions",
+        "size_bytes",
+        "family",
+        "parameter_size",
+        "quantization_level"
+      ],
+      "properties": {
+        "provider": {
+          "const": "local:ollama"
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_revision": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "runtime_id": {
+          "type": "string",
+          "pattern": "^ollama:[^@]+@http://(?:127\\.0\\.0\\.1|\\[::1\\]):[0-9]{1,5}$"
+        },
+        "dimensions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "family": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parameter_size": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quantization_level": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generation_id",
+        "model",
+        "document_revision",
+        "normalization_revision",
+        "ranking_revision"
+      ],
+      "properties": {
+        "generation_id": {
+          "type": "string",
+          "pattern": "^search-gen-[0-9a-f]{64}$"
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "provider",
+            "model_id",
+            "model_revision",
+            "runtime_id",
+            "dimensions"
+          ],
+          "properties": {
+            "provider": {
+              "const": "local:ollama"
+            },
+            "model_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model_revision": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "runtime_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dimensions": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8192
+            }
+          }
+        },
+        "document_revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "normalization_revision": {
+          "const": "weltgewebe-search-normalization-v1"
+        },
+        "ranking_revision": {
+          "const": "weltgewebe-hybrid-ranking-v2"
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "required": [
+        "case_count",
+        "natural_case_count",
+        "top1_relevant_count",
+        "top1_relevant_rate",
+        "top3_relevant_count",
+        "top3_relevant_rate",
+        "natural_top3_relevant_count",
+        "natural_top3_relevant_rate",
+        "false_top1_count",
+        "no_result_count",
+        "visibility_leak_count",
+        "exact_guard_failures",
+        "per_expected_rank_class",
+        "cases"
+      ],
+      "properties": {
+        "case_count": {
+          "const": 24
+        },
+        "natural_case_count": {
+          "const": 19
+        },
+        "natural_top3_relevant_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 19
+        },
+        "natural_top3_relevant_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "false_top1_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "visibility_leak_count": {
+          "const": 0
+        },
+        "exact_guard_failures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cases": {
+          "type": "array",
+          "minItems": 24,
+          "maxItems": 24,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "case_id",
+              "ranked_node_ids",
+              "top3",
+              "relevant_rank",
+              "top1_relevant",
+              "top3_relevant",
+              "visibility_leaks"
+            ],
+            "properties": {
+              "case_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ranked_node_ids": {
+                "type": "array",
+                "maxItems": 10,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "top3": {
+                "type": "array",
+                "maxItems": 3,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "relevant_rank": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1,
+                "maximum": 10
+              },
+              "top1_relevant": {
+                "type": "boolean"
+              },
+              "top3_relevant": {
+                "type": "boolean"
+              },
+              "visibility_leaks": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        "top1_relevant_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 24
+        },
+        "top1_relevant_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "top3_relevant_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 24
+        },
+        "top3_relevant_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "no_result_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 24
+        },
+        "per_expected_rank_class": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exact_title",
+            "exact_tag",
+            "title_prefix",
+            "typo",
+            "full_text",
+            "semantic"
+          ],
+          "properties": {
+            "exact_title": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "count",
+                "top1",
+                "top3"
+              ],
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "top1": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "top3": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                }
+              }
+            },
+            "exact_tag": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "count",
+                "top1",
+                "top3"
+              ],
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "top1": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "top3": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                }
+              }
+            },
+            "title_prefix": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "count",
+                "top1",
+                "top3"
+              ],
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "top1": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "top3": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                }
+              }
+            },
+            "typo": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "count",
+                "top1",
+                "top3"
+              ],
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "top1": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "top3": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                }
+              }
+            },
+            "full_text": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "count",
+                "top1",
+                "top3"
+              ],
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "top1": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "top3": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                }
+              }
+            },
+            "semantic": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "count",
+                "top1",
+                "top3"
+              ],
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "top1": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "top3": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 24
+                }
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "latency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "median_ms",
+        "p95_ms",
+        "maximum_ms"
+      ],
+      "properties": {
+        "median_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p95_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maximum_ms": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "model_performance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_embedding_total_ms",
+        "query_embedding_total_ms",
+        "ranking",
+        "document_count",
+        "query_count"
+      ],
+      "properties": {
+        "document_embedding_total_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "query_embedding_total_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "ranking": {
+          "$ref": "#/$defs/latency"
+        },
+        "document_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "query_count": {
+          "const": 24
+        }
+      }
+    }
+  }
+}
