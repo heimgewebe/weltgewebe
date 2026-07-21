@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import yaml
+
 from scripts.quality.review_governance import (
     Bundle,
     DiffStats,
@@ -1041,6 +1043,8 @@ class WorkflowContractTests(unittest.TestCase):
         self.workflow = (
             self.repo_root / ".github/workflows/review-evidence.yml"
         ).read_text(encoding="utf-8")
+        self.workflow_data = yaml.safe_load(self.workflow)
+        self.review_job = self.workflow_data["jobs"]["review-evidence"]
 
     def test_privileged_workflow_executes_only_literal_main_code(self) -> None:
         self.assertIn("pull_request_target:", self.workflow)
@@ -1109,10 +1113,48 @@ class WorkflowContractTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )
-        self.assertIn("Review evidence gate", required["required_checks"])
-        self.assertGreaterEqual(
-            self.workflow.count("context='Review evidence gate'"), 2
+        required_context = self.workflow_data["env"]["REVIEW_EVIDENCE_CONTEXT"]
+        self.assertIn(required_context, required["required_checks"])
+        self.assertEqual(required_context, "Review evidence gate")
+        self.assertEqual(self.review_job["name"], "Review evidence evaluator")
+        self.assertNotEqual(self.review_job["name"], required_context)
+        self.assertTrue(self.workflow_data["concurrency"]["cancel-in-progress"])
+
+        evaluate_step = next(
+            step
+            for step in self.review_job["steps"]
+            if step.get("name") == "Resolve PR and evaluate exact review evidence"
         )
+        publish_step = next(
+            step
+            for step in self.review_job["steps"]
+            if step.get("name") == "Publish exact-head gate status"
+        )
+        self.assertIn('statuses/${head_sha}', evaluate_step["run"])
+        self.assertIn('-f state=pending', evaluate_step["run"])
+        self.assertIn('-f context="${REVIEW_EVIDENCE_CONTEXT}"', evaluate_step["run"])
+        self.assertEqual(
+            publish_step["env"]["HEAD_SHA"],
+            "${{ steps.evaluate.outputs.head_sha }}",
+        )
+        self.assertIn('statuses/${HEAD_SHA}', publish_step["run"])
+        self.assertIn('-f state="${state}"', publish_step["run"])
+        self.assertIn("state=success", publish_step["run"])
+        self.assertIn("state=failure", publish_step["run"])
+        self.assertIn('-f context="${REVIEW_EVIDENCE_CONTEXT}"', publish_step["run"])
+        self.assertNotIn("context='Review evidence evaluator'", self.workflow)
+        self.assertNotIn('context="Review evidence evaluator"', self.workflow)
+
+    def test_cancellable_review_job_name_is_distinct_from_required_status_context(
+        self,
+    ) -> None:
+        # GitHub requires both a check run and a commit status when both share a
+        # configured required-check name. Keep the cancellable evaluator job name
+        # distinct from the explicit required commit-status context.
+        required_context = self.workflow_data["env"]["REVIEW_EVIDENCE_CONTEXT"]
+        self.assertEqual(self.review_job["name"], "Review evidence evaluator")
+        self.assertEqual(required_context, "Review evidence gate")
+        self.assertNotEqual(self.review_job["name"], required_context)
 
     def test_pr_template_contains_single_risk_marker(self) -> None:
         template = (self.repo_root / ".github/PULL_REQUEST_TEMPLATE.md").read_text(

@@ -7,6 +7,8 @@ import re
 import unittest
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -31,18 +33,56 @@ class CanonicalTruthContractTests(unittest.TestCase):
             ["Required merge gate", "Review evidence gate"],
         )
         producers = {
-            "Required merge gate": ROOT / ".github/workflows/ci.yml",
-            "Review evidence gate": ROOT / ".github/workflows/review-evidence.yml",
+            "Required merge gate": {
+                "kind": "check_run",
+                "workflow": ROOT / ".github/workflows/ci.yml",
+            },
+            "Review evidence gate": {
+                "kind": "commit_status",
+                "workflow": ROOT / ".github/workflows/review-evidence.yml",
+            },
         }
         self.assertEqual(set(data["required_checks"]), set(producers))
-        for name, workflow_path in producers.items():
-            workflow = workflow_path.read_text(encoding="utf-8")
-            self.assertIn(f"name: {name}", workflow)
-        review_workflow = producers["Review evidence gate"].read_text(encoding="utf-8")
-        self.assertGreaterEqual(
-            review_workflow.count("context='Review evidence gate'"),
-            2,
+
+        required_merge = producers["Required merge gate"]
+        self.assertEqual(required_merge["kind"], "check_run")
+        required_merge_workflow = required_merge["workflow"].read_text(encoding="utf-8")
+        self.assertIn("name: Required merge gate", required_merge_workflow)
+
+        review = producers["Review evidence gate"]
+        self.assertEqual(review["kind"], "commit_status")
+        review_workflow = review["workflow"].read_text(encoding="utf-8")
+        review_data = yaml.safe_load(review_workflow)
+        review_job = review_data["jobs"]["review-evidence"]
+        required_context = review_data["env"]["REVIEW_EVIDENCE_CONTEXT"]
+        self.assertEqual(review_job["name"], "Review evidence evaluator")
+        self.assertEqual(required_context, "Review evidence gate")
+        self.assertNotEqual(review_job["name"], required_context)
+
+        evaluate_step = next(
+            step
+            for step in review_job["steps"]
+            if step.get("name") == "Resolve PR and evaluate exact review evidence"
         )
+        publish_step = next(
+            step
+            for step in review_job["steps"]
+            if step.get("name") == "Publish exact-head gate status"
+        )
+        self.assertIn('statuses/${head_sha}', evaluate_step["run"])
+        self.assertIn('-f state=pending', evaluate_step["run"])
+        self.assertIn('-f context="${REVIEW_EVIDENCE_CONTEXT}"', evaluate_step["run"])
+        self.assertEqual(
+            publish_step["env"]["HEAD_SHA"],
+            "${{ steps.evaluate.outputs.head_sha }}",
+        )
+        self.assertIn('statuses/${HEAD_SHA}', publish_step["run"])
+        self.assertIn('-f state="${state}"', publish_step["run"])
+        self.assertIn("state=success", publish_step["run"])
+        self.assertIn("state=failure", publish_step["run"])
+        self.assertIn('-f context="${REVIEW_EVIDENCE_CONTEXT}"', publish_step["run"])
+        self.assertNotIn("context='Review evidence evaluator'", review_workflow)
+        self.assertNotIn('context="Review evidence evaluator"', review_workflow)
         self.assertIn("ref: main", review_workflow)
         self.assertIn("fetch-depth: 1", review_workflow)
         self.assertIn("persist-credentials: false", review_workflow)

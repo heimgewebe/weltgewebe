@@ -174,17 +174,27 @@ test.describe("MapLibre control placement", () => {
     expect(lensBox!.x + lensBox!.width).toBeLessThanOrEqual(panelBox!.x);
   });
 
-  test("tablet-width desktop context panel uses a bounded adaptive width", async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1024, height: 800 });
-    await page.locator(".map-marker").first().click();
+  for (const [viewportWidth, expectedPanelWidth] of [
+    [1024, 320],
+    [1200, 360],
+    [1440, 400],
+  ] as const) {
+    test(`desktop context panel resolves clamp width at ${viewportWidth}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: viewportWidth, height: 800 });
+      await page.locator(".map-marker").first().click();
 
-    const panelBox = await page.getByTestId("context-panel").boundingBox();
-    expect(panelBox).not.toBeNull();
-    expect(panelBox!.width).toBeGreaterThanOrEqual(319);
-    expect(panelBox!.width).toBeLessThanOrEqual(321);
-  });
+      const panel = page.getByTestId("context-panel");
+      await expect(panel).toBeVisible();
+      const panelBox = await panel.boundingBox();
+      expect(panelBox).not.toBeNull();
+      expect(
+        Math.abs(panelBox!.width - expectedPanelWidth),
+        `expected ${expectedPanelWidth}px context panel at ${viewportWidth}px viewport`,
+      ).toBeLessThanOrEqual(2);
+    });
+  }
 
   test("mobile focus sheet moves both corner controls above the sheet", async ({
     page,

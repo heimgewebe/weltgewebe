@@ -22,6 +22,7 @@ zones:
       - ui-interaction.md
       - map-experience.md
       - federation-core.md
+      - federation-wire-v1.md
   reality:
     path: runtime/
     canonical_docs:
