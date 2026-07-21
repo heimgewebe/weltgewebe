@@ -1253,6 +1253,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 
+## scripts/ops/activate-production-reconciler-from-release.sh
+
+- [relates_to] docs/deploy/merge-to-live.md
+
 ## scripts/ops/check_public_live_readiness.py
 
 - [relates_to] docs/deploy/vps.md
