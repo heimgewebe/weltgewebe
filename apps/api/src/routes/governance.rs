@@ -25,9 +25,9 @@ use crate::config::{
     DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource, DomainReadSource,
 };
 use crate::governance::{
-    self, CreateProposalError, MessageError, ProposalMessage, ProposalStatus, ProposalWithCounts,
-    Veto, VetoError, VoteChoice, VoteError, MESSAGE_BODY_MAX_CHARS, SUMMARY_MAX_CHARS,
-    VETO_REASON_MAX_CHARS,
+    self, CreateProposalError, GuestExitError, MessageError, ProposalMessage, ProposalStatus,
+    ProposalWithCounts, Veto, VetoError, VoteChoice, VoteError, MESSAGE_BODY_MAX_CHARS,
+    SUMMARY_MAX_CHARS, VETO_REASON_MAX_CHARS,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::ApiState;
@@ -326,8 +326,8 @@ pub async fn create_proposal(
     Ok((StatusCode::CREATED, Json(proposal_view(proposal, now))))
 }
 
-/// POST /proposals/{id}/veto — begründetes Veto eines Webers (Webungsaktion,
-/// `require_write`-geschützt: Gäste 403, unangemeldet 401).
+/// POST /proposals/{id}/veto — begründetes Veto eines angemeldeten Accounts.
+/// Der eigene Weberantrag bleibt von formaler Selbstentscheidung ausgeschlossen.
 pub async fn veto_proposal(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
@@ -358,7 +358,15 @@ pub async fn veto_proposal(
             ),
             VetoError::AlreadyVetoed => (
                 StatusCode::CONFLICT,
-                "this weber already vetoed the proposal".to_string(),
+                "this account already vetoed the proposal".to_string(),
+            ),
+            VetoError::ApplicantCannotDecide => (
+                StatusCode::FORBIDDEN,
+                "the applicant cannot veto the own Weber proposal".to_string(),
+            ),
+            VetoError::ActorUnavailable => (
+                StatusCode::UNAUTHORIZED,
+                "veto actor account is no longer active".to_string(),
             ),
             VetoError::Database(error) => internal_error("add_veto")(error),
         })?;
@@ -372,8 +380,8 @@ pub async fn veto_proposal(
     Ok((StatusCode::CREATED, Json(veto)))
 }
 
-/// PUT /proposals/{id}/vote — genau eine aktuelle, änderbare Stimme je Weber
-/// (Webungsaktion, `require_write`-geschützt).
+/// PUT /proposals/{id}/vote — genau eine aktuelle, änderbare Stimme je
+/// angemeldetem Account; der Antragsteller stimmt nicht über die eigene Aufnahme ab.
 pub async fn vote_proposal(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
@@ -404,6 +412,14 @@ pub async fn vote_proposal(
             VoteError::WrongPhase => (
                 StatusCode::CONFLICT,
                 "voting is only possible during the open voting phase".to_string(),
+            ),
+            VoteError::ApplicantCannotDecide => (
+                StatusCode::FORBIDDEN,
+                "the applicant cannot vote on the own Weber proposal".to_string(),
+            ),
+            VoteError::ActorUnavailable => (
+                StatusCode::UNAUTHORIZED,
+                "vote actor account is no longer active".to_string(),
             ),
             VoteError::Database(error) => internal_error("upsert_vote")(error),
         })?;
@@ -487,7 +503,17 @@ pub async fn exit_own_account(
 
     governance::delete_guest_account(pool, &account_id)
         .await
-        .map_err(internal_error("delete_guest_account"))?;
+        .map_err(|error| match error {
+            GuestExitError::NotEligible => (
+                StatusCode::CONFLICT,
+                "account is no longer an active guest".to_string(),
+            ),
+            GuestExitError::AmbiguousLegacyEndpoint => (
+                StatusCode::CONFLICT,
+                "guest exit is blocked by an ambiguous legacy relationship".to_string(),
+            ),
+            GuestExitError::Database(error) => internal_error("delete_guest_account")(error),
+        })?;
 
     let session_cleanup = state.sessions.delete_all_by_account(&account_id).await;
 

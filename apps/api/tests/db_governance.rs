@@ -12,7 +12,8 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tokio::time::{sleep, timeout, Duration as TokioDuration};
 use weltgewebe_api::governance::{
     add_message, add_veto, create_weber_proposal, delete_guest_account, finalize_due_proposals,
-    get_proposal, upsert_vote, CreateProposalError, MessageError, ProposalStatus, VoteChoice,
+    get_proposal, upsert_vote, CreateProposalError, MessageError, ProposalStatus, VetoError,
+    VoteChoice, VoteError,
 };
 
 const GUEST_A: &str = "gov-proof-guest-a";
@@ -180,16 +181,27 @@ async fn veto_opens_exact_second_phase_and_yes_must_exceed_no() {
     let accepted = create_weber_proposal(&pool, GUEST_A, "Gast A", None, t0)
         .await
         .expect("create accepted candidate");
+    let own_veto = add_veto(
+        &pool,
+        &accepted.id,
+        GUEST_A,
+        "Gast A",
+        "Eigene Aufnahme blockieren",
+        t0 + Duration::days(1),
+    )
+    .await;
+    assert!(matches!(own_veto, Err(VetoError::ApplicantCannotDecide)));
+
     add_veto(
         &pool,
         &accepted.id,
-        WEBER_A,
-        "Weber A",
+        GUEST_B,
+        "Gast B",
         "Bitte zuerst beraten",
         t0 + Duration::days(1),
     )
     .await
-    .expect("veto");
+    .expect("guest veto on another account's application");
     let first_phase = finalize_due_proposals(&pool, t0 + Duration::days(7))
         .await
         .expect("open voting");
@@ -200,24 +212,34 @@ async fn veto_opens_exact_second_phase_and_yes_must_exceed_no() {
         .expect("voting proposal");
     assert_eq!(voting_proposal.voting_until, Some(t0 + Duration::days(14)));
 
+    let own_vote = upsert_vote(
+        &pool,
+        &accepted.id,
+        GUEST_A,
+        VoteChoice::Ja,
+        t0 + Duration::days(8),
+    )
+    .await;
+    assert!(matches!(own_vote, Err(VoteError::ApplicantCannotDecide)));
+
     upsert_vote(
         &pool,
         &accepted.id,
-        WEBER_A,
+        GUEST_B,
         VoteChoice::Nein,
         t0 + Duration::days(8),
     )
     .await
-    .expect("initial vote");
+    .expect("initial guest vote");
     upsert_vote(
         &pool,
         &accepted.id,
-        WEBER_A,
+        GUEST_B,
         VoteChoice::Ja,
         t0 + Duration::days(9),
     )
     .await
-    .expect("changed vote");
+    .expect("changed guest vote");
     let result = finalize_due_proposals(&pool, t0 + Duration::days(14))
         .await
         .expect("final vote");
@@ -337,6 +359,34 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
     )
     .await
     .expect("guest contribution to foreign proposal");
+    add_veto(
+        &pool,
+        &foreign_proposal.id,
+        GUEST_C,
+        "Gast C",
+        "Dieser Einwand bleibt als Verfahrensspur erhalten.",
+        t0 + Duration::days(16),
+    )
+    .await
+    .expect("guest veto on foreign proposal");
+    sqlx::query(
+        "UPDATE governance_proposals SET status = 'voting', voting_until = $2 \
+         WHERE id = $1::uuid",
+    )
+    .bind(&foreign_proposal.id)
+    .bind(t0 + Duration::days(29))
+    .execute(&pool)
+    .await
+    .expect("open foreign proposal voting phase for exit proof");
+    upsert_vote(
+        &pool,
+        &foreign_proposal.id,
+        GUEST_C,
+        VoteChoice::Ja,
+        t0 + Duration::days(23),
+    )
+    .await
+    .expect("guest vote on foreign proposal");
 
     sqlx::query(
         "INSERT INTO domain_nodes \
@@ -405,6 +455,27 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
             .fetch_one(&pool)
             .await
             .expect("retained message body");
+    let retained_veto_actor: Option<String> = sqlx::query_scalar(
+        "SELECT weber_account_id FROM governance_vetoes \
+         WHERE proposal_id = $1::uuid AND reason = $2",
+    )
+    .bind(&foreign_proposal.id)
+    .bind("Dieser Einwand bleibt als Verfahrensspur erhalten.")
+    .fetch_one(&pool)
+    .await
+    .expect("retained veto actor");
+    let retained_vote_actor: Option<String> = sqlx::query_scalar(
+        "SELECT voter_account_id FROM governance_votes \
+         WHERE proposal_id = $1::uuid AND choice = 'ja'",
+    )
+    .bind(&foreign_proposal.id)
+    .fetch_one(&pool)
+    .await
+    .expect("retained vote actor");
+    let foreign_counts = get_proposal(&pool, &foreign_proposal.id)
+        .await
+        .expect("foreign proposal after guest exit")
+        .expect("foreign proposal remains");
 
     assert!(!account_exists);
     assert!(!proposal_exists);
@@ -415,6 +486,63 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
         "foreign contribution must be anonymized"
     );
     assert_eq!(retained_body, "Dieser Beitrag bleibt erhalten.");
+    assert_eq!(retained_veto_actor, None, "foreign veto must be anonymized");
+    assert_eq!(retained_vote_actor, None, "foreign vote must be anonymized");
+    assert_eq!(
+        foreign_counts.veto_count, 1,
+        "anonymized veto remains in tally"
+    );
+    assert_eq!(
+        foreign_counts.yes_votes, 1,
+        "anonymized vote remains in tally"
+    );
+
+    cleanup(&pool).await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn guest_exit_bulk_locks_and_anonymizes_many_owned_nodes() {
+    const ACCOUNT: &str = "gov-proof-bulk-exit";
+
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, ACCOUNT, "gast").await;
+    sqlx::query(
+        "INSERT INTO domain_nodes \
+         (id, kind, title, lat, lon, created_at, updated_at, payload) \
+         SELECT 'gov-proof-bulk-node-' || series::text, 'Ort', 'Bulk-Knoten', \
+                53.5, 10.0, NOW(), NOW(), \
+                jsonb_build_object('created_by_account_id', $1::text) \
+         FROM generate_series(1, 64) AS series",
+    )
+    .bind(ACCOUNT)
+    .execute(&pool)
+    .await
+    .expect("seed many guest nodes");
+
+    delete_guest_account(&pool, ACCOUNT)
+        .await
+        .expect("bulk guest exit");
+
+    let retained: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_nodes WHERE id LIKE 'gov-proof-bulk-node-%'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count retained bulk nodes");
+    let still_owned: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_nodes \
+         WHERE id LIKE 'gov-proof-bulk-node-%' \
+           AND payload ->> 'created_by_account_id' = $1",
+    )
+    .bind(ACCOUNT)
+    .fetch_one(&pool)
+    .await
+    .expect("count residual bulk ownership");
+    assert_eq!(retained, 64, "exit retains community-visible nodes");
+    assert_eq!(still_owned, 0, "every retained node must be anonymized");
 
     cleanup(&pool).await;
 }

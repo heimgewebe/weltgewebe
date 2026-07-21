@@ -26,6 +26,7 @@ use axum::{
     Router,
 };
 use serial_test::serial;
+use sha2::{Digest, Sha256};
 use sqlx::{postgres::PgPoolOptions, Executor, PgPool};
 use std::{ffi::OsString, path::PathBuf, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
@@ -59,6 +60,16 @@ use weltgewebe_api::{
 
 mod helpers;
 use helpers::set_gewebe_in_dir;
+
+fn account_lifecycle_lock_key(account_id: &str) -> i64 {
+    let mut hasher = Sha256::new();
+    hasher.update(b"weltgewebe:account-lifecycle:v1");
+    let bytes = account_id.as_bytes();
+    hasher.update((bytes.len() as u64).to_be_bytes());
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    i64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"))
+}
 
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL")
@@ -217,6 +228,7 @@ async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, 
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source: DomainAccountWriteSource::Postgres,
         domain_node_write_source: DomainNodeWriteSource::Postgres,
@@ -489,6 +501,7 @@ async fn postgres_read_jsonl_node_write_is_blocked() -> Result<()> {
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source: DomainAccountWriteSource::Postgres,
         domain_node_write_source: DomainNodeWriteSource::Jsonl,
@@ -670,6 +683,7 @@ async fn jsonl_default_node_patch_compiles_and_routes_correctly() -> Result<()> 
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Jsonl,
         domain_account_write_source: DomainAccountWriteSource::Jsonl,
         domain_node_write_source: DomainNodeWriteSource::Jsonl,
@@ -1542,9 +1556,9 @@ async fn guest_node_limit_allows_replay_but_rejects_new_operation() -> Result<()
     Ok(())
 }
 
-/// K3. The real HTTP node-create path keeps the guest account locked until
-/// its derived Faden is durable. A concurrent exit therefore cannot delete the
-/// account between the node INSERT and the later edge INSERT.
+/// K3. The real HTTP node-create path owns one account-lifecycle lock from
+/// before the node INSERT until its derived Faden is durable. A concurrent exit
+/// therefore cannot enter the historical gap between the two durable writes.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
@@ -1606,35 +1620,30 @@ async fn postgres_node_create_faden_projection_serializes_with_guest_exit() -> R
     .await
     .context("node must become durable before Faden blocker is released")?;
 
-    // Observe the real account-row guard rather than relying on scheduler
-    // timing. A NOWAIT probe succeeds until the node request owns the row lock;
-    // lock_not_available (55P03) proves the guard is held before exit starts.
+    // Prove the lifecycle lock is already held immediately after the node is
+    // durable, before the blocked Faden INSERT can complete. This is the exact
+    // historical gap that previously allowed guest exit to win.
+    let lifecycle_key = account_lifecycle_lock_key(ACTOR_ID);
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
-            let mut probe = pool.begin().await.expect("begin account lock probe");
-            let result =
-                sqlx::query("SELECT id FROM domain_accounts WHERE id = $1 FOR UPDATE NOWAIT")
-                    .bind(ACTOR_ID)
-                    .execute(&mut *probe)
-                    .await;
-            match result {
-                Ok(_) => {
-                    probe
-                        .rollback()
-                        .await
-                        .expect("rollback successful account probe");
-                    tokio::time::sleep(Duration::from_millis(20)).await;
-                }
-                Err(sqlx::Error::Database(error)) if error.code().as_deref() == Some("55P03") => {
-                    probe.rollback().await.ok();
-                    break;
-                }
-                Err(error) => panic!("unexpected account lock probe error: {error}"),
+            let mut probe = pool.begin().await.expect("begin lifecycle lock probe");
+            let acquired: bool = sqlx::query_scalar("SELECT pg_try_advisory_xact_lock($1::bigint)")
+                .bind(lifecycle_key)
+                .fetch_one(&mut *probe)
+                .await
+                .expect("probe account lifecycle lock");
+            probe
+                .rollback()
+                .await
+                .expect("rollback lifecycle lock probe");
+            if !acquired {
+                break;
             }
+            tokio::time::sleep(Duration::from_millis(20)).await;
         }
     })
     .await
-    .context("node request must acquire account guard before exit starts")?;
+    .context("node create must hold account lifecycle lock across the durable-node/Faden gap")?;
 
     let exit_pool = pool.clone();
     let mut exit_task =
@@ -1643,7 +1652,7 @@ async fn postgres_node_create_faden_projection_serializes_with_guest_exit() -> R
         tokio::time::timeout(Duration::from_millis(150), &mut exit_task)
             .await
             .is_err(),
-        "guest exit must wait until the derived Faden write releases the account row"
+        "guest exit must wait for the account lifecycle lock until the derived Faden is durable"
     );
 
     edge_blocker

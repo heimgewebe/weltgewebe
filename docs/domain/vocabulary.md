@@ -23,7 +23,7 @@ relations:
 | Faden | Edge, `/edges` | serverseitig abgeleitete Beziehung zwischen Garnrollen und/oder Knoten | öffentliche Leseprojektion; Erzeugung durch fachliche Webungsaktionen |
 | Gesprächsraum | Conversation, `/conversations` | Öffentlicher Diskussionsraum eines Knotens; weitere Gesprächstypen geplant | Knotengespräch produktiv |
 | Beitrag | Message, `/conversations/{id}/messages` | Klartextbeitrag mit Autoren-Snapshot und Tombstone | Knotengespräch produktiv |
-| Berechtigungsrolle | `role` (`gast`, `weber`, `admin`) | Gast webt eigene Inhalte; Weber pflegt zusätzlich gemeinschaftliche Inhalte; Admin moderiert | implementiert |
+| Berechtigungsrolle | `role` (`gast`, `weber`, `admin`) | Gast webt und entscheidet bei fremden Weberanträgen mit; Weber pflegt zusätzlich fremde gemeinschaftliche Inhalte; Admin moderiert | implementiert |
 
 ## Legacybegriffe
 

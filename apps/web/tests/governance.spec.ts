@@ -86,6 +86,7 @@ async function installGovernanceRoutes(
         contentType: "application/json",
         body: JSON.stringify({
           ...proposal(currentStatus),
+          applicant_account_id: options.existingApplicantId ?? GUEST_ID,
           own_vote: undefined,
         }),
       });
@@ -356,7 +357,7 @@ test("initial hash load does not steal focus after the user moves it", async ({
   await expect(backLink).toBeFocused();
 });
 
-test("guest can read everything and submit only the own Weber application", async ({
+test("guest can read, discuss, and submit the own Weber application", async ({
   page,
 }) => {
   await mockApiResponses(page, {
@@ -425,10 +426,51 @@ test("guest can read everything and submit only the own Weber application", asyn
   await expect(
     page.getByText("Ich erläutere meinen Antrag als Gast."),
   ).toBeVisible();
+});
+
+test("applicant cannot veto or vote on the own Weber application", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: GUEST_ID, role: "gast" },
+  });
+  await installGovernanceRoutes(page, { existingApplicantId: GUEST_ID });
+  await page.goto(`/antraege?id=${PROPOSAL_ID}`);
+
   await expect(page.getByRole("button", { name: "Veto einlegen" })).toHaveCount(
     0,
   );
   await expect(page.getByRole("button", { name: "Ja" })).toHaveCount(0);
+});
+
+test("guest can veto and vote on another account's Weber application", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: GUEST_ID, role: "gast" },
+  });
+  const governance = await installGovernanceRoutes(page, {
+    existingApplicantId: "another-guest",
+  });
+  await page.goto(`/antraege?id=${PROPOSAL_ID}`);
+
+  await page
+    .getByPlaceholder("Konkreter Einwand und mögliche Lösung")
+    .fill("Ich möchte diesen Punkt vor der Aufnahme gemeinsam klären.");
+  await page.getByRole("button", { name: "Veto einlegen" }).click();
+  await expect(page.getByText("Gespräch und Abstimmung")).toBeVisible();
+  await page.getByRole("button", { name: "Ja" }).click();
+
+  expect(
+    governance.requests.find((entry) => entry.pathname.endsWith("/veto"))?.body,
+  ).toEqual({
+    reason: "Ich möchte diesen Punkt vor der Aufnahme gemeinsam klären.",
+  });
+  expect(
+    governance.requests.find((entry) => entry.pathname.endsWith("/vote"))?.body,
+  ).toEqual({
+    choice: "ja",
+  });
 });
 
 test("Weber veto opens the second phase and voting uses yes greater than no without quorum", async ({
