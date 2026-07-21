@@ -283,6 +283,13 @@ class ProductionReconcilerContractTests(unittest.TestCase):
             release_dir = release_root / commit
             (release_dir / "infra" / "compose").mkdir(parents=True)
             (release_dir / "scripts" / "ops").mkdir(parents=True)
+            for activation_dir in (
+                release_root,
+                release_dir,
+                release_dir / "scripts",
+                release_dir / "scripts" / "ops",
+            ):
+                activation_dir.chmod(0o755)
             (release_dir / "infra" / "compose" / "compose.prod.yml").write_text(
                 "services: {}\n", encoding="utf-8"
             )
