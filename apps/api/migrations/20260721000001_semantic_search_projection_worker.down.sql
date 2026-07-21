@@ -1,0 +1,12 @@
+DROP TRIGGER IF EXISTS search_track_domain_nodes ON domain_nodes;
+DROP TRIGGER IF EXISTS search_node_projections_validate ON search_node_projections;
+DROP FUNCTION IF EXISTS weltgewebe_search_track_domain_node();
+DROP FUNCTION IF EXISTS weltgewebe_search_enqueue_node(TEXT, TEXT);
+DROP FUNCTION IF EXISTS weltgewebe_search_lexical_candidates(TEXT, TEXT, TEXT[], TEXT, TEXT[], TEXT[], TEXT[], INTEGER);
+DROP FUNCTION IF EXISTS weltgewebe_put_search_projection(TEXT, TEXT, BIGINT, TEXT, TEXT, TEXT, TEXT[], TEXT, TEXT, TEXT, TEXT, TEXT[], DOUBLE PRECISION[]);
+DROP FUNCTION IF EXISTS weltgewebe_activate_search_generation(TEXT);
+DROP FUNCTION IF EXISTS weltgewebe_validate_search_projection();
+DROP TABLE IF EXISTS search_projection_jobs;
+DROP TABLE IF EXISTS search_node_projections;
+DROP TABLE IF EXISTS search_node_versions;
+DROP TABLE IF EXISTS search_index_generations;

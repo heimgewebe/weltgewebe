@@ -61,6 +61,14 @@ async fn run_migrations(pool: &sqlx::PgPool) {
 }
 
 async fn apply_t003_contract(pool: &sqlx::PgPool) {
+    let production_foundation: bool =
+        sqlx::query_scalar("SELECT to_regclass('public.search_index_generations') IS NOT NULL")
+            .fetch_one(pool)
+            .await
+            .expect("inspect promoted search foundation");
+    if production_foundation {
+        return;
+    }
     sqlx::raw_sql(include_str!(
         "../../../contracts/search/postgres-foundation.up.sql"
     ))
@@ -98,7 +106,7 @@ async fn put_projection(
     .bind(GENERATION)
     .bind(node_id)
     .bind(source_version)
-    .bind(format!("revision-{source_version}"))
+    .bind(format!("node-{source_version}"))
     .bind("a".repeat(64))
     .bind("Fahrrad Reparatur")
     .bind(vec!["fahrrad", "reparatur"])
@@ -143,10 +151,11 @@ async fn postgres_foundation_enforces_visibility_generation_and_revision_order()
 
     sqlx::query(
         "INSERT INTO search_index_generations (
-             generation_id, provider, model_id, model_revision, dimension,
-             document_revision, normalization_revision, state
-         ) VALUES ($1, 'local-reference', 'qwen3-embedding:8b', 'sha256:test', 4,
-                   'node-document-v1', 'normalization-v1', 'ready')",
+             generation_id, provider, model_id, model_revision, runtime_identity, dimension,
+             document_revision, normalization_revision, ranking_revision, state, expected_nodes, completed_nodes
+         ) VALUES ($1, 'local-reference', 'qwen3-embedding:8b', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                   't003-proof@local', 4, 'node-document-v1', 'normalization-v1',
+                   'weltgewebe-hybrid-ranking-v2', 'ready', 3, 3)",
     )
     .bind(GENERATION)
     .execute(&pool)
@@ -170,17 +179,38 @@ async fn postgres_foundation_enforces_visibility_generation_and_revision_order()
     }
 
     assert_eq!(
-        put_projection(&pool, ACTIVE_NODE, 1, "active", vec!["public"], None)
-            .await
-            .expect("insert active projection"),
+        put_projection(
+            &pool,
+            ACTIVE_NODE,
+            1,
+            "active",
+            vec!["public"],
+            Some(vec![0.25; 4])
+        )
+        .await
+        .expect("insert active projection"),
         "inserted"
     );
-    put_projection(&pool, HIDDEN_NODE, 1, "hidden", vec!["public"], None)
-        .await
-        .expect("insert hidden projection");
-    put_projection(&pool, DELETED_NODE, 1, "deleted", vec!["public"], None)
-        .await
-        .expect("insert deleted projection");
+    put_projection(
+        &pool,
+        HIDDEN_NODE,
+        1,
+        "hidden",
+        vec!["public"],
+        Some(vec![0.25; 4]),
+    )
+    .await
+    .expect("insert hidden projection");
+    put_projection(
+        &pool,
+        DELETED_NODE,
+        1,
+        "deleted",
+        vec!["public"],
+        Some(vec![0.25; 4]),
+    )
+    .await
+    .expect("insert deleted projection");
 
     sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
         .bind(GENERATION)
@@ -212,14 +242,28 @@ async fn postgres_foundation_enforces_visibility_generation_and_revision_order()
     assert!(unauthorized.is_empty());
 
     assert_eq!(
-        put_projection(&pool, ACTIVE_NODE, 1, "active", vec!["public"], None)
-            .await
-            .expect("repeat projection"),
+        put_projection(
+            &pool,
+            ACTIVE_NODE,
+            1,
+            "active",
+            vec!["public"],
+            Some(vec![0.25; 4])
+        )
+        .await
+        .expect("repeat projection"),
         "idempotent"
     );
-    let visibility_conflict = put_projection(&pool, ACTIVE_NODE, 1, "hidden", vec!["public"], None)
-        .await
-        .expect_err("equal-version visibility conflict must fail");
+    let visibility_conflict = put_projection(
+        &pool,
+        ACTIVE_NODE,
+        1,
+        "hidden",
+        vec!["public"],
+        Some(vec![0.25; 4]),
+    )
+    .await
+    .expect_err("equal-version visibility conflict must fail");
     assert_eq!(
         visibility_conflict
             .as_database_error()
@@ -229,9 +273,16 @@ async fn postgres_foundation_enforces_visibility_generation_and_revision_order()
     );
 
     assert_eq!(
-        put_projection(&pool, ACTIVE_NODE, 0, "active", vec!["public"], None)
-            .await
-            .expect("stale projection"),
+        put_projection(
+            &pool,
+            ACTIVE_NODE,
+            0,
+            "active",
+            vec!["public"],
+            Some(vec![0.25; 4])
+        )
+        .await
+        .expect("stale projection"),
         "stale"
     );
 
