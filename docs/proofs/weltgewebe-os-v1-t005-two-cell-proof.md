@@ -46,7 +46,9 @@ Eine Zelle ist eine eigenständig betriebene Weltgewebe-Instanz. Jede Zelle unte
 | Zwei unabhängige Zellen tauschen Knoten, Kante und gemeinsamen Raum | `two_cells_exchange_objects_survive_partition_and_converge` | bestanden |
 | Trennung, lokale Weiterarbeit, kontrollierte Konvergenz | derselbe Zwei-Zellen-Test, zwei getrennte In-Memory-Repositories und öffentliche Axum-Router | bestanden |
 | Browser- und API-Nachweis | `apps/web/tests/federation-pilot.spec.ts`, API-Integrationstest | bestanden |
-| PostgreSQL-Persistenz und Neustart | `apps/api/tests/db_federation_persistence.rs` in isoliertem Wegwerfcontainer | bestanden |
+| PostgreSQL-Persistenz, Neustart und gemeinsamer Event-ID-Namensraum | `apps/api/tests/db_federation_persistence.rs` in isoliertem Wegwerfcontainer | bestanden |
+| Replikaübergreifende Receive-, Peer- und Object-Read-Limits | zwei unabhängige `FederationService`-Instanzen mit gemeinsamem `PgPool` im PostgreSQL-Beweis | bestanden |
+| Fail-Closed bei Ausfall des gemeinsamen Rate-Limit-Backends | PostgreSQL-Beweis nach kontrolliertem `PgPool`-Close | bestanden |
 | Historische Schlüssel bleiben nach Rotation prüfbar | Unit-Test `historical_peer_key_remains_valid_after_rotation` | bestanden |
 
 ## Belegablauf
@@ -63,8 +65,8 @@ cargo test -p weltgewebe-api --test api_federation_two_cell
 Ergebnis:
 
 ```text
-3 Unit-Tests bestanden
-3 Zwei-Zellen-Integrationstests bestanden
+6 Unit-Tests bestanden
+6 Zwei-Zellen-Integrationstests bestanden
 0 fehlgeschlagen
 ```
 
@@ -89,6 +91,7 @@ Negative Fälle:
 - blockierte Nachbarzelle;
 - ausdrücklich inaktiver Schlüssel;
 - Event-ID-Kollision mit verändertem Umschlag;
+- gemeinsamer Event-ID-Namensraum über lokale Outbox und empfangene Inbox in beiden Belegungsrichtungen;
 - gleichzeitige gleiche Event-ID bei unterschiedlichen Objektadressen;
 - gleichzeitige erste Versionen derselben Adresse;
 - Quarantäne-Speicherverstärkung durch mehr als 120 Umschläge je Ursprungszelle und Minute;
@@ -105,7 +108,7 @@ python3 -m unittest scripts.ci.tests.test_federation_contract
 Ergebnis:
 
 ```text
-7 Tests bestanden
+8 Tests bestanden
 0 fehlgeschlagen
 ```
 
@@ -164,6 +167,10 @@ Geprüft wurden:
 - transaktionale lokale Objekt- und Outbox-Persistenz;
 - adressgebundene Serialisierung zweier gleichzeitiger Version-1-Ereignisse;
 - Event-ID-gebundene Serialisierung zweier gültiger Umschläge mit unterschiedlichen Objektadressen, sodass genau einer angewandt und der andere quarantänisiert wird statt als Datenbankfehler zu entweichen;
+- ein gemeinsamer Inbox-/Outbox-Event-ID-Namensraum: lokal zuerst blockiert eine abweichende eingehende Hülle als Kollision, eingehend zuerst blockiert eine lokale Persistenz derselben ID;
+- ein über zwei unabhängige Service-Instanzen geteilter PostgreSQL-Zähler für 600 eingehende Umschläge je Zelle und 120 verifizierte Ereignisse je lokaler/entfernter Zellkombination;
+- ein replikaübergreifend geteilter öffentlicher Object-Read-Zähler mit `429` und `Retry-After: 60`;
+- fail-closed Verhalten bei Ausfall des gemeinsamen PostgreSQL-Rate-Limit-Backends;
 - Widerruf eines zuvor bekannten Schlüssels über `active: false`.
 
 Der Container wurde nach dem Readback entfernt; die zugehörige Grabowski-Lease wurde freigegeben.
@@ -179,6 +186,8 @@ Zwei unabhängige Vorabreviews wurden zunächst mit `FAIL` abgeschlossen. Die Be
 - Strukturell ungültige, unbekannte oder falsch signierte Umschläge erzeugen keine persistenten Quarantäneeinträge.
 - Signaturverifizierte Ablehnungen sind über Ereignis-ID, Umschlag-Digest und Grund idempotent; wiederholte Replays vergrößern die Quarantäne nicht.
 - Die Quarantäne ist je Ursprung auf 1.000 Einträge und 30 Tage begrenzt; Konfliktprüfung, Quarantäneeintrag und Bereinigung bleiben transaktional serialisiert.
+- Inbox und Outbox teilen einen Event-ID-Namensraum unter demselben Advisory Lock; ein abweichender eingehender Digest wird quarantänisiert, eine lokale Wiederbelegung wird abgewiesen.
+- Produktive Receive-, verifizierte Peer- und Object-Read-Limits nutzen atomare PostgreSQL-Zähler über alle API-Replikas und fallen bei Backendfehlern geschlossen aus.
 
 ## Sicherheits- und Betriebsgrenzen
 
@@ -190,9 +199,10 @@ Zwei unabhängige Vorabreviews wurden zunächst mit `FAIL` abgeschlossen. Die Be
 - `neighbourhood` braucht explizites Ziel und lokale Erlaubnis.
 - Globales Lesen liefert keine Nachbarschafts- oder Löschdaten.
 - Teilkonfiguration oder fehlendes PostgreSQL führt nicht zu einem flüchtigen Ersatzbetrieb.
-- Der öffentliche Empfang begrenzt Quarantäne- und Speicherverstärkung mit globalen und ursprungsgebundenen Minutenfenstern.
+- Der öffentliche Empfang begrenzt Quarantäne-, Signaturprüfungs- und Datenbankverstärkung mit replikaübergreifenden globalen und authentifizierten Peer-Minutenfenstern.
+- Öffentliche Objekt-Lookups besitzen ebenfalls ein replikaübergreifendes Zellfenster.
 - Gleichzeitige Übergänge derselben Objektadresse werden in PostgreSQL serialisiert.
-- Gleichzeitige Zustellungen derselben Event-ID werden vor Objektübergängen serialisiert; kollidierende Umschläge werden kontrolliert quarantänisiert.
+- Inbox und Outbox teilen denselben Event-ID-Namensraum; gleichzeitige Zustellungen derselben Event-ID werden vor Objektübergängen serialisiert und kollidierende Umschläge kontrolliert quarantänisiert.
 - Ausdrücklich inaktive Schlüssel können keine neuen Zustellungen autorisieren.
 
 ### Plausibel, aber noch nicht als realer Mehrhostbetrieb belegt

@@ -33,9 +33,14 @@ const EVENT_UPSERTED: &str = "object.upserted";
 const EVENT_DELETED: &str = "object.deleted";
 const SCOPE_NEIGHBOURHOOD: &str = "neighbourhood";
 const SCOPE_GLOBAL: &str = "global";
-const RECEIVE_RATE_WINDOW: StdDuration = StdDuration::from_secs(60);
+const RATE_LIMIT_WINDOW: StdDuration = StdDuration::from_secs(60);
+const RATE_LIMIT_WINDOW_SECONDS: i64 = 60;
 const RECEIVE_RATE_PER_ORIGIN: u32 = 120;
 const RECEIVE_RATE_GLOBAL: u32 = 600;
+const OBJECT_READ_RATE_GLOBAL: u32 = 600;
+const RATE_SCOPE_RECEIVE_GLOBAL: &str = "receive-global";
+const RATE_SCOPE_RECEIVE_ORIGIN: &str = "receive-origin";
+const RATE_SCOPE_OBJECT_READ_GLOBAL: &str = "object-read-global";
 const QUARANTINE_RETENTION_DAYS: i64 = 30;
 const QUARANTINE_MAX_PER_ORIGIN: usize = 1_000;
 
@@ -248,6 +253,12 @@ pub trait FederationRepository: Send + Sync {
         cell_id: &str,
         key_id: &str,
     ) -> anyhow::Result<Option<ResolvedPeer>>;
+    async fn check_rate_limit(
+        &self,
+        scope: &str,
+        subject: &str,
+        limit: u32,
+    ) -> anyhow::Result<bool>;
     async fn quarantine(
         &self,
         event: &FederationEvent,
@@ -260,19 +271,37 @@ pub trait FederationRepository: Send + Sync {
     async fn quarantined(&self) -> anyhow::Result<Vec<QuarantinedEvent>>;
 }
 
-struct ReceiveRateState {
+struct LocalRateState {
     window_started: Instant,
-    global_count: u32,
-    per_origin: HashMap<String, u32>,
+    counts: HashMap<(String, String), u32>,
 }
 
-impl Default for ReceiveRateState {
+impl Default for LocalRateState {
     fn default() -> Self {
         Self {
             window_started: Instant::now(),
-            global_count: 0,
-            per_origin: HashMap::new(),
+            counts: HashMap::new(),
         }
+    }
+}
+
+impl LocalRateState {
+    fn allow(&mut self, scope: &str, subject: &str, limit: u32) -> bool {
+        if limit == 0 {
+            return true;
+        }
+        if self.window_started.elapsed() >= RATE_LIMIT_WINDOW {
+            *self = Self::default();
+        }
+        let count = self
+            .counts
+            .entry((scope.to_string(), subject.to_string()))
+            .or_default();
+        if *count >= limit {
+            return false;
+        }
+        *count += 1;
+        true
     }
 }
 
@@ -280,7 +309,6 @@ impl Default for ReceiveRateState {
 pub struct FederationService {
     identity: Arc<CellIdentity>,
     repository: Arc<dyn FederationRepository>,
-    receive_rate_state: Arc<Mutex<ReceiveRateState>>,
 }
 
 impl FederationService {
@@ -288,7 +316,6 @@ impl FederationService {
         Self {
             identity: Arc::new(identity),
             repository,
-            receive_rate_state: Arc::new(Mutex::new(ReceiveRateState::default())),
         }
     }
 
@@ -296,38 +323,31 @@ impl FederationService {
         self.identity.descriptor()
     }
 
-    fn allow_receive_global(&self) -> bool {
-        let mut state = self
-            .receive_rate_state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if state.window_started.elapsed() >= RECEIVE_RATE_WINDOW {
-            *state = ReceiveRateState::default();
-        }
-        if state.global_count >= RECEIVE_RATE_GLOBAL {
-            return false;
-        }
-        state.global_count += 1;
-        true
+    async fn allow_receive_global(&self) -> anyhow::Result<bool> {
+        self.repository
+            .check_rate_limit(
+                RATE_SCOPE_RECEIVE_GLOBAL,
+                &self.identity.cell_id,
+                RECEIVE_RATE_GLOBAL,
+            )
+            .await
     }
 
-    fn allow_authenticated_origin(&self, origin_cell_id: &str) -> bool {
-        let mut state = self
-            .receive_rate_state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if state.window_started.elapsed() >= RECEIVE_RATE_WINDOW {
-            *state = ReceiveRateState::default();
-        }
-        let origin_count = state
-            .per_origin
-            .entry(origin_cell_id.to_string())
-            .or_default();
-        if *origin_count >= RECEIVE_RATE_PER_ORIGIN {
-            return false;
-        }
-        *origin_count += 1;
-        true
+    async fn allow_authenticated_origin(&self, origin_cell_id: &str) -> anyhow::Result<bool> {
+        let subject = format!("{}:{origin_cell_id}", self.identity.cell_id);
+        self.repository
+            .check_rate_limit(RATE_SCOPE_RECEIVE_ORIGIN, &subject, RECEIVE_RATE_PER_ORIGIN)
+            .await
+    }
+
+    async fn allow_object_read(&self) -> anyhow::Result<bool> {
+        self.repository
+            .check_rate_limit(
+                RATE_SCOPE_OBJECT_READ_GLOBAL,
+                &self.identity.cell_id,
+                OBJECT_READ_RATE_GLOBAL,
+            )
+            .await
     }
 
     pub async fn install_peer(&self, policy: PeerPolicy) -> anyhow::Result<()> {
@@ -419,7 +439,10 @@ impl FederationService {
         if let Err(error) = verify_signature(&event, peer.public_key) {
             return Ok(ReceiveOutcome::quarantined(&event, error.to_string()));
         }
-        if !self.allow_authenticated_origin(&event.origin_cell_id) {
+        if !self
+            .allow_authenticated_origin(&event.origin_cell_id)
+            .await?
+        {
             return Err(ReceiveRateLimitExceeded.into());
         }
 
@@ -495,6 +518,7 @@ fn push_memory_quarantine_once(
 #[derive(Default)]
 pub struct MemoryFederationRepository {
     state: RwLock<MemoryState>,
+    rate_state: Mutex<LocalRateState>,
 }
 
 impl MemoryFederationRepository {
@@ -548,6 +572,19 @@ impl FederationRepository for MemoryFederationRepository {
             .cloned())
     }
 
+    async fn check_rate_limit(
+        &self,
+        scope: &str,
+        subject: &str,
+        limit: u32,
+    ) -> anyhow::Result<bool> {
+        let mut state = self
+            .rate_state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        Ok(state.allow(scope, subject, limit))
+    }
+
     async fn quarantine(
         &self,
         event: &FederationEvent,
@@ -581,8 +618,19 @@ impl FederationRepository for MemoryFederationRepository {
             push_memory_quarantine_once(&mut state, event, reason, digest);
             return Ok(ReceiveOutcome::quarantined(event, reason));
         }
-        if let Some(existing_digest) = state.inbox.get(&event.event_id) {
-            if existing_digest == &digest {
+        let existing_digest = if let Some(existing_digest) = state.inbox.get(&event.event_id) {
+            Some(existing_digest.clone())
+        } else if let Some(existing) = state
+            .outbox
+            .iter()
+            .find(|existing| existing.event_id == event.event_id)
+        {
+            Some(envelope_sha256(existing)?)
+        } else {
+            None
+        };
+        if let Some(existing_digest) = existing_digest {
+            if existing_digest == digest {
                 return Ok(ReceiveOutcome::duplicate(event));
             }
             push_memory_quarantine_once(
@@ -738,6 +786,15 @@ impl FederationRepository for PostgresFederationRepository {
         }))
     }
 
+    async fn check_rate_limit(
+        &self,
+        scope: &str,
+        subject: &str,
+        limit: u32,
+    ) -> anyhow::Result<bool> {
+        increment_federation_rate_limit(&self.pool, scope, subject, limit).await
+    }
+
     async fn quarantine(
         &self,
         event: &FederationEvent,
@@ -799,16 +856,12 @@ impl FederationRepository for PostgresFederationRepository {
         }
 
         lock_event_receipt(&mut tx, event.event_id).await?;
-        lock_object_transition(&mut tx, &event.object_address).await?;
-        let existing = sqlx::query(
-            "SELECT envelope_sha256 FROM federation_inbox WHERE event_id = $1 FOR UPDATE",
-        )
-        .bind(event.event_id)
-        .fetch_optional(&mut *tx)
-        .await?;
-        if let Some(existing) = existing {
-            let existing_digest: String = existing.try_get("envelope_sha256")?;
-            if existing_digest == digest {
+        let existing_digests = event_receipt_digests_in_tx(&mut tx, event.event_id).await?;
+        if !existing_digests.is_empty() {
+            if existing_digests
+                .iter()
+                .all(|existing_digest| existing_digest == &digest)
+            {
                 tx.rollback().await?;
                 return Ok(ReceiveOutcome::duplicate(event));
             }
@@ -818,6 +871,7 @@ impl FederationRepository for PostgresFederationRepository {
             return Ok(ReceiveOutcome::quarantined(event, reason));
         }
 
+        lock_object_transition(&mut tx, &event.object_address).await?;
         let current = sqlx::query(
             "SELECT object_address, origin_cell_id, object_kind, object_version, scope, payload, \
                     deleted_at, updated_at \
@@ -857,6 +911,13 @@ impl FederationRepository for PostgresFederationRepository {
 
     async fn persist_local(&self, event: &FederationEvent) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
+        lock_event_receipt(&mut tx, event.event_id).await?;
+        if !event_receipt_digests_in_tx(&mut tx, event.event_id)
+            .await?
+            .is_empty()
+        {
+            bail!("local federation event id already exists");
+        }
         lock_object_transition(&mut tx, &event.object_address).await?;
         let current = sqlx::query(
             "SELECT object_address, origin_cell_id, object_kind, object_version, scope, payload, \
@@ -932,6 +993,53 @@ impl FederationRepository for PostgresFederationRepository {
             })
             .collect()
     }
+}
+
+async fn increment_federation_rate_limit(
+    pool: &PgPool,
+    scope: &str,
+    subject: &str,
+    limit: u32,
+) -> anyhow::Result<bool> {
+    if limit == 0 {
+        return Ok(true);
+    }
+    let now_epoch = Utc::now().timestamp();
+    let window_start = now_epoch - now_epoch.rem_euclid(RATE_LIMIT_WINDOW_SECONDS);
+    let count: i64 = sqlx::query_scalar(
+        "INSERT INTO federation_rate_limit_counters \
+         (scope, subject, window_start, window_seconds, request_count, expires_at) \
+         VALUES ($1, $2, $3, $4, 1, to_timestamp($3 + $4 + 60)) \
+         ON CONFLICT (scope, subject, window_start, window_seconds) \
+         DO UPDATE SET request_count = federation_rate_limit_counters.request_count + 1 \
+         RETURNING request_count",
+    )
+    .bind(scope)
+    .bind(subject)
+    .bind(window_start)
+    .bind(i32::try_from(RATE_LIMIT_WINDOW_SECONDS)?)
+    .fetch_one(pool)
+    .await?;
+    if count == 1 {
+        sqlx::query("DELETE FROM federation_rate_limit_counters WHERE expires_at <= NOW()")
+            .execute(pool)
+            .await?;
+    }
+    Ok(count <= i64::from(limit))
+}
+
+async fn event_receipt_digests_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    event_id: Uuid,
+) -> anyhow::Result<Vec<String>> {
+    Ok(sqlx::query_scalar(
+        "SELECT envelope_sha256 FROM federation_inbox WHERE event_id = $1 \
+         UNION ALL \
+         SELECT envelope_sha256 FROM federation_outbox WHERE event_id = $1",
+    )
+    .bind(event_id)
+    .fetch_all(&mut **tx)
+    .await?)
 }
 
 async fn quarantine_verified_in_tx(
@@ -1406,8 +1514,14 @@ async fn receive_event(
         StatusCode::PAYLOAD_TOO_LARGE => ApiError::payload_too_large(),
         _ => ApiError::bad_request("invalid federation event envelope"),
     })?;
-    if !service.allow_receive_global() {
-        return Err(ApiError::too_many_requests());
+    if !service
+        .allow_receive_global()
+        .await
+        .map_err(ApiError::internal)?
+    {
+        return Err(ApiError::too_many_requests(
+            "federation receive rate limit exceeded",
+        ));
     }
     let outcome = match service.receive_body_limited(event).await {
         Ok(outcome) => outcome,
@@ -1415,7 +1529,9 @@ async fn receive_event(
             return Err(ApiError::bad_request("invalid federation event"));
         }
         Err(error) if error.downcast_ref::<ReceiveRateLimitExceeded>().is_some() => {
-            return Err(ApiError::too_many_requests());
+            return Err(ApiError::too_many_requests(
+                "federation receive rate limit exceeded",
+            ));
         }
         Err(error) => return Err(ApiError::internal(error)),
     };
@@ -1431,6 +1547,15 @@ async fn resolve_object(
     State(service): State<FederationService>,
     Query(query): Query<ObjectQuery>,
 ) -> Result<Json<FederatedObject>, ApiError> {
+    if !service
+        .allow_object_read()
+        .await
+        .map_err(ApiError::internal)?
+    {
+        return Err(ApiError::too_many_requests(
+            "federation object read rate limit exceeded",
+        ));
+    }
     let object = service
         .object(&query.address)
         .await
@@ -1475,10 +1600,10 @@ impl ApiError {
         }
     }
 
-    fn too_many_requests() -> Self {
+    fn too_many_requests(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::TOO_MANY_REQUESTS,
-            message: "federation receive rate limit exceeded".to_string(),
+            message: message.into(),
         }
     }
 
@@ -1858,6 +1983,115 @@ mod tests {
         let outcome = receiver.receive(event).await.unwrap();
         assert_eq!(outcome.status, ReceiveStatus::Quarantined);
         assert!(outcome.reason.unwrap().contains("inactive"));
+    }
+
+    #[tokio::test]
+    async fn memory_repository_enforces_one_event_id_namespace_across_inbox_and_outbox() {
+        let sender_identity = identity("cell-a", 1);
+        let receiver_repo = Arc::new(MemoryFederationRepository::new());
+        let receiver = FederationService::new(identity("cell-b", 2), receiver_repo.clone());
+        receiver
+            .install_peer(PeerPolicy {
+                remote_cell_id: "cell-a".to_string(),
+                state: "trusted".to_string(),
+                allow_neighbourhood: true,
+                allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
+                keys: vec![sender_identity.peer_key()],
+            })
+            .await
+            .unwrap();
+        let local = receiver
+            .publish_local(PublishRequest {
+                actor: "system:event-id-namespace-test".to_string(),
+                event_type: EVENT_UPSERTED.to_string(),
+                object_address: "wg://cell-b/node/local-first".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: SCOPE_GLOBAL.to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"title": "Local first"}),
+            })
+            .await
+            .unwrap();
+        let sender = FederationService::new(
+            sender_identity.clone(),
+            Arc::new(MemoryFederationRepository::new()),
+        );
+        let mut inbound_collision = sender
+            .publish_local(PublishRequest {
+                actor: "system:event-id-namespace-test".to_string(),
+                event_type: EVENT_UPSERTED.to_string(),
+                object_address: "wg://cell-a/node/remote-collision".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: SCOPE_GLOBAL.to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"title": "Remote collision"}),
+            })
+            .await
+            .unwrap();
+        inbound_collision.event_id = local.event_id;
+        let signing_key = SigningKey::from_bytes(&[1; 32]);
+        inbound_collision.signature = URL_SAFE_NO_PAD.encode(
+            signing_key
+                .sign(&signing_bytes(&inbound_collision).unwrap())
+                .to_bytes(),
+        );
+        let collision = receiver.receive(inbound_collision).await.unwrap();
+        assert_eq!(collision.status, ReceiveStatus::Quarantined);
+        assert_eq!(
+            collision.reason.as_deref(),
+            Some("event id collision with different envelope")
+        );
+
+        let second_repo = Arc::new(MemoryFederationRepository::new());
+        let second_receiver = FederationService::new(identity("cell-b", 2), second_repo.clone());
+        second_receiver
+            .install_peer(PeerPolicy {
+                remote_cell_id: "cell-a".to_string(),
+                state: "trusted".to_string(),
+                allow_neighbourhood: true,
+                allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
+                keys: vec![sender_identity.peer_key()],
+            })
+            .await
+            .unwrap();
+        let inbound_first = sender
+            .publish_local(PublishRequest {
+                actor: "system:event-id-namespace-test".to_string(),
+                event_type: EVENT_UPSERTED.to_string(),
+                object_address: "wg://cell-a/node/remote-first".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: SCOPE_GLOBAL.to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"title": "Remote first"}),
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            second_receiver
+                .receive(inbound_first.clone())
+                .await
+                .unwrap()
+                .status,
+            ReceiveStatus::Applied
+        );
+        let mut local_conflict = inbound_first;
+        local_conflict.origin_cell_id = "cell-b".to_string();
+        local_conflict.object_address = "wg://cell-b/node/local-conflict".to_string();
+        local_conflict.key_id = "key-1".to_string();
+        local_conflict.signature.clear();
+        let error = second_repo
+            .persist_local(&local_conflict)
+            .await
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("local federation event id already exists"));
     }
 
     #[tokio::test]

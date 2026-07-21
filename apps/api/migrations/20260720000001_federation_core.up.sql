@@ -77,3 +77,16 @@ CREATE TABLE federation_outbox (
 
 CREATE INDEX federation_outbox_created
     ON federation_outbox (created_at, event_id);
+
+CREATE TABLE federation_rate_limit_counters (
+    scope TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    window_start BIGINT NOT NULL,
+    window_seconds INTEGER NOT NULL CHECK (window_seconds > 0),
+    request_count BIGINT NOT NULL CHECK (request_count > 0),
+    expires_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (scope, subject, window_start, window_seconds)
+);
+
+CREATE INDEX federation_rate_limit_counters_expiry
+    ON federation_rate_limit_counters (expires_at);

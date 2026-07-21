@@ -71,16 +71,16 @@ Antworten:
 - `400 Bad Request`: der JSON-Umschlag ist syntaktisch oder strukturell nicht als Föderationsereignis lesbar.
 - `413 Payload Too Large`: der Umschlag überschreitet 256 KiB.
 - `415 Unsupported Media Type`: der Eingang trägt keinen unterstützten `application/json`-Content-Type.
-- `429 Too Many Requests`: das feste Prozess- oder authentifizierte Peerfenster ist ausgeschöpft; `Retry-After: 60` begrenzt Quarantäne- und Speicherverstärkung.
-- `500 Internal Server Error`: die lokale Persistenz konnte keinen verlässlichen Abschluss liefern.
+- `429 Too Many Requests`: das gemeinsame Zell- oder authentifizierte Peerfenster ist ausgeschöpft; `Retry-After: 60` begrenzt Quarantäne-, Signaturprüfungs- und Datenbankverstärkung.
+- `500 Internal Server Error`: die lokale Persistenz oder das gemeinsame PostgreSQL-Rate-Limit-Backend konnte keinen verlässlichen Abschluss liefern; ein Backendfehler öffnet das Limit nicht.
 
-Der Eingang erlaubt pro Minute höchstens 600 syntaktisch lesbare Umschläge je API-Prozess. Nach erfolgreicher Signaturprüfung gelten zusätzlich höchstens 120 Umschläge je authentifizierter Ursprungszelle. Frei behauptete Zell-IDs bilden keine Vertrauens- oder Rate-Limit-Identität. Bei horizontaler Skalierung werden diese Zähler in v1 nicht zwischen Replikas aggregiert; ein verteiltes Rate-Limit ist bewusst nicht Teil dieses Kerns. Ein späterer Auslieferungsworker muss zusätzlich pro Peer mit Backoff und Jitter arbeiten.
+Der Eingang erlaubt pro Minute höchstens 600 syntaktisch lesbare Umschläge je Föderationszelle. Nach erfolgreicher Signaturprüfung gelten zusätzlich höchstens 120 Umschläge je Kombination aus lokaler Zelle und authentifizierter Ursprungszelle. Bei PostgreSQL-Persistenz liegen beide Zähler in atomar aktualisierten gemeinsamen Datenbankfenstern und gelten damit replikaübergreifend. Frei behauptete Zell-IDs bilden keine Vertrauens- oder Peer-Rate-Limit-Identität. Der In-Memory-Repository-Pfad hält dieselben Schranken nur lokal und ist kein produktiver Ersatzbetrieb. Ein späterer Auslieferungsworker muss zusätzlich pro Peer mit Backoff und Jitter arbeiten.
 
 `202` bedeutet ausdrücklich nicht Zustimmung. Nur Umschläge mit verifizierter Signatur werden dauerhaft quarantänisiert. Strukturell unlesbare, unbekannte oder falsch signierte Umschläge werden mit demselben fachlichen Ergebnis verworfen, aber nicht persistiert; dadurch kann unauthentifizierter Verkehr die Quarantäne nicht füllen.
 
 ### `GET /federation/v1/objects?address=<wg-address>`
 
-Liefert ausschließlich vorhandene, nicht gelöschte Objekte mit Reichweite `global`. Nachbarschaftliche, lokale, private oder gelöschte Objekte ergeben `404 Not Found`.
+Liefert ausschließlich vorhandene, nicht gelöschte Objekte mit Reichweite `global`. Nachbarschaftliche, lokale, private oder gelöschte Objekte ergeben `404 Not Found`. Der öffentliche Lookup ist auf 600 Anfragen pro Minute und Föderationszelle begrenzt. Bei PostgreSQL-Persistenz teilen alle API-Replikas denselben Datenbankzähler; Überschreitung ergibt `429 Too Many Requests` mit `Retry-After: 60`, ein Ausfall des gemeinsamen Zählers wird fail-closed als `500 Internal Server Error` behandelt.
 
 ## 3. Ereignisfelder
 
@@ -135,12 +135,12 @@ Für jedes Objekt gilt:
 2. Jeder Folgeschritt erhöht die Version exakt um eins.
 3. `previous_version` muss der aktuell gespeicherten Version entsprechen.
 4. Ursprung und Objektart dürfen sich nicht ändern.
-5. Derselbe `event_id` plus derselbe Umschlag ist ein harmloses Duplikat.
-6. Derselbe `event_id` mit anderem Umschlag ist eine Kollision und wird quarantänisiert.
+5. `event_id` bildet pro Zelle einen gemeinsamen Namensraum über Inbox und Outbox. Derselbe `event_id` plus derselbe vollständige Umschlag-Digest ist ein harmloses Duplikat.
+6. Derselbe `event_id` mit anderem vollständigem Umschlag-Digest ist unabhängig von Inbox oder Outbox eine Kollision und wird bei eingehenden Ereignissen quarantänisiert; lokale Publikation mit bereits belegter ID schlägt fehl.
 7. Veraltete, übersprungene oder anders verzweigte Versionen werden nicht angewandt.
 8. Wiederholte Ablehnungen desselben signierten Umschlags erzeugen höchstens einen Quarantäneeintrag.
 
-Damit arbeiten Zellen während einer Netztrennung mit ihrer lokalen Wahrheit weiter. Nach Wiederverbindung werden fehlende, lückenlose Ereignisse kontrolliert nachgeliefert. PostgreSQL serialisiert jeden Objektübergang zusätzlich mit einer transaktionsgebundenen Sperre aus der Objektadresse; zwei gleichzeitige erste Versionen können daher nicht beide als angewandt bestätigt werden. Die Implementierung erfindet keine Konfliktauflösung zwischen mehreren Ursprüngen, weil eine globale Adresse genau einer Ursprungszelle gehört.
+Damit arbeiten Zellen während einer Netztrennung mit ihrer lokalen Wahrheit weiter. Nach Wiederverbindung werden fehlende, lückenlose Ereignisse kontrolliert nachgeliefert. PostgreSQL serialisiert zuerst den gemeinsamen Event-ID-Namensraum und danach jeden Objektübergang mit transaktionsgebundenen Advisory Locks; dadurch können weder Inbox und Outbox dieselbe ID widersprüchlich belegen noch zwei gleichzeitige erste Versionen als angewandt bestätigt werden. Die Implementierung erfindet keine Konfliktauflösung zwischen mehreren Ursprüngen, weil eine globale Adresse genau einer Ursprungszelle gehört.
 
 ## 6. Reichweiten
 
