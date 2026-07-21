@@ -31,7 +31,9 @@ env:
 
 jobs:
   review-evidence:
-    name: Review evidence gate
+    # Keep the workflow check-run name distinct from the required commit-status context.
+    # A cancelled concurrency run must never shadow a later exact-head terminal status.
+    name: Review evidence evaluator
     if: >-
       (
         github.event_name != 'issue_comment' ||

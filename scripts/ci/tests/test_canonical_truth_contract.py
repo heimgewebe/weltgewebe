@@ -35,10 +35,13 @@ class CanonicalTruthContractTests(unittest.TestCase):
             "Review evidence gate": ROOT / ".github/workflows/review-evidence.yml",
         }
         self.assertEqual(set(data["required_checks"]), set(producers))
-        for name, workflow_path in producers.items():
-            workflow = workflow_path.read_text(encoding="utf-8")
-            self.assertIn(f"name: {name}", workflow)
+        required_merge_workflow = producers["Required merge gate"].read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("name: Required merge gate", required_merge_workflow)
         review_workflow = producers["Review evidence gate"].read_text(encoding="utf-8")
+        self.assertNotIn("\n    name: Review evidence gate\n", review_workflow)
+        self.assertIn("name: Review evidence evaluator", review_workflow)
         self.assertGreaterEqual(
             review_workflow.count("context='Review evidence gate'"),
             2,

@@ -1113,6 +1113,23 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertGreaterEqual(
             self.workflow.count("context='Review evidence gate'"), 2
         )
+        self.assertIn("name: Review evidence evaluator", self.workflow)
+        self.assertNotIn("\n    name: Review evidence gate\n", self.workflow)
+        self.assertIn("cancel-in-progress: true", self.workflow)
+
+    def test_cancelled_workflow_check_cannot_share_required_status_name(self) -> None:
+        # GitHub exposes workflow job check-runs and commit statuses in the same
+        # required-check namespace.  Keeping these names distinct means a cancelled
+        # evaluator run cannot shadow the later exact-head terminal status.
+        job_name = re.search(
+            r"(?m)^  review-evidence:\n    (?:#.*\n    )*name: (.+)$",
+            self.workflow,
+        )
+        self.assertIsNotNone(job_name)
+        self.assertNotEqual(job_name.group(1), "Review evidence gate")
+        self.assertGreaterEqual(
+            self.workflow.count("context='Review evidence gate'"), 2
+        )
 
     def test_pr_template_contains_single_risk_marker(self) -> None:
         template = (self.repo_root / ".github/PULL_REQUEST_TEMPLATE.md").read_text(
