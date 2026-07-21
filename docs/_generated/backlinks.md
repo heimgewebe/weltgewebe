@@ -589,6 +589,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
 - [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
 - [relates_to] docs/policies/architecture-critique.md
+- [relates_to] docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md
 - [relates_to] docs/reports/agent-readiness-audit.md
 - [relates_to] docs/reports/optimierungsbericht.md
 - [relates_to] docs/reports/optimierungsstatus.md
@@ -1200,6 +1201,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/github-action-ref-pinning-audit.md
 
+## scripts/ci/fixtures/repoground_vertical_pilot.v1.json
+
+- [relates_to] docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md
+
 ## scripts/ci/tests/test_check_actions_node24_readiness.py
 
 - [relates_to] docs/reports/github-actions-node24-readiness.md
@@ -1211,6 +1216,14 @@ Generated automatically. Do not edit.
 ## scripts/ci/tests/test_reconcile_public_login_smtp_env.py
 
 - [relates_to] docs/deploy/vps.md
+
+## scripts/ci/tests/test_repoground_vertical_pilot.py
+
+- [relates_to] docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md
+
+## scripts/ci/validate_repoground_vertical_pilot.py
+
+- [relates_to] docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md
 
 ## scripts/docmeta/audit_account_email_uniqueness.py
 
