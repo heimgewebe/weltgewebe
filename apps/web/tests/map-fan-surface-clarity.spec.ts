@@ -1,12 +1,20 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
-const GOVERNANCE_ACTIONS = [
+const GOVERNANCE_TOP_ROW = [
   "governance-fan-all",
   "governance-fan-open",
   "governance-fan-vetoes",
+] as const;
+
+const GOVERNANCE_BOTTOM_ROW = [
   "governance-fan-conversations",
   "governance-fan-voting",
+] as const;
+
+const GOVERNANCE_ACTIONS = [
+  ...GOVERNANCE_TOP_ROW,
+  ...GOVERNANCE_BOTTOM_ROW,
 ] as const;
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -124,17 +132,34 @@ test.describe("Map fan surface clarity", () => {
 
       const actions = page.locator("#governance-fan-actions .fan-action");
       await expect(actions).toHaveCount(5);
+      await expect(page.getByTestId(GOVERNANCE_ACTIONS[0])).toBeVisible();
 
       const boxes = await Promise.all(
         GOVERNANCE_ACTIONS.map((testId) =>
           page.getByTestId(testId).boundingBox(),
         ),
       );
-      expect(boxes.every(Boolean)).toBe(true);
+      for (const [index, box] of boxes.entries()) {
+        expect(
+          box,
+          "governance action " +
+            GOVERNANCE_ACTIONS[index] +
+            " must have a bounding box",
+        ).not.toBeNull();
+      }
 
       const positionedBoxes = boxes.map((box) => box!);
-      const topRow = positionedBoxes.slice(0, 3);
-      const bottomRow = positionedBoxes.slice(3);
+      const boxByAction = new Map(
+        GOVERNANCE_ACTIONS.map(
+          (testId, index) => [testId, positionedBoxes[index]] as const,
+        ),
+      );
+      const topRow = GOVERNANCE_TOP_ROW.map(
+        (testId) => boxByAction.get(testId)!,
+      );
+      const bottomRow = GOVERNANCE_BOTTOM_ROW.map(
+        (testId) => boxByAction.get(testId)!,
+      );
       const rowTolerancePx = 2;
 
       const topYs = topRow.map((box) => box.y);
@@ -181,10 +206,7 @@ test.describe("Map fan surface clarity", () => {
         expect(box.x + box.width).toBeLessThanOrEqual(viewportWidth);
       }
 
-      for (const testId of [
-        "governance-fan-open",
-        "governance-fan-voting",
-      ] as const) {
+      for (const testId of GOVERNANCE_ACTIONS) {
         const label = page.getByTestId(testId).locator(".fan-label");
         const clipping = await label.evaluate((element) => ({
           horizontal: element.scrollWidth > element.clientWidth + 1,
