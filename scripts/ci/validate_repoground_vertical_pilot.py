@@ -19,6 +19,10 @@ def _is_sha(value: Any, pattern: re.Pattern[str]) -> bool:
     return isinstance(value, str) and pattern.fullmatch(value) is not None
 
 
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def validate(data: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     if data.get("schema_version") != 1:
@@ -87,15 +91,37 @@ def validate(data: dict[str, Any]) -> list[str]:
         if not isinstance(baseline, dict) or not isinstance(capsule, dict):
             errors.append(f"{case_id}: baseline and capsule must be objects")
             continue
+        if baseline.get("available") is not True:
+            errors.append(f"{case_id}: paired baseline must be available")
+        if capsule.get("available") is not True:
+            errors.append(f"{case_id}: capsule must be available")
+
         baseline_bytes = baseline.get("payload_bytes")
         context_bytes = capsule.get("context_bytes")
         reported_baseline = capsule.get("general_context_pack_bytes_reported")
-        if not isinstance(baseline_bytes, int) or baseline_bytes <= 0:
+        byte_accounting_valid = True
+        if not isinstance(baseline_bytes, int) or isinstance(baseline_bytes, bool) or baseline_bytes <= 0:
             errors.append(f"{case_id}: baseline payload_bytes must be positive")
+            byte_accounting_valid = False
         if reported_baseline != baseline_bytes:
             errors.append(f"{case_id}: capsule baseline byte accounting must match paired baseline")
-        if not isinstance(context_bytes, int) or context_bytes <= 0:
+        if not isinstance(context_bytes, int) or isinstance(context_bytes, bool) or context_bytes <= 0:
             errors.append(f"{case_id}: capsule context_bytes must be positive")
+            byte_accounting_valid = False
+
+        computed_reduction: float | None = None
+        if byte_accounting_valid:
+            assert isinstance(baseline_bytes, int)
+            assert isinstance(context_bytes, int)
+            computed_ratio = round(context_bytes / baseline_bytes, 6)
+            computed_reduction = round((1 - computed_ratio) * 100, 3)
+            recorded_ratio = capsule.get("ratio")
+            recorded_reduction = capsule.get("reduction_pct")
+            if not _is_number(recorded_ratio) or recorded_ratio != computed_ratio:
+                errors.append(f"{case_id}: capsule ratio must match byte accounting")
+            if not _is_number(recorded_reduction) or recorded_reduction != computed_reduction:
+                errors.append(f"{case_id}: capsule reduction_pct must match byte accounting")
+
         if capsule.get("diff_binding_verified") is not True:
             errors.append(f"{case_id}: diff binding must be verified")
         if capsule.get("freshness_status") != "fresh":
@@ -113,12 +139,11 @@ def validate(data: dict[str, Any]) -> list[str]:
         if capsule.get("status") != "degraded":
             errors.append(f"{case_id}: current evidence expects degraded capsule status")
 
-        reduction = capsule.get("reduction_pct")
         if (
             case.get("profile") in _GOLD_PROFILES
             and case.get("quality_pass") is True
-            and isinstance(reduction, (int, float))
-            and reduction >= 20.0
+            and computed_reduction is not None
+            and computed_reduction >= 20.0
         ):
             qualifying.append(case_id)
 
@@ -131,7 +156,7 @@ def validate(data: dict[str, Any]) -> list[str]:
         if mechanical.get("required_count") != 2:
             errors.append("mechanical promotion gate must require two cases")
         if sorted(mechanical.get("qualifying_case_ids", [])) != sorted(qualifying):
-            errors.append("mechanical promotion qualifying cases do not match measurements")
+            errors.append("mechanical promotion qualifying cases do not match recomputed measurements")
     if len(qualifying) < 2:
         errors.append("at least two gold cases must reduce context by at least 20 percent")
 

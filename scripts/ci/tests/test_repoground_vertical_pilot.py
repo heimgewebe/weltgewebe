@@ -52,6 +52,24 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         errors = self.validator.validate(mutated)
         self.assertTrue(any("above the safe adapter limit" in error for error in errors))
 
+    def test_forged_reduction_cannot_pass_mechanical_gate(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = mutated["cases"][0]
+        case["capsule"]["context_bytes"] = case["baseline"]["payload_bytes"]
+        case["capsule"]["ratio"] = 1.0
+        case["capsule"]["reduction_pct"] = 99.0
+        errors = self.validator.validate(mutated)
+        self.assertTrue(any("reduction_pct must match byte accounting" in error for error in errors))
+        self.assertTrue(any("qualifying cases do not match recomputed measurements" in error for error in errors))
+
+    def test_unavailable_baseline_or_capsule_is_rejected(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["cases"][0]["baseline"]["available"] = False
+        mutated["cases"][1]["capsule"]["available"] = False
+        errors = self.validator.validate(mutated)
+        self.assertTrue(any("paired baseline must be available" in error for error in errors))
+        self.assertTrue(any("capsule must be available" in error for error in errors))
+
 
 if __name__ == "__main__":
     unittest.main()
