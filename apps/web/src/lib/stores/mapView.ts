@@ -42,6 +42,10 @@
  *    state never blur into each other.
  */
 import type { MapSceneModel } from "$lib/map/scene";
+import {
+  getMapSearchTermsNormalized,
+  normalizeMapSearchTerm,
+} from "$lib/map/searchIndex";
 import type { Edge, MapEntityViewModel } from "$lib/map/types";
 import { isRecord } from "$lib/utils/guards";
 import { enterFokus, type Selection } from "./uiView";
@@ -120,24 +124,11 @@ export function deriveSearchResults(
   if (!isOpen || query.trim().length === 0) {
     return [];
   }
-  const q = query.trim().toLocaleLowerCase("de-DE");
+  const q = normalizeMapSearchTerm(query.trim());
   const results: MapEntityViewModel[] = [];
   for (const marker of visibleMarkers) {
-    const semanticTerms =
-      marker.type === "node"
-        ? ["Knoten", marker.kind]
-        : ["Garnrolle", "Garnrollen"];
-    const searchableTerms = [
-      marker.title,
-      marker.summary,
-      ...(marker.tags ?? []),
-      ...semanticTerms,
-    ];
-    const matches = searchableTerms.some(
-      (term) =>
-        typeof term === "string" && term.toLocaleLowerCase("de-DE").includes(q),
-    );
-    if (!matches) continue;
+    const searchableTerms = getMapSearchTermsNormalized(marker);
+    if (!searchableTerms.some((term) => term.includes(q))) continue;
 
     results.push(marker);
     if (results.length === 10) break;
