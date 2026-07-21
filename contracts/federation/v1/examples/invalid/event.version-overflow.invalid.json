@@ -1,0 +1,30 @@
+{
+  "protocol_version": "wg-federation/1",
+  "schema_version": 1,
+  "event_id": "018f7b1a-4bb5-7cc3-a1b2-334455667788",
+  "event_type": "object.upserted",
+  "origin_cell_id": "cell-a.example",
+  "actor": "account:public-weber-42",
+  "object_address": "wg://cell-a.example/shared-room/harvest-2026",
+  "object_kind": "shared-room",
+  "object_version": 9223372036854775808,
+  "previous_version": 9223372036854775807,
+  "created_at": "2026-07-20T08:00:00Z",
+  "scope": "neighbourhood",
+  "neighbourhood_targets": [
+    "cell-b.example"
+  ],
+  "payload": {
+    "title": "Harvest 2026",
+    "members": [
+      "cell-a.example",
+      "cell-b.example"
+    ],
+    "details": {
+      "unicode": "Gewebe ☀",
+      "count": 2
+    }
+  },
+  "key_id": "key-2026-07",
+  "signature": "K1oizQlxat51Gqo8kd-vXpbBut7L2wq6eAqaue7d09gd7feuZ8bR1JDx7jSomACnbwjo5kS0nd0WGavP2pNHDQ"
+}

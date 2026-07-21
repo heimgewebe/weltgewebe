@@ -127,6 +127,29 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
             keys: vec![identity_a.peer_key()],
         })
         .await?;
+    let mut replacement_key = identity_a.peer_key();
+    replacement_key.public_key = [77; 32];
+    let replacement_error = receiver
+        .install_peer(PeerPolicy {
+            remote_cell_id: "cell-a".to_string(),
+            state: "blocked".to_string(),
+            allow_neighbourhood: false,
+            allowed_event_types: HashSet::from(["object.deleted".to_string()]),
+            keys: vec![replacement_key],
+        })
+        .await
+        .expect_err("an existing cell/key id pair must reject replacement key bytes");
+    assert!(replacement_error.to_string().contains("immutable"));
+    let (peer_state, stored_key): (String, Vec<u8>) = sqlx::query_as(
+        "SELECT relationship.state, key.public_key \
+         FROM federation_peer_relationships AS relationship \
+         JOIN federation_peer_keys AS key USING (remote_cell_id) \
+         WHERE relationship.remote_cell_id = 'cell-a' AND key.key_id = 'key-a'",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(peer_state, "trusted");
+    assert_eq!(stored_key, identity_a.peer_key().public_key);
 
     let event = sender
         .publish_local(PublishRequest {
@@ -165,12 +188,11 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
     tampered.event_id = uuid::Uuid::new_v4();
     tampered.payload = json!({"title": "Tampered after signing"});
     let outcome = restarted.receive(tampered).await?;
-    assert_eq!(outcome.status, ReceiveStatus::Quarantined);
-    assert!(outcome
-        .reason
-        .as_deref()
-        .unwrap_or_default()
-        .contains("signature"));
+    assert_eq!(outcome.status, ReceiveStatus::Rejected);
+    assert_eq!(
+        outcome.reason.as_deref(),
+        Some("event authentication rejected")
+    );
     let quarantine = restarted.quarantined().await?;
     assert!(quarantine.is_empty());
 
@@ -285,6 +307,72 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
     );
     assert_eq!(restarted.quarantined().await?.len(), 2);
 
+    let neighbourhood_v1 = sender
+        .publish_local(PublishRequest {
+            actor: "system:postgres-scope-proof".to_string(),
+            event_type: "object.upserted".to_string(),
+            object_address: "wg://cell-a/node/immutable-audience".to_string(),
+            object_kind: "node".to_string(),
+            object_version: 1,
+            previous_version: None,
+            scope: "neighbourhood".to_string(),
+            neighbourhood_targets: vec!["cell-c".to_string(), "cell-b".to_string()],
+            payload: json!({"version": 1}),
+        })
+        .await?;
+    assert_eq!(
+        restarted.receive(neighbourhood_v1).await?.status,
+        ReceiveStatus::Applied
+    );
+    let neighbourhood_v2 = sender
+        .publish_local(PublishRequest {
+            actor: "system:postgres-scope-proof".to_string(),
+            event_type: "object.upserted".to_string(),
+            object_address: "wg://cell-a/node/immutable-audience".to_string(),
+            object_kind: "node".to_string(),
+            object_version: 2,
+            previous_version: Some(1),
+            scope: "neighbourhood".to_string(),
+            neighbourhood_targets: vec!["cell-b".to_string(), "cell-c".to_string()],
+            payload: json!({"version": 2}),
+        })
+        .await?;
+    let mut changed_scope = neighbourhood_v2.clone();
+    changed_scope.event_id = Uuid::new_v4();
+    changed_scope.scope = "global".to_string();
+    changed_scope.neighbourhood_targets.clear();
+    resign(&mut changed_scope, 61)?;
+    let scope_outcome = restarted.receive(changed_scope).await?;
+    assert_eq!(scope_outcome.status, ReceiveStatus::Quarantined);
+    assert_eq!(
+        scope_outcome.reason.as_deref(),
+        Some("object scope cannot change")
+    );
+    assert_eq!(
+        restarted.receive(neighbourhood_v2.clone()).await?.status,
+        ReceiveStatus::Applied
+    );
+    let stored = restarted
+        .object("wg://cell-a/node/immutable-audience")
+        .await?
+        .expect("neighbourhood object");
+    assert_eq!(
+        stored.neighbourhood_targets,
+        vec!["cell-b".to_string(), "cell-c".to_string()]
+    );
+    let mut changed_audience = neighbourhood_v2;
+    changed_audience.event_id = Uuid::new_v4();
+    changed_audience.object_version = 3;
+    changed_audience.previous_version = Some(2);
+    changed_audience.neighbourhood_targets = vec!["cell-b".to_string(), "cell-d".to_string()];
+    resign(&mut changed_audience, 61)?;
+    let audience_outcome = restarted.receive(changed_audience).await?;
+    assert_eq!(audience_outcome.status, ReceiveStatus::Quarantined);
+    assert_eq!(
+        audience_outcome.reason.as_deref(),
+        Some("object neighbourhood audience cannot change")
+    );
+
     // Reproduce the revocation TOCTOU window deterministically. The receive
     // path first observes the still-committed active key, then blocks on the
     // final in-transaction policy lock while a revocation is uncommitted. Once
@@ -330,7 +418,7 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
         .object("wg://cell-a/node/revocation-race")
         .await?
         .is_none());
-    assert_eq!(restarted.quarantined().await?.len(), 3);
+    assert_eq!(restarted.quarantined().await?.len(), 5);
 
     // Explicitly inactive means revoked for new deliveries. Rotation without
     // revocation remains possible by retaining the old verification key active.
@@ -372,7 +460,7 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
         .as_deref()
         .unwrap_or_default()
         .contains("inactive"));
-    assert_eq!(restarted.quarantined().await?.len(), 4);
+    assert_eq!(restarted.quarantined().await?.len(), 6);
 
     sqlx::query(
         "INSERT INTO federation_quarantine \
@@ -563,20 +651,79 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
             payload: json!({"title": "Shared rate bucket"}),
         })
         .await?;
-    for _ in 0..60 {
-        shared_one.receive(shared_event.clone()).await?;
+    assert_eq!(
+        shared_one.receive(shared_event.clone()).await?.status,
+        ReceiveStatus::Applied
+    );
+    for _ in 0..=120 {
+        assert_eq!(
+            shared_two.receive(shared_event.clone()).await?.status,
+            ReceiveStatus::Duplicate
+        );
     }
-    for _ in 0..60 {
-        shared_two.receive(shared_event.clone()).await?;
+    for index in 0..119 {
+        let event = sender_c
+            .publish_local(PublishRequest {
+                actor: "system:postgres-shared-rate-proof".to_string(),
+                event_type: "object.upserted".to_string(),
+                object_address: format!("wg://cell-c/node/shared-rate-{index}"),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: "global".to_string(),
+                neighbourhood_targets: vec![],
+                payload: json!({"index": index}),
+            })
+            .await?;
+        let receiver = if index % 2 == 0 {
+            &shared_one
+        } else {
+            &shared_two
+        };
+        assert_eq!(
+            receiver.receive(event).await?.status,
+            ReceiveStatus::Applied
+        );
     }
+    let limited_event = sender_c
+        .publish_local(PublishRequest {
+            actor: "system:postgres-shared-rate-proof".to_string(),
+            event_type: "object.upserted".to_string(),
+            object_address: "wg://cell-c/node/shared-rate-limited".to_string(),
+            object_kind: "node".to_string(),
+            object_version: 1,
+            previous_version: None,
+            scope: "global".to_string(),
+            neighbourhood_targets: vec![],
+            payload: json!({"limited": true}),
+        })
+        .await?;
     let limited = shared_two
-        .receive(shared_event.clone())
+        .receive(limited_event)
         .await
         .expect_err("121st verified event across replicas must be limited");
     assert!(limited.to_string().contains("rate limit"));
 
-    // The unauthenticated receive bucket and public object-read bucket are also
-    // shared across routers backed by the same PostgreSQL database.
+    // The global receive and public object-read circuit-breaker buckets are
+    // shared across routers backed by the same PostgreSQL database. Seed each
+    // shared DB window just below its high circuit-breaker threshold so the
+    // proof stays fast while still crossing the replica boundary.
+    for scope in ["receive-global", "object-read-global"] {
+        sqlx::query(
+            "WITH database_window AS (\
+               SELECT floor(extract(epoch FROM clock_timestamp()) / 60)::bigint * 60 AS window_start\
+             ) \
+             INSERT INTO federation_rate_limit_counters \
+             (scope, subject, window_start, window_seconds, request_count, expires_at) \
+             SELECT $1, 'cell-b', window_start, 60, 5999, to_timestamp(window_start + 120) \
+             FROM database_window \
+             ON CONFLICT (scope, subject, window_start, window_seconds) \
+             DO UPDATE SET request_count = 5999, expires_at = EXCLUDED.expires_at",
+        )
+        .bind(scope)
+        .execute(&pool)
+        .await?;
+    }
     let app_one = router(shared_one);
     let app_two = router(shared_two);
     let unknown_sender = FederationService::new(
@@ -596,19 +743,11 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
             payload: json!({"title": "Unknown peer"}),
         })
         .await?;
-    for _ in 0..300 {
-        assert_eq!(
-            post_event(&app_one, &unknown_event).await?.status(),
-            StatusCode::ACCEPTED
-        );
-    }
-    for _ in 0..300 {
-        assert_eq!(
-            post_event(&app_two, &unknown_event).await?.status(),
-            StatusCode::ACCEPTED
-        );
-    }
-    let global_limited = post_event(&app_one, &unknown_event).await?;
+    assert_eq!(
+        post_event(&app_one, &unknown_event).await?.status(),
+        StatusCode::ACCEPTED
+    );
+    let global_limited = post_event(&app_two, &unknown_event).await?;
     assert_eq!(global_limited.status(), StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(
         global_limited
@@ -618,19 +757,11 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
         Some("60")
     );
 
-    for _ in 0..300 {
-        assert_eq!(
-            get_missing_object(&app_one).await?.status(),
-            StatusCode::NOT_FOUND
-        );
-    }
-    for _ in 0..300 {
-        assert_eq!(
-            get_missing_object(&app_two).await?.status(),
-            StatusCode::NOT_FOUND
-        );
-    }
-    let read_limited = get_missing_object(&app_one).await?;
+    assert_eq!(
+        get_missing_object(&app_one).await?.status(),
+        StatusCode::NOT_FOUND
+    );
+    let read_limited = get_missing_object(&app_two).await?;
     assert_eq!(read_limited.status(), StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(
         read_limited
