@@ -174,6 +174,18 @@ test.describe("MapLibre control placement", () => {
     expect(lensBox!.x + lensBox!.width).toBeLessThanOrEqual(panelBox!.x);
   });
 
+  test("tablet-width desktop context panel uses a bounded adaptive width", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await page.locator(".map-marker").first().click();
+
+    const panelBox = await page.getByTestId("context-panel").boundingBox();
+    expect(panelBox).not.toBeNull();
+    expect(panelBox!.width).toBeGreaterThanOrEqual(319);
+    expect(panelBox!.width).toBeLessThanOrEqual(321);
+  });
+
   test("mobile focus sheet moves both corner controls above the sheet", async ({
     page,
   }) => {
