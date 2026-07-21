@@ -722,3 +722,69 @@ async fn guest_exit_fails_closed_for_ambiguous_untyped_legacy_endpoint() {
 
     cleanup(&pool).await;
 }
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn proposal_message_locks_author_account_before_proposal() {
+    const AUTHOR: &str = "gov-proof-message-lock-author";
+    const APPLICANT: &str = "gov-proof-message-lock-applicant";
+
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, AUTHOR, "gast").await;
+    seed_account(&pool, APPLICANT, "gast").await;
+    let t0 = Utc.with_ymd_and_hms(2026, 7, 1, 12, 0, 0).unwrap();
+    let proposal = create_weber_proposal(&pool, APPLICANT, "Applicant", None, t0)
+        .await
+        .expect("create proposal");
+
+    let mut account_blocker = pool.begin().await.expect("begin author blocker");
+    sqlx::query("SELECT id FROM domain_accounts WHERE id = $1 FOR UPDATE")
+        .bind(AUTHOR)
+        .execute(&mut *account_blocker)
+        .await
+        .expect("lock author account");
+
+    let message_pool = pool.clone();
+    let proposal_id = proposal.id.clone();
+    let writer = tokio::spawn(async move {
+        add_message(
+            &message_pool,
+            &proposal_id,
+            AUTHOR,
+            "Author",
+            "Lock-order proof",
+            t0 + Duration::days(1),
+        )
+        .await
+    });
+    sleep(TokioDuration::from_millis(150)).await;
+    assert!(
+        !writer.is_finished(),
+        "message writer must wait for author account lock"
+    );
+
+    let mut proposal_probe = pool.begin().await.expect("begin proposal probe");
+    sqlx::query("SELECT id FROM governance_proposals WHERE id = $1::uuid FOR UPDATE NOWAIT")
+        .bind(&proposal.id)
+        .execute(&mut *proposal_probe)
+        .await
+        .expect("proposal must remain unlocked while author account is blocked");
+    proposal_probe
+        .rollback()
+        .await
+        .expect("rollback proposal probe");
+
+    account_blocker
+        .commit()
+        .await
+        .expect("release author account");
+    timeout(TokioDuration::from_secs(5), writer)
+        .await
+        .expect("message writer completes")
+        .expect("message task")
+        .expect("message write");
+
+    cleanup(&pool).await;
+}

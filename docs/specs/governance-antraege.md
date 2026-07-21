@@ -55,6 +55,13 @@ Ein Gast darf:
 Ein Gast darf keine fremden oder historisch eigentümerlosen Knoten bearbeiten,
 kein formales Veto einlegen und nicht abstimmen.
 
+Die Zahl eigener Gastknoten ist pro Account begrenzt. Der Betriebsstandard liegt
+bei 1.000 Knoten und kann über `MAX_GUEST_OWNED_NODES` als positive Ganzzahl
+enger oder weiter gefasst werden. Die Grenze wird serverseitig und bei
+PostgreSQL unter dem Account-Lock geprüft; ein idempotenter Retry derselben
+`operation_id` bleibt auch am Limit zulässig. Weber und Administratoren sind
+von dieser Gastgrenze nicht betroffen.
+
 Ein Weber darf zusätzlich:
 
 - fremde und gemeinschaftliche Knoten pflegen;

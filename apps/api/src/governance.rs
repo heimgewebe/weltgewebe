@@ -421,6 +421,20 @@ pub async fn add_message(
 ) -> Result<ProposalMessage, MessageError> {
     let mut tx = pool.begin().await.map_err(MessageError::Database)?;
 
+    // Guest exit and proposal finalization use account -> proposal ordering.
+    // Lock the message author first as well so the FK insert cannot create the
+    // inverse proposal -> account dependency and deadlock with guest exit.
+    let active_author: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
+    )
+    .bind(author_account_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(MessageError::Database)?;
+    if active_author.is_none() {
+        return Err(MessageError::Database(sqlx::Error::RowNotFound));
+    }
+
     let (status, consent_until, voting_until) = lock_proposal_phase(&mut tx, proposal_id)
         .await
         .map_err(MessageError::Database)?
