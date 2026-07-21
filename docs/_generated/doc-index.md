@@ -87,6 +87,7 @@ Generated automatically. Do not edit.
 | docs.runbook.observability | Observability Runbook | runbook | active | docs/runbook.observability.md |
 | docs.security.agent-write-scope-baseline | Agent Write Scope Baseline | security | active | docs/security/agent-write-scope-baseline.md |
 | docs.specs.federation-core | Föderationskern — normative Fachinvarianten | specification | canonical | docs/specs/federation-core.md |
+| docs.specs.federation-wire-v1 | Föderations-Drahtvertrag v1 | specification | canonical | docs/specs/federation-wire-v1.md |
 | docs.techstack | Techstack | architecture | active | docs/techstack.md |
 | docs.vision | Vision | vision | active | docs/vision.md |
 | domain.modules | Modul-IDs | reference | active | docs/domain/modules.md |
@@ -113,6 +114,7 @@ Generated automatically. Do not edit.
 | process.sprache | Sprache | reference | active | docs/process/sprache.md |
 | proofs.sqlx-pgbouncer-session-crud-proof | SQLx → PgBouncer → Postgres — Session-CRUD-Proof | report | active | docs/proofs/sqlx-pgbouncer-session-crud-proof.md |
 | proofs.sqlx-postgres-direct-session-crud-proof | SQLx \u2192 direkter PostgreSQL \u2014 Session-CRUD-Proof | report | active | docs/proofs/sqlx-postgres-direct-session-crud-proof.md |
+| proofs.weltgewebe-os-v1-t005-two-cell-proof | WELTGEWEBE-OS-V1-T005 — Zwei-Zellen-Beweis | report | active | docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md |
 | quickstart-gate-c | Quickstart Gate C | reference | active | docs/quickstart-gate-c.md |
 | reference.glossar | Glossar | reference | active | docs/reference/glossar.md |
 | reports.auth-persistence-direct-proof-diagnose-audit | Auth-Persistenz - Diagnose-Audit zum Direct-Postgres-Proof | report | deprecated | docs/reports/auth-persistence-direct-proof-diagnose-audit.md |

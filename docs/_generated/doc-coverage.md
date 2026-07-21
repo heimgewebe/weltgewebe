@@ -18,5 +18,5 @@ Generated automatically. Do not edit.
 | Guard | 100% | 7 | 7 |
 | Platform | 100% | 1 | 1 |
 | Schema | 100% | 1 | 1 |
-| Service | 100% | 6 | 6 |
+| Service | 100% | 7 | 7 |
 | Workflow | 100% | 5 | 5 |

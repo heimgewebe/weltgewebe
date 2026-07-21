@@ -2,6 +2,7 @@ mod advisory_lock;
 pub mod auth;
 pub mod config;
 pub mod domain_db;
+pub mod federation;
 pub mod governance;
 pub mod mailer;
 pub mod middleware;
@@ -87,6 +88,9 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     let (nats_client, nats_configured) = initialise_nats_client().await;
+    let federation_router = federation::runtime_router(db_pool.clone())
+        .await
+        .context("failed to initialize public federation boundary")?;
 
     // Domain write-source startup gates. Config loading already enforces that
     // every PostgreSQL write source is paired with PostgreSQL reads. Here we
@@ -393,6 +397,10 @@ pub async fn run() -> anyhow::Result<()> {
         .merge(meta_routes())
         .route("/metrics", get(metrics_handler))
         .with_state(state)
+        // Caddy strips /api in production, while the Vite/direct fallback does not.
+        // Serve the same public federation boundary under both paths.
+        .nest("/api", federation_router.clone())
+        .merge(federation_router)
         .layer(
             ServiceBuilder::new()
                 .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
