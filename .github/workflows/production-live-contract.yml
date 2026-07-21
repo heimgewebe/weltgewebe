@@ -11,6 +11,8 @@ name: Production live contract
       - "scripts/ops/deploy-exact-commit-vps.sh"
       - "scripts/ops/reconcile-production-main-vps.sh"
       - "scripts/ops/install-production-reconciler.sh"
+      - "scripts/ops/activate-production-reconciler-from-release.sh"
+      - "scripts/weltgewebe-up"
       - "scripts/ci/tests/test_generate_version_env.py"
       - "scripts/ci/tests/test_verify_public_release_commit.py"
       - "scripts/ci/tests/test_validate_web_deploy_archive.py"
@@ -57,10 +59,14 @@ jobs:
           bash -n scripts/ops/deploy-exact-commit-vps.sh
           bash -n scripts/ops/reconcile-production-main-vps.sh
           bash -n scripts/ops/install-production-reconciler.sh
+          bash -n scripts/ops/activate-production-reconciler-from-release.sh
+          bash -n scripts/weltgewebe-up
           shellcheck \
             scripts/ops/deploy-exact-commit-vps.sh \
             scripts/ops/reconcile-production-main-vps.sh \
-            scripts/ops/install-production-reconciler.sh
+            scripts/ops/install-production-reconciler.sh \
+            scripts/ops/activate-production-reconciler-from-release.sh \
+            scripts/weltgewebe-up
       - name: Verify systemd units
         run: |
           sudo install -d -m 0755 /usr/local/libexec
