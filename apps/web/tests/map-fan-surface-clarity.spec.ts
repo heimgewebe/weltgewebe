@@ -70,6 +70,51 @@ test.describe("Map fan surface clarity", () => {
     );
   });
 
+  test("root tool actions stay compact without shrinking below touch-target size", async ({
+    page,
+  }) => {
+    await page.getByTestId("tool-fan-trigger").click();
+
+    for (const testId of [
+      "tool-fan-find",
+      "tool-fan-map-content",
+      "tool-fan-weave",
+    ]) {
+      const box = await page.getByTestId(testId).boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+    }
+
+    const findBox = await page.getByTestId("tool-fan-find").boundingBox();
+    expect(findBox).not.toBeNull();
+    expect(findBox!.width).toBeLessThanOrEqual(106);
+  });
+
+  test("five governance actions wrap as a balanced 3 plus 2 layout on tablet widths", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 900, height: 800 });
+    await page.getByTestId("governance-fan-trigger").click();
+
+    const boxes = await Promise.all(
+      [
+        "governance-fan-all",
+        "governance-fan-open",
+        "governance-fan-vetoes",
+        "governance-fan-conversations",
+        "governance-fan-voting",
+      ].map((testId) => page.getByTestId(testId).boundingBox()),
+    );
+    expect(boxes.every(Boolean)).toBe(true);
+
+    const rowCounts = new Map<number, number>();
+    for (const box of boxes) {
+      const row = Math.round(box!.y);
+      rowCounts.set(row, (rowCounts.get(row) ?? 0) + 1);
+    }
+    expect([...rowCounts.values()].sort((a, b) => b - a)).toEqual([3, 2]);
+  });
+
   test("the explanatory weaving branch keeps a readable panel surface", async ({
     page,
   }) => {
