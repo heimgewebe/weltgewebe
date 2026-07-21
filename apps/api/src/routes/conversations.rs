@@ -304,6 +304,46 @@ fn check_precondition(
     }
 }
 
+fn conversation_is_writable(conversation_type: &str, governance_source: Option<&str>) -> bool {
+    conversation_type == "node"
+        || (conversation_type == "governance_proposal" && governance_source == Some("canonical"))
+}
+
+async fn require_conversation_writable(
+    tx: &mut Transaction<'_, Postgres>,
+    conversation_id: &str,
+) -> Result<(), ConversationApiError> {
+    let row: Option<(String, Option<String>)> = sqlx::query_as(
+        "SELECT conversation_type, \
+                (SELECT governance_source FROM domain_conversation_cutover_state WHERE singleton) \
+         FROM domain_conversations \
+         WHERE id = $1::uuid AND deleted_at IS NULL \
+         FOR UPDATE",
+    )
+    .bind(conversation_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|error| database_error("check conversation write cutover", error))?;
+
+    let (conversation_type, governance_source) = row.ok_or_else(|| {
+        ConversationApiError::new(
+            StatusCode::NOT_FOUND,
+            "conversation_not_found",
+            "the node conversation does not exist",
+        )
+    })?;
+
+    if conversation_is_writable(&conversation_type, governance_source.as_deref()) {
+        return Ok(());
+    }
+
+    Err(ConversationApiError::new(
+        StatusCode::CONFLICT,
+        "conversation_write_not_active",
+        "governance conversation writes are not active before canonical cutover",
+    ))
+}
+
 async fn load_message_for_update(
     tx: &mut Transaction<'_, Postgres>,
     conversation_id: &str,
@@ -563,21 +603,7 @@ pub async fn create_message(
         .begin()
         .await
         .map_err(|error| database_error("begin create message", error))?;
-    let conversation_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM domain_conversations \
-         WHERE id = $1::uuid AND deleted_at IS NULL)",
-    )
-    .bind(&conversation_id)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(|error| database_error("check conversation for message create", error))?;
-    if !conversation_exists {
-        return Err(ConversationApiError::new(
-            StatusCode::NOT_FOUND,
-            "conversation_not_found",
-            "the node conversation does not exist",
-        ));
-    }
+    require_conversation_writable(&mut tx, &conversation_id).await?;
 
     let author_title: Option<String> =
         sqlx::query_scalar("SELECT title FROM domain_accounts WHERE id = $1")
@@ -697,6 +723,7 @@ pub async fn update_message(
         .begin()
         .await
         .map_err(|error| database_error("begin message update", error))?;
+    require_conversation_writable(&mut tx, &conversation_id).await?;
     let current = load_message_for_update(&mut tx, &conversation_id, &message_id).await?;
     require_author(&auth, &current)?;
     check_precondition(&headers, &current)?;
@@ -740,6 +767,7 @@ pub async fn delete_message(
         .begin()
         .await
         .map_err(|error| database_error("begin message tombstone", error))?;
+    require_conversation_writable(&mut tx, &conversation_id).await?;
     let current = load_message_for_update(&mut tx, &conversation_id, &message_id).await?;
     require_author_or_admin(&auth, &current)?;
     check_precondition(&headers, &current)?;
@@ -786,6 +814,21 @@ mod tests {
                 .code,
             "invalid_message_content"
         );
+    }
+
+    #[test]
+    fn conversation_write_cutover_keeps_governance_on_legacy_until_canonical() {
+        assert!(conversation_is_writable("node", Some("legacy")));
+        assert!(!conversation_is_writable(
+            "governance_proposal",
+            Some("legacy")
+        ));
+        assert!(conversation_is_writable(
+            "governance_proposal",
+            Some("canonical")
+        ));
+        assert!(!conversation_is_writable("governance_proposal", None));
+        assert!(!conversation_is_writable("unknown", Some("canonical")));
     }
 
     #[test]
