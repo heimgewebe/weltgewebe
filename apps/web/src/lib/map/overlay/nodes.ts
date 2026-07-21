@@ -1,4 +1,4 @@
-import type { Map as MapLibreMap, Marker } from "maplibre-gl";
+import type { Map as MapLibreMap, Marker, MarkerOptions } from "maplibre-gl";
 import type { MapEntityViewModel } from "$lib/map/types";
 import { ICONS } from "$lib/ui/icons";
 
@@ -30,6 +30,8 @@ export function diffSearchMatchIds(
   return { added, removed };
 }
 
+export type MarkerConstructor = new (options?: MarkerOptions) => Marker;
+
 export class NodesOverlay {
   private activeMarkers = new Map<
     string,
@@ -42,7 +44,10 @@ export class NodesOverlay {
   >();
   private searchMatchIds = new Set<string>();
 
-  constructor(private map: MapLibreMap) {}
+  constructor(
+    private map: MapLibreMap,
+    private MarkerClass: MarkerConstructor,
+  ) {}
 
   private getMarkerCategory(
     type: MapEntityViewModel["type"],
@@ -50,9 +55,8 @@ export class NodesOverlay {
     return type === "garnrolle" ? "account" : "node";
   }
 
-  public async update(points: MapEntityViewModel[], showNodes: boolean) {
+  public update(points: MapEntityViewModel[], showNodes: boolean) {
     if (!this.map) return;
-    const maplibregl = await import("maplibre-gl");
 
     if (!showNodes) {
       // If hidden, remove all
@@ -151,7 +155,7 @@ export class NodesOverlay {
         element.setAttribute("aria-label", item.title);
         element.title = item.title;
 
-        const marker = new maplibregl.Marker({ element, anchor: "bottom" })
+        const marker = new this.MarkerClass({ element, anchor: "bottom" })
           .setLngLat([item.lon, item.lat])
           .addTo(this.map);
 
