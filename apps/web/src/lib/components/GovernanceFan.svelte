@@ -224,6 +224,10 @@
   }
 
   @media (max-width: 900px) {
+    .governance-menu {
+      max-width: min(292px, calc(100vw - 24px));
+    }
+
     .governance-menu :global(.fan-action) {
       min-width: 0;
       width: 92px;
@@ -232,11 +236,18 @@
       white-space: normal;
       text-align: left;
     }
+
+    .governance-slot--outer-left,
+    .governance-slot--outer-right,
+    .governance-slot--inner-left,
+    .governance-slot--inner-right {
+      transform: none;
+    }
   }
 
   @media (max-width: 520px) {
     .governance-menu {
-      max-width: min(304px, calc(100vw - 16px));
+      max-width: min(288px, calc(100vw - 16px));
       gap: 0.35rem;
     }
   }
