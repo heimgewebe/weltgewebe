@@ -119,6 +119,7 @@ test.describe("Knoten bearbeiten und löschen", () => {
           address: "Gastweg 1",
           location: { lat: 53.5, lon: 10.0 },
           tags: [],
+          operation_id: "40000000-0000-4000-8000-000000000001",
         }),
       });
       const node = await response.json();

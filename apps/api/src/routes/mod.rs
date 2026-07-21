@@ -16,7 +16,7 @@ use axum::{
     Router,
 };
 
-use crate::middleware::authz::{require_admin, require_authenticated, require_write};
+use crate::middleware::authz::{require_admin, require_authenticated};
 use crate::state::ApiState;
 
 use self::{
@@ -95,20 +95,20 @@ pub fn api_router() -> Router<ApiState> {
         )
         .route("/accounts/{id}", get(get_account))
         // Antragssystem (docs/specs/governance-antraege.md). `POST /proposals`
-        // und `POST /accounts/me/exit` sind bewusst NICHT hinter
-        // `require_write`: der eigene Weberantrag und der eigene Austritt sind
-        // eng begrenzte Gast-Sonderwege; die Handler prüfen die
-        // Authentifizierung selbst. Gesprächsbeiträge sind für alle angemeldeten
-        // Accounts offen. Veto und Stimme bleiben Webern/Admins vorbehalten.
+        // und `POST /accounts/me/exit` sind bewusst nicht über eine allgemeine
+        // Rollen-Middleware geschützt: der eigene Weberantrag und der eigene
+        // Austritt sind eng begrenzte Gast-Sonderwege; die Handler prüfen die
+        // Authentifizierung selbst. Gesprächsbeiträge, Veto und Stimme zu
+        // fremden Weberanträgen sind für alle angemeldeten Accounts offen.
         .route("/proposals", get(list_proposals).post(create_proposal))
         .route("/proposals/{id}", get(get_proposal))
         .route(
             "/proposals/{id}/veto",
-            post(veto_proposal).route_layer(from_fn(require_write)),
+            post(veto_proposal).route_layer(from_fn(require_authenticated)),
         )
         .route(
             "/proposals/{id}/vote",
-            axum::routing::put(vote_proposal).route_layer(from_fn(require_write)),
+            axum::routing::put(vote_proposal).route_layer(from_fn(require_authenticated)),
         )
         .route(
             "/proposals/{id}/messages",

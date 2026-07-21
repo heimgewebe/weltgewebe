@@ -79,6 +79,7 @@ fn test_config() -> AppConfig {
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Jsonl,
         domain_account_write_source: DomainAccountWriteSource::Jsonl,
         domain_node_write_source: DomainNodeWriteSource::Jsonl,
@@ -283,11 +284,11 @@ async fn governance_writes_fail_closed_without_database() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Gastgespräch und formale Weberrechte
+// 2. Gast-Webungsrechte und formale Selbstentscheidungsgrenze
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn guest_can_discuss_but_cannot_veto_or_vote() {
+async fn guest_webungsaktionen_pass_authentication_without_database() {
     let (app, gast_cookie, _) = app_without_database().await;
 
     let veto = app
@@ -300,7 +301,11 @@ async fn guest_can_discuss_but_cannot_veto_or_vote() {
         ))
         .await
         .expect("response");
-    assert_eq!(veto.status(), StatusCode::FORBIDDEN, "guests must not veto");
+    assert_eq!(
+        veto.status(),
+        StatusCode::SERVICE_UNAVAILABLE,
+        "guest veto must pass authentication and fail closed only at the missing database"
+    );
 
     let vote = app
         .clone()
@@ -312,7 +317,11 @@ async fn guest_can_discuss_but_cannot_veto_or_vote() {
         ))
         .await
         .expect("response");
-    assert_eq!(vote.status(), StatusCode::FORBIDDEN, "guests must not vote");
+    assert_eq!(
+        vote.status(),
+        StatusCode::SERVICE_UNAVAILABLE,
+        "guest vote must pass authentication and fail closed only at the missing database"
+    );
 
     let message = app
         .clone()

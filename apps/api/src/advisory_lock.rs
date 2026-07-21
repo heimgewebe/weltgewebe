@@ -1,6 +1,11 @@
 use sha2::{Digest, Sha256};
 
+pub(crate) const ACCOUNT_LIFECYCLE_LOCK_NAMESPACE: &str = "weltgewebe:account-lifecycle:v1";
 pub(crate) const NODE_MUTATION_LOCK_NAMESPACE: &str = "weltgewebe:node-mutation:v1";
+
+pub(crate) fn account_lifecycle_lock_key(account_id: &str) -> i64 {
+    stable_advisory_lock_key(ACCOUNT_LIFECYCLE_LOCK_NAMESPACE, &[account_id])
+}
 
 pub(crate) fn node_mutation_lock_key(node_id: &str) -> i64 {
     stable_advisory_lock_key(NODE_MUTATION_LOCK_NAMESPACE, &[node_id])

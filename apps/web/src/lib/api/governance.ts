@@ -20,7 +20,7 @@ export interface Proposal {
 }
 
 export interface Veto {
-  weber_account_id: string;
+  weber_account_id: string | null;
   weber_title: string;
   reason: string;
   created_at: string;

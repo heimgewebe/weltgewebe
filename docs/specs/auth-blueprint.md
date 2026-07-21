@@ -83,7 +83,7 @@ Verhindern, dass spätere Implementierung bestehende Architektur bricht.
 3. **Rollenmodell**
    - nicht angemeldet → öffentlich lesen
    - `Gast` → eigene Webungsaktionen und eigene Inhalte pflegen
-   - `Weber` → zusätzlich fremde gemeinschaftliche Inhalte pflegen und formal entscheiden
+   - `Weber` → zusätzlich fremde gemeinschaftliche Inhalte pflegen
    - `Admin` → administrativ und moderativ
 4. **Privacy bleibt erhalten**
    - `/auth/me` liefert **keine** internen Account-Felder
@@ -215,9 +215,11 @@ Login hat **reale Konsequenzen**.
 
 - Regel:
   - **401 Unauthorized** → keine gültige angemeldete Sitzung
-  - **403 Forbidden** → authentifiziert, aber für die konkrete fremde oder formale Handlung nicht berechtigt
-  - gewöhnliche Webungsaktionen → jeder angemeldete Account
-  - fremde gemeinschaftliche Pflege, Veto und Stimme → `Weber/Admin`
+  - **403 Forbidden** → authentifiziert, aber für die konkrete Handlung nicht berechtigt
+  - Gespräche und sonstige ausdrücklich freigegebene Webungsaktionen → jeder angemeldete Account
+  - Veto und Abstimmung bei fremden Weberanträgen → jeder angemeldete Account
+  - formale Selbstentscheidung über den eigenen Weberantrag → ausgeschlossen
+  - fremde gemeinschaftliche Inhaltspflege → `Weber/Admin`
 
 ### Ergebnis: Autorisierung
 

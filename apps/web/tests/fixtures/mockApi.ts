@@ -98,10 +98,19 @@ export async function mockApiResponses(
     const method = route.request().method();
 
     if (url.endsWith("/api/nodes") && method === "POST") {
+      if (!isAuthenticated || !currentAccountId) {
+        return route.fulfill({ status: 401 });
+      }
       const payload = route.request().postDataJSON() as Record<
         string,
         unknown
       > | null;
+      const operationId =
+        typeof payload?.operation_id === "string" ? payload.operation_id : "";
+      const validOperationId =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          operationId,
+        );
       const title =
         typeof payload?.title === "string" ? payload.title.trim() : "";
       const kind = typeof payload?.kind === "string" ? payload.kind.trim() : "";
@@ -111,6 +120,7 @@ export async function mockApiResponses(
         | { lat?: unknown; lon?: unknown }
         | undefined;
       if (
+        !validOperationId ||
         !title ||
         !kind ||
         !address ||

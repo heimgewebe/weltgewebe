@@ -24,7 +24,7 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::advisory_lock::node_mutation_lock_key;
+use crate::advisory_lock::{account_lifecycle_lock_key, node_mutation_lock_key};
 use crate::auth::accounts::AccountStore;
 use crate::auth::role::Role;
 
@@ -115,10 +115,10 @@ pub struct ProposalWithCounts {
     pub abstain_votes: i64,
 }
 
-/// Begründetes Veto eines Webers (öffentlich sichtbare Webungsaktion).
+/// Begründetes Veto eines angemeldeten Accounts (öffentlich sichtbare Webungsaktion).
 #[derive(Clone, Debug, Serialize)]
 pub struct Veto {
-    pub weber_account_id: String,
+    pub weber_account_id: Option<String>,
     pub weber_title: String,
     pub reason: String,
     pub created_at: DateTime<Utc>,
@@ -164,9 +164,13 @@ pub enum VetoError {
     /// Veto ist nur während der offenen Konsentphase zulässig.
     #[error("proposal is not in an open consent phase")]
     WrongPhase,
-    /// Je Weber höchstens ein Veto pro Antrag.
-    #[error("this weber already vetoed the proposal")]
+    /// Je Account höchstens ein Veto pro Antrag.
+    #[error("this account already vetoed the proposal")]
     AlreadyVetoed,
+    #[error("the applicant cannot veto the own Weber proposal")]
+    ApplicantCannotDecide,
+    #[error("veto actor account is missing or disabled")]
+    ActorUnavailable,
     #[error("failed to persist veto: {0}")]
     Database(#[source] sqlx::Error),
 }
@@ -178,8 +182,22 @@ pub enum VoteError {
     /// Stimmen sind nur während der Beratungs- und Abstimmungsphase zulässig.
     #[error("proposal is not in an open voting phase")]
     WrongPhase,
+    #[error("the applicant cannot vote on the own Weber proposal")]
+    ApplicantCannotDecide,
+    #[error("vote actor account is missing or disabled")]
+    ActorUnavailable,
     #[error("failed to persist vote: {0}")]
     Database(#[source] sqlx::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GuestExitError {
+    #[error("account is no longer an active guest")]
+    NotEligible,
+    #[error("guest exit cannot classify an untyped legacy edge endpoint because a node uses the same id")]
+    AmbiguousLegacyEndpoint,
+    #[error("failed to delete guest account: {0}")]
+    Database(#[from] sqlx::Error),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -298,13 +316,13 @@ pub async fn create_weber_proposal(
     })
 }
 
-/// Sperre den Antrag und liefere `(status, consent_until, voting_until)`.
+/// Sperre den Antrag und liefere Phase, Antragsteller und Fristen.
 async fn lock_proposal_phase(
     tx: &mut Transaction<'_, Postgres>,
     proposal_id: &str,
-) -> Result<Option<(ProposalStatus, DateTime<Utc>, Option<DateTime<Utc>>)>, sqlx::Error> {
+) -> Result<Option<(ProposalStatus, String, DateTime<Utc>, Option<DateTime<Utc>>)>, sqlx::Error> {
     let row = sqlx::query(
-        "SELECT status, consent_until, voting_until \
+        "SELECT status, applicant_account_id, consent_until, voting_until \
          FROM governance_proposals WHERE id = $1::uuid FOR UPDATE",
     )
     .bind(proposal_id)
@@ -315,6 +333,7 @@ async fn lock_proposal_phase(
         let status = ProposalStatus::from_db(row.try_get::<String, _>("status")?.as_str())?;
         Ok((
             status,
+            row.try_get("applicant_account_id")?,
             row.try_get("consent_until")?,
             row.try_get("voting_until")?,
         ))
@@ -334,10 +353,27 @@ pub async fn add_veto(
 ) -> Result<Veto, VetoError> {
     let mut tx = pool.begin().await.map_err(VetoError::Database)?;
 
-    let (status, consent_until, _) = lock_proposal_phase(&mut tx, proposal_id)
-        .await
-        .map_err(VetoError::Database)?
-        .ok_or(VetoError::NotFound)?;
+    // Guest exit uses account -> proposal lock ordering. Formal actions use the
+    // same order so an exit cannot leave a fresh live actor binding behind.
+    let active_actor: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
+    )
+    .bind(weber_account_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(VetoError::Database)?;
+    if active_actor.is_none() {
+        return Err(VetoError::ActorUnavailable);
+    }
+
+    let (status, applicant_account_id, consent_until, _) =
+        lock_proposal_phase(&mut tx, proposal_id)
+            .await
+            .map_err(VetoError::Database)?
+            .ok_or(VetoError::NotFound)?;
+    if applicant_account_id == weber_account_id {
+        return Err(VetoError::ApplicantCannotDecide);
+    }
     if status != ProposalStatus::Consent || now >= consent_until {
         return Err(VetoError::WrongPhase);
     }
@@ -355,7 +391,7 @@ pub async fn add_veto(
     .execute(&mut *tx)
     .await
     .map_err(|error| {
-        if is_unique_violation(&error, "governance_vetoes_pkey") {
+        if is_unique_violation(&error, "governance_vetoes_proposal_actor_key") {
             VetoError::AlreadyVetoed
         } else {
             VetoError::Database(error)
@@ -365,7 +401,7 @@ pub async fn add_veto(
     tx.commit().await.map_err(VetoError::Database)?;
 
     Ok(Veto {
-        weber_account_id: weber_account_id.to_string(),
+        weber_account_id: Some(weber_account_id.to_string()),
         weber_title: weber_title.to_string(),
         reason: reason.to_string(),
         created_at: now,
@@ -383,10 +419,24 @@ pub async fn upsert_vote(
 ) -> Result<(), VoteError> {
     let mut tx = pool.begin().await.map_err(VoteError::Database)?;
 
-    let (status, _, voting_until) = lock_proposal_phase(&mut tx, proposal_id)
+    let active_actor: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
+    )
+    .bind(voter_account_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(VoteError::Database)?;
+    if active_actor.is_none() {
+        return Err(VoteError::ActorUnavailable);
+    }
+
+    let (status, applicant_account_id, _, voting_until) = lock_proposal_phase(&mut tx, proposal_id)
         .await
         .map_err(VoteError::Database)?
         .ok_or(VoteError::NotFound)?;
+    if applicant_account_id == voter_account_id {
+        return Err(VoteError::ApplicantCannotDecide);
+    }
     let open_voting = status == ProposalStatus::Voting
         && voting_until.is_some_and(|voting_until| now < voting_until);
     if !open_voting {
@@ -435,7 +485,7 @@ pub async fn add_message(
         return Err(MessageError::Database(sqlx::Error::RowNotFound));
     }
 
-    let (status, consent_until, voting_until) = lock_proposal_phase(&mut tx, proposal_id)
+    let (status, _, consent_until, voting_until) = lock_proposal_phase(&mut tx, proposal_id)
         .await
         .map_err(MessageError::Database)?
         .ok_or(MessageError::NotFound)?;
@@ -488,8 +538,17 @@ pub async fn add_message(
 ///
 /// Die Rollenbedingung schützt gegen versehentliches Löschen eines Webers oder
 /// Administrators.
-pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(), sqlx::Error> {
+pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(), GuestExitError> {
     let mut tx = pool.begin().await?;
+
+    // Serialize the complete account lifecycle before taking row or per-node
+    // locks. Node creation uses the same account-scoped advisory lock from
+    // before the durable node INSERT until its derived Faden is durable (or
+    // compensated), so guest exit can never enter the historical commit gap.
+    sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+        .bind(account_lifecycle_lock_key(account_id))
+        .execute(&mut *tx)
+        .await?;
 
     // Lock and verify the exact active guest before touching durable traces.
     let role: Option<String> = sqlx::query_scalar(
@@ -499,7 +558,7 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
     .fetch_optional(&mut *tx)
     .await?;
     if role.as_deref() != Some("gast") {
-        return Err(sqlx::Error::RowNotFound);
+        return Err(GuestExitError::NotEligible);
     }
 
     // Existing node mutations acquire this same advisory lock before reading
@@ -512,11 +571,23 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
     .bind(account_id)
     .fetch_all(&mut *tx)
     .await?;
-    for node_id in owned_node_ids {
-        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
-            .bind(node_mutation_lock_key(&node_id))
-            .execute(&mut *tx)
-            .await?;
+    let mut node_lock_keys: Vec<i64> = owned_node_ids
+        .iter()
+        .map(|node_id| node_mutation_lock_key(node_id))
+        .collect();
+    node_lock_keys.sort_unstable();
+    node_lock_keys.dedup();
+    if !node_lock_keys.is_empty() {
+        // One roundtrip acquires every lock in numeric order. The ORDER BY is
+        // part of the deadlock contract; do not replace this with an unordered
+        // array scan.
+        sqlx::query(
+            "SELECT pg_advisory_xact_lock(lock_key) \
+             FROM unnest($1::bigint[]) AS locks(lock_key) ORDER BY lock_key",
+        )
+        .bind(&node_lock_keys)
+        .fetch_all(&mut *tx)
+        .await?;
     }
 
     sqlx::query(
@@ -542,10 +613,7 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
     .fetch_one(&mut *tx)
     .await?;
     if ambiguous_legacy_endpoint {
-        return Err(sqlx::Error::Protocol(
-            "guest exit cannot classify an untyped legacy edge endpoint because a node uses the same id"
-                .to_string(),
-        ));
+        return Err(GuestExitError::AmbiguousLegacyEndpoint);
     }
 
     sqlx::query(
@@ -562,6 +630,22 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
     sqlx::query(
         "UPDATE governance_messages SET author_account_id = NULL \
          WHERE author_account_id = $1",
+    )
+    .bind(account_id)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        "UPDATE governance_vetoes SET weber_account_id = NULL \
+         WHERE weber_account_id = $1",
+    )
+    .bind(account_id)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        "UPDATE governance_votes SET voter_account_id = NULL \
+         WHERE voter_account_id = $1",
     )
     .bind(account_id)
     .execute(&mut *tx)
@@ -584,7 +668,7 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
         .execute(&mut *tx)
         .await?;
     if deleted.rows_affected() != 1 {
-        return Err(sqlx::Error::RowNotFound);
+        return Err(GuestExitError::Database(sqlx::Error::RowNotFound));
     }
     tx.commit().await?;
     Ok(())
@@ -660,7 +744,7 @@ pub async fn list_vetoes(pool: &PgPool, proposal_id: &str) -> Result<Vec<Veto>, 
     rows.iter()
         .map(|row| {
             Ok(Veto {
-                weber_account_id: row.try_get("weber_account_id")?,
+                weber_account_id: row.try_get::<Option<String>, _>("weber_account_id")?,
                 weber_title: row.try_get("weber_title")?,
                 reason: row.try_get("reason")?,
                 created_at: row.try_get("created_at")?,

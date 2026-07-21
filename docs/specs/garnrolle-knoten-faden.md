@@ -46,8 +46,9 @@ Ein Account beginnt als `gast`. Gäste dürfen bereits weben: die eigene
 Garnrolle beschreiben und verankern, Knoten knüpfen, zulässige Fäden auslösen
 und in offenen Gesprächen mitreden. Der Weberstatus ist keine technische
 Freischaltung der ersten Garnrolle, sondern die gemeinschaftlich bestätigte
-Befugnis, auch fremde beziehungsweise gemeinschaftliche Inhalte zu pflegen und
-an formalen Entscheidungen mitzuwirken.
+Befugnis, auch fremde beziehungsweise gemeinschaftliche Inhalte zu pflegen.
+Formale Veto- und Stimmrechte stehen allen angemeldeten Accounts bei fremden
+Weberanträgen zu; über den eigenen Antrag darf niemand selbst entscheiden.
 
 ## Rollen und Fähigkeiten
 
@@ -59,7 +60,7 @@ an formalen Entscheidungen mitzuwirken.
 | Fremden oder eigentümerlosen Knoten pflegen | nein | ja | ja |
 | In offenen Knoten- und Antragsgesprächen schreiben | ja | ja | ja |
 | Eigenen Gesprächsbeitrag bearbeiten | ja | ja | ja |
-| Veto und Stimme im Weberverfahren | nein | ja | ja |
+| Veto und Stimme zu fremden Weberanträgen | ja | ja | ja |
 | Moderativ fremde Beiträge entfernen | nein | nein | ja |
 
 Nicht angemeldete Besucher dürfen öffentliche Inhalte lesen, aber keine
@@ -129,6 +130,61 @@ Projektionen.
 
 Freie interne Fadennotizen gehören nicht zur öffentlichen Projektion.
 
+Fäden sind keine frei editierbaren Fachobjekte. Für abgeleitete Fadenprojektionen
+gelten weiterhin diese harten Regeln:
+
+1. Es gibt keinen allgemeinen öffentlichen `POST`, `PUT`, `PATCH` oder `DELETE`-Pfad,
+   mit dem Clients beliebige Fäden als eigene Wahrheit erzeugen oder verändern.
+2. Die Benutzeroberfläche bietet keinen unabhängigen Fadeneditor.
+3. Der Server erzeugt oder repariert eine vorgesehene Projektion mit stabiler
+   Operations-ID, damit Wiederholungen keine Doppelprojektionen erzeugen.
+4. Aus der Projektion muss auf die belegte fachliche Webungsaktion zurückgeführt
+   werden können.
+
+Beim Knotenknüpfen erzeugt der Server nach der dauerhaften Knotenanlage den
+zugehörigen Garnrolle-Knoten-Faden. Der Account-Lifecycle wird dabei vom Beginn
+der Knotenpersistenz bis zum erfolgreichen Faden oder zur Kompensation
+serialisiert. Schlägt die Projektion dauerhaft fehl, darf kein verwaister neuer
+Knoten als erfolgreicher Gesamtvorgang zurückbleiben.
+
+Anträge, Vetos, Abstimmungen und Gesprächsbeiträge bleiben eigene dauerhafte
+Governance-Datensätze. Das Antragsgewebe auf der Informationsseite wird daraus
+als reine Leseprojektion berechnet; es erzeugt keinen zweiten `domain_edges`-
+Bestand. Da Anträge keinen geografischen Ort besitzen, erscheint diese Projektion
+nicht auf der Karte. Exakte Aktionszahlen bleiben als Text erhalten; nur die Zahl
+gleichzeitig gezeichneter paralleler Linien darf zur Renderbegrenzung gedeckelt
+werden.
+
+### Auflösung unverzwirnter Fäden
+
+Jeder neu abgeleitete, unverzwirnte Faden besitzt ab seiner Entstehung eine
+eigene Lebensdauer von exakt **168 Stunden**. Der Server setzt `expires_at`
+ausschließlich aus dem servereigenen `created_at`; ein Client darf weder Beginn
+noch Ende vorgeben.
+
+1. Die sichtbare Stärke nimmt zwischen `created_at` und `expires_at` kontinuierlich
+   und linear von vollständig sichtbar auf unsichtbar ab. Die Karte projiziert
+   den Wert minütlich neu; die exakte Ablaufgrenze wird unabhängig davon terminiert.
+2. Bei `now == expires_at` gehört der Faden nicht mehr zur aktiven Projektion.
+   Listen, Einzelabrufe und Karte geben ihn dann nicht mehr aus.
+3. Eine spätere Webungsaktion verlängert keinen bestehenden Faden. Sie erzeugt,
+   sofern fachlich vorgesehen, eine neue Projektion mit eigener Uhr.
+4. Die zugrunde liegende Webungsaktion und ihre Chronik bleiben dauerhaft
+   erhalten. Aufgelöst wird nur die abgeleitete Fadenprojektion.
+5. Bestehende Datensätze ohne `expires_at` bleiben aus Kompatibilitätsgründen
+   sichtbar. Sie dürfen nicht durch eine rückwirkend geratene Ablaufzeit gelöscht
+   werden.
+6. Ein vorhandener, aber ungültiger oder nicht exakt 168 Stunden langer
+   Ablaufvertrag wird in aktiven Projektionen fail-closed ausgeblendet.
+
+Ein verzwirnter, dauerhafter Zusammenhang heißt **Garn** und ist vom Fadenverfall
+ausgenommen. Die Verzwirnungsaktion und ihre technische Garnrepräsentation sind
+nicht Bestandteil dieses Vertragsstands. Bis zu einer eigenen kanonischen
+Spezifikation darf dafür weder ein öffentliches CRUD noch ein geratenes Edge-Feld
+eingeführt werden. `expires_at = null` ist deshalb kein regulärer Erzeugungswert
+für neue Fäden, sondern ausschließlich ein Legacy- und späterer expliziter
+Garn-Kompatibilitätspfad.
+
 ## Gespräche
 
 Jeder PostgreSQL-Knoten besitzt genau einen öffentlichen Gesprächsraum.
@@ -148,12 +204,9 @@ Weberantrag ändert die Berechtigungsrolle von `gast` auf `weber`. Er erzeugt
 keine neue Garnrolle und verändert weder Profil noch Kartenstatus, Position,
 Urheberschaft eigener Knoten oder bisherige Gesprächsbeiträge.
 
-Der zusätzliche Weberstatus verleiht:
-
-- gemeinschaftliche Pflege fremder oder historisch eigentümerloser Knoten;
-- formale Veto- und Stimmrechte im Weberverfahren;
-- die Verantwortung, Veränderungen am gemeinsamen Gewebe nachvollziehbar und
-  konfliktgeschützt vorzunehmen.
+Der zusätzliche Weberstatus verleiht die gemeinschaftliche Pflege fremder oder
+historisch eigentümerloser Knoten. Veto und Stimme bei fremden Weberanträgen
+sind bereits Rechte jedes angemeldeten Accounts.
 
 ## Gast-Austritt
 
@@ -167,7 +220,9 @@ PostgreSQL-Vorgang:
   verlieren ihre aktive Urheberbindung;
 - Fäden mit der gelöschten Garnrolle als Account-Endpunkt werden entfernt;
 - Beiträge in fremden Anträgen und Knotengesprächen bleiben mit ihrem
-  Anzeigenamen erhalten, verlieren aber die Account-ID.
+  Anzeigenamen erhalten, verlieren aber die Account-ID;
+- Vetos und Stimmen in fremden Weberverfahren bleiben als Verfahrensspur und
+  für die Zählung erhalten, verlieren aber ebenfalls ihre aktive Account-ID.
 
 Der Austritt ist nur verfügbar, wenn Accounts, Knoten und Fäden kanonisch in
 PostgreSQL gelesen und geschrieben werden. Ein Mischbetrieb wird fail-closed

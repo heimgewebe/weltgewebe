@@ -27,12 +27,15 @@
   let submitting = false;
 
   $: canDiscuss = $authStore.authenticated;
-  $: canDecide = $authStore.role === "weber" || $authStore.role === "admin";
+  $: canDecide =
+    $authStore.authenticated &&
+    !!proposal &&
+    proposal.applicant_account_id !== $authStore.account_id;
   $: isOpen = proposal?.status === "consent" || proposal?.status === "voting";
 
   function describeError(cause: unknown): string {
     if (cause instanceof GovernanceApiError) {
-      if (cause.status === 403) return "Diese Webungsaktion ist Gästen nicht erlaubt.";
+      if (cause.status === 403) return "Über den eigenen Weberantrag kannst du nicht selbst entscheiden.";
       if (cause.status === 409) return "Die Aktion passt nicht mehr zur aktuellen Antragsphase.";
       if (cause.status === 503) return "Das Antragssystem ist vorübergehend nicht verfügbar.";
     }

@@ -49,11 +49,13 @@ Ein Gast darf:
 - Knoten knüpfen und eigene Knoten pflegen;
 - zulässige, serverseitig abgeleitete Fäden auslösen;
 - in offenen Knoten- und Antragsgesprächen mitreden;
+- bei fremden Weberanträgen ein begründetes Veto einlegen und abstimmen;
 - den eigenen Weberstatus beantragen;
 - den eigenen Gastaccount auflösen.
 
-Ein Gast darf keine fremden oder historisch eigentümerlosen Knoten bearbeiten,
-kein formales Veto einlegen und nicht abstimmen.
+Ein Gast darf keine fremden oder historisch eigentümerlosen Knoten bearbeiten.
+Über den eigenen Weberantrag darf der Antragsteller weder ein formales Veto
+einlegen noch abstimmen; diese Selbstentscheidungsgrenze gilt rollenunabhängig.
 
 Die Zahl eigener Gastknoten ist pro Account begrenzt. Der Betriebsstandard liegt
 bei 1.000 Knoten und kann über `MAX_GUEST_OWNED_NODES` als positive Ganzzahl
@@ -62,11 +64,9 @@ PostgreSQL unter dem Account-Lock geprüft; ein idempotenter Retry derselben
 `operation_id` bleibt auch am Limit zulässig. Weber und Administratoren sind
 von dieser Gastgrenze nicht betroffen.
 
-Ein Weber darf zusätzlich:
-
-- fremde und gemeinschaftliche Knoten pflegen;
-- begründete Vetos einlegen;
-- in der Abstimmungsphase abstimmen.
+Ein Weber darf zusätzlich fremde und gemeinschaftliche Knoten pflegen. Veto und
+Stimme zu fremden Weberanträgen sind bereits allgemeine Rechte angemeldeter
+Accounts.
 
 Administratoren besitzen darüber hinaus moderative Rechte.
 
@@ -91,8 +91,8 @@ Veto gegen den eigenen Antrag einlegen noch über die eigene Aufnahme abstimmen.
 Nach dem Stellen befindet sich der Antrag exakt sieben Tage im Status
 `consent`.
 
-Bestehende Weber und Administratoren können in dieser Zeit ein begründetes
-Veto einlegen. Das Veto muss einen nichtleeren Einwand enthalten.
+Jeder angemeldete Account außer dem Antragsteller selbst kann in dieser Zeit
+ein begründetes Veto einlegen. Das Veto muss einen nichtleeren Einwand enthalten.
 
 Nach Ablauf gilt:
 
@@ -107,8 +107,8 @@ Abstimmung.
 Die zweite Phase schließt unmittelbar an die erste an und dauert exakt weitere
 sieben Tage. Die maximale reguläre Verfahrensdauer beträgt vierzehn Tage.
 
-Jeder Weber und Administrator besitzt pro Antrag genau eine aktuelle Stimme.
-Sie kann bis zum Fristende geändert werden:
+Jeder angemeldete Account außer dem Antragsteller selbst besitzt pro Antrag
+genau eine aktuelle Stimme. Sie kann bis zum Fristende geändert werden:
 
 - `ja`;
 - `nein`;
@@ -169,12 +169,13 @@ Jeder Antrag besitzt einen öffentlichen, lesbaren Gesprächsraum.
   Phase Beiträge verfassen.
 - Nach Abschluss bleibt der Gesprächsraum als Verfahrensnachweis lesbar, aber
   geschlossen.
-- Beim Löschen eines Gastaccounts bleiben Beiträge in fremden Anträgen mit
-  Anzeigename und Text erhalten; nur die aktive Accountbindung wird entfernt.
+- Beim Löschen eines Gastaccounts bleiben Beiträge und Vetos in fremden
+  Anträgen sowie abgegebene Stimmen als Verfahrensspur erhalten; die aktiven
+  Accountbindungen werden entfernt, ohne die historischen Zählungen zu ändern.
 
-Formale Gesprächsbeteiligung und formale Entscheidung sind getrennte Rechte:
-Mitreden ist für jeden angemeldeten Account möglich, Veto und Stimme nur für
-Weber und Administratoren.
+Mitreden, Veto und Stimme sind Webungsrechte angemeldeter Accounts. Beim
+Weberantrag bleibt nur die formale Selbstentscheidung des Antragstellers
+ausgeschlossen.
 
 ## Gast-Austritt
 
@@ -203,7 +204,7 @@ Die Oberfläche bietet:
 - ein aus belegten Aktionen abgeleitetes, nicht editierbares Antragsgewebe;
 - den öffentlichen Gesprächsraum;
 - für angemeldete Accounts das Beitragsfeld;
-- ausschließlich für Weber und Administratoren die kontextabhängigen Veto- und
+- für angemeldete Accounts bei fremden Anträgen die kontextabhängigen Veto- und
   Abstimmungsaktionen;
 - für Gäste Weberantrag und Gast-Austritt.
 
