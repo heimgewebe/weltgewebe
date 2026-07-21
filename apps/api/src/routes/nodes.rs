@@ -12,11 +12,12 @@ use super::{
         MAX_PAGE_SIZE,
     },
 };
+use crate::auth::role::Role;
 use crate::config::{DomainEdgeWriteSource, DomainNodeWriteSource};
 use crate::domain_db::{
-    delete_node_with_edges_in_postgres, insert_domain_node, patch_node_in_postgres,
-    replace_node_in_postgres, CreateOperationKey, CreateWriteOutcome, NodeCreateError,
-    NodePatchInput, NodeWriteError,
+    delete_node_with_edges_in_postgres, insert_domain_node_with_creator_limit,
+    patch_node_in_postgres, replace_node_in_postgres, CreateOperationKey, CreateWriteOutcome,
+    NodeCreateError, NodePatchInput, NodeWriteError,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::{ApiState, OrderedCache};
@@ -31,13 +32,37 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path as FsPath, PathBuf};
+use std::sync::OnceLock;
 use tokio::{
     fs::{File, OpenOptions},
     io::{
         AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, BufWriter, SeekFrom,
     },
+    sync::Semaphore,
 };
 use uuid::Uuid;
+
+pub(crate) const DEFAULT_MAX_GUEST_OWNED_NODES: usize = 1_000;
+
+pub(crate) fn max_guest_owned_nodes() -> usize {
+    std::env::var("MAX_GUEST_OWNED_NODES")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_MAX_GUEST_OWNED_NODES)
+}
+
+fn node_create_faden_db_semaphore() -> &'static Semaphore {
+    static SEMAPHORE: OnceLock<Semaphore> = OnceLock::new();
+    SEMAPHORE.get_or_init(|| {
+        // Each projected PostgreSQL create temporarily needs two connections:
+        // one for the account guard and one for the edge transaction. Reserve
+        // one pool slot for unrelated work and admit only pairs that fit.
+        let permits =
+            (((crate::DATABASE_POOL_MAX_CONNECTIONS as usize).saturating_sub(1)) / 2).max(1);
+        Semaphore::new(permits)
+    })
+}
 
 pub enum NodeMutationError {
     Status(StatusCode),
@@ -655,6 +680,22 @@ async fn ensure_node_created_faden(
             "authenticated account context missing".to_string(),
         )
     })?;
+    let _db_projection_permit = if state.db_pool.is_some() {
+        Some(
+            node_create_faden_db_semaphore()
+                .acquire()
+                .await
+                .map_err(|_| {
+                    (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        "node Faden projection coordinator unavailable".to_string(),
+                    )
+                })?,
+        )
+    } else {
+        None
+    };
+
     // Keep the canonical account row locked until the derived Faden is durable.
     // Guest exit takes the same row lock first, so either exit completes before
     // this projection starts (and we reject it), or exit waits and subsequently
@@ -716,8 +757,7 @@ async fn ensure_node_created_faden(
             );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "node was stored but its derived Faden could not be projected; retry the same operation"
-                    .to_string(),
+                "derived Faden could not be projected; retry the same node operation".to_string(),
             )
         })?;
 
@@ -730,6 +770,46 @@ async fn ensure_node_created_faden(
             )
         })?;
     }
+    Ok(())
+}
+
+async fn rollback_newly_created_node_after_faden_failure(
+    state: &ApiState,
+    node_id: &str,
+) -> Result<(), String> {
+    let removed_edge_ids = match state.config.domain_node_write_source {
+        DomainNodeWriteSource::Jsonl => {
+            // Match normal JSONL create/delete lock order: node persistence
+            // before edge persistence. The journal-backed helper restores both
+            // files together after crashes during compensation.
+            let _node_guard = state.nodes_persist.lock().await;
+            let _edge_guard = edge_create_persist_lock().lock().await;
+            let outcome =
+                delete_node_and_edges_jsonl(node_id, EdgeEndpointCollisionEvidence::default())
+                    .await
+                    .map_err(|error| format!("failed to compensate JSONL node create: {error}"))?;
+            outcome.removed_edge_ids
+        }
+        DomainNodeWriteSource::Postgres => {
+            let pool = state.db_pool.as_ref().ok_or_else(|| {
+                "PostgreSQL pool unavailable during node compensation".to_string()
+            })?;
+            delete_node_with_edges_in_postgres(pool, node_id)
+                .await
+                .map_err(|error| format!("failed to compensate PostgreSQL node create: {error}"))?
+        }
+    };
+
+    let mut edges = state.edges.write().await;
+    for edge_id in &removed_edge_ids {
+        edges.remove(edge_id);
+    }
+    state.metrics.set_edges_cache_count(edges.len() as i64);
+    drop(edges);
+
+    let mut nodes = state.nodes.write().await;
+    nodes.remove(node_id);
+    state.metrics.set_nodes_cache_count(nodes.len() as i64);
     Ok(())
 }
 
@@ -810,7 +890,8 @@ pub async fn create_node(
 
     let id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
-    let (node, mut record) = build_node_record(validated, id.clone(), now, creator_account_id);
+    let (node, mut record) =
+        build_node_record(validated, id.clone(), now, creator_account_id.clone());
     add_create_operation_metadata(&mut record, operation.as_ref());
 
     match state.config.domain_node_write_source {
@@ -847,6 +928,26 @@ pub async fn create_node(
                     )
                     .await?;
                     return Ok((StatusCode::OK, Json(existing)));
+                }
+            }
+
+            if auth.role == Role::Gast {
+                let max = max_guest_owned_nodes();
+                let owned_count = state
+                    .nodes
+                    .read()
+                    .await
+                    .iter_in_order()
+                    .filter(|existing| {
+                        existing.created_by_account_id.as_deref()
+                            == Some(creator_account_id.as_str())
+                    })
+                    .count();
+                if owned_count >= max {
+                    return Err((
+                        StatusCode::TOO_MANY_REQUESTS,
+                        format!("guest node limit reached ({max})"),
+                    ));
                 }
             }
 
@@ -890,7 +991,15 @@ pub async fn create_node(
                     "PostgreSQL pool unavailable for node write".to_string(),
                 )
             })?;
-            match insert_domain_node(pool, &node, operation.as_ref()).await {
+            let creator_node_limit = (auth.role == Role::Gast).then(max_guest_owned_nodes);
+            match insert_domain_node_with_creator_limit(
+                pool,
+                &node,
+                operation.as_ref(),
+                creator_node_limit,
+            )
+            .await
+            {
                 Ok(CreateWriteOutcome::Created) => {}
                 Ok(CreateWriteOutcome::Existing(existing)) => {
                     if !node_matches_create(&existing, &semantic_request) {
@@ -922,6 +1031,12 @@ pub async fn create_node(
                         "creator account is no longer active".to_string(),
                     ));
                 }
+                Err(NodeCreateError::CreatorNodeLimitReached { max }) => {
+                    return Err((
+                        StatusCode::TOO_MANY_REQUESTS,
+                        format!("guest node limit reached ({max})"),
+                    ));
+                }
                 Err(e) => {
                     tracing::error!(error = %e, "failed to insert node into domain_nodes");
                     return Err((
@@ -937,13 +1052,29 @@ pub async fn create_node(
         }
     }
 
-    ensure_node_created_faden(
+    if let Err(projection_error) = ensure_node_created_faden(
         &state,
         &auth,
         &node,
         semantic_request.operation_id.as_deref(),
     )
-    .await?;
+    .await
+    {
+        if let Err(rollback_error) =
+            rollback_newly_created_node_after_faden_failure(&state, &node.id).await
+        {
+            tracing::error!(
+                node_id = %node.id,
+                %rollback_error,
+                "Derived Faden failed and compensating node rollback also failed"
+            );
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "derived Faden failed and node rollback could not be completed".to_string(),
+            ));
+        }
+        return Err(projection_error);
+    }
 
     tracing::info!(
         event = "node.created",
