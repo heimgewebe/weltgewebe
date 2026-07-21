@@ -73,6 +73,7 @@ Generated automatically. Do not edit.
 | docs.policies.agent-reading-protocol | Agent Reading Protocol | policy | canonical | docs/policies/agent-reading-protocol.md |
 | docs.policies.architecture-critique | Architekturkritik-Skill: weltgewebe.architecture.critique | policy | canonical | docs/policies/architecture-critique.md |
 | docs.proofs.basemap-hamburg-artifact-proof | Basemap Hamburg Artifact Proof (Heimserver) | proof | active | docs/proofs/basemap-hamburg-artifact-proof.md |
+| docs.proofs.repoground-agent-utility-v1-t003-vertical-pilot | RepoGround Agent Utility V1 T003 Vertical Pilot | proof | active | docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md |
 | docs.reference.agent-dry-run-runner | Agent Dry-Run Runner | reference | active | docs/reference/agent-dry-run-runner.md |
 | docs.reference.agent-handoff-contract | Agent Handoff Contract | reference | active | docs/reference/agent-handoff-contract.md |
 | docs.reference.agent-operability-fixture-matrix | Agent-Betriebsfaehigkeit: Fixture-Matrix | reference | active | docs/reference/agent-operability-fixture-matrix.md |

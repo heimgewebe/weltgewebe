@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 633 |
+| Relationen gesamt | 637 |
 | — depends_on | 25 |
-| — relates_to | 593 |
+| — relates_to | 597 |
 | — supersedes | 12 |
 | — verifies | 3 |
 | relates_to Anteil | 94% |
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (250 Dokumente):
+**Cluster 1** (254 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -148,6 +148,7 @@ _Keine Lücken erkannt._
 - `docs/process/report-lifecycle.md`
 - `docs/process/sprache.md`
 - `docs/proofs/basemap-hamburg-artifact-proof.md`
+- `docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md`
 - `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
 - `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`
 - `docs/quickstart-gate-c.md`
@@ -257,9 +258,12 @@ _Keine Lücken erkannt._
 - `scripts/basemap/build-hamburg-pmtiles.sh`
 - `scripts/ci/check_actions_node24_readiness.py`
 - `scripts/ci/check_github_action_pinning.py`
+- `scripts/ci/fixtures/repoground_vertical_pilot.v1.json`
 - `scripts/ci/tests/test_check_actions_node24_readiness.py`
 - `scripts/ci/tests/test_check_github_action_pinning.py`
 - `scripts/ci/tests/test_reconcile_public_login_smtp_env.py`
+- `scripts/ci/tests/test_repoground_vertical_pilot.py`
+- `scripts/ci/validate_repoground_vertical_pilot.py`
 - `scripts/docmeta/audit_account_email_uniqueness.py`
 - `scripts/docmeta/audit_domain_edge_references.py`
 - `scripts/docmeta/check_planning_registration.py`
