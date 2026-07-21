@@ -288,7 +288,7 @@ async fn governance_writes_fail_closed_without_database() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn guest_webungsaktionen_pass_authentication_without_database() {
+async fn guest_discussion_passes_but_formal_decisions_are_forbidden() {
     let (app, gast_cookie, _) = app_without_database().await;
 
     let veto = app
@@ -303,8 +303,8 @@ async fn guest_webungsaktionen_pass_authentication_without_database() {
         .expect("response");
     assert_eq!(
         veto.status(),
-        StatusCode::SERVICE_UNAVAILABLE,
-        "guest veto must pass authentication and fail closed only at the missing database"
+        StatusCode::FORBIDDEN,
+        "guest veto must be rejected before touching the database"
     );
 
     let vote = app
@@ -319,8 +319,8 @@ async fn guest_webungsaktionen_pass_authentication_without_database() {
         .expect("response");
     assert_eq!(
         vote.status(),
-        StatusCode::SERVICE_UNAVAILABLE,
-        "guest vote must pass authentication and fail closed only at the missing database"
+        StatusCode::FORBIDDEN,
+        "guest vote must be rejected before touching the database"
     );
 
     let message = app

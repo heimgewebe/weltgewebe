@@ -169,6 +169,8 @@ pub enum VetoError {
     AlreadyVetoed,
     #[error("the applicant cannot veto the own Weber proposal")]
     ApplicantCannotDecide,
+    #[error("veto actor account is not a Weber or administrator")]
+    ActorNotEligible,
     #[error("veto actor account is missing or disabled")]
     ActorUnavailable,
     #[error("failed to persist veto: {0}")]
@@ -184,6 +186,8 @@ pub enum VoteError {
     WrongPhase,
     #[error("the applicant cannot vote on the own Weber proposal")]
     ApplicantCannotDecide,
+    #[error("vote actor account is not a Weber or administrator")]
+    ActorNotEligible,
     #[error("vote actor account is missing or disabled")]
     ActorUnavailable,
     #[error("failed to persist vote: {0}")]
@@ -355,15 +359,17 @@ pub async fn add_veto(
 
     // Guest exit uses account -> proposal lock ordering. Formal actions use the
     // same order so an exit cannot leave a fresh live actor binding behind.
-    let active_actor: Option<String> = sqlx::query_scalar(
-        "SELECT id FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
+    let actor_role: Option<String> = sqlx::query_scalar(
+        "SELECT role FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
     )
     .bind(weber_account_id)
     .fetch_optional(&mut *tx)
     .await
     .map_err(VetoError::Database)?;
-    if active_actor.is_none() {
-        return Err(VetoError::ActorUnavailable);
+    match actor_role.as_deref() {
+        None => return Err(VetoError::ActorUnavailable),
+        Some("weber" | "admin") => {}
+        Some(_) => return Err(VetoError::ActorNotEligible),
     }
 
     let (status, applicant_account_id, consent_until, _) =
@@ -419,15 +425,17 @@ pub async fn upsert_vote(
 ) -> Result<(), VoteError> {
     let mut tx = pool.begin().await.map_err(VoteError::Database)?;
 
-    let active_actor: Option<String> = sqlx::query_scalar(
-        "SELECT id FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
+    let actor_role: Option<String> = sqlx::query_scalar(
+        "SELECT role FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
     )
     .bind(voter_account_id)
     .fetch_optional(&mut *tx)
     .await
     .map_err(VoteError::Database)?;
-    if active_actor.is_none() {
-        return Err(VoteError::ActorUnavailable);
+    match actor_role.as_deref() {
+        None => return Err(VoteError::ActorUnavailable),
+        Some("weber" | "admin") => {}
+        Some(_) => return Err(VoteError::ActorNotEligible),
     }
 
     let (status, applicant_account_id, _, voting_until) = lock_proposal_phase(&mut tx, proposal_id)

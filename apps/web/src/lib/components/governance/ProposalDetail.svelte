@@ -29,6 +29,7 @@
   $: canDiscuss = $authStore.authenticated;
   $: canDecide =
     $authStore.authenticated &&
+    ($authStore.role === "weber" || $authStore.role === "admin") &&
     !!proposal &&
     proposal.applicant_account_id !== $authStore.account_id;
   $: isOpen = proposal?.status === "consent" || proposal?.status === "voting";

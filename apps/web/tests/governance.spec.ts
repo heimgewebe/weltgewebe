@@ -443,7 +443,7 @@ test("applicant cannot veto or vote on the own Weber application", async ({
   await expect(page.getByRole("button", { name: "Ja" })).toHaveCount(0);
 });
 
-test("guest can veto and vote on another account's Weber application", async ({
+test("guest can discuss but cannot veto or vote on another account's Weber application", async ({
   page,
 }) => {
   await mockApiResponses(page, {
@@ -454,23 +454,17 @@ test("guest can veto and vote on another account's Weber application", async ({
   });
   await page.goto(`/antraege?id=${PROPOSAL_ID}`);
 
-  await page
-    .getByPlaceholder("Konkreter Einwand und mögliche Lösung")
-    .fill("Ich möchte diesen Punkt vor der Aufnahme gemeinsam klären.");
-  await page.getByRole("button", { name: "Veto einlegen" }).click();
-  await expect(page.getByText("Gespräch und Abstimmung")).toBeVisible();
-  await page.getByRole("button", { name: "Ja" }).click();
+  await expect(page.getByRole("button", { name: "Veto einlegen" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ja" })).toHaveCount(0);
+  await expect(
+    page.getByPlaceholder("Konkreter Einwand und mögliche Lösung"),
+  ).toHaveCount(0);
 
   expect(
-    governance.requests.find((entry) => entry.pathname.endsWith("/veto"))?.body,
-  ).toEqual({
-    reason: "Ich möchte diesen Punkt vor der Aufnahme gemeinsam klären.",
-  });
-  expect(
-    governance.requests.find((entry) => entry.pathname.endsWith("/vote"))?.body,
-  ).toEqual({
-    choice: "ja",
-  });
+    governance.requests.filter(
+      (entry) => entry.pathname.endsWith("/veto") || entry.pathname.endsWith("/vote"),
+    ),
+  ).toEqual([]);
 });
 
 test("Weber veto opens the second phase and voting uses yes greater than no without quorum", async ({

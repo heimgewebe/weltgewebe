@@ -92,6 +92,17 @@ fn require_account_id(auth: &AuthContext) -> Result<String, ApiError> {
     ))
 }
 
+fn require_formal_governance_actor(auth: &AuthContext) -> Result<String, ApiError> {
+    let account_id = require_account_id(auth)?;
+    if !matches!(auth.role, Role::Weber | Role::Admin) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "formal vetoes and votes require Weber status".to_string(),
+        ));
+    }
+    Ok(account_id)
+}
+
 /// Anzeigename aus dem laufenden Account-Store; Fallback, falls die Projektion
 /// den Account (noch) nicht kennt.
 async fn account_title(state: &ApiState, account_id: &str) -> String {
@@ -334,8 +345,8 @@ pub async fn veto_proposal(
     Path(id): Path<String>,
     Json(payload): Json<Value>,
 ) -> Result<(StatusCode, Json<Veto>), ApiError> {
+    let account_id = require_formal_governance_actor(&auth)?;
     let pool = require_pool(&state)?;
-    let account_id = require_account_id(&auth)?;
 
     let object = payload
         .as_object()
@@ -364,6 +375,10 @@ pub async fn veto_proposal(
                 StatusCode::FORBIDDEN,
                 "the applicant cannot veto the own Weber proposal".to_string(),
             ),
+            VetoError::ActorNotEligible => (
+                StatusCode::FORBIDDEN,
+                "formal vetoes require Weber status".to_string(),
+            ),
             VetoError::ActorUnavailable => (
                 StatusCode::UNAUTHORIZED,
                 "veto actor account is no longer active".to_string(),
@@ -388,8 +403,8 @@ pub async fn vote_proposal(
     Path(id): Path<String>,
     Json(payload): Json<Value>,
 ) -> Result<Json<Value>, ApiError> {
+    let account_id = require_formal_governance_actor(&auth)?;
     let pool = require_pool(&state)?;
-    let account_id = require_account_id(&auth)?;
 
     let object = payload
         .as_object()
@@ -416,6 +431,10 @@ pub async fn vote_proposal(
             VoteError::ApplicantCannotDecide => (
                 StatusCode::FORBIDDEN,
                 "the applicant cannot vote on the own Weber proposal".to_string(),
+            ),
+            VoteError::ActorNotEligible => (
+                StatusCode::FORBIDDEN,
+                "formal votes require Weber status".to_string(),
             ),
             VoteError::ActorUnavailable => (
                 StatusCode::UNAUTHORIZED,

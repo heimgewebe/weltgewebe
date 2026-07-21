@@ -217,7 +217,7 @@ Login hat **reale Konsequenzen**.
   - **401 Unauthorized** → keine gültige angemeldete Sitzung
   - **403 Forbidden** → authentifiziert, aber für die konkrete Handlung nicht berechtigt
   - Gespräche und sonstige ausdrücklich freigegebene Webungsaktionen → jeder angemeldete Account
-  - Veto und Abstimmung bei fremden Weberanträgen → jeder angemeldete Account
+  - Veto und Abstimmung bei fremden Weberanträgen → `Weber/Admin`
   - formale Selbstentscheidung über den eigenen Weberantrag → ausgeschlossen
   - fremde gemeinschaftliche Inhaltspflege → `Weber/Admin`
 

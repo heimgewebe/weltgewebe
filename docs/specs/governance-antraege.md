@@ -49,13 +49,14 @@ Ein Gast darf:
 - Knoten knüpfen und eigene Knoten pflegen;
 - zulässige, serverseitig abgeleitete Fäden auslösen;
 - in offenen Knoten- und Antragsgesprächen mitreden;
-- bei fremden Weberanträgen ein begründetes Veto einlegen und abstimmen;
 - den eigenen Weberstatus beantragen;
 - den eigenen Gastaccount auflösen.
 
 Ein Gast darf keine fremden oder historisch eigentümerlosen Knoten bearbeiten.
-Über den eigenen Weberantrag darf der Antragsteller weder ein formales Veto
-einlegen noch abstimmen; diese Selbstentscheidungsgrenze gilt rollenunabhängig.
+Formale Vetos und Abstimmungen sind Webern und Administratoren vorbehalten.
+Über den eigenen Weberantrag darf der Antragsteller auch nach einem möglichen
+Rollenwechsel nicht selbst entscheiden; diese Selbstentscheidungsgrenze gilt
+rollenunabhängig.
 
 Die Zahl eigener Gastknoten ist pro Account begrenzt. Der Betriebsstandard liegt
 bei 1.000 Knoten und kann über `MAX_GUEST_OWNED_NODES` als positive Ganzzahl
@@ -64,9 +65,8 @@ PostgreSQL unter dem Account-Lock geprüft; ein idempotenter Retry derselben
 `operation_id` bleibt auch am Limit zulässig. Weber und Administratoren sind
 von dieser Gastgrenze nicht betroffen.
 
-Ein Weber darf zusätzlich fremde und gemeinschaftliche Knoten pflegen. Veto und
-Stimme zu fremden Weberanträgen sind bereits allgemeine Rechte angemeldeter
-Accounts.
+Ein Weber darf zusätzlich fremde und gemeinschaftliche Knoten pflegen sowie bei
+fremden Weberanträgen ein begründetes Veto einlegen und abstimmen.
 
 Administratoren besitzen darüber hinaus moderative Rechte.
 
@@ -91,8 +91,9 @@ Veto gegen den eigenen Antrag einlegen noch über die eigene Aufnahme abstimmen.
 Nach dem Stellen befindet sich der Antrag exakt sieben Tage im Status
 `consent`.
 
-Jeder angemeldete Account außer dem Antragsteller selbst kann in dieser Zeit
-ein begründetes Veto einlegen. Das Veto muss einen nichtleeren Einwand enthalten.
+Jeder Weber oder Administrator außer dem Antragsteller selbst kann in dieser
+Zeit ein begründetes Veto einlegen. Das Veto muss einen nichtleeren Einwand
+enthalten.
 
 Nach Ablauf gilt:
 
@@ -107,7 +108,7 @@ Abstimmung.
 Die zweite Phase schließt unmittelbar an die erste an und dauert exakt weitere
 sieben Tage. Die maximale reguläre Verfahrensdauer beträgt vierzehn Tage.
 
-Jeder angemeldete Account außer dem Antragsteller selbst besitzt pro Antrag
+Jeder Weber oder Administrator außer dem Antragsteller selbst besitzt pro Antrag
 genau eine aktuelle Stimme. Sie kann bis zum Fristende geändert werden:
 
 - `ja`;
@@ -169,13 +170,14 @@ Jeder Antrag besitzt einen öffentlichen, lesbaren Gesprächsraum.
   Phase Beiträge verfassen.
 - Nach Abschluss bleibt der Gesprächsraum als Verfahrensnachweis lesbar, aber
   geschlossen.
-- Beim Löschen eines Gastaccounts bleiben Beiträge und Vetos in fremden
-  Anträgen sowie abgegebene Stimmen als Verfahrensspur erhalten; die aktiven
-  Accountbindungen werden entfernt, ohne die historischen Zählungen zu ändern.
+- Beim Löschen eines Gastaccounts bleiben Beiträge erhalten. Historische Vetos
+  oder Stimmen eines früher berechtigten beziehungsweise aus Altdaten stammenden
+  Accounts werden als Verfahrensspur ebenfalls erhalten; aktive Accountbindungen
+  werden entfernt, ohne historische Zählungen zu verändern.
 
-Mitreden, Veto und Stimme sind Webungsrechte angemeldeter Accounts. Beim
-Weberantrag bleibt nur die formale Selbstentscheidung des Antragstellers
-ausgeschlossen.
+Mitreden ist ein Webungsrecht jedes angemeldeten Accounts. Formale Vetos und
+Stimmen setzen Weber- oder Administratorstatus voraus. Die Selbstentscheidung
+des Antragstellers bleibt zusätzlich ausgeschlossen.
 
 ## Gast-Austritt
 
@@ -204,8 +206,8 @@ Die Oberfläche bietet:
 - ein aus belegten Aktionen abgeleitetes, nicht editierbares Antragsgewebe;
 - den öffentlichen Gesprächsraum;
 - für angemeldete Accounts das Beitragsfeld;
-- für angemeldete Accounts bei fremden Anträgen die kontextabhängigen Veto- und
-  Abstimmungsaktionen;
+- für Weber und Administratoren bei fremden Anträgen die kontextabhängigen
+  Veto- und Abstimmungsaktionen;
 - für Gäste Weberantrag und Gast-Austritt.
 
 Die Oberfläche darf keine Rechte simulieren. Jeder Schutz wird zusätzlich auf

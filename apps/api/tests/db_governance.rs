@@ -190,9 +190,9 @@ async fn veto_opens_exact_second_phase_and_yes_must_exceed_no() {
         t0 + Duration::days(1),
     )
     .await;
-    assert!(matches!(own_veto, Err(VetoError::ApplicantCannotDecide)));
+    assert!(matches!(own_veto, Err(VetoError::ActorNotEligible)));
 
-    add_veto(
+    let guest_veto = add_veto(
         &pool,
         &accepted.id,
         GUEST_B,
@@ -200,8 +200,19 @@ async fn veto_opens_exact_second_phase_and_yes_must_exceed_no() {
         "Bitte zuerst beraten",
         t0 + Duration::days(1),
     )
+    .await;
+    assert!(matches!(guest_veto, Err(VetoError::ActorNotEligible)));
+
+    add_veto(
+        &pool,
+        &accepted.id,
+        WEBER_A,
+        "Weber A",
+        "Bitte zuerst beraten",
+        t0 + Duration::days(1),
+    )
     .await
-    .expect("guest veto on another account's application");
+    .expect("Weber veto on guest application");
     let first_phase = finalize_due_proposals(&pool, t0 + Duration::days(7))
         .await
         .expect("open voting");
@@ -220,26 +231,36 @@ async fn veto_opens_exact_second_phase_and_yes_must_exceed_no() {
         t0 + Duration::days(8),
     )
     .await;
-    assert!(matches!(own_vote, Err(VoteError::ApplicantCannotDecide)));
+    assert!(matches!(own_vote, Err(VoteError::ActorNotEligible)));
 
-    upsert_vote(
+    let guest_vote = upsert_vote(
         &pool,
         &accepted.id,
         GUEST_B,
         VoteChoice::Nein,
         t0 + Duration::days(8),
     )
-    .await
-    .expect("initial guest vote");
+    .await;
+    assert!(matches!(guest_vote, Err(VoteError::ActorNotEligible)));
+
     upsert_vote(
         &pool,
         &accepted.id,
-        GUEST_B,
+        WEBER_B,
+        VoteChoice::Nein,
+        t0 + Duration::days(8),
+    )
+    .await
+    .expect("initial Weber vote");
+    upsert_vote(
+        &pool,
+        &accepted.id,
+        WEBER_B,
         VoteChoice::Ja,
         t0 + Duration::days(9),
     )
     .await
-    .expect("changed guest vote");
+    .expect("changed Weber vote");
     let result = finalize_due_proposals(&pool, t0 + Duration::days(14))
         .await
         .expect("final vote");
@@ -359,16 +380,19 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
     )
     .await
     .expect("guest contribution to foreign proposal");
-    add_veto(
-        &pool,
-        &foreign_proposal.id,
-        GUEST_C,
-        "Gast C",
-        "Dieser Einwand bleibt als Verfahrensspur erhalten.",
-        t0 + Duration::days(16),
+    sqlx::query(
+        "INSERT INTO governance_vetoes \
+         (proposal_id, weber_account_id, weber_title, reason, created_at) \
+         VALUES ($1::uuid, $2, $3, $4, $5)",
     )
+    .bind(&foreign_proposal.id)
+    .bind(GUEST_C)
+    .bind("Gast C")
+    .bind("Dieser Einwand bleibt als Verfahrensspur erhalten.")
+    .bind(t0 + Duration::days(16))
+    .execute(&pool)
     .await
-    .expect("guest veto on foreign proposal");
+    .expect("seed historical guest veto for exit anonymization proof");
     sqlx::query(
         "UPDATE governance_proposals SET status = 'voting', voting_until = $2 \
          WHERE id = $1::uuid",
@@ -378,15 +402,17 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
     .execute(&pool)
     .await
     .expect("open foreign proposal voting phase for exit proof");
-    upsert_vote(
-        &pool,
-        &foreign_proposal.id,
-        GUEST_C,
-        VoteChoice::Ja,
-        t0 + Duration::days(23),
+    sqlx::query(
+        "INSERT INTO governance_votes \
+         (proposal_id, voter_account_id, choice, updated_at) \
+         VALUES ($1::uuid, $2, 'ja', $3)",
     )
+    .bind(&foreign_proposal.id)
+    .bind(GUEST_C)
+    .bind(t0 + Duration::days(23))
+    .execute(&pool)
     .await
-    .expect("guest vote on foreign proposal");
+    .expect("seed historical guest vote for exit anonymization proof");
 
     sqlx::query(
         "INSERT INTO domain_nodes \
