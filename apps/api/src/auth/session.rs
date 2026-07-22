@@ -201,9 +201,7 @@ impl Default for SessionStore {
 
 impl SessionStore {
     pub fn new() -> Self {
-        let lifetime = SessionLifetime::from_env()
-            .unwrap_or_else(|error| panic!("invalid {}: {}", SESSION_TTL_ENV, error));
-        Self::with_lifetime(lifetime)
+        Self::with_lifetime(SessionLifetime::default())
     }
 
     pub fn with_lifetime(lifetime: SessionLifetime) -> Self {

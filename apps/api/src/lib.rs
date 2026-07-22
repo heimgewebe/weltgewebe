@@ -88,6 +88,14 @@ pub async fn run() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    let session_lifetime = crate::auth::session::SessionLifetime::from_env().map_err(|error| {
+        anyhow!(
+            "invalid {}: {}",
+            crate::auth::session::SESSION_TTL_ENV,
+            error
+        )
+    })?;
+
     let (nats_client, nats_configured) = initialise_nats_client().await;
     let federation_router = federation::runtime_router(db_pool.clone())
         .await
@@ -170,9 +178,12 @@ pub async fn run() -> anyhow::Result<()> {
     let sessions = match (db_pool_configured, db_pool.as_ref()) {
         (true, Some(pool)) => {
             tracing::info!("Session store backed by PostgreSQL database");
-            crate::auth::session::SessionBackend::new(crate::auth::session_db::DbSessionStore::new(
-                pool.clone(),
-            ))
+            crate::auth::session::SessionBackend::new(
+                crate::auth::session_db::DbSessionStore::with_lifetime(
+                    pool.clone(),
+                    session_lifetime,
+                ),
+            )
         }
         (true, None) => {
             return Err(anyhow!(
@@ -181,7 +192,7 @@ pub async fn run() -> anyhow::Result<()> {
         }
         (false, _) => {
             tracing::info!("Session store in-memory (database not configured)");
-            crate::auth::session::SessionBackend::new_in_memory()
+            crate::auth::session::SessionBackend::new_in_memory_with_lifetime(session_lifetime)
         }
     };
     let (challenges, tokens, step_up_tokens) = match db_pool.as_ref() {
