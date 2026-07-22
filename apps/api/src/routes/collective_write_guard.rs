@@ -11,6 +11,8 @@ use sqlx::{Postgres, Transaction};
 use tokio::sync::{Mutex, MutexGuard, Semaphore, SemaphorePermit};
 
 use crate::{
+    advisory_lock::node_mutation_lock_key,
+    auth::role::Role,
     config::{DomainNodeWriteSource, DomainReadSource},
     domain_db,
     middleware::auth::AuthContext,
@@ -24,7 +26,6 @@ use super::{domain_write_guard::reject_node_patch_unless_writable, nodes};
 // the connection pool while the first request owns the database advisory lock.
 // Different node ids can proceed concurrently; rare stripe collisions only
 // reduce local parallelism and never weaken correctness.
-const NODE_MUTATION_LOCK_NAMESPACE: &str = "weltgewebe:node-mutation:v1";
 const LOCAL_NODE_LOCK_STRIPES: usize = 64;
 // Each PostgreSQL mutation temporarily needs two pool connections: one holds
 // the advisory-lock transaction and one performs the existing mutation helper.
@@ -54,10 +55,6 @@ fn local_node_locks() -> &'static [Mutex<()>] {
                 .collect()
         })
         .as_slice()
-}
-
-fn node_mutation_lock_key(node_id: &str) -> i64 {
-    crate::advisory_lock::stable_advisory_lock_key(NODE_MUTATION_LOCK_NAMESPACE, &[node_id])
 }
 
 fn local_node_lock_index(node_id: &str) -> usize {
@@ -219,6 +216,26 @@ async fn current_node_for_precondition(
     Ok(cache.get(id).cloned())
 }
 
+fn authorize_node_mutation(
+    auth: &AuthContext,
+    node: &nodes::Node,
+) -> Result<(), (StatusCode, &'static str)> {
+    if matches!(auth.role, Role::Weber | Role::Admin) {
+        return Ok(());
+    }
+    let account_id = auth.account_id.as_deref().ok_or((
+        StatusCode::UNAUTHORIZED,
+        "authenticated account context missing",
+    ))?;
+    if node.created_by_account_id.as_deref() == Some(account_id) {
+        return Ok(());
+    }
+    Err((
+        StatusCode::FORBIDDEN,
+        "guests may only modify nodes they created",
+    ))
+}
+
 fn check_node_precondition(
     node: Option<nodes::Node>,
     id: &str,
@@ -250,6 +267,7 @@ fn check_node_precondition(
 
 pub async fn patch_node_serialized(
     State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
     Path(id): Path<String>,
     headers: HeaderMap,
     Json(payload): Json<nodes::UpdateNode>,
@@ -261,6 +279,12 @@ pub async fn patch_node_serialized(
             Ok(node) => node,
             Err(response) => return response,
         };
+        let Some(current) = node.as_ref() else {
+            return StatusCode::NOT_FOUND.into_response();
+        };
+        if let Err((status, message)) = authorize_node_mutation(&auth, current) {
+            return (status, message).into_response();
+        }
         if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
             return *response;
         }
@@ -273,6 +297,7 @@ pub async fn patch_node_serialized(
 
 pub async fn replace_node_serialized(
     State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
     Path(id): Path<String>,
     headers: HeaderMap,
     Json(payload): Json<Value>,
@@ -284,6 +309,12 @@ pub async fn replace_node_serialized(
             Ok(node) => node,
             Err(response) => return response,
         };
+        let Some(current) = node.as_ref() else {
+            return StatusCode::NOT_FOUND.into_response();
+        };
+        if let Err((status, message)) = authorize_node_mutation(&auth, current) {
+            return (status, message).into_response();
+        }
         if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
             return *response;
         }
@@ -296,6 +327,7 @@ pub async fn replace_node_serialized(
 
 pub async fn delete_node_serialized(
     State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Response {
@@ -306,6 +338,12 @@ pub async fn delete_node_serialized(
             Ok(node) => node,
             Err(response) => return response,
         };
+        let Some(current) = node.as_ref() else {
+            return StatusCode::NOT_FOUND.into_response();
+        };
+        if let Err((status, message)) = authorize_node_mutation(&auth, current) {
+            return (status, message).into_response();
+        }
         if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
             return *response;
         }
@@ -361,6 +399,7 @@ mod tests {
             title: "Test".into(),
             created_at: "2026".into(),
             updated_at: "2026-07-18T12:00:00Z".into(),
+            created_by_account_id: None,
             summary: None,
             info: None,
             tags: vec![],
@@ -382,6 +421,7 @@ mod tests {
             title: "Test".into(),
             created_at: "2026".into(),
             updated_at: "2026-07-18T12:00:00Z".into(),
+            created_by_account_id: None,
             summary: None,
             info: None,
             tags: vec![],
@@ -403,6 +443,7 @@ mod tests {
             title: "Test".into(),
             created_at: "2026".into(),
             updated_at: "2026-07-18T12:00:00Z".into(),
+            created_by_account_id: None,
             summary: None,
             info: None,
             tags: vec![],

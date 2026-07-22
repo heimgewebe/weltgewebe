@@ -704,30 +704,53 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
             ReceiveStatus::Duplicate
         );
     }
-    for index in 0..119 {
-        let event = sender_c
-            .publish_local(PublishRequest {
-                actor: "system:postgres-shared-rate-proof".to_string(),
-                event_type: "object.upserted".to_string(),
-                object_address: format!("wg://cell-c/node/shared-rate-{index}"),
-                object_kind: "node".to_string(),
-                object_version: 1,
-                previous_version: None,
-                scope: "global".to_string(),
-                neighbourhood_targets: vec![],
-                payload: json!({"index": index}),
-            })
-            .await?;
-        let receiver = if index % 2 == 0 {
-            &shared_one
-        } else {
-            &shared_two
-        };
-        assert_eq!(
-            receiver.receive(event).await?.status,
-            ReceiveStatus::Applied
-        );
-    }
+    let duplicate_rate_count: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(request_count), 0)::bigint \
+         FROM federation_rate_limit_counters \
+         WHERE scope = 'receive-origin' AND subject = 'cell-b:cell-c'",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        duplicate_rate_count, 1,
+        "exact authenticated duplicates must not consume the shared origin bucket"
+    );
+
+    // Prime the active database-time bucket immediately below the limit. The
+    // previous 119-event loop could straddle a minute boundary and make this
+    // integration proof nondeterministic even though the shared counter was
+    // correct. Direct seeding keeps the proof focused on cross-replica sharing.
+    sqlx::query(
+        "WITH database_window AS (\
+           SELECT floor(extract(epoch FROM clock_timestamp()) / 60)::bigint * 60 AS window_start\
+         ) \
+         INSERT INTO federation_rate_limit_counters \
+         (scope, subject, window_start, window_seconds, request_count, expires_at) \
+         SELECT 'receive-origin', 'cell-b:cell-c', window_start, 60, 119, \
+                to_timestamp(window_start + 120) \
+         FROM database_window \
+         ON CONFLICT (scope, subject, window_start, window_seconds) \
+         DO UPDATE SET request_count = 119, expires_at = EXCLUDED.expires_at",
+    )
+    .execute(&pool)
+    .await?;
+    let last_allowed_event = sender_c
+        .publish_local(PublishRequest {
+            actor: "system:postgres-shared-rate-proof".to_string(),
+            event_type: "object.upserted".to_string(),
+            object_address: "wg://cell-c/node/shared-rate-last-allowed".to_string(),
+            object_kind: "node".to_string(),
+            object_version: 1,
+            previous_version: None,
+            scope: "global".to_string(),
+            neighbourhood_targets: vec![],
+            payload: json!({"last_allowed": true}),
+        })
+        .await?;
+    assert_eq!(
+        shared_one.receive(last_allowed_event).await?.status,
+        ReceiveStatus::Applied
+    );
     let limited_event = sender_c
         .publish_local(PublishRequest {
             actor: "system:postgres-shared-rate-proof".to_string(),

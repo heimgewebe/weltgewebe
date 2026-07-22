@@ -42,6 +42,7 @@ async fn state_for_role(role: Role) -> Result<ApiState> {
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Jsonl,
         domain_account_write_source: DomainAccountWriteSource::Jsonl,
         domain_node_write_source: DomainNodeWriteSource::Jsonl,
@@ -74,7 +75,7 @@ async fn state_for_role(role: Role) -> Result<ApiState> {
     let mut accounts = AccountStore::new();
     accounts.insert(AccountInternal {
         public: AccountPublic {
-            id: "actor".to_string(),
+            id: ACTOR_ID.to_string(),
             kind: "garnrolle".to_string(),
             title: "Testgarnrolle".to_string(),
             summary: None,
@@ -123,7 +124,7 @@ async fn state_for_role(role: Role) -> Result<ApiState> {
 async fn authenticated_app(state: ApiState) -> (Router, String) {
     let session = state
         .sessions
-        .create("actor".to_string(), None)
+        .create(ACTOR_ID.to_string(), None)
         .await
         .expect("in-memory session must be created");
     let cookie = format!("gewebe_session={}", session.id);
@@ -140,6 +141,7 @@ fn write_fixture(path: &Path, content: &str) {
     fs::write(path, content).expect("write fixture");
 }
 
+const ACTOR_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const INITIAL_NODE_ETAG: &str = "\"2026-01-01T00:00:00Z\"";
 
 fn mutation_request_with_etag(
@@ -365,7 +367,9 @@ async fn node_delete_rejects_mixed_node_and_edge_write_sources() -> Result<()> {
     let in_dir = tmp.path().join("in");
     let nodes_path = in_dir.join("demo.nodes.jsonl");
     let original = concat!(
-        r#"{"id":"n1","kind":"Werkstatt","title":"Alt","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+        r#"{"id":"n1","kind":"Werkstatt","title":"Altbestand","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+        r#"{"id":"n2","kind":"Werkstatt","title":"Fremd","address":"Fremd 2","location":{"lat":53.6,"lon":10.1},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","created_by_account_id":"other"}"#,
         "\n",
     );
     write_fixture(&nodes_path, original);
@@ -803,12 +807,97 @@ async fn concurrent_replace_and_delete_leave_one_coherent_jsonl_result() -> Resu
 
 #[tokio::test]
 #[serial]
-async fn guest_cannot_mutate_shared_elements() -> Result<()> {
+async fn guest_can_create_and_mutate_own_node_with_server_owned_creator() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    write_fixture(&in_dir.join("demo.edges.jsonl"), "");
+    let _env = set_gewebe_in_dir(&in_dir);
+    let state = state_for_role(Role::Gast).await?;
+    let (app, cookie) = authenticated_app(state.clone()).await;
+
+    let create = mutation_request(
+        "POST",
+        "/nodes",
+        &cookie,
+        r#"{"title":"Gastknoten","kind":"Werkstatt","address":"Gastweg 1","location":{"lat":53.5,"lon":10.0},"tags":[],"operation_id":"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"}"#,
+    );
+    let response = app.clone().oneshot(create).await?;
+    let status = response.status();
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    assert_eq!(
+        status,
+        StatusCode::CREATED,
+        "unexpected create response: {}",
+        String::from_utf8_lossy(&bytes)
+    );
+    let created: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(created["created_by_account_id"], ACTOR_ID);
+    let node_id = created["id"].as_str().expect("created id");
+    let etag = format!(
+        "\"{}\"",
+        created["updated_at"].as_str().expect("created updated_at")
+    );
+
+    let replace = mutation_request_with_etag(
+        "PUT",
+        &format!("/nodes/{node_id}"),
+        &cookie,
+        r#"{"title":"Eigener Gastknoten","kind":"Werkstatt","address":"Gastweg 2","location":{"lat":53.51,"lon":10.01},"tags":["eigen"]}"#,
+        Some(&etag),
+    );
+    let response = app.oneshot(replace).await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let updated: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(updated["title"], "Eigener Gastknoten");
+    assert_eq!(updated["created_by_account_id"], ACTOR_ID);
+
+    let persisted = fs::read_to_string(in_dir.join("demo.nodes.jsonl"))?;
+    assert!(persisted.contains(&format!(r#""created_by_account_id":"{ACTOR_ID}""#)));
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn guest_can_update_and_anchor_own_garnrolle() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    write_fixture(
+        &in_dir.join("demo.accounts.jsonl"),
+        concat!(
+            r#"{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","type":"garnrolle","title":"Gast","role":"gast","map_state":"not_on_map","radius_m":0}"#,
+            "\n",
+        ),
+    );
+    let _env = set_gewebe_in_dir(&in_dir);
+    let state = state_for_role(Role::Gast).await?;
+    let (app, cookie) = authenticated_app(state).await;
+    let request = mutation_request(
+        "PATCH",
+        "/accounts/me/profile",
+        &cookie,
+        r#"{"title":"Verankerte Gastgarnrolle","summary":"Ich webe mit.","tags":["gast"],"address":"Gastweg 3","map_state":"exact","radius_m":0,"location":{"lat":53.52,"lon":10.02}}"#,
+    );
+    let response = app.oneshot(request).await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let profile: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(profile["title"], "Verankerte Gastgarnrolle");
+    assert_eq!(profile["map_state"], "exact");
+    assert_eq!(profile["location"]["lat"], 53.52);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn guest_cannot_mutate_legacy_or_foreign_nodes() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let in_dir = tmp.path().join("in");
     let nodes_path = in_dir.join("demo.nodes.jsonl");
     let original = concat!(
-        r#"{"id":"n1","kind":"Werkstatt","title":"Alt","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+        r#"{"id":"n1","kind":"Werkstatt","title":"Altbestand","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+        "\n",
+        r#"{"id":"n2","kind":"Werkstatt","title":"Fremd","address":"Fremd 2","location":{"lat":53.6,"lon":10.1},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","created_by_account_id":"other"}"#,
         "\n",
     );
     write_fixture(&nodes_path, original);
@@ -816,36 +905,38 @@ async fn guest_cannot_mutate_shared_elements() -> Result<()> {
     let state = state_for_role(Role::Gast).await?;
     let (app, cookie) = authenticated_app(state).await;
 
-    let replace_without_precondition = mutation_request_with_etag(
-        "PUT",
-        "/nodes/n1",
-        &cookie,
-        r#"{"title":"Verboten","kind":"Werkstatt","address":"Neu 1","location":{"lat":53.55,"lon":10.05}}"#,
-        None,
-    );
-    assert_eq!(
-        app.clone()
-            .oneshot(replace_without_precondition)
-            .await?
-            .status(),
-        StatusCode::FORBIDDEN,
-    );
+    for node_id in ["n1", "n2"] {
+        let replace_without_precondition = mutation_request_with_etag(
+            "PUT",
+            &format!("/nodes/{node_id}"),
+            &cookie,
+            r#"{"title":"Verboten","kind":"Werkstatt","address":"Neu 1","location":{"lat":53.55,"lon":10.05}}"#,
+            None,
+        );
+        assert_eq!(
+            app.clone()
+                .oneshot(replace_without_precondition)
+                .await?
+                .status(),
+            StatusCode::FORBIDDEN,
+        );
 
-    let replace = mutation_request(
-        "PUT",
-        "/nodes/n1",
-        &cookie,
-        r#"{"title":"Verboten","kind":"Werkstatt","address":"Neu 1","location":{"lat":53.55,"lon":10.05}}"#,
-    );
-    assert_eq!(
-        app.clone().oneshot(replace).await?.status(),
-        StatusCode::FORBIDDEN
-    );
-    let delete = mutation_request("DELETE", "/nodes/n1", &cookie, "");
-    assert_eq!(
-        app.clone().oneshot(delete).await?.status(),
-        StatusCode::FORBIDDEN
-    );
+        let replace = mutation_request(
+            "PUT",
+            &format!("/nodes/{node_id}"),
+            &cookie,
+            r#"{"title":"Verboten","kind":"Werkstatt","address":"Neu 1","location":{"lat":53.55,"lon":10.05}}"#,
+        );
+        assert_eq!(
+            app.clone().oneshot(replace).await?.status(),
+            StatusCode::FORBIDDEN
+        );
+        let delete = mutation_request("DELETE", &format!("/nodes/{node_id}"), &cookie, "");
+        assert_eq!(
+            app.clone().oneshot(delete).await?.status(),
+            StatusCode::FORBIDDEN
+        );
+    }
     assert_eq!(fs::read_to_string(&nodes_path)?, original);
 
     Ok(())

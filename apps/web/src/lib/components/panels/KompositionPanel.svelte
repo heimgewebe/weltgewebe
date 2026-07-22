@@ -28,7 +28,7 @@
   let nodeOperationId: string | null = null;
   let nodeOperationSignature: string | null = null;
 
-  $: canWrite = $authStore.role === "weber" || $authStore.role === "admin";
+  $: canWrite = $authStore.authenticated;
   $: placingGarnrolle = $kompositionDraft?.mode === "place-garnrolle";
   $: canSubmit =
     !!$kompositionDraft?.lngLat && !!title.trim() && !!address.trim();
@@ -148,7 +148,7 @@
   {#if !canWrite}
     <div class="state-pending">
       <p><strong>Kein Zugriff</strong></p>
-      <p>Nur Weber und Admins können neue Knoten anlegen.</p>
+      <p>Jeder angemeldete Account kann einen neuen Knoten knüpfen.</p>
     </div>
     <div class="actions">
       <button type="button" class="btn btn-secondary" on:click={handleCancel}

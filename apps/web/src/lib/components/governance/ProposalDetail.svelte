@@ -26,12 +26,17 @@
   let messageBody = "";
   let submitting = false;
 
-  $: canWeave = $authStore.role === "weber" || $authStore.role === "admin";
+  $: canDiscuss = $authStore.authenticated;
+  $: canDecide =
+    $authStore.authenticated &&
+    ($authStore.role === "weber" || $authStore.role === "admin") &&
+    !!proposal &&
+    proposal.applicant_account_id !== $authStore.account_id;
   $: isOpen = proposal?.status === "consent" || proposal?.status === "voting";
 
   function describeError(cause: unknown): string {
     if (cause instanceof GovernanceApiError) {
-      if (cause.status === 403) return "Diese Webungsaktion ist Gästen nicht erlaubt.";
+      if (cause.status === 403) return "Über den eigenen Weberantrag kannst du nicht selbst entscheiden.";
       if (cause.status === 409) return "Die Aktion passt nicht mehr zur aktuellen Antragsphase.";
       if (cause.status === 503) return "Das Antragssystem ist vorübergehend nicht verfügbar.";
     }
@@ -146,7 +151,7 @@
       </section>
     {/if}
 
-    {#if canWeave && proposal.status === "consent"}
+    {#if canDecide && proposal.status === "consent"}
       <section class="card action-card" aria-labelledby="veto-heading">
         <h2 id="veto-heading">Begründetes Veto einlegen</h2>
         <p>Ein Veto verhindert keine Entscheidung. Es eröffnet nach Ablauf der ersten sieben Tage eine weitere siebentägige Gesprächs- und Abstimmungsphase.</p>
@@ -155,7 +160,7 @@
       </section>
     {/if}
 
-    {#if canWeave && proposal.status === "voting"}
+    {#if canDecide && proposal.status === "voting"}
       <section class="card action-card" aria-labelledby="vote-heading">
         <h2 id="vote-heading">Abstimmen</h2>
         <p>Es gibt keine Mindestbeteiligung. Der Antrag wird angenommen, wenn am Ende mehr Ja- als Nein-Stimmen vorliegen.</p>
@@ -180,14 +185,14 @@
           </article>
         {/each}
       </div>
-      {#if canWeave && isOpen}
+      {#if canDiscuss && isOpen}
         <div class="message-form">
           <label for="message-body">Beitrag verfassen</label>
           <textarea id="message-body" bind:value={messageBody} maxlength="4000" rows="4"></textarea>
           <button class="primary" on:click={postMessage} disabled={!messageBody.trim() || submitting}>Beitrag senden</button>
         </div>
-      {:else if $authStore.role === "gast"}
-        <p class="guest-note">Als Gast kannst du den Gesprächsraum lesen. Schreiben, Veto und Abstimmung sind Webungsaktionen und beginnen erst mit dem Weberstatus.</p>
+      {:else if !$authStore.authenticated}
+        <p class="guest-note">Melde dich an, um im Gesprächsraum mitzuschreiben.</p>
       {/if}
     </section>
   {/if}

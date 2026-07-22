@@ -98,8 +98,12 @@ Der Werkzeugfächer formuliert Absichten, ohne der Karte dauerhaft eine Leiste z
 
 Die Webungsebene trennt die fachliche Kategorie von der konkreten Handlung. Der aktuelle Produktstand bietet dort:
 
-- **Knoten knüpfen** für Weber und Administratoren;
+- **Knoten knüpfen** für jeden angemeldeten Account;
 - **Antrag stellen** für Gäste als direkter Einstieg in den produktiv vorhandenen Weberantrag.
+
+Gäste können eigene Knoten im Fokuspanel bearbeiten. An fremden oder historisch
+eigentümerlosen Knoten bleibt der Bearbeitungstab verborgen; Weber und
+Administratoren erhalten dort die gemeinschaftliche Pflegeaktion.
 
 Weitere Antragstypen dürfen erst erscheinen, wenn ihr Serververtrag tatsächlich produktiv ist. Eine deaktivierte oder beschriftete Oberfläche darf keine nicht vorhandene Schreibfähigkeit vortäuschen. Rollenabhängige Berechtigungen dürfen die drei Hauptäste nicht verschieben.
 
