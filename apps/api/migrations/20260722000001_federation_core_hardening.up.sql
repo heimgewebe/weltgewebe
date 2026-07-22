@@ -4,7 +4,7 @@ LANGUAGE SQL
 IMMUTABLE
 STRICT
 AS $$
-    SELECT COALESCE(jsonb_agg(target ORDER BY target), '[]'::jsonb)
+    SELECT COALESCE(jsonb_agg(target ORDER BY target COLLATE "C"), '[]'::jsonb)
     FROM (
         SELECT DISTINCT jsonb_array_elements_text(targets) AS target
     ) canonical_targets

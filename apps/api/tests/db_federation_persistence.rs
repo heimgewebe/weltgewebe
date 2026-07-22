@@ -105,6 +105,16 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
         .await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
 
+    let canonical_function: String = sqlx::query_scalar(
+        "SELECT pg_get_functiondef('federation_canonical_neighbourhood_targets(jsonb)'::regprocedure)",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(
+        canonical_function.contains("ORDER BY target COLLATE \"C\""),
+        "database canonicalization must use C collation to match Rust string ordering"
+    );
+
     let identity_a = identity("cell-a", "key-a", 61);
     let sender = FederationService::new(
         identity("cell-a", "key-a", 61),
@@ -324,6 +334,39 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
         restarted.receive(neighbourhood_v1).await?.status,
         ReceiveStatus::Applied
     );
+
+    // Rust canonicalizes strings by byte/codepoint order. PostgreSQL must use
+    // C collation for the same ordering; locale-sensitive ordering such as
+    // en_US may otherwise place `aab` before `a-b` and violate the DB CHECK.
+    let locale_sensitive_neighbourhood = sender
+        .publish_local(PublishRequest {
+            actor: "system:postgres-collation-proof".to_string(),
+            event_type: "object.upserted".to_string(),
+            object_address: "wg://cell-a/node/collation-audience".to_string(),
+            object_kind: "node".to_string(),
+            object_version: 1,
+            previous_version: None,
+            scope: "neighbourhood".to_string(),
+            neighbourhood_targets: vec!["cell-b".to_string(), "aab".to_string(), "a-b".to_string()],
+            payload: json!({"version": 1}),
+        })
+        .await?;
+    assert_eq!(
+        restarted
+            .receive(locale_sensitive_neighbourhood)
+            .await?
+            .status,
+        ReceiveStatus::Applied
+    );
+    let locale_sensitive_stored = restarted
+        .object("wg://cell-a/node/collation-audience")
+        .await?
+        .expect("locale-sensitive neighbourhood object");
+    assert_eq!(
+        locale_sensitive_stored.neighbourhood_targets,
+        vec!["a-b".to_string(), "aab".to_string(), "cell-b".to_string(),]
+    );
+
     let neighbourhood_v2 = sender
         .publish_local(PublishRequest {
             actor: "system:postgres-scope-proof".to_string(),
