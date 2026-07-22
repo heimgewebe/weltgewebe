@@ -317,7 +317,7 @@ async fn require_conversation_writable(
     // The first read is only a classification hint; the row is locked and re-read below
     // before the write is authorized, so deletion or an unexpected type change cannot race.
     let observed_type: Option<String> = sqlx::query_scalar(
-        "SELECT conversation_type \\n         FROM domain_conversations \\n         WHERE id = $1::uuid AND deleted_at IS NULL",
+        "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL",
     )
     .bind(conversation_id)
     .fetch_optional(&mut **tx)
@@ -334,7 +334,7 @@ async fn require_conversation_writable(
 
     if observed_type == "node" {
         let locked_type: Option<String> = sqlx::query_scalar(
-            "SELECT conversation_type \\n             FROM domain_conversations \\n             WHERE id = $1::uuid AND deleted_at IS NULL \\n             FOR UPDATE",
+            "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL FOR UPDATE",
         )
         .bind(conversation_id)
         .fetch_optional(&mut **tx)
@@ -360,14 +360,14 @@ async fn require_conversation_writable(
     // conversation row second. This keeps the source stable through commit and
     // prevents a rollback to legacy while an authorized canonical write is in flight.
     let governance_source: Option<String> = sqlx::query_scalar(
-        "SELECT governance_source \\n         FROM domain_conversation_cutover_state \\n         WHERE singleton \\n         FOR SHARE",
+        "SELECT governance_source FROM domain_conversation_cutover_state WHERE singleton FOR SHARE",
     )
     .fetch_optional(&mut **tx)
     .await
     .map_err(|error| database_error("lock conversation write cutover", error))?;
 
     let conversation_type: Option<String> = sqlx::query_scalar(
-        "SELECT conversation_type \\n         FROM domain_conversations \\n         WHERE id = $1::uuid AND deleted_at IS NULL \\n         FOR UPDATE",
+        "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL FOR UPDATE",
     )
     .bind(conversation_id)
     .fetch_optional(&mut **tx)
