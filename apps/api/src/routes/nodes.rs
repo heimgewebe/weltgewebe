@@ -1072,6 +1072,46 @@ pub async fn create_node(
                         nodes.insert(existing.id.clone(), existing.clone());
                         state.metrics.set_nodes_cache_count(nodes.len() as i64);
                     }
+                    if postgres_lifecycle_guarded {
+                        let tx = node_create_lifecycle_guard.as_mut().ok_or_else(|| {
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                "PostgreSQL node lifecycle guard disappeared during replay"
+                                    .to_string(),
+                            )
+                        })?;
+                        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+                            .bind(node_mutation_lock_key(&existing.id))
+                            .execute(&mut **tx)
+                            .await
+                            .map_err(|error| {
+                                tracing::error!(%error, node_id = %existing.id, "failed to lock replayed node mutation lifecycle");
+                                (
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    "failed to guard replayed node creation lifecycle".to_string(),
+                                )
+                            })?;
+                        let node_still_exists: bool = sqlx::query_scalar(
+                            "SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)",
+                        )
+                        .bind(&existing.id)
+                        .fetch_one(&mut **tx)
+                        .await
+                        .map_err(|error| {
+                            tracing::error!(%error, node_id = %existing.id, "failed to recheck replayed node after acquiring mutation lock");
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                "failed to verify replayed node creation lifecycle".to_string(),
+                            )
+                        })?;
+                        if !node_still_exists {
+                            return Err((
+                                StatusCode::CONFLICT,
+                                "node operation result was deleted before replay completed"
+                                    .to_string(),
+                            ));
+                        }
+                    }
                     ensure_node_created_faden(
                         &state,
                         &auth,

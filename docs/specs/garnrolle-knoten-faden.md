@@ -221,8 +221,8 @@ PostgreSQL-Vorgang:
 - Fäden mit der gelöschten Garnrolle als Account-Endpunkt werden entfernt;
 - Beiträge in fremden Anträgen und Knotengesprächen bleiben mit ihrem
   Anzeigenamen erhalten, verlieren aber die Account-ID;
-- Vetos und Stimmen in fremden Weberverfahren bleiben als Verfahrensspur und
-  für die Zählung erhalten, verlieren aber ebenfalls ihre aktive Account-ID.
+- formale Vetos und Stimmen können einem löschbaren Gastkonto nicht zugeordnet
+  sein; der Austritt von Webern und Administratoren ist nicht Teil dieses Pfads.
 
 Der Austritt ist nur verfügbar, wenn Accounts, Knoten und Fäden kanonisch in
 PostgreSQL gelesen und geschrieben werden. Ein Mischbetrieb wird fail-closed

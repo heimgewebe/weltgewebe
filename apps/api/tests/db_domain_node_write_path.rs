@@ -71,6 +71,16 @@ fn account_lifecycle_lock_key(account_id: &str) -> i64 {
     i64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"))
 }
 
+fn node_mutation_lock_key(node_id: &str) -> i64 {
+    let mut hasher = Sha256::new();
+    hasher.update(b"weltgewebe:node-mutation:v1");
+    let bytes = node_id.as_bytes();
+    hasher.update((bytes.len() as u64).to_be_bytes());
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    i64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"))
+}
+
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must point at a direct PostgreSQL database (port 5432)");
@@ -1559,6 +1569,107 @@ async fn guest_node_limit_allows_replay_but_rejects_new_operation() -> Result<()
     .fetch_one(&pool)
     .await?;
     assert_eq!(owned_nodes, 1);
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// K2f. An idempotent replay must lock the real existing node before repairing
+/// its derived Faden. Otherwise a concurrent delete could remove the node while
+/// the replay recreates an orphaned edge to the already deleted id.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn node_create_replay_locks_existing_node_before_faden_repair() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000094";
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, _state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+
+    let request_body = serde_json::json!({
+        "title": "Replay Lock",
+        "kind": "Werkstatt",
+        "address": "Replayweg 1",
+        "location": {"lat": 53.5, "lon": 10.0},
+        "operation_id": "30000000-0000-4000-8000-000000000093"
+    })
+    .to_string();
+    let created_response = app
+        .clone()
+        .oneshot(post_node_req(&cookie, &request_body))
+        .await?;
+    assert_eq!(created_response.status(), StatusCode::CREATED);
+    let created_body = body::to_bytes(created_response.into_body(), usize::MAX).await?;
+    let created: serde_json::Value = serde_json::from_slice(&created_body)?;
+    let node_id = created["id"]
+        .as_str()
+        .context("created replay-lock node id")?
+        .to_string();
+
+    sqlx::query(
+        "DELETE FROM domain_edges WHERE source_id = $1 AND target_id = $2 \
+         AND payload ->> 'source_type' = 'account' AND payload ->> 'target_type' = 'node'",
+    )
+    .bind(ACTOR_ID)
+    .bind(&node_id)
+    .execute(&pool)
+    .await?;
+
+    let mut mutation_blocker = pool.begin().await.context("begin replay node blocker")?;
+    sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+        .bind(node_mutation_lock_key(&node_id))
+        .execute(&mut *mutation_blocker)
+        .await
+        .context("lock existing replay node")?;
+
+    let replay_app = app.clone();
+    let replay_cookie = cookie.clone();
+    let replay_body = request_body.clone();
+    let mut replay_task = tokio::spawn(async move {
+        replay_app
+            .oneshot(post_node_req(&replay_cookie, &replay_body))
+            .await
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut replay_task)
+            .await
+            .is_err(),
+        "replay must wait while the existing node mutation lock is held"
+    );
+
+    sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
+        .bind(&node_id)
+        .execute(&mut *mutation_blocker)
+        .await
+        .context("delete replay node while holding mutation lock")?;
+    mutation_blocker
+        .commit()
+        .await
+        .context("commit concurrent replay-node deletion")?;
+    let replay_response = tokio::time::timeout(Duration::from_secs(5), replay_task)
+        .await
+        .context("replay completes after existing-node lock release")?
+        .context("join replay request")??;
+    assert_eq!(replay_response.status(), StatusCode::CONFLICT);
+
+    let repaired_edges: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2 \
+         AND payload ->> 'source_type' = 'account' AND payload ->> 'target_type' = 'node'",
+    )
+    .bind(ACTOR_ID)
+    .bind(&node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        repaired_edges, 0,
+        "replay must not recreate a Faden after the existing node was deleted"
+    );
 
     clean_all_nodes(&pool).await;
     Ok(())
