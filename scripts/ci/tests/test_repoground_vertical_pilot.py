@@ -38,6 +38,12 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         errors = self.validator.validate(mutated)
         self.assertTrue(any("critical-path coverage" in error for error in errors))
 
+    def test_delivery_status_is_not_embedded_as_transient_pr_state(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["acceptance"]["delivery"] = "pending_pr_review_and_ci"
+        errors = self.validator.validate(mutated)
+        self.assertIn("acceptance.delivery must remain not_established_by_fixture", errors)
+
     def test_default_promotion_cannot_be_claimed_while_delivery_chain_is_blocked(self) -> None:
         mutated = copy.deepcopy(self.evidence)
         mutated["promotion_recommendation"] = "promote_default"

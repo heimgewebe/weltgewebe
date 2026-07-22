@@ -1,6 +1,6 @@
 {
   "acceptance": {
-    "delivery": "pending_pr_review_and_ci",
+    "delivery": "not_established_by_fixture",
     "delivery_chain": "blocked_missing_contract_runtime_rollback_evidence",
     "paired_baseline": "pass",
     "promotion_gate": "pass",

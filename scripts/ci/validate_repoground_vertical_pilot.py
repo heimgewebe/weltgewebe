@@ -262,6 +262,8 @@ def validate(data: dict[str, Any]) -> list[str]:
         for key in ("three_classes", "paired_baseline", "quality", "promotion_gate"):
             if acceptance.get(key) != "pass":
                 errors.append(f"acceptance.{key} must be pass")
+        if acceptance.get("delivery") != "not_established_by_fixture":
+            errors.append("acceptance.delivery must remain not_established_by_fixture")
         if acceptance.get("delivery_chain") != "blocked_missing_contract_runtime_rollback_evidence":
             errors.append("delivery_chain acceptance must retain the narrowed post-T007 blocker")
 
