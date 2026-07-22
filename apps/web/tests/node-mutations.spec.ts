@@ -97,7 +97,53 @@ test.describe("Knoten bearbeiten und löschen", () => {
     );
   });
 
-  test("Gast sieht keine Bearbeitungs- oder Löschaktion", async ({ page }) => {
+  test("Gast kann einen selbst geknüpften Knoten bearbeiten", async ({
+    page,
+  }) => {
+    const guestId = "e2e-gast";
+    await mockApiResponses(page, {
+      auth: {
+        authenticated: true,
+        account_id: guestId,
+        role: "gast",
+      },
+    });
+    await page.goto("/map");
+    const created = await page.evaluate(async (accountId) => {
+      const response = await fetch("/api/nodes", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Eigener Gastknoten",
+          kind: "Ort",
+          address: "Gastweg 1",
+          location: { lat: 53.5, lon: 10.0 },
+          tags: [],
+          operation_id: "40000000-0000-4000-8000-000000000001",
+        }),
+      });
+      const node = await response.json();
+      if (node.created_by_account_id !== accountId) {
+        throw new Error("mock creator binding missing");
+      }
+      return node;
+    }, guestId);
+    await page.goto(`/map?focus=node:${created.id}`);
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator("h3")).toHaveText("Eigener Gastknoten");
+    await panel.getByRole("tab", { name: "Bearbeiten" }).click();
+    await panel
+      .getByRole("button", { name: "Bearbeiten", exact: true })
+      .click();
+    await panel.getByLabel("Titel").fill("Vom Gast gepflegt");
+    await panel.getByRole("button", { name: "Änderungen speichern" }).click();
+    await expect(panel.locator("h3")).toHaveText("Vom Gast gepflegt");
+  });
+
+  test("Gast sieht an einem fremden Knoten keine Bearbeitungs- oder Löschaktion", async ({
+    page,
+  }) => {
     await mockApiResponses(page, {
       auth: {
         authenticated: true,

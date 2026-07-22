@@ -1,5 +1,33 @@
 use sha2::{Digest, Sha256};
 
+pub(crate) const ACCOUNT_LIFECYCLE_LOCK_NAMESPACE: &str = "weltgewebe:account-lifecycle:v1";
+pub(crate) const NODE_MUTATION_LOCK_NAMESPACE: &str = "weltgewebe:node-mutation:v1";
+
+// Cross-path advisory-lock ordering contract. Account lifecycle operations take
+// the account-lifecycle lock first. A fully PostgreSQL-backed node create may
+// then take the new node mutation lock and holds both across node persistence
+// and derived Faden projection. Guest exit likewise starts with the account
+// lifecycle lock and then acquires all affected node locks in deterministic
+// sorted-key order. Ordinary existing-node mutations take only the node lock
+// and must never open a reverse node -> account-lifecycle dependency. The
+// legacy Faden account-row guard is a fallback and must not be re-entered by
+// the fully lifecycle-guarded PostgreSQL create path. Node delete/compensation
+// may additionally lock the domain_edges table, but only after the relevant
+// node advisory lock is already held by the serialized mutation path.
+//
+// This is a partial order, not a universal account -> node -> row recipe:
+// same-account lifecycle competitors are already serialized by the outer
+// account lock. Never introduce a path that holds a node mutation lock while
+// waiting for that same account's lifecycle lock.
+
+pub(crate) fn account_lifecycle_lock_key(account_id: &str) -> i64 {
+    stable_advisory_lock_key(ACCOUNT_LIFECYCLE_LOCK_NAMESPACE, &[account_id])
+}
+
+pub(crate) fn node_mutation_lock_key(node_id: &str) -> i64 {
+    stable_advisory_lock_key(NODE_MUTATION_LOCK_NAMESPACE, &[node_id])
+}
+
 /// Derive one stable 64-bit PostgreSQL advisory-lock key from application-owned
 /// inputs. Length-prefixing each part avoids ambiguous concatenations, while a
 /// versioned namespace keeps unrelated lock domains separate.

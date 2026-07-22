@@ -41,6 +41,7 @@ async fn test_state() -> Result<ApiState> {
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Jsonl,
         domain_account_write_source: DomainAccountWriteSource::Jsonl,
         domain_node_write_source: DomainNodeWriteSource::Jsonl,
@@ -852,7 +853,7 @@ async fn weber_radius_profile_keeps_projection_binding_private_and_stable() -> R
 
 #[tokio::test]
 #[serial]
-async fn gast_reads_own_private_profile_but_cannot_update_it() -> Result<()> {
+async fn gast_reads_and_updates_own_private_profile() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let in_dir = tmp.path().join("in");
     std::fs::create_dir_all(&in_dir)?;
@@ -891,12 +892,30 @@ async fn gast_reads_own_private_profile_but_cannot_update_it() -> Result<()> {
     assert!(profile.get("role").is_none());
 
     let response = app
+        .clone()
         .oneshot(patch_own_profile(
             Some(&cookie),
-            r#"{"title":"Nicht erlaubt","tags":[],"map_state":"not_on_map"}"#,
+            r#"{"title":"Mitwirkende Gastgarnrolle","tags":["gast"],"map_state":"not_on_map"}"#,
         ))
         .await?;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .oneshot(
+            Request::get("/accounts/me/profile")
+                .header("Cookie", &cookie)
+                .body(body::Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let updated: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(updated["title"], "Mitwirkende Gastgarnrolle");
+    assert_eq!(updated["map_state"], "not_on_map");
+    assert_eq!(
+        updated["tags"],
+        serde_json::json!(["gast", "account", "garnrolle"])
+    );
     Ok(())
 }
 
