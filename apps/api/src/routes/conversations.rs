@@ -39,7 +39,7 @@ const MESSAGE_RATE_LIMIT_PER_MINUTE: i64 = 10;
 
 type ConversationRow = (
     String,
-    String,
+    Option<String>,
     String,
     String,
     DateTime<Utc>,
@@ -62,7 +62,7 @@ type MessageRow = (
 pub struct ConversationView {
     pub id: String,
     pub conversation_type: String,
-    pub node_id: String,
+    pub node_id: Option<String>,
     pub visibility: String,
     pub created_at: String,
     pub updated_at: String,
@@ -878,6 +878,28 @@ mod tests {
         ));
         assert!(!conversation_is_writable("governance_proposal", None));
         assert!(!conversation_is_writable("unknown", Some("canonical")));
+    }
+
+    #[test]
+    fn conversation_view_accepts_governance_target_without_node() {
+        let created_at = DateTime::parse_from_rfc3339("2026-07-22T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let updated_at = DateTime::parse_from_rfc3339("2026-07-22T12:00:01Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let view = conversation_from_row((
+            Uuid::new_v4().to_string(),
+            None,
+            "governance_proposal".to_string(),
+            "public".to_string(),
+            created_at,
+            updated_at,
+            None,
+        ));
+
+        assert_eq!(view.conversation_type, "governance_proposal");
+        assert_eq!(view.node_id, None);
     }
 
     #[test]
