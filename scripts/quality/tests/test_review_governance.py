@@ -70,6 +70,34 @@ def _comment(
     }
 
 
+def _forwarded_comment(
+    bundle: Bundle, *, reviewer: str, axis: str, author: str = "alex", comment_id: int = 1
+) -> dict:
+    report = (
+        f"Extern eingeholter Reviewbericht von {reviewer} zur Achse {axis}. "
+        "Der vorgelegte Diff wurde vollständig geprüft, einschließlich Korrektheit, "
+        "Regressionen und relevanter Fehlerszenarien. Alle benannten Befunde wurden "
+        "nachgearbeitet; es verbleiben keine bekannten Mergeblocker."
+    )
+    payload = {
+        "schema_version": 1,
+        "head_sha": bundle.head_sha,
+        "reviewer": reviewer,
+        "review_axis": axis,
+        "verdict": "PASS",
+        "findings_resolved": True,
+    }
+    return {
+        "id": comment_id,
+        "body": report + "\n<!-- weltgewebe-forwarded-review\n" + json.dumps(payload) + "\n-->",
+        "author_association": "OWNER",
+        "user": {"login": author},
+        "html_url": "https://example.invalid/forwarded-review",
+        "created_at": "2026-07-22T12:00:00Z",
+        "updated_at": "2026-07-22T12:00:00Z",
+    }
+
+
 ALLOWED_ATTESTERS = frozenset({"alex"})
 
 
@@ -1163,6 +1191,30 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertEqual(template.count("<!-- weltgewebe-risk: R? -->"), 1)
         self.assertIn("R3 = auth, privacy, security", template)
 
+
+
+class ForwardedExternalReviewTests(unittest.TestCase):
+    def test_owner_forwarded_external_reviews_count_for_r2(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        comments = [
+            _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness", comment_id=11),
+            _forwarded_comment(bundle, reviewer="External LLM B", axis="testing", comment_id=12),
+        ]
+        result = _evaluate(bundle=bundle, risk_class="R2", comments=comments)
+        self.assertTrue(result["pass"], result["reasons"])
+        self.assertEqual(result["accepted_review_count"], 2)
+        self.assertEqual(
+            {item["kind"] for item in result["accepted_reviews"]},
+            {"forwarded-external-review"},
+        )
+
+    def test_forwarded_review_is_stale_after_head_change(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        comment = _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness")
+        changed = Bundle(**{**bundle.__dict__, "head_sha": "f" * 40})
+        result = _evaluate(bundle=changed, risk_class="R2", comments=[comment])
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["stale_evidence_count"], 1)
 
 if __name__ == "__main__":
     unittest.main()

@@ -43,6 +43,12 @@ Der Normalfall soll ohne manuelle Hasharbeit auskommen:
 3. **R2/R3 – Produktlogik oder sicherheitsrelevante Änderung:** Das automatisch
    erzeugte Reviewpaket verwenden und die vollständigen hashgebundenen Berichte
    als PR-Kommentare attestieren.
+   Alternativ darf ein in der Attester-Liste autorisierter Maintainer einen von
+   außen eingeholten und an den Operator weitergereichten vollständigen Reviewbericht
+   mit `weltgewebe-forwarded-review` attestieren. Dieser vereinfachte Beleg muss den
+   aktuellen `head_sha`, Prüferidentität, Reviewachse, Urteil und den Status der
+   Befundauflösung enthalten; der Gate-Code berechnet den Berichtshash selbst. Ein
+   Head-Wechsel macht den Beleg automatisch ungültig.
 
 Bei jedem Push werden alte Freigaben nur dann weitergezählt, wenn GitHub sie
 ausdrücklich an den neuen Head bindet. Für R2 und R3 bleiben frühere Berichte

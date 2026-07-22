@@ -46,7 +46,9 @@ jobs:
           contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
           (
             contains(github.event.comment.body, '<!-- weltgewebe-review-evidence') ||
+            contains(github.event.comment.body, '<!-- weltgewebe-forwarded-review') ||
             contains(github.event.changes.body.from, '<!-- weltgewebe-review-evidence') ||
+            contains(github.event.changes.body.from, '<!-- weltgewebe-forwarded-review') ||
             startsWith(github.event.comment.body, '/review-evidence recheck')
           )
         )
