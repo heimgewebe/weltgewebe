@@ -94,12 +94,22 @@ jobs:
           --cluster "$CLUSTER_NAME"
           --mode gitops
           --source-commit "$GITHUB_SHA"
+      - name: Stage failure diagnostics
+        if: failure()
+        run: |
+          set -euo pipefail
+          source=.cache/weltgewebe-platform/failures
+          target=build/kubernetes-platform/failures
+          if [[ -d "$source" ]]; then
+            mkdir -p "$target"
+            cp -a "$source"/. "$target"/
+          fi
       - name: Collect failure diagnostics
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: kubernetes-platform-failure-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .cache/weltgewebe-platform/failures/
+          path: build/kubernetes-platform/failures/
           if-no-files-found: ignore
           retention-days: 7
 
@@ -122,20 +132,35 @@ jobs:
         run: >-
           python scripts/platform/ha_reference.py proof
           --cluster "$CLUSTER_NAME"
+      - name: Stage HA recovery receipt
+        run: |
+          set -euo pipefail
+          mkdir -p build/kubernetes-platform/ha-recovery
+          cp -- .cache/weltgewebe-platform/receipts/*-ha-recovery.json \
+            build/kubernetes-platform/ha-recovery/
       - name: Upload HA recovery receipt
-        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: kubernetes-ha-recovery-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .cache/weltgewebe-platform/receipts/*-ha-recovery.json
-          if-no-files-found: ignore
+          path: build/kubernetes-platform/ha-recovery/*.json
+          if-no-files-found: error
           retention-days: 14
+      - name: Stage HA failure diagnostics
+        if: failure()
+        run: |
+          set -euo pipefail
+          source=.cache/weltgewebe-platform/failures
+          target=build/kubernetes-platform/failures
+          if [[ -d "$source" ]]; then
+            mkdir -p "$target"
+            cp -a "$source"/. "$target"/
+          fi
       - name: Collect HA failure diagnostics
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: kubernetes-ha-failure-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .cache/weltgewebe-platform/failures/
+          path: build/kubernetes-platform/failures/
           if-no-files-found: ignore
           retention-days: 14
       - name: Reconcile owned HA proof resources
