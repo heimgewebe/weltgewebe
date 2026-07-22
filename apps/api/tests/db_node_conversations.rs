@@ -68,6 +68,7 @@ fn config() -> AppConfig {
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source: DomainAccountWriteSource::Postgres,
         domain_node_write_source: DomainNodeWriteSource::Postgres,
@@ -452,7 +453,7 @@ async fn node_conversation_vertical_slice() {
     }
 
     let message_path = format!("/conversations/{conversation_id}/messages");
-    let (status, _) = json_response(
+    let (status, guest_message) = json_response(
         &app,
         request(
             "POST",
@@ -464,7 +465,9 @@ async fn node_conversation_vertical_slice() {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(guest_message["author_account_id"], GUEST_ID);
+    assert_eq!(guest_message["author_title"], "Gast");
 
     let (status, invalid_content) = json_response(
         &app,
@@ -577,7 +580,7 @@ async fn node_conversation_vertical_slice() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(page_two["items"].as_array().map(Vec::len), Some(1));
+    assert_eq!(page_two["items"].as_array().map(Vec::len), Some(2));
     assert_eq!(page_two["page"]["has_more"], false);
     assert!(page_two["page"]["next_cursor"].is_null());
     let first_page_ids: Vec<&str> = page_one["items"]
@@ -603,6 +606,36 @@ async fn node_conversation_vertical_slice() {
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(forbidden["code"], "message_author_required");
+
+    let (status, guest_edit_forbidden) = json_response(
+        &app,
+        request(
+            "PATCH",
+            &item_path,
+            Some(&guest),
+            Some(r#"{"content":"Gast ändert fremden Beitrag"}"#),
+            None,
+            first["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(guest_edit_forbidden["code"], "message_author_required");
+
+    let (status, guest_delete_forbidden) = json_response(
+        &app,
+        request(
+            "DELETE",
+            &item_path,
+            Some(&guest),
+            None,
+            None,
+            first["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(guest_delete_forbidden["code"], "message_owner_required");
 
     let (status, required) = json_response(
         &app,

@@ -6,9 +6,9 @@
 //! 1. **Fail closed:** Ohne konfigurierten Pool antworten alle
 //!    Governance-Endpunkte mit 503 — es gibt keinen JSONL- oder
 //!    In-Memory-Fallback für Anträge.
-//! 2. **Unberechtigte Gastwrites:** Veto, Stimme und Gesprächsraum-Beiträge
-//!    sind Webungsaktionen; Gäste erhalten 403, Unangemeldete 401 — noch vor
-//!    jedem Datenbankzugriff.
+//! 2. **Gast-Governance-Grenze:** Gesprächsraum-Beiträge sind für Gäste erlaubt;
+//!    formale Vetos und Stimmen werden für Gäste mit 403 abgewiesen — noch vor
+//!    jedem Datenbankzugriff. Unangemeldete erhalten 401.
 //! 3. **Keine direkte Fadenmutation:** Fäden besitzen keinen öffentlichen
 //!    POST-, PATCH-, PUT- oder DELETE-Pfad. Sie entstehen ausschließlich als
 //!    serverseitige Projektion einer Webungsaktion.
@@ -79,6 +79,7 @@ fn test_config() -> AppConfig {
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Jsonl,
         domain_account_write_source: DomainAccountWriteSource::Jsonl,
         domain_node_write_source: DomainNodeWriteSource::Jsonl,
@@ -283,11 +284,11 @@ async fn governance_writes_fail_closed_without_database() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Unberechtigte Gastwrites
+// 2. Gast-Webungsrechte und formale Selbstentscheidungsgrenze
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn guest_webungsaktionen_are_forbidden() {
+async fn guest_discussion_passes_but_formal_decisions_are_forbidden() {
     let (app, gast_cookie, _) = app_without_database().await;
 
     let veto = app
@@ -300,7 +301,11 @@ async fn guest_webungsaktionen_are_forbidden() {
         ))
         .await
         .expect("response");
-    assert_eq!(veto.status(), StatusCode::FORBIDDEN, "guests must not veto");
+    assert_eq!(
+        veto.status(),
+        StatusCode::FORBIDDEN,
+        "guest veto must be rejected before touching the database"
+    );
 
     let vote = app
         .clone()
@@ -312,7 +317,11 @@ async fn guest_webungsaktionen_are_forbidden() {
         ))
         .await
         .expect("response");
-    assert_eq!(vote.status(), StatusCode::FORBIDDEN, "guests must not vote");
+    assert_eq!(
+        vote.status(),
+        StatusCode::FORBIDDEN,
+        "guest vote must be rejected before touching the database"
+    );
 
     let message = app
         .clone()
@@ -326,8 +335,8 @@ async fn guest_webungsaktionen_are_forbidden() {
         .expect("response");
     assert_eq!(
         message.status(),
-        StatusCode::FORBIDDEN,
-        "guests must not post to the conversation"
+        StatusCode::SERVICE_UNAVAILABLE,
+        "guest discussion must pass authorization and fail closed only at the missing database"
     );
 
     let node_message = app
@@ -342,22 +351,9 @@ async fn guest_webungsaktionen_are_forbidden() {
         .expect("response");
     assert_eq!(
         node_message.status(),
-        StatusCode::FORBIDDEN,
-        "guests must not post to node conversations"
+        StatusCode::SERVICE_UNAVAILABLE,
+        "guest node discussion must pass authorization and fail closed only at the missing database"
     );
-
-    // Gäste hinterlassen auch über die Domänenpfade keine Spuren.
-    let node = app
-        .clone()
-        .oneshot(request(
-            "POST",
-            "/nodes",
-            Some(&gast_cookie),
-            Some(r#"{"title":"Knoten"}"#),
-        ))
-        .await
-        .expect("response");
-    assert_eq!(node.status(), StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]

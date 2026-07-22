@@ -30,7 +30,12 @@ async function openFirstNodeConversation(page: Page) {
 async function installConversationApi(
   page: Page,
   messages: MockMessage[],
-  options: { failFirstCreate?: boolean; delaySecondList?: boolean } = {},
+  options: {
+    failFirstCreate?: boolean;
+    delaySecondList?: boolean;
+    authorAccountId?: string;
+    authorTitle?: string;
+  } = {},
 ) {
   let listRequests = 0;
   let createAttempts = 0;
@@ -102,8 +107,8 @@ async function installConversationApi(
       const created: MockMessage = {
         id: "e4a7d0c2-9d5a-4f7c-b13a-3d0e7a6c7d4a",
         conversation_id: CONVERSATION_ID,
-        author_account_id: "e2e-weber",
-        author_title: "Eigene Garnrolle",
+        author_account_id: options.authorAccountId ?? "e2e-weber",
+        author_title: options.authorTitle ?? "Eigene Garnrolle",
         content,
         created_at: now,
         updated_at: now,
@@ -152,19 +157,36 @@ async function installConversationApi(
   };
 }
 
-test("Gast liest den leeren Knotengesprächsraum ohne Schreibaktionen", async ({
+test("Gast veröffentlicht, bearbeitet und entfernt den eigenen Gesprächsbeitrag", async ({
   page,
 }) => {
   await mockApiResponses(page, {
     auth: { authenticated: true, account_id: "e2e-gast", role: "gast" },
   });
-  await installConversationApi(page, []);
+  await installConversationApi(page, [], {
+    authorAccountId: "e2e-gast",
+    authorTitle: "Gastgarnrolle",
+  });
 
   const panel = await openFirstNodeConversation(page);
-
   await expect(panel.getByText(/Noch keine Beiträge/)).toBeVisible();
-  await expect(panel.getByText(/Als Gast kannst du/)).toBeVisible();
-  await expect(panel.getByLabel("Neuer Beitrag")).toHaveCount(0);
+  const draft = panel.getByLabel("Neuer Beitrag");
+  await expect(draft).toBeVisible();
+  await draft.fill("Gastbeitrag");
+  await panel.getByRole("button", { name: "Beitrag veröffentlichen" }).click();
+  await expect(panel.getByText("Gastbeitrag")).toBeVisible();
+
+  const log = panel.getByRole("log", { name: "Gesprächsbeiträge" });
+  await log.getByRole("button", { name: "Bearbeiten" }).click();
+  await panel
+    .getByLabel("Beitrag bearbeiten")
+    .fill("Überarbeiteter Gastbeitrag");
+  await panel.getByRole("button", { name: "Änderung speichern" }).click();
+  await expect(panel.getByText("Überarbeiteter Gastbeitrag")).toBeVisible();
+
+  page.once("dialog", async (dialog) => dialog.accept());
+  await log.getByRole("button", { name: "Entfernen" }).click();
+  await expect(panel.getByText("Beitrag entfernt.")).toBeVisible();
 });
 
 test("Eine gelöschte Autorzuordnung verleiht Anonymen keine Eigentümeraktionen", async ({

@@ -187,6 +187,14 @@ class PublicLiveChecker:
             self.check_https_root(self.www_domain),
             self.check_map_route(),
             self.check_api_ready(),
+            self.check_public_metrics_private(
+                "metrics-private:app",
+                f"https://{self.domain}/api/metrics",
+            ),
+            self.check_public_metrics_private(
+                "metrics-private:api",
+                f"https://{self.api_domain}/metrics",
+            ),
             self.check_version_json(),
             self.check_basemap_style(),
             self.check_glyph_range(),
@@ -288,6 +296,20 @@ class PublicLiveChecker:
                 return pass_result("api-ready", "API ready endpoint reports database/nats/policy true", status=result.status)
             return fail_result("api-ready", "API ready endpoint has failed checks", missing=missing, checks=checks)
         return fail_result("api-ready", "API ready endpoint did not report ok", status=result.status, payload=payload)
+
+    def check_public_metrics_private(self, name: str, url: str) -> CheckResult:
+        try:
+            result = self.fetcher(url, None, self.timeout)
+        except Exception as exc:
+            return fail_result(name, str(exc), url=url)
+        if result.status == 404:
+            return pass_result(name, "Public metrics route is not exposed", status=result.status, url=url)
+        return fail_result(
+            name,
+            "Public metrics route is exposed or does not fail closed",
+            status=result.status,
+            url=url,
+        )
 
     def check_version_json(self) -> CheckResult:
         url = f"https://{self.domain}/_app/version.json"

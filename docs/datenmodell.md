@@ -37,7 +37,7 @@ Produktionsfallback.
 |---|---|---|---|
 | Accounts/Garnrollen | JSONL lesen und anhängen | PostgreSQL lesen und schreiben | `domain_accounts` |
 | Knoten | JSONL lesen und umschreiben | PostgreSQL lesen; `POST` und `PATCH` schreiben | `domain_nodes` |
-| Fäden | JSONL lesen und anhängen | PostgreSQL lesen; `POST` schreibt | `domain_edges` |
+| Fäden | JSONL lesen und anhängen | PostgreSQL lesen; fachliche Webungsaktionen schreiben serverseitig | `domain_edges` |
 | Sitzungen | In-Memory ohne `DATABASE_URL` | PostgreSQL bei verpflichtender `DATABASE_URL` | `sessions` |
 | Passkeys | In-Memory | PostgreSQL als Produktionsdefault | `passkey_credentials` |
 | Öffentliche Knotengespräche | kein JSONL-Pfad | PostgreSQL lesen und schreiben | `domain_conversations`, `domain_messages` |
@@ -50,7 +50,7 @@ alle vorhandenen Domänenschreibquellen gemeinsam auf `postgres`;
 
 Für Fäden gilt unabhängig von der physischen Quelle: Freie `note`-Texte werden
 persistiert, gehören aber nicht zur öffentlichen Projektion von `GET /edges`,
-`GET /edges/{id}` oder `GET /accounts/{id}`. Bei regulären Weberhandlungen darf
+`GET /edges/{id}` oder `GET /accounts/{id}`. Bei regulären Webungsaktionen darf
 ein Account-Endpunkt nur beteiligt sein, wenn der Faden von der eigenen
 angemeldeten Garnrolle ausgeht. Bereits bekannte Account-IDs müssen als
 `account` typisiert sein; öffentliche Projektionen vertrauen niemals einer
@@ -109,7 +109,13 @@ dient nur noch als Rollbackbrücke für den stufenweisen Produktionscutover.
 | `title` | `TEXT` | Titel |
 | `lat`, `lon` | `DOUBLE PRECISION` | optionale Position |
 | `created_at`, `updated_at` | `TIMESTAMPTZ` | Zeitangaben |
-| `payload` | `JSONB` | übrige JSONL-Felder |
+| `payload` | `JSONB` | übrige JSONL-Felder einschließlich optionaler unveränderlicher `created_by_account_id` |
+
+Neue Knoten erhalten `created_by_account_id` ausschließlich aus der
+Authentifizierungssitzung. Das Feld wird bei späteren Ersetzungen beibehalten.
+Altbestand und nach einem Gast-Austritt anonymisierte Knoten besitzen keine
+aktive Urheberbindung; Gäste können sie deshalb nicht bearbeiten, Weber und
+Administratoren jedoch gemeinschaftlich pflegen.
 | `create_actor_id`, `create_operation_id` | `TEXT`, nullable | accountgebundene Wiederholungssicherheit für `POST /nodes` |
 
 Es gibt derzeit keine PostGIS-Geometrie. Der Geoindex ist ein einfacher

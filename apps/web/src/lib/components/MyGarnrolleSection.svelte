@@ -50,7 +50,7 @@
     $authStore.authenticated && $authStore.account_id
       ? $authStore.account_id
       : null;
-  $: canEdit = $authStore.role === "weber" || $authStore.role === "admin";
+  $: canEdit = $authStore.authenticated;
   $: canSave =
     canEdit &&
     !!ownGarnrolle &&
@@ -499,8 +499,7 @@
           role="alert"
           data-testid="garnrolle-role-warning"
         >
-          Dein Konto besitzt noch keine Weber-Berechtigung. Die Garnrolle kann
-          deshalb nicht gespeichert werden.
+          Melde dich an, um deine Garnrolle zu speichern.
         </p>
       {/if}
 

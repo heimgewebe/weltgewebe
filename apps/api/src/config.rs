@@ -28,6 +28,10 @@ fn default_auth_cookie_secure() -> bool {
     true
 }
 
+fn default_max_guest_owned_nodes() -> usize {
+    1_000
+}
+
 /// Read the optional startup override for the browser-cookie security scope.
 /// Callers should capture this once while constructing configuration/state;
 /// request handlers must use the stored configuration value.
@@ -292,6 +296,11 @@ pub struct AppConfig {
     pub anonymize_opt_in: bool,
     pub delegation_expire_days: u32,
 
+    /// Maximum number of nodes a guest account may own at once. Loaded once
+    /// at startup so request handlers never re-read process environment state.
+    #[serde(default = "default_max_guest_owned_nodes")]
+    pub max_guest_owned_nodes: usize,
+
     /// Domain data read source (JSONL default, PostgreSQL opt-in).
     #[serde(default)]
     pub domain_read_source: DomainReadSource,
@@ -421,6 +430,7 @@ impl AppConfig {
         apply_env_override!(self, ron_days, "HA_RON_DAYS");
         apply_env_override!(self, anonymize_opt_in, "HA_ANONYMIZE_OPT_IN");
         apply_env_override!(self, delegation_expire_days, "HA_DELEGATION_EXPIRE_DAYS");
+        apply_env_override!(self, max_guest_owned_nodes, "MAX_GUEST_OWNED_NODES");
 
         if let Ok(val) = env::var("WELTGEWEBE_DOMAIN_READ_SOURCE") {
             if !val.trim().is_empty() {
@@ -626,6 +636,10 @@ impl AppConfig {
     }
 
     fn validate(self) -> Result<Self> {
+        if self.max_guest_owned_nodes == 0 {
+            anyhow::bail!("MAX_GUEST_OWNED_NODES must be greater than zero");
+        }
+
         // OPT-ARC-001 Phase E-A: PostgreSQL account-create writes require the
         // PostgreSQL read source. Writing account creates to PostgreSQL while
         // reading accounts from JSONL would persist writes that are invisible
@@ -854,6 +868,7 @@ delegation_expire_days: 28
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
         let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
+        let _guest_nodes = EnvGuard::unset("MAX_GUEST_OWNED_NODES");
         let _cookie_secure = EnvGuard::unset("AUTH_COOKIE_SECURE");
 
         let cfg = AppConfig::load_from_path(file.path())?;
@@ -861,8 +876,23 @@ delegation_expire_days: 28
         assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
+        assert_eq!(cfg.max_guest_owned_nodes, 1_000);
         assert!(cfg.auth_cookie_secure);
 
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn guest_node_limit_must_be_positive() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _limit = EnvGuard::set("MAX_GUEST_OWNED_NODES", "0");
+
+        let error = AppConfig::load_from_path(file.path()).expect_err("zero guest node limit");
+        assert!(error
+            .to_string()
+            .contains("MAX_GUEST_OWNED_NODES must be greater than zero"));
         Ok(())
     }
 
@@ -904,6 +934,7 @@ delegation_expire_days: 28
         let _ron = EnvGuard::set("HA_RON_DAYS", "90");
         let _anonymize = EnvGuard::set("HA_ANONYMIZE_OPT_IN", "false");
         let _delegation = EnvGuard::set("HA_DELEGATION_EXPIRE_DAYS", "14");
+        let _guest_nodes = EnvGuard::set("MAX_GUEST_OWNED_NODES", "321");
         let _cookie_secure = EnvGuard::set("AUTH_COOKIE_SECURE", "false");
 
         let cfg = AppConfig::load_from_path(file.path())?;
@@ -911,6 +942,7 @@ delegation_expire_days: 28
         assert_eq!(cfg.ron_days, 90);
         assert!(!cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 14);
+        assert_eq!(cfg.max_guest_owned_nodes, 321);
         assert!(!cfg.auth_cookie_secure);
 
         Ok(())

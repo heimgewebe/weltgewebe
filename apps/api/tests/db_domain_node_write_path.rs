@@ -26,8 +26,9 @@ use axum::{
     Router,
 };
 use serial_test::serial;
+use sha2::{Digest, Sha256};
 use sqlx::{postgres::PgPoolOptions, Executor, PgPool};
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{ffi::OsString, path::PathBuf, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
@@ -43,7 +44,11 @@ use weltgewebe_api::{
         patch_node_in_postgres, replace_node_in_postgres, NodeCreateError, NodePatchInput,
         NodeWriteError,
     },
-    middleware::{auth::auth_middleware, csrf::require_csrf},
+    governance::delete_guest_account,
+    middleware::{
+        auth::auth_middleware, csrf::require_csrf,
+        domain_projection::ensure_current_domain_projection,
+    },
     routes::{
         accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
@@ -56,6 +61,26 @@ use weltgewebe_api::{
 mod helpers;
 use helpers::set_gewebe_in_dir;
 
+fn account_lifecycle_lock_key(account_id: &str) -> i64 {
+    let mut hasher = Sha256::new();
+    hasher.update(b"weltgewebe:account-lifecycle:v1");
+    let bytes = account_id.as_bytes();
+    hasher.update((bytes.len() as u64).to_be_bytes());
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    i64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"))
+}
+
+fn node_mutation_lock_key(node_id: &str) -> i64 {
+    let mut hasher = Sha256::new();
+    hasher.update(b"weltgewebe:node-mutation:v1");
+    let bytes = node_id.as_bytes();
+    hasher.update((bytes.len() as u64).to_be_bytes());
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    i64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"))
+}
+
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must point at a direct PostgreSQL database (port 5432)");
@@ -64,6 +89,30 @@ fn direct_database_url() -> String {
         "DATABASE_URL must target direct PostgreSQL, not PgBouncer (port 6432)"
     );
     url
+}
+
+struct EnvVarGuard {
+    key: &'static str,
+    previous: Option<OsString>,
+}
+
+impl EnvVarGuard {
+    fn set(key: &'static str, value: &str) -> Self {
+        let previous = std::env::var_os(key);
+        // SAFETY: every test in this direct-PostgreSQL suite is #[serial], so
+        // these process-wide environment mutations cannot overlap each other.
+        unsafe { std::env::set_var(key, value) };
+        Self { key, previous }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => unsafe { std::env::set_var(self.key, value) },
+            None => unsafe { std::env::remove_var(self.key) },
+        }
+    }
 }
 
 async fn connect_pool() -> PgPool {
@@ -162,6 +211,14 @@ fn admin_operator(id: &str) -> AccountInternal {
 }
 
 async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, String, ApiState)> {
+    postgres_write_app_with_guest_limit(pool, operator_id, 1_000).await
+}
+
+async fn postgres_write_app_with_guest_limit(
+    pool: PgPool,
+    operator_id: &str,
+    max_guest_owned_nodes: usize,
+) -> Result<(Router, String, ApiState)> {
     let operator = admin_operator(operator_id);
     sqlx::query(
         "INSERT INTO domain_accounts (id, kind, title, mode, role, disabled, webauthn_user_id) \
@@ -189,6 +246,7 @@ async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, 
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        max_guest_owned_nodes,
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source: DomainAccountWriteSource::Postgres,
         domain_node_write_source: DomainNodeWriteSource::Postgres,
@@ -461,6 +519,7 @@ async fn postgres_read_jsonl_node_write_is_blocked() -> Result<()> {
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source: DomainAccountWriteSource::Postgres,
         domain_node_write_source: DomainNodeWriteSource::Jsonl,
@@ -642,6 +701,7 @@ async fn jsonl_default_node_patch_compiles_and_routes_correctly() -> Result<()> 
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Jsonl,
         domain_account_write_source: DomainAccountWriteSource::Jsonl,
         domain_node_write_source: DomainNodeWriteSource::Jsonl,
@@ -855,12 +915,19 @@ async fn postgres_node_patch_non_object_payload_is_rejected_without_commit() -> 
 // ── POST /nodes PostgreSQL write path ───────────────────────────────────────
 
 fn post_node_req(cookie: &str, json_body: &str) -> Request<body::Body> {
+    let mut payload: serde_json::Value =
+        serde_json::from_str(json_body).expect("node test request must be JSON");
+    if let Some(object) = payload.as_object_mut() {
+        object
+            .entry("operation_id")
+            .or_insert_with(|| serde_json::Value::String(uuid::Uuid::new_v4().to_string()));
+    }
     Request::post("/nodes")
         .header("Content-Type", "application/json")
         .header("Host", "localhost")
         .header("Origin", "http://localhost")
         .header("Cookie", cookie)
-        .body(body::Body::from(json_body.to_string()))
+        .body(body::Body::from(payload.to_string()))
         .unwrap()
 }
 
@@ -1127,6 +1194,792 @@ async fn postgres_node_create_rejects_invalid_payload_without_side_effects() -> 
     Ok(())
 }
 
+/// K2. A PostgreSQL node create cannot race past guest-account deletion.
+/// The create must wait for the account row lock and then fail once the exit
+/// transaction has removed the canonical identity.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_create_rejects_creator_deleted_by_inflight_exit() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let creator_id = "writepath-node-creator-race";
+    let node_id = "writepath-node-race-create";
+    sqlx::query(
+        "INSERT INTO domain_accounts \
+         (id, kind, title, mode, map_state, radius_m, disabled, role, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', 'Race Guest', 'ron', 'not_on_map', 0, FALSE, 'gast', '{}', '{}')",
+    )
+    .bind(creator_id)
+    .execute(&pool)
+    .await
+    .context("seed race creator account")?;
+
+    let node = Node {
+        id: node_id.to_string(),
+        kind: "Werkstatt".to_string(),
+        title: "Race-konsistenter Gastknoten".to_string(),
+        created_at: "2026-07-20T15:00:00+00:00".to_string(),
+        updated_at: "2026-07-20T15:00:00+00:00".to_string(),
+        created_by_account_id: Some(creator_id.to_string()),
+        summary: None,
+        info: None,
+        tags: vec![],
+        address: Some("Somewhere 2".to_string()),
+        location: Location {
+            lat: 53.5,
+            lon: 10.0,
+        },
+    };
+
+    let mut exit_tx = pool.begin().await.context("begin simulated guest exit")?;
+    let locked_creator: String = sqlx::query_scalar(
+        "SELECT id FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
+    )
+    .bind(creator_id)
+    .fetch_one(&mut *exit_tx)
+    .await
+    .context("lock creator as guest exit does")?;
+    assert_eq!(locked_creator, creator_id);
+
+    let create_pool = pool.clone();
+    let mut create_task =
+        tokio::spawn(async move { insert_domain_node(&create_pool, &node, None).await });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut create_task)
+            .await
+            .is_err(),
+        "node create must wait while guest exit owns the account row lock"
+    );
+
+    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
+        .bind(creator_id)
+        .execute(&mut *exit_tx)
+        .await
+        .context("delete creator inside guest exit transaction")?;
+    exit_tx
+        .commit()
+        .await
+        .context("commit simulated guest exit")?;
+
+    let create_result = create_task.await.context("join blocked node create")?;
+    match create_result {
+        Err(NodeCreateError::CreatorAccountUnavailable) => {}
+        Err(error) => panic!("unexpected stale node create error: {error}"),
+        Ok(_) => panic!("stale node create must not succeed after guest exit"),
+    }
+    let node_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+            .bind(node_id)
+            .fetch_one(&pool)
+            .await
+            .context("check race node absence")?;
+    assert!(
+        !node_exists,
+        "guest exit race must not leave an orphaned node"
+    );
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// K2b. The production projection middleware holds a read guard for the whole
+/// request. Guest exit must finish without attempting a read-to-write lock
+/// upgrade; the following request performs the lazy projection refresh.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_guest_exit_completes_under_projection_middleware() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000098";
+    const NODE_ID: &str = "writepath-guest-exit-cache-node";
+    const EDGE_ID: &str = "writepath-guest-exit-cache-edge";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
+        .bind(ACTOR_ID)
+        .execute(&pool)
+        .await?;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+    sqlx::query("UPDATE domain_accounts SET role = 'gast' WHERE id = $1")
+        .bind(ACTOR_ID)
+        .execute(&pool)
+        .await?;
+    let mut guest = admin_operator(ACTOR_ID);
+    guest.role = Role::Gast;
+    state.accounts.write().await.insert(guest);
+
+    sqlx::query(
+        "INSERT INTO domain_nodes \
+         (id, kind, title, lat, lon, created_at, updated_at, payload) \
+         VALUES ($1, 'Ort', 'Exit cache node', 53.5, 10.0, NOW(), NOW(), \
+                 jsonb_build_object('created_by_account_id', $2::text))",
+    )
+    .bind(NODE_ID)
+    .bind(ACTOR_ID)
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO domain_edges \
+         (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ($1, $2, $3, 'reference', NOW(), \
+                 jsonb_build_object('source_type', 'account', 'target_type', 'node'))",
+    )
+    .bind(EDGE_ID)
+    .bind(ACTOR_ID)
+    .bind(NODE_ID)
+    .execute(&pool)
+    .await?;
+
+    let app = app.layer(from_fn_with_state(
+        state.clone(),
+        ensure_current_domain_projection,
+    ));
+
+    let preload_response = app
+        .clone()
+        .oneshot(
+            Request::get("/nodes")
+                .header("Host", "localhost")
+                .body(body::Body::empty())?,
+        )
+        .await?;
+    assert_eq!(preload_response.status(), StatusCode::OK);
+    let cached_creator = state
+        .nodes
+        .read()
+        .await
+        .get(NODE_ID)
+        .and_then(|node| node.created_by_account_id.clone());
+    assert_eq!(cached_creator.as_deref(), Some(ACTOR_ID));
+    assert!(
+        state.edges.read().await.get(EDGE_ID).is_some(),
+        "precondition: account-bound Faden must be present in runtime cache before exit"
+    );
+
+    let exit_request = Request::post("/accounts/me/exit")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .header("Cookie", &cookie)
+        .body(body::Body::empty())?;
+    let exit_response =
+        tokio::time::timeout(Duration::from_secs(5), app.clone().oneshot(exit_request))
+            .await
+            .context("guest exit must not deadlock under projection middleware")??;
+    assert_eq!(exit_response.status(), StatusCode::OK);
+
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_accounts WHERE id = $1)")
+            .bind(ACTOR_ID)
+            .fetch_one(&pool)
+            .await?;
+    assert!(!exists, "canonical guest account must be deleted");
+
+    let refresh_request = Request::get("/nodes")
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+    let refresh_response =
+        tokio::time::timeout(Duration::from_secs(5), app.oneshot(refresh_request))
+            .await
+            .context("next request must refresh projection after exit")??;
+    assert_eq!(refresh_response.status(), StatusCode::OK);
+    assert!(
+        state.accounts.read().await.get(ACTOR_ID).is_none(),
+        "lazy projection refresh must remove exited guest from runtime cache"
+    );
+    let refreshed_creator = state
+        .nodes
+        .read()
+        .await
+        .get(NODE_ID)
+        .and_then(|node| node.created_by_account_id.clone());
+    assert_eq!(
+        refreshed_creator, None,
+        "lazy projection refresh must retain the node without ghost guest ownership"
+    );
+    assert!(
+        state.edges.read().await.get(EDGE_ID).is_none(),
+        "lazy projection refresh must evict account-bound Fäden deleted by guest exit"
+    );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// K2c. Five concurrent node creates on the real five-connection runtime pool
+/// must retain enough headroom for the nested edge transaction. A separate
+/// blocker pool holds the edge table so it does not consume runtime capacity.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn concurrent_node_creates_preserve_runtime_pool_headroom() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000097";
+
+    let database_url = direct_database_url();
+    let runtime_pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+        .context("connect five-slot runtime pool")?;
+    let blocker_pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&database_url)
+        .await
+        .context("connect independent edge blocker pool")?;
+    run_migrations(&runtime_pool).await;
+    clean_all_nodes(&runtime_pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, _state) = postgres_write_app(runtime_pool.clone(), ACTOR_ID).await?;
+
+    let mut edge_blocker = blocker_pool
+        .begin()
+        .await
+        .context("begin external edge blocker")?;
+    sqlx::query("LOCK TABLE domain_edges IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *edge_blocker)
+        .await
+        .context("block derived edge writes")?;
+
+    let mut tasks = Vec::new();
+    for index in 0..5 {
+        let app = app.clone();
+        let cookie = cookie.clone();
+        tasks.push(tokio::spawn(async move {
+            let body = serde_json::json!({
+                "title": format!("Pool Headroom {index}"),
+                "kind": "Werkstatt",
+                "address": format!("Poolweg {index}"),
+                "location": {"lat": 53.5 + f64::from(index) / 1000.0, "lon": 10.0},
+                "operation_id": format!("30000000-0000-4000-8000-{index:012}")
+            })
+            .to_string();
+            app.oneshot(post_node_req(&cookie, &body)).await
+        }));
+    }
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(
+        tasks.iter().all(|task| !task.is_finished()),
+        "all creates should be waiting behind the external edge-table blocker"
+    );
+
+    edge_blocker
+        .commit()
+        .await
+        .context("release external edge blocker")?;
+    tokio::time::timeout(Duration::from_secs(10), async {
+        for task in tasks {
+            let response = task
+                .await
+                .expect("join concurrent node create")
+                .expect("node create response");
+            assert_eq!(response.status(), StatusCode::CREATED);
+        }
+    })
+    .await
+    .context("five concurrent creates must complete without pool exhaustion")?;
+
+    let node_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1",
+    )
+    .bind(ACTOR_ID)
+    .fetch_one(&runtime_pool)
+    .await?;
+    let edge_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND payload ->> 'source_type' = 'account'",
+    )
+    .bind(ACTOR_ID)
+    .fetch_one(&runtime_pool)
+    .await?;
+    assert_eq!(node_count, 5);
+    assert_eq!(edge_count, 5);
+
+    clean_all_nodes(&runtime_pool).await;
+    Ok(())
+}
+
+/// K2d. A permanent derived-Faden capacity failure must not leave the newly
+/// created node durable. The create returns an error and compensation removes
+/// both persistence and cache state.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn node_create_rolls_back_when_derived_faden_is_rejected() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000096";
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+    sqlx::query(
+        "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ('writepath-edge-capacity-sentinel', 'role:a', 'role:b', 'reference', NOW(), \
+                 jsonb_build_object('source_type','role','target_type','role'))",
+    )
+    .execute(&pool)
+    .await?;
+    let _edge_limit = EnvVarGuard::set("MAX_EDGES_CACHE", "1");
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+
+    let body = serde_json::json!({
+        "title": "Rollback Node",
+        "kind": "Werkstatt",
+        "address": "Rollbackweg 1",
+        "location": {"lat": 53.5, "lon": 10.0},
+        "operation_id": "30000000-0000-4000-8000-000000000096"
+    })
+    .to_string();
+    let response = app.oneshot(post_node_req(&cookie, &body)).await?;
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+    let durable_nodes: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1",
+    )
+    .bind(ACTOR_ID)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        durable_nodes, 0,
+        "failed Faden projection must compensate node insert"
+    );
+    assert!(
+        state
+            .nodes
+            .read()
+            .await
+            .iter_in_order()
+            .all(|node| node.created_by_account_id.as_deref() != Some(ACTOR_ID)),
+        "compensation must remove the failed node from cache"
+    );
+
+    sqlx::query("DELETE FROM domain_edges WHERE id = 'writepath-edge-capacity-sentinel'")
+        .execute(&pool)
+        .await?;
+    Ok(())
+}
+
+/// K2e. Guest ownership is bounded durably. Replaying the first operation stays
+/// allowed at the cap, while a different operation is rejected.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn guest_node_limit_allows_replay_but_rejects_new_operation() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000095";
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, state) =
+        postgres_write_app_with_guest_limit(pool.clone(), ACTOR_ID, 1).await?;
+    sqlx::query("UPDATE domain_accounts SET role = 'gast' WHERE id = $1")
+        .bind(ACTOR_ID)
+        .execute(&pool)
+        .await?;
+    let mut guest = admin_operator(ACTOR_ID);
+    guest.role = Role::Gast;
+    state.accounts.write().await.insert(guest);
+
+    let first = serde_json::json!({
+        "title": "Limit One",
+        "kind": "Werkstatt",
+        "address": "Limitweg 1",
+        "location": {"lat": 53.5, "lon": 10.0},
+        "operation_id": "30000000-0000-4000-8000-000000000095"
+    })
+    .to_string();
+    let created = app.clone().oneshot(post_node_req(&cookie, &first)).await?;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let replay = app.clone().oneshot(post_node_req(&cookie, &first)).await?;
+    assert_eq!(replay.status(), StatusCode::OK);
+
+    let second = serde_json::json!({
+        "title": "Limit Two",
+        "kind": "Werkstatt",
+        "address": "Limitweg 2",
+        "location": {"lat": 53.6, "lon": 10.0},
+        "operation_id": "30000000-0000-4000-8000-000000000094"
+    })
+    .to_string();
+    let rejected = app.oneshot(post_node_req(&cookie, &second)).await?;
+    assert_eq!(rejected.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    let owned_nodes: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1",
+    )
+    .bind(ACTOR_ID)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(owned_nodes, 1);
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// K2f. Two distinct guest creates racing at a one-node limit are serialized
+/// by the account lifecycle/account-row lock contract. Exactly one may commit;
+/// the loser must observe the committed count and fail with 429.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn concurrent_guest_node_creates_cannot_overshoot_limit() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000092";
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, state) =
+        postgres_write_app_with_guest_limit(pool.clone(), ACTOR_ID, 1).await?;
+    sqlx::query("UPDATE domain_accounts SET role = 'gast' WHERE id = $1")
+        .bind(ACTOR_ID)
+        .execute(&pool)
+        .await?;
+    let mut guest = admin_operator(ACTOR_ID);
+    guest.role = Role::Gast;
+    state.accounts.write().await.insert(guest);
+
+    let first = serde_json::json!({
+        "title": "Concurrent Limit A",
+        "kind": "Werkstatt",
+        "address": "Limitweg A",
+        "location": {"lat": 53.5, "lon": 10.0},
+        "operation_id": "30000000-0000-4000-8000-000000000091"
+    })
+    .to_string();
+    let second = serde_json::json!({
+        "title": "Concurrent Limit B",
+        "kind": "Werkstatt",
+        "address": "Limitweg B",
+        "location": {"lat": 53.6, "lon": 10.0},
+        "operation_id": "30000000-0000-4000-8000-000000000092"
+    })
+    .to_string();
+
+    let first_app = app.clone();
+    let first_cookie = cookie.clone();
+    let first_task = tokio::spawn(async move {
+        first_app
+            .oneshot(post_node_req(&first_cookie, &first))
+            .await
+    });
+    let second_task =
+        tokio::spawn(async move { app.oneshot(post_node_req(&cookie, &second)).await });
+
+    let first_status = first_task
+        .await
+        .context("join first concurrent create")??
+        .status();
+    let second_status = second_task
+        .await
+        .context("join second concurrent create")??
+        .status();
+    let mut statuses = [first_status, second_status];
+    statuses.sort_by_key(|status| status.as_u16());
+    assert_eq!(
+        statuses,
+        [StatusCode::CREATED, StatusCode::TOO_MANY_REQUESTS]
+    );
+
+    let owned_nodes: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1",
+    )
+    .bind(ACTOR_ID)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        owned_nodes, 1,
+        "concurrent guest creates must not overshoot the cap"
+    );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// K2g. An idempotent replay must lock the real existing node before repairing
+/// its derived Faden. Otherwise a concurrent delete could remove the node while
+/// the replay recreates an orphaned edge to the already deleted id.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn node_create_replay_locks_existing_node_before_faden_repair() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000094";
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+
+    let request_body = serde_json::json!({
+        "title": "Replay Lock",
+        "kind": "Werkstatt",
+        "address": "Replayweg 1",
+        "location": {"lat": 53.5, "lon": 10.0},
+        "operation_id": "30000000-0000-4000-8000-000000000093"
+    })
+    .to_string();
+    let created_response = app
+        .clone()
+        .oneshot(post_node_req(&cookie, &request_body))
+        .await?;
+    assert_eq!(created_response.status(), StatusCode::CREATED);
+    let created_body = body::to_bytes(created_response.into_body(), usize::MAX).await?;
+    let created: serde_json::Value = serde_json::from_slice(&created_body)?;
+    let node_id = created["id"]
+        .as_str()
+        .context("created replay-lock node id")?
+        .to_string();
+
+    {
+        let mut nodes = state.nodes.write().await;
+        nodes.remove(&node_id);
+    }
+
+    sqlx::query(
+        "DELETE FROM domain_edges WHERE source_id = $1 AND target_id = $2 \
+         AND payload ->> 'source_type' = 'account' AND payload ->> 'target_type' = 'node'",
+    )
+    .bind(ACTOR_ID)
+    .bind(&node_id)
+    .execute(&pool)
+    .await?;
+
+    let mut mutation_blocker = pool.begin().await.context("begin replay node blocker")?;
+    sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+        .bind(node_mutation_lock_key(&node_id))
+        .execute(&mut *mutation_blocker)
+        .await
+        .context("lock existing replay node")?;
+
+    let replay_app = app.clone();
+    let replay_cookie = cookie.clone();
+    let replay_body = request_body.clone();
+    let mut replay_task = tokio::spawn(async move {
+        replay_app
+            .oneshot(post_node_req(&replay_cookie, &replay_body))
+            .await
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut replay_task)
+            .await
+            .is_err(),
+        "replay must wait while the existing node mutation lock is held"
+    );
+    assert!(
+        state.nodes.read().await.get(&node_id).is_none(),
+        "blocked replay must not repopulate cache before owning the existing-node lock"
+    );
+
+    sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
+        .bind(&node_id)
+        .execute(&mut *mutation_blocker)
+        .await
+        .context("delete replay node while holding mutation lock")?;
+    mutation_blocker
+        .commit()
+        .await
+        .context("commit concurrent replay-node deletion")?;
+    let replay_response = tokio::time::timeout(Duration::from_secs(5), replay_task)
+        .await
+        .context("replay completes after existing-node lock release")?
+        .context("join replay request")??;
+    assert_eq!(replay_response.status(), StatusCode::CONFLICT);
+
+    let repaired_edges: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2 \
+         AND payload ->> 'source_type' = 'account' AND payload ->> 'target_type' = 'node'",
+    )
+    .bind(ACTOR_ID)
+    .bind(&node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        repaired_edges, 0,
+        "replay must not recreate a Faden after the existing node was deleted"
+    );
+    assert!(
+        state.nodes.read().await.get(&node_id).is_none(),
+        "conflicting replay must not leave a stale node in cache"
+    );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// K3. The real HTTP node-create path owns one account-lifecycle lock from
+/// before the node INSERT until its derived Faden is durable. A concurrent exit
+/// therefore cannot enter the historical gap between the two durable writes.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_create_faden_projection_serializes_with_guest_exit() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000099";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
+        .bind(ACTOR_ID)
+        .execute(&pool)
+        .await?;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+    sqlx::query("UPDATE domain_accounts SET role = 'gast' WHERE id = $1")
+        .bind(ACTOR_ID)
+        .execute(&pool)
+        .await?;
+    let mut guest = admin_operator(ACTOR_ID);
+    guest.role = Role::Gast;
+    state.accounts.write().await.insert(guest);
+
+    // Stop only the derived edge INSERT. Node persistence can complete first,
+    // reproducing the exact historical gap between the two durable writes.
+    let mut edge_blocker = pool.begin().await.context("begin edge blocker")?;
+    sqlx::query("LOCK TABLE domain_edges IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *edge_blocker)
+        .await
+        .context("lock edge table")?;
+
+    let request = post_node_req(
+        &cookie,
+        r#"{"title":"Exit Race Node","kind":"Werkstatt","address":"Race 1","location":{"lat":53.55,"lon":9.99}}"#,
+    );
+    let create_app = app.clone();
+    let create_task = tokio::spawn(async move { create_app.oneshot(request).await });
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let exists: bool = sqlx::query_scalar(
+                "SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1)",
+            )
+            .bind(ACTOR_ID)
+            .fetch_one(&pool)
+            .await
+            .expect("probe created node");
+            if exists {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .context("node must become durable before Faden blocker is released")?;
+
+    // Prove the lifecycle lock is already held immediately after the node is
+    // durable, before the blocked Faden INSERT can complete. This is the exact
+    // historical gap that previously allowed guest exit to win.
+    let lifecycle_key = account_lifecycle_lock_key(ACTOR_ID);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let mut probe = pool.begin().await.expect("begin lifecycle lock probe");
+            let acquired: bool = sqlx::query_scalar("SELECT pg_try_advisory_xact_lock($1::bigint)")
+                .bind(lifecycle_key)
+                .fetch_one(&mut *probe)
+                .await
+                .expect("probe account lifecycle lock");
+            probe
+                .rollback()
+                .await
+                .expect("rollback lifecycle lock probe");
+            if !acquired {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .context("node create must hold account lifecycle lock across the durable-node/Faden gap")?;
+
+    let exit_pool = pool.clone();
+    let mut exit_task =
+        tokio::spawn(async move { delete_guest_account(&exit_pool, ACTOR_ID).await });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut exit_task)
+            .await
+            .is_err(),
+        "guest exit must wait for the account lifecycle lock until the derived Faden is durable"
+    );
+
+    edge_blocker
+        .commit()
+        .await
+        .context("release edge blocker")?;
+    let create_response = tokio::time::timeout(Duration::from_secs(5), create_task)
+        .await
+        .context("node request completes")?
+        .context("join node request")??;
+    let create_status = create_response.status();
+    let create_body = body::to_bytes(create_response.into_body(), usize::MAX).await?;
+    assert_eq!(
+        create_status,
+        StatusCode::CREATED,
+        "node create body: {}",
+        String::from_utf8_lossy(&create_body)
+    );
+    tokio::time::timeout(Duration::from_secs(5), exit_task)
+        .await
+        .context("guest exit completes after Faden projection")??
+        .context("delete guest account")?;
+
+    let account_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_accounts WHERE id = $1)")
+            .bind(ACTOR_ID)
+            .fetch_one(&pool)
+            .await?;
+    let orphan_edges: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 OR target_id = $1",
+    )
+    .bind(ACTOR_ID)
+    .fetch_one(&pool)
+    .await?;
+    let owned_nodes: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1",
+    )
+    .bind(ACTOR_ID)
+    .fetch_one(&pool)
+    .await?;
+    assert!(!account_exists);
+    assert_eq!(
+        orphan_edges, 0,
+        "exit must remove every account-bound Faden"
+    );
+    assert_eq!(owned_nodes, 0, "retained node must be anonymized");
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
 /// L. Direct write-path proof: a primary-key collision at the database level
 /// is classified as `DuplicateId` and leaves the existing row untouched.
 #[tokio::test]
@@ -1144,6 +1997,7 @@ async fn insert_domain_node_classifies_duplicate_id() -> Result<()> {
         title: title.to_string(),
         created_at: "2026-06-12T10:00:00+00:00".to_string(),
         updated_at: "2026-06-12T10:00:00+00:00".to_string(),
+        created_by_account_id: None,
         summary: None,
         info: None,
         tags: vec![],
@@ -1214,6 +2068,7 @@ async fn replace_and_delete_node_cascade_is_transactional_in_postgres() -> Resul
         title: "Gemeinsam gepflegt".to_string(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         updated_at: "2026-07-15T04:00:00Z".to_string(),
+        created_by_account_id: None,
         summary: Some("Neue Zusammenfassung".to_string()),
         info: Some("Neue Information".to_string()),
         tags: vec!["commons".to_string()],
