@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 CONTRACT_FILE="${SCRIPT_DIR}/postgres-proof-contract.json"
 
 : "${DATABASE_URL:?DATABASE_URL must point at a direct disposable PostgreSQL database}"
@@ -14,7 +14,7 @@ cleanup() {
   local exit_code=$?
   trap - EXIT INT TERM
   if [[ -n "$owned_nats_container" ]]; then
-    docker rm --force "$owned_nats_container" >/dev/null 2>&1 || true
+    docker rm --force "$owned_nats_container" > /dev/null 2>&1 || true
   fi
   exit "$exit_code"
 }
@@ -22,7 +22,7 @@ trap cleanup EXIT INT TERM
 
 contract_value() {
   local key="$1"
-  python3 - "$CONTRACT_FILE" "$key" <<'PY'
+  python3 - "$CONTRACT_FILE" "$key" << 'PY'
 import json, sys
 contract=json.load(open(sys.argv[1], encoding='utf-8'))
 if contract.get('schema_version') != 1:
@@ -39,7 +39,7 @@ PY
 
 validate_database_url() {
   local url="$1"
-  python3 - "$CONTRACT_FILE" "$url" <<'PY'
+  python3 - "$CONTRACT_FILE" "$url" << 'PY'
 import json, sys
 from urllib.parse import unquote, urlsplit
 contract=json.load(open(sys.argv[1], encoding='utf-8'))
@@ -78,7 +78,7 @@ fi
 load_t003_connection() {
   local -a values=()
   mapfile -d '' -t values < <(
-    python3 - "$PG_DIRECT_URL" <<'PY'
+    python3 - "$PG_DIRECT_URL" << 'PY'
 import sys
 from urllib.parse import unquote, urlsplit
 url=urlsplit(sys.argv[1])
@@ -109,7 +109,7 @@ PY
 load_t003_connection
 
 postgres_admin_url() {
-  python3 - "$PG_DIRECT_URL" <<'PY'
+  python3 - "$PG_DIRECT_URL" << 'PY'
 import sys
 from urllib.parse import urlsplit, urlunsplit
 url=urlsplit(sys.argv[1])
@@ -121,26 +121,26 @@ preflight_postgres() {
   local admin
   admin="$(postgres_admin_url)"
   if [[ -n "${POSTGRES_RESET_CONTAINER:-}" ]]; then
-    command -v docker >/dev/null 2>&1 || {
+    command -v docker > /dev/null 2>&1 || {
       echo 'PostgreSQL proof container preflight requires docker' >&2
       return 1
     }
-    if ! docker exec "$POSTGRES_RESET_CONTAINER" pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+    if ! docker exec "$POSTGRES_RESET_CONTAINER" pg_isready -U postgres -d postgres > /dev/null 2>&1; then
       echo "PostgreSQL proof preflight container is not ready: ${POSTGRES_RESET_CONTAINER}" >&2
       return 1
     fi
-    if ! docker exec "$POSTGRES_RESET_CONTAINER" psql -U postgres -d postgres -X --no-psqlrc -v ON_ERROR_STOP=1 -Atqc 'SELECT 1' >/dev/null; then
+    if ! docker exec "$POSTGRES_RESET_CONTAINER" psql -U postgres -d postgres -X --no-psqlrc -v ON_ERROR_STOP=1 -Atqc 'SELECT 1' > /dev/null; then
       echo "PostgreSQL proof preflight container query failed: ${POSTGRES_RESET_CONTAINER}" >&2
       return 1
     fi
     echo "PostgreSQL proof preflight: isolated container ready; disposable database=${DATABASE_NAME}"
     return 0
   fi
-  if ! command -v psql >/dev/null 2>&1; then
+  if ! command -v psql > /dev/null 2>&1; then
     echo 'PostgreSQL proof preflight requires psql before the first test' >&2
     return 1
   fi
-  if ! psql "$admin" -X --no-psqlrc -v ON_ERROR_STOP=1 -Atqc 'SELECT 1' >/dev/null; then
+  if ! psql "$admin" -X --no-psqlrc -v ON_ERROR_STOP=1 -Atqc 'SELECT 1' > /dev/null; then
     echo 'PostgreSQL proof preflight could not reach the direct PostgreSQL admin database' >&2
     return 1
   fi
@@ -148,7 +148,7 @@ preflight_postgres() {
 }
 
 check_jetstream_once() {
-  python3 - "$NATS_URL" <<'PY'
+  python3 - "$NATS_URL" << 'PY'
 import json, socket, sys
 from urllib.parse import urlsplit
 url=urlsplit(sys.argv[1])
@@ -192,7 +192,7 @@ provision_jetstream_if_requested() {
     wait_for_jetstream
     return
   fi
-  command -v docker >/dev/null 2>&1 || {
+  command -v docker > /dev/null 2>&1 || {
     echo 'JetStream proof provisioning requires docker' >&2
     return 1
   }
@@ -203,7 +203,7 @@ provision_jetstream_if_requested() {
   docker run --detach --rm \
     --name "$owned_nats_container" \
     --publish 127.0.0.1::4222 \
-    "$image" -js >/dev/null
+    "$image" -js > /dev/null
   binding="$(docker port "$owned_nats_container" 4222/tcp | head -n1)"
   port="${binding##*:}"
   if [[ ! "$port" =~ ^[0-9]+$ ]]; then
@@ -218,14 +218,14 @@ reset_database() {
   local admin
   admin="$(postgres_admin_url)"
   if [[ -n "${POSTGRES_RESET_CONTAINER:-}" ]]; then
-    docker exec "$POSTGRES_RESET_CONTAINER" dropdb -U postgres --if-exists --force "$DATABASE_NAME" >/dev/null
+    docker exec "$POSTGRES_RESET_CONTAINER" dropdb -U postgres --if-exists --force "$DATABASE_NAME" > /dev/null
     docker exec "$POSTGRES_RESET_CONTAINER" createdb -U postgres "$DATABASE_NAME"
     return
   fi
   psql "$admin" -X --no-psqlrc -v ON_ERROR_STOP=1 -c \
-    "DROP DATABASE IF EXISTS \"${DATABASE_NAME}\" WITH (FORCE);" >/dev/null
+    "DROP DATABASE IF EXISTS \"${DATABASE_NAME}\" WITH (FORCE);" > /dev/null
   psql "$admin" -X --no-psqlrc -v ON_ERROR_STOP=1 -c \
-    "CREATE DATABASE \"${DATABASE_NAME}\";" >/dev/null
+    "CREATE DATABASE \"${DATABASE_NAME}\";" > /dev/null
 }
 
 preflight_postgres
@@ -257,7 +257,7 @@ targets=(
 )
 
 if [[ -n "${POSTGRES_PROOF_TARGETS:-}" ]]; then
-  read -r -a targets <<<"$POSTGRES_PROOF_TARGETS"
+  read -r -a targets <<< "$POSTGRES_PROOF_TARGETS"
 fi
 
 for target in "${targets[@]}"; do
