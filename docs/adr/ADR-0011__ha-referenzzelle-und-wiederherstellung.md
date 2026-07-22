@@ -34,7 +34,7 @@ Die T004-Referenzzelle verwendet drei explizite Zonen und folgende Verträge:
 - einen ausschließlich für den Beweis verwendeten externen S3-kompatiblen SeaweedFS-Dienst,
 - dynamisch erzeugte kurzlebige Secrets statt eingecheckter Zugangsdaten,
 - einen kontrollierten Kubernetes-Rollout auf ein getrenntes unveränderliches API-Artefakt und ein echtes `rollout undo` auf die vorherige Revision,
-- eine während Upgrade und Rollback sekündlich gemessene Gateway-Verfügbarkeit mit Null-Ausfall-Vertrag und ausgewiesenem Referenz-Fehlerbudget,
+- eine während Upgrade und Rollback sekündlich owner-lokal gegen alle beworbenen Gateway-Listener gemessene Gateway-Service-Verfügbarkeit der Referenzzelle mit Null-Ausfall-Vertrag, separat ausgewiesener Listener-Degradation und Referenz-Fehlerbudget,
 - einen kontrollierten Ausfall des Worker-Knotens, der den PostgreSQL-Primary trägt,
 - einen neuen zweiten kind-Cluster für den Point-in-Time-Restore, der nach dem Restore selbst wieder WAL archiviert.
 
@@ -53,7 +53,7 @@ Der Beweis erfasst getrennt:
 - erzwungene WAL-Archivlatenz im Primär- und Restorecluster als Referenzobergrenze für den archivierungsgebundenen RPO,
 - Datenvergleich vor und nach dem gewählten PITR-Zeitpunkt.
 
-Eine Messung gilt nur, wenn Upgrade und Rollback keinen beobachteten Gateway-Ausfall erzeugen, alle drei API-Pods ersetzt werden und die vor dem Ausfall bestätigte Domänenmutation sowie die JetStream-Nachricht erhalten bleiben. Das Upgrade-Artefakt verwendet dieselben Runtime-Bits mit abweichender unveränderlicher Metadatenebene; damit wird der Kubernetes-Änderungspfad, nicht die semantische Kompatibilität einer neuen Anwendungsversion bewiesen.
+Eine Messung gilt nur, wenn Upgrade und Rollback über die owner-lokal geprüften beworbenen Gateway-Listener keinen globalen Gateway-Ausfall der Referenzzelle erzeugen, alle drei API-Pods ersetzt werden und die vor dem Ausfall bestätigte Domänenmutation sowie die JetStream-Nachricht erhalten bleiben. Globaler Gateway-Ausfall bedeutet, dass in einer Stichprobe keiner der beworbenen Listener aus dem Netzraum seines zugehörigen Kind-Node-Owners die bestätigte API-Mutation liefert. Ausfälle einzelner Listener werden als Pfaddegradation separat erfasst. Cross-Node-Kind-/Cilium-Pfade gehören nicht zum Ausfallvertrag und werden als eigener Infrastrukturbefund behandelt. Da die Cilium-Gateway-Adressen der Kind-Referenzzelle außerhalb der Kind-Node-Netzräume nicht routbar sind, belegt diese Messung ausdrücklich keine externe Host- oder Produktions-Load-Balancer-Erreichbarkeit. Das Upgrade-Artefakt verwendet dieselben Runtime-Bits mit abweichender unveränderlicher Metadatenebene; damit wird der Kubernetes-Änderungspfad, nicht die semantische Kompatibilität einer neuen Anwendungsversion bewiesen.
 
 ## Sicherheitsgrenzen
 
