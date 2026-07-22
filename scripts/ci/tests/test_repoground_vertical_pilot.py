@@ -115,6 +115,20 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         self.assertTrue(any("dirty overlay must be excluded" in error for error in errors))
         self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
 
+
+    def test_empty_required_direct_paths_block_default_promotion(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["delivery_chain"]["required_direct_paths"] = []
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            "delivery chain required paths must be a non-empty subset of direct changes",
+            errors,
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates",
+            errors,
+        )
+
     def test_delivery_chain_failure_blocks_default_promotion(self) -> None:
         mutated = copy.deepcopy(self.evidence)
         mutated["delivery_chain"]["status"] = "blocked"
@@ -291,14 +305,31 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         self.assertTrue(any("baseline snippet_count must be positive" in error for error in errors))
         self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
 
-    def test_measurement_worktree_must_be_evidence_only_dirty(self) -> None:
+    def test_measurement_worktree_must_be_clean_or_evidence_only_dirty(self) -> None:
         mutated = copy.deepcopy(self.evidence)
         mutated["measurement_worktree"]["dirty_scope"] = "mixed"
-        mutated["measurement_worktree"]["dirty_paths"].append("apps/api/src/lib.rs")
+        mutated["measurement_worktree"]["dirty_paths"] = ["apps/api/src/lib.rs"]
         errors = self.validator.validate(mutated)
-        self.assertIn("measurement worktree dirty scope must be evidence_only", errors)
         self.assertIn(
-            "measurement worktree dirty paths must equal the four evidence files",
+            "clean measurement worktree must have clean scope and no dirty paths",
+            errors,
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates",
+            errors,
+        )
+
+    def test_controlled_live_budget_truncation_cannot_claim_complete_delivery(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        live = next(case for case in mutated["cases"] if case["profile"] == "controlled_live")
+        live["capsule"]["complete_direct_change_delivery"] = True
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            f"{live['id']}: controlled live budget truncation must not claim complete direct-change delivery",
+            errors,
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates",
             errors,
         )
         self.assertIn("truth_gate.passed must match recomputed truth gate", errors)

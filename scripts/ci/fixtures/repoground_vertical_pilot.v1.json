@@ -27,8 +27,8 @@
         "available": true,
         "call_graph_truth": {
           "artifact_available": true,
-          "artifact_bytes": 22437645,
-          "artifact_sha256": "c9256ca8bd55a567d0e9a6d1fc6b0b44872c5476d2819674e331a90ffe94613b",
+          "artifact_bytes": 22485322,
+          "artifact_sha256": "2fe28ccf8294263ecd3d814da800fe25444e3982f8ba1062534d34b57b7cc087",
           "coherent_relation_count": 0,
           "consumed_coherent_evidence": false
         },
@@ -38,11 +38,11 @@
         "diff_binding_verified": true,
         "dirty_overlay": {
           "available": true,
-          "dirty": true,
-          "entry_count": 33,
-          "identity_note": "Observed from the canonical Weltgewebe working tree selected by the alias-level overlay probe; the separate T003 measurement branch had only the four evidence files dirty. Neither overlay is included in the revision-bound historical diff.",
+          "dirty": false,
+          "entry_count": 0,
+          "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "included_in_revision_diff": false,
-          "status_sha256": "c1445530cdf30c72cca213c96a894b775e4df31a8e1141dffe8fde392fa77c15"
+          "identity_note": "Canonical Weltgewebe checkout was clean during the final 1410 measurement."
         },
         "does_not_establish": [
           "truth",
@@ -154,7 +154,13 @@
           }
         ],
         "target_symbols": [],
-        "representative_causal_relations": []
+        "representative_causal_relations": [],
+        "budget_degradation": {
+          "required_lane_loss": false,
+          "exhausted_lanes": [
+            "query_snippets"
+          ]
+        }
       },
       "changed_path_count": 14,
       "critical_path_coverage": 1.0,
@@ -198,7 +204,8 @@
       "quality_pass": true,
       "query": "radius privacy account projection migration database auth",
       "target_commit": "4b9b0507e5d54eaa285d91dbb47a3f2cf74f4ccc",
-      "target_revision": "4b9b0507e5d54eaa285d91dbb47a3f2cf74f4ccc"
+      "target_revision": "4b9b0507e5d54eaa285d91dbb47a3f2cf74f4ccc",
+      "delivery_completeness_required": true
     },
     {
       "base_commit": "c18ef20b0e164d0b3750b1a1650f0c3297a80550",
@@ -207,7 +214,7 @@
         "available": true,
         "direct_context_pack_verified": true,
         "freshness_status": "fresh",
-        "payload_bytes": 43180,
+        "payload_bytes": 43190,
         "payload_bytes_source": "repoground_context_compose.compactness.general_context_pack_bytes",
         "resolved_evidence_status": "available",
         "snippet_count": 5,
@@ -218,22 +225,22 @@
         "available": true,
         "call_graph_truth": {
           "artifact_available": true,
-          "artifact_bytes": 22437645,
-          "artifact_sha256": "c9256ca8bd55a567d0e9a6d1fc6b0b44872c5476d2819674e331a90ffe94613b",
+          "artifact_bytes": 22485322,
+          "artifact_sha256": "2fe28ccf8294263ecd3d814da800fe25444e3982f8ba1062534d34b57b7cc087",
           "coherent_relation_count": 0,
           "consumed_coherent_evidence": false
         },
         "causal_relations_included": 0,
         "citations_included": 4,
-        "context_bytes": 11711,
+        "context_bytes": 11708,
         "diff_binding_verified": true,
         "dirty_overlay": {
           "available": true,
-          "dirty": true,
-          "entry_count": 33,
-          "identity_note": "Observed from the canonical Weltgewebe working tree selected by the alias-level overlay probe; the separate T003 measurement branch had only the four evidence files dirty. Neither overlay is included in the revision-bound historical diff.",
+          "dirty": false,
+          "entry_count": 0,
+          "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "included_in_revision_diff": false,
-          "status_sha256": "c1445530cdf30c72cca213c96a894b775e4df31a8e1141dffe8fde392fa77c15"
+          "identity_note": "Canonical Weltgewebe checkout was clean during the final 1410 measurement."
         },
         "does_not_establish": [
           "truth",
@@ -248,7 +255,7 @@
         ],
         "freshness_status": "fresh",
         "gaps": [],
-        "general_context_pack_bytes_reported": 43180,
+        "general_context_pack_bytes_reported": 43190,
         "lane_counts": {
           "direct_changes": {
             "available": 4,
@@ -276,7 +283,7 @@
           }
         },
         "live_ranges_included": 4,
-        "ratio": 0.271214,
+        "ratio": 0.271081,
         "related_tests_included": 2,
         "retrieval_lanes": {
           "used": [
@@ -293,7 +300,7 @@
             "call_graph"
           ]
         },
-        "reduction_pct": 72.879,
+        "reduction_pct": 72.892,
         "status": "degraded",
         "stop_criteria": {
           "impact_context_blocked": false,
@@ -321,7 +328,13 @@
           }
         ],
         "target_symbols": [],
-        "representative_causal_relations": []
+        "representative_causal_relations": [],
+        "budget_degradation": {
+          "required_lane_loss": false,
+          "exhausted_lanes": [
+            "query_snippets"
+          ]
+        }
       },
       "changed_path_count": 4,
       "critical_path_coverage": 1.0,
@@ -345,7 +358,8 @@
       "quality_pass": true,
       "query": "map",
       "target_commit": "d7c1fb9ca77005a590a0a750124a0fa243b1471c",
-      "target_revision": "d7c1fb9ca77005a590a0a750124a0fa243b1471c"
+      "target_revision": "d7c1fb9ca77005a590a0a750124a0fa243b1471c",
+      "delivery_completeness_required": true
     },
     {
       "base_commit": "5d11513ece74f289bd3c0cf8b92bc0f617f5cc79",
@@ -365,8 +379,8 @@
         "available": true,
         "call_graph_truth": {
           "artifact_available": true,
-          "artifact_bytes": 22437645,
-          "artifact_sha256": "c9256ca8bd55a567d0e9a6d1fc6b0b44872c5476d2819674e331a90ffe94613b",
+          "artifact_bytes": 22485322,
+          "artifact_sha256": "2fe28ccf8294263ecd3d814da800fe25444e3982f8ba1062534d34b57b7cc087",
           "coherent_relation_count": 1,
           "consumed_coherent_evidence": true
         },
@@ -376,11 +390,11 @@
         "diff_binding_verified": true,
         "dirty_overlay": {
           "available": true,
-          "dirty": true,
-          "entry_count": 33,
-          "identity_note": "Observed from the canonical Weltgewebe working tree selected by the alias-level overlay probe; the separate T003 measurement branch had only the four evidence files dirty. Neither overlay is included in the revision-bound historical diff.",
+          "dirty": false,
+          "entry_count": 0,
+          "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "included_in_revision_diff": false,
-          "status_sha256": "c1445530cdf30c72cca213c96a894b775e4df31a8e1141dffe8fde392fa77c15"
+          "identity_note": "Canonical Weltgewebe checkout was clean during the final 1410 measurement."
         },
         "does_not_establish": [
           "truth",
@@ -530,9 +544,9 @@
             "relation_type": "calls",
             "source": "python_call_graph_json",
             "status": "coherent",
-            "artifact_sha256": "c9256ca8bd55a567d0e9a6d1fc6b0b44872c5476d2819674e331a90ffe94613b",
-            "canonical_dump_index_sha256": "b79d323803602ed6e45270bb289870674a4fbe6d9a6f0baba9cb7778c44eec64",
-            "run_id": "heimgewebe__weltgewebe__main-full-max-260722-0641",
+            "artifact_sha256": "2fe28ccf8294263ecd3d814da800fe25444e3982f8ba1062534d34b57b7cc087",
+            "canonical_dump_index_sha256": "8da913266f56bf123703029302b70fa5f504a872733d986e3c44821941625e73",
+            "run_id": "heimgewebe__weltgewebe__main-full-max-260722-1410",
             "source_call_site": "file:scripts/ci/tests/test_production_reconciler_contract.py#L59-L59",
             "peer_definition": "file:scripts/ci/tests/test_production_reconciler_contract.py#L58-L81",
             "symbol_id": "py:scripts:ci:tests:test_production_reconciler_contract.py:function:ProductionReconcilerContractTests.test_deploy_helper_preserves_legacy_checkout_and_binds_main",
@@ -553,6 +567,16 @@
           "included": 7,
           "architecture_import_relations": 6,
           "coherent_call_graph_relations": 1
+        },
+        "budget_degradation": {
+          "required_lane_loss": false,
+          "exhausted_lanes": [
+            "causal_relations",
+            "live_ranges",
+            "citations",
+            "entry_manifest",
+            "query_snippets"
+          ]
         }
       },
       "changed_path_count": 9,
@@ -587,97 +611,233 @@
       "quality_pass": true,
       "query": "production reconciler deployment exact commit live verification",
       "target_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
-      "target_revision": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22"
+      "target_revision": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "delivery_completeness_required": true
     },
     {
-      "id": "live_current_source_bundle_metrics_path_label",
+      "id": "live_current_source_bundle_guest_budget",
       "profile": "controlled_live",
-      "base_commit": "24b74dab863acf1e288974dd0aaddc1c258d21ee",
-      "target_commit": "a7f8c490095d907a26ba637f739ca423b8bba180",
-      "base_revision": "24b74dab863acf1e288974dd0aaddc1c258d21ee",
-      "target_revision": "a7f8c490095d907a26ba637f739ca423b8bba180",
+      "base_commit": "0cd3699c35534e4df93cb7609dbf2dcf4263cf23",
+      "target_commit": "83c39421c8ed4f87e01319d695e59885a500f317",
+      "base_revision": "0cd3699c35534e4df93cb7609dbf2dcf4263cf23",
+      "target_revision": "83c39421c8ed4f87e01319d695e59885a500f317",
       "diff_binding_kind": "git_tree_delta_v1",
-      "diff_sha256": "53750d3df0d4535ada0591d6fd0d85b0f62bfd4481f4dcf08c86343362f06e32",
-      "changed_path_count": 1,
+      "diff_sha256": "2a8b77ceee4ba93266c06ebfb4fe3cf83bfdde2af9d17b10adf33ec3f1ba5d44",
+      "changed_path_count": 89,
       "direct_change_paths": [
-        "apps/api/src/telemetry/mod.rs"
+        ".github/workflows/contracts-domain.yml",
+        "apps/api/README.md",
+        "apps/api/migrations/20260722000001_guest_content_ownership_exit_cleanup.down.sql",
+        "apps/api/migrations/20260722000001_guest_content_ownership_exit_cleanup.up.sql",
+        "apps/api/migrations/20260722000002_guest_node_creator_index.down.sql",
+        "apps/api/migrations/20260722000002_guest_node_creator_index.up.sql",
+        "apps/api/migrations/20260722000003_guest_exit_author_indexes.down.sql",
+        "apps/api/migrations/20260722000003_guest_exit_author_indexes.up.sql",
+        "apps/api/migrations/20260722000004_federation_core_hardening.down.sql",
+        "apps/api/migrations/20260722000004_federation_core_hardening.up.sql",
+        "apps/api/src/advisory_lock.rs",
+        "apps/api/src/config.rs",
+        "apps/api/src/domain_db.rs",
+        "apps/api/src/federation.rs",
+        "apps/api/src/governance.rs",
+        "apps/api/src/mailer.rs",
+        "apps/api/src/middleware/authz.rs",
+        "apps/api/src/routes/accounts.rs",
+        "apps/api/src/routes/auth.rs",
+        "apps/api/src/routes/collective_write_guard.rs",
+        "apps/api/src/routes/domain_write_guard.rs",
+        "apps/api/src/routes/governance.rs",
+        "apps/api/src/routes/health.rs",
+        "apps/api/src/routes/mod.rs",
+        "apps/api/src/routes/nodes.rs",
+        "apps/api/tests/api_accounts.rs",
+        "apps/api/tests/api_accounts_create.rs",
+        "apps/api/tests/api_auth.rs",
+        "apps/api/tests/api_collective_mutations.rs",
+        "apps/api/tests/api_edges.rs",
+        "apps/api/tests/api_federation_two_cell.rs",
+        "apps/api/tests/api_governance_guards.rs",
+        "apps/api/tests/api_nodes.rs",
+        "apps/api/tests/auth_auto_provision_persistence.rs",
+        "apps/api/tests/auth_handler_test.rs",
+        "apps/api/tests/auth_open_registration.rs",
+        "apps/api/tests/auth_ratelimit.rs",
+        "apps/api/tests/auth_ratelimit_proxy_trusted.rs",
+        "apps/api/tests/auth_ratelimit_proxy_untrusted.rs",
+        "apps/api/tests/auth_security_invariants.rs",
+        "apps/api/tests/db_auto_provision_write_path.rs",
+        "apps/api/tests/db_domain_account_write_path.rs",
+        "apps/api/tests/db_domain_edge_write_path.rs",
+        "apps/api/tests/db_domain_node_write_path.rs",
+        "apps/api/tests/db_federation_persistence.rs",
+        "apps/api/tests/db_governance.rs",
+        "apps/api/tests/db_multi_instance_foundation.rs",
+        "apps/api/tests/db_node_conversations.rs",
+        "apps/api/tests/db_passkey_store_persistence.rs",
+        "apps/api/tests/helpers.rs",
+        "apps/web/src/lib/api/domainWrites.ts",
+        "apps/web/src/lib/api/governance.ts",
+        "apps/web/src/lib/components/MyGarnrolleSection.svelte",
+        "apps/web/src/lib/components/ToolFan.svelte",
+        "apps/web/src/lib/components/ToolFanMenu.svelte",
+        "apps/web/src/lib/components/governance/ProposalDetail.svelte",
+        "apps/web/src/lib/components/panels/KompositionPanel.svelte",
+        "apps/web/src/lib/components/panels/NodeConversation.svelte",
+        "apps/web/src/lib/components/panels/NodePanel.svelte",
+        "apps/web/src/lib/map/overlay/komposition.ts",
+        "apps/web/tests/fixtures/mockApi.ts",
+        "apps/web/tests/garnrolle-self-service.spec.ts",
+        "apps/web/tests/governance.spec.ts",
+        "apps/web/tests/komposition.spec.ts",
+        "apps/web/tests/node-conversation.spec.ts",
+        "apps/web/tests/node-mutations.spec.ts",
+        "apps/web/tests/tool-fan-layout.spec.ts",
+        "configs/app.defaults.yml",
+        "contracts/domain/examples/node.example.json",
+        "contracts/domain/node.schema.json",
+        "contracts/federation/v1/event.schema.json",
+        "contracts/federation/v1/examples/invalid/event.global-with-target.invalid.json",
+        "contracts/federation/v1/examples/invalid/event.noncanonical-time.invalid.json",
+        "contracts/federation/v1/examples/invalid/event.noncanonical-uuid.invalid.json",
+        "contracts/federation/v1/examples/invalid/event.unknown-field.invalid.json",
+        "contracts/federation/v1/examples/invalid/event.version-overflow.invalid.json",
+        "docs/_generated/report-lifecycle-inventory.md",
+        "docs/_generated/report-lifecycle.md",
+        "docs/_generated/system-map.md",
+        "docs/datenmodell.md",
+        "docs/domain/vocabulary.md",
+        "docs/reports/auth-persistence-readiness.md",
+        "docs/reports/auth-persistence-runtime-target-reconciliation.md",
+        "docs/specs/auth-blueprint.md",
+        "docs/specs/federation-wire-v1.md",
+        "docs/specs/garnrolle-knoten-faden.md",
+        "docs/specs/governance-antraege.md",
+        "docs/specs/ui-interaction.md",
+        "scripts/ci/tests/test_federation_contract.py"
       ],
-      "expected_critical_paths": [
-        "apps/api/src/telemetry/mod.rs"
-      ],
-      "missing_critical_paths": [],
-      "critical_path_coverage": 1.0,
       "quality_pass": true,
-      "query": "metrics_path_label",
+      "query": "guest",
       "baseline": {
         "available": true,
         "direct_context_pack_verified": true,
         "freshness_status": "fresh",
         "resolved_evidence_status": "available",
-        "snippet_count": 2,
-        "range_count": 2,
-        "citation_count": 2,
-        "payload_bytes": 14073,
+        "snippet_count": 5,
+        "range_count": 5,
+        "citation_count": 5,
+        "payload_bytes": 51900,
         "payload_bytes_source": "repoground_context_compose.compactness.general_context_pack_bytes"
       },
       "capsule": {
         "available": true,
-        "status": "available",
-        "context_bytes": 5095,
-        "general_context_pack_bytes_reported": 14073,
-        "ratio": 0.362041,
-        "reduction_pct": 63.796,
+        "status": "degraded",
+        "context_bytes": 11945,
+        "general_context_pack_bytes_reported": 51900,
+        "ratio": 0.230154,
+        "reduction_pct": 76.985,
         "diff_binding_verified": true,
         "freshness_status": "fresh",
-        "related_tests_included": 1,
+        "related_tests_included": 8,
         "related_tests": [
           {
-            "path": "scripts/ci/tests/test_weltgewebe_up_api_version_contract.py",
-            "evidence_type": "resolved_query",
-            "reason": "test_like_path_from_resolved_query_projection",
-            "relationship_strength": "navigation_candidate",
-            "provenance_strength": "resolved_navigation_evidence",
+            "path": "apps/api/tests/api_accounts.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_accounts_create.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_auth.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_collective_mutations.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_edges.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_federation_two_cell.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_governance_guards.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_nodes.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
             "current_read_evidence": "available"
           }
         ],
-        "target_symbols_included": 0,
+        "target_symbols_included": 8,
         "target_symbols": [],
-        "causal_relations_included": 0,
+        "causal_relations_included": 7,
         "representative_causal_relations": [],
         "live_ranges_included": 1,
-        "representative_live_ranges": [
-          {
-            "path": "apps/api/src/telemetry/mod.rs",
-            "start_line": 260,
-            "end_line": 262,
-            "content_sha256": "226c648776198a99c439758de197605c40a7e40399725d0de8cd60edbeccf603"
-          }
-        ],
-        "citations_included": 1,
+        "representative_live_ranges": [],
+        "citations_included": 5,
         "lane_counts": {
           "direct_changes": {
-            "available": 1,
-            "included": 1
+            "available": 89,
+            "included": 16,
+            "policy_omitted": 73
           },
           "related_tests": {
-            "available": 1,
-            "included": 1
+            "available": 33,
+            "included": 8,
+            "policy_omitted": 25
           },
           "target_symbols": {
-            "available": 0,
-            "included": 0
+            "available": 11,
+            "included": 8,
+            "policy_omitted": 3
           },
           "causal_relations": {
-            "available": 0,
-            "included": 0
+            "available": 7,
+            "included": 7
           },
           "live_ranges": {
-            "available": 1,
+            "available": 5,
             "included": 1
           },
           "citations": {
-            "available": 1,
-            "included": 1
+            "available": 5,
+            "included": 5
           }
         },
         "retrieval_lanes": {
@@ -685,35 +845,37 @@
             "direct_changes",
             "agent_impact",
             "query_context",
+            "symbol_navigation",
             "citation",
-            "live_evidence",
-            "entry_manifest"
+            "live_evidence"
           ],
           "skipped": [
+            "entry_manifest",
             "pr_delta_cards",
-            "symbol_navigation",
             "call_graph"
           ]
         },
         "call_graph_truth": {
           "artifact_available": true,
-          "artifact_bytes": 22437645,
-          "artifact_sha256": "c9256ca8bd55a567d0e9a6d1fc6b0b44872c5476d2819674e331a90ffe94613b",
+          "artifact_bytes": 22485322,
+          "artifact_sha256": "2fe28ccf8294263ecd3d814da800fe25444e3982f8ba1062534d34b57b7cc087",
           "consumed_coherent_evidence": false,
           "coherent_relation_count": 0
         },
         "gaps": [],
         "stop_criteria": {
           "impact_context_blocked": false,
-          "triggered": []
+          "triggered": [
+            "budget_exhausted"
+          ]
         },
         "dirty_overlay": {
           "available": true,
-          "dirty": true,
-          "entry_count": 33,
-          "status_sha256": "c1445530cdf30c72cca213c96a894b775e4df31a8e1141dffe8fde392fa77c15",
+          "dirty": false,
+          "entry_count": 0,
+          "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "included_in_revision_diff": false,
-          "identity_note": "Observed from the canonical Weltgewebe working tree; excluded from the revision-bound controlled-live diff."
+          "identity_note": "Canonical Weltgewebe checkout was clean during the final 1410 measurement."
         },
         "does_not_establish": [
           "truth",
@@ -725,8 +887,18 @@
           "merge_readiness",
           "runtime_behavior",
           "regression_absence"
-        ]
-      }
+        ],
+        "complete_direct_change_delivery": false,
+        "budget_degradation": {
+          "required_lane_loss": false,
+          "exhausted_lanes": [
+            "live_ranges",
+            "entry_manifest",
+            "query_snippets"
+          ]
+        }
+      },
+      "delivery_completeness_required": false
     }
   ],
   "context_budget_bytes": 12000,
@@ -755,18 +927,26 @@
       "job_id": 88556854305,
       "job_name": "Production reconciler contract tests",
       "conclusion": "success",
-      "path": "scripts/ci/tests/test_production_reconciler_contract.py"
+      "path": "scripts/ci/tests/test_production_reconciler_contract.py",
+      "event": "push",
+      "pr_head_sha": "c6d7bbc2dbec97ee0223a9c22cd1e331b7a21993",
+      "merge_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "run_head_sha": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22"
     },
     "ci_evidence": {
       "required_merge_gate": {
         "workflow_run_id": 29805241044,
         "job_id": 88555418515,
-        "conclusion": "success"
+        "conclusion": "success",
+        "event": "pull_request",
+        "head_sha": "c6d7bbc2dbec97ee0223a9c22cd1e331b7a21993"
       },
       "review_evidence_gate": {
         "workflow_run_id": 29805240373,
         "job_id": 88556686625,
-        "conclusion": "success"
+        "conclusion": "success",
+        "event": "pull_request_target",
+        "head_sha": "c6d7bbc2dbec97ee0223a9c22cd1e331b7a21993"
       }
     },
     "deployment_evidence": {
@@ -775,7 +955,8 @@
       "workflow_run_id": 29806103267,
       "event": "push",
       "head_sha": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
-      "conclusion": "success"
+      "conclusion": "success",
+      "pr_head_sha": "c6d7bbc2dbec97ee0223a9c22cd1e331b7a21993"
     },
     "runtime_proof": {
       "workflow_run_id": 29806103267,
@@ -785,7 +966,14 @@
       "conclusion": "success",
       "public_identity_step": "Verify public frontend and API identity",
       "public_identity_step_conclusion": "success",
-      "production_receipt_uploaded": true
+      "production_receipt_uploaded": true,
+      "production_receipt": {
+        "artifact_id": 8485749581,
+        "artifact_name": "production-live-7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+        "artifact_digest": "sha256:c253bacc2bcb0791edbbb820959b10a6f124b60587254c73d5baa64de2687996",
+        "bound_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+        "workflow_run_id": 29806103267
+      }
     },
     "recovery_evidence": {
       "documentation_path": "docs/deploy/merge-to-live.md",
@@ -831,16 +1019,11 @@
   "grabowski_t006_hardening_merge_commit": "de799bbded2d1c09de9b29153325516539a805e2",
   "grabowski_t006_merge_commit": "eaaf8307009df70bba549c571ec376a4fc7743e0",
   "measurement_worktree": {
-    "branch": "docs/repoground-agent-utility-t003-post-t006-pilot-v1",
-    "head": "a7f8c490095d907a26ba637f739ca423b8bba180",
-    "dirty": true,
-    "dirty_scope": "evidence_only",
-    "dirty_paths": [
-      "docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md",
-      "scripts/ci/fixtures/repoground_vertical_pilot.v1.json",
-      "scripts/ci/tests/test_repoground_vertical_pilot.py",
-      "scripts/ci/validate_repoground_vertical_pilot.py"
-    ],
+    "branch": "publication_source_checkout",
+    "head": "83c39421c8ed4f87e01319d695e59885a500f317",
+    "dirty": false,
+    "dirty_scope": "clean",
+    "dirty_paths": [],
     "included_in_revision_diff": false
   },
   "mechanical_promotion_gate": {
@@ -854,28 +1037,28 @@
   },
   "observed_foreign_dirty_overlay": {
     "available": true,
-    "dirty": true,
-    "entry_count": 33,
-    "identity_note": "Observed from the canonical Weltgewebe working tree selected by the alias-level overlay probe; the separate T003 measurement branch had only the four evidence files dirty. Neither overlay is included in the revision-bound historical diff.",
+    "dirty": false,
+    "entry_count": 0,
+    "identity_note": "Canonical Weltgewebe checkout was clean during the final 1410 measurement.",
     "included_in_revision_diff": false,
-    "status_sha256": "c1445530cdf30c72cca213c96a894b775e4df31a8e1141dffe8fde392fa77c15"
+    "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "overall_status": "pass",
   "promotion_recommendation": "promote_default",
   "promotion_scope": "bounded_change_impact_context_for_agent_handoff",
   "repo": "weltgewebe",
   "repoground_1070_merge_commit": "c12e6e867c0de3315b250ce5818f4331f6dbbb63",
-  "repoground_runtime_commit": "131c843a2a0c3e995e879e71286bd21a169e0650",
+  "repoground_runtime_commit": "dea8e61ace8bc45a32ec32bff3f79eccaa9c9f19",
   "schema_version": 1,
   "source_bundle": {
-    "stem": "heimgewebe__weltgewebe__main-max-260722-0641",
-    "git_commit": "a7f8c490095d907a26ba637f739ca423b8bba180",
-    "manifest_sha256": "c24a45375b8751813a70857580568f5746346367c1278d62127bab790ebf5f94",
+    "stem": "heimgewebe__weltgewebe__main-max-260722-1410",
+    "git_commit": "83c39421c8ed4f87e01319d695e59885a500f317",
+    "manifest_sha256": "c11c3511aafec4b0d6b0162796c9758a0bd0c6b708a366de6f850a22b2250546",
     "freshness": "fresh_exact",
     "post_emit_health": "pass",
     "output_health": "pass",
     "bundle_surface_validation": "pass",
-    "generator_runtime_commit": "131c843a2a0c3e995e879e71286bd21a169e0650"
+    "generator_runtime_commit": "dea8e61ace8bc45a32ec32bff3f79eccaa9c9f19"
   },
   "task_profile": "change_impact",
   "truth_gate": {

@@ -109,18 +109,29 @@ def validate(data: dict[str, Any]) -> list[str]:
     if measurement_worktree.get("head") != source_bundle.get("git_commit"):
         errors.append("measurement worktree head must equal source bundle git_commit")
         measurement_worktree_pass = False
-    if measurement_worktree.get("dirty") is not True:
-        errors.append("measurement worktree must record the evidence-only dirty state")
-        measurement_worktree_pass = False
-    if measurement_worktree.get("dirty_scope") != "evidence_only":
-        errors.append("measurement worktree dirty scope must be evidence_only")
-        measurement_worktree_pass = False
+    dirty = measurement_worktree.get("dirty")
+    dirty_scope = measurement_worktree.get("dirty_scope")
     dirty_paths = measurement_worktree.get("dirty_paths")
-    if not isinstance(dirty_paths, list) or set(dirty_paths) != _MEASUREMENT_EVIDENCE_PATHS:
-        errors.append("measurement worktree dirty paths must equal the four evidence files")
+    if dirty is False:
+        if dirty_scope != "clean" or dirty_paths != []:
+            errors.append("clean measurement worktree must have clean scope and no dirty paths")
+            measurement_worktree_pass = False
+    elif dirty is True:
+        if dirty_scope != "evidence_only":
+            errors.append("dirty measurement worktree scope must be evidence_only")
+            measurement_worktree_pass = False
+        if (
+            not isinstance(dirty_paths, list)
+            or not dirty_paths
+            or not set(dirty_paths).issubset(_MEASUREMENT_EVIDENCE_PATHS)
+        ):
+            errors.append("dirty measurement worktree paths must be non-empty and evidence-only")
+            measurement_worktree_pass = False
+    else:
+        errors.append("measurement worktree dirty must be a boolean")
         measurement_worktree_pass = False
     if measurement_worktree.get("included_in_revision_diff") is not False:
-        errors.append("measurement worktree evidence edits must be excluded from revision diff")
+        errors.append("measurement worktree edits must be excluded from revision diff")
         measurement_worktree_pass = False
 
     observed_overlay = data.get("observed_foreign_dirty_overlay")
@@ -206,9 +217,8 @@ def validate(data: dict[str, Any]) -> list[str]:
             errors.append(f"{case_id}: diff_binding_kind must be git_tree_delta_v1")
             diff_binding_pass = False
 
+        profile = case.get("profile")
         direct = case.get("direct_change_paths")
-        expected = case.get("expected_critical_paths")
-        missing = case.get("missing_critical_paths")
         if not isinstance(direct, list) or not direct or not all(
             isinstance(path, str) and path for path in direct
         ):
@@ -218,24 +228,45 @@ def validate(data: dict[str, Any]) -> list[str]:
         if case.get("changed_path_count") != len(direct):
             errors.append(f"{case_id}: changed_path_count must match direct_change_paths")
             bounded_quality_pass = False
-        if not isinstance(expected, list) or not expected:
-            errors.append(f"{case_id}: expected_critical_paths must be non-empty")
-            expected = []
-            bounded_quality_pass = False
-        if set(expected) != set(direct):
-            errors.append(f"{case_id}: bounded critical paths must equal all direct changes")
-            bounded_quality_pass = False
-        if not isinstance(missing, list) or missing:
-            errors.append(f"{case_id}: critical-path coverage must have no missing paths")
-            bounded_quality_pass = False
-        if case.get("critical_path_coverage") != 1.0:
-            errors.append(f"{case_id}: critical_path_coverage must be 1.0")
-            bounded_quality_pass = False
-        if case.get("profile") in _GOLD_PROFILES and not any(
-            _looks_like_test_path(path) for path in direct
-        ):
-            errors.append(f"{case_id}: every gold case must directly include a changed test path")
-            bounded_quality_pass = False
+
+        if profile in _GOLD_PROFILES:
+            expected = case.get("expected_critical_paths")
+            missing = case.get("missing_critical_paths")
+            if not isinstance(expected, list) or not expected:
+                errors.append(f"{case_id}: expected_critical_paths must be non-empty")
+                expected = []
+                bounded_quality_pass = False
+            if set(expected) != set(direct):
+                errors.append(f"{case_id}: bounded critical paths must equal all direct changes")
+                bounded_quality_pass = False
+            if not isinstance(missing, list) or missing:
+                errors.append(f"{case_id}: critical-path coverage must have no missing paths")
+                bounded_quality_pass = False
+            if case.get("critical_path_coverage") != 1.0:
+                errors.append(f"{case_id}: critical_path_coverage must be 1.0")
+                bounded_quality_pass = False
+            if case.get("delivery_completeness_required") is not True:
+                errors.append(f"{case_id}: gold cases must require complete direct-change delivery")
+                bounded_quality_pass = False
+        elif profile == "controlled_live":
+            if any(
+                field in case
+                for field in (
+                    "expected_critical_paths",
+                    "missing_critical_paths",
+                    "critical_path_coverage",
+                )
+            ):
+                errors.append(
+                    f"{case_id}: controlled live case must not claim gold critical-path completeness"
+                )
+                controlled_live_pass = False
+            if case.get("delivery_completeness_required") is not False:
+                errors.append(
+                    f"{case_id}: controlled live case must explicitly disable completeness requirement"
+                )
+                controlled_live_pass = False
+
         if case.get("quality_pass") is not True:
             errors.append(f"{case_id}: bounded quality check must pass")
             bounded_quality_pass = False
@@ -247,7 +278,87 @@ def validate(data: dict[str, Any]) -> list[str]:
             baseline_evidence_pass = False
             freshness_pass = False
             diff_binding_pass = False
+            bounded_quality_pass = False
+            if profile == "controlled_live":
+                controlled_live_pass = False
             continue
+
+        lane_counts = capsule.get("lane_counts")
+        if not isinstance(lane_counts, dict):
+            errors.append(f"{case_id}: lane_counts must be an object")
+            lane_counts = {}
+            bounded_quality_pass = False
+        direct_lane = lane_counts.get("direct_changes")
+        if not isinstance(direct_lane, dict):
+            errors.append(f"{case_id}: direct_changes lane count must be an object")
+            direct_lane = {}
+            bounded_quality_pass = False
+
+        available_direct = direct_lane.get("available")
+        included_direct = direct_lane.get("included")
+        policy_omitted = direct_lane.get("policy_omitted", 0)
+        if profile in _GOLD_PROFILES:
+            if available_direct != len(direct) or included_direct != len(direct):
+                errors.append(f"{case_id}: every gold case must deliver all direct changes")
+                bounded_quality_pass = False
+            if policy_omitted != 0:
+                errors.append(f"{case_id}: gold direct-change delivery must not omit paths")
+                bounded_quality_pass = False
+        elif profile == "controlled_live":
+            if available_direct != len(direct):
+                errors.append(
+                    f"{case_id}: controlled live direct-change inventory must match revision diff"
+                )
+                controlled_live_pass = False
+            if (
+                not isinstance(included_direct, int)
+                or isinstance(included_direct, bool)
+                or included_direct <= 0
+                or not isinstance(available_direct, int)
+                or isinstance(available_direct, bool)
+                or included_direct > available_direct
+            ):
+                errors.append(
+                    f"{case_id}: controlled live delivered direct-change count must be bounded"
+                )
+                controlled_live_pass = False
+            if (
+                not isinstance(policy_omitted, int)
+                or isinstance(policy_omitted, bool)
+                or policy_omitted < 0
+                or not isinstance(available_direct, int)
+                or not isinstance(included_direct, int)
+                or policy_omitted != available_direct - included_direct
+            ):
+                errors.append(
+                    f"{case_id}: controlled live policy_omitted must equal available minus included"
+                )
+                controlled_live_pass = False
+            if (
+                isinstance(available_direct, int)
+                and isinstance(included_direct, int)
+                and included_direct < available_direct
+                and capsule.get("complete_direct_change_delivery") is not False
+            ):
+                errors.append(
+                    f"{case_id}: controlled live budget truncation must not claim complete direct-change delivery"
+                )
+                controlled_live_pass = False
+
+        budget_degradation = capsule.get("budget_degradation")
+        if not isinstance(budget_degradation, dict):
+            errors.append(f"{case_id}: budget_degradation must be an object")
+            bounded_quality_pass = False
+        else:
+            if budget_degradation.get("required_lane_loss") is not False:
+                errors.append(f"{case_id}: budget degradation must not lose required lanes")
+                bounded_quality_pass = False
+            exhausted_lanes = budget_degradation.get("exhausted_lanes")
+            if not isinstance(exhausted_lanes, list) or not all(
+                isinstance(lane, str) and lane for lane in exhausted_lanes
+            ):
+                errors.append(f"{case_id}: budget degradation exhausted_lanes must be a string list")
+                bounded_quality_pass = False
 
         if baseline.get("available") is not True:
             errors.append(f"{case_id}: paired baseline must be available")
@@ -289,8 +400,8 @@ def validate(data: dict[str, Any]) -> list[str]:
                 continue
             path = related.get("path")
             evidence_type = related.get("evidence_type")
-            if not isinstance(path, str) or not path or not _looks_like_test_path(path):
-                errors.append(f"{case_id}: every related test must identify a test-like path")
+            if not isinstance(path, str) or not path:
+                errors.append(f"{case_id}: every related test must identify a non-empty path")
                 bounded_quality_pass = False
             if evidence_type == "changed_test_path":
                 if path not in direct:
@@ -312,6 +423,18 @@ def validate(data: dict[str, Any]) -> list[str]:
             else:
                 errors.append(f"{case_id}: related test evidence_type must be recognized")
                 bounded_quality_pass = False
+
+        if profile in _GOLD_PROFILES and not any(
+            isinstance(related, dict)
+            and related.get("evidence_type") == "changed_test_path"
+            and related.get("provenance_strength") == "direct_diff"
+            and related.get("path") in direct
+            for related in related_tests
+        ):
+            errors.append(
+                f"{case_id}: every gold case must include direct-diff changed-test evidence"
+            )
+            bounded_quality_pass = False
 
         target_symbols = capsule.get("target_symbols")
         if not isinstance(target_symbols, list):
@@ -580,8 +703,15 @@ def validate(data: dict[str, Any]) -> list[str]:
             delivery_evidence_pass = False
         direct = set(deployment.get("direct_change_paths", []))
         required_direct = delivery.get("required_direct_paths")
-        if not isinstance(required_direct, list) or not set(required_direct).issubset(direct):
-            errors.append("delivery chain required paths must be direct changes")
+        if (
+            not isinstance(required_direct, list)
+            or not required_direct
+            or not all(isinstance(path, str) and path for path in required_direct)
+            or not set(required_direct).issubset(direct)
+        ):
+            errors.append(
+                "delivery chain required paths must be a non-empty subset of direct changes"
+            )
             delivery_evidence_pass = False
         capsule = deployment.get("capsule", {})
         for field in (
@@ -630,6 +760,19 @@ def validate(data: dict[str, Any]) -> list[str]:
             if contract.get("conclusion") != "success":
                 errors.append("delivery contract evidence must be successful")
                 delivery_evidence_pass = False
+            if contract.get("event") != "push":
+                errors.append("delivery contract evidence must come from the post-merge push run")
+                delivery_evidence_pass = False
+            if not isinstance(contract.get("pr"), int) or contract.get("pr") <= 0:
+                errors.append("delivery contract evidence pr must be positive")
+                delivery_evidence_pass = False
+            for field in ("pr_head_sha", "merge_commit", "run_head_sha"):
+                if not _is_sha(contract.get(field), _SHA40):
+                    errors.append(f"delivery contract evidence {field} must be a full commit SHA")
+                    delivery_evidence_pass = False
+            if contract.get("run_head_sha") != contract.get("merge_commit"):
+                errors.append("delivery contract run head must equal its merge commit")
+                delivery_evidence_pass = False
             for field in ("workflow_run_id", "job_id"):
                 if not isinstance(contract.get(field), int) or contract.get(field) <= 0:
                     errors.append(f"delivery contract evidence {field} must be positive")
@@ -640,12 +783,26 @@ def validate(data: dict[str, Any]) -> list[str]:
             errors.append("delivery chain must bind explicit CI evidence")
             delivery_evidence_pass = False
         else:
-            for gate_name in ("required_merge_gate", "review_evidence_gate"):
+            expected_events = {
+                "required_merge_gate": "pull_request",
+                "review_evidence_gate": "pull_request_target",
+            }
+            for gate_name, expected_event in expected_events.items():
                 gate = ci_evidence.get(gate_name)
                 if not isinstance(gate, dict) or gate.get("conclusion") != "success":
                     errors.append(f"delivery CI evidence {gate_name} must be successful")
                     delivery_evidence_pass = False
                     continue
+                if gate.get("event") != expected_event:
+                    errors.append(
+                        f"delivery CI evidence {gate_name}.event must be {expected_event}"
+                    )
+                    delivery_evidence_pass = False
+                if not _is_sha(gate.get("head_sha"), _SHA40):
+                    errors.append(
+                        f"delivery CI evidence {gate_name}.head_sha must be a full commit SHA"
+                    )
+                    delivery_evidence_pass = False
                 for field in ("workflow_run_id", "job_id"):
                     if not isinstance(gate.get(field), int) or gate.get(field) <= 0:
                         errors.append(
@@ -669,9 +826,46 @@ def validate(data: dict[str, Any]) -> list[str]:
             ):
                 errors.append("deployment evidence must be a successful post-merge push run")
                 delivery_evidence_pass = False
-            if not isinstance(deployment_evidence.get("workflow_run_id"), int):
+            if not isinstance(deployment_evidence.get("pr"), int) or (
+                deployment_evidence.get("pr") <= 0
+            ):
+                errors.append("deployment evidence pr must be positive")
+                delivery_evidence_pass = False
+            if not _is_sha(deployment_evidence.get("pr_head_sha"), _SHA40):
+                errors.append("deployment evidence pr_head_sha must be a full commit SHA")
+                delivery_evidence_pass = False
+            if not isinstance(deployment_evidence.get("workflow_run_id"), int) or (
+                deployment_evidence.get("workflow_run_id") <= 0
+            ):
                 errors.append("deployment workflow_run_id must be present")
                 delivery_evidence_pass = False
+
+            if isinstance(contract, dict):
+                if contract.get("pr") != deployment_evidence.get("pr"):
+                    errors.append("contract and deployment evidence must bind the same PR")
+                    delivery_evidence_pass = False
+                if contract.get("pr_head_sha") != deployment_evidence.get("pr_head_sha"):
+                    errors.append("contract and deployment evidence must bind the same PR head")
+                    delivery_evidence_pass = False
+                if contract.get("merge_commit") != deployment_target:
+                    errors.append("contract evidence merge commit must equal deployment target")
+                    delivery_evidence_pass = False
+                if contract.get("run_head_sha") != deployment_target:
+                    errors.append("contract evidence run head must equal deployment target")
+                    delivery_evidence_pass = False
+                if contract.get("workflow_run_id") != deployment_evidence.get("workflow_run_id"):
+                    errors.append("contract evidence must come from the bound deployment run")
+                    delivery_evidence_pass = False
+
+            if isinstance(ci_evidence, dict):
+                pr_head_sha = deployment_evidence.get("pr_head_sha")
+                for gate_name in ("required_merge_gate", "review_evidence_gate"):
+                    gate = ci_evidence.get(gate_name)
+                    if isinstance(gate, dict) and gate.get("head_sha") != pr_head_sha:
+                        errors.append(
+                            f"delivery CI evidence {gate_name} must bind the deployment PR head"
+                        )
+                        delivery_evidence_pass = False
 
         runtime_proof = delivery.get("runtime_proof")
         if not isinstance(runtime_proof, dict):
@@ -701,7 +895,33 @@ def validate(data: dict[str, Any]) -> list[str]:
             if runtime_proof.get("production_receipt_uploaded") is not True:
                 errors.append("runtime proof must include an uploaded production receipt")
                 delivery_evidence_pass = False
-            if not isinstance(runtime_proof.get("job_id"), int):
+            production_receipt = runtime_proof.get("production_receipt")
+            if not isinstance(production_receipt, dict):
+                errors.append("runtime proof must bind production receipt artifact metadata")
+                delivery_evidence_pass = False
+            else:
+                if not isinstance(production_receipt.get("artifact_id"), int) or (
+                    production_receipt.get("artifact_id") <= 0
+                ):
+                    errors.append("production receipt artifact_id must be positive")
+                    delivery_evidence_pass = False
+                expected_artifact_name = f"production-live-{deployment.get('target_commit')}"
+                if production_receipt.get("artifact_name") != expected_artifact_name:
+                    errors.append("production receipt artifact name must bind the deployment target")
+                    delivery_evidence_pass = False
+                digest = production_receipt.get("artifact_digest")
+                if not isinstance(digest, str) or not digest.startswith("sha256:") or not _is_sha(
+                    digest.removeprefix("sha256:"), _SHA64
+                ):
+                    errors.append("production receipt artifact_digest must be a SHA-256 digest")
+                    delivery_evidence_pass = False
+                if production_receipt.get("bound_commit") != deployment.get("target_commit"):
+                    errors.append("production receipt bound_commit must equal deployment target")
+                    delivery_evidence_pass = False
+                if production_receipt.get("workflow_run_id") != runtime_proof.get("workflow_run_id"):
+                    errors.append("production receipt must bind the runtime proof workflow run")
+                    delivery_evidence_pass = False
+            if not isinstance(runtime_proof.get("job_id"), int) or runtime_proof.get("job_id") <= 0:
                 errors.append("runtime proof job_id must be present")
                 delivery_evidence_pass = False
 
@@ -753,6 +973,26 @@ def validate(data: dict[str, Any]) -> list[str]:
             errors.append("delivery chain must retain runtime and automatic-rollback non-claims")
             delivery_evidence_pass = False
 
+    computed_evidence_promotion_ready = all(
+        (
+            three_classes_pass,
+            mechanical_pass,
+            len(qualifying) >= 2,
+            controlled_live_pass,
+            source_bundle_pass,
+            measurement_worktree_pass,
+            observed_overlay_pass,
+            bounded_quality_pass,
+            baseline_evidence_pass,
+            freshness_pass,
+            diff_binding_pass,
+            impact_unblocked_pass,
+            lane_truth_pass,
+            computed_truth_gate_pass,
+            delivery_evidence_pass,
+        )
+    )
+
     computed_acceptance = {
         "three_classes": "pass" if three_classes_pass else "fail",
         "paired_baseline": "pass" if baseline_evidence_pass else "fail",
@@ -762,14 +1002,7 @@ def validate(data: dict[str, Any]) -> list[str]:
             "pass" if freshness_pass and diff_binding_pass else "fail"
         ),
         "delivery_chain": "pass_bounded" if delivery_evidence_pass else "blocked",
-        "promotion_gate": (
-            "pass"
-            if mechanical_pass
-            and controlled_live_pass
-            and computed_truth_gate_pass
-            and delivery_evidence_pass
-            else "blocked"
-        ),
+        "promotion_gate": "pass" if computed_evidence_promotion_ready else "blocked",
     }
 
     acceptance = data.get("acceptance")
@@ -782,15 +1015,10 @@ def validate(data: dict[str, Any]) -> list[str]:
             if acceptance.get(field) != computed_acceptance[field]:
                 errors.append(f"acceptance.{field} must match recomputed evidence")
 
-    promotion_ready = (
-        mechanical_pass
-        and len(qualifying) >= 2
-        and controlled_live_pass
-        and computed_truth_gate_pass
-        and delivery_evidence_pass
-        and isinstance(delivery, dict)
-        and delivery.get("status") == "pass_bounded"
-    )
+    # Every validation error above is promotion-blocking.  The individual booleans
+    # make the decision explainable; ``not errors`` prevents logical drift where a
+    # newly-added blocking check forgets to update one of those booleans.
+    promotion_ready = computed_evidence_promotion_ready and not errors
     if data.get("overall_status") != "pass":
         errors.append("overall_status must be pass for the promoted bounded pilot")
     if data.get("promotion_scope") != "bounded_change_impact_context_for_agent_handoff":
