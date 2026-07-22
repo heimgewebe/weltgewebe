@@ -17,7 +17,7 @@ const NODE_ID: &str = "t018-governance-target-node";
 const PROPOSAL_ID: &str = "82000000-0000-4000-8000-000000000001";
 const SECOND_PROPOSAL_ID: &str = "82000000-0000-4000-8000-000000000002";
 const DOWN_MIGRATION: &str =
-    include_str!("../migrations/20260720000002_governance_conversation_target.down.sql");
+    include_str!("../migrations/20260722000004_governance_conversation_target.down.sql");
 
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL")
