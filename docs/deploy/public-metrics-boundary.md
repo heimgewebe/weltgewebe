@@ -10,16 +10,15 @@ relations:
   - type: relates_to
     target: infra/caddy/Caddyfile.vps
   - type: relates_to
-    target: infra/compose/monitoring/prometheus.yml
+    target: infra/compose/compose.observ.yml
 ---
 # Public metrics boundary
 
-The API exposes Prometheus metrics on its internal `/metrics` route. A reference
-Prometheus configuration in `infra/compose/monitoring/prometheus.yml` targets
-`host.docker.internal:8080`, so that reference path does not require public
-Internet exposure. The current optional local observability Compose profile does
-not mount that configuration; this document therefore does not claim a healthy
-or production Prometheus scrape path.
+The API exposes Prometheus metrics on its internal `/metrics` route. The optional
+observability Compose overlay supplies its Prometheus configuration as an inline
+Compose config and scrapes the API through the internal Compose alias
+`weltgewebe-api:8080`. The production API port `8080` is not published on the
+host, so this scrape path does not require public Internet exposure.
 
 The production VPS edge keeps operational metrics private:
 
