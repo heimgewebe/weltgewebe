@@ -1293,6 +1293,8 @@ async fn postgres_node_create_rejects_creator_deleted_by_inflight_exit() -> Resu
 #[serial]
 async fn postgres_guest_exit_completes_under_projection_middleware() -> Result<()> {
     const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000098";
+    const NODE_ID: &str = "writepath-guest-exit-cache-node";
+    const EDGE_ID: &str = "writepath-guest-exit-cache-edge";
 
     let pool = connect_pool().await;
     run_migrations(&pool).await;
@@ -1316,10 +1318,54 @@ async fn postgres_guest_exit_completes_under_projection_middleware() -> Result<(
     guest.role = Role::Gast;
     state.accounts.write().await.insert(guest);
 
+    sqlx::query(
+        "INSERT INTO domain_nodes \
+         (id, kind, title, lat, lon, created_at, updated_at, payload) \
+         VALUES ($1, 'Ort', 'Exit cache node', 53.5, 10.0, NOW(), NOW(), \
+                 jsonb_build_object('created_by_account_id', $2::text))",
+    )
+    .bind(NODE_ID)
+    .bind(ACTOR_ID)
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO domain_edges \
+         (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ($1, $2, $3, 'reference', NOW(), \
+                 jsonb_build_object('source_type', 'account', 'target_type', 'node'))",
+    )
+    .bind(EDGE_ID)
+    .bind(ACTOR_ID)
+    .bind(NODE_ID)
+    .execute(&pool)
+    .await?;
+
     let app = app.layer(from_fn_with_state(
         state.clone(),
         ensure_current_domain_projection,
     ));
+
+    let preload_response = app
+        .clone()
+        .oneshot(
+            Request::get("/nodes")
+                .header("Host", "localhost")
+                .body(body::Body::empty())?,
+        )
+        .await?;
+    assert_eq!(preload_response.status(), StatusCode::OK);
+    let cached_creator = state
+        .nodes
+        .read()
+        .await
+        .get(NODE_ID)
+        .and_then(|node| node.created_by_account_id.clone());
+    assert_eq!(cached_creator.as_deref(), Some(ACTOR_ID));
+    assert!(
+        state.edges.read().await.get(EDGE_ID).is_some(),
+        "precondition: account-bound Faden must be present in runtime cache before exit"
+    );
+
     let exit_request = Request::post("/accounts/me/exit")
         .header("Host", "localhost")
         .header("Origin", "http://localhost")
@@ -1350,7 +1396,22 @@ async fn postgres_guest_exit_completes_under_projection_middleware() -> Result<(
         state.accounts.read().await.get(ACTOR_ID).is_none(),
         "lazy projection refresh must remove exited guest from runtime cache"
     );
+    let refreshed_creator = state
+        .nodes
+        .read()
+        .await
+        .get(NODE_ID)
+        .and_then(|node| node.created_by_account_id.clone());
+    assert_eq!(
+        refreshed_creator, None,
+        "lazy projection refresh must retain the node without ghost guest ownership"
+    );
+    assert!(
+        state.edges.read().await.get(EDGE_ID).is_none(),
+        "lazy projection refresh must evict account-bound Fäden deleted by guest exit"
+    );
 
+    clean_all_nodes(&pool).await;
     Ok(())
 }
 
