@@ -34,8 +34,7 @@ CREATE UNIQUE INDEX domain_conversations_one_per_node
     WHERE conversation_type = 'node';
 
 CREATE UNIQUE INDEX domain_conversations_one_per_governance_proposal
-    ON domain_conversations (proposal_id)
-    WHERE conversation_type = 'governance_proposal';
+    ON domain_conversations (proposal_id);
 
 CREATE OR REPLACE FUNCTION weltgewebe_governance_proposal_conversation_id(
     proposal_identifier UUID
@@ -93,7 +92,7 @@ SELECT
     created_at,
     created_at
 FROM governance_proposals
-ON CONFLICT (proposal_id) WHERE conversation_type = 'governance_proposal'
+ON CONFLICT (proposal_id)
 DO NOTHING;
 
 CREATE OR REPLACE FUNCTION weltgewebe_create_governance_proposal_conversation()
@@ -118,7 +117,7 @@ BEGIN
         NEW.created_at,
         NEW.created_at
     )
-    ON CONFLICT (proposal_id) WHERE conversation_type = 'governance_proposal'
+    ON CONFLICT (proposal_id)
     DO NOTHING;
 
     RETURN NEW;

@@ -313,25 +313,61 @@ async fn require_conversation_writable(
     tx: &mut Transaction<'_, Postgres>,
     conversation_id: &str,
 ) -> Result<(), ConversationApiError> {
-    // Lock the singleton cutover row before the conversation row. A canonical
-    // writer then keeps the cutover source stable until its transaction commits,
-    // so an operator cannot switch back to legacy and run the down migration
-    // while an already-authorized governance message is still in flight.
+    // Fast-path node conversations without touching the global governance cutover row.
+    // The first read is only a classification hint; the row is locked and re-read below
+    // before the write is authorized, so deletion or an unexpected type change cannot race.
+    let observed_type: Option<String> = sqlx::query_scalar(
+        "SELECT conversation_type \\n         FROM domain_conversations \\n         WHERE id = $1::uuid AND deleted_at IS NULL",
+    )
+    .bind(conversation_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|error| database_error("classify conversation write target", error))?;
+
+    let observed_type = observed_type.ok_or_else(|| {
+        ConversationApiError::new(
+            StatusCode::NOT_FOUND,
+            "conversation_not_found",
+            "the conversation does not exist",
+        )
+    })?;
+
+    if observed_type == "node" {
+        let locked_type: Option<String> = sqlx::query_scalar(
+            "SELECT conversation_type \\n             FROM domain_conversations \\n             WHERE id = $1::uuid AND deleted_at IS NULL \\n             FOR UPDATE",
+        )
+        .bind(conversation_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|error| database_error("lock node conversation write target", error))?;
+
+        return match locked_type.as_deref() {
+            Some("node") => Ok(()),
+            None => Err(ConversationApiError::new(
+                StatusCode::NOT_FOUND,
+                "conversation_not_found",
+                "the conversation does not exist",
+            )),
+            Some(_) => Err(ConversationApiError::new(
+                StatusCode::CONFLICT,
+                "conversation_write_target_changed",
+                "the conversation write target changed while the request was in flight",
+            )),
+        };
+    }
+
+    // Governance writes use one lock order everywhere: cutover singleton first,
+    // conversation row second. This keeps the source stable through commit and
+    // prevents a rollback to legacy while an authorized canonical write is in flight.
     let governance_source: Option<String> = sqlx::query_scalar(
-        "SELECT governance_source \
-         FROM domain_conversation_cutover_state \
-         WHERE singleton \
-         FOR SHARE",
+        "SELECT governance_source \\n         FROM domain_conversation_cutover_state \\n         WHERE singleton \\n         FOR SHARE",
     )
     .fetch_optional(&mut **tx)
     .await
     .map_err(|error| database_error("lock conversation write cutover", error))?;
 
     let conversation_type: Option<String> = sqlx::query_scalar(
-        "SELECT conversation_type \
-         FROM domain_conversations \
-         WHERE id = $1::uuid AND deleted_at IS NULL \
-         FOR UPDATE",
+        "SELECT conversation_type \\n         FROM domain_conversations \\n         WHERE id = $1::uuid AND deleted_at IS NULL \\n         FOR UPDATE",
     )
     .bind(conversation_id)
     .fetch_optional(&mut **tx)
@@ -342,7 +378,7 @@ async fn require_conversation_writable(
         ConversationApiError::new(
             StatusCode::NOT_FOUND,
             "conversation_not_found",
-            "the node conversation does not exist",
+            "the conversation does not exist",
         )
     })?;
 

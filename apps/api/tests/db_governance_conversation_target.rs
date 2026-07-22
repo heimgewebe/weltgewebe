@@ -208,6 +208,21 @@ async fn governance_conversation_target_is_additive_deterministic_and_reversible
         "unknown cutover sources must be rejected"
     );
 
+    let (proposal_index_unique, proposal_index_predicate): (bool, Option<String>) = sqlx::query_as(
+        "SELECT index_state.indisunique, pg_get_expr(index_state.indpred, index_state.indrelid)
+             FROM pg_index AS index_state
+             JOIN pg_class AS index_class ON index_class.oid = index_state.indexrelid
+             WHERE index_class.relname = 'domain_conversations_one_per_governance_proposal'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("inspect governance proposal conversation index");
+    assert!(proposal_index_unique);
+    assert!(
+        proposal_index_predicate.is_none(),
+        "proposal_id must have a non-partial unique index so foreign-key cascades can use it"
+    );
+
     let projection_before: i64 =
         sqlx::query_scalar("SELECT version FROM domain_projection_state WHERE singleton")
             .fetch_one(&pool)
