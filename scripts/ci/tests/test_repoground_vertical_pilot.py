@@ -164,6 +164,19 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
                     "default promotion cannot be claimed without all promotion gates", errors
                 )
 
+    def test_delivery_contract_path_must_bind_expected_contract_test(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["pilot_delivery_chain_evidence"]["contract_evidence"][
+            "path"
+        ] = "scripts/weltgewebe-up"
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            "delivery contract evidence path must be the expected contract test", errors
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
     def test_delivery_chain_failure_blocks_default_promotion(self) -> None:
         mutated = copy.deepcopy(self.evidence)
         mutated["pilot_delivery_chain_evidence"]["contract_evidence"][
@@ -324,6 +337,42 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
                 "consumed call graph needs explicit coherent relation provenance" in error
                 for error in errors
             )
+        )
+
+    def test_duplicate_target_symbol_evidence_blocks_promotion(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = next(
+            case for case in mutated["cases"] if case["profile"] == "deployment_kubernetes"
+        )
+        case["capsule"]["target_symbols"].append(
+            copy.deepcopy(case["capsule"]["target_symbols"][0])
+        )
+        case["capsule"]["target_symbols_included"] += 1
+        lane = case["capsule"]["lane_counts"]["target_symbols"]
+        lane["included"] += 1
+        lane["considered"] += 1
+        lane["policy_omitted"] -= 1
+        errors = self.validator.validate(mutated)
+        self.assertIn(f"{case['id']}: target symbol identities must be unique", errors)
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
+    def test_duplicate_materialized_causal_relation_blocks_promotion(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = next(
+            case for case in mutated["cases"] if case["profile"] == "deployment_kubernetes"
+        )
+        relation = copy.deepcopy(case["capsule"]["representative_causal_relations"][0])
+        case["capsule"]["representative_causal_relations"].append(relation)
+        case["capsule"]["call_graph_truth"]["coherent_relation_count"] = 2
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            f"{case['id']}: representative causal relation identities must be unique",
+            errors,
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
         )
 
     def test_delivery_call_graph_count_is_derived_from_materialized_relations(self) -> None:
@@ -487,6 +536,33 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
                 self.assertIn(expected, errors)
                 self.assertIn(
                     "default promotion cannot be claimed without all promotion gates", errors
+                )
+
+    def test_budget_degradation_rejects_unknown_or_duplicate_lane_names(self) -> None:
+        mutations = {
+            "unknown_exhausted": lambda budget: budget["exhausted_lanes"].append(
+                "invented_lane"
+            ),
+            "duplicate_exhausted": lambda budget: budget["exhausted_lanes"].append(
+                budget["exhausted_lanes"][0]
+            ),
+            "unknown_policy": lambda budget: budget["policy_limited_lanes"].append(
+                "invented_lane"
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                mutated = copy.deepcopy(self.evidence)
+                case = next(
+                    case
+                    for case in mutated["cases"]
+                    if case["profile"] == "deployment_kubernetes"
+                )
+                mutate(case["capsule"]["budget_degradation"])
+                errors = self.validator.validate(mutated)
+                self.assertIn(
+                    "default promotion cannot be claimed without all promotion gates",
+                    errors,
                 )
 
     def test_budget_and_policy_lane_lists_must_match_omission_evidence(self) -> None:

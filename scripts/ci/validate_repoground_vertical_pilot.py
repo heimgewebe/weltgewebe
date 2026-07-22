@@ -20,6 +20,19 @@ _DEPLOYMENT_REQUIRED_DIRECT_PATHS = frozenset(
         "scripts/weltgewebe-up",
     }
 )
+_ALLOWED_BUDGET_LANES = frozenset(
+    {
+        "direct_changes",
+        "related_tests",
+        "target_symbols",
+        "causal_relations",
+        "live_ranges",
+        "citations",
+        "entry_manifest",
+        "query_snippets",
+    }
+)
+_DEPLOYMENT_CONTRACT_TEST_PATH = "scripts/ci/tests/test_production_reconciler_contract.py"
 _MEASUREMENT_EVIDENCE_PATHS = {
     "docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md",
     "scripts/ci/fixtures/repoground_vertical_pilot.v1.json",
@@ -408,11 +421,27 @@ def validate(data: dict[str, Any]) -> list[str]:
             ):
                 errors.append(f"{case_id}: budget degradation exhausted_lanes must be a string list")
                 bounded_quality_pass = False
+            elif (
+                len(exhausted_lanes) != len(set(exhausted_lanes))
+                or not set(exhausted_lanes).issubset(_ALLOWED_BUDGET_LANES)
+            ):
+                errors.append(
+                    f"{case_id}: budget degradation exhausted_lanes must be unique known lanes"
+                )
+                bounded_quality_pass = False
             if not isinstance(policy_limited_lanes, list) or not all(
                 isinstance(lane, str) and lane for lane in policy_limited_lanes
             ):
                 errors.append(
                     f"{case_id}: budget degradation policy_limited_lanes must be a string list"
+                )
+                bounded_quality_pass = False
+            elif (
+                len(policy_limited_lanes) != len(set(policy_limited_lanes))
+                or not set(policy_limited_lanes).issubset(set(required_lane_names))
+            ):
+                errors.append(
+                    f"{case_id}: budget degradation policy_limited_lanes must be unique tracked lanes"
                 )
                 bounded_quality_pass = False
             if isinstance(exhausted_lanes, list) and isinstance(policy_limited_lanes, list):
@@ -539,6 +568,8 @@ def validate(data: dict[str, Any]) -> list[str]:
                 )
                 bounded_quality_pass = False
 
+        target_symbol_ids: list[str] = []
+        target_symbol_ranges: list[tuple[str, str]] = []
         for symbol in target_symbols:
             if not isinstance(symbol, dict) or not all(
                 isinstance(symbol.get(field), str) and symbol.get(field)
@@ -546,6 +577,15 @@ def validate(data: dict[str, Any]) -> list[str]:
             ):
                 errors.append(f"{case_id}: every target symbol needs bound identity and range")
                 bounded_quality_pass = False
+                continue
+            target_symbol_ids.append(symbol["id"])
+            target_symbol_ranges.append((symbol["path"], symbol["range_ref"]))
+        if len(target_symbol_ids) != len(set(target_symbol_ids)):
+            errors.append(f"{case_id}: target symbol identities must be unique")
+            bounded_quality_pass = False
+        if len(target_symbol_ranges) != len(set(target_symbol_ranges)):
+            errors.append(f"{case_id}: target symbol path/range bindings must be unique")
+            bounded_quality_pass = False
 
         representative_relations = capsule.get("representative_causal_relations")
         if not isinstance(representative_relations, list):
@@ -553,6 +593,42 @@ def validate(data: dict[str, Any]) -> list[str]:
                 f"{case_id}: representative_causal_relations must be an explicit list"
             )
             representative_relations = []
+            bounded_quality_pass = False
+        relation_identities: list[tuple[Any, ...]] = []
+        for relation in representative_relations:
+            if not isinstance(relation, dict):
+                errors.append(f"{case_id}: every representative causal relation must be an object")
+                bounded_quality_pass = False
+                continue
+            target_ids = relation.get("target_symbol_ids")
+            if target_ids is None:
+                normalized_target_ids: tuple[str, ...] = ()
+            elif (
+                isinstance(target_ids, list)
+                and all(isinstance(value, str) and value for value in target_ids)
+                and len(target_ids) == len(set(target_ids))
+            ):
+                normalized_target_ids = tuple(sorted(target_ids))
+            else:
+                errors.append(
+                    f"{case_id}: causal relation target_symbol_ids must be unique non-empty strings"
+                )
+                bounded_quality_pass = False
+                normalized_target_ids = ()
+            relation_identities.append(
+                (
+                    relation.get("source"),
+                    relation.get("symbol_id"),
+                    normalized_target_ids,
+                    relation.get("relation_type"),
+                    relation.get("relation_kind"),
+                    relation.get("direction"),
+                    relation.get("source_call_site"),
+                    relation.get("peer_definition"),
+                )
+            )
+        if len(relation_identities) != len(set(relation_identities)):
+            errors.append(f"{case_id}: representative causal relation identities must be unique")
             bounded_quality_pass = False
 
         gaps = capsule.get("gaps")
@@ -835,7 +911,10 @@ def validate(data: dict[str, Any]) -> list[str]:
             errors.append("delivery chain must bind explicit contract evidence")
             delivery_evidence_pass = False
         else:
-            if contract.get("path") not in direct:
+            if contract.get("path") != _DEPLOYMENT_CONTRACT_TEST_PATH:
+                errors.append("delivery contract evidence path must be the expected contract test")
+                delivery_evidence_pass = False
+            elif contract.get("path") not in direct:
                 errors.append("delivery contract evidence path must be a direct change")
                 delivery_evidence_pass = False
             if contract.get("conclusion") != "success":
