@@ -44,6 +44,57 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         result = self.validator.validate(render=False)
         self.assertEqual(result["status"], "pass")
 
+    def test_kubernetes_artifact_uploads_stage_hidden_evidence(self) -> None:
+        workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
+        workflow = yaml.safe_load(workflow_path.read_text())
+
+        def named_steps(job_name: str) -> dict[str, dict]:
+            return {
+                step["name"]: step
+                for step in workflow["jobs"][job_name]["steps"]
+                if "name" in step
+            }
+
+        gitops = named_steps("kind-gitops-proof")
+        stage_failure = gitops["Stage failure diagnostics"]
+        upload_failure = gitops["Collect failure diagnostics"]
+        self.assertEqual(stage_failure["if"], "failure()")
+        self.assertIn("source=.cache/weltgewebe-platform/failures", stage_failure["run"])
+        self.assertIn("target=build/kubernetes-platform/failures", stage_failure["run"])
+        self.assertEqual(upload_failure["with"]["path"], "build/kubernetes-platform/failures/")
+        self.assertEqual(upload_failure["with"]["if-no-files-found"], "ignore")
+
+        ha = named_steps("kind-ha-recovery-proof")
+        stage_receipt = ha["Stage HA recovery receipt"]
+        upload_receipt = ha["Upload HA recovery receipt"]
+        self.assertNotIn("if", stage_receipt)
+        self.assertIn(
+            ".cache/weltgewebe-platform/receipts/*-ha-recovery.json",
+            stage_receipt["run"],
+        )
+        self.assertIn("build/kubernetes-platform/ha-recovery/", stage_receipt["run"])
+        self.assertNotIn("if", upload_receipt)
+        self.assertEqual(
+            upload_receipt["with"]["path"],
+            "build/kubernetes-platform/ha-recovery/*.json",
+        )
+        self.assertEqual(upload_receipt["with"]["if-no-files-found"], "error")
+
+        stage_ha_failure = ha["Stage HA failure diagnostics"]
+        upload_ha_failure = ha["Collect HA failure diagnostics"]
+        self.assertEqual(stage_ha_failure["if"], "failure()")
+        self.assertIn("source=.cache/weltgewebe-platform/failures", stage_ha_failure["run"])
+        self.assertEqual(
+            upload_ha_failure["with"]["path"],
+            "build/kubernetes-platform/failures/",
+        )
+        self.assertEqual(upload_ha_failure["with"]["if-no-files-found"], "ignore")
+
+        for job_name in ("kind-gitops-proof", "kind-ha-recovery-proof"):
+            for step in workflow["jobs"][job_name]["steps"]:
+                if str(step.get("uses", "")).startswith("actions/upload-artifact@"):
+                    self.assertNotIn(".cache/", str((step.get("with") or {}).get("path", "")))
+
     def test_ci_proof_binds_pull_requests_to_checked_out_merge_state(self) -> None:
         workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
         workflow_text = workflow_path.read_text()

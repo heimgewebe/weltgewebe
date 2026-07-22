@@ -17,6 +17,16 @@ use tower::{Layer, Service};
 
 use crate::state::ApiState;
 
+const UNMATCHED_ROUTE_LABEL: &str = "<unmatched>";
+
+fn metrics_path_label<B>(request: &Request<B>) -> String {
+    request
+        .extensions()
+        .get::<MatchedPath>()
+        .map(|path| path.as_str().to_owned())
+        .unwrap_or_else(|| UNMATCHED_ROUTE_LABEL.to_owned())
+}
+
 #[cfg(debug_assertions)]
 const GIT_COMMIT_SHA: &str = match option_env!("GIT_COMMIT_SHA") {
     Some(value) => value,
@@ -66,6 +76,7 @@ struct MetricsInner {
     pub http_requests_total: IntCounterVec,
     pub nodes_cache_count: IntGauge,
     pub edges_cache_count: IntGauge,
+    pub search_projection_jobs_total: IntCounterVec,
 }
 
 impl Metrics {
@@ -83,11 +94,20 @@ impl Metrics {
         let edges_count_opts = Opts::new("edges_cache_count", "Number of edges in memory cache");
         let edges_cache_count = IntGauge::with_opts(edges_count_opts)?;
 
+        let search_projection_jobs_total = IntCounterVec::new(
+            Opts::new(
+                "search_projection_jobs_total",
+                "Projection worker outcomes without node, text, query, or vector labels",
+            ),
+            &["outcome"],
+        )?;
+
         let registry = Registry::new();
         registry.register(Box::new(http_requests_total.clone()))?;
         registry.register(Box::new(build_info_metric.clone()))?;
         registry.register(Box::new(nodes_cache_count.clone()))?;
         registry.register(Box::new(edges_cache_count.clone()))?;
+        registry.register(Box::new(search_projection_jobs_total.clone()))?;
 
         build_info_metric
             .with_label_values(&[
@@ -103,6 +123,7 @@ impl Metrics {
                 http_requests_total,
                 nodes_cache_count,
                 edges_cache_count,
+                search_projection_jobs_total,
             }),
         })
     }
@@ -117,6 +138,15 @@ impl Metrics {
 
     pub fn http_requests_total(&self) -> &IntCounterVec {
         &self.inner.http_requests_total
+    }
+
+    /// Outcome labels are from a fixed enum; callers must never attach node
+    /// identifiers, source text, queries, provider responses, or vectors.
+    pub fn search_projection_outcome(&self, outcome: &str) {
+        self.inner
+            .search_projection_jobs_total
+            .with_label_values(&[outcome])
+            .inc();
     }
 
     pub fn render(&self) -> Result<Vec<u8>, prometheus::Error> {
@@ -184,11 +214,11 @@ where
 
     fn call(&mut self, request: Request<B>) -> Self::Future {
         let method = request.method().as_str().to_owned();
-        let matched_path = request
-            .extensions()
-            .get::<MatchedPath>()
-            .map(|p| p.as_str().to_owned());
-        let path = matched_path.unwrap_or_else(|| request.uri().path().to_owned());
+        // Never fall back to the raw URI path here. Unmatched paths are attacker-controlled;
+        // using them as Prometheus label values creates one time series per unique 404 path
+        // and allows unbounded label-cardinality growth. Known routes still use Axum's
+        // normalized route template from `MatchedPath`.
+        let path = metrics_path_label(&request);
         let metrics = self.metrics.clone();
         let future = self.inner.call(request);
 
@@ -206,5 +236,27 @@ where
                 Err(error) => Err(error),
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{metrics_path_label, UNMATCHED_ROUTE_LABEL};
+    use axum::http::Request;
+
+    #[test]
+    fn unmatched_paths_collapse_to_one_low_cardinality_metrics_label() {
+        let first = Request::builder()
+            .uri("/attacker-controlled/a")
+            .body(())
+            .expect("request");
+        let second = Request::builder()
+            .uri("/attacker-controlled/b")
+            .body(())
+            .expect("request");
+
+        assert_eq!(metrics_path_label(&first), UNMATCHED_ROUTE_LABEL);
+        assert_eq!(metrics_path_label(&second), UNMATCHED_ROUTE_LABEL);
+        assert_eq!(metrics_path_label(&first), metrics_path_label(&second));
     }
 }
