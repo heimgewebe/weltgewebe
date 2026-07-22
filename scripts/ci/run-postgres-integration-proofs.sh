@@ -45,9 +45,9 @@ from urllib.parse import unquote, urlsplit
 contract=json.load(open(sys.argv[1], encoding='utf-8'))
 if contract.get('schema_version') != 1:
     raise SystemExit('unsupported postgres proof contract schema')
-markers=contract.get('disposable_database_name_markers') or []
-if not markers:
-    raise SystemExit('postgres proof contract has no disposable database markers')
+segments=contract.get('disposable_database_name_segments') or []
+if not segments:
+    raise SystemExit('postgres proof contract has no disposable database segments')
 url=urlsplit(sys.argv[2])
 if url.scheme not in {'postgres','postgresql'}:
     raise SystemExit(f'unsupported PostgreSQL URL scheme: {url.scheme!r}')
@@ -57,9 +57,10 @@ port=url.port or 5432
 if port == int(contract['pgbouncer_port']):
     raise SystemExit('PostgreSQL integration proofs require direct PostgreSQL, not PgBouncer')
 database=unquote(url.path.lstrip('/'))
-if not database or not any(marker in database for marker in markers):
+database_segments={segment for segment in database.replace('-', '_').replace('.', '_').split('_') if segment}
+if not database or not any(segment in database_segments for segment in segments):
     raise SystemExit(
-        f'refusing non-disposable database {database!r}; expected a name containing one of {markers!r}'
+        f'refusing non-disposable database {database!r}; expected a delimited name segment from {segments!r}'
     )
 print(database)
 PY

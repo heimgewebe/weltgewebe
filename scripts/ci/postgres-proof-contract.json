@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "disposable_database_name_markers": [
+  "pgbouncer_port": 6432,
+  "jetstream_image": "nats@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927",
+  "disposable_database_name_segments": [
     "test",
     "proof",
     "ci"
-  ],
-  "pgbouncer_port": 6432,
-  "jetstream_image": "nats@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927"
+  ]
 }

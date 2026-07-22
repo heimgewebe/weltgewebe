@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import subprocess
 
 import yaml
 
@@ -35,7 +37,7 @@ TARGETS = {
 def test_disposable_database_contract_is_single_source_for_runner_and_rust_tests() -> None:
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
     assert contract["schema_version"] == 1
-    assert contract["disposable_database_name_markers"] == ["test", "proof", "ci"]
+    assert contract["disposable_database_name_segments"] == ["test", "proof", "ci"]
     assert contract["pgbouncer_port"] == 6432
     runner = RUNNER.read_text(encoding="utf-8")
     rust = RUST_SUPPORT.read_text(encoding="utf-8")
@@ -65,3 +67,32 @@ def test_ci_delegates_jetstream_lifecycle_to_runner() -> None:
     rendered = json.dumps(job, sort_keys=True)
     assert "weltgewebe-ci-nats" not in rendered
     assert "run-postgres-integration-proofs.sh" in rendered
+
+
+def test_runner_rejects_incidental_disposable_name_substrings() -> None:
+    env = os.environ.copy()
+    for database in ("social", "official", "citizen"):
+        url = f"postgres://postgres:postgres@127.0.0.1:5432/{database}"
+        env.update(
+            DATABASE_URL=url,
+            PG_DIRECT_URL=url,
+            T005_DATABASE_URL=url,
+        )
+        completed = subprocess.run(
+            [str(RUNNER)],
+            cwd=REPO,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        assert completed.returncode != 0
+        assert "refusing non-disposable database" in completed.stderr
+
+
+def test_runner_accepts_delimited_disposable_name_segment_before_preflight() -> None:
+    runner = RUNNER.read_text(encoding="utf-8")
+    assert "database_segments={segment for segment in database.replace('-', '_').replace('.', '_').split('_') if segment}" in runner
+    assert "segment in database_segments for segment in segments" in runner
+    assert "weltgewebe_t002_test".split("_")[-1] == "test"

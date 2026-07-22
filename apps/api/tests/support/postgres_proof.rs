@@ -6,7 +6,7 @@ use url::Url;
 #[derive(Debug, Deserialize)]
 struct PostgresProofContract {
     schema_version: u32,
-    disposable_database_name_markers: Vec<String>,
+    disposable_database_name_segments: Vec<String>,
     pgbouncer_port: u16,
 }
 
@@ -20,8 +20,8 @@ fn contract() -> PostgresProofContract {
         "unsupported postgres proof contract schema"
     );
     assert!(
-        !parsed.disposable_database_name_markers.is_empty(),
-        "postgres proof contract must define disposable database markers"
+        !parsed.disposable_database_name_segments.is_empty(),
+        "postgres proof contract must define disposable database segments"
     );
     parsed
 }
@@ -31,11 +31,14 @@ pub fn assert_disposable_database_name(name: &str) {
     assert!(
         !name.is_empty()
             && contract
-                .disposable_database_name_markers
+                .disposable_database_name_segments
                 .iter()
-                .any(|marker| name.contains(marker)),
-        "PostgreSQL proof refuses non-disposable database name {name:?}; expected one of markers {:?}",
-        contract.disposable_database_name_markers
+                .any(|expected| {
+                    name.split(['_', '-', '.'])
+                        .any(|segment| segment == expected)
+                }),
+        "PostgreSQL proof refuses non-disposable database name {name:?}; expected a delimited name segment from {:?}",
+        contract.disposable_database_name_segments
     );
 }
 
