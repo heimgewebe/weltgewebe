@@ -128,7 +128,7 @@ class FederationContractTests(unittest.TestCase):
 
         hardening = (
             ROOT
-            / "apps/api/migrations/20260721000001_federation_core_hardening.up.sql"
+            / "apps/api/migrations/20260722000001_federation_core_hardening.up.sql"
         ).read_text()
         self.assertIn("CREATE TABLE federation_event_receipts", hardening)
         self.assertIn("PRIMARY KEY", hardening)
