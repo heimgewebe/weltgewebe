@@ -3,6 +3,8 @@
 //! Run with a direct PostgreSQL connection:
 //! `DATABASE_URL=postgres://... cargo test --locked --test db_governance -- --include-ignored`
 
+mod support;
+
 use std::{path::PathBuf, str::FromStr};
 
 use chrono::{Duration, TimeZone, Utc};
@@ -31,7 +33,7 @@ fn direct_database_url() -> String {
         !url.contains(":6432"),
         "do not use PgBouncer for migration tests"
     );
-    url
+    support::postgres_proof::validated_direct_disposable_url(url)
 }
 
 async fn pool() -> sqlx::PgPool {

@@ -24,6 +24,8 @@
 //! - DATABASE_URL must point to direct PostgreSQL (not PgBouncer at :6432).
 //! - Fixtures use a recognizable account-id namespace and are cleaned up.
 
+mod support;
+
 use std::{net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc};
 
 use axum::{
@@ -76,7 +78,7 @@ fn direct_database_url() -> String {
         !url.contains(":6432"),
         "DATABASE_URL must target direct PostgreSQL, not PgBouncer (port 6432)"
     );
-    url
+    support::postgres_proof::validated_direct_disposable_url(url)
 }
 
 async fn connect_pool() -> sqlx::PgPool {

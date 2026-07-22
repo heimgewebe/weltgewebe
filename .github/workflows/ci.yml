@@ -465,7 +465,7 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_t002_test
       PG_DIRECT_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_t002_test
-      NATS_URL: nats://127.0.0.1:4222
+      POSTGRES_PROOF_PROVISION_NATS: "1"
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
@@ -477,27 +477,8 @@ jobs:
           toolchain: 1.89.0
       - name: Cache cargo
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # tag: v2
-      - name: Start isolated JetStream proof service
-        run: |
-          set -euo pipefail
-          docker run --detach --rm \
-            --name weltgewebe-ci-nats \
-            --publish 127.0.0.1:4222:4222 \
-            nats@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927 \
-            -js
-          for attempt in {1..30}; do
-            if (echo > /dev/tcp/127.0.0.1/4222) 2>/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          docker logs weltgewebe-ci-nats
-          exit 1
-      - name: Run PostgreSQL and multi-instance proof suite
+      - name: Run hermetic PostgreSQL and multi-instance proof suite
         run: scripts/ci/run-postgres-integration-proofs.sh
-      - name: Stop isolated JetStream proof service
-        if: ${{ always() }}
-        run: docker stop weltgewebe-ci-nats || true
 
   lint-docs:
     name: Docs & Shell Hygiene

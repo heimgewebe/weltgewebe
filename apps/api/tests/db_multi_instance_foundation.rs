@@ -9,6 +9,8 @@
 //! cargo test --locked -p weltgewebe-api --test db_multi_instance_foundation \
 //!   -- --ignored --test-threads=1
 
+mod support;
+
 use std::{
     net::{IpAddr, Ipv4Addr},
     path::PathBuf,
@@ -55,12 +57,8 @@ const DEVICE_ID: &str = "multi-instance-device-1";
 
 fn database_url() -> String {
     let url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://welt@127.0.0.1:55432/weltgewebe_t002_test".to_string());
-    assert!(
-        url.contains("_test"),
-        "multi-instance proof refuses a database not explicitly named as a test database"
-    );
-    url
+        .expect("DATABASE_URL must point to a direct disposable PostgreSQL database");
+    support::postgres_proof::validated_direct_disposable_url(url)
 }
 
 async fn migrate(pool: &PgPool) {

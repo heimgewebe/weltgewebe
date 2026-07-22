@@ -2,6 +2,8 @@
 //!
 //! Run with `T005_DATABASE_URL`; it never starts the API or exposes search.
 
+mod support;
+
 use std::{
     path::PathBuf,
     sync::{
@@ -26,6 +28,7 @@ use weltgewebe_api::{
 async fn pool() -> PgPool {
     let url = std::env::var("T005_DATABASE_URL")
         .expect("T005_DATABASE_URL must point to a direct disposable PostgreSQL database");
+    support::postgres_proof::assert_direct_disposable_database_url(&url);
     assert!(
         !url.contains(":6432/"),
         "T005 must not use PgBouncer because claims require direct PostgreSQL locking"

@@ -9,6 +9,8 @@
 //!     cargo test --locked -p weltgewebe-api \
 //!     --test db_passkey_fk_readiness -- --include-ignored --test-threads=1
 
+mod support;
+
 use std::{path::PathBuf, str::FromStr};
 
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -23,7 +25,7 @@ fn direct_database_url() -> String {
         !url.contains(":6432"),
         "DATABASE_URL must target direct PostgreSQL, not PgBouncer (port 6432)"
     );
-    url
+    support::postgres_proof::validated_direct_disposable_url(url)
 }
 
 async fn connect_pool() -> sqlx::PgPool {
