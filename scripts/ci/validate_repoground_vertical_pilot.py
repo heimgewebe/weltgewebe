@@ -11,6 +11,15 @@ DEFAULT_EVIDENCE = ROOT / "scripts/ci/fixtures/repoground_vertical_pilot.v1.json
 _SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 _SHA64 = re.compile(r"[0-9a-f]{64}\Z")
 _GOLD_PROFILES = {"database_auth", "web_map", "deployment_kubernetes"}
+_DEPLOYMENT_REQUIRED_DIRECT_PATHS = frozenset(
+    {
+        ".github/workflows/production-live-contract.yml",
+        "scripts/ci/tests/test_production_reconciler_contract.py",
+        "scripts/ops/activate-production-reconciler-from-release.sh",
+        "scripts/ops/install-production-reconciler.sh",
+        "scripts/weltgewebe-up",
+    }
+)
 _MEASUREMENT_EVIDENCE_PATHS = {
     "docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md",
     "scripts/ci/fixtures/repoground_vertical_pilot.v1.json",
@@ -754,37 +763,58 @@ def validate(data: dict[str, Any]) -> list[str]:
             delivery_evidence_pass = False
         direct = set(deployment.get("direct_change_paths", []))
         required_direct = delivery.get("required_direct_paths")
-        if (
-            not isinstance(required_direct, list)
-            or not required_direct
-            or not all(isinstance(path, str) and path for path in required_direct)
-            or not set(required_direct).issubset(direct)
-        ):
+        required_direct_valid = (
+            isinstance(required_direct, list)
+            and bool(required_direct)
+            and all(isinstance(path, str) and path for path in required_direct)
+            and len(required_direct) == len(set(required_direct))
+            and set(required_direct).issubset(direct)
+        )
+        if not required_direct_valid:
             errors.append(
-                "delivery chain required paths must be a non-empty subset of direct changes"
+                "delivery chain required paths must be a non-empty unique subset of direct changes"
             )
             delivery_evidence_pass = False
+        elif set(required_direct) != _DEPLOYMENT_REQUIRED_DIRECT_PATHS:
+            errors.append(
+                "delivery chain required paths must exactly match expected deployment contract paths"
+            )
+            delivery_evidence_pass = False
+
         capsule = deployment.get("capsule", {})
-        for field in (
-            "target_symbols_included",
-            "causal_relations_included",
-            "live_ranges_included",
-        ):
-            value = delivery.get(field)
-            if not isinstance(value, int) or value <= 0:
-                errors.append(f"delivery chain {field} must be positive")
-                delivery_evidence_pass = False
-            if value != capsule.get(field):
-                errors.append(f"delivery chain {field} must match deployment capsule")
-                delivery_evidence_pass = False
-        coherent = delivery.get("coherent_call_graph_relation_count")
+        target_symbols = capsule.get("target_symbols")
+        if not isinstance(target_symbols, list) or not target_symbols:
+            errors.append("delivery chain needs explicit target-symbol evidence")
+            delivery_evidence_pass = False
+
+        representative_relations = capsule.get("representative_causal_relations")
         call_graph = capsule.get("call_graph_truth", {})
-        if not isinstance(coherent, int) or coherent <= 0:
-            errors.append("delivery chain needs coherent call-graph relation evidence")
+        materialized_coherent_relations = []
+        if isinstance(representative_relations, list):
+            materialized_coherent_relations = [
+                relation
+                for relation in representative_relations
+                if isinstance(relation, dict)
+                and relation.get("source") == "python_call_graph_json"
+                and relation.get("status") == "coherent"
+                and relation.get("artifact_sha256") == call_graph.get("artifact_sha256")
+                and _is_sha(relation.get("canonical_dump_index_sha256"), _SHA64)
+                and isinstance(relation.get("run_id"), str)
+                and bool(relation.get("run_id"))
+                and isinstance(relation.get("source_call_site"), str)
+                and bool(relation.get("source_call_site"))
+                and isinstance(relation.get("peer_definition"), str)
+                and bool(relation.get("peer_definition"))
+            ]
+        if not materialized_coherent_relations:
+            errors.append("delivery chain needs explicit coherent call-graph relation evidence")
             delivery_evidence_pass = False
-        if coherent != call_graph.get("coherent_relation_count"):
-            errors.append("delivery call-graph evidence must match deployment capsule")
+        if len(materialized_coherent_relations) != call_graph.get("coherent_relation_count"):
+            errors.append(
+                "delivery call-graph evidence count must be derived from materialized relations"
+            )
             delivery_evidence_pass = False
+
         representative_ranges = capsule.get("representative_live_ranges")
         if not isinstance(representative_ranges, list) or not representative_ranges:
             errors.append("delivery chain needs explicit representative live-range evidence")

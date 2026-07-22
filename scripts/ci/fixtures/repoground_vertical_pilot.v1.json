@@ -1085,14 +1085,11 @@
   "task_profile": "change_impact",
   "pilot_delivery_chain_evidence": {
     "case_id": "deployment_production_reconciler",
-    "causal_relations_included": 7,
-    "coherent_call_graph_relation_count": 1,
     "does_not_establish": [
       "runtime_correctness",
       "automatic_rollback_success",
       "merge_readiness"
     ],
-    "live_ranges_included": 1,
     "required_direct_paths": [
       ".github/workflows/production-live-contract.yml",
       "scripts/ci/tests/test_production_reconciler_contract.py",
@@ -1100,7 +1097,6 @@
       "scripts/ops/install-production-reconciler.sh",
       "scripts/weltgewebe-up"
     ],
-    "target_symbols_included": 8,
     "contract_evidence": {
       "pr": 1499,
       "workflow_run_id": 29806103267,

@@ -122,13 +122,47 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         mutated["pilot_delivery_chain_evidence"]["required_direct_paths"] = []
         errors = self.validator.validate(mutated)
         self.assertIn(
-            "delivery chain required paths must be a non-empty subset of direct changes",
+            "delivery chain required paths must be a non-empty unique subset of direct changes",
             errors,
         )
         self.assertIn(
             "default promotion cannot be claimed without all promotion gates",
             errors,
         )
+
+    def test_delivery_required_direct_paths_are_exact_and_unique(self) -> None:
+        original = self.evidence["pilot_delivery_chain_evidence"]["required_direct_paths"]
+        deployment = next(
+            case for case in self.evidence["cases"] if case["profile"] == "deployment_kubernetes"
+        )
+        extra_direct = next(
+            path for path in deployment["direct_change_paths"] if path not in original
+        )
+        mutations = {
+            "duplicate": original + [original[0]],
+            "missing": original[:-1],
+            "extra": original + [extra_direct],
+        }
+        for name, required_paths in mutations.items():
+            with self.subTest(name=name):
+                mutated = copy.deepcopy(self.evidence)
+                mutated["pilot_delivery_chain_evidence"][
+                    "required_direct_paths"
+                ] = required_paths
+                errors = self.validator.validate(mutated)
+                if name == "duplicate":
+                    self.assertIn(
+                        "delivery chain required paths must be a non-empty unique subset of direct changes",
+                        errors,
+                    )
+                else:
+                    self.assertIn(
+                        "delivery chain required paths must exactly match expected deployment contract paths",
+                        errors,
+                    )
+                self.assertIn(
+                    "default promotion cannot be claimed without all promotion gates", errors
+                )
 
     def test_delivery_chain_failure_blocks_default_promotion(self) -> None:
         mutated = copy.deepcopy(self.evidence)
@@ -148,15 +182,6 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
             "required_direct_paths": lambda data: data["pilot_delivery_chain_evidence"].update(
                 {"required_direct_paths": ["not/a/direct/change"]}
             ),
-            "target_symbols_count": lambda data: data["pilot_delivery_chain_evidence"].update(
-                {"target_symbols_included": 999}
-            ),
-            "causal_relations_count": lambda data: data["pilot_delivery_chain_evidence"].update(
-                {"causal_relations_included": 999}
-            ),
-            "live_ranges_count": lambda data: data["pilot_delivery_chain_evidence"].update(
-                {"live_ranges_included": 999}
-            ),
         }
         for name, mutate in mutations.items():
             with self.subTest(name=name):
@@ -167,6 +192,19 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
                     "default promotion cannot be claimed without all promotion gates",
                     errors,
                 )
+
+    def test_exact_three_gold_profiles_are_required(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        web_case = next(case for case in mutated["cases"] if case["profile"] == "web_map")
+        web_case["profile"] = "database_auth"
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            "exactly database_auth, web_map and deployment_kubernetes gold cases are required",
+            errors,
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
 
     def test_controlled_live_case_is_required_and_bound_to_source_bundle(self) -> None:
         missing = copy.deepcopy(self.evidence)
@@ -286,6 +324,23 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
                 "consumed call graph needs explicit coherent relation provenance" in error
                 for error in errors
             )
+        )
+
+    def test_delivery_call_graph_count_is_derived_from_materialized_relations(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = next(
+            case
+            for case in mutated["cases"]
+            if case["profile"] == "deployment_kubernetes"
+        )
+        case["capsule"]["call_graph_truth"]["coherent_relation_count"] = 2
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            "delivery call-graph evidence count must be derived from materialized relations",
+            errors,
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
         )
 
     def test_target_symbol_count_must_match_explicit_evidence(self) -> None:
