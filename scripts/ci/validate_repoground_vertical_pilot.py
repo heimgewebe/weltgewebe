@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
+import subprocess
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +61,77 @@ def _is_sha(value: Any, pattern: re.Pattern[str]) -> bool:
 
 def _is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+@lru_cache(maxsize=64)
+def _git_tree_delta_v1(base_commit: str, target_commit: str) -> tuple[tuple[str, ...], str]:
+    def git_output(arguments: list[str], label: str) -> str:
+        completed = subprocess.run(
+            ["git", "-C", str(ROOT), *arguments],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+        )
+        if completed.returncode != 0:
+            detail = completed.stderr.strip() or str(completed.returncode)
+            raise ValueError(f"{label} failed: {detail}")
+        return completed.stdout.strip()
+
+    names = git_output(
+        [
+            "diff",
+            "--name-status",
+            "--find-renames",
+            "--no-ext-diff",
+            base_commit,
+            target_commit,
+            "--",
+        ],
+        "Git diff name-status",
+    )
+    changes: list[dict[str, str]] = []
+    for raw in names.splitlines():
+        parts = raw.split("\t")
+        if len(parts) < 2:
+            continue
+        status = parts[0]
+        if status.startswith(("R", "C")) and len(parts) >= 3:
+            changes.append(
+                {"status": status, "previous_path": parts[1], "path": parts[2]}
+            )
+        else:
+            changes.append({"status": status, "path": parts[1]})
+    changes.sort(
+        key=lambda item: (str(item.get("path")), str(item.get("previous_path", "")))
+    )
+    raw_delta = git_output(
+        [
+            "diff",
+            "--raw",
+            "--full-index",
+            "--no-abbrev",
+            "--no-ext-diff",
+            base_commit,
+            target_commit,
+            "--",
+        ],
+        "Git diff identity",
+    )
+    identity = json.dumps(
+        {
+            "schema_version": 1,
+            "base_commit": base_commit,
+            "target_commit": target_commit,
+            "name_status": names,
+            "raw_tree_delta": raw_delta,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    return tuple(item["path"] for item in changes), digest
 
 
 def validate(data: dict[str, Any]) -> list[str]:
@@ -251,6 +325,24 @@ def validate(data: dict[str, Any]) -> list[str]:
             errors.append(f"{case_id}: diff_binding_kind must be git_tree_delta_v1")
             diff_binding_pass = False
 
+        computed_direct_paths: tuple[str, ...] | None = None
+        base_commit = case.get("base_commit")
+        target_commit = case.get("target_commit")
+        if _is_sha(base_commit, _SHA40) and _is_sha(target_commit, _SHA40):
+            try:
+                computed_direct_paths, computed_diff_sha256 = _git_tree_delta_v1(
+                    base_commit, target_commit
+                )
+            except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                errors.append(f"{case_id}: git_tree_delta_v1 recomputation failed: {exc}")
+                diff_binding_pass = False
+            else:
+                if case.get("diff_sha256") != computed_diff_sha256:
+                    errors.append(
+                        f"{case_id}: diff_sha256 must match recomputed git_tree_delta_v1"
+                    )
+                    diff_binding_pass = False
+
         profile = case.get("profile")
         direct = case.get("direct_change_paths")
         if not isinstance(direct, list) or not direct or not all(
@@ -264,6 +356,12 @@ def validate(data: dict[str, Any]) -> list[str]:
             bounded_quality_pass = False
         if case.get("changed_path_count") != len(direct):
             errors.append(f"{case_id}: changed_path_count must match direct_change_paths")
+            bounded_quality_pass = False
+        if computed_direct_paths is not None and tuple(direct) != computed_direct_paths:
+            errors.append(
+                f"{case_id}: direct_change_paths must match recomputed git_tree_delta_v1 paths"
+            )
+            diff_binding_pass = False
             bounded_quality_pass = False
 
         if profile in _GOLD_PROFILES:
@@ -721,8 +819,10 @@ def validate(data: dict[str, Any]) -> list[str]:
             ):
                 errors.append(f"{case_id}: capsule reduction_pct must match byte accounting")
 
-        if capsule.get("diff_binding_verified") is not True:
-            errors.append(f"{case_id}: diff binding must be verified")
+        if "diff_binding_verified" in capsule:
+            errors.append(
+                f"{case_id}: capsule must not contain self-attested diff_binding_verified"
+            )
             diff_binding_pass = False
         if capsule.get("freshness_status") != "fresh":
             errors.append(f"{case_id}: RepoGround publication must be fresh")

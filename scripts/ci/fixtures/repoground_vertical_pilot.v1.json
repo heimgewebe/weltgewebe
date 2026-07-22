@@ -26,7 +26,6 @@
         "causal_relations_included": 0,
         "citations_included": 3,
         "context_bytes": 8478,
-        "diff_binding_verified": true,
         "dirty_overlay": {
           "available": true,
           "dirty": false,
@@ -241,7 +240,6 @@
         "causal_relations_included": 0,
         "citations_included": 4,
         "context_bytes": 11716,
-        "diff_binding_verified": true,
         "dirty_overlay": {
           "available": true,
           "dirty": false,
@@ -412,7 +410,6 @@
         "causal_relations_included": 7,
         "citations_included": 0,
         "context_bytes": 11998,
-        "diff_binding_verified": true,
         "dirty_overlay": {
           "available": true,
           "dirty": false,
@@ -785,7 +782,6 @@
         "general_context_pack_bytes_reported": 51900,
         "ratio": 0.231079,
         "reduction_pct": 76.892,
-        "diff_binding_verified": true,
         "freshness_status": "fresh",
         "related_tests_included": 8,
         "related_tests": [

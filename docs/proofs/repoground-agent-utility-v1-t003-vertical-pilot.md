@@ -51,7 +51,7 @@ Methodisch schwache Baselines mit null aufgelösten Treffern wurden verworfen. J
 - Grabowski-Runtime: `acf29382784c1541b930b8068c58aac4497da5e4`
 - Capsule-Budget: `12000` Byte
 
-Alle vier Fälle sind an `git_tree_delta_v1`-Digests gebunden. Eine falsche Diff-Identität bricht fail-closed ab. Der kontrollierte Livefall bindet sein Ziel exakt an den Source-Bundle-Commit, der beim eingefrorenen Mess-Readback frisch gegen `origin/main` war.
+Alle vier Fälle sind an `git_tree_delta_v1`-Digests gebunden. Der Validator berechnet diesen Digest selbst aus dem exakten Base-/Target-Commitpaar mit derselben RepoGround-Identität (`git diff --name-status --find-renames` plus `git diff --raw --full-index --no-abbrev`, kanonisch JSON-gehasht) und vergleicht zusätzlich das daraus neu berechnete, sortierte Direktpfadinventar mit `direct_change_paths`. Das frühere selbstattestierte Feld `diff_binding_verified` ist aus der Fixture entfernt und wird bei Wiedereinführung abgewiesen. Eine falsche Diff-Identität oder ein manipuliertes Pfadinventar bricht damit fail-closed ab. Der kontrollierte Livefall bindet sein Ziel exakt an den Source-Bundle-Commit, der beim eingefrorenen Mess-Readback frisch gegen `origin/main` war.
 
 ## Drei Goldfälle plus kontrollierter Livefall
 
@@ -134,7 +134,7 @@ Historische oder fremde Dirty-States sind keine dauerhafte Eigenschaft des Promo
 - **Pilot-Delivery-Evidenz:** begrenzt bestanden und explizit an Contract, CI, Deployment, Runtime-Readback, Produktions-Receipt und Recovery/Risikoevidenz gebunden.
 - **Promotion-Gate für den gemessenen Handoff:** bestanden.
 
-Der Validator berechnet die promotionsrelevanten Truth-, Kompaktheits-, Qualitäts- und Delivery-Gates ausschließlich aus der Detail-Evidenz. Die Fixture enthält keine manuellen Verdict-Felder wie `truth_gate.passed`, `acceptance`, `mechanical_promotion_gate`, `overall_status` oder `promotion_recommendation`. Zusätzlich gilt fail-closed: Jeder Validierungsfehler setzt den berechneten Promotionszustand auf `promotion_ready=false`, auch wenn eine neu hinzugefügte Einzelprüfung versehentlich keinem separaten Gate-Bool zugeordnet wurde.
+Der Validator berechnet die promotionsrelevanten Truth-, Kompaktheits-, Qualitäts-, Diff- und Delivery-Gates aus Detail-Evidenz und lokal nachprüfbarer Git-Historie. Die Fixture enthält keine manuellen Verdict-Felder wie `truth_gate.passed`, `acceptance`, `mechanical_promotion_gate`, `overall_status`, `promotion_recommendation` oder `diff_binding_verified`. Zusätzlich gilt fail-closed: Jeder Validierungsfehler setzt den berechneten Promotionszustand auf `promotion_ready=false`, auch wenn eine neu hinzugefügte Einzelprüfung versehentlich keinem separaten Gate-Bool zugeordnet wurde.
 
 ## Promotion
 

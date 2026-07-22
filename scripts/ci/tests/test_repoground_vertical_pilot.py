@@ -673,14 +673,47 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         self.assertTrue(forbidden.isdisjoint(self.evidence))
         for case in self.evidence["cases"]:
             self.assertNotIn("quality_pass", case)
+            self.assertNotIn("diff_binding_verified", case["capsule"])
         self.assertNotIn("status", self.evidence["pilot_delivery_chain_evidence"])
         self.assertNotIn("freshness", self.evidence["source_bundle"])
 
-    def test_broken_diff_binding_blocks_computed_promotion(self) -> None:
+    def test_diff_binding_is_recomputed_from_git(self) -> None:
         mutated = copy.deepcopy(self.evidence)
-        mutated["cases"][0]["capsule"]["diff_binding_verified"] = False
+        case = mutated["cases"][0]
+        case["diff_sha256"] = "0" * 64
         errors = self.validator.validate(mutated)
-        self.assertTrue(any("diff binding must be verified" in error for error in errors))
+        self.assertIn(
+            f"{case['id']}: diff_sha256 must match recomputed git_tree_delta_v1",
+            errors,
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
+    def test_direct_change_inventory_is_recomputed_from_git(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = next(
+            case for case in mutated["cases"] if case["profile"] == "controlled_live"
+        )
+        case["direct_change_paths"][0] = "invented/not-in-revision-diff.txt"
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            f"{case['id']}: direct_change_paths must match recomputed git_tree_delta_v1 paths",
+            errors,
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
+    def test_self_attested_diff_binding_field_is_rejected(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = mutated["cases"][0]
+        case["capsule"]["diff_binding_verified"] = True
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            f"{case['id']}: capsule must not contain self-attested diff_binding_verified",
+            errors,
+        )
         self.assertIn(
             "default promotion cannot be claimed without all promotion gates", errors
         )
