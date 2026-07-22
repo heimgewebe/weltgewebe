@@ -369,7 +369,7 @@ async fn governance_conversation_target_is_additive_deterministic_and_reversible
                 'governance_proposal', 'public', created_at, created_at
          FROM governance_proposals
          WHERE id = $1::uuid
-         ON CONFLICT (proposal_id) WHERE conversation_type = 'governance_proposal'
+         ON CONFLICT (proposal_id)
          DO NOTHING";
     sqlx::query(backfill)
         .bind(PROPOSAL_ID)
