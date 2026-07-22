@@ -66,6 +66,7 @@ struct MetricsInner {
     pub http_requests_total: IntCounterVec,
     pub nodes_cache_count: IntGauge,
     pub edges_cache_count: IntGauge,
+    pub search_projection_jobs_total: IntCounterVec,
 }
 
 impl Metrics {
@@ -83,11 +84,20 @@ impl Metrics {
         let edges_count_opts = Opts::new("edges_cache_count", "Number of edges in memory cache");
         let edges_cache_count = IntGauge::with_opts(edges_count_opts)?;
 
+        let search_projection_jobs_total = IntCounterVec::new(
+            Opts::new(
+                "search_projection_jobs_total",
+                "Projection worker outcomes without node, text, query, or vector labels",
+            ),
+            &["outcome"],
+        )?;
+
         let registry = Registry::new();
         registry.register(Box::new(http_requests_total.clone()))?;
         registry.register(Box::new(build_info_metric.clone()))?;
         registry.register(Box::new(nodes_cache_count.clone()))?;
         registry.register(Box::new(edges_cache_count.clone()))?;
+        registry.register(Box::new(search_projection_jobs_total.clone()))?;
 
         build_info_metric
             .with_label_values(&[
@@ -103,6 +113,7 @@ impl Metrics {
                 http_requests_total,
                 nodes_cache_count,
                 edges_cache_count,
+                search_projection_jobs_total,
             }),
         })
     }
@@ -117,6 +128,15 @@ impl Metrics {
 
     pub fn http_requests_total(&self) -> &IntCounterVec {
         &self.inner.http_requests_total
+    }
+
+    /// Outcome labels are from a fixed enum; callers must never attach node
+    /// identifiers, source text, queries, provider responses, or vectors.
+    pub fn search_projection_outcome(&self, outcome: &str) {
+        self.inner
+            .search_projection_jobs_total
+            .with_label_values(&[outcome])
+            .inc();
     }
 
     pub fn render(&self) -> Result<Vec<u8>, prometheus::Error> {

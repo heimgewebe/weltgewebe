@@ -8,6 +8,7 @@ pub mod mailer;
 pub mod middleware;
 pub mod outbox;
 pub mod routes;
+pub mod search;
 pub mod state;
 pub mod telemetry;
 pub mod utils;
