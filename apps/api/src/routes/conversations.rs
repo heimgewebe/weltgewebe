@@ -313,9 +313,22 @@ async fn require_conversation_writable(
     tx: &mut Transaction<'_, Postgres>,
     conversation_id: &str,
 ) -> Result<(), ConversationApiError> {
-    let row: Option<(String, Option<String>)> = sqlx::query_as(
-        "SELECT conversation_type, \
-                (SELECT governance_source FROM domain_conversation_cutover_state WHERE singleton) \
+    // Lock the singleton cutover row before the conversation row. A canonical
+    // writer then keeps the cutover source stable until its transaction commits,
+    // so an operator cannot switch back to legacy and run the down migration
+    // while an already-authorized governance message is still in flight.
+    let governance_source: Option<String> = sqlx::query_scalar(
+        "SELECT governance_source \
+         FROM domain_conversation_cutover_state \
+         WHERE singleton \
+         FOR SHARE",
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|error| database_error("lock conversation write cutover", error))?;
+
+    let conversation_type: Option<String> = sqlx::query_scalar(
+        "SELECT conversation_type \
          FROM domain_conversations \
          WHERE id = $1::uuid AND deleted_at IS NULL \
          FOR UPDATE",
@@ -323,9 +336,9 @@ async fn require_conversation_writable(
     .bind(conversation_id)
     .fetch_optional(&mut **tx)
     .await
-    .map_err(|error| database_error("check conversation write cutover", error))?;
+    .map_err(|error| database_error("check conversation write target", error))?;
 
-    let (conversation_type, governance_source) = row.ok_or_else(|| {
+    let conversation_type = conversation_type.ok_or_else(|| {
         ConversationApiError::new(
             StatusCode::NOT_FOUND,
             "conversation_not_found",

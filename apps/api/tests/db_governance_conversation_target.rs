@@ -118,6 +118,68 @@ async fn insert_proposal(pool: &sqlx::PgPool, proposal_id: &str, account_id: &st
 #[tokio::test]
 #[serial]
 #[ignore = "requires direct PostgreSQL"]
+async fn governance_cutover_flip_waits_for_inflight_writer_gate() {
+    let pool = pool().await;
+    sqlx::query(
+        "UPDATE domain_conversation_cutover_state \
+         SET governance_source = 'canonical', updated_at = NOW() \
+         WHERE singleton",
+    )
+    .execute(&pool)
+    .await
+    .expect("enable canonical source for lock proof");
+
+    let mut writer_tx = pool.begin().await.expect("begin writer gate proof");
+    let source: String = sqlx::query_scalar(
+        "SELECT governance_source \
+         FROM domain_conversation_cutover_state \
+         WHERE singleton \
+         FOR SHARE",
+    )
+    .fetch_one(&mut *writer_tx)
+    .await
+    .expect("lock canonical cutover source like the runtime write gate");
+    assert_eq!(source, "canonical");
+
+    let mut flip_tx = pool.begin().await.expect("begin concurrent cutover flip");
+    sqlx::query("SET LOCAL lock_timeout = '100ms'")
+        .execute(&mut *flip_tx)
+        .await
+        .expect("set bounded lock timeout");
+    let blocked_flip = sqlx::query(
+        "UPDATE domain_conversation_cutover_state \
+         SET governance_source = 'legacy', updated_at = NOW() \
+         WHERE singleton",
+    )
+    .execute(&mut *flip_tx)
+    .await;
+    assert!(
+        blocked_flip.is_err(),
+        "legacy cutover must wait while an authorized writer holds the shared gate lock"
+    );
+    flip_tx
+        .rollback()
+        .await
+        .expect("rollback blocked cutover flip");
+    writer_tx
+        .rollback()
+        .await
+        .expect("release writer gate lock");
+
+    sqlx::query(
+        "UPDATE domain_conversation_cutover_state \
+         SET governance_source = 'legacy', updated_at = NOW() \
+         WHERE singleton",
+    )
+    .execute(&pool)
+    .await
+    .expect("restore legacy cutover source");
+    pool.close().await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
 async fn governance_conversation_target_is_additive_deterministic_and_reversible() {
     let pool = pool().await;
     cleanup(&pool).await;
