@@ -1136,6 +1136,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/public-metrics-boundary.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 
+## infra/compose/compose.observ.yml
+
+- [relates_to] docs/deploy/public-metrics-boundary.md
+
 ## infra/compose/compose.prod.override.yml
 
 - [relates_to] docs/deploy/public-app-base-url.md
@@ -1145,10 +1149,6 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/vps-http-route-smoke.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 - [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md
-
-## infra/compose/monitoring/prometheus.yml
-
-- [relates_to] docs/deploy/public-metrics-boundary.md
 
 ## platform/README.md
 
