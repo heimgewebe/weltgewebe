@@ -12,12 +12,18 @@ def _load_yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-def test_prometheus_config_is_mounted_read_only_and_targets_internal_api() -> None:
+def test_prometheus_config_is_hermetic_and_targets_internal_api() -> None:
     observ = _load_yaml(REPO / "infra/compose/compose.observ.yml")
     prometheus = observ["services"]["prometheus"]
-    assert "./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro" in prometheus["volumes"]
+    config_mount = prometheus["configs"][0]
+    assert config_mount == {
+        "source": "prometheus_config",
+        "target": "/etc/prometheus/prometheus.yml",
+    }
+    assert "volumes" not in prometheus
 
-    config = _load_yaml(REPO / "infra/compose/monitoring/prometheus.yml")
+    config_content = observ["configs"]["prometheus_config"]["content"]
+    config = yaml.safe_load(config_content)
     targets = config["scrape_configs"][0]["static_configs"][0]["targets"]
     assert targets == ["weltgewebe-api:8080"]
     assert all("host.docker.internal" not in target for target in targets)
