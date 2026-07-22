@@ -27,6 +27,37 @@ BEGIN
             MESSAGE = 'cannot roll back governance conversation target after canonical cutover';
     END IF;
 
+    -- Stop proposal inserts/deletes while the rollback snapshots and removes the
+    -- additive targets. Transactions that started earlier must finish before this
+    -- lock is granted, so their conversation/outbox rows are visible below.
+    LOCK TABLE governance_proposals IN SHARE ROW EXCLUSIVE MODE;
+
+    -- Fence the relay before deciding that rollback is still local-only. The
+    -- relay claims rows with FOR UPDATE SKIP LOCKED and increments attempt_count
+    -- before publishing, so these locks prevent new claims while attempt_count > 0
+    -- covers both in-flight and previously attempted delivery.
+    PERFORM event.id
+    FROM domain_outbox AS event
+    JOIN domain_conversations AS conversation
+      ON conversation.id::text = event.aggregate_id
+    WHERE event.aggregate_type = 'conversation'
+      AND conversation.conversation_type = 'governance_proposal'
+    FOR UPDATE OF event;
+
+    IF EXISTS (
+        SELECT 1
+        FROM domain_outbox AS event
+        JOIN domain_conversations AS conversation
+          ON conversation.id::text = event.aggregate_id
+        WHERE event.aggregate_type = 'conversation'
+          AND conversation.conversation_type = 'governance_proposal'
+          AND (event.published_at IS NOT NULL OR event.attempt_count > 0)
+    ) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '55000',
+            MESSAGE = 'cannot roll back governance conversation target after outbox delivery started';
+    END IF;
+
     IF EXISTS (
         SELECT 1
         FROM domain_messages AS message

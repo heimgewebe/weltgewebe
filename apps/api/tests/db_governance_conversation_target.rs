@@ -223,6 +223,136 @@ async fn governance_down_guard_blocks_concurrent_cutover_flip() {
 #[tokio::test]
 #[serial]
 #[ignore = "requires direct PostgreSQL"]
+async fn governance_down_guard_rejects_outbox_events_that_may_have_escaped() {
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, ACCOUNT_ID, "T018 Antragsteller").await;
+    insert_proposal(&pool, PROPOSAL_ID, ACCOUNT_ID).await;
+
+    let conversation_id: String =
+        sqlx::query_scalar("SELECT weltgewebe_governance_proposal_conversation_id($1::uuid)::text")
+            .bind(PROPOSAL_ID)
+            .fetch_one(&pool)
+            .await
+            .expect("derive governance conversation id");
+
+    sqlx::query(
+        "UPDATE domain_outbox
+         SET attempt_count = 1, available_at = NOW() + INTERVAL '30 seconds'
+         WHERE aggregate_type = 'conversation'
+           AND aggregate_id = $1
+           AND event_type = 'domain.conversation.created'",
+    )
+    .bind(&conversation_id)
+    .execute(&pool)
+    .await
+    .expect("mark governance create event as claimed");
+
+    let mut claimed_tx = pool
+        .begin()
+        .await
+        .expect("begin claimed outbox rollback proof");
+    let claimed_down = claimed_tx.execute(DOWN_MIGRATION).await;
+    assert!(
+        claimed_down.is_err(),
+        "down migration must reject a governance outbox event that was already claimed"
+    );
+    claimed_tx
+        .rollback()
+        .await
+        .expect("rollback claimed outbox proof");
+
+    sqlx::query(
+        "UPDATE domain_outbox
+         SET attempt_count = 0, published_at = NOW(), available_at = NOW()
+         WHERE aggregate_type = 'conversation'
+           AND aggregate_id = $1
+           AND event_type = 'domain.conversation.created'",
+    )
+    .bind(&conversation_id)
+    .execute(&pool)
+    .await
+    .expect("mark governance create event as published");
+
+    let mut published_tx = pool
+        .begin()
+        .await
+        .expect("begin published outbox rollback proof");
+    let published_down = published_tx.execute(DOWN_MIGRATION).await;
+    assert!(
+        published_down.is_err(),
+        "down migration must reject a governance outbox event that was already published"
+    );
+    published_tx
+        .rollback()
+        .await
+        .expect("rollback published outbox proof");
+
+    cleanup(&pool).await;
+    pool.close().await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn governance_down_guard_locks_pending_outbox_against_relay_claim() {
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, ACCOUNT_ID, "T018 Antragsteller").await;
+    insert_proposal(&pool, PROPOSAL_ID, ACCOUNT_ID).await;
+
+    let conversation_id: String =
+        sqlx::query_scalar("SELECT weltgewebe_governance_proposal_conversation_id($1::uuid)::text")
+            .bind(PROPOSAL_ID)
+            .fetch_one(&pool)
+            .await
+            .expect("derive governance conversation id");
+
+    let guard_end = DOWN_MIGRATION
+        .find("$$;\n\nDROP TRIGGER")
+        .expect("down migration starts with a standalone guard block")
+        + 3;
+    let down_guard = &DOWN_MIGRATION[..guard_end];
+    let mut down_tx = pool.begin().await.expect("begin outbox fence proof");
+    down_tx
+        .execute(down_guard)
+        .await
+        .expect("execute exact rollback guard from down migration");
+
+    let mut relay_tx = pool.begin().await.expect("begin simulated relay claim");
+    let claimed_id: Option<i64> = sqlx::query_scalar(
+        "SELECT id
+         FROM domain_outbox
+         WHERE aggregate_type = 'conversation'
+           AND aggregate_id = $1
+           AND published_at IS NULL
+           AND quarantined_at IS NULL
+         FOR UPDATE SKIP LOCKED",
+    )
+    .bind(&conversation_id)
+    .fetch_optional(&mut *relay_tx)
+    .await
+    .expect("simulate relay claim against rollback-fenced event");
+    assert!(
+        claimed_id.is_none(),
+        "relay claim must skip governance events while the down guard holds their row locks"
+    );
+    relay_tx
+        .rollback()
+        .await
+        .expect("rollback simulated relay claim");
+    down_tx
+        .rollback()
+        .await
+        .expect("release rollback outbox fence");
+
+    cleanup(&pool).await;
+    pool.close().await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
 async fn governance_conversation_target_is_additive_deterministic_and_reversible() {
     let pool = pool().await;
     cleanup(&pool).await;
