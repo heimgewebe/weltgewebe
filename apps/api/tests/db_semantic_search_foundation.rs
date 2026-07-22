@@ -61,6 +61,16 @@ async fn run_migrations(pool: &sqlx::PgPool) {
 }
 
 async fn apply_t003_contract(pool: &sqlx::PgPool) {
+    // This target proves the historical T003 foundation in isolation. The
+    // production migrator now also contains the later T005 projection schema,
+    // so unwind only that Search migration in this disposable database before
+    // applying the deliberately non-production T003 proof contract.
+    sqlx::raw_sql(include_str!(
+        "../migrations/20260721000001_semantic_search_projection_worker.down.sql"
+    ))
+    .execute(pool)
+    .await
+    .expect("unwind T005 search migration for isolated T003 proof");
     sqlx::raw_sql(include_str!(
         "../../../contracts/search/postgres-foundation.up.sql"
     ))

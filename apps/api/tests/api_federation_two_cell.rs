@@ -1,8 +1,9 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
 use axum::{
     body::{self, Body},
+    extract::ConnectInfo,
     http::{Request, StatusCode},
     Router,
 };
@@ -427,7 +428,7 @@ async fn two_cells_exchange_objects_survive_partition_and_converge() -> Result<(
 }
 
 #[tokio::test]
-async fn invalid_scope_version_signature_and_blocked_peer_are_quarantined() -> Result<()> {
+async fn invalid_scope_version_signature_and_blocked_peer_are_classified() -> Result<()> {
     let identity_a = identity("cell-a", 31);
     let cell_a = service("cell-a", 31);
     let cell_b = service("cell-b", 32);
@@ -480,7 +481,11 @@ async fn invalid_scope_version_signature_and_blocked_peer_are_quarantined() -> R
     tampered.payload = json!({"title": "Tampered"});
     let (status, outcome) = deliver(&app_b, &tampered).await?;
     assert_eq!(status, StatusCode::ACCEPTED);
-    assert!(outcome.reason.unwrap().contains("signature"));
+    assert_eq!(outcome.status, ReceiveStatus::Rejected);
+    assert_eq!(
+        outcome.reason.as_deref(),
+        Some("event authentication rejected")
+    );
 
     // A separately signed first version for an already known address is stale.
     let stale_signer = service("cell-a", 31);
@@ -522,6 +527,36 @@ async fn invalid_scope_version_signature_and_blocked_peer_are_quarantined() -> R
         .iter()
         .all(|entry| entry.envelope_sha256.len() == 64));
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn public_receive_endpoint_limits_client_before_json_parse_without_global_starvation(
+) -> Result<()> {
+    let app = router(service("cell-b", 72));
+    let noisy_peer = SocketAddr::from(([192, 0, 2, 10], 41000));
+
+    for index in 0..=240 {
+        let mut request = Request::post("/federation/v1/events")
+            .header("content-type", "application/json")
+            .body(Body::from("{"))?;
+        request.extensions_mut().insert(ConnectInfo(noisy_peer));
+        let response = app.clone().oneshot(request).await?;
+        if index < 240 {
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        } else {
+            assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        }
+    }
+
+    let mut independent_request = Request::post("/federation/v1/events")
+        .header("content-type", "application/json")
+        .body(Body::from("{"))?;
+    independent_request
+        .extensions_mut()
+        .insert(ConnectInfo(SocketAddr::from(([192, 0, 2, 11], 41001))));
+    let independent = app.oneshot(independent_request).await?;
+    assert_eq!(independent.status(), StatusCode::BAD_REQUEST);
     Ok(())
 }
 

@@ -78,7 +78,7 @@ jobs:
         run: pnpm --filter weltgewebe-web test:ci
       - name: Upload HTML report (always)
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: playwright-report
           path: |
@@ -93,7 +93,7 @@ jobs:
           echo "npx playwright show-report apps/web/playwright-report"
       - name: Upload traces (on failure)
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: playwright-traces
           path: apps/web/test-results/**/*.zip

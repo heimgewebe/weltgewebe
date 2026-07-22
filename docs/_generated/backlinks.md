@@ -519,6 +519,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/deploy/README.md
 - [relates_to] docs/deploy/merge-to-live.md
+- [relates_to] docs/deploy/public-metrics-boundary.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 - [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
 
@@ -1132,7 +1133,12 @@ Generated automatically. Do not edit.
 
 ## infra/caddy/Caddyfile.vps
 
+- [relates_to] docs/deploy/public-metrics-boundary.md
 - [relates_to] docs/deploy/vps-http-smoke.md
+
+## infra/compose/compose.observ.yml
+
+- [relates_to] docs/deploy/public-metrics-boundary.md
 
 ## infra/compose/compose.prod.override.yml
 

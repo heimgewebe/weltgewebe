@@ -16,7 +16,7 @@ use axum::{
     Router,
 };
 
-use crate::middleware::authz::{require_admin, require_write};
+use crate::middleware::authz::{require_admin, require_authenticated, require_write};
 use crate::state::ApiState;
 
 use self::{
@@ -50,7 +50,8 @@ pub fn api_router() -> Router<ApiState> {
     let router = Router::new()
         .route(
             "/nodes",
-            get(list_nodes).merge(post(create_node_serialized).route_layer(from_fn(require_write))),
+            get(list_nodes)
+                .merge(post(create_node_serialized).route_layer(from_fn(require_authenticated))),
         )
         .route(
             "/nodes/{id}",
@@ -58,24 +59,25 @@ pub fn api_router() -> Router<ApiState> {
                 .merge(
                     axum::routing::patch(patch_node_serialized)
                         .put(replace_node_serialized)
-                        .route_layer(from_fn(require_write)),
+                        .route_layer(from_fn(require_authenticated)),
                 )
                 .merge(
                     axum::routing::delete(delete_node_serialized)
-                        .route_layer(from_fn(require_write)),
+                        .route_layer(from_fn(require_authenticated)),
                 ),
         )
         .route("/nodes/{id}/conversation", get(get_node_conversation))
         .route("/conversations/{id}", get(get_conversation))
         .route(
             "/conversations/{id}/messages",
-            get(list_messages).merge(post(create_message).route_layer(from_fn(require_write))),
+            get(list_messages)
+                .merge(post(create_message).route_layer(from_fn(require_authenticated))),
         )
         .route(
             "/conversations/{conversation_id}/messages/{message_id}",
             axum::routing::patch(update_message)
                 .delete(delete_message)
-                .route_layer(from_fn(require_write)),
+                .route_layer(from_fn(require_authenticated)),
         )
         .route("/edges", get(list_edges))
         .route("/edges/{id}", get(get_edge))
@@ -89,15 +91,15 @@ pub fn api_router() -> Router<ApiState> {
             "/accounts/me/profile",
             get(get_own_garnrolle_profile)
                 .patch(update_own_garnrolle_profile)
-                .route_layer(from_fn(require_write)),
+                .route_layer(from_fn(require_authenticated)),
         )
         .route("/accounts/{id}", get(get_account))
         // Antragssystem (docs/specs/governance-antraege.md). `POST /proposals`
-        // und `POST /accounts/me/exit` sind bewusst NICHT hinter
-        // `require_write`: der eigene Weberantrag und der eigene Austritt sind
-        // die einzigen zustandsändernden Gastvorgänge; die Handler prüfen die
-        // Authentifizierung selbst. Veto, Stimme und Gesprächsraum-Beiträge
-        // sind Webungsaktionen und bleiben Gästen verwehrt.
+        // und `POST /accounts/me/exit` sind bewusst nicht über eine allgemeine
+        // Rollen-Middleware geschützt: der eigene Weberantrag und der eigene
+        // Austritt sind eng begrenzte Gast-Sonderwege; die Handler prüfen die
+        // Authentifizierung selbst. Gesprächsbeiträge sind für alle angemeldeten
+        // Accounts offen; formale Vetos und Stimmen bleiben Weber/Admin vorbehalten.
         .route("/proposals", get(list_proposals).post(create_proposal))
         .route("/proposals/{id}", get(get_proposal))
         .route(
@@ -111,7 +113,7 @@ pub fn api_router() -> Router<ApiState> {
         .route(
             "/proposals/{id}/messages",
             get(list_proposal_messages)
-                .merge(post(post_proposal_message).route_layer(from_fn(require_write))),
+                .merge(post(post_proposal_message).route_layer(from_fn(require_authenticated))),
         )
         .route("/accounts/me/exit", post(exit_own_account))
         .route("/auth/dev/accounts", get(list_dev_accounts))

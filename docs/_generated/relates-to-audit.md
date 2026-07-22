@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 642 |
+| Relationen gesamt | 645 |
 | — depends_on | 25 |
-| — relates_to | 600 |
+| — relates_to | 603 |
 | — supersedes | 12 |
 | — verifies | 5 |
 | relates_to Anteil | 93% |
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (256 Dokumente):
+**Cluster 1** (258 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -117,6 +117,7 @@ _Keine Lücken erkannt._
 - `docs/deploy/heimserver.integration.md`
 - `docs/deploy/merge-to-live.md`
 - `docs/deploy/public-app-base-url.md`
+- `docs/deploy/public-metrics-boundary.md`
 - `docs/deploy/secondary-domain-web-surfaces.md`
 - `docs/deploy/security.md`
 - `docs/deploy/vps-db-initialization-boundary.md`
@@ -245,6 +246,7 @@ _Keine Lücken erkannt._
 - `docs/zusammenstellung.md`
 - `infra/caddy/Caddyfile.http-smoke`
 - `infra/caddy/Caddyfile.vps`
+- `infra/compose/compose.observ.yml`
 - `infra/compose/compose.prod.override.yml`
 - `infra/compose/compose.vps.override.yml`
 - `platform/README.md`

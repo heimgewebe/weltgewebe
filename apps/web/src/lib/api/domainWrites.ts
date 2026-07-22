@@ -124,7 +124,7 @@ export interface CreateNodePayload {
   location: Location;
   summary?: string;
   /** Stable UUID for retrying one user action after an uncertain response. */
-  operation_id?: string;
+  operation_id: string;
 }
 
 /** POST /api/nodes — create a node. Server owns `id`/`created_at`/`updated_at`. */

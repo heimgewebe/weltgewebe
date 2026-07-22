@@ -68,6 +68,7 @@ fn config() -> AppConfig {
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source: DomainAccountWriteSource::Postgres,
         domain_node_write_source: DomainNodeWriteSource::Postgres,
@@ -452,7 +453,7 @@ async fn node_conversation_vertical_slice() {
     }
 
     let message_path = format!("/conversations/{conversation_id}/messages");
-    let (status, _) = json_response(
+    let (status, guest_message) = json_response(
         &app,
         request(
             "POST",
@@ -464,7 +465,9 @@ async fn node_conversation_vertical_slice() {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(guest_message["author_account_id"], GUEST_ID);
+    assert_eq!(guest_message["author_title"], "Gast");
 
     let (status, invalid_content) = json_response(
         &app,
@@ -577,7 +580,7 @@ async fn node_conversation_vertical_slice() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(page_two["items"].as_array().map(Vec::len), Some(1));
+    assert_eq!(page_two["items"].as_array().map(Vec::len), Some(2));
     assert_eq!(page_two["page"]["has_more"], false);
     assert!(page_two["page"]["next_cursor"].is_null());
     let first_page_ids: Vec<&str> = page_one["items"]
@@ -603,6 +606,36 @@ async fn node_conversation_vertical_slice() {
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(forbidden["code"], "message_author_required");
+
+    let (status, guest_edit_forbidden) = json_response(
+        &app,
+        request(
+            "PATCH",
+            &item_path,
+            Some(&guest),
+            Some(r#"{"content":"Gast ändert fremden Beitrag"}"#),
+            None,
+            first["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(guest_edit_forbidden["code"], "message_author_required");
+
+    let (status, guest_delete_forbidden) = json_response(
+        &app,
+        request(
+            "DELETE",
+            &item_path,
+            Some(&guest),
+            None,
+            None,
+            first["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(guest_delete_forbidden["code"], "message_owner_required");
 
     let (status, required) = json_response(
         &app,
@@ -941,5 +974,198 @@ async fn node_conversation_vertical_slice() {
     assert!(node_still_exists);
 
     cleanup(&pool).await;
+    pool.close().await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn governance_conversation_write_gate_blocks_legacy_and_allows_canonical_http_mutations() {
+    const PROPOSAL_ID: &str = "83000000-0000-4000-8000-000000000001";
+    const LEGACY_MESSAGE_ID: &str = "83000000-0000-4000-8000-000000000002";
+    const LEGACY_IDEMPOTENCY_KEY: &str = "83000000-0000-4000-8000-000000000003";
+    const CANONICAL_IDEMPOTENCY_KEY: &str = "83000000-0000-4000-8000-000000000004";
+
+    let pool = pool().await;
+    sqlx::query("UPDATE domain_conversation_cutover_state SET governance_source = 'legacy', updated_at = NOW() WHERE singleton")
+        .execute(&pool)
+        .await
+        .expect("reset governance source");
+    sqlx::query("DELETE FROM domain_messages WHERE conversation_id IN (SELECT id FROM domain_conversations WHERE proposal_id = $1::uuid)")
+        .bind(PROPOSAL_ID)
+        .execute(&pool)
+        .await
+        .expect("clean governance messages");
+    sqlx::query("DELETE FROM governance_proposals WHERE id = $1::uuid")
+        .bind(PROPOSAL_ID)
+        .execute(&pool)
+        .await
+        .expect("clean governance proposal");
+    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
+        .bind(AUTHOR_ID)
+        .execute(&pool)
+        .await
+        .expect("clean author account");
+
+    seed_account(&pool, AUTHOR_ID, "Autorin", "weber").await;
+    sqlx::query(
+        "INSERT INTO governance_proposals (
+             id, kind, applicant_account_id, applicant_title, summary, status,
+             created_at, consent_until
+         ) VALUES (
+             $1::uuid, 'weberantrag', $2, 'Autorin', 'HTTP Cutover Proof',
+             'consent', NOW(), NOW() + INTERVAL '7 days'
+         )",
+    )
+    .bind(PROPOSAL_ID)
+    .bind(AUTHOR_ID)
+    .execute(&pool)
+    .await
+    .expect("insert governance proposal");
+
+    let conversation_id: String = sqlx::query_scalar(
+        "SELECT id::text FROM domain_conversations WHERE proposal_id = $1::uuid",
+    )
+    .bind(PROPOSAL_ID)
+    .fetch_one(&pool)
+    .await
+    .expect("read governance conversation");
+
+    let (app, author, _, _, _) = app(pool.clone()).await;
+    let message_path = format!("/conversations/{conversation_id}/messages");
+
+    let (status, legacy_create) = json_response(
+        &app,
+        request(
+            "POST",
+            &message_path,
+            Some(&author),
+            Some(r#"{"content":"Noch Legacy"}"#),
+            Some(CANONICAL_IDEMPOTENCY_KEY),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(legacy_create["code"], "conversation_write_not_active");
+
+    sqlx::query(
+        "INSERT INTO domain_messages (
+             id, conversation_id, author_account_id, author_title, content, idempotency_key
+         ) VALUES ($1::uuid, $2::uuid, $3, 'Autorin', 'Vorhandener Testbeitrag', $4::uuid)",
+    )
+    .bind(LEGACY_MESSAGE_ID)
+    .bind(&conversation_id)
+    .bind(AUTHOR_ID)
+    .bind(LEGACY_IDEMPOTENCY_KEY)
+    .execute(&pool)
+    .await
+    .expect("seed governance message for legacy mutation gate");
+
+    let legacy_version: chrono::DateTime<chrono::Utc> =
+        sqlx::query_scalar("SELECT updated_at FROM domain_messages WHERE id = $1::uuid")
+            .bind(LEGACY_MESSAGE_ID)
+            .fetch_one(&pool)
+            .await
+            .expect("read legacy message version");
+    let legacy_item_path = format!("{message_path}/{LEGACY_MESSAGE_ID}");
+    for method in ["PATCH", "DELETE"] {
+        let body = if method == "PATCH" {
+            Some(r#"{"content":"Darf noch nicht mutieren"}"#)
+        } else {
+            None
+        };
+        let (status, blocked) = json_response(
+            &app,
+            request(
+                method,
+                &legacy_item_path,
+                Some(&author),
+                body,
+                None,
+                Some(&legacy_version.to_rfc3339()),
+            ),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::CONFLICT,
+            "{method} must be blocked on legacy"
+        );
+        assert_eq!(blocked["code"], "conversation_write_not_active");
+    }
+
+    sqlx::query("UPDATE domain_conversation_cutover_state SET governance_source = 'canonical', updated_at = NOW() WHERE singleton")
+        .execute(&pool)
+        .await
+        .expect("enable canonical governance source");
+
+    let (status, created) = json_response(
+        &app,
+        request(
+            "POST",
+            &message_path,
+            Some(&author),
+            Some(r#"{"content":"Kanonischer Beitrag"}"#),
+            Some(CANONICAL_IDEMPOTENCY_KEY),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let canonical_item_path = format!(
+        "{message_path}/{}",
+        created["id"].as_str().expect("message id")
+    );
+    let (status, updated) = json_response(
+        &app,
+        request(
+            "PATCH",
+            &canonical_item_path,
+            Some(&author),
+            Some(r#"{"content":"Kanonisch geändert"}"#),
+            None,
+            created["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated["content"], "Kanonisch geändert");
+
+    let (status, deleted) = json_response(
+        &app,
+        request(
+            "DELETE",
+            &canonical_item_path,
+            Some(&author),
+            None,
+            None,
+            updated["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(deleted["deleted_at"].is_string());
+
+    sqlx::query("DELETE FROM domain_messages WHERE conversation_id = $1::uuid")
+        .bind(&conversation_id)
+        .execute(&pool)
+        .await
+        .expect("clean governance messages");
+    sqlx::query("UPDATE domain_conversation_cutover_state SET governance_source = 'legacy', updated_at = NOW() WHERE singleton")
+        .execute(&pool)
+        .await
+        .expect("restore legacy governance source");
+    sqlx::query("DELETE FROM governance_proposals WHERE id = $1::uuid")
+        .bind(PROPOSAL_ID)
+        .execute(&pool)
+        .await
+        .expect("clean governance proposal");
+    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
+        .bind(AUTHOR_ID)
+        .execute(&pool)
+        .await
+        .expect("clean author account");
     pool.close().await;
 }

@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS domain_nodes_created_by_account_id_idx;
