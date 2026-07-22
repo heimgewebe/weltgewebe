@@ -241,22 +241,70 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{metrics_path_label, UNMATCHED_ROUTE_LABEL};
-    use axum::http::Request;
+    use super::{BuildInfo, Metrics, MetricsLayer, UNMATCHED_ROUTE_LABEL};
+    use axum::{body::Body, http::Request, routing::get, Router};
+    use tower::ServiceExt;
 
-    #[test]
-    fn unmatched_paths_collapse_to_one_low_cardinality_metrics_label() {
-        let first = Request::builder()
-            .uri("/attacker-controlled/a")
-            .body(())
-            .expect("request");
-        let second = Request::builder()
-            .uri("/attacker-controlled/b")
-            .body(())
-            .expect("request");
+    fn test_metrics() -> Metrics {
+        Metrics::try_new(BuildInfo {
+            version: "test",
+            commit: "test",
+            build_timestamp: "test",
+        })
+        .expect("metrics")
+    }
 
-        assert_eq!(metrics_path_label(&first), UNMATCHED_ROUTE_LABEL);
-        assert_eq!(metrics_path_label(&second), UNMATCHED_ROUTE_LABEL);
-        assert_eq!(metrics_path_label(&first), metrics_path_label(&second));
+    #[tokio::test]
+    async fn known_dynamic_routes_keep_one_normalized_matched_path_label() {
+        let metrics = test_metrics();
+        let app = Router::new()
+            .route("/known/{id}", get(|| async { "ok" }))
+            .layer(MetricsLayer::new(metrics.clone()));
+
+        for uri in ["/known/1", "/known/2"] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(uri)
+                        .body(Body::empty())
+                        .expect("request"),
+                )
+                .await
+                .expect("response");
+            assert!(response.status().is_success());
+        }
+
+        let rendered = String::from_utf8(metrics.render().expect("render metrics")).expect("utf8");
+        assert!(rendered.contains("path=\"/known/{id}\""));
+        assert!(!rendered.contains("path=\"/known/1\""));
+        assert!(!rendered.contains("path=\"/known/2\""));
+    }
+
+    #[tokio::test]
+    async fn real_unmatched_requests_collapse_to_one_metrics_label() {
+        let metrics = test_metrics();
+        let app = Router::new()
+            .route("/known/{id}", get(|| async { "ok" }))
+            .layer(MetricsLayer::new(metrics.clone()));
+
+        for uri in ["/attacker-controlled/a", "/attacker-controlled/b"] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(uri)
+                        .body(Body::empty())
+                        .expect("request"),
+                )
+                .await
+                .expect("response");
+            assert_eq!(response.status(), axum::http::StatusCode::NOT_FOUND);
+        }
+
+        let rendered = String::from_utf8(metrics.render().expect("render metrics")).expect("utf8");
+        assert!(rendered.contains(&format!("path=\"{UNMATCHED_ROUTE_LABEL}\"")));
+        assert!(!rendered.contains("path=\"/attacker-controlled/a\""));
+        assert!(!rendered.contains("path=\"/attacker-controlled/b\""));
     }
 }
