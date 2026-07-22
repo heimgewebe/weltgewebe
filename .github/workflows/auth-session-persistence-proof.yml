@@ -85,11 +85,11 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: weltgewebe
+          POSTGRES_DB: weltgewebe_ci_proof
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d weltgewebe"
+          --health-cmd "pg_isready -U postgres -d weltgewebe_ci_proof"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -101,7 +101,7 @@ jobs:
       PLAYWRIGHT_HTML_REPORT_OPEN: never
       PLAYWRIGHT_HTML_REPORT: playwright-report-session
       PLAYWRIGHT_JUNIT_OUTPUT_NAME: session-results.xml
-      AUTH_SESSION_PROOF_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe
+      AUTH_SESSION_PROOF_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_ci_proof
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v4

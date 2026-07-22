@@ -37,7 +37,7 @@ if [[ ! -f "$INDEX_HTML" ]]; then
   exit 1
 fi
 
-python3 - "$ROOT/apps/web/build" <<'PY'
+python3 - "$ROOT/apps/web/build" << 'PY'
 from __future__ import annotations
 import base64
 import hashlib

@@ -732,12 +732,12 @@ impl ProjectionWorker {
             stale_jobs: row.get::<i64, _>("stale"),
             failed_jobs: row.get::<i64, _>("failed"),
             active_generation_id: active.as_ref().map(|row| row.get("generation_id")),
-            active_generation_identity: active.as_ref().map(&identity),
+            active_generation_identity: active.as_ref().map(identity),
             active_generation_activated_at: active
                 .as_ref()
                 .and_then(|row| row.try_get("activated_at").ok()),
             rebuild_generation_id: rebuild.as_ref().map(|row| row.get("generation_id")),
-            rebuild_generation_identity: rebuild.as_ref().map(&identity),
+            rebuild_generation_identity: rebuild.as_ref().map(identity),
             rebuild_generation_state: rebuild.as_ref().map(|row| row.get("state")),
             rebuild_total_jobs: rebuild.as_ref().map(|row| row.get("total_jobs")),
             rebuild_terminal_jobs: rebuild.as_ref().map(|row| row.get("terminal_jobs")),

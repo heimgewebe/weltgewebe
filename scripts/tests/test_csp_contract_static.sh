@@ -36,7 +36,8 @@ run_test "external-script-strict" 0
 printf '%s\n' '<meta http-equiv="content-security-policy" content="script-src '\''self'\''"><script>console.log("inline")</script>' > "$INDEX_HTML"
 run_test "inline-without-hash" 1
 
-hash=$(python3 - <<'PY'
+hash=$(
+  python3 - << 'PY'
 import base64, hashlib
 body='console.log("inline")'
 print(base64.b64encode(hashlib.sha256(body.encode()).digest()).decode())

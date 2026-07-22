@@ -207,7 +207,7 @@ provision_jetstream_if_requested() {
   binding="$(docker port "$owned_nats_container" 4222/tcp | head -n1)"
   port="${binding##*:}"
   if [[ ! "$port" =~ ^[0-9]+$ ]]; then
-    echo "could not resolve dynamically published JetStream port from ${binding!r}" >&2
+    echo "could not resolve dynamically published JetStream port from ${binding}" >&2
     return 1
   fi
   export NATS_URL="nats://127.0.0.1:${port}"

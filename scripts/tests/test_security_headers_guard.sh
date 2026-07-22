@@ -7,7 +7,7 @@ TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 mkdir -p "$TEMP_DIR/policies" "$TEMP_DIR/infra/caddy" "$TEMP_DIR/apps/web"
 
-cat > "$TEMP_DIR/policies/security.yml" <<'YAML'
+cat > "$TEMP_DIR/policies/security.yml" << 'YAML'
 content_security_policy:
   script-src: "'self' plus build-generated sha256 hashes"
   script_mode: hash
@@ -18,7 +18,7 @@ strict_transport_security:
   max_age_seconds: 31536000
 YAML
 
-cat > "$TEMP_DIR/apps/web/svelte.config.js" <<'JS'
+cat > "$TEMP_DIR/apps/web/svelte.config.js" << 'JS'
 export default {
   kit: {
     csp: {
@@ -34,7 +34,7 @@ JS
 write_static_caddy() {
   local file="$1"
   local connect="$2"
-  cat > "$file" <<CADDY
+  cat > "$file" << CADDY
 example.test {
   header {
     Content-Security-Policy "style-src 'self' 'unsafe-inline'; connect-src $connect; img-src 'self' data: blob:; worker-src 'self' blob:; font-src 'self'; media-src 'self'; manifest-src 'self'; child-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
@@ -50,7 +50,7 @@ CADDY
 
 write_prod_caddy() {
   local file="$1"
-  cat > "$file" <<'CADDY'
+  cat > "$file" << 'CADDY'
 example.test {
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
