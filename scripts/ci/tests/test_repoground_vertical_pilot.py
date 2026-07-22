@@ -101,6 +101,10 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         case["capsule"]["stop_criteria"]["triggered"].append("impact_context_blocked")
         errors = self.validator.validate(mutated)
         self.assertTrue(any("impact_context_blocked must be absent" in error for error in errors))
+        self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
 
     def test_dirty_overlay_must_not_enter_revision_diff(self) -> None:
         mutated = copy.deepcopy(self.evidence)
@@ -109,6 +113,7 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         ] = True
         errors = self.validator.validate(mutated)
         self.assertTrue(any("dirty overlay must be excluded" in error for error in errors))
+        self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
 
     def test_delivery_chain_failure_blocks_default_promotion(self) -> None:
         mutated = copy.deepcopy(self.evidence)
@@ -119,6 +124,32 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
             "default promotion cannot be claimed without all promotion gates",
             errors,
         )
+
+    def test_delivery_binding_failures_block_default_promotion(self) -> None:
+        mutations = {
+            "case_id": lambda data: data["delivery_chain"].update({"case_id": "wrong"}),
+            "required_direct_paths": lambda data: data["delivery_chain"].update(
+                {"required_direct_paths": ["not/a/direct/change"]}
+            ),
+            "target_symbols_count": lambda data: data["delivery_chain"].update(
+                {"target_symbols_included": 999}
+            ),
+            "causal_relations_count": lambda data: data["delivery_chain"].update(
+                {"causal_relations_included": 999}
+            ),
+            "live_ranges_count": lambda data: data["delivery_chain"].update(
+                {"live_ranges_included": 999}
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                mutated = copy.deepcopy(self.evidence)
+                mutate(mutated)
+                errors = self.validator.validate(mutated)
+                self.assertIn(
+                    "default promotion cannot be claimed without all promotion gates",
+                    errors,
+                )
 
     def test_controlled_live_case_is_required_and_bound_to_source_bundle(self) -> None:
         missing = copy.deepcopy(self.evidence)
@@ -208,6 +239,7 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         errors = self.validator.validate(mutated)
         self.assertIn("source bundle must be fresh_exact", errors)
         self.assertIn("source_bundle.post_emit_health must be pass", errors)
+        self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
 
     def test_source_bundle_generator_must_match_measured_repoground_runtime(self) -> None:
         mutated = copy.deepcopy(self.evidence)
@@ -257,6 +289,7 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
             any("paired baseline must contain resolved evidence" in error for error in errors)
         )
         self.assertTrue(any("baseline snippet_count must be positive" in error for error in errors))
+        self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
 
     def test_measurement_worktree_must_be_evidence_only_dirty(self) -> None:
         mutated = copy.deepcopy(self.evidence)
@@ -268,6 +301,7 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
             "measurement worktree dirty paths must equal the four evidence files",
             errors,
         )
+        self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
 
     def test_every_gold_case_requires_related_test_evidence(self) -> None:
         mutated = copy.deepcopy(self.evidence)
@@ -278,6 +312,37 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         self.assertTrue(
             any("every gold case must include at least one related test" in error for error in errors)
         )
+
+    def test_related_test_evidence_must_match_its_provenance(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = mutated["cases"][0]
+        related = case["capsule"]["related_tests"][0]
+        related["path"] = "not-a-test.txt"
+        related["provenance_strength"] = "invented"
+        errors = self.validator.validate(mutated)
+        self.assertTrue(
+            any("every related test must identify a test-like path" in error for error in errors)
+        )
+        self.assertTrue(
+            any("changed-test evidence provenance must be direct_diff" in error for error in errors)
+        )
+
+    def test_truth_gate_cannot_self_attest_over_broken_case(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["cases"][0]["capsule"]["diff_binding_verified"] = False
+        self.assertTrue(mutated["truth_gate"]["passed"])
+        errors = self.validator.validate(mutated)
+        self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
+    def test_acceptance_cannot_self_attest_over_broken_evidence(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["cases"][0]["baseline"]["resolved_evidence_status"] = "degraded"
+        self.assertEqual(mutated["acceptance"]["paired_baseline"], "pass")
+        errors = self.validator.validate(mutated)
+        self.assertIn("acceptance.paired_baseline must match recomputed evidence", errors)
 
 
 if __name__ == "__main__":
