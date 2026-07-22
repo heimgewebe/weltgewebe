@@ -51,10 +51,10 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |
 | docs/reports/agent-readiness-audit.md | documentation | active |  |  |  |  |  | 2 | 4 | 1 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/auth-persistence-direct-proof-diagnose-audit.md | report | deprecated | superseded | audit | OPT-API-002 |  | docs/reports/optimierungsstatus.md | 0 | 5 | 4 | review_after |  |
-| docs/reports/auth-persistence-next-step.md | report | deprecated | superseded | decision-prep | OPT-API-002 |  | docs/reports/optimierungsstatus.md | 6 | 6 | 4 | review_after |  |
-| docs/reports/auth-persistence-readiness.md | report | deprecated | superseded | decision-prep | OPT-API-002 |  | docs/reports/auth-persistence-next-step.md | 4 | 6 | 3 | review_after |  |
+| docs/reports/auth-persistence-next-step.md | report | deprecated | superseded | decision-prep | OPT-API-002 |  | docs/reports/optimierungsstatus.md | 5 | 6 | 4 | review_after |  |
+| docs/reports/auth-persistence-readiness.md | report | deprecated | superseded | decision-prep | OPT-API-002 |  | docs/reports/optimierungsstatus.md | 4 | 6 | 3 | review_after |  |
 | docs/reports/auth-persistence-runtime-proof.md | report | deprecated | superseded | proof | OPT-API-002 |  | docs/reports/optimierungsstatus.md | 4 | 5 | 6 | review_after |  |
-| docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active | active | audit | OPT-API-002 | 2026-07-17 |  | 1 | 4 | 5 |  |  |
+| docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active | active | audit | OPT-API-002 | 2026-08-22 |  | 1 | 4 | 5 |  |  |
 | docs/reports/auth-pg-002-controlled-preflight.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 1 | 4 | 2 |  |  |
 | docs/reports/auth-pg-002-cutover-plan.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | 7 | 4 | 4 |  |  |
 | docs/reports/auth-pg-002-passkey-db-store.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | 3 | 4 | 3 |  |  |
@@ -185,7 +185,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/blueprints/auth-persistence-runtime-proof.md`
   - `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
   - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
-  - `docs/reports/auth-persistence-readiness.md`
   - `docs/reports/auth-persistence-runtime-proof.md`
   - `docs/reports/passkey-register-verify-prep.md`
 

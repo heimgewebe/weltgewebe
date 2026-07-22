@@ -246,9 +246,9 @@ _Keine Lücken erkannt._
 - `docs/zusammenstellung.md`
 - `infra/caddy/Caddyfile.http-smoke`
 - `infra/caddy/Caddyfile.vps`
+- `infra/compose/compose.observ.yml`
 - `infra/compose/compose.prod.override.yml`
 - `infra/compose/compose.vps.override.yml`
-- `infra/compose/monitoring/prometheus.yml`
 - `platform/README.md`
 - `repo.meta.yaml`
 - `runbooks/README.md`
