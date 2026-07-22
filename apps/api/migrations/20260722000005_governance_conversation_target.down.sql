@@ -3,13 +3,25 @@
 -- no canonical governance message exists.
 
 DO $$
+DECLARE
+    current_governance_source TEXT;
 BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM domain_conversation_cutover_state
-        WHERE singleton
-          AND governance_source <> 'legacy'
-    ) THEN
+    -- Serialize rollback against both cutover flips and canonical writers. The
+    -- row lock is held for the surrounding migration transaction, so the state
+    -- cannot change after this guard succeeds and before the schema is removed.
+    SELECT governance_source
+    INTO current_governance_source
+    FROM domain_conversation_cutover_state
+    WHERE singleton
+    FOR UPDATE;
+
+    IF current_governance_source IS NULL THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '55000',
+            MESSAGE = 'cannot roll back governance conversation target without cutover state';
+    END IF;
+
+    IF current_governance_source <> 'legacy' THEN
         RAISE EXCEPTION USING
             ERRCODE = '55000',
             MESSAGE = 'cannot roll back governance conversation target after canonical cutover';

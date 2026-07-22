@@ -171,6 +171,58 @@ async fn governance_cutover_flip_waits_for_inflight_writer_gate() {
 #[tokio::test]
 #[serial]
 #[ignore = "requires direct PostgreSQL"]
+async fn governance_down_guard_blocks_concurrent_cutover_flip() {
+    let pool = pool().await;
+    sqlx::query(
+        "UPDATE domain_conversation_cutover_state SET governance_source = 'legacy', updated_at = NOW() WHERE singleton",
+    )
+    .execute(&pool)
+    .await
+    .expect("restore legacy source before rollback guard proof");
+
+    let guard_end = DOWN_MIGRATION
+        .find("$$;\n\nDROP TRIGGER")
+        .expect("down migration starts with a standalone guard block")
+        + 3;
+    let down_guard = &DOWN_MIGRATION[..guard_end];
+
+    let mut down_tx = pool.begin().await.expect("begin rollback guard proof");
+    down_tx
+        .execute(down_guard)
+        .await
+        .expect("execute exact rollback guard from down migration");
+
+    let mut flip_tx = pool
+        .begin()
+        .await
+        .expect("begin concurrent cutover flip proof");
+    sqlx::query("SET LOCAL lock_timeout = '100ms'")
+        .execute(&mut *flip_tx)
+        .await
+        .expect("set bounded cutover lock timeout");
+    let blocked_flip = sqlx::query(
+        "UPDATE domain_conversation_cutover_state SET governance_source = 'canonical', updated_at = NOW() WHERE singleton",
+    )
+    .execute(&mut *flip_tx)
+    .await;
+    assert!(
+        blocked_flip.is_err(),
+        "cutover flip must wait while the exact down-migration guard holds the singleton row lock"
+    );
+    flip_tx
+        .rollback()
+        .await
+        .expect("rollback blocked concurrent cutover flip");
+    down_tx
+        .rollback()
+        .await
+        .expect("release rollback guard row lock");
+    pool.close().await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
 async fn governance_conversation_target_is_additive_deterministic_and_reversible() {
     let pool = pool().await;
     cleanup(&pool).await;
