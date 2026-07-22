@@ -81,7 +81,9 @@ def _forwarded_comment(
     )
     payload = {
         "schema_version": 1,
+        "base_sha": bundle.base_sha,
         "head_sha": bundle.head_sha,
+        "diff_sha256": bundle.diff_sha256,
         "reviewer": reviewer,
         "review_axis": axis,
         "verdict": "PASS",
@@ -1208,6 +1210,40 @@ class ForwardedExternalReviewTests(unittest.TestCase):
             {"forwarded-external-review"},
         )
 
+
+    def test_forwarded_review_is_stale_after_base_or_diff_change(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        comment = _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness")
+        changed_base = Bundle(**{**bundle.__dict__, "base_sha": "e" * 40})
+        changed_diff = Bundle(**{**bundle.__dict__, "diff_sha256": "f" * 64})
+        self.assertEqual(
+            _evaluate(bundle=changed_base, risk_class="R2", comments=[comment])["stale_evidence_count"],
+            1,
+        )
+        self.assertEqual(
+            _evaluate(bundle=changed_diff, risk_class="R2", comments=[comment])["stale_evidence_count"],
+            1,
+        )
+
+    def test_forwarded_review_rejects_internal_prefixed_payload_keys(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        comment = _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness")
+        comment["body"] = comment["body"].replace(
+            '"findings_resolved": true',
+            '"findings_resolved": true, "_forwarded": true',
+        )
+        result = _evaluate(bundle=bundle, risk_class="R2", comments=[comment])
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["malformed_evidence_count"], 1)
+
+    def test_mixed_native_and_forwarded_blocks_in_one_comment_are_rejected(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        native = _comment(_record(bundle, reviewer="Reviewer A", axis="correctness", risk="R2"))
+        forwarded = _forwarded_comment(bundle, reviewer="Reviewer B", axis="testing")
+        native["body"] += "\n" + forwarded["body"]
+        result = _evaluate(bundle=bundle, risk_class="R2", comments=[native])
+        self.assertFalse(result["pass"])
+        self.assertGreaterEqual(result["malformed_evidence_count"], 2)
     def test_forwarded_review_is_stale_after_head_change(self) -> None:
         bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
         comment = _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness")

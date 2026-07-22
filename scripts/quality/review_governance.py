@@ -788,6 +788,7 @@ def _evidence_blocks(
             report_text = _normalized_report_text(body[: match.start()])
             report_bytes = report_text.encode("utf-8")
             record = dict(record)
+            record["_payload_keys"] = tuple(record.keys())
             record["_comment_index"] = comment_index
             record["_block_index"] = block_index
             record["_comment_evidence_block_count"] = len(starts)
@@ -831,6 +832,7 @@ def _forwarded_evidence_blocks(
             report_text = _normalized_report_text(body[: match.start()])
             report_bytes = report_text.encode("utf-8")
             record = dict(record)
+            record["_payload_keys"] = tuple(record.keys())
             record["_comment_index"] = comment_index
             record["_block_index"] = block_index
             record["_comment_evidence_block_count"] = len(starts)
@@ -947,6 +949,15 @@ def evaluate_evidence(
 
     records, evidence_parse_failures, oversized_evidence = _evidence_blocks(comments)
     forwarded_records, forwarded_parse_failures, forwarded_oversized = _forwarded_evidence_blocks(comments)
+    total_blocks_by_comment = {
+        index: len(EVIDENCE_START_RE.findall(str(comment.get("body") or "")))
+        + len(FORWARDED_EVIDENCE_START_RE.findall(str(comment.get("body") or "")))
+        for index, comment in enumerate(comments)
+    }
+    for record in [*records, *forwarded_records]:
+        record["_comment_evidence_block_count"] = total_blocks_by_comment.get(
+            int(record.get("_comment_index", -1)), 0
+        )
     exact: list[dict[str, Any]] = []
     stale = 0
     unauthorized = 0
@@ -973,8 +984,12 @@ def evaluate_evidence(
             "verdict",
             "findings_resolved",
         }
-        external_fields = {key for key in record if not key.startswith("_")}
-        if external_fields != required_fields:
+        payload_keys = record.get("_payload_keys", ())
+        if (
+            not isinstance(payload_keys, tuple)
+            or any(str(key).startswith("_") for key in payload_keys)
+            or set(payload_keys) != required_fields
+        ):
             malformed += 1
             continue
         schema_version = record.get("schema_version")
@@ -1034,17 +1049,32 @@ def evaluate_evidence(
             continue
         required_fields = {
             "schema_version",
+            "base_sha",
             "head_sha",
+            "diff_sha256",
             "reviewer",
             "review_axis",
             "verdict",
             "findings_resolved",
         }
-        external_fields = {key for key in record if not key.startswith("_")}
-        if external_fields != required_fields:
+        payload_keys = record.get("_payload_keys", ())
+        if (
+            not isinstance(payload_keys, tuple)
+            or any(str(key).startswith("_") for key in payload_keys)
+            or set(payload_keys) != required_fields
+        ):
             malformed += 1
             continue
-        if record.get("schema_version") != SCHEMA_VERSION or record.get("head_sha") != bundle.head_sha:
+        schema_version = record.get("schema_version")
+        if not isinstance(schema_version, int) or isinstance(schema_version, bool):
+            malformed += 1
+            continue
+        if (
+            schema_version != SCHEMA_VERSION
+            or record.get("base_sha") != bundle.base_sha
+            or record.get("head_sha") != bundle.head_sha
+            or record.get("diff_sha256") != bundle.diff_sha256
+        ):
             stale += 1
             continue
         reviewer_value = record.get("reviewer")
