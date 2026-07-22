@@ -824,3 +824,4 @@ erhalten bleibt.
 Der temporäre Legacy-Alias `/auth/login/consume` wurde entfernt. Der Magic-Link-Consume-Pfad läuft nun ausschließlich über `/auth/magic-link/consume`.
 
 **Risiko:** Niedrig.
+- 2026-07-22: Audit remediation T023-T026 hardens Caddy CSP and security-header handling across default, Heim and VPS edge configurations; deployment contract acknowledgement for the coordinated infra/caddy change set.
