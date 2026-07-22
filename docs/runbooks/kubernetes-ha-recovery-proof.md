@@ -33,8 +33,8 @@ Der Runner installiert Werkzeuge ausschließlich aus `platform/toolchain.lock.js
 2. Cilium, Gateway API, Flux, cert-manager, drei auf unterschiedliche Knoten verteilte CloudNativePG-Operatorreplikate und das Barman-Cloud-Plugin installieren.
 3. Das Plugin- und Instanz-Sidecar-Image digestgebunden zurücklesen, den pluginbasierten `ObjectStore` anwenden und PostgreSQL, NATS JetStream sowie drei API-Replikate über die Zonen verteilen.
 4. Eine gültige `domain_nodes`-Mutation schreiben und über die API zurücklesen.
-5. Ein getrenntes unveränderliches API-Artefakt aus denselben Runtime-Bits laden, alle drei Replikate darauf ausrollen, die Gateway-Verfügbarkeit sekündlich messen und per `rollout undo` auf die vorherige Revision zurückkehren.
-6. Upgrade-, Rollback- und Fehlerbudgetwerte festhalten; jede beobachtete Gateway-Unterbrechung lässt den Beweis scheitern.
+5. Ein getrenntes unveränderliches API-Artefakt aus denselben Runtime-Bits laden, alle drei Replikate darauf ausrollen, jeden beworbenen Gateway-Listener sekündlich aus dem Netzraum seines zugehörigen Kind-Node-Owners prüfen und per `rollout undo` auf die vorherige Revision zurückkehren.
+6. Upgrade-, Rollback- und Fehlerbudgetwerte festhalten. Ein globaler Gateway-Ausfall der Referenzzelle liegt nur vor, wenn in einer Stichprobe kein owner-lokal geprüfter Gateway-Listener die bestätigte API-Mutation liefert; einzelne ausgefallene Listener werden getrennt als Pfaddegradation ausgewiesen. Cross-Node-Kind-/Cilium-Pfadstörungen sind ein separater Infrastrukturbefund. Externe Host- oder Load-Balancer-Erreichbarkeit außerhalb der Kind-Bridge wird damit ausdrücklich nicht bewiesen.
 7. Den Worker des PostgreSQL-Primary stoppen.
 8. PostgreSQL-Failover, API-Readback und JetStream-Quorum messen.
 9. Worker wieder aufnehmen und vollständige Bereitschaft abwarten.

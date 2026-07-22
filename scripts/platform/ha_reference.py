@@ -10,6 +10,7 @@ import secrets
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -1298,34 +1299,8 @@ def api_rollout_complete(kubectl: str, expected_image: str) -> bool:
     )
 
 
-def gateway_probe_target(
-    kubectl: str, kind: str, cluster: str
-) -> tuple[str, str, int]:
-    service = ref.output(
-        [
-            kubectl,
-            "-n",
-            "weltgewebe-gateway",
-            "get",
-            "service",
-            "-l",
-            "gateway.networking.k8s.io/gateway-name=weltgewebe",
-            "-o",
-            "jsonpath={.items[0].metadata.name}",
-        ]
-    )
-    listener_port = ref.gateway_listener_port(kubectl)
-    service_port = ref.gateway_service_listener_port(
-        kubectl, service, listener_port
-    )
-    nodes = ref.kind_nodes(kind, cluster)
-    addresses = ref.gateway_addresses(kubectl)
-    return nodes[0], addresses[0], service_port
-
-
-def gateway_projection_available(
-    node: str, address: str, port: int, marker: str
-) -> bool:
+def projection_sample_url(node: str, url: str, marker: str) -> dict[str, Any]:
+    started = time.monotonic()
     result = subprocess.run(
         [
             "docker",
@@ -1337,7 +1312,7 @@ def gateway_projection_available(
             "--show-error",
             "--max-time",
             "2",
-            f"http://{address}:{port}/api/nodes",
+            url,
         ],
         cwd=ROOT,
         text=True,
@@ -1345,30 +1320,363 @@ def gateway_projection_available(
         timeout=5,
         check=False,
     )
+    stderr = result.stderr if isinstance(result.stderr, str) else ""
+    sample: dict[str, Any] = {
+        "available": False,
+        "returncode": result.returncode,
+        "duration_seconds": round(time.monotonic() - started, 3),
+        "stderr": stderr.strip()[:500],
+        "url": url,
+    }
     if result.returncode != 0:
-        return False
+        return sample
     try:
         payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return False
-    return any(
+    except json.JSONDecodeError as error:
+        sample["json_error"] = str(error)
+        return sample
+    sample["available"] = any(
         isinstance(item, dict) and item.get("id") == marker for item in payload
     )
+    sample["response_items"] = len(payload) if isinstance(payload, list) else None
+    return sample
+
+
+def gateway_projection_sample(
+    node: str, address: str, port: int, marker: str
+) -> dict[str, Any]:
+    return projection_sample_url(
+        node, f"http://{address}:{port}/api/nodes", marker
+    )
+
+
+def gateway_projection_available(
+    node: str, address: str, port: int, marker: str
+) -> bool:
+    return bool(
+        gateway_projection_sample(node, address, port, marker)["available"]
+    )
+
+
+def gateway_owner_sample(
+    kind: str,
+    cluster: str,
+    addresses: list[str],
+    port: int,
+    marker: str,
+) -> dict[str, Any]:
+    gateway_addresses = sorted(set(addresses))
+    if not gateway_addresses:
+        raise ref.ProofError("gateway owner probe has no advertised addresses")
+
+    owners_by_address: dict[str, list[str]] = {}
+    for node in sorted(set(ref.kind_nodes(kind, cluster))):
+        address = ref.output(
+            [
+                "docker",
+                "inspect",
+                "--format",
+                '{{(index .NetworkSettings.Networks "kind").IPAddress}}',
+                node,
+            ]
+        )
+        if address:
+            owners_by_address.setdefault(address, []).append(node)
+
+    invalid_owners = {
+        address: owners_by_address.get(address, [])
+        for address in gateway_addresses
+        if len(owners_by_address.get(address, [])) != 1
+    }
+    if invalid_owners:
+        raise ref.ProofError(
+            "advertised gateway addresses do not map to exactly one kind node owner: "
+            f"{invalid_owners}"
+        )
+
+    targets = [
+        (owners_by_address[address][0], address)
+        for address in gateway_addresses
+    ]
+
+    def run_target(target: tuple[str, str]) -> dict[str, Any]:
+        node, address = target
+        try:
+            sample = gateway_projection_sample(node, address, port, marker)
+        except (subprocess.SubprocessError, OSError) as error:
+            sample = {
+                "available": False,
+                "probe_error": f"{type(error).__name__}: {error}",
+                "url": f"http://{address}:{port}/api/nodes",
+            }
+        return {"node": node, "address": address, **sample}
+
+    with ThreadPoolExecutor(max_workers=min(8, len(targets))) as executor:
+        probes = list(executor.map(run_target, targets))
+
+    failed_paths = [probe for probe in probes if probe.get("available") is not True]
+    successful_addresses = [
+        str(probe["address"])
+        for probe in probes
+        if probe.get("available") is True
+    ]
+    return {
+        "available": bool(successful_addresses),
+        "probe_mode": "owner-node-any-advertised-address",
+        "gateway_address_count": len(gateway_addresses),
+        "owner_node_count": len(targets),
+        "successful_paths": len(probes) - len(failed_paths),
+        "failed_paths": len(failed_paths),
+        "successful_addresses": successful_addresses,
+        "path_failures": failed_paths,
+    }
+
+
+def projection_path_diagnostic(
+    kubectl: str,
+    kind: str,
+    cluster: str,
+    *,
+    probe_node: str,
+    probe_address: str,
+    port: int,
+    marker: str,
+    endpoint_state: list[dict[str, Any]],
+) -> dict[str, Any]:
+    service = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe",
+                "get",
+                "service/weltgewebe-api",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    service_ip = service.get("spec", {}).get("clusterIP")
+    service_ports = service.get("spec", {}).get("ports", [])
+    service_port = next(
+        (item.get("port") for item in service_ports if item.get("name") == "http"),
+        8080,
+    )
+    ready_pod_ips = sorted(
+        {
+            address
+            for endpoint in endpoint_state
+            if endpoint.get("ready") is True
+            and endpoint.get("terminating") is not True
+            for address in endpoint.get("addresses", [])
+            if isinstance(address, str) and address
+        }
+    )
+    targets: list[tuple[str, str, str, str]] = []
+    if isinstance(service_ip, str) and service_ip and service_ip != "None":
+        targets.append(
+            (
+                "service",
+                probe_node,
+                service_ip,
+                f"http://{service_ip}:{service_port}/nodes",
+            )
+        )
+    for pod_ip in ready_pod_ips:
+        targets.append(
+            ("pod", probe_node, pod_ip, f"http://{pod_ip}:8080/nodes")
+        )
+    gateway_addresses = sorted(set(ref.gateway_addresses(kubectl)))
+    gateway_nodes = sorted(set(ref.kind_nodes(kind, cluster)))
+    for node in gateway_nodes:
+        for address in gateway_addresses:
+            targets.append(
+                (
+                    "gateway",
+                    node,
+                    address,
+                    f"http://{address}:{port}/api/nodes",
+                )
+            )
+
+    def run_target(target: tuple[str, str, str, str]) -> dict[str, Any]:
+        layer, node, address, url = target
+        try:
+            sample = projection_sample_url(node, url, marker)
+        except (subprocess.SubprocessError, OSError) as error:
+            sample = {
+                "available": False,
+                "probe_error": f"{type(error).__name__}: {error}",
+                "url": url,
+            }
+        return {
+            "layer": layer,
+            "node": node,
+            "address": address,
+            **sample,
+        }
+
+    if not targets:
+        return {
+            "selected_gateway": {
+                "node": probe_node,
+                "address": probe_address,
+                "port": port,
+            },
+            "probes": [],
+        }
+    with ThreadPoolExecutor(max_workers=min(16, len(targets))) as executor:
+        probes = list(executor.map(run_target, targets))
+    return {
+        "selected_gateway": {
+            "node": probe_node,
+            "address": probe_address,
+            "port": port,
+        },
+        "probes": probes,
+    }
+
+
+def api_transition_diagnostic(
+    kubectl: str,
+    gateway_sample: dict[str, Any],
+    *,
+    kind: str,
+    cluster: str,
+    probe_node: str,
+    probe_address: str,
+    port: int,
+    marker: str,
+) -> dict[str, Any]:
+    deployment = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe",
+                "get",
+                "deployment/weltgewebe-api",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    pods = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe",
+                "get",
+                "pods",
+                "-l",
+                "app.kubernetes.io/name=weltgewebe-api",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    endpoint_slices = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe",
+                "get",
+                "endpointslices.discovery.k8s.io",
+                "-l",
+                "kubernetes.io/service-name=weltgewebe-api",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    pod_state = []
+    for item in pods.get("items", []):
+        conditions = {
+            condition.get("type"): condition.get("status")
+            for condition in item.get("status", {}).get("conditions", [])
+        }
+        pod_state.append(
+            {
+                "name": item.get("metadata", {}).get("name"),
+                "node": item.get("spec", {}).get("nodeName"),
+                "pod_ip": item.get("status", {}).get("podIP"),
+                "phase": item.get("status", {}).get("phase"),
+                "ready": conditions.get("Ready") == "True",
+                "deleting": bool(
+                    item.get("metadata", {}).get("deletionTimestamp")
+                ),
+                "image": next(
+                    (
+                        container.get("image")
+                        for container in item.get("spec", {}).get(
+                            "containers", []
+                        )
+                        if container.get("name") == "api"
+                    ),
+                    None,
+                ),
+            }
+        )
+    endpoint_state = []
+    for item in endpoint_slices.get("items", []):
+        for endpoint in item.get("endpoints", []):
+            endpoint_state.append(
+                {
+                    "addresses": endpoint.get("addresses", []),
+                    "node": endpoint.get("nodeName"),
+                    "target": endpoint.get("targetRef", {}).get("name"),
+                    "ready": endpoint.get("conditions", {}).get("ready"),
+                    "serving": endpoint.get("conditions", {}).get("serving"),
+                    "terminating": endpoint.get("conditions", {}).get(
+                        "terminating"
+                    ),
+                }
+            )
+    status = deployment.get("status", {})
+    metadata = deployment.get("metadata", {})
+    path_diagnostic = projection_path_diagnostic(
+        kubectl,
+        kind,
+        cluster,
+        probe_node=probe_node,
+        probe_address=probe_address,
+        port=port,
+        marker=marker,
+        endpoint_state=endpoint_state,
+    )
+    return {
+        "gateway_sample": gateway_sample,
+        "path_diagnostic": path_diagnostic,
+        "deployment": {
+            "generation": metadata.get("generation"),
+            "observed_generation": status.get("observedGeneration"),
+            "replicas": status.get("replicas"),
+            "updated_replicas": status.get("updatedReplicas"),
+            "ready_replicas": status.get("readyReplicas"),
+            "available_replicas": status.get("availableReplicas"),
+            "unavailable_replicas": status.get("unavailableReplicas", 0),
+        },
+        "pods": pod_state,
+        "endpoint_slices": endpoint_state,
+    }
 
 
 def measure_api_transition(
     kubectl: str,
-    kind: str,
-    cluster: str,
     marker: str,
     expected_image: str,
     action: list[str],
     phase: str,
+    *,
+    kind: str,
+    cluster: str,
+    probe_node: str,
+    probe_address: str,
+    port: int,
 ) -> dict[str, Any]:
     before_uids = ready_api_pod_uids(kubectl)
-    probe_node, probe_address, port = gateway_probe_target(
-        kubectl, kind, cluster
-    )
     started = time.monotonic()
     ref.run(action)
     deadline = started + 600
@@ -1377,14 +1685,28 @@ def measure_api_transition(
     unavailable_seconds = 0.0
     longest_unavailable_seconds = 0.0
     outage_started: float | None = None
+    outage_diagnostics: list[dict[str, Any]] = []
+    degraded_path_samples = 0
+    failed_gateway_paths = 0
+    max_failed_gateway_paths = 0
+    gateway_addresses = sorted(set(ref.gateway_addresses(kubectl)))
     while time.monotonic() < deadline:
         sampled_at = time.monotonic()
         available = False
         rollout_complete = False
+        gateway_sample: dict[str, Any] = {"available": False}
         try:
-            available = gateway_projection_available(
-                probe_node, probe_address, port, marker
+            gateway_sample = gateway_owner_sample(
+                kind, cluster, gateway_addresses, port, marker
             )
+            available = bool(gateway_sample["available"])
+            sample_failed_paths = int(gateway_sample.get("failed_paths", 0))
+            if sample_failed_paths:
+                degraded_path_samples += 1
+                failed_gateway_paths += sample_failed_paths
+                max_failed_gateway_paths = max(
+                    max_failed_gateway_paths, sample_failed_paths
+                )
             if available:
                 rollout_complete = api_rollout_complete(
                     kubectl, expected_image
@@ -1394,7 +1716,11 @@ def measure_api_transition(
             subprocess.TimeoutExpired,
             json.JSONDecodeError,
             ref.ProofError,
-        ):
+        ) as error:
+            gateway_sample = {
+                "available": False,
+                "probe_error": f"{type(error).__name__}: {error}",
+            }
             available = False
             rollout_complete = False
         samples += 1
@@ -1410,6 +1736,32 @@ def measure_api_transition(
             failed_samples += 1
             if outage_started is None:
                 outage_started = sampled_at
+                try:
+                    diagnostic = api_transition_diagnostic(
+                        kubectl,
+                        gateway_sample,
+                        kind=kind,
+                        cluster=cluster,
+                        probe_node=probe_node,
+                        probe_address=probe_address,
+                        port=port,
+                        marker=marker,
+                    )
+                except (
+                    subprocess.CalledProcessError,
+                    subprocess.TimeoutExpired,
+                    json.JSONDecodeError,
+                    ref.ProofError,
+                ) as error:
+                    diagnostic = {
+                        "gateway_sample": gateway_sample,
+                        "diagnostic_error": f"{type(error).__name__}: {error}",
+                    }
+                diagnostic["sample"] = samples
+                diagnostic["elapsed_seconds"] = round(
+                    sampled_at - started, 3
+                )
+                outage_diagnostics.append(diagnostic)
         if available and rollout_complete:
             break
         time.sleep(1)
@@ -1439,13 +1791,19 @@ def measure_api_transition(
         "duration_seconds": round(finished - started, 3),
         "availability_samples": samples,
         "failed_availability_samples": failed_samples,
+        "degraded_gateway_path_samples": degraded_path_samples,
+        "failed_gateway_paths_observed": failed_gateway_paths,
+        "max_failed_gateway_paths_per_sample": max_failed_gateway_paths,
         "observed_unavailable_seconds": round(unavailable_seconds, 3),
         "longest_unavailable_seconds": round(longest_unavailable_seconds, 3),
         "probe_node": probe_node,
         "probe_address": probe_address,
+        "gateway_probe_mode": "owner-node-any-advertised-address",
+        "gateway_addresses": gateway_addresses,
         "before_pods_sha256": sha256_text("\n".join(sorted(before_uids))),
         "after_pods_sha256": sha256_text("\n".join(sorted(after_uids))),
         "replaced_replicas": len(after_uids),
+        "outage_diagnostics": outage_diagnostics,
     }
     if failed_samples:
         raise ref.ProofError(
@@ -1481,17 +1839,28 @@ def compute_error_budget(
 
 
 def prove_api_upgrade_and_rollback(
-    kubectl: str, kind: str, cluster: str, marker: str
+    kubectl: str,
+    kind: str,
+    cluster: str,
+    marker: str,
+    gateway_probe: dict[str, str],
 ) -> dict[str, Any]:
     baseline = api_deployment_image(kubectl)
     if baseline != BASELINE_API_IMAGE:
         raise ref.ProofError(
             f"API baseline image is unexpected before upgrade: {baseline}"
         )
+    try:
+        probe_node = gateway_probe["probe_node"]
+        probe_address = gateway_probe["address"]
+        probe_port = int(gateway_probe["listener_port"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ref.ProofError(
+            f"validated gateway probe receipt is incomplete: {gateway_probe!r}"
+        ) from error
+
     upgrade = measure_api_transition(
         kubectl,
-        kind,
-        cluster,
         marker,
         UPGRADE_API_IMAGE,
         [
@@ -1504,11 +1873,14 @@ def prove_api_upgrade_and_rollback(
             f"api={UPGRADE_API_IMAGE}",
         ],
         "upgrade",
+        kind=kind,
+        cluster=cluster,
+        probe_node=probe_node,
+        probe_address=probe_address,
+        port=probe_port,
     )
     rollback = measure_api_transition(
         kubectl,
-        kind,
-        cluster,
         marker,
         baseline,
         [
@@ -1520,6 +1892,11 @@ def prove_api_upgrade_and_rollback(
             "deployment/weltgewebe-api",
         ],
         "rollback",
+        kind=kind,
+        cluster=cluster,
+        probe_node=probe_node,
+        probe_address=probe_address,
+        port=probe_port,
     )
     budget = compute_error_budget(upgrade, rollback)
     if not gateway_contains_node(kubectl, kind, cluster, marker):
@@ -1765,7 +2142,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         insert_domain_node(kubectl, marker, "T004 acknowledged domain mutation")
         wait_until("domain mutation in API projection", lambda: gateway_contains_node(kubectl, kind, args.cluster, marker), timeout_seconds=180)
         change_management = prove_api_upgrade_and_rollback(
-            kubectl, kind, args.cluster, marker
+            kubectl, kind, args.cluster, marker, gateway_before
         )
 
         barman_leader_alignment = align_postgres_primary_with_barman_leader(
@@ -1986,6 +2363,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "RTO or RPO under production load", "survival of two simultaneous failure domains",
                 "semantic compatibility of a distinct application release",
                 "production error-budget consumption under representative traffic",
+                "external load-balancer reachability from outside the kind bridge",
             ],
         }
         target = CACHE / "receipts"
