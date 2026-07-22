@@ -118,6 +118,8 @@ class PublicLiveReadinessTest(unittest.TestCase):
                 "https-root:www.weltgewebe.net",
                 "map-route",
                 "api-ready",
+                "metrics-private:app",
+                "metrics-private:api",
                 "version-json",
                 "basemap-style",
                 "glyph-range",
@@ -178,6 +180,30 @@ class PublicLiveReadinessTest(unittest.TestCase):
 
         self.assertFalse(api_result.ok)
         self.assertEqual(api_result.data["missing"], ["nats"])
+
+    def test_public_metrics_routes_must_return_404(self) -> None:
+        fake = FakeWorld()
+
+        def exposed_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float):
+            if url in {
+                "https://weltgewebe.net/api/metrics",
+                "https://api.weltgewebe.net/metrics",
+            }:
+                return fake.module.FetchResult(url, 200, {"Content-Type": "text/plain"}, b"secret_metric 1")
+            return fake.fetcher(url, headers, timeout)
+
+        checker = fake.module.PublicLiveChecker(
+            resolver=fake.resolver,
+            fetcher=exposed_fetcher,
+        )
+        metrics_results = [
+            result for result in checker.run() if result.name.startswith("metrics-private:")
+        ]
+
+        self.assertEqual(len(metrics_results), 2)
+        self.assertTrue(all(not result.ok for result in metrics_results))
+        self.assertTrue(all(result.data["status"] == 200 for result in metrics_results))
+        self.assertTrue(all("body" not in result.data for result in metrics_results))
 
     def test_basemap_style_requires_revalidating_cache_policy(self) -> None:
         fake = FakeWorld()

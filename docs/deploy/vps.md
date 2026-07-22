@@ -383,8 +383,10 @@ IPv6-DNS-Erwartung geprüft:
 
 Der Check liest keine Runtime-Secrets und verändert keinen Serverzustand. Er
 prüft DNS-A-Records, HTTP-zu-HTTPS-Redirect, Root-/`www`-HTTPS, `/map`,
-`api.weltgewebe.net/health/ready`, `/_app/version.json`, lokale Basemap-Style-,
-Glyph- und PMTiles-Auslieferung. Ein PASS ist ein Public-HTTP(S)-/Basemap-Receipt,
+`api.weltgewebe.net/health/ready`, die privaten öffentlichen Metrics-Grenzen
+`/api/metrics` und `api.weltgewebe.net/metrics` auf HTTP `404`, `/_app/version.json`,
+lokale Basemap-Style-, Glyph- und PMTiles-Auslieferung. Ein PASS ist ein
+Public-HTTP(S)-/Basemap-Receipt,
 aber kein Beweis für IPv6, Mail/SMTP oder Public Login. Der
 Credential-Source-Cutover wird über den ausgewählten `ENV_FILE`-Pfad und die
 Dateimetadaten der Runtime-Secret-Quelle belegt, nicht über den HTTP(S)-Check
