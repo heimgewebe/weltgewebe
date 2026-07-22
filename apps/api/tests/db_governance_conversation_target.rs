@@ -121,9 +121,7 @@ async fn insert_proposal(pool: &sqlx::PgPool, proposal_id: &str, account_id: &st
 async fn governance_cutover_flip_waits_for_inflight_writer_gate() {
     let pool = pool().await;
     sqlx::query(
-        "UPDATE domain_conversation_cutover_state \
-         SET governance_source = 'canonical', updated_at = NOW() \
-         WHERE singleton",
+        "UPDATE domain_conversation_cutover_state SET governance_source = 'canonical', updated_at = NOW() WHERE singleton",
     )
     .execute(&pool)
     .await
@@ -131,10 +129,7 @@ async fn governance_cutover_flip_waits_for_inflight_writer_gate() {
 
     let mut writer_tx = pool.begin().await.expect("begin writer gate proof");
     let source: String = sqlx::query_scalar(
-        "SELECT governance_source \
-         FROM domain_conversation_cutover_state \
-         WHERE singleton \
-         FOR SHARE",
+        "SELECT governance_source FROM domain_conversation_cutover_state WHERE singleton FOR SHARE",
     )
     .fetch_one(&mut *writer_tx)
     .await
@@ -147,9 +142,7 @@ async fn governance_cutover_flip_waits_for_inflight_writer_gate() {
         .await
         .expect("set bounded lock timeout");
     let blocked_flip = sqlx::query(
-        "UPDATE domain_conversation_cutover_state \
-         SET governance_source = 'legacy', updated_at = NOW() \
-         WHERE singleton",
+        "UPDATE domain_conversation_cutover_state SET governance_source = 'legacy', updated_at = NOW() WHERE singleton",
     )
     .execute(&mut *flip_tx)
     .await;
@@ -167,9 +160,7 @@ async fn governance_cutover_flip_waits_for_inflight_writer_gate() {
         .expect("release writer gate lock");
 
     sqlx::query(
-        "UPDATE domain_conversation_cutover_state \
-         SET governance_source = 'legacy', updated_at = NOW() \
-         WHERE singleton",
+        "UPDATE domain_conversation_cutover_state SET governance_source = 'legacy', updated_at = NOW() WHERE singleton",
     )
     .execute(&pool)
     .await
