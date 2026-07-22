@@ -3,7 +3,7 @@ id: docs.proofs.repoground-agent-utility-v1-t003-vertical-pilot
 title: RepoGround Agent Utility V1 T003 Vertical Pilot
 doc_type: proof
 status: active
-summary: Aktuelle revisionsgebundene Drei-Fälle-Neumessung für den begrenzten RepoGround-change-impact-Handoff; Promotion besteht bei expliziten Grenzen für Vollständigkeit, Testabdeckung und Merge-Autorität.
+summary: Revisionsgebundene Neumessung mit drei Goldfällen und einem kontrollierten Livefall für den begrenzten RepoGround-change-impact-Handoff; Promotion ist an explizite Contract-, CI-, Deployment-, Runtime-Readback- und Recovery-Evidenz gebunden.
 relations:
   - type: relates_to
     target: scripts/ci/fixtures/repoground_vertical_pilot.v1.json
@@ -21,21 +21,22 @@ relations:
 
 **Für die begrenzte Zielsetzung besteht der Pilot:** RepoGround darf im gemessenen `change_impact`-Handoff als Standardkontext verwendet werden, wenn der Consumer die expliziten Nichtaussagen respektiert.
 
-**Für die stärkere Zielsetzung besteht kein Beweis:** Die Messung etabliert weder semantische Vollständigkeit noch vollständige Related-Test- oder Symbolabdeckung, Patch-Korrektheit, Merge-Reife oder Runtime-Korrektheit.
+**Für die stärkere Zielsetzung besteht kein Beweis:** Die Messung etabliert weder semantische Vollständigkeit noch vollständige Related-Test- oder Symbolabdeckung, Patch-Korrektheit, Merge-Reife, allgemeine Runtime-Korrektheit oder einen automatisch erfolgreichen Rollback.
 
-Die alternative, konservativere Entscheidung wäre, die Promotion bis zu vollständiger automatischer Related-Test- und Symbolabdeckung in allen Änderungsklassen zurückzuhalten. Das senkt das Fehlinterpretationsrisiko, setzt aber ein stärkeres Kriterium als den T003-Pilotvertrag voraus und verwirft den bereits belegten Nutzen der revisionsgebundenen Verdichtung.
+Die Promotion gilt ausschließlich für `bounded_change_impact_context_for_agent_handoff`. Sie ersetzt weder Tests noch Review, Deployment-Gates oder Recovery-Verfahren.
 
 ## Warum erneut gemessen wurde
 
-Der historische Pilot aus PR #1520 hielt die Promotion wegen eines damals blockierenden übergroßen Python-Call-Graphs zurück. Dieser Zustand ist überholt und wurde anschließend mehrfach gehärtet:
+Der historische Pilot aus PR #1520 hielt die Promotion wegen eines damals blockierenden übergroßen Python-Call-Graphs zurück. Dieser Zustand ist überholt:
 
-- RepoGround PR #1070, Merge `c12e6e867c0de3315b250ce5818f4331f6dbbb63`, machte den optionalen Call-Graph degradierbar statt Core-Impact-blockierend.
-- Grabowski T006 PR #351, Merge `eaaf8307009df70bba549c571ec376a4fc7743e0`, korrigierte die Call-Graph-Lane-Wahrheit.
-- Grabowski-Härtung PR #356, Merge `de799bbded2d1c09de9b29153325516539a805e2`, bindet Retrieval-Lanes an tatsächlich ausgelieferte Evidenz.
-- Die aktuelle Grabowski-Runtime `acf29382784c1541b930b8068c58aac4497da5e4` enthält beide Grabowski-Merges.
-- Der aktuelle RepoGround-Generator `131c843a2a0c3e995e879e71286bd21a169e0650` ist in der GitHub-Historie 23 Commits weiter als #1070 und enthält diesen Merge.
+- RepoGround PR #1070 machte den optionalen Call-Graph degradierbar statt Core-Impact-blockierend.
+- Grabowski T006 PR #351 korrigierte die Call-Graph-Lane-Wahrheit.
+- Grabowski-Härtung PR #356 bindet Retrieval-Lanes an tatsächlich ausgelieferte Evidenz.
+- RepoGround PR #1075 diversifizierte die begrenzte Target-Symbol-Auswahl über geänderte Python-Pfade.
+- RepoGround PR #1076 härtete exakte Target-Symbol-Treffer pro Pfad und schloss den verbliebenen Starvation-Randfall.
+- Der gemessene RepoGround-Generator `131c843a2a0c3e995e879e71286bd21a169e0650` enthält diese Härtungen.
 
-Während des Abschlussreviews wurde außerdem eine methodisch schwache Web-Baseline mit null Suchtreffern verworfen. Die aktuelle Web-Messung verwendet die Query `map` und enthält fünf aufgelöste Baseline-Snippets, fünf Bereiche und fünf Zitate.
+Methodisch schwache Baselines mit null aufgelösten Treffern wurden verworfen. Jeder hier akzeptierte Fall besitzt eine frisch aufgelöste gepaarte Baseline.
 
 ## Gebundene Identitäten
 
@@ -50,27 +51,28 @@ Während des Abschlussreviews wurde außerdem eine methodisch schwache Web-Basel
 - Grabowski-Runtime: `acf29382784c1541b930b8068c58aac4497da5e4`
 - Capsule-Budget: `12000` Byte
 
-Alle drei Capsules wurden mit dem erwarteten `git_tree_delta_v1`-SHA-256 als harte Eingabe erneut ausgeführt. Eine falsche Diff-Identität hätte damit fail-closed abgebrochen.
+Alle vier Fälle sind an `git_tree_delta_v1`-Digests gebunden. Eine falsche Diff-Identität bricht fail-closed ab.
 
-## Drei-Fälle-Messung
+## Drei Goldfälle plus kontrollierter Livefall
 
 | Klasse | Basis → Ziel | Baseline | Capsule | Reduktion | Direktpfade | Related Tests | Status |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | DB/Auth | `691f663a…` → `4b9b0507…` | 34.306 B | 8.478 B | 75,287 % | 14/14 | 5 | degraded: Budget |
 | Web/Karte | `c18ef20b…` → `d7c1fb9c…` | 43.180 B | 11.711 B | 72,879 % | 4/4 | 2 | degraded: Budget |
 | Deployment/Kubernetes | `5d11513e…` → `7a1b5943…` | 34.369 B | 11.998 B | 65,091 % | 9/9 | 1 | degraded: Budget |
+| Kontrollierter Livefall | `24b74dab…` → `a7f8c490…` | 14.073 B | 5.095 B | 63,796 % | 1/1 | 1 Navigationstreffer | available |
 
-Die gepaarten Baselines wurden auf demselben frischen Bundle direkt über `repoground_context_pack` geprüft. Ihr `resolved_evidence_status` ist in allen drei Fällen `available`; die Baseline-Evidenz enthält 3/3/3, 5/5/5 und 3/3/3 Snippets/Bereiche/Zitate.
+Die drei Goldfälle decken `database_auth`, `web_map` und `deployment_kubernetes` ab. Der vierte Fall ist der von T003 zusätzlich verlangte kontrollierte Livefall und bindet sein Ziel exakt an den frischen Source-Bundle-Commit `a7f8c490…`.
 
-Die in der Fixture gespeicherten Baseline-Bytewerte stammen aus `repoground_context_compose.compactness.general_context_pack_bytes`. Damit ist die Bytebilanz an genau die Vergleichsgröße gebunden, die der Composer für denselben allgemeinen Kontextpfad ausweist.
+Der Livefall verwendet die Query `metrics_path_label`. Die gepaarte Baseline enthält 2 Snippets, 2 Bereiche und 2 Zitate mit `resolved_evidence_status=available`. Der kanonische Revisionsdigest lautet `53750d3df0d4535ada0591d6fd0d85b0f62bfd4481f4dcf08c86343362f06e32`.
 
-Alle drei Fälle überschreiten die T003-Schwelle von 20 Prozent deutlich. Sämtliche direkt geänderten Pfade sind enthalten. Der aktuelle Generator liefert zusätzlich fünf, zwei und einen direkt diff-gebundenen Related-Test.
+Alle vier Fälle haben vollständige Direktpfadabdeckung. Die drei Goldfälle enthalten jeweils mindestens einen direkt diff-gebundenen Testpfad. Beim kontrollierten Livefall liegt der relevante Test im geänderten Rust-Modul; RepoGround liefert zusätzlich einen aufgelösten Test-Navigationstreffer. Dieser Treffer wird nicht als direkt geänderter Test ausgegeben.
 
-`degraded` bedeutet in diesen drei Läufen ausschließlich Budgeterschöpfung in nachrangigen Lanes. `impact_context_blocked` tritt in keinem Fall auf.
+`degraded` bedeutet in den drei Goldfällen Budgeterschöpfung in nachrangigen Lanes. `impact_context_blocked` tritt in keinem Fall auf. Der kontrollierte Livefall ist `available` und hat keine ausgelösten Stop-Kriterien.
 
 ## Retrieval-Lane-Wahrheit
 
-Der aktuelle optionale Python-Call-Graph ist vorhanden:
+Der optionale Python-Call-Graph ist vorhanden:
 
 - Größe: `22.437.645` Byte
 - SHA-256: `c9256ca8bd55a567d0e9a6d1fc6b0b44872c5476d2819674e331a90ffe94613b`
@@ -79,47 +81,50 @@ Seine bloße Existenz zählt nicht als Nutzung:
 
 - **DB/Auth:** keine ausgelieferte kohärente Call-Graph-Relation → `call_graph=skipped`.
 - **Web/Karte:** keine ausgelieferte kohärente Call-Graph-Relation → `call_graph=skipped`.
-- **Deployment/Kubernetes:** eine ausgelieferte Relation ist mit `python_call_graph_json`, `status=coherent`, Call-Site und Peer-Definition provenance-gebunden → `call_graph=used`.
+- **Deployment/Kubernetes:** eine provenance-gebundene kohärente Relation wird ausgeliefert → `call_graph=used`.
+- **Kontrollierter Livefall:** keine konsumierte Call-Graph-Relation → `call_graph=skipped`.
 
-Damit ist die T006-Regel live sichtbar: Eine Retrieval-Lane gilt nur dann als benutzt, wenn ihre vertrauenswürdige Evidenz tatsächlich im ausgelieferten Kontext vorkommt.
+Damit gilt weiter: Eine Retrieval-Lane ist nur benutzt, wenn ihre vertrauenswürdige Evidenz tatsächlich im ausgelieferten Kontext vorkommt.
 
-## Begrenzte Delivery Chain
+## Evidenzgebundene Delivery Chain
 
-Der Deployment-Fall enthält:
+Der Deployment-Goldfall bindet die Änderung selbst, direkte Pfade, Related-Test, 8 Zielsymbole, 7 Kausalrelationen, eine kohärente Call-Graph-Relation und einen Live-Range des Produktions-Reconcilers. Zusätzlich werden die bisher fehlenden operativen Glieder explizit geprüft:
 
-- alle 9 direkten Änderungen,
-- den geänderten Produktions-Reconciler-Contract-Test als Related-Test,
-- 8 ausgelieferte Zielsymbole,
-- 7 ausgelieferte Kausalrelationen,
-- darunter 1 kohärente Call-Graph-Relation,
-- 1 ausgelieferten Live-Range des Produktions-Reconcilers.
+- **Contract:** PR #1499; GitHub-Run `29806103267`, Job `88556854305` `Production reconciler contract tests` = `success`.
+- **CI vor Merge:** Required Merge Gate Run `29805241044`, Job `88555418515` = `success`; Review Evidence Gate Run `29805240373`, Job `88556686625` = `success`.
+- **Deployment:** Post-Merge-Run `29806103267` ist ein erfolgreicher `push`-Lauf auf exakt `7a1b5943524affd90b79cd8769f5e48b3f1d4b22`.
+- **Ausgeführter Runtime-Readback:** Job `88556905034` `Exact main commit is live` = `success`; `Verify public frontend and API identity` = `success`; ein Produktions-Receipt wurde hochgeladen.
+- **Recovery:** `docs/deploy/merge-to-live.md#L162-L171` bindet direkten Recovery-Aufruf, gemeinsame `flock`-Sperre, wirkungslose Konkurrenzablehnung und `EX_TEMPFAIL 75`.
+- **Installationsschutz:** `test_installer_deferred_update_is_atomic_and_non_recursive` bindet atomare Installation sowie Erhalt des enabled/active Produktions-Timers.
 
-Drei direkte Shell-Pfade (`activate-production-reconciler-from-release.sh`, `install-production-reconciler.sh`, `weltgewebe-up`) sind im Architecture Graph weiterhin nicht als Graph-Knoten vorhanden. Diese Lücke bleibt explizit. Sie blockiert den begrenzten Pilot nicht, weil die Pfade selbst als direkte Änderungen ausgeliefert werden; sie verhindert aber jede Behauptung einer vollständigen Architektur- oder Kausalabdeckung.
+Explizit modellierte Risiken sind parallele Recovery-Konkurrenz, partielle Reconciler-Installation, Verlust des Timerzustands und Post-Deploy-Supersession beziehungsweise Fehler. Die zugehörigen Mitigationen sind in der Fixture strukturiert hinterlegt.
+
+Diese Kette belegt einen erfolgreichen exakten Produktions-Readback für den gebundenen Deploymentfall und vorhandene Recovery-Invarianten. Sie beweist **nicht** allgemeine Runtime-Korrektheit und **nicht** den Erfolg eines automatischen Rollbacks.
 
 ## Dirty-State-Grenze
 
-Der aktuelle T003-Arbeitsbranch stand beim Nachmesslauf auf dem Publikationscommit `a7f8c490…` und war ausschließlich durch die vier T003-Evidenzdateien dirty. Diese Evidence-Edits gehören nicht zu den historischen Basis-/Zielrevisionen und sind nicht Teil der gemessenen Revisionsdiffs.
-
-Zusätzlich meldet der aliasbasierte Composer einen fremden Dirty-Overlay des kanonischen Weltgewebe-Hauptcheckouts mit 33 Einträgen. Auch dieser Overlay ist ausdrücklich mit `included_in_revision_diff=false` ausgeschlossen. Beide Grenzen werden in der Fixture getrennt dokumentiert statt geglättet.
+Die Messungen sind revisionsgebunden. Evidence-Edits des T003-Arbeitsbranches und der fremde Dirty-Overlay des kanonischen Hauptcheckouts sind mit `included_in_revision_diff=false` ausgeschlossen. Sie werden dokumentiert, aber nicht in die historischen Revisionsdiffs hineingerechnet.
 
 ## Akzeptanz
 
 - **Drei Änderungsklassen:** bestanden.
-- **Gepaarte Baseline:** bestanden; alle Baselines frisch und mit aufgelöster Evidenz.
-- **Kompaktheit:** bestanden; 75,287 %, 72,879 % und 65,091 % Reduktion.
+- **Kontrollierter Livefall:** bestanden und exakt an den frischen Source-Bundle-Commit gebunden.
+- **Gepaarte Baseline:** bestanden; alle vier Baselines frisch und mit aufgelöster Evidenz.
+- **Kompaktheit:** bestanden; alle vier Fälle liegen deutlich über 20 Prozent Reduktion.
 - **Direktpfadabdeckung:** bestanden; 100 Prozent in jedem Fall.
-- **Related-Test-Evidenz:** bestanden; mindestens ein diff-gebundener Related-Test in jedem Fall.
-- **Diff-Bindung:** bestanden; alle drei erwarteten Diff-SHA-256 wurden verifiziert.
-- **Frische:** bestanden; `fresh_exact` plus drei Health-Gates `pass`.
+- **Related-Test-Evidenz:** bestanden für alle drei Goldfälle; der Livefall besitzt zusätzlich einen aufgelösten Navigationstreffer.
+- **Diff-Bindung und Frische:** bestanden.
 - **Retrieval-Lane-Wahrheit:** bestanden.
-- **Delivery Chain:** begrenzt bestanden im Deployment-Fall.
+- **Delivery Chain:** begrenzt bestanden und explizit an Contract, CI, Deployment, Runtime-Readback und Recovery/Risikoevidenz gebunden.
 - **Promotion-Gate:** bestanden.
+
+Der Validator ist fail-closed gehärtet: Fehlt der kontrollierte Livefall oder einer der Pflichtbelege für Contract, CI, Deployment, Runtime-Readback, Recovery oder Rückfallrisiken, kann `promote_default` nicht bestehen.
 
 ## Promotion
 
 **Empfehlung: `promote_default` ausschließlich für `bounded_change_impact_context_for_agent_handoff`.**
 
-Gilt, wenn Budget-Degradierung nicht als Vollständigkeit interpretiert wird und die bestehenden `does_not_establish`-Grenzen erhalten bleiben. Die Promotion autorisiert weder Merge noch Deployment und ersetzt keine Tests oder Reviews.
+Gilt, wenn Budget-Degradierung nicht als Vollständigkeit interpretiert wird und die bestehenden `does_not_establish`-Grenzen erhalten bleiben. Die Promotion autorisiert weder Merge noch Deployment und ersetzt keine Tests, Reviews oder Recovery-Verfahren.
 
 ## Nicht bewiesen
 
@@ -131,6 +136,7 @@ Gilt, wenn Budget-Degradierung nicht als Vollständigkeit interpretiert wird und
 - Test-Suffizienz oder vollständige Testabdeckung
 - Review-Vollständigkeit
 - Merge-Reife
-- Runtime-Korrektheit
+- allgemeine Runtime-Korrektheit
+- automatisch erfolgreicher Rollback
 - Regressionsfreiheit
 - globale RepoGround-Routing-Autorität außerhalb des gemessenen `change_impact`-Handoff-Pfads

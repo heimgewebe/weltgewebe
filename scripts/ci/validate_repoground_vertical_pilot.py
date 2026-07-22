@@ -121,15 +121,31 @@ def validate(data: dict[str, Any]) -> list[str]:
         errors.append("foreign dirty overlay must remain excluded from revision diff")
 
     cases = data.get("cases")
-    if not isinstance(cases, list) or len(cases) != 3:
-        errors.append("exactly three pilot cases are required")
+    if not isinstance(cases, list) or len(cases) != 4:
+        errors.append("exactly three gold cases plus one controlled live case are required")
         return errors
 
-    profiles = {case.get("profile") for case in cases if isinstance(case, dict)}
-    if profiles != _GOLD_PROFILES:
+    gold_cases = [
+        case
+        for case in cases
+        if isinstance(case, dict) and case.get("profile") in _GOLD_PROFILES
+    ]
+    gold_profiles = {case.get("profile") for case in gold_cases}
+    if len(gold_cases) != 3 or gold_profiles != _GOLD_PROFILES:
         errors.append(
-            "exactly database_auth, web_map and deployment_kubernetes cases are required"
+            "exactly database_auth, web_map and deployment_kubernetes gold cases are required"
         )
+    live_cases = [
+        case
+        for case in cases
+        if isinstance(case, dict) and case.get("profile") == "controlled_live"
+    ]
+    controlled_live_pass = len(live_cases) == 1
+    if not controlled_live_pass:
+        errors.append("exactly one controlled_live case is required")
+    elif live_cases[0].get("target_commit") != source_bundle.get("git_commit"):
+        errors.append("controlled_live target commit must equal source bundle git_commit")
+        controlled_live_pass = False
 
     qualifying: list[str] = []
     lane_truth_pass = True
@@ -174,8 +190,10 @@ def validate(data: dict[str, Any]) -> list[str]:
             errors.append(f"{case_id}: critical-path coverage must have no missing paths")
         if case.get("critical_path_coverage") != 1.0:
             errors.append(f"{case_id}: critical_path_coverage must be 1.0")
-        if not any(_looks_like_test_path(path) for path in direct):
-            errors.append(f"{case_id}: at least one changed test path must be directly included")
+        if case.get("profile") in _GOLD_PROFILES and not any(
+            _looks_like_test_path(path) for path in direct
+        ):
+            errors.append(f"{case_id}: every gold case must directly include a changed test path")
         if case.get("quality_pass") is not True:
             errors.append(f"{case_id}: bounded quality check must pass")
 
@@ -205,8 +223,8 @@ def validate(data: dict[str, Any]) -> list[str]:
             related_tests = []
         if capsule.get("related_tests_included") != len(related_tests):
             errors.append(f"{case_id}: related_tests count must match explicit evidence")
-        if not related_tests:
-            errors.append(f"{case_id}: bounded pilot must include at least one related test")
+        if case.get("profile") in _GOLD_PROFILES and not related_tests:
+            errors.append(f"{case_id}: every gold case must include at least one related test")
 
         target_symbols = capsule.get("target_symbols")
         if not isinstance(target_symbols, list):
@@ -420,6 +438,7 @@ def validate(data: dict[str, Any]) -> list[str]:
         case for case in cases if isinstance(case, dict)
         and case.get("profile") == "deployment_kubernetes"
     ]
+    delivery_evidence_pass = True
     delivery = data.get("delivery_chain")
     if not isinstance(delivery, dict):
         errors.append("delivery_chain must be an object")
@@ -465,6 +484,140 @@ def validate(data: dict[str, Any]) -> list[str]:
         ):
             errors.append("delivery live-range evidence must bind the production reconciler")
 
+        contract = delivery.get("contract_evidence")
+        if not isinstance(contract, dict):
+            errors.append("delivery chain must bind explicit contract evidence")
+            delivery_evidence_pass = False
+        else:
+            if contract.get("path") not in direct:
+                errors.append("delivery contract evidence path must be a direct change")
+                delivery_evidence_pass = False
+            if contract.get("conclusion") != "success":
+                errors.append("delivery contract evidence must be successful")
+                delivery_evidence_pass = False
+            for field in ("workflow_run_id", "job_id"):
+                if not isinstance(contract.get(field), int) or contract.get(field) <= 0:
+                    errors.append(f"delivery contract evidence {field} must be positive")
+                    delivery_evidence_pass = False
+
+        ci_evidence = delivery.get("ci_evidence")
+        if not isinstance(ci_evidence, dict):
+            errors.append("delivery chain must bind explicit CI evidence")
+            delivery_evidence_pass = False
+        else:
+            for gate_name in ("required_merge_gate", "review_evidence_gate"):
+                gate = ci_evidence.get(gate_name)
+                if not isinstance(gate, dict) or gate.get("conclusion") != "success":
+                    errors.append(f"delivery CI evidence {gate_name} must be successful")
+                    delivery_evidence_pass = False
+                    continue
+                for field in ("workflow_run_id", "job_id"):
+                    if not isinstance(gate.get(field), int) or gate.get(field) <= 0:
+                        errors.append(
+                            f"delivery CI evidence {gate_name}.{field} must be positive"
+                        )
+                        delivery_evidence_pass = False
+
+        deployment_evidence = delivery.get("deployment_evidence")
+        if not isinstance(deployment_evidence, dict):
+            errors.append("delivery chain must bind explicit deployment evidence")
+            delivery_evidence_pass = False
+        else:
+            deployment_target = deployment.get("target_commit")
+            if deployment_evidence.get("head_sha") != deployment_target or (
+                deployment_evidence.get("merge_commit") != deployment_target
+            ):
+                errors.append("deployment evidence must bind the exact deployment case target")
+                delivery_evidence_pass = False
+            if deployment_evidence.get("event") != "push" or (
+                deployment_evidence.get("conclusion") != "success"
+            ):
+                errors.append("deployment evidence must be a successful post-merge push run")
+                delivery_evidence_pass = False
+            if not isinstance(deployment_evidence.get("workflow_run_id"), int):
+                errors.append("deployment workflow_run_id must be present")
+                delivery_evidence_pass = False
+
+        runtime_proof = delivery.get("runtime_proof")
+        if not isinstance(runtime_proof, dict):
+            errors.append("delivery chain must bind an executed runtime proof")
+            delivery_evidence_pass = False
+        else:
+            if runtime_proof.get("head_sha") != deployment.get("target_commit"):
+                errors.append("runtime proof must bind the exact deployment case target")
+                delivery_evidence_pass = False
+            if runtime_proof.get("workflow_run_id") != (
+                deployment_evidence.get("workflow_run_id")
+                if isinstance(deployment_evidence, dict)
+                else None
+            ):
+                errors.append("runtime proof must come from the bound deployment run")
+                delivery_evidence_pass = False
+            if runtime_proof.get("job_name") != "Exact main commit is live" or (
+                runtime_proof.get("conclusion") != "success"
+            ):
+                errors.append("runtime proof exact-main-live job must succeed")
+                delivery_evidence_pass = False
+            if runtime_proof.get("public_identity_step") != (
+                "Verify public frontend and API identity"
+            ) or runtime_proof.get("public_identity_step_conclusion") != "success":
+                errors.append("runtime proof must include successful public identity verification")
+                delivery_evidence_pass = False
+            if runtime_proof.get("production_receipt_uploaded") is not True:
+                errors.append("runtime proof must include an uploaded production receipt")
+                delivery_evidence_pass = False
+            if not isinstance(runtime_proof.get("job_id"), int):
+                errors.append("runtime proof job_id must be present")
+                delivery_evidence_pass = False
+
+        recovery = delivery.get("recovery_evidence")
+        if not isinstance(recovery, dict):
+            errors.append("delivery chain must bind explicit recovery evidence")
+            delivery_evidence_pass = False
+        else:
+            expected_recovery = {
+                "documentation_path": "docs/deploy/merge-to-live.md",
+                "contract_test_path": "scripts/ci/tests/test_production_reconciler_contract.py",
+                "atomic_install_test": "test_installer_deferred_update_is_atomic_and_non_recursive",
+                "direct_recovery_supported": True,
+                "contention_no_effects": True,
+                "contention_exit_code": 75,
+                "atomic_install": True,
+                "timer_state_preserved": True,
+            }
+            for field, expected_value in expected_recovery.items():
+                if recovery.get(field) != expected_value:
+                    errors.append(f"delivery recovery evidence {field} must be {expected_value!r}")
+                    delivery_evidence_pass = False
+            if not isinstance(recovery.get("documentation_range"), str) or not recovery.get(
+                "documentation_range", ""
+            ).startswith("file:docs/deploy/merge-to-live.md#L"):
+                errors.append("delivery recovery evidence must bind a documentation range")
+                delivery_evidence_pass = False
+
+        rollback_risks = delivery.get("rollback_risks")
+        if not isinstance(rollback_risks, list) or len(rollback_risks) < 4:
+            errors.append("delivery chain must enumerate rollback/recovery risks")
+            delivery_evidence_pass = False
+        elif not all(
+            isinstance(item, dict)
+            and isinstance(item.get("risk"), str)
+            and item.get("risk")
+            and isinstance(item.get("mitigation"), str)
+            and item.get("mitigation")
+            for item in rollback_risks
+        ):
+            errors.append("every rollback/recovery risk needs a named mitigation")
+            delivery_evidence_pass = False
+
+        delivery_nonclaims = delivery.get("does_not_establish")
+        if not isinstance(delivery_nonclaims, list) or not {
+            "runtime_correctness",
+            "automatic_rollback_success",
+        }.issubset(delivery_nonclaims):
+            errors.append("delivery chain must retain runtime and automatic-rollback non-claims")
+            delivery_evidence_pass = False
+
     acceptance = data.get("acceptance")
     if not isinstance(acceptance, dict):
         errors.append("acceptance must be an object")
@@ -475,7 +628,9 @@ def validate(data: dict[str, Any]) -> list[str]:
 
     promotion_ready = (
         len(qualifying) >= 2
+        and controlled_live_pass
         and lane_truth_pass
+        and delivery_evidence_pass
         and isinstance(delivery, dict)
         and delivery.get("status") == "pass_bounded"
         and isinstance(truth_gate, dict)

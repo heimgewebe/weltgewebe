@@ -120,6 +120,87 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
             errors,
         )
 
+    def test_controlled_live_case_is_required_and_bound_to_source_bundle(self) -> None:
+        missing = copy.deepcopy(self.evidence)
+        missing["cases"] = [
+            case for case in missing["cases"] if case["profile"] != "controlled_live"
+        ]
+        errors = self.validator.validate(missing)
+        self.assertIn(
+            "exactly three gold cases plus one controlled live case are required",
+            errors,
+        )
+
+        stale = copy.deepcopy(self.evidence)
+        live = next(
+            case for case in stale["cases"] if case["profile"] == "controlled_live"
+        )
+        live["target_commit"] = "0" * 40
+        live["target_revision"] = "0" * 40
+        errors = self.validator.validate(stale)
+        self.assertIn(
+            "controlled_live target commit must equal source bundle git_commit",
+            errors,
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates",
+            errors,
+        )
+
+    def test_delivery_evidence_omissions_block_default_promotion(self) -> None:
+        mutations = {
+            "contract": (
+                lambda data: data["delivery_chain"].pop("contract_evidence"),
+                "delivery chain must bind explicit contract evidence",
+            ),
+            "ci": (
+                lambda data: data["delivery_chain"].pop("ci_evidence"),
+                "delivery chain must bind explicit CI evidence",
+            ),
+            "deployment": (
+                lambda data: data["delivery_chain"].pop("deployment_evidence"),
+                "delivery chain must bind explicit deployment evidence",
+            ),
+            "runtime": (
+                lambda data: data["delivery_chain"].pop("runtime_proof"),
+                "delivery chain must bind an executed runtime proof",
+            ),
+            "recovery": (
+                lambda data: data["delivery_chain"].pop("recovery_evidence"),
+                "delivery chain must bind explicit recovery evidence",
+            ),
+            "rollback_risks": (
+                lambda data: data["delivery_chain"].__setitem__("rollback_risks", []),
+                "delivery chain must enumerate rollback/recovery risks",
+            ),
+        }
+        for name, (mutate, expected_error) in mutations.items():
+            with self.subTest(name=name):
+                mutated = copy.deepcopy(self.evidence)
+                mutate(mutated)
+                errors = self.validator.validate(mutated)
+                self.assertIn(expected_error, errors)
+                self.assertIn(
+                    "default promotion cannot be claimed without all promotion gates",
+                    errors,
+                )
+
+    def test_runtime_proof_must_bind_exact_successful_live_identity(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        runtime = mutated["delivery_chain"]["runtime_proof"]
+        runtime["head_sha"] = "0" * 40
+        runtime["public_identity_step_conclusion"] = "failure"
+        runtime["production_receipt_uploaded"] = False
+        errors = self.validator.validate(mutated)
+        self.assertIn("runtime proof must bind the exact deployment case target", errors)
+        self.assertIn(
+            "runtime proof must include successful public identity verification", errors
+        )
+        self.assertIn("runtime proof must include an uploaded production receipt", errors)
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
     def test_source_bundle_must_be_fresh_and_healthy(self) -> None:
         mutated = copy.deepcopy(self.evidence)
         mutated["source_bundle"]["freshness"] = "stale"
@@ -195,7 +276,7 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         case["capsule"]["related_tests_included"] = 0
         errors = self.validator.validate(mutated)
         self.assertTrue(
-            any("bounded pilot must include at least one related test" in error for error in errors)
+            any("every gold case must include at least one related test" in error for error in errors)
         )
 
 

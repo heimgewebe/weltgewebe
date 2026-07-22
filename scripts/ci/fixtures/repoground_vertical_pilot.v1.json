@@ -588,6 +588,145 @@
       "query": "production reconciler deployment exact commit live verification",
       "target_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
       "target_revision": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22"
+    },
+    {
+      "id": "live_current_source_bundle_metrics_path_label",
+      "profile": "controlled_live",
+      "base_commit": "24b74dab863acf1e288974dd0aaddc1c258d21ee",
+      "target_commit": "a7f8c490095d907a26ba637f739ca423b8bba180",
+      "base_revision": "24b74dab863acf1e288974dd0aaddc1c258d21ee",
+      "target_revision": "a7f8c490095d907a26ba637f739ca423b8bba180",
+      "diff_binding_kind": "git_tree_delta_v1",
+      "diff_sha256": "53750d3df0d4535ada0591d6fd0d85b0f62bfd4481f4dcf08c86343362f06e32",
+      "changed_path_count": 1,
+      "direct_change_paths": [
+        "apps/api/src/telemetry/mod.rs"
+      ],
+      "expected_critical_paths": [
+        "apps/api/src/telemetry/mod.rs"
+      ],
+      "missing_critical_paths": [],
+      "critical_path_coverage": 1.0,
+      "quality_pass": true,
+      "query": "metrics_path_label",
+      "baseline": {
+        "available": true,
+        "direct_context_pack_verified": true,
+        "freshness_status": "fresh",
+        "resolved_evidence_status": "available",
+        "snippet_count": 2,
+        "range_count": 2,
+        "citation_count": 2,
+        "payload_bytes": 14073,
+        "payload_bytes_source": "repoground_context_compose.compactness.general_context_pack_bytes"
+      },
+      "capsule": {
+        "available": true,
+        "status": "available",
+        "context_bytes": 5095,
+        "general_context_pack_bytes_reported": 14073,
+        "ratio": 0.362041,
+        "reduction_pct": 63.796,
+        "diff_binding_verified": true,
+        "freshness_status": "fresh",
+        "related_tests_included": 1,
+        "related_tests": [
+          {
+            "path": "scripts/ci/tests/test_weltgewebe_up_api_version_contract.py",
+            "evidence_type": "resolved_query",
+            "reason": "test_like_path_from_resolved_query_projection",
+            "relationship_strength": "navigation_candidate",
+            "provenance_strength": "resolved_navigation_evidence",
+            "current_read_evidence": "available"
+          }
+        ],
+        "target_symbols_included": 0,
+        "target_symbols": [],
+        "causal_relations_included": 0,
+        "representative_causal_relations": [],
+        "live_ranges_included": 1,
+        "representative_live_ranges": [
+          {
+            "path": "apps/api/src/telemetry/mod.rs",
+            "start_line": 260,
+            "end_line": 262,
+            "content_sha256": "226c648776198a99c439758de197605c40a7e40399725d0de8cd60edbeccf603"
+          }
+        ],
+        "citations_included": 1,
+        "lane_counts": {
+          "direct_changes": {
+            "available": 1,
+            "included": 1
+          },
+          "related_tests": {
+            "available": 1,
+            "included": 1
+          },
+          "target_symbols": {
+            "available": 0,
+            "included": 0
+          },
+          "causal_relations": {
+            "available": 0,
+            "included": 0
+          },
+          "live_ranges": {
+            "available": 1,
+            "included": 1
+          },
+          "citations": {
+            "available": 1,
+            "included": 1
+          }
+        },
+        "retrieval_lanes": {
+          "used": [
+            "direct_changes",
+            "agent_impact",
+            "query_context",
+            "citation",
+            "live_evidence",
+            "entry_manifest"
+          ],
+          "skipped": [
+            "pr_delta_cards",
+            "symbol_navigation",
+            "call_graph"
+          ]
+        },
+        "call_graph_truth": {
+          "artifact_available": true,
+          "artifact_bytes": 22437645,
+          "artifact_sha256": "c9256ca8bd55a567d0e9a6d1fc6b0b44872c5476d2819674e331a90ffe94613b",
+          "consumed_coherent_evidence": false,
+          "coherent_relation_count": 0
+        },
+        "gaps": [],
+        "stop_criteria": {
+          "impact_context_blocked": false,
+          "triggered": []
+        },
+        "dirty_overlay": {
+          "available": true,
+          "dirty": true,
+          "entry_count": 33,
+          "status_sha256": "c1445530cdf30c72cca213c96a894b775e4df31a8e1141dffe8fde392fa77c15",
+          "included_in_revision_diff": false,
+          "identity_note": "Observed from the canonical Weltgewebe working tree; excluded from the revision-bound controlled-live diff."
+        },
+        "does_not_establish": [
+          "truth",
+          "completeness",
+          "patch_correctness",
+          "test_sufficiency",
+          "test_coverage",
+          "review_completeness",
+          "merge_readiness",
+          "runtime_behavior",
+          "regression_absence"
+        ]
+      }
     }
   ],
   "context_budget_bytes": 12000,
@@ -596,9 +735,8 @@
     "causal_relations_included": 7,
     "coherent_call_graph_relation_count": 1,
     "does_not_establish": [
-      "complete_delivery_chain",
       "runtime_correctness",
-      "deployment_success",
+      "automatic_rollback_success",
       "merge_readiness"
     ],
     "live_ranges_included": 1,
@@ -610,7 +748,74 @@
       "scripts/weltgewebe-up"
     ],
     "status": "pass_bounded",
-    "target_symbols_included": 8
+    "target_symbols_included": 8,
+    "contract_evidence": {
+      "pr": 1499,
+      "workflow_run_id": 29806103267,
+      "job_id": 88556854305,
+      "job_name": "Production reconciler contract tests",
+      "conclusion": "success",
+      "path": "scripts/ci/tests/test_production_reconciler_contract.py"
+    },
+    "ci_evidence": {
+      "required_merge_gate": {
+        "workflow_run_id": 29805241044,
+        "job_id": 88555418515,
+        "conclusion": "success"
+      },
+      "review_evidence_gate": {
+        "workflow_run_id": 29805240373,
+        "job_id": 88556686625,
+        "conclusion": "success"
+      }
+    },
+    "deployment_evidence": {
+      "pr": 1499,
+      "merge_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "workflow_run_id": 29806103267,
+      "event": "push",
+      "head_sha": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "conclusion": "success"
+    },
+    "runtime_proof": {
+      "workflow_run_id": 29806103267,
+      "job_id": 88556905034,
+      "job_name": "Exact main commit is live",
+      "head_sha": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "conclusion": "success",
+      "public_identity_step": "Verify public frontend and API identity",
+      "public_identity_step_conclusion": "success",
+      "production_receipt_uploaded": true
+    },
+    "recovery_evidence": {
+      "documentation_path": "docs/deploy/merge-to-live.md",
+      "documentation_range": "file:docs/deploy/merge-to-live.md#L162-L171",
+      "contract_test_path": "scripts/ci/tests/test_production_reconciler_contract.py",
+      "atomic_install_test": "test_installer_deferred_update_is_atomic_and_non_recursive",
+      "direct_recovery_supported": true,
+      "contention_no_effects": true,
+      "contention_exit_code": 75,
+      "atomic_install": true,
+      "timer_state_preserved": true
+    },
+    "rollback_risks": [
+      {
+        "risk": "concurrent_recovery_contention",
+        "mitigation": "shared flock plus EX_TEMPFAIL 75; rejected recovery mutates neither containers nor public state"
+      },
+      {
+        "risk": "partial_reconciler_installation",
+        "mitigation": "atomic_install plus installed-contract SHA-256 readback"
+      },
+      {
+        "risk": "production_timer_state_loss",
+        "mitigation": "deferred installation requires and rechecks enabled and active timer state"
+      },
+      {
+        "risk": "post_deploy_supersession_or_failure",
+        "mitigation": "explicit reconciler states and failure/receipt evidence preserve diagnosis without claiming automatic rollback"
+      }
+    ]
   },
   "does_not_establish": [
     "semantic completeness",
