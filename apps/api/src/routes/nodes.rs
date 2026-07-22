@@ -1067,11 +1067,6 @@ pub async fn create_node(
                             "node operation id was already used for different data".to_string(),
                         ));
                     }
-                    {
-                        let mut nodes = state.nodes.write().await;
-                        nodes.insert(existing.id.clone(), existing.clone());
-                        state.metrics.set_nodes_cache_count(nodes.len() as i64);
-                    }
                     if postgres_lifecycle_guarded {
                         let tx = node_create_lifecycle_guard.as_mut().ok_or_else(|| {
                             (
@@ -1111,6 +1106,11 @@ pub async fn create_node(
                                     .to_string(),
                             ));
                         }
+                    }
+                    {
+                        let mut nodes = state.nodes.write().await;
+                        nodes.insert(existing.id.clone(), existing.clone());
+                        state.metrics.set_nodes_cache_count(nodes.len() as i64);
                     }
                     ensure_node_created_faden(
                         &state,

@@ -1590,7 +1590,7 @@ async fn node_create_replay_locks_existing_node_before_faden_repair() -> Result<
     let in_dir = tmp.path().join("in");
     std::fs::create_dir_all(&in_dir)?;
     let _env = set_gewebe_in_dir(&in_dir);
-    let (app, cookie, _state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
 
     let request_body = serde_json::json!({
         "title": "Replay Lock",
@@ -1611,6 +1611,11 @@ async fn node_create_replay_locks_existing_node_before_faden_repair() -> Result<
         .as_str()
         .context("created replay-lock node id")?
         .to_string();
+
+    {
+        let mut nodes = state.nodes.write().await;
+        nodes.remove(&node_id);
+    }
 
     sqlx::query(
         "DELETE FROM domain_edges WHERE source_id = $1 AND target_id = $2 \
@@ -1642,6 +1647,10 @@ async fn node_create_replay_locks_existing_node_before_faden_repair() -> Result<
             .is_err(),
         "replay must wait while the existing node mutation lock is held"
     );
+    assert!(
+        state.nodes.read().await.get(&node_id).is_none(),
+        "blocked replay must not repopulate cache before owning the existing-node lock"
+    );
 
     sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
         .bind(&node_id)
@@ -1669,6 +1678,10 @@ async fn node_create_replay_locks_existing_node_before_faden_repair() -> Result<
     assert_eq!(
         repaired_edges, 0,
         "replay must not recreate a Faden after the existing node was deleted"
+    );
+    assert!(
+        state.nodes.read().await.get(&node_id).is_none(),
+        "conflicting replay must not leave a stale node in cache"
     );
 
     clean_all_nodes(&pool).await;
