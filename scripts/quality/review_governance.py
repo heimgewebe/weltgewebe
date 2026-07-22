@@ -58,6 +58,7 @@ ALLOWED_AXES = HIGH_RISK_AXES | {
 }
 RISK_RE = re.compile(r"<!--\s*weltgewebe-risk:\s*(R[0-3])\s*-->", re.IGNORECASE)
 EVIDENCE_START_RE = re.compile(r"<!--\s*weltgewebe-review-evidence\b", re.IGNORECASE)
+FORWARDED_EVIDENCE_START_RE = re.compile(r"<!--\s*weltgewebe-forwarded-review\b", re.IGNORECASE)
 
 
 class GovernanceError(RuntimeError):
@@ -787,6 +788,7 @@ def _evidence_blocks(
             report_text = _normalized_report_text(body[: match.start()])
             report_bytes = report_text.encode("utf-8")
             record = dict(record)
+            record["_payload_keys"] = tuple(record.keys())
             record["_comment_index"] = comment_index
             record["_block_index"] = block_index
             record["_comment_evidence_block_count"] = len(starts)
@@ -804,6 +806,44 @@ def _evidence_blocks(
             record["_updated_at"] = (
                 comment.get("updated_at") or comment.get("created_at") or ""
             )
+            evidence.append(record)
+    return evidence, parse_failures, oversized_payloads
+
+
+def _forwarded_evidence_blocks(
+    comments: Sequence[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int, int]:
+    evidence: list[dict[str, Any]] = []
+    parse_failures = 0
+    oversized_payloads = 0
+    for comment_index, comment in enumerate(comments):
+        body = comment.get("body") or ""
+        if not isinstance(body, str):
+            continue
+        starts = list(FORWARDED_EVIDENCE_START_RE.finditer(body))
+        for block_index, match in enumerate(starts):
+            record, failure = _decode_evidence_payload(body, match.end())
+            if failure is not None:
+                parse_failures += 1
+                if failure == "oversized":
+                    oversized_payloads += 1
+                continue
+            assert record is not None
+            report_text = _normalized_report_text(body[: match.start()])
+            report_bytes = report_text.encode("utf-8")
+            record = dict(record)
+            record["_payload_keys"] = tuple(record.keys())
+            record["_comment_index"] = comment_index
+            record["_block_index"] = block_index
+            record["_comment_evidence_block_count"] = len(starts)
+            record["_report_text_bytes"] = len(report_bytes)
+            record["_report_text_sha256"] = _sha256(report_bytes)
+            record["_author_association"] = str(comment.get("author_association") or "").upper()
+            user = comment.get("user") or {}
+            record["_comment_author"] = user.get("login") if isinstance(user, dict) else None
+            record["_comment_url"] = comment.get("html_url")
+            record["_comment_id"] = _numeric_id(comment.get("id"))
+            record["_updated_at"] = comment.get("updated_at") or comment.get("created_at") or ""
             evidence.append(record)
     return evidence, parse_failures, oversized_payloads
 
@@ -908,10 +948,21 @@ def evaluate_evidence(
             reasons.append(detail)
 
     records, evidence_parse_failures, oversized_evidence = _evidence_blocks(comments)
+    forwarded_records, forwarded_parse_failures, forwarded_oversized = _forwarded_evidence_blocks(comments)
+    total_blocks_by_comment = {
+        index: len(EVIDENCE_START_RE.findall(str(comment.get("body") or "")))
+        + len(FORWARDED_EVIDENCE_START_RE.findall(str(comment.get("body") or "")))
+        for index, comment in enumerate(comments)
+    }
+    for record in [*records, *forwarded_records]:
+        record["_comment_evidence_block_count"] = total_blocks_by_comment.get(
+            int(record.get("_comment_index", -1)), 0
+        )
     exact: list[dict[str, Any]] = []
     stale = 0
     unauthorized = 0
-    malformed = evidence_parse_failures
+    malformed = evidence_parse_failures + forwarded_parse_failures
+    oversized_evidence += forwarded_oversized
     for record in records:
         comment_author = str(record.get("_comment_author") or "").strip()
         if (
@@ -933,8 +984,12 @@ def evaluate_evidence(
             "verdict",
             "findings_resolved",
         }
-        external_fields = {key for key in record if not key.startswith("_")}
-        if external_fields != required_fields:
+        payload_keys = record.get("_payload_keys", ())
+        if (
+            not isinstance(payload_keys, tuple)
+            or any(str(key).startswith("_") for key in payload_keys)
+            or set(payload_keys) != required_fields
+        ):
             malformed += 1
             continue
         schema_version = record.get("schema_version")
@@ -982,6 +1037,69 @@ def evaluate_evidence(
         record["report_sha256"] = report_sha256
         record["review_axis"] = axis
         record["verdict"] = verdict
+        exact.append(record)
+
+    for record in forwarded_records:
+        comment_author = str(record.get("_comment_author") or "").strip()
+        if (
+            record.get("_author_association") not in AUTHORIZED_ASSOCIATIONS
+            or comment_author.casefold() not in normalized_attesters
+        ):
+            unauthorized += 1
+            continue
+        required_fields = {
+            "schema_version",
+            "base_sha",
+            "head_sha",
+            "diff_sha256",
+            "reviewer",
+            "review_axis",
+            "verdict",
+            "findings_resolved",
+        }
+        payload_keys = record.get("_payload_keys", ())
+        if (
+            not isinstance(payload_keys, tuple)
+            or any(str(key).startswith("_") for key in payload_keys)
+            or set(payload_keys) != required_fields
+        ):
+            malformed += 1
+            continue
+        schema_version = record.get("schema_version")
+        if not isinstance(schema_version, int) or isinstance(schema_version, bool):
+            malformed += 1
+            continue
+        if (
+            schema_version != SCHEMA_VERSION
+            or record.get("base_sha") != bundle.base_sha
+            or record.get("head_sha") != bundle.head_sha
+            or record.get("diff_sha256") != bundle.diff_sha256
+        ):
+            stale += 1
+            continue
+        reviewer_value = record.get("reviewer")
+        reviewer_raw = reviewer_value if isinstance(reviewer_value, str) else ""
+        reviewer = unicodedata.normalize("NFC", reviewer_raw.strip())
+        axis = str(record.get("review_axis") or "").strip().lower()
+        verdict = str(record.get("verdict") or "").strip().upper()
+        if (
+            not reviewer
+            or reviewer_raw != reviewer_raw.strip()
+            or len(reviewer) > 120
+            or any(unicodedata.category(char).startswith("C") for char in reviewer)
+            or record.get("_report_text_bytes", 0) < MIN_REVIEW_REPORT_BYTES
+            or record.get("_comment_evidence_block_count") != 1
+            or axis not in ALLOWED_AXES
+            or verdict not in {"PASS", "BLOCKED", "FAIL"}
+            or not isinstance(record.get("findings_resolved"), bool)
+        ):
+            malformed += 1
+            continue
+        record["reviewer"] = reviewer
+        record["report_sha256"] = record["_report_text_sha256"]
+        record["review_axis"] = axis
+        record["verdict"] = verdict
+        record["_forwarded"] = True
         exact.append(record)
 
     latest: dict[tuple[str, str], dict[str, Any]] = {}
@@ -1080,7 +1198,7 @@ def evaluate_evidence(
 
     accepted_summary = [
         {
-            "kind": "attested-report",
+            "kind": "forwarded-external-review" if record.get("_forwarded") else "attested-report",
             "reviewer": record["reviewer"],
             "report_sha256": record["report_sha256"],
             "review_axis": record["review_axis"],
