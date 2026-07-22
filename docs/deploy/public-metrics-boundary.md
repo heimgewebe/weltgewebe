@@ -1,3 +1,17 @@
+---
+id: deploy.public-metrics-boundary
+title: Public Metrics Boundary
+doc_type: reference
+status: active
+summary: Public/private boundary for Prometheus metrics at the production VPS edge.
+relations:
+  - type: relates_to
+    target: docs/deploy/vps.md
+  - type: relates_to
+    target: infra/caddy/Caddyfile.vps
+  - type: relates_to
+    target: infra/compose/monitoring/prometheus.yml
+---
 # Public metrics boundary
 
 The API exposes Prometheus metrics on its internal `/metrics` route. A reference
