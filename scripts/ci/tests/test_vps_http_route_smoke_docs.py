@@ -115,10 +115,14 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
             self.repo / "infra" / "compose" / "monitoring" / "prometheus.yml"
         ).read_text(encoding="utf-8")
 
-        self.assertEqual(production.count("handle /api/metrics {"), 2)
-        self.assertEqual(production.count("handle /api/metrics/* {"), 2)
-        self.assertEqual(production.count("handle /metrics {"), 1)
-        self.assertEqual(production.count("handle /metrics/* {"), 1)
+        self.assertEqual(
+            production.count("handle /api/metrics {\n\t\trespond 404\n\t}"), 2
+        )
+        self.assertEqual(
+            production.count("handle /api/metrics/* {\n\t\trespond 404\n\t}"), 2
+        )
+        self.assertEqual(production.count("handle /metrics {\n\t\trespond 404\n\t}"), 1)
+        self.assertEqual(production.count("handle /metrics/* {\n\t\trespond 404\n\t}"), 1)
 
         app_snippet = production.split("(api_common)", maxsplit=1)[0]
         api_snippet = production.split("(api_common)", maxsplit=1)[1].split(
