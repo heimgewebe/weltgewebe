@@ -162,7 +162,7 @@ jobs:
         working-directory: apps/web
 
       - name: Cache Playwright browsers
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # tag: v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -182,7 +182,7 @@ jobs:
 
       - name: Upload proof summary
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: auth-passkey-register-proof-summary
           path: build/proofs/auth-passkey-register/
@@ -191,7 +191,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: auth-passkey-register-proof-report
           path: apps/web/playwright-report/
@@ -200,7 +200,7 @@ jobs:
 
       - name: Upload Playwright traces and test results
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: auth-passkey-register-proof-traces
           path: apps/web/test-results/
