@@ -173,6 +173,35 @@ describe("mapView presentation helpers", () => {
     );
   });
 
+  it("reuses lifecycle-bound normalized search terms for repeated queries", () => {
+    const scene = sceneFrom([makeNode({ title: "Hammer Park" })], []);
+    const marker = scene.entities[0];
+
+    expect(deriveSearchResults(scene.entities, "hammer", true)).toHaveLength(1);
+    Object.defineProperty(marker, "title", {
+      get() {
+        throw new Error("search recomputed an already indexed title");
+      },
+    });
+
+    expect(deriveSearchResults(scene.entities, "hammer", true)).toHaveLength(1);
+  });
+
+  it("keeps search fields separate instead of matching across field boundaries", () => {
+    const scene = sceneFrom(
+      [makeNode({ title: "Park", tags: ["Commons"] })],
+      [],
+    );
+
+    expect(deriveSearchResults(scene.entities, "park", true)).toHaveLength(1);
+    expect(deriveSearchResults(scene.entities, "commons", true)).toHaveLength(
+      1,
+    );
+    expect(
+      deriveSearchResults(scene.entities, "parkcommons", true),
+    ).toHaveLength(0);
+  });
+
   it("finds Garnrollen by semantic type, plural and profile tags", () => {
     const scene = sceneFrom(
       [],
