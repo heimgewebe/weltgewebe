@@ -43,7 +43,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
-| docs/reports/auth-persistence-runtime-target-reconciliation.md | active | audit | OPT-API-002 | 2026-07-17 |  |
+| docs/reports/auth-persistence-runtime-target-reconciliation.md | active | audit | OPT-API-002 | 2026-08-22 |  |
 | docs/reports/auth-pg-002-controlled-preflight.md | active | planning | AUTH-PG-002 | 2026-09-30 |  |
 | docs/reports/auth-pg-002-cutover-plan.md | active | planning | AUTH-PG-002 | 2026-09-30 |  |
 | docs/reports/auth-pg-002-passkey-db-store.md | active | proof | AUTH-PG-002 | 2026-09-30 |  |

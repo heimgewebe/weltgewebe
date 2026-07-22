@@ -343,7 +343,7 @@ fn is_trusted_peer(ip: IpAddr) -> bool {
     get_trusted_proxies().iter().any(|rule| rule.matches(ip))
 }
 
-fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
+pub(crate) fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
     if !is_trusted_peer(peer.ip()) {
         return peer.ip();
     }

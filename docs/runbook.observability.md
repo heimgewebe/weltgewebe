@@ -14,7 +14,11 @@ relations:
 ## Start
 
 ```bash
-docker compose -f infra/compose/compose.observ.yml up -d
+API_VERSION=<commit> GIT_COMMIT_SHA=<commit> BUILD_TIMESTAMP=<timestamp> \
+  docker compose \
+    -f infra/compose/compose.prod.yml \
+    -f infra/compose/compose.observ.yml \
+    up -d
 ```
 
 - Prometheus: [http://localhost:9090](http://localhost:9090)
@@ -22,4 +26,4 @@ docker compose -f infra/compose/compose.observ.yml up -d
 - Loki:       [http://localhost:3100](http://localhost:3100)
 - Tempo:      [http://localhost:3200](http://localhost:3200)
 
-This is purely optional and local, does not block anything – but gives you immediate graphics.
+The observability profile is an optional overlay on the production Compose topology. Prometheus shares the internal default Docker network with the API and scrapes `weltgewebe-api:8080`; the API port is not published on the host. The Prometheus configuration is supplied as an inline Compose config, so startup does not depend on checkout file permissions. Prometheus, Grafana, Loki and Tempo bind to `127.0.0.1` on the host by default; set `OBSERVABILITY_BIND` explicitly only when a different trusted interface is required.

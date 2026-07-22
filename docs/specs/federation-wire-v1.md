@@ -67,20 +67,20 @@ Antworten:
 
 - `201 Created`: Signatur und Übergang sind gültig; das Ereignis wurde angewandt.
 - `200 OK`: derselbe signierte Umschlag wurde bereits angewandt.
-- `202 Accepted`: der Umschlag wurde nicht angewandt und getrennt quarantänisiert.
+- `202 Accepted`: der Umschlag wurde nicht angewandt; das Ergebnis unterscheidet `rejected` (nicht authentifiziert und nicht persistiert) von `quarantined` (authentifiziert und getrennt persistiert).
 - `400 Bad Request`: der JSON-Umschlag ist syntaktisch oder strukturell nicht als Föderationsereignis lesbar.
 - `413 Payload Too Large`: der Umschlag überschreitet 256 KiB.
 - `415 Unsupported Media Type`: der Eingang trägt keinen unterstützten `application/json`-Content-Type.
-- `429 Too Many Requests`: das gemeinsame Zell- oder authentifizierte Peerfenster ist ausgeschöpft; `Retry-After: 60` begrenzt Quarantäne-, Signaturprüfungs- und Datenbankverstärkung.
+- `429 Too Many Requests`: das Client-, Zell-Circuit-Breaker- oder authentifizierte Peerfenster ist ausgeschöpft; `Retry-After: 60` begrenzt Parser-, Signaturprüfungs-, Quarantäne- und Datenbankverstärkung.
 - `500 Internal Server Error`: die lokale Persistenz oder das gemeinsame PostgreSQL-Rate-Limit-Backend konnte keinen verlässlichen Abschluss liefern; ein Backendfehler öffnet das Limit nicht.
 
-Der Eingang erlaubt pro Minute höchstens 600 syntaktisch lesbare Umschläge je Föderationszelle. Nach erfolgreicher Signaturprüfung gelten zusätzlich höchstens 120 Umschläge je Kombination aus lokaler Zelle und authentifizierter Ursprungszelle. Bei PostgreSQL-Persistenz liegen beide Zähler in atomar aktualisierten gemeinsamen Datenbankfenstern und gelten damit replikaübergreifend. Frei behauptete Zell-IDs bilden keine Vertrauens- oder Peer-Rate-Limit-Identität. Der In-Memory-Repository-Pfad hält dieselben Schranken nur lokal und ist kein produktiver Ersatzbetrieb. Ein späterer Auslieferungsworker muss zusätzlich pro Peer mit Backoff und Jitter arbeiten.
+Vor dem JSON-Parser gilt pro API-Replika und effektiv ermittelter Client-IP ein billiger lokaler Eingangsvorfilter von 240 Anfragen pro Minute. Die Client-IP stammt aus der direkten Socket-Verbindung; Proxy-Header werden nur berücksichtigt, wenn der direkte Peer in der validierten Trusted-Proxy-Liste steht. Die produktiven Caddy-Grenzen überschreiben `X-Forwarded-For` und entfernen frei angelieferte `Forwarded`-Header. Zusätzlich schützt ein bewusst höher angesetzter globaler Circuit Breaker von 6.000 Anfragen pro Minute die gesamte Föderationszelle, ohne dass ein einzelner Client den normalen Peerverkehr bereits mit wenigen hundert Requests verdrängen kann. Nach erfolgreicher Signaturprüfung gelten höchstens 120 neue oder kollidierende Umschläge je Kombination aus lokaler Zelle und authentifizierter Ursprungszelle. Ein bereits gespeichertes, exakt identisches und unter der aktuell gesperrten Peer-Policy weiterhin autorisiertes Duplikat verbraucht keinen weiteren Ursprungstoken. Bei PostgreSQL-Persistenz liegen die gemeinsamen Zähler in atomar aktualisierten Datenbankfenstern, deren Grenzen aus der Datenbankzeit berechnet werden, und gelten damit replikaübergreifend. Frei behauptete Zell-IDs bilden keine Vertrauens- oder Peer-Rate-Limit-Identität. Der In-Memory-Repository-Pfad hält dieselben Schranken nur lokal und ist kein produktiver Ersatzbetrieb. Ein späterer Auslieferungsworker muss zusätzlich pro Peer mit Backoff und Jitter arbeiten.
 
-`202` bedeutet ausdrücklich nicht Zustimmung. Nur Umschläge mit verifizierter Signatur werden dauerhaft quarantänisiert. Strukturell unlesbare, unbekannte oder falsch signierte Umschläge werden mit demselben fachlichen Ergebnis verworfen, aber nicht persistiert; dadurch kann unauthentifizierter Verkehr die Quarantäne nicht füllen.
+`202` bedeutet ausdrücklich nicht Zustimmung. Nur Umschläge mit verifizierter Signatur werden dauerhaft quarantänisiert. Strukturell lesbare Umschläge mit unbekannter Zell-/Schlüssel-Kombination oder falscher Signatur erhalten dasselbe generische `rejected`-Ergebnis; die öffentliche Antwort legt nicht offen, ob ein angefragter Schlüssel existiert. Sie werden nicht persistiert, sodass unauthentifizierter Verkehr die Quarantäne nicht füllen kann.
 
 ### `GET /federation/v1/objects?address=<wg-address>`
 
-Liefert ausschließlich vorhandene, nicht gelöschte Objekte mit Reichweite `global`. Nachbarschaftliche, lokale, private oder gelöschte Objekte ergeben `404 Not Found`. Der öffentliche Lookup ist auf 600 Anfragen pro Minute und Föderationszelle begrenzt. Bei PostgreSQL-Persistenz teilen alle API-Replikas denselben Datenbankzähler; Überschreitung ergibt `429 Too Many Requests` mit `Retry-After: 60`, ein Ausfall des gemeinsamen Zählers wird fail-closed als `500 Internal Server Error` behandelt.
+Liefert ausschließlich vorhandene, nicht gelöschte Objekte mit Reichweite `global`. Nachbarschaftliche, lokale, private oder gelöschte Objekte ergeben `404 Not Found`. Der öffentliche Lookup hat pro API-Replika und effektiv ermittelter Client-IP einen billigen lokalen Vorfilter von 600 Anfragen pro Minute; zusätzlich gilt ein globaler Circuit Breaker von 6.000 Anfragen pro Minute und Föderationszelle. Bei PostgreSQL-Persistenz teilen alle API-Replikas dieselben Datenbankzähler; Überschreitung ergibt `429 Too Many Requests` mit `Retry-After: 60`, ein Ausfall des gemeinsamen Zählers wird fail-closed als `500 Internal Server Error` behandelt.
 
 ## 3. Ereignisfelder
 
@@ -111,7 +111,7 @@ Wesentliche Felder:
 
 Signiert werden alle Ereignisfelder außer `signature` als UTF-8-Bytes nach RFC 8785, JSON Canonicalization Scheme (JCS). Schlüssel werden rekursiv lexikografisch sortiert, es gibt keine unbedeutenden Leerzeichen, und `created_at` muss bereits in der kanonischen UTC-Schreibweise mit `Z` sowie 0, 3, 6 oder 9 Nachkommastellen vorliegen. Der Empfänger rekonstruiert exakt diese Bytes und verifiziert sie gegen den öffentlichen Schlüssel aus `(origin_cell_id, key_id)`. Fehlende Pflichtfelder, unbekannte Felder, nichtkanonische `event_id`-Schreibweisen sowie andere strukturell vertragswidrige Felder werden vor der Vertrauens- und Fachlogik als `400 Bad Request` abgewiesen.
 
-Signaturdomäne und Umschlagidentität sind absichtlich getrennt: `signing_bytes` umfasst alle Drahtfelder außer `signature`; `envelope_sha256` hasht dagegen den vollständigen signierten Umschlag einschließlich `signature`. Der Umschlag-Digest ist daher kein Signatur-Payload-Hash, sondern dient ausschließlich der exakten Replay-, Duplikat- und Kollisionsidentität. Eine geänderte Signatur verändert den Umschlag-Digest, ohne die signierten Nutzdaten umzudefinieren.
+Signaturdomäne und Umschlagidentität sind absichtlich getrennt: `signing_bytes` umfasst alle Drahtfelder außer `signature`; `envelope_sha256` hasht dagegen die JCS-kanonisierte vollständige Ereignisrepräsentation einschließlich `signature`. Der Digest ist damit die Identität des kanonischen signierten Envelopes und ausdrücklich **nicht** der Hash der unveränderten HTTP-Rohbytes. Unterschiede nur in Whitespace oder JSON-Property-Reihenfolge erzeugen denselben Digest; eine geänderte Signatur verändert ihn. Der Digest ist kein Signatur-Payload-Hash und dient der Replay-, Duplikat- und Kollisionsidentität.
 
 Interoperabilitätsvektor für `contracts/federation/v1/examples/event.example.json`:
 
@@ -124,6 +124,7 @@ Folgen:
 
 - Jede Änderung an Nutzlast, Adresse, Version, Reichweite oder Zeitstempel macht die Signatur ungültig.
 - Eine aktualisierte Peer-Policy deaktiviert alle zuvor bekannten Schlüssel, die nicht erneut ausdrücklich aufgeführt werden. Verzögert zugestellte historische Ereignisse bleiben nur prüfbar, wenn der alte Schlüssel weiterhin explizit und aktiv enthalten ist.
+- Die öffentlichen Schlüsselbytes einer bereits bekannten Kombination `(cell_id, key_id)` sind unveränderlich. Rotation benötigt eine neue `key_id`; ein widersprüchliches Policy-Update wird vollständig zurückgerollt.
 - `active: false` bedeutet Widerruf: Neue Zustellungen mit diesem Schlüssel werden unabhängig von ihrem behaupteten Zeitstempel quarantänisiert. Ein kompromittierter Schlüssel kann Zeitstempel selbst signieren und darf daher nicht durch Rückdatierung wieder gültig werden.
 - Ein unbekannter Schlüssel wird nicht automatisch aus dem Netz übernommen und erzeugt keinen persistenten Quarantäneeintrag.
 
@@ -139,8 +140,9 @@ Für jedes Objekt gilt:
 6. Derselbe `event_id` mit anderem vollständigem Umschlag-Digest ist unabhängig von Inbox oder Outbox eine Kollision und wird bei eingehenden Ereignissen quarantänisiert; lokale Publikation mit bereits belegter ID schlägt fehl.
 7. Veraltete, übersprungene oder anders verzweigte Versionen werden nicht angewandt.
 8. Wiederholte Ablehnungen desselben signierten Umschlags erzeugen höchstens einen Quarantäneeintrag.
+9. Die bei Version `1` gesetzte Reichweite ist Objektidentität und unveränderlich. Bei `neighbourhood` gilt dies ebenso für die kanonisch sortierte, eindeutige Zielzellmenge; eine andere Reihenfolge ändert die Zielgruppe nicht.
 
-Damit arbeiten Zellen während einer Netztrennung mit ihrer lokalen Wahrheit weiter. Nach Wiederverbindung werden fehlende, lückenlose Ereignisse kontrolliert nachgeliefert. PostgreSQL serialisiert zuerst den gemeinsamen Event-ID-Namensraum und danach jeden Objektübergang mit transaktionsgebundenen Advisory Locks; dadurch können weder Inbox und Outbox dieselbe ID widersprüchlich belegen noch zwei gleichzeitige erste Versionen als angewandt bestätigt werden. Die Implementierung erfindet keine Konfliktauflösung zwischen mehreren Ursprüngen, weil eine globale Adresse genau einer Ursprungszelle gehört.
+Damit arbeiten Zellen während einer Netztrennung mit ihrer lokalen Wahrheit weiter. Nach Wiederverbindung werden fehlende, lückenlose Ereignisse kontrolliert nachgeliefert. PostgreSQL erzwingt den gemeinsamen Event-ID-Namensraum zusätzlich über eine zentrale `federation_event_receipts`-Registry mit richtungsgebundener Inbox-/Outbox-Referenz und serialisiert konkurrierende Writer weiterhin zuerst per transaktionsgebundenem Event-ID-Advisory-Lock und danach je Objektübergang; dadurch können weder Inbox und Outbox dieselbe ID widersprüchlich belegen noch zwei gleichzeitige erste Versionen als angewandt bestätigt werden. Die Implementierung erfindet keine Konfliktauflösung zwischen mehreren Ursprüngen, weil eine globale Adresse genau einer Ursprungszelle gehört.
 
 ## 6. Reichweiten
 
@@ -157,8 +159,8 @@ Die Quarantäne ist eine getrennte Tabelle und kein Statuswert in der angewandte
 - Ereignis-ID;
 - behauptete Ursprungszelle;
 - Ablehnungsgrund;
-- SHA-256 des vollständigen Umschlags;
-- unveränderten JSON-Umschlag;
+- SHA-256 der JCS-kanonisierten vollständigen Ereignisrepräsentation;
+- die semantische JSON-Ereignisrepräsentation;
 - Empfangszeitpunkt.
 
 Persistiert werden nur signaturverifizierte Ablehnungen. Typische Gründe:
@@ -170,7 +172,7 @@ Persistiert werden nur signaturverifizierte Ablehnungen. Typische Gründe:
 - Version veraltet, lückenhaft oder kollidierend;
 - Ursprung oder Objektart wechselt.
 
-Quarantäne erzeugt keine automatische Freigabe und keine Rückschreibung. Die Kombination aus Ereignis-ID, Umschlag-Digest und Ablehnungsgrund ist eindeutig; identische Replays vergrößern die Tabelle nicht. Je Ursprungszelle werden höchstens 1.000 Einträge und nur die letzten 30 Tage aufbewahrt; Bereinigung und Einfügung laufen unter einer zellgebundenen Transaktionssperre.
+Quarantäne erzeugt keine automatische Freigabe und keine Rückschreibung. Die Kombination aus Ereignis-ID, Umschlag-Digest und Ablehnungsgrund ist eindeutig; identische Replays mit demselben Ablehnungsgrund vergrößern die Tabelle nicht. Je Ursprungszelle werden höchstens 1.000 Einträge gehalten. Die 30-Tage-Bereinigung ist in v1 opportunistisch an neue Quarantäneschreibvorgänge gebunden und daher kein harter TTL-Vertrag für vollständig inaktive Ursprungszellen; eine spätere periodische Wartung darf daraus eine garantierte globale Retention machen. Bereinigung und Einfügung laufen unter einer zellgebundenen Transaktionssperre.
 
 ## 8. Aktivierung
 
@@ -185,7 +187,7 @@ FEDERATION_SIGNING_KEY_B64
 
 `FEDERATION_SIGNING_KEY_B64` muss genau 32 Bytes base64url-codiertes Ed25519-Schlüsselmaterial enthalten. Bei teilweiser Konfiguration oder fehlender PostgreSQL-Verbindung verweigert die API den Start der Föderationsgrenze; ein flüchtiger In-Memory-Fallback ist im Laufzeitpfad verboten.
 
-Peer-Beziehungen können beim Start über `FEDERATION_PEERS_JSON` eingelesen werden. Jeder Eintrag enthält Zell-ID, Zustand `trusted` oder `blocked`, die Nachbarschaftserlaubnis, erlaubte Ereignistypen und einen oder mehrere öffentliche Schlüssel. Das JSON ist Betreiberkonfiguration, kein öffentliches Discovery-Vertrauen.
+Peer-Beziehungen können beim Start über `FEDERATION_PEERS_JSON` eingelesen werden. Jeder Eintrag enthält zwingend Zell-ID, Zustand `trusted` oder `blocked`, die Nachbarschaftserlaubnis, erlaubte Ereignistypen und einen oder mehrere öffentliche Schlüssel. Eine Zell-ID darf in der Bootstrap-Liste nur einmal vorkommen. Das JSON ist Betreiberkonfiguration, kein öffentliches Discovery-Vertrauen.
 
 ## 9. Bewusst nicht Teil von v1
 
