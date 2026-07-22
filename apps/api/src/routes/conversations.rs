@@ -337,7 +337,7 @@ async fn require_conversation_writable(
 
     if observed_type == "node" {
         let locked_type: Option<String> = sqlx::query_scalar(
-            "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL FOR UPDATE",
+            "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL FOR SHARE",
         )
         .bind(conversation_id)
         .fetch_optional(&mut **tx)
@@ -370,7 +370,7 @@ async fn require_conversation_writable(
     .map_err(|error| database_error("lock conversation write cutover", error))?;
 
     let conversation_type: Option<String> = sqlx::query_scalar(
-        "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL FOR UPDATE",
+        "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL FOR SHARE",
     )
     .bind(conversation_id)
     .fetch_optional(&mut **tx)
