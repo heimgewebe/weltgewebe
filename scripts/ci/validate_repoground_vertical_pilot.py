@@ -370,7 +370,7 @@ def validate(data: dict[str, Any]) -> list[str]:
                     lane_truth_pass = False
                 if "call_graph" not in used or "call_graph" in skipped:
                     errors.append(
-                        f"{case_id}: call_graph must be used only when coherent evidence is consumed"
+                        f"{case_id}: consumed call-graph evidence must be explicitly claimed in used retrieval lanes"
                     )
                     lane_truth_pass = False
             elif consumed is False:

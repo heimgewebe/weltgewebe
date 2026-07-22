@@ -90,7 +90,7 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         errors = self.validator.validate(mutated)
         self.assertTrue(
             any(
-                "call_graph must be used only when coherent evidence is consumed" in error
+                "consumed call-graph evidence must be explicitly claimed in used retrieval lanes" in error
                 for error in errors
             )
         )
@@ -170,7 +170,7 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
                 "delivery chain must bind explicit recovery evidence",
             ),
             "rollback_risks": (
-                lambda data: data["delivery_chain"].__setitem__("rollback_risks", []),
+                lambda data: data["delivery_chain"].update({"rollback_risks": []}),
                 "delivery chain must enumerate rollback/recovery risks",
             ),
         }
