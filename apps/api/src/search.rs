@@ -859,13 +859,24 @@ impl ProjectionWorker {
         state: &str,
         code: Option<&str>,
     ) -> anyhow::Result<bool> {
+        let mut tx = self.pool.begin().await?;
+        // Generation completion is a state transition, so serialize it with
+        // generation start/activation and relevant domain mutations. Keeping
+        // the fenced job finish and generation reconciliation in one
+        // transaction also prevents a ready-index conflict from committing the
+        // job while leaving its generation counters stale.
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('weltgewebe.search.generation.activation', 0))")
+            .execute(&mut *tx)
+            .await?;
         let finished = sqlx::query("UPDATE search_projection_jobs SET state=$2,claimed_by=NULL,claim_until=NULL,completed_at=NOW(),last_error_code=$3 WHERE id=$1 AND state='claimed' AND claimed_by=$4 AND attempt_count=$5 AND claim_until > NOW()")
-            .bind(id).bind(state).bind(code).bind(&self.worker_id).bind(attempts).execute(&self.pool).await?.rows_affected() == 1;
+            .bind(id).bind(state).bind(code).bind(&self.worker_id).bind(attempts).execute(&mut *tx).await?.rows_affected() == 1;
         if !finished {
+            tx.rollback().await?;
             return Ok(false);
         }
         sqlx::query("UPDATE search_index_generations g SET expected_nodes=(SELECT count(*) FROM search_projection_jobs j WHERE j.generation_id=g.generation_id), completed_nodes=(SELECT count(*) FROM search_projection_jobs j WHERE j.generation_id=g.generation_id AND j.state IN ('done','stale')), state=CASE WHEN g.state='building' AND NOT EXISTS (SELECT 1 FROM search_index_generations r WHERE r.state='ready' AND r.generation_id<>g.generation_id) AND NOT EXISTS (SELECT 1 FROM search_projection_jobs j WHERE j.generation_id=g.generation_id AND j.state NOT IN ('done','stale')) AND NOT EXISTS (SELECT 1 FROM search_node_versions v WHERE v.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM search_node_projections p WHERE p.generation_id=g.generation_id AND p.node_id=v.node_id AND p.source_version=v.source_version AND p.source_revision=v.source_revision AND p.semantic_state='ready' AND cardinality(p.embedding)=g.dimension)) AND NOT EXISTS (SELECT 1 FROM search_node_versions v JOIN search_node_projections p ON p.generation_id=g.generation_id AND p.node_id=v.node_id WHERE v.deleted_at IS NOT NULL) THEN 'ready' ELSE g.state END WHERE g.generation_id=(SELECT generation_id FROM search_projection_jobs WHERE id=$1)")
-            .bind(id).execute(&self.pool).await?;
+            .bind(id).execute(&mut *tx).await?;
+        tx.commit().await?;
         Ok(true)
     }
 

@@ -13,7 +13,7 @@ use std::{
 use async_trait::async_trait;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use tokio::{
-    sync::Notify,
+    sync::{Barrier, Notify},
     time::{sleep, Duration},
 };
 use weltgewebe_api::{
@@ -93,6 +93,22 @@ impl EmbeddingProvider for BlockingProvider {
     ) -> Result<Vec<f64>, EmbeddingProviderError> {
         self.entered.notify_one();
         self.release.notified().await;
+        Ok(vec![0.5; dimension])
+    }
+}
+
+struct BarrierProvider {
+    barrier: Arc<Barrier>,
+}
+
+#[async_trait]
+impl EmbeddingProvider for BarrierProvider {
+    async fn embed(
+        &self,
+        _document: &str,
+        dimension: usize,
+    ) -> Result<Vec<f64>, EmbeddingProviderError> {
+        self.barrier.wait().await;
         Ok(vec![0.5; dimension])
     }
 }
@@ -919,6 +935,106 @@ async fn generation_start_and_activation_serialize_with_domain_mutations() {
     .await
     .expect("post-activation pending version");
     assert_eq!(pending_version, 4);
+}
+
+#[tokio::test]
+#[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
+async fn concurrent_generation_finishes_serialize_ready_transition_and_keep_counters_current() {
+    let pool = pool().await;
+    migrate(&pool).await;
+    reset_search_state(&pool).await;
+    let node = "t005-concurrent-ready-node";
+    sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt','Ready Race',$2::jsonb)")
+        .bind(node)
+        .bind(r#"{"search_visibility":"public"}"#)
+        .execute(&pool)
+        .await
+        .expect("insert concurrent ready node");
+
+    let barrier = Arc::new(Barrier::new(2));
+    let provider = Arc::new(BarrierProvider {
+        barrier: barrier.clone(),
+    });
+    let worker_a = Arc::new(
+        ProjectionWorker::new_with_provider(
+            pool.clone(),
+            "t005-ready-race-a".to_owned(),
+            Metrics::try_new(BuildInfo::collect()).expect("metrics a"),
+            provider.clone(),
+        )
+        .expect("worker a"),
+    );
+    let worker_b = Arc::new(
+        ProjectionWorker::new_with_provider(
+            pool.clone(),
+            "t005-ready-race-b".to_owned(),
+            Metrics::try_new(BuildInfo::collect()).expect("metrics b"),
+            provider,
+        )
+        .expect("worker b"),
+    );
+
+    for generation_id in ["t005-ready-race-gen-a", "t005-ready-race-gen-b"] {
+        worker_a
+            .start_generation(GenerationSpec {
+                generation_id,
+                provider: "local:ollama",
+                model_id: "m",
+                model_revision: "r",
+                runtime_identity: "ollama:test@http://127.0.0.1:11434",
+                dimension: 3,
+            })
+            .await
+            .expect("start concurrent generation");
+    }
+
+    let first_worker = worker_a.clone();
+    let second_worker = worker_b.clone();
+    let (first, second) = tokio::join!(
+        async move { first_worker.claim_and_process_one().await },
+        async move { second_worker.claim_and_process_one().await }
+    );
+    assert_eq!(
+        first.expect("first concurrent finish"),
+        ProcessOutcome::Processed
+    );
+    assert_eq!(
+        second.expect("second concurrent finish"),
+        ProcessOutcome::Processed
+    );
+
+    let generations: Vec<(String, String, i64, i64)> = sqlx::query_as(
+        "SELECT generation_id,state,expected_nodes,completed_nodes FROM search_index_generations WHERE generation_id IN ('t005-ready-race-gen-a','t005-ready-race-gen-b') ORDER BY generation_id",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("concurrent generation states");
+    assert_eq!(generations.len(), 2);
+    assert_eq!(generations.iter().filter(|row| row.1 == "ready").count(), 1);
+    assert_eq!(
+        generations.iter().filter(|row| row.1 == "building").count(),
+        1
+    );
+    assert!(generations.iter().all(|row| row.2 == 1 && row.3 == 1));
+
+    let building: String = generations
+        .iter()
+        .find(|row| row.1 == "building")
+        .expect("one complete building generation")
+        .0
+        .clone();
+    sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
+        .bind(&building)
+        .execute(&pool)
+        .await
+        .expect("complete building generation remains directly activatable");
+    let active: String = sqlx::query_scalar(
+        "SELECT generation_id FROM search_index_generations WHERE state='active'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("active generation after concurrent finish");
+    assert_eq!(active, building);
 }
 
 #[tokio::test]
