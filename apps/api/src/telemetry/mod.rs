@@ -17,6 +17,16 @@ use tower::{Layer, Service};
 
 use crate::state::ApiState;
 
+const UNMATCHED_ROUTE_LABEL: &str = "<unmatched>";
+
+fn metrics_path_label<B>(request: &Request<B>) -> String {
+    request
+        .extensions()
+        .get::<MatchedPath>()
+        .map(|path| path.as_str().to_owned())
+        .unwrap_or_else(|| UNMATCHED_ROUTE_LABEL.to_owned())
+}
+
 #[cfg(debug_assertions)]
 const GIT_COMMIT_SHA: &str = match option_env!("GIT_COMMIT_SHA") {
     Some(value) => value,
@@ -204,11 +214,11 @@ where
 
     fn call(&mut self, request: Request<B>) -> Self::Future {
         let method = request.method().as_str().to_owned();
-        let matched_path = request
-            .extensions()
-            .get::<MatchedPath>()
-            .map(|p| p.as_str().to_owned());
-        let path = matched_path.unwrap_or_else(|| request.uri().path().to_owned());
+        // Never fall back to the raw URI path here. Unmatched paths are attacker-controlled;
+        // using them as Prometheus label values creates one time series per unique 404 path
+        // and allows unbounded label-cardinality growth. Known routes still use Axum's
+        // normalized route template from `MatchedPath`.
+        let path = metrics_path_label(&request);
         let metrics = self.metrics.clone();
         let future = self.inner.call(request);
 
@@ -226,5 +236,27 @@ where
                 Err(error) => Err(error),
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{metrics_path_label, UNMATCHED_ROUTE_LABEL};
+    use axum::http::Request;
+
+    #[test]
+    fn unmatched_paths_collapse_to_one_low_cardinality_metrics_label() {
+        let first = Request::builder()
+            .uri("/attacker-controlled/a")
+            .body(())
+            .expect("request");
+        let second = Request::builder()
+            .uri("/attacker-controlled/b")
+            .body(())
+            .expect("request");
+
+        assert_eq!(metrics_path_label(&first), UNMATCHED_ROUTE_LABEL);
+        assert_eq!(metrics_path_label(&second), UNMATCHED_ROUTE_LABEL);
+        assert_eq!(metrics_path_label(&first), metrics_path_label(&second));
     }
 }
