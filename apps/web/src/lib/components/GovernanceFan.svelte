@@ -252,6 +252,12 @@
       text-align: left;
     }
 
+    .governance-menu :global(.fan-label) {
+      overflow-wrap: anywhere;
+      hyphens: auto;
+      text-overflow: clip;
+    }
+
     .governance-slot--outer-left,
     .governance-slot--outer-right,
     .governance-slot--inner-left,

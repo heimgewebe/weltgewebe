@@ -30,7 +30,7 @@ jobs:
       GEWEBE_API_BASE: "http://127.0.0.1:8080"
       PUBLIC_GEWEBE_API_BASE: "http://127.0.0.1:8080"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
       - name: Setup pnpm
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
         with:
@@ -78,7 +78,7 @@ jobs:
         run: pnpm --filter weltgewebe-web test:ci
       - name: Upload HTML report (always)
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: playwright-report
           path: |
@@ -93,7 +93,7 @@ jobs:
           echo "npx playwright show-report apps/web/playwright-report"
       - name: Upload traces (on failure)
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: playwright-traces
           path: apps/web/test-results/**/*.zip

@@ -41,7 +41,7 @@ jobs:
        contains(github.event.pull_request.labels.*.name, 'security')) ||
       (github.event_name == 'schedule')
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
       - name: Read Rust version
         id: rust-version
         shell: bash
@@ -70,7 +70,7 @@ jobs:
         run: cargo audit --json | tee cargo-audit-report.json
       - name: Upload audit report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: cargo-audit-report
           path: cargo-audit-report.json
@@ -86,7 +86,7 @@ jobs:
        contains(github.event.pull_request.labels.*.name, 'security')) ||
       (github.event_name == 'schedule' && github.event.schedule.cron == '10 3 * * 0')
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
       - name: Read Rust version
         id: rust-version
         shell: bash
@@ -115,7 +115,7 @@ jobs:
         run: cargo deny --format json check | tee cargo-deny-report.json
       - name: Upload cargo-deny report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: cargo-deny-report
           path: cargo-deny-report.json
@@ -131,7 +131,7 @@ jobs:
        contains(github.event.pull_request.labels.*.name, 'security')) ||
       (github.event_name == 'schedule' && github.event.schedule.cron == '25 3 * * 0')
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
       - name: Generate SBOM with Syft
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # tag: v0
         with:
@@ -140,7 +140,7 @@ jobs:
           output-file: sbom.spdx.json
       - name: Upload SBOM artifact
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: sbom-spdx
           path: sbom.spdx.json

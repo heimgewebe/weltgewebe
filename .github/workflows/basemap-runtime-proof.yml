@@ -97,7 +97,7 @@ jobs:
       # Skip cleanly when no artefact is present; real script regressions still fail the job.
       BASEMAP_PROOF_MODE: skip
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
 
       - name: Check guard script is executable
         run: test -x scripts/guard/basemap-runtime-proof.sh
@@ -166,7 +166,7 @@ jobs:
       BASEMAP_CADDY_URL: http://localhost:8081
       ARTEFACT_NAME: proof-range-delivery.pmtiles
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
 
       - name: Verify Docker availability
         run: |
@@ -268,7 +268,7 @@ jobs:
 
       - name: Upload proof evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: basemap-range-delivery-proof-evidence
           path: |
@@ -335,7 +335,7 @@ jobs:
       BASEMAP_CADDY_URL: http://localhost:8081
       SOURCE_DATE_EPOCH: "1704067200"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
 
       - name: Install pnpm for PMTiles validator
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
@@ -460,7 +460,7 @@ jobs:
 
       - name: Upload proof evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: basemap-pmtiles-content-proof-evidence
           path: |
@@ -476,7 +476,7 @@ jobs:
 
       - name: Upload reusable visual proof input artefact
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: basemap-visual-proof-input
           path: |
@@ -545,7 +545,7 @@ jobs:
       ARTEFACT_NAME: basemap-schleswig-holstein-v0.1.0.pmtiles
       META_NAME: basemap-schleswig-holstein-v0.1.0.meta.json
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
 
       - name: Install pnpm for PMTiles validator
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
@@ -629,7 +629,7 @@ jobs:
 
       - name: Upload Schleswig-Holstein proof evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: basemap-schleswig-holstein-content-proof-evidence
           path: |
@@ -656,7 +656,7 @@ jobs:
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
 
       - name: Install pnpm
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
@@ -735,7 +735,7 @@ jobs:
 
       - name: Upload visual proof screenshot and summary
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: basemap-visual-proof-screenshot
           path: |
@@ -746,7 +746,7 @@ jobs:
 
       - name: Upload visual proof trace and test results
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: basemap-visual-proof-trace
           path: |
@@ -756,7 +756,7 @@ jobs:
 
       - name: Upload Playwright HTML report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: basemap-visual-proof-report
           path: |

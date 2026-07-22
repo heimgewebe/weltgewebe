@@ -40,7 +40,7 @@ jobs:
         working-directory: apps/api
         shell: bash
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # tag: v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -74,7 +74,7 @@ jobs:
           rustc --version
           cargo --version
       - name: Cache cargo target
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # tag: v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
         with:
           path: target
           key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock','**/Cargo.toml') }}
@@ -96,7 +96,7 @@ jobs:
             2>&1 | tee /tmp/build-logs/cargo-build.log
       - name: Upload cargo build log
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: cargo-build-log
           path: /tmp/build-logs/cargo-build.log
@@ -230,7 +230,7 @@ jobs:
           fi
       - name: Upload API log
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: api-log
           path: /tmp/api.log
