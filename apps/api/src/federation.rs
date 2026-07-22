@@ -665,9 +665,22 @@ impl FederationRepository for MemoryFederationRepository {
             return Ok(ReceiveOutcome::rejected(event));
         }
         let digest = envelope_sha256(event)?;
-        if let Some(reason) = peer_policy_rejection(&peer, event) {
-            push_memory_quarantine_once(&mut state, event, reason, digest);
-            return Ok(ReceiveOutcome::quarantined(event, reason));
+        let policy_rejection = peer_policy_rejection(&peer, event);
+        if policy_rejection.is_some() {
+            let origin_allowed = {
+                let mut rate_state = self
+                    .rate_state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                rate_state.allow(
+                    RATE_SCOPE_RECEIVE_ORIGIN,
+                    origin_rate_subject,
+                    origin_rate_limit,
+                )
+            };
+            if !origin_allowed {
+                return Err(ReceiveRateLimitExceeded.into());
+            }
         }
         let existing_digest = if let Some(existing_digest) = state.inbox.get(&event.event_id) {
             Some(existing_digest.clone())
@@ -684,21 +697,30 @@ impl FederationRepository for MemoryFederationRepository {
             .as_ref()
             .is_some_and(|existing| existing == &digest)
         {
+            if let Some(reason) = policy_rejection {
+                return Ok(ReceiveOutcome::quarantined(event, reason));
+            }
             return Ok(ReceiveOutcome::duplicate(event));
         }
-        let origin_allowed = {
-            let mut rate_state = self
-                .rate_state
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            rate_state.allow(
-                RATE_SCOPE_RECEIVE_ORIGIN,
-                origin_rate_subject,
-                origin_rate_limit,
-            )
-        };
-        if !origin_allowed {
-            return Err(ReceiveRateLimitExceeded.into());
+        if policy_rejection.is_none() {
+            let origin_allowed = {
+                let mut rate_state = self
+                    .rate_state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                rate_state.allow(
+                    RATE_SCOPE_RECEIVE_ORIGIN,
+                    origin_rate_subject,
+                    origin_rate_limit,
+                )
+            };
+            if !origin_allowed {
+                return Err(ReceiveRateLimitExceeded.into());
+            }
+        }
+        if let Some(reason) = policy_rejection {
+            push_memory_quarantine_once(&mut state, event, reason, digest);
+            return Ok(ReceiveOutcome::quarantined(event, reason));
         }
         if existing_digest.is_some() {
             push_memory_quarantine_once(
@@ -935,10 +957,47 @@ impl FederationRepository for PostgresFederationRepository {
             return Ok(ReceiveOutcome::rejected(event));
         }
         let digest = envelope_sha256(event)?;
-        if let Some(reason) = peer_policy_rejection(&peer, event) {
-            quarantine_verified_in_tx(&mut tx, event, reason, &digest).await?;
-            tx.commit().await?;
-            return Ok(ReceiveOutcome::quarantined(event, reason));
+        let policy_rejection = peer_policy_rejection(&peer, event);
+        if policy_rejection.is_some()
+            && !increment_federation_rate_limit_in_tx(
+                &mut tx,
+                RATE_SCOPE_RECEIVE_ORIGIN,
+                origin_rate_subject,
+                origin_rate_limit,
+            )
+            .await?
+        {
+            tx.rollback().await?;
+            return Err(ReceiveRateLimitExceeded.into());
+        }
+
+        // A lock-free pre-read lets established exact duplicates return without
+        // queueing behind the per-event advisory lock. New/colliding events are
+        // re-read after taking the lock before any mutation.
+        let existing_digests = event_receipt_digests_in_tx(&mut tx, event.event_id).await?;
+        if !existing_digests.is_empty()
+            && existing_digests
+                .iter()
+                .all(|existing_digest| existing_digest == &digest)
+        {
+            if let Some(reason) = policy_rejection {
+                tx.commit().await?;
+                return Ok(ReceiveOutcome::quarantined(event, reason));
+            }
+            tx.rollback().await?;
+            return Ok(ReceiveOutcome::duplicate(event));
+        }
+        if policy_rejection.is_none()
+            && !increment_federation_rate_limit_in_tx(
+                &mut tx,
+                RATE_SCOPE_RECEIVE_ORIGIN,
+                origin_rate_subject,
+                origin_rate_limit,
+            )
+            .await?
+        {
+            tx.rollback().await?;
+            return Err(ReceiveRateLimitExceeded.into());
         }
 
         lock_event_receipt(&mut tx, event.event_id).await?;
@@ -948,19 +1007,17 @@ impl FederationRepository for PostgresFederationRepository {
                 .iter()
                 .all(|existing_digest| existing_digest == &digest)
         {
+            if let Some(reason) = policy_rejection {
+                tx.commit().await?;
+                return Ok(ReceiveOutcome::quarantined(event, reason));
+            }
             tx.rollback().await?;
             return Ok(ReceiveOutcome::duplicate(event));
         }
-        if !increment_federation_rate_limit_in_tx(
-            &mut tx,
-            RATE_SCOPE_RECEIVE_ORIGIN,
-            origin_rate_subject,
-            origin_rate_limit,
-        )
-        .await?
-        {
-            tx.rollback().await?;
-            return Err(ReceiveRateLimitExceeded.into());
+        if let Some(reason) = policy_rejection {
+            quarantine_verified_in_tx(&mut tx, event, reason, &digest).await?;
+            tx.commit().await?;
+            return Ok(ReceiveOutcome::quarantined(event, reason));
         }
         if !existing_digests.is_empty() {
             let reason = "event id collision with different envelope";
@@ -1952,6 +2009,20 @@ pub async fn runtime_router(pool: Option<PgPool>) -> anyhow::Result<Router> {
     Ok(router(service))
 }
 
+fn require_explicit_federation_proxy_trust(value: Option<&str>) -> anyhow::Result<()> {
+    if value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none()
+    {
+        bail!(
+            "federation activation requires an explicit AUTH_TRUSTED_PROXIES decision; \
+             set it to trusted proxy IPs/CIDRs or to `none` for direct exposure"
+        );
+    }
+    Ok(())
+}
+
 fn identity_from_env() -> anyhow::Result<Option<CellIdentity>> {
     let values = [
         env::var("FEDERATION_CELL_ID").ok(),
@@ -1968,6 +2039,8 @@ fn identity_from_env() -> anyhow::Result<Option<CellIdentity>> {
              FEDERATION_KEY_ID and FEDERATION_SIGNING_KEY_B64 together"
         );
     };
+    let trusted_proxies = env::var("AUTH_TRUSTED_PROXIES").ok();
+    require_explicit_federation_proxy_trust(trusted_proxies.as_deref())?;
     let decoded = URL_SAFE_NO_PAD
         .decode(signing_key.trim())
         .context("FEDERATION_SIGNING_KEY_B64 is not valid base64url")?;
@@ -2535,6 +2608,142 @@ mod tests {
     fn actor_limit_counts_unicode_characters_like_json_schema() {
         assert!(validate_actor(&"é".repeat(128)).is_ok());
         assert!(validate_actor(&"é".repeat(129)).is_err());
+    }
+
+    #[test]
+    fn federation_activation_requires_explicit_proxy_trust_decision() {
+        assert!(require_explicit_federation_proxy_trust(None).is_err());
+        assert!(require_explicit_federation_proxy_trust(Some("   ")).is_err());
+        assert!(require_explicit_federation_proxy_trust(Some("none")).is_ok());
+        assert!(require_explicit_federation_proxy_trust(Some("127.0.0.1")).is_ok());
+    }
+
+    #[tokio::test]
+    async fn new_authenticated_policy_rejections_consume_origin_rate_limit() {
+        let sender_identity = identity("cell-a", 71);
+        let sender = FederationService::new(
+            sender_identity.clone(),
+            Arc::new(MemoryFederationRepository::new()),
+        );
+        let receiver = FederationService::new(
+            identity("cell-b", 72),
+            Arc::new(MemoryFederationRepository::new()),
+        );
+        receiver
+            .install_peer(PeerPolicy {
+                remote_cell_id: "cell-a".to_string(),
+                state: "blocked".to_string(),
+                allow_neighbourhood: true,
+                allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
+                keys: vec![sender_identity.peer_key()],
+            })
+            .await
+            .unwrap();
+
+        for index in 0..RECEIVE_RATE_PER_ORIGIN {
+            let event = sender
+                .publish_local(PublishRequest {
+                    actor: "system:blocked-origin-rate-proof".to_string(),
+                    event_type: EVENT_UPSERTED.to_string(),
+                    object_address: format!("wg://cell-a/node/blocked-rate-{index}"),
+                    object_kind: "node".to_string(),
+                    object_version: 1,
+                    previous_version: None,
+                    scope: SCOPE_GLOBAL.to_string(),
+                    neighbourhood_targets: vec![],
+                    payload: serde_json::json!({"index": index}),
+                })
+                .await
+                .unwrap();
+            assert_eq!(
+                receiver.receive(event).await.unwrap().status,
+                ReceiveStatus::Quarantined
+            );
+        }
+
+        let overflow = sender
+            .publish_local(PublishRequest {
+                actor: "system:blocked-origin-rate-proof".to_string(),
+                event_type: EVENT_UPSERTED.to_string(),
+                object_address: "wg://cell-a/node/blocked-rate-overflow".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: SCOPE_GLOBAL.to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"overflow": true}),
+            })
+            .await
+            .unwrap();
+        assert!(receiver
+            .receive(overflow)
+            .await
+            .unwrap_err()
+            .downcast_ref::<ReceiveRateLimitExceeded>()
+            .is_some());
+    }
+
+    #[tokio::test]
+    async fn policy_rejected_replays_of_previously_applied_event_are_rate_limited() {
+        let sender_identity = identity("cell-a", 81);
+        let sender = FederationService::new(
+            sender_identity.clone(),
+            Arc::new(MemoryFederationRepository::new()),
+        );
+        let repository = Arc::new(MemoryFederationRepository::new());
+        let receiver = FederationService::new(identity("cell-b", 82), repository.clone());
+        receiver
+            .install_peer(PeerPolicy {
+                remote_cell_id: "cell-a".to_string(),
+                state: "trusted".to_string(),
+                allow_neighbourhood: true,
+                allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
+                keys: vec![sender_identity.peer_key()],
+            })
+            .await
+            .unwrap();
+        let event = sender
+            .publish_local(PublishRequest {
+                actor: "system:blocked-replay-rate-proof".to_string(),
+                event_type: EVENT_UPSERTED.to_string(),
+                object_address: "wg://cell-a/node/blocked-replay-rate-proof".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: SCOPE_GLOBAL.to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"proof": true}),
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            receiver.receive(event.clone()).await.unwrap().status,
+            ReceiveStatus::Applied
+        );
+        receiver
+            .install_peer(PeerPolicy {
+                remote_cell_id: "cell-a".to_string(),
+                state: "blocked".to_string(),
+                allow_neighbourhood: true,
+                allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
+                keys: vec![sender_identity.peer_key()],
+            })
+            .await
+            .unwrap();
+
+        for _ in 1..RECEIVE_RATE_PER_ORIGIN {
+            assert_eq!(
+                receiver.receive(event.clone()).await.unwrap().status,
+                ReceiveStatus::Quarantined
+            );
+        }
+        assert!(repository.quarantined().await.unwrap().is_empty());
+        assert!(receiver
+            .receive(event)
+            .await
+            .unwrap_err()
+            .downcast_ref::<ReceiveRateLimitExceeded>()
+            .is_some());
     }
 
     #[test]
