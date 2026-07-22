@@ -694,6 +694,95 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
             "default promotion cannot be claimed without all promotion gates", errors
         )
 
+    def test_case_ids_and_direct_paths_must_be_unique(self) -> None:
+        mutations = {}
+
+        def duplicate_case_id(data: dict) -> None:
+            data["cases"][1]["id"] = data["cases"][0]["id"]
+
+        def duplicate_direct_path(data: dict) -> None:
+            case = next(
+                item for item in data["cases"] if item["profile"] == "deployment_kubernetes"
+            )
+            case["direct_change_paths"].append(case["direct_change_paths"][0])
+            case["changed_path_count"] += 1
+            lane = case["capsule"]["lane_counts"]["direct_changes"]
+            lane["available"] += 1
+            lane["considered"] += 1
+            lane["included"] += 1
+
+        def duplicate_expected_path(data: dict) -> None:
+            case = next(
+                item for item in data["cases"] if item["profile"] == "deployment_kubernetes"
+            )
+            case["expected_critical_paths"].append(case["expected_critical_paths"][0])
+
+        mutations["case_id"] = duplicate_case_id
+        mutations["direct_path"] = duplicate_direct_path
+        mutations["expected_path"] = duplicate_expected_path
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                mutated = copy.deepcopy(self.evidence)
+                mutate(mutated)
+                errors = self.validator.validate(mutated)
+                self.assertIn(
+                    "default promotion cannot be claimed without all promotion gates", errors
+                )
+
+    def test_related_test_paths_must_be_unique(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = next(
+            case for case in mutated["cases"] if case["profile"] == "deployment_kubernetes"
+        )
+        case["capsule"]["related_tests"].append(
+            copy.deepcopy(case["capsule"]["related_tests"][0])
+        )
+        case["capsule"]["related_tests_included"] += 1
+        lane = case["capsule"]["lane_counts"]["related_tests"]
+        lane["available"] += 1
+        lane["considered"] += 1
+        lane["included"] += 1
+        errors = self.validator.validate(mutated)
+        self.assertIn(f"{case['id']}: related test paths must be unique", errors)
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
+    def test_retrieval_lanes_must_be_closed_unique_partition(self) -> None:
+        mutations = {
+            "unknown": lambda lanes: lanes["used"].append("invented_lane"),
+            "duplicate": lambda lanes: lanes["used"].append(lanes["used"][0]),
+            "overlap": lambda lanes: lanes["skipped"].append(lanes["used"][0]),
+            "missing": lambda lanes: lanes["skipped"].pop(),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                mutated = copy.deepcopy(self.evidence)
+                case = next(
+                    case for case in mutated["cases"] if case["profile"] == "database_auth"
+                )
+                mutate(case["capsule"]["retrieval_lanes"])
+                errors = self.validator.validate(mutated)
+                self.assertIn(
+                    f"{case['id']}: retrieval lanes must be a unique disjoint partition of known lanes",
+                    errors,
+                )
+                self.assertIn(
+                    "default promotion cannot be claimed without all promotion gates", errors
+                )
+
+    def test_rollback_risk_names_must_be_unique(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        risk = copy.deepcopy(mutated["pilot_delivery_chain_evidence"]["rollback_risks"][0])
+        mutated["pilot_delivery_chain_evidence"]["rollback_risks"] = [
+            copy.deepcopy(risk) for _ in range(4)
+        ]
+        errors = self.validator.validate(mutated)
+        self.assertIn("rollback/recovery risk names must be unique", errors)
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

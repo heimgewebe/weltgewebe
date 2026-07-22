@@ -32,6 +32,19 @@ _ALLOWED_BUDGET_LANES = frozenset(
         "query_snippets",
     }
 )
+_RETRIEVAL_LANES = frozenset(
+    {
+        "direct_changes",
+        "agent_impact",
+        "query_context",
+        "citation",
+        "live_evidence",
+        "entry_manifest",
+        "pr_delta_cards",
+        "symbol_navigation",
+        "call_graph",
+    }
+)
 _DEPLOYMENT_CONTRACT_TEST_PATH = "scripts/ci/tests/test_production_reconciler_contract.py"
 _MEASUREMENT_EVIDENCE_PATHS = {
     "docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md",
@@ -163,6 +176,14 @@ def validate(data: dict[str, Any]) -> list[str]:
         errors.append("exactly three gold cases plus one controlled live case are required")
         return errors
 
+    case_ids = [case.get("id") for case in cases if isinstance(case, dict)]
+    if (
+        len(case_ids) != len(cases)
+        or any(not isinstance(case_id, str) or not case_id for case_id in case_ids)
+        or len(case_ids) != len(set(case_ids))
+    ):
+        errors.append("all four pilot case ids must be unique non-empty strings")
+
     gold_cases = [
         case
         for case in cases
@@ -238,6 +259,9 @@ def validate(data: dict[str, Any]) -> list[str]:
             errors.append(f"{case_id}: direct_change_paths must be a non-empty string list")
             direct = []
             bounded_quality_pass = False
+        elif len(direct) != len(set(direct)):
+            errors.append(f"{case_id}: direct_change_paths must be unique")
+            bounded_quality_pass = False
         if case.get("changed_path_count") != len(direct):
             errors.append(f"{case_id}: changed_path_count must match direct_change_paths")
             bounded_quality_pass = False
@@ -248,6 +272,12 @@ def validate(data: dict[str, Any]) -> list[str]:
             if not isinstance(expected, list) or not expected:
                 errors.append(f"{case_id}: expected_critical_paths must be non-empty")
                 expected = []
+                bounded_quality_pass = False
+            elif (
+                not all(isinstance(path, str) and path for path in expected)
+                or len(expected) != len(set(expected))
+            ):
+                errors.append(f"{case_id}: expected_critical_paths must be unique non-empty paths")
                 bounded_quality_pass = False
             if set(expected) != set(direct):
                 errors.append(f"{case_id}: bounded critical paths must equal all direct changes")
@@ -533,6 +563,15 @@ def validate(data: dict[str, Any]) -> list[str]:
                 errors.append(f"{case_id}: related test evidence_type must be recognized")
                 bounded_quality_pass = False
 
+        related_paths = [
+            related.get("path")
+            for related in related_tests
+            if isinstance(related, dict) and isinstance(related.get("path"), str)
+        ]
+        if len(related_paths) != len(set(related_paths)):
+            errors.append(f"{case_id}: related test paths must be unique")
+            bounded_quality_pass = False
+
         if profile in _GOLD_PROFILES and not any(
             isinstance(related, dict)
             and related.get("evidence_type") == "changed_test_path"
@@ -738,6 +777,17 @@ def validate(data: dict[str, Any]) -> list[str]:
         if not isinstance(used, list) or not isinstance(skipped, list):
             errors.append(f"{case_id}: retrieval lane lists must be arrays")
             used, skipped = [], []
+            lane_truth_pass = False
+        elif (
+            not all(isinstance(lane, str) and lane for lane in used + skipped)
+            or len(used) != len(set(used))
+            or len(skipped) != len(set(skipped))
+            or set(used) & set(skipped)
+            or set(used) | set(skipped) != _RETRIEVAL_LANES
+        ):
+            errors.append(
+                f"{case_id}: retrieval lanes must be a unique disjoint partition of known lanes"
+            )
             lane_truth_pass = False
 
         call_graph = capsule.get("call_graph_truth")
@@ -1123,6 +1173,9 @@ def validate(data: dict[str, Any]) -> list[str]:
             for item in rollback_risks
         ):
             errors.append("every rollback/recovery risk needs a named mitigation")
+            delivery_evidence_pass = False
+        elif len({item["risk"] for item in rollback_risks}) != len(rollback_risks):
+            errors.append("rollback/recovery risk names must be unique")
             delivery_evidence_pass = False
 
         delivery_nonclaims = delivery.get("does_not_establish")
