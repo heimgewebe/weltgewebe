@@ -78,6 +78,7 @@ spec:
             capabilities:
               drop: ["ALL"]
             privileged: false
+            readOnlyRootFilesystem: true
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
