@@ -1194,7 +1194,6 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("R3 = auth, privacy, security", template)
 
 
-
 class ForwardedExternalReviewTests(unittest.TestCase):
     def test_owner_forwarded_external_reviews_count_for_r2(self) -> None:
         bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
@@ -1244,6 +1243,33 @@ class ForwardedExternalReviewTests(unittest.TestCase):
         result = _evaluate(bundle=bundle, risk_class="R2", comments=[native])
         self.assertFalse(result["pass"])
         self.assertGreaterEqual(result["malformed_evidence_count"], 2)
+
+    def test_forwarded_review_rejects_boolean_schema_version(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        comment = _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness")
+        comment["body"] = comment["body"].replace(
+            '"schema_version": 1',
+            '"schema_version": true',
+        )
+        result = _evaluate(bundle=bundle, risk_class="R2", comments=[comment])
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["malformed_evidence_count"], 1)
+
+    def test_forwarded_blocking_verdict_does_not_count(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        comment = _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness")
+        comment["body"] = comment["body"].replace(
+            '"verdict": "PASS"',
+            '"verdict": "BLOCKED"',
+        ).replace(
+            '"findings_resolved": true',
+            '"findings_resolved": false',
+        )
+        result = _evaluate(bundle=bundle, risk_class="R2", comments=[comment])
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["accepted_review_count"], 0)
+        self.assertTrue(any("blocking verdicts" in reason for reason in result["reasons"]))
+
     def test_forwarded_review_is_stale_after_head_change(self) -> None:
         bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
         comment = _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness")
