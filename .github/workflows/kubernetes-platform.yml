@@ -96,7 +96,7 @@ jobs:
           --source-commit "$GITHUB_SHA"
       - name: Collect failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: kubernetes-platform-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: .cache/weltgewebe-platform/failures/
@@ -124,7 +124,7 @@ jobs:
           --cluster "$CLUSTER_NAME"
       - name: Upload HA recovery receipt
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: kubernetes-ha-recovery-${{ github.run_id }}-${{ github.run_attempt }}
           path: .cache/weltgewebe-platform/receipts/*-ha-recovery.json
@@ -132,7 +132,7 @@ jobs:
           retention-days: 14
       - name: Collect HA failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # tag: v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: kubernetes-ha-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: .cache/weltgewebe-platform/failures/
