@@ -23,7 +23,7 @@ relations:
 
 **Für die stärkere Zielsetzung besteht kein Beweis:** Die Messung etabliert weder semantische Vollständigkeit noch vollständige Related-Test- oder Symbolabdeckung, Patch-Korrektheit, Merge-Reife, allgemeine Runtime-Korrektheit oder einen automatisch erfolgreichen Rollback.
 
-Die Promotion gilt ausschließlich für `bounded_change_impact_context_for_agent_handoff`. Sie ersetzt weder Tests noch Review, Deployment-Gates oder Recovery-Verfahren.
+Die Promotion gilt ausschließlich für `bounded_change_impact_context_for_agent_handoff`. Sie ersetzt weder Tests noch Review, Deployment-Gates oder Recovery-Verfahren. Alle drei Goldfälle bleiben wegen Budgeterschöpfung in nachrangigen Lanes `degraded`; der Bestand ist deshalb ausdrücklich ein begrenzter Qualitätsnachweis und kein Vollständigkeitsnachweis.
 
 ## Warum erneut gemessen wurde
 
@@ -55,12 +55,12 @@ Alle vier Fälle sind an `git_tree_delta_v1`-Digests gebunden. Eine falsche Diff
 
 ## Drei Goldfälle plus kontrollierter Livefall
 
-| Klasse | Basis → Ziel | Baseline | Capsule | Reduktion | Direktpfade | Related Tests | Status |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| DB/Auth | `691f663a…` → `4b9b0507…` | 34.306 B | 8.478 B | 75,287 % | 14/14 | 5 | degraded: Budget |
-| Web/Karte | `c18ef20b…` → `d7c1fb9c…` | 43.180 B | 11.711 B | 72,879 % | 4/4 | 2 | degraded: Budget |
-| Deployment/Kubernetes | `5d11513e…` → `7a1b5943…` | 34.369 B | 11.998 B | 65,091 % | 9/9 | 1 | degraded: Budget |
-| Kontrollierter Livefall | `24b74dab…` → `a7f8c490…` | 14.073 B | 5.095 B | 63,796 % | 1/1 | 1 Navigationstreffer | available |
+| Klasse | Basis → Ziel | Baseline | Capsule | Reduktion | Direktpfade | Related Tests | Call-Graph | Status |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| DB/Auth | `691f663a…` → `4b9b0507…` | 34.306 B | 8.478 B | 75,287 % | 14/14 | 5 geänderte Testpfade | skipped | degraded: Budget |
+| Web/Karte | `c18ef20b…` → `d7c1fb9c…` | 43.180 B | 11.711 B | 72,879 % | 4/4 | 2 geänderte Testpfade | skipped | degraded: Budget |
+| Deployment/Kubernetes | `5d11513e…` → `7a1b5943…` | 34.369 B | 11.998 B | 65,091 % | 9/9 | 1 geänderter Testpfad | 1 kohärente Contract-Test-Relation | degraded: Budget |
+| Kontrollierter Livefall | `24b74dab…` → `a7f8c490…` | 14.073 B | 5.095 B | 63,796 % | 1/1 | 1 Navigationstreffer | skipped | available |
 
 Die drei Goldfälle decken `database_auth`, `web_map` und `deployment_kubernetes` ab. Der vierte Fall ist der von T003 zusätzlich verlangte kontrollierte Livefall und bindet sein Ziel exakt an den frischen Source-Bundle-Commit `a7f8c490…`.
 
@@ -68,7 +68,7 @@ Der Livefall verwendet die Query `metrics_path_label`. Die gepaarte Baseline ent
 
 Alle vier Fälle haben vollständige Direktpfadabdeckung. Die drei Goldfälle enthalten jeweils mindestens einen direkt diff-gebundenen Testpfad. Beim kontrollierten Livefall liegt der relevante Test im geänderten Rust-Modul; RepoGround liefert zusätzlich einen aufgelösten Test-Navigationstreffer. Dieser Treffer wird nicht als direkt geänderter Test ausgegeben.
 
-`degraded` bedeutet in den drei Goldfällen Budgeterschöpfung in nachrangigen Lanes. `impact_context_blocked` tritt in keinem Fall auf. Der kontrollierte Livefall ist `available` und hat keine ausgelösten Stop-Kriterien.
+`degraded` bedeutet in den drei Goldfällen Budgeterschöpfung in nachrangigen Lanes. `impact_context_blocked` tritt in keinem Fall auf. Der kontrollierte Livefall ist `available` und hat keine ausgelösten Stop-Kriterien. Er ist der sauberste einzelne Lauf, ersetzt wegen seines kleineren Änderungsschnitts aber nicht die drei domänenspezifischen Goldfälle.
 
 ## Retrieval-Lane-Wahrheit
 
@@ -81,14 +81,14 @@ Seine bloße Existenz zählt nicht als Nutzung:
 
 - **DB/Auth:** keine ausgelieferte kohärente Call-Graph-Relation → `call_graph=skipped`.
 - **Web/Karte:** keine ausgelieferte kohärente Call-Graph-Relation → `call_graph=skipped`.
-- **Deployment/Kubernetes:** eine provenance-gebundene kohärente Relation wird ausgeliefert → `call_graph=used`.
+- **Deployment/Kubernetes:** eine provenance-gebundene kohärente Call-Graph-Relation innerhalb der Contract-Tests wird ausgeliefert → `call_graph=used`.
 - **Kontrollierter Livefall:** keine konsumierte Call-Graph-Relation → `call_graph=skipped`.
 
 Damit gilt weiter: Eine Retrieval-Lane ist nur benutzt, wenn ihre vertrauenswürdige Evidenz tatsächlich im ausgelieferten Kontext vorkommt.
 
 ## Evidenzgebundene Delivery Chain
 
-Der Deployment-Goldfall bindet die Änderung selbst, direkte Pfade, Related-Test, 8 Zielsymbole, 7 Kausalrelationen, eine kohärente Call-Graph-Relation und einen Live-Range des Produktions-Reconcilers. Zusätzlich werden die bisher fehlenden operativen Glieder explizit geprüft:
+Der Deployment-Goldfall bindet die Änderung selbst, direkte Pfade, einen geänderten Testpfad, 8 Zielsymbole, einen gemeldeten Gesamtumfang von 7 Kausalrelationen, davon eine mit expliziter Call-Graph-Provenienz materialisierte kohärente Relation innerhalb der Contract-Tests, sowie einen Live-Range des Produktions-Reconcilers. Zusätzlich werden die bisher fehlenden operativen Glieder explizit geprüft:
 
 - **Contract:** PR #1499; GitHub-Run `29806103267`, Job `88556854305` `Production reconciler contract tests` = `success`.
 - **CI vor Merge:** Required Merge Gate Run `29805241044`, Job `88555418515` = `success`; Review Evidence Gate Run `29805240373`, Job `88556686625` = `success`.
@@ -103,7 +103,7 @@ Diese Kette belegt einen erfolgreichen exakten Produktions-Readback für den geb
 
 ## Dirty-State-Grenze
 
-Die Messungen sind revisionsgebunden. Evidence-Edits des T003-Arbeitsbranches und der fremde Dirty-Overlay des kanonischen Hauptcheckouts sind mit `included_in_revision_diff=false` ausgeschlossen. Sie werden dokumentiert, aber nicht in die historischen Revisionsdiffs hineingerechnet.
+Die Messungen sind revisionsgebunden. Evidence-Edits des T003-Arbeitsbranches und der fremde Dirty-Overlay des kanonischen Hauptcheckouts sind mit `included_in_revision_diff=false` ausgeschlossen. Die gespeicherten Overlay-Daten dokumentieren den Zustand zum Messzeitpunkt; der Validator fordert keinen identischen aktuellen lokalen Dirty-State eines späteren CI- oder Entwicklerlaufs. Entscheidend ist ausschließlich, dass Overlay-Inhalte nicht in die revisionsgebundenen historischen Diffs eingehen.
 
 ## Akzeptanz
 
@@ -112,19 +112,19 @@ Die Messungen sind revisionsgebunden. Evidence-Edits des T003-Arbeitsbranches un
 - **Gepaarte Baseline:** bestanden; alle vier Baselines frisch und mit aufgelöster Evidenz.
 - **Kompaktheit:** bestanden; alle vier Fälle liegen deutlich über 20 Prozent Reduktion.
 - **Direktpfadabdeckung:** bestanden; 100 Prozent in jedem Fall.
-- **Related-Test-Evidenz:** bestanden für alle drei Goldfälle; der Livefall besitzt zusätzlich einen aufgelösten Navigationstreffer.
+- **Testpfad-Evidenz:** alle drei Goldfälle enthalten direkt diff-gebundene geänderte Testpfade; der Livefall besitzt zusätzlich einen aufgelösten Test-Navigationstreffer. Dies ist kein Beweis vollständiger automatischer Related-Test-Ermittlung.
 - **Diff-Bindung und Frische:** bestanden.
 - **Retrieval-Lane-Wahrheit:** bestanden.
 - **Delivery Chain:** begrenzt bestanden und explizit an Contract, CI, Deployment, Runtime-Readback und Recovery/Risikoevidenz gebunden.
 - **Promotion-Gate:** bestanden.
 
-Der Validator ist fail-closed gehärtet: Fehlt der kontrollierte Livefall oder einer der Pflichtbelege für Contract, CI, Deployment, Runtime-Readback, Recovery oder Rückfallrisiken, kann `promote_default` nicht bestehen.
+Der Validator berechnet die promotionsrelevanten Truth-, Acceptance- und Delivery-Gates aus der Detail-Evidenz neu. Deklarierte PASS-Zustände können einen gebrochenen Detailbeleg nicht überstimmen. Fehlt der kontrollierte Livefall oder einer der Pflichtbelege für Contract, CI, Deployment, Runtime-Readback, Recovery oder Rückfallrisiken, kann `promote_default` nicht bestehen.
 
 ## Promotion
 
-**Empfehlung: `promote_default` ausschließlich für `bounded_change_impact_context_for_agent_handoff`.**
+**Empfehlung: begrenzte Default-Promotion für den gemessenen `change_impact`-Handoff.**
 
-Gilt, wenn Budget-Degradierung nicht als Vollständigkeit interpretiert wird und die bestehenden `does_not_establish`-Grenzen erhalten bleiben. Die Promotion autorisiert weder Merge noch Deployment und ersetzt keine Tests, Reviews oder Recovery-Verfahren.
+Der maschinenlesbare Scope bleibt `bounded_change_impact_context_for_agent_handoff`. Gilt, wenn Budget-Degradierung nicht als Vollständigkeit interpretiert wird und die bestehenden `does_not_establish`-Grenzen erhalten bleiben. Die Promotion autorisiert weder Merge noch Deployment und ersetzt keine Tests, Reviews oder Recovery-Verfahren.
 
 ## Nicht bewiesen
 
