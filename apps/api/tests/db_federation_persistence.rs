@@ -178,6 +178,16 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
         receiver.receive(event.clone()).await?.status,
         ReceiveStatus::Applied
     );
+    let direction_change = sqlx::query(
+        "UPDATE federation_event_receipts SET direction = 'outbox' WHERE event_id = $1",
+    )
+    .bind(event.event_id)
+    .execute(&pool)
+    .await
+    .expect_err("event receipt direction must be immutable");
+    assert!(direction_change
+        .to_string()
+        .contains("federation event receipt direction is immutable"));
 
     // Reconstruct the service from the same database as a process-restart proof.
     drop(receiver);
@@ -844,5 +854,82 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
         post_event(&app_one, &unknown_event).await?.status(),
         StatusCode::INTERNAL_SERVER_ERROR
     );
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "requires an isolated FEDERATION_TEST_DATABASE_URL"]
+async fn federation_hardening_migration_rejects_legacy_scope_or_audience_drift() -> Result<()> {
+    let database_url = env::var("FEDERATION_TEST_DATABASE_URL")
+        .context("FEDERATION_TEST_DATABASE_URL must identify an isolated PostgreSQL database")?;
+    let pool = PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&database_url)
+        .await?;
+
+    sqlx::raw_sql("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+        .execute(&pool)
+        .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/20260720000001_federation_core.up.sql"
+    ))
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        "INSERT INTO federation_objects \
+         (object_address, origin_cell_id, object_kind, object_version, scope, payload) \
+         VALUES ('wg://cell-a/node/legacy-drift', 'cell-a', 'node', 2, 'neighbourhood', '{}'::jsonb)",
+    )
+    .execute(&pool)
+    .await?;
+    for (event_id, version, scope, targets) in [
+        (
+            Uuid::parse_str("00000000-0000-4000-8000-000000000001")?,
+            1_i64,
+            "global",
+            json!([]),
+        ),
+        (
+            Uuid::parse_str("00000000-0000-4000-8000-000000000002")?,
+            2_i64,
+            "neighbourhood",
+            json!(["aab", "a-b"]),
+        ),
+    ] {
+        let envelope = json!({
+            "scope": scope,
+            "neighbourhood_targets": targets,
+        });
+        sqlx::query(
+            "INSERT INTO federation_inbox \
+             (event_id, origin_cell_id, object_address, object_version, event_type, schema_version, scope, envelope_sha256, envelope) \
+             VALUES ($1, 'cell-a', 'wg://cell-a/node/legacy-drift', $2, 'object.upserted', 1, $3, $4, $5)",
+        )
+        .bind(event_id)
+        .bind(version)
+        .bind(scope)
+        .bind("0".repeat(64))
+        .bind(envelope)
+        .execute(&pool)
+        .await?;
+    }
+
+    sqlx::raw_sql(include_str!(
+        "../migrations/20260722000004_federation_core_hardening.up.sql"
+    ))
+    .execute(&pool)
+    .await?;
+
+    let migration_error = sqlx::raw_sql(include_str!(
+        "../migrations/20260722000006_federation_core_post_merge_hardening.up.sql"
+    ))
+    .execute(&pool)
+    .await
+    .expect_err("legacy scope/audience drift must fail the additive hardening migration closed");
+    assert!(migration_error.to_string().contains(
+        "legacy federation object history changed immutable scope or neighbourhood audience"
+    ));
+
     Ok(())
 }
