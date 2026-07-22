@@ -6,7 +6,7 @@ status: deprecated
 lifecycle_state: superseded
 lifecycle: decision-prep
 owner_task: OPT-API-002
-superseded_by: docs/reports/auth-persistence-next-step.md
+superseded_by: docs/reports/optimierungsstatus.md
 created: 2026-04-28
 lang: de
 summary: >
@@ -35,10 +35,10 @@ relations:
 - **Lifecycle-State:** superseded
 - **Lifecycle:** decision-prep
 - **Owner-Task:** OPT-API-002
-- **Superseded by:** `docs/reports/auth-persistence-next-step.md`
-- **Bewertung:** Historische Readiness-Diagnose. Der Bericht wurde durch den
-  konkreteren Next-Step-Report abgelöst und enthält mittlerweile überholte
-  Aussagen zum Fehlen von Migrationen. Keine aktuelle Umsetzungsquelle.
+- **Superseded by:** `docs/reports/optimierungsstatus.md`
+- **Bewertung:** Historische Readiness-Diagnose. Der Bericht wurde durch den aktuellen Optimierungsstatus abgelöst und enthält
+  mittlerweile überholte Aussagen zum Fehlen von Migrationen. Keine aktuelle
+  Umsetzungsquelle.
 
 ---
 

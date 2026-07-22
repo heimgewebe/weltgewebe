@@ -6,7 +6,7 @@ status: active
 lifecycle_state: active
 lifecycle: audit
 owner_task: OPT-API-002
-review_after: 2026-07-17
+review_after: 2026-08-22
 created: 2026-05-13
 lang: de
 summary: >
@@ -49,7 +49,7 @@ relations:
 - **Lifecycle-State:** active
 - **Lifecycle:** audit
 - **Owner-Task:** OPT-API-002
-- **Review after:** 2026-07-17
+- **Review after:** 2026-08-22
 - **Bewertung:** Weiterhin aktiver Architekturabgleich zur Produktionsentscheidung
   direkter PostgreSQL-Pfad vs. PgBouncer-Dev-/Spezialpfad. Keine neue
   Runtime-Aussage in diesem PR.
