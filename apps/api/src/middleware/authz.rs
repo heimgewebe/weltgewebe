@@ -5,11 +5,43 @@ use axum::{http::StatusCode, response::IntoResponse};
 use crate::auth::role::Role;
 use crate::middleware::auth::AuthContext;
 
-/// Gate for write endpoints:
+/// Gate for ordinary authenticated Webungsaktionen.
+///
+/// Safe methods pass through. Mutating methods require a valid account
+/// session, but deliberately do not distinguish Gast and Weber. Ownership or
+/// stewardship rules remain the responsibility of the resource handler.
+pub async fn require_authenticated(req: Request<Body>, next: Next) -> Response {
+    if req.method() == Method::GET
+        || req.method() == Method::HEAD
+        || req.method() == Method::OPTIONS
+    {
+        return next.run(req).await;
+    }
+
+    let ctx = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or(AuthContext {
+            authenticated: false,
+            account_id: None,
+            device_id: None,
+            role: Role::Gast,
+            expires_at: None,
+        });
+
+    if !ctx.authenticated || ctx.account_id.is_none() {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    next.run(req).await
+}
+
+/// Gate for stewardship and formal-governance write endpoints:
 /// - Safe methods (GET, HEAD, OPTIONS) pass through.
 /// - Others:
 ///   - no valid session -> 401
-///   - authenticated as Gast -> 403
+///   - authenticated as Gast -> 403 (Weber/Admin required)
 pub async fn require_write(req: Request<Body>, next: Next) -> Response {
     if req.method() == Method::GET
         || req.method() == Method::HEAD

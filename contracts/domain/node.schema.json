@@ -27,8 +27,19 @@
       "type": "string",
       "format": "date-time"
     },
+    "created_by_account_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid",
+      "description": "Immutable creator binding assigned by the server. Legacy or anonymized nodes may omit it or expose null."
+    },
     "info": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "maxLength": 20000,
       "description": "Freitext-Info (Markdown erlaubt)."
     },
@@ -62,10 +73,19 @@
           "type": "number"
         }
       },
-      "required": ["lat", "lon"],
+      "required": [
+        "lat",
+        "lon"
+      ],
       "additionalProperties": false
     }
   },
-  "required": ["id", "kind", "title", "created_at", "updated_at"],
+  "required": [
+    "id",
+    "kind",
+    "title",
+    "created_at",
+    "updated_at"
+  ],
   "additionalProperties": false
 }

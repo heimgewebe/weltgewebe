@@ -34,7 +34,7 @@
 
   $: open = $mapChrome.toolFanOpen;
   $: branch = $mapChrome.toolFanBranch;
-  $: canCreateNode = $authStore.role === "weber" || $authStore.role === "admin";
+  $: canCreateNode = $authStore.authenticated;
   $: canCreateProposal = $authStore.authenticated && $authStore.role === "gast";
   $: hasWeavingAction = canCreateNode || canCreateProposal;
 

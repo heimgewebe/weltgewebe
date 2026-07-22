@@ -1,10 +1,9 @@
 //! HTTP-Oberfläche des Antragssystems (`docs/specs/governance-antraege.md`).
 //!
-//! Leserechte sind öffentlich: Gäste sehen Liste, Detail, Vetos und
-//! Gesprächsraum. Zustandsändernd sind für Gäste ausschließlich der eigene
-//! Weberantrag (`POST /proposals`) und der eigene Austritt
-//! (`POST /accounts/me/exit`). Veto, Stimme und Gesprächsraum-Beiträge sind
-//! Webungsaktionen und über `require_write` (kein Gast) geschützt.
+//! Leserechte sind öffentlich. Angemeldete Gäste dürfen den eigenen
+//! Weberantrag stellen, in offenen Gesprächsräumen mitreden und den eigenen
+//! Account auflösen. Formale Vetos und Stimmen bleiben Webern und
+//! Administratoren vorbehalten.
 //!
 //! PostgreSQL ist kanonisch: ohne konfigurierten Pool antworten alle
 //! Governance-Endpunkte fail-closed mit 503 — es gibt keinen JSONL- oder
@@ -22,16 +21,31 @@ use serde_json::Value;
 use sqlx::PgPool;
 
 use crate::auth::role::Role;
-use crate::config::{DomainAccountWriteSource, DomainReadSource};
+use crate::config::{
+    DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource, DomainReadSource,
+};
 use crate::governance::{
-    self, CreateProposalError, MessageError, ProposalMessage, ProposalStatus, ProposalWithCounts,
-    Veto, VetoError, VoteChoice, VoteError, MESSAGE_BODY_MAX_CHARS, SUMMARY_MAX_CHARS,
-    VETO_REASON_MAX_CHARS,
+    self, CreateProposalError, GuestExitError, MessageError, ProposalMessage, ProposalStatus,
+    ProposalWithCounts, Veto, VetoError, VoteChoice, VoteError, MESSAGE_BODY_MAX_CHARS,
+    SUMMARY_MAX_CHARS, VETO_REASON_MAX_CHARS,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::ApiState;
 
 type ApiError = (StatusCode, String);
+
+fn record_guest_exit_session_cleanup(
+    account_id: &str,
+    cleanup: crate::auth::session::SessionResult<()>,
+) {
+    if let Err(error) = cleanup {
+        tracing::warn!(
+            error = %error,
+            account_id,
+            "guest exit committed; secondary session backend cleanup failed"
+        );
+    }
+}
 
 /// Fail-closed-Torwächter: Governance existiert nur mit PostgreSQL.
 fn require_pool(state: &ApiState) -> Result<&PgPool, ApiError> {
@@ -47,6 +61,24 @@ fn require_pool(state: &ApiState) -> Result<&PgPool, ApiError> {
     state.db_pool.as_ref().ok_or((
         StatusCode::SERVICE_UNAVAILABLE,
         "governance requires a configured PostgreSQL database".to_string(),
+    ))
+}
+
+fn require_guest_exit_pool(state: &ApiState) -> Result<&PgPool, ApiError> {
+    if state.config.domain_read_source != DomainReadSource::Postgres
+        || state.config.domain_account_write_source != DomainAccountWriteSource::Postgres
+        || state.config.domain_node_write_source != DomainNodeWriteSource::Postgres
+        || state.config.domain_edge_write_source != DomainEdgeWriteSource::Postgres
+    {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "guest exit requires PostgreSQL as the canonical account, node and edge source"
+                .to_string(),
+        ));
+    }
+    state.db_pool.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "guest exit requires a configured PostgreSQL database".to_string(),
     ))
 }
 
@@ -71,6 +103,17 @@ fn require_account_id(auth: &AuthContext) -> Result<String, ApiError> {
         StatusCode::UNAUTHORIZED,
         "authenticated account context missing".to_string(),
     ))
+}
+
+fn require_formal_governance_actor(auth: &AuthContext) -> Result<String, ApiError> {
+    let account_id = require_account_id(auth)?;
+    if !matches!(auth.role, Role::Weber | Role::Admin) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "formal vetoes and votes require Weber status".to_string(),
+        ));
+    }
+    Ok(account_id)
 }
 
 /// Anzeigename aus dem laufenden Account-Store; Fallback, falls die Projektion
@@ -307,16 +350,16 @@ pub async fn create_proposal(
     Ok((StatusCode::CREATED, Json(proposal_view(proposal, now))))
 }
 
-/// POST /proposals/{id}/veto — begründetes Veto eines Webers (Webungsaktion,
-/// `require_write`-geschützt: Gäste 403, unangemeldet 401).
+/// POST /proposals/{id}/veto — begründetes Veto eines angemeldeten Accounts.
+/// Der eigene Weberantrag bleibt von formaler Selbstentscheidung ausgeschlossen.
 pub async fn veto_proposal(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<String>,
     Json(payload): Json<Value>,
 ) -> Result<(StatusCode, Json<Veto>), ApiError> {
+    let account_id = require_formal_governance_actor(&auth)?;
     let pool = require_pool(&state)?;
-    let account_id = require_account_id(&auth)?;
 
     let object = payload
         .as_object()
@@ -339,7 +382,19 @@ pub async fn veto_proposal(
             ),
             VetoError::AlreadyVetoed => (
                 StatusCode::CONFLICT,
-                "this weber already vetoed the proposal".to_string(),
+                "this account already vetoed the proposal".to_string(),
+            ),
+            VetoError::ApplicantCannotDecide => (
+                StatusCode::FORBIDDEN,
+                "the applicant cannot veto the own Weber proposal".to_string(),
+            ),
+            VetoError::ActorNotEligible => (
+                StatusCode::FORBIDDEN,
+                "formal vetoes require Weber status".to_string(),
+            ),
+            VetoError::ActorUnavailable => (
+                StatusCode::UNAUTHORIZED,
+                "veto actor account is no longer active".to_string(),
             ),
             VetoError::Database(error) => internal_error("add_veto")(error),
         })?;
@@ -353,16 +408,16 @@ pub async fn veto_proposal(
     Ok((StatusCode::CREATED, Json(veto)))
 }
 
-/// PUT /proposals/{id}/vote — genau eine aktuelle, änderbare Stimme je Weber
-/// (Webungsaktion, `require_write`-geschützt).
+/// PUT /proposals/{id}/vote — genau eine aktuelle, änderbare Stimme je
+/// angemeldetem Account; der Antragsteller stimmt nicht über die eigene Aufnahme ab.
 pub async fn vote_proposal(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<String>,
     Json(payload): Json<Value>,
 ) -> Result<Json<Value>, ApiError> {
+    let account_id = require_formal_governance_actor(&auth)?;
     let pool = require_pool(&state)?;
-    let account_id = require_account_id(&auth)?;
 
     let object = payload
         .as_object()
@@ -385,6 +440,18 @@ pub async fn vote_proposal(
             VoteError::WrongPhase => (
                 StatusCode::CONFLICT,
                 "voting is only possible during the open voting phase".to_string(),
+            ),
+            VoteError::ApplicantCannotDecide => (
+                StatusCode::FORBIDDEN,
+                "the applicant cannot vote on the own Weber proposal".to_string(),
+            ),
+            VoteError::ActorNotEligible => (
+                StatusCode::FORBIDDEN,
+                "formal votes require Weber status".to_string(),
+            ),
+            VoteError::ActorUnavailable => (
+                StatusCode::UNAUTHORIZED,
+                "vote actor account is no longer active".to_string(),
             ),
             VoteError::Database(error) => internal_error("upsert_vote")(error),
         })?;
@@ -412,8 +479,8 @@ pub async fn list_proposal_messages(
     Ok(Json(messages))
 }
 
-/// POST /proposals/{id}/messages — Beitrag als Webungsaktion
-/// (`require_write`-geschützt: Gäste hinterlassen keine sichtbaren Spuren).
+/// POST /proposals/{id}/messages — öffentlicher Beitrag eines angemeldeten
+/// Accounts während einer offenen Phase.
 pub async fn post_proposal_message(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
@@ -452,6 +519,7 @@ pub async fn post_proposal_message(
 /// Weltgewebe. Nur Gäste dürfen diesen Sonderpfad nutzen. Er entfernt ihre
 /// Authentifizierungsidentität samt eigenen Weberanträgen und Anmeldedaten aus
 /// der kanonischen Datenbank, aus der Laufzeitprojektion und aus allen Sessions.
+/// Gemeinschaftliche Knoten und Beiträge bleiben anonymisiert erhalten.
 pub async fn exit_own_account(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
@@ -463,30 +531,44 @@ pub async fn exit_own_account(
             "only guest accounts can use the guest exit path".to_string(),
         ));
     }
-    let pool = require_pool(&state)?;
+    let pool = require_guest_exit_pool(&state)?;
 
     governance::delete_guest_account(pool, &account_id)
         .await
-        .map_err(internal_error("delete_guest_account"))?;
-
-    {
-        let mut accounts = state.accounts.write().await;
-        accounts.remove(&account_id);
-    }
-
-    state
-        .sessions
-        .delete_all_by_account(&account_id)
-        .await
-        .map_err(|error| {
-            tracing::error!(error = %error, "failed to end sessions after guest exit");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "guest exit recorded but session cleanup failed".to_string(),
-            )
+        .map_err(|error| match error {
+            GuestExitError::NotEligible => (
+                StatusCode::CONFLICT,
+                "account is no longer an active guest".to_string(),
+            ),
+            GuestExitError::AmbiguousLegacyEndpoint => (
+                StatusCode::CONFLICT,
+                "guest exit is blocked by an ambiguous legacy relationship".to_string(),
+            ),
+            GuestExitError::Database(error) => internal_error("delete_guest_account")(error),
         })?;
+
+    let session_cleanup = state.sessions.delete_all_by_account(&account_id).await;
+    record_guest_exit_session_cleanup(&account_id, session_cleanup);
+    // In PostgreSQL mode the projection middleware holds a read guard for the
+    // whole request. Refreshing here would try to upgrade that guard to a write
+    // lock and deadlock against ourselves. The next domain request observes the
+    // incremented database generation and refreshes before taking its read guard.
 
     tracing::info!(event = "governance.guest.exited", "Guest account deleted");
 
     Ok(Json(serde_json::json!({ "status": "exited" })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::record_guest_exit_session_cleanup;
+    use crate::auth::session::SessionBackendError;
+
+    #[test]
+    fn failed_secondary_session_cleanup_does_not_fail_committed_guest_exit() {
+        record_guest_exit_session_cleanup(
+            "guest-already-deleted",
+            Err(SessionBackendError::Unavailable),
+        );
+    }
 }

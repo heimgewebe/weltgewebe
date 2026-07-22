@@ -20,10 +20,10 @@ relations:
 | Garnrolle | Account, `/accounts` | genau ein persönlicher Ausgangspunkt je Account | produktiver PostgreSQL-Pfad belegt |
 | Kartenstatus | `map_state` | `not_on_map`, `exact` oder `radius`; Eigenschaft der Garnrolle, kein Kontotyp | produktiv migriert; Legacy-`mode` bleibt Rollbackbrücke |
 | Knoten | Node, `/nodes` | Ort, Kollektivgut, Ressource oder Vorhaben | API- und Browser-Schreibpfad produktiv belegt |
-| Faden | Edge, `/edges` | Beziehung zwischen Garnrollen und/oder Knoten | API- und Browser-Schreibpfad produktiv belegt |
+| Faden | Edge, `/edges` | serverseitig abgeleitete Beziehung zwischen Garnrollen und/oder Knoten | öffentliche Leseprojektion; Erzeugung durch fachliche Webungsaktionen |
 | Gesprächsraum | Conversation, `/conversations` | Öffentlicher Diskussionsraum eines Knotens; weitere Gesprächstypen geplant | Knotengespräch produktiv |
 | Beitrag | Message, `/conversations/{id}/messages` | Klartextbeitrag mit Autoren-Snapshot und Tombstone | Knotengespräch produktiv |
-| Berechtigungsrolle | `role` (`gast`, `weber`, `admin`) | technische Autorisierung, nicht die Identität der Person | implementiert |
+| Berechtigungsrolle | `role` (`gast`, `weber`, `admin`) | Gast webt und spricht mit; Weber pflegt zusätzlich fremde gemeinschaftliche Inhalte und besitzt formale Veto-/Stimmrechte; Admin moderiert | implementiert |
 
 ## Legacybegriffe
 
