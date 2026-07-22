@@ -8,7 +8,7 @@ END
 $$;
 
 CREATE TRIGGER federation_event_receipts_immutable_direction
-BEFORE UPDATE OF direction ON federation_event_receipts
+BEFORE UPDATE ON federation_event_receipts
 FOR EACH ROW
 WHEN (NEW.direction IS DISTINCT FROM OLD.direction)
 EXECUTE FUNCTION federation_reject_event_receipt_direction_change();
