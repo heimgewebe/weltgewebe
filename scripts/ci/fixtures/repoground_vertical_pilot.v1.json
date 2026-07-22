@@ -1,34 +1,39 @@
 {
-  "acceptance": {
-    "delivery": "not_established_by_fixture",
-    "delivery_chain": "blocked_call_graph_artifact_too_large",
-    "paired_baseline": "pass",
-    "promotion_gate": "pass_mechanical_compactness",
-    "quality": "pass_with_explicit_degradation",
-    "three_classes": "pass"
-  },
-  "call_graph_blocker": {
-    "artifact_bytes": 22127878,
-    "artifact_role": "python_call_graph_json",
-    "effect": "agent impact context degraded; automatic related_tests, target_symbols and call_graph lanes unavailable",
-    "error_code": "artifact_too_large",
-    "over_limit_bytes": 5350662,
-    "readonly_adapter_max_bytes": 16777216
-  },
   "cases": [
     {
-      "base_commit": "8c57c1debf43bfe5a1eb7d09100907cfa2473228",
-      "base_revision": "8c57c1debf43bfe5a1eb7d09100907cfa2473228",
+      "base_commit": "691f663a278bc4f29e8e7a75b23d9538ac7039c6",
+      "base_revision": "691f663a278bc4f29e8e7a75b23d9538ac7039c6",
       "baseline": {
         "available": true,
-        "duration_ms": 435.475,
-        "payload_bytes": 42848,
-        "status": null
+        "direct_context_pack_verified": true,
+        "freshness_status": "fresh",
+        "payload_bytes": 34306,
+        "payload_bytes_source": "repoground_context_compose.compactness.general_context_pack_bytes",
+        "resolved_evidence_status": "available",
+        "snippet_count": 3,
+        "range_count": 3,
+        "citation_count": 3
       },
       "capsule": {
         "available": true,
-        "context_bytes": 11738,
-        "diff_binding_verified": true,
+        "call_graph_truth": {
+          "artifact_available": true,
+          "artifact_bytes": 22485322,
+          "artifact_sha256": "6e5292dd074e6d5e44b9588c1438f9c2acf23b9f7e0836787d64efc45fa476b9",
+          "coherent_relation_count": 0,
+          "consumed_coherent_evidence": false
+        },
+        "causal_relations_included": 0,
+        "citations_included": 3,
+        "context_bytes": 8478,
+        "dirty_overlay": {
+          "available": true,
+          "dirty": false,
+          "entry_count": 0,
+          "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "included_in_revision_diff": false,
+          "identity_note": "RepoGround publication source checkout was clean during the final 1548 measurement."
+        },
         "does_not_establish": [
           "truth",
           "completeness",
@@ -40,308 +45,1021 @@
           "runtime_behavior",
           "regression_absence"
         ],
-        "duration_ms": 665.914,
+        "freshness_status": "fresh",
+        "gaps": [],
+        "general_context_pack_bytes_reported": 34306,
+        "lane_counts": {
+          "direct_changes": {
+            "available": 14,
+            "considered": 14,
+            "included": 14,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "related_tests": {
+            "available": 5,
+            "considered": 5,
+            "included": 5,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "target_symbols": {
+            "available": 0,
+            "considered": 0,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "causal_relations": {
+            "available": 0,
+            "considered": 0,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "live_ranges": {
+            "available": 3,
+            "considered": 3,
+            "included": 3,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "citations": {
+            "available": 3,
+            "considered": 3,
+            "included": 3,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "entry_manifest": {
+            "available": 1,
+            "considered": 1,
+            "included": 1,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "query_snippets": {
+            "available": 3,
+            "considered": 3,
+            "included": 1,
+            "policy_omitted": 0,
+            "budget_omitted": 2
+          }
+        },
+        "live_ranges_included": 3,
+        "ratio": 0.247129,
+        "related_tests_included": 5,
+        "retrieval_lanes": {
+          "used": [
+            "direct_changes",
+            "agent_impact",
+            "query_context",
+            "citation",
+            "live_evidence",
+            "entry_manifest"
+          ],
+          "skipped": [
+            "pr_delta_cards",
+            "symbol_navigation",
+            "call_graph"
+          ]
+        },
+        "reduction_pct": 75.287,
+        "status": "degraded",
+        "stop_criteria": {
+          "impact_context_blocked": false,
+          "triggered": [
+            "budget_exhausted"
+          ]
+        },
+        "target_symbols_included": 0,
+        "related_tests": [
+          {
+            "path": "apps/api/tests/api_accounts_create.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/db_domain_account_write_path.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/db_domain_backfill.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/db_domain_read_path.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/db_domain_schema_migrations.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          }
+        ],
+        "target_symbols": [],
+        "representative_causal_relations": [],
+        "budget_degradation": {
+          "policy_limited_lanes": [],
+          "exhausted_lanes": [
+            "query_snippets"
+          ]
+        }
+      },
+      "changed_path_count": 14,
+      "critical_path_coverage": 1.0,
+      "diff_binding_kind": "git_tree_delta_v1",
+      "diff_sha256": "8acfc87530bc2ec9f660ef31afa7e4c81e3a08fba879e9f41b244b9931490812",
+      "direct_change_paths": [
+        "apps/api/migrations/20260718000001_radius_projection_privacy.down.sql",
+        "apps/api/migrations/20260718000001_radius_projection_privacy.up.sql",
+        "apps/api/src/domain_db.rs",
+        "apps/api/src/routes/accounts.rs",
+        "apps/api/tests/api_accounts_create.rs",
+        "apps/api/tests/db_domain_account_write_path.rs",
+        "apps/api/tests/db_domain_backfill.rs",
+        "apps/api/tests/db_domain_read_path.rs",
+        "apps/api/tests/db_domain_schema_migrations.rs",
+        "docs/blueprints/domain-data-postgres-cutover.md",
+        "docs/datenmodell.md",
+        "docs/reports/domain-account-write-path-proof.md",
+        "docs/reports/domain-backfill-proof.md",
+        "docs/specs/privacy-api.md"
+      ],
+      "expected_critical_paths": [
+        "apps/api/migrations/20260718000001_radius_projection_privacy.down.sql",
+        "apps/api/migrations/20260718000001_radius_projection_privacy.up.sql",
+        "apps/api/src/domain_db.rs",
+        "apps/api/src/routes/accounts.rs",
+        "apps/api/tests/api_accounts_create.rs",
+        "apps/api/tests/db_domain_account_write_path.rs",
+        "apps/api/tests/db_domain_backfill.rs",
+        "apps/api/tests/db_domain_read_path.rs",
+        "apps/api/tests/db_domain_schema_migrations.rs",
+        "docs/blueprints/domain-data-postgres-cutover.md",
+        "docs/datenmodell.md",
+        "docs/reports/domain-account-write-path-proof.md",
+        "docs/reports/domain-backfill-proof.md",
+        "docs/specs/privacy-api.md"
+      ],
+      "id": "database_auth_radius_privacy",
+      "missing_critical_paths": [],
+      "profile": "database_auth",
+      "query": "radius privacy account projection migration database auth",
+      "target_commit": "4b9b0507e5d54eaa285d91dbb47a3f2cf74f4ccc",
+      "target_revision": "4b9b0507e5d54eaa285d91dbb47a3f2cf74f4ccc",
+      "delivery_completeness_required": true
+    },
+    {
+      "base_commit": "c18ef20b0e164d0b3750b1a1650f0c3297a80550",
+      "base_revision": "c18ef20b0e164d0b3750b1a1650f0c3297a80550",
+      "baseline": {
+        "available": true,
+        "direct_context_pack_verified": true,
+        "freshness_status": "fresh",
+        "payload_bytes": 43206,
+        "payload_bytes_source": "repoground_context_compose.compactness.general_context_pack_bytes",
+        "resolved_evidence_status": "available",
+        "snippet_count": 5,
+        "range_count": 5,
+        "citation_count": 5
+      },
+      "capsule": {
+        "available": true,
+        "call_graph_truth": {
+          "artifact_available": true,
+          "artifact_bytes": 22485322,
+          "artifact_sha256": "6e5292dd074e6d5e44b9588c1438f9c2acf23b9f7e0836787d64efc45fa476b9",
+          "coherent_relation_count": 0,
+          "consumed_coherent_evidence": false
+        },
+        "causal_relations_included": 0,
+        "citations_included": 4,
+        "context_bytes": 11716,
+        "dirty_overlay": {
+          "available": true,
+          "dirty": false,
+          "entry_count": 0,
+          "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "included_in_revision_diff": false,
+          "identity_note": "RepoGround publication source checkout was clean during the final 1548 measurement."
+        },
+        "does_not_establish": [
+          "truth",
+          "completeness",
+          "patch_correctness",
+          "test_sufficiency",
+          "test_coverage",
+          "review_completeness",
+          "merge_readiness",
+          "runtime_behavior",
+          "regression_absence"
+        ],
+        "freshness_status": "fresh",
+        "gaps": [],
+        "general_context_pack_bytes_reported": 43206,
+        "lane_counts": {
+          "direct_changes": {
+            "available": 4,
+            "considered": 4,
+            "included": 4,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "related_tests": {
+            "available": 2,
+            "considered": 2,
+            "included": 2,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "target_symbols": {
+            "available": 0,
+            "considered": 0,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "causal_relations": {
+            "available": 0,
+            "considered": 0,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "live_ranges": {
+            "available": 4,
+            "considered": 4,
+            "included": 4,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "citations": {
+            "available": 4,
+            "considered": 4,
+            "included": 4,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "entry_manifest": {
+            "available": 1,
+            "considered": 1,
+            "included": 1,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "query_snippets": {
+            "available": 4,
+            "considered": 4,
+            "included": 2,
+            "policy_omitted": 0,
+            "budget_omitted": 2
+          }
+        },
+        "live_ranges_included": 4,
+        "ratio": 0.271166,
+        "related_tests_included": 2,
+        "retrieval_lanes": {
+          "used": [
+            "direct_changes",
+            "agent_impact",
+            "query_context",
+            "citation",
+            "live_evidence",
+            "entry_manifest"
+          ],
+          "skipped": [
+            "pr_delta_cards",
+            "symbol_navigation",
+            "call_graph"
+          ]
+        },
+        "reduction_pct": 72.883,
+        "status": "degraded",
+        "stop_criteria": {
+          "impact_context_blocked": false,
+          "triggered": [
+            "budget_exhausted"
+          ]
+        },
+        "target_symbols_included": 0,
+        "related_tests": [
+          {
+            "path": "apps/web/tests/map-controls-offset.spec.ts",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/web/tests/map-fan-surface-clarity.spec.ts",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          }
+        ],
+        "target_symbols": [],
+        "representative_causal_relations": [],
+        "budget_degradation": {
+          "policy_limited_lanes": [],
+          "exhausted_lanes": [
+            "query_snippets"
+          ]
+        }
+      },
+      "changed_path_count": 4,
+      "critical_path_coverage": 1.0,
+      "diff_binding_kind": "git_tree_delta_v1",
+      "diff_sha256": "2bff3bb1f6939e078bac5f389e2d10b617dfff5d108afe1010b66eeaa1b9f0d0",
+      "direct_change_paths": [
+        "apps/web/src/lib/components/GovernanceFan.svelte",
+        "apps/web/src/lib/components/ToolFanMenu.svelte",
+        "apps/web/tests/map-controls-offset.spec.ts",
+        "apps/web/tests/map-fan-surface-clarity.spec.ts"
+      ],
+      "expected_critical_paths": [
+        "apps/web/src/lib/components/GovernanceFan.svelte",
+        "apps/web/src/lib/components/ToolFanMenu.svelte",
+        "apps/web/tests/map-controls-offset.spec.ts",
+        "apps/web/tests/map-fan-surface-clarity.spec.ts"
+      ],
+      "id": "web_map_globe_touch",
+      "missing_critical_paths": [],
+      "profile": "web_map",
+      "query": "map",
+      "target_commit": "d7c1fb9ca77005a590a0a750124a0fa243b1471c",
+      "target_revision": "d7c1fb9ca77005a590a0a750124a0fa243b1471c",
+      "delivery_completeness_required": true
+    },
+    {
+      "base_commit": "5d11513ece74f289bd3c0cf8b92bc0f617f5cc79",
+      "base_revision": "5d11513ece74f289bd3c0cf8b92bc0f617f5cc79",
+      "baseline": {
+        "available": true,
+        "direct_context_pack_verified": true,
+        "freshness_status": "fresh",
+        "payload_bytes": 34369,
+        "payload_bytes_source": "repoground_context_compose.compactness.general_context_pack_bytes",
+        "resolved_evidence_status": "available",
+        "snippet_count": 3,
+        "range_count": 3,
+        "citation_count": 3
+      },
+      "capsule": {
+        "available": true,
+        "call_graph_truth": {
+          "artifact_available": true,
+          "artifact_bytes": 22485322,
+          "artifact_sha256": "6e5292dd074e6d5e44b9588c1438f9c2acf23b9f7e0836787d64efc45fa476b9",
+          "coherent_relation_count": 1,
+          "consumed_coherent_evidence": true
+        },
+        "causal_relations_included": 7,
+        "citations_included": 0,
+        "context_bytes": 11998,
+        "dirty_overlay": {
+          "available": true,
+          "dirty": false,
+          "entry_count": 0,
+          "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "included_in_revision_diff": false,
+          "identity_note": "RepoGround publication source checkout was clean during the final 1548 measurement."
+        },
+        "does_not_establish": [
+          "truth",
+          "completeness",
+          "patch_correctness",
+          "test_sufficiency",
+          "test_coverage",
+          "review_completeness",
+          "merge_readiness",
+          "runtime_behavior",
+          "regression_absence"
+        ],
         "freshness_status": "fresh",
         "gaps": [
           {
-            "reason": "source_unavailable",
-            "source": "python_call_graph_json",
-            "status": "blocked"
-          },
-          {
-            "reason": "required_source_untrusted",
-            "source": "artifact_coherence",
-            "sources": [
-              {
-                "error_code": "artifact_too_large",
-                "source": "python_call_graph_json",
-                "status": "blocked"
-              }
+            "paths": [
+              "scripts/ops/activate-production-reconciler-from-release.sh",
+              "scripts/ops/install-production-reconciler.sh",
+              "scripts/weltgewebe-up"
             ],
-            "status": "blocked"
+            "reason": "target_path_not_present_as_graph_node",
+            "source": "architecture_graph_json",
+            "status": "missing_target"
           }
         ],
-        "general_context_pack_bytes_reported": 42848,
-        "ratio": 0.273945,
-        "reduction_pct": 72.606,
-        "related_tests": [],
+        "general_context_pack_bytes_reported": 34369,
+        "lane_counts": {
+          "direct_changes": {
+            "available": 9,
+            "considered": 9,
+            "included": 9,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "related_tests": {
+            "available": 1,
+            "considered": 1,
+            "included": 1,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "target_symbols": {
+            "available": 17,
+            "considered": 8,
+            "included": 8,
+            "policy_omitted": 9,
+            "budget_omitted": 0
+          },
+          "causal_relations": {
+            "available": 21,
+            "considered": 8,
+            "included": 7,
+            "policy_omitted": 13,
+            "budget_omitted": 1
+          },
+          "live_ranges": {
+            "available": 3,
+            "considered": 3,
+            "included": 1,
+            "policy_omitted": 0,
+            "budget_omitted": 2
+          },
+          "citations": {
+            "available": 3,
+            "considered": 3,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 3
+          },
+          "entry_manifest": {
+            "available": 1,
+            "considered": 1,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 1
+          },
+          "query_snippets": {
+            "available": 3,
+            "considered": 3,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 3
+          }
+        },
+        "live_ranges_included": 1,
+        "ratio": 0.349094,
+        "related_tests_included": 1,
         "retrieval_lanes": {
-          "skipped": [
-            "pr_delta_cards",
-            "call_graph"
-          ],
           "used": [
             "direct_changes",
             "agent_impact",
             "query_context",
             "symbol_navigation",
-            "citation",
-            "live_evidence",
-            "entry_manifest"
+            "call_graph",
+            "live_evidence"
+          ],
+          "skipped": [
+            "entry_manifest",
+            "pr_delta_cards",
+            "citation"
           ]
         },
+        "reduction_pct": 65.091,
         "status": "degraded",
         "stop_criteria": {
-          "available": [
-            "diff_sha256_mismatch",
-            "publication_unavailable",
-            "impact_context_blocked",
-            "budget_exhausted"
-          ],
+          "impact_context_blocked": false,
           "triggered": [
-            "impact_context_blocked",
             "budget_exhausted"
           ]
         },
-        "target_symbols": []
+        "target_symbols_included": 8,
+        "related_tests": [
+          {
+            "path": "scripts/ci/tests/test_production_reconciler_contract.py",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          }
+        ],
+        "target_symbols": [
+          {
+            "id": "py:scripts:ci:tests:test_production_reconciler_contract.py:class:ProductionReconcilerContractTests",
+            "qualified_name": "ProductionReconcilerContractTests",
+            "path": "scripts/ci/tests/test_production_reconciler_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_production_reconciler_contract.py#L12-L540"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_production_reconciler_contract.py:function:ProductionReconcilerContractTests.read",
+            "qualified_name": "ProductionReconcilerContractTests.read",
+            "path": "scripts/ci/tests/test_production_reconciler_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_production_reconciler_contract.py#L13-L14"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_production_reconciler_contract.py:function:ProductionReconcilerContractTests.test_deploy_helper_rechecks_main_after_public_readback",
+            "qualified_name": "ProductionReconcilerContractTests.test_deploy_helper_rechecks_main_after_public_readback",
+            "path": "scripts/ci/tests/test_production_reconciler_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_production_reconciler_contract.py#L16-L35"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_production_reconciler_contract.py:function:ProductionReconcilerContractTests.test_deploy_helper_runs_bounded_migrations_before_full_deploy",
+            "qualified_name": "ProductionReconcilerContractTests.test_deploy_helper_runs_bounded_migrations_before_full_deploy",
+            "path": "scripts/ci/tests/test_production_reconciler_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_production_reconciler_contract.py#L37-L56"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_production_reconciler_contract.py:function:ProductionReconcilerContractTests.test_deploy_helper_preserves_legacy_checkout_and_binds_main",
+            "qualified_name": "ProductionReconcilerContractTests.test_deploy_helper_preserves_legacy_checkout_and_binds_main",
+            "path": "scripts/ci/tests/test_production_reconciler_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_production_reconciler_contract.py#L58-L81"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_production_reconciler_contract.py:function:ProductionReconcilerContractTests.test_deploy_helper_requires_immutable_root_artifact",
+            "qualified_name": "ProductionReconcilerContractTests.test_deploy_helper_requires_immutable_root_artifact",
+            "path": "scripts/ci/tests/test_production_reconciler_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_production_reconciler_contract.py#L83-L91"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_production_reconciler_contract.py:function:ProductionReconcilerContractTests.test_reconciler_has_bounded_storage_and_state_transitions",
+            "qualified_name": "ProductionReconcilerContractTests.test_reconciler_has_bounded_storage_and_state_transitions",
+            "path": "scripts/ci/tests/test_production_reconciler_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_production_reconciler_contract.py#L93-L138"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_production_reconciler_contract.py:function:ProductionReconcilerContractTests.test_reconciler_build_cannot_write_release_or_source",
+            "qualified_name": "ProductionReconcilerContractTests.test_reconciler_build_cannot_write_release_or_source",
+            "path": "scripts/ci/tests/test_production_reconciler_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_production_reconciler_contract.py#L140-L166"
+          }
+        ],
+        "representative_causal_relations": [
+          {
+            "direction": "incoming",
+            "evidence_level": "S1",
+            "path": "scripts/ci/tests/test_production_reconciler_contract.py",
+            "qualified_name": "ProductionReconcilerContractTests.test_deploy_helper_preserves_legacy_checkout_and_binds_main",
+            "relation_kind": "direct_caller",
+            "relation_type": "calls",
+            "source": "python_call_graph_json",
+            "status": "coherent",
+            "artifact_sha256": "6e5292dd074e6d5e44b9588c1438f9c2acf23b9f7e0836787d64efc45fa476b9",
+            "canonical_dump_index_sha256": "e823c534dd76a9705dd1f16744569c628714e7ed9168ea18a5f0be51d8142967",
+            "run_id": "heimgewebe__weltgewebe__main-full-max-260722-1548",
+            "source_call_site": "file:scripts/ci/tests/test_production_reconciler_contract.py#L59-L59",
+            "peer_definition": "file:scripts/ci/tests/test_production_reconciler_contract.py#L58-L81",
+            "symbol_id": "py:scripts:ci:tests:test_production_reconciler_contract.py:function:ProductionReconcilerContractTests.test_deploy_helper_preserves_legacy_checkout_and_binds_main",
+            "target_symbol_ids": [
+              "py:scripts:ci:tests:test_production_reconciler_contract.py:function:ProductionReconcilerContractTests.read"
+            ]
+          }
+        ],
+        "representative_live_ranges": [
+          {
+            "path": "scripts/ops/reconcile-production-main-vps.sh",
+            "start_line": 1,
+            "end_line": 229,
+            "content_sha256": "0effa1744b5edde82c439f60131e4b6c404391171e4d2b70bd6d2c955796dbd3"
+          }
+        ],
+        "causal_relation_summary": {
+          "included": 7,
+          "architecture_import_relations": 6,
+          "coherent_call_graph_relations": 1
+        },
+        "budget_degradation": {
+          "policy_limited_lanes": [
+            "target_symbols",
+            "causal_relations"
+          ],
+          "exhausted_lanes": [
+            "causal_relations",
+            "live_ranges",
+            "citations",
+            "entry_manifest",
+            "query_snippets"
+          ]
+        }
       },
       "changed_path_count": 9,
       "critical_path_coverage": 1.0,
-      "diff_sha256": "73c7da6fa22ec09b1c5ea2b742573fba62808c2bdae9bbc2b95525bd66393bbf",
+      "diff_binding_kind": "git_tree_delta_v1",
+      "diff_sha256": "2ac125101c5dfc7a939826f41e2d5baf7c9f1b9f67cc6c7012f2f2ebd2119f2f",
       "direct_change_paths": [
-        ".github/workflows/api.yml",
-        "apps/api/migrations/20260630000001_create_passkey_credentials.down.sql",
-        "apps/api/migrations/20260630000001_create_passkey_credentials.up.sql",
-        "apps/api/src/auth/mod.rs",
-        "apps/api/src/auth/passkeys_db.rs",
-        "apps/api/tests/db_passkey_store_persistence.rs",
-        "docs/reports/auth-pg-002-passkey-db-store.md",
-        "docs/reports/auth-status-matrix.md",
-        "docs/tasks/index.json"
+        ".github/workflows/production-live-contract.yml",
+        "docs/_generated/backlinks.md",
+        "docs/_generated/relates-to-audit.md",
+        "docs/_generated/relations-analysis.md",
+        "docs/deploy/merge-to-live.md",
+        "scripts/ci/tests/test_production_reconciler_contract.py",
+        "scripts/ops/activate-production-reconciler-from-release.sh",
+        "scripts/ops/install-production-reconciler.sh",
+        "scripts/weltgewebe-up"
       ],
       "expected_critical_paths": [
-        ".github/workflows/api.yml",
-        "apps/api/migrations/20260630000001_create_passkey_credentials.up.sql",
-        "apps/api/src/auth/passkeys_db.rs",
-        "apps/api/src/auth/mod.rs",
-        "apps/api/tests/db_passkey_store_persistence.rs"
+        ".github/workflows/production-live-contract.yml",
+        "docs/_generated/backlinks.md",
+        "docs/_generated/relates-to-audit.md",
+        "docs/_generated/relations-analysis.md",
+        "docs/deploy/merge-to-live.md",
+        "scripts/ci/tests/test_production_reconciler_contract.py",
+        "scripts/ops/activate-production-reconciler-from-release.sh",
+        "scripts/ops/install-production-reconciler.sh",
+        "scripts/weltgewebe-up"
       ],
-      "id": "database_auth_pr1295",
+      "id": "deployment_production_reconciler",
       "missing_critical_paths": [],
-      "pr": 1295,
-      "profile": "database_auth",
-      "quality_pass": true,
-      "query": "PostgreSQL passkey credential store auth migrations persistence tests CI",
-      "target_commit": "38d3ac5dff4edda574e4ccf4298362235c2c4def",
-      "target_revision": "38d3ac5dff4edda574e4ccf4298362235c2c4def"
+      "profile": "deployment_kubernetes",
+      "query": "production reconciler deployment exact commit live verification",
+      "target_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "target_revision": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "delivery_completeness_required": true
     },
     {
-      "base_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
-      "base_revision": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "id": "live_fresh_source_bundle_guest_budget",
+      "profile": "controlled_live",
+      "base_commit": "0cd3699c35534e4df93cb7609dbf2dcf4263cf23",
+      "target_commit": "e14944fb149c0b66b8a1ca4e1e1b26a8603c5067",
+      "base_revision": "0cd3699c35534e4df93cb7609dbf2dcf4263cf23",
+      "target_revision": "e14944fb149c0b66b8a1ca4e1e1b26a8603c5067",
+      "diff_binding_kind": "git_tree_delta_v1",
+      "diff_sha256": "587369a65eb6b98fe70c13752f5fad95b71228b2475e2674e1e4eb741979c158",
+      "changed_path_count": 95,
+      "direct_change_paths": [
+        ".github/workflows/api.yml",
+        ".github/workflows/contracts-domain.yml",
+        "apps/api/README.md",
+        "apps/api/migrations/20260722000001_guest_content_ownership_exit_cleanup.down.sql",
+        "apps/api/migrations/20260722000001_guest_content_ownership_exit_cleanup.up.sql",
+        "apps/api/migrations/20260722000002_guest_node_creator_index.down.sql",
+        "apps/api/migrations/20260722000002_guest_node_creator_index.up.sql",
+        "apps/api/migrations/20260722000003_guest_exit_author_indexes.down.sql",
+        "apps/api/migrations/20260722000003_guest_exit_author_indexes.up.sql",
+        "apps/api/migrations/20260722000004_federation_core_hardening.down.sql",
+        "apps/api/migrations/20260722000004_federation_core_hardening.up.sql",
+        "apps/api/migrations/20260722000005_governance_conversation_target.down.sql",
+        "apps/api/migrations/20260722000005_governance_conversation_target.up.sql",
+        "apps/api/src/advisory_lock.rs",
+        "apps/api/src/config.rs",
+        "apps/api/src/domain_db.rs",
+        "apps/api/src/federation.rs",
+        "apps/api/src/governance.rs",
+        "apps/api/src/mailer.rs",
+        "apps/api/src/middleware/authz.rs",
+        "apps/api/src/routes/accounts.rs",
+        "apps/api/src/routes/auth.rs",
+        "apps/api/src/routes/collective_write_guard.rs",
+        "apps/api/src/routes/conversations.rs",
+        "apps/api/src/routes/domain_write_guard.rs",
+        "apps/api/src/routes/governance.rs",
+        "apps/api/src/routes/health.rs",
+        "apps/api/src/routes/mod.rs",
+        "apps/api/src/routes/nodes.rs",
+        "apps/api/tests/api_accounts.rs",
+        "apps/api/tests/api_accounts_create.rs",
+        "apps/api/tests/api_auth.rs",
+        "apps/api/tests/api_collective_mutations.rs",
+        "apps/api/tests/api_edges.rs",
+        "apps/api/tests/api_federation_two_cell.rs",
+        "apps/api/tests/api_governance_guards.rs",
+        "apps/api/tests/api_nodes.rs",
+        "apps/api/tests/auth_auto_provision_persistence.rs",
+        "apps/api/tests/auth_handler_test.rs",
+        "apps/api/tests/auth_open_registration.rs",
+        "apps/api/tests/auth_ratelimit.rs",
+        "apps/api/tests/auth_ratelimit_proxy_trusted.rs",
+        "apps/api/tests/auth_ratelimit_proxy_untrusted.rs",
+        "apps/api/tests/auth_security_invariants.rs",
+        "apps/api/tests/db_auto_provision_write_path.rs",
+        "apps/api/tests/db_domain_account_write_path.rs",
+        "apps/api/tests/db_domain_edge_write_path.rs",
+        "apps/api/tests/db_domain_node_write_path.rs",
+        "apps/api/tests/db_federation_persistence.rs",
+        "apps/api/tests/db_governance.rs",
+        "apps/api/tests/db_governance_conversation_target.rs",
+        "apps/api/tests/db_multi_instance_foundation.rs",
+        "apps/api/tests/db_node_conversations.rs",
+        "apps/api/tests/db_passkey_store_persistence.rs",
+        "apps/api/tests/helpers.rs",
+        "apps/web/src/lib/api/domainWrites.ts",
+        "apps/web/src/lib/api/governance.ts",
+        "apps/web/src/lib/components/MyGarnrolleSection.svelte",
+        "apps/web/src/lib/components/ToolFan.svelte",
+        "apps/web/src/lib/components/ToolFanMenu.svelte",
+        "apps/web/src/lib/components/governance/ProposalDetail.svelte",
+        "apps/web/src/lib/components/panels/KompositionPanel.svelte",
+        "apps/web/src/lib/components/panels/NodeConversation.svelte",
+        "apps/web/src/lib/components/panels/NodePanel.svelte",
+        "apps/web/src/lib/map/overlay/komposition.ts",
+        "apps/web/tests/fixtures/mockApi.ts",
+        "apps/web/tests/garnrolle-self-service.spec.ts",
+        "apps/web/tests/governance.spec.ts",
+        "apps/web/tests/komposition.spec.ts",
+        "apps/web/tests/node-conversation.spec.ts",
+        "apps/web/tests/node-mutations.spec.ts",
+        "apps/web/tests/tool-fan-layout.spec.ts",
+        "configs/app.defaults.yml",
+        "contracts/domain/examples/node.example.json",
+        "contracts/domain/node.schema.json",
+        "contracts/federation/v1/event.schema.json",
+        "contracts/federation/v1/examples/invalid/event.global-with-target.invalid.json",
+        "contracts/federation/v1/examples/invalid/event.noncanonical-time.invalid.json",
+        "contracts/federation/v1/examples/invalid/event.noncanonical-uuid.invalid.json",
+        "contracts/federation/v1/examples/invalid/event.unknown-field.invalid.json",
+        "contracts/federation/v1/examples/invalid/event.version-overflow.invalid.json",
+        "docs/_generated/report-lifecycle-inventory.md",
+        "docs/_generated/report-lifecycle.md",
+        "docs/_generated/system-map.md",
+        "docs/datenmodell.md",
+        "docs/domain/vocabulary.md",
+        "docs/reports/auth-persistence-readiness.md",
+        "docs/reports/auth-persistence-runtime-target-reconciliation.md",
+        "docs/specs/auth-blueprint.md",
+        "docs/specs/federation-wire-v1.md",
+        "docs/specs/garnrolle-knoten-faden.md",
+        "docs/specs/governance-antraege.md",
+        "docs/specs/ui-interaction.md",
+        "platform/infrastructure/local-data/postgres.yaml",
+        "scripts/ci/tests/test_federation_contract.py"
+      ],
+      "query": "guest",
       "baseline": {
         "available": true,
-        "duration_ms": 393.589,
-        "payload_bytes": 7713,
-        "status": null
+        "direct_context_pack_verified": true,
+        "freshness_status": "fresh",
+        "resolved_evidence_status": "available",
+        "snippet_count": 5,
+        "range_count": 5,
+        "citation_count": 5,
+        "payload_bytes": 51900,
+        "payload_bytes_source": "repoground_context_compose.compactness.general_context_pack_bytes"
       },
       "capsule": {
         "available": true,
-        "context_bytes": 1449,
-        "diff_binding_verified": true,
-        "does_not_establish": [
-          "truth",
-          "completeness",
-          "patch_correctness",
-          "test_sufficiency",
-          "test_coverage",
-          "review_completeness",
-          "merge_readiness",
-          "runtime_behavior",
-          "regression_absence"
-        ],
-        "duration_ms": 627.248,
+        "status": "degraded",
+        "context_bytes": 11993,
+        "general_context_pack_bytes_reported": 51900,
+        "ratio": 0.231079,
+        "reduction_pct": 76.892,
         "freshness_status": "fresh",
-        "gaps": [
+        "related_tests_included": 8,
+        "related_tests": [
           {
-            "reason": "source_unavailable",
-            "source": "python_call_graph_json",
-            "status": "blocked"
+            "path": "apps/api/tests/api_accounts.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
           },
           {
-            "reason": "required_source_untrusted",
-            "source": "artifact_coherence",
-            "sources": [
-              {
-                "error_code": "artifact_too_large",
-                "source": "python_call_graph_json",
-                "status": "blocked"
-              }
-            ],
-            "status": "blocked"
+            "path": "apps/api/tests/api_accounts_create.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_auth.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_collective_mutations.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_edges.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_federation_two_cell.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_governance_guards.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
+          },
+          {
+            "path": "apps/api/tests/api_nodes.rs",
+            "evidence_type": "changed_test_path",
+            "reason": "changed_path_is_test",
+            "relationship_strength": "co_changed",
+            "provenance_strength": "direct_diff",
+            "current_read_evidence": "available"
           }
         ],
-        "general_context_pack_bytes_reported": 7713,
-        "ratio": 0.187865,
-        "reduction_pct": 81.214,
-        "related_tests": [],
+        "target_symbols_included": 8,
+        "target_symbols": [
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:class:FederationContractTests",
+            "qualified_name": "FederationContractTests",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L11-L176"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.setUp",
+            "qualified_name": "FederationContractTests.setUp",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L12-L27"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.test_wire_examples_cover_every_required_field",
+            "qualified_name": "FederationContractTests.test_wire_examples_cover_every_required_field",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L29-L45"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.test_event_schema_is_closed_and_scope_is_explicit",
+            "qualified_name": "FederationContractTests.test_event_schema_is_closed_and_scope_is_explicit",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L47-L62"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.test_public_boundary_uses_http_contract_not_internal_fabric",
+            "qualified_name": "FederationContractTests.test_public_boundary_uses_http_contract_not_internal_fabric",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L64-L81"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.test_wire_signature_is_language_neutral_and_fixture_bound",
+            "qualified_name": "FederationContractTests.test_wire_signature_is_language_neutral_and_fixture_bound",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L83-L91"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.test_public_router_is_outside_browser_auth_and_csrf_layers",
+            "qualified_name": "FederationContractTests.test_public_router_is_outside_browser_auth_and_csrf_layers",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L93-L102"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.test_storage_separates_applied_inbox_from_quarantine",
+            "qualified_name": "FederationContractTests.test_storage_separates_applied_inbox_from_quarantine",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L104-L137"
+          }
+        ],
+        "causal_relations_included": 7,
+        "representative_causal_relations": [],
+        "live_ranges_included": 1,
+        "representative_live_ranges": [
+          {
+            "path": "apps/api/tests/db_governance.rs",
+            "start_line": 255,
+            "end_line": 530,
+            "content_sha256": "6e120c2e9dce17e969a2682bfd54e3bfcaf07a0757ceebb1edb367ce2d1348e5"
+          }
+        ],
+        "citations_included": 2,
+        "lane_counts": {
+          "direct_changes": {
+            "available": 95,
+            "considered": 16,
+            "included": 16,
+            "policy_omitted": 79,
+            "budget_omitted": 0
+          },
+          "related_tests": {
+            "available": 34,
+            "considered": 8,
+            "included": 8,
+            "policy_omitted": 26,
+            "budget_omitted": 0
+          },
+          "target_symbols": {
+            "available": 11,
+            "considered": 8,
+            "included": 8,
+            "policy_omitted": 3,
+            "budget_omitted": 0
+          },
+          "causal_relations": {
+            "available": 7,
+            "considered": 7,
+            "included": 7,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "live_ranges": {
+            "available": 5,
+            "considered": 5,
+            "included": 1,
+            "policy_omitted": 0,
+            "budget_omitted": 4
+          },
+          "citations": {
+            "available": 5,
+            "considered": 5,
+            "included": 2,
+            "policy_omitted": 0,
+            "budget_omitted": 3
+          },
+          "entry_manifest": {
+            "available": 1,
+            "considered": 1,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 1
+          },
+          "query_snippets": {
+            "available": 5,
+            "considered": 5,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 5
+          }
+        },
         "retrieval_lanes": {
-          "skipped": [
-            "pr_delta_cards",
-            "call_graph",
-            "live_evidence"
-          ],
           "used": [
             "direct_changes",
             "agent_impact",
             "query_context",
             "symbol_navigation",
             "citation",
-            "entry_manifest"
-          ]
-        },
-        "status": "degraded",
-        "stop_criteria": {
-          "available": [
-            "diff_sha256_mismatch",
-            "publication_unavailable",
-            "impact_context_blocked",
-            "budget_exhausted"
+            "live_evidence"
           ],
-          "triggered": [
-            "impact_context_blocked"
-          ]
-        },
-        "target_symbols": []
-      },
-      "changed_path_count": 3,
-      "critical_path_coverage": 1.0,
-      "diff_sha256": "07bf33e8bbbf2c8e81cf82e7e4c7122dca9345fb9dfedca4ae0e9989e6d67a2a",
-      "direct_change_paths": [
-        "apps/web/src/lib/components/GovernanceFan.svelte",
-        "apps/web/src/lib/components/ToolFanMenu.svelte",
-        "apps/web/tests/map-fan-surface-clarity.spec.ts"
-      ],
-      "expected_critical_paths": [
-        "apps/web/src/lib/components/GovernanceFan.svelte",
-        "apps/web/src/lib/components/ToolFanMenu.svelte",
-        "apps/web/tests/map-fan-surface-clarity.spec.ts"
-      ],
-      "id": "web_map_pr1514",
-      "missing_critical_paths": [],
-      "pr": 1514,
-      "profile": "web_map",
-      "quality_pass": true,
-      "query": "map fan surfaces governance tool fan clarity tests",
-      "target_commit": "e9bbe2320b41b988972035553349c4b4eab6beac",
-      "target_revision": "e9bbe2320b41b988972035553349c4b4eab6beac"
-    },
-    {
-      "base_commit": "b73bbfe00db9739fa2555e299556def0a809e395",
-      "base_revision": "b73bbfe00db9739fa2555e299556def0a809e395",
-      "baseline": {
-        "available": true,
-        "duration_ms": 434.097,
-        "payload_bytes": 16781,
-        "status": null
-      },
-      "capsule": {
-        "available": true,
-        "context_bytes": 6091,
-        "diff_binding_verified": true,
-        "does_not_establish": [
-          "truth",
-          "completeness",
-          "patch_correctness",
-          "test_sufficiency",
-          "test_coverage",
-          "review_completeness",
-          "merge_readiness",
-          "runtime_behavior",
-          "regression_absence"
-        ],
-        "duration_ms": 694.391,
-        "freshness_status": "fresh",
-        "gaps": [
-          {
-            "reason": "source_unavailable",
-            "source": "python_call_graph_json",
-            "status": "blocked"
-          },
-          {
-            "reason": "required_source_untrusted",
-            "source": "artifact_coherence",
-            "sources": [
-              {
-                "error_code": "artifact_too_large",
-                "source": "python_call_graph_json",
-                "status": "blocked"
-              }
-            ],
-            "status": "blocked"
-          }
-        ],
-        "general_context_pack_bytes_reported": 16781,
-        "ratio": 0.36297,
-        "reduction_pct": 63.703,
-        "related_tests": [],
-        "retrieval_lanes": {
           "skipped": [
+            "entry_manifest",
             "pr_delta_cards",
             "call_graph"
-          ],
-          "used": [
-            "direct_changes",
-            "agent_impact",
-            "query_context",
-            "symbol_navigation",
-            "citation",
-            "live_evidence",
-            "entry_manifest"
           ]
         },
-        "status": "degraded",
+        "call_graph_truth": {
+          "artifact_available": true,
+          "artifact_bytes": 22485322,
+          "artifact_sha256": "6e5292dd074e6d5e44b9588c1438f9c2acf23b9f7e0836787d64efc45fa476b9",
+          "consumed_coherent_evidence": false,
+          "coherent_relation_count": 0
+        },
+        "gaps": [
+          {
+            "paths": [
+              ".github/workflows/api.yml",
+              "platform/infrastructure/local-data/postgres.yaml"
+            ],
+            "reason": "target_path_not_present_as_graph_node",
+            "source": "architecture_graph_json",
+            "status": "missing_target"
+          }
+        ],
         "stop_criteria": {
-          "available": [
-            "diff_sha256_mismatch",
-            "publication_unavailable",
-            "impact_context_blocked",
-            "budget_exhausted"
-          ],
+          "impact_context_blocked": false,
           "triggered": [
-            "impact_context_blocked"
+            "budget_exhausted"
           ]
         },
-        "target_symbols": []
-      },
-      "changed_path_count": 5,
-      "critical_path_coverage": 1.0,
-      "diff_sha256": "b1a672d2a05eeffefd93c505f99d66907d9c6490207a9cc9a6a8be24c6123133",
-      "direct_change_paths": [
-        ".github/workflows/kubernetes-platform.yml",
-        "platform/README.md",
-        "runbooks/kubernetes-local-reference.md",
-        "scripts/ci/tests/test_kubernetes_platform_contract.py",
-        "scripts/platform/kind_reference.py"
-      ],
-      "expected_critical_paths": [
-        ".github/workflows/kubernetes-platform.yml",
-        "scripts/platform/kind_reference.py",
-        "scripts/ci/tests/test_kubernetes_platform_contract.py",
-        "platform/README.md",
-        "runbooks/kubernetes-local-reference.md"
-      ],
-      "id": "deployment_kubernetes_pr1458",
-      "missing_critical_paths": [],
-      "pr": 1458,
-      "profile": "deployment_kubernetes",
-      "quality_pass": true,
-      "query": "Kubernetes platform proof exact workflow state kind reference CI contract",
-      "target_commit": "3aec6e270a10b28e39639cac7791820031b3e348",
-      "target_revision": "3aec6e270a10b28e39639cac7791820031b3e348"
-    },
-    {
-      "base_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
-      "base_revision": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
-      "baseline": {
-        "available": true,
-        "duration_ms": 393.688,
-        "payload_bytes": 7739,
-        "status": null
-      },
-      "capsule": {
-        "available": true,
-        "context_bytes": 1449,
-        "diff_binding_verified": true,
+        "dirty_overlay": {
+          "available": true,
+          "dirty": false,
+          "entry_count": 0,
+          "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "included_in_revision_diff": false,
+          "identity_note": "RepoGround publication source checkout was clean during the final 1548 measurement."
+        },
         "does_not_establish": [
           "truth",
           "completeness",
@@ -353,114 +1071,167 @@
           "runtime_behavior",
           "regression_absence"
         ],
-        "duration_ms": 626.984,
-        "freshness_status": "fresh",
-        "gaps": [
-          {
-            "reason": "source_unavailable",
-            "source": "python_call_graph_json",
-            "status": "blocked"
-          },
-          {
-            "reason": "required_source_untrusted",
-            "source": "artifact_coherence",
-            "sources": [
-              {
-                "error_code": "artifact_too_large",
-                "source": "python_call_graph_json",
-                "status": "blocked"
-              }
-            ],
-            "status": "blocked"
-          }
-        ],
-        "general_context_pack_bytes_reported": 7739,
-        "ratio": 0.187233,
-        "reduction_pct": 81.277,
-        "related_tests": [],
-        "retrieval_lanes": {
-          "skipped": [
-            "pr_delta_cards",
-            "call_graph",
-            "live_evidence"
-          ],
-          "used": [
+        "complete_direct_change_delivery": false,
+        "budget_degradation": {
+          "policy_limited_lanes": [
             "direct_changes",
-            "agent_impact",
-            "query_context",
-            "symbol_navigation",
-            "citation",
-            "entry_manifest"
-          ]
-        },
-        "status": "degraded",
-        "stop_criteria": {
-          "available": [
-            "diff_sha256_mismatch",
-            "publication_unavailable",
-            "impact_context_blocked",
-            "budget_exhausted"
+            "related_tests",
+            "target_symbols"
           ],
-          "triggered": [
-            "impact_context_blocked"
+          "exhausted_lanes": [
+            "live_ranges",
+            "citations",
+            "entry_manifest",
+            "query_snippets"
           ]
-        },
-        "target_symbols": []
+        }
       },
-      "changed_path_count": 3,
-      "critical_path_coverage": 1.0,
-      "diff_sha256": "9daea9873b61522e4405d035444f076cc056886c816efd359947aed937648c6f",
-      "direct_change_paths": [
-        "apps/web/src/lib/components/GovernanceFan.svelte",
-        "apps/web/src/lib/components/ToolFanMenu.svelte",
-        "apps/web/tests/map-fan-surface-clarity.spec.ts"
-      ],
-      "expected_critical_paths": [
-        "apps/web/src/lib/components/GovernanceFan.svelte",
-        "apps/web/src/lib/components/ToolFanMenu.svelte",
-        "apps/web/tests/map-fan-surface-clarity.spec.ts"
-      ],
-      "id": "live_current_main",
-      "missing_critical_paths": [],
-      "pr": 1514,
-      "profile": "controlled_live",
-      "quality_pass": true,
-      "query": "current main map fan surfaces governance tool fan clarity tests",
-      "target_commit": "929dc002c5317e0d85abb24811cf11d5e330d41b",
-      "target_revision": "929dc002c5317e0d85abb24811cf11d5e330d41b"
+      "delivery_completeness_required": false
     }
   ],
   "context_budget_bytes": 12000,
   "does_not_establish": [
     "semantic completeness",
-    "automatic related-test coverage",
-    "automatic symbol impact coverage",
+    "automatic related-test completeness",
+    "automatic symbol-impact completeness",
+    "patch correctness",
     "runtime correctness",
     "merge readiness",
-    "default RepoGround routing authority"
+    "global RepoGround routing authority outside the measured change_impact scope"
   ],
-  "generated_at": "2026-07-21T12:05:00+02:00",
-  "grabowski_runtime_commit": "e5ec3f699499efcfd36d4b320fb9339988e18368",
-  "measurement_source_sha256": "b5c919cabb6f60ed222b9530ee2c34455b8f9746e0bea9d5fcdc91d0a797b92d",
-  "mechanical_promotion_gate": {
-    "passed": true,
-    "qualifying_case_ids": [
-      "database_auth_pr1295",
-      "web_map_pr1514",
-      "deployment_kubernetes_pr1458"
-    ],
-    "required_count": 2
+  "generated_at": "2026-07-22T18:00:27+02:00",
+  "grabowski_runtime_commit": "acf29382784c1541b930b8068c58aac4497da5e4",
+  "grabowski_t006_hardening_merge_commit": "de799bbded2d1c09de9b29153325516539a805e2",
+  "grabowski_t006_merge_commit": "eaaf8307009df70bba549c571ec376a4fc7743e0",
+  "measurement_worktree": {
+    "branch": "publication_source_checkout",
+    "head": "e14944fb149c0b66b8a1ca4e1e1b26a8603c5067",
+    "dirty": false,
+    "dirty_scope": "clean",
+    "dirty_paths": [],
+    "included_in_revision_diff": false
   },
-  "overall_status": "blocked",
-  "promotion_recommendation": "withhold_default_promotion",
-  "reason": "Mechanical compactness gate passes, but all four capsules are degraded by the same oversized call-graph artifact, so the full impact delivery chain is not proven.",
+  "promotion_scope": "bounded_change_impact_context_for_agent_handoff",
   "repo": "weltgewebe",
+  "repoground_1070_merge_commit": "c12e6e867c0de3315b250ce5818f4331f6dbbb63",
+  "repoground_runtime_commit": "dea8e61ace8bc45a32ec32bff3f79eccaa9c9f19",
   "schema_version": 1,
   "source_bundle": {
-    "freshness": "fresh_exact",
-    "git_commit": "929dc002c5317e0d85abb24811cf11d5e330d41b",
-    "manifest_sha256": "34f6ac4682db840efba13e56164d0847a6d3099d16cfb2a6047e8eac6c19f31f",
-    "stem": "heimgewebe__weltgewebe__main-max-260721-0745"
+    "stem": "heimgewebe__weltgewebe__main-max-260722-1548",
+    "git_commit": "e14944fb149c0b66b8a1ca4e1e1b26a8603c5067",
+    "manifest_sha256": "04e84e1af3bf9a52b30fe412549fcb0bf5663967a3c85fb890c01c16a67f1b92",
+    "post_emit_health": "pass",
+    "output_health": "pass",
+    "bundle_surface_validation": "pass",
+    "generator_runtime_commit": "dea8e61ace8bc45a32ec32bff3f79eccaa9c9f19",
+    "freshness_evidence": {
+      "basis": "stored_source_commit_equals_observed_remote_commit",
+      "checked_at": "2026-07-22T16:07:36Z",
+      "live_recheck_required": false,
+      "remote_commit": "e14944fb149c0b66b8a1ca4e1e1b26a8603c5067",
+      "remote_ref": "origin/main",
+      "source_commit": "e14944fb149c0b66b8a1ca4e1e1b26a8603c5067",
+      "publisher_state_sha256": "86351444ebafea5b9673924f26777248980ebac34833fd6a3efc08dc8a2ee882"
+    }
   },
-  "task_profile": "change_impact"
+  "task_profile": "change_impact",
+  "pilot_delivery_chain_evidence": {
+    "case_id": "deployment_production_reconciler",
+    "does_not_establish": [
+      "runtime_correctness",
+      "automatic_rollback_success",
+      "merge_readiness"
+    ],
+    "required_direct_paths": [
+      ".github/workflows/production-live-contract.yml",
+      "scripts/ci/tests/test_production_reconciler_contract.py",
+      "scripts/ops/activate-production-reconciler-from-release.sh",
+      "scripts/ops/install-production-reconciler.sh",
+      "scripts/weltgewebe-up"
+    ],
+    "contract_evidence": {
+      "pr": 1499,
+      "workflow_run_id": 29806103267,
+      "job_id": 88556854305,
+      "job_name": "Production reconciler contract tests",
+      "conclusion": "success",
+      "path": "scripts/ci/tests/test_production_reconciler_contract.py",
+      "event": "push",
+      "pr_head_sha": "c6d7bbc2dbec97ee0223a9c22cd1e331b7a21993",
+      "merge_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "run_head_sha": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22"
+    },
+    "ci_evidence": {
+      "required_merge_gate": {
+        "workflow_run_id": 29805241044,
+        "job_id": 88555418515,
+        "conclusion": "success",
+        "event": "pull_request",
+        "head_sha": "c6d7bbc2dbec97ee0223a9c22cd1e331b7a21993"
+      },
+      "review_evidence_gate": {
+        "workflow_run_id": 29805240373,
+        "job_id": 88556686625,
+        "conclusion": "success",
+        "event": "pull_request_target",
+        "head_sha": "c6d7bbc2dbec97ee0223a9c22cd1e331b7a21993"
+      }
+    },
+    "deployment_evidence": {
+      "pr": 1499,
+      "merge_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "workflow_run_id": 29806103267,
+      "event": "push",
+      "head_sha": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "conclusion": "success",
+      "pr_head_sha": "c6d7bbc2dbec97ee0223a9c22cd1e331b7a21993"
+    },
+    "runtime_proof": {
+      "workflow_run_id": 29806103267,
+      "job_id": 88556905034,
+      "job_name": "Exact main commit is live",
+      "head_sha": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+      "conclusion": "success",
+      "public_identity_step": "Verify public frontend and API identity",
+      "public_identity_step_conclusion": "success",
+      "production_receipt_uploaded": true,
+      "production_receipt": {
+        "artifact_id": 8485749581,
+        "artifact_name": "production-live-7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+        "artifact_digest": "sha256:c253bacc2bcb0791edbbb820959b10a6f124b60587254c73d5baa64de2687996",
+        "bound_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
+        "workflow_run_id": 29806103267
+      }
+    },
+    "recovery_evidence": {
+      "documentation_path": "docs/deploy/merge-to-live.md",
+      "documentation_range": "file:docs/deploy/merge-to-live.md#L162-L171",
+      "contract_test_path": "scripts/ci/tests/test_production_reconciler_contract.py",
+      "atomic_install_test": "test_installer_deferred_update_is_atomic_and_non_recursive",
+      "direct_recovery_supported": true,
+      "contention_no_effects": true,
+      "contention_exit_code": 75,
+      "atomic_install": true,
+      "timer_state_preserved": true,
+      "documentation_range_sha256": "460ea84cd60b2907f7264706d439f3aabee56a0dbc368f09b711214cb33e6535"
+    },
+    "rollback_risks": [
+      {
+        "risk": "concurrent_recovery_contention",
+        "mitigation": "shared flock plus EX_TEMPFAIL 75; rejected recovery mutates neither containers nor public state"
+      },
+      {
+        "risk": "partial_reconciler_installation",
+        "mitigation": "atomic_install plus installed-contract SHA-256 readback"
+      },
+      {
+        "risk": "production_timer_state_loss",
+        "mitigation": "deferred installation requires and rechecks enabled and active timer state"
+      },
+      {
+        "risk": "post_deploy_supersession_or_failure",
+        "mitigation": "explicit reconciler states and failure/receipt evidence preserve diagnosis without claiming automatic rollback"
+      }
+    ]
+  }
 }
