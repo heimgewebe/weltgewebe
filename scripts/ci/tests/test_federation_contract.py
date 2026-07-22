@@ -126,6 +126,26 @@ class FederationContractTests(unittest.TestCase):
         )
         self.assertIn("UNIQUE (event_id, envelope_sha256, reason)", migration)
 
+        hardening = (
+            ROOT
+            / "apps/api/migrations/20260722000004_federation_core_hardening.up.sql"
+        ).read_text()
+        self.assertIn("CREATE TABLE federation_event_receipts", hardening)
+        self.assertIn("PRIMARY KEY", hardening)
+        self.assertIn("federation_inbox_event_receipt", hardening)
+        self.assertIn("federation_outbox_event_receipt", hardening)
+        self.assertIn("federation_validate_event_receipt_direction", hardening)
+
+    def test_runtime_and_schema_share_actor_and_version_domains(self) -> None:
+        source = (ROOT / "apps/api/src/federation.rs").read_text()
+        self.assertIn("value.chars().count() > 128", source)
+        self.assertEqual(
+            self.event_schema["properties"]["object_version"]["maximum"],
+            9223372036854775807,
+        )
+        previous = self.event_schema["properties"]["previous_version"]["oneOf"][0]
+        self.assertEqual(previous["maximum"], 9223372036854775807)
+
     def test_implementation_registry_binds_runtime_browser_and_database_proofs(self) -> None:
         registry = (ROOT / "audit/impl-registry.yaml").read_text()
         self.assertIn("impl.api.federation-core-v1", registry)

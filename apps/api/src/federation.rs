@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     env,
+    net::SocketAddr,
     sync::{Arc, Mutex},
     time::{Duration as StdDuration, Instant},
 };
@@ -8,8 +9,10 @@ use std::{
 use anyhow::{bail, Context};
 use async_trait::async_trait;
 use axum::{
-    extract::{rejection::JsonRejection, DefaultBodyLimit, Query, State},
-    http::{header::RETRY_AFTER, HeaderValue, StatusCode},
+    body::Body,
+    extract::{rejection::JsonRejection, ConnectInfo, DefaultBodyLimit, Query, State},
+    http::{header::RETRY_AFTER, HeaderValue, Request, StatusCode},
+    middleware::{from_fn_with_state, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
@@ -25,6 +28,8 @@ use tokio::sync::RwLock;
 use url::Url;
 use uuid::Uuid;
 
+use crate::routes::auth::effective_client_ip;
+
 pub const FEDERATION_PROTOCOL_VERSION: &str = "wg-federation/1";
 pub const FEDERATION_SCHEMA_VERSION: u16 = 1;
 const MAX_EVENT_BYTES: usize = 256 * 1024;
@@ -36,10 +41,14 @@ const SCOPE_GLOBAL: &str = "global";
 const RATE_LIMIT_WINDOW: StdDuration = StdDuration::from_secs(60);
 const RATE_LIMIT_WINDOW_SECONDS: i64 = 60;
 const RECEIVE_RATE_PER_ORIGIN: u32 = 120;
-const RECEIVE_RATE_GLOBAL: u32 = 600;
-const OBJECT_READ_RATE_GLOBAL: u32 = 600;
+const RECEIVE_RATE_PER_CLIENT: u32 = 240;
+const RECEIVE_RATE_GLOBAL: u32 = 6_000;
+const OBJECT_READ_RATE_PER_CLIENT: u32 = 600;
+const OBJECT_READ_RATE_GLOBAL: u32 = 6_000;
+const RATE_SCOPE_RECEIVE_CLIENT: &str = "receive-client";
 const RATE_SCOPE_RECEIVE_GLOBAL: &str = "receive-global";
 const RATE_SCOPE_RECEIVE_ORIGIN: &str = "receive-origin";
+const RATE_SCOPE_OBJECT_READ_CLIENT: &str = "object-read-client";
 const RATE_SCOPE_OBJECT_READ_GLOBAL: &str = "object-read-global";
 const QUARANTINE_RETENTION_DAYS: i64 = 30;
 const QUARANTINE_MAX_PER_ORIGIN: usize = 1_000;
@@ -90,6 +99,7 @@ pub struct FederatedObject {
     pub object_kind: String,
     pub object_version: i64,
     pub scope: String,
+    pub neighbourhood_targets: Vec<String>,
     pub payload: Value,
     pub deleted: bool,
     pub updated_at: DateTime<Utc>,
@@ -100,6 +110,7 @@ pub struct FederatedObject {
 pub enum ReceiveStatus {
     Applied,
     Duplicate,
+    Rejected,
     Quarantined,
 }
 
@@ -129,6 +140,15 @@ impl ReceiveOutcome {
             event_id: event.event_id,
             reason: None,
             object_version: Some(event.object_version),
+        }
+    }
+
+    fn rejected(event: &FederationEvent) -> Self {
+        Self {
+            status: ReceiveStatus::Rejected,
+            event_id: event.event_id,
+            reason: Some("event authentication rejected".to_string()),
+            object_version: None,
         }
     }
 
@@ -264,7 +284,12 @@ pub trait FederationRepository: Send + Sync {
         event: &FederationEvent,
         reason: &str,
     ) -> anyhow::Result<ReceiveOutcome>;
-    async fn accept_verified(&self, event: &FederationEvent) -> anyhow::Result<ReceiveOutcome>;
+    async fn accept_verified(
+        &self,
+        event: &FederationEvent,
+        origin_rate_subject: &str,
+        origin_rate_limit: u32,
+    ) -> anyhow::Result<ReceiveOutcome>;
     async fn persist_local(&self, event: &FederationEvent) -> anyhow::Result<()>;
     async fn object(&self, address: &str) -> anyhow::Result<Option<FederatedObject>>;
     async fn pending_outbox(&self) -> anyhow::Result<Vec<FederationEvent>>;
@@ -309,6 +334,7 @@ impl LocalRateState {
 pub struct FederationService {
     identity: Arc<CellIdentity>,
     repository: Arc<dyn FederationRepository>,
+    client_rate_state: Arc<Mutex<LocalRateState>>,
 }
 
 impl FederationService {
@@ -316,11 +342,20 @@ impl FederationService {
         Self {
             identity: Arc::new(identity),
             repository,
+            client_rate_state: Arc::new(Mutex::new(LocalRateState::default())),
         }
     }
 
     pub fn descriptor(&self) -> CellDescriptor {
         self.identity.descriptor()
+    }
+
+    fn allow_receive_client(&self, client_ip: &str) -> bool {
+        let subject = format!("{}:{client_ip}", self.identity.cell_id);
+        self.client_rate_state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .allow(RATE_SCOPE_RECEIVE_CLIENT, &subject, RECEIVE_RATE_PER_CLIENT)
     }
 
     async fn allow_receive_global(&self) -> anyhow::Result<bool> {
@@ -333,14 +368,19 @@ impl FederationService {
             .await
     }
 
-    async fn allow_authenticated_origin(&self, origin_cell_id: &str) -> anyhow::Result<bool> {
-        let subject = format!("{}:{origin_cell_id}", self.identity.cell_id);
-        self.repository
-            .check_rate_limit(RATE_SCOPE_RECEIVE_ORIGIN, &subject, RECEIVE_RATE_PER_ORIGIN)
-            .await
+    fn allow_object_read_client(&self, client_ip: &str) -> bool {
+        let subject = format!("{}:{client_ip}", self.identity.cell_id);
+        self.client_rate_state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .allow(
+                RATE_SCOPE_OBJECT_READ_CLIENT,
+                &subject,
+                OBJECT_READ_RATE_PER_CLIENT,
+            )
     }
 
-    async fn allow_object_read(&self) -> anyhow::Result<bool> {
+    async fn allow_object_read_global(&self) -> anyhow::Result<bool> {
         self.repository
             .check_rate_limit(
                 RATE_SCOPE_OBJECT_READ_GLOBAL,
@@ -422,10 +462,7 @@ impl FederationService {
             return Err(InvalidFederationEvent(error.to_string()).into());
         }
         if event.origin_cell_id == self.identity.cell_id {
-            return Ok(ReceiveOutcome::quarantined(
-                &event,
-                "loopback event from local cell",
-            ));
+            return Ok(ReceiveOutcome::rejected(&event));
         }
 
         let Some(peer) = self
@@ -433,23 +470,21 @@ impl FederationService {
             .resolve_peer(&event.origin_cell_id, &event.key_id)
             .await?
         else {
-            return Ok(ReceiveOutcome::quarantined(&event, "unknown cell or key"));
+            return Ok(ReceiveOutcome::rejected(&event));
         };
 
-        if let Err(error) = verify_signature(&event, peer.public_key) {
-            return Ok(ReceiveOutcome::quarantined(&event, error.to_string()));
+        if verify_signature(&event, peer.public_key).is_err() {
+            return Ok(ReceiveOutcome::rejected(&event));
         }
-        if !self
-            .allow_authenticated_origin(&event.origin_cell_id)
-            .await?
-        {
-            return Err(ReceiveRateLimitExceeded.into());
-        }
+        let origin_rate_subject = format!("{}:{}", self.identity.cell_id, event.origin_cell_id);
 
-        // The repository re-resolves and locks the current peer/key policy before
-        // object mutation. This closes the revocation/blocking TOCTOU window
-        // between the optimistic signature check above and durable acceptance.
-        self.repository.accept_verified(&event).await
+        // The repository re-resolves and locks the current peer/key policy, then
+        // detects exact duplicates before consuming the authenticated-origin
+        // rate-limit bucket. This preserves revocation/blocking semantics while
+        // preventing replayed accepted envelopes from exhausting a peer quota.
+        self.repository
+            .accept_verified(&event, &origin_rate_subject, RECEIVE_RATE_PER_ORIGIN)
+            .await
     }
 
     pub async fn object(&self, address: &str) -> anyhow::Result<Option<FederatedObject>> {
@@ -531,6 +566,20 @@ impl MemoryFederationRepository {
 impl FederationRepository for MemoryFederationRepository {
     async fn install_peer(&self, policy: PeerPolicy) -> anyhow::Result<()> {
         let mut state = self.state.write().await;
+        for key in &policy.keys {
+            if let Some(existing) = state
+                .peers
+                .get(&(policy.remote_cell_id.clone(), key.key_id.clone()))
+            {
+                if existing.public_key != key.public_key {
+                    bail!(
+                        "public key for ({}, {}) is immutable",
+                        policy.remote_cell_id,
+                        key.key_id
+                    );
+                }
+            }
+        }
         let supplied_key_ids: HashSet<_> =
             policy.keys.iter().map(|key| key.key_id.clone()).collect();
         for ((cell_id, key_id), peer) in state.peers.iter_mut() {
@@ -596,7 +645,12 @@ impl FederationRepository for MemoryFederationRepository {
         Ok(ReceiveOutcome::quarantined(event, reason))
     }
 
-    async fn accept_verified(&self, event: &FederationEvent) -> anyhow::Result<ReceiveOutcome> {
+    async fn accept_verified(
+        &self,
+        event: &FederationEvent,
+        origin_rate_subject: &str,
+        origin_rate_limit: u32,
+    ) -> anyhow::Result<ReceiveOutcome> {
         // Hold the same write lock used by install_peer so a policy/key update
         // cannot commit between this final authorization check and acceptance.
         let mut state = self.state.write().await;
@@ -605,13 +659,10 @@ impl FederationRepository for MemoryFederationRepository {
             .get(&(event.origin_cell_id.clone(), event.key_id.clone()))
             .cloned()
         else {
-            return Ok(ReceiveOutcome::quarantined(event, "unknown cell or key"));
+            return Ok(ReceiveOutcome::rejected(event));
         };
         if verify_signature(event, peer.public_key).is_err() {
-            return Ok(ReceiveOutcome::quarantined(
-                event,
-                "event signature no longer verifies against current peer key",
-            ));
+            return Ok(ReceiveOutcome::rejected(event));
         }
         let digest = envelope_sha256(event)?;
         if let Some(reason) = peer_policy_rejection(&peer, event) {
@@ -629,10 +680,27 @@ impl FederationRepository for MemoryFederationRepository {
         } else {
             None
         };
-        if let Some(existing_digest) = existing_digest {
-            if existing_digest == digest {
-                return Ok(ReceiveOutcome::duplicate(event));
-            }
+        if existing_digest
+            .as_ref()
+            .is_some_and(|existing| existing == &digest)
+        {
+            return Ok(ReceiveOutcome::duplicate(event));
+        }
+        let origin_allowed = {
+            let mut rate_state = self
+                .rate_state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            rate_state.allow(
+                RATE_SCOPE_RECEIVE_ORIGIN,
+                origin_rate_subject,
+                origin_rate_limit,
+            )
+        };
+        if !origin_allowed {
+            return Err(ReceiveRateLimitExceeded.into());
+        }
+        if existing_digest.is_some() {
             push_memory_quarantine_once(
                 &mut state,
                 event,
@@ -720,6 +788,23 @@ impl FederationRepository for PostgresFederationRepository {
         .execute(&mut *tx)
         .await?;
         let supplied_key_ids: Vec<_> = policy.keys.iter().map(|key| key.key_id.clone()).collect();
+        for key in &policy.keys {
+            let existing: Option<Vec<u8>> = sqlx::query_scalar(
+                "SELECT public_key FROM federation_peer_keys \
+                 WHERE remote_cell_id = $1 AND key_id = $2 FOR UPDATE",
+            )
+            .bind(&policy.remote_cell_id)
+            .bind(&key.key_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+            if existing.is_some_and(|public_key| public_key != key.public_key) {
+                bail!(
+                    "public key for ({}, {}) is immutable",
+                    policy.remote_cell_id,
+                    key.key_id
+                );
+            }
+        }
         sqlx::query(
             "UPDATE federation_peer_keys SET active = FALSE, \
              retired_at = COALESCE(retired_at, NOW()) \
@@ -735,7 +820,6 @@ impl FederationRepository for PostgresFederationRepository {
                  (remote_cell_id, key_id, public_key, active, retired_at) \
                  VALUES ($1, $2, $3, $4, CASE WHEN $4 THEN NULL ELSE NOW() END) \
                  ON CONFLICT (remote_cell_id, key_id) DO UPDATE SET \
-                   public_key = EXCLUDED.public_key, \
                    active = EXCLUDED.active, \
                    retired_at = CASE \
                      WHEN EXCLUDED.active THEN NULL \
@@ -807,7 +891,12 @@ impl FederationRepository for PostgresFederationRepository {
         Ok(ReceiveOutcome::quarantined(event, reason))
     }
 
-    async fn accept_verified(&self, event: &FederationEvent) -> anyhow::Result<ReceiveOutcome> {
+    async fn accept_verified(
+        &self,
+        event: &FederationEvent,
+        origin_rate_subject: &str,
+        origin_rate_limit: u32,
+    ) -> anyhow::Result<ReceiveOutcome> {
         let mut tx = self.pool.begin().await?;
 
         // Lock the current relationship and key in shared mode. Peer policy
@@ -826,7 +915,7 @@ impl FederationRepository for PostgresFederationRepository {
         .await?;
         let Some(peer_row) = peer_row else {
             tx.rollback().await?;
-            return Ok(ReceiveOutcome::quarantined(event, "unknown cell or key"));
+            return Ok(ReceiveOutcome::rejected(event));
         };
         let public_key: Vec<u8> = peer_row.try_get("public_key")?;
         let public_key: [u8; 32] = public_key
@@ -843,10 +932,7 @@ impl FederationRepository for PostgresFederationRepository {
         };
         if verify_signature(event, peer.public_key).is_err() {
             tx.rollback().await?;
-            return Ok(ReceiveOutcome::quarantined(
-                event,
-                "event signature no longer verifies against current peer key",
-            ));
+            return Ok(ReceiveOutcome::rejected(event));
         }
         let digest = envelope_sha256(event)?;
         if let Some(reason) = peer_policy_rejection(&peer, event) {
@@ -857,14 +943,26 @@ impl FederationRepository for PostgresFederationRepository {
 
         lock_event_receipt(&mut tx, event.event_id).await?;
         let existing_digests = event_receipt_digests_in_tx(&mut tx, event.event_id).await?;
-        if !existing_digests.is_empty() {
-            if existing_digests
+        if !existing_digests.is_empty()
+            && existing_digests
                 .iter()
                 .all(|existing_digest| existing_digest == &digest)
-            {
-                tx.rollback().await?;
-                return Ok(ReceiveOutcome::duplicate(event));
-            }
+        {
+            tx.rollback().await?;
+            return Ok(ReceiveOutcome::duplicate(event));
+        }
+        if !increment_federation_rate_limit_in_tx(
+            &mut tx,
+            RATE_SCOPE_RECEIVE_ORIGIN,
+            origin_rate_subject,
+            origin_rate_limit,
+        )
+        .await?
+        {
+            tx.rollback().await?;
+            return Err(ReceiveRateLimitExceeded.into());
+        }
+        if !existing_digests.is_empty() {
             let reason = "event id collision with different envelope";
             quarantine_verified_in_tx(&mut tx, event, reason, &digest).await?;
             tx.commit().await?;
@@ -873,7 +971,8 @@ impl FederationRepository for PostgresFederationRepository {
 
         lock_object_transition(&mut tx, &event.object_address).await?;
         let current = sqlx::query(
-            "SELECT object_address, origin_cell_id, object_kind, object_version, scope, payload, \
+            "SELECT object_address, origin_cell_id, object_kind, object_version, scope, \
+                    neighbourhood_targets, payload, \
                     deleted_at, updated_at \
              FROM federation_objects WHERE object_address = $1 FOR UPDATE",
         )
@@ -888,6 +987,7 @@ impl FederationRepository for PostgresFederationRepository {
         }
 
         upsert_object(&mut tx, event).await?;
+        reserve_event_receipt_in_tx(&mut tx, event.event_id, &digest, "inbox").await?;
         sqlx::query(
             "INSERT INTO federation_inbox \
              (event_id, origin_cell_id, object_address, object_version, event_type, \
@@ -920,7 +1020,8 @@ impl FederationRepository for PostgresFederationRepository {
         }
         lock_object_transition(&mut tx, &event.object_address).await?;
         let current = sqlx::query(
-            "SELECT object_address, origin_cell_id, object_kind, object_version, scope, payload, \
+            "SELECT object_address, origin_cell_id, object_kind, object_version, scope, \
+                    neighbourhood_targets, payload, \
                     deleted_at, updated_at \
              FROM federation_objects WHERE object_address = $1 FOR UPDATE",
         )
@@ -932,6 +1033,8 @@ impl FederationRepository for PostgresFederationRepository {
             bail!("local federation event rejected: {reason}");
         }
         upsert_object(&mut tx, event).await?;
+        let digest = envelope_sha256(event)?;
+        reserve_event_receipt_in_tx(&mut tx, event.event_id, &digest, "outbox").await?;
         sqlx::query(
             "INSERT INTO federation_outbox \
              (event_id, object_address, object_version, envelope_sha256, envelope) \
@@ -940,7 +1043,7 @@ impl FederationRepository for PostgresFederationRepository {
         .bind(event.event_id)
         .bind(&event.object_address)
         .bind(event.object_version)
-        .bind(envelope_sha256(event)?)
+        .bind(digest)
         .bind(serde_json::to_value(event)?)
         .execute(&mut *tx)
         .await?;
@@ -950,7 +1053,8 @@ impl FederationRepository for PostgresFederationRepository {
 
     async fn object(&self, address: &str) -> anyhow::Result<Option<FederatedObject>> {
         sqlx::query(
-            "SELECT object_address, origin_cell_id, object_kind, object_version, scope, payload, \
+            "SELECT object_address, origin_cell_id, object_kind, object_version, scope, \
+                    neighbourhood_targets, payload, \
                     deleted_at, updated_at \
              FROM federation_objects WHERE object_address = $1",
         )
@@ -1004,19 +1108,20 @@ async fn increment_federation_rate_limit(
     if limit == 0 {
         return Ok(true);
     }
-    let now_epoch = Utc::now().timestamp();
-    let window_start = now_epoch - now_epoch.rem_euclid(RATE_LIMIT_WINDOW_SECONDS);
     let count: i64 = sqlx::query_scalar(
-        "INSERT INTO federation_rate_limit_counters \
+        "WITH database_window AS (\
+           SELECT floor(extract(epoch FROM clock_timestamp()) / $3)::bigint * $3 AS window_start\
+         ) \
+         INSERT INTO federation_rate_limit_counters \
          (scope, subject, window_start, window_seconds, request_count, expires_at) \
-         VALUES ($1, $2, $3, $4, 1, to_timestamp($3 + $4 + 60)) \
+         SELECT $1, $2, window_start, $3, 1, to_timestamp(window_start + $3 + 60) \
+         FROM database_window \
          ON CONFLICT (scope, subject, window_start, window_seconds) \
          DO UPDATE SET request_count = federation_rate_limit_counters.request_count + 1 \
          RETURNING request_count",
     )
     .bind(scope)
     .bind(subject)
-    .bind(window_start)
     .bind(i32::try_from(RATE_LIMIT_WINDOW_SECONDS)?)
     .fetch_one(pool)
     .await?;
@@ -1028,18 +1133,69 @@ async fn increment_federation_rate_limit(
     Ok(count <= i64::from(limit))
 }
 
+async fn increment_federation_rate_limit_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    scope: &str,
+    subject: &str,
+    limit: u32,
+) -> anyhow::Result<bool> {
+    if limit == 0 {
+        return Ok(true);
+    }
+    let count: i64 = sqlx::query_scalar(
+        "WITH database_window AS (\
+           SELECT floor(extract(epoch FROM clock_timestamp()) / $3)::bigint * $3 AS window_start\
+         ) \
+         INSERT INTO federation_rate_limit_counters \
+         (scope, subject, window_start, window_seconds, request_count, expires_at) \
+         SELECT $1, $2, window_start, $3, 1, to_timestamp(window_start + $3 + 60) \
+         FROM database_window \
+         ON CONFLICT (scope, subject, window_start, window_seconds) \
+         DO UPDATE SET request_count = federation_rate_limit_counters.request_count + 1 \
+         RETURNING request_count",
+    )
+    .bind(scope)
+    .bind(subject)
+    .bind(i32::try_from(RATE_LIMIT_WINDOW_SECONDS)?)
+    .fetch_one(&mut **tx)
+    .await?;
+    if count == 1 {
+        sqlx::query("DELETE FROM federation_rate_limit_counters WHERE expires_at <= NOW()")
+            .execute(&mut **tx)
+            .await?;
+    }
+    Ok(count <= i64::from(limit))
+}
+
 async fn event_receipt_digests_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     event_id: Uuid,
 ) -> anyhow::Result<Vec<String>> {
     Ok(sqlx::query_scalar(
-        "SELECT envelope_sha256 FROM federation_inbox WHERE event_id = $1 \
-         UNION ALL \
-         SELECT envelope_sha256 FROM federation_outbox WHERE event_id = $1",
+        "SELECT envelope_sha256 FROM federation_event_receipts WHERE event_id = $1",
     )
     .bind(event_id)
     .fetch_all(&mut **tx)
     .await?)
+}
+
+async fn reserve_event_receipt_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    event_id: Uuid,
+    digest: &str,
+    direction: &str,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "INSERT INTO federation_event_receipts \
+         (event_id, envelope_sha256, direction, recorded_at) \
+         VALUES ($1, $2, $3, clock_timestamp())",
+    )
+    .bind(event_id)
+    .bind(digest)
+    .bind(direction)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 async fn quarantine_verified_in_tx(
@@ -1120,15 +1276,14 @@ async fn upsert_object(
     event: &FederationEvent,
 ) -> anyhow::Result<()> {
     let deleted = event.event_type == EVENT_DELETED;
+    let neighbourhood_targets = canonical_neighbourhood_targets(event);
     sqlx::query(
         "INSERT INTO federation_objects \
-         (object_address, origin_cell_id, object_kind, object_version, scope, payload, deleted_at, updated_at) \
-         VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $7 THEN NOW() ELSE NULL END, NOW()) \
+         (object_address, origin_cell_id, object_kind, object_version, scope, \
+          neighbourhood_targets, payload, deleted_at, updated_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8 THEN NOW() ELSE NULL END, NOW()) \
          ON CONFLICT (object_address) DO UPDATE SET \
-           origin_cell_id = EXCLUDED.origin_cell_id, \
-           object_kind = EXCLUDED.object_kind, \
            object_version = EXCLUDED.object_version, \
-           scope = EXCLUDED.scope, \
            payload = EXCLUDED.payload, \
            deleted_at = EXCLUDED.deleted_at, \
            updated_at = NOW()",
@@ -1138,6 +1293,7 @@ async fn upsert_object(
     .bind(&event.object_kind)
     .bind(event.object_version)
     .bind(&event.scope)
+    .bind(serde_json::to_value(neighbourhood_targets)?)
     .bind(&event.payload)
     .bind(deleted)
     .execute(&mut **tx)
@@ -1153,6 +1309,7 @@ fn row_to_object(row: sqlx::postgres::PgRow) -> anyhow::Result<FederatedObject> 
         object_kind: row.try_get("object_kind")?,
         object_version: row.try_get("object_version")?,
         scope: row.try_get("scope")?,
+        neighbourhood_targets: serde_json::from_value(row.try_get("neighbourhood_targets")?)?,
         payload: row.try_get("payload")?,
         deleted: deleted_at.is_some(),
         updated_at: row.try_get("updated_at")?,
@@ -1173,6 +1330,14 @@ fn transition_rejection(
         }
         Some(current) if current.object_kind != event.object_kind => {
             Some("object kind cannot change".to_string())
+        }
+        Some(current) if current.scope != event.scope => {
+            Some("object scope cannot change".to_string())
+        }
+        Some(current)
+            if current.neighbourhood_targets != canonical_neighbourhood_targets(event) =>
+        {
+            Some("object neighbourhood audience cannot change".to_string())
         }
         Some(current) if event.object_version <= current.object_version => {
             Some("object version is stale or replayed".to_string())
@@ -1196,11 +1361,19 @@ fn apply_event(objects: &mut HashMap<String, FederatedObject>, event: &Federatio
             object_kind: event.object_kind.clone(),
             object_version: event.object_version,
             scope: event.scope.clone(),
+            neighbourhood_targets: canonical_neighbourhood_targets(event),
             payload: event.payload.clone(),
             deleted: event.event_type == EVENT_DELETED,
             updated_at: Utc::now(),
         },
     );
+}
+
+fn canonical_neighbourhood_targets(event: &FederationEvent) -> Vec<String> {
+    let mut targets = event.neighbourhood_targets.clone();
+    targets.sort();
+    targets.dedup();
+    targets
 }
 
 #[derive(Serialize)]
@@ -1397,8 +1570,8 @@ fn validate_event_type(value: &str) -> anyhow::Result<()> {
 }
 
 fn validate_actor(value: &str) -> anyhow::Result<()> {
-    if value.is_empty() || value.len() > 128 || value.chars().any(char::is_control) {
-        bail!("actor must be a non-empty control-free string of at most 128 bytes");
+    if value.is_empty() || value.chars().count() > 128 || value.chars().any(char::is_control) {
+        bail!("actor must be a non-empty control-free string of at most 128 characters");
     }
     Ok(())
 }
@@ -1505,6 +1678,56 @@ impl std::fmt::Display for ReceiveRateLimitExceeded {
 
 impl std::error::Error for ReceiveRateLimitExceeded {}
 
+async fn receive_rate_limit_guard(
+    State(service): State<FederationService>,
+    request: Request<Body>,
+    next: Next,
+) -> Result<Response, ApiError> {
+    if let Some(connect_info) = request.extensions().get::<ConnectInfo<SocketAddr>>() {
+        let client_ip = effective_client_ip(connect_info.0, request.headers());
+        if !service.allow_receive_client(&client_ip.to_string()) {
+            return Err(ApiError::too_many_requests(
+                "federation client receive rate limit exceeded",
+            ));
+        }
+    }
+    if !service
+        .allow_receive_global()
+        .await
+        .map_err(ApiError::internal)?
+    {
+        return Err(ApiError::too_many_requests(
+            "federation receive circuit breaker exceeded",
+        ));
+    }
+    Ok(next.run(request).await)
+}
+
+async fn object_read_rate_limit_guard(
+    State(service): State<FederationService>,
+    request: Request<Body>,
+    next: Next,
+) -> Result<Response, ApiError> {
+    if let Some(connect_info) = request.extensions().get::<ConnectInfo<SocketAddr>>() {
+        let client_ip = effective_client_ip(connect_info.0, request.headers());
+        if !service.allow_object_read_client(&client_ip.to_string()) {
+            return Err(ApiError::too_many_requests(
+                "federation client object read rate limit exceeded",
+            ));
+        }
+    }
+    if !service
+        .allow_object_read_global()
+        .await
+        .map_err(ApiError::internal)?
+    {
+        return Err(ApiError::too_many_requests(
+            "federation object read circuit breaker exceeded",
+        ));
+    }
+    Ok(next.run(request).await)
+}
+
 async fn receive_event(
     State(service): State<FederationService>,
     payload: Result<Json<FederationEvent>, JsonRejection>,
@@ -1514,15 +1737,6 @@ async fn receive_event(
         StatusCode::PAYLOAD_TOO_LARGE => ApiError::payload_too_large(),
         _ => ApiError::bad_request("invalid federation event envelope"),
     })?;
-    if !service
-        .allow_receive_global()
-        .await
-        .map_err(ApiError::internal)?
-    {
-        return Err(ApiError::too_many_requests(
-            "federation receive rate limit exceeded",
-        ));
-    }
     let outcome = match service.receive_body_limited(event).await {
         Ok(outcome) => outcome,
         Err(error) if error.downcast_ref::<InvalidFederationEvent>().is_some() => {
@@ -1538,6 +1752,7 @@ async fn receive_event(
     let status = match outcome.status {
         ReceiveStatus::Applied => StatusCode::CREATED,
         ReceiveStatus::Duplicate => StatusCode::OK,
+        ReceiveStatus::Rejected => StatusCode::ACCEPTED,
         ReceiveStatus::Quarantined => StatusCode::ACCEPTED,
     };
     Ok((status, Json(outcome)))
@@ -1547,15 +1762,6 @@ async fn resolve_object(
     State(service): State<FederationService>,
     Query(query): Query<ObjectQuery>,
 ) -> Result<Json<FederatedObject>, ApiError> {
-    if !service
-        .allow_object_read()
-        .await
-        .map_err(ApiError::internal)?
-    {
-        return Err(ApiError::too_many_requests(
-            "federation object read rate limit exceeded",
-        ));
-    }
     let object = service
         .object(&query.address)
         .await
@@ -1635,16 +1841,28 @@ impl IntoResponse for ApiError {
 pub fn router(service: FederationService) -> Router {
     Router::new()
         .route("/federation/v1/cell", get(cell_descriptor))
-        .route("/federation/v1/events", post(receive_event))
-        .route("/federation/v1/objects", get(resolve_object))
+        .route(
+            "/federation/v1/events",
+            post(receive_event).route_layer(from_fn_with_state(
+                service.clone(),
+                receive_rate_limit_guard,
+            )),
+        )
+        .route(
+            "/federation/v1/objects",
+            get(resolve_object).route_layer(from_fn_with_state(
+                service.clone(),
+                object_read_rate_limit_guard,
+            )),
+        )
         .layer(DefaultBodyLimit::max(MAX_EVENT_BYTES))
         .with_state(service)
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PeerBootstrap {
     cell_id: String,
-    #[serde(default = "trusted_state")]
     state: String,
     #[serde(default)]
     allow_neighbourhood: bool,
@@ -1653,6 +1871,7 @@ struct PeerBootstrap {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PeerKeyBootstrap {
     key_id: String,
     public_key: String,
@@ -1660,12 +1879,52 @@ struct PeerKeyBootstrap {
     active: bool,
 }
 
-fn trusted_state() -> String {
-    "trusted".to_string()
-}
-
 fn default_true() -> bool {
     true
+}
+
+fn peer_policies_from_json(raw: &str) -> anyhow::Result<Vec<PeerPolicy>> {
+    let peers: Vec<PeerBootstrap> =
+        serde_json::from_str(raw).context("FEDERATION_PEERS_JSON is invalid")?;
+    let mut cell_ids = HashSet::new();
+    if let Some(duplicate) = peers
+        .iter()
+        .find(|peer| !cell_ids.insert(peer.cell_id.clone()))
+    {
+        bail!(
+            "FEDERATION_PEERS_JSON contains duplicate cell_id {}",
+            duplicate.cell_id
+        );
+    }
+    peers
+        .into_iter()
+        .map(|peer| {
+            let keys = peer
+                .keys
+                .into_iter()
+                .map(|key| {
+                    let decoded = URL_SAFE_NO_PAD
+                        .decode(&key.public_key)
+                        .context("peer public key is not valid base64url")?;
+                    let public_key: [u8; 32] = decoded
+                        .try_into()
+                        .map_err(|_| anyhow::anyhow!("peer public key must be 32 bytes"))?;
+                    Ok(PeerKey {
+                        key_id: key.key_id,
+                        public_key,
+                        active: key.active,
+                    })
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            Ok(PeerPolicy {
+                remote_cell_id: peer.cell_id,
+                state: peer.state,
+                allow_neighbourhood: peer.allow_neighbourhood,
+                allowed_event_types: peer.allowed_event_types.into_iter().collect(),
+                keys,
+            })
+        })
+        .collect()
 }
 
 pub async fn runtime_router(pool: Option<PgPool>) -> anyhow::Result<Router> {
@@ -1681,35 +1940,8 @@ pub async fn runtime_router(pool: Option<PgPool>) -> anyhow::Result<Router> {
     let service = FederationService::new(identity, repository);
     if let Ok(raw) = env::var("FEDERATION_PEERS_JSON") {
         if !raw.trim().is_empty() {
-            let peers: Vec<PeerBootstrap> =
-                serde_json::from_str(&raw).context("FEDERATION_PEERS_JSON is invalid")?;
-            for peer in peers {
-                let keys = peer
-                    .keys
-                    .into_iter()
-                    .map(|key| {
-                        let decoded = URL_SAFE_NO_PAD
-                            .decode(&key.public_key)
-                            .context("peer public key is not valid base64url")?;
-                        let public_key: [u8; 32] = decoded
-                            .try_into()
-                            .map_err(|_| anyhow::anyhow!("peer public key must be 32 bytes"))?;
-                        Ok(PeerKey {
-                            key_id: key.key_id,
-                            public_key,
-                            active: key.active,
-                        })
-                    })
-                    .collect::<anyhow::Result<Vec<_>>>()?;
-                service
-                    .install_peer(PeerPolicy {
-                        remote_cell_id: peer.cell_id,
-                        state: peer.state,
-                        allow_neighbourhood: peer.allow_neighbourhood,
-                        allowed_event_types: peer.allowed_event_types.into_iter().collect(),
-                        keys,
-                    })
-                    .await?;
+            for policy in peer_policies_from_json(&raw)? {
+                service.install_peer(policy).await?;
             }
         }
     }
@@ -2095,7 +2327,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tampered_event_is_quarantined() {
+    async fn tampered_event_is_rejected_without_quarantine() {
         let a = identity("cell-a", 1);
         let b_repo = Arc::new(MemoryFederationRepository::new());
         let b = FederationService::new(identity("cell-b", 2), b_repo);
@@ -2125,7 +2357,197 @@ mod tests {
             .unwrap();
         event.payload = serde_json::json!({"title": "Manipulated"});
         let outcome = b.receive(event).await.unwrap();
-        assert_eq!(outcome.status, ReceiveStatus::Quarantined);
-        assert!(outcome.reason.unwrap().contains("signature"));
+        assert_eq!(outcome.status, ReceiveStatus::Rejected);
+        assert_eq!(
+            outcome.reason.as_deref(),
+            Some("event authentication rejected")
+        );
+        assert!(b.quarantined().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn exact_authenticated_duplicates_do_not_consume_origin_rate_limit() {
+        let sender_identity = identity("cell-a", 41);
+        let sender = FederationService::new(
+            sender_identity.clone(),
+            Arc::new(MemoryFederationRepository::new()),
+        );
+        let receiver = FederationService::new(
+            identity("cell-b", 42),
+            Arc::new(MemoryFederationRepository::new()),
+        );
+        receiver
+            .install_peer(PeerPolicy {
+                remote_cell_id: "cell-a".to_string(),
+                state: "trusted".to_string(),
+                allow_neighbourhood: true,
+                allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
+                keys: vec![sender_identity.peer_key()],
+            })
+            .await
+            .unwrap();
+        let first = sender
+            .publish_local(PublishRequest {
+                actor: "system:duplicate-rate-test".to_string(),
+                event_type: EVENT_UPSERTED.to_string(),
+                object_address: "wg://cell-a/node/first".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: SCOPE_GLOBAL.to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"value": 1}),
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            receiver.receive(first.clone()).await.unwrap().status,
+            ReceiveStatus::Applied
+        );
+        for _ in 0..=RECEIVE_RATE_PER_ORIGIN {
+            assert_eq!(
+                receiver.receive(first.clone()).await.unwrap().status,
+                ReceiveStatus::Duplicate
+            );
+        }
+        let second = sender
+            .publish_local(PublishRequest {
+                actor: "system:duplicate-rate-test".to_string(),
+                event_type: EVENT_UPSERTED.to_string(),
+                object_address: "wg://cell-a/node/second".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: SCOPE_GLOBAL.to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"value": 2}),
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            receiver.receive(second).await.unwrap().status,
+            ReceiveStatus::Applied
+        );
+
+        receiver
+            .install_peer(PeerPolicy {
+                remote_cell_id: "cell-a".to_string(),
+                state: "blocked".to_string(),
+                allow_neighbourhood: true,
+                allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
+                keys: vec![sender_identity.peer_key()],
+            })
+            .await
+            .unwrap();
+        let blocked_replay = receiver.receive(first).await.unwrap();
+        assert_eq!(blocked_replay.status, ReceiveStatus::Quarantined);
+        assert!(blocked_replay
+            .reason
+            .as_deref()
+            .unwrap_or_default()
+            .contains("blocked"));
+    }
+
+    #[tokio::test]
+    async fn peer_key_bytes_are_immutable_and_failed_reinstall_rolls_back() {
+        let repository = Arc::new(MemoryFederationRepository::new());
+        let service = FederationService::new(identity("cell-b", 51), repository.clone());
+        let original = identity("cell-a", 52).peer_key();
+        service
+            .install_peer(PeerPolicy {
+                remote_cell_id: "cell-a".to_string(),
+                state: "trusted".to_string(),
+                allow_neighbourhood: true,
+                allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
+                keys: vec![original.clone()],
+            })
+            .await
+            .unwrap();
+        let mut replacement = original.clone();
+        replacement.public_key = [99; 32];
+        let error = service
+            .install_peer(PeerPolicy {
+                remote_cell_id: "cell-a".to_string(),
+                state: "blocked".to_string(),
+                allow_neighbourhood: false,
+                allowed_event_types: [EVENT_DELETED.to_string()].into_iter().collect(),
+                keys: vec![replacement],
+            })
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("immutable"));
+        let resolved = repository
+            .resolve_peer("cell-a", &original.key_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(resolved.public_key, original.public_key);
+        assert_eq!(resolved.state, "trusted");
+        assert!(resolved.allow_neighbourhood);
+    }
+
+    #[test]
+    fn object_scope_and_canonical_neighbourhood_audience_are_immutable() {
+        let mut event = FederationEvent {
+            protocol_version: FEDERATION_PROTOCOL_VERSION.to_string(),
+            schema_version: FEDERATION_SCHEMA_VERSION,
+            event_id: Uuid::new_v4(),
+            event_type: EVENT_UPSERTED.to_string(),
+            origin_cell_id: "cell-a".to_string(),
+            actor: "system:scope-test".to_string(),
+            object_address: "wg://cell-a/node/audience".to_string(),
+            object_kind: "node".to_string(),
+            object_version: 2,
+            previous_version: Some(1),
+            created_at: Utc::now(),
+            scope: SCOPE_NEIGHBOURHOOD.to_string(),
+            neighbourhood_targets: vec!["cell-c".to_string(), "cell-b".to_string()],
+            payload: serde_json::json!({}),
+            key_id: "key-1".to_string(),
+            signature: String::new(),
+        };
+        let current = FederatedObject {
+            object_address: event.object_address.clone(),
+            origin_cell_id: event.origin_cell_id.clone(),
+            object_kind: event.object_kind.clone(),
+            object_version: 1,
+            scope: SCOPE_NEIGHBOURHOOD.to_string(),
+            neighbourhood_targets: vec!["cell-b".to_string(), "cell-c".to_string()],
+            payload: serde_json::json!({}),
+            deleted: false,
+            updated_at: Utc::now(),
+        };
+        assert_eq!(transition_rejection(Some(&current), &event), None);
+        event.neighbourhood_targets = vec!["cell-b".to_string(), "cell-d".to_string()];
+        assert_eq!(
+            transition_rejection(Some(&current), &event).as_deref(),
+            Some("object neighbourhood audience cannot change")
+        );
+        event.scope = SCOPE_GLOBAL.to_string();
+        event.neighbourhood_targets.clear();
+        assert_eq!(
+            transition_rejection(Some(&current), &event).as_deref(),
+            Some("object scope cannot change")
+        );
+    }
+
+    #[test]
+    fn actor_limit_counts_unicode_characters_like_json_schema() {
+        assert!(validate_actor(&"é".repeat(128)).is_ok());
+        assert!(validate_actor(&"é".repeat(129)).is_err());
+    }
+
+    #[test]
+    fn peer_bootstrap_requires_state_and_rejects_duplicate_cells() {
+        let key = URL_SAFE_NO_PAD.encode([7; 32]);
+        let missing_state = format!(
+            r#"[{{"cell_id":"cell-a","allowed_event_types":["object.upserted"],"keys":[{{"key_id":"key-1","public_key":"{key}"}}]}}]"#
+        );
+        assert!(peer_policies_from_json(&missing_state).is_err());
+        let duplicate = format!(
+            r#"[{{"cell_id":"cell-a","state":"trusted","allowed_event_types":["object.upserted"],"keys":[{{"key_id":"key-1","public_key":"{key}"}}]}},{{"cell_id":"cell-a","state":"blocked","allowed_event_types":["object.upserted"],"keys":[{{"key_id":"key-2","public_key":"{key}"}}]}}]"#
+        );
+        let error = peer_policies_from_json(&duplicate).unwrap_err();
+        assert!(error.to_string().contains("duplicate cell_id cell-a"));
     }
 }
