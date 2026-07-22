@@ -62,30 +62,49 @@ for caddy in \
 done
 
 for caddy in \
+  "${REPO_ROOT}/infra/caddy/Caddyfile" \
   "${REPO_ROOT}/infra/caddy/Caddyfile.vps" \
   "${REPO_ROOT}/infra/caddy/Caddyfile.heim"; do
   if [[ ! -f "$caddy" ]]; then
+    fail "static-app Caddyfile missing: $caddy"
     continue
   fi
   if ! grep -Fq "Content-Security-Policy" "$caddy"; then
     fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing static-app CSP"
     continue
   fi
+  if grep -Eq "script-src[^;]*'unsafe-inline'" "$caddy"; then
+    fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") must not allow script-src unsafe-inline"
+  fi
   for directive in \
-    "default-src 'self'" \
-    "script-src 'self' 'unsafe-inline'" \
     "style-src 'self' 'unsafe-inline'" \
     "connect-src 'self'" \
     "img-src 'self' data: blob:" \
-    "object-src 'none'"; do
+    "worker-src 'self' blob:" \
+    "font-src 'self'" \
+    "media-src 'self'" \
+    "manifest-src 'self'" \
+    "child-src 'self'" \
+    "frame-src 'self'" \
+    "object-src 'none'" \
+    "base-uri 'self'" \
+    "form-action 'self'" \
+    "frame-ancestors 'none'"; do
     if ! grep -Fq "$directive" "$caddy"; then
       fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") CSP missing directive: $directive"
     fi
   done
 done
 
-if ! grep -Fq "script-src 'unsafe-inline'" "$POLICY_FILE"; then
-  fail "policies/security.yml must record the current script-src unsafe-inline exception"
+if grep -Fq "script-src 'unsafe-inline'" "$POLICY_FILE"; then
+  fail "policies/security.yml must not retain a script-src unsafe-inline exception"
+fi
+if ! grep -Fq "script_mode: hash" "$POLICY_FILE"; then
+  fail "policies/security.yml must record hash-bound script delivery"
+fi
+SVELTE_CONFIG="${REPO_ROOT}/apps/web/svelte.config.js"
+if ! grep -Fq 'mode: "hash"' "$SVELTE_CONFIG" || ! grep -Fq '"script-src": ["self"]' "$SVELTE_CONFIG"; then
+  fail "apps/web/svelte.config.js must enable SvelteKit hash CSP for script-src"
 fi
 
 if [[ "$failures" -ne 0 ]]; then

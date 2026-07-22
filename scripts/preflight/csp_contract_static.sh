@@ -1,126 +1,108 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-# This is a STATIC preflight guard. It runs BEFORE docker compose up.
-# It checks if the build artifacts contain an inline script, and if so,
-# verifies that the target Caddyfile's CSP allows it.
-
 ROOT="${ROOT:-/opt/weltgewebe}"
 REQUIRE_FRONTEND="${REQUIRE_FRONTEND:-1}"
-CADDY_TARGET_SITE="${CADDY_TARGET_SITE:-weltgewebe.home.arpa}"
-
-# Caddyfile detection (heuristic: prioritize user explicit env var, then root, then infra)
-if [[ -n "${CADDYFILE_PATH:-}" ]] && [[ -f "$CADDYFILE_PATH" ]]; then
-  CADDYFILE="$CADDYFILE_PATH"
-elif [[ -f "$ROOT/Caddyfile" ]]; then
-  CADDYFILE="$ROOT/Caddyfile"
-elif [[ -f "$ROOT/infra/caddy/Caddyfile.heim" ]]; then
-  CADDYFILE="$ROOT/infra/caddy/Caddyfile.heim"
-elif [[ -f "$ROOT/infra/caddy/Caddyfile.prod" ]]; then
-  CADDYFILE="$ROOT/infra/caddy/Caddyfile.prod"
-elif [[ -f "$ROOT/infra/caddy/Caddyfile" ]]; then
-  CADDYFILE="$ROOT/infra/caddy/Caddyfile"
-else
-  CADDYFILE=""
-fi
 
 if [[ "$REQUIRE_FRONTEND" != "1" ]]; then
   echo "csp_contract_static: Frontend delivery not required, skipping."
   exit 0
 fi
 
+if [[ -n "${CADDYFILE_PATH:-}" ]] && [[ -f "$CADDYFILE_PATH" ]]; then
+  CADDYFILE="$CADDYFILE_PATH"
+elif [[ -f "$ROOT/Caddyfile" ]]; then
+  CADDYFILE="$ROOT/Caddyfile"
+elif [[ -f "$ROOT/infra/caddy/Caddyfile.heim" ]]; then
+  CADDYFILE="$ROOT/infra/caddy/Caddyfile.heim"
+elif [[ -f "$ROOT/infra/caddy/Caddyfile.vps" ]]; then
+  CADDYFILE="$ROOT/infra/caddy/Caddyfile.vps"
+elif [[ -f "$ROOT/infra/caddy/Caddyfile" ]]; then
+  CADDYFILE="$ROOT/infra/caddy/Caddyfile"
+else
+  CADDYFILE=""
+fi
+
 if [[ -z "$CADDYFILE" || ! -f "$CADDYFILE" ]]; then
   echo "ERROR: csp_contract_static could not find the target Caddyfile." >&2
-  echo "       This is a fail-closed check because frontend delivery is required and Caddy is enabled." >&2
+  exit 1
+fi
+if grep -Eq "script-src[^;]*'unsafe-inline'" "$CADDYFILE"; then
+  echo "ERROR: target Caddyfile still allows script-src 'unsafe-inline': $CADDYFILE" >&2
   exit 1
 fi
 
 INDEX_HTML="$ROOT/apps/web/build/index.html"
-
 if [[ ! -f "$INDEX_HTML" ]]; then
   echo "ERROR: csp_contract_static could not find index.html at $INDEX_HTML." >&2
-  echo "       This is a fail-closed check because REQUIRE_FRONTEND=1." >&2
-  echo "       (Note: runtime_contract.sh also enforces this file's existence)." >&2
   exit 1
 fi
 
-# Detect inline script in HTML
-# We must find a <script ...> tag that does NOT contain a src= attribute.
-HAS_INLINE_SCRIPT=0
-# Extract all script tags. grep -o is standard, but the regex needs to be simple.
-# '<script[^>]*>' works in standard grep in many implementations, but to be 100% POSIX safe
-# and handle minified files, we use sed to isolate the script tags by injecting newlines.
-SCRIPT_TAGS=$(sed 's/<script/\n<script/g' "$INDEX_HTML" | grep -io '^<script[^>]*>' || true)
+python3 - "$ROOT/apps/web/build" <<'PY'
+from __future__ import annotations
+import base64
+import hashlib
+import sys
+from html.parser import HTMLParser
+from pathlib import Path
 
-while IFS= read -r tag; do
-  if [[ -z "$tag" ]]; then
-    continue
-  fi
-  # If the script tag does not contain "src=", it's an inline script
-  if ! echo "$tag" | grep -qi "src="; then
-    HAS_INLINE_SCRIPT=1
-    break
-  fi
-done <<< "$SCRIPT_TAGS"
+class DocumentParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.csp_meta: list[str] = []
+        self.inline_scripts: list[str] = []
+        self._script_inline = False
+        self._script_parts: list[str] = []
 
-if [[ "$HAS_INLINE_SCRIPT" == "1" ]]; then
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = {key.lower(): (value or "") for key, value in attrs}
+        if tag.lower() == "meta" and values.get("http-equiv", "").lower() == "content-security-policy":
+            self.csp_meta.append(values.get("content", ""))
+        if tag.lower() == "script":
+            self._script_inline = "src" not in values
+            self._script_parts = []
 
-  # Extract the configuration block for the target site.
-  # This uses a simple awk script to count braces and extract only the relevant host block.
-  TARGET_BLOCK=$(awk -v site="$CADDY_TARGET_SITE" '
-    # Match the site name followed by a brace or space
-    $0 ~ site"( *{| *$)" { in_block=1; braces=0 }
-    in_block {
-      print
-      # Count opening and closing braces
-      braces += gsub(/{/, "{") - gsub(/}/, "}")
-      if (braces <= 0 && $0 ~ /}/) { in_block=0 }
-    }
-  ' "$CADDYFILE" || true)
+    def handle_data(self, data: str) -> None:
+        if self._script_inline:
+            self._script_parts.append(data)
 
-  if [[ -z "$TARGET_BLOCK" ]]; then
-    echo "ERROR: csp_contract_static could not find the host block for '$CADDY_TARGET_SITE' in $CADDYFILE." >&2
-    exit 1
-  fi
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "script" and self._script_inline:
+            self.inline_scripts.append("".join(self._script_parts))
+            self._script_inline = False
+            self._script_parts = []
 
-  # Extract CSP lines from the target block
-  # Assuming standard format: Content-Security-Policy "..."
-  CSP_LINES=$(echo "$TARGET_BLOCK" | grep -i "Content-Security-Policy" || true)
 
-  if [[ -z "$CSP_LINES" ]]; then
-    echo "csp_contract_static: No CSP found for $CADDY_TARGET_SITE in $CADDYFILE, assuming safe (or no CSP)."
-    exit 0
-  fi
+def directives(policy: str) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = {}
+    for raw in policy.split(";"):
+        parts = raw.strip().split()
+        if parts:
+            result[parts[0].lower()] = parts[1:]
+    return result
 
-  # Handle multiple CSP lines: If ANY line satisfies the requirement, we pass.
-  # This prevents false positives in multi-site Caddyfiles without needing a full parser.
-  while IFS= read -r CSP_LINE; do
-    if [[ -z "$CSP_LINE" ]]; then
-      continue
-    fi
+build = Path(sys.argv[1])
+html_files = sorted(build.rglob("*.html"))
+if not html_files:
+    raise SystemExit(f"ERROR: no HTML files found under {build}")
 
-    # Look specifically within the script-src directive
-    if echo "$CSP_LINE" | grep -qi "script-src"; then
-      # Extract just the script-src part (up to the next semicolon or end of string) using sed for portability
-      SCRIPT_SRC=$(echo "$CSP_LINE" | sed -n 's/.*\([sS][cC][rR][iI][pP][tT]-[sS][rR][cC][^;]*\).*/\1/p')
-
-      if echo "$SCRIPT_SRC" | grep -qF "'unsafe-inline'"; then
-        echo "csp_contract_static: OK ('unsafe-inline' present in script-src of $CADDYFILE)"
-        exit 0
-      fi
-
-      if echo "$SCRIPT_SRC" | grep -qE "'nonce-|'sha256-"; then
-        echo "csp_contract_static: OK (nonce/hash present in script-src of $CADDYFILE)"
-        exit 0
-      fi
-    fi
-  done <<< "$CSP_LINES"
-
-  echo "ERROR: Inline <script> detected in INDEX_HTML ($INDEX_HTML), but no matching Content-Security-Policy in CADDYFILE_PATH ($CADDYFILE) allows 'unsafe-inline' or nonce/hash." >&2
-  echo "Found CSP lines:" >&2
-  echo "$CSP_LINES" >&2
-  exit 1
-fi
-
-echo "csp_contract_static: OK (no inline script or valid CSP)"
-exit 0
+validated = 0
+for path in html_files:
+    parser = DocumentParser()
+    parser.feed(path.read_text(encoding="utf-8"))
+    if len(parser.csp_meta) != 1:
+        raise SystemExit(f"ERROR: expected exactly one CSP meta tag in {path}, found {len(parser.csp_meta)}")
+    policy = directives(parser.csp_meta[0])
+    script_src = policy.get("script-src")
+    if not script_src:
+        raise SystemExit(f"ERROR: CSP meta tag has no script-src directive in {path}")
+    if "'unsafe-inline'" in script_src:
+        raise SystemExit(f"ERROR: CSP meta tag still allows script-src 'unsafe-inline' in {path}")
+    for body in parser.inline_scripts:
+        digest = base64.b64encode(hashlib.sha256(body.encode("utf-8")).digest()).decode("ascii")
+        token = f"'sha256-{digest}'"
+        if token not in script_src:
+            raise SystemExit(f"ERROR: inline script hash missing from script-src in {path}: {token}")
+    validated += 1
+    print(f"csp_contract_static: {path.relative_to(build)} scripts={len(parser.inline_scripts)} hash-bound")
+print(f"csp_contract_static: OK ({validated} HTML artifact(s) validated)")
+PY
