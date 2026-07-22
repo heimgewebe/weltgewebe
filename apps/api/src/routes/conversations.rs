@@ -39,7 +39,7 @@ const MESSAGE_RATE_LIMIT_PER_MINUTE: i64 = 10;
 
 type ConversationRow = (
     String,
-    String,
+    Option<String>,
     String,
     String,
     DateTime<Utc>,
@@ -62,7 +62,7 @@ type MessageRow = (
 pub struct ConversationView {
     pub id: String,
     pub conversation_type: String,
-    pub node_id: String,
+    pub node_id: Option<String>,
     pub visibility: String,
     pub created_at: String,
     pub updated_at: String,
@@ -302,6 +302,106 @@ fn check_precondition(
         )
         .current(current)),
     }
+}
+
+fn conversation_is_writable(conversation_type: &str, governance_source: Option<&str>) -> bool {
+    match conversation_type {
+        "node" => true,
+        "governance_proposal" => governance_source == Some("canonical"),
+        _ => false,
+    }
+}
+
+async fn require_conversation_writable(
+    tx: &mut Transaction<'_, Postgres>,
+    conversation_id: &str,
+) -> Result<(), ConversationApiError> {
+    // Fast-path node conversations without touching the global governance cutover row.
+    // The first read is only a classification hint; the row is locked and re-read below
+    // before the write is authorized, so deletion or an unexpected type change cannot race.
+    let observed_type: Option<String> = sqlx::query_scalar(
+        "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL",
+    )
+    .bind(conversation_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|error| database_error("classify conversation write target", error))?;
+
+    let observed_type = observed_type.ok_or_else(|| {
+        ConversationApiError::new(
+            StatusCode::NOT_FOUND,
+            "conversation_not_found",
+            "the conversation does not exist",
+        )
+    })?;
+
+    if observed_type == "node" {
+        let locked_type: Option<String> = sqlx::query_scalar(
+            "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL FOR SHARE",
+        )
+        .bind(conversation_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|error| database_error("lock node conversation write target", error))?;
+
+        return match locked_type.as_deref() {
+            Some("node") => Ok(()),
+            None => Err(ConversationApiError::new(
+                StatusCode::NOT_FOUND,
+                "conversation_not_found",
+                "the conversation does not exist",
+            )),
+            Some(_) => Err(ConversationApiError::new(
+                StatusCode::CONFLICT,
+                "conversation_write_target_changed",
+                "the conversation write target changed while the request was in flight",
+            )),
+        };
+    }
+
+    // Governance writes use one lock order everywhere: cutover singleton first,
+    // conversation row second. This keeps the source stable through commit and
+    // prevents a rollback to legacy while an authorized canonical write is in flight.
+    let governance_source: Option<String> = sqlx::query_scalar(
+        "SELECT governance_source FROM domain_conversation_cutover_state WHERE singleton FOR SHARE",
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|error| database_error("lock conversation write cutover", error))?;
+
+    let conversation_type: Option<String> = sqlx::query_scalar(
+        "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL FOR SHARE",
+    )
+    .bind(conversation_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|error| database_error("check conversation write target", error))?;
+
+    let conversation_type = conversation_type.ok_or_else(|| {
+        ConversationApiError::new(
+            StatusCode::NOT_FOUND,
+            "conversation_not_found",
+            "the conversation does not exist",
+        )
+    })?;
+
+    if conversation_type != observed_type {
+        return Err(ConversationApiError::new(
+            StatusCode::CONFLICT,
+            "conversation_write_target_changed",
+            "the conversation write target changed while the request was in flight",
+        ));
+    }
+
+    if conversation_is_writable(&conversation_type, governance_source.as_deref()) {
+        return Ok(());
+    }
+
+    Err(ConversationApiError::new(
+        StatusCode::CONFLICT,
+        "conversation_write_not_active",
+        "governance conversation writes are not active before canonical cutover",
+    ))
 }
 
 async fn load_message_for_update(
@@ -563,21 +663,7 @@ pub async fn create_message(
         .begin()
         .await
         .map_err(|error| database_error("begin create message", error))?;
-    let conversation_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM domain_conversations \
-         WHERE id = $1::uuid AND deleted_at IS NULL)",
-    )
-    .bind(&conversation_id)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(|error| database_error("check conversation for message create", error))?;
-    if !conversation_exists {
-        return Err(ConversationApiError::new(
-            StatusCode::NOT_FOUND,
-            "conversation_not_found",
-            "the node conversation does not exist",
-        ));
-    }
+    require_conversation_writable(&mut tx, &conversation_id).await?;
 
     let author_title: Option<String> =
         sqlx::query_scalar("SELECT title FROM domain_accounts WHERE id = $1")
@@ -697,6 +783,7 @@ pub async fn update_message(
         .begin()
         .await
         .map_err(|error| database_error("begin message update", error))?;
+    require_conversation_writable(&mut tx, &conversation_id).await?;
     let current = load_message_for_update(&mut tx, &conversation_id, &message_id).await?;
     require_author(&auth, &current)?;
     check_precondition(&headers, &current)?;
@@ -740,6 +827,7 @@ pub async fn delete_message(
         .begin()
         .await
         .map_err(|error| database_error("begin message tombstone", error))?;
+    require_conversation_writable(&mut tx, &conversation_id).await?;
     let current = load_message_for_update(&mut tx, &conversation_id, &message_id).await?;
     require_author_or_admin(&auth, &current)?;
     check_precondition(&headers, &current)?;
@@ -786,6 +874,43 @@ mod tests {
                 .code,
             "invalid_message_content"
         );
+    }
+
+    #[test]
+    fn conversation_write_cutover_keeps_governance_on_legacy_until_canonical() {
+        assert!(conversation_is_writable("node", Some("legacy")));
+        assert!(!conversation_is_writable(
+            "governance_proposal",
+            Some("legacy")
+        ));
+        assert!(conversation_is_writable(
+            "governance_proposal",
+            Some("canonical")
+        ));
+        assert!(!conversation_is_writable("governance_proposal", None));
+        assert!(!conversation_is_writable("unknown", Some("canonical")));
+    }
+
+    #[test]
+    fn conversation_view_accepts_governance_target_without_node() {
+        let created_at = DateTime::parse_from_rfc3339("2026-07-22T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let updated_at = DateTime::parse_from_rfc3339("2026-07-22T12:00:01Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let view = conversation_from_row((
+            Uuid::new_v4().to_string(),
+            None,
+            "governance_proposal".to_string(),
+            "public".to_string(),
+            created_at,
+            updated_at,
+            None,
+        ));
+
+        assert_eq!(view.conversation_type, "governance_proposal");
+        assert_eq!(view.node_id, None);
     }
 
     #[test]
