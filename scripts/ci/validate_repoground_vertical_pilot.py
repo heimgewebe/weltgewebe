@@ -80,45 +80,59 @@ def validate(data: dict[str, Any]) -> list[str]:
     if not isinstance(source_bundle, dict):
         errors.append("source_bundle must be an object")
         source_bundle = {}
+    source_bundle_pass = True
     if source_bundle.get("freshness") != "fresh_exact":
         errors.append("source bundle must be fresh_exact")
+        source_bundle_pass = False
     if not _is_sha(source_bundle.get("git_commit"), _SHA40):
         errors.append("source_bundle.git_commit must be a full commit SHA")
+        source_bundle_pass = False
     if not _is_sha(source_bundle.get("manifest_sha256"), _SHA64):
         errors.append("source_bundle.manifest_sha256 must be a SHA-256")
+        source_bundle_pass = False
     for field in ("post_emit_health", "output_health", "bundle_surface_validation"):
         if source_bundle.get(field) != "pass":
             errors.append(f"source_bundle.{field} must be pass")
-    if source_bundle.get("generator_runtime_commit") != data.get(
-        "repoground_runtime_commit"
-    ):
+            source_bundle_pass = False
+    if source_bundle.get("generator_runtime_commit") != data.get("repoground_runtime_commit"):
         errors.append(
             "source_bundle.generator_runtime_commit must match repoground_runtime_commit"
         )
+        source_bundle_pass = False
 
     measurement_worktree = data.get("measurement_worktree")
+    measurement_worktree_pass = True
     if not isinstance(measurement_worktree, dict):
         errors.append("measurement_worktree must be an object")
         measurement_worktree = {}
+        measurement_worktree_pass = False
     if measurement_worktree.get("head") != source_bundle.get("git_commit"):
         errors.append("measurement worktree head must equal source bundle git_commit")
+        measurement_worktree_pass = False
     if measurement_worktree.get("dirty") is not True:
         errors.append("measurement worktree must record the evidence-only dirty state")
+        measurement_worktree_pass = False
     if measurement_worktree.get("dirty_scope") != "evidence_only":
         errors.append("measurement worktree dirty scope must be evidence_only")
+        measurement_worktree_pass = False
     dirty_paths = measurement_worktree.get("dirty_paths")
     if not isinstance(dirty_paths, list) or set(dirty_paths) != _MEASUREMENT_EVIDENCE_PATHS:
         errors.append("measurement worktree dirty paths must equal the four evidence files")
+        measurement_worktree_pass = False
     if measurement_worktree.get("included_in_revision_diff") is not False:
         errors.append("measurement worktree evidence edits must be excluded from revision diff")
+        measurement_worktree_pass = False
 
     observed_overlay = data.get("observed_foreign_dirty_overlay")
+    observed_overlay_pass = True
     if not isinstance(observed_overlay, dict):
         errors.append("observed_foreign_dirty_overlay must be an object")
+        observed_overlay_pass = False
     elif observed_overlay.get("dirty") is True and observed_overlay.get(
         "included_in_revision_diff"
     ) is not False:
         errors.append("foreign dirty overlay must remain excluded from revision diff")
+        observed_overlay_pass = False
 
     cases = data.get("cases")
     if not isinstance(cases, list) or len(cases) != 4:
@@ -131,10 +145,12 @@ def validate(data: dict[str, Any]) -> list[str]:
         if isinstance(case, dict) and case.get("profile") in _GOLD_PROFILES
     ]
     gold_profiles = {case.get("profile") for case in gold_cases}
-    if len(gold_cases) != 3 or gold_profiles != _GOLD_PROFILES:
+    three_classes_pass = len(gold_cases) == 3 and gold_profiles == _GOLD_PROFILES
+    if not three_classes_pass:
         errors.append(
             "exactly database_auth, web_map and deployment_kubernetes gold cases are required"
         )
+
     live_cases = [
         case
         for case in cases
@@ -149,27 +165,46 @@ def validate(data: dict[str, Any]) -> list[str]:
 
     qualifying: list[str] = []
     lane_truth_pass = True
+    diff_binding_pass = True
+    freshness_pass = source_bundle_pass
+    impact_unblocked_pass = True
+    overlay_exclusion_pass = measurement_worktree_pass and observed_overlay_pass
+    baseline_evidence_pass = True
+    bounded_quality_pass = True
+
     for case in cases:
         if not isinstance(case, dict):
             errors.append("every case must be an object")
+            diff_binding_pass = False
+            freshness_pass = False
+            impact_unblocked_pass = False
+            overlay_exclusion_pass = False
+            baseline_evidence_pass = False
+            bounded_quality_pass = False
             continue
 
         case_id = case.get("id")
         if not isinstance(case_id, str) or not case_id:
             errors.append("every case must have an id")
+            diff_binding_pass = False
             continue
 
         for field in ("base_commit", "target_commit", "base_revision", "target_revision"):
             if not _is_sha(case.get(field), _SHA40):
                 errors.append(f"{case_id}: {field} must be a full commit SHA")
+                diff_binding_pass = False
         if case.get("base_commit") != case.get("base_revision"):
             errors.append(f"{case_id}: base commit and revision must match")
+            diff_binding_pass = False
         if case.get("target_commit") != case.get("target_revision"):
             errors.append(f"{case_id}: target commit and revision must match")
+            diff_binding_pass = False
         if not _is_sha(case.get("diff_sha256"), _SHA64):
             errors.append(f"{case_id}: diff_sha256 must be a SHA-256")
+            diff_binding_pass = False
         if case.get("diff_binding_kind") != "git_tree_delta_v1":
             errors.append(f"{case_id}: diff_binding_kind must be git_tree_delta_v1")
+            diff_binding_pass = False
 
         direct = case.get("direct_change_paths")
         expected = case.get("expected_critical_paths")
@@ -179,65 +214,120 @@ def validate(data: dict[str, Any]) -> list[str]:
         ):
             errors.append(f"{case_id}: direct_change_paths must be a non-empty string list")
             direct = []
+            bounded_quality_pass = False
         if case.get("changed_path_count") != len(direct):
             errors.append(f"{case_id}: changed_path_count must match direct_change_paths")
+            bounded_quality_pass = False
         if not isinstance(expected, list) or not expected:
             errors.append(f"{case_id}: expected_critical_paths must be non-empty")
             expected = []
+            bounded_quality_pass = False
         if set(expected) != set(direct):
             errors.append(f"{case_id}: bounded critical paths must equal all direct changes")
+            bounded_quality_pass = False
         if not isinstance(missing, list) or missing:
             errors.append(f"{case_id}: critical-path coverage must have no missing paths")
+            bounded_quality_pass = False
         if case.get("critical_path_coverage") != 1.0:
             errors.append(f"{case_id}: critical_path_coverage must be 1.0")
+            bounded_quality_pass = False
         if case.get("profile") in _GOLD_PROFILES and not any(
             _looks_like_test_path(path) for path in direct
         ):
             errors.append(f"{case_id}: every gold case must directly include a changed test path")
+            bounded_quality_pass = False
         if case.get("quality_pass") is not True:
             errors.append(f"{case_id}: bounded quality check must pass")
+            bounded_quality_pass = False
 
         baseline = case.get("baseline")
         capsule = case.get("capsule")
         if not isinstance(baseline, dict) or not isinstance(capsule, dict):
             errors.append(f"{case_id}: baseline and capsule must be objects")
+            baseline_evidence_pass = False
+            freshness_pass = False
+            diff_binding_pass = False
             continue
+
         if baseline.get("available") is not True:
             errors.append(f"{case_id}: paired baseline must be available")
+            baseline_evidence_pass = False
         if baseline.get("direct_context_pack_verified") is not True:
             errors.append(f"{case_id}: direct baseline context pack must be freshly verified")
+            baseline_evidence_pass = False
         if baseline.get("freshness_status") != "fresh":
             errors.append(f"{case_id}: paired baseline must be fresh")
+            baseline_evidence_pass = False
+            freshness_pass = False
         if baseline.get("resolved_evidence_status") != "available":
             errors.append(f"{case_id}: paired baseline must contain resolved evidence")
+            baseline_evidence_pass = False
         for field in ("snippet_count", "range_count", "citation_count"):
             value = baseline.get(field)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 errors.append(f"{case_id}: baseline {field} must be positive")
+                baseline_evidence_pass = False
         if capsule.get("available") is not True:
             errors.append(f"{case_id}: capsule must be available")
+            bounded_quality_pass = False
 
         related_tests = capsule.get("related_tests")
         if not isinstance(related_tests, list):
             errors.append(f"{case_id}: related_tests must be an explicit list")
             related_tests = []
+            bounded_quality_pass = False
         if capsule.get("related_tests_included") != len(related_tests):
             errors.append(f"{case_id}: related_tests count must match explicit evidence")
+            bounded_quality_pass = False
         if case.get("profile") in _GOLD_PROFILES and not related_tests:
             errors.append(f"{case_id}: every gold case must include at least one related test")
+            bounded_quality_pass = False
+        for related in related_tests:
+            if not isinstance(related, dict):
+                errors.append(f"{case_id}: every related test must be an evidence object")
+                bounded_quality_pass = False
+                continue
+            path = related.get("path")
+            evidence_type = related.get("evidence_type")
+            if not isinstance(path, str) or not path or not _looks_like_test_path(path):
+                errors.append(f"{case_id}: every related test must identify a test-like path")
+                bounded_quality_pass = False
+            if evidence_type == "changed_test_path":
+                if path not in direct:
+                    errors.append(f"{case_id}: changed-test evidence must be a direct change")
+                    bounded_quality_pass = False
+                if related.get("reason") != "changed_path_is_test":
+                    errors.append(f"{case_id}: changed-test evidence reason must be changed_path_is_test")
+                    bounded_quality_pass = False
+                if related.get("provenance_strength") != "direct_diff":
+                    errors.append(f"{case_id}: changed-test evidence provenance must be direct_diff")
+                    bounded_quality_pass = False
+            elif evidence_type == "resolved_query":
+                if related.get("provenance_strength") != "resolved_navigation_evidence":
+                    errors.append(f"{case_id}: resolved-query test provenance must be resolved_navigation_evidence")
+                    bounded_quality_pass = False
+                if related.get("current_read_evidence") != "available":
+                    errors.append(f"{case_id}: resolved-query test evidence must be currently readable")
+                    bounded_quality_pass = False
+            else:
+                errors.append(f"{case_id}: related test evidence_type must be recognized")
+                bounded_quality_pass = False
 
         target_symbols = capsule.get("target_symbols")
         if not isinstance(target_symbols, list):
             errors.append(f"{case_id}: target_symbols must be an explicit list")
             target_symbols = []
+            bounded_quality_pass = False
         if capsule.get("target_symbols_included") != len(target_symbols):
             errors.append(f"{case_id}: target symbol count must match explicit evidence")
+            bounded_quality_pass = False
         for symbol in target_symbols:
             if not isinstance(symbol, dict) or not all(
                 isinstance(symbol.get(field), str) and symbol.get(field)
                 for field in ("id", "qualified_name", "path", "range_ref")
             ):
                 errors.append(f"{case_id}: every target symbol needs bound identity and range")
+                bounded_quality_pass = False
 
         representative_relations = capsule.get("representative_causal_relations")
         if not isinstance(representative_relations, list):
@@ -245,14 +335,17 @@ def validate(data: dict[str, Any]) -> list[str]:
                 f"{case_id}: representative_causal_relations must be an explicit list"
             )
             representative_relations = []
+            bounded_quality_pass = False
 
         gaps = capsule.get("gaps")
         if not isinstance(gaps, list):
             errors.append(f"{case_id}: gaps must be an explicit list")
             gaps = []
+            bounded_quality_pass = False
         for gap in gaps:
             if not isinstance(gap, dict) or not isinstance(gap.get("paths"), list):
                 errors.append(f"{case_id}: every gap must bind its affected paths")
+                bounded_quality_pass = False
 
         baseline_bytes = baseline.get("payload_bytes")
         context_bytes = capsule.get("context_bytes")
@@ -269,10 +362,10 @@ def validate(data: dict[str, Any]) -> list[str]:
             "repoground_context_compose.compactness.general_context_pack_bytes"
         ):
             errors.append(f"{case_id}: baseline byte source must be explicit")
+            byte_accounting_valid = False
         if reported_baseline != baseline_bytes:
-            errors.append(
-                f"{case_id}: capsule baseline byte accounting must match paired baseline"
-            )
+            errors.append(f"{case_id}: capsule baseline byte accounting must match paired baseline")
+            byte_accounting_valid = False
         if (
             not isinstance(context_bytes, int)
             or isinstance(context_bytes, bool)
@@ -297,45 +390,56 @@ def validate(data: dict[str, Any]) -> list[str]:
 
         if capsule.get("diff_binding_verified") is not True:
             errors.append(f"{case_id}: diff binding must be verified")
+            diff_binding_pass = False
         if capsule.get("freshness_status") != "fresh":
             errors.append(f"{case_id}: RepoGround publication must be fresh")
+            freshness_pass = False
         if capsule.get("status") not in {"available", "degraded"}:
             errors.append(f"{case_id}: capsule status must be available or degraded")
+            bounded_quality_pass = False
 
         stop_criteria = capsule.get("stop_criteria")
         if not isinstance(stop_criteria, dict):
             errors.append(f"{case_id}: stop_criteria must be an object")
             stop_criteria = {}
+            impact_unblocked_pass = False
         triggered = stop_criteria.get("triggered", [])
         if not isinstance(triggered, list):
             errors.append(f"{case_id}: stop_criteria.triggered must be a list")
             triggered = []
+            impact_unblocked_pass = False
         if "impact_context_blocked" in triggered or stop_criteria.get(
             "impact_context_blocked"
         ) is not False:
             errors.append(f"{case_id}: impact_context_blocked must be absent")
+            impact_unblocked_pass = False
 
         overlay = capsule.get("dirty_overlay")
         if not isinstance(overlay, dict):
             errors.append(f"{case_id}: dirty_overlay must be an object")
+            overlay_exclusion_pass = False
         elif overlay.get("dirty") is True and overlay.get(
             "included_in_revision_diff"
         ) is not False:
             errors.append(f"{case_id}: dirty overlay must be excluded from revision diff")
+            overlay_exclusion_pass = False
 
         nonclaims = capsule.get("does_not_establish")
         if not isinstance(nonclaims, list) or "completeness" not in nonclaims:
             errors.append(f"{case_id}: capsule must retain the completeness non-claim")
+            bounded_quality_pass = False
 
         lanes = capsule.get("retrieval_lanes")
         if not isinstance(lanes, dict):
             errors.append(f"{case_id}: retrieval_lanes must be an object")
             lanes = {}
+            lane_truth_pass = False
         used = lanes.get("used", [])
         skipped = lanes.get("skipped", [])
         if not isinstance(used, list) or not isinstance(skipped, list):
             errors.append(f"{case_id}: retrieval lane lists must be arrays")
             used, skipped = [], []
+            lane_truth_pass = False
 
         call_graph = capsule.get("call_graph_truth")
         if not isinstance(call_graph, dict):
@@ -344,15 +448,15 @@ def validate(data: dict[str, Any]) -> list[str]:
         else:
             if call_graph.get("artifact_available") is not True:
                 errors.append(f"{case_id}: call graph artifact must be available")
+                lane_truth_pass = False
             if not _is_sha(call_graph.get("artifact_sha256"), _SHA64):
                 errors.append(f"{case_id}: call graph artifact SHA must be a SHA-256")
+                lane_truth_pass = False
             consumed = call_graph.get("consumed_coherent_evidence")
             coherent_count = call_graph.get("coherent_relation_count")
             if consumed is True:
                 if not isinstance(coherent_count, int) or coherent_count <= 0:
-                    errors.append(
-                        f"{case_id}: consumed call graph needs coherent relation evidence"
-                    )
+                    errors.append(f"{case_id}: consumed call graph needs coherent relation evidence")
                     lane_truth_pass = False
                 coherent_relations = [
                     relation
@@ -360,8 +464,7 @@ def validate(data: dict[str, Any]) -> list[str]:
                     if isinstance(relation, dict)
                     and relation.get("source") == "python_call_graph_json"
                     and relation.get("status") == "coherent"
-                    and relation.get("artifact_sha256")
-                    == call_graph.get("artifact_sha256")
+                    and relation.get("artifact_sha256") == call_graph.get("artifact_sha256")
                 ]
                 if not coherent_relations:
                     errors.append(
@@ -390,9 +493,7 @@ def validate(data: dict[str, Any]) -> list[str]:
                     )
                     lane_truth_pass = False
             else:
-                errors.append(
-                    f"{case_id}: consumed_coherent_evidence must be a boolean"
-                )
+                errors.append(f"{case_id}: consumed_coherent_evidence must be a boolean")
                 lane_truth_pass = False
 
         if (
@@ -404,26 +505,40 @@ def validate(data: dict[str, Any]) -> list[str]:
             qualifying.append(case_id)
 
     mechanical = data.get("mechanical_promotion_gate")
+    mechanical_pass = True
     if not isinstance(mechanical, dict):
         errors.append("mechanical_promotion_gate must be an object")
+        mechanical_pass = False
     else:
         if mechanical.get("passed") is not True:
             errors.append("mechanical compactness promotion gate must pass")
+            mechanical_pass = False
         if mechanical.get("required_count") != 2:
             errors.append("mechanical promotion gate must require two cases")
+            mechanical_pass = False
         if sorted(mechanical.get("qualifying_case_ids", [])) != sorted(qualifying):
             errors.append(
                 "mechanical promotion qualifying cases do not match recomputed measurements"
             )
+            mechanical_pass = False
     if len(qualifying) < 2:
         errors.append("at least two gold cases must reduce context by at least 20 percent")
+        mechanical_pass = False
+
+    computed_truth_requirements = {
+        "fresh_exact_bundle": source_bundle_pass and freshness_pass,
+        "diff_binding_verified_all_cases": diff_binding_pass,
+        "impact_context_blocked_absent_all_cases": impact_unblocked_pass,
+        "call_graph_lane_matches_consumed_coherent_evidence_all_cases": lane_truth_pass,
+        "dirty_overlay_excluded_from_revision_diff_all_cases": overlay_exclusion_pass,
+        "paired_baseline_resolved_evidence_all_cases": baseline_evidence_pass,
+    }
+    computed_truth_gate_pass = all(computed_truth_requirements.values())
 
     truth_gate = data.get("truth_gate")
     if not isinstance(truth_gate, dict):
         errors.append("truth_gate must be an object")
     else:
-        if truth_gate.get("passed") is not True:
-            errors.append("truth gate must pass")
         requirements = truth_gate.get("requirements")
         if not isinstance(requirements, dict):
             errors.append("truth_gate.requirements must be an object")
@@ -431,29 +546,43 @@ def validate(data: dict[str, Any]) -> list[str]:
             for requirement in _REQUIRED_TRUTH_REQUIREMENTS:
                 if requirements.get(requirement) is not True:
                     errors.append(f"truth requirement {requirement} must pass")
+                if requirements.get(requirement) != computed_truth_requirements[requirement]:
+                    errors.append(
+                        f"truth requirement {requirement} must match recomputed evidence"
+                    )
+        if truth_gate.get("passed") is not True:
+            errors.append("truth gate must pass")
+        if truth_gate.get("passed") != computed_truth_gate_pass:
+            errors.append("truth_gate.passed must match recomputed truth gate")
     if not lane_truth_pass:
         errors.append("retrieval lane truth must pass")
 
     deployment_cases = [
-        case for case in cases if isinstance(case, dict)
-        and case.get("profile") == "deployment_kubernetes"
+        case
+        for case in cases
+        if isinstance(case, dict) and case.get("profile") == "deployment_kubernetes"
     ]
     delivery_evidence_pass = True
     delivery = data.get("delivery_chain")
     if not isinstance(delivery, dict):
         errors.append("delivery_chain must be an object")
+        delivery_evidence_pass = False
     elif len(deployment_cases) != 1:
         errors.append("exactly one deployment_kubernetes case is required")
+        delivery_evidence_pass = False
     else:
         deployment = deployment_cases[0]
         if delivery.get("status") != "pass_bounded":
             errors.append("delivery chain must pass bounded evidence")
+            delivery_evidence_pass = False
         if delivery.get("case_id") != deployment.get("id"):
             errors.append("delivery chain must bind to the deployment case")
+            delivery_evidence_pass = False
         direct = set(deployment.get("direct_change_paths", []))
         required_direct = delivery.get("required_direct_paths")
         if not isinstance(required_direct, list) or not set(required_direct).issubset(direct):
             errors.append("delivery chain required paths must be direct changes")
+            delivery_evidence_pass = False
         capsule = deployment.get("capsule", {})
         for field in (
             "target_symbols_included",
@@ -463,17 +592,22 @@ def validate(data: dict[str, Any]) -> list[str]:
             value = delivery.get(field)
             if not isinstance(value, int) or value <= 0:
                 errors.append(f"delivery chain {field} must be positive")
+                delivery_evidence_pass = False
             if value != capsule.get(field):
                 errors.append(f"delivery chain {field} must match deployment capsule")
+                delivery_evidence_pass = False
         coherent = delivery.get("coherent_call_graph_relation_count")
         call_graph = capsule.get("call_graph_truth", {})
         if not isinstance(coherent, int) or coherent <= 0:
             errors.append("delivery chain needs coherent call-graph relation evidence")
+            delivery_evidence_pass = False
         if coherent != call_graph.get("coherent_relation_count"):
             errors.append("delivery call-graph evidence must match deployment capsule")
+            delivery_evidence_pass = False
         representative_ranges = capsule.get("representative_live_ranges")
         if not isinstance(representative_ranges, list) or not representative_ranges:
             errors.append("delivery chain needs explicit representative live-range evidence")
+            delivery_evidence_pass = False
         elif not any(
             isinstance(item, dict)
             and item.get("path") == "scripts/ops/reconcile-production-main-vps.sh"
@@ -483,6 +617,7 @@ def validate(data: dict[str, Any]) -> list[str]:
             for item in representative_ranges
         ):
             errors.append("delivery live-range evidence must bind the production reconciler")
+            delivery_evidence_pass = False
 
         contract = delivery.get("contract_evidence")
         if not isinstance(contract, dict):
@@ -618,6 +753,25 @@ def validate(data: dict[str, Any]) -> list[str]:
             errors.append("delivery chain must retain runtime and automatic-rollback non-claims")
             delivery_evidence_pass = False
 
+    computed_acceptance = {
+        "three_classes": "pass" if three_classes_pass else "fail",
+        "paired_baseline": "pass" if baseline_evidence_pass else "fail",
+        "quality": "pass_bounded" if bounded_quality_pass else "fail",
+        "retrieval_lane_truth": "pass" if lane_truth_pass else "fail",
+        "freshness_and_diff_binding": (
+            "pass" if freshness_pass and diff_binding_pass else "fail"
+        ),
+        "delivery_chain": "pass_bounded" if delivery_evidence_pass else "blocked",
+        "promotion_gate": (
+            "pass"
+            if mechanical_pass
+            and controlled_live_pass
+            and computed_truth_gate_pass
+            and delivery_evidence_pass
+            else "blocked"
+        ),
+    }
+
     acceptance = data.get("acceptance")
     if not isinstance(acceptance, dict):
         errors.append("acceptance must be an object")
@@ -625,16 +779,17 @@ def validate(data: dict[str, Any]) -> list[str]:
         for field, expected in _REQUIRED_ACCEPTANCE.items():
             if acceptance.get(field) != expected:
                 errors.append(f"acceptance.{field} must be {expected}")
+            if acceptance.get(field) != computed_acceptance[field]:
+                errors.append(f"acceptance.{field} must match recomputed evidence")
 
     promotion_ready = (
-        len(qualifying) >= 2
+        mechanical_pass
+        and len(qualifying) >= 2
         and controlled_live_pass
-        and lane_truth_pass
+        and computed_truth_gate_pass
         and delivery_evidence_pass
         and isinstance(delivery, dict)
         and delivery.get("status") == "pass_bounded"
-        and isinstance(truth_gate, dict)
-        and truth_gate.get("passed") is True
     )
     if data.get("overall_status") != "pass":
         errors.append("overall_status must be pass for the promoted bounded pilot")
