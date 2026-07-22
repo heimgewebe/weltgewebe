@@ -69,48 +69,6 @@ BEFORE INSERT OR UPDATE OF event_id, envelope_sha256 ON federation_outbox
 FOR EACH ROW
 EXECUTE FUNCTION federation_validate_event_receipt_direction();
 
-CREATE FUNCTION federation_reject_event_receipt_direction_change()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    IF NEW.direction IS DISTINCT FROM OLD.direction THEN
-        RAISE EXCEPTION 'federation event receipt direction is immutable';
-    END IF;
-    RETURN NEW;
-END
-$$;
-
-CREATE TRIGGER federation_event_receipts_immutable_direction
-BEFORE UPDATE OF direction ON federation_event_receipts
-FOR EACH ROW
-EXECUTE FUNCTION federation_reject_event_receipt_direction_change();
-
--- Before freezing scope and neighbourhood audience, reject legacy histories
--- that already changed either invariant. Choosing only the latest envelope
--- would otherwise bless a historical widening as canonical state.
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM federation_objects AS object
-        JOIN (
-            SELECT object_address, envelope FROM federation_inbox
-            UNION ALL
-            SELECT object_address, envelope FROM federation_outbox
-        ) AS receipt USING (object_address)
-        GROUP BY object.object_address, object.scope
-        HAVING COUNT(DISTINCT receipt.envelope ->> 'scope') <> 1
-            OR MIN(receipt.envelope ->> 'scope') IS DISTINCT FROM object.scope
-            OR COUNT(DISTINCT federation_canonical_neighbourhood_targets(
-                COALESCE(receipt.envelope -> 'neighbourhood_targets', '[]'::jsonb)
-            )) <> 1
-    ) THEN
-        RAISE EXCEPTION 'legacy federation object history changed immutable scope or neighbourhood audience';
-    END IF;
-END
-$$;
-
 ALTER TABLE federation_objects
     ADD COLUMN neighbourhood_targets JSONB;
 

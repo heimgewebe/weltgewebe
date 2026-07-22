@@ -915,12 +915,18 @@ async fn federation_hardening_migration_rejects_legacy_scope_or_audience_drift()
         .await?;
     }
 
-    let migration_error = sqlx::raw_sql(include_str!(
+    sqlx::raw_sql(include_str!(
         "../migrations/20260722000004_federation_core_hardening.up.sql"
     ))
     .execute(&pool)
+    .await?;
+
+    let migration_error = sqlx::raw_sql(include_str!(
+        "../migrations/20260722000006_federation_core_post_merge_hardening.up.sql"
+    ))
+    .execute(&pool)
     .await
-    .expect_err("legacy scope/audience drift must fail the hardening migration closed");
+    .expect_err("legacy scope/audience drift must fail the additive hardening migration closed");
     assert!(migration_error.to_string().contains(
         "legacy federation object history changed immutable scope or neighbourhood audience"
     ));

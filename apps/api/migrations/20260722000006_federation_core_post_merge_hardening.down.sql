@@ -1,0 +1,2 @@
+DROP TRIGGER IF EXISTS federation_event_receipts_immutable_direction ON federation_event_receipts;
+DROP FUNCTION IF EXISTS federation_reject_event_receipt_direction_change();
