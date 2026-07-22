@@ -49,23 +49,13 @@ DROP TRIGGER IF EXISTS governance_proposals_create_conversation
     ON governance_proposals;
 DROP FUNCTION IF EXISTS weltgewebe_create_governance_proposal_conversation();
 
-CREATE TEMP TABLE t018_governance_conversation_ids
-ON COMMIT DROP
-AS
-SELECT id::text AS aggregate_id
-FROM domain_conversations
-WHERE conversation_type = 'governance_proposal';
-
+-- Deleting the additive targets emits domain.conversation.deleted events. Keep
+-- both the earlier created events and these compensating deletes in the outbox:
+-- already-published events cannot be retracted from JetStream, and unpublished
+-- events must retain their ordered create/delete history instead of leaving a
+-- downstream ghost conversation.
 DELETE FROM domain_conversations
 WHERE conversation_type = 'governance_proposal';
-
--- The conversation outbox trigger emits a delete event. Remove every event for
--- the temporary additive targets so rollback restores the pre-migration truth.
-DELETE FROM domain_outbox
-WHERE aggregate_type = 'conversation'
-  AND aggregate_id IN (
-      SELECT aggregate_id FROM t018_governance_conversation_ids
-  );
 
 DROP TABLE domain_conversation_cutover_state;
 

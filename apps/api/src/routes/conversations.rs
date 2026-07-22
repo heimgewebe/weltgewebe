@@ -305,8 +305,11 @@ fn check_precondition(
 }
 
 fn conversation_is_writable(conversation_type: &str, governance_source: Option<&str>) -> bool {
-    conversation_type == "node"
-        || (conversation_type == "governance_proposal" && governance_source == Some("canonical"))
+    match conversation_type {
+        "node" => true,
+        "governance_proposal" => governance_source == Some("canonical"),
+        _ => false,
+    }
 }
 
 async fn require_conversation_writable(
@@ -381,6 +384,14 @@ async fn require_conversation_writable(
             "the conversation does not exist",
         )
     })?;
+
+    if conversation_type != observed_type {
+        return Err(ConversationApiError::new(
+            StatusCode::CONFLICT,
+            "conversation_write_target_changed",
+            "the conversation write target changed while the request was in flight",
+        ));
+    }
 
     if conversation_is_writable(&conversation_type, governance_source.as_deref()) {
         return Ok(());

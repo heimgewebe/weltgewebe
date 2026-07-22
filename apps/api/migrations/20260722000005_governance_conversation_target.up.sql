@@ -48,7 +48,7 @@ AS $$
     SELECT (
         substr(digest, 1, 8) || '-' ||
         substr(digest, 9, 4) || '-' ||
-        '5' || substr(digest, 14, 3) || '-' ||
+        '3' || substr(digest, 14, 3) || '-' ||
         '8' || substr(digest, 18, 3) || '-' ||
         substr(digest, 21, 12)
     )::uuid

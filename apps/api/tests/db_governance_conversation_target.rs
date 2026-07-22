@@ -293,6 +293,12 @@ async fn governance_conversation_target_is_additive_deterministic_and_reversible
     .await
     .expect("read generated governance conversation");
     assert_eq!(conversation_id, deterministic_id);
+    let deterministic_uuid = uuid::Uuid::parse_str(&deterministic_id).expect("deterministic UUID");
+    assert_eq!(
+        deterministic_uuid.get_version_num(),
+        3,
+        "MD5-backed deterministic conversation ids must advertise RFC UUID version 3"
+    );
     assert!(node_id.is_none());
     assert_eq!(proposal_id.as_deref(), Some(PROPOSAL_ID));
     assert_eq!(kind, "governance_proposal");
@@ -607,6 +613,34 @@ async fn governance_conversation_target_is_additive_deterministic_and_reversible
     .await
     .expect("inspect node nullability after down");
     assert_eq!(node_nullable, "NO");
+    let compensating_delete_events: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_outbox
+         WHERE aggregate_type = 'conversation'
+           AND aggregate_id = $1
+           AND event_type = 'domain.conversation.deleted'",
+    )
+    .bind(&conversation_id)
+    .fetch_one(&mut *down_tx)
+    .await
+    .expect("count compensating conversation delete events after down");
+    assert_eq!(
+        compensating_delete_events, 1,
+        "rollback must retain a compensating delete event for downstream consumers"
+    );
+    let created_events_still_present: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_outbox
+         WHERE aggregate_type = 'conversation'
+           AND aggregate_id = $1
+           AND event_type = 'domain.conversation.created'",
+    )
+    .bind(&conversation_id)
+    .fetch_one(&mut *down_tx)
+    .await
+    .expect("count retained conversation create events after down");
+    assert!(
+        created_events_still_present >= 1,
+        "rollback must not erase event history that may already have been published"
+    );
     down_tx.rollback().await.expect("restore latest schema");
 
     cleanup(&pool).await;
