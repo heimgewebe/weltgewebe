@@ -17,9 +17,18 @@ use tokio::{
     time::{sleep, Duration},
 };
 use weltgewebe_api::{
-    search::{
-        EmbeddingProvider, EmbeddingProviderError, GenerationSpec, ProcessOutcome, ProjectionWorker,
+    auth::role::Role,
+    config::{
+        AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
+        DomainReadSource,
     },
+    middleware::auth::AuthContext,
+    search::{
+        execute_search, EmbeddingProvider, EmbeddingProviderError, GenerationSpec, ProcessOutcome,
+        ProjectionWorker, SearchError, SearchQueryParams, DOCUMENT_REVISION,
+        NORMALIZATION_REVISION, RANKING_REVISION,
+    },
+    state::ApiState,
     telemetry::{BuildInfo, Metrics},
 };
 
@@ -1297,4 +1306,454 @@ async fn search_backfill_binary_projects_with_live_local_provider_without_activa
             .await
             .expect("active generation count");
     assert_eq!(active_count, 0);
+}
+
+#[tokio::test]
+async fn t006_search_api_against_postgres_projections() {
+    let database_url = match std::env::var("T005_DATABASE_URL") {
+        Ok(url) => url,
+        Err(_) => return,
+    };
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+        .expect("connect T005 database");
+    migrate(&pool).await;
+    reset_search_state(&pool).await;
+
+    let generation_spec = GenerationSpec {
+        generation_id: "derived-below",
+        provider: "local:ollama",
+        model_id: "qwen3-embedding:4b",
+        model_revision: "sha256:4b",
+        runtime_identity: "ollama:test",
+        dimension: 2,
+    };
+    let gen_id = generation_spec.derived_id();
+    sqlx::query(
+        "INSERT INTO search_index_generations (generation_id, provider, model_id, model_revision, runtime_identity, dimension, document_revision, normalization_revision, ranking_revision, state, activated_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', NOW())",
+    )
+    .bind(&gen_id)
+    .bind(generation_spec.provider)
+    .bind(generation_spec.model_id)
+    .bind(generation_spec.model_revision)
+    .bind(generation_spec.runtime_identity)
+    .bind(generation_spec.dimension)
+    .bind(DOCUMENT_REVISION)
+    .bind(NORMALIZATION_REVISION)
+    .bind(RANKING_REVISION)
+    .execute(&pool)
+    .await
+    .expect("insert identity-bound active generation");
+
+    let nodes = [
+        (
+            "t005-public-node",
+            "Werkstatt",
+            "Fahrrad Werkstatt",
+            r#"{"search_visibility":"public","summary":"Reparatur"}"#,
+            vec![1.0, -1.0],
+        ),
+        (
+            "t005-public-b-node",
+            "Treffpunkt",
+            "Fahrrad Hilfe",
+            r#"{"search_visibility":"public","summary":"Hilfe"}"#,
+            vec![1.0, -1.0],
+        ),
+        (
+            "t005-hidden-node",
+            "Werkstatt",
+            "Geheime Fahrrad Werkstatt",
+            r#"{"search_visibility":"hidden","summary":"Geheim"}"#,
+            vec![0.25, 0.25],
+        ),
+        (
+            "t005-private-node",
+            "Werkstatt",
+            "Private Fahrrad Werkstatt",
+            r#"{"search_visibility":"private","created_by_account_id":"owner-a","summary":"Privat"}"#,
+            vec![0.25, 0.25],
+        ),
+        (
+            "t005-stale-node",
+            "Werkstatt",
+            "Stale Fahrrad Werkstatt",
+            r#"{"search_visibility":"public","summary":"Alt"}"#,
+            vec![0.25, 0.25],
+        ),
+        (
+            "t005-revoked-node",
+            "Werkstatt",
+            "Widerrufene Fahrrad Werkstatt",
+            r#"{"search_visibility":"public","summary":"Widerruf"}"#,
+            vec![0.25, 0.25],
+        ),
+        (
+            "t005-deleted-node",
+            "Werkstatt",
+            "Geloeschte Fahrrad Werkstatt",
+            r#"{"search_visibility":"public","summary":"Loeschen"}"#,
+            vec![0.25, 0.25],
+        ),
+        (
+            "t005-legacy-node",
+            "Werkstatt",
+            "Legacy Fahrrad Werkstatt",
+            r#"{"search_visibility":"legacy","summary":"Legacy"}"#,
+            vec![0.25, 0.25],
+        ),
+        (
+            "t005-wrong-dimension-node",
+            "Werkstatt",
+            "Dimension Fahrrad Werkstatt",
+            r#"{"search_visibility":"public","summary":"Dimension"}"#,
+            vec![1.0],
+        ),
+    ];
+
+    for (index, (id, kind, title, payload, embedding)) in nodes.iter().enumerate() {
+        sqlx::query(
+            "INSERT INTO domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) VALUES ($1, $2, $3, 0.0, 0.0, NOW(), NOW(), $4::jsonb)",
+        )
+        .bind(id)
+        .bind(kind)
+        .bind(title)
+        .bind(payload)
+        .execute(&pool)
+        .await
+        .expect("insert T006 domain node");
+        let content_sha = format!("{:064x}", index + 1);
+        sqlx::query(
+            "INSERT INTO search_node_projections (generation_id, node_id, source_version, source_revision, content_sha256, title, tags, searchable_text, language, kind, status, visibility_scopes, semantic_state, embedding) \
+             SELECT $1, v.node_id, v.source_version, v.source_revision, $3, n.title, ARRAY[]::text[], n.title, 'de', n.kind, 'active', ARRAY['public'], 'ready', $4 \
+               FROM search_node_versions v JOIN domain_nodes n ON n.id = v.node_id WHERE v.node_id = $2",
+        )
+        .bind(&gen_id)
+        .bind(id)
+        .bind(content_sha)
+        .bind(embedding)
+        .execute(&pool)
+        .await
+        .expect("insert T006 projection");
+    }
+
+    // Mutate canonical state after projection creation. The API must reject the
+    // now-stale/revoked/deleted projections before lexical or semantic ranking.
+    sqlx::query(
+        "UPDATE domain_nodes SET title='Stale Fahrrad Werkstatt Neu' WHERE id='t005-stale-node'",
+    )
+    .execute(&pool)
+    .await
+    .expect("make projection stale");
+    sqlx::query("UPDATE domain_nodes SET payload=jsonb_set(payload, '{search_visibility}', '\"revoked\"'::jsonb) WHERE id='t005-revoked-node'")
+        .execute(&pool)
+        .await
+        .expect("revoke visibility");
+    sqlx::query("DELETE FROM domain_nodes WHERE id='t005-deleted-node'")
+        .execute(&pool)
+        .await
+        .expect("delete domain node");
+
+    let metrics = Metrics::try_new(BuildInfo {
+        version: "test",
+        commit: "test",
+        build_timestamp: "test",
+    })
+    .expect("metrics");
+    let state = ApiState {
+        db_pool: Some(pool.clone()),
+        db_pool_configured: true,
+        nats_client: None,
+        nats_configured: false,
+        config: AppConfig {
+            fade_days: 7,
+            ron_days: 84,
+            anonymize_opt_in: true,
+            delegation_expire_days: 28,
+            max_guest_owned_nodes: 1000,
+            domain_read_source: DomainReadSource::Postgres,
+            domain_account_write_source: DomainAccountWriteSource::Postgres,
+            domain_node_write_source: DomainNodeWriteSource::Postgres,
+            domain_edge_write_source: DomainEdgeWriteSource::Postgres,
+            passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
+            auth_public_login: false,
+            auth_cookie_secure: true,
+            app_base_url: None,
+            auth_trusted_proxies: None,
+            auth_allow_emails: None,
+            auth_allow_email_domains: None,
+            auth_auto_provision: false,
+            auth_auto_provision_role: weltgewebe_api::config::AutoProvisionRole::Gast,
+            auth_rl_ip_per_min: None,
+            auth_rl_ip_per_hour: None,
+            auth_rl_email_per_min: None,
+            auth_rl_email_per_hour: None,
+            smtp_host: None,
+            smtp_port: None,
+            smtp_user: None,
+            smtp_pass: None,
+            smtp_from: None,
+            auth_log_magic_token: false,
+            webauthn_rp_id: None,
+            webauthn_rp_origin: None,
+            webauthn_rp_name: None,
+        },
+        metrics,
+        sessions: weltgewebe_api::auth::session::SessionBackend::new_in_memory(),
+        challenges: Default::default(),
+        tokens: Default::default(),
+        step_up_tokens: Default::default(),
+        accounts: Arc::new(tokio::sync::RwLock::new(Default::default())),
+        nodes: Arc::new(tokio::sync::RwLock::new(
+            weltgewebe_api::state::OrderedCache::new(),
+        )),
+        nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+        accounts_persist: Arc::new(tokio::sync::Mutex::new(())),
+        domain_projection_gate: Arc::new(tokio::sync::RwLock::new(())),
+        domain_projection_version: Arc::new(std::sync::atomic::AtomicI64::new(0)),
+        edges: Arc::new(tokio::sync::RwLock::new(
+            weltgewebe_api::state::OrderedCache::new(),
+        )),
+        rate_limiter: Arc::new(weltgewebe_api::auth::rate_limit::AuthRateLimiter::new(
+            &AppConfig::load().unwrap(),
+        )),
+        mailer: None,
+        webauthn: None,
+        passkey_registrations: Default::default(),
+        passkey_registration_grants: Default::default(),
+        passkey_authentications: Default::default(),
+        passkeys: Default::default(),
+    };
+
+    let anonymous = AuthContext {
+        authenticated: false,
+        account_id: None,
+        device_id: None,
+        role: Role::Gast,
+        expires_at: None,
+    };
+    let owner_a = AuthContext {
+        authenticated: true,
+        account_id: Some("owner-a".to_string()),
+        device_id: None,
+        role: Role::Weber,
+        expires_at: None,
+    };
+    let owner_b = AuthContext {
+        authenticated: true,
+        account_id: Some("owner-b".to_string()),
+        device_id: None,
+        role: Role::Weber,
+        expires_at: None,
+    };
+    let unavailable_provider = || -> Arc<dyn EmbeddingProvider> {
+        Arc::new(FakeProvider {
+            unavailable: AtomicBool::new(true),
+        })
+    };
+    let available_provider = || -> Arc<dyn EmbeddingProvider> {
+        Arc::new(FakeProvider {
+            unavailable: AtomicBool::new(false),
+        })
+    };
+
+    let public = execute_search(
+        &state,
+        &anonymous,
+        SearchQueryParams {
+            q: Some("Fahrrad Werkstatt".to_string()),
+            ..Default::default()
+        },
+        Some(unavailable_provider()),
+    )
+    .await
+    .expect("public lexical fallback search");
+    assert_eq!(
+        public.items.first().map(|node| node.id.as_str()),
+        Some("t005-public-node")
+    );
+    assert_eq!(public.generation_id, gen_id);
+    assert_eq!(public.mode, "lexical_fallback");
+    assert_eq!(
+        public.fallback_reason.as_deref(),
+        Some("provider_unavailable")
+    );
+
+    let filtered = execute_search(
+        &state,
+        &anonymous,
+        SearchQueryParams {
+            q: Some("Fahrrad".to_string()),
+            kind: Some("Werkstatt".to_string()),
+            ..Default::default()
+        },
+        Some(unavailable_provider()),
+    )
+    .await
+    .expect("filtered search");
+    assert!(filtered.items.iter().all(|node| node.kind == "Werkstatt"));
+    assert!(!filtered
+        .items
+        .iter()
+        .any(|node| node.id == "t005-public-b-node"));
+
+    for (forbidden_id, forbidden_title) in [
+        ("t005-hidden-node", "Geheime Fahrrad Werkstatt"),
+        ("t005-stale-node", "Stale Fahrrad Werkstatt"),
+        ("t005-revoked-node", "Widerrufene Fahrrad Werkstatt"),
+        ("t005-deleted-node", "Geloeschte Fahrrad Werkstatt"),
+        ("t005-legacy-node", "Legacy Fahrrad Werkstatt"),
+        ("t005-wrong-dimension-node", "Dimension Fahrrad Werkstatt"),
+    ] {
+        let result = execute_search(
+            &state,
+            &anonymous,
+            SearchQueryParams {
+                q: Some(forbidden_title.to_string()),
+                ..Default::default()
+            },
+            Some(unavailable_provider()),
+        )
+        .await
+        .expect("fail-closed lexical search");
+        assert!(
+            !result.items.iter().any(|node| node.id == forbidden_id),
+            "{forbidden_id} must stay invisible even when other public lexical matches remain"
+        );
+    }
+
+    let private_anonymous = execute_search(
+        &state,
+        &anonymous,
+        SearchQueryParams {
+            q: Some("Private Fahrrad Werkstatt".to_string()),
+            ..Default::default()
+        },
+        Some(unavailable_provider()),
+    )
+    .await
+    .expect("anonymous private search");
+    assert!(!private_anonymous
+        .items
+        .iter()
+        .any(|node| node.id == "t005-private-node"));
+
+    let private_owner = execute_search(
+        &state,
+        &owner_a,
+        SearchQueryParams {
+            q: Some("Private Fahrrad Werkstatt".to_string()),
+            ..Default::default()
+        },
+        Some(unavailable_provider()),
+    )
+    .await
+    .expect("owner private search");
+    assert!(private_owner
+        .items
+        .iter()
+        .any(|node| node.id == "t005-private-node"));
+
+    // Authorization changes are read from canonical domain state. Refresh only
+    // the projection identity to model a completed re-projection after ownership
+    // changed; the old owner must immediately lose access and the new owner gain it.
+    sqlx::query("UPDATE domain_nodes SET payload=jsonb_set(payload, '{created_by_account_id}', '\"owner-b\"'::jsonb) WHERE id='t005-private-node'")
+        .execute(&pool)
+        .await
+        .expect("change private owner");
+    sqlx::query(
+        "UPDATE search_node_projections p SET source_version=v.source_version, source_revision=v.source_revision \
+           FROM search_node_versions v WHERE p.generation_id=$1 AND p.node_id='t005-private-node' AND v.node_id=p.node_id",
+    )
+    .bind(&gen_id)
+    .execute(&pool)
+    .await
+    .expect("refresh private projection identity");
+
+    let old_owner = execute_search(
+        &state,
+        &owner_a,
+        SearchQueryParams {
+            q: Some("Private Fahrrad Werkstatt".to_string()),
+            ..Default::default()
+        },
+        Some(unavailable_provider()),
+    )
+    .await
+    .expect("old owner search");
+    assert!(!old_owner
+        .items
+        .iter()
+        .any(|node| node.id == "t005-private-node"));
+    let new_owner = execute_search(
+        &state,
+        &owner_b,
+        SearchQueryParams {
+            q: Some("Private Fahrrad Werkstatt".to_string()),
+            ..Default::default()
+        },
+        Some(unavailable_provider()),
+    )
+    .await
+    .expect("new owner search");
+    assert!(new_owner
+        .items
+        .iter()
+        .any(|node| node.id == "t005-private-node"));
+
+    // Hidden/private candidates carry deliberately misleading public projection
+    // scopes and high semantic similarity. Anonymous semantic retrieval still
+    // cannot see them because canonical authorization ran before ranking.
+    let semantic = execute_search(
+        &state,
+        &anonymous,
+        SearchQueryParams {
+            q: Some("voellig fremder begriff".to_string()),
+            ..Default::default()
+        },
+        Some(available_provider()),
+    )
+    .await
+    .expect("semantic authorization boundary");
+    assert!(semantic.items.is_empty());
+
+    let provider_contract_failure = execute_search(
+        &state,
+        &anonymous,
+        SearchQueryParams {
+            q: Some("Fahrrad Werkstatt".to_string()),
+            ..Default::default()
+        },
+        Some(Arc::new(PermanentFailureProvider)),
+    )
+    .await;
+    assert!(matches!(
+        provider_contract_failure,
+        Err(SearchError::ProviderContractError(
+            EmbeddingProviderError::InvalidVector
+        ))
+    ));
+
+    // Generation identity tampering is not a degradable provider outage.
+    sqlx::query(
+        "UPDATE search_index_generations SET runtime_identity='tampered' WHERE generation_id=$1",
+    )
+    .bind(&gen_id)
+    .execute(&pool)
+    .await
+    .expect("tamper generation identity");
+    let tampered = execute_search(
+        &state,
+        &anonymous,
+        SearchQueryParams {
+            q: Some("Fahrrad Werkstatt".to_string()),
+            ..Default::default()
+        },
+        Some(unavailable_provider()),
+    )
+    .await;
+    assert!(matches!(tampered, Err(SearchError::Unavailable)));
 }

@@ -9,6 +9,7 @@ pub mod health;
 pub mod meta;
 pub mod nodes;
 mod query;
+pub mod search;
 
 use axum::{
     middleware::from_fn,
@@ -44,10 +45,13 @@ use self::{
         post_proposal_message, veto_proposal, vote_proposal,
     },
     nodes::{get_node, list_nodes},
+    search::search_nodes,
 };
 
 pub fn api_router() -> Router<ApiState> {
     let router = Router::new()
+        .route("/search", get(search_nodes))
+        .route("/nodes/search", get(search_nodes))
         .route(
             "/nodes",
             get(list_nodes)
