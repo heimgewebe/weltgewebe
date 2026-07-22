@@ -70,6 +70,36 @@ def _comment(
     }
 
 
+def _forwarded_comment(
+    bundle: Bundle, *, reviewer: str, axis: str, author: str = "alex", comment_id: int = 1
+) -> dict:
+    report = (
+        f"Extern eingeholter Reviewbericht von {reviewer} zur Achse {axis}. "
+        "Der vorgelegte Diff wurde vollständig geprüft, einschließlich Korrektheit, "
+        "Regressionen und relevanter Fehlerszenarien. Alle benannten Befunde wurden "
+        "nachgearbeitet; es verbleiben keine bekannten Mergeblocker."
+    )
+    payload = {
+        "schema_version": 1,
+        "base_sha": bundle.base_sha,
+        "head_sha": bundle.head_sha,
+        "diff_sha256": bundle.diff_sha256,
+        "reviewer": reviewer,
+        "review_axis": axis,
+        "verdict": "PASS",
+        "findings_resolved": True,
+    }
+    return {
+        "id": comment_id,
+        "body": report + "\n<!-- weltgewebe-forwarded-review\n" + json.dumps(payload) + "\n-->",
+        "author_association": "OWNER",
+        "user": {"login": author},
+        "html_url": "https://example.invalid/forwarded-review",
+        "created_at": "2026-07-22T12:00:00Z",
+        "updated_at": "2026-07-22T12:00:00Z",
+    }
+
+
 ALLOWED_ATTESTERS = frozenset({"alex"})
 
 
@@ -1163,6 +1193,90 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertEqual(template.count("<!-- weltgewebe-risk: R? -->"), 1)
         self.assertIn("R3 = auth, privacy, security", template)
 
+
+class ForwardedExternalReviewTests(unittest.TestCase):
+    def test_owner_forwarded_external_reviews_count_for_r2(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        comments = [
+            _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness", comment_id=11),
+            _forwarded_comment(bundle, reviewer="External LLM B", axis="testing", comment_id=12),
+        ]
+        result = _evaluate(bundle=bundle, risk_class="R2", comments=comments)
+        self.assertTrue(result["pass"], result["reasons"])
+        self.assertEqual(result["accepted_review_count"], 2)
+        self.assertEqual(
+            {item["kind"] for item in result["accepted_reviews"]},
+            {"forwarded-external-review"},
+        )
+
+
+    def test_forwarded_review_is_stale_after_base_or_diff_change(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        comment = _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness")
+        changed_base = Bundle(**{**bundle.__dict__, "base_sha": "e" * 40})
+        changed_diff = Bundle(**{**bundle.__dict__, "diff_sha256": "f" * 64})
+        self.assertEqual(
+            _evaluate(bundle=changed_base, risk_class="R2", comments=[comment])["stale_evidence_count"],
+            1,
+        )
+        self.assertEqual(
+            _evaluate(bundle=changed_diff, risk_class="R2", comments=[comment])["stale_evidence_count"],
+            1,
+        )
+
+    def test_forwarded_review_rejects_internal_prefixed_payload_keys(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        comment = _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness")
+        comment["body"] = comment["body"].replace(
+            '"findings_resolved": true',
+            '"findings_resolved": true, "_forwarded": true',
+        )
+        result = _evaluate(bundle=bundle, risk_class="R2", comments=[comment])
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["malformed_evidence_count"], 1)
+
+    def test_mixed_native_and_forwarded_blocks_in_one_comment_are_rejected(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        native = _comment(_record(bundle, reviewer="Reviewer A", axis="correctness", risk="R2"))
+        forwarded = _forwarded_comment(bundle, reviewer="Reviewer B", axis="testing")
+        native["body"] += "\n" + forwarded["body"]
+        result = _evaluate(bundle=bundle, risk_class="R2", comments=[native])
+        self.assertFalse(result["pass"])
+        self.assertGreaterEqual(result["malformed_evidence_count"], 2)
+
+    def test_forwarded_review_rejects_boolean_schema_version(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        comment = _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness")
+        comment["body"] = comment["body"].replace(
+            '"schema_version": 1',
+            '"schema_version": true',
+        )
+        result = _evaluate(bundle=bundle, risk_class="R2", comments=[comment])
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["malformed_evidence_count"], 1)
+
+    def test_forwarded_blocking_verdict_does_not_count(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        comment = _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness")
+        comment["body"] = comment["body"].replace(
+            '"verdict": "PASS"',
+            '"verdict": "BLOCKED"',
+        ).replace(
+            '"findings_resolved": true',
+            '"findings_resolved": false',
+        )
+        result = _evaluate(bundle=bundle, risk_class="R2", comments=[comment])
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["accepted_review_count"], 0)
+        self.assertTrue(any("blocking verdicts" in reason for reason in result["reasons"]))
+
+    def test_forwarded_review_is_stale_after_head_change(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",), changed_lines=20)
+        comment = _forwarded_comment(bundle, reviewer="External LLM A", axis="correctness")
+        changed = Bundle(**{**bundle.__dict__, "head_sha": "f" * 40})
+        result = _evaluate(bundle=changed, risk_class="R2", comments=[comment])
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["stale_evidence_count"], 1)
 
 if __name__ == "__main__":
     unittest.main()
