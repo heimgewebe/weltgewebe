@@ -31,7 +31,8 @@ proxy routes. The API's own `/metrics` route remains unchanged. This preserves t
 possibility of an internal scrape without treating the public edge as a scrape
 target; internal scraper health must be verified separately.
 
-After a production deployment, verify the public boundary with read-only requests:
+After a production deployment, the canonical read-only public readiness checker
+verifies both public metrics routes automatically. They can also be checked directly:
 
 ```bash
 curl -sS -o /dev/null -w '%{http_code}\n' https://weltgewebe.net/api/metrics
