@@ -109,6 +109,31 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
         self.assertNotIn("try_files {path} {path}.html /index.html", production)
         self.assertIn("Unknown paths must remain real 404 responses", production)
 
+    def test_production_caddyfile_keeps_prometheus_metrics_private(self) -> None:
+        production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
+        prometheus = (
+            self.repo / "infra" / "compose" / "monitoring" / "prometheus.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertEqual(production.count("handle /api/metrics {"), 2)
+        self.assertEqual(production.count("handle /api/metrics/* {"), 2)
+        self.assertEqual(production.count("handle /metrics {"), 1)
+        self.assertEqual(production.count("handle /metrics/* {"), 1)
+
+        app_snippet = production.split("(api_common)", maxsplit=1)[0]
+        api_snippet = production.split("(api_common)", maxsplit=1)[1].split(
+            "# HTTP sites", maxsplit=1
+        )[0]
+        self.assertLess(
+            app_snippet.index("handle /api/metrics {"),
+            app_snippet.index("handle_path /api/*"),
+        )
+        self.assertLess(
+            api_snippet.index("handle /metrics {"),
+            api_snippet.index("reverse_proxy api:8080"),
+        )
+        self.assertIn("host.docker.internal:8080", prometheus)
+
     def test_production_caddyfile_canonicalizes_only_existing_trailing_slash_routes(self) -> None:
         production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
 
