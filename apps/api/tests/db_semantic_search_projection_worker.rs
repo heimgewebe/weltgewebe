@@ -220,6 +220,107 @@ async fn worker_is_revision_bound_leased_resumable_and_deletion_propagates() {
 
 #[tokio::test]
 #[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
+async fn status_snapshot_separates_unique_nodes_job_history_and_activation_readiness() {
+    let pool = pool().await;
+    migrate(&pool).await;
+    reset_search_state(&pool).await;
+    let node = "t005-status-semantics-node";
+    let generation = "t005-status-semantics-generation";
+    sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt','Revision eins',$2::jsonb)")
+        .bind(node)
+        .bind(r#"{"search_visibility":"public"}"#)
+        .execute(&pool)
+        .await
+        .expect("insert status semantics node");
+    let projection_worker = worker(
+        pool.clone(),
+        "t005-status-semantics-worker",
+        Arc::new(FakeProvider {
+            unavailable: AtomicBool::new(false),
+        }),
+    );
+    projection_worker
+        .start_generation(GenerationSpec {
+            generation_id: generation,
+            provider: "local:ollama",
+            model_id: "m",
+            model_revision: "r",
+            runtime_identity: "ollama:test@http://127.0.0.1:11434",
+            dimension: 3,
+        })
+        .await
+        .expect("start status semantics generation");
+
+    let initial = projection_worker
+        .status_snapshot()
+        .await
+        .expect("initial status");
+    assert_eq!(initial.current_nodes, 1);
+    assert_eq!(initial.total_jobs, 1);
+    assert_eq!(initial.terminal_jobs, 0);
+    assert_eq!(initial.rebuild_total_jobs, Some(1));
+    assert_eq!(initial.rebuild_terminal_jobs, Some(0));
+    assert_eq!(initial.rebuild_activation_ready, Some(false));
+
+    assert_eq!(
+        projection_worker
+            .claim_and_process_one()
+            .await
+            .expect("project first revision"),
+        ProcessOutcome::Processed
+    );
+    let first_complete = projection_worker
+        .status_snapshot()
+        .await
+        .expect("first complete status");
+    assert_eq!(first_complete.current_nodes, 1);
+    assert_eq!(first_complete.total_jobs, 1);
+    assert_eq!(first_complete.terminal_jobs, 1);
+    assert_eq!(first_complete.rebuild_activation_ready, Some(true));
+
+    sqlx::query("UPDATE domain_nodes SET title='Revision zwei' WHERE id=$1")
+        .bind(node)
+        .execute(&pool)
+        .await
+        .expect("create second revision");
+    let second_pending = projection_worker
+        .status_snapshot()
+        .await
+        .expect("second revision pending status");
+    assert_eq!(
+        second_pending.current_nodes, 1,
+        "revisions must not inflate unique node count"
+    );
+    assert_eq!(
+        second_pending.total_jobs, 2,
+        "job history must retain both revisions"
+    );
+    assert_eq!(second_pending.terminal_jobs, 1);
+    assert_eq!(second_pending.rebuild_total_jobs, Some(2));
+    assert_eq!(second_pending.rebuild_terminal_jobs, Some(1));
+    assert_eq!(second_pending.rebuild_activation_ready, Some(false));
+
+    assert_eq!(
+        projection_worker
+            .claim_and_process_one()
+            .await
+            .expect("project second revision"),
+        ProcessOutcome::Processed
+    );
+    let second_complete = projection_worker
+        .status_snapshot()
+        .await
+        .expect("second complete status");
+    assert_eq!(second_complete.current_nodes, 1);
+    assert_eq!(second_complete.total_jobs, 2);
+    assert_eq!(second_complete.terminal_jobs, 2);
+    assert_eq!(second_complete.rebuild_total_jobs, Some(2));
+    assert_eq!(second_complete.rebuild_terminal_jobs, Some(2));
+    assert_eq!(second_complete.rebuild_activation_ready, Some(true));
+}
+
+#[tokio::test]
+#[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
 async fn worker_hardening_proves_races_trigger_identity_outage_and_activation() {
     let pool = pool().await;
     migrate(&pool).await;
