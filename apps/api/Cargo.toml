@@ -1,5 +1,6 @@
 [package]
 name = "weltgewebe-api"
+default-run = "weltgewebe-api"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.85.0"
@@ -19,7 +20,7 @@ prometheus = "0.14.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8.1", default-features = false, features = ["runtime-tokio", "postgres", "chrono", "migrate", "macros", "uuid"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util", "time"] }
 tower = "0.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
@@ -39,6 +40,7 @@ tower-http = { version = "0.7.0", features = ["request-id", "util"] }
 webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
 url = "2"
 serde_jcs = "0.1"
+unicode-normalization = "0.1"
 
 [features]
 # Enables test-helper APIs (e.g. token introspection) used by integration tests.

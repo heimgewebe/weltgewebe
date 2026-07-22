@@ -3,6 +3,7 @@ set -euo pipefail
 
 : "${DATABASE_URL:?DATABASE_URL must point at a disposable PostgreSQL database}"
 export PG_DIRECT_URL="${PG_DIRECT_URL:-$DATABASE_URL}"
+export T005_DATABASE_URL="${T005_DATABASE_URL:-$PG_DIRECT_URL}"
 export AUTH_PG_003_FIXTURE_MUTATION=1
 
 load_t003_connection() {
@@ -98,6 +99,7 @@ for target in \
   db_session_store_persistence \
   db_webauthn_user_id_backfill_audit \
   db_semantic_search_foundation \
+  db_semantic_search_projection_worker \
   sqlx_postgres_direct_session_crud; do
   printf '=== PostgreSQL proof: %s ===\n' "$target"
   reset_database
