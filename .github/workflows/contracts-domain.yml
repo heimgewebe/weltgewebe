@@ -10,11 +10,13 @@ permissions:
     paths:
       - 'contracts/domain/**.schema.json'
       - 'contracts/domain/examples/**.json'
+      - 'contracts/federation/v1/**.json'
       - '.node-version'
   pull_request:
     paths:
       - 'contracts/domain/**.schema.json'
       - 'contracts/domain/examples/**.json'
+      - 'contracts/federation/v1/**.json'
       - '.node-version'
 
 concurrency:
@@ -53,4 +55,32 @@ jobs:
             schema="contracts/domain/${entity}.schema.json"
             echo "Validating $example against $schema"
             ajv validate -s "$schema" -d "$example" -c ajv-formats
+          done
+
+      - name: Compile Federation v1 schemas
+        run: |
+          set -euo pipefail
+          for schema in contracts/federation/v1/*.schema.json; do
+            echo "Compiling $schema"
+            ajv compile --spec=draft2020 -s "$schema" --strict=false -c ajv-formats
+          done
+
+      - name: Validate Federation v1 positive examples
+        run: |
+          set -euo pipefail
+          ajv validate --spec=draft2020 -s contracts/federation/v1/event.schema.json \
+            -d contracts/federation/v1/examples/event.example.json --strict=false -c ajv-formats
+          ajv validate --spec=draft2020 -s contracts/federation/v1/cell-descriptor.schema.json \
+            -d contracts/federation/v1/examples/cell-descriptor.example.json --strict=false -c ajv-formats
+
+      - name: Reject Federation v1 negative fixtures
+        run: |
+          set -euo pipefail
+          for fixture in contracts/federation/v1/examples/invalid/event.*.invalid.json; do
+            echo "Expecting schema rejection: $fixture"
+            if ajv validate --spec=draft2020 -s contracts/federation/v1/event.schema.json \
+              -d "$fixture" --strict=false -c ajv-formats; then
+              echo "error: invalid fixture unexpectedly passed: $fixture" >&2
+              exit 1
+            fi
           done

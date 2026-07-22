@@ -45,10 +45,10 @@
       "pattern": "^wg://[a-z0-9][a-z0-9.-]{1,62}[a-z0-9]/(node|edge|shared-room)/[A-Za-z0-9._~-]{1,128}$"
     },
     "object_kind": { "enum": ["node", "edge", "shared-room"] },
-    "object_version": { "type": "integer", "minimum": 1 },
+    "object_version": { "type": "integer", "minimum": 1, "maximum": 9223372036854775807 },
     "previous_version": {
       "oneOf": [
-        { "type": "integer", "minimum": 1 },
+        { "type": "integer", "minimum": 1, "maximum": 9223372036854775807 },
         { "type": "null" }
       ]
     },
@@ -96,7 +96,7 @@
     {
       "if": { "properties": { "object_version": { "const": 1 } } },
       "then": { "properties": { "previous_version": { "type": "null" } } },
-      "else": { "properties": { "previous_version": { "type": "integer", "minimum": 1 } } }
+      "else": { "properties": { "previous_version": { "type": "integer", "minimum": 1, "maximum": 9223372036854775807 } } }
     }
   ]
 }
