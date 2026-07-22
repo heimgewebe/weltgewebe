@@ -637,14 +637,6 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
     .execute(&mut *tx)
     .await?;
 
-    sqlx::query(
-        "UPDATE governance_messages SET author_account_id = NULL \
-         WHERE author_account_id = $1",
-    )
-    .bind(account_id)
-    .execute(&mut *tx)
-    .await?;
-
     sqlx::query("DELETE FROM governance_proposals WHERE applicant_account_id = $1")
         .bind(account_id)
         .execute(&mut *tx)

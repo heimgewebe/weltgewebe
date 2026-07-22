@@ -1574,7 +1574,90 @@ async fn guest_node_limit_allows_replay_but_rejects_new_operation() -> Result<()
     Ok(())
 }
 
-/// K2f. An idempotent replay must lock the real existing node before repairing
+/// K2f. Two distinct guest creates racing at a one-node limit are serialized
+/// by the account lifecycle/account-row lock contract. Exactly one may commit;
+/// the loser must observe the committed count and fail with 429.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn concurrent_guest_node_creates_cannot_overshoot_limit() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000092";
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, state) =
+        postgres_write_app_with_guest_limit(pool.clone(), ACTOR_ID, 1).await?;
+    sqlx::query("UPDATE domain_accounts SET role = 'gast' WHERE id = $1")
+        .bind(ACTOR_ID)
+        .execute(&pool)
+        .await?;
+    let mut guest = admin_operator(ACTOR_ID);
+    guest.role = Role::Gast;
+    state.accounts.write().await.insert(guest);
+
+    let first = serde_json::json!({
+        "title": "Concurrent Limit A",
+        "kind": "Werkstatt",
+        "address": "Limitweg A",
+        "location": {"lat": 53.5, "lon": 10.0},
+        "operation_id": "30000000-0000-4000-8000-000000000091"
+    })
+    .to_string();
+    let second = serde_json::json!({
+        "title": "Concurrent Limit B",
+        "kind": "Werkstatt",
+        "address": "Limitweg B",
+        "location": {"lat": 53.6, "lon": 10.0},
+        "operation_id": "30000000-0000-4000-8000-000000000092"
+    })
+    .to_string();
+
+    let first_app = app.clone();
+    let first_cookie = cookie.clone();
+    let first_task = tokio::spawn(async move {
+        first_app
+            .oneshot(post_node_req(&first_cookie, &first))
+            .await
+    });
+    let second_task =
+        tokio::spawn(async move { app.oneshot(post_node_req(&cookie, &second)).await });
+
+    let first_status = first_task
+        .await
+        .context("join first concurrent create")??
+        .status();
+    let second_status = second_task
+        .await
+        .context("join second concurrent create")??
+        .status();
+    let mut statuses = [first_status, second_status];
+    statuses.sort_by_key(|status| status.as_u16());
+    assert_eq!(
+        statuses,
+        [StatusCode::CREATED, StatusCode::TOO_MANY_REQUESTS]
+    );
+
+    let owned_nodes: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1",
+    )
+    .bind(ACTOR_ID)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        owned_nodes, 1,
+        "concurrent guest creates must not overshoot the cap"
+    );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// K2g. An idempotent replay must lock the real existing node before repairing
 /// its derived Faden. Otherwise a concurrent delete could remove the node while
 /// the replay recreates an orphaned edge to the already deleted id.
 #[tokio::test]

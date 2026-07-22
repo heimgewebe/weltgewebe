@@ -11,7 +11,9 @@ pub(crate) const NODE_MUTATION_LOCK_NAMESPACE: &str = "weltgewebe:node-mutation:
 // sorted-key order. Ordinary existing-node mutations take only the node lock
 // and must never open a reverse node -> account-lifecycle dependency. The
 // legacy Faden account-row guard is a fallback and must not be re-entered by
-// the fully lifecycle-guarded PostgreSQL create path.
+// the fully lifecycle-guarded PostgreSQL create path. Node delete/compensation
+// may additionally lock the domain_edges table, but only after the relevant
+// node advisory lock is already held by the serialized mutation path.
 //
 // This is a partial order, not a universal account -> node -> row recipe:
 // same-account lifecycle competitors are already serialized by the outer
