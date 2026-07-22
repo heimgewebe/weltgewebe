@@ -1,13 +1,4 @@
 {
-  "acceptance": {
-    "delivery_chain": "pass_bounded",
-    "freshness_and_diff_binding": "pass",
-    "paired_baseline": "pass",
-    "promotion_gate": "pass",
-    "quality": "pass_bounded",
-    "retrieval_lane_truth": "pass",
-    "three_classes": "pass"
-  },
   "cases": [
     {
       "base_commit": "691f663a278bc4f29e8e7a75b23d9538ac7039c6",
@@ -28,7 +19,7 @@
         "call_graph_truth": {
           "artifact_available": true,
           "artifact_bytes": 22485322,
-          "artifact_sha256": "2fe28ccf8294263ecd3d814da800fe25444e3982f8ba1062534d34b57b7cc087",
+          "artifact_sha256": "6e5292dd074e6d5e44b9588c1438f9c2acf23b9f7e0836787d64efc45fa476b9",
           "coherent_relation_count": 0,
           "consumed_coherent_evidence": false
         },
@@ -42,7 +33,7 @@
           "entry_count": 0,
           "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "included_in_revision_diff": false,
-          "identity_note": "Canonical Weltgewebe checkout was clean during the final 1410 measurement."
+          "identity_note": "RepoGround publication source checkout was clean during the final 1548 measurement."
         },
         "does_not_establish": [
           "truth",
@@ -61,27 +52,45 @@
         "lane_counts": {
           "direct_changes": {
             "available": 14,
-            "included": 14
+            "considered": 14,
+            "included": 14,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "related_tests": {
             "available": 5,
-            "included": 5
+            "considered": 5,
+            "included": 5,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "target_symbols": {
             "available": 0,
-            "included": 0
+            "considered": 0,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "causal_relations": {
             "available": 0,
-            "included": 0
+            "considered": 0,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "live_ranges": {
             "available": 3,
-            "included": 3
+            "considered": 3,
+            "included": 3,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "citations": {
             "available": 3,
-            "included": 3
+            "considered": 3,
+            "included": 3,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           }
         },
         "live_ranges_included": 3,
@@ -156,7 +165,7 @@
         "target_symbols": [],
         "representative_causal_relations": [],
         "budget_degradation": {
-          "required_lane_loss": false,
+          "policy_limited_lanes": [],
           "exhausted_lanes": [
             "query_snippets"
           ]
@@ -201,7 +210,6 @@
       "id": "database_auth_radius_privacy",
       "missing_critical_paths": [],
       "profile": "database_auth",
-      "quality_pass": true,
       "query": "radius privacy account projection migration database auth",
       "target_commit": "4b9b0507e5d54eaa285d91dbb47a3f2cf74f4ccc",
       "target_revision": "4b9b0507e5d54eaa285d91dbb47a3f2cf74f4ccc",
@@ -214,7 +222,7 @@
         "available": true,
         "direct_context_pack_verified": true,
         "freshness_status": "fresh",
-        "payload_bytes": 43190,
+        "payload_bytes": 43206,
         "payload_bytes_source": "repoground_context_compose.compactness.general_context_pack_bytes",
         "resolved_evidence_status": "available",
         "snippet_count": 5,
@@ -226,13 +234,13 @@
         "call_graph_truth": {
           "artifact_available": true,
           "artifact_bytes": 22485322,
-          "artifact_sha256": "2fe28ccf8294263ecd3d814da800fe25444e3982f8ba1062534d34b57b7cc087",
+          "artifact_sha256": "6e5292dd074e6d5e44b9588c1438f9c2acf23b9f7e0836787d64efc45fa476b9",
           "coherent_relation_count": 0,
           "consumed_coherent_evidence": false
         },
         "causal_relations_included": 0,
         "citations_included": 4,
-        "context_bytes": 11708,
+        "context_bytes": 11716,
         "diff_binding_verified": true,
         "dirty_overlay": {
           "available": true,
@@ -240,7 +248,7 @@
           "entry_count": 0,
           "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "included_in_revision_diff": false,
-          "identity_note": "Canonical Weltgewebe checkout was clean during the final 1410 measurement."
+          "identity_note": "RepoGround publication source checkout was clean during the final 1548 measurement."
         },
         "does_not_establish": [
           "truth",
@@ -255,35 +263,53 @@
         ],
         "freshness_status": "fresh",
         "gaps": [],
-        "general_context_pack_bytes_reported": 43190,
+        "general_context_pack_bytes_reported": 43206,
         "lane_counts": {
           "direct_changes": {
             "available": 4,
-            "included": 4
+            "considered": 4,
+            "included": 4,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "related_tests": {
             "available": 2,
-            "included": 2
+            "considered": 2,
+            "included": 2,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "target_symbols": {
             "available": 0,
-            "included": 0
+            "considered": 0,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "causal_relations": {
             "available": 0,
-            "included": 0
+            "considered": 0,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "live_ranges": {
             "available": 4,
-            "included": 4
+            "considered": 4,
+            "included": 4,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "citations": {
             "available": 4,
-            "included": 4
+            "considered": 4,
+            "included": 4,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           }
         },
         "live_ranges_included": 4,
-        "ratio": 0.271081,
+        "ratio": 0.271166,
         "related_tests_included": 2,
         "retrieval_lanes": {
           "used": [
@@ -300,7 +326,7 @@
             "call_graph"
           ]
         },
-        "reduction_pct": 72.892,
+        "reduction_pct": 72.883,
         "status": "degraded",
         "stop_criteria": {
           "impact_context_blocked": false,
@@ -330,7 +356,7 @@
         "target_symbols": [],
         "representative_causal_relations": [],
         "budget_degradation": {
-          "required_lane_loss": false,
+          "policy_limited_lanes": [],
           "exhausted_lanes": [
             "query_snippets"
           ]
@@ -355,7 +381,6 @@
       "id": "web_map_globe_touch",
       "missing_critical_paths": [],
       "profile": "web_map",
-      "quality_pass": true,
       "query": "map",
       "target_commit": "d7c1fb9ca77005a590a0a750124a0fa243b1471c",
       "target_revision": "d7c1fb9ca77005a590a0a750124a0fa243b1471c",
@@ -380,7 +405,7 @@
         "call_graph_truth": {
           "artifact_available": true,
           "artifact_bytes": 22485322,
-          "artifact_sha256": "2fe28ccf8294263ecd3d814da800fe25444e3982f8ba1062534d34b57b7cc087",
+          "artifact_sha256": "6e5292dd074e6d5e44b9588c1438f9c2acf23b9f7e0836787d64efc45fa476b9",
           "coherent_relation_count": 1,
           "consumed_coherent_evidence": true
         },
@@ -394,7 +419,7 @@
           "entry_count": 0,
           "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "included_in_revision_diff": false,
-          "identity_note": "Canonical Weltgewebe checkout was clean during the final 1410 measurement."
+          "identity_note": "RepoGround publication source checkout was clean during the final 1548 measurement."
         },
         "does_not_establish": [
           "truth",
@@ -424,27 +449,45 @@
         "lane_counts": {
           "direct_changes": {
             "available": 9,
-            "included": 9
+            "considered": 9,
+            "included": 9,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "related_tests": {
             "available": 1,
-            "included": 1
+            "considered": 1,
+            "included": 1,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "target_symbols": {
             "available": 17,
-            "included": 8
+            "considered": 8,
+            "included": 8,
+            "policy_omitted": 9,
+            "budget_omitted": 0
           },
           "causal_relations": {
             "available": 21,
-            "included": 7
+            "considered": 8,
+            "included": 7,
+            "policy_omitted": 13,
+            "budget_omitted": 1
           },
           "live_ranges": {
             "available": 3,
-            "included": 1
+            "considered": 3,
+            "included": 1,
+            "policy_omitted": 0,
+            "budget_omitted": 2
           },
           "citations": {
             "available": 3,
-            "included": 0
+            "considered": 3,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 3
           }
         },
         "live_ranges_included": 1,
@@ -544,9 +587,9 @@
             "relation_type": "calls",
             "source": "python_call_graph_json",
             "status": "coherent",
-            "artifact_sha256": "2fe28ccf8294263ecd3d814da800fe25444e3982f8ba1062534d34b57b7cc087",
-            "canonical_dump_index_sha256": "8da913266f56bf123703029302b70fa5f504a872733d986e3c44821941625e73",
-            "run_id": "heimgewebe__weltgewebe__main-full-max-260722-1410",
+            "artifact_sha256": "6e5292dd074e6d5e44b9588c1438f9c2acf23b9f7e0836787d64efc45fa476b9",
+            "canonical_dump_index_sha256": "e823c534dd76a9705dd1f16744569c628714e7ed9168ea18a5f0be51d8142967",
+            "run_id": "heimgewebe__weltgewebe__main-full-max-260722-1548",
             "source_call_site": "file:scripts/ci/tests/test_production_reconciler_contract.py#L59-L59",
             "peer_definition": "file:scripts/ci/tests/test_production_reconciler_contract.py#L58-L81",
             "symbol_id": "py:scripts:ci:tests:test_production_reconciler_contract.py:function:ProductionReconcilerContractTests.test_deploy_helper_preserves_legacy_checkout_and_binds_main",
@@ -569,7 +612,10 @@
           "coherent_call_graph_relations": 1
         },
         "budget_degradation": {
-          "required_lane_loss": false,
+          "policy_limited_lanes": [
+            "target_symbols",
+            "causal_relations"
+          ],
           "exhausted_lanes": [
             "causal_relations",
             "live_ranges",
@@ -608,23 +654,23 @@
       "id": "deployment_production_reconciler",
       "missing_critical_paths": [],
       "profile": "deployment_kubernetes",
-      "quality_pass": true,
       "query": "production reconciler deployment exact commit live verification",
       "target_commit": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
       "target_revision": "7a1b5943524affd90b79cd8769f5e48b3f1d4b22",
       "delivery_completeness_required": true
     },
     {
-      "id": "live_current_source_bundle_guest_budget",
+      "id": "live_fresh_source_bundle_guest_budget",
       "profile": "controlled_live",
       "base_commit": "0cd3699c35534e4df93cb7609dbf2dcf4263cf23",
-      "target_commit": "83c39421c8ed4f87e01319d695e59885a500f317",
+      "target_commit": "e14944fb149c0b66b8a1ca4e1e1b26a8603c5067",
       "base_revision": "0cd3699c35534e4df93cb7609dbf2dcf4263cf23",
-      "target_revision": "83c39421c8ed4f87e01319d695e59885a500f317",
+      "target_revision": "e14944fb149c0b66b8a1ca4e1e1b26a8603c5067",
       "diff_binding_kind": "git_tree_delta_v1",
-      "diff_sha256": "2a8b77ceee4ba93266c06ebfb4fe3cf83bfdde2af9d17b10adf33ec3f1ba5d44",
-      "changed_path_count": 89,
+      "diff_sha256": "587369a65eb6b98fe70c13752f5fad95b71228b2475e2674e1e4eb741979c158",
+      "changed_path_count": 95,
       "direct_change_paths": [
+        ".github/workflows/api.yml",
         ".github/workflows/contracts-domain.yml",
         "apps/api/README.md",
         "apps/api/migrations/20260722000001_guest_content_ownership_exit_cleanup.down.sql",
@@ -635,6 +681,8 @@
         "apps/api/migrations/20260722000003_guest_exit_author_indexes.up.sql",
         "apps/api/migrations/20260722000004_federation_core_hardening.down.sql",
         "apps/api/migrations/20260722000004_federation_core_hardening.up.sql",
+        "apps/api/migrations/20260722000005_governance_conversation_target.down.sql",
+        "apps/api/migrations/20260722000005_governance_conversation_target.up.sql",
         "apps/api/src/advisory_lock.rs",
         "apps/api/src/config.rs",
         "apps/api/src/domain_db.rs",
@@ -645,6 +693,7 @@
         "apps/api/src/routes/accounts.rs",
         "apps/api/src/routes/auth.rs",
         "apps/api/src/routes/collective_write_guard.rs",
+        "apps/api/src/routes/conversations.rs",
         "apps/api/src/routes/domain_write_guard.rs",
         "apps/api/src/routes/governance.rs",
         "apps/api/src/routes/health.rs",
@@ -671,6 +720,7 @@
         "apps/api/tests/db_domain_node_write_path.rs",
         "apps/api/tests/db_federation_persistence.rs",
         "apps/api/tests/db_governance.rs",
+        "apps/api/tests/db_governance_conversation_target.rs",
         "apps/api/tests/db_multi_instance_foundation.rs",
         "apps/api/tests/db_node_conversations.rs",
         "apps/api/tests/db_passkey_store_persistence.rs",
@@ -713,9 +763,9 @@
         "docs/specs/garnrolle-knoten-faden.md",
         "docs/specs/governance-antraege.md",
         "docs/specs/ui-interaction.md",
+        "platform/infrastructure/local-data/postgres.yaml",
         "scripts/ci/tests/test_federation_contract.py"
       ],
-      "quality_pass": true,
       "query": "guest",
       "baseline": {
         "available": true,
@@ -731,10 +781,10 @@
       "capsule": {
         "available": true,
         "status": "degraded",
-        "context_bytes": 11945,
+        "context_bytes": 11993,
         "general_context_pack_bytes_reported": 51900,
-        "ratio": 0.230154,
-        "reduction_pct": 76.985,
+        "ratio": 0.231079,
+        "reduction_pct": 76.892,
         "diff_binding_verified": true,
         "freshness_status": "fresh",
         "related_tests_included": 8,
@@ -805,39 +855,110 @@
           }
         ],
         "target_symbols_included": 8,
-        "target_symbols": [],
+        "target_symbols": [
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:class:FederationContractTests",
+            "qualified_name": "FederationContractTests",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L11-L176"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.setUp",
+            "qualified_name": "FederationContractTests.setUp",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L12-L27"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.test_wire_examples_cover_every_required_field",
+            "qualified_name": "FederationContractTests.test_wire_examples_cover_every_required_field",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L29-L45"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.test_event_schema_is_closed_and_scope_is_explicit",
+            "qualified_name": "FederationContractTests.test_event_schema_is_closed_and_scope_is_explicit",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L47-L62"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.test_public_boundary_uses_http_contract_not_internal_fabric",
+            "qualified_name": "FederationContractTests.test_public_boundary_uses_http_contract_not_internal_fabric",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L64-L81"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.test_wire_signature_is_language_neutral_and_fixture_bound",
+            "qualified_name": "FederationContractTests.test_wire_signature_is_language_neutral_and_fixture_bound",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L83-L91"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.test_public_router_is_outside_browser_auth_and_csrf_layers",
+            "qualified_name": "FederationContractTests.test_public_router_is_outside_browser_auth_and_csrf_layers",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L93-L102"
+          },
+          {
+            "id": "py:scripts:ci:tests:test_federation_contract.py:function:FederationContractTests.test_storage_separates_applied_inbox_from_quarantine",
+            "qualified_name": "FederationContractTests.test_storage_separates_applied_inbox_from_quarantine",
+            "path": "scripts/ci/tests/test_federation_contract.py",
+            "range_ref": "file:scripts/ci/tests/test_federation_contract.py#L104-L137"
+          }
+        ],
         "causal_relations_included": 7,
         "representative_causal_relations": [],
         "live_ranges_included": 1,
-        "representative_live_ranges": [],
-        "citations_included": 5,
+        "representative_live_ranges": [
+          {
+            "path": "apps/api/tests/db_governance.rs",
+            "start_line": 255,
+            "end_line": 530,
+            "content_sha256": "6e120c2e9dce17e969a2682bfd54e3bfcaf07a0757ceebb1edb367ce2d1348e5"
+          }
+        ],
+        "citations_included": 2,
         "lane_counts": {
           "direct_changes": {
-            "available": 89,
+            "available": 95,
+            "considered": 16,
             "included": 16,
-            "policy_omitted": 73
+            "policy_omitted": 79,
+            "budget_omitted": 0
           },
           "related_tests": {
-            "available": 33,
+            "available": 34,
+            "considered": 8,
             "included": 8,
-            "policy_omitted": 25
+            "policy_omitted": 26,
+            "budget_omitted": 0
           },
           "target_symbols": {
             "available": 11,
+            "considered": 8,
             "included": 8,
-            "policy_omitted": 3
+            "policy_omitted": 3,
+            "budget_omitted": 0
           },
           "causal_relations": {
             "available": 7,
-            "included": 7
+            "considered": 7,
+            "included": 7,
+            "policy_omitted": 0,
+            "budget_omitted": 0
           },
           "live_ranges": {
             "available": 5,
-            "included": 1
+            "considered": 5,
+            "included": 1,
+            "policy_omitted": 0,
+            "budget_omitted": 4
           },
           "citations": {
             "available": 5,
-            "included": 5
+            "considered": 5,
+            "included": 2,
+            "policy_omitted": 0,
+            "budget_omitted": 3
           }
         },
         "retrieval_lanes": {
@@ -858,11 +979,21 @@
         "call_graph_truth": {
           "artifact_available": true,
           "artifact_bytes": 22485322,
-          "artifact_sha256": "2fe28ccf8294263ecd3d814da800fe25444e3982f8ba1062534d34b57b7cc087",
+          "artifact_sha256": "6e5292dd074e6d5e44b9588c1438f9c2acf23b9f7e0836787d64efc45fa476b9",
           "consumed_coherent_evidence": false,
           "coherent_relation_count": 0
         },
-        "gaps": [],
+        "gaps": [
+          {
+            "paths": [
+              ".github/workflows/api.yml",
+              "platform/infrastructure/local-data/postgres.yaml"
+            ],
+            "reason": "target_path_not_present_as_graph_node",
+            "source": "architecture_graph_json",
+            "status": "missing_target"
+          }
+        ],
         "stop_criteria": {
           "impact_context_blocked": false,
           "triggered": [
@@ -875,7 +1006,7 @@
           "entry_count": 0,
           "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "included_in_revision_diff": false,
-          "identity_note": "Canonical Weltgewebe checkout was clean during the final 1410 measurement."
+          "identity_note": "RepoGround publication source checkout was clean during the final 1548 measurement."
         },
         "does_not_establish": [
           "truth",
@@ -890,9 +1021,14 @@
         ],
         "complete_direct_change_delivery": false,
         "budget_degradation": {
-          "required_lane_loss": false,
+          "policy_limited_lanes": [
+            "direct_changes",
+            "related_tests",
+            "target_symbols"
+          ],
           "exhausted_lanes": [
             "live_ranges",
+            "citations",
             "entry_manifest",
             "query_snippets"
           ]
@@ -902,7 +1038,52 @@
     }
   ],
   "context_budget_bytes": 12000,
-  "delivery_chain": {
+  "does_not_establish": [
+    "semantic completeness",
+    "automatic related-test completeness",
+    "automatic symbol-impact completeness",
+    "patch correctness",
+    "runtime correctness",
+    "merge readiness",
+    "global RepoGround routing authority outside the measured change_impact scope"
+  ],
+  "generated_at": "2026-07-22T18:00:27+02:00",
+  "grabowski_runtime_commit": "acf29382784c1541b930b8068c58aac4497da5e4",
+  "grabowski_t006_hardening_merge_commit": "de799bbded2d1c09de9b29153325516539a805e2",
+  "grabowski_t006_merge_commit": "eaaf8307009df70bba549c571ec376a4fc7743e0",
+  "measurement_worktree": {
+    "branch": "publication_source_checkout",
+    "head": "e14944fb149c0b66b8a1ca4e1e1b26a8603c5067",
+    "dirty": false,
+    "dirty_scope": "clean",
+    "dirty_paths": [],
+    "included_in_revision_diff": false
+  },
+  "promotion_scope": "bounded_change_impact_context_for_agent_handoff",
+  "repo": "weltgewebe",
+  "repoground_1070_merge_commit": "c12e6e867c0de3315b250ce5818f4331f6dbbb63",
+  "repoground_runtime_commit": "dea8e61ace8bc45a32ec32bff3f79eccaa9c9f19",
+  "schema_version": 1,
+  "source_bundle": {
+    "stem": "heimgewebe__weltgewebe__main-max-260722-1548",
+    "git_commit": "e14944fb149c0b66b8a1ca4e1e1b26a8603c5067",
+    "manifest_sha256": "04e84e1af3bf9a52b30fe412549fcb0bf5663967a3c85fb890c01c16a67f1b92",
+    "post_emit_health": "pass",
+    "output_health": "pass",
+    "bundle_surface_validation": "pass",
+    "generator_runtime_commit": "dea8e61ace8bc45a32ec32bff3f79eccaa9c9f19",
+    "freshness_evidence": {
+      "basis": "stored_source_commit_equals_observed_remote_commit",
+      "checked_at": "2026-07-22T16:07:36Z",
+      "live_recheck_required": false,
+      "remote_commit": "e14944fb149c0b66b8a1ca4e1e1b26a8603c5067",
+      "remote_ref": "origin/main",
+      "source_commit": "e14944fb149c0b66b8a1ca4e1e1b26a8603c5067",
+      "publisher_state_sha256": "86351444ebafea5b9673924f26777248980ebac34833fd6a3efc08dc8a2ee882"
+    }
+  },
+  "task_profile": "change_impact",
+  "pilot_delivery_chain_evidence": {
     "case_id": "deployment_production_reconciler",
     "causal_relations_included": 7,
     "coherent_call_graph_relation_count": 1,
@@ -919,7 +1100,6 @@
       "scripts/ops/install-production-reconciler.sh",
       "scripts/weltgewebe-up"
     ],
-    "status": "pass_bounded",
     "target_symbols_included": 8,
     "contract_evidence": {
       "pr": 1499,
@@ -1004,72 +1184,5 @@
         "mitigation": "explicit reconciler states and failure/receipt evidence preserve diagnosis without claiming automatic rollback"
       }
     ]
-  },
-  "does_not_establish": [
-    "semantic completeness",
-    "automatic related-test completeness",
-    "automatic symbol-impact completeness",
-    "patch correctness",
-    "runtime correctness",
-    "merge readiness",
-    "global RepoGround routing authority outside the measured change_impact scope"
-  ],
-  "generated_at": "2026-07-22T09:14:19+02:00",
-  "grabowski_runtime_commit": "acf29382784c1541b930b8068c58aac4497da5e4",
-  "grabowski_t006_hardening_merge_commit": "de799bbded2d1c09de9b29153325516539a805e2",
-  "grabowski_t006_merge_commit": "eaaf8307009df70bba549c571ec376a4fc7743e0",
-  "measurement_worktree": {
-    "branch": "publication_source_checkout",
-    "head": "83c39421c8ed4f87e01319d695e59885a500f317",
-    "dirty": false,
-    "dirty_scope": "clean",
-    "dirty_paths": [],
-    "included_in_revision_diff": false
-  },
-  "mechanical_promotion_gate": {
-    "passed": true,
-    "qualifying_case_ids": [
-      "database_auth_radius_privacy",
-      "web_map_globe_touch",
-      "deployment_production_reconciler"
-    ],
-    "required_count": 2
-  },
-  "observed_foreign_dirty_overlay": {
-    "available": true,
-    "dirty": false,
-    "entry_count": 0,
-    "identity_note": "Canonical Weltgewebe checkout was clean during the final 1410 measurement.",
-    "included_in_revision_diff": false,
-    "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  },
-  "overall_status": "pass",
-  "promotion_recommendation": "promote_default",
-  "promotion_scope": "bounded_change_impact_context_for_agent_handoff",
-  "repo": "weltgewebe",
-  "repoground_1070_merge_commit": "c12e6e867c0de3315b250ce5818f4331f6dbbb63",
-  "repoground_runtime_commit": "dea8e61ace8bc45a32ec32bff3f79eccaa9c9f19",
-  "schema_version": 1,
-  "source_bundle": {
-    "stem": "heimgewebe__weltgewebe__main-max-260722-1410",
-    "git_commit": "83c39421c8ed4f87e01319d695e59885a500f317",
-    "manifest_sha256": "c11c3511aafec4b0d6b0162796c9758a0bd0c6b708a366de6f850a22b2250546",
-    "freshness": "fresh_exact",
-    "post_emit_health": "pass",
-    "output_health": "pass",
-    "bundle_surface_validation": "pass",
-    "generator_runtime_commit": "dea8e61ace8bc45a32ec32bff3f79eccaa9c9f19"
-  },
-  "task_profile": "change_impact",
-  "truth_gate": {
-    "passed": true,
-    "requirements": {
-      "call_graph_lane_matches_consumed_coherent_evidence_all_cases": true,
-      "diff_binding_verified_all_cases": true,
-      "dirty_overlay_excluded_from_revision_diff_all_cases": true,
-      "fresh_exact_bundle": true,
-      "impact_context_blocked_absent_all_cases": true,
-      "paired_baseline_resolved_evidence_all_cases": true
-    }
   }
 }

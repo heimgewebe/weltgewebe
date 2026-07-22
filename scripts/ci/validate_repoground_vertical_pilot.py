@@ -17,41 +17,12 @@ _MEASUREMENT_EVIDENCE_PATHS = {
     "scripts/ci/tests/test_repoground_vertical_pilot.py",
     "scripts/ci/validate_repoground_vertical_pilot.py",
 }
-_REQUIRED_ACCEPTANCE = {
-    "three_classes": "pass",
-    "paired_baseline": "pass",
-    "quality": "pass_bounded",
-    "retrieval_lane_truth": "pass",
-    "freshness_and_diff_binding": "pass",
-    "delivery_chain": "pass_bounded",
-    "promotion_gate": "pass",
-}
-_REQUIRED_TRUTH_REQUIREMENTS = {
-    "fresh_exact_bundle",
-    "diff_binding_verified_all_cases",
-    "impact_context_blocked_absent_all_cases",
-    "call_graph_lane_matches_consumed_coherent_evidence_all_cases",
-    "dirty_overlay_excluded_from_revision_diff_all_cases",
-    "paired_baseline_resolved_evidence_all_cases",
-}
-
-
 def _is_sha(value: Any, pattern: re.Pattern[str]) -> bool:
     return isinstance(value, str) and pattern.fullmatch(value) is not None
 
 
 def _is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
-
-
-def _looks_like_test_path(path: str) -> bool:
-    name = Path(path).name
-    return (
-        "/tests/" in f"/{path}"
-        or name.startswith("test_")
-        or ".spec." in name
-        or ".test." in name
-    )
 
 
 def validate(data: dict[str, Any]) -> list[str]:
@@ -81,9 +52,6 @@ def validate(data: dict[str, Any]) -> list[str]:
         errors.append("source_bundle must be an object")
         source_bundle = {}
     source_bundle_pass = True
-    if source_bundle.get("freshness") != "fresh_exact":
-        errors.append("source bundle must be fresh_exact")
-        source_bundle_pass = False
     if not _is_sha(source_bundle.get("git_commit"), _SHA40):
         errors.append("source_bundle.git_commit must be a full commit SHA")
         source_bundle_pass = False
@@ -99,6 +67,40 @@ def validate(data: dict[str, Any]) -> list[str]:
             "source_bundle.generator_runtime_commit must match repoground_runtime_commit"
         )
         source_bundle_pass = False
+
+    freshness_evidence = source_bundle.get("freshness_evidence")
+    if not isinstance(freshness_evidence, dict):
+        errors.append("source_bundle.freshness_evidence must be an object")
+        source_bundle_pass = False
+    else:
+        if freshness_evidence.get("basis") != (
+            "stored_source_commit_equals_observed_remote_commit"
+        ):
+            errors.append("source bundle freshness evidence basis must bind source and remote commits")
+            source_bundle_pass = False
+        if freshness_evidence.get("remote_ref") != "origin/main":
+            errors.append("source bundle freshness evidence remote_ref must be origin/main")
+            source_bundle_pass = False
+        for field in ("source_commit", "remote_commit"):
+            if not _is_sha(freshness_evidence.get(field), _SHA40):
+                errors.append(f"source bundle freshness evidence {field} must be a full commit SHA")
+                source_bundle_pass = False
+            elif freshness_evidence.get(field) != source_bundle.get("git_commit"):
+                errors.append(
+                    f"source bundle freshness evidence {field} must equal source_bundle.git_commit"
+                )
+                source_bundle_pass = False
+        if not isinstance(freshness_evidence.get("checked_at"), str) or not freshness_evidence.get(
+            "checked_at"
+        ):
+            errors.append("source bundle freshness evidence checked_at must be present")
+            source_bundle_pass = False
+        if not _is_sha(freshness_evidence.get("publisher_state_sha256"), _SHA64):
+            errors.append("source bundle freshness evidence publisher_state_sha256 must be a SHA-256")
+            source_bundle_pass = False
+        if freshness_evidence.get("live_recheck_required") is not False:
+            errors.append("source bundle freshness evidence must not require another live recheck")
+            source_bundle_pass = False
 
     measurement_worktree = data.get("measurement_worktree")
     measurement_worktree_pass = True
@@ -134,17 +136,6 @@ def validate(data: dict[str, Any]) -> list[str]:
         errors.append("measurement worktree edits must be excluded from revision diff")
         measurement_worktree_pass = False
 
-    observed_overlay = data.get("observed_foreign_dirty_overlay")
-    observed_overlay_pass = True
-    if not isinstance(observed_overlay, dict):
-        errors.append("observed_foreign_dirty_overlay must be an object")
-        observed_overlay_pass = False
-    elif observed_overlay.get("dirty") is True and observed_overlay.get(
-        "included_in_revision_diff"
-    ) is not False:
-        errors.append("foreign dirty overlay must remain excluded from revision diff")
-        observed_overlay_pass = False
-
     cases = data.get("cases")
     if not isinstance(cases, list) or len(cases) != 4:
         errors.append("exactly three gold cases plus one controlled live case are required")
@@ -179,7 +170,7 @@ def validate(data: dict[str, Any]) -> list[str]:
     diff_binding_pass = True
     freshness_pass = source_bundle_pass
     impact_unblocked_pass = True
-    overlay_exclusion_pass = measurement_worktree_pass and observed_overlay_pass
+    overlay_exclusion_pass = measurement_worktree_pass
     baseline_evidence_pass = True
     bounded_quality_pass = True
 
@@ -267,9 +258,6 @@ def validate(data: dict[str, Any]) -> list[str]:
                 )
                 controlled_live_pass = False
 
-        if case.get("quality_pass") is not True:
-            errors.append(f"{case_id}: bounded quality check must pass")
-            bounded_quality_pass = False
 
         baseline = case.get("baseline")
         capsule = case.get("capsule")
@@ -288,20 +276,70 @@ def validate(data: dict[str, Any]) -> list[str]:
             errors.append(f"{case_id}: lane_counts must be an object")
             lane_counts = {}
             bounded_quality_pass = False
-        direct_lane = lane_counts.get("direct_changes")
-        if not isinstance(direct_lane, dict):
-            errors.append(f"{case_id}: direct_changes lane count must be an object")
-            direct_lane = {}
-            bounded_quality_pass = False
 
+        required_lane_names = (
+            "direct_changes",
+            "related_tests",
+            "target_symbols",
+            "causal_relations",
+            "live_ranges",
+            "citations",
+        )
+        lane_entries: dict[str, dict[str, Any]] = {}
+        for lane_name in required_lane_names:
+            lane = lane_counts.get(lane_name)
+            if not isinstance(lane, dict):
+                errors.append(f"{case_id}: {lane_name} lane count must be an object")
+                lane = {}
+                bounded_quality_pass = False
+            lane_entries[lane_name] = lane
+            available = lane.get("available")
+            considered = lane.get("considered")
+            included = lane.get("included")
+            policy_omitted = lane.get("policy_omitted")
+            budget_omitted = lane.get("budget_omitted")
+            values = (available, considered, included, policy_omitted, budget_omitted)
+            if any(
+                not isinstance(value, int) or isinstance(value, bool) or value < 0
+                for value in values
+            ):
+                errors.append(
+                    f"{case_id}: {lane_name} lane counts must be non-negative integers"
+                )
+                bounded_quality_pass = False
+                continue
+            if not included <= considered <= available:
+                errors.append(
+                    f"{case_id}: {lane_name} lane counts must satisfy "
+                    "included <= considered <= available"
+                )
+                bounded_quality_pass = False
+            if policy_omitted != available - considered:
+                errors.append(
+                    f"{case_id}: {lane_name} policy_omitted must equal available minus considered"
+                )
+                bounded_quality_pass = False
+            if budget_omitted != considered - included:
+                errors.append(
+                    f"{case_id}: {lane_name} budget_omitted must equal considered minus included"
+                )
+                bounded_quality_pass = False
+
+        direct_lane = lane_entries["direct_changes"]
         available_direct = direct_lane.get("available")
+        considered_direct = direct_lane.get("considered")
         included_direct = direct_lane.get("included")
-        policy_omitted = direct_lane.get("policy_omitted", 0)
+        policy_omitted = direct_lane.get("policy_omitted")
+        budget_omitted = direct_lane.get("budget_omitted")
         if profile in _GOLD_PROFILES:
-            if available_direct != len(direct) or included_direct != len(direct):
+            if (
+                available_direct != len(direct)
+                or considered_direct != len(direct)
+                or included_direct != len(direct)
+            ):
                 errors.append(f"{case_id}: every gold case must deliver all direct changes")
                 bounded_quality_pass = False
-            if policy_omitted != 0:
+            if policy_omitted != 0 or budget_omitted != 0:
                 errors.append(f"{case_id}: gold direct-change delivery must not omit paths")
                 bounded_quality_pass = False
         elif profile == "controlled_live":
@@ -323,15 +361,19 @@ def validate(data: dict[str, Any]) -> list[str]:
                 )
                 controlled_live_pass = False
             if (
-                not isinstance(policy_omitted, int)
+                not isinstance(considered_direct, int)
+                or isinstance(considered_direct, bool)
+                or considered_direct <= 0
+                or not isinstance(policy_omitted, int)
                 or isinstance(policy_omitted, bool)
-                or policy_omitted < 0
+                or not isinstance(budget_omitted, int)
+                or isinstance(budget_omitted, bool)
                 or not isinstance(available_direct, int)
-                or not isinstance(included_direct, int)
-                or policy_omitted != available_direct - included_direct
+                or policy_omitted != available_direct - considered_direct
+                or budget_omitted != considered_direct - included_direct
             ):
                 errors.append(
-                    f"{case_id}: controlled live policy_omitted must equal available minus included"
+                    f"{case_id}: controlled live direct-change omission accounting must be exact"
                 )
                 controlled_live_pass = False
             if (
@@ -350,15 +392,44 @@ def validate(data: dict[str, Any]) -> list[str]:
             errors.append(f"{case_id}: budget_degradation must be an object")
             bounded_quality_pass = False
         else:
-            if budget_degradation.get("required_lane_loss") is not False:
-                errors.append(f"{case_id}: budget degradation must not lose required lanes")
-                bounded_quality_pass = False
             exhausted_lanes = budget_degradation.get("exhausted_lanes")
+            policy_limited_lanes = budget_degradation.get("policy_limited_lanes")
             if not isinstance(exhausted_lanes, list) or not all(
                 isinstance(lane, str) and lane for lane in exhausted_lanes
             ):
                 errors.append(f"{case_id}: budget degradation exhausted_lanes must be a string list")
                 bounded_quality_pass = False
+            if not isinstance(policy_limited_lanes, list) or not all(
+                isinstance(lane, str) and lane for lane in policy_limited_lanes
+            ):
+                errors.append(
+                    f"{case_id}: budget degradation policy_limited_lanes must be a string list"
+                )
+                bounded_quality_pass = False
+            if isinstance(exhausted_lanes, list) and isinstance(policy_limited_lanes, list):
+                tracked_lanes = set(required_lane_names)
+                computed_budget_limited = {
+                    lane_name
+                    for lane_name, lane in lane_entries.items()
+                    if isinstance(lane.get("budget_omitted"), int)
+                    and lane.get("budget_omitted", 0) > 0
+                }
+                computed_policy_limited = {
+                    lane_name
+                    for lane_name, lane in lane_entries.items()
+                    if isinstance(lane.get("policy_omitted"), int)
+                    and lane.get("policy_omitted", 0) > 0
+                }
+                if set(exhausted_lanes) & tracked_lanes != computed_budget_limited:
+                    errors.append(
+                        f"{case_id}: tracked exhausted lanes must match budget_omitted evidence"
+                    )
+                    bounded_quality_pass = False
+                if set(policy_limited_lanes) & tracked_lanes != computed_policy_limited:
+                    errors.append(
+                        f"{case_id}: tracked policy-limited lanes must match policy_omitted evidence"
+                    )
+                    bounded_quality_pass = False
 
         if baseline.get("available") is not True:
             errors.append(f"{case_id}: paired baseline must be available")
@@ -444,6 +515,21 @@ def validate(data: dict[str, Any]) -> list[str]:
         if capsule.get("target_symbols_included") != len(target_symbols):
             errors.append(f"{case_id}: target symbol count must match explicit evidence")
             bounded_quality_pass = False
+
+        lane_counter_bindings = {
+            "related_tests": capsule.get("related_tests_included"),
+            "target_symbols": capsule.get("target_symbols_included"),
+            "causal_relations": capsule.get("causal_relations_included"),
+            "live_ranges": capsule.get("live_ranges_included"),
+            "citations": capsule.get("citations_included"),
+        }
+        for lane_name, reported_included in lane_counter_bindings.items():
+            if lane_entries[lane_name].get("included") != reported_included:
+                errors.append(
+                    f"{case_id}: {lane_name} lane included count must match capsule counter"
+                )
+                bounded_quality_pass = False
+
         for symbol in target_symbols:
             if not isinstance(symbol, dict) or not all(
                 isinstance(symbol.get(field), str) and symbol.get(field)
@@ -541,11 +627,16 @@ def validate(data: dict[str, Any]) -> list[str]:
         if not isinstance(overlay, dict):
             errors.append(f"{case_id}: dirty_overlay must be an object")
             overlay_exclusion_pass = False
-        elif overlay.get("dirty") is True and overlay.get(
-            "included_in_revision_diff"
-        ) is not False:
-            errors.append(f"{case_id}: dirty overlay must be excluded from revision diff")
-            overlay_exclusion_pass = False
+        else:
+            if overlay.get("available") is not True:
+                errors.append(f"{case_id}: dirty overlay evidence must be available")
+                overlay_exclusion_pass = False
+            if not isinstance(overlay.get("dirty"), bool):
+                errors.append(f"{case_id}: dirty overlay state must be a boolean")
+                overlay_exclusion_pass = False
+            if overlay.get("included_in_revision_diff") is not False:
+                errors.append(f"{case_id}: dirty overlay must be excluded from revision diff")
+                overlay_exclusion_pass = False
 
         nonclaims = capsule.get("does_not_establish")
         if not isinstance(nonclaims, list) or "completeness" not in nonclaims:
@@ -621,32 +712,14 @@ def validate(data: dict[str, Any]) -> list[str]:
 
         if (
             case.get("profile") in _GOLD_PROFILES
-            and case.get("quality_pass") is True
             and computed_reduction is not None
             and computed_reduction >= 20.0
         ):
             qualifying.append(case_id)
 
-    mechanical = data.get("mechanical_promotion_gate")
-    mechanical_pass = True
-    if not isinstance(mechanical, dict):
-        errors.append("mechanical_promotion_gate must be an object")
-        mechanical_pass = False
-    else:
-        if mechanical.get("passed") is not True:
-            errors.append("mechanical compactness promotion gate must pass")
-            mechanical_pass = False
-        if mechanical.get("required_count") != 2:
-            errors.append("mechanical promotion gate must require two cases")
-            mechanical_pass = False
-        if sorted(mechanical.get("qualifying_case_ids", [])) != sorted(qualifying):
-            errors.append(
-                "mechanical promotion qualifying cases do not match recomputed measurements"
-            )
-            mechanical_pass = False
-    if len(qualifying) < 2:
+    mechanical_pass = len(qualifying) >= 2
+    if not mechanical_pass:
         errors.append("at least two gold cases must reduce context by at least 20 percent")
-        mechanical_pass = False
 
     computed_truth_requirements = {
         "fresh_exact_bundle": source_bundle_pass and freshness_pass,
@@ -658,25 +731,6 @@ def validate(data: dict[str, Any]) -> list[str]:
     }
     computed_truth_gate_pass = all(computed_truth_requirements.values())
 
-    truth_gate = data.get("truth_gate")
-    if not isinstance(truth_gate, dict):
-        errors.append("truth_gate must be an object")
-    else:
-        requirements = truth_gate.get("requirements")
-        if not isinstance(requirements, dict):
-            errors.append("truth_gate.requirements must be an object")
-        else:
-            for requirement in _REQUIRED_TRUTH_REQUIREMENTS:
-                if requirements.get(requirement) is not True:
-                    errors.append(f"truth requirement {requirement} must pass")
-                if requirements.get(requirement) != computed_truth_requirements[requirement]:
-                    errors.append(
-                        f"truth requirement {requirement} must match recomputed evidence"
-                    )
-        if truth_gate.get("passed") is not True:
-            errors.append("truth gate must pass")
-        if truth_gate.get("passed") != computed_truth_gate_pass:
-            errors.append("truth_gate.passed must match recomputed truth gate")
     if not lane_truth_pass:
         errors.append("retrieval lane truth must pass")
 
@@ -686,18 +740,15 @@ def validate(data: dict[str, Any]) -> list[str]:
         if isinstance(case, dict) and case.get("profile") == "deployment_kubernetes"
     ]
     delivery_evidence_pass = True
-    delivery = data.get("delivery_chain")
+    delivery = data.get("pilot_delivery_chain_evidence")
     if not isinstance(delivery, dict):
-        errors.append("delivery_chain must be an object")
+        errors.append("pilot_delivery_chain_evidence must be an object")
         delivery_evidence_pass = False
     elif len(deployment_cases) != 1:
         errors.append("exactly one deployment_kubernetes case is required")
         delivery_evidence_pass = False
     else:
         deployment = deployment_cases[0]
-        if delivery.get("status") != "pass_bounded":
-            errors.append("delivery chain must pass bounded evidence")
-            delivery_evidence_pass = False
         if delivery.get("case_id") != deployment.get("id"):
             errors.append("delivery chain must bind to the deployment case")
             delivery_evidence_pass = False
@@ -977,11 +1028,9 @@ def validate(data: dict[str, Any]) -> list[str]:
         (
             three_classes_pass,
             mechanical_pass,
-            len(qualifying) >= 2,
             controlled_live_pass,
             source_bundle_pass,
             measurement_worktree_pass,
-            observed_overlay_pass,
             bounded_quality_pass,
             baseline_evidence_pass,
             freshness_pass,
@@ -993,39 +1042,13 @@ def validate(data: dict[str, Any]) -> list[str]:
         )
     )
 
-    computed_acceptance = {
-        "three_classes": "pass" if three_classes_pass else "fail",
-        "paired_baseline": "pass" if baseline_evidence_pass else "fail",
-        "quality": "pass_bounded" if bounded_quality_pass else "fail",
-        "retrieval_lane_truth": "pass" if lane_truth_pass else "fail",
-        "freshness_and_diff_binding": (
-            "pass" if freshness_pass and diff_binding_pass else "fail"
-        ),
-        "delivery_chain": "pass_bounded" if delivery_evidence_pass else "blocked",
-        "promotion_gate": "pass" if computed_evidence_promotion_ready else "blocked",
-    }
-
-    acceptance = data.get("acceptance")
-    if not isinstance(acceptance, dict):
-        errors.append("acceptance must be an object")
-    else:
-        for field, expected in _REQUIRED_ACCEPTANCE.items():
-            if acceptance.get(field) != expected:
-                errors.append(f"acceptance.{field} must be {expected}")
-            if acceptance.get(field) != computed_acceptance[field]:
-                errors.append(f"acceptance.{field} must match recomputed evidence")
-
-    # Every validation error above is promotion-blocking.  The individual booleans
-    # make the decision explainable; ``not errors`` prevents logical drift where a
-    # newly-added blocking check forgets to update one of those booleans.
-    promotion_ready = computed_evidence_promotion_ready and not errors
-    if data.get("overall_status") != "pass":
-        errors.append("overall_status must be pass for the promoted bounded pilot")
     if data.get("promotion_scope") != "bounded_change_impact_context_for_agent_handoff":
         errors.append("promotion_scope must remain bounded to measured change-impact handoff")
-    if data.get("promotion_recommendation") != "promote_default":
-        errors.append("promotion recommendation must reflect the passing bounded pilot")
-    if not promotion_ready and data.get("promotion_recommendation") == "promote_default":
+
+    # Every validation error is promotion-blocking.  This final computation must stay
+    # after all checks so a newly-added validation cannot accidentally become advisory.
+    promotion_ready = computed_evidence_promotion_ready and not errors
+    if not promotion_ready:
         errors.append("default promotion cannot be claimed without all promotion gates")
 
     return errors
@@ -1047,7 +1070,10 @@ def main() -> int:
         for error in errors:
             print(f"ERROR: {error}")
         return 1
-    print("RepoGround vertical pilot evidence: valid")
+    print(
+        "RepoGround vertical pilot evidence: valid; "
+        "computed_verdict=pass; promotion_ready=true"
+    )
     return 0
 
 

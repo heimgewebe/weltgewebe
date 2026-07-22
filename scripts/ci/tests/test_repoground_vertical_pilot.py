@@ -38,21 +38,21 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         errors = self.validator.validate(mutated)
         self.assertTrue(any("critical-path coverage" in error for error in errors))
 
-    def test_forged_reduction_cannot_pass_mechanical_gate(self) -> None:
+    def test_forged_reductions_cannot_pass_computed_mechanical_gate(self) -> None:
         mutated = copy.deepcopy(self.evidence)
-        case = mutated["cases"][0]
-        case["capsule"]["context_bytes"] = case["baseline"]["payload_bytes"]
-        case["capsule"]["ratio"] = 1.0
-        case["capsule"]["reduction_pct"] = 99.0
+        for case in mutated["cases"][:2]:
+            case["capsule"]["context_bytes"] = case["baseline"]["payload_bytes"]
+            case["capsule"]["ratio"] = 1.0
+            case["capsule"]["reduction_pct"] = 99.0
         errors = self.validator.validate(mutated)
         self.assertTrue(
             any("reduction_pct must match byte accounting" in error for error in errors)
         )
-        self.assertTrue(
-            any(
-                "qualifying cases do not match recomputed measurements" in error
-                for error in errors
-            )
+        self.assertIn(
+            "at least two gold cases must reduce context by at least 20 percent", errors
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
         )
 
     def test_unavailable_or_stale_baseline_is_rejected(self) -> None:
@@ -101,7 +101,6 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         case["capsule"]["stop_criteria"]["triggered"].append("impact_context_blocked")
         errors = self.validator.validate(mutated)
         self.assertTrue(any("impact_context_blocked must be absent" in error for error in errors))
-        self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
         self.assertIn(
             "default promotion cannot be claimed without all promotion gates", errors
         )
@@ -113,12 +112,14 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         ] = True
         errors = self.validator.validate(mutated)
         self.assertTrue(any("dirty overlay must be excluded" in error for error in errors))
-        self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
 
 
     def test_empty_required_direct_paths_block_default_promotion(self) -> None:
         mutated = copy.deepcopy(self.evidence)
-        mutated["delivery_chain"]["required_direct_paths"] = []
+        mutated["pilot_delivery_chain_evidence"]["required_direct_paths"] = []
         errors = self.validator.validate(mutated)
         self.assertIn(
             "delivery chain required paths must be a non-empty subset of direct changes",
@@ -131,9 +132,11 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
 
     def test_delivery_chain_failure_blocks_default_promotion(self) -> None:
         mutated = copy.deepcopy(self.evidence)
-        mutated["delivery_chain"]["status"] = "blocked"
+        mutated["pilot_delivery_chain_evidence"]["contract_evidence"][
+            "conclusion"
+        ] = "failure"
         errors = self.validator.validate(mutated)
-        self.assertTrue(any("delivery chain must pass bounded evidence" in error for error in errors))
+        self.assertIn("delivery contract evidence must be successful", errors)
         self.assertIn(
             "default promotion cannot be claimed without all promotion gates",
             errors,
@@ -141,17 +144,17 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
 
     def test_delivery_binding_failures_block_default_promotion(self) -> None:
         mutations = {
-            "case_id": lambda data: data["delivery_chain"].update({"case_id": "wrong"}),
-            "required_direct_paths": lambda data: data["delivery_chain"].update(
+            "case_id": lambda data: data["pilot_delivery_chain_evidence"].update({"case_id": "wrong"}),
+            "required_direct_paths": lambda data: data["pilot_delivery_chain_evidence"].update(
                 {"required_direct_paths": ["not/a/direct/change"]}
             ),
-            "target_symbols_count": lambda data: data["delivery_chain"].update(
+            "target_symbols_count": lambda data: data["pilot_delivery_chain_evidence"].update(
                 {"target_symbols_included": 999}
             ),
-            "causal_relations_count": lambda data: data["delivery_chain"].update(
+            "causal_relations_count": lambda data: data["pilot_delivery_chain_evidence"].update(
                 {"causal_relations_included": 999}
             ),
-            "live_ranges_count": lambda data: data["delivery_chain"].update(
+            "live_ranges_count": lambda data: data["pilot_delivery_chain_evidence"].update(
                 {"live_ranges_included": 999}
             ),
         }
@@ -195,27 +198,27 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
     def test_delivery_evidence_omissions_block_default_promotion(self) -> None:
         mutations = {
             "contract": (
-                lambda data: data["delivery_chain"].pop("contract_evidence"),
+                lambda data: data["pilot_delivery_chain_evidence"].pop("contract_evidence"),
                 "delivery chain must bind explicit contract evidence",
             ),
             "ci": (
-                lambda data: data["delivery_chain"].pop("ci_evidence"),
+                lambda data: data["pilot_delivery_chain_evidence"].pop("ci_evidence"),
                 "delivery chain must bind explicit CI evidence",
             ),
             "deployment": (
-                lambda data: data["delivery_chain"].pop("deployment_evidence"),
+                lambda data: data["pilot_delivery_chain_evidence"].pop("deployment_evidence"),
                 "delivery chain must bind explicit deployment evidence",
             ),
             "runtime": (
-                lambda data: data["delivery_chain"].pop("runtime_proof"),
+                lambda data: data["pilot_delivery_chain_evidence"].pop("runtime_proof"),
                 "delivery chain must bind an executed runtime proof",
             ),
             "recovery": (
-                lambda data: data["delivery_chain"].pop("recovery_evidence"),
+                lambda data: data["pilot_delivery_chain_evidence"].pop("recovery_evidence"),
                 "delivery chain must bind explicit recovery evidence",
             ),
             "rollback_risks": (
-                lambda data: data["delivery_chain"].update({"rollback_risks": []}),
+                lambda data: data["pilot_delivery_chain_evidence"].update({"rollback_risks": []}),
                 "delivery chain must enumerate rollback/recovery risks",
             ),
         }
@@ -232,7 +235,7 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
 
     def test_runtime_proof_must_bind_exact_successful_live_identity(self) -> None:
         mutated = copy.deepcopy(self.evidence)
-        runtime = mutated["delivery_chain"]["runtime_proof"]
+        runtime = mutated["pilot_delivery_chain_evidence"]["runtime_proof"]
         runtime["head_sha"] = "0" * 40
         runtime["public_identity_step_conclusion"] = "failure"
         runtime["production_receipt_uploaded"] = False
@@ -248,12 +251,17 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
 
     def test_source_bundle_must_be_fresh_and_healthy(self) -> None:
         mutated = copy.deepcopy(self.evidence)
-        mutated["source_bundle"]["freshness"] = "stale"
+        mutated["source_bundle"]["freshness_evidence"]["remote_commit"] = "0" * 40
         mutated["source_bundle"]["post_emit_health"] = "fail"
         errors = self.validator.validate(mutated)
-        self.assertIn("source bundle must be fresh_exact", errors)
+        self.assertIn(
+            "source bundle freshness evidence remote_commit must equal source_bundle.git_commit",
+            errors,
+        )
         self.assertIn("source_bundle.post_emit_health must be pass", errors)
-        self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
 
     def test_source_bundle_generator_must_match_measured_repoground_runtime(self) -> None:
         mutated = copy.deepcopy(self.evidence)
@@ -303,7 +311,9 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
             any("paired baseline must contain resolved evidence" in error for error in errors)
         )
         self.assertTrue(any("baseline snippet_count must be positive" in error for error in errors))
-        self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
 
     def test_measurement_worktree_must_be_clean_or_evidence_only_dirty(self) -> None:
         mutated = copy.deepcopy(self.evidence)
@@ -332,7 +342,6 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
             "default promotion cannot be claimed without all promotion gates",
             errors,
         )
-        self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
 
     def test_every_gold_case_requires_related_test_evidence(self) -> None:
         mutated = copy.deepcopy(self.evidence)
@@ -352,28 +361,207 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         related["provenance_strength"] = "invented"
         errors = self.validator.validate(mutated)
         self.assertTrue(
-            any("every related test must identify a test-like path" in error for error in errors)
+            any("changed-test evidence must be a direct change" in error for error in errors)
         )
         self.assertTrue(
             any("changed-test evidence provenance must be direct_diff" in error for error in errors)
         )
-
-    def test_truth_gate_cannot_self_attest_over_broken_case(self) -> None:
-        mutated = copy.deepcopy(self.evidence)
-        mutated["cases"][0]["capsule"]["diff_binding_verified"] = False
-        self.assertTrue(mutated["truth_gate"]["passed"])
-        errors = self.validator.validate(mutated)
-        self.assertIn("truth_gate.passed must match recomputed truth gate", errors)
         self.assertIn(
             "default promotion cannot be claimed without all promotion gates", errors
         )
 
-    def test_acceptance_cannot_self_attest_over_broken_evidence(self) -> None:
+    def test_gold_direct_change_delivery_cannot_be_truncated(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = next(case for case in mutated["cases"] if case["profile"] == "database_auth")
+        case["capsule"]["lane_counts"]["direct_changes"]["included"] -= 1
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            f"{case['id']}: every gold case must deliver all direct changes", errors
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
+    def test_controlled_live_policy_omission_accounting_is_exact(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        live = next(case for case in mutated["cases"] if case["profile"] == "controlled_live")
+        live["capsule"]["lane_counts"]["direct_changes"]["policy_omitted"] -= 1
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            f"{live['id']}: direct_changes policy_omitted must equal available minus considered",
+            errors,
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
+    def test_policy_and_budget_omission_are_separately_accounted(self) -> None:
+        case = next(
+            case for case in self.evidence["cases"] if case["profile"] == "deployment_kubernetes"
+        )
+        causal = case["capsule"]["lane_counts"]["causal_relations"]
+        self.assertEqual(
+            causal,
+            {
+                "available": 21,
+                "considered": 8,
+                "included": 7,
+                "policy_omitted": 13,
+                "budget_omitted": 1,
+            },
+        )
+
+        mutations = {
+            "policy": (
+                lambda lane: lane.update({"policy_omitted": 12}),
+                f"{case['id']}: causal_relations policy_omitted must equal available minus considered",
+            ),
+            "budget": (
+                lambda lane: lane.update({"budget_omitted": 0}),
+                f"{case['id']}: causal_relations budget_omitted must equal considered minus included",
+            ),
+        }
+        for name, (mutate, expected) in mutations.items():
+            with self.subTest(name=name):
+                mutated = copy.deepcopy(self.evidence)
+                mutated_case = next(
+                    item for item in mutated["cases"] if item["profile"] == "deployment_kubernetes"
+                )
+                mutate(mutated_case["capsule"]["lane_counts"]["causal_relations"] )
+                errors = self.validator.validate(mutated)
+                self.assertIn(expected, errors)
+                self.assertIn(
+                    "default promotion cannot be claimed without all promotion gates", errors
+                )
+
+    def test_budget_and_policy_lane_lists_must_match_omission_evidence(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = next(
+            case for case in mutated["cases"] if case["profile"] == "deployment_kubernetes"
+        )
+        case["capsule"]["budget_degradation"]["exhausted_lanes"].remove(
+            "causal_relations"
+        )
+        case["capsule"]["budget_degradation"]["policy_limited_lanes"].remove(
+            "causal_relations"
+        )
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            f"{case['id']}: tracked exhausted lanes must match budget_omitted evidence", errors
+        )
+        self.assertIn(
+            f"{case['id']}: tracked policy-limited lanes must match policy_omitted evidence",
+            errors,
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
+    def test_pilot_delivery_evidence_cross_identity_must_match(self) -> None:
+        mutations = {
+            "contract_pr": lambda delivery: delivery["contract_evidence"].update(
+                {"pr": 1}
+            ),
+            "contract_pr_head": lambda delivery: delivery["contract_evidence"].update(
+                {"pr_head_sha": "0" * 40}
+            ),
+            "required_gate_head": lambda delivery: delivery["ci_evidence"][
+                "required_merge_gate"
+            ].update({"head_sha": "0" * 40}),
+            "contract_run_head": lambda delivery: delivery["contract_evidence"].update(
+                {"run_head_sha": "0" * 40}
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                mutated = copy.deepcopy(self.evidence)
+                mutate(mutated["pilot_delivery_chain_evidence"])
+                errors = self.validator.validate(mutated)
+                self.assertIn(
+                    "default promotion cannot be claimed without all promotion gates",
+                    errors,
+                )
+
+    def test_production_receipt_metadata_is_content_bound(self) -> None:
+        mutations = {
+            "artifact_id": lambda receipt: receipt.update({"artifact_id": 0}),
+            "artifact_name": lambda receipt: receipt.update({"artifact_name": "wrong"}),
+            "artifact_digest": lambda receipt: receipt.update({"artifact_digest": "sha256:bad"}),
+            "bound_commit": lambda receipt: receipt.update({"bound_commit": "0" * 40}),
+            "workflow_run_id": lambda receipt: receipt.update({"workflow_run_id": 1}),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                mutated = copy.deepcopy(self.evidence)
+                receipt = mutated["pilot_delivery_chain_evidence"]["runtime_proof"][
+                    "production_receipt"
+                ]
+                mutate(receipt)
+                errors = self.validator.validate(mutated)
+                self.assertIn(
+                    "default promotion cannot be claimed without all promotion gates",
+                    errors,
+                )
+
+    def test_late_scope_error_blocks_default_promotion(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["promotion_scope"] = "unbounded"
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            "promotion_scope must remain bounded to measured change-impact handoff", errors
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
+    def test_lane_included_counts_must_match_capsule_counters(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        live = next(case for case in mutated["cases"] if case["profile"] == "controlled_live")
+        live["capsule"]["lane_counts"]["target_symbols"]["included"] -= 1
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            f"{live['id']}: target_symbols lane included count must match capsule counter",
+            errors,
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
+    def test_budget_evidence_contains_no_manual_required_lane_verdict(self) -> None:
+        for case in self.evidence["cases"]:
+            self.assertNotIn("required_lane_loss", case["capsule"]["budget_degradation"])
+
+    def test_fixture_contains_no_manual_verdict_fields(self) -> None:
+        forbidden = {
+            "acceptance",
+            "mechanical_promotion_gate",
+            "truth_gate",
+            "overall_status",
+            "promotion_recommendation",
+        }
+        self.assertTrue(forbidden.isdisjoint(self.evidence))
+        for case in self.evidence["cases"]:
+            self.assertNotIn("quality_pass", case)
+        self.assertNotIn("status", self.evidence["pilot_delivery_chain_evidence"])
+        self.assertNotIn("freshness", self.evidence["source_bundle"])
+
+    def test_broken_diff_binding_blocks_computed_promotion(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["cases"][0]["capsule"]["diff_binding_verified"] = False
+        errors = self.validator.validate(mutated)
+        self.assertTrue(any("diff binding must be verified" in error for error in errors))
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
+    def test_broken_baseline_blocks_computed_promotion_without_acceptance_input(self) -> None:
         mutated = copy.deepcopy(self.evidence)
         mutated["cases"][0]["baseline"]["resolved_evidence_status"] = "degraded"
-        self.assertEqual(mutated["acceptance"]["paired_baseline"], "pass")
         errors = self.validator.validate(mutated)
-        self.assertIn("acceptance.paired_baseline must match recomputed evidence", errors)
+        self.assertTrue(any("paired baseline must contain resolved evidence" in error for error in errors))
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
 
 
 if __name__ == "__main__":
