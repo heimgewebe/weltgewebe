@@ -90,6 +90,20 @@
             "included": 3,
             "policy_omitted": 0,
             "budget_omitted": 0
+          },
+          "entry_manifest": {
+            "available": 1,
+            "considered": 1,
+            "included": 1,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "query_snippets": {
+            "available": 3,
+            "considered": 3,
+            "included": 1,
+            "policy_omitted": 0,
+            "budget_omitted": 2
           }
         },
         "live_ranges_included": 3,
@@ -304,6 +318,20 @@
             "included": 4,
             "policy_omitted": 0,
             "budget_omitted": 0
+          },
+          "entry_manifest": {
+            "available": 1,
+            "considered": 1,
+            "included": 1,
+            "policy_omitted": 0,
+            "budget_omitted": 0
+          },
+          "query_snippets": {
+            "available": 4,
+            "considered": 4,
+            "included": 2,
+            "policy_omitted": 0,
+            "budget_omitted": 2
           }
         },
         "live_ranges_included": 4,
@@ -480,6 +508,20 @@
             "budget_omitted": 2
           },
           "citations": {
+            "available": 3,
+            "considered": 3,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 3
+          },
+          "entry_manifest": {
+            "available": 1,
+            "considered": 1,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 1
+          },
+          "query_snippets": {
             "available": 3,
             "considered": 3,
             "included": 0,
@@ -955,6 +997,20 @@
             "included": 2,
             "policy_omitted": 0,
             "budget_omitted": 3
+          },
+          "entry_manifest": {
+            "available": 1,
+            "considered": 1,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 1
+          },
+          "query_snippets": {
+            "available": 5,
+            "considered": 5,
+            "included": 0,
+            "policy_omitted": 0,
+            "budget_omitted": 5
           }
         },
         "retrieval_lanes": {
@@ -1156,7 +1212,8 @@
       "contention_no_effects": true,
       "contention_exit_code": 75,
       "atomic_install": true,
-      "timer_state_preserved": true
+      "timer_state_preserved": true,
+      "documentation_range_sha256": "460ea84cd60b2907f7264706d439f3aabee56a0dbc368f09b711214cb33e6535"
     },
     "rollback_risks": [
       {

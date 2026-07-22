@@ -816,6 +816,71 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
             "default promotion cannot be claimed without all promotion gates", errors
         )
 
+    def test_recovery_documentation_range_is_bound_to_historical_content(self) -> None:
+        mutations = {
+            "impossible_range": lambda recovery: recovery.update(
+                {"documentation_range": "file:docs/deploy/merge-to-live.md#L99999-L100000"}
+            ),
+            "wrong_digest": lambda recovery: recovery.update(
+                {"documentation_range_sha256": "0" * 64}
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                mutated = copy.deepcopy(self.evidence)
+                recovery = mutated["pilot_delivery_chain_evidence"]["recovery_evidence"]
+                mutate(recovery)
+                errors = self.validator.validate(mutated)
+                self.assertIn(
+                    "default promotion cannot be claimed without all promotion gates", errors
+                )
+
+    def test_entry_manifest_and_query_snippet_exhaustion_are_recomputed(self) -> None:
+        for lane_name in ("entry_manifest", "query_snippets"):
+            with self.subTest(lane=lane_name):
+                mutated = copy.deepcopy(self.evidence)
+                case = next(
+                    case
+                    for case in mutated["cases"]
+                    if case["profile"] == "deployment_kubernetes"
+                )
+                case["capsule"]["budget_degradation"]["exhausted_lanes"].remove(
+                    lane_name
+                )
+                errors = self.validator.validate(mutated)
+                self.assertIn(
+                    f"{case['id']}: tracked exhausted lanes must match budget_omitted evidence",
+                    errors,
+                )
+                self.assertIn(
+                    "default promotion cannot be claimed without all promotion gates", errors
+                )
+
+    def test_controlled_live_must_demonstrate_real_direct_truncation(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = next(
+            case for case in mutated["cases"] if case["profile"] == "controlled_live"
+        )
+        lane = case["capsule"]["lane_counts"]["direct_changes"]
+        lane["considered"] = lane["available"]
+        lane["included"] = lane["available"]
+        lane["policy_omitted"] = 0
+        lane["budget_omitted"] = 0
+        case["capsule"]["budget_degradation"]["policy_limited_lanes"].remove(
+            "direct_changes"
+        )
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            f"{case['id']}: controlled live must demonstrate incomplete direct-change delivery",
+            errors,
+        )
+        self.assertIn(
+            f"{case['id']}: controlled live must contain a real direct-change omission", errors
+        )
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates", errors
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

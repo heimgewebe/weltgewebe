@@ -49,6 +49,9 @@ _RETRIEVAL_LANES = frozenset(
     }
 )
 _DEPLOYMENT_CONTRACT_TEST_PATH = "scripts/ci/tests/test_production_reconciler_contract.py"
+_RECOVERY_DOCUMENTATION_PATH = "docs/deploy/merge-to-live.md"
+_RECOVERY_DOCUMENTATION_START_LINE = 162
+_RECOVERY_DOCUMENTATION_END_LINE = 171
 _MEASUREMENT_EVIDENCE_PATHS = {
     "docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md",
     "scripts/ci/fixtures/repoground_vertical_pilot.v1.json",
@@ -132,6 +135,34 @@ def _git_tree_delta_v1(base_commit: str, target_commit: str) -> tuple[tuple[str,
     )
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
     return tuple(item["path"] for item in changes), digest
+
+
+@lru_cache(maxsize=32)
+def _git_file_range_sha256(
+    commit: str, path: str, start_line: int, end_line: int
+) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(ROOT), "show", f"{commit}:{path}"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=10,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or str(completed.returncode)
+        raise ValueError(f"Git show failed: {detail}")
+    lines = completed.stdout.splitlines()
+    if (
+        start_line <= 0
+        or end_line < start_line
+        or end_line > len(lines)
+    ):
+        raise ValueError(
+            f"range L{start_line}-L{end_line} exceeds {path} at {commit}"
+        )
+    selected = "\n".join(lines[start_line - 1 : end_line]) + "\n"
+    return hashlib.sha256(selected.encode("utf-8")).hexdigest()
 
 
 def validate(data: dict[str, Any]) -> list[str]:
@@ -434,6 +465,8 @@ def validate(data: dict[str, Any]) -> list[str]:
             "causal_relations",
             "live_ranges",
             "citations",
+            "entry_manifest",
+            "query_snippets",
         )
         lane_entries: dict[str, dict[str, Any]] = {}
         for lane_name in required_lane_names:
@@ -524,6 +557,24 @@ def validate(data: dict[str, Any]) -> list[str]:
             ):
                 errors.append(
                     f"{case_id}: controlled live direct-change omission accounting must be exact"
+                )
+                controlled_live_pass = False
+            if (
+                isinstance(available_direct, int)
+                and isinstance(included_direct, int)
+                and included_direct >= available_direct
+            ):
+                errors.append(
+                    f"{case_id}: controlled live must demonstrate incomplete direct-change delivery"
+                )
+                controlled_live_pass = False
+            if (
+                isinstance(policy_omitted, int)
+                and isinstance(budget_omitted, int)
+                and policy_omitted + budget_omitted <= 0
+            ):
+                errors.append(
+                    f"{case_id}: controlled live must contain a real direct-change omission"
                 )
                 controlled_live_pass = False
             if (
@@ -1241,8 +1292,12 @@ def validate(data: dict[str, Any]) -> list[str]:
             delivery_evidence_pass = False
         else:
             expected_recovery = {
-                "documentation_path": "docs/deploy/merge-to-live.md",
-                "contract_test_path": "scripts/ci/tests/test_production_reconciler_contract.py",
+                "documentation_path": _RECOVERY_DOCUMENTATION_PATH,
+                "documentation_range": (
+                    f"file:{_RECOVERY_DOCUMENTATION_PATH}"
+                    f"#L{_RECOVERY_DOCUMENTATION_START_LINE}-L{_RECOVERY_DOCUMENTATION_END_LINE}"
+                ),
+                "contract_test_path": _DEPLOYMENT_CONTRACT_TEST_PATH,
                 "atomic_install_test": "test_installer_deferred_update_is_atomic_and_non_recursive",
                 "direct_recovery_supported": True,
                 "contention_no_effects": True,
@@ -1254,11 +1309,30 @@ def validate(data: dict[str, Any]) -> list[str]:
                 if recovery.get(field) != expected_value:
                     errors.append(f"delivery recovery evidence {field} must be {expected_value!r}")
                     delivery_evidence_pass = False
-            if not isinstance(recovery.get("documentation_range"), str) or not recovery.get(
-                "documentation_range", ""
-            ).startswith("file:docs/deploy/merge-to-live.md#L"):
-                errors.append("delivery recovery evidence must bind a documentation range")
+            range_digest = recovery.get("documentation_range_sha256")
+            if not _is_sha(range_digest, _SHA64):
+                errors.append("delivery recovery documentation range SHA must be a SHA-256")
                 delivery_evidence_pass = False
+            deployment_target = deployment.get("target_commit")
+            if _is_sha(deployment_target, _SHA40) and _is_sha(range_digest, _SHA64):
+                try:
+                    computed_range_digest = _git_file_range_sha256(
+                        deployment_target,
+                        _RECOVERY_DOCUMENTATION_PATH,
+                        _RECOVERY_DOCUMENTATION_START_LINE,
+                        _RECOVERY_DOCUMENTATION_END_LINE,
+                    )
+                except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                    errors.append(
+                        f"delivery recovery documentation range recomputation failed: {exc}"
+                    )
+                    delivery_evidence_pass = False
+                else:
+                    if range_digest != computed_range_digest:
+                        errors.append(
+                            "delivery recovery documentation range SHA must match historical deployment content"
+                        )
+                        delivery_evidence_pass = False
 
         rollback_risks = delivery.get("rollback_risks")
         if not isinstance(rollback_risks, list) or len(rollback_risks) < 4:
