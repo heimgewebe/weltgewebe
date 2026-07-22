@@ -1,3 +1,6 @@
+DROP TRIGGER IF EXISTS federation_event_receipts_immutable_direction ON federation_event_receipts;
+DROP FUNCTION IF EXISTS federation_reject_event_receipt_direction_change();
+
 DROP TRIGGER IF EXISTS federation_outbox_event_receipt_direction ON federation_outbox;
 DROP TRIGGER IF EXISTS federation_inbox_event_receipt_direction ON federation_inbox;
 DROP FUNCTION IF EXISTS federation_validate_event_receipt_direction();
