@@ -1,6 +1,15 @@
 (app_common) {
 	encode zstd gzip
 
+	# The API exposes metrics on its internal service port 8080. Do not expose
+	# operational metrics through the public application edge.
+	handle /api/metrics {
+		respond 404
+	}
+	handle /api/metrics/* {
+		respond 404
+	}
+
 	handle_path /api/* {
 		reverse_proxy api:8080 {
 			# Caddy owns the client-IP chain. Never pass a public client's
@@ -100,6 +109,15 @@
 
 (api_common) {
 	encode zstd gzip
+
+	# The public API hostname is not a Prometheus scrape target.
+	handle /metrics {
+		respond 404
+	}
+	handle /metrics/* {
+		respond 404
+	}
+
 	handle /health/proxy {
 		respond 200
 	}
@@ -122,6 +140,13 @@
 http://weltgewebe.net, http://www.weltgewebe.net {
 	handle /health/proxy {
 		respond 200
+	}
+
+	handle /api/metrics {
+		respond 404
+	}
+	handle /api/metrics/* {
+		respond 404
 	}
 
 	handle_path /api/* {
