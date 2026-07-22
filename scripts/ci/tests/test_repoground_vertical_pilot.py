@@ -38,20 +38,6 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         errors = self.validator.validate(mutated)
         self.assertTrue(any("critical-path coverage" in error for error in errors))
 
-    def test_default_promotion_cannot_be_claimed_while_delivery_chain_is_blocked(self) -> None:
-        mutated = copy.deepcopy(self.evidence)
-        mutated["promotion_recommendation"] = "promote_default"
-        errors = self.validator.validate(mutated)
-        self.assertIn("default promotion must remain withheld", errors)
-
-    def test_call_graph_blocker_requires_real_size_overrun(self) -> None:
-        mutated = copy.deepcopy(self.evidence)
-        blocker = mutated["call_graph_blocker"]
-        blocker["artifact_bytes"] = blocker["readonly_adapter_max_bytes"]
-        blocker["over_limit_bytes"] = 0
-        errors = self.validator.validate(mutated)
-        self.assertTrue(any("above the safe adapter limit" in error for error in errors))
-
     def test_forged_reduction_cannot_pass_mechanical_gate(self) -> None:
         mutated = copy.deepcopy(self.evidence)
         case = mutated["cases"][0]
@@ -59,16 +45,158 @@ class RepoGroundVerticalPilotTests(unittest.TestCase):
         case["capsule"]["ratio"] = 1.0
         case["capsule"]["reduction_pct"] = 99.0
         errors = self.validator.validate(mutated)
-        self.assertTrue(any("reduction_pct must match byte accounting" in error for error in errors))
-        self.assertTrue(any("qualifying cases do not match recomputed measurements" in error for error in errors))
+        self.assertTrue(
+            any("reduction_pct must match byte accounting" in error for error in errors)
+        )
+        self.assertTrue(
+            any(
+                "qualifying cases do not match recomputed measurements" in error
+                for error in errors
+            )
+        )
 
-    def test_unavailable_baseline_or_capsule_is_rejected(self) -> None:
+    def test_unavailable_or_stale_baseline_is_rejected(self) -> None:
         mutated = copy.deepcopy(self.evidence)
         mutated["cases"][0]["baseline"]["available"] = False
-        mutated["cases"][1]["capsule"]["available"] = False
+        mutated["cases"][1]["baseline"]["freshness_status"] = "stale"
         errors = self.validator.validate(mutated)
         self.assertTrue(any("paired baseline must be available" in error for error in errors))
-        self.assertTrue(any("capsule must be available" in error for error in errors))
+        self.assertTrue(any("paired baseline must be fresh" in error for error in errors))
+
+    def test_false_call_graph_use_without_consumed_evidence_is_rejected(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = next(
+            case for case in mutated["cases"] if case["profile"] == "database_auth"
+        )
+        case["capsule"]["retrieval_lanes"]["skipped"].remove("call_graph")
+        case["capsule"]["retrieval_lanes"]["used"].append("call_graph")
+        errors = self.validator.validate(mutated)
+        self.assertTrue(
+            any(
+                "call_graph must be skipped without coherent consumed evidence" in error
+                for error in errors
+            )
+        )
+
+    def test_consumed_call_graph_evidence_must_claim_used_lane(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = next(
+            case
+            for case in mutated["cases"]
+            if case["profile"] == "deployment_kubernetes"
+        )
+        case["capsule"]["retrieval_lanes"]["used"].remove("call_graph")
+        case["capsule"]["retrieval_lanes"]["skipped"].append("call_graph")
+        errors = self.validator.validate(mutated)
+        self.assertTrue(
+            any(
+                "call_graph must be used only when coherent evidence is consumed" in error
+                for error in errors
+            )
+        )
+
+    def test_impact_context_blocked_cannot_pass_truth_gate(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = mutated["cases"][0]
+        case["capsule"]["stop_criteria"]["triggered"].append("impact_context_blocked")
+        errors = self.validator.validate(mutated)
+        self.assertTrue(any("impact_context_blocked must be absent" in error for error in errors))
+
+    def test_dirty_overlay_must_not_enter_revision_diff(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["cases"][0]["capsule"]["dirty_overlay"][
+            "included_in_revision_diff"
+        ] = True
+        errors = self.validator.validate(mutated)
+        self.assertTrue(any("dirty overlay must be excluded" in error for error in errors))
+
+    def test_delivery_chain_failure_blocks_default_promotion(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["delivery_chain"]["status"] = "blocked"
+        errors = self.validator.validate(mutated)
+        self.assertTrue(any("delivery chain must pass bounded evidence" in error for error in errors))
+        self.assertIn(
+            "default promotion cannot be claimed without all promotion gates",
+            errors,
+        )
+
+    def test_source_bundle_must_be_fresh_and_healthy(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["source_bundle"]["freshness"] = "stale"
+        mutated["source_bundle"]["post_emit_health"] = "fail"
+        errors = self.validator.validate(mutated)
+        self.assertIn("source bundle must be fresh_exact", errors)
+        self.assertIn("source_bundle.post_emit_health must be pass", errors)
+
+    def test_source_bundle_generator_must_match_measured_repoground_runtime(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["source_bundle"]["generator_runtime_commit"] = "0" * 40
+        errors = self.validator.validate(mutated)
+        self.assertIn(
+            "source_bundle.generator_runtime_commit must match repoground_runtime_commit",
+            errors,
+        )
+
+    def test_consumed_call_graph_needs_explicit_relation_provenance(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = next(
+            case
+            for case in mutated["cases"]
+            if case["profile"] == "deployment_kubernetes"
+        )
+        case["capsule"]["representative_causal_relations"] = []
+        errors = self.validator.validate(mutated)
+        self.assertTrue(
+            any(
+                "consumed call graph needs explicit coherent relation provenance" in error
+                for error in errors
+            )
+        )
+
+    def test_target_symbol_count_must_match_explicit_evidence(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = next(
+            case
+            for case in mutated["cases"]
+            if case["profile"] == "deployment_kubernetes"
+        )
+        case["capsule"]["target_symbols"] = case["capsule"]["target_symbols"][:-1]
+        errors = self.validator.validate(mutated)
+        self.assertTrue(
+            any("target symbol count must match explicit evidence" in error for error in errors)
+        )
+
+    def test_empty_or_unresolved_baseline_evidence_is_rejected(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        baseline = mutated["cases"][1]["baseline"]
+        baseline["resolved_evidence_status"] = "degraded"
+        baseline["snippet_count"] = 0
+        errors = self.validator.validate(mutated)
+        self.assertTrue(
+            any("paired baseline must contain resolved evidence" in error for error in errors)
+        )
+        self.assertTrue(any("baseline snippet_count must be positive" in error for error in errors))
+
+    def test_measurement_worktree_must_be_evidence_only_dirty(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        mutated["measurement_worktree"]["dirty_scope"] = "mixed"
+        mutated["measurement_worktree"]["dirty_paths"].append("apps/api/src/lib.rs")
+        errors = self.validator.validate(mutated)
+        self.assertIn("measurement worktree dirty scope must be evidence_only", errors)
+        self.assertIn(
+            "measurement worktree dirty paths must equal the four evidence files",
+            errors,
+        )
+
+    def test_every_gold_case_requires_related_test_evidence(self) -> None:
+        mutated = copy.deepcopy(self.evidence)
+        case = mutated["cases"][0]
+        case["capsule"]["related_tests"] = []
+        case["capsule"]["related_tests_included"] = 0
+        errors = self.validator.validate(mutated)
+        self.assertTrue(
+            any("bounded pilot must include at least one related test" in error for error in errors)
+        )
 
 
 if __name__ == "__main__":
