@@ -132,6 +132,7 @@ impl Metrics {
         let candidate_buckets = vec![
             1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 750.0, 1000.0, 1001.0,
         ];
+        let lexical_candidate_buckets = vec![0.0, 1.0, 2.0, 5.0, 10.0];
         let search_request_duration_seconds = Histogram::with_opts(
             HistogramOpts::new(
                 "search_request_duration_seconds",
@@ -165,7 +166,7 @@ impl Metrics {
                 "search_lexical_candidates",
                 "Lexical candidates in the authoritative top-ten prefix per search request",
             )
-            .buckets(candidate_buckets),
+            .buckets(lexical_candidate_buckets),
         )?;
 
         let registry = Registry::new();
