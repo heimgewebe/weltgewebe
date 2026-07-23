@@ -433,7 +433,7 @@ mod tests {
     }
 
     #[test]
-    fn search_cost_metrics_are_label_free_and_record_bounded_observations() {
+    fn search_cost_metrics_use_bounded_non_user_controlled_labels_and_record_observations() {
         let metrics = test_metrics();
         metrics.search_request_outcome(SearchRequestOutcome::Hybrid);
         metrics.search_candidate_set_overflow();
