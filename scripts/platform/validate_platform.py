@@ -407,9 +407,27 @@ def _assert_ha_contract() -> None:
         "ha_reference.py down",
         '--cluster "$CLUSTER_NAME"',
         '--commit "$(git rev-parse HEAD)"',
+        '--owner-id "$PROOF_OWNER_ID"',
     ):
         if marker not in cleanup_command:
             raise ContractError(f"HA workflow cleanup lacks {marker}")
+
+    kind_steps = workflow["jobs"]["kind-gitops-proof"]["steps"]
+    kind_cleanup = next(
+        (item for item in kind_steps if item.get("name") == "Reconcile owned kind proof resources"),
+        None,
+    )
+    if kind_cleanup is None or kind_cleanup.get("if") != "always()":
+        raise ContractError("kind workflow lacks unconditional owned-resource reconciliation")
+    kind_cleanup_command = kind_cleanup.get("run", "")
+    for marker in (
+        "kind_reference.py down",
+        '--cluster "$CLUSTER_NAME"',
+        '--commit "$(git rev-parse HEAD)"',
+        '--owner-id "$PROOF_OWNER_ID"',
+    ):
+        if marker not in kind_cleanup_command:
+            raise ContractError(f"kind workflow cleanup lacks {marker}")
 
 
 def _assert_compose_parity() -> None:
@@ -446,7 +464,18 @@ def _run(command: list[str], *, input_text: str | None = None) -> subprocess.Com
 
 def _render_and_validate() -> dict[str, int]:
     receipt = json.loads(
-        _run([sys.executable, "scripts/platform/bootstrap_tools.py", "--json"]).stdout
+        _run(
+            [
+                sys.executable,
+                "scripts/platform/bootstrap_tools.py",
+                "--json",
+                "--tool",
+                "kustomize",
+                "--tool",
+                "kubeconform",
+                "--skip-artifacts",
+            ]
+        ).stdout
     )
     kustomize = receipt["tools"]["kustomize"]
     kubeconform = receipt["tools"]["kubeconform"]

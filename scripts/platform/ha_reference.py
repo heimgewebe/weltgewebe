@@ -65,14 +65,25 @@ def wait_until(description: str, probe, *, timeout_seconds: int = 600, interval:
     raise ref.ProofError(f"timed out waiting for {description}; last={last!r}")
 
 
-def create_kind_cluster(kind: str, name: str, image: str, config: str, commit: str) -> None:
-    ref.assert_available_cluster_name(kind, name)
-    ref.write_marker(name, commit)
+def create_kind_cluster(
+    kind: str,
+    name: str,
+    image: str,
+    config: str,
+    commit: str,
+    owner_id: str,
+) -> None:
+    ref.reserve_cluster_name(kind, name, commit, owner_id)
     try:
         ref.run([kind, "create", "cluster", "--name", name, "--image", image, "--config", config], timeout=900)
         ref.configure_cluster_access(kind, name)
     except Exception:
-        ref.delete_owned_cluster(kind, name)
+        ref.delete_owned_cluster(
+            kind,
+            name,
+            expected_commit=commit,
+            expected_owner_id=owner_id,
+        )
         raise
 
 
@@ -2087,6 +2098,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         )
     )
     restore_name = f"{args.cluster}-restore"
+    owner_id = args.owner_id or ref.generate_owner_id("ha-proof")
     ref.assert_available_cluster_name(kind, args.cluster)
     ref.assert_available_cluster_name(kind, restore_name)
     created_primary = created_restore = object_store_created = False
@@ -2095,7 +2107,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     app_password = secrets.token_urlsafe(24)
     s3_secret_key = secrets.token_urlsafe(32)
     try:
-        create_kind_cluster(kind, args.cluster, receipt["kubernetes"]["kind_node_image"], "platform/clusters/ha/kind.yaml", commit)
+        create_kind_cluster(
+            kind, args.cluster, receipt["kubernetes"]["kind_node_image"],
+            "platform/clusters/ha/kind.yaml", commit, owner_id
+        )
         created_primary = True
         kubectl = require_active_cluster_context(kind, kubectl, args.cluster)
         image_ids = ref.build_images(kind, args.cluster, commit, timestamp)
@@ -2240,7 +2255,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             kubectl, cluster="postgres-ha"
         )
 
-        create_kind_cluster(kind, restore_name, receipt["kubernetes"]["kind_node_image"], "platform/clusters/ha/restore-kind.yaml", commit)
+        create_kind_cluster(
+            kind, restore_name, receipt["kubernetes"]["kind_node_image"],
+            "platform/clusters/ha/restore-kind.yaml", commit, owner_id
+        )
         created_restore = True
         restore_kubectl = require_active_cluster_context(
             kind, kubectl, restore_name
@@ -2361,6 +2379,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             },
             "change_management": change_management,
             "gateway_before": gateway_before,
+            "proof_owner_id": owner_id,
             "production_changed": False,
             "does_not_establish": [
                 "production rollout", "managed multi-region object-store durability",
@@ -2391,9 +2410,13 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         if stopped_node:
             subprocess.run(["docker", "start", stopped_node], capture_output=True)
         if created_restore and not args.keep:
-            ref.delete_owned_cluster(kind, restore_name)
+            ref.delete_owned_cluster(
+                kind, restore_name, expected_commit=commit, expected_owner_id=owner_id
+            )
         if created_primary and not args.keep:
-            ref.delete_owned_cluster(kind, args.cluster)
+            ref.delete_owned_cluster(
+                kind, args.cluster, expected_commit=commit, expected_owner_id=owner_id
+            )
         if object_store_created and not args.keep:
             delete_external_object_store(args.cluster, commit)
 
@@ -2404,9 +2427,11 @@ def argument_parser() -> argparse.ArgumentParser:
     proof_parser = sub.add_parser("proof")
     proof_parser.add_argument("--cluster", default=DEFAULT_CLUSTER)
     proof_parser.add_argument("--keep", action="store_true")
+    proof_parser.add_argument("--owner-id")
     down = sub.add_parser("down")
     down.add_argument("--cluster", default=DEFAULT_CLUSTER)
     down.add_argument("--commit", required=True)
+    down.add_argument("--owner-id", required=True)
     return parser
 
 
@@ -2417,8 +2442,9 @@ def main() -> int:
         if args.command == "down":
             kind = receipt["tools"]["kind"]
             for name in (f"{args.cluster}-restore", args.cluster):
-                if ref.marker_path(name).exists():
-                    ref.delete_owned_cluster(kind, name)
+                ref.delete_owned_cluster_if_present(
+                    kind, name, expected_commit=args.commit, expected_owner_id=args.owner_id
+                )
             delete_external_object_store(args.cluster, args.commit)
             print(json.dumps({"status": "deleted", "cluster": args.cluster}))
             return 0

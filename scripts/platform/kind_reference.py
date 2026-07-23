@@ -2,15 +2,18 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import ipaddress
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -81,7 +84,25 @@ def control_plane_address(cluster: str) -> str:
 
 
 def tool_receipt() -> dict[str, Any]:
-    raw = output([sys.executable, "scripts/platform/bootstrap_tools.py", "--json"])
+    raw = output(
+        [
+            sys.executable,
+            "scripts/platform/bootstrap_tools.py",
+            "--json",
+            "--tool",
+            "kind",
+            "--tool",
+            "kubectl",
+            "--tool",
+            "kustomize",
+            "--tool",
+            "flux",
+            "--tool",
+            "helm",
+            "--tool",
+            "kubectl_cnpg",
+        ]
+    )
     return json.loads(raw)
 
 
@@ -96,8 +117,79 @@ def marker_path(name: str) -> Path:
     return MARKERS / f"{name}.json"
 
 
+def ownership_lock_path(name: str) -> Path:
+    return MARKERS / f".{name}.ownership.lock"
+
+
 def kubeconfig_path(name: str) -> Path:
     return KUBECONFIGS / f"{name}.yaml"
+
+
+def generate_owner_id(prefix: str) -> str:
+    return f"{prefix}-{os.getpid()}-{secrets.token_hex(8)}"
+
+
+def _validate_ownership_binding(commit: str, owner_id: str) -> None:
+    if not FULL_GIT_OBJECT_ID.fullmatch(commit):
+        raise ProofError("cluster ownership requires a full lowercase Git object id")
+    if (
+        not owner_id
+        or len(owner_id) > 128
+        or re.fullmatch(r"[A-Za-z0-9._:@-]+", owner_id) is None
+    ):
+        raise ProofError("cluster ownership requires a stable owner id")
+
+
+@contextmanager
+def cluster_ownership_lock(name: str):
+    MARKERS.mkdir(parents=True, exist_ok=True)
+    path = ownership_lock_path(name)
+    with path.open("a+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _read_marker(name: str) -> dict[str, Any]:
+    marker = marker_path(name)
+    if marker.is_symlink() or not marker.is_file():
+        raise ProofError(f"cluster {name!r} has no regular ownership marker")
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ProofError(f"cluster {name!r} ownership marker is unreadable: {error}") from error
+    if not isinstance(data, dict):
+        raise ProofError(f"cluster {name!r} ownership marker is not an object")
+    return data
+
+
+def _require_marker_binding(
+    data: dict[str, Any],
+    name: str,
+    *,
+    expected_commit: str,
+    expected_owner_id: str,
+) -> None:
+    _validate_ownership_binding(expected_commit, expected_owner_id)
+    expected = {
+        "schema_version": 2,
+        "cluster": name,
+        "repository": str(ROOT),
+        "commit": expected_commit,
+        "owner_id": expected_owner_id,
+    }
+    mismatched = {
+        key: {"expected": value, "observed": data.get(key)}
+        for key, value in expected.items()
+        if data.get(key) != value
+    }
+    if mismatched:
+        raise ProofError(
+            f"cluster {name!r} ownership marker does not match exact owner binding: "
+            f"{json.dumps(mismatched, sort_keys=True)}"
+        )
 
 
 def configure_cluster_access(kind: str, name: str) -> Path:
@@ -108,15 +200,23 @@ def configure_cluster_access(kind: str, name: str) -> Path:
     return path
 
 
-def require_owned_cluster(kind: str, name: str) -> dict[str, Any]:
-    marker = marker_path(name)
-    if name not in clusters(kind):
-        raise ProofError(f"owned cluster {name!r} is absent")
-    if not marker.is_file():
-        raise ProofError(f"cluster {name!r} has no ownership marker")
-    data = json.loads(marker.read_text(encoding="utf-8"))
-    if data.get("cluster") != name or data.get("repository") != str(ROOT):
-        raise ProofError(f"cluster {name!r} ownership marker does not match")
+def require_owned_cluster(
+    kind: str,
+    name: str,
+    *,
+    expected_commit: str,
+    expected_owner_id: str,
+) -> dict[str, Any]:
+    with cluster_ownership_lock(name):
+        if name not in clusters(kind):
+            raise ProofError(f"owned cluster {name!r} is absent")
+        data = _read_marker(name)
+        _require_marker_binding(
+            data,
+            name,
+            expected_commit=expected_commit,
+            expected_owner_id=expected_owner_id,
+        )
     configure_cluster_access(kind, name)
     return data
 
@@ -127,47 +227,93 @@ def clusters(kind: str) -> set[str]:
 
 
 def assert_available_cluster_name(kind: str, name: str) -> None:
-    existing = clusters(kind)
-    marker = marker_path(name)
-    if name in existing:
-        raise ProofError(
-            f"cluster {name!r} already exists; it is never adopted or deleted by this proof"
-        )
-    if marker.exists():
-        marker.unlink()
+    with cluster_ownership_lock(name):
+        if name in clusters(kind):
+            raise ProofError(
+                f"cluster {name!r} already exists; it is never adopted or deleted by this proof"
+            )
+        if os.path.lexists(marker_path(name)):
+            raise ProofError(
+                f"cluster {name!r} has a stale ownership marker; "
+                "explicit exact-owner cleanup is required"
+            )
 
 
-def write_marker(name: str, commit: str) -> None:
+def write_marker(name: str, commit: str, owner_id: str) -> None:
+    _validate_ownership_binding(commit, owner_id)
     MARKERS.mkdir(parents=True, exist_ok=True)
-    marker_path(name).write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "cluster": name,
-                "repository": str(ROOT),
-                "commit": commit,
-                "pid": os.getpid(),
-            },
-            indent=2,
-            sort_keys=True,
+    payload = {
+        "schema_version": 2,
+        "cluster": name,
+        "repository": str(ROOT),
+        "commit": commit,
+        "owner_id": owner_id,
+        "pid": os.getpid(),
+    }
+    try:
+        with marker_path(name).open("x", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+    except FileExistsError as error:
+        raise ProofError(f"cluster {name!r} ownership marker already exists") from error
+
+
+def reserve_cluster_name(kind: str, name: str, commit: str, owner_id: str) -> None:
+    _validate_ownership_binding(commit, owner_id)
+    with cluster_ownership_lock(name):
+        if name in clusters(kind):
+            raise ProofError(
+                f"cluster {name!r} already exists; it is never adopted or deleted by this proof"
+            )
+        if os.path.lexists(marker_path(name)):
+            raise ProofError(
+                f"cluster {name!r} has a stale ownership marker; "
+                "explicit exact-owner cleanup is required"
+            )
+        write_marker(name, commit, owner_id)
+
+
+def delete_owned_cluster(
+    kind: str,
+    name: str,
+    *,
+    expected_commit: str,
+    expected_owner_id: str,
+) -> None:
+    with cluster_ownership_lock(name):
+        data = _read_marker(name)
+        _require_marker_binding(
+            data,
+            name,
+            expected_commit=expected_commit,
+            expected_owner_id=expected_owner_id,
         )
-        + "\n",
-        encoding="utf-8",
-    )
+        if name in clusters(kind):
+            run([kind, "delete", "cluster", "--name", name])
+        marker_path(name).unlink()
+        kubeconfig_path(name).unlink(missing_ok=True)
 
 
-def delete_owned_cluster(kind: str, name: str) -> None:
-    marker = marker_path(name)
-    if not marker.is_file():
-        raise ProofError(f"refusing to delete unowned cluster {name!r}: marker missing")
-    data = json.loads(marker.read_text(encoding="utf-8"))
-    if data.get("cluster") != name or data.get("repository") != str(ROOT):
-        raise ProofError(f"refusing to delete cluster {name!r}: marker mismatch")
+def delete_owned_cluster_if_present(
+    kind: str,
+    name: str,
+    *,
+    expected_commit: str,
+    expected_owner_id: str,
+) -> bool:
+    if os.path.lexists(marker_path(name)):
+        delete_owned_cluster(
+            kind,
+            name,
+            expected_commit=expected_commit,
+            expected_owner_id=expected_owner_id,
+        )
+        return True
     if name in clusters(kind):
-        run([kind, "delete", "cluster", "--name", name])
-    marker.unlink(missing_ok=True)
-    kubeconfig_path(name).unlink(missing_ok=True)
-
+        raise ProofError(
+            f"refusing to delete cluster {name!r}: cluster exists without ownership marker"
+        )
+    return False
 
 def apply_yaml(kubectl: str, document: dict[str, Any] | list[dict[str, Any]]) -> None:
     documents = document if isinstance(document, list) else [document]
@@ -882,8 +1028,10 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
     kustomize = tools["kustomize"]
     flux = tools["flux"]
     helm = tools["helm"]
-    assert_available_cluster_name(kind, args.cluster)
+    owner_id = args.owner_id or generate_owner_id("kind-proof")
+    reserve_cluster_name(kind, args.cluster, commit, owner_id)
     app_namespace = "weltgewebe"
+    reserved = True
     created = False
     try:
         run(
@@ -900,7 +1048,6 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
             ],
             timeout=600,
         )
-        write_marker(args.cluster, commit)
         configure_cluster_access(kind, args.cluster)
         api_server_host = control_plane_address(args.cluster)
         created = True
@@ -934,6 +1081,7 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
             "source_ref": args.source_ref,
             "source_commit": args.source_commit,
             "commit": commit,
+            "owner_id": owner_id,
             "tool_lock_sha256": receipt["lock_sha256"],
             "image_ids": image_ids,
             "bootstrap_api_server": {"host": api_server_host, "port": 6443},
@@ -956,8 +1104,13 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
             diagnostic_snapshot(kubectl, args.cluster)
         raise
     finally:
-        if created and not args.keep:
-            delete_owned_cluster(kind, args.cluster)
+        if reserved and not args.keep:
+            delete_owned_cluster(
+                kind,
+                args.cluster,
+                expected_commit=commit,
+                expected_owner_id=owner_id,
+            )
 
 
 def argument_parser() -> argparse.ArgumentParser:
@@ -970,8 +1123,11 @@ def argument_parser() -> argparse.ArgumentParser:
     source_group.add_argument("--source-ref")
     source_group.add_argument("--source-commit")
     proof_parser.add_argument("--keep", action="store_true")
+    proof_parser.add_argument("--owner-id")
     down_parser = subparsers.add_parser("down")
     down_parser.add_argument("--cluster", default=DEFAULT_CLUSTER)
+    down_parser.add_argument("--commit", required=True)
+    down_parser.add_argument("--owner-id", required=True)
     return parser
 
 
@@ -980,8 +1136,18 @@ def main() -> int:
     try:
         receipt = tool_receipt()
         if args.command == "down":
-            delete_owned_cluster(receipt["tools"]["kind"], args.cluster)
-            print(json.dumps({"status": "deleted", "cluster": args.cluster}))
+            deleted = delete_owned_cluster_if_present(
+                receipt["tools"]["kind"],
+                args.cluster,
+                expected_commit=args.commit,
+                expected_owner_id=args.owner_id,
+            )
+            print(json.dumps({
+                "status": "deleted" if deleted else "absent",
+                "cluster": args.cluster,
+                "commit": args.commit,
+                "owner_id": args.owner_id,
+            }, sort_keys=True))
             return 0
         result = proof(args)
     except (ProofError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:

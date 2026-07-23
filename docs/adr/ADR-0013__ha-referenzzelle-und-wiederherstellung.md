@@ -1,6 +1,6 @@
 ---
-id: adr.ADR-0011__ha-referenzzelle-und-wiederherstellung
-title: ADR-0011 — Hochverfügbare Referenzzelle und Wiederherstellungsbeweis
+id: adr.ADR-0013__ha-referenzzelle-und-wiederherstellung
+title: ADR-0013 — Hochverfügbare Referenzzelle und Wiederherstellungsbeweis
 doc_type: reference
 status: active
 summary: >
@@ -12,7 +12,7 @@ relations:
     target: docs/runbooks/kubernetes-ha-recovery-proof.md
 ---
 
-# ADR-0011 — Hochverfügbare Referenzzelle und Wiederherstellungsbeweis
+# ADR-0013 — Hochverfügbare Referenzzelle und Wiederherstellungsbeweis
 
 Datum: 2026-07-17
 Status: Accepted

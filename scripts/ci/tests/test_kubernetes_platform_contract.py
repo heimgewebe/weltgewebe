@@ -40,6 +40,17 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             ROOT / "scripts/platform/bootstrap_tools.py",
         )
 
+    def test_tool_bootstrap_selection_is_exact_and_deduplicated(self) -> None:
+        lock = {"tools": {"kustomize": {"version": "x"}, "trivy": {"version": "y"}}}
+        selected = self.bootstrap._selected_tool_specs(lock, ["trivy", "trivy"])
+        self.assertEqual(selected, {"trivy": {"version": "y"}})
+        with self.assertRaisesRegex(RuntimeError, "unknown tool selection"):
+            self.bootstrap._selected_tool_specs(lock, ["missing"])
+
+    def test_kind_reference_requests_ha_required_kubectl_cnpg_tool(self) -> None:
+        source = (ROOT / "scripts/platform/kind_reference.py").read_text(encoding="utf-8")
+        self.assertIn('"kubectl_cnpg"', source)
+
     def test_static_platform_contract_passes(self) -> None:
         result = self.validator.validate(render=False)
         self.assertEqual(result["status"], "pass")
@@ -117,6 +128,8 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 "$CLUSTER_NAME",
                 "--mode",
                 "direct",
+                "--owner-id",
+                "$PROOF_OWNER_ID",
             ],
         )
         self.assertEqual(
@@ -131,6 +144,8 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 "gitops",
                 "--source-commit",
                 "$GITHUB_SHA",
+                "--owner-id",
+                "$PROOF_OWNER_ID",
             ],
         )
         self.assertNotIn("SOURCE_REF:", workflow_text)
@@ -335,8 +350,70 @@ spec:
             original = self.reference.MARKERS
             self.reference.MARKERS = Path(tmp)
             try:
-                with self.assertRaisesRegex(self.reference.ProofError, "marker missing"):
-                    self.reference.delete_owned_cluster("kind", "foreign")
+                with self.assertRaisesRegex(self.reference.ProofError, "regular ownership marker"):
+                    self.reference.delete_owned_cluster(
+                        "kind",
+                        "foreign",
+                        expected_commit="a" * 40,
+                        expected_owner_id="owner-proof",
+                    )
+            finally:
+                self.reference.MARKERS = original
+
+    def test_reference_never_silently_removes_stale_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            original = self.reference.MARKERS
+            self.reference.MARKERS = Path(tmp)
+            try:
+                marker = self.reference.marker_path("stale")
+                marker.write_text("{}\n", encoding="utf-8")
+                with mock.patch.object(self.reference, "clusters", return_value=set()):
+                    with self.assertRaisesRegex(self.reference.ProofError, "stale ownership marker"):
+                        self.reference.assert_available_cluster_name("kind", "stale")
+                self.assertTrue(marker.is_file())
+            finally:
+                self.reference.MARKERS = original
+
+    def test_reference_refuses_cleanup_for_wrong_commit_or_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            original = self.reference.MARKERS
+            self.reference.MARKERS = Path(tmp)
+            try:
+                self.reference.write_marker("proof", "a" * 40, "owner-a")
+                with mock.patch.object(self.reference, "clusters", return_value=set()):
+                    with self.assertRaisesRegex(self.reference.ProofError, "exact owner binding"):
+                        self.reference.delete_owned_cluster(
+                            "kind",
+                            "proof",
+                            expected_commit="b" * 40,
+                            expected_owner_id="owner-a",
+                        )
+                    with self.assertRaisesRegex(self.reference.ProofError, "exact owner binding"):
+                        self.reference.delete_owned_cluster(
+                            "kind",
+                            "proof",
+                            expected_commit="a" * 40,
+                            expected_owner_id="owner-b",
+                        )
+                self.assertTrue(self.reference.marker_path("proof").is_file())
+            finally:
+                self.reference.MARKERS = original
+
+    def test_reference_reservation_records_exact_owner_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            original = self.reference.MARKERS
+            self.reference.MARKERS = Path(tmp)
+            try:
+                with mock.patch.object(self.reference, "clusters", return_value=set()):
+                    self.reference.reserve_cluster_name(
+                        "kind", "proof", "a" * 40, "owner-proof"
+                    )
+                marker = json.loads(
+                    self.reference.marker_path("proof").read_text(encoding="utf-8")
+                )
+                self.assertEqual(marker["schema_version"], 2)
+                self.assertEqual(marker["commit"], "a" * 40)
+                self.assertEqual(marker["owner_id"], "owner-proof")
             finally:
                 self.reference.MARKERS = original
 
