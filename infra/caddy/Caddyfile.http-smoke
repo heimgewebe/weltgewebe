@@ -3,6 +3,11 @@
 # Pre-cutover Host-header smoke only.
 
 http://weltgewebe.net {
+	header {
+		Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
+		X-Content-Type-Options "nosniff"
+	}
+
 	handle /health/proxy {
 		respond 200
 	}

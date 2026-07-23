@@ -50,6 +50,16 @@ use tracing_subscriber::{fmt, EnvFilter};
 /// pool by each waiting for a second connection.
 pub(crate) const DATABASE_POOL_MAX_CONNECTIONS: u32 = 5;
 
+fn configured_session_lifetime() -> anyhow::Result<crate::auth::session::SessionLifetime> {
+    crate::auth::session::SessionLifetime::from_env().map_err(|error| {
+        anyhow!(
+            "invalid {}: {}",
+            crate::auth::session::SESSION_TTL_ENV,
+            error
+        )
+    })
+}
+
 pub async fn run() -> anyhow::Result<()> {
     // Load `.env` *before* initialising tracing so a `RUST_LOG` defined there is
     // visible to `EnvFilter::try_from_default_env()` inside `init_tracing`. The
@@ -87,6 +97,8 @@ pub async fn run() -> anyhow::Result<()> {
         tracing::info!("startup migrations completed in migration-only mode; exiting before runtime initialization");
         return Ok(());
     }
+
+    let session_lifetime = configured_session_lifetime()?;
 
     let (nats_client, nats_configured) = initialise_nats_client().await;
     let federation_router = federation::runtime_router(db_pool.clone())
@@ -170,9 +182,12 @@ pub async fn run() -> anyhow::Result<()> {
     let sessions = match (db_pool_configured, db_pool.as_ref()) {
         (true, Some(pool)) => {
             tracing::info!("Session store backed by PostgreSQL database");
-            crate::auth::session::SessionBackend::new(crate::auth::session_db::DbSessionStore::new(
-                pool.clone(),
-            ))
+            crate::auth::session::SessionBackend::new(
+                crate::auth::session_db::DbSessionStore::with_lifetime(
+                    pool.clone(),
+                    session_lifetime,
+                ),
+            )
         }
         (true, None) => {
             return Err(anyhow!(
@@ -181,7 +196,7 @@ pub async fn run() -> anyhow::Result<()> {
         }
         (false, _) => {
             tracing::info!("Session store in-memory (database not configured)");
-            crate::auth::session::SessionBackend::new_in_memory()
+            crate::auth::session::SessionBackend::new_in_memory_with_lifetime(session_lifetime)
         }
     };
     let (challenges, tokens, step_up_tokens) = match db_pool.as_ref() {
@@ -714,12 +729,23 @@ async fn initialise_nats_client() -> (Option<NatsClient>, bool) {
 #[cfg(test)]
 mod tests {
     use super::{
-        initialise_database_pool, migration_only_requested, record_applied_startup_migration,
-        validate_applied_startup_migrations, validate_migration_only_request,
-        AppliedStartupMigration, StartupMigrationMode,
+        configured_session_lifetime, initialise_database_pool, migration_only_requested,
+        record_applied_startup_migration, validate_applied_startup_migrations,
+        validate_migration_only_request, AppliedStartupMigration, StartupMigrationMode,
     };
     use crate::test_helpers::EnvGuard;
     use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn invalid_session_ttl_is_a_controlled_startup_configuration_error() {
+        let _guard = EnvGuard::set("AUTH_SESSION_TTL_SECONDS", "not-a-number");
+        let error = configured_session_lifetime()
+            .expect_err("invalid session TTL must fail startup configuration");
+        let message = error.to_string();
+        assert!(message.contains("invalid AUTH_SESSION_TTL_SECONDS"));
+        assert!(message.contains("must be an integer number of seconds"));
+    }
 
     #[tokio::test]
     #[serial]

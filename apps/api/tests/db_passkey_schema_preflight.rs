@@ -32,6 +32,8 @@
 //! - NOT proven here: the home-server runtime schema state, the controlled
 //!   runtime application of this migration, and any production cutover.
 
+mod support;
+
 use std::str::FromStr;
 
 use sqlx::migrate::MigrationType;
@@ -62,7 +64,7 @@ fn direct_database_url() -> String {
         !url.contains(":6432"),
         "DATABASE_URL must target direct PostgreSQL, not PgBouncer (port 6432)"
     );
-    url
+    support::postgres_proof::validated_direct_disposable_url(url)
 }
 
 /// Connects a fresh pool per async test runtime and applies the embedded

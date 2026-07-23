@@ -1,21 +1,29 @@
 ---
 content_security_policy:
-  default-src: "'self'"
-  img-src: "'self' data: blob:"
-  script-src: "'self' 'unsafe-inline'"
+  script-src: "'self' plus build-generated sha256 hashes"
+  script_delivery: sveltekit_prerender_meta
+  script_mode: hash
   style-src: "'self' 'unsafe-inline'"
   connect-src:
     - "'self'"
+  img-src: "'self' data: blob:"
   worker-src: "'self' blob:"
+  font-src: "'self'"
+  media-src: "'self'"
+  manifest-src: "'self'"
+  child-src: "'self'"
+  frame-src: "'self'"
   object-src: "'none'"
+  base-uri: "'self'"
+  form-action: "'self'"
+  frame-ancestors: "'none'"
 csp_exceptions:
-  - directive: "script-src 'unsafe-inline'"
+  - directive: "style-src 'unsafe-inline'"
     status: accepted_residual_risk
     reason: >
-      The current static Svelte build contract still permits inline bootstrap
-      script execution. Removal requires a proven static build without inline
-      scripts. scripts/preflight/csp_contract_static.sh and
-      scripts/guard/security-headers-guard.sh keep this exception explicit.
+      Svelte transitions can create runtime inline style elements. Script execution
+      does not share this exception: prerendered SvelteKit bootstrap scripts are
+      bound to build-generated sha256 hashes in the document CSP meta tag.
 allowed_origins:
   - https://weltgewebe.net
   - https://www.weltgewebe.net
@@ -29,5 +37,6 @@ effective_caddy_contract:
     - infra/caddy/Caddyfile.heim
     - infra/caddy/Caddyfile.prod
   static_app_caddyfiles:
+    - infra/caddy/Caddyfile
     - infra/caddy/Caddyfile.vps
     - infra/caddy/Caddyfile.heim

@@ -16,6 +16,8 @@
 //! - DATABASE_URL must point to direct PostgreSQL (not PgBouncer at :6432).
 //! - Use --test-threads=1 to avoid row-level conflicts between parallel tests.
 
+mod support;
+
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::{path::PathBuf, str::FromStr};
 use weltgewebe_api::domain_db::NewDomainAccountRow;
@@ -29,7 +31,7 @@ fn direct_database_url() -> String {
         !url.contains(":6432"),
         "DATABASE_URL must target direct PostgreSQL, not PgBouncer (port 6432)"
     );
-    url
+    support::postgres_proof::validated_direct_disposable_url(url)
 }
 
 async fn connect_pool() -> sqlx::PgPool {

@@ -32,6 +32,8 @@
 //! - Production `SessionStore` wiring (no `DbSessionStore` in this PR).
 //! - PgBouncer compatibility (see `sqlx_pgbouncer_session_crud.rs` for that path).
 
+mod support;
+
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::Row;
 use std::str::FromStr;
@@ -236,6 +238,7 @@ async fn sqlx_postgres_direct_session_crud() {
              -- point it at direct PostgreSQL (port 5432), e.g. \
              postgres://welt:gewebe@localhost:5432/weltgewebe_proof",
         );
+    support::postgres_proof::assert_direct_disposable_database_url(&direct_url);
 
     // Guard: reject any URL that targets PgBouncer port 6432.
     assert_not_pgbouncer_url(&direct_url);

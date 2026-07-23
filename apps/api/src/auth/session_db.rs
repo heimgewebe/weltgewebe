@@ -2,9 +2,7 @@ use async_trait::async_trait;
 use sqlx::{postgres::PgRow, PgPool, Row};
 use uuid::Uuid;
 
-use super::session::{
-    Session, SessionBackendError, SessionLifetime, SessionOps, SessionResult, SESSION_TTL_ENV,
-};
+use super::session::{Session, SessionBackendError, SessionLifetime, SessionOps, SessionResult};
 
 // Trusted static SQL fragment shared by the session queries below. It must
 // never contain configuration or request data; all external values remain
@@ -29,10 +27,12 @@ pub struct DbSessionStore {
 }
 
 impl DbSessionStore {
+    /// Build a database-backed store with `SessionLifetime::default()`. This
+    /// constructor is deterministic and does not read runtime environment; the
+    /// application composition root injects validated configuration through
+    /// `with_lifetime`.
     pub fn new(pool: PgPool) -> Self {
-        let lifetime = SessionLifetime::from_env()
-            .unwrap_or_else(|error| panic!("invalid {}: {}", SESSION_TTL_ENV, error));
-        Self::with_lifetime(pool, lifetime)
+        Self::with_lifetime(pool, SessionLifetime::default())
     }
 
     pub fn with_lifetime(pool: PgPool, lifetime: SessionLifetime) -> Self {
