@@ -160,7 +160,9 @@
     margin-top: 0;
   }
   .similar-error {
-    color: #a33;
+    color: var(--text);
+    border-left: 3px solid color-mix(in srgb, #a33 70%, var(--text));
+    padding-left: 0.6rem;
   }
   ul {
     list-style: none;
