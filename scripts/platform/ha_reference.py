@@ -1335,10 +1335,14 @@ def projection_sample_url(node: str, url: str, marker: str) -> dict[str, Any]:
     except json.JSONDecodeError as error:
         sample["json_error"] = str(error)
         return sample
+    if not isinstance(payload, list):
+        sample["response_items"] = None
+        sample["response_shape"] = type(payload).__name__
+        return sample
     sample["available"] = any(
         isinstance(item, dict) and item.get("id") == marker for item in payload
     )
-    sample["response_items"] = len(payload) if isinstance(payload, list) else None
+    sample["response_items"] = len(payload)
     return sample
 
 
