@@ -113,7 +113,7 @@ load_t003_connection() {
   local tmp_file
   local -a values=()
   tmp_file="$(mktemp)"
-  if ! python3 - "$PG_DIRECT_URL" > "$tmp_file" << 'PY'
+  if ! python3 - "$PG_DIRECT_URL" > "$tmp_file" << 'PY'; then
 import sys
 from urllib.parse import unquote, urlsplit
 url=urlsplit(sys.argv[1])
@@ -130,7 +130,7 @@ for value in values:
     sys.stdout.write(value)
     sys.stdout.write('\0')
 PY
-  then
+
     rm -f "$tmp_file"
     return 1
   fi
