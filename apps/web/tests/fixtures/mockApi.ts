@@ -97,6 +97,19 @@ export async function mockApiResponses(
     const url = route.request().url();
     const method = route.request().method();
 
+    if (new URL(url).pathname === "/api/search" && method === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: [],
+          mode: "hybrid",
+          generation_id: "mock-search-generation",
+          offset: 0,
+        }),
+      });
+    }
+
     if (url.endsWith("/api/nodes") && method === "POST") {
       if (!isAuthenticated || !currentAccountId) {
         return route.fulfill({ status: 401 });

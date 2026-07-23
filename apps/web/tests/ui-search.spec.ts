@@ -24,6 +24,37 @@ test.describe("Search mode", () => {
       });
     });
 
+    await page.route("**/api/search**", async (route) => {
+      const query =
+        new URL(route.request().url()).searchParams
+          .get("q")
+          ?.toLocaleLowerCase("de-DE") ?? "";
+      const matches =
+        query.includes("strick") || query === "a"
+          ? [
+              {
+                id: "mock-node-1",
+                title: "Abendliches Stricken",
+                summary: "Wir stricken gemeinsam",
+                kind: "Treffen",
+                location: { lat: 51, lon: 10 },
+                modules: [],
+                created_at: new Date().toISOString(),
+              },
+            ]
+          : [];
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: matches,
+          mode: "hybrid",
+          generation_id: "mock-search-generation",
+          offset: 0,
+        }),
+      });
+    });
+
     await page.route("**/api/node/mock-node-1", async (route) => {
       await route.fulfill({
         status: 200,
@@ -254,6 +285,18 @@ test.describe("Search mode", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify(manyNodes),
+      });
+    });
+    await page.route("**/api/search**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: manyNodes,
+          mode: "hybrid",
+          generation_id: "mock-search-generation",
+          offset: 0,
+        }),
       });
     });
 

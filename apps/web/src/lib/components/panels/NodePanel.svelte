@@ -13,6 +13,7 @@
   } from "$lib/panels/panelDetails";
   import { formatDate } from "$lib/utils/formatDate";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
+  import type { MapEntityViewModel } from "$lib/map/types";
   import NodeConversation from "./NodeConversation.svelte";
 
   type DomainChanged = {
@@ -22,7 +23,11 @@
   };
 
   const dispatch = createEventDispatcher<{
-    selectRelated: { type: "garnrolle"; id: string };
+    selectRelated: {
+      type: "node" | "garnrolle";
+      id: string;
+      data?: MapEntityViewModel;
+    };
     domainChanged: DomainChanged;
   }>();
 
@@ -45,6 +50,10 @@
   let formLon = "";
   let formTags = "";
   let conflictNode: NodeDetails | null = null;
+  let SimilarNodesComponent:
+    | typeof import("./SimilarNodes.svelte").default
+    | null = null;
+  let similarNodesLoadStarted = false;
 
   interface NodeDetails {
     id: string;
@@ -95,6 +104,16 @@
     ($authStore.role === "weber" ||
       $authStore.role === "admin" ||
       (!!nodeCreator && nodeCreator === $authStore.account_id));
+
+  async function ensureSimilarNodesComponent() {
+    if (similarNodesLoadStarted) return;
+    similarNodesLoadStarted = true;
+    SimilarNodesComponent = (await import("./SimilarNodes.svelte")).default;
+  }
+
+  $: if ($selection?.type === "node" && !similarNodesLoadStarted) {
+    void ensureSimilarNodesComponent();
+  }
 
   $: tabs = canMutate
     ? ["uebersicht", "gespraech", "verlauf", "bearbeiten"]
@@ -474,6 +493,18 @@
                     </li>{/each}
                 </ul>
               </div>
+            {/if}
+            {#if SimilarNodesComponent}
+              <svelte:component
+                this={SimilarNodesComponent}
+                sourceId={nodeDetails?.id || $selection?.id || ""}
+                title={nodeDetails?.title || $selection?.data?.title}
+                kind={nodeDetails?.kind || $selection?.data?.kind}
+                summary={nodeDetails?.summary || $selection?.data?.summary}
+                info={nodeDetails?.info || $selection?.data?.info}
+                tags={nodeDetails?.tags || $selection?.data?.tags}
+                on:select={(event) => dispatch("selectRelated", event.detail)}
+              />
             {/if}
           {/if}
         </div>

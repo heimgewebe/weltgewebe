@@ -14,13 +14,18 @@
     Selection,
     SystemState,
   } from "$lib/stores/uiView";
+  import type { MapEntityViewModel } from "$lib/map/types";
 
   import NodePanel from "./panels/NodePanel.svelte";
   import AccountPanel from "./panels/AccountPanel.svelte";
   import EdgePanel from "./panels/EdgePanel.svelte";
   import KompositionPanel from "./panels/KompositionPanel.svelte";
 
-  type RelatedSelection = { type: "node" | "garnrolle"; id: string };
+  type RelatedSelection = {
+    type: "node" | "garnrolle";
+    id: string;
+    data?: MapEntityViewModel;
+  };
   type DomainChanged = {
     kind: "node";
     id: string;

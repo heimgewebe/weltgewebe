@@ -8,9 +8,13 @@
   import { contextPanelOpen } from "$lib/stores/uiView";
   import { activeFilters } from "$lib/stores/filterStore";
   import type { MapEntityViewModel } from "$lib/map/types";
+  import type { NodeSearchStatus } from "$lib/api/search";
   import { restoreTarget } from "$lib/utils/focusManager";
 
   export let filteredResults: MapEntityViewModel[] = [];
+  export let searchStatus: NodeSearchStatus = "idle";
+  export let searchMode: string | null = null;
+  export let searchFallbackReason: string | null = null;
   const dispatch = createEventDispatcher<{ select: MapEntityViewModel }>();
   let inputEl: HTMLInputElement;
   let listEl: HTMLUListElement;
@@ -109,6 +113,7 @@
     role="dialog"
     aria-label="Finden"
     aria-modal="false"
+    aria-busy={searchStatus === "loading"}
   >
     <div class="search-box">
       <span class="search-icon" aria-hidden="true">⌕</span>
@@ -137,6 +142,23 @@
     </div>
 
     {#if $searchQuery.trim().length > 0}
+      {#if searchStatus === "loading"}
+        <div class="search-status" role="status" aria-live="polite">
+          Knoten werden sicher auf dem Server gesucht…
+        </div>
+      {/if}
+      {#if searchStatus === "error"}
+        <div class="search-error" role="status" aria-live="polite">
+          Die sichere Knotensuche ist gerade nicht verfügbar. Es wird nicht auf
+          eine lokale Knotensuche zurückgefallen.
+        </div>
+      {/if}
+      {#if searchMode === "lexical_fallback" || searchFallbackReason === "provider_unavailable"}
+        <div class="search-note" role="status">
+          Die semantische Ergänzung ist vorübergehend nicht verfügbar. Die
+          serverseitige lexikalische Suche bleibt aktiv.
+        </div>
+      {/if}
       {#if visibleResults.length > 0}
         <div class="result-meta" aria-live="polite">
           {#if $activeFilters.size > 0}
@@ -197,7 +219,7 @@
               : `Alle ${filteredResults.length} Vorschläge zeigen`}</button
           >
         {/if}
-      {:else}
+      {:else if searchStatus !== "loading" && searchStatus !== "error"}
         <div class="no-results" role="status">
           Keine Treffer für „{$searchQuery}“
         </div>
@@ -266,6 +288,24 @@
     padding: 0.35rem 0.45rem 0.15rem;
     color: var(--muted);
     font-size: 0.78rem;
+  }
+  .search-status,
+  .search-error,
+  .search-note {
+    margin: 0.4rem 0.35rem 0;
+    padding: 0.55rem 0.65rem;
+    border-radius: 9px;
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+  .search-status,
+  .search-note {
+    background: var(--accent-soft);
+    color: var(--muted);
+  }
+  .search-error {
+    border: 1px solid color-mix(in srgb, #a33 55%, transparent);
+    color: var(--text);
   }
   .results {
     list-style: none;
