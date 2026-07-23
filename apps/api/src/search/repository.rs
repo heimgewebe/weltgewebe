@@ -7,6 +7,18 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Row};
 
+pub const MAX_AUTHORIZED_CANDIDATES: usize = 1000;
+
+#[derive(Debug, thiserror::Error)]
+pub enum SearchRepositoryError {
+    #[error("authorized search candidate set exceeds T004 maximum")]
+    CandidateSetTooLarge,
+    #[error(transparent)]
+    Database(#[from] sqlx::Error),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+}
+
 use crate::{
     middleware::auth::AuthContext,
     routes::nodes::{Location, Node},
@@ -50,7 +62,7 @@ pub async fn fetch_postgres_candidates(
     query: &str,
     filters: &SearchFilters,
     auth: &AuthContext,
-) -> anyhow::Result<Option<SearchCandidateSet>> {
+) -> Result<Option<SearchCandidateSet>, SearchRepositoryError> {
     let generation_row = sqlx::query(
         "SELECT generation_id, provider, model_id, model_revision, runtime_identity, dimension, \
                 document_revision, normalization_revision, ranking_revision \
@@ -96,17 +108,8 @@ pub async fn fetch_postgres_candidates(
             SELECT count(*)::INTEGER AS term_count FROM query_terms
         ), authorized AS (
             SELECT p.node_id, p.title, p.tags, p.searchable_text, p.language, p.kind,
-                   p.embedding, n.created_at, n.updated_at, n.lat, n.lon, n.payload::text AS payload,
-                   setweight(to_tsvector('german'::regconfig, coalesce(p.title, '')), 'A') ||
-                   setweight(to_tsvector('german'::regconfig, coalesce(array_to_string(p.tags, ' '), '')), 'B') ||
-                   setweight(to_tsvector('german'::regconfig, coalesce(p.searchable_text, '')), 'C') ||
-                   setweight(to_tsvector('simple'::regconfig, coalesce(p.kind, '') || ' ' || coalesce(p.language, '')), 'D')
-                       AS search_vector,
-                   setweight(to_tsvector('simple'::regconfig, coalesce(p.title, '')), 'A') ||
-                   setweight(to_tsvector('simple'::regconfig, coalesce(array_to_string(p.tags, ' '), '')), 'B') ||
-                   setweight(to_tsvector('simple'::regconfig, coalesce(p.searchable_text, '')), 'C') ||
-                   setweight(to_tsvector('simple'::regconfig, coalesce(p.kind, '') || ' ' || coalesce(p.language, '')), 'D')
-                       AS search_vector_simple
+                   p.embedding, p.search_vector, p.search_vector_simple,
+                   n.created_at, n.updated_at, n.lat, n.lon, n.payload::text AS payload
               FROM search_node_projections p
               JOIN search_node_versions v
                 ON v.node_id = p.node_id
@@ -203,6 +206,7 @@ pub async fn fetch_postgres_candidates(
          ORDER BY lexical_top.rank_class ASC NULLS LAST,
                   lexical_top.rank_score DESC NULLS LAST,
                   scored.node_id ASC
+         LIMIT $9
         "#,
     )
     .bind(&generation.generation_id)
@@ -213,8 +217,13 @@ pub async fn fetch_postgres_candidates(
     .bind(&filters.tags)
     .bind(&filters.languages)
     .bind(generation.dimension)
+    .bind((MAX_AUTHORIZED_CANDIDATES + 1) as i64)
     .fetch_all(pool)
     .await?;
+
+    if rows.len() > MAX_AUTHORIZED_CANDIDATES {
+        return Err(SearchRepositoryError::CandidateSetTooLarge);
+    }
 
     let mut candidates = Vec::with_capacity(rows.len());
     for row in rows {

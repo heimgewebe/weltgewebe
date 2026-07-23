@@ -13,7 +13,8 @@ use crate::{
 /// GET /search
 ///
 /// Authorization comes from the request's canonical AuthContext and is applied
-/// against PostgreSQL domain state before retrieval.
+/// against PostgreSQL domain state before retrieval. T006 v1 returns a bounded
+/// top-10 ranking and deliberately does not claim offset pagination.
 pub async fn search_nodes(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,

@@ -51,6 +51,7 @@ use self::{
 pub fn api_router() -> Router<ApiState> {
     let router = Router::new()
         .route("/search", get(search_nodes))
+        // Compatibility alias for node-oriented clients; `/search` is canonical.
         .route("/nodes/search", get(search_nodes))
         .route(
             "/nodes",

@@ -16,7 +16,9 @@ use crate::{
             rank_hybrid, SearchQuery, DEFAULT_SEMANTIC_MINIMUM_COSINE,
             DEFAULT_SEMANTIC_MINIMUM_MARGIN,
         },
-        repository::{fetch_postgres_candidates, ActiveSearchGeneration, SearchFilters},
+        repository::{
+            fetch_postgres_candidates, ActiveSearchGeneration, SearchFilters, SearchRepositoryError,
+        },
         worker::{
             EmbeddingProvider, EmbeddingProviderError, GenerationSpec, OllamaEmbeddingProvider,
             DOCUMENT_REVISION, NORMALIZATION_REVISION, RANKING_REVISION,
@@ -26,8 +28,8 @@ use crate::{
 };
 
 const DEFAULT_LIMIT: usize = 10;
-const MAX_LIMIT: usize = 100;
-const MAX_OFFSET: usize = 10_000;
+const MAX_LIMIT: usize = 10;
+const MAX_OFFSET: usize = 0;
 const MAX_QUERY_CHARS: usize = 512;
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -39,7 +41,9 @@ pub struct SearchQueryParams {
     pub tags: Option<String>,
     pub language: Option<String>,
     pub languages: Option<String>,
+    /// Bounded T003/T004 result size; T006 v1 accepts values from 1 through 10.
     pub limit: Option<usize>,
+    /// Reserved for a future measured pagination contract; T006 v1 accepts only 0.
     pub offset: Option<usize>,
 }
 
@@ -102,10 +106,22 @@ fn parse_list(single: &Option<String>, multiple: &Option<String>) -> Vec<String>
     values
 }
 
+fn validated_query(params: &SearchQueryParams) -> Result<SearchQuery, SearchError> {
+    let raw_q = params.q.as_deref().unwrap_or("").trim();
+    if raw_q.is_empty() || raw_q.chars().count() > MAX_QUERY_CHARS {
+        return Err(SearchError::InvalidRequest);
+    }
+    let query = SearchQuery::new(raw_q);
+    if query.normalized.is_empty() {
+        return Err(SearchError::InvalidRequest);
+    }
+    Ok(query)
+}
+
 fn pagination(params: &SearchQueryParams) -> Result<(usize, usize), SearchError> {
-    let limit = params.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
+    let limit = params.limit.unwrap_or(DEFAULT_LIMIT);
     let offset = params.offset.unwrap_or(0);
-    if offset > MAX_OFFSET {
+    if !(1..=MAX_LIMIT).contains(&limit) || offset > MAX_OFFSET {
         return Err(SearchError::InvalidRequest);
     }
     Ok((limit, offset))
@@ -163,15 +179,7 @@ pub async fn execute_search(
     }
     let pool = state.db_pool.as_ref().ok_or(SearchError::Unavailable)?;
 
-    let raw_q = params.q.as_deref().unwrap_or("").trim();
-    if raw_q.is_empty() || raw_q.chars().count() > MAX_QUERY_CHARS {
-        return Err(SearchError::InvalidRequest);
-    }
-    let query = SearchQuery::new(raw_q);
-    if query.normalized.is_empty() {
-        return Err(SearchError::InvalidRequest);
-    }
-
+    let query = validated_query(&params)?;
     let (limit, offset) = pagination(&params)?;
     let filters = SearchFilters {
         kinds: parse_list(&params.kind, &params.kinds),
@@ -179,10 +187,19 @@ pub async fn execute_search(
         languages: parse_list(&params.language, &params.languages),
     };
 
-    let candidate_set = fetch_postgres_candidates(pool, &query.raw, &filters, auth)
-        .await
-        .map_err(|_| SearchError::Internal)?
-        .ok_or(SearchError::Unavailable)?;
+    let candidate_set = match fetch_postgres_candidates(pool, &query.raw, &filters, auth).await {
+        Ok(Some(candidate_set)) => candidate_set,
+        Ok(None) => return Err(SearchError::Unavailable),
+        Err(SearchRepositoryError::CandidateSetTooLarge) => {
+            state
+                .metrics
+                .search_projection_outcome("candidate_set_too_large");
+            return Err(SearchError::Unavailable);
+        }
+        Err(SearchRepositoryError::Database(_)) | Err(SearchRepositoryError::Json(_)) => {
+            return Err(SearchError::Internal);
+        }
+    };
     validate_generation(&candidate_set.generation)?;
 
     let lexical_ranked = candidate_set
@@ -250,29 +267,78 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pagination_defaults_clamps_limit_and_rejects_excessive_offset() {
+    fn pagination_is_a_bounded_top_ten_contract_without_offset_pages() {
         assert_eq!(pagination(&SearchQueryParams::default()).unwrap(), (10, 0));
 
-        let low = SearchQueryParams {
-            limit: Some(0),
+        let exact = SearchQueryParams {
+            limit: Some(MAX_LIMIT),
+            offset: Some(0),
             ..Default::default()
         };
-        assert_eq!(pagination(&low).unwrap(), (1, 0));
+        assert_eq!(pagination(&exact).unwrap(), (MAX_LIMIT, 0));
 
-        let high = SearchQueryParams {
-            limit: Some(MAX_LIMIT + 1),
-            offset: Some(MAX_OFFSET),
-            ..Default::default()
-        };
-        assert_eq!(pagination(&high).unwrap(), (MAX_LIMIT, MAX_OFFSET));
+        for invalid in [
+            SearchQueryParams {
+                limit: Some(0),
+                ..Default::default()
+            },
+            SearchQueryParams {
+                limit: Some(MAX_LIMIT + 1),
+                ..Default::default()
+            },
+            SearchQueryParams {
+                offset: Some(1),
+                ..Default::default()
+            },
+        ] {
+            assert!(matches!(
+                pagination(&invalid),
+                Err(SearchError::InvalidRequest)
+            ));
+        }
+    }
 
-        let excessive = SearchQueryParams {
-            offset: Some(MAX_OFFSET + 1),
+    #[test]
+    fn query_validation_rejects_empty_and_overlong_input() {
+        for q in [None, Some("".to_string()), Some("   ".to_string())] {
+            let params = SearchQueryParams {
+                q,
+                ..Default::default()
+            };
+            assert!(matches!(
+                validated_query(&params),
+                Err(SearchError::InvalidRequest)
+            ));
+        }
+
+        let overlong = SearchQueryParams {
+            q: Some("x".repeat(MAX_QUERY_CHARS + 1)),
             ..Default::default()
         };
         assert!(matches!(
-            pagination(&excessive),
+            validated_query(&overlong),
             Err(SearchError::InvalidRequest)
         ));
+
+        let valid = SearchQueryParams {
+            q: Some("  Fahrrad Hilfe  ".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(validated_query(&valid).unwrap().raw, "Fahrrad Hilfe");
+    }
+
+    #[test]
+    fn list_filters_merge_deduplicate_and_sort_single_and_plural_forms() {
+        assert_eq!(
+            parse_list(
+                &Some("Werkstatt, Treffpunkt".to_string()),
+                &Some("Treffpunkt,Bibliothek".to_string())
+            ),
+            vec![
+                "Bibliothek".to_string(),
+                "Treffpunkt".to_string(),
+                "Werkstatt".to_string()
+            ]
+        );
     }
 }

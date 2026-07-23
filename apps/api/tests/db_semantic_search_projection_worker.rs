@@ -28,7 +28,8 @@ use weltgewebe_api::{
     search::{
         execute_search, fetch_postgres_candidates, EmbeddingProvider, EmbeddingProviderError,
         GenerationSpec, ProcessOutcome, ProjectionWorker, SearchError, SearchFilters,
-        SearchQueryParams, DOCUMENT_REVISION, NORMALIZATION_REVISION, RANKING_REVISION,
+        SearchQueryParams, SearchRepositoryError, DOCUMENT_REVISION, MAX_AUTHORIZED_CANDIDATES,
+        NORMALIZATION_REVISION, RANKING_REVISION,
     },
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
@@ -62,7 +63,7 @@ async fn migrate(pool: &PgPool) {
 async fn reset_search_state(pool: &PgPool) {
     // Tests in this target share one disposable database serially. Remove test
     // domain rows first (which may fire triggers), then clear all derived state.
-    sqlx::query("DELETE FROM domain_nodes WHERE id LIKE 't005-%'")
+    sqlx::query("DELETE FROM domain_nodes WHERE id LIKE 't005-%' OR id LIKE 't006-%'")
         .execute(pool)
         .await
         .expect("remove prior T005 test nodes");
@@ -1688,6 +1689,25 @@ async fn t006_search_api_against_postgres_projections() {
         .expect("insert T006 projection");
     }
 
+    // T006 stores the T003 lexical representations once in projection state.
+    // Updating an indexed field must refresh the stored vector through the
+    // migration trigger rather than rebuilding it in every search request.
+    sqlx::query(
+        "UPDATE search_node_projections SET tags=ARRAY['Rad','Reparatur'] WHERE generation_id=$1 AND node_id='t005-public-node'",
+    )
+    .bind(&gen_id)
+    .execute(&pool)
+    .await
+    .expect("update T006 projection tags");
+    let stored_vector_matches: bool = sqlx::query_scalar(
+        "SELECT search_vector @@ plainto_tsquery('german'::regconfig, 'Reparatur') FROM search_node_projections WHERE generation_id=$1 AND node_id='t005-public-node'",
+    )
+    .bind(&gen_id)
+    .fetch_one(&pool)
+    .await
+    .expect("read stored T006 lexical vector");
+    assert!(stored_vector_matches);
+
     // Add more than ten valid lexical matches. T003 limits the authoritative
     // lexical prefix to ten; lower-ranked matches remain eligible only for the
     // bounded semantic append decision.
@@ -1964,6 +1984,28 @@ async fn t006_search_api_against_postgres_projections() {
         .iter()
         .any(|node| node.id == "t005-public-b-node"));
 
+    let combined_filter = execute_search(
+        &state,
+        &anonymous,
+        SearchQueryParams {
+            q: Some("Fahrrad".to_string()),
+            kinds: Some("Werkstatt,Treffpunkt".to_string()),
+            tags: Some("Rad".to_string()),
+            ..Default::default()
+        },
+        Some(unavailable_provider()),
+    )
+    .await
+    .expect("combined kind and tag filter search");
+    assert_eq!(
+        combined_filter
+            .items
+            .iter()
+            .map(|node| node.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["t005-public-node"]
+    );
+
     for (forbidden_id, forbidden_title) in [
         ("t005-hidden-node", "Geheime Fahrrad Werkstatt"),
         ("t005-stale-node", "Stale Fahrrad Werkstatt"),
@@ -2100,6 +2142,55 @@ async fn t006_search_api_against_postgres_projections() {
             EmbeddingProviderError::InvalidVector
         ))
     ));
+
+    // The verified T004 core rejects candidate sets above 1000. T006 mirrors
+    // that bound and fetches only one sentinel row beyond it, preventing an
+    // unbounded transfer of embedding arrays into the API process.
+    sqlx::query(
+        "INSERT INTO domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) \
+         SELECT 't006-overflow-' || lpad(value::text, 4, '0'), 'Overflow', 'Overflow ' || value::text, 0.0, 0.0, NOW(), NOW(), '{\"search_visibility\":\"public\"}'::jsonb \
+           FROM generate_series(1, $1::integer) AS value",
+    )
+    .bind((MAX_AUTHORIZED_CANDIDATES + 1) as i32)
+    .execute(&pool)
+    .await
+    .expect("insert T006 overflow domain nodes");
+    sqlx::query(
+        "INSERT INTO search_node_projections (generation_id, node_id, source_version, source_revision, content_sha256, title, tags, searchable_text, language, kind, status, visibility_scopes, semantic_state, embedding) \
+         SELECT $1, v.node_id, v.source_version, v.source_revision, repeat('a', 64), n.title, ARRAY[]::text[], n.title, 'de', n.kind, 'active', ARRAY['public'], 'ready', ARRAY[1.0,-1.0]::double precision[] \
+           FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id WHERE n.kind='Overflow'",
+    )
+    .bind(&gen_id)
+    .execute(&pool)
+    .await
+    .expect("insert T006 overflow projections");
+    let overflow = fetch_postgres_candidates(
+        &pool,
+        "kein lexikalischer treffer",
+        &SearchFilters {
+            kinds: vec!["Overflow".to_string()],
+            ..Default::default()
+        },
+        &anonymous,
+    )
+    .await;
+    assert!(matches!(
+        overflow,
+        Err(SearchRepositoryError::CandidateSetTooLarge)
+    ));
+
+    let overflow_api = execute_search(
+        &state,
+        &anonymous,
+        SearchQueryParams {
+            q: Some("kein lexikalischer treffer".to_string()),
+            kind: Some("Overflow".to_string()),
+            ..Default::default()
+        },
+        Some(unavailable_provider()),
+    )
+    .await;
+    assert!(matches!(overflow_api, Err(SearchError::Unavailable)));
 
     // Generation identity tampering is not a degradable provider outage.
     sqlx::query(
