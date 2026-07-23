@@ -33,7 +33,7 @@ fn candidate(id: &str, rank_class: u8, rank_score: f64, embedding: [f64; 2]) -> 
 fn semantic_append_preserves_authoritative_postgres_lexical_order() {
     let lexical = vec![
         candidate("lexical-first", 0, 1.0, [0.0, 1.0]),
-        candidate("lexical-second", 5, 0.4, [0.0, 1.0]),
+        candidate("lexical-second", 4, 0.4, [0.0, 1.0]),
     ];
     let mut candidates = lexical.clone();
     candidates.push(candidate("semantic", u8::MAX, 0.0, [1.0, 0.0]));

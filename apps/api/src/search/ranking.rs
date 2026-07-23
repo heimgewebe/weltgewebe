@@ -152,20 +152,16 @@ pub fn calculate_lexical_rank_class(
         .filter(|&&tok| norm_searchable.contains(tok))
         .count();
 
-    // 4. Class 3: Typo tolerance / Trigram >= 0.30 & token match >= 1
-    if tri_score >= 0.30 && matched_count >= 1 {
+    // 4. Class 3: Typo tolerance / Trigram. Hard priority requires every
+    // qualifying trigram match to rank before full-text token matches.
+    if tri_score >= 0.30 {
         return Some((3, tri_score));
     }
 
-    // 5. Class 4: Token match
+    // 5. Class 4: Full-text token match
     if matched_count > 0 {
         let score = matched_count as f64 / q_tokens.len().max(1) as f64;
         return Some((4, score));
-    }
-
-    // 6. Class 4 (trigram alone >= 0.30)
-    if tri_score >= 0.30 {
-        return Some((4, tri_score));
     }
 
     None
@@ -303,6 +299,30 @@ mod tests {
         assert_eq!(c1, 0);
         assert_eq!(c2, 1);
         assert_eq!(c3, 2);
+    }
+
+
+    #[test]
+    fn pure_trigram_match_ranks_before_full_text_match() {
+        let q = SearchQuery::new("Fahrrad gemeinschaftswerkstatt");
+        let trigram = calculate_lexical_rank_class(
+            &q,
+            "Fahrrad gemeinschaftswerkstat",
+            &[],
+            "kein token treffer",
+        )
+        .expect("trigram match");
+        let full_text = calculate_lexical_rank_class(
+            &q,
+            "Unverbundener Titel",
+            &[],
+            "Fahrrad",
+        )
+        .expect("full-text match");
+
+        assert_eq!(trigram.0, 3);
+        assert_eq!(full_text.0, 4);
+        assert!(trigram.0 < full_text.0);
     }
 
     #[test]

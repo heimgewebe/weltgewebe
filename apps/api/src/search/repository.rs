@@ -143,10 +143,8 @@ pub async fn fetch_postgres_candidates(
                           WHERE lower(btrim(tag)) = lower(btrim($2))
                      ) THEN 1
                      WHEN lower(authorized.title) LIKE lower(btrim($2)) || '%' THEN 2
-                     WHEN trigram.score >= 0.30
-                          AND lexical.matched_terms >= least(2, greatest(query_stats.term_count, 1)) THEN 3
+                     WHEN trigram.score >= 0.30 THEN 3
                      WHEN lexical.matched_terms >= CASE WHEN query_stats.term_count <= 2 THEN 1 ELSE 2 END THEN 4
-                     WHEN trigram.score >= 0.30 THEN 5
                      ELSE NULL
                    END AS rank_class,
                    CASE
