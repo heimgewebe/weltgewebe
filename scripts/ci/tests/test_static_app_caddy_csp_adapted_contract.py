@@ -7,6 +7,7 @@ import subprocess
 import unittest
 
 REPO = Path(__file__).resolve().parents[3]
+MAGIC_LINK_CONFIRM_PATH = "/api/auth/magic-link/consume"
 CASES = (
     ("infra/caddy/Caddyfile", None),
     ("infra/caddy/Caddyfile.heim", "weltgewebe.home.arpa"),
@@ -17,7 +18,10 @@ CASES = (
 def adapt(relative: str) -> dict:
     result = subprocess.run(
         ["caddy", "adapt", "--config", relative, "--adapter", "caddyfile"],
-        cwd=REPO, text=True, capture_output=True, check=False,
+        cwd=REPO,
+        text=True,
+        capture_output=True,
+        check=False,
     )
     if result.returncode != 0:
         raise AssertionError(result.stdout + result.stderr)
@@ -45,7 +49,9 @@ def collect_csp(routes: list[dict]) -> list[tuple[object, str]]:
     for route in routes:
         for handler in route.get("handle", []):
             if handler.get("handler") == "headers":
-                values = handler.get("response", {}).get("set", {}).get("Content-Security-Policy", [])
+                values = handler.get("response", {}).get("set", {}).get(
+                    "Content-Security-Policy", []
+                )
                 found.extend((route.get("match"), value) for value in values)
             if handler.get("handler") == "subroute":
                 found.extend(collect_csp(handler.get("routes", [])))
@@ -54,18 +60,45 @@ def collect_csp(routes: list[dict]) -> list[tuple[object, str]]:
 
 @unittest.skipUnless(shutil.which("caddy"), "caddy binary required")
 class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
-    def test_adapted_app_route_has_only_split_csp_pair(self) -> None:
+    def test_adapted_app_route_splits_document_api_and_magic_link_csp(self) -> None:
         for relative, host in CASES:
             with self.subTest(caddyfile=relative):
                 policies = collect_csp(app_routes(adapt(relative), host))
-                self.assertEqual(len(policies), 2, policies)
-                strict = [item for item in policies if "default-src 'none'" in item[1]]
-                frontend = [item for item in policies if "default-src 'none'" not in item[1]]
+                self.assertEqual(len(policies), 3, policies)
+
+                strict = [item for item in policies if "form-action 'none'" in item[1]]
+                magic = [
+                    item
+                    for item in policies
+                    if "default-src 'none'" in item[1]
+                    and "form-action 'self'" in item[1]
+                ]
+                frontend = [
+                    item for item in policies if "default-src 'none'" not in item[1]
+                ]
                 self.assertEqual(len(strict), 1, policies)
+                self.assertEqual(len(magic), 1, policies)
                 self.assertEqual(len(frontend), 1, policies)
+
+                strict_match = json.dumps(strict[0][0])
                 self.assertIn("frame-ancestors 'none'", strict[0][1])
                 self.assertNotIn("unsafe-inline", strict[0][1])
-                directives = {part.strip().split()[0] for part in frontend[0][1].split(";") if part.strip()}
+                self.assertIn("not", strict_match)
+                self.assertIn(MAGIC_LINK_CONFIRM_PATH, strict_match)
+                self.assertIn("GET", strict_match)
+
+                magic_match = json.dumps(magic[0][0])
+                self.assertIn(MAGIC_LINK_CONFIRM_PATH, magic_match)
+                self.assertIn("GET", magic_match)
+                self.assertIn("style-src 'unsafe-inline'", magic[0][1])
+                self.assertNotIn("script-src", magic[0][1])
+                self.assertIn("frame-ancestors 'none'", magic[0][1])
+
+                directives = {
+                    part.strip().split()[0]
+                    for part in frontend[0][1].split(";")
+                    if part.strip()
+                }
                 self.assertNotIn("default-src", directives)
                 self.assertNotIn("script-src", directives)
                 self.assertIn("frame-ancestors", directives)
