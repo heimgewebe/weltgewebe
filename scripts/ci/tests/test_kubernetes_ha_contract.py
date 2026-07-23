@@ -188,13 +188,29 @@ class KubernetesHaContractTests(unittest.TestCase):
                 relative,
             )
 
-    def test_ha_workflow_checks_out_the_immutable_pr_head(self) -> None:
+    def test_kubernetes_workflow_checks_out_the_event_merge_state(self) -> None:
         workflow = (ROOT / ".github/workflows/kubernetes-platform.yml").read_text()
-        expected = (
-            "ref: ${{ github.event_name == 'pull_request' && "
-            "github.event.pull_request.head.sha || github.sha }}"
+        self.assertEqual(
+            workflow.count(
+                "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+            ),
+            4,
         )
-        self.assertEqual(workflow.count(expected), 4)
+        self.assertNotIn("github.event.pull_request.head.sha", workflow)
+        self.assertNotIn("ref: ${{ github.event_name == 'pull_request'", workflow)
+
+    def test_kubernetes_workflow_covers_api_build_inputs(self) -> None:
+        workflow = (ROOT / ".github/workflows/kubernetes-platform.yml").read_text()
+        for path in (
+            '".dockerignore"',
+            '"Cargo.toml"',
+            '"Cargo.lock"',
+            '"toolchain.versions.yml"',
+            '"apps/api/**"',
+            '"scripts/dev/**"',
+            '"policies/**"',
+        ):
+            self.assertEqual(workflow.count(f"- {path}"), 2, path)
 
     def test_zone_contract_requires_three_distinct_zones(self) -> None:
         valid = {
@@ -362,15 +378,25 @@ class KubernetesHaContractTests(unittest.TestCase):
         cleanup.assert_called_once_with("proof", "a" * 40)
 
     def test_kind_cluster_creation_is_transactional(self) -> None:
-        with mock.patch.object(self.ha.ref, "assert_available_cluster_name"), mock.patch.object(
-            self.ha.ref, "write_marker"
-        ) as marker, mock.patch.object(
+        with mock.patch.object(self.ha.ref, "reserve_cluster_name") as reserve, mock.patch.object(
             self.ha.ref, "run", side_effect=self.ha.ref.ProofError("kind failed")
         ), mock.patch.object(self.ha.ref, "delete_owned_cluster") as cleanup:
             with self.assertRaisesRegex(self.ha.ref.ProofError, "kind failed"):
-                self.ha.create_kind_cluster("kind", "proof", "node-image", "cluster.yaml", "b" * 40)
-        marker.assert_called_once_with("proof", "b" * 40)
-        cleanup.assert_called_once_with("kind", "proof")
+                self.ha.create_kind_cluster(
+                    "kind",
+                    "proof",
+                    "node-image",
+                    "cluster.yaml",
+                    "b" * 40,
+                    "owner-proof",
+                )
+        reserve.assert_called_once_with("kind", "proof", "b" * 40, "owner-proof")
+        cleanup.assert_called_once_with(
+            "kind",
+            "proof",
+            expected_commit="b" * 40,
+            expected_owner_id="owner-proof",
+        )
 
     def test_digest_locked_manifest_replaces_each_release_image_once(self) -> None:
         tagged = {
@@ -1450,9 +1476,18 @@ spec:
         self.assertEqual(proof.command, "proof")
         self.assertFalse(proof.keep)
         down = self.ha.argument_parser().parse_args(
-            ["down", "--cluster", "weltgewebe-t004-test", "--commit", "a" * 40]
+            [
+                "down",
+                "--cluster",
+                "weltgewebe-t004-test",
+                "--commit",
+                "a" * 40,
+                "--owner-id",
+                "gha-ha-123-1",
+            ]
         )
         self.assertEqual(down.commit, "a" * 40)
+        self.assertEqual(down.owner_id, "gha-ha-123-1")
 
 
 if __name__ == "__main__":
