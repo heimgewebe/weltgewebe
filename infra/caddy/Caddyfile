@@ -33,14 +33,31 @@
     reverse_proxy api:8080
   }
   reverse_proxy /* web:5173
+  @apiResponse path /api/*
+  header @apiResponse Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
+  @frontendResponse {
+    not path /api/*
+  }
+  header @frontendResponse Content-Security-Policy "style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; worker-src 'self' blob:; font-src 'self'; media-src 'self'; manifest-src 'self'; child-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
+
   header {
     # Local-sovereign CSP: WebSocket-Schemes bleiben fuer Dev/Proxy erlaubt;
     # externe Tile-/Bildquellen bleiben in diesem Caddy-Pfad bewusst gesperrt.
-    Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none';"
+    # Script execution is intentionally document-owned: SvelteKit emits a hash-bound
+    # meta CSP for every served HTML artifact. An edge default-src/script-src would
+    # intersect with that policy and block the hash-authorized inline bootstrap.
+    # The static CSP preflight validates every HTML artifact and rejects active SVGs.
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"
+    X-Content-Type-Options "nosniff"
     # Optional diagnostic header. Deploy can set WELTGEWEBE_BUILD to the canonical
     # build version (matches /_app/version.json#version).
     X-Weltgewebe-Build "{$WELTGEWEBE_BUILD}"
+  }
+
+  handle_errors {
+    header Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
+    header X-Content-Type-Options "nosniff"
+    respond "request failed" {err.status_code}
   }
 }

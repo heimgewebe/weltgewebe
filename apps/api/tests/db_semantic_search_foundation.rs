@@ -4,6 +4,8 @@
 //! database. It verifies the migration surface and hard candidate boundaries;
 //! it does not start an API, worker, backfill or production search runtime.
 
+mod support;
+
 use std::path::PathBuf;
 
 use serial_test::serial;
@@ -32,12 +34,14 @@ async fn connect_pool() -> sqlx::PgPool {
         port, 6432,
         "T003 must target direct PostgreSQL, not PgBouncer"
     );
+    let database = required_env("T003_PG_DATABASE");
+    support::postgres_proof::assert_disposable_database_name(&database);
     let options = PgConnectOptions::new()
         .host(&host)
         .port(port)
         .username(&required_env("T003_PG_USER"))
         .password(&required_env("T003_PG_PASSWORD"))
-        .database(&required_env("T003_PG_DATABASE"))
+        .database(&database)
         .ssl_mode(PgSslMode::Disable);
     let probe = PgConnection::connect_with(&options)
         .await

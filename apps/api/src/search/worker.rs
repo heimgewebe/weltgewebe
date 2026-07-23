@@ -72,17 +72,30 @@ pub enum ProcessOutcome {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProjectionStatusSnapshot {
+    /// Unique rows currently present in `domain_nodes`; revisions and projection-job history do not inflate this count.
+    pub current_nodes: i64,
+    /// All projection jobs across generations and revisions.
+    pub total_jobs: i64,
+    /// Jobs in terminal states (`done`, `stale`, or `failed`).
+    pub terminal_jobs: i64,
     pub pending_jobs: i64,
     pub claimed_jobs: i64,
     pub retry_jobs: i64,
     pub done_jobs: i64,
     pub stale_jobs: i64,
     pub failed_jobs: i64,
+    /// Generation currently serving semantic search.
     pub active_generation_id: Option<String>,
     pub active_generation_identity: Option<String>,
-    pub rebuild_expected_nodes: Option<i64>,
-    pub rebuild_completed_nodes: Option<i64>,
-    pub last_successful_projection_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub active_generation_activated_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Newest non-active generation still being built or retained as activation candidate.
+    pub rebuild_generation_id: Option<String>,
+    pub rebuild_generation_identity: Option<String>,
+    pub rebuild_generation_state: Option<String>,
+    pub rebuild_total_jobs: Option<i64>,
+    pub rebuild_terminal_jobs: Option<i64>,
+    /// Separate integrity statement mirroring the database activation gate.
+    pub rebuild_activation_ready: Option<bool>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -512,9 +525,16 @@ impl ProjectionWorker {
             anyhow::bail!("search generation identity is invalid");
         }
         let mut tx = self.pool.begin().await?;
+        // Match the trigger's shared transaction lock. This makes the initial
+        // generation snapshot linearizable with relevant domain mutations: a
+        // mutation is ordered wholly before this seed or, after commit, sees
+        // the new generation and enqueues its own current revision.
         sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('weltgewebe.search.generation.activation', 0))")
             .execute(&mut *tx)
             .await?;
+        // A migration starts tracking future mutations.  This idempotent seed
+        // makes legacy rows resumable without treating a missing revision as a
+        // public/visible value.
         sqlx::query(
             "INSERT INTO search_node_versions (node_id,source_version,source_revision) \
             SELECT id,1,'node-1' FROM domain_nodes ON CONFLICT (node_id) DO NOTHING",
@@ -539,6 +559,9 @@ impl ProjectionWorker {
         if identity.is_none() {
             anyhow::bail!("search generation identity mismatch");
         }
+        // A previous bounded outage may have exhausted retries. Re-running the
+        // same exact generation is the explicit catch-up action: only outage-
+        // exhausted jobs are rearmed; permanent contract failures stay failed.
         sqlx::query("UPDATE search_projection_jobs SET state='pending', attempt_count=0, available_at=NOW(), claimed_by=NULL, claim_until=NULL, completed_at=NULL, last_error_code=NULL WHERE generation_id=$1 AND state='failed' AND last_error_code='provider_unavailable_exhausted'")
             .bind(spec.generation_id).execute(&mut *tx).await?;
         let inserted = sqlx::query("INSERT INTO search_projection_jobs (generation_id,node_id,source_version,source_revision,operation) \
@@ -546,6 +569,9 @@ impl ProjectionWorker {
             ON CONFLICT DO NOTHING")
             .bind(spec.generation_id).execute(&mut *tx).await?.rows_affected() as i64;
         tx.commit().await?;
+        // Defense-in-depth reconciliation after releasing the exclusive
+        // generation lock. The lock establishes the race-free ordering; this
+        // idempotent pass repairs legacy or externally seeded version rows.
         let reconciled = sqlx::query("INSERT INTO search_projection_jobs (generation_id,node_id,source_version,source_revision,operation) \
             SELECT $1, v.node_id,v.source_version,v.source_revision,'upsert' FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id \
             ON CONFLICT DO NOTHING")
@@ -645,40 +671,79 @@ impl ProjectionWorker {
         Ok(final_outcome)
     }
 
+    /// Read-only operational view: no document text, tags, or vectors escape.
+    /// All fields come from one PostgreSQL statement, so operators never see a
+    /// synthetic snapshot assembled from different committed moments.
     pub async fn status_snapshot(&self) -> anyhow::Result<ProjectionStatusSnapshot> {
-        let row = sqlx::query("SELECT count(*) FILTER (WHERE state='pending') AS pending, count(*) FILTER (WHERE state='claimed') AS claimed, count(*) FILTER (WHERE state='retry') AS retry, count(*) FILTER (WHERE state='done') AS done, count(*) FILTER (WHERE state='stale') AS stale, count(*) FILTER (WHERE state='failed') AS failed FROM search_projection_jobs")
-            .fetch_one(&self.pool).await?;
-        let generation = sqlx::query("SELECT generation_id,provider,model_id,model_revision,runtime_identity,dimension,document_revision,normalization_revision,ranking_revision,expected_nodes,completed_nodes,activated_at FROM search_index_generations WHERE state='active'")
-            .fetch_optional(&self.pool).await?;
+        let row = sqlx::query(
+            "WITH job_counts AS ( \
+                SELECT \
+                    (SELECT count(*) FROM domain_nodes) AS current_nodes, \
+                    count(*) AS total_jobs, \
+                    count(*) FILTER (WHERE state IN ('done','stale','failed')) AS terminal_jobs, \
+                    count(*) FILTER (WHERE state='pending') AS pending, \
+                    count(*) FILTER (WHERE state='claimed') AS claimed, \
+                    count(*) FILTER (WHERE state='retry') AS retry, \
+                    count(*) FILTER (WHERE state='done') AS done, \
+                    count(*) FILTER (WHERE state='stale') AS stale, \
+                    count(*) FILTER (WHERE state='failed') AS failed \
+                FROM search_projection_jobs \
+             ), active AS ( \
+                SELECT generation_id,provider,model_id,model_revision,runtime_identity,dimension,document_revision,normalization_revision,ranking_revision,activated_at \
+                FROM search_index_generations WHERE state='active' \
+             ), rebuild AS ( \
+                SELECT g.generation_id,g.provider,g.model_id,g.model_revision,g.runtime_identity,g.dimension,g.document_revision,g.normalization_revision,g.ranking_revision,g.state, \
+                    (SELECT count(*) FROM search_projection_jobs j WHERE j.generation_id=g.generation_id) AS total_jobs, \
+                    (SELECT count(*) FROM search_projection_jobs j WHERE j.generation_id=g.generation_id AND j.state IN ('done','stale','failed')) AS terminal_jobs, \
+                    weltgewebe_search_generation_activation_ready(g.generation_id) AS activation_ready \
+                FROM search_index_generations g \
+                WHERE g.state IN ('building','ready') \
+                ORDER BY CASE WHEN g.state='ready' THEN 0 ELSE 1 END, g.created_at DESC, g.generation_id DESC \
+                LIMIT 1 \
+             ) \
+             SELECT jc.*, \
+                a.generation_id AS active_generation_id, \
+                CASE WHEN a.generation_id IS NULL THEN NULL ELSE concat_ws(':',a.provider,a.model_id,a.model_revision,a.runtime_identity,a.dimension::text,a.document_revision,a.normalization_revision,a.ranking_revision) END AS active_generation_identity, \
+                a.activated_at AS active_generation_activated_at, \
+                r.generation_id AS rebuild_generation_id, \
+                CASE WHEN r.generation_id IS NULL THEN NULL ELSE concat_ws(':',r.provider,r.model_id,r.model_revision,r.runtime_identity,r.dimension::text,r.document_revision,r.normalization_revision,r.ranking_revision) END AS rebuild_generation_identity, \
+                r.state AS rebuild_generation_state, \
+                r.total_jobs AS rebuild_total_jobs, \
+                r.terminal_jobs AS rebuild_terminal_jobs, \
+                r.activation_ready AS rebuild_activation_ready \
+             FROM job_counts jc \
+             LEFT JOIN active a ON TRUE \
+             LEFT JOIN rebuild r ON TRUE",
+        )
+        .fetch_one(&self.pool)
+        .await?;
         Ok(ProjectionStatusSnapshot {
+            current_nodes: row.get::<i64, _>("current_nodes"),
+            total_jobs: row.get::<i64, _>("total_jobs"),
+            terminal_jobs: row.get::<i64, _>("terminal_jobs"),
             pending_jobs: row.get::<i64, _>("pending"),
             claimed_jobs: row.get::<i64, _>("claimed"),
             retry_jobs: row.get::<i64, _>("retry"),
             done_jobs: row.get::<i64, _>("done"),
             stale_jobs: row.get::<i64, _>("stale"),
             failed_jobs: row.get::<i64, _>("failed"),
-            active_generation_id: generation.as_ref().map(|row| row.get("generation_id")),
-            active_generation_identity: generation.as_ref().map(|row| {
-                format!(
-                    "{}:{}:{}:{}:{}:{}:{}:{}",
-                    row.get::<String, _>("provider"),
-                    row.get::<String, _>("model_id"),
-                    row.get::<String, _>("model_revision"),
-                    row.get::<String, _>("runtime_identity"),
-                    row.get::<i32, _>("dimension"),
-                    row.get::<String, _>("document_revision"),
-                    row.get::<String, _>("normalization_revision"),
-                    row.get::<String, _>("ranking_revision")
-                )
-            }),
-            rebuild_expected_nodes: generation.as_ref().map(|row| row.get("expected_nodes")),
-            rebuild_completed_nodes: generation.as_ref().map(|row| row.get("completed_nodes")),
-            last_successful_projection_at: generation
-                .as_ref()
-                .and_then(|row| row.try_get("activated_at").ok()),
+            active_generation_id: row.get("active_generation_id"),
+            active_generation_identity: row.get("active_generation_identity"),
+            active_generation_activated_at: row.get("active_generation_activated_at"),
+            rebuild_generation_id: row.get("rebuild_generation_id"),
+            rebuild_generation_identity: row.get("rebuild_generation_identity"),
+            rebuild_generation_state: row.get("rebuild_generation_state"),
+            rebuild_total_jobs: row.get("rebuild_total_jobs"),
+            rebuild_terminal_jobs: row.get("rebuild_terminal_jobs"),
+            rebuild_activation_ready: row.get("rebuild_activation_ready"),
         })
     }
 
+    /// Deterministic digest over projection identity and metadata, deliberately
+    /// excluding `searchable_text`, tags, and raw embeddings.
+    /// Deterministic digest over projection identity and metadata, deliberately
+    /// excluding `searchable_text`, tags, raw embeddings, timestamps, and the
+    /// generation id itself. Empty rebuilds still bind the full identity.
     pub async fn integrity_digest(&self, generation_id: &str) -> anyhow::Result<String> {
         let generation = sqlx::query("SELECT provider,model_id,model_revision,runtime_identity,dimension,document_revision,normalization_revision,ranking_revision FROM search_index_generations WHERE generation_id=$1")
             .bind(generation_id)
@@ -741,6 +806,9 @@ impl ProjectionWorker {
         version: i64,
         revision: &str,
     ) -> anyhow::Result<Result<ProcessOutcome, &'static str>> {
+        // The claim row and canonical tombstone are locked and checked inside
+        // the mutating statement. attempt_count is the fencing token, so a
+        // reclaimed lease cannot be reused even when a worker id is recycled.
         let row = sqlx::query(
             "WITH lease AS (SELECT 1 FROM search_projection_jobs WHERE id=$5 AND generation_id=$4 AND node_id=$1 AND source_version=$2 AND source_revision=$3 AND operation='delete' AND state='claimed' AND claimed_by=$6 AND attempt_count=$7 AND claim_until > NOW() FOR UPDATE), current AS (SELECT 1 FROM search_node_versions WHERE node_id=$1 AND source_version=$2 AND source_revision=$3 AND deleted_at IS NOT NULL FOR UPDATE), deleted AS (DELETE FROM search_node_projections p USING current, lease, search_index_generations g WHERE p.node_id=$1 AND p.generation_id=$4 AND g.generation_id=p.generation_id AND g.state IN ('building','ready','active') RETURNING 1) SELECT EXISTS (SELECT 1 FROM lease) AS lease_current, EXISTS (SELECT 1 FROM current) AS tombstone_current",
         )
@@ -813,6 +881,8 @@ impl ProjectionWorker {
             }
             Err(error) => return Ok(Err(error.code())),
         };
+        // This INSERT is itself revision fenced. Its affected-row semantics
+        // classify a concurrent canonical mutation as Stale, closing TOCTOU.
         let written = sqlx::query("INSERT INTO search_node_projections (generation_id,node_id,source_version,source_revision,content_sha256,title,tags,searchable_text,language,kind,status,visibility_scopes,semantic_state,embedding) \
             SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'ready',$13 \
             FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$14 WHERE n.id=$2 AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$15 AND j.attempt_count=$16 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
@@ -836,6 +906,11 @@ impl ProjectionWorker {
         code: Option<&str>,
     ) -> anyhow::Result<bool> {
         let mut tx = self.pool.begin().await?;
+        // Generation completion is a state transition, so serialize it with
+        // generation start/activation and relevant domain mutations. Keeping
+        // the fenced job finish and generation reconciliation in one
+        // transaction also prevents a ready-index conflict from committing the
+        // job while leaving its generation counters stale.
         sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('weltgewebe.search.generation.activation', 0))")
             .execute(&mut *tx)
             .await?;
@@ -845,7 +920,9 @@ impl ProjectionWorker {
             tx.rollback().await?;
             return Ok(false);
         }
-        sqlx::query("UPDATE search_index_generations g SET expected_nodes=(SELECT count(*) FROM search_projection_jobs j WHERE j.generation_id=g.generation_id), completed_nodes=(SELECT count(*) FROM search_projection_jobs j WHERE j.generation_id=g.generation_id AND j.state IN ('done','stale')), state=CASE WHEN g.state='building' AND NOT EXISTS (SELECT 1 FROM search_index_generations r WHERE r.state='ready' AND r.generation_id<>g.generation_id) AND NOT EXISTS (SELECT 1 FROM search_projection_jobs j WHERE j.generation_id=g.generation_id AND j.state NOT IN ('done','stale')) AND NOT EXISTS (SELECT 1 FROM search_node_versions v WHERE v.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM search_node_projections p WHERE p.generation_id=g.generation_id AND p.node_id=v.node_id AND p.source_version=v.source_version AND p.source_revision=v.source_revision AND p.semantic_state='ready' AND cardinality(p.embedding)=g.dimension)) AND NOT EXISTS (SELECT 1 FROM search_node_versions v JOIN search_node_projections p ON p.generation_id=g.generation_id AND p.node_id=v.node_id WHERE v.deleted_at IS NOT NULL) THEN 'ready' ELSE g.state END WHERE g.generation_id=(SELECT generation_id FROM search_projection_jobs WHERE id=$1)")
+        sqlx::query("UPDATE search_index_generations g SET expected_nodes=(SELECT count(*) FROM search_projection_jobs j WHERE j.generation_id=g.generation_id), completed_nodes=(SELECT count(*) FROM search_projection_jobs j WHERE j.generation_id=g.generation_id AND j.state IN ('done','stale')) WHERE g.generation_id=(SELECT generation_id FROM search_projection_jobs WHERE id=$1)")
+            .bind(id).execute(&mut *tx).await?;
+        sqlx::query("UPDATE search_index_generations g SET state='ready' WHERE g.generation_id=(SELECT generation_id FROM search_projection_jobs WHERE id=$1) AND g.state='building' AND NOT EXISTS (SELECT 1 FROM search_index_generations r WHERE r.state='ready' AND r.generation_id<>g.generation_id) AND weltgewebe_search_generation_activation_ready(g.generation_id)")
             .bind(id).execute(&mut *tx).await?;
         tx.commit().await?;
         Ok(true)
@@ -855,6 +932,259 @@ impl ProjectionWorker {
         let secs = (2_i32.pow(attempts.clamp(1, 7) as u32)).min(300);
         Ok(sqlx::query("UPDATE search_projection_jobs SET state='retry',claimed_by=NULL,claim_until=NULL,available_at=NOW()+make_interval(secs=>$2),last_error_code=$3 WHERE id=$1 AND state='claimed' AND claimed_by=$4 AND attempt_count=$5 AND claim_until > NOW()")
             .bind(id).bind(secs).bind(code).bind(&self.worker_id).bind(attempts).execute(&self.pool).await?.rows_affected() == 1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        http_host_header, http_response_complete, EmbeddingProvider, EmbeddingProviderError,
+        OllamaEmbeddingProvider, SearchDocument,
+    };
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+    };
+
+    #[test]
+    fn document_excludes_address_and_fails_closed_visibility() {
+        let private = SearchDocument::from_row(
+            "node-1",
+            "Werkstatt",
+            "Fahrradhilfe",
+            r#"{"summary":"Reparatur","address":"secret lane 9","tags":["Rad"]}"#,
+        )
+        .expect("document");
+        assert_eq!(private.status, "hidden");
+        assert!(private.scopes.is_empty());
+        assert!(!private.text.contains("secret lane 9"));
+
+        let public = SearchDocument::from_row(
+            "node-1",
+            "Werkstatt",
+            "Fahrradhilfe",
+            r#"{"search_visibility":"public","summary":"Reparatur","tags":["Rad"]}"#,
+        )
+        .expect("document");
+        assert_eq!(public.status, "active");
+        assert_eq!(public.scopes, ["public"]);
+    }
+
+    #[test]
+    fn document_rejects_blank_projection_required_fields() {
+        assert!(SearchDocument::from_row("node", "Kind", "   ", "{}").is_err());
+        assert!(SearchDocument::from_row("node", "   ", "Titel", "{}").is_err());
+    }
+
+    #[test]
+    fn document_hash_changes_for_indexed_content_not_unindexed_payload() {
+        let first = SearchDocument::from_row("node", "Kind", "Titel", r#"{"address":"a"}"#)
+            .expect("document");
+        let same = SearchDocument::from_row("node", "Kind", "Titel", r#"{"address":"b"}"#)
+            .expect("document");
+        let changed = SearchDocument::from_row("node", "Kind", "Titel", r#"{"summary":"neu"}"#)
+            .expect("document");
+        assert_eq!(first.hash(), same.hash());
+        assert_ne!(first.hash(), changed.hash());
+    }
+
+    #[test]
+    fn ollama_ipv6_loopback_uses_bracketed_host_header() {
+        assert_eq!(http_host_header("::1", 11434), "[::1]:11434");
+        assert_eq!(http_host_header("127.0.0.1", 11434), "127.0.0.1:11434");
+    }
+
+    #[test]
+    fn ollama_invalid_or_conflicting_content_length_is_permanent_format_error() {
+        for response in [
+            b"HTTP/1.1 200 OK\r\nContent-Length: abc\r\n\r\n{}".as_slice(),
+            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Length: 3\r\n\r\n{}".as_slice(),
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Length: 2\r\n\r\n0\r\n\r\n"
+                .as_slice(),
+        ] {
+            assert!(matches!(
+                http_response_complete(response),
+                Err(EmbeddingProviderError::MalformedResponse)
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn ollama_truncated_framed_response_is_temporary_unavailability() {
+        let listener = match TcpListener::bind("127.0.0.1:0").await {
+            Ok(listener) => listener,
+            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => return,
+            Err(error) => panic!("bind loopback: {error}"),
+        };
+        let port = listener.local_addr().expect("address").port();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept");
+            let mut request = [0_u8; 4096];
+            let _ = stream.read(&mut request).await.expect("read request");
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 64\r\nConnection: close\r\n\r\n{\"models\":[")
+                .await
+                .expect("partial response");
+        });
+        let provider = OllamaEmbeddingProvider::new(
+            &format!("http://127.0.0.1:{port}/"),
+            "test-model".into(),
+            "sha256:exact".into(),
+            format!("ollama:test-runtime@http://127.0.0.1:{port}"),
+        )
+        .expect("provider");
+        assert!(matches!(
+            provider.object("api/tags", None).await,
+            Err(EmbeddingProviderError::Unavailable)
+        ));
+        server.await.expect("server");
+    }
+
+    #[tokio::test]
+    async fn ollama_408_and_429_are_temporary_unavailability() {
+        for status in [408_u16, 429_u16] {
+            let listener = match TcpListener::bind("127.0.0.1:0").await {
+                Ok(listener) => listener,
+                Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => return,
+                Err(error) => panic!("bind loopback: {error}"),
+            };
+            let port = listener.local_addr().expect("address").port();
+            let server = tokio::spawn(async move {
+                let (mut stream, _) = listener.accept().await.expect("accept");
+                let mut request = [0_u8; 4096];
+                let _ = stream.read(&mut request).await.expect("read request");
+                stream
+                    .write_all(
+                        format!(
+                            "HTTP/1.1 {status} Temporary\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        )
+                        .as_bytes(),
+                    )
+                    .await
+                    .expect("temporary response");
+            });
+            let provider = OllamaEmbeddingProvider::new(
+                &format!("http://127.0.0.1:{port}/"),
+                "test-model".into(),
+                "sha256:exact".into(),
+                format!("ollama:test-runtime@http://127.0.0.1:{port}"),
+            )
+            .expect("provider");
+            assert!(matches!(
+                provider.object("api/tags", None).await,
+                Err(EmbeddingProviderError::Unavailable)
+            ));
+            server.await.expect("server");
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires explicit T005 live Ollama identity environment"]
+    async fn ollama_boundary_embeds_against_explicit_live_loopback() {
+        let url = std::env::var("T005_LIVE_OLLAMA_URL").expect("T005_LIVE_OLLAMA_URL");
+        let model_id = std::env::var("T005_LIVE_OLLAMA_MODEL_ID").expect("model id");
+        let model_revision =
+            std::env::var("T005_LIVE_OLLAMA_MODEL_REVISION").expect("model revision");
+        let runtime_identity =
+            std::env::var("T005_LIVE_OLLAMA_RUNTIME_IDENTITY").expect("runtime identity");
+        let dimension: usize = std::env::var("T005_LIVE_OLLAMA_DIMENSION")
+            .expect("dimension")
+            .parse()
+            .expect("numeric dimension");
+        let provider =
+            OllamaEmbeddingProvider::new(&url, model_id, model_revision, runtime_identity)
+                .expect("live local provider");
+        provider
+            .object("api/tags", None)
+            .await
+            .expect("live local tags");
+        provider
+            .object("api/version", None)
+            .await
+            .expect("live local version");
+        provider
+            .verify_identity()
+            .await
+            .expect("live local identity");
+        let vector = provider
+            .embed("T005 local provider contract proof", dimension)
+            .await
+            .expect("live local embedding");
+        assert_eq!(vector.len(), dimension);
+        assert!(vector.iter().all(|value| value.is_finite()));
+    }
+
+    #[tokio::test]
+    async fn ollama_boundary_uses_only_mocked_loopback_and_rechecks_identity() {
+        let listener = match TcpListener::bind("127.0.0.1:0").await {
+            Ok(listener) => listener,
+            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => return,
+            Err(error) => panic!("bind loopback: {error}"),
+        };
+        let port = listener.local_addr().expect("address").port();
+        let server = tokio::spawn(async move {
+            for _ in 0..5 {
+                let (mut stream, _) = listener.accept().await.expect("accept");
+                let mut request = [0_u8; 4096];
+                let count = stream.read(&mut request).await.expect("read request");
+                let request = std::str::from_utf8(&request[..count]).expect("request utf8");
+                let (body, chunked) = if request.starts_with("GET /api/tags ") {
+                    (
+                        r#"{"models":[{"name":"test-model","digest":"sha256:exact"}]}"#,
+                        false,
+                    )
+                } else if request.starts_with("GET /api/version ") {
+                    (r#"{"version":"test-runtime"}"#, false)
+                } else if request.starts_with("POST /api/embed ") {
+                    (r#"{"embeddings":[[0.25,0.5]]}"#, true)
+                } else {
+                    panic!("unexpected request: {request}");
+                };
+                let response = if chunked {
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n{:X}\r\n{}\r\n0\r\n\r\n",
+                        body.len(), body
+                    )
+                } else {
+                    format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body)
+                };
+                stream
+                    .write_all(response.as_bytes())
+                    .await
+                    .expect("response");
+            }
+        });
+        let origin = format!("http://127.0.0.1:{port}/");
+        let provider = OllamaEmbeddingProvider::new(
+            &origin,
+            "test-model".into(),
+            "sha256:exact".into(),
+            format!("ollama:test-runtime@http://127.0.0.1:{port}"),
+        )
+        .expect("provider");
+        assert_eq!(
+            provider.embed("only a test", 2).await.expect("embedding"),
+            vec![0.25, 0.5]
+        );
+        server.await.expect("server");
+        assert!(matches!(
+            OllamaEmbeddingProvider::new(
+                "https://127.0.0.1:11434/",
+                "m".into(),
+                "r".into(),
+                "x".into()
+            ),
+            Err(EmbeddingProviderError::Unsupported)
+        ));
+        assert!(matches!(
+            OllamaEmbeddingProvider::new(
+                "http://example.invalid/",
+                "m".into(),
+                "r".into(),
+                "x".into()
+            ),
+            Err(EmbeddingProviderError::Unsupported)
+        ));
     }
 }
 
@@ -870,7 +1200,6 @@ pub struct SearchDocument {
     pub status: String,
     pub scopes: Vec<String>,
 }
-
 impl SearchDocument {
     pub fn from_row(node_id: &str, kind: &str, title: &str, payload: &str) -> anyhow::Result<Self> {
         let payload: Value =
@@ -896,9 +1225,14 @@ impl SearchDocument {
                 .filter(|v| !v.trim().is_empty())
                 .unwrap_or("und"),
         );
+        // Visibility is fail-closed: legacy/missing values are hidden. No address
+        // or arbitrary payload key is ever incorporated into the document.
         let public = payload.get("search_visibility").and_then(Value::as_str) == Some("public");
         let title = normalize(title);
         let kind = normalize(kind);
+        // Projection columns enforce non-blank title/kind individually. Reject
+        // invalid legacy domain rows before embedding or SQL mutation so the
+        // leased job can terminate fail-closed as document_invalid.
         if title.is_empty() || kind.is_empty() {
             anyhow::bail!("search document for {node_id} has blank required fields");
         }
@@ -930,7 +1264,6 @@ impl SearchDocument {
             },
         })
     }
-
     pub fn hash(&self) -> String {
         let mut h = Sha256::new();
         let tags = self.tags.join("\u{1f}");

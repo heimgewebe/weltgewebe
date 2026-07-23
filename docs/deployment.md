@@ -181,15 +181,20 @@ Cargo-Paketversion.
 
 ## CSP contract
 
-The production frontend currently contains an inline bootstrap `<script>` (SvelteKit).
-Therefore the served `Content-Security-Policy` must allow that inline script, either via:
+The production frontend uses SvelteKit's hash-mode CSP. SvelteKit writes a document-level CSP meta tag whose
+`script-src` contains the build-generated SHA-256 hashes for the prerendered inline bootstrap scripts.
+`script-src 'unsafe-inline'` is forbidden.
 
-- `script-src 'unsafe-inline'` (pragmatic), or
-- a nonce/hash-based CSP (preferred hardening, follow-up work).
+The static-app Caddy edge deliberately does **not** add `default-src` or `script-src` to its HTTP CSP. Multiple CSP
+policies intersect; an edge policy without the same build-generated hashes would therefore block the legitimate
+hash-authorized SvelteKit bootstrap. Directives that must remain edge-owned, including `frame-ancestors`, plus the
+non-script resource directives remain in the Caddy header.
 
-The static preflight `scripts/preflight/csp_contract_static.sh` parses the Caddyfile and the compiled `index.html` to
-fail deploys early if an inline script is present but the CSP forbids it. This prevents a whitepage without relying on
-a running server.
+The static preflight `scripts/preflight/csp_contract_static.sh` fails closed before deploy. It recursively validates
+**every** compiled HTML artifact, requires exactly one CSP meta policy with `script-src`, rejects `unsafe-inline`, and
+verifies every inline script body against a matching SHA-256 source expression. Because non-HTML active documents do
+not receive a meta CSP, the same guard also rejects scriptable constructs in static SVG artifacts. This keeps the split
+edge/document CSP contract explicit without relying on a running server.
 
 ### Caddyfile Source of Truth
 

@@ -1,3 +1,5 @@
+mod support;
+
 use std::path::PathBuf;
 
 use serial_test::serial;
@@ -11,6 +13,7 @@ use weltgewebe_api::test_helpers::EnvGuard;
 async fn direct_pool() -> PgPool {
     let url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must point at a direct PostgreSQL database");
+    support::postgres_proof::assert_direct_disposable_database_url(&url);
     PgPool::connect(&url).await.expect("connect to PostgreSQL")
 }
 

@@ -7,6 +7,14 @@ const config = {
   preprocess: vitePreprocess(),
 
   kit: {
+    // Hash the prerendered SvelteKit bootstrap scripts instead of allowing all inline JS.
+    csp: {
+      mode: "hash",
+      directives: {
+        "script-src": ["self"],
+        "worker-src": ["self", "blob:"],
+      },
+    },
     // Verwende adapter-static, da wir eine SPA bzw. statische Seite bauen:
     adapter: adapter(),
 

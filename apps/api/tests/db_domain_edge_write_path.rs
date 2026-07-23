@@ -21,6 +21,8 @@
 //! - Fixture rows use the `edec0000-` id prefix (valid UUID hex) and are
 //!   cleaned before/after.
 
+mod support;
+
 use anyhow::{Context, Result};
 use axum::{
     body,
@@ -62,7 +64,7 @@ fn direct_database_url() -> String {
         !url.contains(":6432"),
         "DATABASE_URL must target direct PostgreSQL, not PgBouncer (port 6432)"
     );
-    url
+    support::postgres_proof::validated_direct_disposable_url(url)
 }
 
 async fn connect_pool() -> PgPool {

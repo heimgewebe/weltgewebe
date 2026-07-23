@@ -143,8 +143,10 @@ pub async fn fetch_postgres_candidates(
                           WHERE lower(btrim(tag)) = lower(btrim($2))
                      ) THEN 1
                      WHEN lower(authorized.title) LIKE lower(btrim($2)) || '%' THEN 2
-                     WHEN trigram.score >= 0.30 THEN 3
+                     WHEN trigram.score >= 0.30
+                          AND lexical.matched_terms >= least(2, greatest(query_stats.term_count, 1)) THEN 3
                      WHEN lexical.matched_terms >= CASE WHEN query_stats.term_count <= 2 THEN 1 ELSE 2 END THEN 4
+                     WHEN trigram.score >= 0.30 THEN 5
                      ELSE NULL
                    END AS rank_class,
                    CASE
@@ -185,11 +187,22 @@ pub async fn fetch_postgres_candidates(
                          )), 0)::DOUBLE PRECISION AS score
                     FROM query_terms
               ) AS lexical
+        ), lexical_top AS (
+            SELECT node_id, rank_class, rank_score
+              FROM scored
+             WHERE rank_class IS NOT NULL
+             ORDER BY rank_class ASC, rank_score DESC, node_id ASC
+             LIMIT 10
         )
-        SELECT node_id, title, tags, searchable_text, language, kind, embedding,
-               created_at, updated_at, lat, lon, payload, rank_class, rank_score
+        SELECT scored.node_id, scored.title, scored.tags, scored.searchable_text,
+               scored.language, scored.kind, scored.embedding, scored.created_at,
+               scored.updated_at, scored.lat, scored.lon, scored.payload,
+               lexical_top.rank_class, lexical_top.rank_score
           FROM scored
-         ORDER BY rank_class ASC NULLS LAST, rank_score DESC NULLS LAST, node_id ASC
+          LEFT JOIN lexical_top ON lexical_top.node_id = scored.node_id
+         ORDER BY lexical_top.rank_class ASC NULLS LAST,
+                  lexical_top.rank_score DESC NULLS LAST,
+                  scored.node_id ASC
         "#,
     )
     .bind(&generation.generation_id)

@@ -1200,6 +1200,22 @@ spec:
         self.assertIn("timed out", sample["stderr"])
         self.assertIn("duration_seconds", sample)
 
+    def test_gateway_availability_sample_rejects_unexpected_json_shape(self) -> None:
+        completed = mock.Mock(
+            returncode=0,
+            stdout=json.dumps(42),
+            stderr="",
+        )
+        with mock.patch.object(
+            self.ha.subprocess, "run", return_value=completed
+        ):
+            sample = self.ha.gateway_projection_sample(
+                "kind-worker", "10.0.0.10", 80, "marker"
+            )
+        self.assertFalse(sample["available"])
+        self.assertIsNone(sample["response_items"])
+        self.assertEqual(sample["response_shape"], "int")
+
     def test_error_budget_is_measured_from_upgrade_and_rollback(self) -> None:
         budget = self.ha.compute_error_budget(
             {

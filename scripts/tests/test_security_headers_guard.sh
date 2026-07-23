@@ -1,27 +1,59 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 GUARD="$REPO_ROOT/scripts/guard/security-headers-guard.sh"
-
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
+mkdir -p "$TEMP_DIR/policies" "$TEMP_DIR/infra/caddy" "$TEMP_DIR/apps/web"
 
-mkdir -p "$TEMP_DIR/policies" "$TEMP_DIR/infra/caddy"
 cat > "$TEMP_DIR/policies/security.yml" << 'YAML'
+content_security_policy:
+  script-src: "'self' plus build-generated sha256 hashes"
+  script_mode: hash
+  style-src: "'self' 'unsafe-inline'"
+csp_exceptions:
+  - directive: "style-src 'unsafe-inline'"
 strict_transport_security:
   max_age_seconds: 31536000
-csp_exceptions:
-  - "script-src 'unsafe-inline'"
 YAML
 
-write_caddy() {
+cat > "$TEMP_DIR/apps/web/svelte.config.js" << 'JS'
+export default {
+  kit: {
+    csp: {
+      mode: "hash",
+      directives: {
+        "script-src": ["self"],
+      },
+    },
+  },
+};
+JS
+
+write_static_caddy() {
+  local file="$1"
+  local connect="$2"
+  cat > "$file" << CADDY
+example.test {
+  header {
+    Content-Security-Policy "style-src 'self' 'unsafe-inline'; connect-src $connect; img-src 'self' data: blob:; worker-src 'self' blob:; font-src 'self'; media-src 'self'; manifest-src 'self'; child-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
+    Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Frame-Options "DENY"
+    Referrer-Policy "no-referrer"
+    X-Content-Type-Options "nosniff"
+    X-Weltgewebe-Build "{\$WELTGEWEBE_BUILD}"
+  }
+}
+CADDY
+}
+
+write_prod_caddy() {
   local file="$1"
   cat > "$file" << 'CADDY'
 example.test {
   header {
-    Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; object-src 'none';"
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"
@@ -32,15 +64,23 @@ example.test {
 CADDY
 }
 
-write_caddy "$TEMP_DIR/infra/caddy/Caddyfile.vps"
-write_caddy "$TEMP_DIR/infra/caddy/Caddyfile.heim"
-write_caddy "$TEMP_DIR/infra/caddy/Caddyfile.prod"
+write_static_caddy "$TEMP_DIR/infra/caddy/Caddyfile" "'self' ws: wss:"
+write_static_caddy "$TEMP_DIR/infra/caddy/Caddyfile.vps" "'self'"
+write_static_caddy "$TEMP_DIR/infra/caddy/Caddyfile.heim" "'self'"
+write_prod_caddy "$TEMP_DIR/infra/caddy/Caddyfile.prod"
 
 REPO_ROOT="$TEMP_DIR" bash "$GUARD" > /dev/null
 
 sed -i '/Strict-Transport-Security/d' "$TEMP_DIR/infra/caddy/Caddyfile.vps"
 if REPO_ROOT="$TEMP_DIR" bash "$GUARD" > /dev/null 2>&1; then
   echo "security headers guard should fail without HSTS" >&2
+  exit 1
+fi
+write_static_caddy "$TEMP_DIR/infra/caddy/Caddyfile.vps" "'self'"
+
+sed -i "s/style-src 'self' 'unsafe-inline';/script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';/" "$TEMP_DIR/infra/caddy/Caddyfile.vps"
+if REPO_ROOT="$TEMP_DIR" bash "$GUARD" > /dev/null 2>&1; then
+  echo "security headers guard should fail with script-src unsafe-inline" >&2
   exit 1
 fi
 
