@@ -25,6 +25,7 @@ use crate::{
         },
     },
     state::ApiState,
+    telemetry::SearchRequestOutcome,
 };
 
 const DEFAULT_LIMIT: usize = 10;
@@ -47,10 +48,28 @@ pub struct SearchQueryParams {
     pub offset: Option<usize>,
 }
 
+/// Bounded search result mode. The serialized HTTP/JSON wire format keeps the
+/// pre-existing snake_case strings, so this does not change the wire contract.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchMode {
+    Hybrid,
+    LexicalFallback,
+}
+
+impl From<SearchMode> for SearchRequestOutcome {
+    fn from(mode: SearchMode) -> Self {
+        match mode {
+            SearchMode::Hybrid => Self::Hybrid,
+            SearchMode::LexicalFallback => Self::LexicalFallback,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct SearchResponse {
     pub items: Vec<Node>,
-    pub mode: String,
+    pub mode: SearchMode,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fallback_reason: Option<String>,
     pub generation_id: String,
@@ -177,13 +196,11 @@ pub async fn execute_search(
     let request_started = Instant::now();
     let result = execute_search_inner(state, auth, params, provider_override).await;
     let outcome = match &result {
-        Ok(response) if response.mode == "hybrid" => "hybrid",
-        Ok(response) if response.mode == "lexical_fallback" => "lexical_fallback",
-        Ok(_) => "success",
-        Err(SearchError::ProviderContractError(_)) => "provider_contract_error",
-        Err(SearchError::Unavailable) => "unavailable",
-        Err(SearchError::InvalidRequest) => "invalid_request",
-        Err(SearchError::Internal) => "internal",
+        Ok(response) => response.mode.into(),
+        Err(SearchError::ProviderContractError(_)) => SearchRequestOutcome::ProviderContractError,
+        Err(SearchError::Unavailable) => SearchRequestOutcome::Unavailable,
+        Err(SearchError::InvalidRequest) => SearchRequestOutcome::InvalidRequest,
+        Err(SearchError::Internal) => SearchRequestOutcome::Internal,
     };
     state.metrics.search_request_outcome(outcome);
     state
@@ -265,12 +282,12 @@ async fn execute_search_inner(
                 DEFAULT_SEMANTIC_MINIMUM_COSINE,
                 DEFAULT_SEMANTIC_MINIMUM_MARGIN,
             ),
-            "hybrid".to_string(),
+            SearchMode::Hybrid,
             None,
         ),
         Err(EmbeddingProviderError::Unavailable) => (
             lexical_ranked,
-            "lexical_fallback".to_string(),
+            SearchMode::LexicalFallback,
             Some("provider_unavailable".to_string()),
         ),
         Err(error) => return Err(SearchError::ProviderContractError(error)),
@@ -370,5 +387,132 @@ mod tests {
                 "Werkstatt".to_string()
             ]
         );
+    }
+
+    /// Non-Postgres `ApiState` for the early-unavailable path, which returns
+    /// before ever touching a database pool. Mirrors the state builder in
+    /// `routes/health.rs`'s tests, the existing non-DB `ApiState` harness.
+    fn state_without_postgres() -> ApiState {
+        use crate::{
+            auth::{rate_limit::AuthRateLimiter, session::SessionBackend},
+            config::{AppConfig, AutoProvisionRole, DomainReadSource, PasskeyCredentialSource},
+            state::OrderedCache,
+            telemetry::{BuildInfo, Metrics},
+        };
+        use std::sync::atomic::AtomicI64;
+        use tokio::sync::{Mutex, RwLock};
+
+        let metrics = Metrics::try_new(BuildInfo {
+            version: "test",
+            commit: "test",
+            build_timestamp: "test",
+        })
+        .expect("metrics");
+
+        let config = AppConfig {
+            fade_days: 7,
+            ron_days: 84,
+            anonymize_opt_in: true,
+            delegation_expire_days: 28,
+            max_guest_owned_nodes: 1_000,
+            domain_read_source: DomainReadSource::Jsonl,
+            domain_account_write_source: crate::config::DomainAccountWriteSource::Jsonl,
+            domain_node_write_source: crate::config::DomainNodeWriteSource::Jsonl,
+            domain_edge_write_source: crate::config::DomainEdgeWriteSource::Jsonl,
+            passkey_credential_source: PasskeyCredentialSource::InMemory,
+            auth_public_login: false,
+            auth_cookie_secure: true,
+            app_base_url: None,
+            auth_trusted_proxies: None,
+            auth_allow_emails: None,
+            auth_allow_email_domains: None,
+            auth_auto_provision: false,
+            auth_auto_provision_role: AutoProvisionRole::Gast,
+            auth_rl_ip_per_min: None,
+            auth_rl_ip_per_hour: None,
+            auth_rl_email_per_min: None,
+            auth_rl_email_per_hour: None,
+            smtp_host: None,
+            smtp_port: None,
+            smtp_user: None,
+            smtp_pass: None,
+            smtp_from: None,
+            auth_log_magic_token: false,
+            webauthn_rp_id: None,
+            webauthn_rp_origin: None,
+            webauthn_rp_name: None,
+        };
+
+        let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
+
+        ApiState {
+            db_pool: None,
+            db_pool_configured: false,
+            nats_client: None,
+            nats_configured: false,
+            config,
+            metrics,
+            sessions: SessionBackend::new_in_memory(),
+            challenges: Default::default(),
+            tokens: crate::auth::tokens::TokenStore::new(),
+            step_up_tokens: crate::auth::step_up_tokens::StepUpTokenStore::new(),
+            accounts: Arc::new(RwLock::new(crate::auth::accounts::AccountStore::new())),
+            nodes: Arc::new(RwLock::new(OrderedCache::new())),
+            nodes_persist: Arc::new(Mutex::new(())),
+            accounts_persist: Arc::new(Mutex::new(())),
+            domain_projection_gate: Arc::new(RwLock::new(())),
+            domain_projection_version: Arc::new(AtomicI64::new(0)),
+            edges: Arc::new(RwLock::new(OrderedCache::new())),
+            rate_limiter,
+            mailer: None,
+            webauthn: None,
+            passkey_registrations: Default::default(),
+            passkey_registration_grants: Default::default(),
+            passkey_authentications: Default::default(),
+            passkeys: Default::default(),
+        }
+    }
+
+    #[tokio::test]
+    async fn early_unavailable_path_records_exactly_one_bounded_outcome_and_no_downstream_metrics()
+    {
+        use crate::auth::role::Role;
+
+        let state = state_without_postgres();
+        let auth = AuthContext {
+            authenticated: false,
+            account_id: None,
+            device_id: None,
+            role: Role::Gast,
+            expires_at: None,
+        };
+
+        let result = execute_search(
+            &state,
+            &auth,
+            SearchQueryParams {
+                q: Some("Fahrrad".to_string()),
+                ..Default::default()
+            },
+            None,
+        )
+        .await;
+
+        assert!(matches!(result, Err(SearchError::Unavailable)));
+
+        let rendered =
+            String::from_utf8(state.metrics.render().expect("render metrics")).expect("utf8");
+        assert!(rendered.contains("search_requests_total{outcome=\"unavailable\"} 1"));
+        assert!(rendered.contains("search_request_duration_seconds_count 1"));
+        assert!(
+            rendered.contains("search_repository_duration_seconds_count 0"),
+            "the early unavailable path must return before the repository is ever queried"
+        );
+        assert!(
+            rendered.contains("search_provider_duration_seconds_count 0"),
+            "the early unavailable path must return before an embedding provider is ever called"
+        );
+        assert!(rendered.contains("search_authorized_candidates_count 0"));
+        assert!(rendered.contains("search_candidate_set_overflow_total 0"));
     }
 }

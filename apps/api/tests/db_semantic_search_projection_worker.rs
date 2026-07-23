@@ -27,7 +27,7 @@ use weltgewebe_api::{
     middleware::auth::AuthContext,
     search::{
         execute_search, fetch_postgres_candidates, EmbeddingProvider, EmbeddingProviderError,
-        GenerationSpec, ProcessOutcome, ProjectionWorker, SearchError, SearchFilters,
+        GenerationSpec, ProcessOutcome, ProjectionWorker, SearchError, SearchFilters, SearchMode,
         SearchQueryParams, SearchRepositoryError, DOCUMENT_REVISION, MAX_AUTHORIZED_CANDIDATES,
         NORMALIZATION_REVISION, RANKING_REVISION,
     },
@@ -71,6 +71,26 @@ async fn reset_search_state(pool: &PgPool) {
         .execute(pool)
         .await
         .expect("reset T005 projection state");
+}
+
+/// Reads the current `search_requests_total{outcome="..."}` counter value out
+/// of the rendered Prometheus text exposition. Scans every line rather than
+/// assuming a fixed position, so it stays correct regardless of metric
+/// family ordering. Missing labels (never touched yet) count as zero.
+fn search_requests_total_for_outcome(metrics: &Metrics, outcome: &str) -> u64 {
+    let rendered =
+        String::from_utf8(metrics.render().expect("render metrics")).expect("utf8 metrics");
+    let prefix = format!("search_requests_total{{outcome=\"{outcome}\"}} ");
+    rendered
+        .lines()
+        .find_map(|line| line.strip_prefix(prefix.as_str()))
+        .map(|value| {
+            value
+                .trim()
+                .parse::<u64>()
+                .unwrap_or_else(|_| panic!("non-numeric search_requests_total value: {value:?}"))
+        })
+        .unwrap_or(0)
 }
 
 struct FakeProvider {
@@ -1944,6 +1964,8 @@ async fn t006_search_api_against_postgres_projections() {
         "T006 must preserve the verified T003 class ordering"
     );
 
+    let lexical_fallback_before =
+        search_requests_total_for_outcome(&state.metrics, "lexical_fallback");
     let public = execute_search(
         &state,
         &anonymous,
@@ -1960,10 +1982,16 @@ async fn t006_search_api_against_postgres_projections() {
         Some("t005-public-node")
     );
     assert_eq!(public.generation_id, gen_id);
-    assert_eq!(public.mode, "lexical_fallback");
+    assert_eq!(public.mode, SearchMode::LexicalFallback);
     assert_eq!(
         public.fallback_reason.as_deref(),
         Some("provider_unavailable")
+    );
+    assert_eq!(
+        search_requests_total_for_outcome(&state.metrics, "lexical_fallback")
+            - lexical_fallback_before,
+        1,
+        "a single lexical-fallback search must record exactly one lexical_fallback outcome"
     );
 
     let filtered = execute_search(
@@ -2113,6 +2141,7 @@ async fn t006_search_api_against_postgres_projections() {
     // Hidden/private candidates carry deliberately misleading public projection
     // scopes and high semantic similarity. Anonymous semantic retrieval still
     // cannot see them because canonical authorization ran before ranking.
+    let hybrid_before = search_requests_total_for_outcome(&state.metrics, "hybrid");
     let semantic = execute_search(
         &state,
         &anonymous,
@@ -2125,7 +2154,15 @@ async fn t006_search_api_against_postgres_projections() {
     .await
     .expect("semantic authorization boundary");
     assert!(semantic.items.is_empty());
+    assert_eq!(semantic.mode, SearchMode::Hybrid);
+    assert_eq!(
+        search_requests_total_for_outcome(&state.metrics, "hybrid") - hybrid_before,
+        1,
+        "a single available-provider hybrid search must record exactly one hybrid outcome"
+    );
 
+    let provider_contract_error_before =
+        search_requests_total_for_outcome(&state.metrics, "provider_contract_error");
     let provider_contract_failure = execute_search(
         &state,
         &anonymous,
@@ -2142,6 +2179,12 @@ async fn t006_search_api_against_postgres_projections() {
             EmbeddingProviderError::InvalidVector
         ))
     ));
+    assert_eq!(
+        search_requests_total_for_outcome(&state.metrics, "provider_contract_error")
+            - provider_contract_error_before,
+        1,
+        "a single provider-contract-error search must record exactly one provider_contract_error outcome"
+    );
 
     // The verified T004 core rejects candidate sets above 1000. T006 mirrors
     // that bound and fetches only one sentinel row beyond it, preventing an

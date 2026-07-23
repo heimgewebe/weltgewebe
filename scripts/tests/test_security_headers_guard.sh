@@ -36,9 +36,21 @@ write_static_caddy() {
   local connect="$2"
   cat > "$file" << CADDY
 example.test {
+  @magicLinkConfirm {
+    method GET
+    path /api/auth/magic-link/consume
+  }
+  header @magicLinkConfirm Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none';"
+  @apiResponse {
+    path /api/*
+    not {
+      method GET
+      path /api/auth/magic-link/consume
+    }
+  }
+  header @apiResponse Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
   header {
     Content-Security-Policy "style-src 'self' 'unsafe-inline'; connect-src $connect; img-src 'self' data: blob:; worker-src 'self' blob:; font-src 'self'; media-src 'self'; manifest-src 'self'; child-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
-    Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"
@@ -74,6 +86,13 @@ REPO_ROOT="$TEMP_DIR" bash "$GUARD" > /dev/null
 sed -i '/Strict-Transport-Security/d' "$TEMP_DIR/infra/caddy/Caddyfile.vps"
 if REPO_ROOT="$TEMP_DIR" bash "$GUARD" > /dev/null 2>&1; then
   echo "security headers guard should fail without HSTS" >&2
+  exit 1
+fi
+write_static_caddy "$TEMP_DIR/infra/caddy/Caddyfile.vps" "'self'"
+
+sed -i '/method GET/d' "$TEMP_DIR/infra/caddy/Caddyfile.vps"
+if REPO_ROOT="$TEMP_DIR" bash "$GUARD" > /dev/null 2>&1; then
+  echo "security headers guard should fail without GET-only magic-link matcher" >&2
   exit 1
 fi
 write_static_caddy "$TEMP_DIR/infra/caddy/Caddyfile.vps" "'self'"

@@ -23,6 +23,32 @@ use crate::state::ApiState;
 
 const UNMATCHED_ROUTE_LABEL: &str = "<unmatched>";
 
+/// Fixed set of search service request outcomes. The label set is bounded by
+/// the type system rather than by a runtime string match, so an exhaustive
+/// match at the call site is the only place new outcomes can be introduced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchRequestOutcome {
+    Hybrid,
+    LexicalFallback,
+    ProviderContractError,
+    Unavailable,
+    InvalidRequest,
+    Internal,
+}
+
+impl SearchRequestOutcome {
+    fn as_label(self) -> &'static str {
+        match self {
+            Self::Hybrid => "hybrid",
+            Self::LexicalFallback => "lexical_fallback",
+            Self::ProviderContractError => "provider_contract_error",
+            Self::Unavailable => "unavailable",
+            Self::InvalidRequest => "invalid_request",
+            Self::Internal => "internal",
+        }
+    }
+}
+
 fn metrics_path_label<B>(request: &Request<B>) -> String {
     request
         .extensions()
@@ -129,6 +155,11 @@ impl Metrics {
         let duration_buckets = vec![
             0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
         ];
+        // MAX_AUTHORIZED_CANDIDATES (search/repository.rs) hard-bounds observed
+        // values at 1000. Keep the historical 1001 bucket as a compatibility
+        // series for existing Prometheus queries and dashboards even though no
+        // successful repository result can currently populate it independently
+        // from the 1000 bucket.
         let candidate_buckets = vec![
             1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 750.0, 1000.0, 1001.0,
         ];
@@ -230,23 +261,12 @@ impl Metrics {
             .inc();
     }
 
-    /// Keep the Prometheus label set bounded even if a future caller passes an
-    /// unexpected value. Queries, identities, node ids, and provider text must
-    /// never become labels.
-    pub fn search_request_outcome(&self, outcome: &str) {
-        let outcome = match outcome {
-            "hybrid"
-            | "lexical_fallback"
-            | "success"
-            | "provider_contract_error"
-            | "unavailable"
-            | "invalid_request"
-            | "internal" => outcome,
-            _ => "internal",
-        };
+    /// Queries, identities, node ids, and provider text must never become
+    /// labels; `SearchRequestOutcome` bounds the label set at compile time.
+    pub fn search_request_outcome(&self, outcome: SearchRequestOutcome) {
         self.inner
             .search_requests_total
-            .with_label_values(&[outcome])
+            .with_label_values(&[outcome.as_label()])
             .inc();
     }
 
@@ -373,7 +393,7 @@ where
 mod tests {
     use std::time::Duration;
 
-    use super::{BuildInfo, Metrics, MetricsLayer, UNMATCHED_ROUTE_LABEL};
+    use super::{BuildInfo, Metrics, MetricsLayer, SearchRequestOutcome, UNMATCHED_ROUTE_LABEL};
     use axum::{body::Body, http::Request, routing::get, Router};
     use tower::ServiceExt;
 
@@ -387,10 +407,36 @@ mod tests {
     }
 
     #[test]
-    fn search_cost_metrics_are_label_free_and_record_bounded_observations() {
+    fn search_request_outcome_records_exactly_one_observation_per_bounded_label() {
         let metrics = test_metrics();
-        metrics.search_request_outcome("hybrid");
-        metrics.search_request_outcome("must-not-become-a-label");
+        let outcomes = [
+            (SearchRequestOutcome::Hybrid, "hybrid"),
+            (SearchRequestOutcome::LexicalFallback, "lexical_fallback"),
+            (
+                SearchRequestOutcome::ProviderContractError,
+                "provider_contract_error",
+            ),
+            (SearchRequestOutcome::Unavailable, "unavailable"),
+            (SearchRequestOutcome::InvalidRequest, "invalid_request"),
+            (SearchRequestOutcome::Internal, "internal"),
+        ];
+        for (outcome, _) in outcomes {
+            metrics.search_request_outcome(outcome);
+        }
+
+        let rendered = String::from_utf8(metrics.render().expect("render metrics")).expect("utf8");
+        for (_, label) in outcomes {
+            assert!(
+                rendered.contains(&format!("search_requests_total{{outcome=\"{label}\"}} 1")),
+                "expected exactly one recorded observation for outcome {label}"
+            );
+        }
+    }
+
+    #[test]
+    fn search_cost_metrics_use_bounded_non_user_controlled_labels_and_record_observations() {
+        let metrics = test_metrics();
+        metrics.search_request_outcome(SearchRequestOutcome::Hybrid);
         metrics.search_candidate_set_overflow();
         metrics.observe_search_request_duration(Duration::from_millis(25));
         metrics.observe_search_repository_duration(Duration::from_millis(10));
@@ -399,8 +445,6 @@ mod tests {
 
         let rendered = String::from_utf8(metrics.render().expect("render metrics")).expect("utf8");
         assert!(rendered.contains("search_requests_total{outcome=\"hybrid\"} 1"));
-        assert!(rendered.contains("search_requests_total{outcome=\"internal\"} 1"));
-        assert!(!rendered.contains("must-not-become-a-label"));
         assert!(rendered.contains("search_candidate_set_overflow_total 1"));
         assert!(rendered.contains("search_request_duration_seconds_count 1"));
         assert!(rendered.contains("search_repository_duration_seconds_count 1"));
@@ -409,6 +453,19 @@ mod tests {
         assert!(rendered.contains("search_lexical_candidates_sum 10"));
         assert!(!rendered.contains("query="));
         assert!(!rendered.contains("node_id="));
+    }
+
+    #[test]
+    fn search_authorized_candidates_histogram_keeps_legacy_1001_bucket_for_compatibility() {
+        let metrics = test_metrics();
+        metrics.observe_search_candidate_counts(1000, 10);
+
+        let rendered = String::from_utf8(metrics.render().expect("render metrics")).expect("utf8");
+        assert!(rendered.contains("search_authorized_candidates_bucket{le=\"1000\"}"));
+        assert!(
+            rendered.contains("search_authorized_candidates_bucket{le=\"1001\"}"),
+            "the legacy 1001 bucket remains part of the exported Prometheus contract"
+        );
     }
 
     #[tokio::test]
