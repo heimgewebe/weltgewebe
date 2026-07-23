@@ -368,6 +368,22 @@ class KubernetesHaContractTests(unittest.TestCase):
             with self.assertRaisesRegex(self.ha.ref.ProofError, "not spread"):
                 self.ha.configure_cluster_dns_ha("kubectl")
 
+    def test_external_object_store_missing_volume_is_absent_case_insensitively(self) -> None:
+        result = mock.Mock(
+            returncode=1,
+            stdout="",
+            stderr=(
+                "Error response from daemon: get proof-object-store-data: "
+                "no such volume"
+            ),
+        )
+        with mock.patch.object(self.ha.subprocess, "run", return_value=result):
+            self.assertIsNone(
+                self.ha._object_store_labels(
+                    "volume", "proof-object-store-data"
+                )
+            )
+
     def test_external_object_store_cleanup_is_ownership_bound(self) -> None:
         foreign = self.ha.external_object_store_binding(
             "proof", "a" * 40, "owner-foreign"

@@ -197,11 +197,11 @@ def _object_store_labels(resource_kind: str, name: str) -> dict[str, str] | None
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
         missing_markers = (
-            "No such container",
-            "No such volume",
-            "No such object",
+            "no such container",
+            "no such volume",
+            "no such object",
         )
-        if any(marker in detail for marker in missing_markers):
+        if any(marker in detail.casefold() for marker in missing_markers):
             return None
         raise ref.ProofError(
             f"failed to inspect external object-store {resource_kind} {name}: "
