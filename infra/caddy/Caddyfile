@@ -33,7 +33,21 @@
     reverse_proxy api:8080
   }
   reverse_proxy /* web:5173
-  @apiResponse path /api/*
+  # The magic-link confirmation endpoint intentionally serves one tiny HTML form.
+  # Give only this exact API path the form/style capabilities that its upstream
+  # response already declares; all other API responses stay non-document locked.
+  @magicLinkConfirm {
+    method GET
+    path /api/auth/magic-link/consume
+  }
+  header @magicLinkConfirm Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none';"
+  @apiResponse {
+    path /api/*
+    not {
+      method GET
+      path /api/auth/magic-link/consume
+    }
+  }
   header @apiResponse Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
   @frontendResponse {
     not path /api/*
