@@ -24,8 +24,9 @@ use crate::state::ApiState;
 const UNMATCHED_ROUTE_LABEL: &str = "<unmatched>";
 
 /// Fixed set of search service request outcomes. The label set is bounded by
-/// the type system rather than by a runtime string match, so an exhaustive
-/// match at the call site is the only place new outcomes can be introduced.
+/// the type system rather than by a runtime string match. Successful search
+/// modes are mapped exhaustively through the typed `SearchMode -> SearchRequestOutcome`
+/// conversion; error outcomes remain exhaustively matched at the request boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchRequestOutcome {
     Hybrid,
@@ -155,11 +156,11 @@ impl Metrics {
         let duration_buckets = vec![
             0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
         ];
-        // MAX_AUTHORIZED_CANDIDATES (search/repository.rs) hard-bounds observed
-        // values at 1000. Keep the historical 1001 bucket as a compatibility
-        // series for existing Prometheus queries and dashboards even though no
-        // successful repository result can currently populate it independently
-        // from the 1000 bucket.
+        // MAX_AUTHORIZED_CANDIDATES (search/repository.rs) hard-bounds successful
+        // observed values at 1000. Keep the historical 1001 bucket as a legacy
+        // compatibility series for existing Prometheus queries and dashboards.
+        // It is intentionally redundant with 1000 and is not an overflow signal;
+        // overflows are reported via search_candidate_set_overflow_total.
         let candidate_buckets = vec![
             1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 750.0, 1000.0, 1001.0,
         ];
@@ -461,10 +462,17 @@ mod tests {
         metrics.observe_search_candidate_counts(1000, 10);
 
         let rendered = String::from_utf8(metrics.render().expect("render metrics")).expect("utf8");
-        assert!(rendered.contains("search_authorized_candidates_bucket{le=\"1000\"}"));
+        for le in ["1000", "1001", "+Inf"] {
+            assert!(
+                rendered.contains(&format!(
+                    "search_authorized_candidates_bucket{{le=\"{le}\"}} 1"
+                )),
+                "expected the successful hard-bound observation in bucket le={le}"
+            );
+        }
         assert!(
-            rendered.contains("search_authorized_candidates_bucket{le=\"1001\"}"),
-            "the legacy 1001 bucket remains part of the exported Prometheus contract"
+            rendered.contains("search_candidate_set_overflow_total 0"),
+            "the legacy 1001 bucket is not an overflow signal"
         );
     }
 
