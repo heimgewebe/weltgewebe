@@ -35,6 +35,14 @@ async function longPressMapCenter(page: Page) {
   await page.mouse.up();
 }
 
+async function clickMapCenter(page: Page) {
+  const map = page.locator("#map");
+  await expect(map).toBeVisible();
+  // A plain click (down + up at the same spot, no hold) must set the point in
+  // the explicit place-garnrolle mode.
+  await map.click({ position: { x: 50, y: 50 } });
+}
+
 test.describe("Eigene Garnrolle speichern", () => {
   test("clears sensitive Garnrolle drafts on logout", async ({ page }) => {
     await mockApiResponses(page, {
@@ -137,6 +145,73 @@ test.describe("Eigene Garnrolle speichern", () => {
     });
     await expect(
       section.locator('[data-testid="garnrolle-success"]'),
+    ).toContainText("gespeichert");
+  });
+
+  test("guest places the own Garnrolle via a plain map click and saves it exact", async ({
+    page,
+  }) => {
+    await mockApiResponses(page, {
+      auth: {
+        authenticated: true,
+        account_id: ACCOUNT_ID,
+        role: "gast",
+      },
+    });
+    await page.goto("/settings#meine-garnrolle");
+    const section = page.locator('[data-testid="my-garnrolle-section"]');
+    await expect(section).toBeVisible();
+    await expect(
+      section.locator('[data-testid="garnrolle-role-warning"]'),
+    ).toHaveCount(0);
+
+    await section.getByLabel("Anzeigename").fill("Gastgarnrolle am Ort");
+    await section.getByLabel("Adresse").fill("Poelsweg 2, Hamburg");
+    await section.getByLabel("Exakt sichtbar").check();
+
+    const save = section.locator('[data-testid="save-garnrolle"]');
+    // Without a self-selected point the exact profile cannot be saved.
+    await expect(save).toBeDisabled();
+    await section.locator('[data-testid="choose-garnrolle-location"]').click();
+
+    await expect(page).toHaveURL(/\/map\?compose=garnrolle/);
+    const placement = page.locator('[data-testid="garnrolle-placement"]');
+    await expect(placement).toContainText("Ort ausstehend");
+    // The regression: a normal click (not an 800ms longpress) must set the point.
+    await clickMapCenter(page);
+    await expect(placement).toContainText("Ort gewählt");
+    await placement
+      .locator('[data-testid="confirm-garnrolle-location"]')
+      .click();
+
+    await expect(page).toHaveURL(/\/settings#meine-garnrolle$/);
+    const returned = page.locator('[data-testid="my-garnrolle-section"]');
+    await expect(returned.getByLabel("Anzeigename")).toHaveValue(
+      "Gastgarnrolle am Ort",
+    );
+    await expect(
+      returned.locator('[data-testid="garnrolle-location-state"]'),
+    ).toContainText("Ort gewählt");
+    await expect(
+      returned.locator('[data-testid="save-garnrolle"]'),
+    ).toBeEnabled();
+
+    const requestPromise = page.waitForRequest(
+      (request) =>
+        request.url().endsWith("/api/accounts/me/profile") &&
+        request.method() === "PATCH",
+    );
+    await returned.locator('[data-testid="save-garnrolle"]').click();
+    const payload = (await requestPromise).postDataJSON();
+    expect(payload).toMatchObject({
+      title: "Gastgarnrolle am Ort",
+      address: "Poelsweg 2, Hamburg",
+      map_state: "exact",
+    });
+    expect(typeof payload.location?.lat).toBe("number");
+    expect(typeof payload.location?.lon).toBe("number");
+    await expect(
+      returned.locator('[data-testid="garnrolle-success"]'),
     ).toContainText("gespeichert");
   });
 
@@ -276,6 +351,35 @@ test.describe("Garnrollen-Kartenpunkt per Touch", () => {
       touchPoints: [touchPoint],
     });
     await page.waitForTimeout(950);
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await expect(placement).toContainText("Ort gewählt");
+  });
+
+  test("accepts a plain touch tap (no longpress hold)", async ({ page }) => {
+    await mockApiResponses(page, {
+      auth: {
+        authenticated: true,
+        account_id: ACCOUNT_ID,
+        role: "gast",
+      },
+    });
+    await page.goto("/map?compose=garnrolle");
+    const placement = page.locator('[data-testid="garnrolle-placement"]');
+    await expect(placement).toContainText("Ort ausstehend");
+
+    const map = page.locator("#map canvas").first();
+    const box = await map.boundingBox();
+    if (!box) throw new Error("map has no bounding box");
+    const touchPoint = { x: box.x + 50, y: box.y + 50 };
+    const client = await page.context().newCDPSession(page);
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [touchPoint],
+    });
+    // A quick tap, well below the longpress threshold.
     await client.send("Input.dispatchTouchEvent", {
       type: "touchEnd",
       touchPoints: [],

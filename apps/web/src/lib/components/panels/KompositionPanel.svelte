@@ -161,7 +161,8 @@
         <div class="state-set">
           <p><strong>Ort gewählt</strong></p>
           <p class="ghost">
-            Prüfe, ob dieser Punkt zu deiner Adresse passt. Erst in den
+            Prüfe, ob dieser Punkt zu deiner Adresse passt. Zum Verschieben
+            tippe oder klicke einfach auf eine andere Stelle. Erst in den
             Einstellungen wird die Garnrolle gespeichert.
           </p>
         </div>
@@ -169,8 +170,9 @@
         <div class="state-pending">
           <p><strong>Ort ausstehend</strong></p>
           <p>
-            Halte den gewünschten Ort auf der Karte etwa eine Sekunde gedrückt.
-            Du kannst den Punkt danach bestätigen oder erneut setzen.
+            Tippe oder klicke auf den gewünschten Ort auf der Karte, um den
+            Punkt zu setzen. Du kannst ihn danach bestätigen oder erneut setzen.
+            (Ein längeres Gedrückthalten funktioniert ebenfalls.)
           </p>
         </div>
       {/if}

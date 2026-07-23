@@ -22,7 +22,7 @@ import { setupUiInvariantWatcher } from "./uiInvariants";
  * NodesOverlay         | DOM markers, activeMarkers map  | MapEntityViewModel[]
  * edges.ts             | GeoJSON edge source/layers      | Edge[], MapEntityViewModel[]
  * focus.ts             | click-to-dismiss handler         | systemState
- * komposition.ts       | longpress handler                | —
+ * komposition.ts       | longpress + garnrolle-tap handler| kompositionDraft
  *
  * Invariants (enforced by uiInvariants.ts):
  *  - selection and kompositionDraft are mutually exclusive
@@ -66,7 +66,7 @@ export const contextPanelOpen = derived(
 export type KompositionDraft = {
   mode: "new-knoten" | "place-garnrolle";
   lngLat?: [number, number];
-  source: "map-longpress" | "tool-fan";
+  source: "map-longpress" | "map-tap" | "tool-fan";
 } | null;
 
 export const kompositionDraft = writable<KompositionDraft>(null);
