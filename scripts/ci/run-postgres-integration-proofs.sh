@@ -91,7 +91,9 @@ IFS=$'\t' read -r T005_HOST T005_PORT T005_DATABASE_NAME <<< "$(validate_databas
 DATABASE_ENDPOINT="${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}"
 PG_DIRECT_ENDPOINT="${PG_DIRECT_HOST}:${PG_DIRECT_PORT}/${PG_DIRECT_DATABASE_NAME}"
 T005_ENDPOINT="${T005_HOST}:${T005_PORT}/${T005_DATABASE_NAME}"
-if [[ "$DATABASE_ENDPOINT" != "$PG_DIRECT_ENDPOINT" || "$DATABASE_ENDPOINT" != "$T005_ENDPOINT" ]]; then
+if [[ "$DATABASE_ENDPOINT" == "$PG_DIRECT_ENDPOINT" && "$DATABASE_ENDPOINT" == "$T005_ENDPOINT" ]]; then
+  :
+else
   echo "PostgreSQL proof URLs must target the same direct endpoint: DATABASE_URL=${DATABASE_ENDPOINT}, PG_DIRECT_URL=${PG_DIRECT_ENDPOINT}, T005_DATABASE_URL=${T005_ENDPOINT}" >&2
   exit 1
 fi
@@ -145,7 +147,7 @@ validate_reset_container_binding() {
     return 1
   }
   case "$PG_DIRECT_HOST" in
-    localhost|127.0.0.1|::1) ;;
+    localhost | 127.0.0.1 | ::1) ;;
     *)
       echo "POSTGRES_RESET_CONTAINER requires a loopback PG_DIRECT_URL, got host ${PG_DIRECT_HOST}" >&2
       return 1
@@ -295,7 +297,7 @@ reset_database() {
     return 1
   fi
   case "$PG_DIRECT_HOST" in
-    localhost|127.0.0.1|::1) ;;
+    localhost | 127.0.0.1 | ::1) ;;
     *)
       echo "PostgreSQL proof reset refused for non-loopback host ${PG_DIRECT_HOST}; destructive CI proofs must use an isolated local server" >&2
       return 1
