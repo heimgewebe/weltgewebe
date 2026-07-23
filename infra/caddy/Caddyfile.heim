@@ -67,6 +67,10 @@ weltgewebe.home.arpa {
 
   header {
     # Security headers (Heim-first specific)
+    # Script execution is intentionally document-owned: SvelteKit emits a hash-bound
+    # meta CSP for every served HTML artifact. An edge default-src/script-src would
+    # intersect with that policy and block the hash-authorized inline bootstrap.
+    # The static CSP preflight validates every HTML artifact and rejects active SVGs.
     Content-Security-Policy "style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; font-src 'self'; media-src 'self'; manifest-src 'self'; child-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"

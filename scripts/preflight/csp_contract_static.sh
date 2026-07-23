@@ -41,6 +41,7 @@ python3 - "$ROOT/apps/web/build" << 'PY'
 from __future__ import annotations
 import base64
 import hashlib
+import re
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
@@ -104,5 +105,29 @@ for path in html_files:
             raise SystemExit(f"ERROR: inline script hash missing from script-src in {path}: {token}")
     validated += 1
     print(f"csp_contract_static: {path.relative_to(build)} scripts={len(parser.inline_scripts)} hash-bound")
-print(f"csp_contract_static: OK ({validated} HTML artifact(s) validated)")
+
+# The edge CSP intentionally delegates script-src to each HTML document so that
+# SvelteKit can authorize its inline bootstrap with build-generated hashes.
+# Non-HTML active documents therefore need a separate fail-closed rule. Static
+# SVG assets are repository/build artifacts only and must not contain scriptable
+# constructs when served directly by Caddy.
+active_svg = re.compile(
+    r"<\s*script\b|javascript\s*:|\son[a-z0-9_-]+\s*=|"
+    r"<\s*foreignobject\b|<\s*(?:iframe|object|embed)\b",
+    re.IGNORECASE,
+)
+svg_files = sorted(build.rglob("*.svg"))
+for path in svg_files:
+    text = path.read_text(encoding="utf-8")
+    match = active_svg.search(text)
+    if match:
+        raise SystemExit(
+            f"ERROR: active/scriptable SVG content is forbidden in {path}: {match.group(0)!r}"
+        )
+    print(f"csp_contract_static: {path.relative_to(build)} passive-svg")
+
+print(
+    f"csp_contract_static: OK ({validated} HTML artifact(s) validated, "
+    f"{len(svg_files)} passive SVG artifact(s) validated)"
+)
 PY

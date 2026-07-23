@@ -33,6 +33,18 @@ run_test "missing-index" 1
 printf '%s\n' '<meta http-equiv="content-security-policy" content="script-src '\''self'\''"><script src="/app.js"></script>' > "$INDEX_HTML"
 run_test "external-script-strict" 0
 
+mkdir -p "$TEST_DIR/apps/web/build/weltweberei"
+printf '%s\n' '<html><body>secondary static document</body></html>' > "$TEST_DIR/apps/web/build/weltweberei/index.html"
+run_test "secondary-html-without-csp" 1
+printf '%s\n' '<meta http-equiv="content-security-policy" content="script-src '\''none'\''"><main>secondary static document</main>' > "$TEST_DIR/apps/web/build/weltweberei/index.html"
+run_test "secondary-html-strict" 0
+
+printf '%s\n' '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1z"/></svg>' > "$TEST_DIR/apps/web/build/favicon.svg"
+run_test "passive-svg" 0
+printf '%s\n' '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>' > "$TEST_DIR/apps/web/build/favicon.svg"
+run_test "active-svg-rejected" 1
+printf '%s\n' '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1z"/></svg>' > "$TEST_DIR/apps/web/build/favicon.svg"
+
 printf '%s\n' '<meta http-equiv="content-security-policy" content="script-src '\''self'\''"><script>console.log("inline")</script>' > "$INDEX_HTML"
 run_test "inline-without-hash" 1
 
