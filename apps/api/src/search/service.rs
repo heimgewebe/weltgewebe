@@ -102,6 +102,15 @@ fn parse_list(single: &Option<String>, multiple: &Option<String>) -> Vec<String>
     values
 }
 
+fn pagination(params: &SearchQueryParams) -> Result<(usize, usize), SearchError> {
+    let limit = params.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
+    let offset = params.offset.unwrap_or(0);
+    if offset > MAX_OFFSET {
+        return Err(SearchError::InvalidRequest);
+    }
+    Ok((limit, offset))
+}
+
 fn validate_generation(generation: &ActiveSearchGeneration) -> Result<(), SearchError> {
     if generation.dimension <= 0
         || generation.document_revision != DOCUMENT_REVISION
@@ -163,11 +172,7 @@ pub async fn execute_search(
         return Err(SearchError::InvalidRequest);
     }
 
-    let limit = params.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
-    let offset = params.offset.unwrap_or(0);
-    if offset > MAX_OFFSET {
-        return Err(SearchError::InvalidRequest);
-    }
+    let (limit, offset) = pagination(&params)?;
     let filters = SearchFilters {
         kinds: parse_list(&params.kind, &params.kinds),
         tags: parse_list(&params.tag, &params.tags),
@@ -192,9 +197,10 @@ pub async fn execute_search(
         None => runtime_provider(&candidate_set.generation)?,
     };
 
+    let query_embedding_text = query.embedding_text();
     let (ranked, mode, fallback_reason) = match provider
         .embed(
-            &query.normalized,
+            &query_embedding_text,
             candidate_set.generation.dimension as usize,
         )
         .await
@@ -237,4 +243,36 @@ pub async fn execute_search(
         generation_id: candidate_set.generation.generation_id,
         offset,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pagination_defaults_clamps_limit_and_rejects_excessive_offset() {
+        assert_eq!(pagination(&SearchQueryParams::default()).unwrap(), (10, 0));
+
+        let low = SearchQueryParams {
+            limit: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(pagination(&low).unwrap(), (1, 0));
+
+        let high = SearchQueryParams {
+            limit: Some(MAX_LIMIT + 1),
+            offset: Some(MAX_OFFSET),
+            ..Default::default()
+        };
+        assert_eq!(pagination(&high).unwrap(), (MAX_LIMIT, MAX_OFFSET));
+
+        let excessive = SearchQueryParams {
+            offset: Some(MAX_OFFSET + 1),
+            ..Default::default()
+        };
+        assert!(matches!(
+            pagination(&excessive),
+            Err(SearchError::InvalidRequest)
+        ));
+    }
 }
