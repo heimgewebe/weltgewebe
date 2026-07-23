@@ -132,10 +132,11 @@
     query: string,
     kinds: string[],
     enabled: boolean,
+    open: boolean,
   ) {
     resetNodeSearch();
     const normalizedQuery = query.trim();
-    if (!$isSearchOpen || !enabled || !normalizedQuery) return;
+    if (!open || !enabled || !normalizedQuery) return;
     const sequence = nodeSearchSequence;
     nodeSearchStatus = "loading";
     nodeSearchTimer = setTimeout(async () => {
@@ -172,7 +173,12 @@
   );
   $: nodeSearchEnabled =
     $activeFilters.size === 0 || activeSearchKinds.length > 0;
-  $: scheduleNodeSearch($searchQuery, activeSearchKinds, nodeSearchEnabled);
+  $: scheduleNodeSearch(
+    $searchQuery,
+    activeSearchKinds,
+    nodeSearchEnabled,
+    $isSearchOpen,
+  );
   $: searchBaseMarkers =
     $activeFilters.size === 0 ? markersData : filteredMarkersData;
   $: localGarnrolleResults = deriveSearchResults(

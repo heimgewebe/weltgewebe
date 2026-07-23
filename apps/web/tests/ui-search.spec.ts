@@ -38,8 +38,10 @@ test.describe("Search mode", () => {
                 summary: "Wir stricken gemeinsam",
                 kind: "Treffen",
                 location: { lat: 51, lon: 10 },
+                tags: ["Stricken"],
                 modules: [],
                 created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               },
             ]
           : [];
@@ -313,7 +315,7 @@ test.describe("Search mode", () => {
 
     const results = page.locator("li[role='option']");
     await expect(results).toHaveCount(6);
-    await expect(page.getByText("9 Treffer auf der Karte")).toBeVisible();
+    await expect(page.getByText("9 Treffer", { exact: true })).toBeVisible();
 
     const showMore = page.getByRole("button", {
       name: "Alle 9 Vorschläge zeigen",

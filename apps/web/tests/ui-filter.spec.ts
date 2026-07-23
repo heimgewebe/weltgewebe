@@ -47,6 +47,9 @@ test.describe("Sicht mode", () => {
           kind: "Event",
           location: { lat: 53.5, lon: 10.0 },
           summary: "A test event node.",
+          tags: [],
+          created_at: "2026-07-23T00:00:00Z",
+          updated_at: "2026-07-23T00:00:00Z",
         },
         {
           id: "node-2",
@@ -54,6 +57,9 @@ test.describe("Sicht mode", () => {
           kind: "Place",
           location: { lat: 53.6, lon: 10.1 },
           summary: "A test place node.",
+          tags: [],
+          created_at: "2026-07-23T00:00:00Z",
+          updated_at: "2026-07-23T00:00:00Z",
         },
       ].filter(
         (node) =>

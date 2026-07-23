@@ -12,6 +12,7 @@ const SOURCE_NODE = {
   location: { lat: 54.9, lon: 8.3 },
   modules: [],
   created_at: "2026-07-23T00:00:00Z",
+  updated_at: "2026-07-23T00:00:00Z",
 };
 
 const SIMILAR_NODE = {
@@ -20,8 +21,10 @@ const SIMILAR_NODE = {
   summary: "Hilfe bei Fahrradreparaturen",
   kind: "Werkstatt",
   location: { lat: 54.91, lon: 8.31 },
+  tags: ["Fahrrad", "Reparatur"],
   modules: [],
   created_at: "2026-07-23T00:00:00Z",
+  updated_at: "2026-07-23T00:00:00Z",
 };
 
 async function openSearch(page: Page) {

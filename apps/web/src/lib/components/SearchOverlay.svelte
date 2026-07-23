@@ -163,12 +163,12 @@
         <div class="result-meta" aria-live="polite">
           {#if $activeFilters.size > 0}
             {filteredResults.length === 1
-              ? "1 Treffer in der aktuellen Kartenansicht"
-              : `${filteredResults.length} Treffer in der aktuellen Kartenansicht`}
+              ? "1 gefilterter Treffer"
+              : `${filteredResults.length} gefilterte Treffer`}
           {:else}
             {filteredResults.length === 1
-              ? "1 Treffer auf der Karte"
-              : `${filteredResults.length} Treffer auf der Karte`}
+              ? "1 Treffer"
+              : `${filteredResults.length} Treffer`}
           {/if}
         </div>
         <ul
