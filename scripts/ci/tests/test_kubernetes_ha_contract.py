@@ -374,7 +374,7 @@ class KubernetesHaContractTests(unittest.TestCase):
             stdout="",
             stderr=(
                 "Error response from daemon: get proof-object-store-data: "
-                "no such volume"
+                "No Such Volume"
             ),
         )
         with mock.patch.object(self.ha.subprocess, "run", return_value=result):

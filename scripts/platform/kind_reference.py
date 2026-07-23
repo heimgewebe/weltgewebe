@@ -328,10 +328,21 @@ def cluster_creation_reservation(
         try:
             yield
         except Exception:
-            if name in clusters(kind):
-                run([kind, "delete", "cluster", "--name", name])
-            marker_path(name).unlink(missing_ok=True)
-            kubeconfig_path(name).unlink(missing_ok=True)
+            rollback_error: Exception | None = None
+            try:
+                if name in clusters(kind):
+                    run([kind, "delete", "cluster", "--name", name])
+            except Exception as error:
+                rollback_error = error
+            if rollback_error is None:
+                marker_path(name).unlink(missing_ok=True)
+                kubeconfig_path(name).unlink(missing_ok=True)
+            else:
+                print(
+                    f"cluster {name!r} creation rollback incomplete; "
+                    f"preserving ownership marker: {rollback_error}",
+                    file=sys.stderr,
+                )
             raise
 
 

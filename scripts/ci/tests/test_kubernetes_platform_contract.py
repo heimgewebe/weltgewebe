@@ -565,6 +565,31 @@ spec:
                 release.set()
                 self.reference.MARKERS = original
 
+    def test_creation_reservation_preserves_original_error_when_rollback_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            original = self.reference.MARKERS
+            self.reference.MARKERS = Path(tmp)
+            try:
+                with mock.patch.object(
+                    self.reference,
+                    "clusters",
+                    side_effect=[set(), {"proof"}],
+                ), mock.patch.object(
+                    self.reference,
+                    "run",
+                    side_effect=self.reference.ProofError("rollback failed"),
+                ):
+                    with self.assertRaisesRegex(
+                        self.reference.ProofError, "create failed"
+                    ):
+                        with self.reference.cluster_creation_reservation(
+                            "kind", "proof", "a" * 40, "owner-proof"
+                        ):
+                            raise self.reference.ProofError("create failed")
+                self.assertTrue(self.reference.marker_path("proof").is_file())
+            finally:
+                self.reference.MARKERS = original
+
     def test_web_container_copies_postinstall_script_before_install(self) -> None:
         dockerfile = (ROOT / "apps/web/Dockerfile").read_text()
         script_copy = dockerfile.index(
