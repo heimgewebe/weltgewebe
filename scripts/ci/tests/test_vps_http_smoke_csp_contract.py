@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
 import pathlib
 import subprocess
@@ -19,8 +21,14 @@ class VpsHttpSmokeCspContractTest(unittest.TestCase):
             root = pathlib.Path(tmp)
             build_dir = root / "apps" / "web" / "build"
             build_dir.mkdir(parents=True)
+            inline_script = 'console.log("inline")'
+            digest = base64.b64encode(
+                hashlib.sha256(inline_script.encode("utf-8")).digest()
+            ).decode("ascii")
             (build_dir / "index.html").write_text(
-                '<html><head><script>console.log("inline")</script></head></html>',
+                f'<html><head><meta http-equiv="content-security-policy" '
+                f"content=\"script-src 'self' 'sha256-{digest}'\">"
+                f'<script>{inline_script}</script></head></html>',
                 encoding="utf-8",
             )
 
