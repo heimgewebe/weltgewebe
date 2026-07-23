@@ -7,7 +7,7 @@ summary: >
   Führt den eigentumsgebundenen T004-Beweis für Zonenverteilung, API-Upgrade/Rollback, PostgreSQL- und JetStream-Failover sowie PITR in einen leeren kind-Cluster aus.
 relations:
   - type: relates_to
-    target: docs/adr/ADR-0011__ha-referenzzelle-und-wiederherstellung.md
+    target: docs/adr/ADR-0013__ha-referenzzelle-und-wiederherstellung.md
 ---
 
 # Kubernetes-HA- und Recovery-Beweis
@@ -66,12 +66,13 @@ Bei einem Fehler werden Clusterzustand, Pods, Events, Flux, Gateway, CloudNative
 
 ## Manuelles eigentumsgebundenes Cleanup
 
-Nur für einen abgebrochenen Lauf mit bekanntem Commit:
+Nur für einen abgebrochenen Lauf mit bekanntem Commit und der im Proof-Receipt gebundenen Owner-ID:
 
 ```bash
 python scripts/platform/ha_reference.py down \
   --cluster weltgewebe-ha-reference \
-  --commit <exakter-commit>
+  --commit <exakter-commit> \
+  --owner-id <exakte-owner-id>
 ```
 
-Ohne passende Eigentumsmarker verweigert der Befehl das Löschen.
+Ohne exakt passenden Eigentumsmarker für Repository, Commit und Owner-ID verweigert der Befehl das Löschen. Verwaiste Marker werden nicht automatisch entfernt.

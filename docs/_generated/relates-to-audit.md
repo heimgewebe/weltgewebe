@@ -78,8 +78,8 @@ _Keine Lücken erkannt._
 - `docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md`
 - `docs/adr/ADR-0010__kubernetes-kanonische-plattform.md`
 - `docs/adr/ADR-0011__foederierte-gewebezellen.md`
-- `docs/adr/ADR-0011__ha-referenzzelle-und-wiederherstellung.md`
 - `docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md`
+- `docs/adr/ADR-0013__ha-referenzzelle-und-wiederherstellung.md`
 - `docs/architecture/weltgewebe-os-convergence-adapter.md`
 - `docs/architekturstruktur.md`
 - `docs/blueprints/agent-operability-blaupause.md`
