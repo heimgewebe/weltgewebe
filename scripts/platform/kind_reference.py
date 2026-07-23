@@ -96,6 +96,8 @@ def tool_receipt() -> dict[str, Any]:
             "flux",
             "--tool",
             "helm",
+            "--tool",
+            "kubectl_cnpg",
         ]
     )
     return json.loads(raw)

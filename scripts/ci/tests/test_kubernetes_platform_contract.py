@@ -47,6 +47,10 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "unknown tool selection"):
             self.bootstrap._selected_tool_specs(lock, ["missing"])
 
+    def test_kind_reference_requests_ha_required_kubectl_cnpg_tool(self) -> None:
+        source = (ROOT / "scripts/platform/kind_reference.py").read_text(encoding="utf-8")
+        self.assertIn('"kubectl_cnpg"', source)
+
     def test_static_platform_contract_passes(self) -> None:
         result = self.validator.validate(render=False)
         self.assertEqual(result["status"], "pass")
