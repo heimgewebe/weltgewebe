@@ -27,7 +27,7 @@ use weltgewebe_api::{
     middleware::auth::AuthContext,
     search::{
         execute_search, fetch_postgres_candidates, EmbeddingProvider, EmbeddingProviderError,
-        GenerationSpec, ProcessOutcome, ProjectionWorker, SearchError, SearchFilters,
+        GenerationSpec, ProcessOutcome, ProjectionWorker, SearchError, SearchFilters, SearchMode,
         SearchQueryParams, SearchRepositoryError, DOCUMENT_REVISION, MAX_AUTHORIZED_CANDIDATES,
         NORMALIZATION_REVISION, RANKING_REVISION,
     },
@@ -1960,7 +1960,7 @@ async fn t006_search_api_against_postgres_projections() {
         Some("t005-public-node")
     );
     assert_eq!(public.generation_id, gen_id);
-    assert_eq!(public.mode, "lexical_fallback");
+    assert_eq!(public.mode, SearchMode::LexicalFallback);
     assert_eq!(
         public.fallback_reason.as_deref(),
         Some("provider_unavailable")
