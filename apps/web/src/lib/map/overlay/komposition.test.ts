@@ -33,22 +33,24 @@ import {
   enterKomposition,
 } from "$lib/stores/uiView";
 
-// The overlay classifies event targets with `instanceof HTMLElement` +
-// `closest(".map-marker")`. The suite runs under the "node" environment (no
-// DOM), so a minimal element stand-in provides both.
+// The production guard only requires the DOM-standard `closest` capability,
+// so these tests do not replace global HTMLElement/Element constructors. The
+// parent chain also models nested HTML/SVG content inside a map marker.
 class FakeElement {
   className: string;
-  constructor(className = "") {
+  parent: FakeElement | null;
+
+  constructor(className = "", parent: FakeElement | null = null) {
     this.className = className;
+    this.parent = parent;
   }
+
   closest(selector: string): FakeElement | null {
-    return selector === ".map-marker" &&
-      /(^|\s)map-marker(\s|$)/.test(this.className)
-      ? this
-      : null;
+    if (selector !== ".map-marker") return null;
+    if (/(^|\s)map-marker(\s|$)/.test(this.className)) return this;
+    return this.parent?.closest(selector) ?? null;
   }
 }
-(globalThis as { HTMLElement?: unknown }).HTMLElement = FakeElement;
 
 type Handler = (event: unknown) => void;
 
@@ -75,9 +77,14 @@ function pointerEvent(
   lng: number,
   lat: number,
   target: unknown = new FakeElement("maplibregl-canvas"),
+  touchCount = 1,
 ) {
   return {
     point: { x, y },
+    points: Array.from({ length: touchCount }, (_, index) => ({
+      x: x + index,
+      y: y + index,
+    })),
     lngLat: { lng, lat },
     originalEvent: { target },
   };
@@ -125,6 +132,21 @@ describe("setupKompositionInteraction", () => {
     clickAt(map, "touchstart", "touchend", pointerEvent(50, 50, 9.9, 53.4));
     expect(get(kompositionDraft)?.lngLat).toEqual([9.9, 53.4]);
     expect(get(kompositionDraft)?.source).toBe("map-tap");
+  });
+
+  it("suppresses compatibility mouse events after a touch tap", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    const setSpy = vi.fn();
+    const unsub = kompositionDraft.subscribe((value) => {
+      if (value?.lngLat) setSpy(value.lngLat);
+    });
+
+    clickAt(map, "touchstart", "touchend", pointerEvent(50, 50, 9.9, 53.4));
+    clickAt(map, "mousedown", "mouseup", pointerEvent(50, 50, 10.1, 53.6));
+
+    unsub();
+    expect(setSpy).toHaveBeenCalledTimes(1);
+    expect(get(kompositionDraft)?.lngLat).toEqual([9.9, 53.4]);
   });
 
   it("ignores a plain click outside place-garnrolle mode (navigation)", () => {
@@ -178,6 +200,23 @@ describe("setupKompositionInteraction", () => {
     expect(get(kompositionDraft)?.lngLat).toBeUndefined();
   });
 
+  it("does not move the point from nested SVG-like marker content", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    const marker = new FakeElement("map-marker");
+    const svg = new FakeElement("marker-icon-svg", marker);
+    const path = new FakeElement("marker-icon-path", svg);
+    clickAt(map, "mousedown", "mouseup", pointerEvent(50, 50, 10, 53.5, path));
+    expect(get(kompositionDraft)?.lngLat).toBeUndefined();
+  });
+
+  it("does not resurrect Garnrolle placement when composition is cancelled mid-press", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    leaveToNavigation();
+    map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
+    expect(get(kompositionDraft)).toBeNull();
+  });
+
   it("does not place a point for a pan (movement beyond tolerance)", () => {
     enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
     map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
@@ -186,10 +225,28 @@ describe("setupKompositionInteraction", () => {
     expect(get(kompositionDraft)?.lngLat).toBeUndefined();
   });
 
+  it("does not arm placement for a multi-touch gesture", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit(
+      "touchstart",
+      pointerEvent(50, 50, 10, 53.5, new FakeElement("maplibregl-canvas"), 2),
+    );
+    map.emit("touchend", pointerEvent(50, 50, 10, 53.5));
+    expect(get(kompositionDraft)?.lngLat).toBeUndefined();
+  });
+
   it("ignores a click by an anonymous user", () => {
     authStore.set({ authenticated: false, role: "gast" });
     enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
     clickAt(map, "mousedown", "mouseup", pointerEvent(50, 50, 10, 53.5));
+    expect(get(kompositionDraft)?.lngLat).toBeUndefined();
+  });
+
+  it("cancels an armed gesture when authentication disappears before release", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    authStore.set({ authenticated: false, role: "gast" });
+    map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
     expect(get(kompositionDraft)?.lngLat).toBeUndefined();
   });
 });
