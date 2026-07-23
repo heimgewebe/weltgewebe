@@ -116,15 +116,18 @@ class MagicLinkCspRuntimeContractTest(unittest.TestCase):
                     "caddyfile",
                 ]
 
-            process = subprocess.Popen(
-                command,
-                cwd=REPO,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
+            stderr_path = Path(tmp) / "caddy.stderr"
+            with stderr_path.open("w", encoding="utf-8") as stderr_file:
+                process = subprocess.Popen(
+                    command,
+                    cwd=REPO,
+                    stdout=subprocess.DEVNULL,
+                    stderr=stderr_file,
+                    text=True,
+                )
             try:
-                deadline = time.monotonic() + 5
+                startup_timeout = 10 if CADDY_BINARY else 60
+                deadline = time.monotonic() + startup_timeout
                 while time.monotonic() < deadline:
                     try:
                         connection = http.client.HTTPConnection("127.0.0.1", edge_port, timeout=1)
@@ -136,8 +139,13 @@ class MagicLinkCspRuntimeContractTest(unittest.TestCase):
                     except OSError:
                         time.sleep(0.05)
                 else:
-                    stderr = process.stderr.read() if process.stderr else ""
-                    self.fail(f"caddy runtime did not become ready: {stderr}")
+                    stderr = stderr_path.read_text(encoding="utf-8") if stderr_path.exists() else ""
+                    state = (
+                        f"process exited with {process.returncode}"
+                        if process.poll() is not None
+                        else f"process still running after {startup_timeout}s"
+                    )
+                    self.fail(f"caddy runtime did not become ready ({state}): {stderr}")
 
                 cases = (
                     ("GET", MAGIC_PATH, MAGIC_POLICY),
