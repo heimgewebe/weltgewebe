@@ -354,6 +354,7 @@ if [[ "${POSTGRES_PROOF_PREFLIGHT_ONLY:-0}" == "1" ]]; then
 fi
 
 targets=(
+  db_migration_checksum_recovery
   db_auto_provision_write_path
   db_domain_account_write_path
   db_domain_backfill
