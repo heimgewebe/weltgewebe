@@ -301,7 +301,6 @@ mod tests {
         assert_eq!(c3, 2);
     }
 
-
     #[test]
     fn pure_trigram_match_ranks_before_full_text_match() {
         let q = SearchQuery::new("Fahrrad gemeinschaftswerkstatt");
@@ -312,13 +311,8 @@ mod tests {
             "kein token treffer",
         )
         .expect("trigram match");
-        let full_text = calculate_lexical_rank_class(
-            &q,
-            "Unverbundener Titel",
-            &[],
-            "Fahrrad",
-        )
-        .expect("full-text match");
+        let full_text = calculate_lexical_rank_class(&q, "Unverbundener Titel", &[], "Fahrrad")
+            .expect("full-text match");
 
         assert_eq!(trigram.0, 3);
         assert_eq!(full_text.0, 4);
