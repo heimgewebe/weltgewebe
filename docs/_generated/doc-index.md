@@ -26,8 +26,8 @@ Generated automatically. Do not edit.
 | adr.ADR-0009__garnrolle-verortung-sichtbarkeit | ADR-0009 — Garnrolle, Verortung und Sichtbarkeit | reference | active | docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md |
 | adr.ADR-0010__kubernetes-kanonische-plattform | ADR-0010 — Kubernetes als kanonische Zielplattform | reference | active | docs/adr/ADR-0010__kubernetes-kanonische-plattform.md |
 | adr.ADR-0011__foederierte-gewebezellen | ADR-0011 — Föderierte Gewebe-Zellen | reference | active | docs/adr/ADR-0011__foederierte-gewebezellen.md |
-| adr.ADR-0011__ha-referenzzelle-und-wiederherstellung | ADR-0011 — Hochverfügbare Referenzzelle und Wiederherstellungsbeweis | reference | active | docs/adr/ADR-0011__ha-referenzzelle-und-wiederherstellung.md |
 | adr.ADR-0012__ereignisrueckgrat-transactional-outbox | ADR-0012 — Ereignisrückgrat mit Transactional Outbox | reference | active | docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md |
+| adr.ADR-0013__ha-referenzzelle-und-wiederherstellung | ADR-0013 — Hochverfügbare Referenzzelle und Wiederherstellungsbeweis | reference | active | docs/adr/ADR-0013__ha-referenzzelle-und-wiederherstellung.md |
 | blueprint-doc-structure-task-control | Weltgewebe Dokumentationsstruktur und Task-Steuerung | blueprint | draft | docs/blueprints/doc-structure-task-control.md |
 | blueprint-doc-structure-task-control-examples | Dokumentationsstruktur und Task-Steuerung Beispiele | reference | draft | docs/blueprints/doc-structure-task-control-examples.md |
 | blueprint-doc-structure-task-control-roadmap | Dokumentationsstruktur und Task-Steuerung Roadmap | roadmap | draft | docs/blueprints/doc-structure-task-control-roadmap.md |

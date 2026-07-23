@@ -11,9 +11,14 @@ permissions:
   pull_request:
     paths:
       - ".github/workflows/kubernetes-platform.yml"
-      - "apps/api/Dockerfile"
-      - "apps/api/entrypoint.sh"
+      - ".dockerignore"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "toolchain.versions.yml"
+      - "apps/api/**"
       - "apps/web/**"
+      - "scripts/dev/**"
+      - "policies/**"
       - "infra/compose/compose.prod.yml"
       - "platform/**"
       - "scripts/platform/**"
@@ -26,9 +31,14 @@ permissions:
     branches: [main]
     paths:
       - ".github/workflows/kubernetes-platform.yml"
-      - "apps/api/Dockerfile"
-      - "apps/api/entrypoint.sh"
+      - ".dockerignore"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "toolchain.versions.yml"
+      - "apps/api/**"
       - "apps/web/**"
+      - "scripts/dev/**"
+      - "policies/**"
       - "infra/compose/compose.prod.yml"
       - "platform/**"
       - "scripts/platform/**"
@@ -48,8 +58,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
@@ -78,8 +86,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
@@ -101,10 +107,9 @@ jobs:
     timeout-minutes: 45
     env:
       CLUSTER_NAME: wg-${{ github.run_id }}-${{ github.run_attempt }}
+      PROOF_OWNER_ID: gha-kind-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
@@ -116,6 +121,7 @@ jobs:
           python scripts/platform/kind_reference.py proof
           --cluster "$CLUSTER_NAME"
           --mode direct
+          --owner-id "$PROOF_OWNER_ID"
       - name: Run commit-bound GitOps reference proof
         if: github.event_name != 'pull_request'
         run: >-
@@ -123,6 +129,7 @@ jobs:
           --cluster "$CLUSTER_NAME"
           --mode gitops
           --source-commit "$GITHUB_SHA"
+          --owner-id "$PROOF_OWNER_ID"
       - name: Stage failure diagnostics
         if: failure()
         run: |
@@ -141,6 +148,13 @@ jobs:
           path: build/kubernetes-platform/failures/
           if-no-files-found: ignore
           retention-days: 7
+      - name: Reconcile owned kind proof resources
+        if: always()
+        run: >-
+          python scripts/platform/kind_reference.py down
+          --cluster "$CLUSTER_NAME"
+          --commit "$(git rev-parse HEAD)"
+          --owner-id "$PROOF_OWNER_ID"
 
   kind-ha-recovery-proof:
     needs: contract
@@ -148,10 +162,9 @@ jobs:
     timeout-minutes: 90
     env:
       CLUSTER_NAME: wg-ha-${{ github.run_id }}-${{ github.run_attempt }}
+      PROOF_OWNER_ID: gha-ha-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
@@ -161,6 +174,7 @@ jobs:
         run: >-
           python scripts/platform/ha_reference.py proof
           --cluster "$CLUSTER_NAME"
+          --owner-id "$PROOF_OWNER_ID"
       - name: Stage HA recovery receipt
         run: |
           set -euo pipefail
@@ -198,3 +212,4 @@ jobs:
           python scripts/platform/ha_reference.py down
           --cluster "$CLUSTER_NAME"
           --commit "$(git rev-parse HEAD)"
+          --owner-id "$PROOF_OWNER_ID"
