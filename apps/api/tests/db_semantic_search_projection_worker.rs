@@ -358,6 +358,23 @@ async fn status_snapshot_separates_unique_nodes_job_history_and_activation_readi
         Some(canonical_second_complete)
     );
 
+    sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
+        .bind(generation)
+        .execute(&pool)
+        .await
+        .expect("activate first status generation");
+    let active_only = projection_worker
+        .status_snapshot()
+        .await
+        .expect("active-only status");
+    assert_eq!(
+        active_only.active_generation_id.as_deref(),
+        Some(generation)
+    );
+    assert!(active_only.active_generation_identity.is_some());
+    assert!(active_only.active_generation_activated_at.is_some());
+    assert_eq!(active_only.rebuild_generation_id, None);
+
     let generation_two = "t005-status-semantics-generation-two";
     projection_worker
         .start_generation(GenerationSpec {
@@ -374,6 +391,13 @@ async fn status_snapshot_separates_unique_nodes_job_history_and_activation_readi
         .status_snapshot()
         .await
         .expect("second generation pending status");
+    assert_eq!(
+        second_generation_pending.active_generation_id.as_deref(),
+        Some(generation)
+    );
+    assert!(second_generation_pending
+        .active_generation_activated_at
+        .is_some());
     assert_eq!(
         second_generation_pending.rebuild_generation_id.as_deref(),
         Some(generation_two)

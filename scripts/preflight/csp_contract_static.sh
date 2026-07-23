@@ -37,7 +37,7 @@ if [[ ! -f "$INDEX_HTML" ]]; then
   exit 1
 fi
 
-python3 - "$ROOT/apps/web/build" << 'PY'
+python3 - "$ROOT/apps/web/build" "$CADDYFILE" << 'PY'
 from __future__ import annotations
 import base64
 import hashlib
@@ -68,7 +68,7 @@ ACTIVE_SCRIPT_TYPES = {"module", "importmap", "speculationrules"}
 
 
 def executable_script_type(raw: str) -> bool:
-    script_type = raw.strip().lower()
+    script_type = raw.split(";", 1)[0].strip().lower()
     return (
         not script_type
         or script_type in ACTIVE_SCRIPT_TYPES
@@ -82,13 +82,25 @@ class DocumentParser(HTMLParser):
         self.csp_meta: list[str] = []
         self.inline_scripts: list[str] = []
         self.executable_script_before_csp = False
+        self.csp_meta_outside_head = False
+        self.active_markup: list[str] = []
+        self._in_head = False
         self._script_inline = False
         self._script_parts: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        values = {key.lower(): (value or "") for key, value in attrs}
         lowered_tag = tag.lower()
+        if lowered_tag == "head":
+            self._in_head = True
+        values = {key.lower(): (value or "") for key, value in attrs}
+        for key, value in values.items():
+            if re.fullmatch(r"on[a-z0-9_-]+", key):
+                self.active_markup.append(f"inline event handler {key}")
+            if value.lstrip().lower().startswith("javascript:"):
+                self.active_markup.append(f"javascript URL in {key}")
         if lowered_tag == "meta" and values.get("http-equiv", "").lower() == "content-security-policy":
+            if not self._in_head:
+                self.csp_meta_outside_head = True
             self.csp_meta.append(values.get("content", ""))
         if lowered_tag == "script":
             executable = executable_script_type(values.get("type", ""))
@@ -102,11 +114,14 @@ class DocumentParser(HTMLParser):
             self._script_parts.append(data)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag.lower() == "script":
+        lowered_tag = tag.lower()
+        if lowered_tag == "script":
             if self._script_inline:
                 self.inline_scripts.append("".join(self._script_parts))
             self._script_inline = False
             self._script_parts = []
+        if lowered_tag == "head":
+            self._in_head = False
 
 
 def directives(policy: str) -> dict[str, list[str]]:
@@ -118,6 +133,24 @@ def directives(policy: str) -> dict[str, list[str]]:
     return result
 
 build = Path(sys.argv[1])
+caddyfile = Path(sys.argv[2])
+caddy_text = caddyfile.read_text(encoding="utf-8")
+frontend_policies = re.findall(
+    r'^\s*header\s+@frontendResponse\s+Content-Security-Policy\s+"([^"]*)"\s*$',
+    caddy_text,
+    flags=re.MULTILINE,
+)
+if len(frontend_policies) != 1:
+    raise SystemExit(
+        f"ERROR: expected exactly one @frontendResponse CSP in {caddyfile}, found {len(frontend_policies)}"
+    )
+frontend_directives = directives(frontend_policies[0])
+for forbidden in ("default-src", "script-src"):
+    if forbidden in frontend_directives:
+        raise SystemExit(
+            f"ERROR: frontend edge CSP in {caddyfile} must delegate {forbidden} to the document policy"
+        )
+
 html_files = sorted(build.rglob("*.html"))
 if not html_files:
     raise SystemExit(f"ERROR: no HTML files found under {build}")
@@ -128,6 +161,10 @@ for path in html_files:
     parser.feed(path.read_text(encoding="utf-8"))
     if len(parser.csp_meta) != 1:
         raise SystemExit(f"ERROR: expected exactly one CSP meta tag in {path}, found {len(parser.csp_meta)}")
+    if parser.csp_meta_outside_head:
+        raise SystemExit(f"ERROR: CSP meta tag must appear inside <head> in {path}")
+    if parser.active_markup:
+        raise SystemExit(f"ERROR: active inline HTML markup is forbidden in {path}: {parser.active_markup[0]}")
     if parser.executable_script_before_csp:
         raise SystemExit(f"ERROR: executable script appears before the CSP meta tag in {path}")
     policy = directives(parser.csp_meta[0])

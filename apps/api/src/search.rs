@@ -672,52 +672,51 @@ impl ProjectionWorker {
     }
 
     /// Read-only operational view: no document text, tags, or vectors escape.
+    /// All fields come from one PostgreSQL statement, so operators never see a
+    /// synthetic snapshot assembled from different committed moments.
     pub async fn status_snapshot(&self) -> anyhow::Result<ProjectionStatusSnapshot> {
         let row = sqlx::query(
-            "SELECT \
-                (SELECT count(*) FROM domain_nodes) AS current_nodes, \
-                count(*) AS total_jobs, \
-                count(*) FILTER (WHERE state IN ('done','stale','failed')) AS terminal_jobs, \
-                count(*) FILTER (WHERE state='pending') AS pending, \
-                count(*) FILTER (WHERE state='claimed') AS claimed, \
-                count(*) FILTER (WHERE state='retry') AS retry, \
-                count(*) FILTER (WHERE state='done') AS done, \
-                count(*) FILTER (WHERE state='stale') AS stale, \
-                count(*) FILTER (WHERE state='failed') AS failed \
-             FROM search_projection_jobs",
+            "WITH job_counts AS ( \
+                SELECT \
+                    (SELECT count(*) FROM domain_nodes) AS current_nodes, \
+                    count(*) AS total_jobs, \
+                    count(*) FILTER (WHERE state IN ('done','stale','failed')) AS terminal_jobs, \
+                    count(*) FILTER (WHERE state='pending') AS pending, \
+                    count(*) FILTER (WHERE state='claimed') AS claimed, \
+                    count(*) FILTER (WHERE state='retry') AS retry, \
+                    count(*) FILTER (WHERE state='done') AS done, \
+                    count(*) FILTER (WHERE state='stale') AS stale, \
+                    count(*) FILTER (WHERE state='failed') AS failed \
+                FROM search_projection_jobs \
+             ), active AS ( \
+                SELECT generation_id,provider,model_id,model_revision,runtime_identity,dimension,document_revision,normalization_revision,ranking_revision,activated_at \
+                FROM search_index_generations WHERE state='active' \
+             ), rebuild AS ( \
+                SELECT g.generation_id,g.provider,g.model_id,g.model_revision,g.runtime_identity,g.dimension,g.document_revision,g.normalization_revision,g.ranking_revision,g.state, \
+                    (SELECT count(*) FROM search_projection_jobs j WHERE j.generation_id=g.generation_id) AS total_jobs, \
+                    (SELECT count(*) FROM search_projection_jobs j WHERE j.generation_id=g.generation_id AND j.state IN ('done','stale','failed')) AS terminal_jobs, \
+                    weltgewebe_search_generation_activation_ready(g.generation_id) AS activation_ready \
+                FROM search_index_generations g \
+                WHERE g.state IN ('building','ready') \
+                ORDER BY CASE WHEN g.state='ready' THEN 0 ELSE 1 END, g.created_at DESC, g.generation_id DESC \
+                LIMIT 1 \
+             ) \
+             SELECT jc.*, \
+                a.generation_id AS active_generation_id, \
+                CASE WHEN a.generation_id IS NULL THEN NULL ELSE concat_ws(':',a.provider,a.model_id,a.model_revision,a.runtime_identity,a.dimension::text,a.document_revision,a.normalization_revision,a.ranking_revision) END AS active_generation_identity, \
+                a.activated_at AS active_generation_activated_at, \
+                r.generation_id AS rebuild_generation_id, \
+                CASE WHEN r.generation_id IS NULL THEN NULL ELSE concat_ws(':',r.provider,r.model_id,r.model_revision,r.runtime_identity,r.dimension::text,r.document_revision,r.normalization_revision,r.ranking_revision) END AS rebuild_generation_identity, \
+                r.state AS rebuild_generation_state, \
+                r.total_jobs AS rebuild_total_jobs, \
+                r.terminal_jobs AS rebuild_terminal_jobs, \
+                r.activation_ready AS rebuild_activation_ready \
+             FROM job_counts jc \
+             LEFT JOIN active a ON TRUE \
+             LEFT JOIN rebuild r ON TRUE",
         )
         .fetch_one(&self.pool)
         .await?;
-        let active = sqlx::query(
-            "SELECT generation_id,provider,model_id,model_revision,runtime_identity,dimension,document_revision,normalization_revision,ranking_revision,activated_at \
-             FROM search_index_generations WHERE state='active'",
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        let rebuild = sqlx::query(
-            "SELECT g.generation_id,g.provider,g.model_id,g.model_revision,g.runtime_identity,g.dimension,g.document_revision,g.normalization_revision,g.ranking_revision,g.state, \
-                (SELECT count(*) FROM search_projection_jobs j WHERE j.generation_id=g.generation_id) AS total_jobs, \
-                (SELECT count(*) FROM search_projection_jobs j WHERE j.generation_id=g.generation_id AND j.state IN ('done','stale','failed')) AS terminal_jobs, \
-                weltgewebe_search_generation_activation_ready(g.generation_id) AS activation_ready \
-             FROM search_index_generations g \
-             WHERE g.state IN ('building','ready') \
-             ORDER BY g.created_at DESC, g.generation_id DESC LIMIT 1",
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        let identity = |row: &sqlx::postgres::PgRow| {
-            format!(
-                "{}:{}:{}:{}:{}:{}:{}:{}",
-                row.get::<String, _>("provider"),
-                row.get::<String, _>("model_id"),
-                row.get::<String, _>("model_revision"),
-                row.get::<String, _>("runtime_identity"),
-                row.get::<i32, _>("dimension"),
-                row.get::<String, _>("document_revision"),
-                row.get::<String, _>("normalization_revision"),
-                row.get::<String, _>("ranking_revision")
-            )
-        };
         Ok(ProjectionStatusSnapshot {
             current_nodes: row.get::<i64, _>("current_nodes"),
             total_jobs: row.get::<i64, _>("total_jobs"),
@@ -728,17 +727,15 @@ impl ProjectionWorker {
             done_jobs: row.get::<i64, _>("done"),
             stale_jobs: row.get::<i64, _>("stale"),
             failed_jobs: row.get::<i64, _>("failed"),
-            active_generation_id: active.as_ref().map(|row| row.get("generation_id")),
-            active_generation_identity: active.as_ref().map(identity),
-            active_generation_activated_at: active
-                .as_ref()
-                .and_then(|row| row.try_get("activated_at").ok()),
-            rebuild_generation_id: rebuild.as_ref().map(|row| row.get("generation_id")),
-            rebuild_generation_identity: rebuild.as_ref().map(identity),
-            rebuild_generation_state: rebuild.as_ref().map(|row| row.get("state")),
-            rebuild_total_jobs: rebuild.as_ref().map(|row| row.get("total_jobs")),
-            rebuild_terminal_jobs: rebuild.as_ref().map(|row| row.get("terminal_jobs")),
-            rebuild_activation_ready: rebuild.as_ref().map(|row| row.get("activation_ready")),
+            active_generation_id: row.get("active_generation_id"),
+            active_generation_identity: row.get("active_generation_identity"),
+            active_generation_activated_at: row.get("active_generation_activated_at"),
+            rebuild_generation_id: row.get("rebuild_generation_id"),
+            rebuild_generation_identity: row.get("rebuild_generation_identity"),
+            rebuild_generation_state: row.get("rebuild_generation_state"),
+            rebuild_total_jobs: row.get("rebuild_total_jobs"),
+            rebuild_terminal_jobs: row.get("rebuild_terminal_jobs"),
+            rebuild_activation_ready: row.get("rebuild_activation_ready"),
         })
     }
 

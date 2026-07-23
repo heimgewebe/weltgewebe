@@ -94,11 +94,18 @@ def test_runner_rejects_incidental_disposable_name_substrings() -> None:
         assert "refusing non-disposable database" in completed.stderr
 
 
-def test_runner_accepts_delimited_disposable_name_segment_before_preflight() -> None:
+def test_runner_requires_weltgewebe_prefix_and_final_disposable_segment() -> None:
     runner = RUNNER.read_text(encoding="utf-8")
-    assert "database_segments={segment for segment in database.replace('-', '_').replace('.', '_').split('_') if segment}" in runner
-    assert "segment in database_segments for segment in segments" in runner
-    assert "weltgewebe_t002_test".split("_")[-1] == "test"
+    assert "database.startswith('weltgewebe_')" in runner
+    assert "database_segments[-1] not in segments" in runner
+    for database in ("proof_of_concept", "ci_test_db", "weltgewebe_ci_data"):
+        url = f"postgres://postgres:postgres@127.0.0.1:5432/{database}"
+        completed = _run_runner_with_urls(url, url, url)
+        assert completed.returncode != 0
+        assert "refusing non-disposable database" in completed.stderr
+    for database in ("weltgewebe_proof", "weltgewebe_ci_proof", "weltgewebe_t002_test"):
+        assert database.startswith("weltgewebe_")
+        assert database.replace("-", "_").replace(".", "_").split("_")[-1] in {"test", "proof", "ci"}
 
 def _run_runner_with_urls(database_url: str, direct_url: str, t005_url: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
@@ -147,3 +154,47 @@ def test_reset_and_container_guards_are_fail_closed() -> None:
     assert 'must expose exactly one 4222/tcp binding' in runner
     rust = RUST_SUPPORT.read_text(encoding="utf-8")
     assert "must not contain percent-encoding" in rust
+
+
+def test_runner_binds_validator_failures_before_read_and_rejects_unsafe_identifiers() -> None:
+    runner = RUNNER.read_text(encoding="utf-8")
+    assert 'validated_database="$(validate_database_url "$DATABASE_URL")"' in runner
+    assert 'validated_pg_direct="$(validate_database_url "$PG_DIRECT_URL")"' in runner
+    assert 'validated_t005="$(validate_database_url "$T005_DATABASE_URL")"' in runner
+    assert '<<< "$(validate_database_url' not in runner
+    assert "re.fullmatch(r'[A-Za-z0-9_.-]+', database)" in runner
+    unsafe = "postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_ci_proof%22"
+    completed = _run_runner_with_urls(unsafe, unsafe, unsafe)
+    assert completed.returncode != 0
+    assert "percent-encoding" in completed.stderr
+
+
+def test_t003_loader_binds_python_exit_status_and_preserves_nul_records() -> None:
+    runner = RUNNER.read_text(encoding="utf-8")
+    assert 'tmp_file="$(mktemp)"' in runner
+    assert 'if ! python3 - "$PG_DIRECT_URL" > "$tmp_file"' in runner
+    assert "mapfile -d '' -t values < \"$tmp_file\"" in runner
+    assert 'if ((${#values[@]} != 5)); then' in runner
+    assert "mapfile -d '' -t values < <(" not in runner
+
+
+def test_local_reset_uses_postgres_cli_arguments_not_interpolated_sql() -> None:
+    runner = RUNNER.read_text(encoding="utf-8")
+    assert 'dropdb --maintenance-db="$admin" --if-exists --force "$DATABASE_NAME"' in runner
+    assert 'createdb --maintenance-db="$admin" "$DATABASE_NAME"' in runner
+    assert 'DROP DATABASE IF EXISTS' not in runner
+    assert 'CREATE DATABASE \"${DATABASE_NAME}\"' not in runner
+
+
+def test_jetstream_retry_handles_expected_socket_failures_without_tracebacks() -> None:
+    runner = RUNNER.read_text(encoding="utf-8")
+    assert "except OSError:" in runner
+    assert "except (UnicodeDecodeError, json.JSONDecodeError):" in runner
+    assert "raise SystemExit(1)" in runner
+
+
+def test_rust_support_rejects_unsafe_database_identifier_characters() -> None:
+    rust = RUST_SUPPORT.read_text(encoding="utf-8")
+    assert "character.is_ascii_alphanumeric()" in rust
+    assert "matches!(character, '_' | '-' | '.')" in rust
+    assert "unsafe disposable database identifier" in rust

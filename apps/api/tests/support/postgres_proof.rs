@@ -30,14 +30,24 @@ pub fn assert_disposable_database_name(name: &str) {
     let contract = contract();
     assert!(
         !name.is_empty()
-            && contract
-                .disposable_database_name_segments
-                .iter()
-                .any(|expected| {
-                    name.split(['_', '-', '.'])
-                        .any(|segment| segment == expected)
-                }),
-        "PostgreSQL proof refuses non-disposable database name {name:?}; expected a delimited name segment from {:?}",
+            && name.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '.')
+            }),
+        "PostgreSQL proof refuses unsafe disposable database identifier {name:?}"
+    );
+    let final_segment = name
+        .split(['_', '-', '.'])
+        .filter(|segment| !segment.is_empty())
+        .next_back();
+    assert!(
+        name.starts_with("weltgewebe_")
+            && final_segment.is_some_and(|segment| {
+                contract
+                    .disposable_database_name_segments
+                    .iter()
+                    .any(|expected| segment == expected)
+            }),
+        "PostgreSQL proof refuses non-disposable database name {name:?}; expected weltgewebe_ prefix and final delimited segment from {:?}",
         contract.disposable_database_name_segments
     );
 }

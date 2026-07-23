@@ -55,7 +55,7 @@ PY
 validate_database_url() {
   local url="$1"
   python3 - "$CONTRACT_FILE" "$url" << 'PY'
-import json, sys
+import json, re, sys
 from urllib.parse import unquote, urlsplit
 contract=json.load(open(sys.argv[1], encoding='utf-8'))
 if contract.get('schema_version') != 1:
@@ -75,19 +75,30 @@ raw_database=url.path.lstrip('/')
 if '%' in raw_database:
     raise SystemExit('PostgreSQL proof database path must not contain percent-encoding')
 database=unquote(raw_database)
-database_segments={segment for segment in database.replace('-', '_').replace('.', '_').split('_') if segment}
-if not database or not any(segment in database_segments for segment in segments):
+if not re.fullmatch(r'[A-Za-z0-9_.-]+', database):
+    raise SystemExit(f'refusing unsafe disposable database identifier: {database!r}')
+database_segments=[segment for segment in database.replace('-', '_').replace('.', '_').split('_') if segment]
+if not database.startswith('weltgewebe_') or not database_segments or database_segments[-1] not in segments:
     raise SystemExit(
-        f'refusing non-disposable database {database!r}; expected a delimited name segment from {segments!r}'
+        f'refusing non-disposable database {database!r}; expected weltgewebe_ prefix and final delimited segment from {segments!r}'
     )
 host=url.hostname.rstrip('.').lower()
 print(f'{host}\t{port}\t{database}')
 PY
 }
 
-IFS=$'\t' read -r DATABASE_HOST DATABASE_PORT DATABASE_NAME <<< "$(validate_database_url "$DATABASE_URL")"
-IFS=$'\t' read -r PG_DIRECT_HOST PG_DIRECT_PORT PG_DIRECT_DATABASE_NAME <<< "$(validate_database_url "$PG_DIRECT_URL")"
-IFS=$'\t' read -r T005_HOST T005_PORT T005_DATABASE_NAME <<< "$(validate_database_url "$T005_DATABASE_URL")"
+validated_database="$(validate_database_url "$DATABASE_URL")"
+validated_pg_direct="$(validate_database_url "$PG_DIRECT_URL")"
+validated_t005="$(validate_database_url "$T005_DATABASE_URL")"
+IFS=$'\t' read -r DATABASE_HOST DATABASE_PORT DATABASE_NAME <<< "$validated_database"
+IFS=$'\t' read -r PG_DIRECT_HOST PG_DIRECT_PORT PG_DIRECT_DATABASE_NAME <<< "$validated_pg_direct"
+IFS=$'\t' read -r T005_HOST T005_PORT T005_DATABASE_NAME <<< "$validated_t005"
+for endpoint_field in DATABASE_HOST DATABASE_PORT DATABASE_NAME PG_DIRECT_HOST PG_DIRECT_PORT PG_DIRECT_DATABASE_NAME T005_HOST T005_PORT T005_DATABASE_NAME; do
+  if [[ -z "${!endpoint_field}" ]]; then
+    echo "PostgreSQL proof URL validation returned an empty field: ${endpoint_field}" >&2
+    exit 1
+  fi
+done
 DATABASE_ENDPOINT="${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}"
 PG_DIRECT_ENDPOINT="${PG_DIRECT_HOST}:${PG_DIRECT_PORT}/${PG_DIRECT_DATABASE_NAME}"
 T005_ENDPOINT="${T005_HOST}:${T005_PORT}/${T005_DATABASE_NAME}"
@@ -99,9 +110,10 @@ else
 fi
 
 load_t003_connection() {
+  local tmp_file
   local -a values=()
-  mapfile -d '' -t values < <(
-    python3 - "$PG_DIRECT_URL" << 'PY'
+  tmp_file="$(mktemp)"
+  if ! python3 - "$PG_DIRECT_URL" > "$tmp_file" << 'PY'
 import sys
 from urllib.parse import unquote, urlsplit
 url=urlsplit(sys.argv[1])
@@ -118,10 +130,15 @@ for value in values:
     sys.stdout.write(value)
     sys.stdout.write('\0')
 PY
-  )
+  then
+    rm -f "$tmp_file"
+    return 1
+  fi
+  mapfile -d '' -t values < "$tmp_file"
+  rm -f "$tmp_file"
   if ((${#values[@]} != 5)); then
     echo 'failed to derive direct T003 PostgreSQL connection parameters' >&2
-    exit 1
+    return 1
   fi
   export T003_PG_HOST="${values[0]}"
   export T003_PG_PORT="${values[1]}"
@@ -224,18 +241,24 @@ from urllib.parse import urlsplit
 url=urlsplit(sys.argv[1])
 if url.scheme != 'nats' or not url.hostname:
     raise SystemExit('NATS_URL must be a plain nats:// URL for the integration proof')
-with socket.create_connection((url.hostname, url.port or 4222), timeout=2.0) as sock:
-    sock.settimeout(2.0)
-    data=b''
-    while b'\r\n' not in data and len(data) < 65536:
-        chunk=sock.recv(4096)
-        if not chunk:
-            break
-        data += chunk
+try:
+    with socket.create_connection((url.hostname, url.port or 4222), timeout=2.0) as sock:
+        sock.settimeout(2.0)
+        data=b''
+        while b'\r\n' not in data and len(data) < 65536:
+            chunk=sock.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+except OSError:
+    raise SystemExit(1)
 line=data.split(b'\r\n',1)[0]
 if not line.startswith(b'INFO '):
     raise SystemExit(f'NATS readiness expected INFO line, got {line[:80]!r}')
-info=json.loads(line[5:].decode('utf-8'))
+try:
+    info=json.loads(line[5:].decode('utf-8'))
+except (UnicodeDecodeError, json.JSONDecodeError):
+    raise SystemExit('NATS readiness received malformed INFO JSON')
 if info.get('jetstream') is not True:
     raise SystemExit('NATS server is reachable but JetStream is not enabled')
 print('JetStream proof preflight: semantic INFO jetstream=true')
@@ -310,10 +333,16 @@ reset_database() {
     docker exec "$POSTGRES_RESET_CONTAINER" createdb -U postgres "$DATABASE_NAME"
     return
   fi
-  psql "$admin" -X --no-psqlrc -v ON_ERROR_STOP=1 -c \
-    "DROP DATABASE IF EXISTS \"${DATABASE_NAME}\" WITH (FORCE);" > /dev/null
-  psql "$admin" -X --no-psqlrc -v ON_ERROR_STOP=1 -c \
-    "CREATE DATABASE \"${DATABASE_NAME}\";" > /dev/null
+  command -v dropdb > /dev/null 2>&1 || {
+    echo 'PostgreSQL proof reset requires dropdb' >&2
+    return 1
+  }
+  command -v createdb > /dev/null 2>&1 || {
+    echo 'PostgreSQL proof reset requires createdb' >&2
+    return 1
+  }
+  dropdb --maintenance-db="$admin" --if-exists --force "$DATABASE_NAME" > /dev/null
+  createdb --maintenance-db="$admin" "$DATABASE_NAME" > /dev/null
 }
 
 preflight_postgres
