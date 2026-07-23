@@ -1,5 +1,5 @@
 //! T006 server-side hybrid search service.
-use std::{env, sync::Arc};
+use std::{env, sync::Arc, time::Instant};
 
 use axum::{
     http::StatusCode,
@@ -174,6 +174,30 @@ pub async fn execute_search(
     params: SearchQueryParams,
     provider_override: Option<Arc<dyn EmbeddingProvider>>,
 ) -> Result<SearchResponse, SearchError> {
+    let request_started = Instant::now();
+    let result = execute_search_inner(state, auth, params, provider_override).await;
+    let outcome = match &result {
+        Ok(response) if response.mode == "hybrid" => "hybrid",
+        Ok(response) if response.mode == "lexical_fallback" => "lexical_fallback",
+        Ok(_) => "success",
+        Err(SearchError::ProviderContractError(_)) => "provider_contract_error",
+        Err(SearchError::Unavailable) => "unavailable",
+        Err(SearchError::InvalidRequest) => "invalid_request",
+        Err(SearchError::Internal) => "internal",
+    };
+    state.metrics.search_request_outcome(outcome);
+    state
+        .metrics
+        .observe_search_request_duration(request_started.elapsed());
+    result
+}
+
+async fn execute_search_inner(
+    state: &ApiState,
+    auth: &AuthContext,
+    params: SearchQueryParams,
+    provider_override: Option<Arc<dyn EmbeddingProvider>>,
+) -> Result<SearchResponse, SearchError> {
     if state.config.domain_read_source != DomainReadSource::Postgres {
         return Err(SearchError::Unavailable);
     }
@@ -187,13 +211,16 @@ pub async fn execute_search(
         languages: parse_list(&params.language, &params.languages),
     };
 
-    let candidate_set = match fetch_postgres_candidates(pool, &query.raw, &filters, auth).await {
+    let repository_started = Instant::now();
+    let candidate_result = fetch_postgres_candidates(pool, &query.raw, &filters, auth).await;
+    state
+        .metrics
+        .observe_search_repository_duration(repository_started.elapsed());
+    let candidate_set = match candidate_result {
         Ok(Some(candidate_set)) => candidate_set,
         Ok(None) => return Err(SearchError::Unavailable),
         Err(SearchRepositoryError::CandidateSetTooLarge) => {
-            state
-                .metrics
-                .search_projection_outcome("candidate_set_too_large");
+            state.metrics.search_candidate_set_overflow();
             return Err(SearchError::Unavailable);
         }
         Err(SearchRepositoryError::Database(_)) | Err(SearchRepositoryError::Json(_)) => {
@@ -209,19 +236,27 @@ pub async fn execute_search(
         .cloned()
         .collect::<Vec<_>>();
 
+    state
+        .metrics
+        .observe_search_candidate_counts(candidate_set.candidates.len(), lexical_ranked.len());
+
     let provider = match provider_override {
         Some(provider) => provider,
         None => runtime_provider(&candidate_set.generation)?,
     };
 
     let query_embedding_text = query.embedding_text();
-    let (ranked, mode, fallback_reason) = match provider
+    let provider_started = Instant::now();
+    let provider_result = provider
         .embed(
             &query_embedding_text,
             candidate_set.generation.dimension as usize,
         )
-        .await
-    {
+        .await;
+    state
+        .metrics
+        .observe_search_provider_duration(provider_started.elapsed());
+    let (ranked, mode, fallback_reason) = match provider_result {
         Ok(query_vector) => (
             rank_hybrid(
                 Some(&query_vector),
@@ -233,16 +268,11 @@ pub async fn execute_search(
             "hybrid".to_string(),
             None,
         ),
-        Err(EmbeddingProviderError::Unavailable) => {
-            state
-                .metrics
-                .search_projection_outcome("fallback_unavailable");
-            (
-                lexical_ranked,
-                "lexical_fallback".to_string(),
-                Some("provider_unavailable".to_string()),
-            )
-        }
+        Err(EmbeddingProviderError::Unavailable) => (
+            lexical_ranked,
+            "lexical_fallback".to_string(),
+            Some("provider_unavailable".to_string()),
+        ),
         Err(error) => return Err(SearchError::ProviderContractError(error)),
     };
 
