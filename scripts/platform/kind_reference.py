@@ -239,9 +239,22 @@ def assert_available_cluster_name(kind: str, name: str) -> None:
             )
 
 
-def write_marker(name: str, commit: str, owner_id: str) -> None:
+def _fsync_directory(path: Path) -> None:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _write_marker_locked(name: str, commit: str, owner_id: str) -> None:
     _validate_ownership_binding(commit, owner_id)
     MARKERS.mkdir(parents=True, exist_ok=True)
+    marker = marker_path(name)
+    temporary = MARKERS / f".{name}.{os.getpid()}.{secrets.token_hex(8)}.marker.tmp"
     payload = {
         "schema_version": 2,
         "cluster": name,
@@ -251,11 +264,27 @@ def write_marker(name: str, commit: str, owner_id: str) -> None:
         "pid": os.getpid(),
     }
     try:
-        with marker_path(name).open("x", encoding="utf-8") as handle:
+        with temporary.open("x", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, sort_keys=True)
             handle.write("\n")
-    except FileExistsError as error:
-        raise ProofError(f"cluster {name!r} ownership marker already exists") from error
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, marker)
+        except FileExistsError as error:
+            raise ProofError(
+                f"cluster {name!r} ownership marker already exists"
+            ) from error
+        _fsync_directory(MARKERS)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def write_marker(name: str, commit: str, owner_id: str) -> None:
+    with cluster_ownership_lock(name):
+        if os.path.lexists(marker_path(name)):
+            raise ProofError(f"cluster {name!r} ownership marker already exists")
+        _write_marker_locked(name, commit, owner_id)
 
 
 def reserve_cluster_name(kind: str, name: str, commit: str, owner_id: str) -> None:
@@ -270,7 +299,71 @@ def reserve_cluster_name(kind: str, name: str, commit: str, owner_id: str) -> No
                 f"cluster {name!r} has a stale ownership marker; "
                 "explicit exact-owner cleanup is required"
             )
-        write_marker(name, commit, owner_id)
+        _write_marker_locked(name, commit, owner_id)
+
+
+@contextmanager
+def cluster_creation_reservation(
+    kind: str, name: str, commit: str, owner_id: str
+):
+    """Reserve one cluster name until creation either succeeds or is rolled back.
+
+    The per-cluster lock intentionally spans marker publication and ``kind create``.
+    This prevents an exact-owner reconciliation from deleting the marker in the
+    gap between reservation and cluster creation. Persistent lock files are kept
+    because unlinking flock files can create inode races between waiters.
+    """
+    _validate_ownership_binding(commit, owner_id)
+    with cluster_ownership_lock(name):
+        if name in clusters(kind):
+            raise ProofError(
+                f"cluster {name!r} already exists; it is never adopted or deleted by this proof"
+            )
+        if os.path.lexists(marker_path(name)):
+            raise ProofError(
+                f"cluster {name!r} has a stale ownership marker; "
+                "explicit exact-owner cleanup is required"
+            )
+        _write_marker_locked(name, commit, owner_id)
+        try:
+            yield
+        except Exception:
+            rollback_error: Exception | None = None
+            try:
+                if name in clusters(kind):
+                    run([kind, "delete", "cluster", "--name", name])
+            except Exception as error:
+                rollback_error = error
+            if rollback_error is None:
+                marker_path(name).unlink(missing_ok=True)
+                kubeconfig_path(name).unlink(missing_ok=True)
+            else:
+                print(
+                    f"cluster {name!r} creation rollback incomplete; "
+                    f"preserving ownership marker: {rollback_error}",
+                    file=sys.stderr,
+                )
+            raise
+
+
+def _delete_owned_cluster_locked(
+    kind: str,
+    name: str,
+    *,
+    expected_commit: str,
+    expected_owner_id: str,
+) -> None:
+    data = _read_marker(name)
+    _require_marker_binding(
+        data,
+        name,
+        expected_commit=expected_commit,
+        expected_owner_id=expected_owner_id,
+    )
+    if name in clusters(kind):
+        run([kind, "delete", "cluster", "--name", name])
+    marker_path(name).unlink()
+    kubeconfig_path(name).unlink(missing_ok=True)
 
 
 def delete_owned_cluster(
@@ -281,17 +374,12 @@ def delete_owned_cluster(
     expected_owner_id: str,
 ) -> None:
     with cluster_ownership_lock(name):
-        data = _read_marker(name)
-        _require_marker_binding(
-            data,
+        _delete_owned_cluster_locked(
+            kind,
             name,
             expected_commit=expected_commit,
             expected_owner_id=expected_owner_id,
         )
-        if name in clusters(kind):
-            run([kind, "delete", "cluster", "--name", name])
-        marker_path(name).unlink()
-        kubeconfig_path(name).unlink(missing_ok=True)
 
 
 def delete_owned_cluster_if_present(
@@ -301,19 +389,21 @@ def delete_owned_cluster_if_present(
     expected_commit: str,
     expected_owner_id: str,
 ) -> bool:
-    if os.path.lexists(marker_path(name)):
-        delete_owned_cluster(
-            kind,
-            name,
-            expected_commit=expected_commit,
-            expected_owner_id=expected_owner_id,
-        )
-        return True
-    if name in clusters(kind):
-        raise ProofError(
-            f"refusing to delete cluster {name!r}: cluster exists without ownership marker"
-        )
-    return False
+    with cluster_ownership_lock(name):
+        if os.path.lexists(marker_path(name)):
+            _delete_owned_cluster_locked(
+                kind,
+                name,
+                expected_commit=expected_commit,
+                expected_owner_id=expected_owner_id,
+            )
+            return True
+        if name in clusters(kind):
+            raise ProofError(
+                f"refusing to delete cluster {name!r}: cluster exists without ownership marker"
+            )
+        return False
+
 
 def apply_yaml(kubectl: str, document: dict[str, Any] | list[dict[str, Any]]) -> None:
     documents = document if isinstance(document, list) else [document]
@@ -1029,28 +1119,29 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
     flux = tools["flux"]
     helm = tools["helm"]
     owner_id = args.owner_id or generate_owner_id("kind-proof")
-    reserve_cluster_name(kind, args.cluster, commit, owner_id)
     app_namespace = "weltgewebe"
-    reserved = True
+    reserved = False
     created = False
     try:
-        run(
-            [
-                kind,
-                "create",
-                "cluster",
-                "--name",
-                args.cluster,
-                "--image",
-                receipt["kubernetes"]["kind_node_image"],
-                "--config",
-                "platform/clusters/local/kind.yaml",
-            ],
-            timeout=600,
-        )
-        configure_cluster_access(kind, args.cluster)
-        api_server_host = control_plane_address(args.cluster)
+        with cluster_creation_reservation(kind, args.cluster, commit, owner_id):
+            run(
+                [
+                    kind,
+                    "create",
+                    "cluster",
+                    "--name",
+                    args.cluster,
+                    "--image",
+                    receipt["kubernetes"]["kind_node_image"],
+                    "--config",
+                    "platform/clusters/local/kind.yaml",
+                ],
+                timeout=600,
+            )
+            configure_cluster_access(kind, args.cluster)
+        reserved = True
         created = True
+        api_server_host = control_plane_address(args.cluster)
         image_ids = build_images(kind, args.cluster, commit, timestamp)
         install_platform_components(
             kubectl, flux, helm, receipt["artifacts"], api_server_host
@@ -1094,7 +1185,8 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
         }
         target = CACHE / "receipts"
         target.mkdir(parents=True, exist_ok=True)
-        path = target / f"{args.cluster}-{commit}.json"
+        owner_receipt_key = hashlib.sha256(owner_id.encode("utf-8")).hexdigest()[:16]
+        path = target / f"{args.cluster}-{commit}-{owner_receipt_key}.json"
         path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         result["receipt_path"] = str(path)
         result["receipt_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()

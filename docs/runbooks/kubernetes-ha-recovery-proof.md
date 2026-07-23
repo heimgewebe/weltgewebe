@@ -75,4 +75,4 @@ python scripts/platform/ha_reference.py down \
   --owner-id <exakte-owner-id>
 ```
 
-Ohne exakt passenden Eigentumsmarker für Repository, Commit und Owner-ID verweigert der Befehl das Löschen. Verwaiste Marker werden nicht automatisch entfernt.
+Ohne exakt passende Eigentumsbindung für Repository, Cluster, Commit und Owner-ID verweigert der Befehl das Löschen. Das gilt sowohl für die kind-Cluster als auch für Container und Volume des externen Proof-Object-Stores. Das JSON-Ergebnis weist jede Ressource als `deleted`, `absent` oder `error` aus und meldet bei gemischtem Ergebnis `partial`. Verwaiste oder unlesbare Marker werden nicht automatisch entfernt.
