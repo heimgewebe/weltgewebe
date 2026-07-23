@@ -19,7 +19,7 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::telemetry::Metrics;
 
-pub const DOCUMENT_REVISION: &str = "weltgewebe-node-document-v1";
+pub const DOCUMENT_REVISION: &str = "node-document-v1";
 pub const NORMALIZATION_REVISION: &str = "weltgewebe-search-normalization-v1";
 pub const RANKING_REVISION: &str = "weltgewebe-hybrid-ranking-v2";
 // Five minutes exceeds the provider boundary's bounded worst-case request budget
@@ -41,21 +41,23 @@ pub struct GenerationSpec<'a> {
 
 impl GenerationSpec<'_> {
     pub fn derived_id(&self) -> String {
-        let mut digest = Sha256::new();
-        for field in [
-            self.provider,
-            self.model_id,
-            self.model_revision,
-            self.runtime_identity,
-            &self.dimension.to_string(),
-            DOCUMENT_REVISION,
-            NORMALIZATION_REVISION,
-            RANKING_REVISION,
-        ] {
-            digest.update(field.as_bytes());
-            digest.update([0]);
-        }
-        format!("search-gen-{}", hex::encode(digest.finalize()))
+        // Keep the production Rust identity byte-compatible with the verified
+        // T004 Python reference contract: JCS over the same nested field names.
+        let payload = serde_json::json!({
+            "model": {
+                "provider": self.provider,
+                "model_id": self.model_id,
+                "model_revision": self.model_revision,
+                "runtime_id": self.runtime_identity,
+                "dimensions": self.dimension,
+            },
+            "document_revision": DOCUMENT_REVISION,
+            "normalization_revision": NORMALIZATION_REVISION,
+            "ranking_revision": RANKING_REVISION,
+        });
+        let canonical = serde_jcs::to_vec(&payload)
+            .expect("static search generation identity payload must serialize");
+        format!("search-gen-{}", hex::encode(Sha256::digest(canonical)))
     }
 }
 
@@ -468,7 +470,7 @@ fn decode_chunked_body(mut input: &[u8]) -> Result<Vec<u8>, EmbeddingProviderErr
     }
 }
 
-struct UnavailableEmbeddingProvider;
+pub struct UnavailableEmbeddingProvider;
 
 #[async_trait]
 impl EmbeddingProvider for UnavailableEmbeddingProvider {
@@ -862,7 +864,7 @@ impl ProjectionWorker {
         let dimension: i32 = row.get("dimension");
         let embedding = match self
             .provider
-            .embed(&document.text, dimension as usize)
+            .embed(&document.embedding_text(), dimension as usize)
             .await
         {
             Ok(vector)
@@ -939,12 +941,29 @@ impl ProjectionWorker {
 mod tests {
     use super::{
         http_host_header, http_response_complete, EmbeddingProvider, EmbeddingProviderError,
-        OllamaEmbeddingProvider, SearchDocument,
+        GenerationSpec, OllamaEmbeddingProvider, SearchDocument,
     };
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::TcpListener,
     };
+
+    #[test]
+    fn t004_selected_generation_identity_is_byte_compatible() {
+        let generation = GenerationSpec {
+            generation_id: "unused-for-derivation",
+            provider: "local:ollama",
+            model_id: "qwen3-embedding:4b",
+            model_revision:
+                "sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907",
+            runtime_identity: "ollama:0.12.6@http://127.0.0.1:11434",
+            dimension: 2560,
+        };
+        assert_eq!(
+            generation.derived_id(),
+            "search-gen-46e7aba00f4c40aec10569dc42c9e12205a215d98036291bf006136467653b52"
+        );
+    }
 
     #[test]
     fn document_excludes_address_and_fails_closed_visibility() {
@@ -968,6 +987,10 @@ mod tests {
         .expect("document");
         assert_eq!(public.status, "active");
         assert_eq!(public.scopes, ["public"]);
+        assert_eq!(
+            public.embedding_text(),
+            "Titel: Fahrradhilfe\nKurzbeschreibung: Reparatur\nInformation: \nTags: Rad\nArt: Werkstatt\nSprache: und"
+        );
     }
 
     #[test]
@@ -1189,19 +1212,19 @@ mod tests {
 }
 
 #[derive(Debug)]
-struct SearchDocument {
-    title: String,
-    tags: Vec<String>,
-    summary: String,
-    info: String,
-    text: String,
-    language: String,
-    kind: String,
-    status: String,
-    scopes: Vec<String>,
+pub struct SearchDocument {
+    pub title: String,
+    pub tags: Vec<String>,
+    pub summary: String,
+    pub info: String,
+    pub text: String,
+    pub language: String,
+    pub kind: String,
+    pub status: String,
+    pub scopes: Vec<String>,
 }
 impl SearchDocument {
-    fn from_row(node_id: &str, kind: &str, title: &str, payload: &str) -> anyhow::Result<Self> {
+    pub fn from_row(node_id: &str, kind: &str, title: &str, payload: &str) -> anyhow::Result<Self> {
         let payload: Value =
             serde_json::from_str(payload).context("domain node payload is not JSON")?;
         let tags = payload
@@ -1264,7 +1287,19 @@ impl SearchDocument {
             },
         })
     }
-    fn hash(&self) -> String {
+    pub fn embedding_text(&self) -> String {
+        format!(
+            "Titel: {}\nKurzbeschreibung: {}\nInformation: {}\nTags: {}\nArt: {}\nSprache: {}",
+            self.title,
+            self.summary,
+            self.info,
+            self.tags.join(", "),
+            self.kind,
+            self.language
+        )
+    }
+
+    pub fn hash(&self) -> String {
         let mut h = Sha256::new();
         let tags = self.tags.join("\u{1f}");
         for (label, value) in [
@@ -1286,6 +1321,6 @@ impl SearchDocument {
     }
 }
 
-fn normalize(value: &str) -> String {
+pub fn normalize(value: &str) -> String {
     value.nfkc().collect::<String>().trim().to_owned()
 }
