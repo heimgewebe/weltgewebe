@@ -46,20 +46,55 @@ import sys
 from html.parser import HTMLParser
 from pathlib import Path
 
+JAVASCRIPT_MIME_TYPES = {
+    "application/ecmascript",
+    "application/javascript",
+    "application/x-ecmascript",
+    "application/x-javascript",
+    "text/ecmascript",
+    "text/javascript",
+    "text/javascript1.0",
+    "text/javascript1.1",
+    "text/javascript1.2",
+    "text/javascript1.3",
+    "text/javascript1.4",
+    "text/javascript1.5",
+    "text/jscript",
+    "text/livescript",
+    "text/x-ecmascript",
+    "text/x-javascript",
+}
+ACTIVE_SCRIPT_TYPES = {"module", "importmap", "speculationrules"}
+
+
+def executable_script_type(raw: str) -> bool:
+    script_type = raw.strip().lower()
+    return (
+        not script_type
+        or script_type in ACTIVE_SCRIPT_TYPES
+        or script_type in JAVASCRIPT_MIME_TYPES
+    )
+
+
 class DocumentParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.csp_meta: list[str] = []
         self.inline_scripts: list[str] = []
+        self.executable_script_before_csp = False
         self._script_inline = False
         self._script_parts: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = {key.lower(): (value or "") for key, value in attrs}
-        if tag.lower() == "meta" and values.get("http-equiv", "").lower() == "content-security-policy":
+        lowered_tag = tag.lower()
+        if lowered_tag == "meta" and values.get("http-equiv", "").lower() == "content-security-policy":
             self.csp_meta.append(values.get("content", ""))
-        if tag.lower() == "script":
-            self._script_inline = "src" not in values
+        if lowered_tag == "script":
+            executable = executable_script_type(values.get("type", ""))
+            if executable and not self.csp_meta:
+                self.executable_script_before_csp = True
+            self._script_inline = executable and "src" not in values
             self._script_parts = []
 
     def handle_data(self, data: str) -> None:
@@ -67,8 +102,9 @@ class DocumentParser(HTMLParser):
             self._script_parts.append(data)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag.lower() == "script" and self._script_inline:
-            self.inline_scripts.append("".join(self._script_parts))
+        if tag.lower() == "script":
+            if self._script_inline:
+                self.inline_scripts.append("".join(self._script_parts))
             self._script_inline = False
             self._script_parts = []
 
@@ -92,6 +128,8 @@ for path in html_files:
     parser.feed(path.read_text(encoding="utf-8"))
     if len(parser.csp_meta) != 1:
         raise SystemExit(f"ERROR: expected exactly one CSP meta tag in {path}, found {len(parser.csp_meta)}")
+    if parser.executable_script_before_csp:
+        raise SystemExit(f"ERROR: executable script appears before the CSP meta tag in {path}")
     policy = directives(parser.csp_meta[0])
     script_src = policy.get("script-src")
     if not script_src:

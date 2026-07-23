@@ -264,6 +264,13 @@ async fn status_snapshot_separates_unique_nodes_job_history_and_activation_readi
     assert_eq!(initial.rebuild_total_jobs, Some(1));
     assert_eq!(initial.rebuild_terminal_jobs, Some(0));
     assert_eq!(initial.rebuild_activation_ready, Some(false));
+    let canonical_initial: bool =
+        sqlx::query_scalar("SELECT weltgewebe_search_generation_activation_ready($1)")
+            .bind(generation)
+            .fetch_one(&pool)
+            .await
+            .expect("canonical initial readiness");
+    assert_eq!(initial.rebuild_activation_ready, Some(canonical_initial));
 
     assert_eq!(
         projection_worker
@@ -280,6 +287,16 @@ async fn status_snapshot_separates_unique_nodes_job_history_and_activation_readi
     assert_eq!(first_complete.total_jobs, 1);
     assert_eq!(first_complete.terminal_jobs, 1);
     assert_eq!(first_complete.rebuild_activation_ready, Some(true));
+    let canonical_first_complete: bool =
+        sqlx::query_scalar("SELECT weltgewebe_search_generation_activation_ready($1)")
+            .bind(generation)
+            .fetch_one(&pool)
+            .await
+            .expect("canonical first-complete readiness");
+    assert_eq!(
+        first_complete.rebuild_activation_ready,
+        Some(canonical_first_complete)
+    );
 
     sqlx::query("UPDATE domain_nodes SET title='Revision zwei' WHERE id=$1")
         .bind(node)
@@ -302,6 +319,16 @@ async fn status_snapshot_separates_unique_nodes_job_history_and_activation_readi
     assert_eq!(second_pending.rebuild_total_jobs, Some(2));
     assert_eq!(second_pending.rebuild_terminal_jobs, Some(1));
     assert_eq!(second_pending.rebuild_activation_ready, Some(false));
+    let canonical_second_pending: bool =
+        sqlx::query_scalar("SELECT weltgewebe_search_generation_activation_ready($1)")
+            .bind(generation)
+            .fetch_one(&pool)
+            .await
+            .expect("canonical second-pending readiness");
+    assert_eq!(
+        second_pending.rebuild_activation_ready,
+        Some(canonical_second_pending)
+    );
 
     assert_eq!(
         projection_worker
@@ -320,6 +347,99 @@ async fn status_snapshot_separates_unique_nodes_job_history_and_activation_readi
     assert_eq!(second_complete.rebuild_total_jobs, Some(2));
     assert_eq!(second_complete.rebuild_terminal_jobs, Some(2));
     assert_eq!(second_complete.rebuild_activation_ready, Some(true));
+    let canonical_second_complete: bool =
+        sqlx::query_scalar("SELECT weltgewebe_search_generation_activation_ready($1)")
+            .bind(generation)
+            .fetch_one(&pool)
+            .await
+            .expect("canonical second-complete readiness");
+    assert_eq!(
+        second_complete.rebuild_activation_ready,
+        Some(canonical_second_complete)
+    );
+
+    let generation_two = "t005-status-semantics-generation-two";
+    projection_worker
+        .start_generation(GenerationSpec {
+            generation_id: generation_two,
+            provider: "local:ollama",
+            model_id: "m",
+            model_revision: "r2",
+            runtime_identity: "ollama:test@http://127.0.0.1:11434",
+            dimension: 3,
+        })
+        .await
+        .expect("start second status generation");
+    let second_generation_pending = projection_worker
+        .status_snapshot()
+        .await
+        .expect("second generation pending status");
+    assert_eq!(
+        second_generation_pending.rebuild_generation_id.as_deref(),
+        Some(generation_two)
+    );
+    assert_eq!(
+        second_generation_pending.rebuild_activation_ready,
+        Some(false)
+    );
+    assert_eq!(
+        projection_worker
+            .claim_and_process_one()
+            .await
+            .expect("project second generation"),
+        ProcessOutcome::Processed
+    );
+    let second_generation_complete = projection_worker
+        .status_snapshot()
+        .await
+        .expect("second generation complete status");
+    let canonical_generation_two: bool =
+        sqlx::query_scalar("SELECT weltgewebe_search_generation_activation_ready($1)")
+            .bind(generation_two)
+            .fetch_one(&pool)
+            .await
+            .expect("canonical second-generation readiness");
+    assert_eq!(
+        second_generation_complete.rebuild_activation_ready,
+        Some(canonical_generation_two)
+    );
+    assert!(canonical_generation_two);
+
+    sqlx::query("DELETE FROM domain_nodes WHERE id=$1")
+        .bind(node)
+        .execute(&pool)
+        .await
+        .expect("delete status semantics node");
+    let deletion_pending = projection_worker
+        .status_snapshot()
+        .await
+        .expect("deletion pending status");
+    assert_eq!(deletion_pending.current_nodes, 0);
+    assert_eq!(deletion_pending.rebuild_activation_ready, Some(false));
+    for _ in 0..2 {
+        assert_eq!(
+            projection_worker
+                .claim_and_process_one()
+                .await
+                .expect("process retained-generation deletion"),
+            ProcessOutcome::Deleted
+        );
+    }
+    let deletion_complete = projection_worker
+        .status_snapshot()
+        .await
+        .expect("deletion complete status");
+    let canonical_after_delete: bool =
+        sqlx::query_scalar("SELECT weltgewebe_search_generation_activation_ready($1)")
+            .bind(generation_two)
+            .fetch_one(&pool)
+            .await
+            .expect("canonical post-deletion readiness");
+    assert_eq!(
+        deletion_complete.rebuild_activation_ready,
+        Some(canonical_after_delete)
+    );
+    assert!(canonical_after_delete);
 }
 
 #[tokio::test]

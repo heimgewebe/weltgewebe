@@ -466,6 +466,7 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_t002_test
       PG_DIRECT_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_t002_test
       POSTGRES_PROOF_PROVISION_NATS: "1"
+      POSTGRES_PROOF_ALLOW_RESET: "1"
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1

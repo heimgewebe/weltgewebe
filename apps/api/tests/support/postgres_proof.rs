@@ -64,5 +64,9 @@ pub fn assert_direct_disposable_database_url(raw: &str) {
         "PostgreSQL proof requires direct PostgreSQL, not PgBouncer"
     );
     let database = url.path().trim_start_matches('/');
+    assert!(
+        !database.contains('%'),
+        "PostgreSQL proof database path must not contain percent-encoding"
+    );
     assert_disposable_database_name(database);
 }

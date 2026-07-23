@@ -10,15 +10,30 @@ export T005_DATABASE_URL="${T005_DATABASE_URL:-$PG_DIRECT_URL}"
 export AUTH_PG_003_FIXTURE_MUTATION=1
 
 owned_nats_container=""
-cleanup() {
-  local exit_code=$?
-  trap - EXIT INT TERM
+cleanup_owned_nats() {
   if [[ -n "$owned_nats_container" ]]; then
     docker rm --force "$owned_nats_container" > /dev/null 2>&1 || true
   fi
+}
+cleanup_exit() {
+  local exit_code=$?
+  trap - EXIT INT TERM
+  cleanup_owned_nats
   exit "$exit_code"
 }
-trap cleanup EXIT INT TERM
+cleanup_int() {
+  trap - EXIT INT TERM
+  cleanup_owned_nats
+  exit 130
+}
+cleanup_term() {
+  trap - EXIT INT TERM
+  cleanup_owned_nats
+  exit 143
+}
+trap cleanup_exit EXIT
+trap cleanup_int INT
+trap cleanup_term TERM
 
 contract_value() {
   local key="$1"
@@ -56,23 +71,28 @@ if not url.hostname:
 port=url.port or 5432
 if port == int(contract['pgbouncer_port']):
     raise SystemExit('PostgreSQL integration proofs require direct PostgreSQL, not PgBouncer')
-database=unquote(url.path.lstrip('/'))
+raw_database=url.path.lstrip('/')
+if '%' in raw_database:
+    raise SystemExit('PostgreSQL proof database path must not contain percent-encoding')
+database=unquote(raw_database)
 database_segments={segment for segment in database.replace('-', '_').replace('.', '_').split('_') if segment}
 if not database or not any(segment in database_segments for segment in segments):
     raise SystemExit(
         f'refusing non-disposable database {database!r}; expected a delimited name segment from {segments!r}'
     )
-print(database)
+host=url.hostname.rstrip('.').lower()
+print(f'{host}\t{port}\t{database}')
 PY
 }
 
-DATABASE_NAME="$(validate_database_url "$DATABASE_URL")"
-PG_DIRECT_DATABASE_NAME="$(validate_database_url "$PG_DIRECT_URL")"
-T005_DATABASE_NAME="$(validate_database_url "$T005_DATABASE_URL")"
-if [[ "$DATABASE_NAME" == "$PG_DIRECT_DATABASE_NAME" && "$DATABASE_NAME" == "$T005_DATABASE_NAME" ]]; then
-  :
-else
-  echo "PostgreSQL proof URLs must target the same disposable database name: DATABASE_URL=${DATABASE_NAME}, PG_DIRECT_URL=${PG_DIRECT_DATABASE_NAME}, T005_DATABASE_URL=${T005_DATABASE_NAME}" >&2
+IFS=$'\t' read -r DATABASE_HOST DATABASE_PORT DATABASE_NAME <<< "$(validate_database_url "$DATABASE_URL")"
+IFS=$'\t' read -r PG_DIRECT_HOST PG_DIRECT_PORT PG_DIRECT_DATABASE_NAME <<< "$(validate_database_url "$PG_DIRECT_URL")"
+IFS=$'\t' read -r T005_HOST T005_PORT T005_DATABASE_NAME <<< "$(validate_database_url "$T005_DATABASE_URL")"
+DATABASE_ENDPOINT="${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}"
+PG_DIRECT_ENDPOINT="${PG_DIRECT_HOST}:${PG_DIRECT_PORT}/${PG_DIRECT_DATABASE_NAME}"
+T005_ENDPOINT="${T005_HOST}:${T005_PORT}/${T005_DATABASE_NAME}"
+if [[ "$DATABASE_ENDPOINT" != "$PG_DIRECT_ENDPOINT" || "$DATABASE_ENDPOINT" != "$T005_ENDPOINT" ]]; then
+  echo "PostgreSQL proof URLs must target the same direct endpoint: DATABASE_URL=${DATABASE_ENDPOINT}, PG_DIRECT_URL=${PG_DIRECT_ENDPOINT}, T005_DATABASE_URL=${T005_ENDPOINT}" >&2
   exit 1
 fi
 
@@ -118,10 +138,57 @@ print(urlunsplit((url.scheme, url.netloc, '/postgres', url.query, url.fragment))
 PY
 }
 
+validate_reset_container_binding() {
+  [[ -n "${POSTGRES_RESET_CONTAINER:-}" ]] || return 0
+  command -v docker > /dev/null 2>&1 || {
+    echo 'PostgreSQL proof container binding validation requires docker' >&2
+    return 1
+  }
+  case "$PG_DIRECT_HOST" in
+    localhost|127.0.0.1|::1) ;;
+    *)
+      echo "POSTGRES_RESET_CONTAINER requires a loopback PG_DIRECT_URL, got host ${PG_DIRECT_HOST}" >&2
+      return 1
+      ;;
+  esac
+  local -a bindings=()
+  mapfile -t bindings < <(docker port "$POSTGRES_RESET_CONTAINER" 5432/tcp)
+  if [[ "${#bindings[@]}" -ne 1 ]]; then
+    echo "PostgreSQL reset container must expose exactly one 5432/tcp binding; found ${#bindings[@]}" >&2
+    return 1
+  fi
+  python3 - "${bindings[0]}" "$PG_DIRECT_PORT" << 'PY'
+import ipaddress, sys
+binding=sys.argv[1].strip()
+expected_port=int(sys.argv[2])
+if binding.startswith('['):
+    host, sep, tail=binding[1:].partition(']:')
+    if not sep:
+        raise SystemExit(f'invalid Docker port binding: {binding!r}')
+    port=int(tail)
+else:
+    host, sep, tail=binding.rpartition(':')
+    if not sep:
+        raise SystemExit(f'invalid Docker port binding: {binding!r}')
+    port=int(tail)
+try:
+    loopback=ipaddress.ip_address(host).is_loopback
+except ValueError:
+    loopback=host.lower() == 'localhost'
+if not loopback:
+    raise SystemExit(f'PostgreSQL reset container binding must be loopback-only, got {host!r}')
+if port != expected_port:
+    raise SystemExit(
+        f'PostgreSQL reset container published port {port} does not match PG_DIRECT_URL port {expected_port}'
+    )
+PY
+}
+
 preflight_postgres() {
   local admin
   admin="$(postgres_admin_url)"
   if [[ -n "${POSTGRES_RESET_CONTAINER:-}" ]]; then
+    validate_reset_container_binding
     command -v docker > /dev/null 2>&1 || {
       echo 'PostgreSQL proof container preflight requires docker' >&2
       return 1
@@ -205,7 +272,13 @@ provision_jetstream_if_requested() {
     --name "$owned_nats_container" \
     --publish 127.0.0.1::4222 \
     "$image" -js > /dev/null
-  binding="$(docker port "$owned_nats_container" 4222/tcp | head -n1)"
+  local -a bindings=()
+  mapfile -t bindings < <(docker port "$owned_nats_container" 4222/tcp)
+  if [[ "${#bindings[@]}" -ne 1 ]]; then
+    echo "JetStream proof container must expose exactly one 4222/tcp binding; found ${#bindings[@]}" >&2
+    return 1
+  fi
+  binding="${bindings[0]}"
   port="${binding##*:}"
   if [[ ! "$port" =~ ^[0-9]+$ ]]; then
     echo "could not resolve dynamically published JetStream port from ${binding}" >&2
@@ -217,8 +290,20 @@ provision_jetstream_if_requested() {
 
 reset_database() {
   local admin
+  if [[ "${POSTGRES_PROOF_ALLOW_RESET:-0}" != "1" ]]; then
+    echo 'PostgreSQL proof reset refused: set POSTGRES_PROOF_ALLOW_RESET=1 for destructive disposable-database reset' >&2
+    return 1
+  fi
+  case "$PG_DIRECT_HOST" in
+    localhost|127.0.0.1|::1) ;;
+    *)
+      echo "PostgreSQL proof reset refused for non-loopback host ${PG_DIRECT_HOST}; destructive CI proofs must use an isolated local server" >&2
+      return 1
+      ;;
+  esac
   admin="$(postgres_admin_url)"
   if [[ -n "${POSTGRES_RESET_CONTAINER:-}" ]]; then
+    validate_reset_container_binding
     docker exec "$POSTGRES_RESET_CONTAINER" dropdb -U postgres --if-exists --force "$DATABASE_NAME" > /dev/null
     docker exec "$POSTGRES_RESET_CONTAINER" createdb -U postgres "$DATABASE_NAME"
     return

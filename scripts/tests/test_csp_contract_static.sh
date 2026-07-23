@@ -58,6 +58,15 @@ PY
 printf '%s\n' "<meta http-equiv=\"content-security-policy\" content=\"script-src 'self' 'sha256-$hash'\"><script>console.log(\"inline\")</script>" > "$INDEX_HTML"
 run_test "inline-with-matching-hash" 0
 
+printf '%s\n' "<script>console.log(\"inline\")</script><meta http-equiv=\"content-security-policy\" content=\"script-src 'self' 'sha256-$hash'\">" > "$INDEX_HTML"
+run_test "csp-meta-after-executable-script-rejected" 1
+
+printf '%s\n' '<meta http-equiv="content-security-policy" content="script-src '\''self'\''"><script type="application/json">{"safe":true}</script>' > "$INDEX_HTML"
+run_test "json-data-script-does-not-require-hash" 0
+
+printf '%s\n' '<meta http-equiv="content-security-policy" content="script-src '\''self'\''"><script type="module">console.log("module")</script>' > "$INDEX_HTML"
+run_test "inline-module-without-hash-rejected" 1
+
 printf '%s\n' '<meta http-equiv="content-security-policy" content="script-src '\''self'\'' '\''unsafe-inline'\''"><script>console.log("inline")</script>' > "$INDEX_HTML"
 run_test "inline-unsafe-inline-rejected" 1
 

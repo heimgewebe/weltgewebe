@@ -152,6 +152,9 @@ impl SessionBackend {
         }
     }
 
+    /// Build an in-memory backend with the compile-time default lifetime.
+    /// Runtime environment configuration is parsed once at the application
+    /// composition root and injected through `new_in_memory_with_lifetime`.
     pub fn new_in_memory() -> Self {
         Self::new(SessionStore::new())
     }
@@ -200,6 +203,9 @@ impl Default for SessionStore {
 }
 
 impl SessionStore {
+    /// Build a store with `SessionLifetime::default()`. This constructor does
+    /// not read `AUTH_SESSION_TTL_SECONDS`; production startup validates that
+    /// environment value once and injects the resulting lifetime explicitly.
     pub fn new() -> Self {
         Self::with_lifetime(SessionLifetime::default())
     }

@@ -76,6 +76,9 @@ for caddy in \
   if grep -Eq "script-src[^;]*'unsafe-inline'" "$caddy"; then
     fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") must not allow script-src unsafe-inline"
   fi
+  if ! grep -Fq "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';" "$caddy"; then
+    fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing strict non-document/error CSP baseline"
+  fi
   for directive in \
     "style-src 'self' 'unsafe-inline'" \
     "connect-src 'self'" \

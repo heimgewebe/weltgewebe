@@ -54,7 +54,9 @@ def test_runner_preflights_postgres_and_jetstream_before_the_first_target() -> N
     loop = runner.index('for target in "${targets[@]}"; do')
     assert preflight < loop
     assert "info.get('jetstream') is not True" in runner
-    assert 'trap cleanup EXIT INT TERM' in runner
+    assert 'trap cleanup_exit EXIT' in runner
+    assert 'trap cleanup_int INT' in runner
+    assert 'trap cleanup_term TERM' in runner
     assert 'docker rm --force "$owned_nats_container"' in runner
     assert 'docker exec "$POSTGRES_RESET_CONTAINER" pg_isready' in runner
     assert 'docker exec "$POSTGRES_RESET_CONTAINER" psql' in runner
@@ -64,6 +66,7 @@ def test_ci_delegates_jetstream_lifecycle_to_runner() -> None:
     workflow = yaml.safe_load(CI.read_text(encoding="utf-8"))
     job = workflow["jobs"]["postgres-proofs"]
     assert job["env"]["POSTGRES_PROOF_PROVISION_NATS"] == "1"
+    assert job["env"]["POSTGRES_PROOF_ALLOW_RESET"] == "1"
     rendered = json.dumps(job, sort_keys=True)
     assert "weltgewebe-ci-nats" not in rendered
     assert "run-postgres-integration-proofs.sh" in rendered
@@ -96,3 +99,51 @@ def test_runner_accepts_delimited_disposable_name_segment_before_preflight() -> 
     assert "database_segments={segment for segment in database.replace('-', '_').replace('.', '_').split('_') if segment}" in runner
     assert "segment in database_segments for segment in segments" in runner
     assert "weltgewebe_t002_test".split("_")[-1] == "test"
+
+def _run_runner_with_urls(database_url: str, direct_url: str, t005_url: str) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env.update(
+        DATABASE_URL=database_url,
+        PG_DIRECT_URL=direct_url,
+        T005_DATABASE_URL=t005_url,
+        POSTGRES_PROOF_PREFLIGHT_ONLY="1",
+    )
+    return subprocess.run(
+        [str(RUNNER)],
+        cwd=REPO,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+
+def test_runner_rejects_same_database_name_on_different_endpoints_before_preflight() -> None:
+    completed = _run_runner_with_urls(
+        "postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_ci_proof",
+        "postgres://postgres:postgres@127.0.0.1:55432/weltgewebe_ci_proof",
+        "postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_ci_proof",
+    )
+    assert completed.returncode != 0
+    assert "must target the same direct endpoint" in completed.stderr
+
+
+def test_runner_rejects_percent_encoded_database_path_before_preflight() -> None:
+    encoded = "postgres://postgres:postgres@127.0.0.1:5432/weltgewebe%5Fci%5Fproof"
+    completed = _run_runner_with_urls(encoded, encoded, encoded)
+    assert completed.returncode != 0
+    assert "must not contain percent-encoding" in completed.stderr
+
+
+def test_reset_and_container_guards_are_fail_closed() -> None:
+    runner = RUNNER.read_text(encoding="utf-8")
+    assert 'POSTGRES_PROOF_ALLOW_RESET:-0' in runner
+    assert 'reset refused for non-loopback host' in runner
+    assert 'validate_reset_container_binding' in runner
+    assert 'must expose exactly one 5432/tcp binding' in runner
+    assert 'requires a loopback PG_DIRECT_URL' in runner
+    assert 'does not match PG_DIRECT_URL port' in runner
+    assert 'must expose exactly one 4222/tcp binding' in runner
+    rust = RUST_SUPPORT.read_text(encoding="utf-8")
+    assert "must not contain percent-encoding" in rust

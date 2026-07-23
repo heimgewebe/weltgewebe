@@ -38,6 +38,7 @@ write_static_caddy() {
 example.test {
   header {
     Content-Security-Policy "style-src 'self' 'unsafe-inline'; connect-src $connect; img-src 'self' data: blob:; worker-src 'self' blob:; font-src 'self'; media-src 'self'; manifest-src 'self'; child-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
+    Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"

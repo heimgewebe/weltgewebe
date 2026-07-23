@@ -27,6 +27,10 @@ pub struct DbSessionStore {
 }
 
 impl DbSessionStore {
+    /// Build a database-backed store with `SessionLifetime::default()`. This
+    /// constructor is deterministic and does not read runtime environment; the
+    /// application composition root injects validated configuration through
+    /// `with_lifetime`.
     pub fn new(pool: PgPool) -> Self {
         Self::with_lifetime(pool, SessionLifetime::default())
     }
