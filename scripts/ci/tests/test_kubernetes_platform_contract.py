@@ -6,6 +6,8 @@ import os
 import shlex
 import subprocess
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -415,6 +417,152 @@ spec:
                 self.assertEqual(marker["commit"], "a" * 40)
                 self.assertEqual(marker["owner_id"], "owner-proof")
             finally:
+                self.reference.MARKERS = original
+
+    def test_reference_refuses_symlink_ownership_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            original = self.reference.MARKERS
+            self.reference.MARKERS = Path(tmp)
+            try:
+                target = Path(tmp) / "target.json"
+                target.write_text("{}\n", encoding="utf-8")
+                self.reference.marker_path("proof").symlink_to(target)
+                with self.assertRaisesRegex(
+                    self.reference.ProofError, "regular ownership marker"
+                ):
+                    self.reference.delete_owned_cluster(
+                        "kind",
+                        "proof",
+                        expected_commit="a" * 40,
+                        expected_owner_id="owner-proof",
+                    )
+            finally:
+                self.reference.MARKERS = original
+
+    def test_reference_refuses_cluster_without_marker_in_if_present_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            original = self.reference.MARKERS
+            self.reference.MARKERS = Path(tmp)
+            try:
+                with mock.patch.object(
+                    self.reference, "clusters", return_value={"proof"}
+                ):
+                    with self.assertRaisesRegex(
+                        self.reference.ProofError, "exists without ownership marker"
+                    ):
+                        self.reference.delete_owned_cluster_if_present(
+                            "kind",
+                            "proof",
+                            expected_commit="a" * 40,
+                            expected_owner_id="owner-proof",
+                        )
+            finally:
+                self.reference.MARKERS = original
+
+    def test_reference_marker_publication_is_no_clobber_and_crash_atomic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            original = self.reference.MARKERS
+            self.reference.MARKERS = Path(tmp)
+            try:
+                with mock.patch.object(
+                    self.reference.os, "link", side_effect=OSError("link failed")
+                ):
+                    with self.assertRaisesRegex(OSError, "link failed"):
+                        self.reference.write_marker(
+                            "proof", "a" * 40, "owner-proof"
+                        )
+                self.assertFalse(
+                    self.reference.marker_path("proof").exists()
+                )
+                self.assertEqual(
+                    list(Path(tmp).glob(".proof.*.marker.tmp")), []
+                )
+            finally:
+                self.reference.MARKERS = original
+
+    def test_reference_serializes_competing_reservations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            original = self.reference.MARKERS
+            self.reference.MARKERS = Path(tmp)
+            outcomes: list[str] = []
+            start = threading.Barrier(2)
+
+            def reserve() -> None:
+                start.wait(timeout=1)
+                try:
+                    self.reference.reserve_cluster_name(
+                        "kind", "proof", "a" * 40, "owner-proof"
+                    )
+                    outcomes.append("reserved")
+                except self.reference.ProofError:
+                    outcomes.append("rejected")
+
+            try:
+                with mock.patch.object(
+                    self.reference, "clusters", return_value=set()
+                ):
+                    threads = [threading.Thread(target=reserve) for _ in range(2)]
+                    for thread in threads:
+                        thread.start()
+                    for thread in threads:
+                        thread.join(timeout=2)
+                self.assertCountEqual(outcomes, ["reserved", "rejected"])
+            finally:
+                self.reference.MARKERS = original
+
+    def test_creation_reservation_blocks_exact_owner_cleanup_until_create_finishes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            original = self.reference.MARKERS
+            self.reference.MARKERS = Path(tmp)
+            created: set[str] = set()
+            entered = threading.Event()
+            release = threading.Event()
+            cleanup_started = threading.Event()
+            cleanup_finished = threading.Event()
+            cleanup_result: list[bool] = []
+
+            def observed_clusters(_kind: str) -> set[str]:
+                return set(created)
+
+            def creator() -> None:
+                with self.reference.cluster_creation_reservation(
+                    "kind", "proof", "a" * 40, "owner-proof"
+                ):
+                    entered.set()
+                    release.wait(timeout=2)
+                    created.add("proof")
+
+            def cleanup() -> None:
+                cleanup_started.set()
+                cleanup_result.append(
+                    self.reference.delete_owned_cluster_if_present(
+                        "kind",
+                        "proof",
+                        expected_commit="a" * 40,
+                        expected_owner_id="owner-proof",
+                    )
+                )
+                cleanup_finished.set()
+
+            try:
+                with mock.patch.object(
+                    self.reference, "clusters", side_effect=observed_clusters
+                ), mock.patch.object(self.reference, "run"):
+                    creator_thread = threading.Thread(target=creator)
+                    cleanup_thread = threading.Thread(target=cleanup)
+                    creator_thread.start()
+                    self.assertTrue(entered.wait(timeout=1))
+                    cleanup_thread.start()
+                    self.assertTrue(cleanup_started.wait(timeout=1))
+                    time.sleep(0.05)
+                    self.assertFalse(cleanup_finished.is_set())
+                    release.set()
+                    creator_thread.join(timeout=2)
+                    cleanup_thread.join(timeout=2)
+                self.assertEqual(cleanup_result, [True])
+                self.assertFalse(self.reference.marker_path("proof").exists())
+            finally:
+                release.set()
                 self.reference.MARKERS = original
 
     def test_web_container_copies_postinstall_script_before_install(self) -> None:

@@ -73,18 +73,22 @@ def create_kind_cluster(
     commit: str,
     owner_id: str,
 ) -> None:
-    ref.reserve_cluster_name(kind, name, commit, owner_id)
-    try:
-        ref.run([kind, "create", "cluster", "--name", name, "--image", image, "--config", config], timeout=900)
-        ref.configure_cluster_access(kind, name)
-    except Exception:
-        ref.delete_owned_cluster(
-            kind,
-            name,
-            expected_commit=commit,
-            expected_owner_id=owner_id,
+    with ref.cluster_creation_reservation(kind, name, commit, owner_id):
+        ref.run(
+            [
+                kind,
+                "create",
+                "cluster",
+                "--name",
+                name,
+                "--image",
+                image,
+                "--config",
+                config,
+            ],
+            timeout=900,
         )
-        raise
+        ref.configure_cluster_access(kind, name)
 
 
 def require_active_cluster_context(kind: str, kubectl: str, cluster: str) -> str:
@@ -146,24 +150,129 @@ def external_object_store_names(cluster: str) -> tuple[str, str]:
     return f"{normalized}-object-store", f"{normalized}-object-store-data"
 
 
-def start_external_object_store(cluster: str, commit: str, s3_secret_key: str) -> tuple[str, str, str]:
+def external_object_store_binding(
+    cluster: str, commit: str, owner_id: str
+) -> dict[str, str]:
+    ref._validate_ownership_binding(commit, owner_id)
+    return {
+        "weltgewebe.net/proof-repository": str(ROOT),
+        "weltgewebe.net/proof-cluster": cluster,
+        "weltgewebe.net/proof-commit": commit,
+        "weltgewebe.net/proof-owner-id": owner_id,
+    }
+
+
+def _docker_label_args(labels: dict[str, str]) -> list[str]:
+    return [
+        argument
+        for key, value in sorted(labels.items())
+        for argument in ("--label", f"{key}={value}")
+    ]
+
+
+def _object_store_labels(resource_kind: str, name: str) -> dict[str, str] | None:
+    if resource_kind == "container":
+        argv = [
+            "docker",
+            "container",
+            "inspect",
+            "--format",
+            "{{json .Config.Labels}}",
+            name,
+        ]
+    elif resource_kind == "volume":
+        argv = [
+            "docker",
+            "volume",
+            "inspect",
+            "--format",
+            "{{json .Labels}}",
+            name,
+        ]
+    else:
+        raise ValueError(f"unsupported object-store resource kind: {resource_kind}")
+    result = subprocess.run(
+        argv, cwd=ROOT, text=True, capture_output=True, timeout=30
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        missing_markers = (
+            "No such container",
+            "No such volume",
+            "No such object",
+        )
+        if any(marker in detail for marker in missing_markers):
+            return None
+        raise ref.ProofError(
+            f"failed to inspect external object-store {resource_kind} {name}: "
+            f"{detail or f'exit {result.returncode}'}"
+        )
+    try:
+        labels = json.loads(result.stdout.strip() or "null")
+    except json.JSONDecodeError as error:
+        raise ref.ProofError(
+            f"external object-store {resource_kind} labels are unreadable: {name}"
+        ) from error
+    if not isinstance(labels, dict):
+        raise ref.ProofError(
+            f"external object-store {resource_kind} has no label object: {name}"
+        )
+    return {str(key): str(value) for key, value in labels.items()}
+
+
+def _require_object_store_binding(
+    resource_kind: str,
+    name: str,
+    observed: dict[str, str],
+    expected: dict[str, str],
+) -> None:
+    mismatched = {
+        key: {"expected": value, "observed": observed.get(key)}
+        for key, value in expected.items()
+        if observed.get(key) != value
+    }
+    if mismatched:
+        raise ref.ProofError(
+            f"refusing to delete foreign object-store {resource_kind} {name}: "
+            f"{json.dumps(mismatched, sort_keys=True)}"
+        )
+
+
+def start_external_object_store(
+    cluster: str, commit: str, owner_id: str, s3_secret_key: str
+) -> tuple[str, str, str]:
     container, volume = external_object_store_names(cluster)
-    if subprocess.run(["docker", "container", "inspect", container], capture_output=True).returncode == 0:
+    binding = external_object_store_binding(cluster, commit, owner_id)
+    if _object_store_labels("container", container) is not None:
         raise ref.ProofError(f"external object-store container already exists: {container}")
-    if subprocess.run(["docker", "volume", "inspect", volume], capture_output=True).returncode == 0:
+    if _object_store_labels("volume", volume) is not None:
         raise ref.ProofError(f"external object-store volume already exists: {volume}")
-    ref.run(["docker", "volume", "create", "--label", f"weltgewebe.net/proof-commit={commit}", volume])
+    ref.run(
+        ["docker", "volume", "create", *_docker_label_args(binding), volume]
+    )
     try:
         run_with_environment(
             [
-                "docker", "run", "--detach", "--name", container,
-                "--label", f"weltgewebe.net/proof-commit={commit}",
-                "--network", "kind",
-                "--env", "AWS_ACCESS_KEY_ID",
-                "--env", "AWS_SECRET_ACCESS_KEY",
-                "--env", "S3_BUCKET",
-                "--volume", f"{volume}:/data",
-                SEAWEEDFS_IMAGE, "mini", "-dir=/data", "-ip=0.0.0.0",
+                "docker",
+                "run",
+                "--detach",
+                "--name",
+                container,
+                *_docker_label_args(binding),
+                "--network",
+                "kind",
+                "--env",
+                "AWS_ACCESS_KEY_ID",
+                "--env",
+                "AWS_SECRET_ACCESS_KEY",
+                "--env",
+                "S3_BUCKET",
+                "--volume",
+                f"{volume}:/data",
+                SEAWEEDFS_IMAGE,
+                "mini",
+                "-dir=/data",
+                "-ip=0.0.0.0",
             ],
             {
                 "AWS_ACCESS_KEY_ID": S3_ACCESS_KEY,
@@ -172,35 +281,158 @@ def start_external_object_store(cluster: str, commit: str, s3_secret_key: str) -
             },
             timeout=120,
         )
+
         def address_probe() -> str | bool:
-            address = ref.output(["docker", "inspect", "--format", "{{(index .NetworkSettings.Networks \"kind\").IPAddress}}", container])
+            address = ref.output(
+                [
+                    "docker",
+                    "inspect",
+                    "--format",
+                    "{{(index .NetworkSettings.Networks \"kind\").IPAddress}}",
+                    container,
+                ]
+            )
             return address if address else False
-        address = str(wait_until("external object-store address", address_probe, timeout_seconds=60))
+
+        address = str(
+            wait_until(
+                "external object-store address", address_probe, timeout_seconds=60
+            )
+        )
+
         def port_probe() -> bool:
             result = subprocess.run(
-                ["docker", "exec", container, "sh", "-c", "wget -qO- http://127.0.0.1:9333/cluster/status >/dev/null"],
+                [
+                    "docker",
+                    "exec",
+                    container,
+                    "sh",
+                    "-c",
+                    "wget -qO- http://127.0.0.1:9333/cluster/status >/dev/null",
+                ],
                 capture_output=True,
             )
             return result.returncode == 0
+
         wait_until("external object-store readiness", port_probe, timeout_seconds=180)
         return container, volume, address
-    except Exception:
-        delete_external_object_store(cluster, commit)
+    except Exception as error:
+        cleanup = reconcile_external_object_store(cluster, commit, owner_id)
+        if cleanup["errors"]:
+            raise ref.ProofError(
+                "external object-store start failed and exact-owner cleanup was incomplete: "
+                f"{json.dumps(cleanup, sort_keys=True)}"
+            ) from error
         raise
 
 
-def delete_external_object_store(cluster: str, commit: str) -> None:
+def reconcile_external_object_store(
+    cluster: str, commit: str, owner_id: str
+) -> dict[str, Any]:
+    expected = external_object_store_binding(cluster, commit, owner_id)
     container, volume = external_object_store_names(cluster)
-    if subprocess.run(["docker", "container", "inspect", container], capture_output=True).returncode == 0:
-        label = ref.output(["docker", "inspect", "--format", "{{index .Config.Labels \"weltgewebe.net/proof-commit\"}}", container])
-        if label != commit:
-            raise ref.ProofError(f"refusing to delete foreign object-store container {container}")
-        ref.run(["docker", "rm", "--force", container])
-    if subprocess.run(["docker", "volume", "inspect", volume], capture_output=True).returncode == 0:
-        label = ref.output(["docker", "volume", "inspect", "--format", "{{index .Labels \"weltgewebe.net/proof-commit\"}}", volume])
-        if label != commit:
-            raise ref.ProofError(f"refusing to delete foreign object-store volume {volume}")
-        ref.run(["docker", "volume", "rm", volume])
+    resources: dict[str, str] = {}
+    errors: dict[str, str] = {}
+    for resource_key, resource_kind, name, delete_argv in (
+        (
+            "object_store_container",
+            "container",
+            container,
+            ["docker", "rm", "--force", container],
+        ),
+        (
+            "object_store_volume",
+            "volume",
+            volume,
+            ["docker", "volume", "rm", volume],
+        ),
+    ):
+        try:
+            labels = _object_store_labels(resource_kind, name)
+            if labels is None:
+                resources[resource_key] = "absent"
+                continue
+            _require_object_store_binding(resource_kind, name, labels, expected)
+            ref.run(delete_argv)
+            resources[resource_key] = "deleted"
+        except (
+            ref.ProofError,
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            OSError,
+        ) as error:
+            resources[resource_key] = "error"
+            errors[resource_key] = str(error)
+    return {"resources": resources, "errors": errors}
+
+
+def delete_external_object_store(
+    cluster: str, commit: str, owner_id: str
+) -> dict[str, Any]:
+    result = reconcile_external_object_store(cluster, commit, owner_id)
+    if result["errors"]:
+        raise ref.ProofError(
+            "external object-store cleanup incomplete: "
+            f"{json.dumps(result, sort_keys=True)}"
+        )
+    return result
+
+
+def reconcile_owned_ha_resources(
+    kind: str,
+    cluster: str,
+    commit: str,
+    owner_id: str,
+    *,
+    include_restore: bool = True,
+    include_primary: bool = True,
+    include_object_store: bool = True,
+) -> dict[str, Any]:
+    ref._validate_ownership_binding(commit, owner_id)
+    resources: dict[str, str] = {}
+    errors: dict[str, str] = {}
+    cluster_resources = (
+        ("restore_cluster", f"{cluster}-restore", include_restore),
+        ("primary_cluster", cluster, include_primary),
+    )
+    for resource_key, name, included in cluster_resources:
+        if not included:
+            continue
+        try:
+            deleted = ref.delete_owned_cluster_if_present(
+                kind,
+                name,
+                expected_commit=commit,
+                expected_owner_id=owner_id,
+            )
+            resources[resource_key] = "deleted" if deleted else "absent"
+        except (
+            ref.ProofError,
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            OSError,
+        ) as error:
+            resources[resource_key] = "error"
+            errors[resource_key] = str(error)
+
+    if include_object_store:
+        object_store = reconcile_external_object_store(cluster, commit, owner_id)
+        resources.update(object_store["resources"])
+        errors.update(object_store["errors"])
+
+    deleted_any = any(value == "deleted" for value in resources.values())
+    if errors:
+        status = "partial" if deleted_any else "error"
+    else:
+        status = "deleted" if deleted_any else "absent"
+    return {
+        "status": status,
+        "cluster": cluster,
+        "commit": commit,
+        "owner_id": owner_id,
+        "resources": resources,
+        "errors": errors,
+    }
 
 
 def apply_object_store_endpoint(kubectl: str, address: str) -> None:
@@ -2099,8 +2331,6 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     )
     restore_name = f"{args.cluster}-restore"
     owner_id = args.owner_id or ref.generate_owner_id("ha-proof")
-    ref.assert_available_cluster_name(kind, args.cluster)
-    ref.assert_available_cluster_name(kind, restore_name)
     created_primary = created_restore = object_store_created = False
     stopped_node = ""
     object_store_address = ""
@@ -2120,7 +2350,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         ref.install_platform_components(kubectl, flux, helm, receipt["artifacts"], ref.control_plane_address(args.cluster))
         ref.run([kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=8m"])
         primary_dns_topology = configure_cluster_dns_ha(kubectl)
-        _, _, object_store_address = start_external_object_store(args.cluster, commit, s3_secret_key)
+        _, _, object_store_address = start_external_object_store(
+            args.cluster, commit, owner_id, s3_secret_key
+        )
         object_store_created = True
         ref.apply_file(kubectl, ROOT / "platform/infrastructure/ha-data/namespace.yaml")
         apply_secret_contracts(kubectl, app_password, s3_secret_key)
@@ -2391,7 +2623,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         }
         target = CACHE / "receipts"
         target.mkdir(parents=True, exist_ok=True)
-        path = target / f"{args.cluster}-{commit}-ha-recovery.json"
+        owner_receipt_key = hashlib.sha256(owner_id.encode("utf-8")).hexdigest()[:16]
+        path = target / (
+            f"{args.cluster}-{commit}-{owner_receipt_key}-ha-recovery.json"
+        )
         path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         result["receipt_path"] = str(path)
         result["receipt_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -2407,18 +2642,29 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             ref.diagnostic_snapshot(kubectl, restore_name)
         raise
     finally:
+        active_error = sys.exc_info()[1]
         if stopped_node:
             subprocess.run(["docker", "start", stopped_node], capture_output=True)
-        if created_restore and not args.keep:
-            ref.delete_owned_cluster(
-                kind, restore_name, expected_commit=commit, expected_owner_id=owner_id
+        if not args.keep and (created_restore or created_primary or object_store_created):
+            cleanup = reconcile_owned_ha_resources(
+                kind,
+                args.cluster,
+                commit,
+                owner_id,
+                include_restore=created_restore,
+                include_primary=created_primary,
+                include_object_store=object_store_created,
             )
-        if created_primary and not args.keep:
-            ref.delete_owned_cluster(
-                kind, args.cluster, expected_commit=commit, expected_owner_id=owner_id
-            )
-        if object_store_created and not args.keep:
-            delete_external_object_store(args.cluster, commit)
+            if cleanup["errors"]:
+                detail = json.dumps(cleanup, sort_keys=True)
+                if active_error is None:
+                    raise ref.ProofError(
+                        f"HA proof cleanup incomplete: {detail}"
+                    )
+                print(
+                    f"HA proof cleanup incomplete while preserving original failure: {detail}",
+                    file=sys.stderr,
+                )
 
 
 def argument_parser() -> argparse.ArgumentParser:
@@ -2441,13 +2687,11 @@ def main() -> int:
         receipt = ref.tool_receipt()
         if args.command == "down":
             kind = receipt["tools"]["kind"]
-            for name in (f"{args.cluster}-restore", args.cluster):
-                ref.delete_owned_cluster_if_present(
-                    kind, name, expected_commit=args.commit, expected_owner_id=args.owner_id
-                )
-            delete_external_object_store(args.cluster, args.commit)
-            print(json.dumps({"status": "deleted", "cluster": args.cluster}))
-            return 0
+            cleanup = reconcile_owned_ha_resources(
+                kind, args.cluster, args.commit, args.owner_id
+            )
+            print(json.dumps(cleanup, sort_keys=True))
+            return 1 if cleanup["errors"] else 0
         prove(args)
     except (ref.ProofError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         if isinstance(error, subprocess.CalledProcessError):
