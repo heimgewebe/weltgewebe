@@ -112,7 +112,23 @@ def _check_host(lock: dict[str, Any]) -> None:
         raise RuntimeError("unexpected platform lock")
 
 
-def install(cache: Path) -> dict[str, Any]:
+def _selected_tool_specs(lock: dict[str, Any], requested: list[str] | None) -> dict[str, Any]:
+    tools = lock["tools"]
+    if requested is None:
+        return tools
+    names = list(dict.fromkeys(requested))
+    unknown = [name for name in names if name not in tools]
+    if unknown:
+        raise RuntimeError(f"unknown tool selection: {', '.join(unknown)}")
+    return {name: tools[name] for name in names}
+
+
+def install(
+    cache: Path,
+    *,
+    tool_names: list[str] | None = None,
+    include_artifacts: bool = True,
+) -> dict[str, Any]:
     lock = json.loads(LOCK_PATH.read_text(encoding="utf-8"))
     if lock.get("schema_version") != 1:
         raise RuntimeError("unsupported toolchain lock schema")
@@ -124,7 +140,7 @@ def install(cache: Path) -> dict[str, Any]:
     artifact_dir.mkdir(parents=True, exist_ok=True)
     tool_paths: dict[str, str] = {}
 
-    for name, spec in lock["tools"].items():
+    for name, spec in _selected_tool_specs(lock, tool_names).items():
         filename = Path(urllib.parse.urlparse(spec["url"]).path).name
         archive = downloads / filename
         _download(spec["url"], spec["sha256"], archive)
@@ -147,11 +163,12 @@ def install(cache: Path) -> dict[str, Any]:
         tool_paths[name] = str(destination)
 
     artifact_paths: dict[str, str] = {}
-    for name, spec in lock["artifacts"].items():
-        destination = artifact_dir / spec["filename"]
-        _download(spec["url"], spec["sha256"], destination)
-        _assert_artifact_contract(name, destination, spec)
-        artifact_paths[name] = str(destination)
+    if include_artifacts:
+        for name, spec in lock["artifacts"].items():
+            destination = artifact_dir / spec["filename"]
+            _download(spec["url"], spec["sha256"], destination)
+            _assert_artifact_contract(name, destination, spec)
+            artifact_paths[name] = str(destination)
 
     receipt = {
         "schema_version": 1,
@@ -171,8 +188,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--tool", action="append", dest="tools")
+    parser.add_argument("--skip-artifacts", action="store_true")
     args = parser.parse_args()
-    receipt = install(args.cache.resolve())
+    receipt = install(
+        args.cache.resolve(),
+        tool_names=args.tools,
+        include_artifacts=not args.skip_artifacts,
+    )
     if args.json:
         print(json.dumps(receipt, sort_keys=True))
     else:

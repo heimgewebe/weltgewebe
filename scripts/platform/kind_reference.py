@@ -81,7 +81,23 @@ def control_plane_address(cluster: str) -> str:
 
 
 def tool_receipt() -> dict[str, Any]:
-    raw = output([sys.executable, "scripts/platform/bootstrap_tools.py", "--json"])
+    raw = output(
+        [
+            sys.executable,
+            "scripts/platform/bootstrap_tools.py",
+            "--json",
+            "--tool",
+            "kind",
+            "--tool",
+            "kubectl",
+            "--tool",
+            "kustomize",
+            "--tool",
+            "flux",
+            "--tool",
+            "helm",
+        ]
+    )
     return json.loads(raw)
 
 

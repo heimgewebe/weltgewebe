@@ -194,7 +194,7 @@ class KubernetesHaContractTests(unittest.TestCase):
             "ref: ${{ github.event_name == 'pull_request' && "
             "github.event.pull_request.head.sha || github.sha }}"
         )
-        self.assertEqual(workflow.count(expected), 3)
+        self.assertEqual(workflow.count(expected), 4)
 
     def test_zone_contract_requires_three_distinct_zones(self) -> None:
         valid = {
