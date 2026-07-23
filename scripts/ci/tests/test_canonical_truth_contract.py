@@ -30,7 +30,7 @@ class CanonicalTruthContractTests(unittest.TestCase):
         self.assertEqual(data["schema_version"], 1)
         self.assertEqual(
             data["required_checks"],
-            ["Required merge gate"],
+            ["Required merge gate", "Review evidence gate"],
         )
         producers = {
             "Required merge gate": {
@@ -42,7 +42,7 @@ class CanonicalTruthContractTests(unittest.TestCase):
                 "workflow": ROOT / ".github/workflows/review-evidence.yml",
             },
         }
-        self.assertEqual(set(data["required_checks"]), {"Required merge gate"})
+        self.assertEqual(set(data["required_checks"]), set(producers))
 
         required_merge = producers["Required merge gate"]
         self.assertEqual(required_merge["kind"], "check_run")

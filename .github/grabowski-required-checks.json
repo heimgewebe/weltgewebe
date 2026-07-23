@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "required_checks": [
-    "Required merge gate"
+    "Required merge gate",
+    "Review evidence gate"
   ]
 }
