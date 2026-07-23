@@ -34,6 +34,7 @@ LIB='apps/api/src/lib.rs'
 PROOF='apps/api/tests/db_multi_instance_foundation.rs'
 CI='.github/workflows/ci.yml'
 PROOF_RUNNER='scripts/ci/run-postgres-integration-proofs.sh'
+PROOF_CONTRACT='scripts/ci/postgres-proof-contract.json'
 
 for table in auth_ephemeral_state auth_rate_limit_counters domain_outbox \
   domain_event_consumptions domain_projection_state; do
@@ -85,8 +86,9 @@ for marker in 'let state_a =' 'let state_b =' 'let state_c =' \
 done
 
 require_literal "$CI" 'weltgewebe_t002_test' 'isolated CI database'
-require_literal "$CI" 'NATS_URL: nats://127.0.0.1:4222' 'JetStream CI endpoint'
-require_literal "$CI" 'nats@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927' 'pinned JetStream CI image'
+require_literal "$CI" 'POSTGRES_PROOF_PROVISION_NATS: "1"' 'JetStream CI provisioning delegation'
+require_literal "$PROOF_RUNNER" 'contract_value jetstream_image' 'JetStream image contract lookup'
+require_literal "$PROOF_CONTRACT" 'nats@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927' 'pinned JetStream proof image'
 require_literal "$CI" 'Run PostgreSQL and multi-instance proof suite' 'multi-instance CI job'
 require_literal "$PROOF_RUNNER" 'db_multi_instance_foundation' 'multi-instance proof runner'
 

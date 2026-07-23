@@ -18,6 +18,7 @@ FILES=(
   apps/api/tests/db_multi_instance_foundation.rs
   .github/workflows/ci.yml
   scripts/ci/run-postgres-integration-proofs.sh
+  scripts/ci/postgres-proof-contract.json
 )
 
 seed() {
