@@ -79,6 +79,15 @@ for caddy in \
   if ! grep -Fq "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';" "$caddy"; then
     fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing strict non-document/error CSP baseline"
   fi
+  if ! grep -Fq "@magicLinkConfirm {" "$caddy" || ! grep -Fq "path /api/auth/magic-link/consume" "$caddy"; then
+    fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing exact magic-link confirmation CSP matcher"
+  fi
+  if ! grep -Fq "method GET" "$caddy"; then
+    fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") magic-link confirmation CSP must be GET-only"
+  fi
+  if ! grep -Fq "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none';" "$caddy"; then
+    fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing narrow magic-link confirmation CSP"
+  fi
   for directive in \
     "style-src 'self' 'unsafe-inline'" \
     "connect-src 'self'" \

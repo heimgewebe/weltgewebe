@@ -10,6 +10,39 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-07-23 - Magic-Link-Bestätigungsformular am Edge wieder zulassen
+
+**Geänderte Bereiche:**
+
+- `infra/caddy/Caddyfile`, `Caddyfile.heim` und `Caddyfile.vps`;
+- CSP-Vertragsprüfung und Security-Header-Guard.
+
+**Beschreibung:**
+
+Die globale Nicht-Dokument-CSP für `/api/*` setzte `form-action 'none'` auch auf
+die absichtlich als HTML-Formular ausgelieferte Magic-Link-Bestätigungsseite.
+Browser wenden mehrere CSP-Header gleichzeitig an; dadurch blockierte die
+Edge-Richtlinie sowohl die Formularübermittlung als auch das Inline-Styling der
+Bestätigungsseite, obwohl der API-Handler selbst den engeren Formularvertrag
+korrekt deklarierte.
+
+Der Edge behandelt deshalb ausschließlich `GET /api/auth/magic-link/consume`
+als schmale Dokument-Ausnahme. Sie behält `default-src 'none'`,
+`base-uri 'none'` und `frame-ancestors 'none'`, erlaubt kein Script und gibt nur
+das bereits benötigte Inline-Styling sowie `form-action 'self'` frei. `POST` auf
+demselben Pfad und alle übrigen API- und Health-Antworten bleiben auf der
+strikten `form-action 'none'`-Richtlinie.
+
+**Produktionswirkung:**
+
+Beim Rollout muss die geprüfte VPS-Caddy-Konfiguration gemeinsam mit dem
+Merge-Commit veröffentlicht und Caddy erfolgreich neu geladen werden. Danach
+muss ein GET auf den Magic-Link-Consume-Pfad die schmale CSP mit
+`form-action 'self'` liefern, während ein gewöhnlicher API-Pfad weiterhin
+`form-action 'none'` ausliefert. Ein frischer Magic-Link kann anschließend das
+Bestätigungsformular wieder same-origin absenden; Token-, Nonce- und
+Sessionlogik werden durch diese Änderung nicht verändert.
+
 ## 2026-07-14 - Schleswig-Holstein sichtbar kartografieren
 
 **Geänderte Bereiche:**
