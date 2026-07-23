@@ -155,12 +155,13 @@ impl Metrics {
         let duration_buckets = vec![
             0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
         ];
-        // MAX_AUTHORIZED_CANDIDATES (search/repository.rs) hard-bounds this at
-        // 1000; the repository layer rejects any request before an over-bound
-        // count would ever reach this histogram, so 1000.0 is the true max
-        // bucket and no sentinel bucket above it is meaningful.
+        // MAX_AUTHORIZED_CANDIDATES (search/repository.rs) hard-bounds observed
+        // values at 1000. Keep the historical 1001 bucket as a compatibility
+        // series for existing Prometheus queries and dashboards even though no
+        // successful repository result can currently populate it independently
+        // from the 1000 bucket.
         let candidate_buckets = vec![
-            1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 750.0, 1000.0,
+            1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 750.0, 1000.0, 1001.0,
         ];
         let lexical_candidate_buckets = vec![0.0, 1.0, 2.0, 5.0, 10.0];
         let search_request_duration_seconds = Histogram::with_opts(
@@ -455,15 +456,15 @@ mod tests {
     }
 
     #[test]
-    fn search_authorized_candidates_histogram_has_no_bucket_above_the_hard_bound() {
+    fn search_authorized_candidates_histogram_keeps_legacy_1001_bucket_for_compatibility() {
         let metrics = test_metrics();
         metrics.observe_search_candidate_counts(1000, 10);
 
         let rendered = String::from_utf8(metrics.render().expect("render metrics")).expect("utf8");
         assert!(rendered.contains("search_authorized_candidates_bucket{le=\"1000\"}"));
         assert!(
-            !rendered.contains("search_authorized_candidates_bucket{le=\"1001\"}"),
-            "MAX_AUTHORIZED_CANDIDATES rejects requests before a >1000 count ever reaches this histogram"
+            rendered.contains("search_authorized_candidates_bucket{le=\"1001\"}"),
+            "the legacy 1001 bucket remains part of the exported Prometheus contract"
         );
     }
 

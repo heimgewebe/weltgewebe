@@ -48,13 +48,22 @@ pub struct SearchQueryParams {
     pub offset: Option<usize>,
 }
 
-/// Bounded search result mode. The wire format keeps the pre-existing
-/// snake_case strings so this is not a breaking API change.
+/// Bounded search result mode. The serialized HTTP/JSON wire format keeps the
+/// pre-existing snake_case strings, so this does not change the wire contract.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SearchMode {
     Hybrid,
     LexicalFallback,
+}
+
+impl From<SearchMode> for SearchRequestOutcome {
+    fn from(mode: SearchMode) -> Self {
+        match mode {
+            SearchMode::Hybrid => Self::Hybrid,
+            SearchMode::LexicalFallback => Self::LexicalFallback,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -187,10 +196,7 @@ pub async fn execute_search(
     let request_started = Instant::now();
     let result = execute_search_inner(state, auth, params, provider_override).await;
     let outcome = match &result {
-        Ok(response) => match response.mode {
-            SearchMode::Hybrid => SearchRequestOutcome::Hybrid,
-            SearchMode::LexicalFallback => SearchRequestOutcome::LexicalFallback,
-        },
+        Ok(response) => response.mode.into(),
         Err(SearchError::ProviderContractError(_)) => SearchRequestOutcome::ProviderContractError,
         Err(SearchError::Unavailable) => SearchRequestOutcome::Unavailable,
         Err(SearchError::InvalidRequest) => SearchRequestOutcome::InvalidRequest,
