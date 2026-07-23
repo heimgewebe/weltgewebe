@@ -1024,16 +1024,21 @@ spec:
         spec = api["spec"]
         self.assertEqual(spec["replicas"], 3)
         self.assertEqual(spec["strategy"]["type"], "RollingUpdate")
-        self.assertEqual(spec["strategy"]["rollingUpdate"]["maxSurge"], 0)
+        self.assertEqual(spec["strategy"]["rollingUpdate"]["maxSurge"], 1)
         self.assertEqual(
-            spec["strategy"]["rollingUpdate"]["maxUnavailable"], 1
+            spec["strategy"]["rollingUpdate"]["maxUnavailable"], 0
         )
-        required = spec["template"]["spec"]["affinity"][
+        preferred = spec["template"]["spec"]["affinity"][
             "podAntiAffinity"
-        ]["requiredDuringSchedulingIgnoredDuringExecution"]
+        ]["preferredDuringSchedulingIgnoredDuringExecution"]
+        self.assertEqual(preferred[0]["weight"], 100)
         self.assertEqual(
-            required[0]["topologyKey"], "topology.kubernetes.io/zone"
+            preferred[0]["podAffinityTerm"]["topologyKey"],
+            "topology.kubernetes.io/zone",
         )
+        spread = spec["template"]["spec"]["topologySpreadConstraints"][0]
+        self.assertEqual(spread["maxSkew"], 1)
+        self.assertEqual(spread["whenUnsatisfiable"], "DoNotSchedule")
 
     def test_upgrade_candidate_is_distinct_and_loaded_into_kind(self) -> None:
         baseline = "sha256:" + "a" * 64
@@ -1085,6 +1090,116 @@ spec:
         self.assertEqual(run.call_args.kwargs["timeout"], 5)
         self.assertFalse(run.call_args.kwargs["check"])
 
+    def test_projection_sample_url_preserves_exact_target_and_marker(self) -> None:
+        completed = mock.Mock(
+            returncode=0,
+            stdout='[{"id":"marker"}]',
+            stderr="",
+        )
+        with mock.patch.object(
+            self.ha.subprocess, "run", return_value=completed
+        ) as run:
+            sample = self.ha.projection_sample_url(
+                "kind-worker", "http://10.0.0.12:8080/nodes", "marker"
+            )
+        self.assertTrue(sample["available"])
+        self.assertEqual(sample["url"], "http://10.0.0.12:8080/nodes")
+        self.assertIn("http://10.0.0.12:8080/nodes", run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs["timeout"], 5)
+        self.assertFalse(run.call_args.kwargs["check"])
+
+    def test_gateway_owner_sample_tolerates_one_failed_advertised_listener(self) -> None:
+        node_addresses = {
+            "node-a": "10.0.0.1",
+            "node-b": "10.0.0.2",
+        }
+
+        def output(argv: list[str]) -> str:
+            return node_addresses[argv[-1]]
+
+        def sample(
+            node: str, address: str, port: int, marker: str
+        ) -> dict[str, object]:
+            available = address == "10.0.0.2"
+            return {
+                "available": available,
+                "url": f"http://{address}:{port}/api/nodes",
+                "returncode": 0 if available else 28,
+            }
+
+        with mock.patch.object(
+            self.ha.ref, "kind_nodes", return_value=["node-a", "node-b"]
+        ), mock.patch.object(
+            self.ha.ref, "output", side_effect=output
+        ), mock.patch.object(
+            self.ha, "gateway_projection_sample", side_effect=sample
+        ):
+            observed = self.ha.gateway_owner_sample(
+                "kind", "proof", ["10.0.0.1", "10.0.0.2"], 80, "marker"
+            )
+
+        self.assertTrue(observed["available"])
+        self.assertEqual(observed["failed_paths"], 1)
+        self.assertEqual(observed["successful_addresses"], ["10.0.0.2"])
+        self.assertEqual(
+            observed["probe_mode"], "owner-node-any-advertised-address"
+        )
+
+    def test_gateway_owner_sample_fails_when_all_advertised_listeners_fail(self) -> None:
+        node_addresses = {
+            "node-a": "10.0.0.1",
+            "node-b": "10.0.0.2",
+        }
+
+        with mock.patch.object(
+            self.ha.ref, "kind_nodes", return_value=["node-a", "node-b"]
+        ), mock.patch.object(
+            self.ha.ref,
+            "output",
+            side_effect=lambda argv: node_addresses[argv[-1]],
+        ), mock.patch.object(
+            self.ha,
+            "gateway_projection_sample",
+            return_value={"available": False, "returncode": 28},
+        ):
+            observed = self.ha.gateway_owner_sample(
+                "kind", "proof", ["10.0.0.1", "10.0.0.2"], 80, "marker"
+            )
+
+        self.assertFalse(observed["available"])
+        self.assertEqual(observed["successful_addresses"], [])
+        self.assertEqual(observed["failed_paths"], 2)
+
+    def test_gateway_owner_sample_rejects_unowned_advertised_address(self) -> None:
+        with mock.patch.object(
+            self.ha.ref, "kind_nodes", return_value=["node-a"]
+        ), mock.patch.object(
+            self.ha.ref, "output", return_value="10.0.0.1"
+        ):
+            with self.assertRaisesRegex(
+                self.ha.ref.ProofError, "exactly one kind node owner"
+            ):
+                self.ha.gateway_owner_sample(
+                    "kind", "proof", ["10.0.0.2"], 80, "marker"
+                )
+
+    def test_gateway_availability_sample_preserves_failure_diagnostics(self) -> None:
+        completed = mock.Mock(
+            returncode=28,
+            stdout="",
+            stderr="curl: (28) Operation timed out",
+        )
+        with mock.patch.object(
+            self.ha.subprocess, "run", return_value=completed
+        ):
+            sample = self.ha.gateway_projection_sample(
+                "kind-worker", "10.0.0.10", 80, "marker"
+            )
+        self.assertFalse(sample["available"])
+        self.assertEqual(sample["returncode"], 28)
+        self.assertIn("timed out", sample["stderr"])
+        self.assertIn("duration_seconds", sample)
+
     def test_error_budget_is_measured_from_upgrade_and_rollback(self) -> None:
         budget = self.ha.compute_error_budget(
             {
@@ -1109,9 +1224,24 @@ spec:
             '"rollout",\n            "undo"', source
         )
         self.assertIn('"change_management": change_management', source)
+        self.assertIn(
+            "kubectl, kind, args.cluster, marker, gateway_before", source
+        )
+        self.assertIn('probe_node = gateway_probe["probe_node"]', source)
+        self.assertIn('probe_address = gateway_probe["address"]', source)
+        self.assertIn("gateway_owner_sample(", source)
+        self.assertIn("owner-node-any-advertised-address", source)
+        self.assertIn('"degraded_gateway_path_samples"', source)
+        self.assertIn('"failed_gateway_paths_observed"', source)
+        self.assertIn('probe_port = int(gateway_probe["listener_port"])', source)
+        self.assertNotIn("def gateway_probe_target(", source)
         self.assertIn('"failed_availability_samples"', source)
         self.assertIn('"within_budget"', source)
         self.assertIn('"measured_archive_rpo_upper_bound_seconds"', source)
+        self.assertIn(
+            "external load-balancer reachability from outside the kind bridge",
+            source,
+        )
 
     def test_restore_rto_stops_before_continuity_validation(self) -> None:
         source = (ROOT / "scripts/platform/ha_reference.py").read_text()

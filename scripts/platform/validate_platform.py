@@ -324,16 +324,33 @@ def _assert_ha_contract() -> None:
     rolling = api_spec.get("strategy", {}).get("rollingUpdate", {})
     if (
         api_spec.get("strategy", {}).get("type") != "RollingUpdate"
-        or rolling.get("maxSurge") != 0
-        or rolling.get("maxUnavailable") != 1
+        or rolling.get("maxSurge") != 1
+        or rolling.get("maxUnavailable") != 0
     ):
         raise ContractError(
-            "HA API rollout must replace one zoned replica without a surge pod"
+            "HA API rollout must admit one surge replica before terminating an available pod"
         )
     pod = api_spec["template"]["spec"]
     spread = pod.get("topologySpreadConstraints", [])
-    if not spread or spread[0].get("topologyKey") != "topology.kubernetes.io/zone" or spread[0].get("whenUnsatisfiable") != "DoNotSchedule":
-        raise ContractError("HA API does not require zone spread")
+    if (
+        not spread
+        or spread[0].get("maxSkew") != 1
+        or spread[0].get("topologyKey") != "topology.kubernetes.io/zone"
+        or spread[0].get("whenUnsatisfiable") != "DoNotSchedule"
+    ):
+        raise ContractError("HA API does not require bounded zone spread")
+    preferred = (
+        pod.get("affinity", {})
+        .get("podAntiAffinity", {})
+        .get("preferredDuringSchedulingIgnoredDuringExecution", [])
+    )
+    if (
+        not preferred
+        or preferred[0].get("weight") != 100
+        or preferred[0].get("podAffinityTerm", {}).get("topologyKey")
+        != "topology.kubernetes.io/zone"
+    ):
+        raise ContractError("HA API does not prefer zone anti-affinity during surge rollouts")
 
     object_store = next(_documents(PLATFORM / "infrastructure/ha-data/object-store.yaml"))
     if object_store.get("kind") != "Service" or object_store.get("spec", {}).get("selector"):
@@ -367,6 +384,7 @@ def _assert_ha_contract() -> None:
         "prove_api_upgrade_and_rollback", "UPGRADE_API_IMAGE",
         "rollout", "undo", "compute_error_budget",
         "zero-observed-outage", "within_budget",
+        "owner-node-any-advertised-address", "degraded_gateway_path_samples",
         "continued_wal_archiving", "continuity_validation_seconds",
         "measured_archive_rpo_upper_bound_seconds",
     )
