@@ -43,6 +43,22 @@ async function clickMapCenter(page: Page) {
   await map.click({ position: { x: 50, y: 50 } });
 }
 
+function expectValidLocation(location: unknown) {
+  expect(location).toEqual(
+    expect.objectContaining({
+      lat: expect.any(Number),
+      lon: expect.any(Number),
+    }),
+  );
+  const { lat, lon } = location as { lat: number; lon: number };
+  expect(Number.isFinite(lat)).toBe(true);
+  expect(Number.isFinite(lon)).toBe(true);
+  expect(lat).toBeGreaterThanOrEqual(-90);
+  expect(lat).toBeLessThanOrEqual(90);
+  expect(lon).toBeGreaterThanOrEqual(-180);
+  expect(lon).toBeLessThanOrEqual(180);
+}
+
 test.describe("Eigene Garnrolle speichern", () => {
   test("clears sensitive Garnrolle drafts on logout", async ({ page }) => {
     await mockApiResponses(page, {
@@ -208,8 +224,7 @@ test.describe("Eigene Garnrolle speichern", () => {
       address: "Poelsweg 2, Hamburg",
       map_state: "exact",
     });
-    expect(typeof payload.location?.lat).toBe("number");
-    expect(typeof payload.location?.lon).toBe("number");
+    expectValidLocation(payload.location);
     await expect(
       returned.locator('[data-testid="garnrolle-success"]'),
     ).toContainText("gespeichert");
@@ -313,8 +328,7 @@ test.describe("Eigene Garnrolle speichern", () => {
       map_state: "exact",
       tags: ["skill:Nachbarschaftshilfe"],
     });
-    expect(typeof payload.location?.lat).toBe("number");
-    expect(typeof payload.location?.lon).toBe("number");
+    expectValidLocation(payload.location);
     await expect(
       returned.locator('[data-testid="garnrolle-success"]'),
     ).toContainText("gespeichert");

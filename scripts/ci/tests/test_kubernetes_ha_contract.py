@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[3]
 PLATFORM_SCRIPTS = ROOT / "scripts/platform"
 if str(PLATFORM_SCRIPTS) not in sys.path:
@@ -189,15 +191,23 @@ class KubernetesHaContractTests(unittest.TestCase):
             )
 
     def test_kubernetes_workflow_checks_out_the_event_merge_state(self) -> None:
-        workflow = (ROOT / ".github/workflows/kubernetes-platform.yml").read_text()
-        self.assertEqual(
-            workflow.count(
-                "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
-            ),
-            4,
-        )
-        self.assertNotIn("github.event.pull_request.head.sha", workflow)
-        self.assertNotIn("ref: ${{ github.event_name == 'pull_request'", workflow)
+        workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
+        workflow_text = workflow_path.read_text()
+        workflow = yaml.safe_load(workflow_text)
+        checkout_steps = [
+            step
+            for job in workflow["jobs"].values()
+            for step in job.get("steps", [])
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+        ]
+        self.assertEqual(len(checkout_steps), 4)
+        for step in checkout_steps:
+            self.assertEqual(
+                step["uses"],
+                "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            )
+            self.assertNotIn("ref", step.get("with", {}))
+        self.assertNotIn("github.event.pull_request.head.sha", workflow_text)
 
     def test_kubernetes_workflow_covers_api_build_inputs(self) -> None:
         workflow = (ROOT / ".github/workflows/kubernetes-platform.yml").read_text()
@@ -358,29 +368,64 @@ class KubernetesHaContractTests(unittest.TestCase):
             with self.assertRaisesRegex(self.ha.ref.ProofError, "not spread"):
                 self.ha.configure_cluster_dns_ha("kubectl")
 
+    def test_external_object_store_missing_volume_is_absent_case_insensitively(self) -> None:
+        result = mock.Mock(
+            returncode=1,
+            stdout="",
+            stderr=(
+                "Error response from daemon: get proof-object-store-data: "
+                "No Such Volume"
+            ),
+        )
+        with mock.patch.object(self.ha.subprocess, "run", return_value=result):
+            self.assertIsNone(
+                self.ha._object_store_labels(
+                    "volume", "proof-object-store-data"
+                )
+            )
+
     def test_external_object_store_cleanup_is_ownership_bound(self) -> None:
-        inspect = mock.Mock(return_value=mock.Mock(returncode=0))
-        with mock.patch.object(self.ha.subprocess, "run", inspect), mock.patch.object(
-            self.ha.ref, "output", return_value="foreign-commit"
-        ):
+        foreign = self.ha.external_object_store_binding(
+            "proof", "a" * 40, "owner-foreign"
+        )
+        with mock.patch.object(
+            self.ha, "_object_store_labels", return_value=foreign
+        ), mock.patch.object(self.ha.ref, "run") as delete:
             with self.assertRaisesRegex(self.ha.ref.ProofError, "foreign"):
-                self.ha.delete_external_object_store("proof", "expected-commit")
+                self.ha.delete_external_object_store(
+                    "proof", "a" * 40, "owner-expected"
+                )
+        delete.assert_not_called()
 
     def test_external_object_store_start_cleans_partial_owned_resources(self) -> None:
-        absent = mock.Mock(returncode=1)
         with mock.patch.object(
-            self.ha.subprocess, "run", side_effect=[absent, absent]
+            self.ha, "_object_store_labels", side_effect=[None, None]
         ), mock.patch.object(self.ha.ref, "run"), mock.patch.object(
-            self.ha, "run_with_environment", side_effect=self.ha.ref.ProofError("container start failed")
-        ), mock.patch.object(self.ha, "delete_external_object_store") as cleanup:
+            self.ha,
+            "run_with_environment",
+            side_effect=self.ha.ref.ProofError("container start failed"),
+        ), mock.patch.object(
+            self.ha,
+            "reconcile_external_object_store",
+            return_value={"resources": {}, "errors": {}},
+        ) as cleanup:
             with self.assertRaisesRegex(self.ha.ref.ProofError, "container start failed"):
-                self.ha.start_external_object_store("proof", "a" * 40, "secret")
-        cleanup.assert_called_once_with("proof", "a" * 40)
+                self.ha.start_external_object_store(
+                    "proof", "a" * 40, "owner-proof", "secret"
+                )
+        cleanup.assert_called_once_with("proof", "a" * 40, "owner-proof")
 
     def test_kind_cluster_creation_is_transactional(self) -> None:
-        with mock.patch.object(self.ha.ref, "reserve_cluster_name") as reserve, mock.patch.object(
+        reservation_context = mock.MagicMock()
+        reservation_context.__enter__.return_value = None
+        reservation_context.__exit__.return_value = False
+        with mock.patch.object(
+            self.ha.ref,
+            "cluster_creation_reservation",
+            return_value=reservation_context,
+        ) as reservation, mock.patch.object(
             self.ha.ref, "run", side_effect=self.ha.ref.ProofError("kind failed")
-        ), mock.patch.object(self.ha.ref, "delete_owned_cluster") as cleanup:
+        ):
             with self.assertRaisesRegex(self.ha.ref.ProofError, "kind failed"):
                 self.ha.create_kind_cluster(
                     "kind",
@@ -390,13 +435,70 @@ class KubernetesHaContractTests(unittest.TestCase):
                     "b" * 40,
                     "owner-proof",
                 )
-        reserve.assert_called_once_with("kind", "proof", "b" * 40, "owner-proof")
-        cleanup.assert_called_once_with(
-            "kind",
-            "proof",
-            expected_commit="b" * 40,
-            expected_owner_id="owner-proof",
+        reservation.assert_called_once_with(
+            "kind", "proof", "b" * 40, "owner-proof"
         )
+
+    def test_ha_cleanup_continues_after_one_cluster_failure(self) -> None:
+        with mock.patch.object(
+            self.ha.ref,
+            "delete_owned_cluster_if_present",
+            side_effect=[self.ha.ref.ProofError("restore marker unreadable"), True],
+        ) as delete_cluster, mock.patch.object(
+            self.ha,
+            "reconcile_external_object_store",
+            return_value={
+                "resources": {
+                    "object_store_container": "deleted",
+                    "object_store_volume": "absent",
+                },
+                "errors": {},
+            },
+        ) as object_store:
+            result = self.ha.reconcile_owned_ha_resources(
+                "kind", "proof", "a" * 40, "owner-proof"
+            )
+        self.assertEqual(delete_cluster.call_count, 2)
+        object_store.assert_called_once_with("proof", "a" * 40, "owner-proof")
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["resources"]["restore_cluster"], "error")
+        self.assertEqual(result["resources"]["primary_cluster"], "deleted")
+        self.assertIn("restore_cluster", result["errors"])
+
+    def test_external_object_store_binding_covers_exact_owner_dimensions(self) -> None:
+        binding = self.ha.external_object_store_binding(
+            "proof", "a" * 40, "owner-proof"
+        )
+        self.assertEqual(
+            binding,
+            {
+                "weltgewebe.net/proof-repository": str(self.ha.ROOT),
+                "weltgewebe.net/proof-cluster": "proof",
+                "weltgewebe.net/proof-commit": "a" * 40,
+                "weltgewebe.net/proof-owner-id": "owner-proof",
+            },
+        )
+
+    def test_ha_cleanup_reports_absent_when_nothing_exists(self) -> None:
+        with mock.patch.object(
+            self.ha.ref, "delete_owned_cluster_if_present", return_value=False
+        ), mock.patch.object(
+            self.ha,
+            "reconcile_external_object_store",
+            return_value={
+                "resources": {
+                    "object_store_container": "absent",
+                    "object_store_volume": "absent",
+                },
+                "errors": {},
+            },
+        ):
+            result = self.ha.reconcile_owned_ha_resources(
+                "kind", "proof", "a" * 40, "owner-proof"
+            )
+        self.assertEqual(result["status"], "absent")
+        self.assertEqual(set(result["resources"].values()), {"absent"})
+        self.assertEqual(result["errors"], {})
 
     def test_digest_locked_manifest_replaces_each_release_image_once(self) -> None:
         tagged = {
