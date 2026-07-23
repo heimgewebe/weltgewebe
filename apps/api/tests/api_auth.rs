@@ -1472,8 +1472,52 @@ async fn consume_login_fails_bad_nonce() -> Result<()> {
         res.headers().get("location").unwrap(),
         "/login?error=invalid_token"
     );
+    assert!(
+        res.headers()
+            .get("content-type")
+            .and_then(|value| value.to_str().ok())
+            .is_none_or(|value| !value.starts_with("text/html")),
+        "invalid-nonce POST must not render an HTML document"
+    );
     // Token should NOT be consumed
     assert!(state.tokens.peek(&token).is_some());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn consume_login_post_expired_token_is_non_document_redirect() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let token = state
+        .tokens
+        .create_with_expiry("u1@example.com".to_string(), chrono::Duration::seconds(-1));
+    let nonce = "expired-token-post-nonce";
+    let cookie_val = format!("{}.{}", hash_token(&token), nonce);
+    let body_str = format!("token={}&nonce={}", token, nonce);
+    let app = app(state);
+
+    let req = Request::post("/auth/magic-link/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, cookie_val))
+        .body(body::Body::from(body_str))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res.headers().get("location").unwrap(),
+        "/login?error=invalid_token"
+    );
+    assert!(
+        res.headers()
+            .get("content-type")
+            .and_then(|value| value.to_str().ok())
+            .is_none_or(|value| !value.starts_with("text/html")),
+        "expired-token POST must not render an HTML document"
+    );
 
     Ok(())
 }
