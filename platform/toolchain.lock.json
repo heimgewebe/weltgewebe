@@ -54,6 +54,13 @@
       "sha256": "e9b88b4ee95b18c706839c28d3a0220e5bc470e9cd9262410c90793c45ff8b7c",
       "format": "tar.gz",
       "binary": "helm"
+    },
+    "trivy": {
+      "version": "0.72.0",
+      "url": "https://github.com/aquasecurity/trivy/releases/download/v0.72.0/trivy_0.72.0_Linux-64bit.tar.gz",
+      "sha256": "bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea",
+      "binary": "trivy",
+      "format": "tar.gz"
     }
   },
   "artifacts": {

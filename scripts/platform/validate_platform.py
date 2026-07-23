@@ -446,7 +446,18 @@ def _run(command: list[str], *, input_text: str | None = None) -> subprocess.Com
 
 def _render_and_validate() -> dict[str, int]:
     receipt = json.loads(
-        _run([sys.executable, "scripts/platform/bootstrap_tools.py", "--json"]).stdout
+        _run(
+            [
+                sys.executable,
+                "scripts/platform/bootstrap_tools.py",
+                "--json",
+                "--tool",
+                "kustomize",
+                "--tool",
+                "kubeconform",
+                "--skip-artifacts",
+            ]
+        ).stdout
     )
     kustomize = receipt["tools"]["kustomize"]
     kubeconform = receipt["tools"]["kubeconform"]
