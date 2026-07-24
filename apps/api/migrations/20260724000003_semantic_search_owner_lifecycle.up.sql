@@ -31,18 +31,32 @@ WHERE EXISTS (
 $$;
 
 -- Final database write fence: even a stale or non-Rust writer cannot persist
--- recoverable private plaintext once the owner is absent or disabled.
+-- recoverable private plaintext once the owner is absent or disabled. Locking
+-- the active account row serializes projection writes with disable/delete: a
+-- write either finishes first and is then redacted, or observes inactivity.
 CREATE OR REPLACE FUNCTION weltgewebe_search_enforce_projection_owner()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
     canonical_visibility TEXT;
+    canonical_payload JSONB;
+    declared_owner_account_id TEXT;
     active_owner_account_id TEXT;
 BEGIN
-    SELECT n.search_visibility,
-           weltgewebe_search_node_owner_account_id(n.payload)
-      INTO canonical_visibility, active_owner_account_id
+    SELECT n.search_visibility, n.payload
+      INTO canonical_visibility, canonical_payload
       FROM domain_nodes n
      WHERE n.id = NEW.node_id;
+
+    IF FOUND AND canonical_visibility = 'private' THEN
+        declared_owner_account_id :=
+            weltgewebe_search_declared_owner_account_id(canonical_payload);
+        SELECT a.id
+          INTO active_owner_account_id
+          FROM domain_accounts a
+         WHERE a.id = declared_owner_account_id
+           AND a.disabled = FALSE
+         FOR KEY SHARE;
+    END IF;
 
     IF NOT FOUND
        OR canonical_visibility IN ('hidden', 'revoked')
