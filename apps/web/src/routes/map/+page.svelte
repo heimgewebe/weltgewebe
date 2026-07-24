@@ -475,10 +475,11 @@
     focusAndFlyToPoint(event.detail);
   }
 
-  function handleRelatedSelect(
+  async function handleRelatedSelect(
     event: CustomEvent<{
       type: "node" | "garnrolle";
       id: string;
+      title?: string;
       data?: MapEntityViewModel;
     }>,
   ) {
@@ -498,7 +499,12 @@
     enterFokus({
       type: event.detail.type,
       id: event.detail.id,
+      data: event.detail.title ? { title: event.detail.title } : undefined,
     });
+    await tick();
+    document
+      .querySelector<HTMLElement>('[data-testid="account-heading"]')
+      ?.focus();
   }
 
   async function handleDomainChanged(

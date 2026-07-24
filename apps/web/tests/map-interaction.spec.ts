@@ -358,7 +358,7 @@ test.describe("Map Interaction & Context Panel", () => {
 
     // The same labels remain fully readable when the panel switches to a
     // narrow mobile layout; they wrap instead of being silently ellipsized.
-    await page.setViewportSize({ width: 375, height: 667 });
+    await page.setViewportSize({ width: 320, height: 667 });
     await expect
       .poll(() =>
         tabList.evaluate(
@@ -407,7 +407,12 @@ test.describe("Map Interaction & Context Panel", () => {
   }) => {
     const nodeId = "b52be17c-4ab7-4434-98ce-520f86290cf0";
     const creatorId = "unlocated-public-account";
+    let releaseAccountResponse!: () => void;
+    const accountResponseBarrier = new Promise<void>((resolve) => {
+      releaseAccountResponse = resolve;
+    });
     await page.route(`**/api/accounts/${creatorId}`, async (route) => {
+      await accountResponseBarrier;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -475,10 +480,19 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(creatorButton).toHaveText("Unverortete Garnrolle");
 
     await creatorButton.click();
+    const accountHeading = panel.getByTestId("account-heading");
+    await expect(accountHeading).toHaveText("Unverortete Garnrolle");
+    await expect(accountHeading).toBeFocused();
+    await expect(panel.getByText(creatorId, { exact: false })).toHaveCount(0);
     await expect(panel.getByRole("tab", { name: "Profil" })).toBeVisible();
+
+    releaseAccountResponse();
     await expect(
-      panel.getByRole("heading", { name: "Unverortete Garnrolle" }),
+      panel.getByText("Öffentliche Garnrolle ohne Kartenposition", {
+        exact: true,
+      }),
     ).toBeVisible();
+    await expect(accountHeading).toHaveText("Unverortete Garnrolle");
   });
 
   test("NodePanel never exposes a creator id when no public title exists", async ({

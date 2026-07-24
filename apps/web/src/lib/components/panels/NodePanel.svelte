@@ -26,6 +26,7 @@
     selectRelated: {
       type: "node" | "garnrolle";
       id: string;
+      title?: string;
       data?: MapEntityViewModel;
     };
     domainChanged: DomainChanged;
@@ -553,6 +554,7 @@
                           dispatch("selectRelated", {
                             type: "garnrolle",
                             id: nodeCreator,
+                            title: currentCreatorTitle,
                           })}>{currentCreatorTitle}</button
                       >
                     </span>{/if}
@@ -665,6 +667,7 @@
     font-size: 0.85rem;
   }
   .creator button {
+    min-width: 44px;
     min-height: 44px;
     max-width: 100%;
     padding: 0.35rem 0.25rem;
@@ -779,6 +782,7 @@
     .node-tabs > button {
       padding-inline: 0.15rem;
       line-height: 1.15;
+      overflow-wrap: anywhere;
       white-space: normal;
     }
     .coordinate-grid,

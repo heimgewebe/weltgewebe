@@ -236,7 +236,7 @@ async fn node_details_include_only_current_public_creator_titles() -> anyhow::Re
     write_lines(
         &in_dir.join("demo.nodes.jsonl"),
         &[
-            r#"{"id":"active-node","location":{"lon":10.0,"lat":53.5},"title":"A","created_by_account_id":"active-account"}"#,
+            r#"{"id":"active-node","location":{"lon":10.0,"lat":53.5},"title":"A","created_at":"2025-01-01T12:00:00Z","updated_at":"2025-01-02T12:00:00Z","created_by_account_id":"active-account"}"#,
             r#"{"id":"disabled-node","location":{"lon":10.1,"lat":53.6},"title":"B","created_by_account_id":"disabled-account"}"#,
             r#"{"id":"missing-node","location":{"lon":10.2,"lat":53.7},"title":"C","created_by_account_id":"missing-account"}"#,
             r#"{"id":"blank-node","location":{"lon":10.3,"lat":53.8},"title":"D","created_by_account_id":"blank-account"}"#,
@@ -294,6 +294,28 @@ async fn node_details_include_only_current_public_creator_titles() -> anyhow::Re
                 .and_then(serde_json::Value::as_str),
             expected_current_title,
         );
+        if expected_current_title.is_none() {
+            assert!(
+                node.get("created_by_account_current_title").is_none(),
+                "non-public creator titles are omitted instead of serialized as null",
+            );
+        }
+
+        let history = node["history"]
+            .as_array()
+            .context("history must be an array")?;
+        assert_eq!(
+            history.last().and_then(|event| event["kind"].as_str()),
+            Some("created")
+        );
+        if node_id == "active-node" {
+            assert_eq!(history.len(), 2);
+            assert_eq!(history[0]["kind"], "updated");
+            assert_eq!(history[0]["date"], "2025-01-02T12:00:00Z");
+            assert_eq!(history[1]["date"], "2025-01-01T12:00:00Z");
+        } else {
+            assert_eq!(history.len(), 1);
+        }
     }
 
     Ok(())
