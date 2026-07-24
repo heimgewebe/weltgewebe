@@ -4,9 +4,9 @@ title: ADR-0009 — Garnrolle, Verortung und Sichtbarkeit
 doc_type: reference
 status: active
 summary: >
-  Entscheidung zum Zielmodell: Jeder Account hat eine Garnrolle; Verortung und
-  Sichtbarkeit sind Eigenschaften dieser Garnrolle, keine getrennten
-  Identitätsmodi.
+  Entscheidung zum Zielmodell: Jeder Account hat eine Garnrolle; privater
+  Kartenanker und öffentliche Sichtbarkeit sind getrennte Eigenschaften dieser
+  Garnrolle, keine Identitäts- oder Onboardingmodi.
 relations:
   - type: supersedes
     target: docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md
@@ -20,7 +20,8 @@ relations:
 
 # ADR-0009 — Garnrolle, Verortung und Sichtbarkeit
 
-Datum: 2026-07-09
+Datum: 2026-07-09  
+Aktualisiert: 2026-07-24  
 Status: Accepted
 
 ## Entscheidung
@@ -35,9 +36,18 @@ im Gewebe. Sie ist der Ursprung von Fäden und kann Knoten knüpfen.
 Verortung und öffentliche Sichtbarkeit sind Eigenschaften dieser Garnrolle. Sie
 sind kein Identitätsmodus und keine zweite Art von Account.
 
+Ein privater Kartenanker und seine öffentliche Darstellung sind zwei getrennte
+Entscheidungen:
+
+1. Eine Garnrolle kann keine oder eine privat gespeicherte Koordinate besitzen.
+2. Unabhängig davon kann sie privat bleiben, exakt oder ungefähr öffentlich
+   dargestellt werden.
+
 ## Zielmodell
 
-Eine Garnrolle hat einen Profilkern und optional eine Kartenposition.
+Eine Garnrolle hat einen Profilkern und optional einen privaten Kartenanker. Die
+öffentliche Kartenposition ist eine daraus abgeleitete, ausdrücklich gewählte
+Darstellung.
 
 ```text
 Garnrolle
@@ -47,16 +57,26 @@ Garnrolle
 │  ├─ Fähigkeiten
 │  ├─ Güter
 │  └─ Interessen
-└─ Kartenposition
-   ├─ keine öffentliche Position
-   └─ öffentliche Position
+└─ Kartenbezug
+   ├─ privater Kartenanker
+   │  ├─ keiner
+   │  └─ Koordinate
+   ├─ private Adresse oder Ortsnotiz
+   │  ├─ keine
+   │  └─ Freitext
+   └─ öffentliche Darstellung
+      ├─ privat: keine öffentliche Position
       ├─ exakt sichtbar
       └─ im Umkreis sichtbar
 ```
 
+Die Adresse oder Ortsnotiz ist optional, bleibt privat und wird nicht
+automatisch in eine Koordinate umgewandelt. Eine öffentliche Darstellung setzt
+einen vorhandenen privaten Kartenanker voraus, aber keine Adresse.
+
 Die zentrale Nutzerhandlung lautet:
 
-> Garnrolle auf die Karte setzen.
+> Privaten Kartenanker wählen und öffentliche Sichtbarkeit bestimmen.
 
 Nicht:
 
@@ -68,16 +88,26 @@ Sichtbarkeit ist im Weltgewebe ein positiver Wert. Ein genauer öffentlicher Ort
 ist kein Fehlerfall, sondern kann selbst ein Gemeingut sein: Menschen,
 Initiativen und Orte werden auffindbar, ansprechbar und anschlussfähig.
 
-Die Nutzerführung kennt drei einfache Zustände:
+Die Nutzerführung kennt drei einfache Entscheidungen:
 
 | Zustand | Bedeutung |
 |---|---|
-| Noch nicht auf der Karte | Die Garnrolle hat keine öffentliche Kartenposition. |
-| Exakt sichtbar | Die angegebene Position wird öffentlich exakt angezeigt. |
-| Im Umkreis sichtbar | Die Garnrolle wird öffentlich nur ungefähr angezeigt. |
+| Privat | Die Garnrolle hat keine öffentliche Kartenposition. Ein privater Kartenanker kann trotzdem gespeichert sein. |
+| Öffentlich exakt | Der private Kartenanker wird öffentlich exakt angezeigt. |
+| Öffentlich ungefähr | Eine versetzte Position innerhalb des gewählten Umkreises wird öffentlich angezeigt. |
 
-Die exakte Sichtbarkeit ist der einfache Fall. Die ungefähre Sichtbarkeit ist
-eine bewusste Option, nicht der normative Default.
+Die exakte Sichtbarkeit ist der einfache öffentliche Fall. Die ungefähre
+Sichtbarkeit ist eine bewusste Option, nicht der normative Default.
+
+Der technische Zustand `map_state=not_on_map` bedeutet ausschließlich, dass
+keine öffentliche Kartenposition projiziert wird. Er sagt nicht aus, ob ein
+privater Kartenanker vorhanden ist, ob ein Account neu ist oder ob Onboarding
+abgeschlossen wurde. Nutzerführung darf aus diesem Zustand daher keinen
+Erstnutzerstatus ableiten.
+
+Ein späterer Onboarding-Abschlusszustand muss als eigenes, datensparsames Signal
+modelliert werden. Er darf nicht aus Sichtbarkeit, Rolle oder vorhandener
+Koordinate erraten werden.
 
 ## Knoten und Fäden
 
@@ -106,10 +136,11 @@ Dokumentationssprache konsistent bleibt.
 1. Alexander legt seinen Account an.
 2. Seine Garnrolle entsteht.
 3. Er ergänzt Profilinformationen.
-4. Er setzt seine Garnrolle exakt sichtbar auf den Poelsweg 2.
-5. Er knüpft den Knoten "Fairschenkbox Caspar-Voght-Straße" an der exakten
+4. Er wählt den Poelsweg 2 als privaten Kartenanker.
+5. Er entscheidet, den Punkt exakt öffentlich zu zeigen.
+6. Er knüpft den Knoten "Fairschenkbox Caspar-Voght-Straße" an der exakten
    Position der Box.
-6. Das System erzeugt einen Gestaltungsfaden:
+7. Das System erzeugt einen Gestaltungsfaden:
    "Alexander hat die Fairschenkbox gebaut / betreut sie".
 
 Damit entsteht kein Demo-Datensatz von außen, sondern der erste echte
@@ -117,41 +148,50 @@ Weltgewebe-Akt aus einer Garnrolle heraus.
 
 ## API-Zielrichtung
 
-Das Zielmodell sollte künftig durch klare Felder ausgedrückt werden:
+Das Zielmodell trennt private Daten und öffentliche Projektion ausdrücklich:
 
 ```text
-garnrolle.location = null
-```
-
-oder:
-
-```text
-garnrolle.location = {
-  address,
-  coordinates,
-  public_visibility: "exact" | "radius",
-  radius_m
+garnrolle.private_location = null | {
+  coordinates
 }
-```
 
-Alternativ ist ein expliziter Kartenzustand möglich:
+garnrolle.private_address_note = null | string
 
-```text
 garnrolle.map_state = "not_on_map" | "exact" | "radius"
+garnrolle.radius_m = 0 | 50..5000
 ```
 
-Die konkrete Migration ist nicht Bestandteil dieser ADR. Wichtig ist die
-semantische Richtung: keine separaten Identitätsmodi für dasselbe Nutzerkonto.
+Dabei gilt:
+
+- `private_location=null` bedeutet: Es existiert kein Kartenanker.
+- `map_state=not_on_map` bedeutet: Es existiert keine öffentliche Projektion;
+  `private_location` kann dennoch gesetzt sein.
+- `map_state=exact` veröffentlicht den privaten Kartenanker exakt.
+- `map_state=radius` veröffentlicht eine stabile, versetzte Projektion innerhalb
+  des gewählten Radius.
+- Nicht übermittelte private Felder bleiben erhalten.
+- Explizite Löschsignale entfernen private Adresse oder privaten Kartenanker.
+- Eine öffentliche Sichtbarkeit ohne vorhandenen Kartenanker wird fail-closed
+  abgewiesen.
+
+Die aktuelle Persistenz darf diese Semantik mit getrennten Spalten, privaten
+Payload-Feldern und `map_state` ausdrücken. Entscheidend ist die fachliche
+Trennung; die konkrete weitere Migration ist nicht Bestandteil dieser ADR.
 
 ## Konsequenzen
 
-- Onboarding beginnt mit "Deine Garnrolle".
-- Die erste große Handlung ist "Garnrolle auf Karte setzen".
+- Onboarding beginnt mit "Deine Garnrolle", wird aber nicht aus `map_state`
+  abgeleitet.
+- Die Nutzerführung trennt Beschreiben, privaten Kartenanker und öffentliche
+  Sichtbarkeit.
 - Sichtbarkeit wird als positive, verständliche Auswahl geführt.
-- Die exakte Adresse ist ein regulärer Fall.
+- Eine private Adresse ist optional; ein exakter öffentlicher Punkt ist ein
+  regulärer Fall.
+- Bewusst private Garnrollen werden nicht als unfertig oder neu bezeichnet.
 - Das erste echte Produktziel ist organisches Weben aus der eigenen Garnrolle.
 - UI, Konzepte und Roadmaps verwenden **Fäden** statt **Kanten/Edges**.
-- Alte technische Begriffe bleiben nur als Migrations- oder Implementierungsdetail zulässig.
+- Alte technische Begriffe bleiben nur als Migrations- oder
+  Implementierungsdetail zulässig.
 
 ## Nicht-Ziele
 
@@ -159,6 +199,7 @@ semantische Richtung: keine separaten Identitätsmodi für dasselbe Nutzerkonto.
 - Keine Pflichtverifikation als Einstiegshürde.
 - Kein anonymer Alternativaccount neben der Garnrolle.
 - Kein Privacy-Modus als Ersatz für klare Sichtbarkeit.
+- Kein aus Sichtbarkeit oder Rolle erratener Onboardingstatus.
 - Keine seedartige Inhaltseinspielung als Ersatz für organisches Weben.
 
 ## Abgelöste Entscheidung
