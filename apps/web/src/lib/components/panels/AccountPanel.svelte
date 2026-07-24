@@ -90,7 +90,9 @@
 </script>
 
 <div class="account-mode">
-  <h3>{accountDetails?.title || $selection?.data?.title || $selection?.id}</h3>
+  <h3 tabindex="-1" data-testid="account-heading">
+    {accountDetails?.title || $selection?.data?.title || "Garnrolle"}
+  </h3>
   {#if summary}<p class="summary">{summary}</p>{/if}
 
   <div class="tabs" role="tablist" aria-label="Garnrollen-Tabs">

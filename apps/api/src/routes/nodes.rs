@@ -115,6 +115,48 @@ pub struct Node {
     pub location: Location,
 }
 
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeHistoryKind {
+    Created,
+    Updated,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub struct NodeHistoryEvent {
+    pub date: String,
+    pub event: &'static str,
+    pub kind: NodeHistoryKind,
+}
+
+#[derive(Serialize)]
+pub struct NodeDetails {
+    #[serde(flatten)]
+    pub node: Node,
+    /// Current public Garnrollen title for the immutable creator binding.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by_account_current_title: Option<String>,
+    /// Newest-first, typed timeline derived from the authoritative node dates.
+    pub history: Vec<NodeHistoryEvent>,
+}
+
+fn node_history(node: &Node) -> Vec<NodeHistoryEvent> {
+    let mut history = Vec::with_capacity(2);
+    if node.updated_at != node.created_at {
+        history.push(NodeHistoryEvent {
+            date: node.updated_at.clone(),
+            event: "Knoten aktualisiert.",
+            kind: NodeHistoryKind::Updated,
+        });
+    }
+    history.push(NodeHistoryEvent {
+        date: node.created_at.clone(),
+        event: "Knoten wurde im Gewebe verankert.",
+        kind: NodeHistoryKind::Created,
+    });
+    history
+}
+
 fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     T: Deserialize<'de>,
@@ -469,13 +511,33 @@ pub async fn load_nodes() -> OrderedCache<Node> {
 pub async fn get_node(
     State(state): State<ApiState>,
     Path(id): Path<String>,
-) -> Result<Json<Node>, StatusCode> {
-    let nodes = state.nodes.read().await;
-    nodes
+) -> Result<Json<NodeDetails>, StatusCode> {
+    // Clone before reading accounts so this endpoint never holds several state
+    // locks at once.
+    let node = state
+        .nodes
+        .read()
+        .await
         .get(&id)
         .cloned()
-        .map(Json)
-        .ok_or(StatusCode::NOT_FOUND)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let created_by_account_current_title = match node.created_by_account_id.as_deref() {
+        Some(account_id) => state
+            .accounts
+            .read()
+            .await
+            .public_display_title(account_id)
+            .map(str::to_owned),
+        None => None,
+    };
+
+    let history = node_history(&node);
+
+    Ok(Json(NodeDetails {
+        node,
+        created_by_account_current_title,
+        history,
+    }))
 }
 
 /// Append a single node record as a JSONL line. Durability via fsync.
