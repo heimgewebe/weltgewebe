@@ -9,6 +9,14 @@ DOCKERFILE = REPO / "apps" / "api" / "Dockerfile"
 DEPLOY = REPO / "scripts" / "weltgewebe-up"
 ACTIVATE = REPO / "scripts" / "ops" / "activate-production-search-vps.sh"
 WORKER = REPO / "scripts" / "ops" / "search-worker-loop.sh"
+BACKFILL = REPO / "apps" / "api" / "src" / "bin" / "search-backfill.rs"
+MIGRATION = (
+    REPO
+    / "apps"
+    / "api"
+    / "migrations"
+    / "20260724000002_semantic_search_projection_privacy_boundary.up.sql"
+)
 
 
 def test_ollama_is_digest_pinned_and_loopback_only() -> None:
@@ -78,16 +86,26 @@ def test_persistent_worker_waits_for_exact_model_and_runs_bounded_batches() -> N
     assert 'sleep "$INTERVAL_SECONDS"' in worker
 
 
+def test_backfill_session_is_generation_bound_before_leased_processing() -> None:
+    backfill = BACKFILL.read_text(encoding="utf-8")
+    assert "generation_bound_pool" in backfill
+    assert "set_config('weltgewebe.search_generation_id'" in backfill
+    assert "SET search_path TO pg_temp, public" in backfill
+    assert "CREATE TEMP VIEW search_projection_jobs" in backfill
+    assert "FROM public.search_projection_jobs" in backfill
+    assert "ensure_generation_identity(&control_pool, &generation)" in backfill
+    assert "document_revision=$7" in backfill
+    assert "normalization_revision=$8" in backfill
+    assert "ranking_revision=$9" in backfill
+    assert backfill.index("start_generation(generation.clone())") < backfill.index(
+        "let worker = ProjectionWorker::new_with_provider"
+    )
+
+
 def test_projection_privacy_contract_is_generation_bound() -> None:
     worker = (REPO / "apps" / "api" / "src" / "search" / "worker.rs").read_text(encoding="utf-8")
     repository = (REPO / "apps" / "api" / "src" / "search" / "repository.rs").read_text(encoding="utf-8")
-    migration = (
-        REPO
-        / "apps"
-        / "api"
-        / "migrations"
-        / "20260724000002_semantic_search_projection_privacy_boundary.up.sql"
-    ).read_text(encoding="utf-8")
+    migration = MIGRATION.read_text(encoding="utf-8")
     revision = "node-document-v4-canonical-visibility"
     assert revision in worker
     assert revision in migration
@@ -106,6 +124,16 @@ def test_projection_privacy_contract_is_generation_bound() -> None:
     assert "n.search_visibility = 'public'" in repository
     assert "n.search_visibility = 'private'" in repository
     assert "n.payload ->> 'search_visibility'" not in repository
+
+
+def test_visibility_cutover_is_trigger_quiet_and_excludes_legacy_documents() -> None:
+    migration = MIGRATION.read_text(encoding="utf-8")
+    disable = migration.index("DISABLE TRIGGER search_track_domain_nodes")
+    rewrite = migration.index("UPDATE domain_nodes")
+    enable = migration.index("ENABLE TRIGGER search_track_domain_nodes")
+    assert disable < rewrite < enable
+    assert "CREATE OR REPLACE FUNCTION weltgewebe_search_enqueue_node" in migration
+    assert "document_revision = 'node-document-v4-canonical-visibility'" in migration
 
 
 def test_privacy_contract_is_wired_into_make_ci_validate() -> None:
