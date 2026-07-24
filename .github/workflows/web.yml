@@ -125,7 +125,7 @@ jobs:
 
   # BEGIN PR1568 LIFECYCLE AUTOFIX
   autofix-pr1568-lifecycle:
-    if: github.ref == 'refs/heads/feat/first-user-ux-v1' && github.actor != 'github-actions[bot]'
+    if: github.event_name == 'pull_request' && github.head_ref == 'feat/first-user-ux-v1' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: write
