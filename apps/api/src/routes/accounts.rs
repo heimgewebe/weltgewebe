@@ -1756,6 +1756,26 @@ mod profile_update_tests {
     }
 
     #[test]
+    fn mapped_profile_without_new_or_existing_location_is_rejected() {
+        for map_state in [GarnrolleMapState::Exact, GarnrolleMapState::Radius] {
+            let update = validate_profile_update(request(map_state, None, None))
+                .expect("profile validation leaves location resolution to persistence");
+            let record = json!({
+                "id": "own-account",
+                "type": "garnrolle",
+                "title": "Alt",
+                "role": "gast",
+                "map_state": "not_on_map",
+                "radius_m": 0
+            });
+
+            let error = update_jsonl_profile_record(record, &update)
+                .expect_err("mapped profile without any location must fail closed");
+            assert_eq!(error.0, StatusCode::BAD_REQUEST);
+        }
+    }
+
+    #[test]
     fn profile_validation_normalises_fields_and_keeps_required_tags() {
         let update = validate_profile_update(request(
             GarnrolleMapState::Radius,
