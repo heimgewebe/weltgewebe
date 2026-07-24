@@ -358,7 +358,7 @@ test.describe("Eigene Garnrolle speichern", () => {
     ).toBeFocused();
     await expect(
       section.locator('[data-testid="garnrolle-draft-status"]'),
-    ).toContainText("endgültig zu löschen");
+    ).toContainText("auf „Privat“ gesetzt");
 
     const requestPromise = page.waitForRequest(
       (request) =>
