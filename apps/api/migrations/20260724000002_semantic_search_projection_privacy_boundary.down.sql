@@ -3,6 +3,14 @@
 -- the projection version stream in the same way as the forward migration.
 ALTER TABLE domain_nodes DISABLE TRIGGER search_track_domain_nodes;
 
+-- Remove account/projection lifecycle hooks before the canonical visibility
+-- column and active-owner helper they depend on disappear.
+DROP TRIGGER IF EXISTS search_track_domain_account_owner_disabled ON domain_accounts;
+DROP TRIGGER IF EXISTS search_track_domain_account_owner_insert_delete ON domain_accounts;
+DROP FUNCTION IF EXISTS weltgewebe_search_track_domain_account_owner();
+DROP TRIGGER IF EXISTS search_enforce_projection_owner ON search_node_projections;
+DROP FUNCTION IF EXISTS weltgewebe_search_enforce_projection_owner();
+
 UPDATE domain_nodes
 SET payload = jsonb_set(payload, '{search_visibility}', to_jsonb(search_visibility), true);
 
@@ -88,3 +96,6 @@ SELECT COALESCE((
     WHERE g.generation_id = p_generation_id
 ), FALSE);
 $$;
+
+DROP FUNCTION IF EXISTS weltgewebe_search_owner_is_active(JSONB);
+DROP FUNCTION IF EXISTS weltgewebe_search_owner_account_id(JSONB);
