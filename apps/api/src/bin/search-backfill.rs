@@ -1,12 +1,12 @@
 //! Bounded, resumable internal T005 projection backfill.  It has no HTTP role.
 
-use std::env;
+use std::{env, sync::Arc};
 
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use weltgewebe_api::{
     search::{
-        GenerationSpec, OllamaEmbeddingProvider, ProcessOutcome, ProjectionWorker,
-        DOCUMENT_REVISION, NORMALIZATION_REVISION, RANKING_REVISION,
+        EmbeddingProvider, GenerationSpec, OllamaEmbeddingProvider, ProcessOutcome,
+        ProjectionWorker, DOCUMENT_REVISION, NORMALIZATION_REVISION, RANKING_REVISION,
     },
     telemetry::{BuildInfo, Metrics},
 };
@@ -45,6 +45,40 @@ async fn ensure_generation_identity(
     Ok(())
 }
 
+async fn generation_bound_pool(database_url: &str, generation_id: String) -> anyhow::Result<PgPool> {
+    Ok(PgPoolOptions::new()
+        .max_connections(2)
+        .after_connect(move |connection, _metadata| {
+            let generation_id = generation_id.clone();
+            Box::pin(async move {
+                sqlx::query(
+                    "SELECT set_config('weltgewebe.search_generation_id',$1,false)",
+                )
+                .bind(generation_id)
+                .execute(&mut *connection)
+                .await?;
+                sqlx::query("SET search_path TO pg_temp, public")
+                    .execute(&mut *connection)
+                    .await?;
+                // A simple temporary view is automatically updatable. It shadows
+                // the base queue for every unqualified worker query, including
+                // SELECT ... FOR UPDATE, UPDATE ... RETURNING and lease cleanup.
+                // Unlike RLS this boundary also applies when the session user is
+                // a PostgreSQL superuser.
+                sqlx::query(
+                    "CREATE TEMP VIEW search_projection_jobs AS \
+                     SELECT * FROM public.search_projection_jobs \
+                     WHERE generation_id = current_setting('weltgewebe.search_generation_id')",
+                )
+                .execute(&mut *connection)
+                .await?;
+                Ok(())
+            })
+        })
+        .connect(database_url)
+        .await?)
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let database_url = required("DATABASE_URL")?;
@@ -71,47 +105,45 @@ async fn main() -> anyhow::Result<()> {
         anyhow::bail!("WELTGEWEBE_SEARCH_BACKFILL_MAX_JOBS must be 1..=10000");
     }
 
-    // Every connection in this pool is generation-bound. The FORCE RLS policy
-    // on search_projection_jobs therefore makes foreign jobs invisible to the
-    // otherwise shared leased-worker implementation.
-    let bound_generation_id = generation_id.clone();
-    let pool = PgPoolOptions::new()
+    // Generation creation needs the canonical base tables, including ON
+    // CONFLICT on the real queue. Leased processing uses a separate pool whose
+    // temporary view makes every queue operation generation-local.
+    let control_pool = PgPoolOptions::new()
         .max_connections(2)
-        .after_connect(move |connection, _metadata| {
-            let generation_id = bound_generation_id.clone();
-            Box::pin(async move {
-                sqlx::query(
-                    "SELECT set_config('weltgewebe.search_generation_id',$1,false)",
-                )
-                .bind(generation_id)
-                .execute(connection)
-                .await?;
-                Ok(())
-            })
-        })
         .connect(&database_url)
         .await?;
+    let worker_pool = generation_bound_pool(&database_url, generation_id.clone()).await?;
 
-    let provider = OllamaEmbeddingProvider::new(
-        &required("WELTGEWEBE_SEARCH_OLLAMA_URL")?,
-        model_id.clone(),
-        model_revision.clone(),
-        runtime_identity.clone(),
-    )
-    .map_err(|error| anyhow::anyhow!("invalid local Ollama provider: {}", error.code()))?;
+    let provider: Arc<dyn EmbeddingProvider> = Arc::new(
+        OllamaEmbeddingProvider::new(
+            &required("WELTGEWEBE_SEARCH_OLLAMA_URL")?,
+            model_id.clone(),
+            model_revision.clone(),
+            runtime_identity.clone(),
+        )
+        .map_err(|error| anyhow::anyhow!("invalid local Ollama provider: {}", error.code()))?,
+    );
+    let generation_control = ProjectionWorker::new_with_provider(
+        control_pool.clone(),
+        format!("generation-control:{}:{}", generation_id, std::process::id()),
+        Metrics::try_new(BuildInfo::collect())?,
+        provider.clone(),
+    )?;
+    generation_control
+        .start_generation(generation.clone())
+        .await?;
     let worker = ProjectionWorker::new_with_provider(
-        pool.clone(),
+        worker_pool,
         format!("backfill:{}:{}", generation_id, std::process::id()),
         Metrics::try_new(BuildInfo::collect())?,
-        std::sync::Arc::new(provider),
+        provider,
     )?;
-    worker.start_generation(generation.clone()).await?;
 
     let mut completed = 0usize;
     while completed < max_jobs {
         // Re-read the complete stored identity before every leased mutation.
         // A changed or mismatched generation fails closed before claiming work.
-        ensure_generation_identity(&pool, &generation).await?;
+        ensure_generation_identity(&control_pool, &generation).await?;
         match worker.claim_and_process_one().await? {
             ProcessOutcome::Empty => break,
             _ => completed += 1,
