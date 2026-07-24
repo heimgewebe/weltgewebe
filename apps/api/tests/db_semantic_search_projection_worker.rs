@@ -835,6 +835,43 @@ async fn provider_failures_are_bounded_fail_closed_and_explicitly_recoverable() 
         ProcessOutcome::Processed
     );
 
+    let identity_generation_spec =
+        exact_generation_spec("m", "identity-r", "ollama:test@http://127.0.0.1:11434", 3);
+    let identity_generation = identity_generation_spec.generation_id;
+    retrying
+        .start_generation(identity_generation_spec)
+        .await
+        .expect("start identity recovery generation");
+    sqlx::query("UPDATE search_projection_jobs SET state='failed',attempt_count=1,last_error_code='provider_identity_mismatch',completed_at=NOW() WHERE generation_id=$1")
+        .bind(identity_generation)
+        .execute(&pool)
+        .await
+        .expect("seed identity mismatch failure");
+    retrying
+        .start_generation(exact_generation_spec(
+            "m",
+            "identity-r",
+            "ollama:test@http://127.0.0.1:11434",
+            3,
+        ))
+        .await
+        .expect("explicit identity catch-up rearm");
+    let identity_rearmed: (String, i32, Option<String>) = sqlx::query_as(
+        "SELECT state,attempt_count,last_error_code FROM search_projection_jobs WHERE generation_id=$1",
+    )
+    .bind(identity_generation)
+    .fetch_one(&pool)
+    .await
+    .expect("identity mismatch job rearmed");
+    assert_eq!(identity_rearmed, ("pending".to_owned(), 0, None));
+    assert_eq!(
+        retrying
+            .claim_and_process_one()
+            .await
+            .expect("identity catch-up projection"),
+        ProcessOutcome::Processed
+    );
+
     let permanent_generation_spec =
         exact_generation_spec("m", "permanent-r", "ollama:test@http://127.0.0.1:11434", 3);
     let permanent_generation = permanent_generation_spec.generation_id;
