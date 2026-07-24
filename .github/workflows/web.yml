@@ -91,21 +91,6 @@ jobs:
       - name: Unit tests (Vitest)
         run: pnpm test:unit
 
-      - name: Diagnose E2E webserver build
-        run: |
-          set +e
-          pnpm run build:e2e > /tmp/pr1568-build-e2e.log 2>&1
-          status=$?
-          echo "exit_status=${status}" >> /tmp/pr1568-build-e2e.log
-          exit 0
-
-      - name: Upload E2E webserver diagnostics
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
-        with:
-          name: pr1568-build-e2e-log
-          path: /tmp/pr1568-build-e2e.log
-          if-no-files-found: error
-
       - name: "Playwright: setup browsers (CI)"
         # WICHTIG: Nicht "0" setzen – jede nicht-leere Zeichenkette gilt als truthy
         # und verhindert weiterhin den Download. Ein leerer String sorgt dafür,
