@@ -2,8 +2,15 @@ import type { Account, Location } from "$lib/map/types";
 
 export type GarnrolleMapState = "not_on_map" | "exact" | "radius";
 
+/**
+ * UI-facing state. `not_on_map` remains part of the compatibility union while
+ * callers migrate, but this projector represents the non-public choice as
+ * `private`: the persistence state does not prove that onboarding is unfinished.
+ */
+export type GarnrolleVisibilityState = GarnrolleMapState | "private";
+
 export type GarnrolleVisibilityView = {
-  state: GarnrolleMapState;
+  state: GarnrolleVisibilityState;
   label: string;
   description: string;
   publicPos: Location | null;
@@ -22,35 +29,35 @@ export function deriveGarnrolleMapState(
 export function describeGarnrolleVisibility(
   account: Account | null | undefined,
 ): GarnrolleVisibilityView {
-  const state = deriveGarnrolleMapState(account);
-  if (state === "exact") {
+  const mapState = deriveGarnrolleMapState(account);
+  if (mapState === "exact") {
     return {
-      state,
-      label: "Exakt sichtbar",
-      description: "Deine Garnrolle steht exakt auf der Karte.",
+      state: "exact",
+      label: "Öffentlich exakt",
+      description: "Dein privater Kartenanker wird öffentlich exakt angezeigt.",
       publicPos: account?.public_pos ?? null,
       radiusM: 0,
       canZoomToMap: true,
     };
   }
-  if (state === "radius") {
+  if (mapState === "radius") {
     const radiusM = account?.radius_m ?? null;
     return {
-      state,
-      label: "Im Umkreis sichtbar",
+      state: "radius",
+      label: "Öffentlich ungefähr",
       description: radiusM
-        ? `Deine Garnrolle wird öffentlich im Umkreis von ${radiusM} m angezeigt.`
-        : "Deine Garnrolle wird öffentlich im Umkreis angezeigt.",
+        ? `Deine Garnrolle wird öffentlich ungefähr im Umkreis von ${radiusM} m angezeigt.`
+        : "Deine Garnrolle wird öffentlich ungefähr angezeigt.",
       publicPos: account?.public_pos ?? null,
       radiusM,
       canZoomToMap: true,
     };
   }
   return {
-    state,
-    label: "Noch nicht auf der Karte",
+    state: "private",
+    label: "Privat",
     description:
-      "Deine Garnrolle ist angelegt, hat aber noch keine öffentliche Kartenposition.",
+      "Deine Garnrolle hat keine öffentliche Kartenposition. Ein privater Kartenanker kann trotzdem gespeichert sein.",
     publicPos: null,
     radiusM: null,
     canZoomToMap: false,
