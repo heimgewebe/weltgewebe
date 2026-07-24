@@ -20,6 +20,7 @@ async function requestJson<T>(
   method: "POST" | "PATCH" | "PUT",
   payload: unknown,
   etag?: string,
+  signal?: AbortSignal,
 ): Promise<T> {
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (etag) {
@@ -30,6 +31,7 @@ async function requestJson<T>(
     headers,
     body: JSON.stringify(payload),
     credentials: "include",
+    signal,
   });
   if (!res.ok) {
     const body =
@@ -47,8 +49,9 @@ async function patchJson<T>(
   path: string,
   payload: unknown,
   etag?: string,
+  signal?: AbortSignal,
 ): Promise<T> {
-  return requestJson<T>(path, "PATCH", payload, etag);
+  return requestJson<T>(path, "PATCH", payload, etag, signal);
 }
 
 async function putJson<T>(
@@ -76,8 +79,8 @@ async function deleteResource(path: string, etag?: string): Promise<void> {
   }
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(path, { credentials: "include" });
+async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(path, { credentials: "include", signal });
   if (!res.ok) {
     throw new ApiRequestError(res.status);
   }
@@ -108,15 +111,23 @@ export interface UpdateOwnGarnrollePayload {
 }
 
 /** GET /api/accounts/me/profile — private profile of the active account only. */
-export function getOwnGarnrolleProfile(): Promise<OwnGarnrolleProfile> {
-  return getJson<OwnGarnrolleProfile>("/api/accounts/me/profile");
+export function getOwnGarnrolleProfile(
+  signal?: AbortSignal,
+): Promise<OwnGarnrolleProfile> {
+  return getJson<OwnGarnrolleProfile>("/api/accounts/me/profile", signal);
 }
 
 /** PATCH /api/accounts/me/profile — update only the active account's Garnrolle. */
 export function updateOwnGarnrolle(
   payload: UpdateOwnGarnrollePayload,
+  signal?: AbortSignal,
 ): Promise<OwnGarnrolleProfile> {
-  return patchJson<OwnGarnrolleProfile>("/api/accounts/me/profile", payload);
+  return patchJson<OwnGarnrolleProfile>(
+    "/api/accounts/me/profile",
+    payload,
+    undefined,
+    signal,
+  );
 }
 
 export interface CreateNodePayload {
