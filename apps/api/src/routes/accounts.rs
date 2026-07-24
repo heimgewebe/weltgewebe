@@ -66,7 +66,7 @@ pub struct Location {
 /// Public view of an Account.
 /// STRICTLY does not contain the internal exact `location` (residence).
 /// `map_state` and `public_pos` express visibility without creating a second
-/// identity type. Legacy `ron`/`mode` fields are accepted only by the mapper.
+/// identity type. Removed identity and visibility fields are rejected.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum GarnrolleMapState {
@@ -350,11 +350,24 @@ pub(crate) fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         }
     };
 
-    let kind = v
-        .get("type")
-        .and_then(|v| v.as_str())
-        .unwrap_or("garnrolle")
-        .to_string();
+    let kind = match v.get("type").and_then(|value| value.as_str()) {
+        Some("garnrolle") => "garnrolle",
+        Some(other) => {
+            tracing::warn!(%id, account_type = %other, "rejecting non-canonical account type");
+            return None;
+        }
+        None => {
+            tracing::warn!(%id, "rejecting account without canonical type");
+            return None;
+        }
+    };
+
+    for forbidden in ["mode", "ron_flag", "visibility", "suppress_public_pos"] {
+        if v.get(forbidden).is_some() {
+            tracing::warn!(%id, field = forbidden, "rejecting removed account field");
+            return None;
+        }
+    }
 
     let title = v
         .get("title")
@@ -391,39 +404,23 @@ pub(crate) fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
     };
     let invalid_radius = radius_raw > 0 && !(MIN_RADIUS_M..=MAX_RADIUS_M).contains(&radius_m);
 
-    // Legacy compatibility is read-only. Old `type=ron`, `mode=ron` or
-    // `ron_flag=true` records become an ordinary Garnrolle that is not on the
-    // public map. No location is invented and no private position is exposed.
-    let has_ron_flag = v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false);
-    let legacy_mode = v.get("mode").and_then(|v| v.as_str());
-    let explicit_map_state = v.get("map_state").and_then(|v| v.as_str());
-    if let Some(state) = explicit_map_state {
-        if !matches!(state, "not_on_map" | "exact" | "radius") {
+    let explicit_map_state = match v.get("map_state").and_then(|value| value.as_str()) {
+        Some(state @ ("not_on_map" | "exact" | "radius")) => state,
+        Some(state) => {
             tracing::warn!(%id, %state, "rejecting account with invalid map_state");
             return None;
         }
-    }
-    let legacy_visibility = v.get("visibility").and_then(|v| v.as_str());
-    if legacy_visibility == Some("approximate") && radius_m == 0 {
-        radius_m = 250;
-    }
-
-    let legacy_not_on_map = kind == "ron"
-        || has_ron_flag
-        || legacy_mode == Some("ron")
-        || legacy_visibility == Some("private")
-        || v.get("suppress_public_pos")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
+        None => {
+            tracing::warn!(%id, "rejecting account without map_state");
+            return None;
+        }
+    };
 
     let internal_location = match (lat, lon) {
         (Some(lat), Some(lon)) => Some(Location { lat, lon }),
         _ => None,
     };
-    let radius_requested = invalid_radius
-        || explicit_map_state == Some("radius")
-        || radius_m > 0
-        || legacy_visibility == Some("approximate");
+    let radius_requested = invalid_radius || explicit_map_state == "radius" || radius_m > 0;
     let radius_public_pos = if radius_requested && !invalid_radius {
         internal_location.as_ref().and_then(|location| {
             radius_projection_public_pos(v.get(RADIUS_PROJECTION_KEY), location, radius_m)
@@ -432,10 +429,10 @@ pub(crate) fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         None
     };
 
-    let map_state = if legacy_not_on_map
-        || explicit_map_state == Some("not_on_map")
-        || internal_location.is_none()
-    {
+    let map_state = if explicit_map_state == "not_on_map" {
+        GarnrolleMapState::NotOnMap
+    } else if internal_location.is_none() {
+        tracing::warn!(account_id = %id, "suppressing mapped account without an internal location");
         GarnrolleMapState::NotOnMap
     } else if radius_requested {
         if radius_public_pos.is_some() {
@@ -475,7 +472,7 @@ pub(crate) fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
 
     Some(AccountPublic {
         id,
-        kind: "garnrolle".to_string(),
+        kind: kind.to_string(),
         title,
         summary,
         public_pos,
@@ -486,63 +483,60 @@ pub(crate) fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
     })
 }
 
-pub async fn load_all_accounts() -> AccountStore {
+pub async fn load_all_accounts() -> std::io::Result<AccountStore> {
     let mut store = AccountStore::new();
     let path = accounts_path();
 
     let file = match File::open(&path).await {
-        Ok(f) => f,
-        Err(e) => {
-            tracing::warn!(
-                ?path,
-                ?e,
-                "Failed to open accounts file, returning empty map"
-            );
-            return store;
-        }
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(store),
+        Err(error) => return Err(error),
     };
 
     let mut lines = BufReader::new(file).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
-        let v: Value = match serde_json::from_str(&line) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
+    let mut line_number = 0usize;
+    while let Some(line) = lines.next_line().await? {
+        line_number += 1;
+        let value: Value = serde_json::from_str(&line).map_err(|error| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("invalid JSONL account record at {path:?} line {line_number}: {error}"),
+            )
+        })?;
 
-        let role = v
+        let public = map_json_to_public_account(&value).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "account record at {path:?} line {line_number} violates the canonical Garnrolle contract"
+                ),
+            )
+        })?;
+
+        let role = value
             .get("role")
-            .and_then(|v| v.as_str())
+            .and_then(|value| value.as_str())
             .map(Role::from_str_lossy)
             .unwrap_or(Role::Gast);
-
-        let email = v
+        let email = value
             .get("email")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        // Read persisted webauthn_user_id if present; otherwise generate a new one.
-        // NOTE: This generated ID is stable only for the lifetime of this process.
-        // Once passkey registration is implemented (register-verify), the generated
-        // webauthn_user_id MUST be persisted back to the account data source so that
-        // registered passkeys remain bound to the correct identity across restarts.
-        let webauthn_user_id = v
+            .and_then(|value| value.as_str())
+            .map(ToOwned::to_owned);
+        let webauthn_user_id = value
             .get("webauthn_user_id")
-            .and_then(|v| v.as_str())
-            .and_then(|s| Uuid::parse_str(s).ok())
+            .and_then(|value| value.as_str())
+            .and_then(|value| Uuid::parse_str(value).ok())
             .unwrap_or_else(Uuid::new_v4);
 
-        if let Some(public) = map_json_to_public_account(&v) {
-            let account = AccountInternal {
-                public,
-                role,
-                email,
-                webauthn_user_id,
-            };
-            store.insert_unindexed(account);
-        }
+        store.insert_unindexed(AccountInternal {
+            public,
+            role,
+            email,
+            webauthn_user_id,
+        });
     }
     store.rebuild_email_index();
-    store
+    Ok(store)
 }
 
 pub async fn list_accounts(
@@ -917,10 +911,6 @@ fn update_jsonl_profile_record(
     object.insert("title".to_string(), json!(update.title));
     object.insert("map_state".to_string(), json!(update.map_state));
     object.insert("radius_m".to_string(), json!(update.radius_m));
-    object.remove("mode");
-    object.remove("ron_flag");
-    object.remove("visibility");
-    object.remove("suppress_public_pos");
     match &update.summary {
         Some(summary) => {
             object.insert("summary".to_string(), json!(summary));
@@ -1383,8 +1373,8 @@ mod tests {
             "id": "test-leak-guard",
             "type": "garnrolle",
             "title": "Leak Test",
-            "location": { "lat": 53.5, "lon": 10.0 },
-            "visibility": "public"
+            "map_state": "exact",
+            "location": { "lat": 53.5, "lon": 10.0 }
         });
 
         let account = map_json_to_public_account(&input).expect("Mapping failed");
@@ -1413,6 +1403,16 @@ mod tests {
     }
 
     #[test]
+    fn missing_map_state_is_rejected() {
+        let input = serde_json::json!({
+            "id": "test-missing-map-state",
+            "type": "garnrolle",
+            "title": "Missing state"
+        });
+        assert!(map_json_to_public_account(&input).is_none());
+    }
+
+    #[test]
     fn explicit_not_on_map_ignores_internal_and_supplied_public_positions() {
         let input = serde_json::json!({
             "id": "test-explicit-hidden",
@@ -1434,61 +1434,52 @@ mod tests {
     }
 
     #[test]
-    fn test_guard_private_hides_public_pos() {
-        let input = serde_json::json!({
-            "id": "test-private",
-            "type": "garnrolle",
-            "title": "Private Test",
-            "location": { "lat": 53.5, "lon": 10.0 },
-            "visibility": "private" // Legacy field
-        });
-
-        let account = map_json_to_public_account(&input).expect("Mapping failed");
-
-        // GUARD: Private legacy visibility becomes an ordinary Garnrolle off the public map.
-        assert_eq!(account.map_state, GarnrolleMapState::NotOnMap);
-        assert!(account.public_pos.is_none());
+    fn removed_identity_and_visibility_fields_are_rejected() {
+        for (field, value) in [
+            ("mode", json!("verortet")),
+            ("ron_flag", json!(true)),
+            ("visibility", json!("private")),
+            ("suppress_public_pos", json!(true)),
+        ] {
+            let mut input = json!({
+                "id": format!("removed-{field}"),
+                "type": "garnrolle",
+                "title": "Removed field",
+                "map_state": "not_on_map",
+                "radius_m": 0
+            });
+            input[field] = value;
+            assert!(
+                map_json_to_public_account(&input).is_none(),
+                "removed field {field} must not be interpreted"
+            );
+        }
     }
 
     #[test]
-    fn test_guard_legacy_radius_maps_to_radius_state() {
-        let input = serde_json::json!({
-            "id": "test-verortet-zero",
-            "type": "garnrolle",
-            "title": "Verortet Zero",
-            "location": { "lat": 53.5, "lon": 10.0 },
-            "mode": "verortet",
-            "radius_m": 0
+    fn non_canonical_or_missing_account_type_is_rejected() {
+        let non_canonical = json!({
+            "id": "removed-account-type",
+            "type": "ron",
+            "title": "Removed type",
+            "map_state": "not_on_map"
         });
+        assert!(map_json_to_public_account(&non_canonical).is_none());
 
-        let account = map_json_to_public_account(&input).expect("Mapping failed");
-
-        assert_eq!(account.radius_m, 0);
-        assert!(account.public_pos.is_some());
+        let missing = json!({
+            "id": "missing-account-type",
+            "title": "Missing type",
+            "map_state": "not_on_map"
+        });
+        assert!(map_json_to_public_account(&missing).is_none());
     }
 
     #[test]
-    fn test_guard_unknown_visibility_defaults_to_public() {
+    fn radius_without_private_binding_fails_closed() {
         let input = json!({
-            "id": "test-unknown-vis",
+            "id": "radius-without-binding",
             "type": "garnrolle",
-            "title": "Unknown Vis",
-            "location": { "lat": 53.5, "lon": 10.0 },
-            "visibility": "garbage_value"
-        });
-
-        let account = map_json_to_public_account(&input).expect("Mapping failed");
-
-        assert_eq!(account.map_state, GarnrolleMapState::Exact);
-        assert!(account.public_pos.is_some());
-    }
-
-    #[test]
-    fn legacy_radius_without_private_binding_fails_closed() {
-        let input = json!({
-            "id": "legacy-radius",
-            "type": "garnrolle",
-            "title": "Legacy radius",
+            "title": "Radius without binding",
             "location": { "lat": 53.5, "lon": 10.0 },
             "map_state": "radius",
             "radius_m": 500,
@@ -1501,11 +1492,12 @@ mod tests {
     }
 
     #[test]
-    fn oversized_radius_without_explicit_state_fails_closed() {
+    fn oversized_radius_fails_closed() {
         let input = json!({
             "id": "oversized-radius",
             "type": "garnrolle",
             "title": "Oversized radius",
+            "map_state": "radius",
             "location": { "lat": 53.5, "lon": 10.0 },
             "radius_m": u64::MAX,
         });
@@ -1690,72 +1682,6 @@ mod tests {
         });
         input[RADIUS_PROJECTION_KEY] = projection;
         let account = map_json_to_public_account(&input).expect("valid account");
-        assert_eq!(account.map_state, GarnrolleMapState::NotOnMap);
-        assert!(account.public_pos.is_none());
-    }
-}
-
-#[cfg(test)]
-mod additional_tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn test_legacy_verortet_without_location_normalizes_to_not_on_map() {
-        let input = json!({
-            "id": "test-verortet-no-loc",
-            "type": "garnrolle",
-            "title": "No Loc",
-            "mode": "verortet",
-        });
-
-        let account = map_json_to_public_account(&input)
-            .expect("A Garnrolle without location remains a valid account");
-        assert_eq!(account.kind, "garnrolle");
-        assert_eq!(account.map_state, GarnrolleMapState::NotOnMap);
-        assert!(account.public_pos.is_none());
-    }
-
-    #[test]
-    fn test_ron_without_location_succeeds() {
-        let input = serde_json::json!({
-            "id": "test-ron-no-loc",
-            "type": "ron",
-            "title": "No Loc Ron",
-            "mode": "ron",
-        });
-
-        let account = map_json_to_public_account(&input)
-            .expect("legacy RoN without location should normalize");
-        assert_eq!(account.map_state, GarnrolleMapState::NotOnMap);
-        assert!(account.public_pos.is_none());
-    }
-
-    #[test]
-    fn test_legacy_type_ron_maps_correctly() {
-        let input = json!({
-            "id": "test-legacy-type-ron",
-            "type": "ron",
-            "title": "Legacy Type Ron",
-            // Notice: no "mode" field here
-        });
-
-        let account = map_json_to_public_account(&input).expect("Mapping failed");
-        assert_eq!(account.map_state, GarnrolleMapState::NotOnMap);
-        assert!(account.public_pos.is_none());
-    }
-
-    #[test]
-    fn test_legacy_ron_flag_maps_correctly() {
-        let input = json!({
-            "id": "test-legacy-ron-flag",
-            "type": "garnrolle",
-            "title": "Legacy Ron Flag",
-            "ron_flag": true
-            // Notice: no "mode" field here
-        });
-
-        let account = map_json_to_public_account(&input).expect("Mapping failed");
         assert_eq!(account.map_state, GarnrolleMapState::NotOnMap);
         assert!(account.public_pos.is_none());
     }

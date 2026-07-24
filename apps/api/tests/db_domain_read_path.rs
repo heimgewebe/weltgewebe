@@ -97,14 +97,14 @@ async fn edges_loader_respects_max_edges_cache_limit() {
 #[tokio::test]
 #[ignore]
 #[serial]
-async fn accounts_loader_rebuilds_email_index_and_privacy_projection() {
+async fn accounts_loader_rebuilds_email_index_and_rejects_removed_fields() {
     let pool = prepare_pool().await;
     sqlx::query(
         "INSERT INTO domain_accounts \
-         (id, kind, title, mode, map_state, radius_m, disabled, location_lat, location_lon, role, email, public_payload, private_payload) \
+         (id, kind, title, map_state, radius_m, disabled, location_lat, location_lon, role, email, public_payload, private_payload) \
          VALUES \
-         ('rp-account-a', 'garnrolle', 'Visible', 'verortet', 'exact', 0, false, 53.55, 9.99, 'gast', 'ReadPath@Example.test', '{\"summary\":\"Public\"}'::jsonb, '{}'::jsonb), \
-         ('rp-account-b', 'garnrolle', 'Suppressed', 'verortet', 'exact', 0, false, 53.56, 9.98, 'gast', NULL, '{}'::jsonb, '{\"suppress_public_pos\":true}'::jsonb)",
+         ('rp-account-a', 'garnrolle', 'Visible', 'exact', 0, false, 53.55, 9.99, 'gast', 'ReadPath@Example.test', '{\"summary\":\"Public\"}'::jsonb, '{}'::jsonb), \
+         ('rp-account-b', 'garnrolle', 'Suppressed', 'exact', 0, false, 53.56, 9.98, 'gast', NULL, '{}'::jsonb, '{\"suppress_public_pos\":true}'::jsonb)",
     )
     .execute(&pool)
     .await
@@ -116,38 +116,12 @@ async fn accounts_loader_rebuilds_email_index_and_privacy_projection() {
     let visible = store
         .get_by_email("readpath@example.test")
         .expect("case-insensitive email lookup");
-    let suppressed = store.get("rp-account-b").expect("suppressed account");
-
     assert_eq!(visible.public.summary.as_deref(), Some("Public"));
     assert!(visible.public.public_pos.is_some());
-    assert!(suppressed.public.public_pos.is_none());
-    clean(&pool).await;
-}
-
-#[tokio::test]
-#[ignore]
-#[serial]
-async fn accounts_loader_respects_mode_column_ron_even_with_location() {
-    let pool = prepare_pool().await;
-    sqlx::query(
-        "INSERT INTO domain_accounts \
-         (id, kind, title, mode, map_state, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
-         VALUES \
-         ('rp-account-ron-location', 'garnrolle', 'RoN With Location', 'ron', 'exact', 0, false, 53.55, 9.99, 'gast', '{}'::jsonb, '{}'::jsonb)",
-    )
-    .execute(&pool)
-    .await
-    .expect("insert ron account");
-
-    let store = load_accounts_from_postgres(&pool)
-        .await
-        .expect("load accounts");
-    let account = store
-        .get("rp-account-ron-location")
-        .expect("ron account present");
-
-    assert_eq!(account.public.map_state, GarnrolleMapState::NotOnMap);
-    assert!(account.public.public_pos.is_none());
+    assert!(
+        store.get("rp-account-b").is_none(),
+        "removed suppress_public_pos field must reject the row"
+    );
     clean(&pool).await;
 }
 
@@ -158,10 +132,10 @@ async fn accounts_loader_requires_valid_private_radius_binding() {
     let pool = prepare_pool().await;
     sqlx::query(
         "INSERT INTO domain_accounts \
-         (id, kind, title, mode, map_state, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
+         (id, kind, title, map_state, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
          VALUES \
-         ('rp-account-approximate', 'garnrolle', 'Legacy approximate', 'verortet', 'radius', 250, false, 53.55, 9.99, 'gast', '{}'::jsonb, '{\"visibility\":\"approximate\"}'::jsonb), \
-         ('rp-account-safe-radius', 'garnrolle', 'Safe radius', NULL, 'radius', 250, false, 53.55, 9.99, 'gast', '{}'::jsonb, \
+         ('rp-account-approximate', 'garnrolle', 'Legacy approximate', 'radius', 250, false, 53.55, 9.99, 'gast', '{}'::jsonb, '{\"visibility\":\"approximate\"}'::jsonb), \
+         ('rp-account-safe-radius', 'garnrolle', 'Safe radius', 'radius', 250, false, 53.55, 9.99, 'gast', '{}'::jsonb, \
           '{\"radius_projection\":{\"version\":1,\"anchor\":{\"lat\":53.55,\"lon\":9.99},\"radius_m\":250,\"public_pos\":{\"lat\":53.5505,\"lon\":9.99}}}'::jsonb)",
     )
     .execute(&pool)
@@ -171,16 +145,14 @@ async fn accounts_loader_requires_valid_private_radius_binding() {
     let store = load_accounts_from_postgres(&pool)
         .await
         .expect("load accounts");
-    let legacy = store
-        .get("rp-account-approximate")
-        .expect("legacy approximate account present");
     let safe = store
         .get("rp-account-safe-radius")
         .expect("safe radius account present");
 
-    assert_eq!(legacy.public.map_state, GarnrolleMapState::NotOnMap);
-    assert_eq!(legacy.public.radius_m, 0);
-    assert!(legacy.public.public_pos.is_none());
+    assert!(
+        store.get("rp-account-approximate").is_none(),
+        "removed visibility field must reject the radius row"
+    );
 
     assert_eq!(safe.public.map_state, GarnrolleMapState::Radius);
     assert_eq!(safe.public.radius_m, 250);
@@ -196,13 +168,13 @@ async fn accounts_loader_requires_valid_private_radius_binding() {
 #[tokio::test]
 #[ignore]
 #[serial]
-async fn accounts_loader_private_visibility_suppresses_public_pos() {
+async fn accounts_loader_rejects_removed_private_visibility() {
     let pool = prepare_pool().await;
     sqlx::query(
         "INSERT INTO domain_accounts \
-         (id, kind, title, mode, map_state, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
+         (id, kind, title, map_state, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
          VALUES \
-         ('rp-account-private', 'garnrolle', 'Private', 'verortet', 'exact', 0, false, 53.55, 9.99, 'gast', '{}'::jsonb, '{\"visibility\":\"private\"}'::jsonb)",
+         ('rp-account-private', 'garnrolle', 'Private', 'exact', 0, false, 53.55, 9.99, 'gast', '{}'::jsonb, '{\"visibility\":\"private\"}'::jsonb)",
     )
     .execute(&pool)
     .await
@@ -211,12 +183,10 @@ async fn accounts_loader_private_visibility_suppresses_public_pos() {
     let store = load_accounts_from_postgres(&pool)
         .await
         .expect("load accounts");
-    let account = store
-        .get("rp-account-private")
-        .expect("private account present");
-
-    assert_eq!(account.public.map_state, GarnrolleMapState::NotOnMap);
-    assert!(account.public.public_pos.is_none());
+    assert!(
+        store.get("rp-account-private").is_none(),
+        "removed private visibility field must reject the row"
+    );
     clean(&pool).await;
 }
 
@@ -227,9 +197,9 @@ async fn accounts_loader_explicit_not_on_map_hides_internal_location() {
     let pool = prepare_pool().await;
     sqlx::query(
         "INSERT INTO domain_accounts \
-         (id, kind, title, mode, map_state, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
+         (id, kind, title, map_state, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
          VALUES \
-         ('rp-account-explicit-hidden', 'garnrolle', 'Explicitly Hidden', NULL, 'not_on_map', 0, false, 53.55, 9.99, 'gast', '{}'::jsonb, '{}'::jsonb)",
+         ('rp-account-explicit-hidden', 'garnrolle', 'Explicitly Hidden', 'not_on_map', 0, false, 53.55, 9.99, 'gast', '{}'::jsonb, '{}'::jsonb)",
     )
     .execute(&pool)
     .await
@@ -254,13 +224,13 @@ async fn accounts_loader_explicit_not_on_map_hides_internal_location() {
 #[tokio::test]
 #[ignore]
 #[serial]
-async fn accounts_loader_ron_flag_normalizes_to_not_on_map_even_with_location() {
+async fn accounts_loader_rejects_removed_ron_flag() {
     let pool = prepare_pool().await;
     sqlx::query(
         "INSERT INTO domain_accounts \
-         (id, kind, title, mode, map_state, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
+         (id, kind, title, map_state, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
          VALUES \
-         ('rp-account-ron-flag', 'garnrolle', 'RoN Flag', 'verortet', 'exact', 0, false, 53.55, 9.99, 'gast', '{}'::jsonb, '{\"ron_flag\":true}'::jsonb)",
+         ('rp-account-ron-flag', 'garnrolle', 'RoN Flag', 'exact', 0, false, 53.55, 9.99, 'gast', '{}'::jsonb, '{\"ron_flag\":true}'::jsonb)",
     )
     .execute(&pool)
     .await
@@ -269,12 +239,10 @@ async fn accounts_loader_ron_flag_normalizes_to_not_on_map_even_with_location() 
     let store = load_accounts_from_postgres(&pool)
         .await
         .expect("load accounts");
-    let account = store
-        .get("rp-account-ron-flag")
-        .expect("ron-flag account present");
-
-    assert_eq!(account.public.map_state, GarnrolleMapState::NotOnMap);
-    assert!(account.public.public_pos.is_none());
+    assert!(
+        store.get("rp-account-ron-flag").is_none(),
+        "removed ron_flag must reject the row"
+    );
     clean(&pool).await;
 }
 
@@ -352,11 +320,11 @@ async fn jsonl_postgres_legacy_list_order_gap_diagnostic() {
 
     sqlx::query(
         "INSERT INTO domain_accounts \
-         (id, kind, title, mode, map_state, role, email, public_payload, private_payload) \
+         (id, kind, title, map_state, role, email, public_payload, private_payload) \
          VALUES \
-         ('rp-list-account-c', 'garnrolle', 'C', NULL, 'not_on_map', 'gast', 'rp-list-account-c@example.invalid', '{}'::jsonb, '{}'::jsonb), \
-         ('rp-list-account-a', 'garnrolle', 'A', NULL, 'not_on_map', 'gast', 'rp-list-account-a@example.invalid', '{}'::jsonb, '{}'::jsonb), \
-         ('rp-list-account-b', 'garnrolle', 'B', NULL, 'not_on_map', 'gast', 'rp-list-account-b@example.invalid', '{}'::jsonb, '{}'::jsonb)"
+         ('rp-list-account-c', 'garnrolle', 'C', 'not_on_map', 'gast', 'rp-list-account-c@example.invalid', '{}'::jsonb, '{}'::jsonb), \
+         ('rp-list-account-a', 'garnrolle', 'A', 'not_on_map', 'gast', 'rp-list-account-a@example.invalid', '{}'::jsonb, '{}'::jsonb), \
+         ('rp-list-account-b', 'garnrolle', 'B', 'not_on_map', 'gast', 'rp-list-account-b@example.invalid', '{}'::jsonb, '{}'::jsonb)"
     )
     .execute(&pool)
     .await
@@ -369,7 +337,9 @@ async fn jsonl_postgres_legacy_list_order_gap_diagnostic() {
     let jsonl_edges = weltgewebe_api::routes::edges::load_edges().await;
     let pg_edges = load_edges_from_postgres(&pool).await.unwrap();
 
-    let jsonl_accounts = weltgewebe_api::routes::accounts::load_all_accounts().await;
+    let jsonl_accounts = weltgewebe_api::routes::accounts::load_all_accounts()
+        .await
+        .expect("load canonical JSONL accounts");
     let pg_accounts = load_accounts_from_postgres(&pool).await.unwrap();
 
     // 4. Assert Diagnostic Outcomes

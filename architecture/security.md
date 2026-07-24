@@ -102,9 +102,8 @@ auditierte Vorgänge.
 
 ## Offene Risiken
 
-- Legacy-RoN-Daten werden privacy-sicher zu `not_on_map` normalisiert. Vor der
-  späteren Entfernung der nullable Rollbackspalte `mode` ist ein Produktions-
-  und Rückrollbeleg nötig.
+- `map_state=not_on_map` unterdrückt jede öffentliche Position, ohne dafür eine
+  zweite Identität oder einen Legacy-Modus zu verwenden.
 - Der vollständige PostgreSQL-Cutover ist nicht abgeschlossen.
 - Branch-/Ruleset-Schutz muss nach Stabilisierung der Pflichtcheckliste aktiv
   und minimal gehalten werden.

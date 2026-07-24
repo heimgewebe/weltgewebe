@@ -3199,9 +3199,9 @@ pub async fn passkey_testing_bootstrap_session(
 
         if let Err(error) = sqlx::query(
             "INSERT INTO domain_accounts \
-                (id, kind, title, mode, map_state, radius_m, disabled, role, email, webauthn_user_id, public_payload, private_payload) \
+                (id, kind, title, map_state, radius_m, disabled, role, email, webauthn_user_id, public_payload, private_payload) \
              VALUES \
-                ($1, 'garnrolle', 'Passkey Proof User', NULL, 'not_on_map', 0, false, 'gast', $2, $3::uuid, '{}'::jsonb, '{}'::jsonb) \
+                ($1, 'garnrolle', 'Passkey Proof User', 'not_on_map', 0, false, 'gast', $2, $3::uuid, '{}'::jsonb, '{}'::jsonb) \
              ON CONFLICT (id) DO UPDATE SET \
                 title = EXCLUDED.title, \
                 disabled = false, \

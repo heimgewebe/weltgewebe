@@ -415,21 +415,20 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
 
         let upsert_result = sqlx::query(
             "INSERT INTO domain_accounts
-                 (id, kind, title, mode, map_state, radius_m, disabled,
+                 (id, kind, title, map_state, radius_m, disabled,
                   location_lat, location_lon,
                   role, email, webauthn_user_id,
                   created_at, updated_at,
                   public_payload, private_payload)
              VALUES
-                 ($1, $2, $3, $4, $5, $6, $7,
-                  $8, $9,
-                  $10, $11, $12::uuid,
-                  $13, $14,
-                  $15::jsonb, $16::jsonb)
+                 ($1, $2, $3, $4, $5, $6,
+                  $7, $8,
+                  $9, $10, $11::uuid,
+                  $12, $13,
+                  $14::jsonb, $15::jsonb)
              ON CONFLICT (id) DO UPDATE SET
                  kind             = EXCLUDED.kind,
                  title            = EXCLUDED.title,
-                 mode             = EXCLUDED.mode,
                  map_state        = EXCLUDED.map_state,
                  radius_m         = EXCLUDED.radius_m,
                  disabled         = EXCLUDED.disabled,
@@ -446,7 +445,6 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
         .bind(&id)
         .bind(&row.kind)
         .bind(&row.title)
-        .bind(row.legacy_mode.as_deref())
         .bind(&row.map_state)
         .bind(row.radius_m)
         .bind(row.disabled)
@@ -505,8 +503,8 @@ const EDGE_FIXTURE: &str = r#"
 "#;
 
 const ACCOUNT_FIXTURE: &str = r#"
-{"id":"backfill-proof-account-alpha","type":"garnrolle","title":"Alpha Account","mode":"verortet","radius_m":100,"location":{"lat":53.5,"lon":10.0},"role":"weber","email":"alpha@proof.example","summary":"Alpha summary"}
-{"id":"backfill-proof-account-beta","type":"ron","title":"Beta Account","mode":"ron","radius_m":0,"role":"gast"}
+{"id":"backfill-proof-account-alpha","type":"garnrolle","title":"Alpha Account","map_state":"exact","radius_m":0,"location":{"lat":53.5,"lon":10.0},"role":"weber","email":"alpha@proof.example","summary":"Alpha summary"}
+{"id":"backfill-proof-account-beta","type":"garnrolle","title":"Beta Account","map_state":"not_on_map","radius_m":0,"role":"gast"}
 "#;
 
 const MALFORMED_NODE_FIXTURE: &str = r#"
@@ -522,11 +520,11 @@ const DUPLICATE_ID_NODE_FIXTURE: &str = r#"
 "#;
 
 const DUPLICATE_EMAIL_ACCOUNT_FIXTURE: &str = r#"
-{"id":"backfill-proof-account-dup-email-a","type":"garnrolle","title":"Dup Email A","mode":"verortet","radius_m":0,"location":{"lat":53.0,"lon":10.0},"role":"gast","email":"dup@proof.example"}
-{"id":"backfill-proof-account-dup-email-b","type":"garnrolle","title":"Dup Email B","mode":"verortet","radius_m":0,"location":{"lat":53.0,"lon":10.0},"role":"gast","email":"  DUP@proof.example  "}
+{"id":"backfill-proof-account-dup-email-a","type":"garnrolle","title":"Dup Email A","map_state":"exact","radius_m":0,"location":{"lat":53.0,"lon":10.0},"role":"gast","email":"dup@proof.example"}
+{"id":"backfill-proof-account-dup-email-b","type":"garnrolle","title":"Dup Email B","map_state":"exact","radius_m":0,"location":{"lat":53.0,"lon":10.0},"role":"gast","email":"  DUP@proof.example  "}
 "#;
 
-const LEGACY_ACCOUNT_FIXTURE: &str = r#"
+const REMOVED_ACCOUNT_FIXTURE: &str = r#"
 {"id":"legacy-private","location":{"lat":50.0,"lon":10.0},"visibility":"private"}
 {"id":"legacy-missing-type","location":{"lat":51.0,"lon":11.0}}
 {"id":"legacy-missing-mode-ron-flag","ron_flag":true}
@@ -743,9 +741,7 @@ async fn domain_backfill_edges_deterministic_and_idempotent() {
     pool.close().await;
 }
 
-/// Proves that two legacy account fixtures normalize to canonical Garnrollen,
-/// with an unbound historical radius account failing closed, and re-import
-/// idempotently.
+/// Proves that two canonical Garnrollen import and re-import idempotently.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn domain_backfill_accounts_deterministic_and_idempotent() {
@@ -769,31 +765,25 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
         "no duplicate emails in clean fixture"
     );
 
-    // Field mapping for a legacy approximate account. Historical records have
-    // no private random projection, so the import must preserve the residence
-    // privately but suppress the public radius state.
     type AccountProjectionRow = (
         String,
-        Option<String>,
         String,
         String,
         Option<String>,
         Option<f64>,
         Option<f64>,
     );
-    let (kind, mode, map_state, role, email, loc_lat, loc_lon): AccountProjectionRow =
-        sqlx::query_as(
-            "SELECT kind, mode, map_state, role, email, location_lat, location_lon
+    let (kind, map_state, role, email, loc_lat, loc_lon): AccountProjectionRow = sqlx::query_as(
+        "SELECT kind, map_state, role, email, location_lat, location_lon
              FROM domain_accounts WHERE id = $1",
-        )
-        .bind("backfill-proof-account-alpha")
-        .fetch_one(&pool)
-        .await
-        .expect("account alpha must exist after import");
+    )
+    .bind("backfill-proof-account-alpha")
+    .fetch_one(&pool)
+    .await
+    .expect("account alpha must exist after import");
 
     assert_eq!(kind, "garnrolle");
-    assert_eq!(mode, None);
-    assert_eq!(map_state, "not_on_map");
+    assert_eq!(map_state, "exact");
     assert_eq!(role, "weber");
     assert_eq!(email.as_deref(), Some("alpha@proof.example"));
     assert!(
@@ -805,7 +795,7 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
         "location_lon must map correctly"
     );
 
-    // Legacy hidden account: no location
+    // A canonical not-on-map Garnrolle needs no location.
     let (beta_lat, beta_lon): (Option<f64>, Option<f64>) =
         sqlx::query_as("SELECT location_lat, location_lon FROM domain_accounts WHERE id = $1")
             .bind("backfill-proof-account-beta")
@@ -820,14 +810,6 @@ async fn domain_backfill_accounts_deterministic_and_idempotent() {
         beta_lon.is_none(),
         "hidden account must have NULL location_lon"
     );
-
-    // Unsafe historical radius is cleared while private coordinates remain.
-    let (radius_m,): (i64,) = sqlx::query_as("SELECT radius_m FROM domain_accounts WHERE id = $1")
-        .bind("backfill-proof-account-alpha")
-        .fetch_one(&pool)
-        .await
-        .expect("radius_m must be readable");
-    assert_eq!(radius_m, 0);
 
     // Second import (idempotency)
     let r2 = import_accounts(&pool, ACCOUNT_FIXTURE).await;
@@ -1031,10 +1013,10 @@ async fn domain_backfill_duplicate_account_emails_audited() {
     pool.close().await;
 }
 
-/// Proves that legacy accounts import correctly preserving semantics.
+/// Proves that removed account identities and visibility fields are rejected.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
-async fn domain_backfill_legacy_account_semantics() {
+async fn domain_backfill_rejects_removed_account_fields() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
 
@@ -1043,82 +1025,18 @@ async fn domain_backfill_legacy_account_semantics() {
         .await
         .expect("pre-test cleanup failed");
 
-    let r = import_accounts(&pool, LEGACY_ACCOUNT_FIXTURE).await;
-    assert_eq!(r.records_read, 4);
-    assert_eq!(r.records_inserted, 4);
+    let report = import_accounts(&pool, REMOVED_ACCOUNT_FIXTURE).await;
+    assert_eq!(report.records_read, 4);
+    assert_eq!(report.records_inserted, 0);
+    assert_eq!(report.records_updated, 0);
+    assert_eq!(report.skipped_records, 4);
 
-    // legacy-private: visibility: "private" + location.
-    // Compile-safety: use SQL scalar extraction (private_payload->>'key')
-    // to read JSONB as TEXT, avoiding the sqlx/json feature dependency.
-    let (kind, mode, map_state, visibility, suppress_public_pos): (
-        String,
-        Option<String>,
-        String,
-        Option<String>,
-        Option<String>,
-    ) = sqlx::query_as(
-        "SELECT
-             kind,
-             mode,
-             map_state,
-             private_payload->>'visibility',
-             private_payload->>'suppress_public_pos'
-         FROM domain_accounts
-         WHERE id = $1",
-    )
-    .bind("legacy-private")
-    .fetch_one(&pool)
-    .await
-    .expect("legacy-private must exist");
-    assert_eq!(kind, "garnrolle", "missing type defaults to garnrolle");
-    assert_eq!(mode, None);
-    assert_eq!(map_state, "not_on_map");
-    assert_eq!(
-        visibility.as_deref(),
-        Some("private"),
-        "private_payload.visibility must be preserved"
-    );
-    assert_eq!(
-        suppress_public_pos.as_deref(),
-        Some("true"),
-        "private visibility must set suppress_public_pos=true"
-    );
-
-    // legacy-missing-type: missing type + location
-    let (kind, mode, map_state): (String, Option<String>, String) = sqlx::query_as(
-        "SELECT kind, mode, map_state FROM domain_accounts WHERE id = 'legacy-missing-type'",
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("legacy-missing-type must exist");
-    assert_eq!(kind, "garnrolle");
-    assert_eq!(mode, None);
-    assert_eq!(map_state, "exact");
-
-    // legacy-missing-mode-ron-flag: missing mode + ron_flag: true
-    let (mode, map_state): (Option<String>, String) = sqlx::query_as(
-        "SELECT mode, map_state FROM domain_accounts WHERE id = 'legacy-missing-mode-ron-flag'",
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("legacy-missing-mode-ron-flag must exist");
-    assert_eq!(mode, None);
-    assert_eq!(map_state, "not_on_map");
-
-    // legacy-approximate: no private projection binding, therefore fail closed
-    let (radius_m, map_state): (i64, String) = sqlx::query_as(
-        "SELECT radius_m, map_state FROM domain_accounts WHERE id = 'legacy-approximate'",
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("legacy-approximate must exist");
-    assert_eq!(radius_m, 0);
-    assert_eq!(map_state, "not_on_map");
-
-    sqlx::query("DELETE FROM domain_accounts WHERE id LIKE 'legacy-%'")
-        .execute(&pool)
-        .await
-        .expect("post-test cleanup failed");
+    let (count,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM domain_accounts WHERE id LIKE 'legacy-%'")
+            .fetch_one(&pool)
+            .await
+            .expect("count rejected account rows");
+    assert_eq!(count, 0, "removed account shapes must not reach PostgreSQL");
 
     pool.close().await;
 }

@@ -103,9 +103,9 @@ async fn passkey_account_fk_readiness_audit_detects_orphans() {
 
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, map_state, radius_m, disabled, role, email, webauthn_user_id, public_payload, private_payload) \
+            (id, kind, title, map_state, radius_m, disabled, role, email, webauthn_user_id, public_payload, private_payload) \
          VALUES \
-            ($1, 'garnrolle', 'FK Readiness Account', NULL, 'not_on_map', 0, false, 'weber', $2, $3::uuid, '{}'::jsonb, '{}'::jsonb)",
+            ($1, 'garnrolle', 'FK Readiness Account', 'not_on_map', 0, false, 'weber', $2, $3::uuid, '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(&valid_account_id)
     .bind(format!("{valid_account_id}@example.invalid"))

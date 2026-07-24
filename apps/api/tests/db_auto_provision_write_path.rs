@@ -248,8 +248,8 @@ async fn auto_provision_resolves_cross_process_duplicate_email_race() -> Result<
     // NOT present in the in-memory cache.
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, map_state, radius_m, role, email, public_payload, private_payload) \
-         VALUES ($1, 'garnrolle', 'Garnrolle', NULL, 'not_on_map', 0, 'gast', $2, '{}'::jsonb, '{}'::jsonb)",
+            (id, kind, title, map_state, radius_m, role, email, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', 'Garnrolle', 'not_on_map', 0, 'gast', $2, '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(existing_id)
     .bind(email)
@@ -309,8 +309,8 @@ async fn auto_provision_refuses_disabled_cross_process_winner() -> Result<()> {
     let email = "auto-provision-proof-disabled@example.invalid";
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, map_state, radius_m, disabled, role, email, public_payload, private_payload) \
-         VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-000000000100', 'garnrolle', 'Garnrolle', NULL, \
+            (id, kind, title, map_state, radius_m, disabled, role, email, public_payload, private_payload) \
+         VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-000000000100', 'garnrolle', 'Garnrolle', \
                  'not_on_map', 0, true, 'gast', $1, '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(email)

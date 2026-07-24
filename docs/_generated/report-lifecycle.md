@@ -16,10 +16,10 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Metric | Count |
 | --- | ---: |
-| files_scanned | 50 |
-| reports_checked | 44 |
+| files_scanned | 51 |
+| reports_checked | 45 |
 | reports_ignored_non_report | 6 |
-| reports_with_lifecycle_state | 44 |
+| reports_with_lifecycle_state | 45 |
 | reports_missing_lifecycle_state | 0 |
 | findings_total | 0 |
 
@@ -27,7 +27,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | lifecycle_state | Count |
 | --- | ---: |
-| active | 32 |
+| active | 33 |
 | deferred | 0 |
 | superseded | 6 |
 | archived | 6 |
@@ -68,6 +68,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/domain-provider-role-finding.md | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  |
 | docs/reports/domain-read-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-runtime-data-source-reconciliation.md | active | audit | DB-PROOF-001 | 2026-07-18 |  |
+| docs/reports/garnrolle-identity-cutover-proof.md | active | proof | OPT-ARC-001 | 2026-10-24 |  |
 | docs/reports/github-action-ref-pinning-audit.md | active | audit | OPT-INF-002 | 2026-09-30 |  |
 | docs/reports/github-actions-node24-readiness.md | active | audit | OPT-CI-005 | 2026-09-29 |  |
 | docs/reports/map-status.md | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-08-12 |  |

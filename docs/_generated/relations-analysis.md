@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 184 |
-| Dokumente mit ausgehenden Relationen | 183 |
-| Dokumente als Ziel referenziert | 138 |
-| Relationen gesamt | 645 |
+| Dokumente gesamt | 185 |
+| Dokumente mit ausgehenden Relationen | 184 |
+| Dokumente als Ziel referenziert | 139 |
+| Relationen gesamt | 650 |
 | — depends_on | 25 |
-| — relates_to | 603 |
+| — relates_to | 608 |
 | — supersedes | 12 |
 | — verifies | 5 |
 | Isolierte Dokumente | 0 |
@@ -46,6 +46,7 @@ Generated automatically. Do not edit.
 - ⚠️ High inbound count (12): `docs/deployment.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/blueprints/auth-roadmap.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/roadmap.md` — central dependency, review carefully
+- ⚠️ High inbound count (10): `docs/datenmodell.md` — central dependency, review carefully
 
 ### Zyklen (depends_on)
 
@@ -75,6 +76,7 @@ _Keine Zyklen gefunden._
 - `docs/deployment.md` — 12 eingehende Relationen
 - `docs/blueprints/auth-roadmap.md` — 11 eingehende Relationen
 - `docs/roadmap.md` — 11 eingehende Relationen
+- `docs/datenmodell.md` — 10 eingehende Relationen
 
 ### Isolierte Dokumente
 

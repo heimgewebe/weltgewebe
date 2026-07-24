@@ -150,6 +150,7 @@ Generated automatically. Do not edit.
 | reports.domain-postgres-instance-coherence-decision | Domain PostgreSQL Instance Coherence Decision — DOMAIN-PG-002 | report | active | docs/reports/domain-postgres-instance-coherence-decision.md |
 | reports.domain-provider-role-finding | Finding: Aktuelle Domain- und Provider-Rollen | report | active | docs/reports/domain-provider-role-finding.md |
 | reports.domain-read-path-proof | Domain Read Path Proof | report | active | docs/reports/domain-read-path-proof.md |
+| reports.garnrolle-identity-cutover-proof | Garnrolle Identity Cutover Proof | report | active | docs/reports/garnrolle-identity-cutover-proof.md |
 | reports.github-action-ref-pinning-audit | GitHub Action Reference Pinning Audit — OPT-INF-002 | report | active | docs/reports/github-action-ref-pinning-audit.md |
 | reports.github-actions-node24-readiness | GitHub Actions Node-24 Runtime Readiness — OPT-CI-005 | report | active | docs/reports/github-actions-node24-readiness.md |
 | reports.inwx-zone-reconciliation-plan | INWX Zone Reconciliation Plan | report | deprecated | docs/reports/inwx-zone-reconciliation-plan.md |

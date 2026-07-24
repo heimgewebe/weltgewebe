@@ -98,8 +98,8 @@ async fn cleanup(pool: &sqlx::PgPool) {
 async fn insert_account(pool: &sqlx::PgPool, id: &str, user_id: Option<Uuid>) {
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, map_state, radius_m, role, webauthn_user_id, public_payload, private_payload) \
-         VALUES ($1, 'garnrolle', $2, NULL, 'not_on_map', 0, 'gast', $3::uuid, '{}'::jsonb, '{}'::jsonb)",
+            (id, kind, title, map_state, radius_m, role, webauthn_user_id, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', $2, 'not_on_map', 0, 'gast', $3::uuid, '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(id)
     .bind(id)
