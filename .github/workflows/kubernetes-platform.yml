@@ -163,7 +163,10 @@ jobs:
         if: steps.proof-cache.outputs.cache-hit != 'true' && success()
         run: |
           set -euo pipefail
-          receipt="$(find .cache/weltgewebe-platform/receipts -maxdepth 1 -type f -name "${CLUSTER_NAME}-*.json" -print -quit)"
+          receipt="$(
+            find .cache/weltgewebe-platform/receipts \
+              -maxdepth 1 -type f -name "${CLUSTER_NAME}-*.json" -print -quit
+          )"
           test -n "$receipt"
           python scripts/platform/proof_identity.py record \
             --identity build/kubernetes-platform/kind-gitops-identity.json \
@@ -266,7 +269,11 @@ jobs:
         if: steps.proof-cache.outputs.cache-hit != 'true' && success()
         run: |
           set -euo pipefail
-          receipt="$(find .cache/weltgewebe-platform/receipts -maxdepth 1 -type f -name "${CLUSTER_NAME}-*-ha-recovery.json" -print -quit)"
+          receipt="$(
+            find .cache/weltgewebe-platform/receipts \
+              -maxdepth 1 -type f \
+              -name "${CLUSTER_NAME}-*-ha-recovery.json" -print -quit
+          )"
           test -n "$receipt"
           python scripts/platform/proof_identity.py record \
             --identity build/kubernetes-platform/ha-recovery-identity.json \
