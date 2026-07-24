@@ -265,16 +265,17 @@ async fn private_owner_lifecycle_is_account_bound_redacted_and_recoverable() {
     // projection is inserted but not committed yet while another connection
     // disables the owner. The disable must wait; after the insert commits, the
     // lifecycle trigger must observe and synchronously redact that row.
-    sqlx::query(
-        "DELETE FROM search_node_projections WHERE generation_id=$1 AND node_id=$2",
-    )
-    .bind(&generation)
-    .bind(NODE_ID)
-    .execute(&pool)
-    .await
-    .expect("remove committed private projection before race proof");
+    sqlx::query("DELETE FROM search_node_projections WHERE generation_id=$1 AND node_id=$2")
+        .bind(&generation)
+        .bind(NODE_ID)
+        .execute(&pool)
+        .await
+        .expect("remove committed private projection before race proof");
 
-    let mut projection_tx = pool.begin().await.expect("begin concurrent projection write");
+    let mut projection_tx = pool
+        .begin()
+        .await
+        .expect("begin concurrent projection write");
     sqlx::query(
         "INSERT INTO search_node_projections \
          (generation_id,node_id,source_version,source_revision,content_sha256,title,tags,searchable_text,language,kind,status,visibility_scopes,semantic_state,embedding) \
