@@ -1,7 +1,6 @@
 <script lang="ts">
   import { ICONS, MARKER_SIZES } from "$lib/ui/icons";
   import { authStore } from "$lib/auth/store";
-  export let label = "Meine Garnrolle einrichten";
 </script>
 
 <div class="garnrolle-container wrap">
@@ -9,8 +8,8 @@
     <a
       class="roll wrap-btn"
       href="/settings#meine-garnrolle"
-      aria-label={label}
-      title={label}
+      aria-label="Meine Garnrolle einrichten"
+      title="Meine Garnrolle einrichten"
       style="width: {MARKER_SIZES.account}px; height: {MARKER_SIZES.account}px;"
     >
       <img src={ICONS.garnrolle} alt="" />

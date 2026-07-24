@@ -159,9 +159,9 @@ test.describe("Eigene Garnrolle speichern", () => {
       title: "Mitwebende Gastgarnrolle",
       map_state: "not_on_map",
     });
-    await expect(
-      section.locator('[data-testid="garnrolle-success"]'),
-    ).toContainText("gespeichert");
+    await expect(section.locator('.form-message[data-kind="D"]')).toContainText(
+      "gespeichert",
+    );
   });
 
   test("guest places the own Garnrolle via a plain map click and saves it exact", async ({
@@ -207,6 +207,12 @@ test.describe("Eigene Garnrolle speichern", () => {
     await expect(
       returned.locator('[data-testid="garnrolle-location-state"]'),
     ).toContainText("Kartenanker gewählt");
+    const unsavedHint = returned.locator('.form-message[data-kind="P"]');
+    await expect(unsavedHint).toContainText("noch nicht gespeichert");
+    await expect(unsavedHint).toHaveAttribute("data-kind", "P");
+    await expect(returned.locator('.form-message[data-kind="D"]')).toHaveCount(
+      0,
+    );
     await expect(
       returned.locator('[data-testid="save-garnrolle"]'),
     ).toBeEnabled();
@@ -225,7 +231,7 @@ test.describe("Eigene Garnrolle speichern", () => {
     expect(payload).not.toHaveProperty("address");
     expectValidLocation(payload.location);
     await expect(
-      returned.locator('[data-testid="garnrolle-success"]'),
+      returned.locator('.form-message[data-kind="D"]'),
     ).toContainText("gespeichert");
   });
 
@@ -263,9 +269,9 @@ test.describe("Eigene Garnrolle speichern", () => {
         "interest:Commons",
       ],
     });
-    await expect(
-      section.locator('[data-testid="garnrolle-success"]'),
-    ).toContainText("gespeichert");
+    await expect(section.locator('.form-message[data-kind="D"]')).toContainText(
+      "gespeichert",
+    );
 
     await page.reload();
     await expect(page.getByLabel("Anzeigename")).toHaveValue(
@@ -274,6 +280,46 @@ test.describe("Eigene Garnrolle speichern", () => {
     await expect(page.getByLabel("Fähigkeiten")).toHaveValue(
       "Organisation, Kochen",
     );
+  });
+
+  test("validates the approximate radius and keeps setup steps structurally separate", async ({
+    page,
+  }) => {
+    const section = await openSettingsAsWeber(page);
+    await page.evaluate((accountId) => {
+      sessionStorage.setItem(
+        `weltgewebe:garnrolle-return-location:${accountId}`,
+        JSON.stringify({ lat: 53.5, lon: 10.0 }),
+      );
+    }, ACCOUNT_ID);
+    await page.reload();
+
+    const stepTwo = section.getByRole("group", {
+      name: "2. Privaten Kartenanker wählen",
+    });
+    const stepThree = section.getByRole("group", {
+      name: "3. Öffentliche Sichtbarkeit wählen",
+    });
+    await expect(stepTwo).toBeVisible();
+    await expect(stepThree).toBeVisible();
+    await expect(stepTwo.getByLabel("Öffentlich ungefähr")).toHaveCount(0);
+
+    await stepThree.getByLabel("Öffentlich ungefähr").check();
+    const radius = stepThree.getByLabel("Ungefährer Umkreis in Metern");
+    const save = section.locator('[data-testid="save-garnrolle"]');
+
+    await radius.fill("10");
+    await expect(radius).toHaveAttribute("aria-invalid", "true");
+    await expect(
+      stepThree.getByText(
+        "Bitte wähle einen Umkreis zwischen 50 und 5.000 Metern.",
+      ),
+    ).toBeVisible();
+    await expect(save).toBeDisabled();
+
+    await radius.fill("250");
+    await expect(radius).toHaveAttribute("aria-invalid", "false");
+    await expect(save).toBeEnabled();
   });
 
   test("requires a self-selected map point and preserves the draft across map navigation", async ({
@@ -331,7 +377,7 @@ test.describe("Eigene Garnrolle speichern", () => {
     });
     expectValidLocation(payload.location);
     await expect(
-      returned.locator('[data-testid="garnrolle-success"]'),
+      returned.locator('.form-message[data-kind="D"]'),
     ).toContainText("gespeichert");
 
     await page.goto(`/map?focus=garnrolle:${ACCOUNT_ID}`);

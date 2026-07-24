@@ -51,13 +51,15 @@
       ? $authStore.account_id
       : null;
   $: canEdit = $authStore.authenticated;
+  $: radiusIsValid = radiusM >= 50 && radiusM <= 5000;
   $: canSave =
     canEdit &&
     !!ownGarnrolle &&
     !!displayName.trim() &&
     !isLoadingProfile &&
     !isSaving &&
-    (visibilityChoice === "not_on_map" || selectedLocation !== null);
+    (visibilityChoice === "not_on_map" || selectedLocation !== null) &&
+    (visibilityChoice !== "radius" || radiusIsValid);
   $: mapHref = ownGarnrolle?.public_pos
     ? `/map?focus=garnrolle:${ownGarnrolle.id}`
     : "/map";
@@ -223,7 +225,7 @@
       if (returned) {
         selectedLocation = returned;
         saveMessage =
-          "Privater Kartenanker übernommen. Wähle nun die öffentliche Sichtbarkeit und speichere deine Garnrolle.";
+          "Privater Kartenanker übernommen, aber noch nicht gespeichert. Wähle nun die öffentliche Sichtbarkeit und speichere deine Garnrolle.";
       }
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 401) {
@@ -480,51 +482,44 @@
             placeholder="z. B. Stadtteil oder Treffpunkt"
           />
         </label>
+      </fieldset>
 
-        <div class="visibility-block">
-          <h3>3. Öffentliche Sichtbarkeit wählen</h3>
-          <p class="field-intro">
-            Du kannst diese Entscheidung jederzeit ändern.
-          </p>
-          <div class="radio-group" role="radiogroup" aria-label="Sichtbarkeit">
-            <label class="radio-card">
-              <input
-                type="radio"
-                bind:group={visibilityChoice}
-                value="not_on_map"
-              />
-              <span>
-                <strong>Privat – nicht öffentlich auf der Karte</strong>
-                <small
-                  >Ein gewählter Kartenanker bleibt gespeichert, aber
-                  unsichtbar.</small
-                >
-              </span>
-            </label>
-            <label class="radio-card">
-              <input
-                type="radio"
-                bind:group={visibilityChoice}
-                value="radius"
-              />
-              <span>
-                <strong>Öffentlich ungefähr</strong>
-                <small
-                  >Gezeigt wird nur eine versetzte Position innerhalb des
-                  gewählten Umkreises.</small
-                >
-              </span>
-            </label>
-            <label class="radio-card">
-              <input type="radio" bind:group={visibilityChoice} value="exact" />
-              <span>
-                <strong>Öffentlich exakt</strong>
-                <small
-                  >Der gewählte Kartenanker wird genau veröffentlicht.</small
-                >
-              </span>
-            </label>
-          </div>
+      <fieldset disabled={isLoadingProfile || isSaving}>
+        <legend>3. Öffentliche Sichtbarkeit wählen</legend>
+        <p class="field-intro">
+          Du kannst diese Entscheidung jederzeit ändern.
+        </p>
+        <div class="radio-group" role="radiogroup" aria-label="Sichtbarkeit">
+          <label class="radio-card">
+            <input
+              type="radio"
+              bind:group={visibilityChoice}
+              value="not_on_map"
+            />
+            <span>
+              <strong>Privat – nicht öffentlich auf der Karte</strong>
+              <small
+                >Ein gewählter Kartenanker bleibt gespeichert, aber unsichtbar.</small
+              >
+            </span>
+          </label>
+          <label class="radio-card">
+            <input type="radio" bind:group={visibilityChoice} value="radius" />
+            <span>
+              <strong>Öffentlich ungefähr</strong>
+              <small
+                >Gezeigt wird nur eine versetzte Position innerhalb des
+                gewählten Umkreises.</small
+              >
+            </span>
+          </label>
+          <label class="radio-card">
+            <input type="radio" bind:group={visibilityChoice} value="exact" />
+            <span>
+              <strong>Öffentlich exakt</strong>
+              <small>Der gewählte Kartenanker wird genau veröffentlicht.</small>
+            </span>
+          </label>
         </div>
 
         {#if visibilityChoice !== "not_on_map" && !selectedLocation}
@@ -542,8 +537,20 @@
               max="5000"
               step="50"
               bind:value={radiusM}
+              aria-invalid={!radiusIsValid}
+              aria-describedby="garnrolle-radius-help"
             />
           </label>
+          <p
+            id="garnrolle-radius-help"
+            class={radiusIsValid
+              ? "field-intro"
+              : "field-intro form-message error"}
+          >
+            {radiusIsValid
+              ? "Erlaubt sind 50 bis 5.000 Meter."
+              : "Bitte wähle einen Umkreis zwischen 50 und 5.000 Metern."}
+          </p>
         {/if}
       </fieldset>
 
@@ -568,9 +575,10 @@
       {/if}
       {#if saveMessage}
         <p
-          class="form-message success"
+          class="form-message"
+          data-kind={saveMessage[0]}
           role="status"
-          data-testid="garnrolle-success"
+          data-testid="garnrolle-message"
         >
           {saveMessage}
         </p>
@@ -711,16 +719,6 @@
     font-weight: 400;
   }
 
-  .visibility-block {
-    display: grid;
-    gap: 0.7rem;
-  }
-
-  .visibility-block h3 {
-    font-size: 1rem;
-    margin: 0;
-  }
-
   .garnrolle-form {
     display: grid;
     gap: 1rem;
@@ -789,11 +787,12 @@
     border: 1px solid #ff6b6b;
   }
 
-  .form-message.success {
+  .form-message[data-kind="D"] {
     background: rgba(84, 225, 166, 0.12);
     border: 1px solid rgba(84, 225, 166, 0.7);
   }
 
+  .form-message[data-kind="P"],
   .form-message.hint {
     background: rgba(255, 210, 138, 0.08);
     border: 1px solid rgba(255, 210, 138, 0.55);
