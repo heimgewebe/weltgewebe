@@ -1,0 +1,79 @@
+---
+name: Debug PR1565 PostgreSQL proof
+
+"on":
+  push:
+    branches:
+      - feat/semantic-search-t012-production-v1
+    paths:
+      - "apps/api/**"
+      - "scripts/ci/run-postgres-integration-proofs.sh"
+      - ".github/workflows/debug-pr1565-postgres.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "scripts/ci/run-postgres-integration-proofs.sh"
+      - ".github/workflows/debug-pr1565-postgres.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  semantic-projection-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_t002_test
+      PG_DIRECT_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_t002_test
+      POSTGRES_PROOF_PROVISION_NATS: "1"
+      POSTGRES_PROOF_ALLOW_RESET: "1"
+      POSTGRES_PROOF_TARGETS: db_semantic_search_projection_worker
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # tag: v1
+        with:
+          toolchain: 1.89.0
+
+      - name: Run isolated proof and capture log
+        id: proof
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifact
+          scripts/ci/run-postgres-integration-proofs.sh > artifact/postgres-proof.log 2>&1
+          rc=$?
+          printf '%s\n' "$rc" > artifact/exit-code.txt
+          cat artifact/postgres-proof.log
+          exit "$rc"
+
+      - name: Upload complete proof log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: pr1565-postgres-proof-log
+          path: artifact/**
+          if-no-files-found: error
+          retention-days: 1
