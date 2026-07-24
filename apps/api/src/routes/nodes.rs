@@ -92,6 +92,77 @@ pub struct Location {
     pub lon: f64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchVisibility {
+    #[default]
+    Public,
+    Private,
+    Hidden,
+    Revoked,
+}
+
+impl SearchVisibility {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Public => "public",
+            Self::Private => "private",
+            Self::Hidden => "hidden",
+            Self::Revoked => "revoked",
+        }
+    }
+}
+
+impl std::fmt::Display for SearchVisibility {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl std::str::FromStr for SearchVisibility {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "public" => Ok(Self::Public),
+            "private" => Ok(Self::Private),
+            "hidden" => Ok(Self::Hidden),
+            "revoked" => Ok(Self::Revoked),
+            other => Err(format!("invalid search_visibility: {}", other)),
+        }
+    }
+}
+
+impl sqlx::Type<sqlx::Postgres> for SearchVisibility {
+    fn type_info() -> sqlx::postgres::PgTypeInfo {
+        <&str as sqlx::Type<sqlx::Postgres>>::type_info()
+    }
+}
+
+impl<'q> sqlx::Encode<'q, sqlx::Postgres> for SearchVisibility {
+    fn encode_by_ref(
+        &self,
+        buf: &mut sqlx::postgres::PgArgumentBuffer,
+    ) -> Result<sqlx::encode::IsNull, Box<dyn std::error::Error + Send + Sync>> {
+        <&str as sqlx::Encode<sqlx::Postgres>>::encode_by_ref(&self.as_str(), buf)
+    }
+}
+
+impl<'r> sqlx::Decode<'r, sqlx::Postgres> for SearchVisibility {
+    fn decode(
+        value: sqlx::postgres::PgValueRef<'r>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let s = <&str as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
+        s.parse::<SearchVisibility>().map_err(|e| e.into())
+    }
+}
+
+pub fn normalize_account_id(s: Option<&str>) -> Option<String> {
+    s.map(|v| v.trim())
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_string())
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Node {
     pub id: String,
@@ -102,6 +173,8 @@ pub struct Node {
     /// Server-owned, immutable creator binding. Legacy records remain `None`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by_account_id: Option<String>,
+    #[serde(default)]
+    pub search_visibility: SearchVisibility,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -169,6 +242,8 @@ where
 pub struct UpdateNode {
     #[serde(default, deserialize_with = "deserialize_some")]
     pub info: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    pub search_visibility: Option<Option<SearchVisibility>>,
 }
 
 /// Lightweight struct for fast-path ID checking during node rewrites.
@@ -213,6 +288,8 @@ struct NodeDto {
     updated_at: Option<String>,
     #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
     created_by_account_id: Option<String>,
+    #[serde(default)]
+    search_visibility: Option<SearchVisibility>,
     #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
     summary: Option<String>,
     #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
@@ -314,7 +391,8 @@ impl From<NodeDto> for Node {
             title: dto.title.unwrap_or_else(|| DEFAULT_TITLE.to_string()),
             created_at,
             updated_at,
-            created_by_account_id: dto.created_by_account_id,
+            created_by_account_id: normalize_account_id(dto.created_by_account_id.as_deref()),
+            search_visibility: dto.search_visibility.unwrap_or_default(),
             summary: dto.summary,
             info: dto.info,
             tags: dto.tags,
@@ -389,10 +467,14 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
         .unwrap_or(default_timestamp)
         .to_string();
 
-    let created_by_account_id = v
-        .get("created_by_account_id")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+    let created_by_account_id =
+        normalize_account_id(v.get("created_by_account_id").and_then(|v| v.as_str()));
+
+    let search_visibility = match v.get("search_visibility") {
+        None => SearchVisibility::Public,
+        Some(value) => serde_json::from_value::<SearchVisibility>(value.clone())
+            .unwrap_or(SearchVisibility::Hidden),
+    };
 
     let summary = v
         .get("summary")
@@ -426,6 +508,7 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
         created_at,
         updated_at,
         created_by_account_id,
+        search_visibility,
         summary,
         info,
         tags,
@@ -641,6 +724,7 @@ async fn find_node_by_operation(operation: &CreateOperationKey) -> std::io::Resu
 fn node_matches_create(node: &Node, expected: &node_create::ValidatedCreateNode) -> bool {
     node.title == expected.title
         && node.kind == expected.kind
+        && node.search_visibility == expected.search_visibility
         && node.address.as_deref() == Some(expected.address.as_str())
         && node.location.lat == expected.lat
         && node.location.lon == expected.lon
@@ -664,6 +748,7 @@ fn build_node_record(
         created_at: now.clone(),
         updated_at: now,
         created_by_account_id: Some(created_by_account_id),
+        search_visibility: validated.search_visibility,
         summary: validated.summary,
         info: validated.info,
         tags: validated.tags,
@@ -683,6 +768,10 @@ fn build_node_record(
     if let Some(created_by_account_id) = &node.created_by_account_id {
         record.insert("created_by_account_id".into(), json!(created_by_account_id));
     }
+    record.insert(
+        "search_visibility".into(),
+        json!(node.search_visibility.as_str()),
+    );
     if let Some(summary) = &node.summary {
         record.insert("summary".into(), json!(summary));
     }
@@ -1277,6 +1366,7 @@ pub async fn create_node(
 /// can safely replay the same account-scoped create action when the derived
 /// Faden projection fails after the node itself became durable.
 mod node_create {
+    use super::SearchVisibility;
     use serde::{de, Deserialize, Deserializer};
     use uuid::Uuid;
 
@@ -1325,6 +1415,8 @@ mod node_create {
         address: String,
         location: CreateLocation,
         #[serde(default)]
+        search_visibility: Option<SearchVisibility>,
+        #[serde(default)]
         summary: Option<String>,
         #[serde(default)]
         info: Option<String>,
@@ -1339,6 +1431,7 @@ mod node_create {
         pub(super) title: String,
         pub(super) kind: String,
         pub(super) address: String,
+        pub(super) search_visibility: SearchVisibility,
         pub(super) lat: f64,
         pub(super) lon: f64,
         pub(super) summary: Option<String>,
@@ -1473,6 +1566,7 @@ mod node_create {
                 title,
                 kind,
                 address,
+                search_visibility: self.search_visibility.unwrap_or_default(),
                 lat: self.location.lat,
                 lon: self.location.lon,
                 summary,
@@ -1496,6 +1590,7 @@ mod node_create {
                     lat: 53.5,
                     lon: 10.0,
                 },
+                search_visibility: None,
                 summary: None,
                 info: None,
                 tags: None,
@@ -2508,6 +2603,7 @@ pub async fn replace_node(
         created_at: existing.created_at,
         updated_at: chrono::Utc::now().to_rfc3339(),
         created_by_account_id: existing.created_by_account_id,
+        search_visibility: validated.search_visibility,
         summary: validated.summary,
         info: validated.info,
         tags: validated.tags,
@@ -2703,6 +2799,7 @@ async fn patch_node_postgres(
 
     let patch = NodePatchInput {
         info: payload.info.clone(),
+        search_visibility: payload.search_visibility.clone().flatten(),
     };
 
     // Serialize DB patch + cache update in-process so a later committed patch cannot
@@ -2815,6 +2912,16 @@ async fn patch_node_jsonl(
                         has_changes = true;
                     }
                     None => {} // No-op
+                }
+
+                if let Some(vis) = &payload.search_visibility {
+                    match vis {
+                        Some(v_enum) => {
+                            v["search_visibility"] = Value::String(v_enum.as_str().to_string());
+                            has_changes = true;
+                        }
+                        None => {}
+                    }
                 }
 
                 // Clean up old "steckbrief" field if it exists (migration logic)
@@ -2981,6 +3088,36 @@ pub async fn list_nodes(
             .cloned()
             .collect();
         Ok(Json(ListResponse::Legacy(out)))
+    }
+}
+
+#[cfg(test)]
+mod search_visibility_mapping_tests {
+    use super::*;
+
+    fn node_fixture() -> Value {
+        json!({
+            "id": "visibility-fixture",
+            "kind": "Werkstatt",
+            "title": "Sichtbarkeit",
+            "location": {"lat": 54.0, "lon": 8.0}
+        })
+    }
+
+    #[test]
+    fn jsonl_visibility_defaults_only_when_absent_and_malformed_values_fail_closed() {
+        let missing = map_json_to_node(&node_fixture()).expect("missing visibility fixture");
+        assert_eq!(missing.search_visibility, SearchVisibility::Public);
+
+        let mut malformed = node_fixture();
+        malformed["search_visibility"] = json!("unexpected");
+        let malformed = map_json_to_node(&malformed).expect("malformed visibility fixture");
+        assert_eq!(malformed.search_visibility, SearchVisibility::Hidden);
+
+        let mut wrong_type = node_fixture();
+        wrong_type["search_visibility"] = json!({"scope": "public"});
+        let wrong_type = map_json_to_node(&wrong_type).expect("wrong-type visibility fixture");
+        assert_eq!(wrong_type.search_visibility, SearchVisibility::Hidden);
     }
 }
 

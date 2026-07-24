@@ -1710,15 +1710,42 @@ wait_for_scoped_api_health() {
   fi
 
   local deadline=$((SECONDS + timeout_seconds))
-  local cid status
   while ((SECONDS < deadline)); do
-    cid="$(compose_service_id api)"
-    if [[ -n "$cid" ]]; then
-      status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2> /dev/null || true)"
-      case "$status" in
-        healthy | running) return 0 ;;
-        unhealthy | exited | dead) return 1 ;;
-      esac
+    local api_cid
+    api_cid="$(compose_service_id api)"
+    if [[ -n "$api_cid" ]]; then
+      local status
+      status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$api_cid" 2> /dev/null || true)"
+      if [[ "$status" == "healthy" || "$status" == "running" ]]; then
+        local target_ok=true
+
+        local ollama_cid
+        ollama_cid="$(compose_service_id ollama 2>/dev/null || true)"
+        if [[ -n "$ollama_cid" ]]; then
+          local o_status
+          o_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$ollama_cid" 2> /dev/null || true)"
+          if [[ "$o_status" != "healthy" && "$o_status" != "running" ]]; then
+            target_ok=false
+          fi
+        fi
+
+        local worker_cid
+        worker_cid="$(compose_service_id search-worker 2>/dev/null || true)"
+        if [[ -n "$worker_cid" ]]; then
+          local w_status w_img api_img w_cmd
+          w_status="$(docker inspect --format '{{.State.Running}}' "$worker_cid" 2> /dev/null || true)"
+          w_img="$(docker inspect --format '{{.Image}}' "$worker_cid" 2> /dev/null || true)"
+          api_img="$(docker inspect --format '{{.Image}}' "$api_cid" 2> /dev/null || true)"
+          w_cmd="$(docker inspect --format '{{json .Config.Cmd}}' "$worker_cid" 2> /dev/null || true)"
+          if [[ "$w_status" != "true" || "$w_img" != "$api_img" || "$w_cmd" != '["/usr/local/bin/search-worker-loop"]' ]]; then
+            target_ok=false
+          fi
+        fi
+
+        if [[ "$target_ok" == "true" ]]; then
+          return 0
+        fi
+      fi
     fi
     sleep 1
   done

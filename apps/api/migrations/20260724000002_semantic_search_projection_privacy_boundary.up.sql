@@ -30,6 +30,15 @@ WHERE p.node_id = n.id
 DELETE FROM search_node_projections p
 WHERE NOT EXISTS (SELECT 1 FROM domain_nodes n WHERE n.id = p.node_id);
 
+CREATE OR REPLACE FUNCTION weltgewebe_search_node_owner_account_id(p_payload JSONB)
+RETURNS TEXT LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+SELECT CASE
+    WHEN jsonb_typeof(p_payload -> 'created_by_account_id') = 'string' THEN
+        NULLIF(trim(p_payload ->> 'created_by_account_id'), '')
+    ELSE NULL
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION weltgewebe_search_track_domain_node()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE next_version BIGINT; revision TEXT; node_identifier TEXT;
@@ -87,8 +96,7 @@ SELECT COALESCE((
                             AND cardinality(p.embedding) = g.dimension)
                            OR
                            (n.search_visibility = 'private'
-                            AND jsonb_typeof(n.payload -> 'created_by_account_id') = 'string'
-                            AND regexp_replace(n.payload ->> 'created_by_account_id', '[[:space:]]', '', 'g') <> ''
+                            AND weltgewebe_search_node_owner_account_id(n.payload) IS NOT NULL
                             AND p.status = 'active'
                             AND p.semantic_state = 'unavailable'
                             AND p.visibility_scopes = ARRAY['owner']::TEXT[]
@@ -96,10 +104,7 @@ SELECT COALESCE((
                            OR
                            ((n.search_visibility IN ('hidden', 'revoked')
                              OR (n.search_visibility = 'private'
-                                 AND NOT (
-                                     jsonb_typeof(n.payload -> 'created_by_account_id') = 'string'
-                                     AND regexp_replace(n.payload ->> 'created_by_account_id', '[[:space:]]', '', 'g') <> ''
-                                 )))
+                                 AND weltgewebe_search_node_owner_account_id(n.payload) IS NULL))
                             AND p.status = 'hidden'
                             AND p.semantic_state = 'unavailable'
                             AND p.visibility_scopes = '{}'::TEXT[]

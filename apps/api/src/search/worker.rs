@@ -849,7 +849,7 @@ impl ProjectionWorker {
         version: i64,
         revision: &str,
     ) -> anyhow::Result<Result<ProcessOutcome, &'static str>> {
-        let row = sqlx::query("SELECT n.kind,n.title,n.payload::text,n.search_visibility,g.dimension FROM domain_nodes n JOIN search_node_versions v ON v.node_id=n.id JOIN search_index_generations g ON g.generation_id=$2 JOIN search_projection_jobs j ON j.id=$5 WHERE n.id=$1 AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND j.generation_id=$2 AND j.node_id=$1 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$6 AND j.attempt_count=$7 AND j.claim_until > NOW()")
+        let row = sqlx::query("SELECT n.kind,n.title,n.payload::text,n.search_visibility,g.dimension,weltgewebe_search_node_owner_account_id(n.payload) AS owner_account_id FROM domain_nodes n JOIN search_node_versions v ON v.node_id=n.id JOIN search_index_generations g ON g.generation_id=$2 JOIN search_projection_jobs j ON j.id=$5 WHERE n.id=$1 AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND j.generation_id=$2 AND j.node_id=$1 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$6 AND j.attempt_count=$7 AND j.claim_until > NOW()")
             .bind(node).bind(generation).bind(version).bind(revision).bind(job_id).bind(&self.worker_id).bind(attempts).fetch_optional(&self.pool).await?;
         let Some(row) = row else {
             return Ok(Ok(if self.claim_is_current(job_id, attempts).await? {
@@ -858,29 +858,26 @@ impl ProjectionWorker {
                 ProcessOutcome::LeaseLost
             }));
         };
-        let document = match SearchDocument::from_row(
-            node,
-            &row.get::<String, _>("kind"),
-            &row.get::<String, _>("title"),
-            &row.get::<String, _>("payload"),
-            &row.get::<String, _>("search_visibility"),
-        ) {
-            Ok(document) => document,
-            Err(_) => return Ok(Err("document_invalid")),
-        };
+        let search_visibility: String = row.get("search_visibility");
+        let owner_account_id: Option<String> = row.get("owner_account_id");
         let dimension: i32 = row.get("dimension");
-        if document.status == "hidden" {
+
+        let is_sentinel = search_visibility == "hidden"
+            || search_visibility == "revoked"
+            || (search_visibility == "private" && owner_account_id.is_none());
+
+        if is_sentinel {
             // Canonically hidden, revoked, deleted, unknown, or ownerless private
             // rows are represented only by a content-free sentinel. They never
-            // cross the embedding-provider boundary and cannot leave recoverable
-            // text or vectors in the projection.
+            // parse content, never cross the embedding-provider boundary and cannot
+            // leave recoverable text or vectors in the projection.
             let redacted = "[nicht öffentlich]";
             let content_sha256 = hex::encode(Sha256::digest(
                 format!("redacted-search-projection-v2\n{node}\n{version}\n{revision}").as_bytes(),
             ));
             let written = sqlx::query("INSERT INTO search_node_projections (generation_id,node_id,source_version,source_revision,content_sha256,title,tags,searchable_text,language,kind,status,visibility_scopes,semantic_state,embedding) \
                 SELECT $1,$2,$3,$4,$5,$6,'{}'::TEXT[],$6,'und',$6,'hidden','{}'::TEXT[],'unavailable',NULL \
-                FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$7 WHERE n.id=$2 AND (n.search_visibility IN ('hidden','revoked') OR (n.search_visibility='private' AND NOT (jsonb_typeof(n.payload -> 'created_by_account_id') = 'string' AND regexp_replace(n.payload ->> 'created_by_account_id', '[[:space:]]', '', 'g') <> ''))) AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$8 AND j.attempt_count=$9 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
+                FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$7 WHERE n.id=$2 AND (n.search_visibility IN ('hidden','revoked') OR (n.search_visibility='private' AND weltgewebe_search_node_owner_account_id(n.payload) IS NULL)) AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$8 AND j.attempt_count=$9 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
                 ON CONFLICT (generation_id,node_id) DO UPDATE SET source_version=EXCLUDED.source_version,source_revision=EXCLUDED.source_revision,content_sha256=EXCLUDED.content_sha256,title=EXCLUDED.title,tags=EXCLUDED.tags,searchable_text=EXCLUDED.searchable_text,language=EXCLUDED.language,kind=EXCLUDED.kind,status=EXCLUDED.status,visibility_scopes=EXCLUDED.visibility_scopes,semantic_state=EXCLUDED.semantic_state,embedding=NULL,indexed_at=clock_timestamp() \
                 WHERE search_node_projections.source_version <= EXCLUDED.source_version")
                 .bind(generation)
@@ -903,13 +900,24 @@ impl ProjectionWorker {
                 ProcessOutcome::LeaseLost
             }));
         }
+
+        let document = match SearchDocument::from_row(
+            node,
+            &row.get::<String, _>("kind"),
+            &row.get::<String, _>("title"),
+            &row.get::<String, _>("payload"),
+            &search_visibility,
+        ) {
+            Ok(document) => document,
+            Err(_) => return Ok(Err("document_invalid")),
+        };
         if document.scopes.as_slice() == ["owner"] {
             // Private content remains searchable only as an authorized lexical
             // projection inside PostgreSQL. It is never sent to the embedding
             // provider and never receives a vector.
             let written = sqlx::query("INSERT INTO search_node_projections (generation_id,node_id,source_version,source_revision,content_sha256,title,tags,searchable_text,language,kind,status,visibility_scopes,semantic_state,embedding) \
                 SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'active',ARRAY['owner']::TEXT[],'unavailable',NULL \
-                FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$11 WHERE n.id=$2 AND n.search_visibility = 'private' AND jsonb_typeof(n.payload -> 'created_by_account_id') = 'string' AND regexp_replace(n.payload ->> 'created_by_account_id', '[[:space:]]', '', 'g') <> '' AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$12 AND j.attempt_count=$13 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
+                FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$11 WHERE n.id=$2 AND n.search_visibility = 'private' AND weltgewebe_search_node_owner_account_id(n.payload) IS NOT NULL AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$12 AND j.attempt_count=$13 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
                 ON CONFLICT (generation_id,node_id) DO UPDATE SET source_version=EXCLUDED.source_version,source_revision=EXCLUDED.source_revision,content_sha256=EXCLUDED.content_sha256,title=EXCLUDED.title,tags=EXCLUDED.tags,searchable_text=EXCLUDED.searchable_text,language=EXCLUDED.language,kind=EXCLUDED.kind,status=EXCLUDED.status,visibility_scopes=EXCLUDED.visibility_scopes,semantic_state=EXCLUDED.semantic_state,embedding=NULL,indexed_at=clock_timestamp() \
                 WHERE search_node_projections.source_version <= EXCLUDED.source_version")
                 .bind(generation)

@@ -56,7 +56,13 @@ def test_activation_is_commit_locked_identity_bound_and_gate_first() -> None:
     assert "search_activation=verified" in script
     assert "search worker stopped or was replaced after activation" in script
     assert "active generation has no public semantic probe candidate" in script
-    assert "(.items | length > 0)" in script
+    assert "any(.items[]?; .id == $probe_id)" in script
+    assert 'semantic_probe_status="candidate_bound"' in script
+    assert 'gate_ready="$(psql_exec -At -v gen=' in script
+    assert "rollback_activation()" in script
+    assert 'rollback_status="verified"' in script
+    assert "rollback could not be verified" in script
+    assert 'failed to capture previous active search generation' in script
     assert 'worker_cid="$("${compose[@]}" ps -q search-worker)"' in script
     assert "WELTGEWEBE_SEARCH_MIN_CPU_COUNT" in script
     assert "getconf _NPROCESSORS_ONLN" in script
@@ -105,6 +111,10 @@ def test_projection_privacy_contract_is_generation_bound() -> None:
     assert "p.embedding IS NULL" in migration
     assert "n.search_visibility = 'public'" in repository
     assert "n.search_visibility = 'private'" in repository
+    assert "n.payload::text AS payload," in repository
+    assert "scored.search_visibility" in repository
+    assert "InvalidVisibility" in repository
+    assert "unwrap_or_default()" not in repository.split("search_visibility_raw", 1)[1]
     assert "n.payload ->> 'search_visibility'" not in repository
 
 

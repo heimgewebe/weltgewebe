@@ -45,6 +45,10 @@ require_command() {
   command -v "$1" > /dev/null 2>&1 || fail "required command not found: $1"
 }
 
+PREVIOUS_GENERATION_ID=""
+semantic_probe_status="unobserved"
+rollback_status="not_attempted"
+
 write_receipt() {
   local result="$1"
   local completed_at="$2"
@@ -57,6 +61,9 @@ write_receipt() {
     --arg result "$result" \
     --arg commit "$COMMIT" \
     --arg generation_id "$GENERATION_ID" \
+    --arg previous_generation_id "$PREVIOUS_GENERATION_ID" \
+    --arg semantic_probe_status "$semantic_probe_status" \
+    --arg rollback_status "$rollback_status" \
     --arg provider "$PROVIDER" \
     --arg model_id "$MODEL_ID" \
     --arg model_revision "$MODEL_REVISION" \
@@ -65,7 +72,7 @@ write_receipt() {
     --arg started_at "$started_at" \
     --arg completed_at "$completed_at" \
     --arg aggregate_status "$aggregate_status" \
-    '{schema_version:1,kind:"weltgewebe_search_activation",result:$result,commit:$commit,generation_id:$generation_id,provider:$provider,model_id:$model_id,model_revision:$model_revision,runtime_identity:$runtime_identity,dimension:($dimension|tonumber),started_at:(if ($started_at|length)>0 then $started_at else null end),completed_at:(if ($completed_at|length)>0 then $completed_at else null end),aggregate_status:$aggregate_status,does_not_establish:["private content disclosure","SemantAH retirement","domain data mutation authority"]}' \
+    '{schema_version:1,kind:"weltgewebe_search_activation",result:$result,commit:$commit,generation_id:$generation_id,previous_generation_id:(if ($previous_generation_id|length)>0 then $previous_generation_id else null end),semantic_probe_status:$semantic_probe_status,rollback_status:$rollback_status,provider:$provider,model_id:$model_id,model_revision:$model_revision,runtime_identity:$runtime_identity,dimension:($dimension|tonumber),started_at:(if ($started_at|length)>0 then $started_at else null end),completed_at:(if ($completed_at|length)>0 then $completed_at else null end),aggregate_status:$aggregate_status,does_not_establish:["private content disclosure","SemantAH retirement","domain data mutation authority"]}' \
     > "$temporary"
   chmod 0600 "$temporary"
   chown root:root "$temporary"
@@ -172,6 +179,10 @@ psql_exec() {
   "${compose[@]}" exec -T db psql -v ON_ERROR_STOP=1 -U "$postgres_user" -d "$postgres_db" "$@"
 }
 
+if ! PREVIOUS_GENERATION_ID="$(psql_exec -Atc "SELECT generation_id FROM search_index_generations WHERE state = 'active' ORDER BY activated_at DESC LIMIT 1;")"; then
+  fail "failed to capture previous active search generation"
+fi
+
 for ((batch = 1; batch <= MAX_BATCHES; batch++)); do
   "${compose[@]}" exec -T \
     -e WELTGEWEBE_SEARCH_GENERATION_ID="$GENERATION_ID" \
@@ -197,19 +208,82 @@ for ((batch = 1; batch <= MAX_BATCHES; batch++)); do
 done
 
 [[ "$expected" =~ ^[0-9]+$ && "$completed" == "$expected" ]] || fail "search generation is incomplete"
-psql_exec -Atc "SELECT weltgewebe_search_generation_activation_ready('$GENERATION_ID');" | grep -qx t || fail "database activation gate rejected generation"
-psql_exec -c "SELECT weltgewebe_activate_search_generation('$GENERATION_ID');" > /dev/null
-identity_ok="$(psql_exec -Atc "SELECT count(*)=1 FROM search_index_generations WHERE generation_id='$GENERATION_ID' AND state='active' AND provider='$PROVIDER' AND model_id='$MODEL_ID' AND model_revision='$MODEL_REVISION' AND runtime_identity='$RUNTIME_IDENTITY' AND dimension=$DIMENSION AND completed_nodes=expected_nodes;")"
-[[ "$identity_ok" == "t" ]] || fail "active generation identity mismatch"
 
-probe_query="$(psql_exec -Atc "SELECT p.title FROM search_node_projections p JOIN domain_nodes n ON n.id=p.node_id WHERE p.generation_id='$GENERATION_ID' AND n.search_visibility='public' AND p.status='active' AND p.semantic_state='ready' AND cardinality(p.embedding)=$DIMENSION ORDER BY p.node_id LIMIT 1;")"
-[[ -n "$probe_query" ]] || fail "active generation has no public semantic probe candidate"
-search_body="$(mktemp)"
-curl -fsS --get --data-urlencode "q=$probe_query" --data-urlencode 'limit=10' "$SEARCH_URL" > "$search_body"
-jq -e --arg generation "$GENERATION_ID" '.generation_id == $generation and (.mode == "hybrid" or .mode == "lexical_fallback") and (.items | type == "array") and (.items | length > 0)' "$search_body" > /dev/null || fail "public search readback mismatch or empty result"
-rm -f "$search_body"
-worker_cid="$("${compose[@]}" ps -q search-worker)"
-[[ -n "$worker_cid" && "$(docker inspect --format '{{.State.Running}}' "$worker_cid")" == "true" ]] || fail "search worker stopped or was replaced after activation"
+probe_json="$(psql_exec -At -v gen="$GENERATION_ID" -c "SELECT json_build_object('id', p.node_id, 'title', p.title)::text FROM search_node_projections p JOIN domain_nodes n ON n.id=p.node_id WHERE p.generation_id=:'gen' AND n.search_visibility='public' AND p.status='active' AND p.semantic_state='ready' AND cardinality(p.embedding)=$DIMENSION ORDER BY p.node_id LIMIT 1;")"
+
+probe_node_id=""
+probe_title=""
+if [[ -n "$probe_json" ]]; then
+  probe_node_id="$(jq -er '.id | select(type == "string" and length > 0)' <<< "$probe_json")" || fail "semantic probe node id is malformed"
+  probe_title="$(jq -er '.title | select(type == "string" and length > 0)' <<< "$probe_json")" || fail "semantic probe title is malformed"
+  semantic_probe_status="candidate_bound"
+else
+  semantic_probe_status="not_applicable"
+  echo "Notice: active generation has no public semantic probe candidate"
+fi
+
+gate_ready="$(psql_exec -At -v gen="$GENERATION_ID" -c "SELECT weltgewebe_search_generation_activation_ready(:'gen');")"
+[[ "$gate_ready" == "t" ]] || fail "database activation gate rejected generation"
+psql_exec -v gen="$GENERATION_ID" -c "SELECT weltgewebe_activate_search_generation(:'gen');" > /dev/null
+
+verify_activation() {
+  identity_ok="$(psql_exec -v gen="$GENERATION_ID" -v prov="$PROVIDER" -v model="$MODEL_ID" -v rev="$MODEL_REVISION" -v rid="$RUNTIME_IDENTITY" -v dim="$DIMENSION" -Atc "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'gen' AND state='active' AND provider=:'prov' AND model_id=:'model' AND model_revision=:'rev' AND runtime_identity=:'rid' AND dimension=:'dim'::integer AND completed_nodes=expected_nodes;")"
+  [[ "$identity_ok" == "t" ]] || return 1
+
+  if [[ "$semantic_probe_status" == "candidate_bound" ]]; then
+    search_body="$(mktemp)"
+    curl -fsS --get --data-urlencode "q=$probe_title" --data-urlencode 'limit=10' "$SEARCH_URL" > "$search_body" || { rm -f "$search_body"; return 1; }
+    jq -e --arg generation "$GENERATION_ID" --arg probe_id "$probe_node_id" '.generation_id == $generation and .mode == "hybrid" and (.items | type == "array") and any(.items[]?; .id == $probe_id)' "$search_body" > /dev/null || { rm -f "$search_body"; return 1; }
+    rm -f "$search_body"
+    semantic_probe_status="verified"
+  fi
+
+  worker_cid="$("${compose[@]}" ps -q search-worker)"
+  if [[ -z "$worker_cid" || "$(docker inspect --format '{{.State.Running}}' "$worker_cid")" != "true" ]]; then
+    echo "ERROR: search worker stopped or was replaced after activation" >&2
+    return 1
+  fi
+  if [[ "$(docker inspect --format '{{.Image}}' "$worker_cid")" != "$(docker inspect --format '{{.Image}}' "$api_cid")" ]]; then
+    echo "ERROR: search worker image drifted after activation" >&2
+    return 1
+  fi
+  if [[ "$(docker inspect --format '{{json .Config.Cmd}}' "$worker_cid")" != '["/usr/local/bin/search-worker-loop"]' ]]; then
+    echo "ERROR: search worker command drifted after activation" >&2
+    return 1
+  fi
+  return 0
+}
+
+rollback_activation() {
+  local rollback_ok
+  if [[ -n "$PREVIOUS_GENERATION_ID" ]]; then
+    if [[ "$PREVIOUS_GENERATION_ID" != "$GENERATION_ID" ]]; then
+      psql_exec -v prev_gen="$PREVIOUS_GENERATION_ID" -c "SELECT weltgewebe_activate_search_generation(:'prev_gen');" > /dev/null || return 1
+    fi
+    rollback_ok="$(psql_exec -At -v prev_gen="$PREVIOUS_GENERATION_ID" -v gen="$GENERATION_ID" -c "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'prev_gen' AND state='active' AND (:'prev_gen'=:'gen' OR NOT EXISTS (SELECT 1 FROM search_index_generations WHERE generation_id=:'gen' AND state='active'));")" || return 1
+  else
+    psql_exec -v gen="$GENERATION_ID" -c "BEGIN; SELECT pg_advisory_xact_lock(hashtextextended('weltgewebe.search.generation.activation', 0)); UPDATE search_index_generations SET state='ready', activated_at=NULL WHERE generation_id=:'gen' AND state='active'; COMMIT;" > /dev/null || return 1
+    rollback_ok="$(psql_exec -At -v gen="$GENERATION_ID" -c "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'gen' AND state='ready' AND NOT EXISTS (SELECT 1 FROM search_index_generations WHERE state='active');")" || return 1
+  fi
+  [[ "$rollback_ok" == "t" ]]
+}
+
+if ! verify_activation; then
+  echo "ERROR: post-activation verification failed, initiating rollback..." >&2
+  semantic_probe_status="failed"
+  if rollback_activation; then
+    rollback_status="verified"
+  else
+    rollback_status="failed"
+  fi
+  aggregate_status="post_activation_verification_failed|rollback=$rollback_status"
+  write_receipt "failed" "$(date --utc +%Y-%m-%dT%H:%M:%SZ)" > /dev/null
+  receipt_terminal=true
+  if [[ "$rollback_status" != "verified" ]]; then
+    fail "post-activation verification failed and rollback could not be verified"
+  fi
+  fail "post-activation verification failed; rollback verified"
+fi
 
 aggregate_status="active|expected=$expected|completed=$completed|failed=$failed|worker=running"
 receipt="$(write_receipt "verified" "$(date --utc +%Y-%m-%dT%H:%M:%SZ)")"

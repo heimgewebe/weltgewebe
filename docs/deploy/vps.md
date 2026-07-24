@@ -421,3 +421,18 @@ Ressourcenreserve, Image-, Runtime- und Modelldigest, verarbeitet die
 Projektionsjobs in begrenzten Batches und ruft den atomaren PostgreSQL-Gate erst
 nach vollständiger Konvergenz auf. Eine fehlgeschlagene Vorbereitung verändert
 keine kanonischen Knotendaten und lässt die Suche fail-closed.
+
+Bei der Aktivierung wird die vorherige `active` Generation erfasst. Vor dem
+Aufruf von `weltgewebe_activate_search_generation` führt das Skript eine
+Kandidaten-Vorabprüfung durch (öffentlicher Probe-Knoten). Ist kein öffentlicher
+Knoten vorhanden (z. B. rein private Datenbank), wird `semantic_probe_status` auf
+`not_applicable` gesetzt. Nach der Umschaltung verifiziert das Skript die
+Live-Suche (erfordert `mode == "hybrid"` und exakten Treffer des Probe-Knotens).
+Schlägt die Verifikation fehl, wird automatisch auf die vorherige Generation
+zurückgerollt (`weltgewebe_activate_search_generation(previous_generation_id)`).
+
+Ein Online-Downgrade der Datenbankmigration (`down.sql`) wird bewusst durch eine
+Exception blockiert, da private lexikalische Projektionen nicht ohne Re-Embedding
+auf den alten Vektor-Zwangszustand zurückgeführt werden können. Im Fehlerfall ist
+ein Roll-forward der Korrektur zu bevorzugen (bzw. Stoppen des Workers und
+Roll-forward).

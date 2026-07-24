@@ -17,11 +17,13 @@ pub enum SearchRepositoryError {
     Database(#[from] sqlx::Error),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    #[error("invalid canonical search visibility: {0}")]
+    InvalidVisibility(String),
 }
 
 use crate::{
     middleware::auth::AuthContext,
-    routes::nodes::{Location, Node},
+    routes::nodes::{normalize_account_id, Location, Node, SearchVisibility},
     search::ranking::ScoredNode,
 };
 
@@ -109,7 +111,8 @@ pub async fn fetch_postgres_candidates(
         ), authorized AS (
             SELECT p.node_id, p.title, p.tags, p.searchable_text, p.language, p.kind,
                    p.embedding, p.search_vector, p.search_vector_simple,
-                   n.created_at, n.updated_at, n.lat, n.lon, n.payload::text AS payload
+                   n.created_at, n.updated_at, n.lat, n.lon, n.payload::text AS payload,
+                   n.search_visibility
               FROM search_node_projections p
               JOIN search_node_versions v
                 ON v.node_id = p.node_id
@@ -132,9 +135,7 @@ pub async fn fetch_postgres_candidates(
                     (n.search_visibility = 'private'
                      AND $4::boolean
                      AND $3::text IS NOT NULL
-                     AND jsonb_typeof(n.payload -> 'created_by_account_id') = 'string'
-                     AND regexp_replace(n.payload ->> 'created_by_account_id', '[[:space:]]', '', 'g') <> ''
-                     AND n.payload ->> 'created_by_account_id' = $3::text
+                     AND weltgewebe_search_node_owner_account_id(n.payload) = trim($3::text)
                      AND p.status = 'active'
                      AND p.semantic_state = 'unavailable'
                      AND p.visibility_scopes = ARRAY['owner']::TEXT[]
@@ -206,7 +207,7 @@ pub async fn fetch_postgres_candidates(
         SELECT scored.node_id, scored.title, scored.tags, scored.searchable_text,
                scored.language, scored.kind, scored.embedding, scored.created_at,
                scored.updated_at, scored.lat, scored.lon, scored.payload,
-               lexical_top.rank_class, lexical_top.rank_score
+               scored.search_visibility, lexical_top.rank_class, lexical_top.rank_score
           FROM scored
           LEFT JOIN lexical_top ON lexical_top.node_id = scored.node_id
          ORDER BY lexical_top.rank_class ASC NULLS LAST,
@@ -243,6 +244,15 @@ pub async fn fetch_postgres_candidates(
         let rank_class: Option<i32> = row.try_get("rank_class")?;
         let rank_score: Option<f64> = row.try_get("rank_score")?;
         let embedding: Option<Vec<f64>> = row.try_get("embedding")?;
+        let search_visibility_raw: String = row.try_get("search_visibility")?;
+        let search_visibility = match search_visibility_raw.parse::<SearchVisibility>() {
+            Ok(value) => value,
+            Err(_) => {
+                return Err(SearchRepositoryError::InvalidVisibility(
+                    search_visibility_raw,
+                ))
+            }
+        };
 
         let node = Node {
             id: row.try_get("node_id")?,
@@ -250,10 +260,10 @@ pub async fn fetch_postgres_candidates(
             title: row.try_get("title")?,
             created_at: created_at.to_rfc3339(),
             updated_at: updated_at.to_rfc3339(),
-            created_by_account_id: payload
-                .get("created_by_account_id")
-                .and_then(Value::as_str)
-                .map(str::to_owned),
+            created_by_account_id: normalize_account_id(
+                payload.get("created_by_account_id").and_then(Value::as_str),
+            ),
+            search_visibility,
             summary: payload
                 .get("summary")
                 .and_then(Value::as_str)
