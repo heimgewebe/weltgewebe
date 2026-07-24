@@ -391,3 +391,48 @@ aber kein Beweis für IPv6, Mail/SMTP oder Public Login. Der
 Credential-Source-Cutover wird über den ausgewählten `ENV_FILE`-Pfad und die
 Dateimetadaten der Runtime-Secret-Quelle belegt, nicht über den HTTP(S)-Check
 allein.
+
+## Lokale semantische Suchprojektion aktivieren
+
+Die produktive semantische Suche verwendet keinen Cloud-Provider. Der gepinnte
+Ollama-Sidecar teilt den Netzwerk-Namensraum der API und bindet ausschließlich
+an `127.0.0.1:11434`; es wird kein Host-Port veröffentlicht. Das Modellvolume
+ist regenerierbare Projektionsinfrastruktur, während `domain_nodes` in
+PostgreSQL die einzige Datenwahrheit bleibt. Die Sichtbarkeit liegt in der
+serverseitigen Spalte `domain_nodes.search_visibility`; gewöhnliche bestehende
+Knoten werden bei der Migration als öffentlich übernommen. Malformed explizite
+Altwerte werden geschlossen als verborgen behandelt. Clients können diese
+Spalte nicht über beliebige Payload-Felder überschreiben.
+
+Der normale commitgebundene Reconciler prüft vor Build oder Containeränderung,
+ob mindestens 8 GiB freier Speicher, 5 GiB verfügbarer Arbeitsspeicher und drei
+Online-CPUs vorhanden sind. Danach rollt er API, Sidecar und den begrenzten
+Projektions-Worker gemeinsam aus. Der Worker wartet auf den exakt gepinnten
+Modelldigest und verarbeitet danach sowohl den initialen Bestand als auch neue
+Projektionsjobs fortlaufend. Öffentliche Knoten erhalten eine semantische
+Projektion. Private Knoten mit gültigem Eigentümer bleiben ausschließlich als
+autorisierte lexikalische PostgreSQL-Projektion erhalten und werden nie an
+Ollama übergeben. Alle übrigen Sichtbarkeitszustände werden nur als
+inhaltsfreier Platzhalter abgebildet.
+Die Modellbeschaffung, der begrenzte Backfill und die Aktivierung erfolgen
+absichtlich separat über `scripts/ops/activate-production-search-vps.sh`. Der
+Helper hält denselben Produktionslock wie der Deploypfad, prüft Live-Commit,
+Ressourcenreserve, Image-, Runtime- und Modelldigest, verarbeitet die
+Projektionsjobs in begrenzten Batches und ruft den atomaren PostgreSQL-Gate erst
+nach vollständiger Konvergenz auf. Eine fehlgeschlagene Vorbereitung verändert
+keine kanonischen Knotendaten und lässt die Suche fail-closed.
+
+Bei der Aktivierung wird die vorherige `active` Generation erfasst. Vor dem
+Aufruf von `weltgewebe_activate_search_generation` führt das Skript eine
+Kandidaten-Vorabprüfung durch (öffentlicher Probe-Knoten). Ist kein öffentlicher
+Knoten vorhanden (z. B. rein private Datenbank), wird `semantic_probe_status` auf
+`not_applicable` gesetzt. Nach der Umschaltung verifiziert das Skript die
+Live-Suche (erfordert `mode == "hybrid"` und exakten Treffer des Probe-Knotens).
+Schlägt die Verifikation fehl, wird automatisch auf die vorherige Generation
+zurückgerollt (`weltgewebe_activate_search_generation(previous_generation_id)`).
+
+Ein Online-Downgrade der Datenbankmigration (`down.sql`) wird bewusst durch eine
+Exception blockiert, da private lexikalische Projektionen nicht ohne Re-Embedding
+auf den alten Vektor-Zwangszustand zurückgeführt werden können. Im Fehlerfall ist
+ein Roll-forward der Korrektur zu bevorzugen (bzw. Stoppen des Workers und
+Roll-forward).

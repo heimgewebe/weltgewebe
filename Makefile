@@ -4,6 +4,7 @@ validate-tests:
 	python3 -m unittest discover scripts/docmeta/tests/
 	python3 -m unittest discover scripts/agent/tests/
 	python3 -m unittest discover scripts/ci/tests/
+	python3 -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py
 	python3 scripts/docmeta/validate_claim_registry.py
 	python3 scripts/docmeta/validate_doc_freshness_registry.py
 	python3 -m scripts.docmeta.generate_claim_evidence_map --check

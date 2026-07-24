@@ -60,6 +60,19 @@ async fn migrate(pool: &PgPool) {
         .expect("run migrations")
 }
 
+#[derive(sqlx::FromRow)]
+struct PrivateLexicalProjectionRow {
+    title: String,
+    tags: Vec<String>,
+    searchable_text: String,
+    language: String,
+    kind: String,
+    visibility_scopes: Vec<String>,
+    status: String,
+    semantic_state: String,
+    embedding: Option<Vec<f64>>,
+}
+
 async fn reset_search_state(pool: &PgPool) {
     // Tests in this target share one disposable database serially. Remove test
     // domain rows first (which may fire triggers), then clear all derived state.
@@ -169,6 +182,27 @@ fn worker(pool: PgPool, id: &str, provider: Arc<FakeProvider>) -> ProjectionWork
     .expect("worker")
 }
 
+fn exact_generation_spec<'a>(
+    model_id: &'a str,
+    model_revision: &'a str,
+    runtime_identity: &'a str,
+    dimension: i32,
+) -> GenerationSpec<'a> {
+    let draft = GenerationSpec {
+        generation_id: "",
+        provider: "local:ollama",
+        model_id,
+        model_revision,
+        runtime_identity,
+        dimension,
+    };
+    let generation_id: &'static str = Box::leak(draft.derived_id().into_boxed_str());
+    GenerationSpec {
+        generation_id,
+        ..draft
+    }
+}
+
 #[tokio::test]
 #[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
 async fn worker_is_revision_bound_leased_resumable_and_deletion_propagates() {
@@ -178,29 +212,25 @@ async fn worker_is_revision_bound_leased_resumable_and_deletion_propagates() {
     let node = "t005-worker-node";
     sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt','Fahrradhilfe',$2::jsonb)")
         .bind(node)
-        .bind(r#"{"summary":"Reparatur","address":"must not index","search_visibility":"public"}"#)
+        .bind(r#"{"summary":"Reparatur","address":"must not index"}"#)
         .execute(&pool).await.expect("insert node");
     let provider = Arc::new(FakeProvider {
         unavailable: AtomicBool::new(false),
     });
     let first = worker(pool.clone(), "t005-a", provider.clone());
+    let generation_spec =
+        exact_generation_spec("test", "test", "ollama:test@http://127.0.0.1:11434", 4);
+    let generation = generation_spec.generation_id;
     first
-        .start_generation(GenerationSpec {
-            generation_id: "t005-generation",
-            provider: "local:ollama",
-            model_id: "test",
-            model_revision: "test",
-            runtime_identity: "ollama:test@http://127.0.0.1:11434",
-            dimension: 4,
-        })
+        .start_generation(generation_spec)
         .await
         .expect("start");
     assert_eq!(
         first.claim_and_process_one().await.expect("process"),
         ProcessOutcome::Processed
     );
-    let projection: (i64, String, String, String) = sqlx::query_as("SELECT source_version,status,semantic_state,searchable_text FROM search_node_projections WHERE generation_id='t005-generation' AND node_id=$1")
-        .bind(node).fetch_one(&pool).await.expect("projection");
+    let projection: (i64, String, String, String) = sqlx::query_as("SELECT source_version,status,semantic_state,searchable_text FROM search_node_projections WHERE generation_id=$2 AND node_id=$1")
+        .bind(node).bind(generation).fetch_one(&pool).await.expect("projection");
     assert_eq!(projection.0, 1);
     assert_eq!(projection.1, "active");
     assert_eq!(projection.2, "ready");
@@ -220,10 +250,17 @@ async fn worker_is_revision_bound_leased_resumable_and_deletion_propagates() {
             .expect("process current"),
         ProcessOutcome::Processed
     );
-    let version: i64 = sqlx::query_scalar("SELECT source_version FROM search_node_projections WHERE generation_id='t005-generation' AND node_id=$1")
-        .bind(node).fetch_one(&pool).await.expect("current projection");
+    let version: i64 = sqlx::query_scalar(
+        "SELECT source_version FROM search_node_projections WHERE generation_id=$2 AND node_id=$1",
+    )
+    .bind(node)
+    .bind(generation)
+    .fetch_one(&pool)
+    .await
+    .expect("current projection");
     assert_eq!(version, 2);
-    sqlx::query("INSERT INTO search_projection_jobs (generation_id,node_id,source_version,source_revision,operation) VALUES ('t005-generation',$1,1,'node-1','delete')")
+    sqlx::query("INSERT INTO search_projection_jobs (generation_id,node_id,source_version,source_revision,operation) VALUES ($1,$2,1,'node-1','delete')")
+        .bind(generation)
         .bind(node).execute(&pool).await.expect("stale job");
     assert_eq!(
         second.claim_and_process_one().await.expect("process stale"),
@@ -253,15 +290,87 @@ async fn worker_is_revision_bound_leased_resumable_and_deletion_propagates() {
 
 #[tokio::test]
 #[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
+async fn private_nodes_stay_lexical_without_calling_the_provider_and_can_activate() {
+    let pool = pool().await;
+    migrate(&pool).await;
+    reset_search_state(&pool).await;
+    let node = "t005-private-lexical-node";
+    let generation_spec =
+        exact_generation_spec("test", "test", "ollama:test@http://127.0.0.1:11434", 4);
+    let generation = generation_spec.generation_id;
+    sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload,search_visibility) VALUES ($1,'Privatwerkstatt','Vertraulicher Titel',$2::jsonb,'private')")
+        .bind(node)
+        .bind(r#"{"summary":"Vertrauliche Zusammenfassung","address":"Geheimer Weg 9","created_by_account_id":"owner-private"}"#)
+        .execute(&pool)
+        .await
+        .expect("insert private node");
+    let projection_worker = ProjectionWorker::new_with_provider(
+        pool.clone(),
+        "t005-private-lexical-worker".to_owned(),
+        Metrics::try_new(BuildInfo::collect()).expect("metrics"),
+        Arc::new(PermanentFailureProvider),
+    )
+    .expect("private lexical worker");
+    projection_worker
+        .start_generation(generation_spec)
+        .await
+        .expect("start private lexical generation");
+
+    assert_eq!(
+        projection_worker
+            .claim_and_process_one()
+            .await
+            .expect("project private node lexically"),
+        ProcessOutcome::Processed
+    );
+    let projection: PrivateLexicalProjectionRow = sqlx::query_as(
+        "SELECT title,tags,searchable_text,language,kind,visibility_scopes,status,semantic_state,embedding \
+         FROM search_node_projections WHERE generation_id=$1 AND node_id=$2",
+    )
+    .bind(generation)
+    .bind(node)
+    .fetch_one(&pool)
+    .await
+    .expect("private lexical projection");
+    assert_eq!(projection.title, "Vertraulicher Titel");
+    assert!(projection.tags.is_empty());
+    assert!(projection.searchable_text.contains("Vertraulicher Titel"));
+    assert!(projection
+        .searchable_text
+        .contains("Vertrauliche Zusammenfassung"));
+    assert!(!projection.searchable_text.contains("Geheimer Weg 9"));
+    assert_eq!(projection.language, "und");
+    assert_eq!(projection.kind, "Privatwerkstatt");
+    assert_eq!(projection.visibility_scopes, ["owner"]);
+    assert_eq!(projection.status, "active");
+    assert_eq!(projection.semantic_state, "unavailable");
+    assert!(projection.embedding.is_none());
+    let ready: bool =
+        sqlx::query_scalar("SELECT weltgewebe_search_generation_activation_ready($1)")
+            .bind(generation)
+            .fetch_one(&pool)
+            .await
+            .expect("private lexical readiness");
+    assert!(ready);
+    sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
+        .bind(generation)
+        .execute(&pool)
+        .await
+        .expect("activate private lexical generation");
+}
+
+#[tokio::test]
+#[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
 async fn status_snapshot_separates_unique_nodes_job_history_and_activation_readiness() {
     let pool = pool().await;
     migrate(&pool).await;
     reset_search_state(&pool).await;
     let node = "t005-status-semantics-node";
-    let generation = "t005-status-semantics-generation";
+    let generation_spec = exact_generation_spec("m", "r", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation = generation_spec.generation_id;
     sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt','Revision eins',$2::jsonb)")
         .bind(node)
-        .bind(r#"{"search_visibility":"public"}"#)
+        .bind(r#"{}"#)
         .execute(&pool)
         .await
         .expect("insert status semantics node");
@@ -273,14 +382,7 @@ async fn status_snapshot_separates_unique_nodes_job_history_and_activation_readi
         }),
     );
     projection_worker
-        .start_generation(GenerationSpec {
-            generation_id: generation,
-            provider: "local:ollama",
-            model_id: "m",
-            model_revision: "r",
-            runtime_identity: "ollama:test@http://127.0.0.1:11434",
-            dimension: 3,
-        })
+        .start_generation(generation_spec)
         .await
         .expect("start status semantics generation");
 
@@ -405,16 +507,11 @@ async fn status_snapshot_separates_unique_nodes_job_history_and_activation_readi
     assert!(active_only.active_generation_activated_at.is_some());
     assert_eq!(active_only.rebuild_generation_id, None);
 
-    let generation_two = "t005-status-semantics-generation-two";
+    let generation_two_spec =
+        exact_generation_spec("m", "r2", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation_two = generation_two_spec.generation_id;
     projection_worker
-        .start_generation(GenerationSpec {
-            generation_id: generation_two,
-            provider: "local:ollama",
-            model_id: "m",
-            model_revision: "r2",
-            runtime_identity: "ollama:test@http://127.0.0.1:11434",
-            dimension: 3,
-        })
+        .start_generation(generation_two_spec)
         .await
         .expect("start second status generation");
     let second_generation_pending = projection_worker
@@ -503,25 +600,17 @@ async fn worker_hardening_proves_races_trigger_identity_outage_and_activation() 
     migrate(&pool).await;
     reset_search_state(&pool).await;
     let node = "t005-hardening-node";
-    let generation = "t005-hardening-generation";
+    let generation_spec = exact_generation_spec("m", "r", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation = generation_spec.generation_id;
     sqlx::query("INSERT INTO domain_nodes (id,kind,title,lat,lon,payload) VALUES ($1,'Werkstatt','Alt',1,2,$2::jsonb)")
-        .bind(node).bind(r#"{"summary":"S","search_visibility":"public","address":"private","other":"a"}"#)
+        .bind(node).bind(r#"{"summary":"S","address":"private","other":"a"}"#)
         .execute(&pool).await.expect("insert");
     let provider = Arc::new(FakeProvider {
         unavailable: AtomicBool::new(true),
     });
     let a = worker(pool.clone(), "t005-hardening-a", provider.clone());
     let b = worker(pool.clone(), "t005-hardening-b", provider.clone());
-    a.start_generation(GenerationSpec {
-        generation_id: generation,
-        provider: "local:ollama",
-        model_id: "m",
-        model_revision: "r",
-        runtime_identity: "ollama:test@http://127.0.0.1:11434",
-        dimension: 3,
-    })
-    .await
-    .expect("start");
+    a.start_generation(generation_spec).await.expect("start");
     // A provider outage leaves a leased item retryable; it does not alter the canonical node.
     assert_eq!(
         a.claim_and_process_one().await.expect("outage"),
@@ -558,14 +647,12 @@ async fn worker_hardening_proves_races_trigger_identity_outage_and_activation() 
         .await
         .expect("simulate incompatible stored generation identity");
     assert!(a
-        .start_generation(GenerationSpec {
-            generation_id: generation,
-            provider: "local:ollama",
-            model_id: "m",
-            model_revision: "r",
-            runtime_identity: "ollama:test@http://127.0.0.1:11434",
-            dimension: 3
-        })
+        .start_generation(exact_generation_spec(
+            "m",
+            "r",
+            "ollama:test@http://127.0.0.1:11434",
+            3,
+        ))
         .await
         .is_err());
     sqlx::query("UPDATE search_index_generations SET ranking_revision='weltgewebe-hybrid-ranking-v2' WHERE generation_id=$1")
@@ -682,10 +769,11 @@ async fn provider_failures_are_bounded_fail_closed_and_explicitly_recoverable() 
     migrate(&pool).await;
     reset_search_state(&pool).await;
     let node = "t005-provider-node";
-    let generation = "t005-provider-generation";
+    let generation_spec = exact_generation_spec("m", "r", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation = generation_spec.generation_id;
     sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt','Provider',$2::jsonb)")
         .bind(node)
-        .bind(r#"{"search_visibility":"public"}"#)
+        .bind(r#"{}"#)
         .execute(&pool)
         .await
         .expect("insert provider node");
@@ -695,14 +783,7 @@ async fn provider_failures_are_bounded_fail_closed_and_explicitly_recoverable() 
     });
     let retrying = worker(pool.clone(), "t005-provider-retry", unavailable.clone());
     retrying
-        .start_generation(GenerationSpec {
-            generation_id: generation,
-            provider: "local:ollama",
-            model_id: "m",
-            model_revision: "r",
-            runtime_identity: "ollama:test@http://127.0.0.1:11434",
-            dimension: 3,
-        })
+        .start_generation(generation_spec)
         .await
         .expect("start retry generation");
 
@@ -738,14 +819,12 @@ async fn provider_failures_are_bounded_fail_closed_and_explicitly_recoverable() 
 
     unavailable.unavailable.store(false, Ordering::SeqCst);
     retrying
-        .start_generation(GenerationSpec {
-            generation_id: generation,
-            provider: "local:ollama",
-            model_id: "m",
-            model_revision: "r",
-            runtime_identity: "ollama:test@http://127.0.0.1:11434",
-            dimension: 3,
-        })
+        .start_generation(exact_generation_spec(
+            "m",
+            "r",
+            "ollama:test@http://127.0.0.1:11434",
+            3,
+        ))
         .await
         .expect("explicit catch-up rearm");
     assert_eq!(
@@ -756,7 +835,9 @@ async fn provider_failures_are_bounded_fail_closed_and_explicitly_recoverable() 
         ProcessOutcome::Processed
     );
 
-    let permanent_generation = "t005-provider-permanent";
+    let permanent_generation_spec =
+        exact_generation_spec("m", "permanent-r", "ollama:test@http://127.0.0.1:11434", 3);
+    let permanent_generation = permanent_generation_spec.generation_id;
     let permanent = ProjectionWorker::new_with_provider(
         pool.clone(),
         "t005-provider-permanent-worker".to_owned(),
@@ -765,14 +846,7 @@ async fn provider_failures_are_bounded_fail_closed_and_explicitly_recoverable() 
     )
     .expect("permanent worker");
     permanent
-        .start_generation(GenerationSpec {
-            generation_id: permanent_generation,
-            provider: "local:ollama",
-            model_id: "m",
-            model_revision: "r",
-            runtime_identity: "ollama:test@http://127.0.0.1:11434",
-            dimension: 3,
-        })
+        .start_generation(permanent_generation_spec)
         .await
         .expect("start permanent failure generation");
     assert_eq!(
@@ -796,14 +870,12 @@ async fn provider_failures_are_bounded_fail_closed_and_explicitly_recoverable() 
         Some("provider_invalid_vector")
     );
     permanent
-        .start_generation(GenerationSpec {
-            generation_id: permanent_generation,
-            provider: "local:ollama",
-            model_id: "m",
-            model_revision: "r",
-            runtime_identity: "ollama:test@http://127.0.0.1:11434",
-            dimension: 3,
-        })
+        .start_generation(exact_generation_spec(
+            "m",
+            "permanent-r",
+            "ollama:test@http://127.0.0.1:11434",
+            3,
+        ))
         .await
         .expect("idempotent permanent generation restart");
     let still_failed: String =
@@ -826,7 +898,7 @@ async fn rollback_candidate_stays_current_and_retired_generation_cannot_reactiva
         "INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt','A',$2::jsonb)",
     )
     .bind(node)
-    .bind(r#"{"summary":"sichtbar","search_visibility":"public"}"#)
+    .bind(r#"{"summary":"sichtbar"}"#)
     .execute(&pool)
     .await
     .expect("insert rollback node");
@@ -834,50 +906,46 @@ async fn rollback_candidate_stays_current_and_retired_generation_cannot_reactiva
         unavailable: AtomicBool::new(false),
     });
     let worker = worker(pool.clone(), "t005-rollback", provider);
-    let spec = |generation_id| GenerationSpec {
-        generation_id,
-        provider: "local:ollama",
-        model_id: "m",
-        model_revision: "r",
-        runtime_identity: "ollama:test@http://127.0.0.1:11434",
-        dimension: 3,
-    };
+    let spec_a = exact_generation_spec("m", "r-a", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation_a = spec_a.generation_id.to_owned();
+    let spec_b = exact_generation_spec("m", "r-b", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation_b = spec_b.generation_id.to_owned();
 
-    worker
-        .start_generation(spec("t005-gen-a"))
-        .await
-        .expect("gen A");
+    worker.start_generation(spec_a).await.expect("gen A");
     assert_eq!(
         worker.claim_and_process_one().await.expect("A project"),
         ProcessOutcome::Processed
     );
-    sqlx::query("SELECT weltgewebe_activate_search_generation('t005-gen-a')")
+    sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
+        .bind(&generation_a)
         .execute(&pool)
         .await
         .expect("activate A");
 
-    worker
-        .start_generation(spec("t005-gen-b"))
-        .await
-        .expect("gen B");
+    worker.start_generation(spec_b).await.expect("gen B");
     assert_eq!(
         worker.claim_and_process_one().await.expect("B project"),
         ProcessOutcome::Processed
     );
-    sqlx::query("SELECT weltgewebe_activate_search_generation('t005-gen-b')")
+    sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
+        .bind(&generation_b)
         .execute(&pool)
         .await
         .expect("activate B");
     let states: Vec<(String, String)> = sqlx::query_as(
-        "SELECT generation_id,state FROM search_index_generations WHERE generation_id IN ('t005-gen-a','t005-gen-b') ORDER BY generation_id",
+        "SELECT generation_id,state FROM search_index_generations WHERE generation_id = ANY($1::text[])",
     )
-    .fetch_all(&pool).await.expect("A/B states");
+    .bind(vec![generation_a.clone(), generation_b.clone()])
+    .fetch_all(&pool)
+    .await
+    .expect("A/B states");
     assert_eq!(
-        states,
-        vec![
-            ("t005-gen-a".into(), "ready".into()),
-            ("t005-gen-b".into(), "active".into())
-        ]
+        states.iter().find(|row| row.0 == generation_a).unwrap().1,
+        "ready"
+    );
+    assert_eq!(
+        states.iter().find(|row| row.0 == generation_b).unwrap().1,
+        "active"
     );
 
     sqlx::query("UPDATE domain_nodes SET title='Aktuell' WHERE id=$1")
@@ -885,98 +953,122 @@ async fn rollback_candidate_stays_current_and_retired_generation_cannot_reactiva
         .execute(&pool)
         .await
         .expect("mutate canonical node");
-    assert_eq!(
-        worker
-            .claim_and_process_one()
-            .await
-            .expect("first catch-up"),
-        ProcessOutcome::Processed
-    );
-    assert_eq!(
-        worker
-            .claim_and_process_one()
-            .await
-            .expect("second catch-up"),
-        ProcessOutcome::Processed
-    );
+    for label in ["first catch-up", "second catch-up"] {
+        assert_eq!(
+            worker.claim_and_process_one().await.expect(label),
+            ProcessOutcome::Processed
+        );
+    }
     let versions: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT generation_id,source_version FROM search_node_projections WHERE node_id=$1 AND generation_id IN ('t005-gen-a','t005-gen-b') ORDER BY generation_id",
+        "SELECT generation_id,source_version FROM search_node_projections WHERE node_id=$1 AND generation_id = ANY($2::text[])",
     )
-    .bind(node).fetch_all(&pool).await.expect("caught-up versions");
-    assert_eq!(
-        versions,
-        vec![("t005-gen-a".into(), 2), ("t005-gen-b".into(), 2)]
-    );
+    .bind(node)
+    .bind(vec![generation_a.clone(), generation_b.clone()])
+    .fetch_all(&pool)
+    .await
+    .expect("caught-up versions");
+    assert_eq!(versions.len(), 2);
+    assert!(versions.iter().all(|row| row.1 == 2));
 
-    sqlx::query("UPDATE domain_nodes SET payload=jsonb_set(payload,'{search_visibility}','\"hidden\"'::jsonb) WHERE id=$1")
-        .bind(node).execute(&pool).await.expect("withdraw visibility");
-    assert_eq!(
-        worker
-            .claim_and_process_one()
-            .await
-            .expect("first visibility catch-up"),
-        ProcessOutcome::Processed
-    );
-    assert_eq!(
-        worker
-            .claim_and_process_one()
-            .await
-            .expect("second visibility catch-up"),
-        ProcessOutcome::Processed
-    );
+    sqlx::query("UPDATE domain_nodes SET search_visibility='hidden' WHERE id=$1")
+        .bind(node)
+        .execute(&pool)
+        .await
+        .expect("withdraw visibility");
+    for label in ["first visibility catch-up", "second visibility catch-up"] {
+        assert_eq!(
+            worker.claim_and_process_one().await.expect(label),
+            ProcessOutcome::Processed
+        );
+    }
     let visibility: Vec<(String, String, Vec<String>)> = sqlx::query_as(
-        "SELECT generation_id,status,visibility_scopes FROM search_node_projections WHERE node_id=$1 AND generation_id IN ('t005-gen-a','t005-gen-b') ORDER BY generation_id",
+        "SELECT generation_id,status,visibility_scopes FROM search_node_projections WHERE node_id=$1 AND generation_id = ANY($2::text[])",
     )
-    .bind(node).fetch_all(&pool).await.expect("visibility projections");
+    .bind(node)
+    .bind(vec![generation_a.clone(), generation_b.clone()])
+    .fetch_all(&pool)
+    .await
+    .expect("visibility projections");
     assert_eq!(visibility.len(), 2);
     assert!(visibility
         .iter()
         .all(|(_, status, scopes)| status == "hidden" && scopes.is_empty()));
 
-    sqlx::query("SELECT weltgewebe_activate_search_generation('t005-gen-a')")
+    sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
+        .bind(&generation_a)
         .execute(&pool)
         .await
         .expect("rollback A");
-    let rolled_back: Vec<(String, String)> = sqlx::query_as(
-        "SELECT generation_id,state FROM search_index_generations WHERE generation_id IN ('t005-gen-a','t005-gen-b') ORDER BY generation_id",
+    let rollback_states: Vec<(String, String)> = sqlx::query_as(
+        "SELECT generation_id,state FROM search_index_generations WHERE generation_id = ANY($1::text[])",
     )
-    .fetch_all(&pool).await.expect("rollback states");
+    .bind(vec![generation_a.clone(), generation_b.clone()])
+    .fetch_all(&pool)
+    .await
+    .expect("rollback states");
     assert_eq!(
-        rolled_back,
-        vec![
-            ("t005-gen-a".into(), "active".into()),
-            ("t005-gen-b".into(), "ready".into())
-        ]
+        rollback_states
+            .iter()
+            .find(|row| row.0 == generation_a)
+            .unwrap()
+            .1,
+        "active"
+    );
+    assert_eq!(
+        rollback_states
+            .iter()
+            .find(|row| row.0 == generation_b)
+            .unwrap()
+            .1,
+        "ready"
     );
 
-    worker
-        .start_generation(spec("t005-gen-c"))
-        .await
-        .expect("gen C");
+    let spec_c = exact_generation_spec("m", "r-c", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation_c = spec_c.generation_id.to_owned();
+    worker.start_generation(spec_c).await.expect("gen C");
     assert_eq!(
         worker.claim_and_process_one().await.expect("C project"),
         ProcessOutcome::Processed
     );
-    sqlx::query("SELECT weltgewebe_activate_search_generation('t005-gen-c')")
+    sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
+        .bind(&generation_c)
         .execute(&pool)
         .await
         .expect("activate C");
     let fallback_states: Vec<(String, String)> = sqlx::query_as(
-        "SELECT generation_id,state FROM search_index_generations WHERE generation_id IN ('t005-gen-a','t005-gen-b','t005-gen-c') ORDER BY generation_id",
+        "SELECT generation_id,state FROM search_index_generations WHERE generation_id = ANY($1::text[])",
     )
+    .bind(vec![generation_a.clone(), generation_b.clone(), generation_c.clone()])
     .fetch_all(&pool)
     .await
     .expect("post-C generation states");
     assert_eq!(
-        fallback_states,
-        vec![
-            ("t005-gen-a".into(), "ready".into()),
-            ("t005-gen-b".into(), "retired".into()),
-            ("t005-gen-c".into(), "active".into()),
-        ]
+        fallback_states
+            .iter()
+            .find(|row| row.0 == generation_a)
+            .unwrap()
+            .1,
+        "ready"
+    );
+    assert_eq!(
+        fallback_states
+            .iter()
+            .find(|row| row.0 == generation_b)
+            .unwrap()
+            .1,
+        "retired"
+    );
+    assert_eq!(
+        fallback_states
+            .iter()
+            .find(|row| row.0 == generation_c)
+            .unwrap()
+            .1,
+        "active"
     );
     assert!(
-        sqlx::query("SELECT weltgewebe_activate_search_generation('t005-gen-b')")
+        sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
+            .bind(&generation_b)
             .execute(&pool)
             .await
             .is_err()
@@ -988,7 +1080,8 @@ async fn rollback_candidate_stays_current_and_retired_generation_cannot_reactiva
         .await
         .expect("delete canonical node");
     assert!(
-        sqlx::query("SELECT weltgewebe_activate_search_generation('t005-gen-a')")
+        sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
+            .bind(&generation_a)
             .execute(&pool)
             .await
             .is_err(),
@@ -1005,9 +1098,13 @@ async fn rollback_candidate_stays_current_and_retired_generation_cannot_reactiva
     let live_rollback_projections: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM search_node_projections p JOIN search_index_generations g USING (generation_id) WHERE p.node_id=$1 AND g.state IN ('active','ready')",
     )
-    .bind(node).fetch_one(&pool).await.expect("active/ready deletion count");
+    .bind(node)
+    .fetch_one(&pool)
+    .await
+    .expect("active/ready deletion count");
     assert_eq!(live_rollback_projections, 0);
-    sqlx::query("SELECT weltgewebe_activate_search_generation('t005-gen-a')")
+    sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
+        .bind(&generation_a)
         .execute(&pool)
         .await
         .expect("rollback is safe after all delete jobs complete");
@@ -1015,46 +1112,49 @@ async fn rollback_candidate_stays_current_and_retired_generation_cannot_reactiva
 
 #[tokio::test]
 #[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
-async fn identical_rebuilds_have_the_same_logical_integrity_digest() {
+async fn restarting_the_same_identity_preserves_the_logical_integrity_digest() {
     let pool = pool().await;
     migrate(&pool).await;
     reset_search_state(&pool).await;
     let node = "t005-digest-node";
     sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt','Digest',$2::jsonb)")
         .bind(node)
-        .bind(r#"{"summary":"gleich","tags":["b","a"],"language":"de","search_visibility":"public"}"#)
-        .execute(&pool).await.expect("insert digest node");
+        .bind(r#"{"summary":"gleich","tags":["b","a"],"language":"de"}"#)
+        .execute(&pool)
+        .await
+        .expect("insert digest node");
     let provider = Arc::new(FakeProvider {
         unavailable: AtomicBool::new(false),
     });
     let worker = worker(pool.clone(), "t005-digest", provider);
-    for generation_id in ["t005-digest-a", "t005-digest-b"] {
+    let spec = exact_generation_spec("m", "r", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation = spec.generation_id;
+    worker
+        .start_generation(spec)
+        .await
+        .expect("start digest generation");
+    assert_eq!(
         worker
-            .start_generation(GenerationSpec {
-                generation_id,
-                provider: "local:ollama",
-                model_id: "m",
-                model_revision: "r",
-                runtime_identity: "ollama:test@http://127.0.0.1:11434",
-                dimension: 3,
-            })
+            .claim_and_process_one()
             .await
-            .expect("start digest generation");
-    }
-    assert_eq!(
-        worker.claim_and_process_one().await.expect("digest first"),
-        ProcessOutcome::Processed
-    );
-    assert_eq!(
-        worker.claim_and_process_one().await.expect("digest second"),
+            .expect("digest projection"),
         ProcessOutcome::Processed
     );
     let first = worker
-        .integrity_digest("t005-digest-a")
+        .integrity_digest(generation)
         .await
         .expect("first digest");
+    worker
+        .start_generation(exact_generation_spec(
+            "m",
+            "r",
+            "ollama:test@http://127.0.0.1:11434",
+            3,
+        ))
+        .await
+        .expect("idempotent generation restart");
     let second = worker
-        .integrity_digest("t005-digest-b")
+        .integrity_digest(generation)
         .await
         .expect("second digest");
     assert_eq!(first, second);
@@ -1068,12 +1168,13 @@ async fn generation_start_and_activation_serialize_with_domain_mutations() {
     migrate(&pool).await;
     reset_search_state(&pool).await;
     let node = "t005-generation-race-node";
-    let generation = "t005-generation-race";
+    let generation_spec = exact_generation_spec("m", "r", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation = generation_spec.generation_id;
     sqlx::query(
         "INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt','A',$2::jsonb)",
     )
     .bind(node)
-    .bind(r#"{"search_visibility":"public"}"#)
+    .bind(r#"{}"#)
     .execute(&pool)
     .await
     .expect("insert race node");
@@ -1095,18 +1196,7 @@ async fn generation_start_and_activation_serialize_with_domain_mutations() {
         }),
     ));
     let starter = worker.clone();
-    let start = tokio::spawn(async move {
-        starter
-            .start_generation(GenerationSpec {
-                generation_id: generation,
-                provider: "local:ollama",
-                model_id: "m",
-                model_revision: "r",
-                runtime_identity: "ollama:test@http://127.0.0.1:11434",
-                dimension: 3,
-            })
-            .await
-    });
+    let start = tokio::spawn(async move { starter.start_generation(generation_spec).await });
     sleep(Duration::from_millis(50)).await;
     assert!(
         !start.is_finished(),
@@ -1224,7 +1314,7 @@ async fn concurrent_generation_finishes_serialize_ready_transition_and_keep_coun
     let node = "t005-concurrent-ready-node";
     sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt','Ready Race',$2::jsonb)")
         .bind(node)
-        .bind(r#"{"search_visibility":"public"}"#)
+        .bind(r#"{}"#)
         .execute(&pool)
         .await
         .expect("insert concurrent ready node");
@@ -1252,16 +1342,13 @@ async fn concurrent_generation_finishes_serialize_ready_transition_and_keep_coun
         .expect("worker b"),
     );
 
-    for generation_id in ["t005-ready-race-gen-a", "t005-ready-race-gen-b"] {
+    let generation_a = exact_generation_spec("m", "r-a", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation_a_id = generation_a.generation_id.to_owned();
+    let generation_b = exact_generation_spec("m", "r-b", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation_b_id = generation_b.generation_id.to_owned();
+    for spec in [generation_a, generation_b] {
         worker_a
-            .start_generation(GenerationSpec {
-                generation_id,
-                provider: "local:ollama",
-                model_id: "m",
-                model_revision: "r",
-                runtime_identity: "ollama:test@http://127.0.0.1:11434",
-                dimension: 3,
-            })
+            .start_generation(spec)
             .await
             .expect("start concurrent generation");
     }
@@ -1282,8 +1369,9 @@ async fn concurrent_generation_finishes_serialize_ready_transition_and_keep_coun
     );
 
     let generations: Vec<(String, String, i64, i64)> = sqlx::query_as(
-        "SELECT generation_id,state,expected_nodes,completed_nodes FROM search_index_generations WHERE generation_id IN ('t005-ready-race-gen-a','t005-ready-race-gen-b') ORDER BY generation_id",
+        "SELECT generation_id,state,expected_nodes,completed_nodes FROM search_index_generations WHERE generation_id = ANY($1::text[]) ORDER BY generation_id",
     )
+    .bind(vec![generation_a_id, generation_b_id])
     .fetch_all(&pool)
     .await
     .expect("concurrent generation states");
@@ -1322,10 +1410,11 @@ async fn reclaimed_lease_fences_the_old_worker_before_projection_mutation() {
     migrate(&pool).await;
     reset_search_state(&pool).await;
     let node = "t005-lease-fence-node";
-    let generation = "t005-lease-fence-generation";
+    let generation_spec = exact_generation_spec("m", "r", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation = generation_spec.generation_id;
     sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt','Lease',$2::jsonb)")
         .bind(node)
-        .bind(r#"{"search_visibility":"public"}"#)
+        .bind(r#"{}"#)
         .execute(&pool)
         .await
         .expect("insert lease node");
@@ -1342,16 +1431,9 @@ async fn reclaimed_lease_fences_the_old_worker_before_projection_mutation() {
         }),
     )
     .expect("slow worker");
-    slow.start_generation(GenerationSpec {
-        generation_id: generation,
-        provider: "local:ollama",
-        model_id: "m",
-        model_revision: "r",
-        runtime_identity: "ollama:test@http://127.0.0.1:11434",
-        dimension: 3,
-    })
-    .await
-    .expect("start lease generation");
+    slow.start_generation(generation_spec)
+        .await
+        .expect("start lease generation");
 
     let slow_task = tokio::spawn(async move { slow.claim_and_process_one().await });
     entered.notified().await;
@@ -1401,7 +1483,7 @@ async fn reclaimed_lease_fences_the_old_worker_before_projection_mutation() {
 
 #[tokio::test]
 #[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
-async fn empty_integrity_digest_binds_generation_identity_but_not_generation_id() {
+async fn empty_integrity_digest_binds_the_derived_generation_identity() {
     let pool = pool().await;
     migrate(&pool).await;
     reset_search_state(&pool).await;
@@ -1409,35 +1491,30 @@ async fn empty_integrity_digest_binds_generation_identity_but_not_generation_id(
         unavailable: AtomicBool::new(false),
     });
     let worker = worker(pool, "t005-empty-digest", provider);
-    for (generation_id, revision) in [
-        ("t005-empty-a", "r1"),
-        ("t005-empty-b", "r2"),
-        ("t005-empty-c", "r1"),
-    ] {
-        worker
-            .start_generation(GenerationSpec {
-                generation_id,
-                provider: "local:ollama",
-                model_id: "m",
-                model_revision: revision,
-                runtime_identity: "ollama:test@http://127.0.0.1:11434",
-                dimension: 3,
-            })
-            .await
-            .expect("start empty digest generation");
-    }
+    let first_spec = exact_generation_spec("m", "r1", "ollama:test@http://127.0.0.1:11434", 3);
+    let first_generation = first_spec.generation_id;
+    let changed_spec = exact_generation_spec("m", "r2", "ollama:test@http://127.0.0.1:11434", 3);
+    let changed_generation = changed_spec.generation_id;
+    worker
+        .start_generation(first_spec)
+        .await
+        .expect("start first empty generation");
+    worker
+        .start_generation(changed_spec)
+        .await
+        .expect("start changed empty generation");
     let first = worker
-        .integrity_digest("t005-empty-a")
+        .integrity_digest(first_generation)
         .await
-        .expect("digest A");
-    let changed = worker
-        .integrity_digest("t005-empty-b")
-        .await
-        .expect("digest B");
+        .expect("first empty digest");
     let same = worker
-        .integrity_digest("t005-empty-c")
+        .integrity_digest(first_generation)
         .await
-        .expect("digest C");
+        .expect("same empty digest");
+    let changed = worker
+        .integrity_digest(changed_generation)
+        .await
+        .expect("changed empty digest");
     assert_eq!(first, same);
     assert_ne!(first, changed);
 }
@@ -1449,12 +1526,13 @@ async fn invalid_projection_document_fails_terminally_without_lease_cycle() {
     migrate(&pool).await;
     reset_search_state(&pool).await;
     let node = "t005-invalid-document-node";
-    let generation = "t005-invalid-document-generation";
+    let generation_spec = exact_generation_spec("m", "r", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation = generation_spec.generation_id;
     sqlx::query(
         "INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt','   ',$2::jsonb)",
     )
     .bind(node)
-    .bind(r#"{"search_visibility":"public"}"#)
+    .bind(r#"{}"#)
     .execute(&pool)
     .await
     .expect("insert invalid projection document");
@@ -1466,14 +1544,7 @@ async fn invalid_projection_document_fails_terminally_without_lease_cycle() {
         }),
     );
     worker
-        .start_generation(GenerationSpec {
-            generation_id: generation,
-            provider: "local:ollama",
-            model_id: "m",
-            model_revision: "r",
-            runtime_identity: "ollama:test@http://127.0.0.1:11434",
-            dimension: 3,
-        })
+        .start_generation(generation_spec)
         .await
         .expect("start invalid document generation");
     assert_eq!(
@@ -1516,7 +1587,7 @@ async fn search_backfill_binary_projects_with_live_local_provider_without_activa
     let generation = "t005-backfill-e2e-generation";
     sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt','Backfill E2E',$2::jsonb)")
         .bind(node)
-        .bind(r#"{"summary":"lokaler Providerpfad","search_visibility":"public"}"#)
+        .bind(r#"{"summary":"lokaler Providerpfad"}"#)
         .execute(&pool)
         .await
         .expect("insert E2E node");
@@ -1622,75 +1693,85 @@ async fn t006_search_api_against_postgres_projections() {
             "t005-public-node",
             "Werkstatt",
             "Fahrrad Werkstatt",
-            r#"{"search_visibility":"public","summary":"Reparatur"}"#,
+            r#"{"summary":"Reparatur"}"#,
+            "public",
             vec![1.0, -1.0],
         ),
         (
             "t005-public-b-node",
             "Treffpunkt",
             "Fahrrad Hilfe",
-            r#"{"search_visibility":"public","summary":"Hilfe"}"#,
+            r#"{"summary":"Hilfe"}"#,
+            "public",
             vec![1.0, -1.0],
         ),
         (
             "t005-hidden-node",
             "Werkstatt",
             "Geheime Fahrrad Werkstatt",
-            r#"{"search_visibility":"hidden","summary":"Geheim"}"#,
+            r#"{"summary":"Geheim"}"#,
+            "hidden",
             vec![0.25, 0.25],
         ),
         (
             "t005-private-node",
             "Werkstatt",
             "Private Fahrrad Werkstatt",
-            r#"{"search_visibility":"private","created_by_account_id":"owner-a","summary":"Privat"}"#,
+            r#"{"created_by_account_id":"owner-a","summary":"Privat"}"#,
+            "private",
             vec![0.25, 0.25],
         ),
         (
             "t005-stale-node",
             "Werkstatt",
             "Stale Fahrrad Werkstatt",
-            r#"{"search_visibility":"public","summary":"Alt"}"#,
+            r#"{"summary":"Alt"}"#,
+            "public",
             vec![0.25, 0.25],
         ),
         (
             "t005-revoked-node",
             "Werkstatt",
             "Widerrufene Fahrrad Werkstatt",
-            r#"{"search_visibility":"public","summary":"Widerruf"}"#,
+            r#"{"summary":"Widerruf"}"#,
+            "public",
             vec![0.25, 0.25],
         ),
         (
             "t005-deleted-node",
             "Werkstatt",
             "Geloeschte Fahrrad Werkstatt",
-            r#"{"search_visibility":"public","summary":"Loeschen"}"#,
+            r#"{"summary":"Loeschen"}"#,
+            "public",
             vec![0.25, 0.25],
         ),
         (
             "t005-legacy-node",
             "Werkstatt",
             "Legacy Fahrrad Werkstatt",
-            r#"{"search_visibility":"legacy","summary":"Legacy"}"#,
+            r#"{"summary":"Legacy"}"#,
+            "hidden",
             vec![0.25, 0.25],
         ),
         (
             "t005-wrong-dimension-node",
             "Werkstatt",
             "Dimension Fahrrad Werkstatt",
-            r#"{"search_visibility":"public","summary":"Dimension"}"#,
+            r#"{"summary":"Dimension"}"#,
+            "public",
             vec![1.0],
         ),
     ];
 
-    for (index, (id, kind, title, payload, embedding)) in nodes.iter().enumerate() {
+    for (index, (id, kind, title, payload, visibility, embedding)) in nodes.iter().enumerate() {
         sqlx::query(
-            "INSERT INTO domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) VALUES ($1, $2, $3, 0.0, 0.0, NOW(), NOW(), $4::jsonb)",
+            "INSERT INTO domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload, search_visibility) VALUES ($1, $2, $3, 0.0, 0.0, NOW(), NOW(), $4::jsonb, $5)",
         )
         .bind(id)
         .bind(kind)
         .bind(title)
         .bind(payload)
+        .bind(visibility)
         .execute(&pool)
         .await
         .expect("insert T006 domain node");
@@ -1708,6 +1789,14 @@ async fn t006_search_api_against_postgres_projections() {
         .await
         .expect("insert T006 projection");
     }
+
+    sqlx::query(
+        "UPDATE search_node_projections SET status='active', visibility_scopes=ARRAY['owner']::TEXT[], semantic_state='unavailable', embedding=NULL WHERE generation_id=$1 AND node_id='t005-private-node'",
+    )
+    .bind(&gen_id)
+    .execute(&pool)
+    .await
+    .expect("shape private lexical-only projection");
 
     // T006 stores the T003 lexical representations once in projection state.
     // Updating an indexed field must refresh the stored vector through the
@@ -1735,7 +1824,7 @@ async fn t006_search_api_against_postgres_projections() {
         let id = format!("t005-ranking-prefix-{index:02}");
         let title = format!("Fahrrad Rang {index:02}");
         sqlx::query(
-            "INSERT INTO domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) VALUES ($1, 'Werkstatt', $2, 0.0, 0.0, NOW(), NOW(), '{\"search_visibility\":\"public\"}'::jsonb)",
+            "INSERT INTO domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) VALUES ($1, 'Werkstatt', $2, 0.0, 0.0, NOW(), NOW(), '{}'::jsonb)",
         )
         .bind(&id)
         .bind(&title)
@@ -1774,7 +1863,7 @@ async fn t006_search_api_against_postgres_projections() {
     .enumerate()
     {
         sqlx::query(
-            "INSERT INTO domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) VALUES ($1, 'Werkstatt', $2, 0.0, 0.0, NOW(), NOW(), '{\"search_visibility\":\"public\"}'::jsonb)",
+            "INSERT INTO domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) VALUES ($1, 'Werkstatt', $2, 0.0, 0.0, NOW(), NOW(), '{}'::jsonb)",
         )
         .bind(id)
         .bind(title)
@@ -1804,7 +1893,7 @@ async fn t006_search_api_against_postgres_projections() {
     .execute(&pool)
     .await
     .expect("make projection stale");
-    sqlx::query("UPDATE domain_nodes SET payload=jsonb_set(payload, '{search_visibility}', '\"revoked\"'::jsonb) WHERE id='t005-revoked-node'")
+    sqlx::query("UPDATE domain_nodes SET search_visibility='revoked' WHERE id='t005-revoked-node'")
         .execute(&pool)
         .await
         .expect("revoke visibility");
@@ -2075,6 +2164,23 @@ async fn t006_search_api_against_postgres_projections() {
         .iter()
         .any(|node| node.id == "t005-private-node"));
 
+    let private_owner_candidates = fetch_postgres_candidates(
+        &pool,
+        "Private Fahrrad Werkstatt",
+        &SearchFilters::default(),
+        &owner_a,
+    )
+    .await
+    .expect("fetch owner private candidates")
+    .expect("active generation for owner private candidates");
+    let private_candidate = private_owner_candidates
+        .candidates
+        .iter()
+        .find(|candidate| candidate.node.id == "t005-private-node")
+        .expect("private owner lexical candidate");
+    assert!(private_candidate.embedding.is_none());
+    assert_ne!(private_candidate.rank_class, u8::MAX);
+
     let private_owner = execute_search(
         &state,
         &owner_a,
@@ -2191,7 +2297,7 @@ async fn t006_search_api_against_postgres_projections() {
     // unbounded transfer of embedding arrays into the API process.
     sqlx::query(
         "INSERT INTO domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) \
-         SELECT 't006-overflow-' || lpad(value::text, 4, '0'), 'Overflow', 'Overflow ' || value::text, 0.0, 0.0, NOW(), NOW(), '{\"search_visibility\":\"public\"}'::jsonb \
+         SELECT 't006-overflow-' || lpad(value::text, 4, '0'), 'Overflow', 'Overflow ' || value::text, 0.0, 0.0, NOW(), NOW(), '{}'::jsonb \
            FROM generate_series(1, $1::integer) AS value",
     )
     .bind((MAX_AUTHORIZED_CANDIDATES + 1) as i32)
@@ -2254,4 +2360,155 @@ async fn t006_search_api_against_postgres_projections() {
     )
     .await;
     assert!(matches!(tampered, Err(SearchError::Unavailable)));
+}
+
+#[tokio::test]
+#[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
+async fn canonical_visibility_migration_preserves_public_defaults_and_reprojects_owner_changes() {
+    let pool = pool().await;
+    migrate(&pool).await;
+    reset_search_state(&pool).await;
+
+    let down_err = sqlx::raw_sql(include_str!(
+        "../migrations/20260724000002_semantic_search_projection_privacy_boundary.down.sql"
+    ))
+    .execute(&pool)
+    .await;
+    assert!(
+        down_err.is_err(),
+        "down.sql must fail-closed with explicit exception"
+    );
+
+    // Exercise the legacy-schema upgrade in one transaction. The existing
+    // projection trigger is disabled while its new canonical column is absent;
+    // rolling the transaction back restores the exact migrated schema for the
+    // owner-change proof and every later test in this shared disposable DB.
+    let mut legacy_tx = pool.begin().await.expect("begin legacy migration fixture");
+    sqlx::query("ALTER TABLE domain_nodes DISABLE TRIGGER search_track_domain_nodes")
+        .execute(&mut *legacy_tx)
+        .await
+        .expect("disable projection trigger for legacy schema fixture");
+    sqlx::query("ALTER TABLE domain_nodes DROP COLUMN IF EXISTS search_visibility CASCADE")
+        .execute(&mut *legacy_tx)
+        .await
+        .expect("drop search_visibility column for legacy schema setup");
+    sqlx::query("DROP FUNCTION IF EXISTS weltgewebe_search_node_owner_account_id(JSONB)")
+        .execute(&mut *legacy_tx)
+        .await
+        .expect("drop owner function for legacy schema setup");
+
+    for (id, title, payload) in [
+        (
+            "t005-legacy-default-public",
+            "Legacy Public",
+            r#"{"summary":"ohne Sichtbarkeitsfeld"}"#,
+        ),
+        (
+            "t005-legacy-malformed-hidden",
+            "Legacy Malformed",
+            r#"{"summary":"malformed","search_visibility":17}"#,
+        ),
+        (
+            "t005-legacy-private-owner",
+            "Legacy Private",
+            r#"{"summary":"privat","search_visibility":"private","created_by_account_id":"owner-a"}"#,
+        ),
+    ] {
+        sqlx::query(
+            "INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt',$2,$3::jsonb)",
+        )
+        .bind(id)
+        .bind(title)
+        .bind(payload)
+        .execute(&mut *legacy_tx)
+        .await
+        .expect("insert legacy visibility fixture");
+    }
+
+    sqlx::raw_sql(include_str!(
+        "../migrations/20260724000002_semantic_search_projection_privacy_boundary.up.sql"
+    ))
+    .execute(&mut *legacy_tx)
+    .await
+    .expect("apply canonical visibility migration to legacy fixture");
+
+    let migrated: Vec<(String, String, bool)> = sqlx::query_as(
+        "SELECT id,search_visibility,payload ? 'search_visibility' FROM domain_nodes WHERE id LIKE 't005-legacy-%' ORDER BY id",
+    )
+    .fetch_all(&mut *legacy_tx)
+    .await
+    .expect("read migrated visibility fixtures");
+    assert_eq!(
+        migrated,
+        vec![
+            ("t005-legacy-default-public".into(), "public".into(), false),
+            (
+                "t005-legacy-malformed-hidden".into(),
+                "hidden".into(),
+                false
+            ),
+            ("t005-legacy-private-owner".into(), "private".into(), false),
+        ]
+    );
+    legacy_tx
+        .rollback()
+        .await
+        .expect("restore canonical schema after legacy migration fixture");
+
+    let trigger_enabled: bool = sqlx::query_scalar(
+        "SELECT tgenabled = 'O' FROM pg_trigger WHERE tgrelid='domain_nodes'::regclass AND tgname='search_track_domain_nodes'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("verify canonical projection trigger restored");
+    assert!(trigger_enabled);
+
+    sqlx::query(
+        "INSERT INTO domain_nodes (id,kind,title,payload,search_visibility) VALUES ('t005-legacy-private-owner','Werkstatt','Legacy Private',$1::jsonb,'private')",
+    )
+    .bind(r#"{"summary":"privat","created_by_account_id":"owner-a"}"#)
+    .execute(&pool)
+    .await
+    .expect("insert canonical private owner fixture");
+
+    let provider = Arc::new(FakeProvider {
+        unavailable: AtomicBool::new(false),
+    });
+    let projection_worker = worker(pool.clone(), "t005-owner-change", provider);
+    let spec = exact_generation_spec("m", "owner-change", "ollama:test@http://127.0.0.1:11434", 3);
+    let generation = spec.generation_id;
+    projection_worker
+        .start_generation(spec)
+        .await
+        .expect("start owner-change generation");
+    let version_before: i64 = sqlx::query_scalar(
+        "SELECT source_version FROM search_node_versions WHERE node_id='t005-legacy-private-owner'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("owner version before change");
+
+    sqlx::query(
+        "UPDATE domain_nodes SET payload=jsonb_set(payload,'{created_by_account_id}',to_jsonb('owner-b'::text),true) WHERE id='t005-legacy-private-owner'",
+    )
+    .execute(&pool)
+    .await
+    .expect("change canonical private owner");
+
+    let version_after: i64 = sqlx::query_scalar(
+        "SELECT source_version FROM search_node_versions WHERE node_id='t005-legacy-private-owner'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("owner version after change");
+    assert_eq!(version_after, version_before + 1);
+    let owner_change_job: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM search_projection_jobs WHERE generation_id=$1 AND node_id='t005-legacy-private-owner' AND source_version=$2 AND operation='upsert')",
+    )
+    .bind(generation)
+    .bind(version_after)
+    .fetch_one(&pool)
+    .await
+    .expect("owner change projection job");
+    assert!(owner_change_job);
 }

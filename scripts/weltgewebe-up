@@ -17,6 +17,9 @@ COMPOSE_PROJECT="${COMPOSE_PROJECT:-weltgewebe}"
 REMOTE="${REMOTE:-origin}"
 WELTGEWEBE_COMPOSE_BAKE="${WELTGEWEBE_COMPOSE_BAKE:-auto}"
 DEPLOY_TARGET="${DEPLOY_TARGET:-vps}"
+WELTGEWEBE_SEARCH_MIN_DISK_BYTES="${WELTGEWEBE_SEARCH_MIN_DISK_BYTES:-8589934592}"
+WELTGEWEBE_SEARCH_MIN_MEMORY_BYTES="${WELTGEWEBE_SEARCH_MIN_MEMORY_BYTES:-5368709120}"
+WELTGEWEBE_SEARCH_MIN_CPU_COUNT="${WELTGEWEBE_SEARCH_MIN_CPU_COUNT:-3}"
 
 case "$DEPLOY_TARGET" in
   vps | heimserver) ;;
@@ -877,6 +880,44 @@ if ! docker compose "${BASE_ARGS[@]}" config > /dev/null; then
   exit 1
 fi
 
+# Ollama and the projection worker are part of the bounded API deployment unit.
+# Refuse before image build or container mutation when the production VPS no
+# longer has enough measured capacity for the pinned 4B embedding model.
+if [[ "$DEPLOY_TARGET" == "vps" ]]; then
+  configured_preflight_services="$(docker compose "${BASE_ARGS[@]}" config --services)"
+  if grep -qFx ollama <<< "$configured_preflight_services" || grep -qFx search-worker <<< "$configured_preflight_services"; then
+    for bounded_value in "$WELTGEWEBE_SEARCH_MIN_DISK_BYTES" "$WELTGEWEBE_SEARCH_MIN_MEMORY_BYTES" "$WELTGEWEBE_SEARCH_MIN_CPU_COUNT"; do
+      [[ "$bounded_value" =~ ^[0-9]+$ ]] || {
+        echo "ERROR: Semantic-search resource limits must be positive integers." >&2
+        exit 1
+      }
+    done
+    ((WELTGEWEBE_SEARCH_MIN_DISK_BYTES > 0 && WELTGEWEBE_SEARCH_MIN_MEMORY_BYTES > 0 && WELTGEWEBE_SEARCH_MIN_CPU_COUNT > 0)) || {
+      echo "ERROR: Semantic-search resource limits must be positive." >&2
+      exit 1
+    }
+    search_available_disk="$(df -B1 --output=avail / | awk 'NR==2 {print $1}')"
+    search_available_memory="$(awk '/^MemAvailable:/ {print $2 * 1024}' /proc/meminfo)"
+    search_available_cpus="$(getconf _NPROCESSORS_ONLN)"
+    [[ "$search_available_disk" =~ ^[0-9]+$ && "$search_available_memory" =~ ^[0-9]+$ && "$search_available_cpus" =~ ^[0-9]+$ ]] || {
+      echo "ERROR: Semantic-search resource preflight could not be measured." >&2
+      exit 1
+    }
+    ((search_available_disk >= WELTGEWEBE_SEARCH_MIN_DISK_BYTES)) || {
+      echo "ERROR: Insufficient free disk for the pinned semantic-search runtime." >&2
+      exit 1
+    }
+    ((search_available_memory >= WELTGEWEBE_SEARCH_MIN_MEMORY_BYTES)) || {
+      echo "ERROR: Insufficient available memory for the pinned semantic-search runtime." >&2
+      exit 1
+    }
+    ((search_available_cpus >= WELTGEWEBE_SEARCH_MIN_CPU_COUNT)) || {
+      echo "ERROR: Insufficient online CPUs for the pinned semantic-search runtime." >&2
+      exit 1
+    }
+  fi
+fi
+
 # Guard: Validate API host port publishing for Heimserver production path
 # Target specifically the Heimserver layout which relies on proxy/FQDN without host port publishing
 if [[ "$BASE_COMPOSE_FILE" == *"compose.prod.yml"* && "$OVERRIDE_FILE" == *"compose.prod.override.yml"* ]]; then
@@ -1669,15 +1710,42 @@ wait_for_scoped_api_health() {
   fi
 
   local deadline=$((SECONDS + timeout_seconds))
-  local cid status
   while ((SECONDS < deadline)); do
-    cid="$(compose_service_id api)"
-    if [[ -n "$cid" ]]; then
-      status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2> /dev/null || true)"
-      case "$status" in
-        healthy | running) return 0 ;;
-        unhealthy | exited | dead) return 1 ;;
-      esac
+    local api_cid
+    api_cid="$(compose_service_id api)"
+    if [[ -n "$api_cid" ]]; then
+      local status
+      status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$api_cid" 2> /dev/null || true)"
+      if [[ "$status" == "healthy" || "$status" == "running" ]]; then
+        local target_ok=true
+
+        local ollama_cid
+        ollama_cid="$(compose_service_id ollama 2> /dev/null || true)"
+        if [[ -n "$ollama_cid" ]]; then
+          local o_status
+          o_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$ollama_cid" 2> /dev/null || true)"
+          if [[ "$o_status" != "healthy" && "$o_status" != "running" ]]; then
+            target_ok=false
+          fi
+        fi
+
+        local worker_cid
+        worker_cid="$(compose_service_id search-worker 2> /dev/null || true)"
+        if [[ -n "$worker_cid" ]]; then
+          local w_status w_img api_img w_cmd
+          w_status="$(docker inspect --format '{{.State.Running}}' "$worker_cid" 2> /dev/null || true)"
+          w_img="$(docker inspect --format '{{.Image}}' "$worker_cid" 2> /dev/null || true)"
+          api_img="$(docker inspect --format '{{.Image}}' "$api_cid" 2> /dev/null || true)"
+          w_cmd="$(docker inspect --format '{{json .Config.Cmd}}' "$worker_cid" 2> /dev/null || true)"
+          if [[ "$w_status" != "true" || "$w_img" != "$api_img" || "$w_cmd" != '["/usr/local/bin/search-worker-loop"]' ]]; then
+            target_ok=false
+          fi
+        fi
+
+        if [[ "$target_ok" == "true" ]]; then
+          return 0
+        fi
+      fi
     fi
     sleep 1
   done
@@ -1711,7 +1779,7 @@ restore_scoped_migration_mode() {
 }
 
 write_scoped_deploy_plan() {
-  local initial_command_joined restore_command_joined protected_lines=""
+  local initial_command_joined restore_command_joined protected_lines="" target_lines=""
   initial_command_joined="$(join_command_for_plan "${SCOPED_INITIAL_CMD[@]}")"
   restore_command_joined=""
   if ((${#SCOPED_RESTORE_CMD[@]} > 0)); then
@@ -1721,6 +1789,9 @@ write_scoped_deploy_plan() {
   local service
   for service in "${PROTECTED_SERVICES[@]}"; do
     protected_lines+="${service}=${PROTECTED_IDS_BEFORE[$service]}"$'\n'
+  done
+  for service in "${SCOPED_TARGET_SERVICES[@]}"; do
+    target_lines+="${service}"$'\n'
   done
 
   local plan_name
@@ -1748,6 +1819,7 @@ write_scoped_deploy_plan() {
   PLAN_INITIAL_COMMAND="$initial_command_joined" \
     PLAN_RESTORE_COMMAND="$restore_command_joined" \
     PLAN_PROTECTED_IDS="$protected_lines" \
+    PLAN_TARGET_SERVICES="$target_lines" \
     PLAN_PATH="$plan_tmp" \
     PLAN_SCOPE="$DEPLOY_SCOPE" \
     PLAN_PROJECT="$COMPOSE_PROJECT" \
@@ -1775,12 +1847,13 @@ for line in os.environ.get("PLAN_PROTECTED_IDS", "").splitlines():
     service, value = line.split("=", 1)
     protected[service] = None if value in ("", "__not_configured__") else value
 
+targets = [line for line in os.environ.get("PLAN_TARGET_SERVICES", "").splitlines() if line]
 scope = os.environ["PLAN_SCOPE"]
 payload = {
     "schema_version": 1,
     "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "scope": scope,
-    "target_services": ["api"],
+    "target_services": targets,
     "protected_services": ["db", "nats", "caddy"],
     "protected_service_ids": protected,
     "compose_project": os.environ["PLAN_PROJECT"],
@@ -1800,7 +1873,7 @@ payload = {
         *([{"WELTGEWEBE_API_STARTUP_MIGRATIONS": "verify-applied"}] if scope == "migration" else []),
     ],
     "authorization": {
-        "allowed_recreated_services": ["api"],
+        "allowed_recreated_services": targets,
         "forbidden_recreated_services": ["db", "nats", "caddy"],
     },
 }
@@ -1880,15 +1953,27 @@ else
     fi
   fi
 
+  SCOPED_TARGET_SERVICES=(api)
+  configured_scoped_services="$(docker compose "${BASE_ARGS[@]}" config --services)"
+  if grep -qFx ollama <<< "$configured_scoped_services"; then
+    SCOPED_TARGET_SERVICES+=(ollama)
+  fi
+  if grep -qFx search-worker <<< "$configured_scoped_services"; then
+    # Both containers share the API network namespace. Recreating only the API
+    # would strand them on the retired namespace, so all three are one bounded
+    # deployment unit while db, nats and caddy stay protected.
+    SCOPED_TARGET_SERVICES+=(search-worker)
+  fi
+
   SCOPED_INITIAL_CMD=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--no-deps")
   if [[ "$DO_BUILD" == "1" ]]; then
     SCOPED_INITIAL_CMD+=("--build")
   fi
-  SCOPED_INITIAL_CMD+=("api")
+  SCOPED_INITIAL_CMD+=("${SCOPED_TARGET_SERVICES[@]}")
 
   SCOPED_RESTORE_CMD=()
   if [[ "$DEPLOY_SCOPE" == "migration" ]]; then
-    SCOPED_RESTORE_CMD=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--no-deps" "--force-recreate" "api")
+    SCOPED_RESTORE_CMD=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--no-deps" "--force-recreate" "${SCOPED_TARGET_SERVICES[@]}")
   fi
 
   if [[ "${SCOPED_INITIAL_CMD[*]}" == *" --remove-orphans"* ]]; then

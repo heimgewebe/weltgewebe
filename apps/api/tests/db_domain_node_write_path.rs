@@ -823,6 +823,7 @@ async fn postgres_node_patch_mapping_failure_does_not_commit() -> Result<()> {
         NODE_NULL_LOC,
         NodePatchInput {
             info: Some(Some("changed".to_string())),
+            search_visibility: None,
         },
     )
     .await;
@@ -883,6 +884,7 @@ async fn postgres_node_patch_non_object_payload_is_rejected_without_commit() -> 
         NODE_BAD_PAYLOAD,
         NodePatchInput {
             info: Some(Some("inject".to_string())),
+            search_visibility: None,
         },
     )
     .await;
@@ -1226,6 +1228,7 @@ async fn postgres_node_create_rejects_creator_deleted_by_inflight_exit() -> Resu
         created_at: "2026-07-20T15:00:00+00:00".to_string(),
         updated_at: "2026-07-20T15:00:00+00:00".to_string(),
         created_by_account_id: Some(creator_id.to_string()),
+        search_visibility: Default::default(),
         summary: None,
         info: None,
         tags: vec![],
@@ -2000,6 +2003,7 @@ async fn insert_domain_node_classifies_duplicate_id() -> Result<()> {
         created_at: "2026-06-12T10:00:00+00:00".to_string(),
         updated_at: "2026-06-12T10:00:00+00:00".to_string(),
         created_by_account_id: None,
+        search_visibility: Default::default(),
         summary: None,
         info: None,
         tags: vec![],
@@ -2071,6 +2075,7 @@ async fn replace_and_delete_node_cascade_is_transactional_in_postgres() -> Resul
         created_at: "2026-01-01T00:00:00Z".to_string(),
         updated_at: "2026-07-15T04:00:00Z".to_string(),
         created_by_account_id: None,
+        search_visibility: Default::default(),
         summary: Some("Neue Zusammenfassung".to_string()),
         info: Some("Neue Information".to_string()),
         tags: vec!["commons".to_string()],
@@ -2398,6 +2403,10 @@ async fn postgres_replace_response_etag_is_reusable() -> Result<()> {
     run_migrations(&pool).await;
     clean(&pool).await;
     seed_node(&pool, NODE_A, Some("before"), None).await;
+    sqlx::query("UPDATE domain_nodes SET search_visibility='private' WHERE id=$1")
+        .bind(NODE_A)
+        .execute(&pool)
+        .await?;
 
     let tmp = tempfile::tempdir()?;
     let in_dir = tmp.path().join("in");
@@ -2418,6 +2427,7 @@ async fn postgres_replace_response_etag_is_reusable() -> Result<()> {
     assert_eq!(first_response.status(), StatusCode::OK);
     let first_body = body::to_bytes(first_response.into_body(), usize::MAX).await?;
     let first_node: serde_json::Value = serde_json::from_slice(&first_body)?;
+    assert_eq!(first_node["search_visibility"], "private");
     let reusable_etag = format!(
         "\"{}\"",
         first_node["updated_at"]
@@ -2437,6 +2447,14 @@ async fn postgres_replace_response_etag_is_reusable() -> Result<()> {
     let second_body = body::to_bytes(second_response.into_body(), usize::MAX).await?;
     let second_node: serde_json::Value = serde_json::from_slice(&second_body)?;
     assert_eq!(second_node["title"], "Second replace");
+    assert_eq!(second_node["search_visibility"], "private");
+
+    let persisted_visibility: String =
+        sqlx::query_scalar("SELECT search_visibility FROM domain_nodes WHERE id = $1")
+            .bind(NODE_A)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(persisted_visibility, "private");
 
     let persisted_updated_at: chrono::DateTime<chrono::Utc> =
         sqlx::query_scalar("SELECT updated_at FROM domain_nodes WHERE id = $1")
