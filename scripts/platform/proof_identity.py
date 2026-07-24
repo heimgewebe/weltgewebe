@@ -222,6 +222,14 @@ def validate(identity_path: Path, record_path: Path, proof_path: Path) -> dict[s
         raise IdentityError("reusable proof payload is not passing")
     if proof.get("tool_lock_sha256") != identity["tool_lock_sha256"]:
         raise IdentityError("reusable proof payload uses a different tool lock")
+    if proof.get("production_changed") is not False:
+        raise IdentityError("reusable proof payload must assert production_changed=false")
+    if reusable.get("production_changed") is not False:
+        raise IdentityError("reusable proof record must assert production_changed=false")
+    if reusable.get("proof_commit") != proof.get("commit"):
+        raise IdentityError("reusable proof record commit does not match the proof payload")
+    if reusable.get("proof_source_commit") != proof.get("source_commit"):
+        raise IdentityError("reusable proof record source commit does not match the proof payload")
     return reusable
 
 

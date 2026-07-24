@@ -334,6 +334,61 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                         identity_path, reuse / "record.json", reuse / "proof.json"
                     )
 
+    def test_proof_validate_rejects_crafted_policy_and_record_fields(self) -> None:
+        identity = {
+            "schema_version": 1,
+            "suite": "kind-gitops",
+            "source_commit": "1" * 40,
+            "input_manifest_sha256": "2" * 64,
+            "tool_lock_sha256": "3" * 64,
+            "invalidation_contract": [],
+            "identity_sha256": "4" * 64,
+        }
+        proof = {
+            "status": "pass",
+            "tool_lock_sha256": "3" * 64,
+            "commit": "5" * 40,
+            "source_commit": "1" * 40,
+            "production_changed": False,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            identity_path = root / "identity.json"
+            source_proof_path = root / "source-proof.json"
+            reuse = root / "reuse"
+            identity_path.write_text(json.dumps(identity))
+            source_proof_path.write_text(json.dumps(proof))
+            with mock.patch.object(
+                self.proof_identity, "compute_identity", return_value=identity
+            ), mock.patch.object(
+                self.proof_identity, "_checkout_commit", return_value="5" * 40
+            ):
+                self.proof_identity.record(identity_path, source_proof_path, reuse)
+
+                proof_path = reuse / "proof.json"
+                record_path = reuse / "record.json"
+                crafted_proof = json.loads(proof_path.read_text())
+                crafted_proof["production_changed"] = None
+                proof_bytes = self.proof_identity._canonical_json(crafted_proof)
+                proof_path.write_bytes(proof_bytes)
+                crafted_record = json.loads(record_path.read_text())
+                crafted_record["proof_receipt_sha256"] = hashlib.sha256(proof_bytes).hexdigest()
+                crafted_record["production_changed"] = None
+                record_path.write_bytes(self.proof_identity._canonical_json(crafted_record))
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "production_changed=false"
+                ):
+                    self.proof_identity.validate(identity_path, record_path, proof_path)
+
+                self.proof_identity.record(identity_path, source_proof_path, reuse)
+                drifted_record = json.loads(record_path.read_text())
+                drifted_record["proof_commit"] = "6" * 40
+                record_path.write_bytes(self.proof_identity._canonical_json(drifted_record))
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "record commit"
+                ):
+                    self.proof_identity.validate(identity_path, record_path, proof_path)
+
     def test_proof_record_rejects_receipt_from_different_checkout(self) -> None:
         identity = {
             "schema_version": 1,
