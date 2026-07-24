@@ -26,6 +26,7 @@
     selection,
     systemState,
     contextPanelOpen,
+    enterFokus,
     enterKomposition,
     leaveToNavigation,
     lastCreatedNodeId,
@@ -478,6 +479,7 @@
     event: CustomEvent<{
       type: "node" | "garnrolle";
       id: string;
+      title?: string;
       data?: MapEntityViewModel;
     }>,
   ) {
@@ -487,7 +489,18 @@
         (item) =>
           item.id === event.detail.id && item.type === event.detail.type,
       );
-    if (related) focusAndFlyToPoint(related);
+    if (related) {
+      focusAndFlyToPoint(related);
+      return;
+    }
+
+    // Public relations may point to Garnrollen that intentionally have no map
+    // position. Open their panel without inventing coordinates or a fly-to.
+    enterFokus({
+      type: event.detail.type,
+      id: event.detail.id,
+      data: event.detail.title ? { title: event.detail.title } : undefined,
+    });
   }
 
   async function handleDomainChanged(

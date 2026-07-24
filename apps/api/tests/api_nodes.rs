@@ -230,7 +230,7 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
-async fn node_details_include_only_active_creator_titles() -> anyhow::Result<()> {
+async fn node_details_include_only_current_public_creator_titles() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
     write_lines(
@@ -238,41 +238,63 @@ async fn node_details_include_only_active_creator_titles() -> anyhow::Result<()>
         &[
             r#"{"id":"active-node","location":{"lon":10.0,"lat":53.5},"title":"A","created_by_account_id":"active-account"}"#,
             r#"{"id":"disabled-node","location":{"lon":10.1,"lat":53.6},"title":"B","created_by_account_id":"disabled-account"}"#,
+            r#"{"id":"missing-node","location":{"lon":10.2,"lat":53.7},"title":"C","created_by_account_id":"missing-account"}"#,
+            r#"{"id":"blank-node","location":{"lon":10.3,"lat":53.8},"title":"D","created_by_account_id":"blank-account"}"#,
+            r#"{"id":"anonymous-node","location":{"lon":10.4,"lat":53.9},"title":"E"}"#,
         ],
     );
     let _env = set_gewebe_in_dir(&in_dir);
 
     let mut active = weber_account("active-account");
-    active.public.title = "Öffentliche Garnrolle".to_string();
+    active.public.title = "  Öffentliche Garnrolle  ".to_string();
     let mut disabled = weber_account("disabled-account");
     disabled.public.title = "Verborgene Garnrolle".to_string();
     disabled.public.disabled = true;
+    let mut blank = weber_account("blank-account");
+    blank.public.title = "   ".to_string();
     let mut accounts = AccountStore::new();
     accounts.insert(active);
     accounts.insert(disabled);
+    accounts.insert(blank);
 
     let mut state = test_state().await?;
     state.accounts = Arc::new(RwLock::new(accounts));
     let app = Router::new().merge(api_router()).with_state(state);
 
-    let response = app
-        .clone()
-        .oneshot(Request::get("/nodes/active-node").body(body::Body::empty())?)
-        .await?;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body::to_bytes(response.into_body(), usize::MAX).await?;
-    let node: serde_json::Value = serde_json::from_slice(&body)?;
-    assert_eq!(node["created_by_account_id"], "active-account");
-    assert_eq!(node["created_by_account_title"], "Öffentliche Garnrolle");
+    let cases = [
+        (
+            "active-node",
+            Some("active-account"),
+            Some("Öffentliche Garnrolle"),
+        ),
+        ("disabled-node", Some("disabled-account"), None),
+        ("missing-node", Some("missing-account"), None),
+        ("blank-node", Some("blank-account"), None),
+        ("anonymous-node", None, None),
+    ];
 
-    let response = app
-        .oneshot(Request::get("/nodes/disabled-node").body(body::Body::empty())?)
-        .await?;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body::to_bytes(response.into_body(), usize::MAX).await?;
-    let node: serde_json::Value = serde_json::from_slice(&body)?;
-    assert_eq!(node["created_by_account_id"], "disabled-account");
-    assert!(node.get("created_by_account_title").is_none());
+    for (node_id, expected_creator_id, expected_current_title) in cases {
+        let response = app
+            .clone()
+            .oneshot(Request::get(format!("/nodes/{node_id}")).body(body::Body::empty())?)
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body::to_bytes(response.into_body(), usize::MAX).await?;
+        let node: serde_json::Value = serde_json::from_slice(&body)?;
+
+        assert_eq!(node["id"], node_id, "flattened node id remains top-level");
+        assert!(node.get("node").is_none(), "response remains flat");
+        assert_eq!(
+            node.get("created_by_account_id")
+                .and_then(serde_json::Value::as_str),
+            expected_creator_id,
+        );
+        assert_eq!(
+            node.get("created_by_account_current_title")
+                .and_then(serde_json::Value::as_str),
+            expected_current_title,
+        );
+    }
 
     Ok(())
 }

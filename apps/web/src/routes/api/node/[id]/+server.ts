@@ -32,6 +32,7 @@ export function GET({ params }: RequestEvent) {
       {
         date: node.created_at,
         event: "Knoten wurde im Gewebe verankert.",
+        kind: "created" as const,
       },
       // If updated_at exists and is different, add it
       ...(node.updated_at && node.updated_at !== node.created_at
@@ -39,6 +40,7 @@ export function GET({ params }: RequestEvent) {
             {
               date: node.updated_at,
               event: "Knoten aktualisiert.",
+              kind: "updated" as const,
             },
           ]
         : []),

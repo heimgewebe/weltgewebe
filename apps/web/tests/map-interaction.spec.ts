@@ -356,6 +356,28 @@ test.describe("Map Interaction & Context Panel", () => {
       )
       .toBe(true);
 
+    // The same labels remain fully readable when the panel switches to a
+    // narrow mobile layout; they wrap instead of being silently ellipsized.
+    await page.setViewportSize({ width: 375, height: 667 });
+    await expect
+      .poll(() =>
+        tabList.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth + 1,
+        ),
+      )
+      .toBe(true);
+    await expect
+      .poll(() =>
+        tabList
+          .getByRole("tab")
+          .evaluateAll((elements) =>
+            elements.every(
+              (element) => element.scrollWidth <= element.clientWidth + 1,
+            ),
+          ),
+      )
+      .toBe(true);
+
     // ArrowRight from the last tab wraps to the first tab.
     await page.keyboard.press("ArrowRight");
     await expect(uebersichtTab).toBeFocused();
@@ -380,11 +402,11 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(bearbeitenTab).toHaveAttribute("aria-selected", "true");
   });
 
-  test("NodePanel shows the public creator in the creation history", async ({
+  test("NodePanel keeps the public creator on a typed creation event", async ({
     page,
   }) => {
     const nodeId = "b52be17c-4ab7-4434-98ce-520f86290cf0";
-    const creatorId = "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8";
+    const creatorId = "unlocated-public-account";
     await page.route(`**/api/nodes/${nodeId}`, async (route) => {
       await route.fulfill({
         status: 200,
@@ -396,9 +418,21 @@ test.describe("Map Interaction & Context Panel", () => {
           summary: "Öffentliche Fair-Schenk-Box",
           location: { lat: 53.558894813662505, lon: 10.060228407382967 },
           created_at: "2025-01-01T12:00:00Z",
-          updated_at: "2025-01-01T12:00:00Z",
+          updated_at: "2025-01-02T12:00:00Z",
           created_by_account_id: creatorId,
-          created_by_account_title: "weltgewebeknoten1",
+          created_by_account_current_title: "Unverortete Garnrolle",
+          history: [
+            {
+              date: "2025-01-02T12:00:00Z",
+              event: "Knoten aktualisiert.",
+              kind: "updated",
+            },
+            {
+              date: "2025-01-01T12:00:00Z",
+              event: "Knoten wurde im Gewebe verankert.",
+              kind: "created",
+            },
+          ],
         }),
       });
     });
@@ -417,8 +451,69 @@ test.describe("Map Interaction & Context Panel", () => {
     await panel.getByRole("tab", { name: "Verlauf" }).click();
 
     await expect(
-      panel.getByText("Urheber: weltgewebeknoten1", { exact: true }),
+      panel.getByText("Knoten aktualisiert.", { exact: true }),
     ).toBeVisible();
+    await expect(
+      panel.getByText("Knoten wurde im Gewebe verankert.", { exact: true }),
+    ).toHaveCount(1);
+    const creatorButton = panel.getByRole("button", {
+      name: "Garnrolle Unverortete Garnrolle öffnen",
+    });
+    await expect(creatorButton).toHaveText("Unverortete Garnrolle");
+
+    await creatorButton.click();
+    await expect(panel.getByRole("tab", { name: "Profil" })).toBeVisible();
+    await expect(
+      panel.getByRole("heading", { name: "Unverortete Garnrolle" }),
+    ).toBeVisible();
+  });
+
+  test("NodePanel never exposes a creator id when no public title exists", async ({
+    page,
+  }) => {
+    const nodeId = "b52be17c-4ab7-4434-98ce-520f86290cf0";
+    const creatorId = "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8";
+    await page.route(`**/api/nodes/${nodeId}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: nodeId,
+          kind: "Knoten",
+          title: "fairschenkbox",
+          location: { lat: 53.558894813662505, lon: 10.060228407382967 },
+          created_at: "2025-01-01T12:00:00Z",
+          updated_at: "2025-01-01T12:00:00Z",
+          created_by_account_id: creatorId,
+          history: [
+            {
+              date: "2025-01-01T12:00:00Z",
+              event: "Knoten wurde im Gewebe verankert.",
+              kind: "created",
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.waitForSelector(`.map-marker[data-id="${nodeId}"]`, {
+      timeout: 10000,
+    });
+    await page
+      .locator(`.map-marker[data-id="${nodeId}"]`)
+      .evaluate((marker) => {
+        marker.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+    const panel = page.locator(`[data-testid="context-panel"]`);
+    await expect(panel).toBeVisible();
+    await panel.getByRole("tab", { name: "Verlauf" }).click();
+
+    await expect(
+      panel.getByText("Knoten wurde im Gewebe verankert.", { exact: true }),
+    ).toBeVisible();
+    await expect(panel.getByText("Urheber:", { exact: true })).toHaveCount(0);
+    await expect(panel.getByText(creatorId, { exact: false })).toHaveCount(0);
   });
 
   test("AccountPanel keyboard navigation allows arrow keys, Home, and End", async ({

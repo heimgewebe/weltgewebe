@@ -119,9 +119,9 @@ pub struct Node {
 pub struct NodeDetails {
     #[serde(flatten)]
     pub node: Node,
-    /// Public Garnrollen title for the immutable creator binding.
+    /// Current public Garnrollen title for the immutable creator binding.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub created_by_account_title: Option<String>,
+    pub created_by_account_current_title: Option<String>,
 }
 
 fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
@@ -488,20 +488,19 @@ pub async fn get_node(
         .get(&id)
         .cloned()
         .ok_or(StatusCode::NOT_FOUND)?;
-    let created_by_account_title = match node.created_by_account_id.as_deref() {
+    let created_by_account_current_title = match node.created_by_account_id.as_deref() {
         Some(account_id) => state
             .accounts
             .read()
             .await
-            .get(account_id)
-            .filter(|account| !account.public.disabled)
-            .map(|account| account.public.title.clone()),
+            .public_display_title(account_id)
+            .map(str::to_owned),
         None => None,
     };
 
     Ok(Json(NodeDetails {
         node,
-        created_by_account_title,
+        created_by_account_current_title,
     }))
 }
 

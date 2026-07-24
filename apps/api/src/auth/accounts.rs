@@ -38,6 +38,15 @@ impl AccountStore {
         self.get(account_id).is_some_and(|acc| !acc.public.disabled)
     }
 
+    /// Returns the trimmed public display title for an active account.
+    /// Missing, disabled and blank-titled accounts remain non-public.
+    pub fn public_display_title(&self, account_id: &str) -> Option<&str> {
+        self.get(account_id)
+            .filter(|account| !account.public.disabled)
+            .map(|account| account.public.title.trim())
+            .filter(|title| !title.is_empty())
+    }
+
     fn recompute_email_index_for_key(&mut self, key: &str) {
         let mut candidates = Vec::new();
         for (id, acc) in self.map.iter() {
@@ -215,6 +224,32 @@ mod tests {
             !store.is_account_active("missing"),
             "missing account is not active"
         );
+    }
+
+    #[test]
+    fn public_display_title_hides_missing_disabled_and_blank_accounts() {
+        let mut store = AccountStore::new();
+
+        let mut active = dummy_account("active", None);
+        active.public.title = "  Öffentliche Garnrolle  ".to_string();
+        store.insert(active);
+
+        let mut disabled = dummy_account("disabled", None);
+        disabled.public.title = "Verborgene Garnrolle".to_string();
+        disabled.public.disabled = true;
+        store.insert(disabled);
+
+        let mut blank = dummy_account("blank", None);
+        blank.public.title = "   ".to_string();
+        store.insert(blank);
+
+        assert_eq!(
+            store.public_display_title("active"),
+            Some("Öffentliche Garnrolle")
+        );
+        assert_eq!(store.public_display_title("disabled"), None);
+        assert_eq!(store.public_display_title("blank"), None);
+        assert_eq!(store.public_display_title("missing"), None);
     }
 
     #[test]
