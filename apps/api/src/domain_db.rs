@@ -1461,9 +1461,11 @@ pub struct AccountProfileUpdate {
     pub summary: Option<String>,
     pub tags: Vec<String>,
     pub address: Option<String>,
+    pub clear_address: bool,
     pub map_state: String,
     pub radius_m: i64,
     pub location: Option<AccountLocation>,
+    pub clear_location: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1529,14 +1531,24 @@ pub async fn update_account_profile_in_postgres(
         return Err(AccountProfileUpdateError::NotFound);
     };
     let existing_private_payload = parse_payload(&existing_private_text);
-
-    let effective_location = update
-        .location
-        .clone()
-        .or(match (existing_lat, existing_lon) {
-            (Some(lat), Some(lon)) => Some(AccountLocation { lat, lon }),
-            _ => None,
-        });
+    let existing_address = existing_private_payload
+        .get("address")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let effective_address = if update.clear_address {
+        None
+    } else {
+        update.address.clone().or(existing_address)
+    };
+    let existing_location = match (existing_lat, existing_lon) {
+        (Some(lat), Some(lon)) => Some(AccountLocation { lat, lon }),
+        _ => None,
+    };
+    let effective_location = if update.clear_location {
+        None
+    } else {
+        update.location.clone().or(existing_location)
+    };
     if update.map_state != "not_on_map" && effective_location.is_none() {
         return Err(AccountProfileUpdateError::MissingLocation);
     }
@@ -1552,7 +1564,7 @@ pub async fn update_account_profile_in_postgres(
         .map_err(AccountProfileUpdateError::Serialization)?;
 
     let mut private_map = Map::new();
-    if let Some(address) = &update.address {
+    if let Some(address) = &effective_address {
         private_map.insert("address".to_string(), Value::String(address.clone()));
     }
     if let (Some(existing_projection), Some(location)) = (
@@ -1584,7 +1596,7 @@ pub async fn update_account_profile_in_postgres(
     let private_payload = serde_json::to_string(&Value::Object(private_map))
         .map_err(AccountProfileUpdateError::Serialization)?;
 
-    let (new_lat, new_lon) = match &update.location {
+    let (new_lat, new_lon) = match &effective_location {
         Some(location) => (Some(location.lat), Some(location.lon)),
         None => (None, None),
     };
@@ -1594,8 +1606,8 @@ pub async fn update_account_profile_in_postgres(
            title = $2, \
            map_state = $3, \
            radius_m = $4, \
-           location_lat = COALESCE($5, location_lat), \
-           location_lon = COALESCE($6, location_lon), \
+           location_lat = $5, \
+           location_lon = $6, \
            public_payload = (public_payload - 'summary' - 'tags') || $7::jsonb, \
            private_payload = (private_payload - 'address' - 'radius_projection') || $8::jsonb, \
            updated_at = now() \
@@ -1622,7 +1634,7 @@ pub async fn update_account_profile_in_postgres(
     let account = account_row_to_internal(row).ok_or(AccountProfileUpdateError::Mapping)?;
     Ok(StoredAccountProfile {
         account,
-        address: update.address.clone(),
+        address: effective_address,
         location: effective_location,
     })
 }

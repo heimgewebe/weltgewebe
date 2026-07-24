@@ -28,6 +28,7 @@
     visibilityChoice: GarnrolleMapState;
     radiusM: number;
     selectedLocation: Location | null;
+    clearLocation: boolean;
   };
 
   let profileKey = "";
@@ -40,6 +41,7 @@
   let visibilityChoice: GarnrolleMapState = "not_on_map";
   let radiusM = 250;
   let selectedLocation: Location | null = null;
+  let clearLocation = false;
   let isLoadingProfile = false;
   let isSaving = false;
   let profileError: string | null = null;
@@ -121,6 +123,7 @@
       visibilityChoice,
       radiusM,
       selectedLocation,
+      clearLocation,
     };
   }
 
@@ -148,6 +151,9 @@
     ) {
       selectedLocation = draft.selectedLocation ?? null;
     }
+    if (typeof draft.clearLocation === "boolean") {
+      clearLocation = draft.clearLocation;
+    }
   }
 
   function resetDraft() {
@@ -160,6 +166,7 @@
     visibilityChoice = "not_on_map";
     radiusM = 250;
     selectedLocation = null;
+    clearLocation = false;
     profileError = null;
     draftMessage = null;
     saveMessage = null;
@@ -175,6 +182,7 @@
     visibilityChoice = profile.map_state;
     radiusM = profile.radius_m > 0 ? profile.radius_m : 250;
     selectedLocation = profile.location ?? null;
+    clearLocation = false;
   }
 
   function returnedMapLocation(accountId: string): Location | null {
@@ -231,6 +239,7 @@
       const returned = returnedMapLocation(accountId);
       if (returned) {
         selectedLocation = returned;
+        clearLocation = false;
         draftMessage =
           "Privater Kartenanker übernommen, aber noch nicht gespeichert. Wähle nun die öffentliche Sichtbarkeit und speichere deine Garnrolle.";
         focusReturnedLocation = true;
@@ -261,11 +270,24 @@
   }
 
   async function chooseMapLocation() {
+    clearLocation = false;
     draftMessage = null;
     saveMessage = null;
     profileError = null;
     saveDraftForMap();
     await goto("/map?compose=garnrolle");
+  }
+
+  async function removeMapLocation() {
+    selectedLocation = null;
+    clearLocation = true;
+    visibilityChoice = "not_on_map";
+    profileError = null;
+    saveMessage = null;
+    draftMessage =
+      "Kartenanker zum Entfernen vorgemerkt, aber noch nicht gespeichert. Speichere deine Garnrolle, um die private Koordinate endgültig zu löschen.";
+    await tick();
+    locationButton?.focus();
   }
 
   function profileTags(): string[] {
@@ -305,10 +327,13 @@
         summary: summary.trim() || undefined,
         tags: profileTags(),
         address: address.trim() || undefined,
+        clear_address: !address.trim(),
         location: selectedLocation ?? undefined,
+        clear_location: clearLocation,
         map_state: visibilityChoice,
         radius_m: visibilityChoice === "radius" ? radiusM : undefined,
       });
+      clearLocation = false;
       if (browser) {
         sessionStorage.removeItem(draftStorageKey(activeAccountId));
       }
@@ -466,14 +491,19 @@
                   : "Dieser Punkt ist die Grundlage deiner gewählten öffentlichen Darstellung."}
               </small>
             </div>
-            <button
-              bind:this={locationButton}
-              type="button"
-              class="btn"
-              on:click={chooseMapLocation}
-            >
-              Punkt ändern
-            </button>
+            <div class="actions">
+              <button
+                bind:this={locationButton}
+                type="button"
+                class="btn"
+                on:click={chooseMapLocation}
+              >
+                Punkt ändern
+              </button>
+              <button type="button" class="btn" on:click={removeMapLocation}>
+                Kartenanker entfernen
+              </button>
+            </div>
           {:else}
             <div>
               <strong>Noch kein Kartenanker gewählt</strong>
@@ -555,7 +585,7 @@
               type="number"
               min="50"
               max="5000"
-              step="50"
+              step="1"
               bind:value={radiusM}
               aria-invalid={!radiusIsValid}
               aria-describedby="garnrolle-radius-help"

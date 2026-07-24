@@ -144,11 +144,15 @@ pub struct UpdateOwnGarnrolleRequest {
     pub tags: Vec<String>,
     #[serde(default)]
     pub address: Option<String>,
+    #[serde(default)]
+    pub clear_address: bool,
     pub map_state: GarnrolleMapState,
     #[serde(default)]
     pub radius_m: Option<u32>,
     #[serde(default)]
     pub location: Option<Location>,
+    #[serde(default)]
+    pub clear_location: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -785,6 +789,7 @@ fn validate_profile_update(
     {
         return Err(bad("summary is too long"));
     }
+    let address_was_provided = payload.address.is_some();
     let address = payload
         .address
         .map(|value| value.trim().to_string())
@@ -794,6 +799,15 @@ fn validate_profile_update(
         .is_some_and(|value| value.len() > MAX_PROFILE_ADDRESS_LEN)
     {
         return Err(bad("address is too long"));
+    }
+    if payload.clear_address && address_was_provided {
+        return Err(bad("address and clear_address cannot be combined"));
+    }
+    if payload.clear_location && payload.location.is_some() {
+        return Err(bad("location and clear_location cannot be combined"));
+    }
+    if payload.clear_location && payload.map_state != GarnrolleMapState::NotOnMap {
+        return Err(bad("clear_location requires map_state not_on_map"));
     }
 
     let mut tags = Vec::new();
@@ -847,9 +861,11 @@ fn validate_profile_update(
         summary,
         tags,
         address,
+        clear_address: payload.clear_address,
         map_state,
         radius_m,
         location: payload.location,
+        clear_location: payload.clear_location,
     })
 }
 
@@ -868,7 +884,11 @@ fn update_jsonl_profile_record(
         let lon = value.get("lon").and_then(json_f64)?;
         Some(Location { lat, lon })
     });
-    let effective_location = update.location.clone().or(existing_location);
+    let effective_location = if update.clear_location {
+        None
+    } else {
+        update.location.clone().or(existing_location)
+    };
     if update.map_state != "not_on_map" && effective_location.is_none() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -916,15 +936,14 @@ fn update_jsonl_profile_record(
     } else {
         object.insert("tags".to_string(), json!(update.tags));
     }
-    match &update.address {
-        Some(address) => {
-            object.insert("address".to_string(), json!(address));
-        }
-        None => {
-            object.remove("address");
-        }
+    if update.clear_address {
+        object.remove("address");
+    } else if let Some(address) = &update.address {
+        object.insert("address".to_string(), json!(address));
     }
-    if let Some(location) = &update.location {
+    if update.clear_location {
+        object.remove("location");
+    } else if let Some(location) = &update.location {
         object.insert(
             "location".to_string(),
             json!({ "lat": location.lat, "lon": location.lon }),
@@ -1033,7 +1052,8 @@ pub async fn update_own_garnrolle_profile(
                     StatusCode::NOT_FOUND,
                     "account profile not found".to_string(),
                 ))?;
-            let (record, location) = update_jsonl_profile_record(record, &update)?;
+            let (record, _) = update_jsonl_profile_record(record, &update)?;
+            let (address, location) = private_profile_from_record(&record);
             let public = map_json_to_public_account(&record).ok_or((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to project updated account".to_string(),
@@ -1049,7 +1069,7 @@ pub async fn update_own_garnrolle_profile(
             account.public = public;
             crate::domain_db::StoredAccountProfile {
                 account,
-                address: update.address.clone(),
+                address,
                 location,
             }
         }
@@ -1698,9 +1718,11 @@ mod profile_update_tests {
                 "interest:Commons".to_string(),
             ],
             address: address.map(str::to_string),
+            clear_address: false,
             map_state,
             radius_m: Some(250),
             location,
+            clear_location: false,
         }
     }
 
@@ -1817,9 +1839,11 @@ mod profile_update_tests {
             summary: None,
             tags: vec![],
             address: Some("Neue Adresse".to_string()),
+            clear_address: false,
             map_state: GarnrolleMapState::Exact,
             radius_m: None,
             location: None,
+            clear_location: false,
         })
         .expect("valid profile");
 
@@ -1836,6 +1860,91 @@ mod profile_update_tests {
         assert_eq!(updated["address"], "Neue Adresse");
         assert_eq!(effective_location.unwrap().lat, 53.5);
         assert_eq!(updated["location"]["lat"], 53.5);
+    }
+
+    #[test]
+    fn jsonl_update_preserves_omitted_private_fields() {
+        let record = json!({
+            "id": "own-account",
+            "type": "garnrolle",
+            "title": "Alt",
+            "role": "weber",
+            "map_state": "exact",
+            "radius_m": 0,
+            "address": "Private Adresse",
+            "location": {"lat": 53.5, "lon": 10.0}
+        });
+        let update = validate_profile_update(request(GarnrolleMapState::Exact, None, None))
+            .expect("omitted private fields");
+
+        let (updated, effective_location) =
+            update_jsonl_profile_record(record, &update).expect("preserved private fields");
+        assert_eq!(updated["address"], "Private Adresse");
+        assert_eq!(updated["location"]["lat"], 53.5);
+        assert_eq!(effective_location.expect("preserved location").lon, 10.0);
+    }
+
+    #[test]
+    fn jsonl_update_explicitly_clears_private_fields_and_binding() {
+        let location = Location {
+            lat: 53.5,
+            lon: 10.0,
+        };
+        let projection = ensure_radius_projection_value(None, &location, 250);
+        let mut record = json!({
+            "id": "own-account",
+            "type": "garnrolle",
+            "title": "Alt",
+            "role": "weber",
+            "map_state": "not_on_map",
+            "radius_m": 0,
+            "address": "Private Adresse",
+            "location": location
+        });
+        record[RADIUS_PROJECTION_KEY] = projection;
+        let mut clear_request = request(GarnrolleMapState::NotOnMap, None, None);
+        clear_request.clear_address = true;
+        clear_request.clear_location = true;
+        let update = validate_profile_update(clear_request).expect("valid explicit clear");
+
+        let (updated, effective_location) =
+            update_jsonl_profile_record(record, &update).expect("cleared private fields");
+        assert!(updated.get("address").is_none());
+        assert!(updated.get("location").is_none());
+        assert!(updated.get(RADIUS_PROJECTION_KEY).is_none());
+        assert!(effective_location.is_none());
+    }
+
+    #[test]
+    fn profile_validation_rejects_conflicting_clear_signals() {
+        let mut address_conflict =
+            request(GarnrolleMapState::NotOnMap, Some("Private Adresse"), None);
+        address_conflict.clear_address = true;
+        assert_eq!(
+            validate_profile_update(address_conflict).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
+
+        let mut location_conflict = request(
+            GarnrolleMapState::NotOnMap,
+            None,
+            Some(Location {
+                lat: 53.5,
+                lon: 10.0,
+            }),
+        );
+        location_conflict.clear_location = true;
+        assert_eq!(
+            validate_profile_update(location_conflict).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
+
+        let mut mapped_clear = request(GarnrolleMapState::Exact, None, None);
+        mapped_clear.clear_location = true;
+        assert_eq!(
+            validate_profile_update(mapped_clear).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]

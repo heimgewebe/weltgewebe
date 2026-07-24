@@ -320,9 +320,56 @@ test.describe("Eigene Garnrolle speichern", () => {
     ).toBeVisible();
     await expect(save).toBeDisabled();
 
+    await radius.fill("51");
+    await expect(radius).toHaveAttribute("aria-invalid", "false");
+    await expect(save).toBeEnabled();
+
     await radius.fill("250");
     await expect(radius).toHaveAttribute("aria-invalid", "false");
     await expect(save).toBeEnabled();
+  });
+
+  test("allows the private Kartenanker to be removed explicitly", async ({
+    page,
+  }) => {
+    const section = await openSettingsAsWeber(page);
+    await page.evaluate((accountId) => {
+      sessionStorage.setItem(
+        `weltgewebe:garnrolle-return-location:${accountId}`,
+        JSON.stringify({ lat: 53.5, lon: 10.0 }),
+      );
+    }, ACCOUNT_ID);
+    await page.reload();
+
+    await expect(
+      section.getByRole("button", { name: "Kartenanker entfernen" }),
+    ).toBeVisible();
+    await section
+      .getByRole("button", { name: "Kartenanker entfernen" })
+      .click();
+    await expect(
+      section.getByLabel("Privat – nicht öffentlich auf der Karte"),
+    ).toBeChecked();
+    await expect(
+      section.locator('[data-testid="garnrolle-location-state"]'),
+    ).toContainText("Noch kein Kartenanker gewählt");
+    await expect(
+      section.getByRole("button", { name: "Punkt auf Karte wählen" }),
+    ).toBeFocused();
+    await expect(
+      section.locator('[data-testid="garnrolle-draft-status"]'),
+    ).toContainText("endgültig zu löschen");
+
+    const requestPromise = page.waitForRequest(
+      (request) =>
+        request.url().endsWith("/api/accounts/me/profile") &&
+        request.method() === "PATCH",
+    );
+    await section.locator('[data-testid="save-garnrolle"]').click();
+    expect((await requestPromise).postDataJSON()).toMatchObject({
+      map_state: "not_on_map",
+      clear_location: true,
+    });
   });
 
   test("requires a self-selected map point and preserves the draft across map navigation", async ({

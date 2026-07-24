@@ -26,7 +26,9 @@ durch drei getrennte Entscheidungen: Garnrolle beschreiben, freiwillig einen
 privaten Kartenanker wählen und anschließend bestimmen, ob keine, eine
 ungefähre oder die exakte Position öffentlich wird. Adresse oder Ortsnotiz
 bleiben optional und privat; Weboberfläche und API behandeln sie nicht mehr als
-Voraussetzung für eine öffentliche Kartenposition.
+Voraussetzung für eine öffentliche Kartenposition. Nicht übermittelte private
+Felder bleiben unverändert; ein gespeicherter Kartenanker kann ausdrücklich und
+dauerhaft entfernt werden.
 
 Der vorhandene Garnrollenknopf auf der Karte führt direkt in diese Einrichtung.
 Die abschließende Aktion heißt eindeutig „Garnrolle speichern“. Der Weberantrag

@@ -100,7 +100,9 @@ export interface UpdateOwnGarnrollePayload {
   summary?: string;
   tags: string[];
   address?: string;
+  clear_address?: boolean;
   location?: Location;
+  clear_location?: boolean;
   map_state: GarnrolleMapState;
   radius_m?: number;
 }

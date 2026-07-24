@@ -119,10 +119,17 @@ Geltende Grenzen:
 - `PATCH` akzeptiert keine Account-ID und verwendet ausschließlich die
   `account_id` der Sitzung. Unbekannte Felder wie `id` oder `role` werden
   abgewiesen.
-- `PATCH` ist für Weber und Admin erlaubt, für Gäste verboten.
-- `exact` und `radius` verlangen eine Adresse und eine gültige vorhandene oder
-  neu übermittelte Koordinate. `not_on_map` setzt Radius 0 und entfernt jede
-  öffentliche Position, ohne die private Koordinate zu löschen.
+- `PATCH` ist für authentifizierte Gäste, Weber und Admin erlaubt und bleibt
+  strikt auf die eigene Garnrolle begrenzt.
+- Die private Adresse oder Ortsnotiz ist optional. `exact` und `radius`
+  verlangen ausschließlich eine gültige vorhandene oder neu übermittelte
+  Koordinate. `not_on_map` setzt Radius 0 und entfernt jede öffentliche
+  Position, bewahrt die private Koordinate aber standardmäßig.
+- Nicht übermittelte `address`- und `location`-Felder bleiben unverändert.
+  `clear_address=true` löscht die private Adressnotiz; `clear_location=true`
+  löscht die private Koordinate und ist nur zusammen mit `map_state=not_on_map`
+  zulässig. Ein Löschsignal darf nicht mit einem neuen Wert desselben Feldes
+  kombiniert werden.
 - PostgreSQL-Modus: Transaktion und Zeilensperre, DB-Update vor Cache-Update,
   kein JSONL-Write. JSONL-Modus: Append eines vollständigen neuen Snapshots,
   danach Cache-Update. Kein Dual-Write.
