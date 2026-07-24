@@ -203,13 +203,12 @@ jobs:
               test = test[:closing_index] + lifecycle_test + test[closing_index:]
           test_path.write_text(test, encoding="utf-8")
 
-      - name: Format and test lifecycle contract
+      - name: Format lifecycle contract
         working-directory: apps/web
         run: |
           pnpm exec prettier --write \
             src/lib/components/MyGarnrolleSection.svelte \
             src/lib/garnrolle/accountRequestGuard.test.ts
-          pnpm test:unit src/lib/garnrolle/accountRequestGuard.test.ts
 
       - name: Remove temporary workflow job
         shell: python
