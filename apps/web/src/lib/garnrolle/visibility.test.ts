@@ -15,6 +15,13 @@ const baseAccount: Account = {
 };
 
 describe("garnrolle visibility helpers", () => {
+  it("keeps missing account data separate from a confirmed private choice", () => {
+    const visibility = describeGarnrolleVisibility(null);
+    expect(visibility.state).toBe("unknown");
+    expect(visibility.label).toBe("Nicht verfügbar");
+    expect(visibility.canZoomToMap).toBe(false);
+  });
+
   it("keeps the storage state separate from the private UI meaning", () => {
     expect(deriveGarnrolleMapState(baseAccount)).toBe("not_on_map");
 
