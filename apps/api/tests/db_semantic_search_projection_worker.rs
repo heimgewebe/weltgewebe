@@ -80,10 +80,10 @@ async fn reset_search_state(pool: &PgPool) {
         .execute(pool)
         .await
         .expect("remove prior T005 test nodes");
-    sqlx::query("DELETE FROM domain_accounts WHERE id='owner-private'")
+    sqlx::query("DELETE FROM domain_accounts WHERE id IN ('owner-private','owner-a','owner-b')")
         .execute(pool)
         .await
-        .expect("remove prior private-owner account");
+        .expect("remove prior private-owner accounts");
     sqlx::query("TRUNCATE search_projection_jobs, search_node_projections, search_node_versions, search_index_generations RESTART IDENTITY CASCADE")
         .execute(pool)
         .await
@@ -1770,6 +1770,14 @@ async fn t006_search_api_against_postgres_projections() {
             vec![1.0],
         ),
     ];
+
+    sqlx::query(
+        "INSERT INTO domain_accounts (id,title,disabled) VALUES \
+         ('owner-a','Owner A',FALSE),('owner-b','Owner B',FALSE)",
+    )
+    .execute(&pool)
+    .await
+    .expect("insert active T006 owner accounts");
 
     for (index, (id, kind, title, payload, visibility, embedding)) in nodes.iter().enumerate() {
         sqlx::query(
