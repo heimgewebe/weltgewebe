@@ -36,6 +36,11 @@ def test_scoped_deploy_treats_api_and_ollama_as_one_unit() -> None:
     assert 'SCOPED_INITIAL_CMD+=("${SCOPED_TARGET_SERVICES[@]}")' in deploy
     assert '"allowed_recreated_services": targets' in deploy
     assert "PROTECTED_SERVICES=(db nats caddy)" in deploy
+    assert "configured_preflight_services" in deploy
+    assert "WELTGEWEBE_SEARCH_MIN_DISK_BYTES" in deploy
+    assert "WELTGEWEBE_SEARCH_MIN_MEMORY_BYTES" in deploy
+    assert "WELTGEWEBE_SEARCH_MIN_CPU_COUNT" in deploy
+    assert deploy.index("configured_preflight_services") < deploy.index("# 4. Build Decision")
 
 
 def test_activation_is_commit_locked_identity_bound_and_gate_first() -> None:
@@ -43,13 +48,18 @@ def test_activation_is_commit_locked_identity_bound_and_gate_first() -> None:
     assert "flock -n 9" in script
     assert "requested commit is no longer current origin/main" in script
     assert "sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907" in script
-    assert "search-gen-7881b3d26c915cf24edeaaf42b1bbc8308d9510ceddcdacd05af6134b4e034d5" in script
+    assert "search-gen-2e8358273aa6d41e6a59025985a99738614aba725b8f369b3a54f390f8752e5c" in script
     assert "weltgewebe_search_generation_activation_ready" in script
     gate = script.index("weltgewebe_search_generation_activation_ready")
     activate = script.index("weltgewebe_activate_search_generation")
     assert gate < activate
     assert "search_activation=verified" in script
-    assert "search worker stopped after activation" in script
+    assert "search worker stopped or was replaced after activation" in script
+    assert "active generation has no public semantic probe candidate" in script
+    assert "(.items | length > 0)" in script
+    assert 'worker_cid="$("${compose[@]}" ps -q search-worker)"' in script
+    assert "WELTGEWEBE_SEARCH_MIN_CPU_COUNT" in script
+    assert "getconf _NPROCESSORS_ONLN" in script
     assert "SemantAH" in script
 
 
@@ -58,7 +68,7 @@ def test_persistent_worker_waits_for_exact_model_and_runs_bounded_batches() -> N
     worker = WORKER.read_text(encoding="utf-8")
     assert "  search-worker:" in compose
     assert "network_mode: service:api" in compose.split("  search-worker:", 1)[1].split("\n  db:", 1)[0]
-    assert "search-gen-7881b3d26c915cf24edeaaf42b1bbc8308d9510ceddcdacd05af6134b4e034d5" in compose
+    assert "search-gen-2e8358273aa6d41e6a59025985a99738614aba725b8f369b3a54f390f8752e5c" in compose
     assert "sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907" in compose
     assert "provider_ready" in worker
     assert "waiting_for_pinned_model" in worker
@@ -66,6 +76,7 @@ def test_persistent_worker_waits_for_exact_model_and_runs_bounded_batches() -> N
     assert 'GEWEBE_SEED_DEMO: "false"' in compose
     assert "/app/search-backfill" in worker
     assert 'sleep "$INTERVAL_SECONDS"' in worker
+
 
 def test_projection_privacy_contract_is_generation_bound() -> None:
     worker = (REPO / "apps" / "api" / "src" / "search" / "worker.rs").read_text(encoding="utf-8")
@@ -77,11 +88,26 @@ def test_projection_privacy_contract_is_generation_bound() -> None:
         / "migrations"
         / "20260724000002_semantic_search_projection_privacy_boundary.up.sql"
     ).read_text(encoding="utf-8")
-    revision = "node-document-v3-public-semantic-private-lexical"
+    revision = "node-document-v4-canonical-visibility"
     assert revision in worker
     assert revision in migration
+    assert "ADD COLUMN search_visibility TEXT NOT NULL DEFAULT 'public'" in migration
+    assert "OLD.search_visibility IS NOT DISTINCT FROM NEW.search_visibility" in migration
+    assert "OLD.payload -> 'created_by_account_id'" in migration
+    assert "LEFT JOIN domain_nodes" in migration
+    assert "spec.validate()?" in worker
+    assert "search generation id does not match its derived identity" in worker
+    assert "n.search_visibility" in worker
     assert "ARRAY['owner']::TEXT[],'unavailable',NULL" in worker
     assert "p.visibility_scopes = ARRAY['owner']::TEXT[]" in repository
     assert "p.embedding IS NULL" in repository
     assert "p.visibility_scopes = ARRAY['owner']::TEXT[]" in migration
     assert "p.embedding IS NULL" in migration
+    assert "n.search_visibility = 'public'" in repository
+    assert "n.search_visibility = 'private'" in repository
+    assert "n.payload ->> 'search_visibility'" not in repository
+
+
+def test_privacy_contract_is_wired_into_make_ci_validate() -> None:
+    makefile = (REPO / "Makefile").read_text(encoding="utf-8")
+    assert "python3 -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py" in makefile

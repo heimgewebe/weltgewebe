@@ -19,7 +19,7 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::telemetry::Metrics;
 
-pub const DOCUMENT_REVISION: &str = "node-document-v3-public-semantic-private-lexical";
+pub const DOCUMENT_REVISION: &str = "node-document-v4-canonical-visibility";
 pub const NORMALIZATION_REVISION: &str = "weltgewebe-search-normalization-v1";
 pub const RANKING_REVISION: &str = "weltgewebe-hybrid-ranking-v2";
 // Five minutes exceeds the provider boundary's bounded worst-case request budget
@@ -58,6 +58,19 @@ impl GenerationSpec<'_> {
         let canonical = serde_jcs::to_vec(&payload)
             .expect("static search generation identity payload must serialize");
         format!("search-gen-{}", hex::encode(Sha256::digest(canonical)))
+    }
+
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if self.provider != "local:ollama" {
+            anyhow::bail!("unsupported search embedding provider");
+        }
+        if self.dimension <= 0 || self.dimension > 8192 {
+            anyhow::bail!("search generation identity is invalid");
+        }
+        if self.generation_id != self.derived_id() {
+            anyhow::bail!("search generation id does not match its derived identity");
+        }
+        Ok(())
     }
 }
 
@@ -520,12 +533,7 @@ impl ProjectionWorker {
 
     /// Starts a bounded rebuild generation.  No activation occurs here.
     pub async fn start_generation(&self, spec: GenerationSpec<'_>) -> anyhow::Result<i64> {
-        if spec.provider != "local:ollama" {
-            anyhow::bail!("unsupported search embedding provider");
-        }
-        if spec.dimension <= 0 || spec.dimension > 8192 {
-            anyhow::bail!("search generation identity is invalid");
-        }
+        spec.validate()?;
         let mut tx = self.pool.begin().await?;
         // Match the trigger's shared transaction lock. This makes the initial
         // generation snapshot linearizable with relevant domain mutations: a
@@ -742,8 +750,6 @@ impl ProjectionWorker {
     }
 
     /// Deterministic digest over projection identity and metadata, deliberately
-    /// excluding `searchable_text`, tags, and raw embeddings.
-    /// Deterministic digest over projection identity and metadata, deliberately
     /// excluding `searchable_text`, tags, raw embeddings, timestamps, and the
     /// generation id itself. Empty rebuilds still bind the full identity.
     pub async fn integrity_digest(&self, generation_id: &str) -> anyhow::Result<String> {
@@ -843,7 +849,7 @@ impl ProjectionWorker {
         version: i64,
         revision: &str,
     ) -> anyhow::Result<Result<ProcessOutcome, &'static str>> {
-        let row = sqlx::query("SELECT n.kind,n.title,n.payload::text,g.dimension FROM domain_nodes n JOIN search_node_versions v ON v.node_id=n.id JOIN search_index_generations g ON g.generation_id=$2 JOIN search_projection_jobs j ON j.id=$5 WHERE n.id=$1 AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND j.generation_id=$2 AND j.node_id=$1 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$6 AND j.attempt_count=$7 AND j.claim_until > NOW()")
+        let row = sqlx::query("SELECT n.kind,n.title,n.payload::text,n.search_visibility,g.dimension FROM domain_nodes n JOIN search_node_versions v ON v.node_id=n.id JOIN search_index_generations g ON g.generation_id=$2 JOIN search_projection_jobs j ON j.id=$5 WHERE n.id=$1 AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND j.generation_id=$2 AND j.node_id=$1 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$6 AND j.attempt_count=$7 AND j.claim_until > NOW()")
             .bind(node).bind(generation).bind(version).bind(revision).bind(job_id).bind(&self.worker_id).bind(attempts).fetch_optional(&self.pool).await?;
         let Some(row) = row else {
             return Ok(Ok(if self.claim_is_current(job_id, attempts).await? {
@@ -857,6 +863,7 @@ impl ProjectionWorker {
             &row.get::<String, _>("kind"),
             &row.get::<String, _>("title"),
             &row.get::<String, _>("payload"),
+            &row.get::<String, _>("search_visibility"),
         ) {
             Ok(document) => document,
             Err(_) => return Ok(Err("document_invalid")),
@@ -873,7 +880,7 @@ impl ProjectionWorker {
             ));
             let written = sqlx::query("INSERT INTO search_node_projections (generation_id,node_id,source_version,source_revision,content_sha256,title,tags,searchable_text,language,kind,status,visibility_scopes,semantic_state,embedding) \
                 SELECT $1,$2,$3,$4,$5,$6,'{}'::TEXT[],$6,'und',$6,'hidden','{}'::TEXT[],'unavailable',NULL \
-                FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$7 WHERE n.id=$2 AND NOT (coalesce(n.payload ->> 'search_visibility', '') = 'public' OR (n.payload ->> 'search_visibility' = 'private' AND nullif(btrim(n.payload ->> 'created_by_account_id'), '') IS NOT NULL)) AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$8 AND j.attempt_count=$9 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
+                FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$7 WHERE n.id=$2 AND (n.search_visibility IN ('hidden','revoked') OR (n.search_visibility='private' AND NOT (jsonb_typeof(n.payload -> 'created_by_account_id') = 'string' AND regexp_replace(n.payload ->> 'created_by_account_id', '[[:space:]]', '', 'g') <> ''))) AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$8 AND j.attempt_count=$9 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
                 ON CONFLICT (generation_id,node_id) DO UPDATE SET source_version=EXCLUDED.source_version,source_revision=EXCLUDED.source_revision,content_sha256=EXCLUDED.content_sha256,title=EXCLUDED.title,tags=EXCLUDED.tags,searchable_text=EXCLUDED.searchable_text,language=EXCLUDED.language,kind=EXCLUDED.kind,status=EXCLUDED.status,visibility_scopes=EXCLUDED.visibility_scopes,semantic_state=EXCLUDED.semantic_state,embedding=NULL,indexed_at=clock_timestamp() \
                 WHERE search_node_projections.source_version <= EXCLUDED.source_version")
                 .bind(generation)
@@ -902,7 +909,7 @@ impl ProjectionWorker {
             // provider and never receives a vector.
             let written = sqlx::query("INSERT INTO search_node_projections (generation_id,node_id,source_version,source_revision,content_sha256,title,tags,searchable_text,language,kind,status,visibility_scopes,semantic_state,embedding) \
                 SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'active',ARRAY['owner']::TEXT[],'unavailable',NULL \
-                FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$11 WHERE n.id=$2 AND n.payload ->> 'search_visibility' = 'private' AND nullif(btrim(n.payload ->> 'created_by_account_id'), '') IS NOT NULL AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$12 AND j.attempt_count=$13 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
+                FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$11 WHERE n.id=$2 AND n.search_visibility = 'private' AND jsonb_typeof(n.payload -> 'created_by_account_id') = 'string' AND regexp_replace(n.payload ->> 'created_by_account_id', '[[:space:]]', '', 'g') <> '' AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$12 AND j.attempt_count=$13 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
                 ON CONFLICT (generation_id,node_id) DO UPDATE SET source_version=EXCLUDED.source_version,source_revision=EXCLUDED.source_revision,content_sha256=EXCLUDED.content_sha256,title=EXCLUDED.title,tags=EXCLUDED.tags,searchable_text=EXCLUDED.searchable_text,language=EXCLUDED.language,kind=EXCLUDED.kind,status=EXCLUDED.status,visibility_scopes=EXCLUDED.visibility_scopes,semantic_state=EXCLUDED.semantic_state,embedding=NULL,indexed_at=clock_timestamp() \
                 WHERE search_node_projections.source_version <= EXCLUDED.source_version")
                 .bind(generation)
@@ -954,7 +961,7 @@ impl ProjectionWorker {
         // classify a concurrent canonical mutation as Stale, closing TOCTOU.
         let written = sqlx::query("INSERT INTO search_node_projections (generation_id,node_id,source_version,source_revision,content_sha256,title,tags,searchable_text,language,kind,status,visibility_scopes,semantic_state,embedding) \
             SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'ready',$13 \
-            FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$14 WHERE n.id=$2 AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$15 AND j.attempt_count=$16 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
+            FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$14 WHERE n.id=$2 AND n.search_visibility='public' AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$15 AND j.attempt_count=$16 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
             ON CONFLICT (generation_id,node_id) DO UPDATE SET source_version=EXCLUDED.source_version,source_revision=EXCLUDED.source_revision,content_sha256=EXCLUDED.content_sha256,title=EXCLUDED.title,tags=EXCLUDED.tags,searchable_text=EXCLUDED.searchable_text,language=EXCLUDED.language,kind=EXCLUDED.kind,status=EXCLUDED.status,visibility_scopes=EXCLUDED.visibility_scopes,semantic_state='ready',embedding=EXCLUDED.embedding,indexed_at=clock_timestamp() \
             WHERE search_node_projections.source_version <= EXCLUDED.source_version")
             .bind(generation).bind(node).bind(version).bind(revision).bind(document.hash()).bind(&document.title).bind(&document.tags).bind(&document.text).bind(&document.language).bind(&document.kind).bind(&document.status).bind(&document.scopes).bind(embedding).bind(job_id).bind(&self.worker_id).bind(attempts).execute(&self.pool).await?.rows_affected();
@@ -1028,8 +1035,22 @@ mod tests {
         };
         assert_eq!(
             generation.derived_id(),
-            "search-gen-7881b3d26c915cf24edeaaf42b1bbc8308d9510ceddcdacd05af6134b4e034d5"
+            "search-gen-2e8358273aa6d41e6a59025985a99738614aba725b8f369b3a54f390f8752e5c"
         );
+    }
+
+    #[test]
+    fn generation_identity_rejects_mismatched_configured_id() {
+        let generation = GenerationSpec {
+            generation_id: "search-gen-wrong",
+            provider: "local:ollama",
+            model_id: "qwen3-embedding:4b",
+            model_revision:
+                "sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907",
+            runtime_identity: "ollama:0.12.6@http://127.0.0.1:11434",
+            dimension: 2560,
+        };
+        assert!(generation.validate().is_err());
     }
 
     #[test]
@@ -1039,6 +1060,7 @@ mod tests {
             "Werkstatt",
             "Fahrradhilfe",
             r#"{"summary":"Reparatur","address":"secret lane 9","tags":["Rad"]}"#,
+            "hidden",
         )
         .expect("document");
         assert_eq!(unknown.status, "hidden");
@@ -1049,7 +1071,8 @@ mod tests {
             "node-1",
             "Werkstatt",
             "Fahrradhilfe",
-            r#"{"search_visibility":"private","created_by_account_id":"owner-a","summary":"Reparatur","address":"secret lane 9","tags":["Rad"]}"#,
+            r#"{"created_by_account_id":"owner-a","summary":"Reparatur","address":"secret lane 9","tags":["Rad"]}"#,
+            "private",
         )
         .expect("private document");
         assert_eq!(private.status, "active");
@@ -1060,7 +1083,8 @@ mod tests {
             "node-1",
             "Werkstatt",
             "Fahrradhilfe",
-            r#"{"search_visibility":"public","summary":"Reparatur","tags":["Rad"]}"#,
+            r#"{"summary":"Reparatur","tags":["Rad"]}"#,
+            "public",
         )
         .expect("document");
         assert_eq!(public.status, "active");
@@ -1073,18 +1097,21 @@ mod tests {
 
     #[test]
     fn document_rejects_blank_projection_required_fields() {
-        assert!(SearchDocument::from_row("node", "Kind", "   ", "{}").is_err());
-        assert!(SearchDocument::from_row("node", "   ", "Titel", "{}").is_err());
+        assert!(SearchDocument::from_row("node", "Kind", "   ", "{}", "public").is_err());
+        assert!(SearchDocument::from_row("node", "   ", "Titel", "{}", "public").is_err());
     }
 
     #[test]
     fn document_hash_changes_for_indexed_content_not_unindexed_payload() {
-        let first = SearchDocument::from_row("node", "Kind", "Titel", r#"{"address":"a"}"#)
-            .expect("document");
-        let same = SearchDocument::from_row("node", "Kind", "Titel", r#"{"address":"b"}"#)
-            .expect("document");
-        let changed = SearchDocument::from_row("node", "Kind", "Titel", r#"{"summary":"neu"}"#)
-            .expect("document");
+        let first =
+            SearchDocument::from_row("node", "Kind", "Titel", r#"{"address":"a"}"#, "public")
+                .expect("document");
+        let same =
+            SearchDocument::from_row("node", "Kind", "Titel", r#"{"address":"b"}"#, "public")
+                .expect("document");
+        let changed =
+            SearchDocument::from_row("node", "Kind", "Titel", r#"{"summary":"neu"}"#, "public")
+                .expect("document");
         assert_eq!(first.hash(), same.hash());
         assert_ne!(first.hash(), changed.hash());
     }
@@ -1302,7 +1329,13 @@ pub struct SearchDocument {
     pub scopes: Vec<String>,
 }
 impl SearchDocument {
-    pub fn from_row(node_id: &str, kind: &str, title: &str, payload: &str) -> anyhow::Result<Self> {
+    pub fn from_row(
+        node_id: &str,
+        kind: &str,
+        title: &str,
+        payload: &str,
+        search_visibility: &str,
+    ) -> anyhow::Result<Self> {
         let payload: Value =
             serde_json::from_str(payload).context("domain node payload is not JSON")?;
         let tags = payload
@@ -1326,16 +1359,15 @@ impl SearchDocument {
                 .filter(|v| !v.trim().is_empty())
                 .unwrap_or("und"),
         );
-        // Visibility is fail-closed: legacy/missing values are hidden. A private
-        // row is eligible only with a non-blank canonical owner. No address or
-        // arbitrary payload key is ever incorporated into the document.
-        let visibility = payload.get("search_visibility").and_then(Value::as_str);
-        let public = visibility == Some("public");
-        let private = visibility == Some("private")
+        // Visibility is server-owned canonical domain state. A private row is
+        // eligible only with a non-blank string owner. This predicate mirrors
+        // the SQL guards; arbitrary payload values never grant visibility.
+        let public = search_visibility == "public";
+        let private = search_visibility == "private"
             && payload
                 .get("created_by_account_id")
                 .and_then(Value::as_str)
-                .is_some_and(|owner| !owner.trim().is_empty());
+                .is_some_and(|owner| owner.chars().any(|c| !c.is_whitespace()));
         let title = normalize(title);
         let kind = normalize(kind);
         // Projection columns enforce non-blank title/kind individually. Reject

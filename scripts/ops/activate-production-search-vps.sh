@@ -18,10 +18,11 @@ readonly MODEL_REVISION="sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99b
 readonly RUNTIME_IDENTITY="ollama:0.12.6@http://127.0.0.1:11434"
 readonly OLLAMA_URL="http://127.0.0.1:11434"
 readonly DIMENSION="2560"
-readonly GENERATION_ID="search-gen-7881b3d26c915cf24edeaaf42b1bbc8308d9510ceddcdacd05af6134b4e034d5"
+readonly GENERATION_ID="search-gen-2e8358273aa6d41e6a59025985a99738614aba725b8f369b3a54f390f8752e5c"
 readonly OLLAMA_IMAGE="ollama/ollama:0.12.6@sha256:352e045b937ac29d3d9550c22fb85525f60a89e064df34c26579bee5a93b3a16"
 readonly MIN_DISK_BYTES="${WELTGEWEBE_SEARCH_MIN_DISK_BYTES:-8589934592}"
 readonly MIN_MEMORY_BYTES="${WELTGEWEBE_SEARCH_MIN_MEMORY_BYTES:-5368709120}"
+readonly MIN_CPU_COUNT="${WELTGEWEBE_SEARCH_MIN_CPU_COUNT:-3}"
 readonly MAX_BATCHES="${WELTGEWEBE_SEARCH_MAX_BATCHES:-100}"
 readonly BATCH_SIZE="${WELTGEWEBE_SEARCH_BACKFILL_MAX_JOBS:-200}"
 
@@ -100,13 +101,13 @@ done
 
 [[ "$EUID" -eq 0 ]] || fail "this helper must run as root"
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail "commit must be a full lowercase Git SHA"
-for bounded_value in "$MIN_DISK_BYTES" "$MIN_MEMORY_BYTES" "$MAX_BATCHES" "$BATCH_SIZE"; do
+for bounded_value in "$MIN_DISK_BYTES" "$MIN_MEMORY_BYTES" "$MIN_CPU_COUNT" "$MAX_BATCHES" "$BATCH_SIZE"; do
   [[ "$bounded_value" =~ ^[0-9]+$ ]] || fail "numeric activation limits are invalid"
 done
-((MIN_DISK_BYTES > 0 && MIN_MEMORY_BYTES > 0)) || fail "resource limits must be positive"
+((MIN_DISK_BYTES > 0 && MIN_MEMORY_BYTES > 0 && MIN_CPU_COUNT > 0)) || fail "resource limits must be positive"
 ((MAX_BATCHES >= 1 && MAX_BATCHES <= 1000)) || fail "WELTGEWEBE_SEARCH_MAX_BATCHES must be 1..=1000"
 ((BATCH_SIZE >= 1 && BATCH_SIZE <= 10000)) || fail "WELTGEWEBE_SEARCH_BACKFILL_MAX_JOBS must be 1..=10000"
-for command_name in git docker curl jq flock install realpath readlink stat find awk grep date mktemp mv ln df rm chmod chown sleep; do
+for command_name in git docker curl jq flock install realpath readlink stat find awk grep date mktemp mv ln df rm chmod chown sleep getconf; do
   require_command "$command_name"
 done
 [[ -d "$SOURCE_CHECKOUT" && ! -L "$SOURCE_CHECKOUT" ]] || fail "source checkout is missing or unsafe"
@@ -129,9 +130,11 @@ remote_main="$(git -C "$SOURCE_CHECKOUT" ls-remote origin refs/heads/main | awk 
 
 available_disk="$(df -B1 --output=avail / | awk 'NR==2 {print $1}')"
 available_memory="$(awk '/^MemAvailable:/ {print $2 * 1024}' /proc/meminfo)"
-[[ "$available_disk" =~ ^[0-9]+$ && "$available_memory" =~ ^[0-9]+$ ]] || fail "resource preflight could not be measured"
+available_cpus="$(getconf _NPROCESSORS_ONLN)"
+[[ "$available_disk" =~ ^[0-9]+$ && "$available_memory" =~ ^[0-9]+$ && "$available_cpus" =~ ^[0-9]+$ ]] || fail "resource preflight could not be measured"
 ((available_disk >= MIN_DISK_BYTES)) || fail "insufficient free disk for pinned Ollama image and model"
 ((available_memory >= MIN_MEMORY_BYTES)) || fail "insufficient available memory for qwen3-embedding:4b"
+((available_cpus >= MIN_CPU_COUNT)) || fail "insufficient online CPUs for qwen3-embedding:4b"
 
 compose=(docker compose --env-file "$RUNTIME_ENV" -p "$COMPOSE_PROJECT" -f "$release_dir/infra/compose/compose.prod.yml")
 override="$release_dir/infra/compose/compose.vps.override.yml"
@@ -199,11 +202,14 @@ psql_exec -c "SELECT weltgewebe_activate_search_generation('$GENERATION_ID');" >
 identity_ok="$(psql_exec -Atc "SELECT count(*)=1 FROM search_index_generations WHERE generation_id='$GENERATION_ID' AND state='active' AND provider='$PROVIDER' AND model_id='$MODEL_ID' AND model_revision='$MODEL_REVISION' AND runtime_identity='$RUNTIME_IDENTITY' AND dimension=$DIMENSION AND completed_nodes=expected_nodes;")"
 [[ "$identity_ok" == "t" ]] || fail "active generation identity mismatch"
 
+probe_query="$(psql_exec -Atc "SELECT p.title FROM search_node_projections p JOIN domain_nodes n ON n.id=p.node_id WHERE p.generation_id='$GENERATION_ID' AND n.search_visibility='public' AND p.status='active' AND p.semantic_state='ready' AND cardinality(p.embedding)=$DIMENSION ORDER BY p.node_id LIMIT 1;")"
+[[ -n "$probe_query" ]] || fail "active generation has no public semantic probe candidate"
 search_body="$(mktemp)"
-curl -fsS --get --data-urlencode 'q=Gemeinschaft' --data-urlencode 'limit=10' "$SEARCH_URL" > "$search_body"
-jq -e --arg generation "$GENERATION_ID" '.generation_id == $generation and (.mode == "hybrid" or .mode == "lexical_fallback") and (.items | type == "array")' "$search_body" > /dev/null || fail "public search readback mismatch"
+curl -fsS --get --data-urlencode "q=$probe_query" --data-urlencode 'limit=10' "$SEARCH_URL" > "$search_body"
+jq -e --arg generation "$GENERATION_ID" '.generation_id == $generation and (.mode == "hybrid" or .mode == "lexical_fallback") and (.items | type == "array") and (.items | length > 0)' "$search_body" > /dev/null || fail "public search readback mismatch or empty result"
 rm -f "$search_body"
-[[ "$(docker inspect --format '{{.State.Running}}' "$worker_cid")" == "true" ]] || fail "search worker stopped after activation"
+worker_cid="$("${compose[@]}" ps -q search-worker)"
+[[ -n "$worker_cid" && "$(docker inspect --format '{{.State.Running}}' "$worker_cid")" == "true" ]] || fail "search worker stopped or was replaced after activation"
 
 aggregate_status="active|expected=$expected|completed=$completed|failed=$failed|worker=running"
 receipt="$(write_receipt "verified" "$(date --utc +%Y-%m-%dT%H:%M:%SZ)")"

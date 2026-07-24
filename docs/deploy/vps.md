@@ -398,9 +398,15 @@ Die produktive semantische Suche verwendet keinen Cloud-Provider. Der gepinnte
 Ollama-Sidecar teilt den Netzwerk-Namensraum der API und bindet ausschließlich
 an `127.0.0.1:11434`; es wird kein Host-Port veröffentlicht. Das Modellvolume
 ist regenerierbare Projektionsinfrastruktur, während `domain_nodes` in
-PostgreSQL die einzige Datenwahrheit bleibt.
+PostgreSQL die einzige Datenwahrheit bleibt. Die Sichtbarkeit liegt in der
+serverseitigen Spalte `domain_nodes.search_visibility`; gewöhnliche bestehende
+Knoten werden bei der Migration als öffentlich übernommen. Malformed explizite
+Altwerte werden geschlossen als verborgen behandelt. Clients können diese
+Spalte nicht über beliebige Payload-Felder überschreiben.
 
-Der normale commitgebundene Reconciler rollt API, Sidecar und den begrenzten
+Der normale commitgebundene Reconciler prüft vor Build oder Containeränderung,
+ob mindestens 8 GiB freier Speicher, 5 GiB verfügbarer Arbeitsspeicher und drei
+Online-CPUs vorhanden sind. Danach rollt er API, Sidecar und den begrenzten
 Projektions-Worker gemeinsam aus. Der Worker wartet auf den exakt gepinnten
 Modelldigest und verarbeitet danach sowohl den initialen Bestand als auch neue
 Projektionsjobs fortlaufend. Öffentliche Knoten erhalten eine semantische

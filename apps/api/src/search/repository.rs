@@ -123,16 +123,18 @@ pub async fn fetch_postgres_candidates(
                AND n.lat IS NOT NULL
                AND n.lon IS NOT NULL
                AND (
-                    (n.payload ->> 'search_visibility' = 'public'
+                    (n.search_visibility = 'public'
                      AND p.status = 'active'
                      AND p.semantic_state = 'ready'
                      AND p.visibility_scopes = ARRAY['public']::TEXT[]
                      AND cardinality(p.embedding) = $8)
                     OR
-                    (n.payload ->> 'search_visibility' = 'private'
+                    (n.search_visibility = 'private'
                      AND $4::boolean
                      AND $3::text IS NOT NULL
-                     AND nullif(btrim(n.payload ->> 'created_by_account_id'), '') = $3::text
+                     AND jsonb_typeof(n.payload -> 'created_by_account_id') = 'string'
+                     AND regexp_replace(n.payload ->> 'created_by_account_id', '[[:space:]]', '', 'g') <> ''
+                     AND n.payload ->> 'created_by_account_id' = $3::text
                      AND p.status = 'active'
                      AND p.semantic_state = 'unavailable'
                      AND p.visibility_scopes = ARRAY['owner']::TEXT[]
