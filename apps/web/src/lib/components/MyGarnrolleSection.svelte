@@ -26,6 +26,7 @@
     goods: string;
     interests: string;
     address: string;
+    addressTouched: boolean;
     visibilityChoice: GarnrolleMapState;
     radiusM: number;
     selectedLocation: Location | null;
@@ -33,6 +34,9 @@
   };
 
   const accountRequestGuard = createAccountRequestGuard();
+  const saveRequestGuard = createAccountRequestGuard();
+  let loadAbortController: AbortController | null = null;
+  let saveAbortController: AbortController | null = null;
   let profileKey = "";
   let loadedProfileAccountId: string | null = null;
   let displayName = "";
@@ -41,6 +45,8 @@
   let goods = "";
   let interests = "";
   let address = "";
+  let initialAddress = "";
+  let addressTouched = false;
   let visibilityChoice: GarnrolleMapState = "not_on_map";
   let radiusM = 250;
   let selectedLocation: Location | null = null;
@@ -61,11 +67,13 @@
   $: canEdit = $authStore.authenticated;
   $: radiusIsValid =
     Number.isInteger(radiusM) && radiusM >= 50 && radiusM <= 5000;
+  $: formDisabled =
+    isLoadingProfile ||
+    isSaving ||
+    loadedProfileAccountId !== activeAccountId;
   $: canSave =
     canEdit &&
-    !!ownGarnrolle &&
     loadedProfileAccountId === activeAccountId &&
-    profileError === null &&
     !!displayName.trim() &&
     !isLoadingProfile &&
     !isSaving &&
@@ -76,15 +84,21 @@
     : "/map";
 
   $: if (activeAccountId && activeAccountId !== profileKey) {
+    const previousAccountId = profileKey;
+    if (previousAccountId) clearStoredPrivateDraft(previousAccountId);
     profileKey = activeAccountId;
+    invalidateAccountOperations();
     loadedProfileAccountId = null;
+    isLoadingProfile = false;
     isSaving = false;
     resetDraft();
     void loadPrivateProfile(activeAccountId);
   }
   $: if (!activeAccountId && profileKey) {
+    const previousAccountId = profileKey;
     profileKey = "";
-    accountRequestGuard.invalidate();
+    clearStoredPrivateDraft(previousAccountId);
+    invalidateAccountOperations();
     loadedProfileAccountId = null;
     isLoadingProfile = false;
     isSaving = false;
@@ -124,6 +138,25 @@
     return `weltgewebe:garnrolle-draft:${accountId}`;
   }
 
+  function returnLocationStorageKey(accountId: string): string {
+    return `weltgewebe:garnrolle-return-location:${accountId}`;
+  }
+
+  function clearStoredPrivateDraft(accountId: string) {
+    if (!browser) return;
+    sessionStorage.removeItem(draftStorageKey(accountId));
+    sessionStorage.removeItem(returnLocationStorageKey(accountId));
+  }
+
+  function invalidateAccountOperations() {
+    accountRequestGuard.invalidate();
+    saveRequestGuard.invalidate();
+    loadAbortController?.abort();
+    saveAbortController?.abort();
+    loadAbortController = null;
+    saveAbortController = null;
+  }
+
   function currentDraft(): GarnrolleDraft {
     return {
       displayName,
@@ -132,6 +165,7 @@
       goods,
       interests,
       address,
+      addressTouched,
       visibilityChoice,
       radiusM,
       selectedLocation,
@@ -145,7 +179,13 @@
     if (typeof draft.skills === "string") skills = draft.skills;
     if (typeof draft.goods === "string") goods = draft.goods;
     if (typeof draft.interests === "string") interests = draft.interests;
-    if (typeof draft.address === "string") address = draft.address;
+    if (typeof draft.address === "string") {
+      address = draft.address;
+      addressTouched =
+        typeof draft.addressTouched === "boolean"
+          ? draft.addressTouched
+          : draft.address.trim() !== initialAddress;
+    }
     if (
       draft.visibilityChoice === "not_on_map" ||
       draft.visibilityChoice === "exact" ||
@@ -175,6 +215,8 @@
     goods = "";
     interests = "";
     address = "";
+    initialAddress = "";
+    addressTouched = false;
     visibilityChoice = "not_on_map";
     radiusM = 250;
     selectedLocation = null;
@@ -190,7 +232,9 @@
     skills = profileSkills(profile.tags).join(", ");
     goods = categoryValues(profile.tags, "good:").join(", ");
     interests = categoryValues(profile.tags, "interest:").join(", ");
-    address = profile.address ?? "";
+    initialAddress = profile.address?.trim() ?? "";
+    address = initialAddress;
+    addressTouched = false;
     visibilityChoice = profile.map_state;
     radiusM = profile.radius_m > 0 ? profile.radius_m : 250;
     selectedLocation = profile.location ?? null;
@@ -199,7 +243,7 @@
 
   function returnedMapLocation(accountId: string): Location | null {
     if (!browser) return null;
-    const key = `weltgewebe:garnrolle-return-location:${accountId}`;
+    const key = returnLocationStorageKey(accountId);
     const stored = sessionStorage.getItem(key);
     sessionStorage.removeItem(key);
     if (!stored) return null;
@@ -225,9 +269,17 @@
     }
   }
 
+  function isAbortError(error: unknown): boolean {
+    return error instanceof Error && error.name === "AbortError";
+  }
+
   async function loadPrivateProfile(accountId: string) {
+    loadAbortController?.abort();
+    const controller = new AbortController();
+    loadAbortController = controller;
     const request = accountRequestGuard.begin(accountId);
     const isCurrentRequest = () =>
+      loadAbortController === controller &&
       accountRequestGuard.isCurrent(request, activeAccountId);
     let focusReturnedLocation = false;
     loadedProfileAccountId = null;
@@ -236,7 +288,7 @@
     draftMessage = null;
     saveMessage = null;
     try {
-      const profile = await getOwnGarnrolleProfile();
+      const profile = await getOwnGarnrolleProfile(controller.signal);
       if (!isCurrentRequest()) return;
       if (profile.id !== accountId) {
         throw new Error("profile-account-mismatch");
@@ -263,7 +315,7 @@
       }
       loadedProfileAccountId = accountId;
     } catch (error) {
-      if (!isCurrentRequest()) return;
+      if (!isCurrentRequest() || isAbortError(error)) return;
       loadedProfileAccountId = null;
       if (error instanceof ApiRequestError && error.status === 401) {
         profileError =
@@ -273,11 +325,18 @@
           "Deine Garnrolle konnte nicht vollständig geladen werden. Bitte lade die Seite neu.";
       }
     } finally {
-      if (!isCurrentRequest()) return;
-      isLoadingProfile = false;
-      if (focusReturnedLocation) {
-        await tick();
-        if (isCurrentRequest()) locationButton?.focus();
+      if (isCurrentRequest()) {
+        isLoadingProfile = false;
+        loadAbortController = null;
+        if (focusReturnedLocation) {
+          await tick();
+          if (
+            accountRequestGuard.isCurrent(request, activeAccountId) &&
+            loadedProfileAccountId === accountId
+          ) {
+            locationButton?.focus();
+          }
+        }
       }
     }
   }
@@ -306,7 +365,7 @@
     profileError = null;
     saveMessage = null;
     draftMessage =
-      "Kartenanker zum Entfernen vorgemerkt, aber noch nicht gespeichert. Speichere deine Garnrolle, um die private Koordinate endgültig zu löschen.";
+      "Kartenanker zum Entfernen vorgemerkt. Die öffentliche Sichtbarkeit wurde deshalb auf „Privat“ gesetzt. Noch nicht gespeichert.";
     await tick();
     locationButton?.focus();
   }
@@ -336,49 +395,68 @@
 
   async function handleSave(event: SubmitEvent) {
     event.preventDefault();
+    if (!canSave || !activeAccountId) return;
+
     profileError = null;
     draftMessage = null;
     saveMessage = null;
-    if (!canSave || !activeAccountId) return;
-
     const savingAccountId = activeAccountId;
+    saveAbortController?.abort();
+    const controller = new AbortController();
+    saveAbortController = controller;
+    const request = saveRequestGuard.begin(savingAccountId);
+    const isCurrentSave = () =>
+      saveAbortController === controller &&
+      saveRequestGuard.isCurrent(request, activeAccountId) &&
+      loadedProfileAccountId === savingAccountId;
+    const normalizedAddress = address.trim();
+    const addressChanged = normalizedAddress !== initialAddress;
+    const addressPatch =
+      addressTouched && addressChanged
+        ? normalizedAddress
+          ? { address: normalizedAddress }
+          : { clear_address: true }
+        : {};
+
     isSaving = true;
     try {
-      await updateOwnGarnrolle({
-        title: displayName.trim(),
-        summary: summary.trim() || undefined,
-        tags: profileTags(),
-        address: address.trim() || undefined,
-        clear_address: !address.trim(),
-        location: selectedLocation ?? undefined,
-        clear_location: clearLocation,
-        map_state: visibilityChoice,
-        radius_m: visibilityChoice === "radius" ? radiusM : undefined,
-      });
-      if (
-        activeAccountId !== savingAccountId ||
-        loadedProfileAccountId !== savingAccountId
-      ) {
-        return;
-      }
-      clearLocation = false;
-      if (browser) {
-        sessionStorage.removeItem(draftStorageKey(savingAccountId));
-      }
+      const savedProfile = await updateOwnGarnrolle(
+        {
+          title: displayName.trim(),
+          summary: summary.trim() || undefined,
+          tags: profileTags(),
+          ...addressPatch,
+          location: selectedLocation ?? undefined,
+          ...(clearLocation ? { clear_location: true } : {}),
+          map_state: visibilityChoice,
+          radius_m: visibilityChoice === "radius" ? radiusM : undefined,
+        },
+        controller.signal,
+      );
+      if (!isCurrentSave()) return;
+
+      applyProfile(savedProfile);
+      if (browser) clearStoredPrivateDraft(savingAccountId);
       await invalidateAll();
+      if (!isCurrentSave()) return;
+
       saveMessage =
         "Deine Garnrolle wurde gespeichert. Du kannst ihre Sichtbarkeit jederzeit ändern.";
+      if (!isCurrentSave()) return;
       await goto("/settings#meine-garnrolle", {
         replaceState: true,
         noScroll: true,
         keepFocus: true,
       });
     } catch (error) {
-      if (activeAccountId === savingAccountId) {
+      if (isCurrentSave() && !isAbortError(error)) {
         profileError = describeSaveError(error);
       }
     } finally {
-      isSaving = false;
+      if (isCurrentSave()) {
+        isSaving = false;
+        saveAbortController = null;
+      }
     }
   }
 </script>
@@ -413,12 +491,13 @@
         <p>{visibility.description}</p>
         {#if accountsLoadError}
           <p class="warn">
-            Garnrollen-Daten konnten nicht geladen werden: {accountsLoadError}
+            Die öffentliche Garnrollenansicht konnte nicht geladen werden: {accountsLoadError}
+            Das private Profil bleibt nach erfolgreichem Laden bearbeitbar.
           </p>
         {:else if !ownGarnrolle}
           <p class="warn">
-            Deine Sitzung ist aktiv, aber der zugehörige Garnrollen-Datensatz
-            fehlt. Speichern ist deshalb gesperrt.
+            Der öffentliche Garnrollen-Datensatz fehlt derzeit. Das private
+            Profil bleibt bearbeitbar, sobald es vollständig geladen ist.
           </p>
         {/if}
       </div>
@@ -437,7 +516,7 @@
       aria-describedby="my-garnrolle-save-note"
       on:submit={handleSave}
     >
-      <fieldset disabled={isLoadingProfile || isSaving}>
+      <fieldset disabled={formDisabled}>
         <legend>1. Garnrolle beschreiben</legend>
         <p class="field-intro">
           Nur der Anzeigename ist erforderlich. Alles Weitere kannst du später
@@ -483,7 +562,7 @@
         </label>
       </fieldset>
 
-      <fieldset disabled={isLoadingProfile || isSaving}>
+      <fieldset disabled={formDisabled}>
         <legend>2. Privaten Kartenanker wählen</legend>
         <p class="field-intro">
           Der Kartenanker ist zunächst privat. Erst deine Auswahl im nächsten
@@ -537,13 +616,14 @@
           Adresse oder Ortsnotiz <span class="optional">privat, optional</span>
           <input
             bind:value={address}
+            on:input={() => (addressTouched = true)}
             maxlength="500"
             placeholder="z. B. Stadtteil oder Treffpunkt"
           />
         </label>
       </fieldset>
 
-      <fieldset disabled={isLoadingProfile || isSaving}>
+      <fieldset disabled={formDisabled}>
         <legend>3. Öffentliche Sichtbarkeit wählen</legend>
         <p class="field-intro">
           Du kannst diese Entscheidung jederzeit ändern.
