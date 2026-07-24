@@ -14,7 +14,7 @@
     describeGarnrolleVisibility,
     findOwnGarnrolle,
   } from "$lib/garnrolle/visibility";
-  import { tick } from "svelte";
+  import { onDestroy, tick } from "svelte";
 
   export let accounts: Account[] = [];
   export let accountsLoadError: string | null = null;
@@ -154,6 +154,8 @@
     loadAbortController = null;
     saveAbortController = null;
   }
+
+  onDestroy(invalidateAccountOperations);
 
   function currentDraft(): GarnrolleDraft {
     return {
