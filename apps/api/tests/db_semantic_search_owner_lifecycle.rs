@@ -116,11 +116,14 @@ struct ProjectionRow {
     visibility_scopes: Vec<String>,
     semantic_state: String,
     embedding: Option<Vec<f64>>,
+    search_vector: String,
+    search_vector_simple: String,
 }
 
 async fn projection(pool: &PgPool, generation: &str) -> ProjectionRow {
     sqlx::query_as(
-        "SELECT source_version,title,tags,searchable_text,language,kind,status,visibility_scopes,semantic_state,embedding \
+        "SELECT source_version,title,tags,searchable_text,language,kind,status,visibility_scopes,semantic_state,embedding, \
+                search_vector::text AS search_vector, search_vector_simple::text AS search_vector_simple \
          FROM search_node_projections WHERE generation_id=$1 AND node_id=$2",
     )
     .bind(generation)
@@ -140,6 +143,18 @@ fn assert_redacted(row: &ProjectionRow) {
     assert!(row.visibility_scopes.is_empty());
     assert_eq!(row.semantic_state, "unavailable");
     assert!(row.embedding.is_none());
+    let german_vector = row.search_vector.to_lowercase();
+    let simple_vector = row.search_vector_simple.to_lowercase();
+    for sensitive_lexeme in ["vertraulich", "fahrradwerkstatt", "eigentuemer"] {
+        assert!(
+            !german_vector.contains(sensitive_lexeme),
+            "redacted German vector retained sensitive lexeme {sensitive_lexeme}: {german_vector}"
+        );
+        assert!(
+            !simple_vector.contains(sensitive_lexeme),
+            "redacted simple vector retained sensitive lexeme {sensitive_lexeme}: {simple_vector}"
+        );
+    }
 }
 
 fn assert_private(row: &ProjectionRow) {
