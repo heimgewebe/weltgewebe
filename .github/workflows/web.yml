@@ -123,82 +123,40 @@ jobs:
           path: apps/web/playwright-report
           if-no-files-found: ignore
 
-  # BEGIN PR1568 LIFECYCLE AUTOFIX
-  autofix-pr1568-lifecycle:
-    if: github.event_name == 'pull_request' && github.head_ref == 'feat/first-user-ux-v1' && github.actor != 'github-actions[bot]'
+  lifecycle-diagnostic-pr1568:
+    if: github.event_name == 'pull_request' && github.head_ref == 'feat/first-user-ux-v1'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: feat/first-user-ux-v1
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34
+      - name: Materialize lifecycle change
+        shell: python
+        run: |
+          from pathlib import Path
 
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+          path = Path("apps/web/src/lib/components/MyGarnrolleSection.svelte")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace(
+              'import { tick } from "svelte";',
+              'import { onDestroy, tick } from "svelte";',
+              1,
+          )
+          marker = "\n  function currentDraft(): GarnrolleDraft {"
+          text = text.replace(
+              marker,
+              "\n  onDestroy(invalidateAccountOperations);\n" + marker,
+              1,
+          )
+          path.write_text(text, encoding="utf-8")
+
+      - name: Upload exact generated component
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          node-version-file: '.node-version'
-          cache: 'pnpm'
-          cache-dependency-path: apps/web/pnpm-lock.yaml
-
-      - name: Install dependencies
-        working-directory: apps/web
-        run: pnpm install --frozen-lockfile
-
-      - name: Apply lifecycle hardening
-        shell: python
-        run: |
-          from pathlib import Path
-
-          component_path = Path("apps/web/src/lib/components/MyGarnrolleSection.svelte")
-          component = component_path.read_text(encoding="utf-8")
-          old_import = 'import { tick } from "svelte";'
-          new_import = 'import { onDestroy, tick } from "svelte";'
-          if new_import not in component:
-              if old_import not in component:
-                  raise SystemExit("Svelte lifecycle import not found")
-              component = component.replace(old_import, new_import, 1)
-
-          lifecycle_call = "  onDestroy(invalidateAccountOperations);"
-          if lifecycle_call not in component:
-              marker = "\n  function currentDraft(): GarnrolleDraft {"
-              if marker not in component:
-                  raise SystemExit("currentDraft insertion marker not found")
-              component = component.replace(
-                  marker,
-                  f"\n{lifecycle_call}\n{marker}",
-                  1,
-              )
-          component_path.write_text(component, encoding="utf-8")
-
-      - name: Format lifecycle change
-        working-directory: apps/web
-        run: pnpm exec prettier --write src/lib/components/MyGarnrolleSection.svelte
-
-      - name: Remove temporary workflow job
-        shell: python
-        run: |
-          from pathlib import Path
-
-          workflow = Path(".github/workflows/web.yml")
-          text = workflow.read_text(encoding="utf-8")
-          start = text.index("\n  # BEGIN PR1568 LIFECYCLE AUTOFIX\n")
-          end_marker = "\n  # END PR1568 LIFECYCLE AUTOFIX\n"
-          end = text.index(end_marker, start) + len(end_marker)
-          workflow.write_text(text[:start] + "\n", encoding="utf-8")
-
-      - name: Commit exact fix
-        run: |
-          git diff --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            .github/workflows/web.yml \
-            apps/web/src/lib/components/MyGarnrolleSection.svelte
-          git commit -m "fix(web): abort Garnrolle requests on teardown"
-          git push origin HEAD:feat/first-user-ux-v1
-  # END PR1568 LIFECYCLE AUTOFIX
+          name: pr1568-lifecycle-component
+          path: apps/web/src/lib/components/MyGarnrolleSection.svelte
+          if-no-files-found: error
