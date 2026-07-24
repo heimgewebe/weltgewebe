@@ -230,6 +230,55 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn node_details_include_only_active_creator_titles() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    write_lines(
+        &in_dir.join("demo.nodes.jsonl"),
+        &[
+            r#"{"id":"active-node","location":{"lon":10.0,"lat":53.5},"title":"A","created_by_account_id":"active-account"}"#,
+            r#"{"id":"disabled-node","location":{"lon":10.1,"lat":53.6},"title":"B","created_by_account_id":"disabled-account"}"#,
+        ],
+    );
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let mut active = weber_account("active-account");
+    active.public.title = "Öffentliche Garnrolle".to_string();
+    let mut disabled = weber_account("disabled-account");
+    disabled.public.title = "Verborgene Garnrolle".to_string();
+    disabled.public.disabled = true;
+    let mut accounts = AccountStore::new();
+    accounts.insert(active);
+    accounts.insert(disabled);
+
+    let mut state = test_state().await?;
+    state.accounts = Arc::new(RwLock::new(accounts));
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    let response = app
+        .clone()
+        .oneshot(Request::get("/nodes/active-node").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let node: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(node["created_by_account_id"], "active-account");
+    assert_eq!(node["created_by_account_title"], "Öffentliche Garnrolle");
+
+    let response = app
+        .oneshot(Request::get("/nodes/disabled-node").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let node: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(node["created_by_account_id"], "disabled-account");
+    assert!(node.get("created_by_account_title").is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");

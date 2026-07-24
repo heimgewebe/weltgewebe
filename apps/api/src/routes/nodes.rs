@@ -115,6 +115,15 @@ pub struct Node {
     pub location: Location,
 }
 
+#[derive(Serialize)]
+pub struct NodeDetails {
+    #[serde(flatten)]
+    pub node: Node,
+    /// Public Garnrollen title for the immutable creator binding.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by_account_title: Option<String>,
+}
+
 fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     T: Deserialize<'de>,
@@ -469,13 +478,31 @@ pub async fn load_nodes() -> OrderedCache<Node> {
 pub async fn get_node(
     State(state): State<ApiState>,
     Path(id): Path<String>,
-) -> Result<Json<Node>, StatusCode> {
-    let nodes = state.nodes.read().await;
-    nodes
+) -> Result<Json<NodeDetails>, StatusCode> {
+    // Clone before reading accounts so this endpoint never holds several state
+    // locks at once.
+    let node = state
+        .nodes
+        .read()
+        .await
         .get(&id)
         .cloned()
-        .map(Json)
-        .ok_or(StatusCode::NOT_FOUND)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let created_by_account_title = match node.created_by_account_id.as_deref() {
+        Some(account_id) => state
+            .accounts
+            .read()
+            .await
+            .get(account_id)
+            .filter(|account| !account.public.disabled)
+            .map(|account| account.public.title.clone()),
+        None => None,
+    };
+
+    Ok(Json(NodeDetails {
+        node,
+        created_by_account_title,
+    }))
 }
 
 /// Append a single node record as a JSONL line. Durability via fsync.

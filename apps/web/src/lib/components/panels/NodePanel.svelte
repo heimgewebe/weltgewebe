@@ -66,6 +66,7 @@
     created_at?: string;
     updated_at?: string;
     created_by_account_id?: string | null;
+    created_by_account_title?: string | null;
     kind?: string;
     participants?: {
       account_title?: string;
@@ -398,7 +399,7 @@
       </div>
     </form>
   {:else}
-    <div class="tabs" role="tablist" aria-label="Knoten-Tabs">
+    <div class="tabs node-tabs" role="tablist" aria-label="Knoten-Tabs">
       <button
         class:active={activeTab === "uebersicht"}
         on:click={() => setTab("uebersicht")}
@@ -544,6 +545,10 @@
                     nodeDetails?.created_at || $selection?.data?.created_at,
                   )}</span
                 ><span class="event">Knoten wurde geknüpft.</span>
+                {#if nodeCreator}<span class="creator"
+                    >Urheber: {nodeDetails?.created_by_account_title ||
+                      nodeCreator}</span
+                  >{/if}
               </li>
             </ul>
           {:else}<p class="ghost">Noch kein Verlauf.</p>{/if}
@@ -583,6 +588,14 @@
     margin: 0;
     font-size: 1.5rem;
     line-height: 1.2;
+  }
+  .node-tabs {
+    gap: 0;
+  }
+  .node-tabs > button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 0.25rem;
   }
   .summary {
     color: var(--muted);
@@ -634,6 +647,13 @@
   .participants button:hover,
   .participants button:focus-visible {
     border-color: var(--accent);
+  }
+  .creator {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
   }
   .edit-form,
   .mutation-actions {
