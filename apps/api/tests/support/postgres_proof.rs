@@ -123,12 +123,10 @@ mod t012_generation_boundary {
             .after_connect(move |connection, _metadata| {
                 let generation_id = generation_id.clone();
                 Box::pin(async move {
-                    sqlx::query(
-                        "SELECT set_config('weltgewebe.search_generation_id',$1,false)",
-                    )
-                    .bind(generation_id)
-                    .execute(&mut *connection)
-                    .await?;
+                    sqlx::query("SELECT set_config('weltgewebe.search_generation_id',$1,false)")
+                        .bind(generation_id)
+                        .execute(&mut *connection)
+                        .await?;
                     sqlx::query("SET search_path TO pg_temp, public")
                         .execute(&mut *connection)
                         .await?;
@@ -246,12 +244,11 @@ mod t012_generation_boundary {
             .expect("start generation B");
 
         let bound = generation_bound_pool(&generation_a).await;
-        let configured: String = sqlx::query_scalar(
-            "SELECT current_setting('weltgewebe.search_generation_id')",
-        )
-        .fetch_one(&bound)
-        .await
-        .expect("read session generation binding");
+        let configured: String =
+            sqlx::query_scalar("SELECT current_setting('weltgewebe.search_generation_id')")
+                .fetch_one(&bound)
+                .await
+                .expect("read session generation binding");
         assert_eq!(configured, generation_a);
         let visible_jobs: i64 = sqlx::query_scalar("SELECT count(*) FROM search_projection_jobs")
             .fetch_one(&bound)
