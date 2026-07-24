@@ -54,12 +54,10 @@ async fn generation_bound_pool(
         .after_connect(move |connection, _metadata| {
             let generation_id = generation_id.clone();
             Box::pin(async move {
-                sqlx::query(
-                    "SELECT set_config('weltgewebe.search_generation_id',$1,false)",
-                )
-                .bind(generation_id)
-                .execute(&mut *connection)
-                .await?;
+                sqlx::query("SELECT set_config('weltgewebe.search_generation_id',$1,false)")
+                    .bind(generation_id)
+                    .execute(&mut *connection)
+                    .await?;
                 sqlx::query("SET search_path TO pg_temp, public")
                     .execute(&mut *connection)
                     .await?;
@@ -128,7 +126,11 @@ async fn main() -> anyhow::Result<()> {
     );
     let generation_control = ProjectionWorker::new_with_provider(
         control_pool.clone(),
-        format!("generation-control:{}:{}", generation_id, std::process::id()),
+        format!(
+            "generation-control:{}:{}",
+            generation_id,
+            std::process::id()
+        ),
         Metrics::try_new(BuildInfo::collect())?,
         provider.clone(),
     )?;
