@@ -84,6 +84,9 @@ test.describe("Own Garnrolle settings entry", () => {
     await expect(
       section.locator('[data-testid="garnrolle-location-state"]'),
     ).toContainText("Privater Kartenanker gewählt");
+    const mapLink = section.locator('[data-testid="my-garnrolle-map-link"]');
+    await expect(mapLink).toHaveAttribute("href", "/map");
+    await expect(mapLink).not.toHaveAttribute("aria-disabled");
 
     await section.getByLabel("Öffentlich exakt").check();
     await expect(

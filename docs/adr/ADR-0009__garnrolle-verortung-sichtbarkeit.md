@@ -20,8 +20,8 @@ relations:
 
 # ADR-0009 — Garnrolle, Verortung und Sichtbarkeit
 
-Datum: 2026-07-09  
-Aktualisiert: 2026-07-24  
+Datum: 2026-07-09
+Aktualisiert: 2026-07-24
 Status: Accepted
 
 ## Entscheidung

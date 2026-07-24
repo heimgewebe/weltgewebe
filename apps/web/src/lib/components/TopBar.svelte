@@ -11,7 +11,6 @@
   role="toolbar"
   aria-label="Navigation"
 >
-  <div aria-hidden="true"></div>
   <div class="governance-slot">
     <GovernanceFan />
   </div>
@@ -20,7 +19,6 @@
       class="garnrolle-link"
       href="/settings#meine-garnrolle"
       aria-label="Meine Garnrolle einrichten"
-      title="Meine Garnrolle einrichten"
     >
       <img src={garnrolleIcon} alt="" />
     </a>

@@ -372,6 +372,30 @@ test.describe("Eigene Garnrolle speichern", () => {
     });
   });
 
+  test("rejects address and clear_address in the same mock API request", async ({
+    page,
+  }) => {
+    await openSettingsAsWeber(page);
+
+    const status = await page.evaluate(async () => {
+      const response = await fetch("/api/accounts/me/profile", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "Konfliktprüfung",
+          tags: [],
+          address: "Private Ortsnotiz",
+          clear_address: true,
+          map_state: "not_on_map",
+        }),
+      });
+      return response.status;
+    });
+
+    expect(status).toBe(400);
+  });
+
   test("requires a self-selected map point and preserves the draft across map navigation", async ({
     page,
   }) => {

@@ -68,9 +68,7 @@
   $: radiusIsValid =
     Number.isInteger(radiusM) && radiusM >= 50 && radiusM <= 5000;
   $: formDisabled =
-    isLoadingProfile ||
-    isSaving ||
-    loadedProfileAccountId !== activeAccountId;
+    isLoadingProfile || isSaving || loadedProfileAccountId !== activeAccountId;
   $: canSave =
     canEdit &&
     loadedProfileAccountId === activeAccountId &&
@@ -501,12 +499,7 @@
           </p>
         {/if}
       </div>
-      <a
-        class="btn"
-        href={mapHref}
-        aria-disabled={!visibility.canZoomToMap}
-        data-testid="my-garnrolle-map-link"
-      >
+      <a class="btn" href={mapHref} data-testid="my-garnrolle-map-link">
         {visibility.canZoomToMap ? "Auf Karte zeigen" : "Karte öffnen"}
       </a>
     </div>
@@ -965,8 +958,7 @@
     border-color: var(--accent, #6aa6ff);
   }
 
-  .btn:disabled,
-  .btn[aria-disabled="true"] {
+  .btn:disabled {
     cursor: not-allowed;
     opacity: 0.55;
   }

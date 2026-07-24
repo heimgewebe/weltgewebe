@@ -314,6 +314,7 @@ export async function mockApiResponses(
         const location = payload.location as
           | { lat?: unknown; lon?: unknown }
           | undefined;
+        const clearAddress = payload.clear_address === true;
         const clearLocation = payload.clear_location === true;
         const suppliedLocation =
           typeof location?.lat === "number" && typeof location?.lon === "number"
@@ -328,6 +329,7 @@ export async function mockApiResponses(
           (mapState !== "not_on_map" &&
             mapState !== "exact" &&
             mapState !== "radius") ||
+          (clearAddress && payload.address !== undefined) ||
           (clearLocation && location !== undefined) ||
           (clearLocation && mapState !== "not_on_map") ||
           (mapState !== "not_on_map" && effectiveLocation === null)
@@ -350,7 +352,7 @@ export async function mockApiResponses(
         } else if (suppliedLocation) {
           privateProfile.location = suppliedLocation;
         }
-        if (payload.clear_address === true) {
+        if (clearAddress) {
           privateProfile.address = "";
         } else if (typeof payload.address === "string") {
           privateProfile.address = payload.address;
