@@ -9,6 +9,7 @@
     type OwnGarnrolleProfile,
   } from "$lib/api/domainWrites";
   import type { Account, GarnrolleMapState, Location } from "$lib/map/types";
+  import { createAccountRequestGuard } from "$lib/garnrolle/accountRequestGuard";
   import {
     describeGarnrolleVisibility,
     findOwnGarnrolle,
@@ -31,7 +32,9 @@
     clearLocation: boolean;
   };
 
+  const accountRequestGuard = createAccountRequestGuard();
   let profileKey = "";
+  let loadedProfileAccountId: string | null = null;
   let displayName = "";
   let summary = "";
   let skills = "";
@@ -61,6 +64,8 @@
   $: canSave =
     canEdit &&
     !!ownGarnrolle &&
+    loadedProfileAccountId === activeAccountId &&
+    profileError === null &&
     !!displayName.trim() &&
     !isLoadingProfile &&
     !isSaving &&
@@ -72,10 +77,17 @@
 
   $: if (activeAccountId && activeAccountId !== profileKey) {
     profileKey = activeAccountId;
+    loadedProfileAccountId = null;
+    isSaving = false;
+    resetDraft();
     void loadPrivateProfile(activeAccountId);
   }
   $: if (!activeAccountId && profileKey) {
     profileKey = "";
+    accountRequestGuard.invalidate();
+    loadedProfileAccountId = null;
+    isLoadingProfile = false;
+    isSaving = false;
     resetDraft();
   }
 
@@ -214,13 +226,18 @@
   }
 
   async function loadPrivateProfile(accountId: string) {
+    const request = accountRequestGuard.begin(accountId);
+    const isCurrentRequest = () =>
+      accountRequestGuard.isCurrent(request, activeAccountId);
     let focusReturnedLocation = false;
+    loadedProfileAccountId = null;
     isLoadingProfile = true;
     profileError = null;
     draftMessage = null;
     saveMessage = null;
     try {
       const profile = await getOwnGarnrolleProfile();
+      if (!isCurrentRequest()) return;
       if (profile.id !== accountId) {
         throw new Error("profile-account-mismatch");
       }
@@ -244,7 +261,10 @@
           "Privater Kartenanker übernommen, aber noch nicht gespeichert. Wähle nun die öffentliche Sichtbarkeit und speichere deine Garnrolle.";
         focusReturnedLocation = true;
       }
+      loadedProfileAccountId = accountId;
     } catch (error) {
+      if (!isCurrentRequest()) return;
+      loadedProfileAccountId = null;
       if (error instanceof ApiRequestError && error.status === 401) {
         profileError =
           "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.";
@@ -253,10 +273,11 @@
           "Deine Garnrolle konnte nicht vollständig geladen werden. Bitte lade die Seite neu.";
       }
     } finally {
+      if (!isCurrentRequest()) return;
       isLoadingProfile = false;
       if (focusReturnedLocation) {
         await tick();
-        locationButton?.focus();
+        if (isCurrentRequest()) locationButton?.focus();
       }
     }
   }
@@ -320,6 +341,7 @@
     saveMessage = null;
     if (!canSave || !activeAccountId) return;
 
+    const savingAccountId = activeAccountId;
     isSaving = true;
     try {
       await updateOwnGarnrolle({
@@ -333,9 +355,15 @@
         map_state: visibilityChoice,
         radius_m: visibilityChoice === "radius" ? radiusM : undefined,
       });
+      if (
+        activeAccountId !== savingAccountId ||
+        loadedProfileAccountId !== savingAccountId
+      ) {
+        return;
+      }
       clearLocation = false;
       if (browser) {
-        sessionStorage.removeItem(draftStorageKey(activeAccountId));
+        sessionStorage.removeItem(draftStorageKey(savingAccountId));
       }
       await invalidateAll();
       saveMessage =
@@ -346,7 +374,9 @@
         keepFocus: true,
       });
     } catch (error) {
-      profileError = describeSaveError(error);
+      if (activeAccountId === savingAccountId) {
+        profileError = describeSaveError(error);
+      }
     } finally {
       isSaving = false;
     }
@@ -401,27 +431,6 @@
         {visibility.canZoomToMap ? "Auf Karte zeigen" : "Karte öffnen"}
       </a>
     </div>
-
-    {#if visibility.state === "not_on_map"}
-      <div class="setup-guide" data-testid="garnrolle-first-user-guide">
-        <p class="eyebrow">Dein Einstieg</p>
-        <h3>Deine Garnrolle ist schon da.</h3>
-        <p>Du brauchst keine weitere Rolle und keinen Antrag, um anzufangen.</p>
-        <ol>
-          <li>
-            <strong>Beschreiben:</strong> Wähle einen Anzeigenamen.
-          </li>
-          <li>
-            <strong>Verankern:</strong> Setze freiwillig einen privaten Punkt auf
-            der Karte.
-          </li>
-          <li>
-            <strong>Freigeben:</strong> Entscheide selbst, ob nichts, ein ungefährer
-            Ort oder der genaue Punkt öffentlich wird.
-          </li>
-        </ol>
-      </div>
-    {/if}
 
     <form
       class="garnrolle-form"
@@ -705,14 +714,17 @@
     background: rgba(106, 166, 255, 0.16);
   }
 
-  .state-pill[data-state="not_on_map"] {
+  .state-pill[data-state="private"] {
     background: rgba(255, 255, 255, 0.05);
+  }
+
+  .state-pill[data-state="unknown"] {
+    background: rgba(255, 210, 138, 0.1);
   }
 
   .status-card,
   .empty-card,
-  .location-card,
-  .setup-guide {
+  .location-card {
     border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.08));
     border-radius: 12px;
     display: flex;
@@ -722,27 +734,8 @@
   }
 
   .status-card p,
-  .empty-card p,
-  .setup-guide p {
+  .empty-card p {
     margin: 0.35rem 0 0;
-  }
-
-  .setup-guide {
-    display: block;
-    background: rgba(106, 166, 255, 0.08);
-  }
-
-  .setup-guide h3 {
-    margin: 0.25rem 0 0;
-  }
-
-  .setup-guide ol {
-    margin: 0.85rem 0 0;
-    padding-left: 1.25rem;
-  }
-
-  .setup-guide li + li {
-    margin-top: 0.45rem;
   }
 
   .location-card {
@@ -902,8 +895,7 @@
     .section-head,
     .status-card,
     .empty-card,
-    .location-card,
-    .setup-guide {
+    .location-card {
       display: grid;
     }
   }
