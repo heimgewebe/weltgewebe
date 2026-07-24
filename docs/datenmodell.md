@@ -97,8 +97,7 @@ fail-closed als `not_on_map` projiziert. Die private Position und die Bindung
 erscheinen nie in der öffentlichen Account-Antwort.
 
 `kind` ist auf `garnrolle` begrenzt. `map_state` enthält `not_on_map`, `exact`
-oder `radius`. Die frühere Spalte `mode` ist nullable, besitzt keinen Default und
-dient nur noch als Rollbackbrücke für den stufenweisen Produktionscutover.
+oder `radius`. Eine separate Identitäts- oder Modusspalte existiert nicht mehr.
 
 ### `domain_nodes`
 
@@ -205,6 +204,4 @@ Ein vollständiger PostgreSQL-Cutover ist erst belegt, wenn:
 
 Das Produktmodell besteht aus einer Garnrolle je Account, `map_state` für
 Sichtbarkeit und Verortung, Knoten als Kollektivgüter oder Orte sowie Fäden als
-Beziehungen. Legacyfelder werden nur noch lesend normalisiert. Die spätere
-Entfernung der nullable Spalte `mode` bleibt an einen Produktions- und
-Rollbackbeleg gebunden.
+Beziehungen. Die frühere RoN-Identität und ihre Modusspalte sind entfernt.

@@ -122,10 +122,9 @@ Weitere wichtige Prüfpfade:
 | Gespräch | Conversation/Message | geplant und vertraglich beschrieben, aber noch kein vollständiger produktiver Persistenzpfad |
 
 Neue und öffentlich ausgegebene Accounts sind ausschließlich Garnrollen. Die
-Kartenwirkung wird über `map_state=not_on_map|exact|radius` beschrieben. Alte
-`ron`-/`mode`-Datensätze werden lesend privacy-sicher normalisiert; die nullable
-Datenbankspalte `mode` bleibt vorerst nur als Rollbackbrücke. Ihre Entfernung
-braucht einen eigenen Post-Cutover-Beobachtungs-, Daten- und Rückfallbeleg.
+Kartenwirkung wird über `map_state=not_on_map|exact|radius` beschrieben. Die
+frühere RoN-Identität und die Datenbankspalte `mode` sind nach belegtem
+Produktionscutover entfernt.
 
 ## Daten- und Datenschutzgrenze
 

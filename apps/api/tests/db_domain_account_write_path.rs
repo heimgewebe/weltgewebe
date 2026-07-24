@@ -298,16 +298,15 @@ async fn account_create_persists_stable_webauthn_user_id_across_reload() -> Resu
     assert!(created.get("location").is_none());
 
     // domain_accounts row: explicit columns.
-    let (kind, mode, map_state, role, title, lat, lon): (
+    let (kind, map_state, role, title, lat, lon): (
         String,
-        Option<String>,
         String,
         String,
         String,
         Option<f64>,
         Option<f64>,
     ) = sqlx::query_as(
-        "SELECT kind, mode, map_state, role, title, location_lat, location_lon \
+        "SELECT kind, map_state, role, title, location_lat, location_lon \
          FROM domain_accounts WHERE id = $1",
     )
     .bind(id)
@@ -315,7 +314,6 @@ async fn account_create_persists_stable_webauthn_user_id_across_reload() -> Resu
     .await
     .expect("account row must exist after create");
     assert_eq!(kind, "garnrolle");
-    assert_eq!(mode, None);
     assert_eq!(map_state, "exact");
     assert_eq!(role, "weber");
     assert_eq!(title, "Write Path");
@@ -331,7 +329,7 @@ async fn account_create_persists_stable_webauthn_user_id_across_reload() -> Resu
         db_webauthn_user_id.expect("new account must persist webauthn_user_id");
     let db_uuid = uuid::Uuid::parse_str(&db_webauthn_user_id)?;
 
-    // JSONB payloads: public carries summary+tags; private mirrors backfill mode.
+    // JSONB payloads: public carries summary+tags; private carries private account data.
     let (public_text, private_text): (String, String) = sqlx::query_as(
         "SELECT public_payload::text, private_payload::text FROM domain_accounts WHERE id = $1",
     )
@@ -515,8 +513,8 @@ async fn postgres_account_create_duplicate_id_conflicts_without_side_effects() -
     let id = DUP_ID;
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, map_state, radius_m, role, public_payload, private_payload) \
-         VALUES ($1, 'garnrolle', 'Existing', NULL, 'not_on_map', 0, 'weber', '{}'::jsonb, '{}'::jsonb)",
+            (id, kind, title, map_state, radius_m, role, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', 'Existing', 'not_on_map', 0, 'weber', '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(id)
     .execute(&pool)
@@ -573,6 +571,7 @@ fn account_record(id: &str, email: Option<&str>) -> serde_json::Value {
     m.insert("id".into(), serde_json::json!(id));
     m.insert("type".into(), serde_json::json!("garnrolle"));
     m.insert("title".into(), serde_json::json!("Email Unique Fixture"));
+    m.insert("map_state".into(), serde_json::json!("not_on_map"));
     if let Some(e) = email {
         m.insert("email".into(), serde_json::json!(e));
     }
@@ -662,8 +661,8 @@ async fn route_maps_db_email_conflict_to_409_without_side_effects() -> Result<()
     // Seed a row directly in PostgreSQL (deliberately absent from the cache).
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, map_state, radius_m, role, email, public_payload, private_payload) \
-         VALUES ($1, 'garnrolle', 'Existing', NULL, 'not_on_map', 0, 'weber', $2, '{}'::jsonb, '{}'::jsonb)",
+            (id, kind, title, map_state, radius_m, role, email, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', 'Existing', 'not_on_map', 0, 'weber', $2, '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(&existing_id)
     .bind(EMAIL_ALPHA)
@@ -730,10 +729,10 @@ async fn update_account_email_helper_persists_and_classifies_duplicate() -> Resu
 
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, map_state, radius_m, role, email, public_payload, private_payload) \
+            (id, kind, title, map_state, radius_m, role, email, public_payload, private_payload) \
          VALUES \
-            ($1, 'garnrolle', 'Step Up Account', NULL, 'not_on_map', 0, 'weber', $2, '{}'::jsonb, '{}'::jsonb), \
-            ($3, 'garnrolle', 'Other Account', NULL, 'not_on_map', 0, 'weber', $4, '{}'::jsonb, '{}'::jsonb)",
+            ($1, 'garnrolle', 'Step Up Account', 'not_on_map', 0, 'weber', $2, '{}'::jsonb, '{}'::jsonb), \
+            ($3, 'garnrolle', 'Other Account', 'not_on_map', 0, 'weber', $4, '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(STEP_UP_EMAIL_ID)
     .bind("old-step-up@example.invalid")
@@ -814,8 +813,8 @@ async fn step_up_update_email_persists_to_postgres_and_reloads() -> Result<()> {
 
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, map_state, radius_m, role, email, public_payload, private_payload) \
-         VALUES ($1, 'garnrolle', 'Step Up Account', NULL, 'not_on_map', 0, 'admin', $2, '{}'::jsonb, '{}'::jsonb)",
+            (id, kind, title, map_state, radius_m, role, email, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', 'Step Up Account', 'not_on_map', 0, 'admin', $2, '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(STEP_UP_EMAIL_ID)
     .bind("old-route-step-up@example.invalid")

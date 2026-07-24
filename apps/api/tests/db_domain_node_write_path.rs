@@ -223,10 +223,10 @@ async fn postgres_write_app_with_guest_limit(
 ) -> Result<(Router, String, ApiState)> {
     let operator = admin_operator(operator_id);
     sqlx::query(
-        "INSERT INTO domain_accounts (id, kind, title, mode, role, disabled, webauthn_user_id) \
+        "INSERT INTO domain_accounts (id, kind, title, map_state, role, disabled, webauthn_user_id) \
          VALUES ($1, 'garnrolle', $2, 'not_on_map', 'admin', FALSE, $3::uuid) \
          ON CONFLICT (id) DO UPDATE SET \
-             kind = EXCLUDED.kind, title = EXCLUDED.title, mode = EXCLUDED.mode, \
+             kind = EXCLUDED.kind, title = EXCLUDED.title, map_state = EXCLUDED.map_state, \
              role = EXCLUDED.role, disabled = FALSE, webauthn_user_id = EXCLUDED.webauthn_user_id",
     )
     .bind(operator_id)
@@ -1211,8 +1211,8 @@ async fn postgres_node_create_rejects_creator_deleted_by_inflight_exit() -> Resu
     let node_id = "writepath-node-race-create";
     sqlx::query(
         "INSERT INTO domain_accounts \
-         (id, kind, title, mode, map_state, radius_m, disabled, role, public_payload, private_payload) \
-         VALUES ($1, 'garnrolle', 'Race Guest', 'ron', 'not_on_map', 0, FALSE, 'gast', '{}', '{}')",
+         (id, kind, title, map_state, radius_m, disabled, role, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', 'Race Guest', 'not_on_map', 0, FALSE, 'gast', '{}', '{}')",
     )
     .bind(creator_id)
     .execute(&pool)
@@ -2220,8 +2220,8 @@ async fn delete_node_rejects_untyped_postgres_account_collision_without_partial_
     seed_node(&pool, NODE_A, Some("kept"), None).await;
     sqlx::query(
         "INSERT INTO domain_accounts \
-         (id, kind, title, mode, map_state, role, disabled, webauthn_user_id) \
-         VALUES ($1, 'garnrolle', 'Colliding Account', NULL, 'not_on_map', 'weber', FALSE, $2::uuid)",
+         (id, kind, title, map_state, role, disabled, webauthn_user_id) \
+         VALUES ($1, 'garnrolle', 'Colliding Account', 'not_on_map', 'weber', FALSE, $2::uuid)",
     )
     .bind(NODE_A)
     .bind(uuid::Uuid::new_v4().to_string())

@@ -69,6 +69,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 
+## apps/api/migrations/20260724000001_remove_ron_legacy.up.sql
+
+- [relates_to] docs/reports/garnrolle-identity-cutover-proof.md
+
 ## apps/api/src/auth/accounts.rs
 
 - [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
@@ -423,6 +427,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/architekturstruktur.md
 - [relates_to] docs/blueprints/domain-scale-foundation.md
 - [relates_to] docs/domain/vocabulary.md
+- [relates_to] docs/reports/garnrolle-identity-cutover-proof.md
 - [relates_to] docs/reports/optimierungsbericht.md
 - [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
 - [relates_to] docs/runbooks/db-recovery.md
@@ -559,6 +564,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/datenmodell.md
 - [relates_to] docs/domain/modules.md
 - [relates_to] docs/reference/glossar.md
+- [relates_to] docs/reports/garnrolle-identity-cutover-proof.md
 - [relates_to] docs/specs/contract.md
 - [relates_to] docs/specs/garnrolle-knoten-faden.md
 - [relates_to] docs/specs/governance-antraege.md
@@ -815,6 +821,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-edge-write-path-proof.md
 - [relates_to] docs/reports/domain-node-write-path-proof.md
 - [relates_to] docs/reports/optimierungsstatus.md
+
+## docs/reports/garnrolle-identity-cutover-proof.md
+
+- [relates_to] docs/domain/vocabulary.md
 
 ## docs/reports/inwx-zone-reconciliation-plan.md
 
@@ -1218,6 +1228,10 @@ Generated automatically. Do not edit.
 ## scripts/ci/tests/test_check_github_action_pinning.py
 
 - [relates_to] docs/reports/github-action-ref-pinning-audit.md
+
+## scripts/ci/tests/test_garnrolle_ontology_contract.py
+
+- [relates_to] docs/reports/garnrolle-identity-cutover-proof.md
 
 ## scripts/ci/tests/test_reconcile_public_login_smtp_env.py
 

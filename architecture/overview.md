@@ -110,9 +110,8 @@ darstellen.
 ## Bewusste Ausbaugrenzen
 
 - JSONL ist noch nicht vollständig durch PostgreSQL abgelöst.
-- Neue Accounts und öffentliche Projektionen verwenden nur noch Garnrolle plus
-  `map_state`. Legacy-RoN wird lesend auf `not_on_map` normalisiert; die nullable
-  DB-Spalte `mode` bleibt bis zum belegten Produktionscutover als Rollbackbrücke.
+- Accounts und öffentliche Projektionen verwenden ausschließlich Garnrolle plus
+  `map_state`. Die frühere RoN-Identität und die Spalte `mode` sind entfernt.
 - Der produktive Gesprächspfad ist auf genau einen öffentlichen Raum je
   PostgreSQL-Knoten begrenzt; private Räume, Anhänge und Föderation fehlen.
 - NATS im Stack bedeutet noch keinen belegten Transactional-Outbox-Betrieb.

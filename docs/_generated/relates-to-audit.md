@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 645 |
+| Relationen gesamt | 650 |
 | — depends_on | 25 |
-| — relates_to | 603 |
+| — relates_to | 608 |
 | — supersedes | 12 |
 | — verifies | 5 |
-| relates_to Anteil | 93% |
+| relates_to Anteil | 94% |
 
 ### Mögliche supersedes-Lücken
 
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (258 Dokumente):
+**Cluster 1** (261 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -41,6 +41,7 @@ _Keine Lücken erkannt._
 - `agent-policy.yaml`
 - `apps/api/migrations/20260531000002_create_domain_edges.up.sql`
 - `apps/api/migrations/20260716000001_multi_instance_foundation.up.sql`
+- `apps/api/migrations/20260724000001_remove_ron_legacy.up.sql`
 - `apps/api/src/auth/accounts.rs`
 - `apps/api/src/auth/ephemeral_db.rs`
 - `apps/api/src/domain_db.rs`
@@ -192,6 +193,7 @@ _Keine Lücken erkannt._
 - `docs/reports/domain-provider-role-finding.md`
 - `docs/reports/domain-read-path-proof.md`
 - `docs/reports/domain-runtime-data-source-reconciliation.md`
+- `docs/reports/garnrolle-identity-cutover-proof.md`
 - `docs/reports/github-action-ref-pinning-audit.md`
 - `docs/reports/github-actions-node24-readiness.md`
 - `docs/reports/inwx-zone-reconciliation-plan.md`
@@ -265,6 +267,7 @@ _Keine Lücken erkannt._
 - `scripts/ci/fixtures/repoground_vertical_pilot.v1.json`
 - `scripts/ci/tests/test_check_actions_node24_readiness.py`
 - `scripts/ci/tests/test_check_github_action_pinning.py`
+- `scripts/ci/tests/test_garnrolle_ontology_contract.py`
 - `scripts/ci/tests/test_reconcile_public_login_smtp_env.py`
 - `scripts/ci/tests/test_repoground_vertical_pilot.py`
 - `scripts/ci/validate_repoground_vertical_pilot.py`

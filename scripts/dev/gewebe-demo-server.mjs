@@ -156,7 +156,6 @@ const DEMO_ACCOUNTS_JSONL = [
     map_state: "exact",
     radius_m: 0,
     created_at: "2025-01-01T12:00:00Z",
-    visibility: "public",
     tags: ["account", "garnrolle", "wohnort"]
   }
 ];
