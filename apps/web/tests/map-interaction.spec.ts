@@ -407,6 +407,19 @@ test.describe("Map Interaction & Context Panel", () => {
   }) => {
     const nodeId = "b52be17c-4ab7-4434-98ce-520f86290cf0";
     const creatorId = "unlocated-public-account";
+    await page.route(`**/api/accounts/${creatorId}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: creatorId,
+          title: "Unverortete Garnrolle",
+          summary: "Öffentliche Garnrolle ohne Kartenposition",
+          created_at: "2025-01-01T11:00:00Z",
+          updated_at: "2025-01-01T11:00:00Z",
+        }),
+      });
+    });
     await page.route(`**/api/nodes/${nodeId}`, async (route) => {
       await route.fulfill({
         status: 200,

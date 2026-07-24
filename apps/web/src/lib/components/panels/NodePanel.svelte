@@ -26,7 +26,6 @@
     selectRelated: {
       type: "node" | "garnrolle";
       id: string;
-      title?: string;
       data?: MapEntityViewModel;
     };
     domainChanged: DomainChanged;
@@ -83,35 +82,6 @@
     history?: NodeHistoryEvent[];
   }
 
-  function buildTimelineEvents(
-    history: NodeHistoryEvent[],
-    createdAt: string | undefined,
-  ): NodeHistoryEvent[] {
-    const events = history.map((event) => ({
-      ...event,
-      // Legacy history entries had no kind. Matching created_at is the stable
-      // backwards-compatible signal until every producer emits kind="created".
-      kind:
-        event.kind === "created" ||
-        (!event.kind && !!createdAt && event.date === createdAt)
-          ? ("created" as const)
-          : event.kind,
-    }));
-
-    if (createdAt && !events.some((event) => event.kind === "created")) {
-      events.push({
-        date: createdAt,
-        event: "Knoten wurde geknüpft.",
-        kind: "created",
-      });
-    }
-
-    return events.sort(
-      (left, right) =>
-        new Date(right.date).getTime() - new Date(left.date).getTime(),
-    );
-  }
-
   function resetMutationState() {
     activeTab = "uebersicht";
     editing = false;
@@ -136,14 +106,8 @@
   $: nodeCreator =
     nodeDetails?.created_by_account_id ||
     ($selection?.data?.created_by_account_id as string | undefined);
-  $: currentCreatorTitle =
-    nodeDetails?.created_by_account_current_title?.trim() || "";
-  $: createdAt =
-    nodeDetails?.created_at || $selection?.data?.created_at || undefined;
-  $: timelineEvents = buildTimelineEvents(
-    nodeDetails?.history || [],
-    createdAt,
-  );
+  $: currentCreatorTitle = nodeDetails?.created_by_account_current_title || "";
+  $: timelineEvents = nodeDetails?.history || [];
   $: canMutate =
     $authStore.authenticated &&
     ($authStore.role === "weber" ||
@@ -589,7 +553,6 @@
                           dispatch("selectRelated", {
                             type: "garnrolle",
                             id: nodeCreator,
-                            title: currentCreatorTitle,
                           })}>{currentCreatorTitle}</button
                       >
                     </span>{/if}

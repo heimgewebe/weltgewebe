@@ -24,7 +24,6 @@
   type RelatedSelection = {
     type: "node" | "garnrolle";
     id: string;
-    title?: string;
     data?: MapEntityViewModel;
   };
   type DomainChanged = {

@@ -479,7 +479,6 @@
     event: CustomEvent<{
       type: "node" | "garnrolle";
       id: string;
-      title?: string;
       data?: MapEntityViewModel;
     }>,
   ) {
@@ -499,7 +498,6 @@
     enterFokus({
       type: event.detail.type,
       id: event.detail.id,
-      data: event.detail.title ? { title: event.detail.title } : undefined,
     });
   }
 
