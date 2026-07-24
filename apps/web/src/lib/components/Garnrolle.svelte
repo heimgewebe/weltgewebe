@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ICONS, MARKER_SIZES } from "$lib/ui/icons";
   import { authStore } from "$lib/auth/store";
-  export let label = "Meine Garnrolle einstellen";
+  export let label = "Meine Garnrolle einrichten";
 </script>
 
 <div class="garnrolle-container wrap">

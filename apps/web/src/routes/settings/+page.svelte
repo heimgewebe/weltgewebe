@@ -10,7 +10,8 @@
 <div class="container">
   <h1>Einstellungen</h1>
   <p class="intro">
-    Hier verwaltest du deine Garnrolle, ihre Sichtbarkeit und dein Konto.
+    Deine Garnrolle besteht bereits. Hier beschreibst du sie, setzt freiwillig
+    einen privaten Kartenanker und bestimmst ihre öffentliche Sichtbarkeit.
   </p>
 
   <div class="card primary-card">

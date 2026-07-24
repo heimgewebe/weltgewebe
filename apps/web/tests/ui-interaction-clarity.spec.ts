@@ -67,7 +67,7 @@ test.describe("Interaction Clarity & State Feedback", () => {
     page,
   }) => {
     const garnrolleLink = page.locator(
-      '.garnrolle-container a[aria-label="Meine Garnrolle einstellen"]',
+      '.garnrolle-container a[aria-label="Meine Garnrolle einrichten"]',
     );
 
     await expect(garnrolleLink).toBeVisible();

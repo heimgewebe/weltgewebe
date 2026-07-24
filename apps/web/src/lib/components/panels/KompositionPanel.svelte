@@ -159,11 +159,12 @@
     <div data-testid="garnrolle-placement">
       {#if $kompositionDraft?.lngLat}
         <div class="state-set">
-          <p><strong>Ort gewählt</strong></p>
+          <p><strong>Privater Kartenanker gewählt</strong></p>
           <p class="ghost">
-            Prüfe, ob dieser Punkt zu deiner Adresse passt. Zum Verschieben
+            Prüfe, ob dies dein gewünschter privater Anker ist. Zum Verschieben
             tippe oder klicke einfach auf eine andere Stelle. Erst in den
-            Einstellungen wird die Garnrolle gespeichert.
+            Einstellungen entscheidest du über die öffentliche Sichtbarkeit und
+            speicherst die Garnrolle.
           </p>
         </div>
       {:else}

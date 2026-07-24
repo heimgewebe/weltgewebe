@@ -146,7 +146,7 @@ test.describe("Eigene Garnrolle speichern", () => {
       section.locator('[data-testid="garnrolle-role-warning"]'),
     ).toHaveCount(0);
     await section.getByLabel("Anzeigename").fill("Mitwebende Gastgarnrolle");
-    await section.getByLabel("Noch nicht auf der Karte").check();
+    await section.getByLabel("Privat – nicht öffentlich auf der Karte").check();
     const save = section.locator('[data-testid="save-garnrolle"]');
     await expect(save).toBeEnabled();
     const requestPromise = page.waitForRequest(
@@ -182,8 +182,7 @@ test.describe("Eigene Garnrolle speichern", () => {
     ).toHaveCount(0);
 
     await section.getByLabel("Anzeigename").fill("Gastgarnrolle am Ort");
-    await section.getByLabel("Adresse").fill("Poelsweg 2, Hamburg");
-    await section.getByLabel("Exakt sichtbar").check();
+    await section.getByLabel("Öffentlich exakt").check();
 
     const save = section.locator('[data-testid="save-garnrolle"]');
     // Without a self-selected point the exact profile cannot be saved.
@@ -195,7 +194,7 @@ test.describe("Eigene Garnrolle speichern", () => {
     await expect(placement).toContainText("Ort ausstehend");
     // The regression: a normal click (not an 800ms longpress) must set the point.
     await clickMapCenter(page);
-    await expect(placement).toContainText("Ort gewählt");
+    await expect(placement).toContainText("Kartenanker gewählt");
     await placement
       .locator('[data-testid="confirm-garnrolle-location"]')
       .click();
@@ -207,7 +206,7 @@ test.describe("Eigene Garnrolle speichern", () => {
     );
     await expect(
       returned.locator('[data-testid="garnrolle-location-state"]'),
-    ).toContainText("Ort gewählt");
+    ).toContainText("Kartenanker gewählt");
     await expect(
       returned.locator('[data-testid="save-garnrolle"]'),
     ).toBeEnabled();
@@ -221,9 +220,9 @@ test.describe("Eigene Garnrolle speichern", () => {
     const payload = (await requestPromise).postDataJSON();
     expect(payload).toMatchObject({
       title: "Gastgarnrolle am Ort",
-      address: "Poelsweg 2, Hamburg",
       map_state: "exact",
     });
+    expect(payload).not.toHaveProperty("address");
     expectValidLocation(payload.location);
     await expect(
       returned.locator('[data-testid="garnrolle-success"]'),
@@ -243,7 +242,7 @@ test.describe("Eigene Garnrolle speichern", () => {
     await section.getByLabel("Fähigkeiten").fill("Organisation, Kochen");
     await section.getByLabel("Güter").fill("Werkzeug");
     await section.getByLabel("Interessen").fill("Commons");
-    await section.getByLabel("Noch nicht auf der Karte").check();
+    await section.getByLabel("Privat – nicht öffentlich auf der Karte").check();
     await expect(save).toBeEnabled();
 
     const requestPromise = page.waitForRequest(
@@ -282,9 +281,11 @@ test.describe("Eigene Garnrolle speichern", () => {
   }) => {
     const section = await openSettingsAsWeber(page);
     await section.getByLabel("Anzeigename").fill("Garnrolle am gewählten Ort");
-    await section.getByLabel("Adresse").fill("Poelsweg 2, Hamburg");
+    await section
+      .getByLabel("Adresse oder Ortsnotiz")
+      .fill("Poelsweg 2, Hamburg");
     await section.getByLabel("Fähigkeiten").fill("Nachbarschaftshilfe");
-    await section.getByLabel("Exakt sichtbar").check();
+    await section.getByLabel("Öffentlich exakt").check();
 
     const save = section.locator('[data-testid="save-garnrolle"]');
     // The address is not silently geocoded. A point chosen by the user is required.
@@ -295,7 +296,7 @@ test.describe("Eigene Garnrolle speichern", () => {
     const placement = page.locator('[data-testid="garnrolle-placement"]');
     await expect(placement).toContainText("Ort ausstehend");
     await longPressMapCenter(page);
-    await expect(placement).toContainText("Ort gewählt");
+    await expect(placement).toContainText("Kartenanker gewählt");
     await placement
       .locator('[data-testid="confirm-garnrolle-location"]')
       .click();
@@ -305,12 +306,12 @@ test.describe("Eigene Garnrolle speichern", () => {
     await expect(returned.getByLabel("Anzeigename")).toHaveValue(
       "Garnrolle am gewählten Ort",
     );
-    await expect(returned.getByLabel("Adresse")).toHaveValue(
+    await expect(returned.getByLabel("Adresse oder Ortsnotiz")).toHaveValue(
       "Poelsweg 2, Hamburg",
     );
     await expect(
       returned.locator('[data-testid="garnrolle-location-state"]'),
-    ).toContainText("Ort gewählt");
+    ).toContainText("Kartenanker gewählt");
     await expect(
       returned.locator('[data-testid="save-garnrolle"]'),
     ).toBeEnabled();
@@ -369,7 +370,7 @@ test.describe("Garnrollen-Kartenpunkt per Touch", () => {
       type: "touchEnd",
       touchPoints: [],
     });
-    await expect(placement).toContainText("Ort gewählt");
+    await expect(placement).toContainText("Kartenanker gewählt");
   });
 
   test("accepts a plain touch tap (no longpress hold)", async ({ page }) => {
@@ -398,6 +399,6 @@ test.describe("Garnrollen-Kartenpunkt per Touch", () => {
       type: "touchEnd",
       touchPoints: [],
     });
-    await expect(placement).toContainText("Ort gewählt");
+    await expect(placement).toContainText("Kartenanker gewählt");
   });
 });

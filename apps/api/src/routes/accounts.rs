@@ -832,16 +832,8 @@ fn validate_profile_update(
 
     let (radius_m, map_state) = match payload.map_state {
         GarnrolleMapState::NotOnMap => (0_i64, "not_on_map".to_string()),
-        GarnrolleMapState::Exact => {
-            if address.is_none() {
-                return Err(bad("address is required for a mapped Garnrolle"));
-            }
-            (0_i64, "exact".to_string())
-        }
+        GarnrolleMapState::Exact => (0_i64, "exact".to_string()),
         GarnrolleMapState::Radius => {
-            if address.is_none() {
-                return Err(bad("address is required for a mapped Garnrolle"));
-            }
             let radius = payload.radius_m.unwrap_or(250);
             if !(MIN_RADIUS_M..=MAX_RADIUS_M).contains(&radius) {
                 return Err(bad("radius_m must be between 50 and 5000"));
@@ -1713,16 +1705,44 @@ mod profile_update_tests {
     }
 
     #[test]
-    fn exact_profile_requires_address_and_valid_location() {
-        let missing_address = validate_profile_update(request(
+    fn mapped_profile_allows_no_address_but_rejects_invalid_location() {
+        let no_address = validate_profile_update(request(
             GarnrolleMapState::Exact,
             None,
             Some(Location {
                 lat: 53.5,
                 lon: 10.0,
             }),
-        ));
-        assert_eq!(missing_address.unwrap_err().0, StatusCode::BAD_REQUEST);
+        ))
+        .expect("mapped profile without address");
+        assert!(no_address.address.is_none());
+        assert_eq!(no_address.map_state, "exact");
+
+        let record = json!({
+            "id": "own-account",
+            "type": "garnrolle",
+            "title": "Alt",
+            "role": "gast",
+            "map_state": "not_on_map",
+            "radius_m": 0
+        });
+        let (updated, effective_location) =
+            update_jsonl_profile_record(record, &no_address).expect("mapped JSONL profile");
+        assert!(updated.get("address").is_none());
+        assert_eq!(updated["map_state"], "exact");
+        assert_eq!(effective_location.expect("private location").lat, 53.5);
+
+        let radius_without_address = validate_profile_update(request(
+            GarnrolleMapState::Radius,
+            None,
+            Some(Location {
+                lat: 53.5,
+                lon: 10.0,
+            }),
+        ))
+        .expect("radius profile without address");
+        assert!(radius_without_address.address.is_none());
+        assert_eq!(radius_without_address.map_state, "radius");
 
         let invalid_location = validate_profile_update(request(
             GarnrolleMapState::Exact,

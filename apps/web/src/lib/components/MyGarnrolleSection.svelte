@@ -57,8 +57,7 @@
     !!displayName.trim() &&
     !isLoadingProfile &&
     !isSaving &&
-    (visibilityChoice === "not_on_map" ||
-      (!!address.trim() && selectedLocation !== null));
+    (visibilityChoice === "not_on_map" || selectedLocation !== null);
   $: mapHref = ownGarnrolle?.public_pos
     ? `/map?focus=garnrolle:${ownGarnrolle.id}`
     : "/map";
@@ -224,7 +223,7 @@
       if (returned) {
         selectedLocation = returned;
         saveMessage =
-          "Ort übernommen. Prüfe Adresse und Sichtbarkeit und speichere anschließend.";
+          "Privater Kartenanker übernommen. Wähle nun die öffentliche Sichtbarkeit und speichere deine Garnrolle.";
       }
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 401) {
@@ -271,7 +270,7 @@
         return "Dein Konto darf die Garnrolle derzeit nicht bearbeiten.";
       }
       if (error.status === 400) {
-        return "Bitte prüfe Name, Adresse, Ort und Sichtbarkeit.";
+        return "Bitte prüfe Anzeigename, Kartenanker und Sichtbarkeit.";
       }
     }
     return "Die Garnrolle konnte nicht gespeichert werden. Bitte versuche es erneut.";
@@ -298,7 +297,8 @@
         sessionStorage.removeItem(draftStorageKey(activeAccountId));
       }
       await invalidateAll();
-      saveMessage = "Deine Garnrolle wurde gespeichert.";
+      saveMessage =
+        "Deine Garnrolle wurde gespeichert. Du kannst ihre Sichtbarkeit jederzeit ändern.";
       await goto("/settings#meine-garnrolle", {
         replaceState: true,
         noScroll: true,
@@ -330,7 +330,8 @@
   {#if !$authStore.authenticated}
     <div class="empty-card" data-testid="my-garnrolle-anonymous">
       <p>
-        Du bist noch nicht angemeldet. Nach dem Login entsteht deine Garnrolle.
+        Du bist noch nicht angemeldet. Bei der Registrierung wird deine
+        Garnrolle angelegt; nach dem Login kannst du sie hier einrichten.
       </p>
       <a class="btn btn-primary" href="/login">Login starten</a>
     </div>
@@ -360,13 +361,38 @@
       </a>
     </div>
 
+    {#if visibility.state === "not_on_map"}
+      <div class="setup-guide" data-testid="garnrolle-first-user-guide">
+        <p class="eyebrow">Dein Einstieg</p>
+        <h3>Deine Garnrolle ist schon da.</h3>
+        <p>Du brauchst keine weitere Rolle und keinen Antrag, um anzufangen.</p>
+        <ol>
+          <li>
+            <strong>Beschreiben:</strong> Wähle einen Anzeigenamen.
+          </li>
+          <li>
+            <strong>Verankern:</strong> Setze freiwillig einen privaten Punkt auf
+            der Karte.
+          </li>
+          <li>
+            <strong>Freigeben:</strong> Entscheide selbst, ob nichts, ein ungefährer
+            Ort oder der genaue Punkt öffentlich wird.
+          </li>
+        </ol>
+      </div>
+    {/if}
+
     <form
       class="garnrolle-form"
       aria-describedby="my-garnrolle-save-note"
       on:submit={handleSave}
     >
       <fieldset disabled={isLoadingProfile || isSaving}>
-        <legend>Garnrolle beschreiben</legend>
+        <legend>1. Garnrolle beschreiben</legend>
+        <p class="field-intro">
+          Nur der Anzeigename ist erforderlich. Alles Weitere kannst du später
+          ergänzen.
+        </p>
         <label>
           Anzeigename
           <input
@@ -408,80 +434,108 @@
       </fieldset>
 
       <fieldset disabled={isLoadingProfile || isSaving}>
-        <legend>Garnrolle auf Karte setzen</legend>
+        <legend>2. Privaten Kartenanker wählen</legend>
+        <p class="field-intro">
+          Der Kartenanker ist zunächst privat. Erst deine Auswahl im nächsten
+          Schritt bestimmt, ob und wie daraus eine öffentliche Position wird.
+        </p>
+
+        <div class="location-card" data-testid="garnrolle-location-state">
+          {#if selectedLocation}
+            <div>
+              <strong>Privater Kartenanker gewählt</strong>
+              <small>
+                {visibilityChoice === "not_on_map"
+                  ? "Der Punkt bleibt vollständig unsichtbar."
+                  : "Dieser Punkt ist die Grundlage deiner gewählten öffentlichen Darstellung."}
+              </small>
+            </div>
+            <button type="button" class="btn" on:click={chooseMapLocation}>
+              Punkt ändern
+            </button>
+          {:else}
+            <div>
+              <strong>Noch kein Kartenanker gewählt</strong>
+              <small>
+                Wähle den passenden Punkt selbst auf der Karte. Eine Adresse
+                wird nicht automatisch in eine Position umgewandelt.
+              </small>
+            </div>
+            <button
+              type="button"
+              class="btn btn-primary"
+              on:click={chooseMapLocation}
+              data-testid="choose-garnrolle-location"
+            >
+              Punkt auf Karte wählen
+            </button>
+          {/if}
+        </div>
+
         <label>
-          Adresse
+          Adresse oder Ortsnotiz <span class="optional">privat, optional</span>
           <input
             bind:value={address}
             maxlength="500"
-            placeholder="Straße, Hausnummer, Ort"
+            placeholder="z. B. Stadtteil oder Treffpunkt"
           />
         </label>
 
-        <div class="radio-group" role="radiogroup" aria-label="Sichtbarkeit">
-          <label class="radio-card">
-            <input
-              type="radio"
-              bind:group={visibilityChoice}
-              value="not_on_map"
-            />
-            <span>
-              <strong>Noch nicht auf der Karte</strong>
-              <small>Keine öffentliche Kartenposition.</small>
-            </span>
-          </label>
-          <label class="radio-card">
-            <input type="radio" bind:group={visibilityChoice} value="exact" />
-            <span>
-              <strong>Exakt sichtbar</strong>
-              <small>Der von dir gewählte Ort wird öffentlich sichtbar.</small>
-            </span>
-          </label>
-          <label class="radio-card">
-            <input type="radio" bind:group={visibilityChoice} value="radius" />
-            <span>
-              <strong>Im Umkreis sichtbar</strong>
-              <small>
-                Die öffentliche Position wird innerhalb des gewählten Umkreises
-                versetzt.
-              </small>
-            </span>
-          </label>
+        <div class="visibility-block">
+          <h3>3. Öffentliche Sichtbarkeit wählen</h3>
+          <p class="field-intro">
+            Du kannst diese Entscheidung jederzeit ändern.
+          </p>
+          <div class="radio-group" role="radiogroup" aria-label="Sichtbarkeit">
+            <label class="radio-card">
+              <input
+                type="radio"
+                bind:group={visibilityChoice}
+                value="not_on_map"
+              />
+              <span>
+                <strong>Privat – nicht öffentlich auf der Karte</strong>
+                <small
+                  >Ein gewählter Kartenanker bleibt gespeichert, aber
+                  unsichtbar.</small
+                >
+              </span>
+            </label>
+            <label class="radio-card">
+              <input
+                type="radio"
+                bind:group={visibilityChoice}
+                value="radius"
+              />
+              <span>
+                <strong>Öffentlich ungefähr</strong>
+                <small
+                  >Gezeigt wird nur eine versetzte Position innerhalb des
+                  gewählten Umkreises.</small
+                >
+              </span>
+            </label>
+            <label class="radio-card">
+              <input type="radio" bind:group={visibilityChoice} value="exact" />
+              <span>
+                <strong>Öffentlich exakt</strong>
+                <small
+                  >Der gewählte Kartenanker wird genau veröffentlicht.</small
+                >
+              </span>
+            </label>
+          </div>
         </div>
 
-        {#if visibilityChoice !== "not_on_map"}
-          <div class="location-card" data-testid="garnrolle-location-state">
-            {#if selectedLocation}
-              <div>
-                <strong>Ort gewählt</strong>
-                <small>Die genaue Position ist auf der Karte gesetzt.</small>
-              </div>
-              <button type="button" class="btn" on:click={chooseMapLocation}>
-                Ort ändern
-              </button>
-            {:else}
-              <div>
-                <strong>Noch kein Ort gewählt</strong>
-                <small>
-                  Die Adresse wird nicht automatisch in eine Position
-                  umgewandelt. Wähle den passenden Punkt selbst auf der Karte.
-                </small>
-              </div>
-              <button
-                type="button"
-                class="btn btn-primary"
-                on:click={chooseMapLocation}
-                data-testid="choose-garnrolle-location"
-              >
-                Ort auf Karte wählen
-              </button>
-            {/if}
-          </div>
+        {#if visibilityChoice !== "not_on_map" && !selectedLocation}
+          <p class="form-message hint" role="status">
+            Für diese öffentliche Sichtbarkeit fehlt noch ein Kartenanker.
+          </p>
         {/if}
 
         {#if visibilityChoice === "radius"}
           <label>
-            Radius in Metern
+            Ungefährer Umkreis in Metern
             <input
               type="number"
               min="50"
@@ -529,15 +583,15 @@
           disabled={!canSave}
           data-testid="save-garnrolle"
         >
-          {isSaving ? "Wird gespeichert…" : "Speichern"}
+          {isSaving ? "Garnrolle wird gespeichert…" : "Garnrolle speichern"}
         </button>
       </div>
       <p id="my-garnrolle-save-note" class="muted">
         Öffentlich sind Anzeigename, Kurzbeschreibung, Fähigkeiten, Güter und
-        Interessen. Deine Adresse bleibt privat. Bei „Exakt sichtbar“ ist der
-        gewählte Ort öffentlich; bei „Im Umkreis sichtbar“ nur eine versetzte
-        Näherung; bei „Noch nicht auf der Karte“ keine Position. Adresse und Ort
-        werden nicht automatisch abgeglichen.
+        Interessen. Adresse oder Ortsnotiz bleiben privat. Bei „Öffentlich
+        exakt“ wird der Kartenanker genau gezeigt, bei „Öffentlich ungefähr“ nur
+        eine versetzte Näherung und bei „Privat“ gar keine Position. Kartenanker
+        und Adressnotiz werden nicht automatisch abgeglichen.
       </p>
     </form>
   {/if}
@@ -591,7 +645,8 @@
 
   .status-card,
   .empty-card,
-  .location-card {
+  .location-card,
+  .setup-guide {
     border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.08));
     border-radius: 12px;
     display: flex;
@@ -601,8 +656,27 @@
   }
 
   .status-card p,
-  .empty-card p {
+  .empty-card p,
+  .setup-guide p {
     margin: 0.35rem 0 0;
+  }
+
+  .setup-guide {
+    display: block;
+    background: rgba(106, 166, 255, 0.08);
+  }
+
+  .setup-guide h3 {
+    margin: 0.25rem 0 0;
+  }
+
+  .setup-guide ol {
+    margin: 0.85rem 0 0;
+    padding-left: 1.25rem;
+  }
+
+  .setup-guide li + li {
+    margin-top: 0.45rem;
   }
 
   .location-card {
@@ -621,9 +695,30 @@
     color: #ffd28a;
   }
 
-  .muted {
+  .muted,
+  .field-intro {
     color: var(--muted, #9aa4b2);
     font-size: 0.92rem;
+  }
+
+  .field-intro {
+    margin: 0;
+  }
+
+  .optional {
+    color: var(--muted, #9aa4b2);
+    font-size: 0.82rem;
+    font-weight: 400;
+  }
+
+  .visibility-block {
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .visibility-block h3 {
+    font-size: 1rem;
+    margin: 0;
   }
 
   .garnrolle-form {
@@ -699,6 +794,11 @@
     border: 1px solid rgba(84, 225, 166, 0.7);
   }
 
+  .form-message.hint {
+    background: rgba(255, 210, 138, 0.08);
+    border: 1px solid rgba(255, 210, 138, 0.55);
+  }
+
   .actions {
     display: flex;
     flex-wrap: wrap;
@@ -735,7 +835,8 @@
     .section-head,
     .status-card,
     .empty-card,
-    .location-card {
+    .location-card,
+    .setup-guide {
       display: grid;
     }
   }
