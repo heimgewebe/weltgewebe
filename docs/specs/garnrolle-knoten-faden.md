@@ -102,6 +102,21 @@ created_by_account_id = Account-ID der authentifizierten Sitzung
 Der Client darf diese Bindung weder vorgeben noch ändern. Beim Ersetzen oder
 Bearbeiten eines Knotens bleibt sie erhalten.
 
+Der Detailendpunkt `GET /api/nodes/{id}` ergänzt diese unveränderliche Bindung
+um zwei abgeleitete, nicht persistierte Projektionen:
+
+- `created_by_account_current_title` ist ausschließlich der **heutige öffentliche**
+  Garnrollenname. Das Feld fehlt bei deaktivierten, fehlenden oder leeren
+  Accounts und ist kein historischer Namenssnapshot.
+- `history` enthält die typisierten Ereignisse `created` und – sofern
+  `updated_at` von `created_at` abweicht – `updated`, jeweils aus den
+  autoritativen Knotendaten abgeleitet und neuestes Ereignis zuerst.
+
+Die Benutzeroberfläche darf eine interne Account-ID niemals als sichtbaren
+Namensersatz ausgeben. Ein öffentlicher aktueller Name darf zur heutigen
+Garnrolle führen; eine unveränderliche historische Namensanzeige benötigt ein
+eigenes persistiertes Ereignis- und Snapshotmodell.
+
 Für bestehende Knoten, deren Urheber historisch nicht belegt ist, wird keine
 Urheberschaft erfunden. Sie besitzen keine `created_by_account_id`. Daraus folgt:
 
