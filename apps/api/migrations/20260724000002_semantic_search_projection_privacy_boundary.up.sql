@@ -21,6 +21,30 @@ SET search_visibility = CASE
 END,
 payload = payload - 'search_visibility';
 
+-- Resolve ownership once and reuse the same active-account rule at every search
+-- boundary. Surrounding whitespace is malformed rather than silently normalized,
+-- because request authorization compares the canonical account id byte-for-byte.
+CREATE OR REPLACE FUNCTION weltgewebe_search_owner_account_id(p_payload JSONB)
+RETURNS TEXT LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+SELECT CASE
+    WHEN jsonb_typeof(p_payload -> 'created_by_account_id') = 'string'
+     AND p_payload ->> 'created_by_account_id' = btrim(p_payload ->> 'created_by_account_id')
+     AND btrim(p_payload ->> 'created_by_account_id') <> ''
+      THEN p_payload ->> 'created_by_account_id'
+    ELSE NULL
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION weltgewebe_search_owner_is_active(p_payload JSONB)
+RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
+SELECT EXISTS (
+    SELECT 1
+    FROM domain_accounts a
+    WHERE a.id = weltgewebe_search_owner_account_id(p_payload)
+      AND a.disabled = FALSE
+);
+$$;
+
 -- Legacy document generations are immutable after this cutover. Future domain
 -- mutations enqueue only generations using the canonical-visibility document
 -- contract; a different generation requires its own identity-bound worker.
@@ -74,6 +98,133 @@ ALTER TABLE domain_nodes
     ADD CONSTRAINT domain_nodes_search_visibility_valid
     CHECK (search_visibility IN ('public', 'private', 'hidden', 'revoked'));
 
+-- The database is the final worker write fence. A private projection may retain
+-- plaintext only while its canonical owner account exists and is enabled. The
+-- trigger also makes hidden/revoked/orphan writes content-free even if a caller
+-- supplies a weaker row shape.
+CREATE OR REPLACE FUNCTION weltgewebe_search_enforce_projection_owner()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+    canonical_payload JSONB;
+    canonical_visibility TEXT;
+    must_redact BOOLEAN;
+BEGIN
+    SELECT n.payload, n.search_visibility
+      INTO canonical_payload, canonical_visibility
+      FROM domain_nodes n
+     WHERE n.id = NEW.node_id;
+
+    must_redact := NOT FOUND;
+    IF NOT must_redact THEN
+        must_redact := canonical_visibility IN ('hidden', 'revoked')
+            OR (canonical_visibility = 'private'
+                AND NOT weltgewebe_search_owner_is_active(canonical_payload));
+    END IF;
+
+    IF must_redact THEN
+        NEW.content_sha256 := 'a0014e8fdbf41fbdb6be203681519f957f0fc5283c50cc48d57978c68de09b32';
+        NEW.title := '[nicht öffentlich]';
+        NEW.tags := '{}'::TEXT[];
+        NEW.searchable_text := '[nicht öffentlich]';
+        NEW.language := 'und';
+        NEW.kind := '[nicht öffentlich]';
+        NEW.status := 'hidden';
+        NEW.visibility_scopes := '{}'::TEXT[];
+        NEW.semantic_state := 'unavailable';
+        NEW.embedding := NULL;
+    ELSIF canonical_visibility = 'private' THEN
+        NEW.status := 'active';
+        NEW.visibility_scopes := ARRAY['owner']::TEXT[];
+        NEW.semantic_state := 'unavailable';
+        NEW.embedding := NULL;
+    END IF;
+
+    RETURN NEW;
+END; $$;
+
+CREATE TRIGGER search_enforce_projection_owner
+BEFORE INSERT OR UPDATE ON search_node_projections
+FOR EACH ROW EXECUTE FUNCTION weltgewebe_search_enforce_projection_owner();
+
+-- Account activation is part of private-search authorization. Insert, disable,
+-- re-enable and delete events therefore version every affected private node.
+-- Inactivation also redacts all retained generations synchronously; the queued
+-- current-version job then reconciles counters and the serving generation.
+CREATE OR REPLACE FUNCTION weltgewebe_search_track_domain_account_owner()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+    account_identifier TEXT;
+    account_inactive BOOLEAN;
+BEGIN
+    IF TG_OP = 'UPDATE' AND OLD.disabled IS NOT DISTINCT FROM NEW.disabled THEN
+        RETURN NEW;
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        account_identifier := OLD.id;
+        account_inactive := TRUE;
+    ELSE
+        account_identifier := NEW.id;
+        account_inactive := NEW.disabled;
+    END IF;
+
+    PERFORM pg_advisory_xact_lock_shared(hashtextextended('weltgewebe.search.generation.activation', 0));
+
+    IF account_inactive THEN
+        UPDATE search_node_projections p
+           SET content_sha256 = 'a0014e8fdbf41fbdb6be203681519f957f0fc5283c50cc48d57978c68de09b32',
+               title = '[nicht öffentlich]',
+               tags = '{}'::TEXT[],
+               searchable_text = '[nicht öffentlich]',
+               language = 'und',
+               kind = '[nicht öffentlich]',
+               status = 'hidden',
+               visibility_scopes = '{}'::TEXT[],
+               semantic_state = 'unavailable',
+               embedding = NULL,
+               indexed_at = clock_timestamp()
+          FROM domain_nodes n
+         WHERE p.node_id = n.id
+           AND n.search_visibility = 'private'
+           AND weltgewebe_search_owner_account_id(n.payload) = account_identifier;
+    END IF;
+
+    WITH affected AS (
+        SELECT n.id
+          FROM domain_nodes n
+         WHERE n.search_visibility = 'private'
+           AND weltgewebe_search_owner_account_id(n.payload) = account_identifier
+    ), bumped AS (
+        INSERT INTO search_node_versions AS current_version
+            (node_id, source_version, source_revision, deleted_at)
+        SELECT id, 1, 'node-1', NULL
+          FROM affected
+        ON CONFLICT (node_id) DO UPDATE SET
+          source_version = current_version.source_version + 1,
+          source_revision = 'node-' || (current_version.source_version + 1)::TEXT,
+          deleted_at = NULL
+        RETURNING node_id, source_version, source_revision
+    )
+    INSERT INTO search_projection_jobs
+        (generation_id, node_id, source_version, source_revision, operation)
+    SELECT g.generation_id, b.node_id, b.source_version, b.source_revision, 'upsert'
+      FROM bumped b
+      CROSS JOIN search_index_generations g
+     WHERE g.state IN ('building', 'ready', 'active')
+       AND g.document_revision = 'node-document-v4-canonical-visibility'
+    ON CONFLICT DO NOTHING;
+
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END; $$;
+
+CREATE TRIGGER search_track_domain_account_owner_insert_delete
+AFTER INSERT OR DELETE ON domain_accounts
+FOR EACH ROW EXECUTE FUNCTION weltgewebe_search_track_domain_account_owner();
+
+CREATE TRIGGER search_track_domain_account_owner_disabled
+AFTER UPDATE OF disabled ON domain_accounts
+FOR EACH ROW EXECUTE FUNCTION weltgewebe_search_track_domain_account_owner();
+
 -- Purge recoverable non-public and orphaned content left by older generations.
 -- Canonical domain rows remain untouched; projections are regenerable state.
 DELETE FROM search_node_projections p
@@ -112,8 +263,7 @@ SELECT COALESCE((
                             AND cardinality(p.embedding) = g.dimension)
                            OR
                            (n.search_visibility = 'private'
-                            AND jsonb_typeof(n.payload -> 'created_by_account_id') = 'string'
-                            AND regexp_replace(n.payload ->> 'created_by_account_id', '[[:space:]]', '', 'g') <> ''
+                            AND weltgewebe_search_owner_is_active(n.payload)
                             AND p.status = 'active'
                             AND p.semantic_state = 'unavailable'
                             AND p.visibility_scopes = ARRAY['owner']::TEXT[]
@@ -121,10 +271,7 @@ SELECT COALESCE((
                            OR
                            ((n.search_visibility IN ('hidden', 'revoked')
                              OR (n.search_visibility = 'private'
-                                 AND NOT (
-                                     jsonb_typeof(n.payload -> 'created_by_account_id') = 'string'
-                                     AND regexp_replace(n.payload ->> 'created_by_account_id', '[[:space:]]', '', 'g') <> ''
-                                 )))
+                                 AND NOT weltgewebe_search_owner_is_active(n.payload)))
                             AND p.status = 'hidden'
                             AND p.semantic_state = 'unavailable'
                             AND p.visibility_scopes = '{}'::TEXT[]
