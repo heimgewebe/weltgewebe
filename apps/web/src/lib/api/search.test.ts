@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildSimilarNodeQuery, nodeToMapEntity, searchNodes } from "./search";
+import {
+  buildSimilarNodeQuery,
+  MAX_SEARCH_QUERY_CHARS,
+  nodeToMapEntity,
+  searchNodes,
+} from "./search";
 import type { Node } from "$lib/map/types";
 
 const NODE: Node = {
@@ -14,20 +19,21 @@ const NODE: Node = {
   location: { lat: 54.9, lon: 8.3 },
 };
 
+function searchResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      items: [NODE],
+      mode: "hybrid",
+      generation_id: "generation-1",
+      offset: 0,
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+}
+
 describe("searchNodes", () => {
   it("calls the authorized server search with credentials and stable kind filters", async () => {
-    const fetcher = vi.fn<typeof fetch>(
-      async () =>
-        new Response(
-          JSON.stringify({
-            items: [NODE],
-            mode: "hybrid",
-            generation_id: "generation-1",
-            offset: 0,
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
-    );
+    const fetcher = vi.fn<typeof fetch>(async () => searchResponse());
 
     const response = await searchNodes("  Fahrrad Hilfe  ", {
       kinds: ["Werkstatt", "Treffpunkt", "Werkstatt"],
@@ -42,6 +48,20 @@ describe("searchNodes", () => {
       "https://api.example.test/api/search?q=Fahrrad+Hilfe&limit=10&kinds=Treffpunkt%2CWerkstatt",
     );
     expect(init).toMatchObject({ credentials: "include" });
+  });
+
+  it("bounds overlong queries before they reach the server contract", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => searchResponse());
+
+    await searchNodes(`  ${"😀".repeat(MAX_SEARCH_QUERY_CHARS + 20)}  `, {
+      apiBase: "https://api.example.test",
+      fetcher: fetcher as typeof fetch,
+    });
+
+    const [url] = fetcher.mock.calls[0];
+    const query = new URL(String(url)).searchParams.get("q");
+    expect(Array.from(query ?? "")).toHaveLength(MAX_SEARCH_QUERY_CHARS);
+    expect(query).toBe("😀".repeat(MAX_SEARCH_QUERY_CHARS));
   });
 
   it("maps server nodes to canonical map entities", () => {
@@ -63,6 +83,8 @@ describe("buildSimilarNodeQuery", () => {
   });
 
   it("never exceeds the T006 query contract", () => {
-    expect(buildSimilarNodeQuery({ title: "x".repeat(600) })).toHaveLength(512);
+    expect(buildSimilarNodeQuery({ title: "x".repeat(600) })).toHaveLength(
+      MAX_SEARCH_QUERY_CHARS,
+    );
   });
 });

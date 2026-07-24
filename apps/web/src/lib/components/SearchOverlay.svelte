@@ -8,6 +8,7 @@
   import { contextPanelOpen } from "$lib/stores/uiView";
   import { activeFilters } from "$lib/stores/filterStore";
   import type { MapEntityViewModel } from "$lib/map/types";
+  import { MAX_SEARCH_QUERY_CHARS } from "$lib/api/search";
   import type { NodeSearchStatus } from "$lib/api/search";
   import { restoreTarget } from "$lib/utils/focusManager";
 
@@ -121,6 +122,7 @@
         bind:this={inputEl}
         bind:value={$searchQuery}
         type="search"
+        maxlength={MAX_SEARCH_QUERY_CHARS}
         placeholder="Gewebe durchsuchen…"
         aria-label="Suchbegriff"
         aria-autocomplete="list"

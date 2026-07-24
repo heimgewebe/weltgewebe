@@ -1,5 +1,7 @@
 import type { MapEntityNode, Node } from "$lib/map/types";
 
+export const MAX_SEARCH_QUERY_CHARS = 512;
+
 export type NodeSearchStatus = "idle" | "loading" | "ready" | "error";
 
 export interface NodeSearchResponse {
@@ -42,11 +44,15 @@ export function nodeToMapEntity(node: Node): MapEntityNode {
   };
 }
 
+export function normalizeSearchQuery(query: string): string {
+  return Array.from(query.trim()).slice(0, MAX_SEARCH_QUERY_CHARS).join("");
+}
+
 export async function searchNodes(
   query: string,
   options: SearchNodesOptions = {},
 ): Promise<NodeSearchResponse> {
-  const normalizedQuery = query.trim();
+  const normalizedQuery = normalizeSearchQuery(query);
   if (!normalizedQuery) {
     throw new Error("Search query must not be empty");
   }
@@ -90,5 +96,7 @@ export function buildSimilarNodeQuery(source: SimilarNodeSource): string {
   ]
     .map((part) => part?.trim())
     .filter((part): part is string => Boolean(part));
-  return Array.from(parts.join(" · ")).slice(0, 512).join("");
+  return Array.from(parts.join(" · "))
+    .slice(0, MAX_SEARCH_QUERY_CHARS)
+    .join("");
 }
