@@ -26,6 +26,7 @@
     selectRelated: {
       type: "node" | "garnrolle";
       id: string;
+      title?: string;
       data?: MapEntityViewModel;
     };
     domainChanged: DomainChanged;
@@ -55,6 +56,12 @@
     | null = null;
   let similarNodesLoadStarted = false;
 
+  type NodeHistoryEvent = {
+    date: string;
+    event: string;
+    kind?: "created" | "updated";
+  };
+
   interface NodeDetails {
     id: string;
     title: string;
@@ -66,13 +73,14 @@
     created_at?: string;
     updated_at?: string;
     created_by_account_id?: string | null;
+    created_by_account_current_title?: string | null;
     kind?: string;
     participants?: {
       account_title?: string;
       account_id: string;
       edge_kind?: string;
     }[];
-    history?: { date: string; event: string }[];
+    history?: NodeHistoryEvent[];
   }
 
   function resetMutationState() {
@@ -99,6 +107,8 @@
   $: nodeCreator =
     nodeDetails?.created_by_account_id ||
     ($selection?.data?.created_by_account_id as string | undefined);
+  $: currentCreatorTitle = nodeDetails?.created_by_account_current_title || "";
+  $: timelineEvents = nodeDetails?.history || [];
   $: canMutate =
     $authStore.authenticated &&
     ($authStore.role === "weber" ||
@@ -398,7 +408,7 @@
       </div>
     </form>
   {:else}
-    <div class="tabs" role="tablist" aria-label="Knoten-Tabs">
+    <div class="tabs node-tabs" role="tablist" aria-label="Knoten-Tabs">
       <button
         class:active={activeTab === "uebersicht"}
         on:click={() => setTab("uebersicht")}
@@ -528,23 +538,27 @@
           tabindex="0"
         >
           {#if isLoadingDetails}<p class="ghost">Lade Verlauf…</p>
-          {:else if nodeDetails?.history?.length}<ul class="timeline">
-              {#each nodeDetails.history as event}<li>
+          {:else if timelineEvents.length}<ul class="timeline">
+              {#each timelineEvents as event}<li>
                   <span class="date">{formatDate(event.date)}</span><span
                     class="event">{event.event}</span
                   >
+                  {#if event.kind === "created" && currentCreatorTitle && nodeCreator}<span
+                      class="creator"
+                    >
+                      <span>Urheber:</span>
+                      <button
+                        type="button"
+                        aria-label={`Garnrolle ${currentCreatorTitle} öffnen`}
+                        on:click={() =>
+                          dispatch("selectRelated", {
+                            type: "garnrolle",
+                            id: nodeCreator,
+                            title: currentCreatorTitle,
+                          })}>{currentCreatorTitle}</button
+                      >
+                    </span>{/if}
                 </li>{/each}
-            </ul>
-          {:else if nodeDetails?.created_at || $selection?.data?.created_at}<ul
-              class="timeline"
-            >
-              <li>
-                <span class="date"
-                  >{formatDate(
-                    nodeDetails?.created_at || $selection?.data?.created_at,
-                  )}</span
-                ><span class="event">Knoten wurde geknüpft.</span>
-              </li>
             </ul>
           {:else}<p class="ghost">Noch kein Verlauf.</p>{/if}
         </div>
@@ -583,6 +597,14 @@
     margin: 0;
     font-size: 1.5rem;
     line-height: 1.2;
+  }
+  .node-tabs {
+    gap: 0;
+  }
+  .node-tabs > button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 0.25rem;
   }
   .summary {
     color: var(--muted);
@@ -634,6 +656,40 @@
   .participants button:hover,
   .participants button:focus-visible {
     border-color: var(--accent);
+  }
+  .creator {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .creator button {
+    min-width: 44px;
+    min-height: 44px;
+    max-width: 100%;
+    padding: 0.35rem 0.25rem;
+    border: 0;
+    border-radius: 0.25rem;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-weight: 650;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    cursor: pointer;
+  }
+  .creator button:hover {
+    color: var(--accent);
+  }
+  .creator button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
   .edit-form,
   .mutation-actions {
@@ -723,6 +779,12 @@
     white-space: pre-wrap;
   }
   @media (max-width: 420px) {
+    .node-tabs > button {
+      padding-inline: 0.15rem;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
     .coordinate-grid,
     .form-actions {
       grid-template-columns: 1fr;
