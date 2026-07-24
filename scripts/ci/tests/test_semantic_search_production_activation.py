@@ -98,7 +98,7 @@ def test_backfill_session_is_generation_bound_before_leased_processing() -> None
     assert "normalization_revision=$8" in backfill
     assert "ranking_revision=$9" in backfill
     assert backfill.index("start_generation(generation.clone())") < backfill.index(
-        "let worker = ProjectionWorker::new_with_provider"
+        'format!("backfill:{}:{}"'
     )
 
 
