@@ -37,14 +37,14 @@ async function expectDirectSettingsEntry(page: Page) {
 }
 
 test.describe("Own Garnrolle settings entry", () => {
-  test("uses the same direct settings entry when the Garnrolle is not on the map", async ({
+  test("uses the same direct settings entry when the Garnrolle is private", async ({
     page,
   }) => {
     await gotoMapAsAccount(page, NOT_ON_MAP_ACCOUNT_ID);
     await expectDirectSettingsEntry(page);
   });
 
-  test("guides a freshly authenticated guest from the map through the first Garnrolle decisions", async ({
+  test("guides an authenticated guest without treating privacy as unfinished onboarding", async ({
     page,
   }) => {
     await gotoMapAsAccount(page, NOT_ON_MAP_ACCOUNT_ID, "gast");
@@ -57,7 +57,13 @@ test.describe("Own Garnrolle settings entry", () => {
     const section = page.locator('[data-testid="my-garnrolle-section"]');
     await expect(
       section.locator('[data-testid="garnrolle-first-user-guide"]'),
-    ).toContainText("Du brauchst keine weitere Rolle");
+    ).toHaveCount(0);
+    await expect(
+      section.locator('[data-testid="my-garnrolle-status"]'),
+    ).toContainText("Privat");
+    await expect(
+      section.locator('[data-testid="my-garnrolle-status"]'),
+    ).toContainText("keine öffentliche Kartenposition");
     await expect(
       section.getByLabel("Privat – nicht öffentlich auf der Karte"),
     ).toBeChecked();
