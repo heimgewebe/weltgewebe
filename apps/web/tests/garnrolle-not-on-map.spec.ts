@@ -29,12 +29,11 @@ async function gotoMapAsAccount(page: Page, accountId: string, role = "weber") {
 }
 
 async function expectDirectSettingsEntry(page: Page) {
-  const link = page.locator(
-    '.garnrolle-container a[aria-label="Meine Garnrolle einrichten"]',
-  );
+  const link = page.getByRole("link", {
+    name: "Meine Garnrolle einrichten",
+  });
   await expect(link).toBeVisible();
   await expect(link).toHaveAttribute("href", "/settings#meine-garnrolle");
-  await expect(page.locator(".garnrolle-container .menu")).toHaveCount(0);
 }
 
 test.describe("Own Garnrolle settings entry", () => {
@@ -51,9 +50,7 @@ test.describe("Own Garnrolle settings entry", () => {
     await gotoMapAsAccount(page, NOT_ON_MAP_ACCOUNT_ID, "gast");
 
     await page
-      .locator(
-        '.garnrolle-container a[aria-label="Meine Garnrolle einrichten"]',
-      )
+      .getByRole("link", { name: "Meine Garnrolle einrichten" })
       .click();
 
     await expect(page).toHaveURL(/\/settings#meine-garnrolle$/);

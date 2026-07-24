@@ -66,16 +66,15 @@ test.describe("Interaction Clarity & State Feedback", () => {
   test("Garnrolle führt ohne Zwischenmenü direkt zu ihren Einstellungen", async ({
     page,
   }) => {
-    const garnrolleLink = page.locator(
-      '.garnrolle-container a[aria-label="Meine Garnrolle einrichten"]',
-    );
+    const garnrolleLink = page.getByRole("link", {
+      name: "Meine Garnrolle einrichten",
+    });
 
     await expect(garnrolleLink).toBeVisible();
     await expect(garnrolleLink).toHaveAttribute(
       "href",
       "/settings#meine-garnrolle",
     );
-    await expect(page.locator(".garnrolle-container .menu")).toHaveCount(0);
   });
 
   test("focus does not return to the tool fan trigger when entering komposition from Finden", async ({

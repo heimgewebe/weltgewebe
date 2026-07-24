@@ -79,7 +79,7 @@
 
   .garnrolle-link:focus-visible,
   .login-entry:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent, #6aa6ff);
     outline-offset: 3px;
   }
 
