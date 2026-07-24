@@ -244,10 +244,56 @@ describe("setupKompositionInteraction", () => {
     expect(draft?.lngLat).toBeUndefined();
   });
 
+  it("does not let a stale longpress affect a re-entered Garnrolle composition", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    leaveToNavigation();
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    vi.advanceTimersByTime(800);
+    const draft = get(kompositionDraft);
+    expect(draft?.mode).toBe("place-garnrolle");
+    expect(draft?.lngLat).toBeUndefined();
+    expect(draft?.source).toBe("tool-fan");
+  });
+
+  it("does not revive a navigation longpress after an ABA state transition", () => {
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    leaveToNavigation();
+    vi.advanceTimersByTime(800);
+    expect(get(kompositionDraft)).toBeNull();
+  });
+
+  it("does not revive a gesture after authentication changes away and back", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    authStore.set({ authenticated: false, role: "gast" });
+    authStore.set({ authenticated: true, role: "gast" });
+    vi.advanceTimersByTime(800);
+    expect(get(kompositionDraft)?.lngLat).toBeUndefined();
+  });
+
   it("ignores right and middle mouse buttons for placement", () => {
     enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
-    clickAt(map, "mousedown", "mouseup", pointerEvent(50, 50, 10, 53.5, undefined, 1, 2));
-    clickAt(map, "mousedown", "mouseup", pointerEvent(50, 50, 10, 53.5, undefined, 1, 1));
+    clickAt(
+      map,
+      "mousedown",
+      "mouseup",
+      pointerEvent(50, 50, 10, 53.5, undefined, 1, 2),
+    );
+    clickAt(
+      map,
+      "mousedown",
+      "mouseup",
+      pointerEvent(50, 50, 10, 53.5, undefined, 1, 1),
+    );
+    expect(get(kompositionDraft)?.lngLat).toBeUndefined();
+  });
+
+  it("does not arm a longpress from a non-primary mouse button", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5, undefined, 1, 2));
+    vi.advanceTimersByTime(800);
     expect(get(kompositionDraft)?.lngLat).toBeUndefined();
   });
 

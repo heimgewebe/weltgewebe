@@ -57,7 +57,7 @@ type ActiveGesture = {
   startX: number;
   startY: number;
   mode: GestureMode;
-  initialDraftMode: string | null;
+  interactionRevision: number;
   longPressFired: boolean;
 };
 
@@ -65,6 +65,17 @@ export function setupKompositionInteraction(map: MapLibreMap) {
   let longPressTimer: ReturnType<typeof setTimeout> | undefined;
   let activeGesture: ActiveGesture | null = null;
   let suppressMouseUntil = 0;
+  let interactionRevision = 0;
+
+  // Bind a gesture to one exact composition/auth generation rather than only
+  // to a mode value. This also rejects ABA transitions such as
+  // place-garnrolle -> navigation -> place-garnrolle during one held press.
+  const unsubscribeDraftRevision = kompositionDraft.subscribe(() => {
+    interactionRevision += 1;
+  });
+  const unsubscribeAuthRevision = authStore.subscribe(() => {
+    interactionRevision += 1;
+  });
 
   const clearLongPressTimer = () => {
     if (longPressTimer !== undefined) {
@@ -80,7 +91,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
 
   const gestureIsStillValid = (gesture: ActiveGesture) => {
     if (!canComposeOnMap()) return false;
-    return (get(kompositionDraft)?.mode ?? null) === gesture.initialDraftMode;
+    return gesture.interactionRevision === interactionRevision;
   };
 
   const setPoint = (
@@ -110,7 +121,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
       startX: point.x,
       startY: point.y,
       mode: isPlacingGarnrolle() ? "place-garnrolle" : "new-knoten",
-      initialDraftMode: get(kompositionDraft)?.mode ?? null,
+      interactionRevision,
       longPressFired: false,
     };
     longPressTimer = setTimeout(() => {
@@ -214,6 +225,8 @@ export function setupKompositionInteraction(map: MapLibreMap) {
 
   return () => {
     cancelGesture();
+    unsubscribeDraftRevision();
+    unsubscribeAuthRevision();
     map.off("mousedown", handleMousedown);
     map.off("mouseup", handleMouseup);
     map.off("mousemove", handleMousemove);
