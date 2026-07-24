@@ -64,6 +64,29 @@ jobs:
       - name: SvelteKit prepare
         run: pnpm sync
 
+      - name: Format PR 1568 files
+        run: |
+          pnpm exec prettier --write \
+            src/lib/api/domainWrites.ts \
+            src/lib/components/MyGarnrolleSection.svelte \
+            src/lib/components/TopBar.svelte \
+            src/lib/garnrolle/visibility.ts \
+            src/routes/antraege/+page.svelte \
+            tests/garnrolle-update-safety.spec.ts
+
+      - name: Upload PR 1568 formatted files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: pr1568-formatted
+          path: |
+            apps/web/src/lib/api/domainWrites.ts
+            apps/web/src/lib/components/MyGarnrolleSection.svelte
+            apps/web/src/lib/components/TopBar.svelte
+            apps/web/src/lib/garnrolle/visibility.ts
+            apps/web/src/routes/antraege/+page.svelte
+            apps/web/tests/garnrolle-update-safety.spec.ts
+          if-no-files-found: error
+
       - name: Typecheck
         run: pnpm check
 
