@@ -261,11 +261,66 @@ async fn private_owner_lifecycle_is_account_bound_redacted_and_recoverable() {
     assert_private(&active_owner);
     assert_eq!(owner_candidate_count(&pool).await, 1);
 
-    sqlx::query("UPDATE domain_accounts SET disabled=TRUE WHERE id=$1")
-        .bind(OWNER_ID)
-        .execute(&pool)
+    // Prove the account-row lock against the dangerous race: a new private
+    // projection is inserted but not committed yet while another connection
+    // disables the owner. The disable must wait; after the insert commits, the
+    // lifecycle trigger must observe and synchronously redact that row.
+    sqlx::query(
+        "DELETE FROM search_node_projections WHERE generation_id=$1 AND node_id=$2",
+    )
+    .bind(&generation)
+    .bind(NODE_ID)
+    .execute(&pool)
+    .await
+    .expect("remove committed private projection before race proof");
+
+    let mut projection_tx = pool.begin().await.expect("begin concurrent projection write");
+    sqlx::query(
+        "INSERT INTO search_node_projections \
+         (generation_id,node_id,source_version,source_revision,content_sha256,title,tags,searchable_text,language,kind,status,visibility_scopes,semantic_state,embedding) \
+         SELECT $1,v.node_id,v.source_version,v.source_revision,$3,$4,'{}'::TEXT[],$5,'de','Werkstatt','active',ARRAY['owner']::TEXT[],'unavailable',NULL \
+         FROM search_node_versions v WHERE v.node_id=$2",
+    )
+    .bind(&generation)
+    .bind(NODE_ID)
+    .bind(format!("{:064x}", 99))
+    .bind(PRIVATE_TITLE)
+    .bind(format!("{PRIVATE_TITLE} Nur für den Eigentümer"))
+    .execute(&mut *projection_tx)
+    .await
+    .expect("insert uncommitted private projection");
+
+    let mut disable_connection = pool
+        .acquire()
         .await
-        .expect("disable owner account");
+        .expect("acquire concurrent account connection");
+    let (disable_started_tx, disable_started_rx) = tokio::sync::oneshot::channel();
+    let mut disable_task = tokio::spawn(async move {
+        let _ = disable_started_tx.send(());
+        sqlx::query("UPDATE domain_accounts SET disabled=TRUE WHERE id=$1")
+            .bind(OWNER_ID)
+            .execute(&mut *disable_connection)
+            .await
+    });
+    disable_started_rx
+        .await
+        .expect("concurrent disable task started");
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(250), &mut disable_task)
+            .await
+            .is_err(),
+        "owner disable completed before the uncommitted private projection released its account lock"
+    );
+    projection_tx
+        .commit()
+        .await
+        .expect("commit concurrent private projection");
+    let disabled_result = disable_task
+        .await
+        .expect("join concurrent owner disable")
+        .expect("disable owner account after projection commit");
+    assert_eq!(disabled_result.rows_affected(), 1);
+
     let synchronously_disabled = projection(&pool, &generation).await;
     assert_redacted(&synchronously_disabled);
     assert_eq!(owner_candidate_count(&pool).await, 0);
