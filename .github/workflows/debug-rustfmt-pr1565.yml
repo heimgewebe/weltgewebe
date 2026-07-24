@@ -11,6 +11,14 @@ name: Debug rustfmt PR1565
       - "Cargo.lock"
       - "toolchain.versions.yml"
       - ".github/workflows/debug-rustfmt-pr1565.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "toolchain.versions.yml"
+      - ".github/workflows/debug-rustfmt-pr1565.yml"
   workflow_dispatch: {}
 
 permissions:
