@@ -49,10 +49,6 @@ END; $$;
 
 ALTER TABLE domain_nodes ENABLE TRIGGER search_track_domain_nodes;
 
-DROP POLICY IF EXISTS search_projection_jobs_generation_binding ON search_projection_jobs;
-ALTER TABLE search_projection_jobs NO FORCE ROW LEVEL SECURITY;
-ALTER TABLE search_projection_jobs DISABLE ROW LEVEL SECURITY;
-
 ALTER TABLE domain_nodes
     DROP CONSTRAINT domain_nodes_search_visibility_valid,
     DROP COLUMN search_visibility;
