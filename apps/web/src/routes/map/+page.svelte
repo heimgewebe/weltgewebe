@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
   import type { PageData } from "./$types";
   import "$lib/styles/tokens.css";
   import "maplibre-gl/dist/maplibre-gl.css";
@@ -8,7 +8,6 @@
   import TopBar from "$lib/components/TopBar.svelte";
   import ContextPanel from "$lib/components/ContextPanel.svelte";
   import ToolFan from "$lib/components/ToolFan.svelte";
-  import SearchOverlay from "$lib/components/SearchOverlay.svelte";
   import SearchDirectionIndicators from "$lib/components/SearchDirectionIndicators.svelte";
   import FilterOverlay from "$lib/components/FilterOverlay.svelte";
   import type { MapEntityViewModel } from "$lib/map/types";
@@ -104,17 +103,102 @@
   $: availableTypes = deriveAvailableFilterTypes(markersData);
   $: filteredMarkersData = deriveFilteredMarkers(markersData, $activeFilters);
   $: showNodes = $view.showNodes;
-  // Search is scoped to the currently visible markers (filtered set when a
-  // filter is active, otherwise the full set) so it never reaches hidden ones.
+  // T007: node search comes from the authorized T006 server contract. The only
+  // client-side search left here is for Garnrollen that are already public map
+  // markers; node visibility is never reconstructed from the downloaded scene.
+  // The search client itself is lazy-loaded so opening the map does not pay the
+  // search runtime cost before a person actually starts searching.
+  let nodeSearchItems: MapEntityViewModel[] = [];
+  let nodeSearchStatus: "idle" | "loading" | "ready" | "error" = "idle";
+  let nodeSearchMode: string | null = null;
+  let nodeSearchFallbackReason: string | null = null;
+  let nodeSearchTimer: ReturnType<typeof setTimeout> | undefined;
+  let nodeSearchAbortController: AbortController | null = null;
+  let nodeSearchSequence = 0;
+
+  function resetNodeSearch() {
+    if (nodeSearchTimer !== undefined) clearTimeout(nodeSearchTimer);
+    nodeSearchTimer = undefined;
+    nodeSearchAbortController?.abort();
+    nodeSearchAbortController = null;
+    nodeSearchSequence += 1;
+    nodeSearchItems = [];
+    nodeSearchStatus = "idle";
+    nodeSearchMode = null;
+    nodeSearchFallbackReason = null;
+  }
+
+  function scheduleNodeSearch(
+    query: string,
+    kinds: string[],
+    enabled: boolean,
+    open: boolean,
+  ) {
+    resetNodeSearch();
+    const normalizedQuery = query.trim();
+    if (!open || !enabled || !normalizedQuery) return;
+    const sequence = nodeSearchSequence;
+    nodeSearchStatus = "loading";
+    nodeSearchTimer = setTimeout(async () => {
+      nodeSearchTimer = undefined;
+      const controller = new AbortController();
+      nodeSearchAbortController = controller;
+      try {
+        const { nodeToMapEntity, searchNodes } =
+          await import("$lib/api/search");
+        const response = await searchNodes(normalizedQuery, {
+          kinds,
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted || sequence !== nodeSearchSequence)
+          return;
+        nodeSearchItems = response.items.map(nodeToMapEntity);
+        nodeSearchStatus = "ready";
+        nodeSearchMode = response.mode;
+        nodeSearchFallbackReason = response.fallback_reason ?? null;
+      } catch {
+        if (controller.signal.aborted || sequence !== nodeSearchSequence)
+          return;
+        nodeSearchStatus = "error";
+      } finally {
+        if (nodeSearchAbortController === controller)
+          nodeSearchAbortController = null;
+      }
+    }, 180);
+  }
+
+  onDestroy(resetNodeSearch);
+  $: activeSearchKinds = Array.from($activeFilters).filter(
+    (filter) => filter !== "Garnrolle",
+  );
+  $: nodeSearchEnabled =
+    $activeFilters.size === 0 || activeSearchKinds.length > 0;
+  $: scheduleNodeSearch(
+    $searchQuery,
+    activeSearchKinds,
+    nodeSearchEnabled,
+    $isSearchOpen,
+  );
   $: searchBaseMarkers =
     $activeFilters.size === 0 ? markersData : filteredMarkersData;
-  $: filteredResults = deriveSearchResults(
-    searchBaseMarkers,
+  $: localGarnrolleResults = deriveSearchResults(
+    searchBaseMarkers.filter((item) => item.type === "garnrolle"),
     $searchQuery,
     $isSearchOpen,
   );
+  $: filteredResults = [...nodeSearchItems, ...localGarnrolleResults];
   $: searchMatchIds = deriveSearchMatchIds(filteredResults);
   $: edgesData = deriveVisibleEdges(scene.edges, filteredMarkersData);
+
+  let SearchOverlayComponent:
+    | typeof import("$lib/components/SearchOverlay.svelte").default
+    | null = null;
+
+  async function preloadSearchOverlay() {
+    SearchOverlayComponent = (
+      await import("$lib/components/SearchOverlay.svelte")
+    ).default;
+  }
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
@@ -391,11 +475,18 @@
   }
 
   function handleRelatedSelect(
-    event: CustomEvent<{ type: "node" | "garnrolle"; id: string }>,
+    event: CustomEvent<{
+      type: "node" | "garnrolle";
+      id: string;
+      data?: MapEntityViewModel;
+    }>,
   ) {
-    const related = markersData.find(
-      (item) => item.id === event.detail.id && item.type === event.detail.type,
-    );
+    const related =
+      event.detail.data ??
+      markersData.find(
+        (item) =>
+          item.id === event.detail.id && item.type === event.detail.type,
+      );
     if (related) focusAndFlyToPoint(related);
   }
 
@@ -566,6 +657,7 @@
     import.meta.env.VITE_PUBLIC_ENABLE_TEST_MAP === "true";
 
   onMount(() => {
+    void preloadSearchOverlay();
     let maplibreModule: any = null;
     // onMount returns its cleanup synchronously while the initialiser below is
     // still suspended on `await import('maplibre-gl')`. If the component is
@@ -798,7 +890,16 @@
     on:selectRelated={handleRelatedSelect}
     on:domainChanged={handleDomainChanged}
   />
-  <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
+  {#if SearchOverlayComponent}
+    <svelte:component
+      this={SearchOverlayComponent}
+      {filteredResults}
+      searchStatus={nodeSearchStatus}
+      searchMode={nodeSearchMode}
+      searchFallbackReason={nodeSearchFallbackReason}
+      on:select={handleSearchSelect}
+    />
+  {/if}
   <SearchDirectionIndicators
     indicators={searchDirectionIndicators}
     on:select={handleSearchDirectionSelect}

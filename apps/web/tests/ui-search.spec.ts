@@ -24,6 +24,39 @@ test.describe("Search mode", () => {
       });
     });
 
+    await page.route("**/api/search**", async (route) => {
+      const query =
+        new URL(route.request().url()).searchParams
+          .get("q")
+          ?.toLocaleLowerCase("de-DE") ?? "";
+      const matches =
+        query.includes("strick") || query === "a"
+          ? [
+              {
+                id: "mock-node-1",
+                title: "Abendliches Stricken",
+                summary: "Wir stricken gemeinsam",
+                kind: "Treffen",
+                location: { lat: 51, lon: 10 },
+                tags: ["Stricken"],
+                modules: [],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              },
+            ]
+          : [];
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: matches,
+          mode: "hybrid",
+          generation_id: "mock-search-generation",
+          offset: 0,
+        }),
+      });
+    });
+
     await page.route("**/api/node/mock-node-1", async (route) => {
       await route.fulfill({
         status: 200,
@@ -256,6 +289,18 @@ test.describe("Search mode", () => {
         body: JSON.stringify(manyNodes),
       });
     });
+    await page.route("**/api/search**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: manyNodes,
+          mode: "hybrid",
+          generation_id: "mock-search-generation",
+          offset: 0,
+        }),
+      });
+    });
 
     await page.goto("/map");
     await page.waitForFunction(
@@ -270,7 +315,7 @@ test.describe("Search mode", () => {
 
     const results = page.locator("li[role='option']");
     await expect(results).toHaveCount(6);
-    await expect(page.getByText("9 Treffer auf der Karte")).toBeVisible();
+    await expect(page.getByText("9 Treffer", { exact: true })).toBeVisible();
 
     const showMore = page.getByRole("button", {
       name: "Alle 9 Vorschläge zeigen",

@@ -31,6 +31,53 @@ test.describe("Sicht mode", () => {
       });
     });
 
+    await page.route("**/api/search**", async (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      const query = params.get("q")?.toLocaleLowerCase("de-DE") ?? "";
+      const kinds = new Set(
+        (params.get("kinds") ?? "")
+          .split(",")
+          .map((kind) => kind.trim())
+          .filter(Boolean),
+      );
+      const nodes = [
+        {
+          id: "node-1",
+          title: "Test Node 1",
+          kind: "Event",
+          location: { lat: 53.5, lon: 10.0 },
+          summary: "A test event node.",
+          tags: [],
+          created_at: "2026-07-23T00:00:00Z",
+          updated_at: "2026-07-23T00:00:00Z",
+        },
+        {
+          id: "node-2",
+          title: "Test Node 2",
+          kind: "Place",
+          location: { lat: 53.6, lon: 10.1 },
+          summary: "A test place node.",
+          tags: [],
+          created_at: "2026-07-23T00:00:00Z",
+          updated_at: "2026-07-23T00:00:00Z",
+        },
+      ].filter(
+        (node) =>
+          node.title.toLocaleLowerCase("de-DE").includes(query) &&
+          (kinds.size === 0 || kinds.has(node.kind)),
+      );
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: nodes,
+          mode: "hybrid",
+          generation_id: "mock-search-generation",
+          offset: 0,
+        }),
+      });
+    });
+
     await page.route("**/api/accounts", async (route) => {
       route.fulfill({
         status: 200,
