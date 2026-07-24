@@ -21,7 +21,9 @@ describe("garnrolle visibility helpers", () => {
     const visibility = describeGarnrolleVisibility(baseAccount);
     expect(visibility.state).toBe("private");
     expect(visibility.label).toBe("Privat");
-    expect(visibility.description).toContain("keine öffentliche Kartenposition");
+    expect(visibility.description).toContain(
+      "keine öffentliche Kartenposition",
+    );
     expect(visibility.canZoomToMap).toBe(false);
   });
 
@@ -32,9 +34,7 @@ describe("garnrolle visibility helpers", () => {
       radius_m: 0,
     };
     expect(deriveGarnrolleMapState(account)).toBe("exact");
-    expect(describeGarnrolleVisibility(account).label).toBe(
-      "Öffentlich exakt",
-    );
+    expect(describeGarnrolleVisibility(account).label).toBe("Öffentlich exakt");
   });
 
   it("treats positive radius as approximate visibility", () => {
