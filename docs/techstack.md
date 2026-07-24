@@ -104,7 +104,7 @@ Diese Punkte sind durch `architecture/weltgewebe-os.md` und ADR-0010 bis ADR-001
 
 ## Geplant oder noch unvollständig
 
-- Entfernung der nullable Legacy-`mode`-Rollbackspalte nach eigenem Post-Cutover-Beleg
+- weitere Vereinfachung des Garnrollen-Produktflusses
 - private Nachrichten, Anhänge und föderierte Gespräche
 - föderierte Identitäten, Zellbeziehungen und gemeinsame Räume
 - normalisierte Geoabfragen beziehungsweise PostGIS

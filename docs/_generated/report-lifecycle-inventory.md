@@ -16,23 +16,23 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 | Metric | Count |
 | --- | ---: |
-| files_total | 50 |
-| files_with_frontmatter | 50 |
+| files_total | 51 |
+| files_with_frontmatter | 51 |
 | files_without_frontmatter | 0 |
-| files_with_status | 50 |
+| files_with_status | 51 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 45 |
+| files_with_lifecycle_state | 46 |
 | files_missing_lifecycle_state | 5 |
-| files_with_lifecycle | 44 |
+| files_with_lifecycle | 45 |
 | files_missing_lifecycle | 6 |
-| files_with_owner_task | 46 |
+| files_with_owner_task | 47 |
 | files_missing_owner_task | 4 |
-| files_with_review_after | 37 |
+| files_with_review_after | 38 |
 | files_missing_review_after | 13 |
-| files_primary_referenced | 43 |
+| files_primary_referenced | 44 |
 | files_primary_unreferenced | 7 |
-| files_with_derived_references | 50 |
-| files_with_relations | 50 |
+| files_with_derived_references | 51 |
+| files_with_relations | 51 |
 | files_with_missing_supersession_target | 0 |
 
 ## Doc Type Distribution
@@ -41,7 +41,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | --- | ---: |
 | documentation | 1 |
 | reference | 1 |
-| report | 44 |
+| report | 45 |
 | status | 2 |
 | status-matrix | 2 |
 
@@ -82,6 +82,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | 4 | 4 | 3 |  |  |
 | docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 4 | 4 | 5 |  |  |
 | docs/reports/domain-runtime-data-source-reconciliation.md | report | active | active | audit | DB-PROOF-001 | 2026-07-18 |  | 1 | 4 | 5 |  |  |
+| docs/reports/garnrolle-identity-cutover-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-10-24 |  | 1 | 4 | 4 |  |  |
 | docs/reports/github-action-ref-pinning-audit.md | report | active | active | audit | OPT-INF-002 | 2026-09-30 |  | 0 | 4 | 4 |  |  |
 | docs/reports/github-actions-node24-readiness.md | report | active | active | audit | OPT-CI-005 | 2026-09-29 |  | 2 | 4 | 5 |  |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | deprecated | archived | planning | DEPLOY-DNS-001 |  |  | 1 | 5 | 4 | review_after |  |
@@ -157,6 +158,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-provider-role-finding.md | 3 | relates_to | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md, docs/runbooks/domain-mail-cutover.md, docs/tasks/board.md |
 | docs/reports/domain-read-path-proof.md | 5 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-backfill-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md |
 | docs/reports/domain-runtime-data-source-reconciliation.md | 5 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-edge-reference-audit.md, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, docs/tasks/index.json |
+| docs/reports/garnrolle-identity-cutover-proof.md | 4 | relates_to | apps/api/migrations/20260724000001_remove_ron_legacy.up.sql, docs/datenmodell.md, docs/domain/vocabulary.md, scripts/ci/tests/test_garnrolle_ontology_contract.py |
 | docs/reports/github-action-ref-pinning-audit.md | 4 | relates_to | docs/tasks/board.md, docs/tasks/index.json, scripts/ci/check_github_action_pinning.py, scripts/ci/tests/test_check_github_action_pinning.py |
 | docs/reports/github-actions-node24-readiness.md | 5 | relates_to | .github/workflows/opt-arc-001-db-proof-matrix.yml, docs/tasks/board.md, docs/tasks/index.json, scripts/ci/check_actions_node24_readiness.py, scripts/ci/tests/test_check_actions_node24_readiness.py |
 | docs/reports/inwx-zone-reconciliation-plan.md | 4 | relates_to | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md, docs/reports/domain-provider-role-finding.md, docs/runbooks/domain-mail-cutover.md, docs/tasks/board.md |
@@ -329,6 +331,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/domain-runtime-data-source-reconciliation.md`
   - `docs/tasks/board.md`
+
+- `docs/reports/garnrolle-identity-cutover-proof.md`
+  - `docs/domain/vocabulary.md`
 
 - `docs/reports/github-actions-node24-readiness.md`
   - `docs/reports/optimierungsstatus.md`
@@ -618,6 +623,12 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/report-lifecycle.md`
 
 - `docs/reports/domain-runtime-data-source-reconciliation.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/report-lifecycle.md`
+
+- `docs/reports/garnrolle-identity-cutover-proof.md`
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`

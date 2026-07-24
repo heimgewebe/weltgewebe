@@ -215,6 +215,10 @@ async fn domain_schema_tables_exist_after_migration() {
         index_exists(&pool, "domain_accounts_email_lookup").await,
         "domain_accounts_email_lookup index must exist"
     );
+    assert!(
+        !column_exists(&pool, "domain_accounts", "mode").await,
+        "removed domain_accounts.mode column must not exist"
+    );
 
     pool.close().await;
 }
@@ -233,13 +237,13 @@ async fn radius_privacy_migration_hides_legacy_rows_irreversibly() {
         .expect("pre-test cleanup failed");
     sqlx::query(
         "INSERT INTO domain_accounts (
-             id, kind, title, mode, map_state, radius_m, role,
+             id, kind, title, map_state, radius_m, role,
              location_lat, location_lon, public_payload, private_payload
          ) VALUES
-         ('radius-migration-legacy', 'garnrolle', 'Legacy radius', NULL, 'radius', 500, 'weber',
+         ('radius-migration-legacy', 'garnrolle', 'Legacy radius', 'radius', 500, 'weber',
           53.5, 10.0, '{}'::jsonb,
           '{\"visibility\":\"approximate\",\"radius_projection\":{\"legacy\":true},\"keep\":\"yes\"}'::jsonb),
-         ('radius-migration-exact', 'garnrolle', 'Exact', NULL, 'exact', 0, 'weber',
+         ('radius-migration-exact', 'garnrolle', 'Exact', 'exact', 0, 'weber',
           53.6, 10.1, '{}'::jsonb, '{\"keep\":\"exact\"}'::jsonb)",
     )
     .execute(&pool)
@@ -419,22 +423,21 @@ async fn domain_schema_basic_insert_and_read() {
         .expect("pre-test cleanup of domain_accounts failed");
 
     sqlx::query(
-        "INSERT INTO domain_accounts (id, kind, title, mode, map_state, radius_m, role, public_payload, private_payload)
-            VALUES ('test-account-schema-probe', 'garnrolle', 'Test Account', NULL, 'not_on_map', 0, 'gast', '{}'::jsonb, '{}'::jsonb)",
+        "INSERT INTO domain_accounts (id, kind, title, map_state, radius_m, role, public_payload, private_payload)
+            VALUES ('test-account-schema-probe', 'garnrolle', 'Test Account', 'not_on_map', 0, 'gast', '{}'::jsonb, '{}'::jsonb)",
     )
     .execute(&pool)
     .await
     .expect("failed to insert test row into domain_accounts");
 
-    let (kind, mode, map_state): (String, Option<String>, String) =
-        sqlx::query_as("SELECT kind, mode, map_state FROM domain_accounts WHERE id = $1")
+    let (kind, map_state): (String, String) =
+        sqlx::query_as("SELECT kind, map_state FROM domain_accounts WHERE id = $1")
             .bind("test-account-schema-probe")
             .fetch_one(&pool)
             .await
             .expect("failed to read back test row from domain_accounts");
 
     assert_eq!(kind, "garnrolle");
-    assert_eq!(mode, None);
     assert_eq!(map_state, "not_on_map");
 
     sqlx::query("DELETE FROM domain_accounts WHERE id = 'test-account-schema-probe'")
@@ -668,8 +671,8 @@ async fn domain_accounts_normalized_email_uniqueness_is_enforced() {
 
     // Insert first account with email
     sqlx::query(
-        "INSERT INTO domain_accounts (id, kind, title, mode, map_state, radius_m, role, email, public_payload, private_payload)
-         VALUES ('test-email-dup-a', 'garnrolle', 'dup-a', NULL, 'not_on_map', 0, 'gast', 'alpha@example.invalid', '{}', '{}')",
+        "INSERT INTO domain_accounts (id, kind, title, map_state, radius_m, role, email, public_payload, private_payload)
+         VALUES ('test-email-dup-a', 'garnrolle', 'dup-a', 'not_on_map', 0, 'gast', 'alpha@example.invalid', '{}', '{}')",
     )
     .execute(&pool)
     .await
@@ -679,8 +682,8 @@ async fn domain_accounts_normalized_email_uniqueness_is_enforced() {
     // rejected specifically by the normalized unique index (TODO 2A), identified
     // by constraint name so any unrelated database error fails the test.
     let dup_result = sqlx::query(
-        "INSERT INTO domain_accounts (id, kind, title, mode, map_state, radius_m, role, email, public_payload, private_payload)
-         VALUES ('test-email-dup-b', 'garnrolle', 'dup-b', NULL, 'not_on_map', 0, 'gast', 'ALPHA@example.invalid', '{}', '{}')",
+        "INSERT INTO domain_accounts (id, kind, title, map_state, radius_m, role, email, public_payload, private_payload)
+         VALUES ('test-email-dup-b', 'garnrolle', 'dup-b', 'not_on_map', 0, 'gast', 'ALPHA@example.invalid', '{}', '{}')",
     )
     .execute(&pool)
     .await;
@@ -696,16 +699,16 @@ async fn domain_accounts_normalized_email_uniqueness_is_enforced() {
 
     // Two accounts without email (NULL) must both succeed
     sqlx::query(
-        "INSERT INTO domain_accounts (id, kind, title, mode, map_state, radius_m, role, public_payload, private_payload)
-         VALUES ('test-email-null-a', 'garnrolle', 'null-a', NULL, 'not_on_map', 0, 'gast', '{}', '{}')",
+        "INSERT INTO domain_accounts (id, kind, title, map_state, radius_m, role, public_payload, private_payload)
+         VALUES ('test-email-null-a', 'garnrolle', 'null-a', 'not_on_map', 0, 'gast', '{}', '{}')",
     )
     .execute(&pool)
     .await
     .expect("first NULL-email insert must succeed");
 
     sqlx::query(
-        "INSERT INTO domain_accounts (id, kind, title, mode, map_state, radius_m, role, public_payload, private_payload)
-         VALUES ('test-email-null-b', 'garnrolle', 'null-b', NULL, 'not_on_map', 0, 'gast', '{}', '{}')",
+        "INSERT INTO domain_accounts (id, kind, title, map_state, radius_m, role, public_payload, private_payload)
+         VALUES ('test-email-null-b', 'garnrolle', 'null-b', 'not_on_map', 0, 'gast', '{}', '{}')",
     )
     .execute(&pool)
     .await
@@ -716,8 +719,8 @@ async fn domain_accounts_normalized_email_uniqueness_is_enforced() {
     // "" and whitespace-only must fail with that specific constraint.
     for (probe_id, probe_email) in [("test-email-empty", ""), ("test-email-ws", "   ")] {
         let res = sqlx::query(
-            "INSERT INTO domain_accounts (id, kind, title, mode, map_state, radius_m, role, email, public_payload, private_payload)
-             VALUES ($1, 'garnrolle', 'empty-email', NULL, 'not_on_map', 0, 'gast', $2, '{}', '{}')",
+            "INSERT INTO domain_accounts (id, kind, title, map_state, radius_m, role, email, public_payload, private_payload)
+             VALUES ($1, 'garnrolle', 'empty-email', 'not_on_map', 0, 'gast', $2, '{}', '{}')",
         )
         .bind(probe_id)
         .bind(probe_email)
@@ -741,16 +744,16 @@ async fn domain_accounts_normalized_email_uniqueness_is_enforced() {
         .expect("pre-test cleanup of test-radius-u32-max failed");
 
     sqlx::query(
-        "INSERT INTO domain_accounts (id, kind, title, mode, map_state, radius_m, location_lat, location_lon, role, public_payload, private_payload)
-         VALUES ('test-radius-u32-max', 'garnrolle', 'radius-max', NULL, 'radius', 4294967295, 53.5, 10.0, 'gast', '{}', '{}')",
+        "INSERT INTO domain_accounts (id, kind, title, map_state, radius_m, location_lat, location_lon, role, public_payload, private_payload)
+         VALUES ('test-radius-u32-max', 'garnrolle', 'radius-max', 'radius', 4294967295, 53.5, 10.0, 'gast', '{}', '{}')",
     )
     .execute(&pool)
     .await
     .expect("u32::MAX radius_m must be accepted");
 
     let overflow_result = sqlx::query(
-        "INSERT INTO domain_accounts (id, kind, title, mode, map_state, radius_m, location_lat, location_lon, role, public_payload, private_payload)
-         VALUES ('test-radius-overflow', 'garnrolle', 'radius-overflow', NULL, 'radius', 4294967296, 53.5, 10.0, 'gast', '{}', '{}')",
+        "INSERT INTO domain_accounts (id, kind, title, map_state, radius_m, location_lat, location_lon, role, public_payload, private_payload)
+         VALUES ('test-radius-overflow', 'garnrolle', 'radius-overflow', 'radius', 4294967296, 53.5, 10.0, 'gast', '{}', '{}')",
     )
     .execute(&pool)
     .await;

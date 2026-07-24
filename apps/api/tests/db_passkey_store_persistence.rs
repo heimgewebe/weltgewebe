@@ -990,9 +990,9 @@ async fn passkey_register_reload_auth_route_proof() {
     let webauthn_user_id = Uuid::new_v4();
     sqlx::query(
         "INSERT INTO domain_accounts \
-            (id, kind, title, mode, map_state, radius_m, disabled, role, email, webauthn_user_id, public_payload, private_payload) \
+            (id, kind, title, map_state, radius_m, disabled, role, email, webauthn_user_id, public_payload, private_payload) \
          VALUES \
-            ($1, 'garnrolle', 'Route Reload Proof User', NULL, 'not_on_map', 0, false, 'weber', $2, $3::uuid, '{}'::jsonb, '{}'::jsonb)",
+            ($1, 'garnrolle', 'Route Reload Proof User', 'not_on_map', 0, false, 'weber', $2, $3::uuid, '{}'::jsonb, '{}'::jsonb)",
     )
     .bind(&account_id)
     .bind(&email)

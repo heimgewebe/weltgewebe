@@ -10,6 +10,39 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-07-24 - RoN-Identität und Legacy-Modus endgültig entfernen
+
+**Geänderte Bereiche:**
+
+- PostgreSQL-Schema und Account-Migrationen;
+- API-Lese-, Schreib- und Backfillpfade;
+- Garnrollen-Vertrag, Tests und aktive Dokumentation.
+
+**Beschreibung:**
+
+Weltgewebe besitzt nur noch eine persönliche Identität: die Garnrolle. Der
+Kartenstatus `not_on_map`, `exact` oder `radius` ist eine Eigenschaft dieser
+Garnrolle und kein eigener Kontotyp. Die frühere nullable Spalte `mode` wird
+entfernt. API und Backfill interpretieren `type=ron`, `mode`, `ron_flag`,
+`visibility` oder `suppress_public_pos` nicht länger, sondern weisen solche
+Datensätze fail-closed ab.
+
+Die Migration prüft vor dem `DROP COLUMN`, dass Produktion keine abweichenden
+Kontotypen, gesetzten `mode`-Werte oder alten privaten Sichtbarkeitsfelder mehr
+enthält. Sobald auch nur ein solcher Datensatz existiert, bricht sie ohne
+Schemaänderung ab. Der belegte Produktionsstand vom 24. Juli 2026 enthält acht
+Accounts und null Legacy-Treffer in allen geprüften Kategorien.
+
+**Produktionswirkung:**
+
+Der commitgebundene Rollout muss den vorgesehenen Migration-Scope verwenden,
+der die API des Zielcommits für die Migration neu erstellt und anschließend im
+Modus `verify-applied` wiederherstellt. Ein älterer API-Prozess darf nach dem
+Spaltenabbau nicht erneut gestartet werden. Die Down-Migration stellt für einen
+Code-Rollback eine nullable Spalte `mode` wieder her; sie rekonstruiert bewusst
+keine entfernte Identität. Positionen und `map_state` werden durch den Cutover
+nicht verändert.
+
 ## 2026-07-23 - Magic-Link-Bestätigungsformular am Edge wieder zulassen
 
 **Geänderte Bereiche:**

@@ -104,8 +104,8 @@ async fn seed_guest_node(pool: &sqlx::PgPool, account_id: &str, node_id: &str) {
 async fn seed_account(pool: &sqlx::PgPool, id: &str, role: &str) {
     sqlx::query(
         "INSERT INTO domain_accounts \
-         (id, kind, title, mode, map_state, radius_m, disabled, role, public_payload, private_payload) \
-         VALUES ($1, 'garnrolle', $2, 'ron', 'not_on_map', 0, FALSE, $3, '{}', '{}')",
+         (id, kind, title, map_state, radius_m, disabled, role, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', $2, 'not_on_map', 0, FALSE, $3, '{}', '{}')",
     )
     .bind(id)
     .bind(format!("Account {id}"))

@@ -139,7 +139,7 @@ Es beschreibt:
 - **Events und Beobachtung:** NATS sowie Prometheus-/Grafana-/Loki-/Tempo-Konfigurationen sind vorhanden, aber kein vollständiges Event-Sourcing- oder Observability-System ist allgemein produktiv belegt.
 - **Security:** sichere Sitzungen, Proxygrenze, CI-/Contract-Checks und secret-sichere Betriebsabläufe sind reale Leitplanken; SBOM, Signaturen, automatische Rotation und Forget-Pipeline bleiben gesondert nachzuweisende Ziele.
 - **Skalierung:** Compose ist die aktuelle Betriebsrealität. Kubernetes ist nach ADR-0010 die kanonische Zielplattform, aber noch keine heutige Runtime- oder HA-Wahrheit. Nomad ist keine neue Primärzielrichtung.
-- **Garnrollen-Sichtbarkeit:** Sichtbarkeit und Verortung sind Eigenschaften einer Garnrolle (`not_on_map`, `exact`, `radius`); Legacy-RoN wird nur lesend privacy-sicher normalisiert.
+- **Garnrollen-Sichtbarkeit:** Sichtbarkeit und Verortung sind ausschließlich Eigenschaften einer Garnrolle (`not_on_map`, `exact`, `radius`); eine zweite Identität existiert nicht.
 
 ---
 

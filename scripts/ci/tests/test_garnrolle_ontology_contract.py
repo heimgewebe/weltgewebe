@@ -35,17 +35,31 @@ class GarnrolleOntologyContractTests(unittest.TestCase):
             self.assertIsNone(forbidden.search(text), relative)
             self.assertIn("map_state", text, relative)
 
-    def test_migration_retains_only_nullable_rollback_bridge(self) -> None:
-        up = (ROOT / "apps/api/migrations/20260711000001_garnrolle_map_state_cutover.up.sql").read_text()
-        self.assertIn("ADD COLUMN map_state TEXT", up)
-        self.assertIn("UPDATE domain_accounts SET kind = 'garnrolle'", up)
-        self.assertIn("ALTER COLUMN mode DROP NOT NULL", up)
-        self.assertIn("ALTER COLUMN mode DROP DEFAULT", up)
-        self.assertIn("CHECK (kind = 'garnrolle')", up)
-        self.assertIn("map_state IN ('not_on_map', 'exact', 'radius')", up)
-        down = (ROOT / "apps/api/migrations/20260711000001_garnrolle_map_state_cutover.down.sql").read_text()
-        self.assertIn("COALESCE(mode", down)
-        self.assertIn("DROP COLUMN map_state", down)
+    def test_final_migration_removes_legacy_identity_fail_closed(self) -> None:
+        up = (ROOT / "apps/api/migrations/20260724000001_remove_ron_legacy.up.sql").read_text()
+        self.assertIn("kind IS DISTINCT FROM 'garnrolle'", up)
+        self.assertIn("mode IS NOT NULL", up)
+        self.assertIn("private_payload ? 'ron_flag'", up)
+        self.assertIn("private_payload ? 'visibility'", up)
+        self.assertIn("private_payload ? 'suppress_public_pos'", up)
+        self.assertIn("RAISE EXCEPTION", up)
+        self.assertIn("DROP COLUMN mode", up)
+        down = (ROOT / "apps/api/migrations/20260724000001_remove_ron_legacy.down.sql").read_text()
+        self.assertEqual(down.strip(), "ALTER TABLE domain_accounts ADD COLUMN mode TEXT;")
+
+    def test_runtime_rejects_removed_identity_fields(self) -> None:
+        production = "\n".join(
+            (ROOT / path)
+            .read_text(encoding="utf-8")
+            .split("#[cfg(test)]", 1)[0]
+            for path in ("apps/api/src/routes/accounts.rs", "apps/api/src/domain_db.rs")
+        )
+        self.assertNotIn("legacy_not_on_map", production)
+        self.assertNotIn("legacy_mode", production)
+        self.assertNotIn('kind == "ron"', production)
+        self.assertNotIn("legacy_visibility", production)
+        self.assertIn('"mode", "ron_flag", "visibility", "suppress_public_pos"', production)
+        self.assertIn("rejecting removed account field", production)
 
     def test_public_api_type_no_longer_contains_account_mode(self) -> None:
         source = (ROOT / "apps/api/src/routes/accounts.rs").read_text()
@@ -54,7 +68,7 @@ class GarnrolleOntologyContractTests(unittest.TestCase):
         self.assertIn("pub map_state: GarnrolleMapState", source)
         self.assertNotRegex(source, r"pub\s+mode:\s+AccountMode")
 
-    def test_canonical_docs_describe_legacy_as_read_only(self) -> None:
+    def test_canonical_docs_describe_completed_identity_removal(self) -> None:
         combined = "\n".join(
             (ROOT / path).read_text(encoding="utf-8")
             for path in (
@@ -66,8 +80,9 @@ class GarnrolleOntologyContractTests(unittest.TestCase):
             )
         )
         self.assertIn("not_on_map", combined)
-        self.assertIn("Rollbackbrücke", combined)
-        self.assertNotIn("Legacy-Modell `ron` widerspricht", combined)
+        self.assertNotIn("Rollbackbrücke", combined)
+        self.assertNotIn("Legacy-RoN wird", combined)
+        self.assertIn("entfernt", combined)
 
 
 if __name__ == "__main__":

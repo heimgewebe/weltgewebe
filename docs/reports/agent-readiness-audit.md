@@ -14,6 +14,13 @@ summary: "Repository-Audit und Ausarbeitung des Agent-Readiness-Masterplans für
 # Weltgewebe Repository-Audit und Ausarbeitung des Agent-Readiness-Masterplans
 
 > **Hinweis:** Dieses Audit ist ein Diagnose- und Berichtsartefakt. Es dient als Grundlage für Priorisierungen, ist aber **keine Primärnorm**. Für bindende Agenten-Regeln siehe das [`Agent Reading Protocol`](../policies/agent-reading-protocol.md).
+>
+> **Aktualisierung 2026-07-24:** Die damalige Feststellung zum
+> RoN-/`mode`-Modell ist überholt. Aktuell existiert genau eine Garnrolle je
+> Account; ihre Kartensichtbarkeit wird ausschließlich über `map_state`
+> beschrieben. Der endgültige Cutover ist in
+> [`garnrolle-identity-cutover-proof.md`](garnrolle-identity-cutover-proof.md)
+> belegt.
 
 ## Executive Summary
 
@@ -81,7 +88,7 @@ Belege: Repo-Entry/Canon, Policies, Apps, Contracts, Compose, Workflows.
 **Belegt (Datenvertrag):** Domain-Entities sind `node`, `edge`, `conversation`, `message` (und `account`, `role`), „thread“ ist verboten.
 **Ist (API/Web heute):** Web und API arbeiten primär mit `nodes`, `edges`, `accounts`; Conversations/Messages sind in UI als Tabs teilweise Scaffold, aber nicht implementiert.
 
-**Privacy-Identitätsmodell (RoN/verortet):** In Contract und Backend ist „mode“ fundamental; RoN hat keine individuelle Location/public_pos.
+**Aktuelles Privacy-Modell:** Contract und Backend kennen ausschließlich Garnrollen. `map_state=not_on_map|exact|radius` steuert die Kartenwirkung; eine zweite Identität oder Modusspalte existiert nicht.
 
 ## Komponentenanalyse
 
@@ -300,7 +307,7 @@ Bezüge auf Masterplan-Maßnahmenliste (Phase 5) sind explizit: AGENTS verschlan
 Verständlichkeit/Onboarding (Truth Layer), Sicherheit (Auth/CSRF), Betriebssicherheit (Health/Metrics/Deploy), Performance (Budgets), Produktfähigkeit (DB/Contracts).
 
 **Risikoklassen:**
-Security/Privacy (Sessions, Magic Links, RoN), Operational (Deploy drift), Data integrity (Migration JSONL->DB), DX-Risiko (CI-Strenge), Systemische Verwirrung (Wahrheitsmix).
+Security/Privacy (Sessions, Magic Links, Garnrollen-Sichtbarkeit), Operational (Deploy drift), Data integrity (Migration JSONL->DB), DX-Risiko (CI-Strenge), Systemische Verwirrung (Wahrheitsmix).
 
 ### Realistische Use Cases und Integrationsmuster
 

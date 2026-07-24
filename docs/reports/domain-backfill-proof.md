@@ -28,6 +28,11 @@ relations:
 > ohne private Zufallsbindung werden beim Import nicht mehr öffentlich
 > rekonstruiert. Private Koordinaten bleiben erhalten, während `map_state` und
 > `radius_m` fail-closed auf `not_on_map` beziehungsweise `0` gesetzt werden.
+>
+> **Finaler Kontovertrag 2026-07-24:** Nach belegtem Produktionscutover werden
+> RoN-, `mode`- und alte Sichtbarkeitsfelder nicht mehr normalisiert, sondern
+> abgewiesen. Importierbar sind nur `type=garnrolle` und ein expliziter gültiger
+> `map_state`. Die Datenbankspalte `mode` ist entfernt.
 
 ## Scope
 
@@ -94,9 +99,9 @@ These paths are unchanged. JSONL is the active runtime truth until Phase D/E.
 | JSONL field | DB column | Notes |
 |---|---|---|
 | `id` | `id` (TEXT PK) | Required |
-| `type` | `kind` | JSONL uses `"type"` (AccountPublic serde rename) |
+| `type` | `kind` | Required canonical value: `"garnrolle"` |
 | `title` | `title` | Default: `"Untitled"` |
-| `mode` | `mode` | `"verortet"` or `"ron"` |
+| `map_state` | `map_state` | Required: `not_on_map`, `exact` or `radius` |
 | `radius_m` | `radius_m` (BIGINT) | Bound as `i64`; default 0 |
 | `disabled` | `disabled` | Default: `false` |
 | `location.lat` | `location_lat` | Private residence; never the public radius projection |
@@ -107,7 +112,7 @@ These paths are unchanged. JSONL is the active runtime truth until Phase D/E.
 | `created_at` | `created_at` (TIMESTAMPTZ) | Optional |
 | `updated_at` | `updated_at` (TIMESTAMPTZ) | Optional |
 | `summary`, `tags` | `public_payload` (JSONB) | Public fields not in explicit columns |
-| `radius_projection` und Legacy-Felder | `private_payload` (JSONB) | Sichere Bindungen bleiben privat; Legacy-Radius ohne gültige Bindung wird nicht öffentlich reaktiviert |
+| `radius_projection` | `private_payload` (JSONB) | Sichere Radiusbindung bleibt privat; entfernte Identitäts- und Sichtbarkeitsfelder werden nicht gespeichert |
 
 ## Idempotency Contract
 
@@ -135,6 +140,9 @@ path. The final row contains the last-seen values in file order.
 | Half-populated or invalid create-operation metadata | `skipped_records` incremented; line not imported |
 | Unparseable timestamp | `NULL` stored in TIMESTAMPTZ column |
 | Invalid `webauthn_user_id` UUID | `NULL` stored; original string discarded |
+| Missing or non-canonical `type` | `skipped_records` incremented; line not imported |
+| Missing or invalid `map_state` | `skipped_records` incremented; line not imported |
+| `mode`, `ron_flag`, `visibility` or `suppress_public_pos` present | `skipped_records` incremented; line not imported |
 
 No silent continuation: all quarantined lines are counted in `BackfillReport`.
 
@@ -165,16 +173,17 @@ allowed. See `docs/reports/domain-account-email-uniqueness-audit.md` (TODO 2A)
 for the constraint policy.
 
 
-## Legacy Account Semantics
+## Final Account Identity Contract
 
-Phase C import mapping mirrors legacy JSONL loader rules to ensure Phase D reconstructions maintain visibility and mode correctly:
+The importer and PostgreSQL read path now enforce one account identity:
 
-- Missing `type` defaults to `"garnrolle"`.
-- `ron_flag` and `type == "ron"` map to `"ron"` mode.
-- Accounts with `visibility` explicitly set or with valid coordinates are mapped to `"verortet"`.
-- `visibility: "private"` stores `suppress_public_pos: true` in `private_payload` to avoid public coordinate disclosure.
-- `visibility: "approximate"` with missing/zero radius defaults `radius_m` to `250`.
-- All operational legacy fields (`visibility`, `ron_flag`, explicit `mode`) are preserved in `private_payload`.
+- `type` must be exactly `"garnrolle"`.
+- `map_state` must be explicitly `not_on_map`, `exact`, or `radius`.
+- `mode`, `ron_flag`, `visibility`, and `suppress_public_pos` are rejected.
+- A radius projection requires a valid private binding; otherwise the account
+  fails closed to `not_on_map` without inventing a public position.
+- A non-public account remains a normal Garnrolle with
+  `map_state=not_on_map`; it is not converted into another account type.
 
 ## Validation
 
