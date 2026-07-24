@@ -162,10 +162,12 @@ mod t012_generation_boundary {
             .execute(pool)
             .await
             .expect("remove T012 nodes");
-        sqlx::query("TRUNCATE search_projection_jobs, search_node_projections, search_node_versions, search_index_generations RESTART IDENTITY CASCADE")
-            .execute(pool)
-            .await
-            .expect("reset T012 projection state");
+        sqlx::query(
+            "TRUNCATE search_projection_jobs, search_node_projections, search_node_versions, search_index_generations RESTART IDENTITY CASCADE",
+        )
+        .execute(pool)
+        .await
+        .expect("reset T012 projection state");
     }
 
     #[derive(Default)]
@@ -222,10 +224,12 @@ mod t012_generation_boundary {
         migrate(&unbound).await;
         reset(&unbound).await;
 
-        sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload,search_visibility) VALUES ('t012-bound-node','Werkstatt','Gebundener Knoten','{}'::jsonb,'public')")
-            .execute(&unbound)
-            .await
-            .expect("insert bound node");
+        sqlx::query(
+            "INSERT INTO domain_nodes (id,kind,title,payload,search_visibility) VALUES ('t012-bound-node','Werkstatt','Gebundener Knoten','{}'::jsonb,'public')",
+        )
+        .execute(&unbound)
+        .await
+        .expect("insert bound node");
 
         let spec_a = exact_generation_spec("revision-a");
         let generation_a = spec_a.generation_id.to_owned();
@@ -321,13 +325,15 @@ mod t012_generation_boundary {
                 r#"{"summary":"privat","search_visibility":"private","created_by_account_id":"owner-a"}"#,
             ),
         ] {
-            sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt',$2,$3::jsonb)")
-                .bind(id)
-                .bind(title)
-                .bind(payload)
-                .execute(&unbound)
-                .await
-                .expect("insert legacy node");
+            sqlx::query(
+                "INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Werkstatt',$2,$3::jsonb)",
+            )
+            .bind(id)
+            .bind(title)
+            .bind(payload)
+            .execute(&unbound)
+            .await
+            .expect("insert legacy node");
         }
 
         let legacy_generation = "t012-legacy-generation";
@@ -413,10 +419,12 @@ mod t012_generation_boundary {
         .expect("read private legacy projection");
         assert!(!private_projection_survives);
 
-        sqlx::query("UPDATE domain_nodes SET title='Legacy Public geändert' WHERE id='t012-legacy-public'")
-            .execute(&unbound)
-            .await
-            .expect("mutate post-migration legacy node");
+        sqlx::query(
+            "UPDATE domain_nodes SET title='Legacy Public geändert' WHERE id='t012-legacy-public'",
+        )
+        .execute(&unbound)
+        .await
+        .expect("mutate post-migration legacy node");
         let legacy_job_count: i64 = sqlx::query_scalar(
             "SELECT count(*) FROM search_projection_jobs WHERE generation_id=$1",
         )
