@@ -71,7 +71,9 @@ async function openProfile(page: Page, accountId = ACCOUNT_ID) {
 }
 
 test.describe("Garnrolle update safety", () => {
-  test("preserves an untouched private address by omission", async ({ page }) => {
+  test("preserves an untouched private address by omission", async ({
+    page,
+  }) => {
     const { section } = await openProfile(page);
     await section.getByLabel("Anzeigename").fill("Nur Titel geändert");
 
