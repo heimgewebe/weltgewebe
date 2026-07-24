@@ -232,8 +232,14 @@ verify_activation() {
 
   if [[ "$semantic_probe_status" == "candidate_bound" ]]; then
     search_body="$(mktemp)"
-    curl -fsS --get --data-urlencode "q=$probe_title" --data-urlencode 'limit=10' "$SEARCH_URL" > "$search_body" || { rm -f "$search_body"; return 1; }
-    jq -e --arg generation "$GENERATION_ID" --arg probe_id "$probe_node_id" '.generation_id == $generation and .mode == "hybrid" and (.items | type == "array") and any(.items[]?; .id == $probe_id)' "$search_body" > /dev/null || { rm -f "$search_body"; return 1; }
+    curl -fsS --get --data-urlencode "q=$probe_title" --data-urlencode 'limit=10' "$SEARCH_URL" > "$search_body" || {
+      rm -f "$search_body"
+      return 1
+    }
+    jq -e --arg generation "$GENERATION_ID" --arg probe_id "$probe_node_id" '.generation_id == $generation and .mode == "hybrid" and (.items | type == "array") and any(.items[]?; .id == $probe_id)' "$search_body" > /dev/null || {
+      rm -f "$search_body"
+      return 1
+    }
     rm -f "$search_body"
     semantic_probe_status="verified"
   fi

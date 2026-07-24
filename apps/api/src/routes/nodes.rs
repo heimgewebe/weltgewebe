@@ -2799,7 +2799,7 @@ async fn patch_node_postgres(
 
     let patch = NodePatchInput {
         info: payload.info.clone(),
-        search_visibility: payload.search_visibility.clone().flatten(),
+        search_visibility: payload.search_visibility.flatten(),
     };
 
     // Serialize DB patch + cache update in-process so a later committed patch cannot
@@ -2914,14 +2914,9 @@ async fn patch_node_jsonl(
                     None => {} // No-op
                 }
 
-                if let Some(vis) = &payload.search_visibility {
-                    match vis {
-                        Some(v_enum) => {
-                            v["search_visibility"] = Value::String(v_enum.as_str().to_string());
-                            has_changes = true;
-                        }
-                        None => {}
-                    }
+                if let Some(Some(v_enum)) = payload.search_visibility {
+                    v["search_visibility"] = Value::String(v_enum.as_str().to_string());
+                    has_changes = true;
                 }
 
                 // Clean up old "steckbrief" field if it exists (migration logic)

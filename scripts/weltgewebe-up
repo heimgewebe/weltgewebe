@@ -1720,7 +1720,7 @@ wait_for_scoped_api_health() {
         local target_ok=true
 
         local ollama_cid
-        ollama_cid="$(compose_service_id ollama 2>/dev/null || true)"
+        ollama_cid="$(compose_service_id ollama 2> /dev/null || true)"
         if [[ -n "$ollama_cid" ]]; then
           local o_status
           o_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$ollama_cid" 2> /dev/null || true)"
@@ -1730,7 +1730,7 @@ wait_for_scoped_api_health() {
         fi
 
         local worker_cid
-        worker_cid="$(compose_service_id search-worker 2>/dev/null || true)"
+        worker_cid="$(compose_service_id search-worker 2> /dev/null || true)"
         if [[ -n "$worker_cid" ]]; then
           local w_status w_img api_img w_cmd
           w_status="$(docker inspect --format '{{.State.Running}}' "$worker_cid" 2> /dev/null || true)"
