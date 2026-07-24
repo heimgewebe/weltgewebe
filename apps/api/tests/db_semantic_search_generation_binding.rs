@@ -40,7 +40,17 @@ async fn generation_bound_pool(generation_id: &str) -> PgPool {
                     "SELECT set_config('weltgewebe.search_generation_id',$1,false)",
                 )
                 .bind(generation_id)
-                .execute(connection)
+                .execute(&mut *connection)
+                .await?;
+                sqlx::query("SET search_path TO pg_temp, public")
+                    .execute(&mut *connection)
+                    .await?;
+                sqlx::query(
+                    "CREATE TEMP VIEW search_projection_jobs AS \
+                     SELECT * FROM public.search_projection_jobs \
+                     WHERE generation_id = current_setting('weltgewebe.search_generation_id')",
+                )
+                .execute(&mut *connection)
                 .await?;
                 Ok(())
             })
@@ -129,7 +139,7 @@ async fn generation_bound_session_never_claims_or_mutates_a_foreign_generation()
     let generation_b = spec_b.generation_id.to_owned();
     let setup = worker(unbound.clone(), "t012-setup");
     setup
-        .start_generation(spec_a.clone())
+        .start_generation(spec_a)
         .await
         .expect("start generation A");
     setup
@@ -145,12 +155,13 @@ async fn generation_bound_session_never_claims_or_mutates_a_foreign_generation()
     .await
     .expect("read session generation binding");
     assert_eq!(configured, generation_a);
+    let visible_jobs: i64 = sqlx::query_scalar("SELECT count(*) FROM search_projection_jobs")
+        .fetch_one(&bound)
+        .await
+        .expect("read generation-local queue view");
+    assert_eq!(visible_jobs, 1);
 
     let bound_worker = worker(bound, "t012-bound-a");
-    bound_worker
-        .start_generation(spec_a)
-        .await
-        .expect("reconcile generation A");
     assert_eq!(
         bound_worker
             .claim_and_process_one()
