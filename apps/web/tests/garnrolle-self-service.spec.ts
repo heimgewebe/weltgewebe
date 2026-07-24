@@ -159,9 +159,9 @@ test.describe("Eigene Garnrolle speichern", () => {
       title: "Mitwebende Gastgarnrolle",
       map_state: "not_on_map",
     });
-    await expect(section.locator('.form-message[data-kind="D"]')).toContainText(
-      "gespeichert",
-    );
+    await expect(
+      section.locator('[data-testid="garnrolle-success"]'),
+    ).toContainText("gespeichert");
   });
 
   test("guest places the own Garnrolle via a plain map click and saves it exact", async ({
@@ -207,12 +207,15 @@ test.describe("Eigene Garnrolle speichern", () => {
     await expect(
       returned.locator('[data-testid="garnrolle-location-state"]'),
     ).toContainText("Kartenanker gewählt");
-    const unsavedHint = returned.locator('.form-message[data-kind="P"]');
-    await expect(unsavedHint).toContainText("noch nicht gespeichert");
-    await expect(unsavedHint).toHaveAttribute("data-kind", "P");
-    await expect(returned.locator('.form-message[data-kind="D"]')).toHaveCount(
-      0,
-    );
+    await expect(
+      returned.locator('[data-testid="garnrolle-draft-status"]'),
+    ).toContainText("noch nicht gespeichert");
+    await expect(
+      returned.locator('[data-testid="garnrolle-success"]'),
+    ).toHaveCount(0);
+    await expect(
+      returned.getByRole("button", { name: "Punkt ändern" }),
+    ).toBeFocused();
     await expect(
       returned.locator('[data-testid="save-garnrolle"]'),
     ).toBeEnabled();
@@ -231,7 +234,7 @@ test.describe("Eigene Garnrolle speichern", () => {
     expect(payload).not.toHaveProperty("address");
     expectValidLocation(payload.location);
     await expect(
-      returned.locator('.form-message[data-kind="D"]'),
+      returned.locator('[data-testid="garnrolle-success"]'),
     ).toContainText("gespeichert");
   });
 
@@ -269,9 +272,9 @@ test.describe("Eigene Garnrolle speichern", () => {
         "interest:Commons",
       ],
     });
-    await expect(section.locator('.form-message[data-kind="D"]')).toContainText(
-      "gespeichert",
-    );
+    await expect(
+      section.locator('[data-testid="garnrolle-success"]'),
+    ).toContainText("gespeichert");
 
     await page.reload();
     await expect(page.getByLabel("Anzeigename")).toHaveValue(
@@ -308,7 +311,7 @@ test.describe("Eigene Garnrolle speichern", () => {
     const radius = stepThree.getByLabel("Ungefährer Umkreis in Metern");
     const save = section.locator('[data-testid="save-garnrolle"]');
 
-    await radius.fill("10");
+    await radius.fill("50.5");
     await expect(radius).toHaveAttribute("aria-invalid", "true");
     await expect(
       stepThree.getByText(
@@ -377,7 +380,7 @@ test.describe("Eigene Garnrolle speichern", () => {
     });
     expectValidLocation(payload.location);
     await expect(
-      returned.locator('.form-message[data-kind="D"]'),
+      returned.locator('[data-testid="garnrolle-success"]'),
     ).toContainText("gespeichert");
 
     await page.goto(`/map?focus=garnrolle:${ACCOUNT_ID}`);

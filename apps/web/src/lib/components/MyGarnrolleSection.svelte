@@ -13,6 +13,7 @@
     describeGarnrolleVisibility,
     findOwnGarnrolle,
   } from "$lib/garnrolle/visibility";
+  import { tick } from "svelte";
 
   export let accounts: Account[] = [];
   export let accountsLoadError: string | null = null;
@@ -42,7 +43,9 @@
   let isLoadingProfile = false;
   let isSaving = false;
   let profileError: string | null = null;
+  let draftMessage: string | null = null;
   let saveMessage: string | null = null;
+  let locationButton: HTMLButtonElement | null = null;
 
   $: ownGarnrolle = findOwnGarnrolle(accounts, $authStore.account_id);
   $: visibility = describeGarnrolleVisibility(ownGarnrolle);
@@ -51,7 +54,8 @@
       ? $authStore.account_id
       : null;
   $: canEdit = $authStore.authenticated;
-  $: radiusIsValid = radiusM >= 50 && radiusM <= 5000;
+  $: radiusIsValid =
+    Number.isInteger(radiusM) && radiusM >= 50 && radiusM <= 5000;
   $: canSave =
     canEdit &&
     !!ownGarnrolle &&
@@ -157,6 +161,7 @@
     radiusM = 250;
     selectedLocation = null;
     profileError = null;
+    draftMessage = null;
     saveMessage = null;
   }
 
@@ -201,8 +206,10 @@
   }
 
   async function loadPrivateProfile(accountId: string) {
+    let focusReturnedLocation = false;
     isLoadingProfile = true;
     profileError = null;
+    draftMessage = null;
     saveMessage = null;
     try {
       const profile = await getOwnGarnrolleProfile();
@@ -224,8 +231,9 @@
       const returned = returnedMapLocation(accountId);
       if (returned) {
         selectedLocation = returned;
-        saveMessage =
+        draftMessage =
           "Privater Kartenanker übernommen, aber noch nicht gespeichert. Wähle nun die öffentliche Sichtbarkeit und speichere deine Garnrolle.";
+        focusReturnedLocation = true;
       }
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 401) {
@@ -237,6 +245,10 @@
       }
     } finally {
       isLoadingProfile = false;
+      if (focusReturnedLocation) {
+        await tick();
+        locationButton?.focus();
+      }
     }
   }
 
@@ -249,6 +261,7 @@
   }
 
   async function chooseMapLocation() {
+    draftMessage = null;
     saveMessage = null;
     profileError = null;
     saveDraftForMap();
@@ -281,6 +294,7 @@
   async function handleSave(event: SubmitEvent) {
     event.preventDefault();
     profileError = null;
+    draftMessage = null;
     saveMessage = null;
     if (!canSave || !activeAccountId) return;
 
@@ -452,7 +466,12 @@
                   : "Dieser Punkt ist die Grundlage deiner gewählten öffentlichen Darstellung."}
               </small>
             </div>
-            <button type="button" class="btn" on:click={chooseMapLocation}>
+            <button
+              bind:this={locationButton}
+              type="button"
+              class="btn"
+              on:click={chooseMapLocation}
+            >
               Punkt ändern
             </button>
           {:else}
@@ -464,6 +483,7 @@
               </small>
             </div>
             <button
+              bind:this={locationButton}
               type="button"
               class="btn btn-primary"
               on:click={chooseMapLocation}
@@ -564,6 +584,15 @@
         </p>
       {/if}
 
+      {#if draftMessage}
+        <p
+          class="form-message hint"
+          role="status"
+          data-testid="garnrolle-draft-status"
+        >
+          {draftMessage}
+        </p>
+      {/if}
       {#if profileError}
         <p
           class="form-message error"
@@ -575,10 +604,9 @@
       {/if}
       {#if saveMessage}
         <p
-          class="form-message"
-          data-kind={saveMessage[0]}
+          class="form-message success"
           role="status"
-          data-testid="garnrolle-message"
+          data-testid="garnrolle-success"
         >
           {saveMessage}
         </p>
@@ -787,12 +815,11 @@
     border: 1px solid #ff6b6b;
   }
 
-  .form-message[data-kind="D"] {
+  .form-message.success {
     background: rgba(84, 225, 166, 0.12);
     border: 1px solid rgba(84, 225, 166, 0.7);
   }
 
-  .form-message[data-kind="P"],
   .form-message.hint {
     background: rgba(255, 210, 138, 0.08);
     border: 1px solid rgba(255, 210, 138, 0.55);
@@ -822,6 +849,17 @@
   .btn-primary {
     background: var(--accent, #6aa6ff);
     color: #0f1115;
+  }
+
+  .btn:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: 3px solid var(--accent, #6aa6ff);
+    outline-offset: 2px;
+  }
+
+  .radio-card:focus-within {
+    border-color: var(--accent, #6aa6ff);
   }
 
   .btn:disabled,
