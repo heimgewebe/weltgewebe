@@ -175,40 +175,9 @@ jobs:
               )
           component_path.write_text(component, encoding="utf-8")
 
-          test_path = Path("apps/web/src/lib/garnrolle/accountRequestGuard.test.ts")
-          test = test_path.read_text(encoding="utf-8")
-          fs_import = 'import { readFileSync } from "node:fs";\n'
-          if fs_import not in test:
-              test = fs_import + test
-
-          test_name = "invalidates account-bound operations when the component is destroyed"
-          if test_name not in test:
-              closing_index = test.rfind("\n});")
-              if closing_index < 0:
-                  raise SystemExit("request-guard describe ending not found")
-              lifecycle_test = """
-
-            it("invalidates account-bound operations when the component is destroyed", () => {
-              const component = readFileSync(
-                new URL("../components/MyGarnrolleSection.svelte", import.meta.url),
-                "utf8",
-              );
-
-              expect(component).toContain(
-                'import { onDestroy, tick } from "svelte";',
-              );
-              expect(component).toContain("onDestroy(invalidateAccountOperations);");
-            });
-          """
-              test = test[:closing_index] + lifecycle_test + test[closing_index:]
-          test_path.write_text(test, encoding="utf-8")
-
-      - name: Format lifecycle contract
+      - name: Format lifecycle change
         working-directory: apps/web
-        run: |
-          pnpm exec prettier --write \
-            src/lib/components/MyGarnrolleSection.svelte \
-            src/lib/garnrolle/accountRequestGuard.test.ts
+        run: pnpm exec prettier --write src/lib/components/MyGarnrolleSection.svelte
 
       - name: Remove temporary workflow job
         shell: python
@@ -229,8 +198,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
             .github/workflows/web.yml \
-            apps/web/src/lib/components/MyGarnrolleSection.svelte \
-            apps/web/src/lib/garnrolle/accountRequestGuard.test.ts
+            apps/web/src/lib/components/MyGarnrolleSection.svelte
           git commit -m "fix(web): abort Garnrolle requests on teardown"
           git push origin HEAD:feat/first-user-ux-v1
   # END PR1568 LIFECYCLE AUTOFIX
