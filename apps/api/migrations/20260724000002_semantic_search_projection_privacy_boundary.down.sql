@@ -1,7 +1,23 @@
 -- Restore the payload-carried visibility contract expected by the previous
--- worker before dropping the canonical column.
+-- worker before dropping the canonical column. Keep the migration itself out of
+-- the projection version stream in the same way as the forward migration.
+ALTER TABLE domain_nodes DISABLE TRIGGER search_track_domain_nodes;
+
 UPDATE domain_nodes
 SET payload = jsonb_set(payload, '{search_visibility}', to_jsonb(search_visibility), true);
+
+CREATE OR REPLACE FUNCTION weltgewebe_search_enqueue_node(p_node_id TEXT, p_operation TEXT)
+RETURNS VOID LANGUAGE plpgsql AS $$
+DECLARE current_version BIGINT; current_revision TEXT;
+BEGIN
+    SELECT source_version, source_revision INTO current_version, current_revision
+      FROM search_node_versions WHERE node_id = p_node_id;
+    IF current_version IS NULL THEN RETURN; END IF;
+    INSERT INTO search_projection_jobs (generation_id, node_id, source_version, source_revision, operation)
+    SELECT generation_id, p_node_id, current_version, current_revision, p_operation
+      FROM search_index_generations WHERE state IN ('building', 'ready', 'active')
+    ON CONFLICT DO NOTHING;
+END; $$;
 
 CREATE OR REPLACE FUNCTION weltgewebe_search_track_domain_node()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
@@ -30,6 +46,12 @@ BEGIN
     PERFORM weltgewebe_search_enqueue_node(node_identifier, CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'upsert' END);
     RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
 END; $$;
+
+ALTER TABLE domain_nodes ENABLE TRIGGER search_track_domain_nodes;
+
+DROP POLICY IF EXISTS search_projection_jobs_generation_binding ON search_projection_jobs;
+ALTER TABLE search_projection_jobs NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE search_projection_jobs DISABLE ROW LEVEL SECURITY;
 
 ALTER TABLE domain_nodes
     DROP CONSTRAINT domain_nodes_search_visibility_valid,
