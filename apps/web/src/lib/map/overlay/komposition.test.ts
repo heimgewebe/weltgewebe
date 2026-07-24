@@ -71,15 +71,26 @@ class FakeMap {
   }
 }
 
+type PointerEventOptions = {
+  target?: unknown;
+  touchCount?: number;
+  button?: number;
+  buttons?: number;
+};
+
 function pointerEvent(
   x: number,
   y: number,
   lng: number,
   lat: number,
-  target: unknown = new FakeElement("maplibregl-canvas"),
-  touchCount = 1,
-  button = 0,
+  options: PointerEventOptions = {},
 ) {
+  const {
+    target = new FakeElement("maplibregl-canvas"),
+    touchCount = 1,
+    button = 0,
+    buttons = 0,
+  } = options;
   return {
     point: { x, y },
     points: Array.from({ length: touchCount }, (_, index) => ({
@@ -87,7 +98,7 @@ function pointerEvent(
       y: y + index,
     })),
     lngLat: { lng, lat },
-    originalEvent: { target, button },
+    originalEvent: { target, button, buttons },
   };
 }
 
@@ -204,7 +215,7 @@ describe("setupKompositionInteraction", () => {
       map,
       "mousedown",
       "mouseup",
-      pointerEvent(50, 50, 10, 53.5, marker),
+      pointerEvent(50, 50, 10, 53.5, { target: marker }),
     );
     expect(get(kompositionDraft)?.lngLat).toBeUndefined();
   });
@@ -214,7 +225,12 @@ describe("setupKompositionInteraction", () => {
     const marker = new FakeElement("map-marker");
     const svg = new FakeElement("marker-icon-svg", marker);
     const path = new FakeElement("marker-icon-path", svg);
-    clickAt(map, "mousedown", "mouseup", pointerEvent(50, 50, 10, 53.5, path));
+    clickAt(
+      map,
+      "mousedown",
+      "mouseup",
+      pointerEvent(50, 50, 10, 53.5, { target: path }),
+    );
     expect(get(kompositionDraft)?.lngLat).toBeUndefined();
   });
 
@@ -256,6 +272,27 @@ describe("setupKompositionInteraction", () => {
     expect(draft?.source).toBe("tool-fan");
   });
 
+  it("does not complete a tap after same-mode ABA re-entry", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    leaveToNavigation();
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
+    const draft = get(kompositionDraft);
+    expect(draft?.mode).toBe("place-garnrolle");
+    expect(draft?.lngLat).toBeUndefined();
+    expect(draft?.source).toBe("tool-fan");
+  });
+
+  it("does not complete a tap after authentication changes away and back", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    authStore.set({ authenticated: false, role: "gast" });
+    authStore.set({ authenticated: true, role: "gast" });
+    map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
+    expect(get(kompositionDraft)?.lngLat).toBeUndefined();
+  });
+
   it("does not revive a navigation longpress after an ABA state transition", () => {
     map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
     enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
@@ -279,31 +316,46 @@ describe("setupKompositionInteraction", () => {
       map,
       "mousedown",
       "mouseup",
-      pointerEvent(50, 50, 10, 53.5, undefined, 1, 2),
+      pointerEvent(50, 50, 10, 53.5, { button: 2 }),
     );
     clickAt(
       map,
       "mousedown",
       "mouseup",
-      pointerEvent(50, 50, 10, 53.5, undefined, 1, 1),
+      pointerEvent(50, 50, 10, 53.5, { button: 1 }),
     );
     expect(get(kompositionDraft)?.lngLat).toBeUndefined();
   });
 
   it("does not arm a longpress from a non-primary mouse button", () => {
     enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
-    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5, undefined, 1, 2));
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5, { button: 2 }));
     vi.advanceTimersByTime(800);
     expect(get(kompositionDraft)?.lngLat).toBeUndefined();
   });
 
-  it("does not let a non-primary mouseup finish an armed primary-button gesture", () => {
+  it("keeps a primary gesture armed when a non-primary mouseup reports primary held", () => {
     enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
     map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
-    map.emit("mouseup", pointerEvent(50, 50, 10, 53.5, undefined, 1, 2));
+    map.emit(
+      "mouseup",
+      pointerEvent(50, 50, 10, 53.5, { button: 2, buttons: 1 }),
+    );
     expect(get(kompositionDraft)?.lngLat).toBeUndefined();
     map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
     expect(get(kompositionDraft)?.lngLat).toEqual([10, 53.5]);
+  });
+
+  it("cancels a primary gesture when a non-primary mouseup reports primary released", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    map.emit(
+      "mouseup",
+      pointerEvent(50, 50, 10, 53.5, { button: 2, buttons: 0 }),
+    );
+    vi.advanceTimersByTime(800);
+    map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
+    expect(get(kompositionDraft)?.lngLat).toBeUndefined();
   });
 
   it("does not place a point for a pan (movement beyond tolerance)", () => {
@@ -316,10 +368,7 @@ describe("setupKompositionInteraction", () => {
 
   it("does not arm placement for a multi-touch gesture", () => {
     enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
-    map.emit(
-      "touchstart",
-      pointerEvent(50, 50, 10, 53.5, new FakeElement("maplibregl-canvas"), 2),
-    );
+    map.emit("touchstart", pointerEvent(50, 50, 10, 53.5, { touchCount: 2 }));
     map.emit("touchend", pointerEvent(50, 50, 10, 53.5));
     expect(get(kompositionDraft)?.lngLat).toBeUndefined();
   });

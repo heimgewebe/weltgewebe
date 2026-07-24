@@ -171,9 +171,13 @@ export function setupKompositionInteraction(map: MapLibreMap) {
   const suppressCompatibilityMouse = () => {
     suppressMouseUntil = Date.now() + COMPAT_MOUSE_SUPPRESSION_MS;
   };
+  const isPrimaryMouseButton = (e: MapMouseEvent) =>
+    e.originalEvent.button === 0;
+  const primaryMouseButtonIsHeld = (e: MapMouseEvent) =>
+    (e.originalEvent.buttons & 1) !== 0;
 
   const handleMousedown = (e: MapMouseEvent) => {
-    if (mouseIsSuppressed() || e.originalEvent.button !== 0) return;
+    if (mouseIsSuppressed() || !isPrimaryMouseButton(e)) return;
     beginGesture(e.point, e.lngLat, e.originalEvent.target);
   };
   const handleMousemove = (e: MapMouseEvent) => {
@@ -181,7 +185,13 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     trackMove(e.point);
   };
   const handleMouseup = (e: MapMouseEvent) => {
-    if (mouseIsSuppressed() || e.originalEvent.button !== 0) return;
+    if (mouseIsSuppressed()) return;
+    if (!isPrimaryMouseButton(e)) {
+      // A foreign-button release may happen while the primary button remains
+      // held. Keep the gesture only when the browser explicitly reports that.
+      if (!primaryMouseButtonIsHeld(e)) cancelGesture();
+      return;
+    }
     endGesture(e.point, e.lngLat);
   };
 
