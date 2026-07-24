@@ -78,6 +78,7 @@ function pointerEvent(
   lat: number,
   target: unknown = new FakeElement("maplibregl-canvas"),
   touchCount = 1,
+  button = 0,
 ) {
   return {
     point: { x, y },
@@ -86,7 +87,7 @@ function pointerEvent(
       y: y + index,
     })),
     lngLat: { lng, lat },
-    originalEvent: { target },
+    originalEvent: { target, button },
   };
 }
 
@@ -132,6 +133,14 @@ describe("setupKompositionInteraction", () => {
     clickAt(map, "touchstart", "touchend", pointerEvent(50, 50, 9.9, 53.4));
     expect(get(kompositionDraft)?.lngLat).toEqual([9.9, 53.4]);
     expect(get(kompositionDraft)?.source).toBe("map-tap");
+  });
+
+  it("accepts mouse placement again after compatibility suppression expires", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    clickAt(map, "touchstart", "touchend", pointerEvent(50, 50, 9.9, 53.4));
+    vi.advanceTimersByTime(501);
+    clickAt(map, "mousedown", "mouseup", pointerEvent(50, 50, 10.1, 53.6));
+    expect(get(kompositionDraft)?.lngLat).toEqual([10.1, 53.6]);
   });
 
   it("suppresses compatibility mouse events after a touch tap", () => {
@@ -215,6 +224,40 @@ describe("setupKompositionInteraction", () => {
     leaveToNavigation();
     map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
     expect(get(kompositionDraft)).toBeNull();
+  });
+
+  it("does not resurrect Garnrolle placement when the longpress timer fires after cancellation", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    leaveToNavigation();
+    vi.advanceTimersByTime(800);
+    expect(get(kompositionDraft)).toBeNull();
+  });
+
+  it("does not let a stale longpress overwrite a changed composition mode", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    enterKomposition({ mode: "new-knoten", source: "tool-fan" });
+    vi.advanceTimersByTime(800);
+    const draft = get(kompositionDraft);
+    expect(draft?.mode).toBe("new-knoten");
+    expect(draft?.lngLat).toBeUndefined();
+  });
+
+  it("ignores right and middle mouse buttons for placement", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    clickAt(map, "mousedown", "mouseup", pointerEvent(50, 50, 10, 53.5, undefined, 1, 2));
+    clickAt(map, "mousedown", "mouseup", pointerEvent(50, 50, 10, 53.5, undefined, 1, 1));
+    expect(get(kompositionDraft)?.lngLat).toBeUndefined();
+  });
+
+  it("does not let a non-primary mouseup finish an armed primary-button gesture", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    map.emit("mouseup", pointerEvent(50, 50, 10, 53.5, undefined, 1, 2));
+    expect(get(kompositionDraft)?.lngLat).toBeUndefined();
+    map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
+    expect(get(kompositionDraft)?.lngLat).toEqual([10, 53.5]);
   });
 
   it("does not place a point for a pan (movement beyond tolerance)", () => {

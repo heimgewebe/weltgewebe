@@ -57,6 +57,7 @@ type ActiveGesture = {
   startX: number;
   startY: number;
   mode: GestureMode;
+  initialDraftMode: string | null;
   longPressFired: boolean;
 };
 
@@ -75,6 +76,11 @@ export function setupKompositionInteraction(map: MapLibreMap) {
   const cancelGesture = () => {
     clearLongPressTimer();
     activeGesture = null;
+  };
+
+  const gestureIsStillValid = (gesture: ActiveGesture) => {
+    if (!canComposeOnMap()) return false;
+    return (get(kompositionDraft)?.mode ?? null) === gesture.initialDraftMode;
   };
 
   const setPoint = (
@@ -104,6 +110,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
       startX: point.x,
       startY: point.y,
       mode: isPlacingGarnrolle() ? "place-garnrolle" : "new-knoten",
+      initialDraftMode: get(kompositionDraft)?.mode ?? null,
       longPressFired: false,
     };
     longPressTimer = setTimeout(() => {
@@ -112,7 +119,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
       if (gesture === null) return;
       // Authentication may change while the finger/button is still held.
       // Re-check before producing a UI action; the API remains the final guard.
-      if (!canComposeOnMap()) {
+      if (!gestureIsStillValid(gesture)) {
         cancelGesture();
         return;
       }
@@ -141,7 +148,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     const dx = point.x - gesture.startX;
     const dy = point.y - gesture.startY;
     cancelGesture();
-    if (gesture.longPressFired || !canComposeOnMap()) return;
+    if (gesture.longPressFired || !gestureIsStillValid(gesture)) return;
     if (dx * dx + dy * dy > TAP_MOVE_TOLERANCE_SQ) return;
     // The mode is frozen at press start. A stationary release only places on
     // the explicit Garnrolle picker; normal node composition stays longpress-only.
@@ -155,7 +162,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
   };
 
   const handleMousedown = (e: MapMouseEvent) => {
-    if (mouseIsSuppressed()) return;
+    if (mouseIsSuppressed() || e.originalEvent.button !== 0) return;
     beginGesture(e.point, e.lngLat, e.originalEvent.target);
   };
   const handleMousemove = (e: MapMouseEvent) => {
@@ -163,7 +170,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     trackMove(e.point);
   };
   const handleMouseup = (e: MapMouseEvent) => {
-    if (mouseIsSuppressed()) return;
+    if (mouseIsSuppressed() || e.originalEvent.button !== 0) return;
     endGesture(e.point, e.lngLat);
   };
 
