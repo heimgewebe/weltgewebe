@@ -45,7 +45,10 @@ async fn ensure_generation_identity(
     Ok(())
 }
 
-async fn generation_bound_pool(database_url: &str, generation_id: String) -> anyhow::Result<PgPool> {
+async fn generation_bound_pool(
+    database_url: &str,
+    generation_id: String,
+) -> anyhow::Result<PgPool> {
     Ok(PgPoolOptions::new()
         .max_connections(2)
         .after_connect(move |connection, _metadata| {
