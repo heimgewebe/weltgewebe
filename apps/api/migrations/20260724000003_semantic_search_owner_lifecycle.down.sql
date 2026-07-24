@@ -5,6 +5,7 @@
 -- revisioning. Recovery procedure: stop search workers, deploy a corrected
 -- roll-forward migration, rebuild the affected generation, then reactivate it
 -- through the canonical database gate.
+-- The refusal is the first statement, so a rejected downgrade mutates nothing.
 
 DO $$
 BEGIN
