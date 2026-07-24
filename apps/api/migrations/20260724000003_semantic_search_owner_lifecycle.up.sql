@@ -31,9 +31,10 @@ WHERE EXISTS (
 $$;
 
 -- Final database write fence: even a stale or non-Rust writer cannot persist
--- recoverable private plaintext once the owner is absent or disabled. Locking
--- the active account row serializes projection writes with disable/delete: a
--- write either finishes first and is then redacted, or observes inactivity.
+-- recoverable private plaintext once the owner is absent or disabled. FOR SHARE
+-- permits parallel projection writers but conflicts with the row lock required
+-- by UPDATE disabled and DELETE. A lifecycle mutation therefore either runs
+-- first and makes the write redact itself, or waits and redacts it afterwards.
 CREATE OR REPLACE FUNCTION weltgewebe_search_enforce_projection_owner()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
@@ -55,7 +56,7 @@ BEGIN
           FROM domain_accounts a
          WHERE a.id = declared_owner_account_id
            AND a.disabled = FALSE
-         FOR KEY SHARE;
+         FOR SHARE;
     END IF;
 
     IF NOT FOUND
