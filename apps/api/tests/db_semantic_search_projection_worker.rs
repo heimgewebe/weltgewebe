@@ -80,6 +80,10 @@ async fn reset_search_state(pool: &PgPool) {
         .execute(pool)
         .await
         .expect("remove prior T005 test nodes");
+    sqlx::query("DELETE FROM domain_accounts WHERE id='owner-private'")
+        .execute(pool)
+        .await
+        .expect("remove prior private-owner account");
     sqlx::query("TRUNCATE search_projection_jobs, search_node_projections, search_node_versions, search_index_generations RESTART IDENTITY CASCADE")
         .execute(pool)
         .await
@@ -298,6 +302,10 @@ async fn private_nodes_stay_lexical_without_calling_the_provider_and_can_activat
     let generation_spec =
         exact_generation_spec("test", "test", "ollama:test@http://127.0.0.1:11434", 4);
     let generation = generation_spec.generation_id;
+    sqlx::query("INSERT INTO domain_accounts (id,title,disabled) VALUES ('owner-private','Private owner',FALSE)")
+        .execute(&pool)
+        .await
+        .expect("insert active private owner");
     sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload,search_visibility) VALUES ($1,'Privatwerkstatt','Vertraulicher Titel',$2::jsonb,'private')")
         .bind(node)
         .bind(r#"{"summary":"Vertrauliche Zusammenfassung","address":"Geheimer Weg 9","created_by_account_id":"owner-private"}"#)

@@ -234,13 +234,11 @@ async fn private_owner_lifecycle_is_account_bound_redacted_and_recoverable() {
         .expect("activate owner-lifecycle generation");
     assert_eq!(owner_candidate_count(&pool).await, 0);
 
-    sqlx::query(
-        "INSERT INTO domain_accounts (id,title,disabled) VALUES ($1,'Eigentümer',FALSE)",
-    )
-    .bind(OWNER_ID)
-    .execute(&pool)
-    .await
-    .expect("create active owner account");
+    sqlx::query("INSERT INTO domain_accounts (id,title,disabled) VALUES ($1,'Eigentümer',FALSE)")
+        .bind(OWNER_ID)
+        .execute(&pool)
+        .await
+        .expect("create active owner account");
     assert_eq!(owner_candidate_count(&pool).await, 0);
     process_one(&projection_worker).await;
     let active_owner = projection(&pool, &generation).await;

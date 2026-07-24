@@ -371,6 +371,7 @@ targets=(
   db_webauthn_user_id_backfill_audit
   db_semantic_search_foundation
   db_semantic_search_projection_worker
+  db_semantic_search_owner_lifecycle
   sqlx_postgres_direct_session_crud
 )
 
