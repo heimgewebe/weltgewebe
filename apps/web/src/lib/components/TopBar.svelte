@@ -17,7 +17,7 @@
   </div>
   {#if $authStore.authenticated}
     <a
-      class="topbar-action garnrolle-link"
+      class="action garnrolle-link"
       href="/settings#meine-garnrolle"
       aria-label="Meine Garnrolle einrichten"
       title="Meine Garnrolle einrichten"
@@ -25,7 +25,7 @@
       <img src={garnrolleIcon} alt="" />
     </a>
   {:else}
-    <a class="topbar-action login-entry" href="/login">Anmelden</a>
+    <a class="action login-entry" href="/login">Anmelden</a>
   {/if}
 </div>
 
@@ -51,7 +51,7 @@
     pointer-events: auto;
   }
 
-  .topbar-action {
+  .action {
     grid-column: 3;
     justify-self: end;
     pointer-events: auto;
