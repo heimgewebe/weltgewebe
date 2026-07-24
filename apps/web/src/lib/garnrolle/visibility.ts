@@ -1,8 +1,4 @@
-import type {
-  Account,
-  GarnrolleMapState,
-  Location,
-} from "$lib/map/types";
+import type { Account, GarnrolleMapState, Location } from "$lib/map/types";
 
 export type { GarnrolleMapState } from "$lib/map/types";
 
