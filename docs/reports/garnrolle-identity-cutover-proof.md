@@ -57,10 +57,16 @@ nicht zuverlässig bestimmt und ist ausdrücklich kein Teil dieses Belegs.
 
 ## Migrationsvertrag
 
-`20260724000001_remove_ron_legacy.up.sql` prüft die Legacy-Kategorien erneut in
-der Zieltransaktion. Bei einem Treffer löst die Migration eine Ausnahme aus und
-löscht die Spalte nicht. Nur bei leerem Altbestand wird `domain_accounts.mode`
-entfernt.
+`20260724000001_remove_ron_legacy.up.sql` prüft die semantischen
+Legacy-Kategorien erneut in der Zieltransaktion. Abweichende Kontotypen sowie
+`ron_flag`, `visibility` oder `suppress_public_pos` lösen eine Ausnahme aus; die
+Spalte bleibt dann bestehen. Ein bloßer Restwert in `mode` blockiert nicht, weil
+diese Spalte ohne fachliche Auswertung vollständig entfernt wird.
+
+Ein PostgreSQL-16-Gegentest belegt beide Richtungen: Eine kanonische Garnrolle
+mit altem `mode='ron'` passiert den Cutover und verliert nur die obsolete Spalte.
+Ein Datensatz mit privatem `visibility`-Marker blockiert die Migration, lässt das
+Schema unverändert und kann erst nach expliziter Bereinigung migriert werden.
 
 Die Down-Migration fügt eine nullable Spalte `mode` wieder hinzu. Das genügt für
 einen Code-Rollback auf den unmittelbar vorherigen lesekompatiblen Stand, ohne
@@ -71,6 +77,9 @@ alte Identitäten oder vermeintliche Sichtbarkeitswerte zu erfinden.
 - Account-Lese- und Schreibpfade akzeptieren nur `type=garnrolle`.
 - `map_state` ist explizit und auf `not_on_map`, `exact` oder `radius` begrenzt.
 - `mode`, `ron_flag`, `visibility` und `suppress_public_pos` werden abgewiesen.
+- Der JSONL-Startpfad überspringt solche Zeilen nicht: Er bricht mit Datei und
+  Zeilennummer ab, damit kein Konto unbemerkt verschwindet und keine Sperre durch
+  automatische Neuanlage umgangen werden kann.
 - Fehlende private Orts- oder Radiusbindungen bleiben privacy-sicher und können
   keine öffentliche Position erzeugen.
 - Die automatische Erstregistrierung erzeugt eine Garnrolle mit
@@ -80,7 +89,8 @@ alte Identitäten oder vermeintliche Sichtbarkeitswerte zu erfinden.
 
 Die folgenden Beweisklassen liefen gegen eine frische PostgreSQL-16-Datenbank:
 
-- Schema-Migrationen: 5 Tests grün;
+- Schema-Migrationen einschließlich des zweiachsigen finalen Cutover-Gegentests:
+  6 Tests grün;
 - deterministischer Backfill: 7 Tests grün;
 - PostgreSQL-Lesepfad: 9 Tests grün;
 - Account-Schreibpfad: 8 Tests grün;
@@ -89,8 +99,11 @@ Die folgenden Beweisklassen liefen gegen eine frische PostgreSQL-16-Datenbank:
 - Governance: 10 Tests grün;
 - Passkey- und WebAuthn-Audits: 11 Tests grün.
 
-Zusätzlich sind die Garnrollen-Ontologie-Contracttests, die Account-Routen- und
-Domain-DB-Unit-Tests sowie die vollständige Rust-Testkompilierung grün.
+Zusätzlich sind sechs Garnrollen-Ontologie-Contracttests, 14
+Account-Routen-Unit-Tests, fünf JSONL-Provisionierungs- und Neustarttests sowie
+die kanonische Erzeugung der Bash-Demodaten grün. Die vollständige
+Rust-Testkompilierung und die übrigen Domain-DB-Unit-Tests bleiben Bestandteil
+des Repository-Gates.
 
 ## Grenzen
 

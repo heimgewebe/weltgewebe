@@ -179,12 +179,42 @@ async fn auto_provision_persists_before_cache_and_survives_reload() -> Result<()
 
     // Simulated restart: a fresh load from the JSONL file alone must
     // reconstruct the exact same account — no reliance on the in-memory cache.
-    let reloaded = load_all_accounts().await;
+    let reloaded = load_all_accounts().await?;
     let reloaded_account = reloaded
         .get(&account_id)
         .expect("account must be loadable from PostgreSQL/JSONL after a restart");
     assert_eq!(reloaded_account.email.as_deref(), Some(email));
     assert_eq!(reloaded_account.role, Role::Gast);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn jsonl_loader_rejects_legacy_account_instead_of_hiding_it() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    std::fs::write(
+        in_dir.join("demo.accounts.jsonl"),
+        concat!(
+            r#"{"id":"legacy-disabled","type":"garnrolle","title":"Legacy disabled","map_state":"not_on_map","email":"blocked@example.com","disabled":true,"visibility":"private"}"#,
+            "\n"
+        ),
+    )?;
+
+    let error = match load_all_accounts().await {
+        Ok(_) => panic!("legacy JSONL account must stop startup instead of disappearing"),
+        Err(error) => error,
+    };
+    let message = error.to_string();
+    assert!(message.contains("line 1"), "unexpected error: {message}");
+    assert!(
+        message.contains("canonical Garnrolle contract"),
+        "unexpected error: {message}"
+    );
 
     Ok(())
 }

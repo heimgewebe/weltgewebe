@@ -4,7 +4,6 @@ BEGIN
         SELECT 1
         FROM domain_accounts
         WHERE kind IS DISTINCT FROM 'garnrolle'
-           OR mode IS NOT NULL
            OR private_payload ? 'ron_flag'
            OR private_payload ? 'visibility'
            OR private_payload ? 'suppress_public_pos'

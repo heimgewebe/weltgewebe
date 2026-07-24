@@ -23,13 +23,14 @@ class GarnrolleOntologyContractTests(unittest.TestCase):
 
     def test_new_data_producers_do_not_emit_legacy_identity_fields(self) -> None:
         paths = (
+            "scripts/dev/generate-demo-data.sh",
             "scripts/dev/gewebe-demo-server.mjs",
             "scripts/dev/bootstrap-first-account.sh",
             "apps/web/src/lib/demo/demoData.ts",
             "apps/web/tests/map-url-state.spec.ts",
             "contracts/domain/examples/account.example.json",
         )
-        forbidden = re.compile(r'(?i)(["\']mode["\']\s*:|["\']type["\']\s*:\s*["\']ron["\']|ron_flag)')
+        forbidden = re.compile(r'(?i)(["\'](?:mode|ron_flag|visibility|suppress_public_pos)["\']\s*:|["\']type["\']\s*:\s*["\']ron["\'])')
         for relative in paths:
             text = (ROOT / relative).read_text(encoding="utf-8")
             self.assertIsNone(forbidden.search(text), relative)
@@ -38,7 +39,7 @@ class GarnrolleOntologyContractTests(unittest.TestCase):
     def test_final_migration_removes_legacy_identity_fail_closed(self) -> None:
         up = (ROOT / "apps/api/migrations/20260724000001_remove_ron_legacy.up.sql").read_text()
         self.assertIn("kind IS DISTINCT FROM 'garnrolle'", up)
-        self.assertIn("mode IS NOT NULL", up)
+        self.assertNotIn("mode IS NOT NULL", up)
         self.assertIn("private_payload ? 'ron_flag'", up)
         self.assertIn("private_payload ? 'visibility'", up)
         self.assertIn("private_payload ? 'suppress_public_pos'", up)

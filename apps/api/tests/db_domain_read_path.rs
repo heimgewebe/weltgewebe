@@ -337,7 +337,9 @@ async fn jsonl_postgres_legacy_list_order_gap_diagnostic() {
     let jsonl_edges = weltgewebe_api::routes::edges::load_edges().await;
     let pg_edges = load_edges_from_postgres(&pool).await.unwrap();
 
-    let jsonl_accounts = weltgewebe_api::routes::accounts::load_all_accounts().await;
+    let jsonl_accounts = weltgewebe_api::routes::accounts::load_all_accounts()
+        .await
+        .expect("load canonical JSONL accounts");
     let pg_accounts = load_accounts_from_postgres(&pool).await.unwrap();
 
     // 4. Assert Diagnostic Outcomes

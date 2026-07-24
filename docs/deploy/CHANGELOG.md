@@ -27,11 +27,18 @@ entfernt. API und Backfill interpretieren `type=ron`, `mode`, `ron_flag`,
 `visibility` oder `suppress_public_pos` nicht länger, sondern weisen solche
 Datensätze fail-closed ab.
 
-Die Migration prüft vor dem `DROP COLUMN`, dass Produktion keine abweichenden
-Kontotypen, gesetzten `mode`-Werte oder alten privaten Sichtbarkeitsfelder mehr
-enthält. Sobald auch nur ein solcher Datensatz existiert, bricht sie ohne
-Schemaänderung ab. Der belegte Produktionsstand vom 24. Juli 2026 enthält acht
-Accounts und null Legacy-Treffer in allen geprüften Kategorien.
+Die Migration prüft vor dem `DROP COLUMN`, dass keine abweichenden Kontotypen
+oder alten privaten Identitäts- und Sichtbarkeitsmarker mehr vorhanden sind.
+Bedeutungslose Restwerte in der ohnehin entfernten Spalte `mode` blockieren den
+Cutover nicht. Ein echter Legacy-Marker lässt die Migration dagegen ohne
+Schemaänderung abbrechen. Der belegte Produktionsstand vom 24. Juli 2026 enthält
+acht Accounts und null Legacy-Treffer in allen geprüften Kategorien.
+
+Auch der lokale JSONL-Pfad ist fail-closed: Ein syntaktisch ungültiger oder nicht
+kanonischer Accountdatensatz stoppt den API-Start mit Datei und Zeilennummer,
+statt das Konto still aus dem Speicher zu entfernen. Die Bash- und
+JavaScript-Demodatenproduzenten schreiben nur noch `type=garnrolle`, einen
+expliziten `map_state` und keine entfernten Legacy-Felder.
 
 **Produktionswirkung:**
 

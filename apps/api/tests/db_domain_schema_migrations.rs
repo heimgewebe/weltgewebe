@@ -223,6 +223,106 @@ async fn domain_schema_tables_exist_after_migration() {
     pool.close().await;
 }
 
+/// Final identity cutover proof: obsolete `mode` contents are discarded, but
+/// semantically meaningful legacy identity markers still block the column drop.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn final_identity_migration_discards_mode_but_blocks_legacy_markers() {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+
+    const ACCOUNT_ID: &str = "final-identity-migration-probe";
+    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
+        .bind(ACCOUNT_ID)
+        .execute(&pool)
+        .await
+        .expect("pre-test cleanup failed");
+
+    sqlx::raw_sql(include_str!(
+        "../migrations/20260724000001_remove_ron_legacy.down.sql"
+    ))
+    .execute(&pool)
+    .await
+    .expect("restore nullable compatibility column");
+
+    sqlx::query(
+        "INSERT INTO domain_accounts (
+             id, kind, mode, title, map_state, radius_m, role,
+             public_payload, private_payload
+         ) VALUES ($1, 'garnrolle', 'ron', 'Canonical Garnrolle',
+                   'not_on_map', 0, 'gast', '{}'::jsonb, '{}'::jsonb)",
+    )
+    .bind(ACCOUNT_ID)
+    .execute(&pool)
+    .await
+    .expect("insert canonical row with obsolete mode value");
+
+    sqlx::raw_sql(include_str!(
+        "../migrations/20260724000001_remove_ron_legacy.up.sql"
+    ))
+    .execute(&pool)
+    .await
+    .expect("obsolete mode value must not block the final column drop");
+    assert!(
+        !column_exists(&pool, "domain_accounts", "mode").await,
+        "mode column must be absent after successful cutover"
+    );
+
+    sqlx::raw_sql(include_str!(
+        "../migrations/20260724000001_remove_ron_legacy.down.sql"
+    ))
+    .execute(&pool)
+    .await
+    .expect("restore compatibility column for fail-closed case");
+    sqlx::query(
+        r#"UPDATE domain_accounts
+         SET private_payload = '{"visibility":"private"}'::jsonb
+         WHERE id = $1"#,
+    )
+    .bind(ACCOUNT_ID)
+    .execute(&pool)
+    .await
+    .expect("add semantic legacy marker");
+
+    let error = sqlx::raw_sql(include_str!(
+        "../migrations/20260724000001_remove_ron_legacy.up.sql"
+    ))
+    .execute(&pool)
+    .await
+    .expect_err("semantic legacy marker must block the cutover");
+    assert!(
+        error.to_string().contains("legacy rows remain"),
+        "unexpected migration error: {error}"
+    );
+    assert!(
+        column_exists(&pool, "domain_accounts", "mode").await,
+        "failed migration must leave the schema unchanged"
+    );
+
+    sqlx::query(
+        "UPDATE domain_accounts
+         SET private_payload = private_payload - 'visibility'
+         WHERE id = $1",
+    )
+    .bind(ACCOUNT_ID)
+    .execute(&pool)
+    .await
+    .expect("remove semantic legacy marker");
+    sqlx::raw_sql(include_str!(
+        "../migrations/20260724000001_remove_ron_legacy.up.sql"
+    ))
+    .execute(&pool)
+    .await
+    .expect("cutover must succeed after remediation");
+
+    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
+        .bind(ACCOUNT_ID)
+        .execute(&pool)
+        .await
+        .expect("post-test cleanup failed");
+    pool.close().await;
+}
+
 /// Security cutover proof: an historical radius row is never re-exposed by
 /// the new migration or its intentionally irreversible down migration.
 #[tokio::test]

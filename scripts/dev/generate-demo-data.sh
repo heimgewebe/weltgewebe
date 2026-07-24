@@ -109,11 +109,11 @@ ensure_jsonl_line() {
 
 # --- ACCOUNTS ---
 ACCOUNT_ID="7d97a42e-3704-4a33-a61f-0e0a6b4d65d8"
-ACCOUNT_JSON='{"id":"7d97a42e-3704-4a33-a61f-0e0a6b4d65d8","type":"garnrolle","title":"gewebespinnerAYE","summary":"Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.","location":{"lat":53.5604148,"lon":10.0629844},"visibility":"public","tags":["account","garnrolle","wohnort"]}'
+ACCOUNT_JSON='{"id":"7d97a42e-3704-4a33-a61f-0e0a6b4d65d8","type":"garnrolle","title":"gewebespinnerAYE","summary":"Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.","location":{"lat":53.5604148,"lon":10.0629844},"map_state":"exact","radius_m":0,"tags":["account","garnrolle","wohnort"]}'
 
 # Just ensure the file exists so ensure_jsonl_line doesn't complain about missing file if Logic A branches
 touch "$DIR/demo.accounts.jsonl"
-ensure_jsonl_line "$DIR/demo.accounts.jsonl" "$ACCOUNT_ID" "$ACCOUNT_JSON" "location"
+ensure_jsonl_line "$DIR/demo.accounts.jsonl" "$ACCOUNT_ID" "$ACCOUNT_JSON" "map_state"
 
 # --- NODES ---
 NODE_ID="b52be17c-4ab7-4434-98ce-520f86290cf0"

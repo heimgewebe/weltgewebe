@@ -483,63 +483,60 @@ pub(crate) fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
     })
 }
 
-pub async fn load_all_accounts() -> AccountStore {
+pub async fn load_all_accounts() -> std::io::Result<AccountStore> {
     let mut store = AccountStore::new();
     let path = accounts_path();
 
     let file = match File::open(&path).await {
-        Ok(f) => f,
-        Err(e) => {
-            tracing::warn!(
-                ?path,
-                ?e,
-                "Failed to open accounts file, returning empty map"
-            );
-            return store;
-        }
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(store),
+        Err(error) => return Err(error),
     };
 
     let mut lines = BufReader::new(file).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
-        let v: Value = match serde_json::from_str(&line) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
+    let mut line_number = 0usize;
+    while let Some(line) = lines.next_line().await? {
+        line_number += 1;
+        let value: Value = serde_json::from_str(&line).map_err(|error| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("invalid JSONL account record at {path:?} line {line_number}: {error}"),
+            )
+        })?;
 
-        let role = v
+        let public = map_json_to_public_account(&value).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "account record at {path:?} line {line_number} violates the canonical Garnrolle contract"
+                ),
+            )
+        })?;
+
+        let role = value
             .get("role")
-            .and_then(|v| v.as_str())
+            .and_then(|value| value.as_str())
             .map(Role::from_str_lossy)
             .unwrap_or(Role::Gast);
-
-        let email = v
+        let email = value
             .get("email")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        // Read persisted webauthn_user_id if present; otherwise generate a new one.
-        // NOTE: This generated ID is stable only for the lifetime of this process.
-        // Once passkey registration is implemented (register-verify), the generated
-        // webauthn_user_id MUST be persisted back to the account data source so that
-        // registered passkeys remain bound to the correct identity across restarts.
-        let webauthn_user_id = v
+            .and_then(|value| value.as_str())
+            .map(ToOwned::to_owned);
+        let webauthn_user_id = value
             .get("webauthn_user_id")
-            .and_then(|v| v.as_str())
-            .and_then(|s| Uuid::parse_str(s).ok())
+            .and_then(|value| value.as_str())
+            .and_then(|value| Uuid::parse_str(value).ok())
             .unwrap_or_else(Uuid::new_v4);
 
-        if let Some(public) = map_json_to_public_account(&v) {
-            let account = AccountInternal {
-                public,
-                role,
-                email,
-                webauthn_user_id,
-            };
-            store.insert_unindexed(account);
-        }
+        store.insert_unindexed(AccountInternal {
+            public,
+            role,
+            email,
+            webauthn_user_id,
+        });
     }
     store.rebuild_email_index();
-    store
+    Ok(store)
 }
 
 pub async fn list_accounts(
@@ -1401,6 +1398,16 @@ mod tests {
             "title": "Invalid state",
             "map_state": "public-ish",
             "location": { "lat": 53.5, "lon": 10.0 }
+        });
+        assert!(map_json_to_public_account(&input).is_none());
+    }
+
+    #[test]
+    fn missing_map_state_is_rejected() {
+        let input = serde_json::json!({
+            "id": "test-missing-map-state",
+            "type": "garnrolle",
+            "title": "Missing state"
         });
         assert!(map_json_to_public_account(&input).is_none());
     }
