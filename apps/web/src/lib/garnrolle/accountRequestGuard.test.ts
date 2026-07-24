@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createAccountRequestGuard } from "./accountRequestGuard";
 
@@ -18,5 +19,15 @@ describe("Garnrolle account request guard", () => {
     guard.invalidate();
 
     expect(guard.isCurrent(request, null)).toBe(false);
+  });
+
+  it("invalidates account-bound operations when the component is destroyed", () => {
+    const component = readFileSync(
+      new URL("../components/MyGarnrolleSection.svelte", import.meta.url),
+      "utf8",
+    );
+
+    expect(component).toContain('import { onDestroy, tick } from "svelte";');
+    expect(component).toContain("onDestroy(invalidateAccountOperations);");
   });
 });
