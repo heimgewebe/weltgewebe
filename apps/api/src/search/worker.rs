@@ -907,6 +907,7 @@ impl ProjectionWorker {
             &row.get::<String, _>("title"),
             &row.get::<String, _>("payload"),
             &search_visibility,
+            owner_account_id.as_deref(),
         ) {
             Ok(document) => document,
             Err(_) => return Ok(Err("document_invalid")),
@@ -1069,6 +1070,7 @@ mod tests {
             "Fahrradhilfe",
             r#"{"summary":"Reparatur","address":"secret lane 9","tags":["Rad"]}"#,
             "hidden",
+            None,
         )
         .expect("document");
         assert_eq!(unknown.status, "hidden");
@@ -1081,11 +1083,24 @@ mod tests {
             "Fahrradhilfe",
             r#"{"created_by_account_id":"owner-a","summary":"Reparatur","address":"secret lane 9","tags":["Rad"]}"#,
             "private",
+            Some("owner-a"),
         )
         .expect("private document");
         assert_eq!(private.status, "active");
         assert_eq!(private.scopes, ["owner"]);
         assert!(!private.text.contains("secret lane 9"));
+
+        let sql_canonical_private = SearchDocument::from_row(
+            "node-1",
+            "Werkstatt",
+            "Fahrradhilfe",
+            r#"{"created_by_account_id":"\t","summary":"Reparatur"}"#,
+            "private",
+            Some("\t"),
+        )
+        .expect("SQL-canonical private document");
+        assert_eq!(sql_canonical_private.status, "active");
+        assert_eq!(sql_canonical_private.scopes, ["owner"]);
 
         let public = SearchDocument::from_row(
             "node-1",
@@ -1093,6 +1108,7 @@ mod tests {
             "Fahrradhilfe",
             r#"{"summary":"Reparatur","tags":["Rad"]}"#,
             "public",
+            None,
         )
         .expect("document");
         assert_eq!(public.status, "active");
@@ -1105,21 +1121,39 @@ mod tests {
 
     #[test]
     fn document_rejects_blank_projection_required_fields() {
-        assert!(SearchDocument::from_row("node", "Kind", "   ", "{}", "public").is_err());
-        assert!(SearchDocument::from_row("node", "   ", "Titel", "{}", "public").is_err());
+        assert!(SearchDocument::from_row("node", "Kind", "   ", "{}", "public", None).is_err());
+        assert!(SearchDocument::from_row("node", "   ", "Titel", "{}", "public", None).is_err());
     }
 
     #[test]
     fn document_hash_changes_for_indexed_content_not_unindexed_payload() {
-        let first =
-            SearchDocument::from_row("node", "Kind", "Titel", r#"{"address":"a"}"#, "public")
-                .expect("document");
-        let same =
-            SearchDocument::from_row("node", "Kind", "Titel", r#"{"address":"b"}"#, "public")
-                .expect("document");
-        let changed =
-            SearchDocument::from_row("node", "Kind", "Titel", r#"{"summary":"neu"}"#, "public")
-                .expect("document");
+        let first = SearchDocument::from_row(
+            "node",
+            "Kind",
+            "Titel",
+            r#"{"address":"a"}"#,
+            "public",
+            None,
+        )
+        .expect("document");
+        let same = SearchDocument::from_row(
+            "node",
+            "Kind",
+            "Titel",
+            r#"{"address":"b"}"#,
+            "public",
+            None,
+        )
+        .expect("document");
+        let changed = SearchDocument::from_row(
+            "node",
+            "Kind",
+            "Titel",
+            r#"{"summary":"neu"}"#,
+            "public",
+            None,
+        )
+        .expect("document");
         assert_eq!(first.hash(), same.hash());
         assert_ne!(first.hash(), changed.hash());
     }
@@ -1343,6 +1377,7 @@ impl SearchDocument {
         title: &str,
         payload: &str,
         search_visibility: &str,
+        owner_account_id: Option<&str>,
     ) -> anyhow::Result<Self> {
         let payload: Value =
             serde_json::from_str(payload).context("domain node payload is not JSON")?;
@@ -1367,15 +1402,12 @@ impl SearchDocument {
                 .filter(|v| !v.trim().is_empty())
                 .unwrap_or("und"),
         );
-        // Visibility is server-owned canonical domain state. A private row is
-        // eligible only with a non-blank string owner. This predicate mirrors
-        // the SQL guards; arbitrary payload values never grant visibility.
+        // Visibility and owner eligibility are server-owned canonical domain
+        // state. PostgreSQL computes the owner once; Rust must not reinterpret
+        // whitespace differently and accidentally route private text to the
+        // embedding provider.
         let public = search_visibility == "public";
-        let private = search_visibility == "private"
-            && payload
-                .get("created_by_account_id")
-                .and_then(Value::as_str)
-                .is_some_and(|owner| owner.chars().any(|c| !c.is_whitespace()));
+        let private = search_visibility == "private" && owner_account_id.is_some();
         let title = normalize(title);
         let kind = normalize(kind);
         // Projection columns enforce non-blank title/kind individually. Reject

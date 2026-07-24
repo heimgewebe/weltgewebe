@@ -2403,6 +2403,10 @@ async fn postgres_replace_response_etag_is_reusable() -> Result<()> {
     run_migrations(&pool).await;
     clean(&pool).await;
     seed_node(&pool, NODE_A, Some("before"), None).await;
+    sqlx::query("UPDATE domain_nodes SET search_visibility='private' WHERE id=$1")
+        .bind(NODE_A)
+        .execute(&pool)
+        .await?;
 
     let tmp = tempfile::tempdir()?;
     let in_dir = tmp.path().join("in");
@@ -2423,6 +2427,7 @@ async fn postgres_replace_response_etag_is_reusable() -> Result<()> {
     assert_eq!(first_response.status(), StatusCode::OK);
     let first_body = body::to_bytes(first_response.into_body(), usize::MAX).await?;
     let first_node: serde_json::Value = serde_json::from_slice(&first_body)?;
+    assert_eq!(first_node["search_visibility"], "private");
     let reusable_etag = format!(
         "\"{}\"",
         first_node["updated_at"]
@@ -2442,6 +2447,14 @@ async fn postgres_replace_response_etag_is_reusable() -> Result<()> {
     let second_body = body::to_bytes(second_response.into_body(), usize::MAX).await?;
     let second_node: serde_json::Value = serde_json::from_slice(&second_body)?;
     assert_eq!(second_node["title"], "Second replace");
+    assert_eq!(second_node["search_visibility"], "private");
+
+    let persisted_visibility: String =
+        sqlx::query_scalar("SELECT search_visibility FROM domain_nodes WHERE id = $1")
+            .bind(NODE_A)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(persisted_visibility, "private");
 
     let persisted_updated_at: chrono::DateTime<chrono::Utc> =
         sqlx::query_scalar("SELECT updated_at FROM domain_nodes WHERE id = $1")

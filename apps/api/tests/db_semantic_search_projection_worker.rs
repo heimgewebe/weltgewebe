@@ -2379,18 +2379,21 @@ async fn canonical_visibility_migration_preserves_public_defaults_and_reprojects
         "down.sql must fail-closed with explicit exception"
     );
 
+    // Exercise the legacy-schema upgrade in one transaction. The existing
+    // projection trigger is disabled while its new canonical column is absent;
+    // rolling the transaction back restores the exact migrated schema for the
+    // owner-change proof and every later test in this shared disposable DB.
+    let mut legacy_tx = pool.begin().await.expect("begin legacy migration fixture");
+    sqlx::query("ALTER TABLE domain_nodes DISABLE TRIGGER search_track_domain_nodes")
+        .execute(&mut *legacy_tx)
+        .await
+        .expect("disable projection trigger for legacy schema fixture");
     sqlx::query("ALTER TABLE domain_nodes DROP COLUMN IF EXISTS search_visibility CASCADE")
-        .execute(&pool)
+        .execute(&mut *legacy_tx)
         .await
         .expect("drop search_visibility column for legacy schema setup");
-    sqlx::query(
-        "DROP TRIGGER IF EXISTS weltgewebe_domain_nodes_search_visibility_boundary ON domain_nodes",
-    )
-    .execute(&pool)
-    .await
-    .expect("drop trigger for legacy schema setup");
     sqlx::query("DROP FUNCTION IF EXISTS weltgewebe_search_node_owner_account_id(JSONB)")
-        .execute(&pool)
+        .execute(&mut *legacy_tx)
         .await
         .expect("drop owner function for legacy schema setup");
 
@@ -2417,7 +2420,7 @@ async fn canonical_visibility_migration_preserves_public_defaults_and_reprojects
         .bind(id)
         .bind(title)
         .bind(payload)
-        .execute(&pool)
+        .execute(&mut *legacy_tx)
         .await
         .expect("insert legacy visibility fixture");
     }
@@ -2425,14 +2428,14 @@ async fn canonical_visibility_migration_preserves_public_defaults_and_reprojects
     sqlx::raw_sql(include_str!(
         "../migrations/20260724000002_semantic_search_projection_privacy_boundary.up.sql"
     ))
-    .execute(&pool)
+    .execute(&mut *legacy_tx)
     .await
     .expect("apply canonical visibility migration to legacy fixture");
 
     let migrated: Vec<(String, String, bool)> = sqlx::query_as(
         "SELECT id,search_visibility,payload ? 'search_visibility' FROM domain_nodes WHERE id LIKE 't005-legacy-%' ORDER BY id",
     )
-    .fetch_all(&pool)
+    .fetch_all(&mut *legacy_tx)
     .await
     .expect("read migrated visibility fixtures");
     assert_eq!(
@@ -2447,6 +2450,26 @@ async fn canonical_visibility_migration_preserves_public_defaults_and_reprojects
             ("t005-legacy-private-owner".into(), "private".into(), false),
         ]
     );
+    legacy_tx
+        .rollback()
+        .await
+        .expect("restore canonical schema after legacy migration fixture");
+
+    let trigger_enabled: bool = sqlx::query_scalar(
+        "SELECT tgenabled = 'O' FROM pg_trigger WHERE tgrelid='domain_nodes'::regclass AND tgname='search_track_domain_nodes'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("verify canonical projection trigger restored");
+    assert!(trigger_enabled);
+
+    sqlx::query(
+        "INSERT INTO domain_nodes (id,kind,title,payload,search_visibility) VALUES ('t005-legacy-private-owner','Werkstatt','Legacy Private',$1::jsonb,'private')",
+    )
+    .bind(r#"{"summary":"privat","created_by_account_id":"owner-a"}"#)
+    .execute(&pool)
+    .await
+    .expect("insert canonical private owner fixture");
 
     let provider = Arc::new(FakeProvider {
         unavailable: AtomicBool::new(false),

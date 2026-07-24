@@ -724,7 +724,7 @@ async fn find_node_by_operation(operation: &CreateOperationKey) -> std::io::Resu
 fn node_matches_create(node: &Node, expected: &node_create::ValidatedCreateNode) -> bool {
     node.title == expected.title
         && node.kind == expected.kind
-        && node.search_visibility == expected.search_visibility
+        && node.search_visibility == expected.search_visibility.unwrap_or_default()
         && node.address.as_deref() == Some(expected.address.as_str())
         && node.location.lat == expected.lat
         && node.location.lon == expected.lon
@@ -748,7 +748,7 @@ fn build_node_record(
         created_at: now.clone(),
         updated_at: now,
         created_by_account_id: Some(created_by_account_id),
-        search_visibility: validated.search_visibility,
+        search_visibility: validated.search_visibility.unwrap_or_default(),
         summary: validated.summary,
         info: validated.info,
         tags: validated.tags,
@@ -1431,7 +1431,9 @@ mod node_create {
         pub(super) title: String,
         pub(super) kind: String,
         pub(super) address: String,
-        pub(super) search_visibility: SearchVisibility,
+        /// `None` means the client omitted the field. Creation resolves that
+        /// to `public`; replacement preserves the existing canonical value.
+        pub(super) search_visibility: Option<SearchVisibility>,
         pub(super) lat: f64,
         pub(super) lon: f64,
         pub(super) summary: Option<String>,
@@ -1566,7 +1568,7 @@ mod node_create {
                 title,
                 kind,
                 address,
-                search_visibility: self.search_visibility.unwrap_or_default(),
+                search_visibility: self.search_visibility,
                 lat: self.location.lat,
                 lon: self.location.lon,
                 summary,
@@ -2603,7 +2605,9 @@ pub async fn replace_node(
         created_at: existing.created_at,
         updated_at: chrono::Utc::now().to_rfc3339(),
         created_by_account_id: existing.created_by_account_id,
-        search_visibility: validated.search_visibility,
+        search_visibility: validated
+            .search_visibility
+            .unwrap_or(existing.search_visibility),
         summary: validated.summary,
         info: validated.info,
         tags: validated.tags,
