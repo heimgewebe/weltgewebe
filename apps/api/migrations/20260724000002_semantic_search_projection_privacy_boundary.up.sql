@@ -6,6 +6,11 @@
 ALTER TABLE domain_nodes
     ADD COLUMN search_visibility TEXT NOT NULL DEFAULT 'public';
 
+-- The historical trigger treats payload.search_visibility as indexed content.
+-- Disable only that user trigger while moving the field so the migration cannot
+-- version every node or enqueue work under a legacy generation identity.
+ALTER TABLE domain_nodes DISABLE TRIGGER search_track_domain_nodes;
+
 UPDATE domain_nodes
 SET search_visibility = CASE
     WHEN NOT (payload ? 'search_visibility') THEN 'public'
@@ -16,19 +21,23 @@ SET search_visibility = CASE
 END,
 payload = payload - 'search_visibility';
 
-ALTER TABLE domain_nodes
-    ADD CONSTRAINT domain_nodes_search_visibility_valid
-    CHECK (search_visibility IN ('public', 'private', 'hidden', 'revoked'));
-
--- Purge recoverable non-public and orphaned content left by older generations.
--- Canonical domain rows remain untouched; projections are regenerable state.
-DELETE FROM search_node_projections p
-USING domain_nodes n
-WHERE p.node_id = n.id
-  AND n.search_visibility <> 'public';
-
-DELETE FROM search_node_projections p
-WHERE NOT EXISTS (SELECT 1 FROM domain_nodes n WHERE n.id = p.node_id);
+-- Legacy document generations are immutable after this cutover. Future domain
+-- mutations enqueue only generations using the canonical-visibility document
+-- contract; a different generation requires its own identity-bound worker.
+CREATE OR REPLACE FUNCTION weltgewebe_search_enqueue_node(p_node_id TEXT, p_operation TEXT)
+RETURNS VOID LANGUAGE plpgsql AS $$
+DECLARE current_version BIGINT; current_revision TEXT;
+BEGIN
+    SELECT source_version, source_revision INTO current_version, current_revision
+      FROM search_node_versions WHERE node_id = p_node_id;
+    IF current_version IS NULL THEN RETURN; END IF;
+    INSERT INTO search_projection_jobs (generation_id, node_id, source_version, source_revision, operation)
+    SELECT generation_id, p_node_id, current_version, current_revision, p_operation
+      FROM search_index_generations
+     WHERE state IN ('building', 'ready', 'active')
+       AND document_revision = 'node-document-v4-canonical-visibility'
+    ON CONFLICT DO NOTHING;
+END; $$;
 
 CREATE OR REPLACE FUNCTION weltgewebe_search_track_domain_node()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
@@ -58,6 +67,39 @@ BEGIN
     PERFORM weltgewebe_search_enqueue_node(node_identifier, CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'upsert' END);
     RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
 END; $$;
+
+ALTER TABLE domain_nodes ENABLE TRIGGER search_track_domain_nodes;
+
+ALTER TABLE domain_nodes
+    ADD CONSTRAINT domain_nodes_search_visibility_valid
+    CHECK (search_visibility IN ('public', 'private', 'hidden', 'revoked'));
+
+-- Purge recoverable non-public and orphaned content left by older generations.
+-- Canonical domain rows remain untouched; projections are regenerable state.
+DELETE FROM search_node_projections p
+USING domain_nodes n
+WHERE p.node_id = n.id
+  AND n.search_visibility <> 'public';
+
+DELETE FROM search_node_projections p
+WHERE NOT EXISTS (SELECT 1 FROM domain_nodes n WHERE n.id = p.node_id);
+
+-- A worker connection may set weltgewebe.search_generation_id. FORCE RLS then
+-- turns the shared queue into a generation-scoped view for that entire pool.
+-- Ordinary API and migration connections leave the setting unset and retain the
+-- full queue view needed by trigger and operator paths.
+DROP POLICY IF EXISTS search_projection_jobs_generation_binding ON search_projection_jobs;
+ALTER TABLE search_projection_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE search_projection_jobs FORCE ROW LEVEL SECURITY;
+CREATE POLICY search_projection_jobs_generation_binding ON search_projection_jobs
+USING (
+    NULLIF(current_setting('weltgewebe.search_generation_id', true), '') IS NULL
+    OR generation_id = current_setting('weltgewebe.search_generation_id', true)
+)
+WITH CHECK (
+    NULLIF(current_setting('weltgewebe.search_generation_id', true), '') IS NULL
+    OR generation_id = current_setting('weltgewebe.search_generation_id', true)
+);
 
 CREATE OR REPLACE FUNCTION weltgewebe_search_generation_activation_ready(p_generation_id TEXT)
 RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
