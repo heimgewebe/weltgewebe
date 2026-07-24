@@ -27,21 +27,29 @@ Bestätigungsseite, obwohl der API-Handler selbst den engeren Formularvertrag
 korrekt deklarierte.
 
 Der Edge behandelt deshalb ausschließlich `GET /api/auth/magic-link/consume`
-als schmale Dokument-Ausnahme. Sie behält `default-src 'none'`,
-`base-uri 'none'` und `frame-ancestors 'none'`, erlaubt kein Script und gibt nur
-das bereits benötigte Inline-Styling sowie `form-action 'self'` frei. `POST` auf
-demselben Pfad und alle übrigen API- und Health-Antworten bleiben auf der
-strikten `form-action 'none'`-Richtlinie.
+als schmale Dokument-Ausnahme. Caddy ist für öffentliche Antworten der
+kanonische CSP-Eigentümer und setzt die Richtlinie verzögert, sodass eine vom
+API-Upstream gelieferte CSP beim Schreiben der Response ersetzt statt mit ihr
+kombiniert wird. Die Ausnahme behält `default-src 'none'`, `base-uri 'none'` und
+`frame-ancestors 'none'`, erlaubt kein Script und gibt nur das bereits benötigte
+Inline-Styling sowie `form-action 'self'` frei. `POST` auf demselben Pfad und alle
+übrigen API- und Health-Antworten werden am Edge ebenfalls verzögert auf die
+strikte `form-action 'none'`-Richtlinie gesetzt. Die API-eigene GET-CSP bleibt als
+Defense-in-Depth für direkte interne Nutzung bestehen, bestimmt aber nicht die
+öffentliche Edge-Response.
 
 **Produktionswirkung:**
 
 Beim Rollout muss die geprüfte VPS-Caddy-Konfiguration gemeinsam mit dem
 Merge-Commit veröffentlicht und Caddy erfolgreich neu geladen werden. Danach
-muss ein GET auf den Magic-Link-Consume-Pfad die schmale CSP mit
-`form-action 'self'` liefern, während ein gewöhnlicher API-Pfad weiterhin
-`form-action 'none'` ausliefert. Ein frischer Magic-Link kann anschließend das
-Bestätigungsformular wieder same-origin absenden; Token-, Nonce- und
-Sessionlogik werden durch diese Änderung nicht verändert.
+muss ein GET auf den Magic-Link-Consume-Pfad genau eine schmale CSP mit
+`form-action 'self'` liefern, während ein gewöhnlicher API-Pfad und ein POST auf
+den Consume-Pfad genau eine strikte CSP mit `form-action 'none'` ausliefern. Der
+Runtime-Vertrag wird gegen einen Mock-Upstream geprüft, der absichtlich eine
+widersprechende CSP setzt; diese Upstream-CSP darf am Edge nicht mehr sichtbar
+sein. Ein frischer Magic-Link kann anschließend das Bestätigungsformular wieder
+same-origin absenden; Token-, Nonce- und Sessionlogik werden durch diese Änderung
+nicht verändert.
 
 ## 2026-07-14 - Schleswig-Holstein sichtbar kartografieren
 

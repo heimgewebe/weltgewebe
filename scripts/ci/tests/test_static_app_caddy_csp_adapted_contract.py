@@ -8,10 +8,12 @@ import unittest
 
 REPO = Path(__file__).resolve().parents[3]
 MAGIC_LINK_CONFIRM_PATH = "/api/auth/magic-link/consume"
+MAGIC_POLICY = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none';"
+STRICT_POLICY = "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
 CASES = (
-    ("infra/caddy/Caddyfile", None),
-    ("infra/caddy/Caddyfile.heim", "weltgewebe.home.arpa"),
-    ("infra/caddy/Caddyfile.vps", "weltgewebe.net"),
+    ("infra/caddy/Caddyfile", None, ["/api/*"]),
+    ("infra/caddy/Caddyfile.heim", "weltgewebe.home.arpa", ["/api/*"]),
+    ("infra/caddy/Caddyfile.vps", "weltgewebe.net", ["/api/*", "/health/*"]),
 )
 
 
@@ -44,65 +46,103 @@ def app_routes(config: dict, host: str | None) -> list[dict]:
     raise AssertionError(f"no HTTPS app route for {host}")
 
 
-def collect_csp(routes: list[dict]) -> list[tuple[object, str]]:
-    found: list[tuple[object, str]] = []
+def collect_csp(routes: list[dict]) -> list[dict]:
+    found: list[dict] = []
     for route in routes:
         for handler in route.get("handle", []):
             if handler.get("handler") == "headers":
-                values = handler.get("response", {}).get("set", {}).get(
-                    "Content-Security-Policy", []
-                )
-                found.extend((route.get("match"), value) for value in values)
+                response = handler.get("response", {})
+                for value in response.get("set", {}).get("Content-Security-Policy", []):
+                    found.append(
+                        {
+                            "match": route.get("match"),
+                            "policy": value,
+                            "deferred": response.get("deferred", False),
+                        }
+                    )
             if handler.get("handler") == "subroute":
                 found.extend(collect_csp(handler.get("routes", [])))
     return found
 
 
+def directive_map(policy: str) -> dict[str, tuple[str, ...]]:
+    directives: dict[str, tuple[str, ...]] = {}
+    for raw in policy.split(";"):
+        raw = raw.strip()
+        if not raw:
+            continue
+        parts = raw.split()
+        directives[parts[0]] = tuple(parts[1:])
+    return directives
+
+
 @unittest.skipUnless(shutil.which("caddy"), "caddy binary required")
 class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
-    def test_adapted_app_route_splits_document_api_and_magic_link_csp(self) -> None:
-        for relative, host in CASES:
+    def test_adapted_app_route_has_exact_matchers_and_canonical_edge_csp(self) -> None:
+        for relative, host, protected_paths in CASES:
             with self.subTest(caddyfile=relative):
                 policies = collect_csp(app_routes(adapt(relative), host))
                 self.assertEqual(len(policies), 3, policies)
 
-                strict = [item for item in policies if "form-action 'none'" in item[1]]
-                magic = [
+                magic = [item for item in policies if item["policy"] == MAGIC_POLICY]
+                strict = [item for item in policies if item["policy"] == STRICT_POLICY]
+                frontend = [
                     item
                     for item in policies
-                    if "default-src 'none'" in item[1]
-                    and "form-action 'self'" in item[1]
+                    if item["policy"] not in {MAGIC_POLICY, STRICT_POLICY}
                 ]
-                frontend = [
-                    item for item in policies if "default-src 'none'" not in item[1]
-                ]
-                self.assertEqual(len(strict), 1, policies)
                 self.assertEqual(len(magic), 1, policies)
+                self.assertEqual(len(strict), 1, policies)
                 self.assertEqual(len(frontend), 1, policies)
 
-                strict_match = json.dumps(strict[0][0])
-                self.assertIn("frame-ancestors 'none'", strict[0][1])
-                self.assertNotIn("unsafe-inline", strict[0][1])
-                self.assertIn("not", strict_match)
-                self.assertIn(MAGIC_LINK_CONFIRM_PATH, strict_match)
-                self.assertIn("GET", strict_match)
+                magic_match = [
+                    {
+                        "method": ["GET"],
+                        "path": [MAGIC_LINK_CONFIRM_PATH],
+                    }
+                ]
+                strict_match = [
+                    {
+                        "not": [
+                            {
+                                "method": ["GET"],
+                                "path": [MAGIC_LINK_CONFIRM_PATH],
+                            }
+                        ],
+                        "path": protected_paths,
+                    }
+                ]
+                frontend_match = [{"not": [{"path": protected_paths}]}]
 
-                magic_match = json.dumps(magic[0][0])
-                self.assertIn(MAGIC_LINK_CONFIRM_PATH, magic_match)
-                self.assertIn("GET", magic_match)
-                self.assertIn("style-src 'unsafe-inline'", magic[0][1])
-                self.assertNotIn("script-src", magic[0][1])
-                self.assertIn("frame-ancestors 'none'", magic[0][1])
+                self.assertEqual(magic[0]["match"], magic_match)
+                self.assertEqual(strict[0]["match"], strict_match)
+                self.assertEqual(frontend[0]["match"], frontend_match)
 
-                directives = {
-                    part.strip().split()[0]
-                    for part in frontend[0][1].split(";")
-                    if part.strip()
-                }
-                self.assertNotIn("default-src", directives)
-                self.assertNotIn("script-src", directives)
-                self.assertIn("frame-ancestors", directives)
-                self.assertIn("not", json.dumps(frontend[0][0]))
+                self.assertTrue(
+                    magic[0]["deferred"],
+                    "magic-link CSP must overwrite any upstream CSP after proxying",
+                )
+                self.assertTrue(
+                    strict[0]["deferred"],
+                    "strict API CSP must overwrite any upstream CSP after proxying",
+                )
+
+                self.assertEqual(
+                    directive_map(magic[0]["policy"]),
+                    {
+                        "default-src": ("'none'",),
+                        "style-src": ("'unsafe-inline'",),
+                        "form-action": ("'self'",),
+                        "base-uri": ("'none'",),
+                        "frame-ancestors": ("'none'",),
+                    },
+                )
+                self.assertNotIn("script-src", directive_map(magic[0]["policy"]))
+
+                frontend_directives = directive_map(frontend[0]["policy"])
+                self.assertNotIn("default-src", frontend_directives)
+                self.assertNotIn("script-src", frontend_directives)
+                self.assertEqual(frontend_directives["frame-ancestors"], ("'none'",))
 
 
 if __name__ == "__main__":
