@@ -2,8 +2,7 @@
 name: Patch owner API fixture
 
 "on":
-  push:
-    branches: [feat/semantic-search-t012-production-v1]
+  pull_request:
     paths:
       - ".github/workflows/postgres-owner-impact-diagnostic.yml"
 
