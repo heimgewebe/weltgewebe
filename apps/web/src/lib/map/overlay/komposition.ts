@@ -66,9 +66,13 @@ export function setupKompositionInteraction(map: MapLibreMap) {
   let activeGesture: ActiveGesture | null = null;
   let suppressMouseUntil = 0;
   let interactionRevision = 0;
+  const browserWindow = typeof window === "undefined" ? null : window;
+  const browserDocument = typeof document === "undefined" ? null : document;
 
   // Bind a gesture to one exact composition/auth generation rather than only
-  // to a mode value. This also rejects ABA transitions such as
+  // to a mode value. Every store emission invalidates the gesture deliberately:
+  // a false-positive cancellation is safer than completing a stale placement.
+  // This also rejects ABA transitions such as
   // place-garnrolle -> navigation -> place-garnrolle during one held press.
   const unsubscribeDraftRevision = kompositionDraft.subscribe(() => {
     interactionRevision += 1;
@@ -128,8 +132,9 @@ export function setupKompositionInteraction(map: MapLibreMap) {
       longPressTimer = undefined;
       const gesture = activeGesture;
       if (gesture === null) return;
-      // Authentication may change while the finger/button is still held.
-      // Re-check before producing a UI action; the API remains the final guard.
+      // Authentication or composition state may change while the pointer is
+      // held. Re-check the exact revision before producing a UI action; the API
+      // remains the final guard.
       if (!gestureIsStillValid(gesture)) {
         cancelGesture();
         return;
@@ -158,8 +163,9 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     if (gesture === null) return;
     const dx = point.x - gesture.startX;
     const dy = point.y - gesture.startY;
+    const gestureWasValid = gestureIsStillValid(gesture);
     cancelGesture();
-    if (gesture.longPressFired || !gestureIsStillValid(gesture)) return;
+    if (gesture.longPressFired || !gestureWasValid) return;
     if (dx * dx + dy * dy > TAP_MOVE_TOLERANCE_SQ) return;
     // The mode is frozen at press start. A stationary release only places on
     // the explicit Garnrolle picker; normal node composition stays longpress-only.
@@ -220,6 +226,9 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     cancelGesture();
     suppressCompatibilityMouse();
   };
+  const handleVisibilityChange = () => {
+    if (browserDocument?.visibilityState !== "visible") cancelGesture();
+  };
 
   map.on("mousedown", handleMousedown);
   map.on("mouseup", handleMouseup);
@@ -232,6 +241,9 @@ export function setupKompositionInteraction(map: MapLibreMap) {
   map.on("touchend", handleTouchend);
   map.on("touchmove", handleTouchmove);
   map.on("touchcancel", handleTouchcancel);
+
+  browserWindow?.addEventListener("blur", cancelGesture);
+  browserDocument?.addEventListener("visibilitychange", handleVisibilityChange);
 
   return () => {
     cancelGesture();
@@ -248,5 +260,11 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     map.off("touchend", handleTouchend);
     map.off("touchmove", handleTouchmove);
     map.off("touchcancel", handleTouchcancel);
+
+    browserWindow?.removeEventListener("blur", cancelGesture);
+    browserDocument?.removeEventListener(
+      "visibilitychange",
+      handleVisibilityChange,
+    );
   };
 }

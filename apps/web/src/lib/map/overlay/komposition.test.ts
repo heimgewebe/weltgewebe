@@ -53,6 +53,9 @@ class FakeElement {
 }
 
 type Handler = (event: unknown) => void;
+type FakeDocumentTarget = EventTarget & {
+  visibilityState: "visible" | "hidden";
+};
 
 class FakeMap {
   private handlers = new Map<string, Set<Handler>>();
@@ -115,9 +118,17 @@ function clickAt(
 describe("setupKompositionInteraction", () => {
   let map: FakeMap;
   let cleanup: () => void;
+  let browserWindow: EventTarget;
+  let browserDocument: FakeDocumentTarget;
 
   beforeEach(() => {
     vi.useFakeTimers();
+    browserWindow = new EventTarget();
+    browserDocument = Object.assign(new EventTarget(), {
+      visibilityState: "visible" as const,
+    });
+    vi.stubGlobal("window", browserWindow);
+    vi.stubGlobal("document", browserDocument);
     authStore.set({ authenticated: true, role: "gast" });
     leaveToNavigation();
     map = new FakeMap();
@@ -127,6 +138,7 @@ describe("setupKompositionInteraction", () => {
   afterEach(() => {
     cleanup();
     leaveToNavigation();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
@@ -356,6 +368,33 @@ describe("setupKompositionInteraction", () => {
     vi.advanceTimersByTime(800);
     map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
     expect(get(kompositionDraft)?.lngLat).toBeUndefined();
+  });
+
+  it("cancels an armed gesture when the window loses focus", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    browserWindow.dispatchEvent(new Event("blur"));
+    vi.advanceTimersByTime(800);
+    map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
+    expect(get(kompositionDraft)?.lngLat).toBeUndefined();
+  });
+
+  it("cancels an armed gesture when the document becomes hidden", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    browserDocument.visibilityState = "hidden";
+    browserDocument.dispatchEvent(new Event("visibilitychange"));
+    vi.advanceTimersByTime(800);
+    map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
+    expect(get(kompositionDraft)?.lngLat).toBeUndefined();
+  });
+
+  it("keeps an armed gesture when the document remains visible", () => {
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    browserDocument.dispatchEvent(new Event("visibilitychange"));
+    map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
+    expect(get(kompositionDraft)?.lngLat).toEqual([10, 53.5]);
   });
 
   it("does not place a point for a pan (movement beyond tolerance)", () => {
