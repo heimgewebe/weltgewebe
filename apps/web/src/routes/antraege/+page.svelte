@@ -170,7 +170,7 @@
       <div>
         <p class="eyebrow">Dein Status: Gast</p>
         <h2 id="weberstatus-heading">Weberstatus beantragen</h2>
-        <p>Als Gast kannst du das gesamte Weltgewebe erkunden, hinterlässt aber keine Spuren. Mit einem angenommenen Antrag erhältst du deine Garnrolle und kannst weben.</p>
+        <p>Als Gast besitzt du bereits deine Garnrolle und kannst sie beschreiben. Ein angenommener Antrag verleiht dir zusätzliche Weberrechte; er erzeugt keine zweite Garnrolle.</p>
       </div>
       {#if hasOpenOwnProposal}
         <p class="notice">Dein Weberantrag ist bereits offen.</p>
