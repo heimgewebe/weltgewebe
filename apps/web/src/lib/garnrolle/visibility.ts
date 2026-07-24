@@ -1,6 +1,10 @@
-import type { Account, Location } from "$lib/map/types";
+import type {
+  Account,
+  GarnrolleMapState,
+  Location,
+} from "$lib/map/types";
 
-export type GarnrolleMapState = "not_on_map" | "exact" | "radius";
+export type { GarnrolleMapState } from "$lib/map/types";
 
 /**
  * UI-facing visibility. Persistence-only `not_on_map` is projected as
