@@ -73,22 +73,15 @@ def create_kind_cluster(
     commit: str,
     owner_id: str,
 ) -> None:
-    with ref.cluster_creation_reservation(kind, name, commit, owner_id):
-        ref.run(
-            [
-                kind,
-                "create",
-                "cluster",
-                "--name",
-                name,
-                "--image",
-                image,
-                "--config",
-                config,
-            ],
-            timeout=900,
-        )
-        ref.configure_cluster_access(kind, name)
+    ref.create_kind_cluster(
+        kind,
+        name,
+        image,
+        config,
+        commit,
+        owner_id,
+        timeout=900,
+    )
 
 
 def require_active_cluster_context(kind: str, kubectl: str, cluster: str) -> str:
@@ -2627,7 +2620,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         path = target / (
             f"{args.cluster}-{commit}-{owner_receipt_key}-ha-recovery.json"
         )
-        path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ref.write_json_atomic(path, result)
         result["receipt_path"] = str(path)
         result["receipt_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         return result
@@ -2678,6 +2671,7 @@ def argument_parser() -> argparse.ArgumentParser:
     down.add_argument("--cluster", default=DEFAULT_CLUSTER)
     down.add_argument("--commit", required=True)
     down.add_argument("--owner-id", required=True)
+    down.add_argument("--receipt", type=Path)
     return parser
 
 
@@ -2690,7 +2684,18 @@ def main() -> int:
             cleanup = reconcile_owned_ha_resources(
                 kind, args.cluster, args.commit, args.owner_id
             )
-            print(json.dumps(cleanup, sort_keys=True))
+            cleanup_receipt = {
+                "schema_version": 1,
+                "status": "pass" if not cleanup["errors"] else "fail",
+                "cluster": args.cluster,
+                "commit": args.commit,
+                "owner_id": args.owner_id,
+                "owned_resources_remaining": bool(cleanup["errors"]),
+                "cleanup": cleanup,
+            }
+            if args.receipt:
+                ref.write_json_atomic(args.receipt, cleanup_receipt)
+            print(json.dumps(cleanup_receipt, sort_keys=True))
             return 1 if cleanup["errors"] else 0
         prove(args)
     except (ref.ProofError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:

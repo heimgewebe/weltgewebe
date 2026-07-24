@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import io
 import json
 import os
 import shlex
 import subprocess
+import sys
 import tempfile
 import threading
 import time
 import unittest
+import urllib.error
+from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
@@ -41,6 +46,10 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             "weltgewebe_platform_bootstrap",
             ROOT / "scripts/platform/bootstrap_tools.py",
         )
+        cls.proof_identity = load_module(
+            "weltgewebe_proof_identity",
+            ROOT / "scripts/platform/proof_identity.py",
+        )
 
     def test_tool_bootstrap_selection_is_exact_and_deduplicated(self) -> None:
         lock = {"tools": {"kustomize": {"version": "x"}, "trivy": {"version": "y"}}}
@@ -48,6 +57,109 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertEqual(selected, {"trivy": {"version": "y"}})
         with self.assertRaisesRegex(RuntimeError, "unknown tool selection"):
             self.bootstrap._selected_tool_specs(lock, ["missing"])
+
+    def test_tool_download_retries_transient_gateway_failure_and_cleans_temps(self) -> None:
+        payload = b"kind-binary"
+        expected = hashlib.sha256(payload).hexdigest()
+        transient = urllib.error.HTTPError(
+            "https://downloads.example/kind", 504, "gateway timeout", {}, None
+        )
+
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                self.close()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "downloads" / "kind"
+            with mock.patch.object(
+                self.bootstrap.urllib.request,
+                "urlopen",
+                side_effect=[transient, Response(payload)],
+            ) as urlopen, mock.patch.object(self.bootstrap.time, "sleep") as sleep:
+                self.bootstrap._download(
+                    "https://downloads.example/kind", expected, destination
+                )
+            self.assertEqual(destination.read_bytes(), payload)
+            self.assertEqual(urlopen.call_count, 2)
+            sleep.assert_called_once_with(1.0)
+            self.assertEqual(list(destination.parent.glob("*.download.tmp")), [])
+
+    def test_tool_download_hash_mismatch_is_integrity_failure_without_retry(self) -> None:
+        payload = b"tampered"
+
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                self.close()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "downloads" / "kind"
+            with mock.patch.object(
+                self.bootstrap.urllib.request, "urlopen", return_value=Response(payload)
+            ) as urlopen, mock.patch.object(self.bootstrap.time, "sleep") as sleep:
+                with self.assertRaises(self.bootstrap.DownloadIntegrityError):
+                    self.bootstrap._download(
+                        "https://downloads.example/kind", "0" * 64, destination
+                    )
+            urlopen.assert_called_once()
+            sleep.assert_not_called()
+            self.assertFalse(destination.exists())
+            self.assertEqual(list(destination.parent.glob("*.download.tmp")), [])
+
+    def test_tool_download_mirror_is_controlled_and_falls_back_to_canonical(self) -> None:
+        canonical = "https://github.com/org/repo/releases/download/v1/tool"
+        mirror = self.bootstrap._mirror_url(
+            canonical, "https://mirror.example/platform-cache"
+        )
+        self.assertEqual(
+            mirror,
+            "https://mirror.example/platform-cache/github.com/org/repo/releases/download/v1/tool",
+        )
+        with self.assertRaises(self.bootstrap.DownloadError):
+            self.bootstrap._mirror_url(canonical, "http://mirror.example/cache")
+
+    def test_tool_download_rechecks_symlink_after_lock_acquisition(self) -> None:
+        payload = b"cached"
+        expected = hashlib.sha256(payload).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            destination = root / "downloads" / "kind"
+            destination.parent.mkdir(parents=True)
+            target = root / "target"
+            target.write_bytes(payload)
+
+            @contextmanager
+            def replace_with_symlink(_destination):
+                destination.symlink_to(target)
+                yield
+
+            with mock.patch.object(
+                self.bootstrap, "_download_lock", side_effect=replace_with_symlink
+            ), mock.patch.object(self.bootstrap.urllib.request, "urlopen") as urlopen:
+                with self.assertRaises(self.bootstrap.DownloadIntegrityError):
+                    self.bootstrap._download(
+                        "https://downloads.example/kind", expected, destination
+                    )
+            urlopen.assert_not_called()
+
+    def test_tool_download_uses_valid_cached_digest_without_network(self) -> None:
+        payload = b"cached"
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "downloads" / "kind"
+            destination.parent.mkdir(parents=True)
+            destination.write_bytes(payload)
+            with mock.patch.object(self.bootstrap.urllib.request, "urlopen") as urlopen:
+                self.bootstrap._download(
+                    "https://downloads.example/kind",
+                    hashlib.sha256(payload).hexdigest(),
+                    destination,
+                )
+            urlopen.assert_not_called()
 
     def test_kind_reference_requests_ha_required_kubectl_cnpg_tool(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text(encoding="utf-8")
@@ -57,9 +169,12 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         result = self.validator.validate(render=False)
         self.assertEqual(result["status"], "pass")
 
-    def test_kubernetes_artifact_uploads_stage_hidden_evidence(self) -> None:
+    def test_kubernetes_proof_workflow_is_reusable_and_auditable(self) -> None:
         workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
-        workflow = yaml.safe_load(workflow_path.read_text())
+        workflow_text = workflow_path.read_text()
+        workflow = yaml.safe_load(workflow_text)
+        self.assertFalse(workflow["concurrency"]["cancel-in-progress"])
+        self.assertIn("github.event.pull_request.head.sha || github.sha", workflow["concurrency"]["group"])
 
         def named_steps(job_name: str) -> dict[str, dict]:
             return {
@@ -68,40 +183,44 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 if "name" in step
             }
 
+        for job_name, suite, cleanup_name in (
+            ("kind-gitops-proof", "kind-gitops", "Reconcile owned kind proof resources"),
+            ("kind-ha-recovery-proof", "ha-recovery", "Reconcile owned HA proof resources"),
+        ):
+            steps = named_steps(job_name)
+            compute = next(step for name, step in steps.items() if name.startswith("Compute immutable"))
+            restore = next(step for name, step in steps.items() if name.startswith("Restore immutable"))
+            validate = next(step for name, step in steps.items() if name.startswith("Validate restored"))
+            cleanup = steps[cleanup_name]
+            self.assertIn(f"--suite {suite}", compute["run"])
+            self.assertIn('--source-commit "$PROOF_SOURCE_COMMIT"', compute["run"])
+            self.assertTrue(str(restore["uses"]).startswith("actions/cache@"))
+            self.assertIn("steps.proof-identity.outputs.identity", restore["with"]["key"] )
+            self.assertEqual(validate["if"], "steps.proof-cache.outputs.cache-hit == 'true'")
+            self.assertIn("proof_identity.py validate", validate["run"])
+            self.assertEqual(
+                cleanup["if"],
+                "always() && steps.proof-cache.outputs.cache-hit != 'true'",
+            )
+            self.assertIn("--receipt build/kubernetes-platform/", cleanup["run"])
+
         gitops = named_steps("kind-gitops-proof")
-        stage_failure = gitops["Stage failure diagnostics"]
-        upload_failure = gitops["Collect failure diagnostics"]
-        self.assertEqual(stage_failure["if"], "failure()")
-        self.assertIn("source=.cache/weltgewebe-platform/failures", stage_failure["run"])
-        self.assertIn("target=build/kubernetes-platform/failures", stage_failure["run"])
-        self.assertEqual(upload_failure["with"]["path"], "build/kubernetes-platform/failures/")
-        self.assertEqual(upload_failure["with"]["if-no-files-found"], "ignore")
+        self.assertEqual(
+            gitops["Stage failure diagnostics"]["if"],
+            "failure() && steps.proof-cache.outputs.cache-hit != 'true'",
+        )
+        self.assertEqual(
+            gitops["Collect failure diagnostics"]["with"]["path"],
+            "build/kubernetes-platform/failures/",
+        )
 
         ha = named_steps("kind-ha-recovery-proof")
         stage_receipt = ha["Stage HA recovery receipt"]
+        self.assertEqual(stage_receipt["if"], "success()")
+        self.assertIn("build/kubernetes-platform/reuse/ha-recovery/proof.json", stage_receipt["run"])
         upload_receipt = ha["Upload HA recovery receipt"]
-        self.assertNotIn("if", stage_receipt)
-        self.assertIn(
-            ".cache/weltgewebe-platform/receipts/*-ha-recovery.json",
-            stage_receipt["run"],
-        )
-        self.assertIn("build/kubernetes-platform/ha-recovery/", stage_receipt["run"])
-        self.assertNotIn("if", upload_receipt)
-        self.assertEqual(
-            upload_receipt["with"]["path"],
-            "build/kubernetes-platform/ha-recovery/*.json",
-        )
-        self.assertEqual(upload_receipt["with"]["if-no-files-found"], "error")
-
-        stage_ha_failure = ha["Stage HA failure diagnostics"]
-        upload_ha_failure = ha["Collect HA failure diagnostics"]
-        self.assertEqual(stage_ha_failure["if"], "failure()")
-        self.assertIn("source=.cache/weltgewebe-platform/failures", stage_ha_failure["run"])
-        self.assertEqual(
-            upload_ha_failure["with"]["path"],
-            "build/kubernetes-platform/failures/",
-        )
-        self.assertEqual(upload_ha_failure["with"]["if-no-files-found"], "ignore")
+        self.assertEqual(upload_receipt["if"], "success()")
+        self.assertIn("ha-recovery-identity.json", upload_receipt["with"]["path"] )
 
         for job_name in ("kind-gitops-proof", "kind-ha-recovery-proof"):
             for step in workflow["jobs"][job_name]["steps"]:
@@ -118,8 +237,14 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         direct = named_steps["Run pull-request direct reference proof"]
         gitops = named_steps["Run commit-bound GitOps reference proof"]
 
-        self.assertEqual(direct["if"], "github.event_name == 'pull_request'")
-        self.assertEqual(gitops["if"], "github.event_name != 'pull_request'")
+        self.assertEqual(
+            direct["if"],
+            "steps.proof-cache.outputs.cache-hit != 'true' && github.event_name == 'pull_request'",
+        )
+        self.assertEqual(
+            gitops["if"],
+            "steps.proof-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'",
+        )
         self.assertEqual(
             shlex.split(direct["run"]),
             [
@@ -150,8 +275,128 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 "$PROOF_OWNER_ID",
             ],
         )
+        self.assertIn("PROOF_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}", workflow_text)
         self.assertNotIn("SOURCE_REF:", workflow_text)
         self.assertNotIn("github.head_ref || github.ref_name", workflow_text)
+
+    def test_proof_identity_ignores_unrelated_inputs_and_rejects_tampering(self) -> None:
+        commit = "0123456789abcdef0123456789abcdef01234567"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "platform").mkdir()
+            (root / "scripts/platform").mkdir(parents=True)
+            (root / "docs").mkdir()
+            (root / "platform/toolchain.lock.json").write_text("{}\n")
+            (root / "scripts/platform/proof_identity.py").write_text("helper-v1\n")
+            (root / "docs/unrelated.md").write_text("one\n")
+            tracked = (
+                "platform/toolchain.lock.json",
+                "scripts/platform/proof_identity.py",
+                "docs/unrelated.md",
+            )
+            with mock.patch.object(self.proof_identity, "ROOT", root), mock.patch.object(
+                self.proof_identity, "_tracked_files", return_value=tracked
+            ), mock.patch.dict(
+                self.proof_identity.SUITE_INPUTS,
+                {"kind-gitops": ("platform/", "scripts/platform/")},
+                clear=True,
+            ):
+                first = self.proof_identity.compute_identity("kind-gitops", commit)
+                (root / "docs/unrelated.md").write_text("two\n")
+                second = self.proof_identity.compute_identity("kind-gitops", commit)
+                self.assertEqual(first["identity_sha256"], second["identity_sha256"])
+                (root / "scripts/platform/proof_identity.py").write_text("helper-v2\n")
+                third = self.proof_identity.compute_identity("kind-gitops", commit)
+                self.assertNotEqual(first["identity_sha256"], third["identity_sha256"])
+
+                identity_path = root / "identity.json"
+                identity_path.write_bytes(self.proof_identity._canonical_json(third))
+                proof_path = root / "source-proof.json"
+                proof_path.write_text(json.dumps({
+                    "status": "pass",
+                    "tool_lock_sha256": third["tool_lock_sha256"],
+                    "commit": commit,
+                    "source_commit": commit,
+                    "production_changed": False,
+                }))
+                reuse = root / "reuse"
+                with mock.patch.object(
+                    self.proof_identity, "_checkout_commit", return_value=commit
+                ):
+                    self.proof_identity.record(identity_path, proof_path, reuse)
+                self.proof_identity.validate(
+                    identity_path, reuse / "record.json", reuse / "proof.json"
+                )
+                with (reuse / "proof.json").open("a") as handle:
+                    handle.write(" ")
+                with self.assertRaises(self.proof_identity.IdentityError):
+                    self.proof_identity.validate(
+                        identity_path, reuse / "record.json", reuse / "proof.json"
+                    )
+
+    def test_proof_record_rejects_receipt_from_different_checkout(self) -> None:
+        identity = {
+            "schema_version": 1,
+            "suite": "kind-gitops",
+            "source_commit": "1" * 40,
+            "input_manifest_sha256": "2" * 64,
+            "tool_lock_sha256": "3" * 64,
+            "invalidation_contract": [],
+            "identity_sha256": "4" * 64,
+        }
+        proof = {
+            "status": "pass",
+            "tool_lock_sha256": "3" * 64,
+            "commit": "5" * 40,
+            "production_changed": False,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            identity_path = root / "identity.json"
+            proof_path = root / "proof.json"
+            identity_path.write_text(json.dumps(identity))
+            proof_path.write_text(json.dumps(proof))
+            with mock.patch.object(
+                self.proof_identity, "compute_identity", return_value=identity
+            ), mock.patch.object(
+                self.proof_identity, "_checkout_commit", return_value="6" * 40
+            ):
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "current checkout commit"
+                ):
+                    self.proof_identity.record(identity_path, proof_path, root / "reuse")
+
+    def test_proof_record_requires_explicit_no_production_change(self) -> None:
+        identity = {
+            "schema_version": 1,
+            "suite": "ha-recovery",
+            "source_commit": "1" * 40,
+            "input_manifest_sha256": "2" * 64,
+            "tool_lock_sha256": "3" * 64,
+            "invalidation_contract": [],
+            "identity_sha256": "4" * 64,
+        }
+        proof = {
+            "status": "pass",
+            "tool_lock_sha256": "3" * 64,
+            "commit": "5" * 40,
+            "production_changed": None,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            identity_path = root / "identity.json"
+            proof_path = root / "proof.json"
+            identity_path.write_text(json.dumps(identity))
+            proof_path.write_text(json.dumps(proof))
+            with mock.patch.object(
+                self.proof_identity, "compute_identity", return_value=identity
+            ), mock.patch.object(
+                self.proof_identity, "_checkout_commit", return_value="5" * 40
+            ):
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "production_changed=false"
+                ):
+                    self.proof_identity.record(identity_path, proof_path, root / "reuse")
 
     def test_cli_parser_accepts_exact_source_commit(self) -> None:
         commit = "0123456789abcdef0123456789abcdef01234567"
@@ -459,6 +704,145 @@ spec:
             finally:
                 self.reference.MARKERS = original
 
+    def test_kind_cluster_creation_retries_only_transient_registry_failure(self) -> None:
+        transient = subprocess.CalledProcessError(
+            1,
+            ["kind", "create", "cluster"],
+            output="",
+            stderr="429 Too Many Requests from registry-1.docker.io",
+        )
+        success = subprocess.CompletedProcess(
+            ["kind", "create", "cluster"], 0, stdout="created\n", stderr=""
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            original = self.reference.MARKERS
+            self.reference.MARKERS = Path(tmp)
+            try:
+                reservation = mock.MagicMock()
+                with mock.patch.object(
+                    self.reference,
+                    "cluster_creation_reservation",
+                    return_value=reservation,
+                ) as reserve, mock.patch.object(
+                    self.reference, "run", side_effect=[transient, success]
+                ) as run, mock.patch.object(
+                    self.reference, "configure_cluster_access"
+                ) as configure, mock.patch.object(
+                    self.reference.time, "sleep"
+                ) as sleep:
+                    self.reference.create_kind_cluster(
+                        "kind",
+                        "proof",
+                        "kindest/node@sha256:" + "a" * 64,
+                        "kind.yaml",
+                        "a" * 40,
+                        "owner-proof",
+                        timeout=600,
+                    )
+                self.assertEqual(run.call_count, 2)
+                self.assertEqual(reserve.call_count, 2)
+                configure.assert_called_once_with("kind", "proof")
+                sleep.assert_called_once_with(5.0)
+            finally:
+                self.reference.MARKERS = original
+
+    def test_kind_cluster_creation_does_not_retry_contract_failure(self) -> None:
+        permanent = subprocess.CalledProcessError(
+            1,
+            ["kind", "create", "cluster"],
+            output="",
+            stderr="invalid kind configuration",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            original = self.reference.MARKERS
+            self.reference.MARKERS = Path(tmp)
+            try:
+                with mock.patch.object(
+                    self.reference,
+                    "cluster_creation_reservation",
+                    return_value=mock.MagicMock(),
+                ), mock.patch.object(
+                    self.reference, "run", side_effect=permanent
+                ) as run, mock.patch.object(
+                    self.reference.time, "sleep"
+                ) as sleep:
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        self.reference.create_kind_cluster(
+                            "kind",
+                            "proof",
+                            "kindest/node@sha256:" + "a" * 64,
+                            "kind.yaml",
+                            "a" * 40,
+                            "owner-proof",
+                            timeout=600,
+                        )
+                run.assert_called_once()
+                sleep.assert_not_called()
+            finally:
+                self.reference.MARKERS = original
+
+    def test_exact_owner_cleanup_reconciles_marker_after_sigkill(self) -> None:
+        commit = "a" * 40
+        owner = "owner-sigkill"
+        cluster = "proof-sigkill"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            markers = root / "clusters"
+            kubeconfigs = root / "kubeconfigs"
+            child = f"""
+import importlib.util
+import time
+from pathlib import Path
+spec = importlib.util.spec_from_file_location(
+    'sigkill_kind_reference',
+    {str(ROOT / 'scripts/platform/kind_reference.py')!r},
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.MARKERS = Path({str(markers)!r})
+module.KUBECONFIGS = Path({str(kubeconfigs)!r})
+module.write_marker({cluster!r}, {commit!r}, {owner!r})
+print('marker-published', flush=True)
+time.sleep(60)
+"""
+            process = subprocess.Popen(
+                [sys.executable, "-c", child],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                self.assertEqual(process.stdout.readline().strip(), "marker-published")
+                process.kill()
+                process.communicate(timeout=5)
+                self.assertLess(process.returncode, 0)
+                self.assertTrue((markers / f"{cluster}.json").is_file())
+
+                original_markers = self.reference.MARKERS
+                original_kubeconfigs = self.reference.KUBECONFIGS
+                self.reference.MARKERS = markers
+                self.reference.KUBECONFIGS = kubeconfigs
+                try:
+                    with mock.patch.object(
+                        self.reference, "clusters", return_value=set()
+                    ):
+                        deleted = self.reference.delete_owned_cluster_if_present(
+                            "kind",
+                            cluster,
+                            expected_commit=commit,
+                            expected_owner_id=owner,
+                        )
+                    self.assertTrue(deleted)
+                    self.assertFalse((markers / f"{cluster}.json").exists())
+                finally:
+                    self.reference.MARKERS = original_markers
+                    self.reference.KUBECONFIGS = original_kubeconfigs
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.communicate(timeout=5)
+
     def test_reference_marker_publication_is_no_clobber_and_crash_atomic(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             original = self.reference.MARKERS
@@ -751,10 +1135,12 @@ spec:
             ):
                 self.reference.prove_restart("kubectl", "weltgewebe")
 
-    def test_reference_binds_cluster_access_after_cni_bootstrap(self) -> None:
+    def test_reference_binds_cluster_access_after_cluster_creation(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text()
         self.assertNotIn('"--wait",\n                "180s"', source)
-        self.assertIn("configure_cluster_access(kind, args.cluster)", source)
+        self.assertIn("def create_kind_cluster(", source)
+        self.assertIn("configure_cluster_access(kind, name)", source)
+        self.assertIn("create_kind_cluster(\n            kind,\n            args.cluster,", source)
         self.assertIn('"--for=condition=Ready", "nodes"', source)
 
     def test_control_plane_address_uses_kind_network(self) -> None:

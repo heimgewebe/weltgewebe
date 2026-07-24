@@ -400,14 +400,21 @@ def _assert_ha_contract() -> None:
         (item for item in steps if item.get("name") == "Reconcile owned HA proof resources"),
         None,
     )
-    if cleanup is None or cleanup.get("if") != "always()":
-        raise ContractError("HA workflow lacks unconditional owned-resource reconciliation")
+    cleanup_condition = cleanup.get("if") if cleanup else None
+    if cleanup_condition not in {
+        "always()",
+        "always() && steps.proof-cache.outputs.cache-hit != 'true'",
+    }:
+        raise ContractError(
+            "HA workflow lacks owned-resource reconciliation after every resource-producing path"
+        )
     cleanup_command = cleanup.get("run", "")
     for marker in (
         "ha_reference.py down",
         '--cluster "$CLUSTER_NAME"',
         '--commit "$(git rev-parse HEAD)"',
         '--owner-id "$PROOF_OWNER_ID"',
+        "--receipt build/kubernetes-platform/ha-recovery-cleanup.json",
     ):
         if marker not in cleanup_command:
             raise ContractError(f"HA workflow cleanup lacks {marker}")
@@ -417,14 +424,21 @@ def _assert_ha_contract() -> None:
         (item for item in kind_steps if item.get("name") == "Reconcile owned kind proof resources"),
         None,
     )
-    if kind_cleanup is None or kind_cleanup.get("if") != "always()":
-        raise ContractError("kind workflow lacks unconditional owned-resource reconciliation")
+    kind_cleanup_condition = kind_cleanup.get("if") if kind_cleanup else None
+    if kind_cleanup_condition not in {
+        "always()",
+        "always() && steps.proof-cache.outputs.cache-hit != 'true'",
+    }:
+        raise ContractError(
+            "kind workflow lacks owned-resource reconciliation after every resource-producing path"
+        )
     kind_cleanup_command = kind_cleanup.get("run", "")
     for marker in (
         "kind_reference.py down",
         '--cluster "$CLUSTER_NAME"',
         '--commit "$(git rev-parse HEAD)"',
         '--owner-id "$PROOF_OWNER_ID"',
+        "--receipt build/kubernetes-platform/kind-gitops-cleanup.json",
     ):
         if marker not in kind_cleanup_command:
             raise ContractError(f"kind workflow cleanup lacks {marker}")

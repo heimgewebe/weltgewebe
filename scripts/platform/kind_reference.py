@@ -12,6 +12,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -25,6 +26,21 @@ MARKERS = CACHE / "clusters"
 KUBECONFIGS = CACHE / "kubeconfigs"
 DEFAULT_CLUSTER = "weltgewebe-reference"
 FULL_GIT_OBJECT_ID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
+KIND_CREATE_ATTEMPTS = 3
+KIND_CREATE_BACKOFF_SECONDS = (5.0, 15.0)
+TRANSIENT_KIND_CREATE_MARKERS = (
+    "429 too many requests",
+    "status code: 429",
+    "toomanyrequests",
+    "rate limit",
+    "tls handshake timeout",
+    "i/o timeout",
+    "connection reset by peer",
+    "temporary failure",
+    "bad gateway",
+    "service unavailable",
+    "gateway timeout",
+)
 GATEWAY_API_ARTIFACTS = (
     "gateway_api_gatewayclasses",
     "gateway_api_gateways",
@@ -250,6 +266,24 @@ def _fsync_directory(path: Path) -> None:
         os.close(descriptor)
 
 
+def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        _fsync_directory(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def _write_marker_locked(name: str, commit: str, owner_id: str) -> None:
     _validate_ownership_binding(commit, owner_id)
     MARKERS.mkdir(parents=True, exist_ok=True)
@@ -403,6 +437,73 @@ def delete_owned_cluster_if_present(
                 f"refusing to delete cluster {name!r}: cluster exists without ownership marker"
             )
         return False
+
+
+def _kind_create_error_detail(error: BaseException) -> str:
+    if isinstance(error, subprocess.CalledProcessError):
+        return "\n".join(
+            part for part in (error.stdout, error.stderr, str(error)) if part
+        )
+    return str(error)
+
+
+def _is_transient_kind_create_error(error: BaseException) -> bool:
+    if isinstance(error, subprocess.TimeoutExpired):
+        return True
+    detail = _kind_create_error_detail(error).lower()
+    return any(marker in detail for marker in TRANSIENT_KIND_CREATE_MARKERS)
+
+
+def create_kind_cluster(
+    kind: str,
+    name: str,
+    image: str,
+    config: str,
+    commit: str,
+    owner_id: str,
+    *,
+    timeout: int,
+) -> None:
+    command = [
+        kind,
+        "create",
+        "cluster",
+        "--name",
+        name,
+        "--image",
+        image,
+        "--config",
+        config,
+    ]
+    for attempt in range(KIND_CREATE_ATTEMPTS):
+        try:
+            with cluster_creation_reservation(kind, name, commit, owner_id):
+                result = run(command, capture=True, timeout=timeout)
+                if result.stdout:
+                    print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
+                if result.stderr:
+                    print(
+                        result.stderr,
+                        end="" if result.stderr.endswith("\n") else "\n",
+                        file=sys.stderr,
+                    )
+                configure_cluster_access(kind, name)
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            if (
+                not _is_transient_kind_create_error(error)
+                or attempt + 1 >= KIND_CREATE_ATTEMPTS
+                or os.path.lexists(marker_path(name))
+            ):
+                raise
+            delay = KIND_CREATE_BACKOFF_SECONDS[attempt]
+            print(
+                f"transient kind cluster creation failure; retrying "
+                f"attempt {attempt + 2}/{KIND_CREATE_ATTEMPTS} after {delay:.0f}s: "
+                f"{_kind_create_error_detail(error)}",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
 
 
 def apply_yaml(kubectl: str, document: dict[str, Any] | list[dict[str, Any]]) -> None:
@@ -1123,22 +1224,15 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
     reserved = False
     created = False
     try:
-        with cluster_creation_reservation(kind, args.cluster, commit, owner_id):
-            run(
-                [
-                    kind,
-                    "create",
-                    "cluster",
-                    "--name",
-                    args.cluster,
-                    "--image",
-                    receipt["kubernetes"]["kind_node_image"],
-                    "--config",
-                    "platform/clusters/local/kind.yaml",
-                ],
-                timeout=600,
-            )
-            configure_cluster_access(kind, args.cluster)
+        create_kind_cluster(
+            kind,
+            args.cluster,
+            receipt["kubernetes"]["kind_node_image"],
+            "platform/clusters/local/kind.yaml",
+            commit,
+            owner_id,
+            timeout=600,
+        )
         reserved = True
         created = True
         api_server_host = control_plane_address(args.cluster)
@@ -1187,7 +1281,7 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
         target.mkdir(parents=True, exist_ok=True)
         owner_receipt_key = hashlib.sha256(owner_id.encode("utf-8")).hexdigest()[:16]
         path = target / f"{args.cluster}-{commit}-{owner_receipt_key}.json"
-        path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        write_json_atomic(path, result)
         result["receipt_path"] = str(path)
         result["receipt_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         return result
@@ -1220,6 +1314,7 @@ def argument_parser() -> argparse.ArgumentParser:
     down_parser.add_argument("--cluster", default=DEFAULT_CLUSTER)
     down_parser.add_argument("--commit", required=True)
     down_parser.add_argument("--owner-id", required=True)
+    down_parser.add_argument("--receipt", type=Path)
     return parser
 
 
@@ -1234,12 +1329,18 @@ def main() -> int:
                 expected_commit=args.commit,
                 expected_owner_id=args.owner_id,
             )
-            print(json.dumps({
-                "status": "deleted" if deleted else "absent",
+            cleanup = {
+                "schema_version": 1,
+                "status": "pass",
+                "cleanup_status": "deleted" if deleted else "absent",
                 "cluster": args.cluster,
                 "commit": args.commit,
                 "owner_id": args.owner_id,
-            }, sort_keys=True))
+                "owned_resources_remaining": False,
+            }
+            if args.receipt:
+                write_json_atomic(args.receipt, cleanup)
+            print(json.dumps(cleanup, sort_keys=True))
             return 0
         result = proof(args)
     except (ProofError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
