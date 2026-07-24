@@ -391,3 +391,23 @@ aber kein Beweis für IPv6, Mail/SMTP oder Public Login. Der
 Credential-Source-Cutover wird über den ausgewählten `ENV_FILE`-Pfad und die
 Dateimetadaten der Runtime-Secret-Quelle belegt, nicht über den HTTP(S)-Check
 allein.
+
+## Lokale semantische Suchprojektion aktivieren
+
+Die produktive semantische Suche verwendet keinen Cloud-Provider. Der gepinnte
+Ollama-Sidecar teilt den Netzwerk-Namensraum der API und bindet ausschließlich
+an `127.0.0.1:11434`; es wird kein Host-Port veröffentlicht. Das Modellvolume
+ist regenerierbare Projektionsinfrastruktur, während `domain_nodes` in
+PostgreSQL die einzige Datenwahrheit bleibt.
+
+Der normale commitgebundene Reconciler rollt API, Sidecar und den begrenzten
+Projektions-Worker gemeinsam aus. Der Worker wartet auf den exakt gepinnten
+Modelldigest und verarbeitet danach sowohl den initialen Bestand als auch neue
+Projektionsjobs fortlaufend.
+Die Modellbeschaffung, der begrenzte Backfill und die Aktivierung erfolgen
+absichtlich separat über `scripts/ops/activate-production-search-vps.sh`. Der
+Helper hält denselben Produktionslock wie der Deploypfad, prüft Live-Commit,
+Ressourcenreserve, Image-, Runtime- und Modelldigest, verarbeitet die
+Projektionsjobs in begrenzten Batches und ruft den atomaren PostgreSQL-Gate erst
+nach vollständiger Konvergenz auf. Eine fehlgeschlagene Vorbereitung verändert
+keine kanonischen Knotendaten und lässt die Suche fail-closed.

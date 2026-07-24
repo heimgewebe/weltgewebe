@@ -1711,7 +1711,7 @@ restore_scoped_migration_mode() {
 }
 
 write_scoped_deploy_plan() {
-  local initial_command_joined restore_command_joined protected_lines=""
+  local initial_command_joined restore_command_joined protected_lines="" target_lines=""
   initial_command_joined="$(join_command_for_plan "${SCOPED_INITIAL_CMD[@]}")"
   restore_command_joined=""
   if ((${#SCOPED_RESTORE_CMD[@]} > 0)); then
@@ -1721,6 +1721,9 @@ write_scoped_deploy_plan() {
   local service
   for service in "${PROTECTED_SERVICES[@]}"; do
     protected_lines+="${service}=${PROTECTED_IDS_BEFORE[$service]}"$'\n'
+  done
+  for service in "${SCOPED_TARGET_SERVICES[@]}"; do
+    target_lines+="${service}"$'\n'
   done
 
   local plan_name
@@ -1748,6 +1751,7 @@ write_scoped_deploy_plan() {
   PLAN_INITIAL_COMMAND="$initial_command_joined" \
     PLAN_RESTORE_COMMAND="$restore_command_joined" \
     PLAN_PROTECTED_IDS="$protected_lines" \
+    PLAN_TARGET_SERVICES="$target_lines" \
     PLAN_PATH="$plan_tmp" \
     PLAN_SCOPE="$DEPLOY_SCOPE" \
     PLAN_PROJECT="$COMPOSE_PROJECT" \
@@ -1775,12 +1779,13 @@ for line in os.environ.get("PLAN_PROTECTED_IDS", "").splitlines():
     service, value = line.split("=", 1)
     protected[service] = None if value in ("", "__not_configured__") else value
 
+targets = [line for line in os.environ.get("PLAN_TARGET_SERVICES", "").splitlines() if line]
 scope = os.environ["PLAN_SCOPE"]
 payload = {
     "schema_version": 1,
     "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "scope": scope,
-    "target_services": ["api"],
+    "target_services": targets,
     "protected_services": ["db", "nats", "caddy"],
     "protected_service_ids": protected,
     "compose_project": os.environ["PLAN_PROJECT"],
@@ -1800,7 +1805,7 @@ payload = {
         *([{"WELTGEWEBE_API_STARTUP_MIGRATIONS": "verify-applied"}] if scope == "migration" else []),
     ],
     "authorization": {
-        "allowed_recreated_services": ["api"],
+        "allowed_recreated_services": targets,
         "forbidden_recreated_services": ["db", "nats", "caddy"],
     },
 }
@@ -1880,15 +1885,27 @@ else
     fi
   fi
 
+  SCOPED_TARGET_SERVICES=(api)
+  configured_scoped_services="$(docker compose "${BASE_ARGS[@]}" config --services)"
+  if grep -qFx ollama <<<"$configured_scoped_services"; then
+    SCOPED_TARGET_SERVICES+=(ollama)
+  fi
+  if grep -qFx search-worker <<<"$configured_scoped_services"; then
+    # Both containers share the API network namespace. Recreating only the API
+    # would strand them on the retired namespace, so all three are one bounded
+    # deployment unit while db, nats and caddy stay protected.
+    SCOPED_TARGET_SERVICES+=(search-worker)
+  fi
+
   SCOPED_INITIAL_CMD=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--no-deps")
   if [[ "$DO_BUILD" == "1" ]]; then
     SCOPED_INITIAL_CMD+=("--build")
   fi
-  SCOPED_INITIAL_CMD+=("api")
+  SCOPED_INITIAL_CMD+=("${SCOPED_TARGET_SERVICES[@]}")
 
   SCOPED_RESTORE_CMD=()
   if [[ "$DEPLOY_SCOPE" == "migration" ]]; then
-    SCOPED_RESTORE_CMD=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--no-deps" "--force-recreate" "api")
+    SCOPED_RESTORE_CMD=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--no-deps" "--force-recreate" "${SCOPED_TARGET_SERVICES[@]}")
   fi
 
   if [[ "${SCOPED_INITIAL_CMD[*]}" == *" --remove-orphans"* ]]; then

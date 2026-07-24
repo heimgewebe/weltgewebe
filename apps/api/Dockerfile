@@ -35,7 +35,7 @@ RUN printf '%s' "${GIT_COMMIT_SHA}" | grep -Eq '^[0-9a-f]{40}$' \
     && GIT_COMMIT_SHA="${GIT_COMMIT_SHA}" \
        BUILD_TIMESTAMP="${BUILD_TIMESTAMP}" \
        CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS}" \
-       cargo build --release --locked --bin weltgewebe-api
+       cargo build --release --locked --bin weltgewebe-api --bin search-backfill
 
 # Runner stage
 FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
@@ -52,13 +52,15 @@ RUN apt-get update \
 
 # Copy the binary from builder
 COPY --from=builder /app/target/release/weltgewebe-api /app/weltgewebe-api
+COPY --from=builder /app/target/release/search-backfill /app/search-backfill
 
 # Copy scripts for data seeding
 # Note: Docker context is repo root
 COPY scripts/dev/generate-demo-data.sh /usr/local/bin/generate-demo-data
 COPY scripts/dev/bootstrap-first-account.sh /usr/local/bin/bootstrap-first-account
 COPY apps/api/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod 0755 /usr/local/bin/generate-demo-data /usr/local/bin/bootstrap-first-account /usr/local/bin/entrypoint.sh
+COPY scripts/ops/search-worker-loop.sh /usr/local/bin/search-worker-loop
+RUN chmod 0755 /usr/local/bin/generate-demo-data /usr/local/bin/bootstrap-first-account /usr/local/bin/entrypoint.sh /usr/local/bin/search-worker-loop
 RUN groupadd --gid 10001 weltgewebe \
     && useradd --uid 10001 --gid 10001 --home-dir /app --shell /usr/sbin/nologin weltgewebe \
     && mkdir -p /data /tmp \

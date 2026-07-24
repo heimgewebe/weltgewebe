@@ -27,6 +27,10 @@ services:
         target: /app/policies/limits.yaml
         read_only: true
 
+  search-worker:
+    env_file:
+      - ${WELTGEWEBE_ENV_FILE:-/etc/weltgewebe/weltgewebe.env}
+
   caddy:
     ports:
       - "${CADDY_IPV6_BIND:-[::]}:80:80"
