@@ -45,6 +45,12 @@ require_command() {
   command -v "$1" > /dev/null 2>&1 || fail "required command not found: $1"
 }
 
+normalize_sha256_digest() {
+  local digest="${1#sha256:}"
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || return 1
+  printf '%s\n' "$digest"
+}
+
 PREVIOUS_GENERATION_ID=""
 semantic_probe_status="unobserved"
 rollback_status="not_attempted"
@@ -135,6 +141,14 @@ remote_main="$(git -C "$SOURCE_CHECKOUT" ls-remote origin refs/heads/main | awk 
 [[ "$(curl -fsS "$API_VERSION_URL" | jq -er '.commit')" == "$COMMIT" ]] || fail "public API commit mismatch"
 [[ "$(curl -fsS "$FRONTEND_VERSION_URL" | jq -er '.commit')" == "$COMMIT" ]] || fail "public frontend commit mismatch"
 
+build_identity_short="${COMMIT:0:8}"
+build_timestamp="$(git -C "$release_dir" show -s --format=%cI "$COMMIT")"
+[[ "$build_timestamp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$ ]] || fail "release commit timestamp is not valid RFC3339"
+export API_VERSION="$build_identity_short"
+export WELTGEWEBE_BUILD="$build_identity_short"
+export GIT_COMMIT_SHA="$COMMIT"
+export BUILD_TIMESTAMP="$build_timestamp"
+
 available_disk="$(df -B1 --output=avail / | awk 'NR==2 {print $1}')"
 available_memory="$(awk '/^MemAvailable:/ {print $2 * 1024}' /proc/meminfo)"
 available_cpus="$(getconf _NPROCESSORS_ONLN)"
@@ -167,7 +181,9 @@ version_body="$("${compose[@]}" exec -T api wget -qO- "$OLLAMA_URL/api/version")
 [[ "$(jq -er '.version' <<< "$version_body")" == "0.12.6" ]] || fail "Ollama runtime version mismatch"
 tags_body="$("${compose[@]}" exec -T api wget -qO- "$OLLAMA_URL/api/tags")"
 observed_digest="$(jq -er --arg model "$MODEL_ID" '.models[] | select(.name == $model) | .digest' <<< "$tags_body")"
-[[ "$observed_digest" == "$MODEL_REVISION" ]] || fail "Ollama model digest mismatch"
+observed_digest_normalized="$(normalize_sha256_digest "$observed_digest")" || fail "Ollama model digest is malformed"
+expected_digest_normalized="$(normalize_sha256_digest "$MODEL_REVISION")" || fail "pinned Ollama model revision is malformed"
+[[ "$observed_digest_normalized" == "$expected_digest_normalized" ]] || fail "Ollama model digest mismatch"
 
 [[ "$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$api_cid" | awk -F= '$1=="WELTGEWEBE_SEARCH_OLLAMA_URL" {print $2}')" == "$OLLAMA_URL/" ]] || fail "API search provider URL is not literal loopback"
 
