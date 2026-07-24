@@ -72,6 +72,20 @@ BEGIN
         NEW.visibility_scopes := '{}'::TEXT[];
         NEW.semantic_state := 'unavailable';
         NEW.embedding := NULL;
+        -- The existing lexical refresh trigger is declared as UPDATE OF the
+        -- indexed columns. PostgreSQL decides that from the original SET list,
+        -- not from changes made by an earlier trigger. Rewrite both vectors here
+        -- so an indexed_at-only lifecycle update cannot retain old lexemes.
+        NEW.search_vector :=
+            setweight(to_tsvector('german'::regconfig, NEW.title), 'A') ||
+            setweight(to_tsvector('german'::regconfig, ''), 'B') ||
+            setweight(to_tsvector('german'::regconfig, NEW.searchable_text), 'C') ||
+            setweight(to_tsvector('simple'::regconfig, NEW.kind || ' ' || NEW.language), 'D');
+        NEW.search_vector_simple :=
+            setweight(to_tsvector('simple'::regconfig, NEW.title), 'A') ||
+            setweight(to_tsvector('simple'::regconfig, ''), 'B') ||
+            setweight(to_tsvector('simple'::regconfig, NEW.searchable_text), 'C') ||
+            setweight(to_tsvector('simple'::regconfig, NEW.kind || ' ' || NEW.language), 'D');
     ELSIF canonical_visibility = 'private' THEN
         NEW.status := 'active';
         NEW.visibility_scopes := ARRAY['owner']::TEXT[];
@@ -87,9 +101,8 @@ CREATE TRIGGER search_enforce_projection_owner
 BEFORE INSERT OR UPDATE ON search_node_projections
 FOR EACH ROW EXECUTE FUNCTION weltgewebe_search_enforce_projection_owner();
 
--- Redact already retained plaintext for missing or disabled owners during the
--- cutover. Touching indexed_at is sufficient because the write fence replaces
--- every sensitive projection field before the UPDATE reaches the table.
+-- Redact already retained plaintext and lexical vectors for missing or disabled
+-- owners during the cutover. The write fence performs the complete replacement.
 UPDATE search_node_projections p
 SET indexed_at = clock_timestamp()
 FROM domain_nodes n
