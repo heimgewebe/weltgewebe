@@ -22,6 +22,34 @@ policy_value() {
   ' "$POLICY_FILE"
 }
 
+named_matcher_block() {
+  local file="$1"
+  local matcher="$2"
+  python3 - "$file" "$matcher" << 'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+matcher = sys.argv[2]
+lines = path.read_text(encoding="utf-8").splitlines()
+start_re = re.compile(rf"^\s*@{re.escape(matcher)}\s*\{{\s*$")
+for index, line in enumerate(lines):
+    if not start_re.match(line):
+        continue
+    depth = 0
+    block = []
+    for candidate in lines[index:]:
+        block.append(candidate)
+        depth += candidate.count("{") - candidate.count("}")
+        if depth == 0:
+            print("\n".join(block))
+            raise SystemExit(0)
+    break
+raise SystemExit(1)
+PY
+}
+
 if [[ ! -f "$POLICY_FILE" ]]; then
   fail "security policy missing: $POLICY_FILE"
   exit 1
@@ -79,14 +107,30 @@ for caddy in \
   if ! grep -Fq "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';" "$caddy"; then
     fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing strict non-document/error CSP baseline"
   fi
-  if ! grep -Fq "@magicLinkConfirm {" "$caddy" || ! grep -Fq "path /api/auth/magic-link/consume" "$caddy"; then
-    fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing exact magic-link confirmation CSP matcher"
+  relative_caddy="$(realpath --relative-to "$REPO_ROOT" "$caddy")"
+  if ! magic_block="$(named_matcher_block "$caddy" magicLinkConfirm)"; then
+    fail "$relative_caddy missing exact magic-link confirmation CSP matcher"
+  else
+    if [[ "$(printf '%s\n' "$magic_block" | grep -Ec '^[[:space:]]*method[[:space:]]+GET[[:space:]]*$')" -ne 1 ]]; then
+      fail "$relative_caddy magic-link confirmation matcher must contain exactly one GET method constraint"
+    fi
+    if [[ "$(printf '%s\n' "$magic_block" | grep -Ec '^[[:space:]]*path[[:space:]]+/api/auth/magic-link/consume[[:space:]]*$')" -ne 1 ]]; then
+      fail "$relative_caddy magic-link confirmation matcher must contain the exact consume path"
+    fi
   fi
-  if ! grep -Fq "method GET" "$caddy"; then
-    fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") magic-link confirmation CSP must be GET-only"
+
+  magic_policy="default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none';"
+  if ! grep -Fq "header @magicLinkConfirm >Content-Security-Policy \"${magic_policy}\"" "$caddy"; then
+    fail "$relative_caddy must defer and overwrite the canonical magic-link confirmation CSP"
   fi
-  if ! grep -Fq "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none';" "$caddy"; then
-    fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing narrow magic-link confirmation CSP"
+
+  strict_policy="default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
+  strict_matcher="@apiResponse"
+  if [[ "$(basename "$caddy")" == "Caddyfile.vps" ]]; then
+    strict_matcher="@nonDocumentResponse"
+  fi
+  if ! grep -Fq "header ${strict_matcher} >Content-Security-Policy \"${strict_policy}\"" "$caddy"; then
+    fail "$relative_caddy must defer and overwrite the canonical strict API CSP"
   fi
   for directive in \
     "style-src 'self' 'unsafe-inline'" \
