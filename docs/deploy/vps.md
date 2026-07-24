@@ -403,7 +403,11 @@ PostgreSQL die einzige Datenwahrheit bleibt.
 Der normale commitgebundene Reconciler rollt API, Sidecar und den begrenzten
 Projektions-Worker gemeinsam aus. Der Worker wartet auf den exakt gepinnten
 Modelldigest und verarbeitet danach sowohl den initialen Bestand als auch neue
-Projektionsjobs fortlaufend.
+Projektionsjobs fortlaufend. Öffentliche Knoten erhalten eine semantische
+Projektion. Private Knoten mit gültigem Eigentümer bleiben ausschließlich als
+autorisierte lexikalische PostgreSQL-Projektion erhalten und werden nie an
+Ollama übergeben. Alle übrigen Sichtbarkeitszustände werden nur als
+inhaltsfreier Platzhalter abgebildet.
 Die Modellbeschaffung, der begrenzte Backfill und die Aktivierung erfolgen
 absichtlich separat über `scripts/ops/activate-production-search-vps.sh`. Der
 Helper hält denselben Produktionslock wie der Deploypfad, prüft Live-Commit,

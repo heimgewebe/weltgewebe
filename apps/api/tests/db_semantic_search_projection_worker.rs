@@ -60,6 +60,19 @@ async fn migrate(pool: &PgPool) {
         .expect("run migrations")
 }
 
+#[derive(sqlx::FromRow)]
+struct PrivateLexicalProjectionRow {
+    title: String,
+    tags: Vec<String>,
+    searchable_text: String,
+    language: String,
+    kind: String,
+    visibility_scopes: Vec<String>,
+    status: String,
+    semantic_state: String,
+    embedding: Option<Vec<f64>>,
+}
+
 async fn reset_search_state(pool: &PgPool) {
     // Tests in this target share one disposable database serially. Remove test
     // domain rows first (which may fire triggers), then clear all derived state.
@@ -253,25 +266,25 @@ async fn worker_is_revision_bound_leased_resumable_and_deletion_propagates() {
 
 #[tokio::test]
 #[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
-async fn private_nodes_are_redacted_without_calling_the_provider_and_can_activate() {
+async fn private_nodes_stay_lexical_without_calling_the_provider_and_can_activate() {
     let pool = pool().await;
     migrate(&pool).await;
     reset_search_state(&pool).await;
-    let node = "t005-private-redaction-node";
-    let generation = "t005-private-redaction-generation";
+    let node = "t005-private-lexical-node";
+    let generation = "t005-private-lexical-generation";
     sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Privatwerkstatt','Vertraulicher Titel',$2::jsonb)")
         .bind(node)
-        .bind(r#"{"summary":"Vertrauliche Zusammenfassung","address":"Geheimer Weg 9"}"#)
+        .bind(r#"{"summary":"Vertrauliche Zusammenfassung","address":"Geheimer Weg 9","search_visibility":"private","created_by_account_id":"owner-private"}"#)
         .execute(&pool)
         .await
         .expect("insert private node");
     let projection_worker = ProjectionWorker::new_with_provider(
         pool.clone(),
-        "t005-private-redaction-worker".to_owned(),
+        "t005-private-lexical-worker".to_owned(),
         Metrics::try_new(BuildInfo::collect()).expect("metrics"),
         Arc::new(PermanentFailureProvider),
     )
-    .expect("private redaction worker");
+    .expect("private lexical worker");
     projection_worker
         .start_generation(GenerationSpec {
             generation_id: generation,
@@ -282,45 +295,49 @@ async fn private_nodes_are_redacted_without_calling_the_provider_and_can_activat
             dimension: 4,
         })
         .await
-        .expect("start private redaction generation");
+        .expect("start private lexical generation");
 
     assert_eq!(
         projection_worker
             .claim_and_process_one()
             .await
-            .expect("redact private node"),
+            .expect("project private node lexically"),
         ProcessOutcome::Processed
     );
-    let projection: (String, Vec<String>, String, String, String, Vec<String>, String, Option<Vec<f64>>) =
-        sqlx::query_as(
-            "SELECT title,tags,searchable_text,language,kind,visibility_scopes,semantic_state,embedding \
-             FROM search_node_projections WHERE generation_id=$1 AND node_id=$2",
-        )
-        .bind(generation)
-        .bind(node)
-        .fetch_one(&pool)
-        .await
-        .expect("private redacted projection");
-    assert_eq!(projection.0, "[nicht öffentlich]");
-    assert!(projection.1.is_empty());
-    assert_eq!(projection.2, "[nicht öffentlich]");
-    assert_eq!(projection.3, "und");
-    assert_eq!(projection.4, "[nicht öffentlich]");
-    assert!(projection.5.is_empty());
-    assert_eq!(projection.6, "unavailable");
-    assert!(projection.7.is_none());
+    let projection: PrivateLexicalProjectionRow = sqlx::query_as(
+        "SELECT title,tags,searchable_text,language,kind,visibility_scopes,status,semantic_state,embedding \
+         FROM search_node_projections WHERE generation_id=$1 AND node_id=$2",
+    )
+    .bind(generation)
+    .bind(node)
+    .fetch_one(&pool)
+    .await
+    .expect("private lexical projection");
+    assert_eq!(projection.title, "Vertraulicher Titel");
+    assert!(projection.tags.is_empty());
+    assert!(projection.searchable_text.contains("Vertraulicher Titel"));
+    assert!(projection
+        .searchable_text
+        .contains("Vertrauliche Zusammenfassung"));
+    assert!(!projection.searchable_text.contains("Geheimer Weg 9"));
+    assert_eq!(projection.language, "und");
+    assert_eq!(projection.kind, "Privatwerkstatt");
+    assert_eq!(projection.visibility_scopes, ["owner"]);
+    assert_eq!(projection.status, "active");
+    assert_eq!(projection.semantic_state, "unavailable");
+    assert!(projection.embedding.is_none());
     let ready: bool =
         sqlx::query_scalar("SELECT weltgewebe_search_generation_activation_ready($1)")
             .bind(generation)
             .fetch_one(&pool)
             .await
-            .expect("private redaction readiness");
+            .expect("private lexical readiness");
     assert!(ready);
     sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
         .bind(generation)
         .execute(&pool)
         .await
-        .expect("activate redacted generation");
+        .expect("activate private lexical generation");
 }
 
 #[tokio::test]
@@ -1781,6 +1798,14 @@ async fn t006_search_api_against_postgres_projections() {
         .expect("insert T006 projection");
     }
 
+    sqlx::query(
+        "UPDATE search_node_projections SET status='active', visibility_scopes=ARRAY['owner']::TEXT[], semantic_state='unavailable', embedding=NULL WHERE generation_id=$1 AND node_id='t005-private-node'",
+    )
+    .bind(&gen_id)
+    .execute(&pool)
+    .await
+    .expect("shape private lexical-only projection");
+
     // T006 stores the T003 lexical representations once in projection state.
     // Updating an indexed field must refresh the stored vector through the
     // migration trigger rather than rebuilding it in every search request.
@@ -2146,6 +2171,23 @@ async fn t006_search_api_against_postgres_projections() {
         .items
         .iter()
         .any(|node| node.id == "t005-private-node"));
+
+    let private_owner_candidates = fetch_postgres_candidates(
+        &pool,
+        "Private Fahrrad Werkstatt",
+        &SearchFilters::default(),
+        &owner_a,
+    )
+    .await
+    .expect("fetch owner private candidates")
+    .expect("active generation for owner private candidates");
+    let private_candidate = private_owner_candidates
+        .candidates
+        .iter()
+        .find(|candidate| candidate.node.id == "t005-private-node")
+        .expect("private owner lexical candidate");
+    assert!(private_candidate.embedding.is_none());
+    assert_ne!(private_candidate.rank_class, u8::MAX);
 
     let private_owner = execute_search(
         &state,

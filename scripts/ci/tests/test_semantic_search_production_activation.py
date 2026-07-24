@@ -43,7 +43,7 @@ def test_activation_is_commit_locked_identity_bound_and_gate_first() -> None:
     assert "flock -n 9" in script
     assert "requested commit is no longer current origin/main" in script
     assert "sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907" in script
-    assert "search-gen-bfa894157d53e406d232141f785084d5f33f41e6aee5dc6cbd4ef4b93794c13f" in script
+    assert "search-gen-7881b3d26c915cf24edeaaf42b1bbc8308d9510ceddcdacd05af6134b4e034d5" in script
     assert "weltgewebe_search_generation_activation_ready" in script
     gate = script.index("weltgewebe_search_generation_activation_ready")
     activate = script.index("weltgewebe_activate_search_generation")
@@ -58,7 +58,7 @@ def test_persistent_worker_waits_for_exact_model_and_runs_bounded_batches() -> N
     worker = WORKER.read_text(encoding="utf-8")
     assert "  search-worker:" in compose
     assert "network_mode: service:api" in compose.split("  search-worker:", 1)[1].split("\n  db:", 1)[0]
-    assert "search-gen-bfa894157d53e406d232141f785084d5f33f41e6aee5dc6cbd4ef4b93794c13f" in compose
+    assert "search-gen-7881b3d26c915cf24edeaaf42b1bbc8308d9510ceddcdacd05af6134b4e034d5" in compose
     assert "sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907" in compose
     assert "provider_ready" in worker
     assert "waiting_for_pinned_model" in worker
@@ -66,3 +66,22 @@ def test_persistent_worker_waits_for_exact_model_and_runs_bounded_batches() -> N
     assert 'GEWEBE_SEED_DEMO: "false"' in compose
     assert "/app/search-backfill" in worker
     assert 'sleep "$INTERVAL_SECONDS"' in worker
+
+def test_projection_privacy_contract_is_generation_bound() -> None:
+    worker = (REPO / "apps" / "api" / "src" / "search" / "worker.rs").read_text(encoding="utf-8")
+    repository = (REPO / "apps" / "api" / "src" / "search" / "repository.rs").read_text(encoding="utf-8")
+    migration = (
+        REPO
+        / "apps"
+        / "api"
+        / "migrations"
+        / "20260724000002_semantic_search_projection_privacy_boundary.up.sql"
+    ).read_text(encoding="utf-8")
+    revision = "node-document-v3-public-semantic-private-lexical"
+    assert revision in worker
+    assert revision in migration
+    assert "ARRAY['owner']::TEXT[],'unavailable',NULL" in worker
+    assert "p.visibility_scopes = ARRAY['owner']::TEXT[]" in repository
+    assert "p.embedding IS NULL" in repository
+    assert "p.visibility_scopes = ARRAY['owner']::TEXT[]" in migration
+    assert "p.embedding IS NULL" in migration

@@ -118,22 +118,26 @@ pub async fn fetch_postgres_candidates(
                AND v.deleted_at IS NULL
               JOIN domain_nodes n ON n.id = p.node_id
              WHERE p.generation_id = $1
-               AND p.semantic_state = 'ready'
-               AND cardinality(p.embedding) = $8
                AND n.created_at IS NOT NULL
                AND n.updated_at IS NOT NULL
                AND n.lat IS NOT NULL
                AND n.lon IS NOT NULL
-               AND CASE
-                     WHEN jsonb_typeof(n.payload -> 'search_visibility') IS DISTINCT FROM 'string' THEN FALSE
-                     WHEN n.payload ->> 'search_visibility' = 'public' THEN TRUE
-                     WHEN n.payload ->> 'search_visibility' = 'private' THEN
-                          $4::boolean
-                          AND $3::text IS NOT NULL
-                          AND nullif(btrim(n.payload ->> 'created_by_account_id'), '') = $3::text
-                     WHEN n.payload ->> 'search_visibility' IN ('hidden', 'revoked', 'deleted') THEN FALSE
-                     ELSE FALSE
-                   END
+               AND (
+                    (n.payload ->> 'search_visibility' = 'public'
+                     AND p.status = 'active'
+                     AND p.semantic_state = 'ready'
+                     AND p.visibility_scopes = ARRAY['public']::TEXT[]
+                     AND cardinality(p.embedding) = $8)
+                    OR
+                    (n.payload ->> 'search_visibility' = 'private'
+                     AND $4::boolean
+                     AND $3::text IS NOT NULL
+                     AND nullif(btrim(n.payload ->> 'created_by_account_id'), '') = $3::text
+                     AND p.status = 'active'
+                     AND p.semantic_state = 'unavailable'
+                     AND p.visibility_scopes = ARRAY['owner']::TEXT[]
+                     AND p.embedding IS NULL)
+               )
                AND (cardinality($5::text[]) = 0 OR p.kind = ANY($5::text[]))
                AND (cardinality($6::text[]) = 0 OR p.tags && $6::text[])
                AND (cardinality($7::text[]) = 0 OR p.language = ANY($7::text[]))
@@ -236,7 +240,7 @@ pub async fn fetch_postgres_candidates(
         let tags: Vec<String> = row.try_get("tags")?;
         let rank_class: Option<i32> = row.try_get("rank_class")?;
         let rank_score: Option<f64> = row.try_get("rank_score")?;
-        let embedding: Vec<f64> = row.try_get("embedding")?;
+        let embedding: Option<Vec<f64>> = row.try_get("embedding")?;
 
         let node = Node {
             id: row.try_get("node_id")?,
@@ -270,7 +274,7 @@ pub async fn fetch_postgres_candidates(
                 .and_then(|value| u8::try_from(value).ok())
                 .unwrap_or(u8::MAX),
             rank_score: rank_score.unwrap_or(0.0),
-            embedding: Some(embedding),
+            embedding,
         });
     }
 
