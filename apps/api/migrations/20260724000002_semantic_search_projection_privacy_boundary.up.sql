@@ -84,23 +84,6 @@ WHERE p.node_id = n.id
 DELETE FROM search_node_projections p
 WHERE NOT EXISTS (SELECT 1 FROM domain_nodes n WHERE n.id = p.node_id);
 
--- A worker connection may set weltgewebe.search_generation_id. FORCE RLS then
--- turns the shared queue into a generation-scoped view for that entire pool.
--- Ordinary API and migration connections leave the setting unset and retain the
--- full queue view needed by trigger and operator paths.
-DROP POLICY IF EXISTS search_projection_jobs_generation_binding ON search_projection_jobs;
-ALTER TABLE search_projection_jobs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE search_projection_jobs FORCE ROW LEVEL SECURITY;
-CREATE POLICY search_projection_jobs_generation_binding ON search_projection_jobs
-USING (
-    NULLIF(current_setting('weltgewebe.search_generation_id', true), '') IS NULL
-    OR generation_id = current_setting('weltgewebe.search_generation_id', true)
-)
-WITH CHECK (
-    NULLIF(current_setting('weltgewebe.search_generation_id', true), '') IS NULL
-    OR generation_id = current_setting('weltgewebe.search_generation_id', true)
-);
-
 CREATE OR REPLACE FUNCTION weltgewebe_search_generation_activation_ready(p_generation_id TEXT)
 RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
 SELECT COALESCE((
