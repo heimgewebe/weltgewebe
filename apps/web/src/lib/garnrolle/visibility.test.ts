@@ -15,9 +15,23 @@ const baseAccount: Account = {
 };
 
 describe("garnrolle visibility helpers", () => {
-  it("treats missing public position as not on the map", () => {
+  it("keeps missing account data separate from a confirmed private choice", () => {
+    const visibility = describeGarnrolleVisibility(null);
+    expect(visibility.state).toBe("unknown");
+    expect(visibility.label).toBe("Nicht verfügbar");
+    expect(visibility.canZoomToMap).toBe(false);
+  });
+
+  it("keeps the storage state separate from the private UI meaning", () => {
     expect(deriveGarnrolleMapState(baseAccount)).toBe("not_on_map");
-    expect(describeGarnrolleVisibility(baseAccount).canZoomToMap).toBe(false);
+
+    const visibility = describeGarnrolleVisibility(baseAccount);
+    expect(visibility.state).toBe("private");
+    expect(visibility.label).toBe("Privat");
+    expect(visibility.description).toContain(
+      "keine öffentliche Kartenposition",
+    );
+    expect(visibility.canZoomToMap).toBe(false);
   });
 
   it("treats radius zero as exact visibility", () => {
@@ -27,17 +41,19 @@ describe("garnrolle visibility helpers", () => {
       radius_m: 0,
     };
     expect(deriveGarnrolleMapState(account)).toBe("exact");
-    expect(describeGarnrolleVisibility(account).label).toBe("Exakt sichtbar");
+    expect(describeGarnrolleVisibility(account).label).toBe("Öffentlich exakt");
   });
 
-  it("treats positive radius as radius visibility", () => {
+  it("treats positive radius as approximate visibility", () => {
     const account: Account = {
       ...baseAccount,
       public_pos: { lat: 53.56, lon: 10.06 },
       radius_m: 250,
     };
     expect(deriveGarnrolleMapState(account)).toBe("radius");
-    expect(describeGarnrolleVisibility(account).description).toContain("250 m");
+    const visibility = describeGarnrolleVisibility(account);
+    expect(visibility.label).toBe("Öffentlich ungefähr");
+    expect(visibility.description).toContain("250 m");
   });
 
   it("finds the authenticated account's Garnrolle when present", () => {

@@ -868,7 +868,8 @@ async fn gast_reads_and_updates_own_private_profile() -> Result<()> {
             "role": "gast",
             "map_state": "not_on_map",
             "radius_m": 0,
-            "address": "Private Testadresse"
+            "address": "Private Testadresse",
+            "location": {"lat": 53.5, "lon": 10.0}
         })
         .to_string()
             + "
@@ -889,6 +890,7 @@ async fn gast_reads_and_updates_own_private_profile() -> Result<()> {
     let profile: serde_json::Value = serde_json::from_slice(&bytes)?;
     assert_eq!(profile["id"], account_id);
     assert_eq!(profile["address"], "Private Testadresse");
+    assert_eq!(profile["location"]["lat"], 53.5);
     assert!(profile.get("role").is_none());
 
     let response = app
@@ -901,6 +903,7 @@ async fn gast_reads_and_updates_own_private_profile() -> Result<()> {
     assert_eq!(response.status(), StatusCode::OK);
 
     let response = app
+        .clone()
         .oneshot(
             Request::get("/accounts/me/profile")
                 .header("Cookie", &cookie)
@@ -912,10 +915,38 @@ async fn gast_reads_and_updates_own_private_profile() -> Result<()> {
     let updated: serde_json::Value = serde_json::from_slice(&bytes)?;
     assert_eq!(updated["title"], "Mitwirkende Gastgarnrolle");
     assert_eq!(updated["map_state"], "not_on_map");
+    assert_eq!(updated["address"], "Private Testadresse");
+    assert_eq!(updated["location"]["lon"], 10.0);
     assert_eq!(
         updated["tags"],
         serde_json::json!(["gast", "account", "garnrolle"])
     );
+
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(
+            Some(&cookie),
+            r#"{"title":"Mitwirkende Gastgarnrolle","tags":["gast"],"map_state":"not_on_map","clear_address":true,"clear_location":true}"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let cleared: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert!(cleared.get("address").is_none());
+    assert!(cleared.get("location").is_none());
+
+    let response = app
+        .oneshot(
+            Request::get("/accounts/me/profile")
+                .header("Cookie", &cookie)
+                .body(body::Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let reloaded: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert!(reloaded.get("address").is_none());
+    assert!(reloaded.get("location").is_none());
     Ok(())
 }
 

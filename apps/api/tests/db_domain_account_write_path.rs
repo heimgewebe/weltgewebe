@@ -1038,8 +1038,8 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
     assert_eq!(reloaded_profile["address"], "Poelsweg 2, Hamburg");
     assert_eq!(reloaded_profile["location"]["lon"], 10.0630);
 
-    // Hiding the Garnrolle removes only the public projection. The internal
-    // coordinate remains available for a later, user-controlled reactivation.
+    // Hiding the Garnrolle removes only the public projection. Omitted
+    // private fields remain unchanged and can be reactivated deliberately.
     let response = app
         .clone()
         .oneshot(patch_own_profile(
@@ -1048,7 +1048,6 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
               "title":"Meine PostgreSQL Garnrolle",
               "summary":"Dauerhaft gespeichert",
               "tags":["skill:Kochen","interest:Commons"],
-              "address":"Poelsweg 2, Hamburg",
               "map_state":"not_on_map"
             }"#,
         ))
@@ -1057,6 +1056,7 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
     let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
     let hidden_profile: serde_json::Value = serde_json::from_slice(&response_body)?;
     assert_eq!(hidden_profile["map_state"], "not_on_map");
+    assert_eq!(hidden_profile["address"], "Poelsweg 2, Hamburg");
     assert_eq!(hidden_profile["location"]["lat"], 53.5604);
 
     let (map_state, radius_m, lat, lon): (String, i64, Option<f64>, Option<f64>) =
@@ -1082,8 +1082,8 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
     let hidden_private: serde_json::Value = serde_json::from_str(&hidden_private_text)?;
     assert_eq!(hidden_private["radius_projection"], initial_projection);
 
-    // Re-enable the same location and radius. The private binding and public
-    // point must remain stable, preventing intersection attacks through toggles.
+    // Re-enable the same location and radius without resending address or
+    // location. The persisted private fields and projection remain stable.
     let response = app
         .clone()
         .oneshot(patch_own_profile(
@@ -1092,14 +1092,16 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
               "title":"Meine PostgreSQL Garnrolle",
               "summary":"Dauerhaft gespeichert",
               "tags":["skill:Kochen","interest:Commons"],
-              "address":"Poelsweg 2, Hamburg",
               "map_state":"radius",
-              "radius_m":300,
-              "location":{"lat":53.5604,"lon":10.0630}
+              "radius_m":300
             }"#,
         ))
         .await?;
     assert_eq!(response.status(), StatusCode::OK);
+    let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let radius_without_address: serde_json::Value = serde_json::from_slice(&response_body)?;
+    assert_eq!(radius_without_address["address"], "Poelsweg 2, Hamburg");
+    assert_eq!(radius_without_address["location"]["lon"], 10.0630);
     let same_reload = load_accounts_from_postgres(&pool).await?;
     let same_account = same_reload.get(PROFILE_ID).context("same radius reload")?;
     assert_eq!(
@@ -1114,6 +1116,25 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
     let same_private: serde_json::Value = serde_json::from_str(&same_private_text)?;
     assert_eq!(same_private["radius_projection"], initial_projection);
 
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(
+            &cookie,
+            r#"{
+              "title":"Meine PostgreSQL Garnrolle",
+              "summary":"Dauerhaft gespeichert",
+              "tags":["skill:Kochen","interest:Commons"],
+              "map_state":"exact"
+            }"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let exact_without_address: serde_json::Value = serde_json::from_slice(&response_body)?;
+    assert_eq!(exact_without_address["map_state"], "exact");
+    assert_eq!(exact_without_address["address"], "Poelsweg 2, Hamburg");
+    assert_eq!(exact_without_address["location"]["lat"], 53.5604);
+
     // A radius change rotates the binding exactly once and the new value stays
     // stable on reload.
     let response = app
@@ -1124,10 +1145,8 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
               "title":"Meine PostgreSQL Garnrolle",
               "summary":"Dauerhaft gespeichert",
               "tags":["skill:Kochen","interest:Commons"],
-              "address":"Poelsweg 2, Hamburg",
               "map_state":"radius",
-              "radius_m":450,
-              "location":{"lat":53.5604,"lon":10.0630}
+              "radius_m":450
             }"#,
         ))
         .await?;
@@ -1176,6 +1195,53 @@ async fn own_garnrolle_profile_persists_privately_and_reloads_from_postgres() ->
         .context("moved hidden reload")?;
     assert_eq!(moved_account.public.map_state, GarnrolleMapState::NotOnMap);
     assert!(moved_account.public.public_pos.is_none());
+
+    let response = app
+        .clone()
+        .oneshot(patch_own_profile(
+            &cookie,
+            r#"{
+              "title":"Meine PostgreSQL Garnrolle",
+              "summary":"Dauerhaft gespeichert",
+              "tags":["skill:Kochen","interest:Commons"],
+              "map_state":"not_on_map",
+              "clear_address":true,
+              "clear_location":true
+            }"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let cleared_profile: serde_json::Value = serde_json::from_slice(&response_body)?;
+    assert!(cleared_profile.get("address").is_none());
+    assert!(cleared_profile.get("location").is_none());
+
+    let (cleared_lat, cleared_lon, cleared_private_text): (Option<f64>, Option<f64>, String) =
+        sqlx::query_as(
+            "SELECT location_lat, location_lon, private_payload::text \
+         FROM domain_accounts WHERE id = $1",
+        )
+        .bind(PROFILE_ID)
+        .fetch_one(&pool)
+        .await?;
+    assert!(cleared_lat.is_none());
+    assert!(cleared_lon.is_none());
+    let cleared_private: serde_json::Value = serde_json::from_str(&cleared_private_text)?;
+    assert!(cleared_private.get("address").is_none());
+    assert!(cleared_private.get("radius_projection").is_none());
+
+    let response = app
+        .oneshot(patch_own_profile(
+            &cookie,
+            r#"{
+              "title":"Meine PostgreSQL Garnrolle",
+              "summary":"Dauerhaft gespeichert",
+              "tags":["skill:Kochen","interest:Commons"],
+              "map_state":"exact"
+            }"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
     clean(&pool).await;
     Ok(())
