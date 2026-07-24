@@ -253,6 +253,78 @@ async fn worker_is_revision_bound_leased_resumable_and_deletion_propagates() {
 
 #[tokio::test]
 #[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
+async fn private_nodes_are_redacted_without_calling_the_provider_and_can_activate() {
+    let pool = pool().await;
+    migrate(&pool).await;
+    reset_search_state(&pool).await;
+    let node = "t005-private-redaction-node";
+    let generation = "t005-private-redaction-generation";
+    sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload) VALUES ($1,'Privatwerkstatt','Vertraulicher Titel',$2::jsonb)")
+        .bind(node)
+        .bind(r#"{"summary":"Vertrauliche Zusammenfassung","address":"Geheimer Weg 9"}"#)
+        .execute(&pool)
+        .await
+        .expect("insert private node");
+    let projection_worker = ProjectionWorker::new_with_provider(
+        pool.clone(),
+        "t005-private-redaction-worker".to_owned(),
+        Metrics::try_new(BuildInfo::collect()).expect("metrics"),
+        Arc::new(PermanentFailureProvider),
+    )
+    .expect("private redaction worker");
+    projection_worker
+        .start_generation(GenerationSpec {
+            generation_id: generation,
+            provider: "local:ollama",
+            model_id: "test",
+            model_revision: "test",
+            runtime_identity: "ollama:test@http://127.0.0.1:11434",
+            dimension: 4,
+        })
+        .await
+        .expect("start private redaction generation");
+
+    assert_eq!(
+        projection_worker
+            .claim_and_process_one()
+            .await
+            .expect("redact private node"),
+        ProcessOutcome::Processed
+    );
+    let projection: (String, Vec<String>, String, String, String, Vec<String>, String, Option<Vec<f64>>) =
+        sqlx::query_as(
+            "SELECT title,tags,searchable_text,language,kind,visibility_scopes,semantic_state,embedding \
+             FROM search_node_projections WHERE generation_id=$1 AND node_id=$2",
+        )
+        .bind(generation)
+        .bind(node)
+        .fetch_one(&pool)
+        .await
+        .expect("private redacted projection");
+    assert_eq!(projection.0, "[nicht öffentlich]");
+    assert!(projection.1.is_empty());
+    assert_eq!(projection.2, "[nicht öffentlich]");
+    assert_eq!(projection.3, "und");
+    assert_eq!(projection.4, "[nicht öffentlich]");
+    assert!(projection.5.is_empty());
+    assert_eq!(projection.6, "unavailable");
+    assert!(projection.7.is_none());
+    let ready: bool =
+        sqlx::query_scalar("SELECT weltgewebe_search_generation_activation_ready($1)")
+            .bind(generation)
+            .fetch_one(&pool)
+            .await
+            .expect("private redaction readiness");
+    assert!(ready);
+    sqlx::query("SELECT weltgewebe_activate_search_generation($1)")
+        .bind(generation)
+        .execute(&pool)
+        .await
+        .expect("activate redacted generation");
+}
+
+#[tokio::test]
+#[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
 async fn status_snapshot_separates_unique_nodes_job_history_and_activation_readiness() {
     let pool = pool().await;
     migrate(&pool).await;

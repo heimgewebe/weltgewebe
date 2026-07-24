@@ -19,7 +19,7 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::telemetry::Metrics;
 
-pub const DOCUMENT_REVISION: &str = "node-document-v1";
+pub const DOCUMENT_REVISION: &str = "node-document-v2-public-only";
 pub const NORMALIZATION_REVISION: &str = "weltgewebe-search-normalization-v1";
 pub const RANKING_REVISION: &str = "weltgewebe-hybrid-ranking-v2";
 // Five minutes exceeds the provider boundary's bounded worst-case request budget
@@ -862,6 +862,39 @@ impl ProjectionWorker {
             Err(_) => return Ok(Err("document_invalid")),
         };
         let dimension: i32 = row.get("dimension");
+        if document.status != "active" {
+            // Non-public canonical rows are represented only by a content-free
+            // sentinel. They never cross the embedding-provider boundary and
+            // cannot leave recoverable text or vectors in the projection.
+            let redacted = "[nicht öffentlich]";
+            let content_sha256 = hex::encode(Sha256::digest(
+                format!("redacted-search-projection-v1\n{node}\n{version}\n{revision}").as_bytes(),
+            ));
+            let written = sqlx::query("INSERT INTO search_node_projections (generation_id,node_id,source_version,source_revision,content_sha256,title,tags,searchable_text,language,kind,status,visibility_scopes,semantic_state,embedding) \
+                SELECT $1,$2,$3,$4,$5,$6,'{}'::TEXT[],$6,'und',$6,'hidden','{}'::TEXT[],'unavailable',NULL \
+                FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$7 WHERE n.id=$2 AND coalesce(n.payload ->> 'search_visibility','') <> 'public' AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$8 AND j.attempt_count=$9 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
+                ON CONFLICT (generation_id,node_id) DO UPDATE SET source_version=EXCLUDED.source_version,source_revision=EXCLUDED.source_revision,content_sha256=EXCLUDED.content_sha256,title=EXCLUDED.title,tags=EXCLUDED.tags,searchable_text=EXCLUDED.searchable_text,language=EXCLUDED.language,kind=EXCLUDED.kind,status=EXCLUDED.status,visibility_scopes=EXCLUDED.visibility_scopes,semantic_state=EXCLUDED.semantic_state,embedding=NULL,indexed_at=clock_timestamp() \
+                WHERE search_node_projections.source_version <= EXCLUDED.source_version")
+                .bind(generation)
+                .bind(node)
+                .bind(version)
+                .bind(revision)
+                .bind(content_sha256)
+                .bind(redacted)
+                .bind(job_id)
+                .bind(&self.worker_id)
+                .bind(attempts)
+                .execute(&self.pool)
+                .await?
+                .rows_affected();
+            return Ok(Ok(if written == 1 {
+                ProcessOutcome::Processed
+            } else if self.claim_is_current(job_id, attempts).await? {
+                ProcessOutcome::Stale
+            } else {
+                ProcessOutcome::LeaseLost
+            }));
+        }
         let embedding = match self
             .provider
             .embed(&document.embedding_text(), dimension as usize)
@@ -961,7 +994,7 @@ mod tests {
         };
         assert_eq!(
             generation.derived_id(),
-            "search-gen-46e7aba00f4c40aec10569dc42c9e12205a215d98036291bf006136467653b52"
+            "search-gen-bfa894157d53e406d232141f785084d5f33f41e6aee5dc6cbd4ef4b93794c13f"
         );
     }
 

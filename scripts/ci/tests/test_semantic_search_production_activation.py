@@ -43,7 +43,7 @@ def test_activation_is_commit_locked_identity_bound_and_gate_first() -> None:
     assert "flock -n 9" in script
     assert "requested commit is no longer current origin/main" in script
     assert "sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907" in script
-    assert "search-gen-46e7aba00f4c40aec10569dc42c9e12205a215d98036291bf006136467653b52" in script
+    assert "search-gen-bfa894157d53e406d232141f785084d5f33f41e6aee5dc6cbd4ef4b93794c13f" in script
     assert "weltgewebe_search_generation_activation_ready" in script
     gate = script.index("weltgewebe_search_generation_activation_ready")
     activate = script.index("weltgewebe_activate_search_generation")
@@ -58,7 +58,7 @@ def test_persistent_worker_waits_for_exact_model_and_runs_bounded_batches() -> N
     worker = WORKER.read_text(encoding="utf-8")
     assert "  search-worker:" in compose
     assert "network_mode: service:api" in compose.split("  search-worker:", 1)[1].split("\n  db:", 1)[0]
-    assert "search-gen-46e7aba00f4c40aec10569dc42c9e12205a215d98036291bf006136467653b52" in compose
+    assert "search-gen-bfa894157d53e406d232141f785084d5f33f41e6aee5dc6cbd4ef4b93794c13f" in compose
     assert "sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907" in compose
     assert "provider_ready" in worker
     assert "waiting_for_pinned_model" in worker
