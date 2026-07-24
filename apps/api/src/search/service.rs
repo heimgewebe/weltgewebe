@@ -240,7 +240,9 @@ async fn execute_search_inner(
             state.metrics.search_candidate_set_overflow();
             return Err(SearchError::Unavailable);
         }
-        Err(SearchRepositoryError::Database(_)) | Err(SearchRepositoryError::Json(_)) => {
+        Err(SearchRepositoryError::Database(_))
+        | Err(SearchRepositoryError::Json(_))
+        | Err(SearchRepositoryError::InvalidVisibility(_)) => {
             return Err(SearchError::Internal);
         }
     };

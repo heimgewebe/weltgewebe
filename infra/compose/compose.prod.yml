@@ -44,6 +44,9 @@ services:
       APP_BASE_URL: ${APP_BASE_URL:-}
       AUTH_TRUSTED_PROXIES: ${AUTH_TRUSTED_PROXIES:-}
       NATS_URL: ${NATS_URL:-nats://nats:4222}
+      # Search remains local to the API network namespace. The provider itself
+      # accepts only literal loopback and revalidates runtime/model identity.
+      WELTGEWEBE_SEARCH_OLLAMA_URL: ${WELTGEWEBE_SEARCH_OLLAMA_URL:-http://127.0.0.1:11434/}
     depends_on:
       db:
         condition: service_healthy
@@ -63,6 +66,56 @@ services:
       default:
         aliases:
           - weltgewebe-api
+
+  # Local embedding runtime. Sharing the API network namespace makes the
+  # provider reachable only through literal loopback; no host or compose port
+  # is published. Scoped API deploys recreate api+ollama together.
+  ollama:
+    image: ollama/ollama:0.12.6@sha256:352e045b937ac29d3d9550c22fb85525f60a89e064df34c26579bee5a93b3a16
+    restart: always
+    network_mode: service:api
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      OLLAMA_HOST: 127.0.0.1:11434
+      OLLAMA_KEEP_ALIVE: ${WELTGEWEBE_SEARCH_OLLAMA_KEEP_ALIVE:-5m}
+      OLLAMA_NUM_PARALLEL: ${WELTGEWEBE_SEARCH_OLLAMA_NUM_PARALLEL:-1}
+      OLLAMA_MAX_LOADED_MODELS: ${WELTGEWEBE_SEARCH_OLLAMA_MAX_LOADED_MODELS:-1}
+    mem_limit: ${WELTGEWEBE_SEARCH_OLLAMA_MEMORY_LIMIT:-5g}
+    cpus: ${WELTGEWEBE_SEARCH_OLLAMA_CPUS:-3.0}
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # Persistent bounded consumer for projection jobs created after activation.
+  # It shares the API namespace to preserve the literal-loopback provider
+  # contract and waits for the exact pinned model before touching PostgreSQL.
+  search-worker:
+    image: weltgewebe-api:${API_VERSION:?API_VERSION must be set}
+    restart: always
+    network_mode: service:api
+    command: ["/usr/local/bin/search-worker-loop"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-}
+      GEWEBE_SEED_REAL: "false"
+      GEWEBE_SEED_DEMO: "false"
+      WELTGEWEBE_SEARCH_GENERATION_ID: search-gen-2e8358273aa6d41e6a59025985a99738614aba725b8f369b3a54f390f8752e5c
+      WELTGEWEBE_SEARCH_BACKFILL_MAX_JOBS: ${WELTGEWEBE_SEARCH_BACKFILL_MAX_JOBS:-100}
+      WELTGEWEBE_SEARCH_OLLAMA_URL: http://127.0.0.1:11434/
+      WELTGEWEBE_SEARCH_PROVIDER: local:ollama
+      WELTGEWEBE_SEARCH_MODEL_ID: qwen3-embedding:4b
+      WELTGEWEBE_SEARCH_MODEL_REVISION: sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907
+      WELTGEWEBE_SEARCH_RUNTIME_IDENTITY: ollama:0.12.6@http://127.0.0.1:11434
+      WELTGEWEBE_SEARCH_DIMENSION: "2560"
+      WELTGEWEBE_SEARCH_WORKER_INTERVAL_SECONDS: ${WELTGEWEBE_SEARCH_WORKER_INTERVAL_SECONDS:-15}
+    depends_on:
+      api:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
 
   db:
     image: postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c
@@ -122,3 +175,4 @@ volumes:
   caddy_config:
   gewebe_fs_data:
   nats_js:
+  ollama_models:

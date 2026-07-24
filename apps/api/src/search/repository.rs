@@ -17,11 +17,13 @@ pub enum SearchRepositoryError {
     Database(#[from] sqlx::Error),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    #[error("invalid canonical search visibility: {0}")]
+    InvalidVisibility(String),
 }
 
 use crate::{
     middleware::auth::AuthContext,
-    routes::nodes::{Location, Node},
+    routes::nodes::{normalize_account_id, Location, Node, SearchVisibility},
     search::ranking::ScoredNode,
 };
 
@@ -109,7 +111,8 @@ pub async fn fetch_postgres_candidates(
         ), authorized AS (
             SELECT p.node_id, p.title, p.tags, p.searchable_text, p.language, p.kind,
                    p.embedding, p.search_vector, p.search_vector_simple,
-                   n.created_at, n.updated_at, n.lat, n.lon, n.payload::text AS payload
+                   n.created_at, n.updated_at, n.lat, n.lon, n.payload::text AS payload,
+                   n.search_visibility
               FROM search_node_projections p
               JOIN search_node_versions v
                 ON v.node_id = p.node_id
@@ -118,22 +121,26 @@ pub async fn fetch_postgres_candidates(
                AND v.deleted_at IS NULL
               JOIN domain_nodes n ON n.id = p.node_id
              WHERE p.generation_id = $1
-               AND p.semantic_state = 'ready'
-               AND cardinality(p.embedding) = $8
                AND n.created_at IS NOT NULL
                AND n.updated_at IS NOT NULL
                AND n.lat IS NOT NULL
                AND n.lon IS NOT NULL
-               AND CASE
-                     WHEN jsonb_typeof(n.payload -> 'search_visibility') IS DISTINCT FROM 'string' THEN FALSE
-                     WHEN n.payload ->> 'search_visibility' = 'public' THEN TRUE
-                     WHEN n.payload ->> 'search_visibility' = 'private' THEN
-                          $4::boolean
-                          AND $3::text IS NOT NULL
-                          AND nullif(btrim(n.payload ->> 'created_by_account_id'), '') = $3::text
-                     WHEN n.payload ->> 'search_visibility' IN ('hidden', 'revoked', 'deleted') THEN FALSE
-                     ELSE FALSE
-                   END
+               AND (
+                    (n.search_visibility = 'public'
+                     AND p.status = 'active'
+                     AND p.semantic_state = 'ready'
+                     AND p.visibility_scopes = ARRAY['public']::TEXT[]
+                     AND cardinality(p.embedding) = $8)
+                    OR
+                    (n.search_visibility = 'private'
+                     AND $4::boolean
+                     AND $3::text IS NOT NULL
+                     AND weltgewebe_search_node_owner_account_id(n.payload) = trim($3::text)
+                     AND p.status = 'active'
+                     AND p.semantic_state = 'unavailable'
+                     AND p.visibility_scopes = ARRAY['owner']::TEXT[]
+                     AND p.embedding IS NULL)
+               )
                AND (cardinality($5::text[]) = 0 OR p.kind = ANY($5::text[]))
                AND (cardinality($6::text[]) = 0 OR p.tags && $6::text[])
                AND (cardinality($7::text[]) = 0 OR p.language = ANY($7::text[]))
@@ -200,7 +207,7 @@ pub async fn fetch_postgres_candidates(
         SELECT scored.node_id, scored.title, scored.tags, scored.searchable_text,
                scored.language, scored.kind, scored.embedding, scored.created_at,
                scored.updated_at, scored.lat, scored.lon, scored.payload,
-               lexical_top.rank_class, lexical_top.rank_score
+               scored.search_visibility, lexical_top.rank_class, lexical_top.rank_score
           FROM scored
           LEFT JOIN lexical_top ON lexical_top.node_id = scored.node_id
          ORDER BY lexical_top.rank_class ASC NULLS LAST,
@@ -236,7 +243,16 @@ pub async fn fetch_postgres_candidates(
         let tags: Vec<String> = row.try_get("tags")?;
         let rank_class: Option<i32> = row.try_get("rank_class")?;
         let rank_score: Option<f64> = row.try_get("rank_score")?;
-        let embedding: Vec<f64> = row.try_get("embedding")?;
+        let embedding: Option<Vec<f64>> = row.try_get("embedding")?;
+        let search_visibility_raw: String = row.try_get("search_visibility")?;
+        let search_visibility = match search_visibility_raw.parse::<SearchVisibility>() {
+            Ok(value) => value,
+            Err(_) => {
+                return Err(SearchRepositoryError::InvalidVisibility(
+                    search_visibility_raw,
+                ))
+            }
+        };
 
         let node = Node {
             id: row.try_get("node_id")?,
@@ -244,10 +260,10 @@ pub async fn fetch_postgres_candidates(
             title: row.try_get("title")?,
             created_at: created_at.to_rfc3339(),
             updated_at: updated_at.to_rfc3339(),
-            created_by_account_id: payload
-                .get("created_by_account_id")
-                .and_then(Value::as_str)
-                .map(str::to_owned),
+            created_by_account_id: normalize_account_id(
+                payload.get("created_by_account_id").and_then(Value::as_str),
+            ),
+            search_visibility,
             summary: payload
                 .get("summary")
                 .and_then(Value::as_str)
@@ -270,7 +286,7 @@ pub async fn fetch_postgres_candidates(
                 .and_then(|value| u8::try_from(value).ok())
                 .unwrap_or(u8::MAX),
             rank_score: rank_score.unwrap_or(0.0),
-            embedding: Some(embedding),
+            embedding,
         });
     }
 

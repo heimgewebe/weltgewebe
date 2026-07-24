@@ -20,7 +20,7 @@ use crate::routes::accounts::{
 };
 use crate::routes::auth::MAX_EMAIL_LEN;
 use crate::routes::edges::{Edge, LifecycleTimestamp};
-use crate::routes::nodes::{Location, Node};
+use crate::routes::nodes::{normalize_account_id, Location, Node, SearchVisibility};
 use crate::state::OrderedCache;
 
 const DEFAULT_TIMESTAMP: &str = "1970-01-01T00:00:00Z";
@@ -59,6 +59,7 @@ type NodeRow = (
     Option<f64>,
     Option<DateTime<Utc>>,
     Option<DateTime<Utc>>,
+    String,
     String,
 );
 
@@ -129,7 +130,7 @@ fn node_timestamps(
 
 pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node>> {
     let rows: Vec<NodeRow> = sqlx::query_as(
-        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text \
+        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility \
          FROM domain_nodes ORDER BY id ASC",
     )
     .fetch_all(pool)
@@ -138,31 +139,17 @@ pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node
 
     let mut cache = OrderedCache::new();
     let mut skipped = 0usize;
-    for (id, kind, title, lat, lon, created_at, updated_at, payload_text) in rows {
-        let (lat, lon) = match (lat, lon) {
-            (Some(lat), Some(lon)) => (lat, lon),
-            _ => {
-                tracing::warn!(node_id = %id, "skipping domain node with NULL location");
-                skipped += 1;
-                continue;
+    for row in rows {
+        let node_id = row.0.clone();
+        match node_from_row(row) {
+            Ok(node) => {
+                cache.insert(node_id, node);
             }
-        };
-        let payload = parse_payload(&payload_text);
-        let (created_at, updated_at) = node_timestamps(created_at, updated_at);
-        let node = Node {
-            id: id.clone(),
-            kind,
-            title,
-            created_at,
-            updated_at,
-            created_by_account_id: payload_string(&payload, "created_by_account_id"),
-            summary: payload_string(&payload, "summary"),
-            info: payload_string(&payload, "info"),
-            tags: payload_string_array(&payload, "tags"),
-            address: payload_string(&payload, "address"),
-            location: Location { lat, lon },
-        };
-        cache.insert(id, node);
+            Err(err) => {
+                tracing::warn!(node_id = %node_id, ?err, "skipping invalid domain node row");
+                skipped += 1;
+            }
+        }
     }
 
     tracing::info!(count = cache.len(), skipped, "Loaded nodes from PostgreSQL");
@@ -557,6 +544,7 @@ pub async fn find_account_by_normalized_email(
 pub struct NodePatchInput {
     /// `None` = no-op; `Some(Some(s))` = set; `Some(None)` = clear.
     pub info: Option<Option<String>>,
+    pub search_visibility: Option<SearchVisibility>,
 }
 
 /// Error from the node-patch write path.
@@ -577,20 +565,34 @@ pub enum NodeWriteError {
 }
 
 fn node_from_row(row: NodeRow) -> Result<Node, anyhow::Error> {
-    let (id, kind, title, lat, lon, created_at, updated_at, payload_text) = row;
+    let (id, kind, title, lat, lon, created_at, updated_at, payload_text, search_visibility_str) =
+        row;
     let (lat, lon) = match (lat, lon) {
         (Some(lat), Some(lon)) => (lat, lon),
         _ => anyhow::bail!("domain node {} has NULL location", id),
     };
     let payload = parse_payload(&payload_text);
     let (created_at, updated_at) = node_timestamps(created_at, updated_at);
+    let search_visibility = search_visibility_str
+        .parse::<SearchVisibility>()
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "domain node {} has invalid search_visibility {:?}: {}",
+                id,
+                search_visibility_str,
+                error
+            )
+        })?;
     Ok(Node {
         id,
         kind,
         title,
         created_at,
         updated_at,
-        created_by_account_id: payload_string(&payload, "created_by_account_id"),
+        created_by_account_id: normalize_account_id(
+            payload_string(&payload, "created_by_account_id").as_deref(),
+        ),
+        search_visibility,
         summary: payload_string(&payload, "summary"),
         info: payload_string(&payload, "info"),
         tags: payload_string_array(&payload, "tags"),
@@ -647,7 +649,7 @@ pub async fn load_node_from_postgres(
     id: &str,
 ) -> Result<Option<Node>, NodeWriteError> {
     let row: Option<NodeRow> = sqlx::query_as(
-        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text \
+        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility \
          FROM domain_nodes WHERE id = $1",
     )
     .bind(id)
@@ -661,22 +663,6 @@ pub async fn load_node_from_postgres(
 }
 
 /// Apply a patch to one `domain_nodes` row inside a transaction.
-///
-/// Semantics:
-/// - `info: None` is a no-op (no DB write, `updated_at` unchanged).
-/// - `info: Some(Some(s))` sets `info` to `s`.
-/// - `info: Some(None)` removes `info` from the payload (key absent after patch).
-///   The public `Node` projection is identical to the JSONL handler — both yield
-///   `node.info == None` — but the DB payload shape differs: the JSONL handler
-///   stores `{"info": null}`, this path stores a payload without the `info` key.
-/// - `steckbrief` is removed from the payload if present.
-/// - `updated_at` follows the current JSONL patch semantics: supplied `info`
-///   patches bump the timestamp even when the public projection is unchanged;
-///   `steckbrief` cleanup also bumps it.
-///
-/// The final `Node` projection is built **before** `tx.commit()` so a mapping or
-/// serialization failure cannot produce a DB mutation that returns 500 to the
-/// caller.
 pub async fn patch_node_in_postgres(
     pool: &PgPool,
     id: &str,
@@ -685,7 +671,7 @@ pub async fn patch_node_in_postgres(
     let mut tx = pool.begin().await.map_err(NodeWriteError::Database)?;
 
     let row: Option<NodeRow> = sqlx::query_as(
-        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text \
+        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility \
          FROM domain_nodes WHERE id = $1 FOR UPDATE",
     )
     .bind(id)
@@ -693,7 +679,17 @@ pub async fn patch_node_in_postgres(
     .await
     .map_err(NodeWriteError::Database)?;
 
-    let (row_id, kind, title, lat, lon, created_at, updated_at, payload_text) = match row {
+    let (
+        row_id,
+        kind,
+        title,
+        lat,
+        lon,
+        created_at,
+        updated_at,
+        payload_text,
+        current_search_visibility_str,
+    ) = match row {
         Some(r) => r,
         None => {
             tx.rollback().await.ok();
@@ -705,8 +701,6 @@ pub async fn patch_node_in_postgres(
     let mut has_changes = false;
 
     {
-        // Reject non-object payloads before any mutation: a non-object payload is
-        // data corruption in domain_nodes.payload.
         let obj = payload.as_object_mut().ok_or_else(|| {
             NodeWriteError::Mapping(anyhow::anyhow!("domain node {} has non-object payload", id))
         })?;
@@ -727,8 +721,25 @@ pub async fn patch_node_in_postgres(
         }
     }
 
-    // Serialize payload once after all mutations; propagate errors instead of
-    // silently falling back to "{}".
+    let new_search_visibility = match patch.search_visibility {
+        Some(vis) => {
+            if vis.as_str() != current_search_visibility_str {
+                has_changes = true;
+            }
+            vis
+        }
+        None => current_search_visibility_str
+            .parse::<SearchVisibility>()
+            .map_err(|error| {
+                NodeWriteError::Mapping(anyhow::anyhow!(
+                    "domain node {} has invalid search_visibility {:?}: {}",
+                    id,
+                    current_search_visibility_str,
+                    error
+                ))
+            })?,
+    };
+
     let final_payload_text =
         serde_json::to_string(&payload).map_err(NodeWriteError::Serialization)?;
 
@@ -736,12 +747,13 @@ pub async fn patch_node_in_postgres(
         let now = postgres_timestamp_precision(chrono::Utc::now());
         sqlx::query(
             "UPDATE domain_nodes \
-             SET payload = $2::jsonb, updated_at = $3 \
+             SET payload = $2::jsonb, updated_at = $3, search_visibility = $4 \
              WHERE id = $1",
         )
         .bind(id)
         .bind(&final_payload_text)
         .bind(now)
+        .bind(new_search_visibility.as_str())
         .execute(&mut *tx)
         .await
         .map_err(NodeWriteError::Database)?;
@@ -750,8 +762,6 @@ pub async fn patch_node_in_postgres(
         updated_at
     };
 
-    // Build the public projection before commit so a mapping failure cannot persist
-    // a DB mutation that returns 500 to the caller.
     let final_node = node_from_row((
         row_id,
         kind,
@@ -761,6 +771,7 @@ pub async fn patch_node_in_postgres(
         created_at,
         new_updated_at,
         final_payload_text,
+        new_search_visibility.as_str().to_string(),
     ))
     .map_err(NodeWriteError::Mapping)?;
 
@@ -779,7 +790,7 @@ pub async fn replace_node_in_postgres(
         .map_err(|error| NodeWriteError::Mapping(anyhow::Error::new(error)))?;
     let result = sqlx::query(
         "UPDATE domain_nodes \
-         SET kind = $2, title = $3, lat = $4, lon = $5, updated_at = $6, payload = $7::jsonb \
+         SET kind = $2, title = $3, lat = $4, lon = $5, updated_at = $6, payload = $7::jsonb, search_visibility = $8 \
          WHERE id = $1",
     )
     .bind(&node.id)
@@ -789,6 +800,7 @@ pub async fn replace_node_in_postgres(
     .bind(node.location.lon)
     .bind(updated_at)
     .bind(payload)
+    .bind(node.search_visibility.as_str())
     .execute(pool)
     .await
     .map_err(NodeWriteError::Database)?;
@@ -1034,7 +1046,7 @@ pub async fn insert_domain_node_with_creator_limit(
             .map_err(NodeCreateError::Database)?;
 
         let existing: Option<NodeRow> = sqlx::query_as(
-            "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text \
+            "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility \
              FROM domain_nodes \
              WHERE create_actor_id = $1 AND create_operation_id = $2",
         )
@@ -1058,7 +1070,7 @@ pub async fn insert_domain_node_with_creator_limit(
         let owned_count: i64 = sqlx::query_scalar(
             "SELECT count(*) FROM domain_nodes \
              WHERE payload ? 'created_by_account_id' \
-               AND payload ->> 'created_by_account_id' = $1",
+               AND weltgewebe_search_node_owner_account_id(payload) = trim($1)",
         )
         .bind(creator_account_id)
         .fetch_one(&mut *tx)
@@ -1073,8 +1085,8 @@ pub async fn insert_domain_node_with_creator_limit(
     let result = sqlx::query(
         "INSERT INTO domain_nodes \
             (id, kind, title, lat, lon, created_at, updated_at, payload, \
-             create_actor_id, create_operation_id) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)",
+             create_actor_id, create_operation_id, search_visibility) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)",
     )
     .bind(&node.id)
     .bind(&node.kind)
@@ -1086,6 +1098,7 @@ pub async fn insert_domain_node_with_creator_limit(
     .bind(&payload)
     .bind(operation.map(|value| value.actor_id.as_str()))
     .bind(operation.map(|value| value.operation_id.as_str()))
+    .bind(node.search_visibility.as_str())
     .execute(&mut *tx)
     .await;
 
@@ -1098,7 +1111,7 @@ pub async fn insert_domain_node_with_creator_limit(
             tx.rollback().await.ok();
             if let Some(operation) = operation {
                 let existing: Option<NodeRow> = sqlx::query_as(
-                    "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text \
+                    "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility \
                      FROM domain_nodes \
                      WHERE create_actor_id = $1 AND create_operation_id = $2",
                 )

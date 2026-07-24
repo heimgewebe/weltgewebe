@@ -152,6 +152,7 @@ mod tests {
             created_at: "2026-01-01T00:00:00Z".to_string(),
             updated_at: "2026-01-01T00:00:00Z".to_string(),
             created_by_account_id: None,
+            search_visibility: Default::default(),
             summary: Some("Test summary".to_string()),
             info: Some("Test info".to_string()),
             tags: tags.into_iter().map(String::from).collect(),
