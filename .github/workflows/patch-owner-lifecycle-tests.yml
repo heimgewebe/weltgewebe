@@ -1,0 +1,90 @@
+---
+name: Patch owner lifecycle tests
+
+"on":
+  push:
+    branches: [fix/semantic-search-owner-lifecycle]
+    paths:
+      - ".github/workflows/patch-owner-lifecycle-tests.yml"
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: fix/semantic-search-owner-lifecycle
+          fetch-depth: 0
+
+      - name: Apply exact owner-lifecycle test registrations
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          worker_test = Path("apps/api/tests/db_semantic_search_projection_worker.rs")
+          text = worker_test.read_text(encoding="utf-8")
+
+          reset_anchor = '''    sqlx::query("TRUNCATE search_projection_jobs, search_node_projections, search_node_versions, search_index_generations RESTART IDENTITY CASCADE")
+          '''
+          reset_replacement = '''    sqlx::query("DELETE FROM domain_accounts WHERE id='owner-private'")
+              .execute(pool)
+              .await
+              .expect("remove prior private-owner account");
+              sqlx::query("TRUNCATE search_projection_jobs, search_node_projections, search_node_versions, search_index_generations RESTART IDENTITY CASCADE")
+          '''
+          if text.count(reset_anchor) != 1:
+              raise SystemExit("unexpected reset anchor count")
+          text = text.replace(reset_anchor, reset_replacement, 1)
+
+          private_anchor = '''    let generation = generation_spec.generation_id;
+              sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload,search_visibility) VALUES ($1,'Privatwerkstatt','Vertraulicher Titel',$2::jsonb,'private')")
+          '''
+          private_replacement = '''    let generation = generation_spec.generation_id;
+              sqlx::query("INSERT INTO domain_accounts (id,title,disabled) VALUES ('owner-private','Private owner',FALSE)")
+                  .execute(&pool)
+                  .await
+                  .expect("insert active private owner");
+              sqlx::query("INSERT INTO domain_nodes (id,kind,title,payload,search_visibility) VALUES ($1,'Privatwerkstatt','Vertraulicher Titel',$2::jsonb,'private')")
+          '''
+          if text.count(private_anchor) != 1:
+              raise SystemExit("unexpected private test anchor count")
+          text = text.replace(private_anchor, private_replacement, 1)
+          worker_test.write_text(text, encoding="utf-8")
+
+          matrix = Path("scripts/ci/run-postgres-integration-proofs.sh")
+          matrix_text = matrix.read_text(encoding="utf-8")
+          matrix_anchor = "  db_semantic_search_projection_worker\n"
+          matrix_replacement = (
+              "  db_semantic_search_projection_worker\n"
+              "  db_semantic_search_owner_lifecycle\n"
+          )
+          if matrix_text.count(matrix_anchor) != 1:
+              raise SystemExit("unexpected PostgreSQL matrix anchor count")
+          matrix.write_text(
+              matrix_text.replace(matrix_anchor, matrix_replacement, 1),
+              encoding="utf-8",
+          )
+          PY
+
+          cargo fmt --all
+          git diff --check
+          rm .github/workflows/patch-owner-lifecycle-tests.yml
+
+      - name: Commit exact patch
+        run: |
+          git config user.name "weltgewebe-ci"
+          git config user.email "weltgewebe-ci@users.noreply.github.com"
+          git add apps/api/tests/db_semantic_search_projection_worker.rs \
+            apps/api/tests/db_semantic_search_owner_lifecycle.rs \
+            scripts/ci/run-postgres-integration-proofs.sh \
+            .github/workflows/patch-owner-lifecycle-tests.yml
+          git diff --cached --check
+          git commit -m "test(search): bind owner proofs to active accounts"
+          git push origin HEAD:fix/semantic-search-owner-lifecycle
