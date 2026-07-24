@@ -41,7 +41,7 @@ fail() {
 }
 
 require_command() {
-  command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
+  command -v "$1" > /dev/null 2>&1 || fail "required command not found: $1"
 }
 
 write_receipt() {
@@ -65,7 +65,7 @@ write_receipt() {
     --arg completed_at "$completed_at" \
     --arg aggregate_status "$aggregate_status" \
     '{schema_version:1,kind:"weltgewebe_search_activation",result:$result,commit:$commit,generation_id:$generation_id,provider:$provider,model_id:$model_id,model_revision:$model_revision,runtime_identity:$runtime_identity,dimension:($dimension|tonumber),started_at:(if ($started_at|length)>0 then $started_at else null end),completed_at:(if ($completed_at|length)>0 then $completed_at else null end),aggregate_status:$aggregate_status,does_not_establish:["private content disclosure","SemantAH retirement","domain data mutation authority"]}' \
-    >"$temporary"
+    > "$temporary"
   chmod 0600 "$temporary"
   chown root:root "$temporary"
   mv -fT "$temporary" "$receipt"
@@ -77,7 +77,7 @@ cleanup() {
   local rc=$?
   trap - EXIT
   if ((rc != 0)) && [[ -n "$started_at" && "$receipt_terminal" == false ]]; then
-    write_receipt "failed" "$(date --utc +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)" >/dev/null || true
+    write_receipt "failed" "$(date --utc +%Y-%m-%dT%H:%M:%SZ 2> /dev/null || true)" > /dev/null || true
   fi
   exit "$rc"
 }
@@ -90,7 +90,7 @@ while (($#)); do
       COMMIT="$2"
       shift 2
       ;;
-    -h|--help)
+    -h | --help)
       usage
       exit 0
       ;;
@@ -112,10 +112,10 @@ done
 [[ -d "$SOURCE_CHECKOUT" && ! -L "$SOURCE_CHECKOUT" ]] || fail "source checkout is missing or unsafe"
 [[ -f "$RUNTIME_ENV" && ! -L "$RUNTIME_ENV" ]] || fail "runtime environment is missing or unsafe"
 [[ "$(stat --format=%u "$RUNTIME_ENV")" == "0" ]] || fail "runtime environment is not root-owned"
-(( (8#$(stat --format=%a "$RUNTIME_ENV") & 022) == 0 )) || fail "runtime environment is group- or world-writable"
+(((8#$(stat --format=%a "$RUNTIME_ENV") & 022) == 0)) || fail "runtime environment is group- or world-writable"
 [[ -f "$LOCK_FILE" && ! -L "$LOCK_FILE" ]] || fail "production lock is missing or unsafe"
 [[ "$(stat --format=%u "$LOCK_FILE")" == "0" ]] || fail "production lock is not root-owned"
-exec 9<>"$LOCK_FILE"
+exec 9<> "$LOCK_FILE"
 flock -n 9 || fail "production deployment lock is busy"
 
 release_dir="$(readlink -f "$STATE_ROOT/current-release")"
@@ -150,13 +150,13 @@ worker_cid="$("${compose[@]}" ps -q search-worker)"
 [[ "$(docker inspect --format '{{json .Config.Cmd}}' "$worker_cid")" == '["/usr/local/bin/search-worker-loop"]' ]] || fail "search worker command mismatch"
 
 started_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
-write_receipt "preparing" "" >/dev/null
+write_receipt "preparing" "" > /dev/null
 
 "${compose[@]}" exec -T ollama ollama pull "$MODEL_ID"
 version_body="$("${compose[@]}" exec -T api wget -qO- "$OLLAMA_URL/api/version")"
-[[ "$(jq -er '.version' <<<"$version_body")" == "0.12.6" ]] || fail "Ollama runtime version mismatch"
+[[ "$(jq -er '.version' <<< "$version_body")" == "0.12.6" ]] || fail "Ollama runtime version mismatch"
 tags_body="$("${compose[@]}" exec -T api wget -qO- "$OLLAMA_URL/api/tags")"
-observed_digest="$(jq -er --arg model "$MODEL_ID" '.models[] | select(.name == $model) | .digest' <<<"$tags_body")"
+observed_digest="$(jq -er --arg model "$MODEL_ID" '.models[] | select(.name == $model) | .digest' <<< "$tags_body")"
 [[ "$observed_digest" == "$MODEL_REVISION" ]] || fail "Ollama model digest mismatch"
 
 [[ "$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$api_cid" | awk -F= '$1=="WELTGEWEBE_SEARCH_OLLAMA_URL" {print $2}')" == "$OLLAMA_URL/" ]] || fail "API search provider URL is not literal loopback"
@@ -169,7 +169,7 @@ psql_exec() {
   "${compose[@]}" exec -T db psql -v ON_ERROR_STOP=1 -U "$postgres_user" -d "$postgres_db" "$@"
 }
 
-for ((batch=1; batch<=MAX_BATCHES; batch++)); do
+for ((batch = 1; batch <= MAX_BATCHES; batch++)); do
   "${compose[@]}" exec -T \
     -e WELTGEWEBE_SEARCH_GENERATION_ID="$GENERATION_ID" \
     -e WELTGEWEBE_SEARCH_BACKFILL_MAX_JOBS="$BATCH_SIZE" \
@@ -181,7 +181,7 @@ for ((batch=1; batch<=MAX_BATCHES; batch++)); do
     -e WELTGEWEBE_SEARCH_DIMENSION="$DIMENSION" \
     api /app/search-backfill
   aggregate_status="$(psql_exec -Atc "SELECT concat_ws('|',g.expected_nodes,g.completed_nodes,count(*) FILTER (WHERE j.state='pending'),count(*) FILTER (WHERE j.state='claimed'),count(*) FILTER (WHERE j.state='retry'),count(*) FILTER (WHERE j.state='failed')) FROM search_index_generations g LEFT JOIN search_projection_jobs j ON j.generation_id=g.generation_id WHERE g.generation_id='$GENERATION_ID' GROUP BY g.expected_nodes,g.completed_nodes;")"
-  IFS='|' read -r expected completed pending claimed retry failed <<<"$aggregate_status"
+  IFS='|' read -r expected completed pending claimed retry failed <<< "$aggregate_status"
   for count in "$expected" "$completed" "$pending" "$claimed" "$retry" "$failed"; do
     [[ "$count" =~ ^[0-9]+$ ]] || fail "search projection aggregate is malformed"
   done
@@ -195,13 +195,13 @@ done
 
 [[ "$expected" =~ ^[0-9]+$ && "$completed" == "$expected" ]] || fail "search generation is incomplete"
 psql_exec -Atc "SELECT weltgewebe_search_generation_activation_ready('$GENERATION_ID');" | grep -qx t || fail "database activation gate rejected generation"
-psql_exec -c "SELECT weltgewebe_activate_search_generation('$GENERATION_ID');" >/dev/null
+psql_exec -c "SELECT weltgewebe_activate_search_generation('$GENERATION_ID');" > /dev/null
 identity_ok="$(psql_exec -Atc "SELECT count(*)=1 FROM search_index_generations WHERE generation_id='$GENERATION_ID' AND state='active' AND provider='$PROVIDER' AND model_id='$MODEL_ID' AND model_revision='$MODEL_REVISION' AND runtime_identity='$RUNTIME_IDENTITY' AND dimension=$DIMENSION AND completed_nodes=expected_nodes;")"
 [[ "$identity_ok" == "t" ]] || fail "active generation identity mismatch"
 
 search_body="$(mktemp)"
-curl -fsS --get --data-urlencode 'q=Gemeinschaft' --data-urlencode 'limit=10' "$SEARCH_URL" >"$search_body"
-jq -e --arg generation "$GENERATION_ID" '.generation_id == $generation and (.mode == "hybrid" or .mode == "lexical_fallback") and (.items | type == "array")' "$search_body" >/dev/null || fail "public search readback mismatch"
+curl -fsS --get --data-urlencode 'q=Gemeinschaft' --data-urlencode 'limit=10' "$SEARCH_URL" > "$search_body"
+jq -e --arg generation "$GENERATION_ID" '.generation_id == $generation and (.mode == "hybrid" or .mode == "lexical_fallback") and (.items | type == "array")' "$search_body" > /dev/null || fail "public search readback mismatch"
 rm -f "$search_body"
 [[ "$(docker inspect --format '{{.State.Running}}' "$worker_cid")" == "true" ]] || fail "search worker stopped after activation"
 

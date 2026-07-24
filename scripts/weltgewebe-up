@@ -1887,10 +1887,10 @@ else
 
   SCOPED_TARGET_SERVICES=(api)
   configured_scoped_services="$(docker compose "${BASE_ARGS[@]}" config --services)"
-  if grep -qFx ollama <<<"$configured_scoped_services"; then
+  if grep -qFx ollama <<< "$configured_scoped_services"; then
     SCOPED_TARGET_SERVICES+=(ollama)
   fi
-  if grep -qFx search-worker <<<"$configured_scoped_services"; then
+  if grep -qFx search-worker <<< "$configured_scoped_services"; then
     # Both containers share the API network namespace. Recreating only the API
     # would strand them on the retired namespace, so all three are one bounded
     # deployment unit while db, nats and caddy stay protected.

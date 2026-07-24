@@ -17,8 +17,8 @@ fi
 
 provider_ready() {
   local body observed
-  body="$(wget -qO- "${OLLAMA_URL}api/tags" 2>/dev/null)" || return 1
-  observed="$(jq -er --arg model "$MODEL_ID" '.models[] | select(.name == $model) | .digest' <<<"$body" 2>/dev/null)" || return 1
+  body="$(wget -qO- "${OLLAMA_URL}api/tags" 2> /dev/null)" || return 1
+  observed="$(jq -er --arg model "$MODEL_ID" '.models[] | select(.name == $model) | .digest' <<< "$body" 2> /dev/null)" || return 1
   [[ "$observed" == "$MODEL_REVISION" ]]
 }
 
