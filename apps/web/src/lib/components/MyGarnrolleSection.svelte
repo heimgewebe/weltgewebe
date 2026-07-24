@@ -9,10 +9,12 @@
     type OwnGarnrolleProfile,
   } from "$lib/api/domainWrites";
   import type { Account, GarnrolleMapState, Location } from "$lib/map/types";
+  import { createAccountRequestGuard } from "$lib/garnrolle/accountRequestGuard";
   import {
     describeGarnrolleVisibility,
     findOwnGarnrolle,
   } from "$lib/garnrolle/visibility";
+  import { onDestroy, tick } from "svelte";
 
   export let accounts: Account[] = [];
   export let accountsLoadError: string | null = null;
@@ -24,25 +26,37 @@
     goods: string;
     interests: string;
     address: string;
+    addressTouched: boolean;
     visibilityChoice: GarnrolleMapState;
     radiusM: number;
     selectedLocation: Location | null;
+    clearLocation: boolean;
   };
 
+  const accountRequestGuard = createAccountRequestGuard();
+  const saveRequestGuard = createAccountRequestGuard();
+  let loadAbortController: AbortController | null = null;
+  let saveAbortController: AbortController | null = null;
   let profileKey = "";
+  let loadedProfileAccountId: string | null = null;
   let displayName = "";
   let summary = "";
   let skills = "";
   let goods = "";
   let interests = "";
   let address = "";
+  let initialAddress = "";
+  let addressTouched = false;
   let visibilityChoice: GarnrolleMapState = "not_on_map";
   let radiusM = 250;
   let selectedLocation: Location | null = null;
+  let clearLocation = false;
   let isLoadingProfile = false;
   let isSaving = false;
   let profileError: string | null = null;
+  let draftMessage: string | null = null;
   let saveMessage: string | null = null;
+  let locationButton: HTMLButtonElement | null = null;
 
   $: ownGarnrolle = findOwnGarnrolle(accounts, $authStore.account_id);
   $: visibility = describeGarnrolleVisibility(ownGarnrolle);
@@ -51,24 +65,41 @@
       ? $authStore.account_id
       : null;
   $: canEdit = $authStore.authenticated;
+  $: radiusIsValid =
+    Number.isInteger(radiusM) && radiusM >= 50 && radiusM <= 5000;
+  $: formDisabled =
+    isLoadingProfile || isSaving || loadedProfileAccountId !== activeAccountId;
   $: canSave =
     canEdit &&
-    !!ownGarnrolle &&
+    loadedProfileAccountId === activeAccountId &&
     !!displayName.trim() &&
     !isLoadingProfile &&
     !isSaving &&
-    (visibilityChoice === "not_on_map" ||
-      (!!address.trim() && selectedLocation !== null));
+    (visibilityChoice === "not_on_map" || selectedLocation !== null) &&
+    (visibilityChoice !== "radius" || radiusIsValid);
   $: mapHref = ownGarnrolle?.public_pos
     ? `/map?focus=garnrolle:${ownGarnrolle.id}`
     : "/map";
 
   $: if (activeAccountId && activeAccountId !== profileKey) {
+    const previousAccountId = profileKey;
+    if (previousAccountId) clearStoredPrivateDraft(previousAccountId);
     profileKey = activeAccountId;
+    invalidateAccountOperations();
+    loadedProfileAccountId = null;
+    isLoadingProfile = false;
+    isSaving = false;
+    resetDraft();
     void loadPrivateProfile(activeAccountId);
   }
   $: if (!activeAccountId && profileKey) {
+    const previousAccountId = profileKey;
     profileKey = "";
+    clearStoredPrivateDraft(previousAccountId);
+    invalidateAccountOperations();
+    loadedProfileAccountId = null;
+    isLoadingProfile = false;
+    isSaving = false;
     resetDraft();
   }
 
@@ -105,6 +136,27 @@
     return `weltgewebe:garnrolle-draft:${accountId}`;
   }
 
+  function returnLocationStorageKey(accountId: string): string {
+    return `weltgewebe:garnrolle-return-location:${accountId}`;
+  }
+
+  function clearStoredPrivateDraft(accountId: string) {
+    if (!browser) return;
+    sessionStorage.removeItem(draftStorageKey(accountId));
+    sessionStorage.removeItem(returnLocationStorageKey(accountId));
+  }
+
+  function invalidateAccountOperations() {
+    accountRequestGuard.invalidate();
+    saveRequestGuard.invalidate();
+    loadAbortController?.abort();
+    saveAbortController?.abort();
+    loadAbortController = null;
+    saveAbortController = null;
+  }
+
+  onDestroy(invalidateAccountOperations);
+
   function currentDraft(): GarnrolleDraft {
     return {
       displayName,
@@ -113,9 +165,11 @@
       goods,
       interests,
       address,
+      addressTouched,
       visibilityChoice,
       radiusM,
       selectedLocation,
+      clearLocation,
     };
   }
 
@@ -125,7 +179,13 @@
     if (typeof draft.skills === "string") skills = draft.skills;
     if (typeof draft.goods === "string") goods = draft.goods;
     if (typeof draft.interests === "string") interests = draft.interests;
-    if (typeof draft.address === "string") address = draft.address;
+    if (typeof draft.address === "string") {
+      address = draft.address;
+      addressTouched =
+        typeof draft.addressTouched === "boolean"
+          ? draft.addressTouched
+          : draft.address.trim() !== initialAddress;
+    }
     if (
       draft.visibilityChoice === "not_on_map" ||
       draft.visibilityChoice === "exact" ||
@@ -143,6 +203,9 @@
     ) {
       selectedLocation = draft.selectedLocation ?? null;
     }
+    if (typeof draft.clearLocation === "boolean") {
+      clearLocation = draft.clearLocation;
+    }
   }
 
   function resetDraft() {
@@ -152,10 +215,14 @@
     goods = "";
     interests = "";
     address = "";
+    initialAddress = "";
+    addressTouched = false;
     visibilityChoice = "not_on_map";
     radiusM = 250;
     selectedLocation = null;
+    clearLocation = false;
     profileError = null;
+    draftMessage = null;
     saveMessage = null;
   }
 
@@ -165,15 +232,18 @@
     skills = profileSkills(profile.tags).join(", ");
     goods = categoryValues(profile.tags, "good:").join(", ");
     interests = categoryValues(profile.tags, "interest:").join(", ");
-    address = profile.address ?? "";
+    initialAddress = profile.address?.trim() ?? "";
+    address = initialAddress;
+    addressTouched = false;
     visibilityChoice = profile.map_state;
     radiusM = profile.radius_m > 0 ? profile.radius_m : 250;
     selectedLocation = profile.location ?? null;
+    clearLocation = false;
   }
 
   function returnedMapLocation(accountId: string): Location | null {
     if (!browser) return null;
-    const key = `weltgewebe:garnrolle-return-location:${accountId}`;
+    const key = returnLocationStorageKey(accountId);
     const stored = sessionStorage.getItem(key);
     sessionStorage.removeItem(key);
     if (!stored) return null;
@@ -199,12 +269,27 @@
     }
   }
 
+  function isAbortError(error: unknown): boolean {
+    return error instanceof Error && error.name === "AbortError";
+  }
+
   async function loadPrivateProfile(accountId: string) {
+    loadAbortController?.abort();
+    const controller = new AbortController();
+    loadAbortController = controller;
+    const request = accountRequestGuard.begin(accountId);
+    const isCurrentRequest = () =>
+      loadAbortController === controller &&
+      accountRequestGuard.isCurrent(request, activeAccountId);
+    let focusReturnedLocation = false;
+    loadedProfileAccountId = null;
     isLoadingProfile = true;
     profileError = null;
+    draftMessage = null;
     saveMessage = null;
     try {
-      const profile = await getOwnGarnrolleProfile();
+      const profile = await getOwnGarnrolleProfile(controller.signal);
+      if (!isCurrentRequest()) return;
       if (profile.id !== accountId) {
         throw new Error("profile-account-mismatch");
       }
@@ -223,10 +308,15 @@
       const returned = returnedMapLocation(accountId);
       if (returned) {
         selectedLocation = returned;
-        saveMessage =
-          "Ort übernommen. Prüfe Adresse und Sichtbarkeit und speichere anschließend.";
+        clearLocation = false;
+        draftMessage =
+          "Privater Kartenanker übernommen, aber noch nicht gespeichert. Wähle nun die öffentliche Sichtbarkeit und speichere deine Garnrolle.";
+        focusReturnedLocation = true;
       }
+      loadedProfileAccountId = accountId;
     } catch (error) {
+      if (!isCurrentRequest() || isAbortError(error)) return;
+      loadedProfileAccountId = null;
       if (error instanceof ApiRequestError && error.status === 401) {
         profileError =
           "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.";
@@ -235,7 +325,19 @@
           "Deine Garnrolle konnte nicht vollständig geladen werden. Bitte lade die Seite neu.";
       }
     } finally {
-      isLoadingProfile = false;
+      if (isCurrentRequest()) {
+        isLoadingProfile = false;
+        loadAbortController = null;
+        if (focusReturnedLocation) {
+          await tick();
+          if (
+            accountRequestGuard.isCurrent(request, activeAccountId) &&
+            loadedProfileAccountId === accountId
+          ) {
+            locationButton?.focus();
+          }
+        }
+      }
     }
   }
 
@@ -248,10 +350,24 @@
   }
 
   async function chooseMapLocation() {
+    clearLocation = false;
+    draftMessage = null;
     saveMessage = null;
     profileError = null;
     saveDraftForMap();
     await goto("/map?compose=garnrolle");
+  }
+
+  async function removeMapLocation() {
+    selectedLocation = null;
+    clearLocation = true;
+    visibilityChoice = "not_on_map";
+    profileError = null;
+    saveMessage = null;
+    draftMessage =
+      "Kartenanker zum Entfernen vorgemerkt. Die öffentliche Sichtbarkeit wurde deshalb auf „Privat“ gesetzt. Noch nicht gespeichert.";
+    await tick();
+    locationButton?.focus();
   }
 
   function profileTags(): string[] {
@@ -271,7 +387,7 @@
         return "Dein Konto darf die Garnrolle derzeit nicht bearbeiten.";
       }
       if (error.status === 400) {
-        return "Bitte prüfe Name, Adresse, Ort und Sichtbarkeit.";
+        return "Bitte prüfe Anzeigename, Kartenanker und Sichtbarkeit.";
       }
     }
     return "Die Garnrolle konnte nicht gespeichert werden. Bitte versuche es erneut.";
@@ -279,35 +395,68 @@
 
   async function handleSave(event: SubmitEvent) {
     event.preventDefault();
-    profileError = null;
-    saveMessage = null;
     if (!canSave || !activeAccountId) return;
+
+    profileError = null;
+    draftMessage = null;
+    saveMessage = null;
+    const savingAccountId = activeAccountId;
+    saveAbortController?.abort();
+    const controller = new AbortController();
+    saveAbortController = controller;
+    const request = saveRequestGuard.begin(savingAccountId);
+    const isCurrentSave = () =>
+      saveAbortController === controller &&
+      saveRequestGuard.isCurrent(request, activeAccountId) &&
+      loadedProfileAccountId === savingAccountId;
+    const normalizedAddress = address.trim();
+    const addressChanged = normalizedAddress !== initialAddress;
+    const addressPatch =
+      addressTouched && addressChanged
+        ? normalizedAddress
+          ? { address: normalizedAddress }
+          : { clear_address: true }
+        : {};
 
     isSaving = true;
     try {
-      await updateOwnGarnrolle({
-        title: displayName.trim(),
-        summary: summary.trim() || undefined,
-        tags: profileTags(),
-        address: address.trim() || undefined,
-        location: selectedLocation ?? undefined,
-        map_state: visibilityChoice,
-        radius_m: visibilityChoice === "radius" ? radiusM : undefined,
-      });
-      if (browser) {
-        sessionStorage.removeItem(draftStorageKey(activeAccountId));
-      }
+      const savedProfile = await updateOwnGarnrolle(
+        {
+          title: displayName.trim(),
+          summary: summary.trim() || undefined,
+          tags: profileTags(),
+          ...addressPatch,
+          location: selectedLocation ?? undefined,
+          ...(clearLocation ? { clear_location: true } : {}),
+          map_state: visibilityChoice,
+          radius_m: visibilityChoice === "radius" ? radiusM : undefined,
+        },
+        controller.signal,
+      );
+      if (!isCurrentSave()) return;
+
+      applyProfile(savedProfile);
+      if (browser) clearStoredPrivateDraft(savingAccountId);
       await invalidateAll();
-      saveMessage = "Deine Garnrolle wurde gespeichert.";
+      if (!isCurrentSave()) return;
+
+      saveMessage =
+        "Deine Garnrolle wurde gespeichert. Du kannst ihre Sichtbarkeit jederzeit ändern.";
+      if (!isCurrentSave()) return;
       await goto("/settings#meine-garnrolle", {
         replaceState: true,
         noScroll: true,
         keepFocus: true,
       });
     } catch (error) {
-      profileError = describeSaveError(error);
+      if (isCurrentSave() && !isAbortError(error)) {
+        profileError = describeSaveError(error);
+      }
     } finally {
-      isSaving = false;
+      if (isCurrentSave()) {
+        isSaving = false;
+        saveAbortController = null;
+      }
     }
   }
 </script>
@@ -330,7 +479,8 @@
   {#if !$authStore.authenticated}
     <div class="empty-card" data-testid="my-garnrolle-anonymous">
       <p>
-        Du bist noch nicht angemeldet. Nach dem Login entsteht deine Garnrolle.
+        Du bist noch nicht angemeldet. Bei der Registrierung wird deine
+        Garnrolle angelegt; nach dem Login kannst du sie hier einrichten.
       </p>
       <a class="btn btn-primary" href="/login">Login starten</a>
     </div>
@@ -341,21 +491,17 @@
         <p>{visibility.description}</p>
         {#if accountsLoadError}
           <p class="warn">
-            Garnrollen-Daten konnten nicht geladen werden: {accountsLoadError}
+            Die öffentliche Garnrollenansicht konnte nicht geladen werden: {accountsLoadError}
+            Das private Profil bleibt nach erfolgreichem Laden bearbeitbar.
           </p>
         {:else if !ownGarnrolle}
           <p class="warn">
-            Deine Sitzung ist aktiv, aber der zugehörige Garnrollen-Datensatz
-            fehlt. Speichern ist deshalb gesperrt.
+            Der öffentliche Garnrollen-Datensatz fehlt derzeit. Das private
+            Profil bleibt bearbeitbar, sobald es vollständig geladen ist.
           </p>
         {/if}
       </div>
-      <a
-        class="btn"
-        href={mapHref}
-        aria-disabled={!visibility.canZoomToMap}
-        data-testid="my-garnrolle-map-link"
-      >
+      <a class="btn" href={mapHref} data-testid="my-garnrolle-map-link">
         {visibility.canZoomToMap ? "Auf Karte zeigen" : "Karte öffnen"}
       </a>
     </div>
@@ -365,8 +511,12 @@
       aria-describedby="my-garnrolle-save-note"
       on:submit={handleSave}
     >
-      <fieldset disabled={isLoadingProfile || isSaving}>
-        <legend>Garnrolle beschreiben</legend>
+      <fieldset disabled={formDisabled}>
+        <legend>1. Garnrolle beschreiben</legend>
+        <p class="field-intro">
+          Nur der Anzeigename ist erforderlich. Alles Weitere kannst du später
+          ergänzen.
+        </p>
         <label>
           Anzeigename
           <input
@@ -407,17 +557,72 @@
         </label>
       </fieldset>
 
-      <fieldset disabled={isLoadingProfile || isSaving}>
-        <legend>Garnrolle auf Karte setzen</legend>
+      <fieldset disabled={formDisabled}>
+        <legend>2. Privaten Kartenanker wählen</legend>
+        <p class="field-intro">
+          Der Kartenanker ist zunächst privat. Erst deine Auswahl im nächsten
+          Schritt bestimmt, ob und wie daraus eine öffentliche Position wird.
+        </p>
+
+        <div class="location-card" data-testid="garnrolle-location-state">
+          {#if selectedLocation}
+            <div>
+              <strong>Privater Kartenanker gewählt</strong>
+              <small>
+                {visibilityChoice === "not_on_map"
+                  ? "Der Punkt bleibt vollständig unsichtbar."
+                  : "Dieser Punkt ist die Grundlage deiner gewählten öffentlichen Darstellung."}
+              </small>
+            </div>
+            <div class="actions">
+              <button
+                bind:this={locationButton}
+                type="button"
+                class="btn"
+                on:click={chooseMapLocation}
+              >
+                Punkt ändern
+              </button>
+              <button type="button" class="btn" on:click={removeMapLocation}>
+                Kartenanker entfernen
+              </button>
+            </div>
+          {:else}
+            <div>
+              <strong>Noch kein Kartenanker gewählt</strong>
+              <small>
+                Wähle den passenden Punkt selbst auf der Karte. Eine Adresse
+                wird nicht automatisch in eine Position umgewandelt.
+              </small>
+            </div>
+            <button
+              bind:this={locationButton}
+              type="button"
+              class="btn btn-primary"
+              on:click={chooseMapLocation}
+              data-testid="choose-garnrolle-location"
+            >
+              Punkt auf Karte wählen
+            </button>
+          {/if}
+        </div>
+
         <label>
-          Adresse
+          Adresse oder Ortsnotiz <span class="optional">privat, optional</span>
           <input
             bind:value={address}
+            on:input={() => (addressTouched = true)}
             maxlength="500"
-            placeholder="Straße, Hausnummer, Ort"
+            placeholder="z. B. Stadtteil oder Treffpunkt"
           />
         </label>
+      </fieldset>
 
+      <fieldset disabled={formDisabled}>
+        <legend>3. Öffentliche Sichtbarkeit wählen</legend>
+        <p class="field-intro">
+          Du kannst diese Entscheidung jederzeit ändern.
+        </p>
         <div class="radio-group" role="radiogroup" aria-label="Sichtbarkeit">
           <label class="radio-card">
             <input
@@ -426,70 +631,60 @@
               value="not_on_map"
             />
             <span>
-              <strong>Noch nicht auf der Karte</strong>
-              <small>Keine öffentliche Kartenposition.</small>
-            </span>
-          </label>
-          <label class="radio-card">
-            <input type="radio" bind:group={visibilityChoice} value="exact" />
-            <span>
-              <strong>Exakt sichtbar</strong>
-              <small>Der von dir gewählte Ort wird öffentlich sichtbar.</small>
+              <strong>Privat – nicht öffentlich auf der Karte</strong>
+              <small
+                >Ein gewählter Kartenanker bleibt gespeichert, aber unsichtbar.</small
+              >
             </span>
           </label>
           <label class="radio-card">
             <input type="radio" bind:group={visibilityChoice} value="radius" />
             <span>
-              <strong>Im Umkreis sichtbar</strong>
-              <small>
-                Die öffentliche Position wird innerhalb des gewählten Umkreises
-                versetzt.
-              </small>
+              <strong>Öffentlich ungefähr</strong>
+              <small
+                >Gezeigt wird nur eine versetzte Position innerhalb des
+                gewählten Umkreises.</small
+              >
+            </span>
+          </label>
+          <label class="radio-card">
+            <input type="radio" bind:group={visibilityChoice} value="exact" />
+            <span>
+              <strong>Öffentlich exakt</strong>
+              <small>Der gewählte Kartenanker wird genau veröffentlicht.</small>
             </span>
           </label>
         </div>
 
-        {#if visibilityChoice !== "not_on_map"}
-          <div class="location-card" data-testid="garnrolle-location-state">
-            {#if selectedLocation}
-              <div>
-                <strong>Ort gewählt</strong>
-                <small>Die genaue Position ist auf der Karte gesetzt.</small>
-              </div>
-              <button type="button" class="btn" on:click={chooseMapLocation}>
-                Ort ändern
-              </button>
-            {:else}
-              <div>
-                <strong>Noch kein Ort gewählt</strong>
-                <small>
-                  Die Adresse wird nicht automatisch in eine Position
-                  umgewandelt. Wähle den passenden Punkt selbst auf der Karte.
-                </small>
-              </div>
-              <button
-                type="button"
-                class="btn btn-primary"
-                on:click={chooseMapLocation}
-                data-testid="choose-garnrolle-location"
-              >
-                Ort auf Karte wählen
-              </button>
-            {/if}
-          </div>
+        {#if visibilityChoice !== "not_on_map" && !selectedLocation}
+          <p class="form-message hint" role="status">
+            Für diese öffentliche Sichtbarkeit fehlt noch ein Kartenanker.
+          </p>
         {/if}
 
         {#if visibilityChoice === "radius"}
           <label>
-            Radius in Metern
+            Ungefährer Umkreis in Metern
             <input
               type="number"
               min="50"
               max="5000"
-              step="50"
+              step="1"
               bind:value={radiusM}
+              aria-invalid={!radiusIsValid}
+              aria-describedby="garnrolle-radius-help"
             />
           </label>
+          <p
+            id="garnrolle-radius-help"
+            class={radiusIsValid
+              ? "field-intro"
+              : "field-intro form-message error"}
+          >
+            {radiusIsValid
+              ? "Erlaubt sind 50 bis 5.000 Meter."
+              : "Bitte wähle einen Umkreis zwischen 50 und 5.000 Metern."}
+          </p>
         {/if}
       </fieldset>
 
@@ -503,6 +698,15 @@
         </p>
       {/if}
 
+      {#if draftMessage}
+        <p
+          class="form-message hint"
+          role="status"
+          data-testid="garnrolle-draft-status"
+        >
+          {draftMessage}
+        </p>
+      {/if}
       {#if profileError}
         <p
           class="form-message error"
@@ -529,15 +733,15 @@
           disabled={!canSave}
           data-testid="save-garnrolle"
         >
-          {isSaving ? "Wird gespeichert…" : "Speichern"}
+          {isSaving ? "Garnrolle wird gespeichert…" : "Garnrolle speichern"}
         </button>
       </div>
       <p id="my-garnrolle-save-note" class="muted">
         Öffentlich sind Anzeigename, Kurzbeschreibung, Fähigkeiten, Güter und
-        Interessen. Deine Adresse bleibt privat. Bei „Exakt sichtbar“ ist der
-        gewählte Ort öffentlich; bei „Im Umkreis sichtbar“ nur eine versetzte
-        Näherung; bei „Noch nicht auf der Karte“ keine Position. Adresse und Ort
-        werden nicht automatisch abgeglichen.
+        Interessen. Adresse oder Ortsnotiz bleiben privat. Bei „Öffentlich
+        exakt“ wird der Kartenanker genau gezeigt, bei „Öffentlich ungefähr“ nur
+        eine versetzte Näherung und bei „Privat“ gar keine Position. Kartenanker
+        und Adressnotiz werden nicht automatisch abgeglichen.
       </p>
     </form>
   {/if}
@@ -585,8 +789,12 @@
     background: rgba(106, 166, 255, 0.16);
   }
 
-  .state-pill[data-state="not_on_map"] {
+  .state-pill[data-state="private"] {
     background: rgba(255, 255, 255, 0.05);
+  }
+
+  .state-pill[data-state="unknown"] {
+    background: rgba(255, 210, 138, 0.1);
   }
 
   .status-card,
@@ -621,9 +829,20 @@
     color: #ffd28a;
   }
 
-  .muted {
+  .muted,
+  .field-intro {
     color: var(--muted, #9aa4b2);
     font-size: 0.92rem;
+  }
+
+  .field-intro {
+    margin: 0;
+  }
+
+  .optional {
+    color: var(--muted, #9aa4b2);
+    font-size: 0.82rem;
+    font-weight: 400;
   }
 
   .garnrolle-form {
@@ -699,6 +918,11 @@
     border: 1px solid rgba(84, 225, 166, 0.7);
   }
 
+  .form-message.hint {
+    background: rgba(255, 210, 138, 0.08);
+    border: 1px solid rgba(255, 210, 138, 0.55);
+  }
+
   .actions {
     display: flex;
     flex-wrap: wrap;
@@ -725,8 +949,18 @@
     color: #0f1115;
   }
 
-  .btn:disabled,
-  .btn[aria-disabled="true"] {
+  .btn:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: 3px solid var(--accent, #6aa6ff);
+    outline-offset: 2px;
+  }
+
+  .radio-card:focus-within {
+    border-color: var(--accent, #6aa6ff);
+  }
+
+  .btn:disabled {
     cursor: not-allowed;
     opacity: 0.55;
   }

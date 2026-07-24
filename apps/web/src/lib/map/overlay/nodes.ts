@@ -1,6 +1,6 @@
 import type { Map as MapLibreMap, Marker, MarkerOptions } from "maplibre-gl";
 import type { MapEntityViewModel } from "$lib/map/types";
-import { ICONS } from "$lib/ui/icons";
+import { garnrolleIcon } from "$lib/ui/icons";
 
 function hasRenderablePosition(item: MapEntityViewModel): boolean {
   return (
@@ -143,7 +143,7 @@ export class NodesOverlay {
         if (markerCategory === "account") {
           const icon = document.createElement("img");
           icon.className = "marker-account__icon";
-          icon.src = ICONS.garnrolle;
+          icon.src = garnrolleIcon;
           icon.alt = "";
           icon.setAttribute("aria-hidden", "true");
           icon.draggable = false;
