@@ -18,7 +18,10 @@ type Profile = {
 async function installProfileRoute(
   page: Page,
   profile: Profile,
-  patchHandler?: (route: Route, payload: Record<string, unknown>) => Promise<void>,
+  patchHandler?: (
+    route: Route,
+    payload: Record<string, unknown>,
+  ) => Promise<void>,
 ) {
   await page.route("**/api/accounts/me/profile", async (route) => {
     if (route.request().method() === "GET") {
@@ -136,7 +139,9 @@ test.describe("Garnrolle update safety", () => {
     await expect(save).toBeEnabled();
 
     await save.click();
-    await expect(section.locator('[data-testid="garnrolle-error"]')).toBeVisible();
+    await expect(
+      section.locator('[data-testid="garnrolle-error"]'),
+    ).toBeVisible();
     await expect(save).toBeEnabled();
 
     await save.click();
@@ -157,6 +162,8 @@ test.describe("Garnrolle update safety", () => {
     await expect(
       section.locator('[data-testid="my-garnrolle-status"]'),
     ).toContainText("private Profil bleibt bearbeitbar");
-    await expect(section.locator('[data-testid="save-garnrolle"]')).toBeEnabled();
+    await expect(
+      section.locator('[data-testid="save-garnrolle"]'),
+    ).toBeEnabled();
   });
 });
