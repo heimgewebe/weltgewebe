@@ -165,6 +165,25 @@ pub struct OllamaEmbeddingProvider {
     runtime_identity: String,
 }
 
+fn normalize_sha256_digest(value: &str) -> Option<&str> {
+    let digest = value.strip_prefix("sha256:").unwrap_or(value);
+    (digest.len() == 64
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
+    .then_some(digest)
+}
+
+fn sha256_digests_match(observed: &str, expected: &str) -> bool {
+    matches!(
+        (
+            normalize_sha256_digest(observed),
+            normalize_sha256_digest(expected),
+        ),
+        (Some(observed), Some(expected)) if observed == expected
+    )
+}
+
 impl OllamaEmbeddingProvider {
     pub fn new(
         base_url: &str,
@@ -304,7 +323,7 @@ impl OllamaEmbeddingProvider {
             .and_then(|model| model.get("digest"))
             .and_then(Value::as_str)
             .ok_or(EmbeddingProviderError::IdentityMismatch)?;
-        if digest != self.model_revision {
+        if !sha256_digests_match(digest, &self.model_revision) {
             return Err(EmbeddingProviderError::IdentityMismatch);
         }
         let version_response = self.object("api/version", None).await?;
@@ -569,10 +588,11 @@ impl ProjectionWorker {
         if identity.is_none() {
             anyhow::bail!("search generation identity mismatch");
         }
-        // A previous bounded outage may have exhausted retries. Re-running the
-        // same exact generation is the explicit catch-up action: only outage-
-        // exhausted jobs are rearmed; permanent contract failures stay failed.
-        sqlx::query("UPDATE search_projection_jobs SET state='pending', attempt_count=0, available_at=NOW(), claimed_by=NULL, claim_until=NULL, completed_at=NULL, last_error_code=NULL WHERE generation_id=$1 AND state='failed' AND last_error_code='provider_unavailable_exhausted'")
+        // A previous bounded outage may have exhausted retries, or a corrected
+        // provider identity check may make an exact pinned generation valid.
+        // Re-running that same generation is the explicit catch-up action;
+        // unrelated permanent contract failures stay failed.
+        sqlx::query("UPDATE search_projection_jobs SET state='pending', attempt_count=0, available_at=NOW(), claimed_by=NULL, claim_until=NULL, completed_at=NULL, last_error_code=NULL WHERE generation_id=$1 AND state='failed' AND last_error_code IN ('provider_unavailable_exhausted','provider_identity_mismatch')")
             .bind(spec.generation_id).execute(&mut *tx).await?;
         let inserted = sqlx::query("INSERT INTO search_projection_jobs (generation_id,node_id,source_version,source_revision,operation) \
             SELECT $1, v.node_id,v.source_version,v.source_revision,'upsert' FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id \
@@ -1023,8 +1043,9 @@ impl ProjectionWorker {
 #[cfg(test)]
 mod tests {
     use super::{
-        http_host_header, http_response_complete, EmbeddingProvider, EmbeddingProviderError,
-        GenerationSpec, OllamaEmbeddingProvider, SearchDocument,
+        http_host_header, http_response_complete, normalize_sha256_digest, sha256_digests_match,
+        EmbeddingProvider, EmbeddingProviderError, GenerationSpec, OllamaEmbeddingProvider,
+        SearchDocument,
     };
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
@@ -1248,6 +1269,31 @@ mod tests {
         }
     }
 
+    #[test]
+    fn sha256_digest_normalization_accepts_only_optional_lowercase_prefix() {
+        const DIGEST: &str = "df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907";
+        assert_eq!(normalize_sha256_digest(DIGEST), Some(DIGEST));
+        let prefixed = format!("sha256:{DIGEST}");
+        assert_eq!(normalize_sha256_digest(&prefixed), Some(DIGEST));
+        assert!(sha256_digests_match(DIGEST, &prefixed));
+        assert!(sha256_digests_match(&prefixed, DIGEST));
+        assert!(!sha256_digests_match(
+            "ef5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907",
+            &prefixed,
+        ));
+
+        for malformed in [
+            "sha256:",
+            "sha256:ABCDEF",
+            "SHA256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907",
+            "sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff90g",
+            "sha256:sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907",
+        ] {
+            assert_eq!(normalize_sha256_digest(malformed), None);
+            assert!(!sha256_digests_match(malformed, &prefixed));
+        }
+    }
+
     #[tokio::test]
     #[ignore = "requires explicit T005 live Ollama identity environment"]
     async fn ollama_boundary_embeds_against_explicit_live_loopback() {
@@ -1300,7 +1346,7 @@ mod tests {
                 let request = std::str::from_utf8(&request[..count]).expect("request utf8");
                 let (body, chunked) = if request.starts_with("GET /api/tags ") {
                     (
-                        r#"{"models":[{"name":"test-model","digest":"sha256:exact"}]}"#,
+                        r#"{"models":[{"name":"test-model","digest":"df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907"}]}"#,
                         false,
                     )
                 } else if request.starts_with("GET /api/version ") {
@@ -1328,7 +1374,7 @@ mod tests {
         let provider = OllamaEmbeddingProvider::new(
             &origin,
             "test-model".into(),
-            "sha256:exact".into(),
+            "sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907".into(),
             format!("ollama:test-runtime@http://127.0.0.1:{port}"),
         )
         .expect("provider");
