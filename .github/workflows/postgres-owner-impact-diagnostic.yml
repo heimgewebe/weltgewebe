@@ -30,35 +30,32 @@ jobs:
           path = Path("apps/api/tests/db_semantic_search_projection_worker.rs")
           text = path.read_text(encoding="utf-8")
 
-          old_cleanup = '''    sqlx::query("DELETE FROM domain_accounts WHERE id='owner-private'")
-              .execute(pool)
-              .await
-              .expect("remove prior private-owner account");
-          '''
-          new_cleanup = '''    sqlx::query("DELETE FROM domain_accounts WHERE id IN ('owner-private','owner-a','owner-b')")
-              .execute(pool)
-              .await
-              .expect("remove prior private-owner accounts");
-          '''
-          if text.count(old_cleanup) != 1:
-              raise SystemExit("unexpected owner cleanup anchor count")
-          text = text.replace(old_cleanup, new_cleanup, 1)
+          old_query = "DELETE FROM domain_accounts WHERE id='owner-private'"
+          new_query = "DELETE FROM domain_accounts WHERE id IN ('owner-private','owner-a','owner-b')"
+          if text.count(old_query) != 1:
+              raise SystemExit(f"unexpected owner cleanup query count: {text.count(old_query)}")
+          text = text.replace(old_query, new_query, 1)
 
-          loop_anchor = '''    for (index, (id, kind, title, payload, visibility, embedding)) in nodes.iter().enumerate() {
-          '''
-          owner_setup = '''    sqlx::query(
-              "INSERT INTO domain_accounts (id,title,disabled) VALUES \
-               ('owner-a','Owner A',FALSE),('owner-b','Owner B',FALSE)",
+          old_message = "remove prior private-owner account"
+          new_message = "remove prior private-owner accounts"
+          if text.count(old_message) != 1:
+              raise SystemExit(f"unexpected owner cleanup message count: {text.count(old_message)}")
+          text = text.replace(old_message, new_message, 1)
+
+          loop_line = "    for (index, (id, kind, title, payload, visibility, embedding)) in nodes.iter().enumerate() {\n"
+          owner_setup = (
+              "    sqlx::query(\n"
+              "        \"INSERT INTO domain_accounts (id,title,disabled) VALUES \\\n"
+              "         ('owner-a','Owner A',FALSE),('owner-b','Owner B',FALSE)\",\n"
+              "    )\n"
+              "    .execute(&pool)\n"
+              "    .await\n"
+              "    .expect(\"insert active T006 owner accounts\");\n\n"
+              + loop_line
           )
-          .execute(&pool)
-          .await
-          .expect("insert active T006 owner accounts");
-
-              for (index, (id, kind, title, payload, visibility, embedding)) in nodes.iter().enumerate() {
-          '''
-          if text.count(loop_anchor) != 1:
-              raise SystemExit("unexpected T006 node loop anchor count")
-          text = text.replace(loop_anchor, owner_setup, 1)
+          if text.count(loop_line) != 1:
+              raise SystemExit(f"unexpected T006 node loop count: {text.count(loop_line)}")
+          text = text.replace(loop_line, owner_setup, 1)
           path.write_text(text, encoding="utf-8")
           PY
 
