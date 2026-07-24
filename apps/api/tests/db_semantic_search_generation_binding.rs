@@ -281,13 +281,12 @@ async fn visibility_cutover_does_not_version_or_enqueue_legacy_generations() {
     .fetch_all(&pool)
     .await
     .expect("read legacy versions before migration");
-    let jobs_before: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM search_projection_jobs WHERE generation_id=$1",
-    )
-    .bind(legacy_generation)
-    .fetch_one(&pool)
-    .await
-    .expect("read legacy jobs before migration");
+    let jobs_before: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM search_projection_jobs WHERE generation_id=$1")
+            .bind(legacy_generation)
+            .fetch_one(&pool)
+            .await
+            .expect("read legacy jobs before migration");
 
     sqlx::raw_sql(include_str!(
         "../migrations/20260724000002_semantic_search_projection_privacy_boundary.up.sql"
@@ -303,13 +302,12 @@ async fn visibility_cutover_does_not_version_or_enqueue_legacy_generations() {
     .await
     .expect("read legacy versions after migration");
     assert_eq!(versions_after, versions_before);
-    let jobs_after: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM search_projection_jobs WHERE generation_id=$1",
-    )
-    .bind(legacy_generation)
-    .fetch_one(&pool)
-    .await
-    .expect("read legacy jobs after migration");
+    let jobs_after: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM search_projection_jobs WHERE generation_id=$1")
+            .bind(legacy_generation)
+            .fetch_one(&pool)
+            .await
+            .expect("read legacy jobs after migration");
     assert_eq!(jobs_after, jobs_before);
 
     let public_projection_survives: bool = sqlx::query_scalar(
@@ -335,13 +333,12 @@ async fn visibility_cutover_does_not_version_or_enqueue_legacy_generations() {
     .execute(&pool)
     .await
     .expect("mutate post-migration legacy node");
-    let legacy_job_count: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM search_projection_jobs WHERE generation_id=$1",
-    )
-    .bind(legacy_generation)
-    .fetch_one(&pool)
-    .await
-    .expect("read post-migration legacy jobs");
+    let legacy_job_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM search_projection_jobs WHERE generation_id=$1")
+            .bind(legacy_generation)
+            .fetch_one(&pool)
+            .await
+            .expect("read post-migration legacy jobs");
     assert_eq!(legacy_job_count, jobs_before);
 
     let canonical_revision_generations: i64 = sqlx::query_scalar(
