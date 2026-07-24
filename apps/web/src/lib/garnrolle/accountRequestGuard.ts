@@ -13,9 +13,9 @@ export type AccountRequestGuard = {
 };
 
 /**
- * Keeps asynchronous account-bound reads from applying after the authenticated
- * account changes. Starting a new read or invalidating the guard makes every
- * earlier token stale.
+ * Keeps asynchronous account-bound reads and writes from applying after the
+ * authenticated account changes. Starting a new operation or invalidating the
+ * guard makes every earlier token stale.
  */
 export function createAccountRequestGuard(): AccountRequestGuard {
   let generation = 0;
