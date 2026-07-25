@@ -8,6 +8,8 @@
 -- The refusal is the first statement, so a rejected downgrade mutates nothing.
 -- Worker writes and account lifecycle mutations share the same account-first
 -- lock order; rollback must not remove either side of that concurrency contract.
+-- Final validation is performed after merging the current main branch so the
+-- required checks exercise the exact merge tree rather than an older base.
 
 DO $$
 BEGIN
