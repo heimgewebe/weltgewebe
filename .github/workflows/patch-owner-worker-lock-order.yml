@@ -1,5 +1,6 @@
 ---
 name: Patch owner worker lock order
+# Second synchronize event executes the workflow after its definition exists.
 
 "on":
   pull_request:
