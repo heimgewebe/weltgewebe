@@ -356,9 +356,12 @@ test.describe("Map Interaction & Context Panel", () => {
       )
       .toBe(true);
 
-    // The same labels remain fully readable when the panel switches to a
-    // narrow mobile layout; they wrap instead of being silently ellipsized.
+    // Mobile hides tabs in the compact card. Open the full sheet before
+    // checking that the same labels remain readable without ellipsis.
     await page.setViewportSize({ width: 320, height: 667 });
+    await page.getByTestId("sheet-handle").click();
+    await expect(panel).toHaveAttribute("data-sheet-stage", "full");
+    await expect(tabList).toBeVisible();
     await expect
       .poll(() =>
         tabList.evaluate(
@@ -377,6 +380,11 @@ test.describe("Map Interaction & Context Panel", () => {
           ),
       )
       .toBe(true);
+
+    // Opening the mobile sheet focuses its handle. Return focus to the last
+    // tab before verifying the tablist's own wraparound behavior.
+    await bearbeitenTab.focus();
+    await expect(bearbeitenTab).toBeFocused();
 
     // ArrowRight from the last tab wraps to the first tab.
     await page.keyboard.press("ArrowRight");

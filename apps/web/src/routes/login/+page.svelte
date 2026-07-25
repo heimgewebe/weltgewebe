@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { authStore } from '$lib/auth/store';
+  import { authStore } from "$lib/auth/store";
+  import "$lib/styles/page-system.css";
 
-  let email = '';
+  let email = "";
   let error: string | null = null;
   let success = false;
   let loading = false;
@@ -14,10 +15,10 @@
       await authStore.requestLogin(email);
       success = true;
     } catch (e) {
-      if (e instanceof Error && e.message.includes('disabled')) {
-        error = 'Öffentlicher Login ist derzeit deaktiviert.';
+      if (e instanceof Error && e.message.includes("disabled")) {
+        error = "Öffentlicher Login ist derzeit deaktiviert.";
       } else {
-        error = 'Login fehlgeschlagen. Bitte versuche es erneut.';
+        error = "Login fehlgeschlagen. Bitte versuche es erneut.";
       }
       console.error(e);
     } finally {
@@ -30,42 +31,59 @@
   <title>Login</title>
 </svelte:head>
 
-<div class="col" style="gap:1.5rem; padding:1.5rem; max-width:400px; margin:0 auto; margin-top: 10vh;">
-  <div class="panel col" style="gap:1rem;">
-    <h1 style="margin:0; font-size:1.5rem;">Login</h1>
+<main class="wg-page" data-testid="login-page">
+  <div class="wg-page__shell wg-page__shell--narrow">
+    <section
+      class="wg-card wg-card--padded wg-stack"
+      aria-labelledby="login-heading"
+    >
+      <header class="wg-stack">
+        <p class="wg-eyebrow">Gewebekonto</p>
+        <h1 id="login-heading" class="wg-title wg-title--compact">Login</h1>
+      </header>
 
-    {#if success}
-      <div class="panel" style="border-color:var(--color-theme-2, #2ecc71);">
-        <p><strong>Postfach prüfen!</strong></p>
-        <p>Falls deine E-Mail registriert ist, haben wir dir einen Login-Link gesendet.</p>
-      </div>
-    {:else}
-      <form on:submit|preventDefault={handleSubmit} class="col" style="gap:1rem;">
-        <div class="col">
-          <label for="email" style="font-size:0.9rem; color:var(--muted);">E-Mail</label>
-          <input
-            id="email"
-            type="email"
-            bind:value={email}
-            placeholder="du@example.com"
-            required
-            disabled={loading}
-            style="padding:0.5rem; border-radius:6px; border:1px solid #263240; background:#101821; color:white;"
-          />
+      {#if success}
+        <div class="wg-state wg-state--success" role="status">
+          <p><strong>Postfach prüfen!</strong></p>
+          <p>
+            Falls deine E-Mail registriert ist, haben wir dir einen Login-Link
+            gesendet.
+          </p>
         </div>
-
-        {#if error}
-          <div style="color:var(--color-danger, #ff6b6b); font-size:0.9rem;">
-            {error}
+      {:else}
+        <form on:submit|preventDefault={handleSubmit} class="wg-stack">
+          <div class="wg-field">
+            <label class="wg-label" for="email">E-Mail</label>
+            <input
+              class="wg-control"
+              id="email"
+              type="email"
+              bind:value={email}
+              placeholder="du@example.com"
+              autocomplete="email"
+              required
+              disabled={loading}
+              aria-describedby={error ? "login-error" : undefined}
+            />
           </div>
-        {/if}
 
-        <div class="row" style="justify-content:flex-end;">
-          <button type="submit" class="btn" disabled={loading || !email}>
-            {#if loading}Wird gesendet...{:else}Login-Link senden{/if}
-          </button>
-        </div>
-      </form>
-    {/if}
+          {#if error}
+            <div id="login-error" class="wg-state wg-state--error" role="alert">
+              {error}
+            </div>
+          {/if}
+
+          <div class="wg-actions">
+            <button
+              type="submit"
+              class="wg-button wg-button--primary"
+              disabled={loading || !email}
+            >
+              {#if loading}Wird gesendet…{:else}Login-Link senden{/if}
+            </button>
+          </div>
+        </form>
+      {/if}
+    </section>
   </div>
-</div>
+</main>
