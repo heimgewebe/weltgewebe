@@ -51,6 +51,30 @@ test.describe("ContextPanel mobile compact and full states", () => {
     await expect(panel.locator(".tabs")).toBeHidden();
   });
 
+  test("compact mode always shows the summary instead of the previously selected tab", async ({
+    page,
+  }) => {
+    await page.locator(".map-marker").first().click();
+    const panel = page.getByTestId("context-panel");
+    const handle = page.getByTestId("sheet-handle");
+
+    await handle.click();
+    await panel.getByRole("tab", { name: "Gespräch" }).click();
+    await expect(panel.locator("#panel-gespraech")).toBeVisible();
+
+    await panel.locator(".mobile-panel-title").click();
+    await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
+    await expect(panel.getByTestId("node-compact-summary")).toBeVisible();
+    await expect(panel.locator("#panel-gespraech")).toHaveCount(0);
+
+    await handle.click();
+    await expect(panel.locator("#panel-gespraech")).toBeVisible();
+    await expect(panel.getByRole("tab", { name: "Gespräch" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
   test("Komposition starts full and can collapse through the same handle", async ({
     page,
   }) => {
@@ -104,23 +128,39 @@ test.describe("ContextPanel mobile compact and full states", () => {
     expect(transitionDuration).toBe("0s");
   });
 
-  test("orientation change keeps the open panel inside the viewport", async ({
-    page,
+  test("a coarse-pointer phone keeps the mobile sheet in landscape", async ({
+    browser,
   }) => {
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.locator(".map-marker").first().click();
-    const panel = page.getByTestId("context-panel");
-    await page.getByTestId("sheet-handle").click();
+    const context = await browser.newContext({
+      viewport: { width: 844, height: 390 },
+      hasTouch: true,
+      isMobile: true,
+    });
+    const landscapePage = await context.newPage();
+    await mockApiResponses(landscapePage, {
+      auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
+    });
+    await landscapePage.goto("/map");
+    await landscapePage.waitForSelector(".map-marker", { timeout: 10000 });
+    expect(
+      await landscapePage.evaluate(
+        () => window.matchMedia("(pointer: coarse)").matches,
+      ),
+    ).toBe(true);
+
+    await landscapePage.locator(".map-marker").first().click();
+    const panel = landscapePage.getByTestId("context-panel");
+    const handle = landscapePage.getByTestId("sheet-handle");
+    await expect(handle).toBeVisible();
+    await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
+    await handle.click();
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
 
-    await page.setViewportSize({ width: 844, height: 390 });
     const box = await panel.boundingBox();
     expect(box).not.toBeNull();
-    expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.y).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(844);
+    expect(Math.round(box!.width)).toBe(844);
     expect(box!.y + box!.height).toBeLessThanOrEqual(390);
-    await expect(page.getByTestId("sheet-handle")).toBeHidden();
+    await context.close();
   });
 
   test("switching the selected marker resets the sheet to compact", async ({
