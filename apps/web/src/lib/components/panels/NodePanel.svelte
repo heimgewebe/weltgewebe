@@ -32,6 +32,8 @@
     domainChanged: DomainChanged;
   }>();
 
+  export let compact = false;
+
   type NodeTab = "uebersicht" | "gespraech" | "verlauf" | "bearbeiten";
   let activeTab: NodeTab = "uebersicht";
   let tabs: NodeTab[] = ["uebersicht", "gespraech", "verlauf"];
@@ -319,9 +321,13 @@
 
 <div class="node-mode">
   <h3>{nodeDetails?.title || $selection?.data?.title || $selection?.id}</h3>
-  {#if summary && !editing}<p class="summary">{summary}</p>{/if}
+  {#if summary && (!editing || compact)}<p class="summary">{summary}</p>{/if}
 
-  {#if editing}
+  {#if compact}
+    <div class="compact-node-summary" data-testid="node-compact-summary">
+      <p><strong>Knotenart:</strong> {kind}</p>
+    </div>
+  {:else if editing}
     <form class="edit-form" on:submit|preventDefault={saveNode}>
       <label>
         Titel

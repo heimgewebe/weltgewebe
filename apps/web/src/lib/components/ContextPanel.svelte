@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
+  import { createEventDispatcher, onMount } from "svelte";
   import {
     selection,
     systemState,
@@ -40,6 +40,8 @@
     domainChanged: DomainChanged;
   }>();
   const DRAG_THRESHOLD_PX = 6;
+  const MOBILE_SHEET_MEDIA =
+    "(max-width: 768px), (max-height: 500px) and (pointer: coarse)";
 
   let kompositionPanel: KompositionPanelHandle | null = null;
   let sheetStage: SheetStage = "compact";
@@ -51,6 +53,17 @@
   let dragging = false;
   let dragMoved = false;
   let suppressNextHandleClick = false;
+  let mobileSheetMode = false;
+
+  onMount(() => {
+    const media = window.matchMedia(MOBILE_SHEET_MEDIA);
+    const updateMobileSheetMode = () => {
+      mobileSheetMode = media.matches;
+    };
+    updateMobileSheetMode();
+    media.addEventListener("change", updateMobileSheetMode);
+    return () => media.removeEventListener("change", updateMobileSheetMode);
+  });
 
   function derivePanelTitle(
     state: SystemState,
@@ -100,7 +113,7 @@
   }
 
   function toggleSheetStage(): void {
-    if (window.innerWidth > 768) return;
+    if (!mobileSheetMode) return;
     setSheetStage(sheetStage === "compact" ? "full" : "compact");
   }
 
@@ -113,7 +126,7 @@
   }
 
   function handleSheetPointerDown(event: PointerEvent): void {
-    if (window.innerWidth > 768) return;
+    if (!mobileSheetMode) return;
     const handle = event.currentTarget as HTMLElement;
     const aside = handle.closest<HTMLElement>('[data-testid="context-panel"]');
     if (!aside) return;
@@ -181,7 +194,7 @@
   }
 
   function handleSheetKeydown(event: KeyboardEvent): void {
-    if (window.innerWidth > 768) return;
+    if (!mobileSheetMode) return;
     if (event.key === "ArrowUp" || event.key === "End") {
       event.preventDefault();
       setSheetStage("full");
@@ -281,6 +294,7 @@
       {:else if $selection}
         {#if $selection.type === "node"}
           <NodePanel
+            compact={mobileSheetMode && sheetStage === "compact"}
             on:selectRelated={handleRelated}
             on:domainChanged={handleDomainChanged}
           />
@@ -297,10 +311,14 @@
 <style>
   .context-panel {
     position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--context-panel-width);
     z-index: var(--z-map-context-panel);
     background: var(--panel);
     color: var(--text);
-    box-shadow: var(--shadow);
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.28);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -364,14 +382,17 @@
     overscroll-behavior: contain;
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     .context-panel {
+      top: auto;
       bottom: 0;
       left: 0;
       right: 0;
+      width: auto;
       max-height: none;
       padding-bottom: env(safe-area-inset-bottom);
       border-radius: 18px 18px 0 0;
+      box-shadow: var(--shadow);
       transition: height var(--motion-ui);
     }
 
@@ -459,16 +480,6 @@
 
     .stage-compact :global(.tabs) {
       display: none;
-    }
-  }
-
-  @media (min-width: 769px) {
-    .context-panel {
-      top: 0;
-      right: 0;
-      bottom: 0;
-      width: var(--context-panel-width);
-      box-shadow: -4px 0 16px rgba(0, 0, 0, 0.28);
     }
   }
 

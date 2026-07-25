@@ -244,23 +244,31 @@
               class="proposal-filters"
               aria-label="Governance-Ereignisse filtern"
             >
-              <a class:active={!statusFilter && !eventFilter} href="/antraege"
-                >Alle</a
+              <a
+                class:active={!statusFilter && !eventFilter}
+                aria-current={!statusFilter && !eventFilter
+                  ? "page"
+                  : undefined}
+                href="/antraege">Alle</a
               >
               <a
                 class:active={statusFilter === "consent"}
+                aria-current={statusFilter === "consent" ? "page" : undefined}
                 href="/antraege?status=consent">Offen</a
               >
               <a
                 class:active={eventFilter === "veto"}
+                aria-current={eventFilter === "veto" ? "page" : undefined}
                 href="/antraege?ereignis=veto">Vetos</a
               >
               <a
                 class:active={eventFilter === "gespraech"}
+                aria-current={eventFilter === "gespraech" ? "page" : undefined}
                 href="/antraege?ereignis=gespraech">Gespräche</a
               >
               <a
                 class:active={statusFilter === "voting"}
+                aria-current={statusFilter === "voting" ? "page" : undefined}
                 href="/antraege?status=voting">Abstimmungen</a
               >
             </nav>
@@ -276,46 +284,51 @@
           <p class="wg-state wg-state--muted" role="status">
             Anträge werden geladen…
           </p>
-        {:else if proposals.length === 0}
-          <p class="wg-state">Noch liegen keine Anträge vor.</p>
-        {:else if visibleProposals.length === 0}
-          <p class="wg-state">Für diese Ansicht liegen keine Anträge vor.</p>
-        {:else}
-          <div class="proposal-list">
-            {#each visibleProposals as proposal}
-              <a
-                class="wg-card proposal-card"
-                href={`/antraege?id=${encodeURIComponent(proposal.id)}`}
-              >
-                <div class="wg-inline-spread proposal-topline">
-                  <span
-                    class:open={proposal.status === "consent" ||
-                      proposal.status === "voting"}
-                    >{statusLabel(proposal.status)}</span
-                  >
-                  <time datetime={proposal.created_at}
-                    >{new Date(proposal.created_at).toLocaleDateString(
-                      "de-DE",
-                    )}</time
-                  >
-                </div>
-                <h3>Weberstatus für {proposal.applicant_title}</h3>
-                {#if proposal.summary}<p>{proposal.summary}</p>{/if}
-                <div class="facts">
-                  <span
-                    >{proposal.veto_count} Veto{proposal.veto_count === 1
-                      ? ""
-                      : "s"}</span
-                  >
-                  <span>{proposal.yes_votes} Ja · {proposal.no_votes} Nein</span
-                  >
-                  {#if proposal.remaining_seconds !== undefined}<span
-                      >Noch {formatRemaining(proposal.remaining_seconds)}</span
-                    >{/if}
-                </div>
-              </a>
-            {/each}
-          </div>
+        {:else if !error || proposals.length > 0}
+          {#if proposals.length === 0}
+            <p class="wg-state">Noch liegen keine Anträge vor.</p>
+          {:else if visibleProposals.length === 0}
+            <p class="wg-state">Für diese Ansicht liegen keine Anträge vor.</p>
+          {:else}
+            <div class="proposal-list">
+              {#each visibleProposals as proposal}
+                <a
+                  class="wg-card proposal-card"
+                  href={`/antraege?id=${encodeURIComponent(proposal.id)}`}
+                >
+                  <div class="wg-inline-spread proposal-topline">
+                    <span
+                      class:open={proposal.status === "consent" ||
+                        proposal.status === "voting"}
+                      >{statusLabel(proposal.status)}</span
+                    >
+                    <time datetime={proposal.created_at}
+                      >{new Date(proposal.created_at).toLocaleDateString(
+                        "de-DE",
+                      )}</time
+                    >
+                  </div>
+                  <h3>Weberstatus für {proposal.applicant_title}</h3>
+                  {#if proposal.summary}<p>{proposal.summary}</p>{/if}
+                  <div class="facts">
+                    <span
+                      >{proposal.veto_count} Veto{proposal.veto_count === 1
+                        ? ""
+                        : "s"}</span
+                    >
+                    <span
+                      >{proposal.yes_votes} Ja · {proposal.no_votes} Nein</span
+                    >
+                    {#if proposal.remaining_seconds !== undefined}<span
+                        >Noch {formatRemaining(
+                          proposal.remaining_seconds,
+                        )}</span
+                      >{/if}
+                  </div>
+                </a>
+              {/each}
+            </div>
+          {/if}
         {/if}
       </section>
     </div>

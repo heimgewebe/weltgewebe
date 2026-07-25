@@ -20,6 +20,7 @@ test("login uses the shared page, form and state contracts without changing the 
   await expect(loginPage).toHaveClass(/wg-page/);
   await expect(loginPage.locator(".wg-card")).toHaveCount(1);
   await expect(loginPage.locator("[style]")).toHaveCount(0);
+  await expect(loginPage).toHaveCSS("background-image", /radial-gradient/);
 
   await page.getByLabel("E-Mail").fill("person@example.org");
   await page.getByRole("button", { name: "Login-Link senden" }).click();
@@ -63,4 +64,31 @@ test("application overview uses the same surfaces, controls and empty-state cont
     /wg-state/,
   );
   await expect(page.locator("#antrag-stellen")).toBeFocused();
+  const filters = page.getByRole("navigation", {
+    name: "Governance-Ereignisse filtern",
+  });
+  await expect(filters.getByRole("link")).toHaveCount(5);
+  await expect(filters.getByRole("link", { name: "Alle" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+});
+
+test("a proposal API failure is not presented as an empty list", async ({
+  page,
+}) => {
+  await mockApiResponses(page, { auth: { authenticated: false } });
+  await page.route("**/api/proposals**", async (route: Route) => {
+    await route.fulfill({ status: 503, body: "temporarily unavailable" });
+  });
+
+  await page.goto("/antraege");
+
+  await expect(page.getByRole("alert")).toContainText(
+    "Das Antragssystem ist vorübergehend nicht verfügbar.",
+  );
+  await expect(page.getByText("Noch liegen keine Anträge vor.")).toHaveCount(0);
+  await expect(
+    page.getByText("Für diese Ansicht liegen keine Anträge vor."),
+  ).toHaveCount(0);
 });
