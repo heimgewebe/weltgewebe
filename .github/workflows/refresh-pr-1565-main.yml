@@ -1,0 +1,35 @@
+---
+name: Refresh PR 1565 from main
+
+"on":
+  pull_request:
+    types: [edited]
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  refresh:
+    if: github.event.pull_request.number == 1565
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: feat/semantic-search-t012-production-v1
+          fetch-depth: 0
+
+      - name: Merge current main without rewriting history
+        run: |
+          set -euo pipefail
+          git config user.name "weltgewebe-ci"
+          git config user.email "weltgewebe-ci@users.noreply.github.com"
+          git fetch --no-tags origin main
+          git merge --no-ff origin/main -m "merge(main): refresh PR 1565 validation base"
+          rm .github/workflows/refresh-pr-1565-main.yml
+          git add .github/workflows/refresh-pr-1565-main.yml
+          git commit --amend --no-edit
+          git diff HEAD^1..HEAD --check
+          git push origin HEAD:feat/semantic-search-t012-production-v1
