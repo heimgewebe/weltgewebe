@@ -257,22 +257,18 @@
     >
       <div class="heading-group">
         <h2 class="desktop-panel-title">{panelTitle}</h2>
-        <h2 class="mobile-panel-heading">
-          <button
-            type="button"
-            class="mobile-panel-title"
-            aria-controls="context-panel-content"
-            aria-expanded={sheetStage === "full"}
-            aria-label={`${panelTitle}: ${
-              sheetStage === "compact"
-                ? "vollständig öffnen"
-                : "kompakt anzeigen"
-            }`}
-            on:click={toggleSheetStage}
-          >
-            <span>{panelTitle}</span>
-          </button>
-        </h2>
+        <button
+          type="button"
+          class="mobile-panel-title"
+          aria-controls="context-panel-content"
+          aria-expanded={sheetStage === "full"}
+          aria-label={`${panelTitle}: ${
+            sheetStage === "compact" ? "vollständig öffnen" : "kompakt anzeigen"
+          }`}
+          on:click={toggleSheetStage}
+        >
+          <span>{panelTitle}</span>
+        </button>
       </div>
       <button class="close-btn" on:click={closePanel} aria-label="Schließen"
         >✕</button
@@ -312,7 +308,7 @@
   }
 
   .sheet-handle,
-  .mobile-panel-heading {
+  .mobile-panel-title {
     display: none;
   }
 
@@ -331,7 +327,7 @@
   }
 
   .desktop-panel-title,
-  .mobile-panel-heading {
+  .mobile-panel-title {
     margin: 0;
     color: var(--muted);
     font-size: 0.78rem;
@@ -341,7 +337,7 @@
   }
 
   .panel-header.composition .desktop-panel-title,
-  .panel-header.composition .mobile-panel-heading {
+  .panel-header.composition .mobile-panel-title {
     color: var(--text);
     font-size: 1.1rem;
     letter-spacing: 0;
@@ -429,12 +425,15 @@
     }
 
     .desktop-panel-title {
-      display: none;
-    }
-
-    .mobile-panel-heading {
-      display: block;
-      margin: 0;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     .mobile-panel-title {

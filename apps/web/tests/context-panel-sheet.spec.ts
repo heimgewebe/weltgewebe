@@ -20,6 +20,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
     const panel = page.getByTestId("context-panel");
     const handle = page.getByTestId("sheet-handle");
     await expect(panel).toBeVisible();
+    await expect(panel.locator(".panel-header h2")).toHaveCount(1);
     await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
     await expect(handle).toHaveAttribute("aria-expanded", "false");
     await expect(panel.locator(".tabs")).toBeHidden();
