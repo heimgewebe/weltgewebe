@@ -195,6 +195,12 @@ psql_exec() {
   "${compose[@]}" exec -T db psql -v ON_ERROR_STOP=1 -U "$postgres_user" -d "$postgres_db" "$@"
 }
 
+psql_exec_sql() {
+  local sql="$1"
+  shift
+  printf '%s\n' "$sql" | psql_exec "$@"
+}
+
 if ! PREVIOUS_GENERATION_ID="$(psql_exec -Atc "SELECT generation_id FROM search_index_generations WHERE state = 'active' ORDER BY activated_at DESC LIMIT 1;")"; then
   fail "failed to capture previous active search generation"
 fi
@@ -225,7 +231,7 @@ done
 
 [[ "$expected" =~ ^[0-9]+$ && "$completed" == "$expected" ]] || fail "search generation is incomplete"
 
-probe_json="$(psql_exec -At -v gen="$GENERATION_ID" -c "SELECT json_build_object('id', p.node_id, 'title', p.title)::text FROM search_node_projections p JOIN domain_nodes n ON n.id=p.node_id WHERE p.generation_id=:'gen' AND n.search_visibility='public' AND p.status='active' AND p.semantic_state='ready' AND cardinality(p.embedding)=$DIMENSION ORDER BY p.node_id LIMIT 1;")"
+probe_json="$(psql_exec_sql "SELECT json_build_object('id', p.node_id, 'title', p.title)::text FROM search_node_projections p JOIN domain_nodes n ON n.id=p.node_id WHERE p.generation_id=:'gen' AND n.search_visibility='public' AND p.status='active' AND p.semantic_state='ready' AND cardinality(p.embedding)=$DIMENSION ORDER BY p.node_id LIMIT 1;" -At -v gen="$GENERATION_ID")"
 
 probe_node_id=""
 probe_title=""
@@ -238,12 +244,12 @@ else
   echo "Notice: active generation has no public semantic probe candidate"
 fi
 
-gate_ready="$(psql_exec -At -v gen="$GENERATION_ID" -c "SELECT weltgewebe_search_generation_activation_ready(:'gen');")"
+gate_ready="$(psql_exec_sql "SELECT weltgewebe_search_generation_activation_ready(:'gen');" -At -v gen="$GENERATION_ID")"
 [[ "$gate_ready" == "t" ]] || fail "database activation gate rejected generation"
-psql_exec -v gen="$GENERATION_ID" -c "SELECT weltgewebe_activate_search_generation(:'gen');" > /dev/null
+psql_exec_sql "SELECT weltgewebe_activate_search_generation(:'gen');" -v gen="$GENERATION_ID" > /dev/null
 
 verify_activation() {
-  identity_ok="$(psql_exec -v gen="$GENERATION_ID" -v prov="$PROVIDER" -v model="$MODEL_ID" -v rev="$MODEL_REVISION" -v rid="$RUNTIME_IDENTITY" -v dim="$DIMENSION" -Atc "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'gen' AND state='active' AND provider=:'prov' AND model_id=:'model' AND model_revision=:'rev' AND runtime_identity=:'rid' AND dimension=:'dim'::integer AND completed_nodes=expected_nodes;")"
+  identity_ok="$(psql_exec_sql "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'gen' AND state='active' AND provider=:'prov' AND model_id=:'model' AND model_revision=:'rev' AND runtime_identity=:'rid' AND dimension=:'dim'::integer AND completed_nodes=expected_nodes;" -At -v gen="$GENERATION_ID" -v prov="$PROVIDER" -v model="$MODEL_ID" -v rev="$MODEL_REVISION" -v rid="$RUNTIME_IDENTITY" -v dim="$DIMENSION")"
   [[ "$identity_ok" == "t" ]] || return 1
 
   if [[ "$semantic_probe_status" == "candidate_bound" ]]; then
@@ -280,12 +286,12 @@ rollback_activation() {
   local rollback_ok
   if [[ -n "$PREVIOUS_GENERATION_ID" ]]; then
     if [[ "$PREVIOUS_GENERATION_ID" != "$GENERATION_ID" ]]; then
-      psql_exec -v prev_gen="$PREVIOUS_GENERATION_ID" -c "SELECT weltgewebe_activate_search_generation(:'prev_gen');" > /dev/null || return 1
+      psql_exec_sql "SELECT weltgewebe_activate_search_generation(:'prev_gen');" -v prev_gen="$PREVIOUS_GENERATION_ID" > /dev/null || return 1
     fi
-    rollback_ok="$(psql_exec -At -v prev_gen="$PREVIOUS_GENERATION_ID" -v gen="$GENERATION_ID" -c "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'prev_gen' AND state='active' AND (:'prev_gen'=:'gen' OR NOT EXISTS (SELECT 1 FROM search_index_generations WHERE generation_id=:'gen' AND state='active'));")" || return 1
+    rollback_ok="$(psql_exec_sql "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'prev_gen' AND state='active' AND (:'prev_gen'=:'gen' OR NOT EXISTS (SELECT 1 FROM search_index_generations WHERE generation_id=:'gen' AND state='active'));" -At -v prev_gen="$PREVIOUS_GENERATION_ID" -v gen="$GENERATION_ID")" || return 1
   else
-    psql_exec -v gen="$GENERATION_ID" -c "BEGIN; SELECT pg_advisory_xact_lock(hashtextextended('weltgewebe.search.generation.activation', 0)); UPDATE search_index_generations SET state='ready', activated_at=NULL WHERE generation_id=:'gen' AND state='active'; COMMIT;" > /dev/null || return 1
-    rollback_ok="$(psql_exec -At -v gen="$GENERATION_ID" -c "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'gen' AND state='ready' AND NOT EXISTS (SELECT 1 FROM search_index_generations WHERE state='active');")" || return 1
+    psql_exec_sql "BEGIN; SELECT pg_advisory_xact_lock(hashtextextended('weltgewebe.search.generation.activation', 0)); UPDATE search_index_generations SET state='ready', activated_at=NULL WHERE generation_id=:'gen' AND state='active'; COMMIT;" -v gen="$GENERATION_ID" > /dev/null || return 1
+    rollback_ok="$(psql_exec_sql "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'gen' AND state='ready' AND NOT EXISTS (SELECT 1 FROM search_index_generations WHERE state='active');" -At -v gen="$GENERATION_ID")" || return 1
   fi
   [[ "$rollback_ok" == "t" ]]
 }

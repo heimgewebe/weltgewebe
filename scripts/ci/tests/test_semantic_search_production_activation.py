@@ -59,7 +59,7 @@ def test_activation_is_commit_locked_identity_bound_and_gate_first() -> None:
     assert "active generation has no public semantic probe candidate" in script
     assert "any(.items[]?; .id == $probe_id)" in script
     assert 'semantic_probe_status="candidate_bound"' in script
-    assert 'gate_ready="$(psql_exec -At -v gen=' in script
+    assert 'gate_ready="$(psql_exec_sql ' in script
     assert "rollback_activation()" in script
     assert 'rollback_status="verified"' in script
     assert "rollback could not be verified" in script
@@ -69,6 +69,27 @@ def test_activation_is_commit_locked_identity_bound_and_gate_first() -> None:
     assert "getconf _NPROCESSORS_ONLN" in script
     assert "SemantAH" in script
 
+
+
+def test_activation_routes_psql_variables_through_stdin() -> None:
+    script = ACTIVATE.read_text(encoding="utf-8")
+    helper_body = script.split("psql_exec_sql() {", 1)[1].split("\n}\n", 1)[0]
+    helper = "psql_exec_sql() {" + helper_body + "\n}\n"
+    command = (
+        r"""psql_exec() { printf 'argv=%s\n' "$*" >&2; cat; }
+"""
+        + helper
+        + """psql_exec_sql "SELECT :'gen';" -At -v gen=probe-value
+"""
+    )
+    result = subprocess.run(["bash", "-c", command], check=True, capture_output=True, text=True)
+    assert result.stdout == "SELECT :'gen';\n"
+    assert result.stderr == "argv=-At -v gen=probe-value\n"
+
+    variable_sql_lines = [line for line in script.splitlines() if ":'" in line]
+    assert variable_sql_lines
+    assert all("psql_exec_sql" in line for line in variable_sql_lines)
+    assert all(" -c " not in line and "-Atc" not in line for line in variable_sql_lines)
 
 def test_activation_derives_compose_identity_from_the_verified_release_commit() -> None:
     script = ACTIVATE.read_text(encoding="utf-8")
