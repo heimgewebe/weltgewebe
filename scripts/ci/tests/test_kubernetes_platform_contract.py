@@ -356,6 +356,15 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertFalse(workflow["concurrency"]["cancel-in-progress"])
         self.assertIn("github.event.pull_request.head.sha || github.sha", workflow["concurrency"]["group"])
         self.assertNotIn("oci-proof-cache", workflow_text)
+        for job_name in (
+            "contract",
+            "kind-gitops-proof",
+            "kind-ha-recovery-proof",
+        ):
+            checkout = workflow["jobs"][job_name]["steps"][0]
+            self.assertTrue(str(checkout["uses"]).startswith("actions/checkout@"))
+            self.assertEqual(checkout["with"]["fetch-depth"], 0)
+            self.assertIs(checkout["with"]["persist-credentials"], False)
 
         def named_steps(job_name: str) -> dict[str, dict]:
             return {
@@ -438,10 +447,18 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         ha = named_steps("kind-ha-recovery-proof")
         stage_receipt = ha["Stage HA recovery receipt"]
         self.assertEqual(stage_receipt["if"], "success()")
-        self.assertIn("build/kubernetes-platform/reuse/ha-recovery/proof.json", stage_receipt["run"])
+        self.assertIn(
+            "build/kubernetes-platform/reuse/ha-recovery/proof.json",
+            stage_receipt["run"],
+        )
+        self.assertNotIn("ha-recovery-oci-mirror", stage_receipt["run"])
         upload_receipt = ha["Upload HA recovery receipt"]
         self.assertEqual(upload_receipt["if"], "success()")
-        self.assertIn("ha-recovery-identity.json", upload_receipt["with"]["path"] )
+        self.assertIn("ha-recovery-identity.json", upload_receipt["with"]["path"])
+        self.assertIn(
+            "build/kubernetes-platform/ha-recovery-oci-mirror/*.json",
+            upload_receipt["with"]["path"],
+        )
 
         for job_name in ("kind-gitops-proof", "kind-ha-recovery-proof"):
             for step in workflow["jobs"][job_name]["steps"]:

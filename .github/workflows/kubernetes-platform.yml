@@ -58,6 +58,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
@@ -118,6 +121,9 @@ jobs:
       OCI_MIRROR_EVIDENCE: build/kubernetes-platform/kind-gitops-oci-mirror
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
@@ -297,6 +303,9 @@ jobs:
       OCI_MIRROR_EVIDENCE: build/kubernetes-platform/ha-recovery-oci-mirror
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
@@ -414,7 +423,6 @@ jobs:
           mkdir -p build/kubernetes-platform/ha-recovery
           cp -- build/kubernetes-platform/reuse/ha-recovery/proof.json \
             build/kubernetes-platform/ha-recovery/proof.json
-            build/kubernetes-platform/ha-recovery-oci-mirror/*.json
       - name: Upload HA recovery receipt
         if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
@@ -424,6 +432,7 @@ jobs:
             build/kubernetes-platform/ha-recovery-identity.json
             build/kubernetes-platform/reuse/ha-recovery/record.json
             build/kubernetes-platform/ha-recovery/proof.json
+            build/kubernetes-platform/ha-recovery-oci-mirror/*.json
           if-no-files-found: error
           retention-days: 14
       - name: Stage HA failure diagnostics
