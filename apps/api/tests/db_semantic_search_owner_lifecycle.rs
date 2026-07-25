@@ -377,3 +377,106 @@ async fn private_owner_lifecycle_is_account_bound_redacted_and_recoverable() {
             .expect("read final owner-lifecycle readiness");
     assert!(final_ready);
 }
+
+#[tokio::test]
+#[ignore = "requires T005_DATABASE_URL pointing to direct disposable PostgreSQL"]
+async fn private_worker_locks_owner_before_projection_state() {
+    let pool = pool().await;
+    migrate(&pool).await;
+    reset(&pool).await;
+
+    sqlx::query("INSERT INTO domain_accounts (id,title,disabled) VALUES ($1,'Eigentümer',FALSE)")
+        .bind(OWNER_ID)
+        .execute(&pool)
+        .await
+        .expect("create active owner for worker race proof");
+    sqlx::query(
+        "INSERT INTO domain_nodes \
+         (id,kind,title,lat,lon,payload,search_visibility,created_at,updated_at) \
+         VALUES ($1,'Werkstatt',$2,54.9,8.3,$3::jsonb,'private',clock_timestamp(),clock_timestamp())",
+    )
+    .bind(NODE_ID)
+    .bind(PRIVATE_TITLE)
+    .bind(format!(
+        r#"{{"summary":"Nur für den Eigentümer","created_by_account_id":"{OWNER_ID}"}}"#
+    ))
+    .execute(&pool)
+    .await
+    .expect("insert private node for worker race proof");
+
+    let generation_spec = exact_generation_spec();
+    let generation = generation_spec.generation_id.to_owned();
+    let projection_worker = worker(pool.clone());
+    projection_worker
+        .start_generation(generation_spec)
+        .await
+        .expect("start generation for worker race proof");
+
+    let mut version_blocker = pool.begin().await.expect("begin version blocker");
+    sqlx::query("SELECT node_id FROM search_node_versions WHERE node_id=$1 FOR UPDATE")
+        .bind(NODE_ID)
+        .fetch_one(&mut *version_blocker)
+        .await
+        .expect("lock node version before worker");
+
+    let worker_task = tokio::spawn(async move { projection_worker.claim_and_process_one().await });
+
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let waiting: bool = sqlx::query_scalar(
+                "SELECT EXISTS (\
+                   SELECT 1 FROM pg_stat_activity \
+                   WHERE pid <> pg_backend_pid() \
+                     AND datname = current_database() \
+                     AND state = 'active' \
+                     AND wait_event_type = 'Lock' \
+                     AND query ILIKE '%INSERT INTO search_node_projections%'\
+                 )",
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("observe worker lock wait");
+            if waiting {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("worker did not reach version fence while holding owner lock");
+
+    let mut disable_connection = pool
+        .acquire()
+        .await
+        .expect("acquire account-disable connection");
+    let mut disable_task = tokio::spawn(async move {
+        sqlx::query("UPDATE domain_accounts SET disabled=TRUE WHERE id=$1")
+            .bind(OWNER_ID)
+            .execute(&mut *disable_connection)
+            .await
+    });
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(250), &mut disable_task,)
+            .await
+            .is_err(),
+        "owner disable bypassed the real worker's account lock",
+    );
+
+    version_blocker
+        .commit()
+        .await
+        .expect("release node version for worker");
+    let worker_outcome = tokio::time::timeout(std::time::Duration::from_secs(10), worker_task)
+        .await
+        .expect("worker remained blocked after version release")
+        .expect("join real worker race proof")
+        .expect("process private projection in race proof");
+    assert_eq!(worker_outcome, ProcessOutcome::Processed);
+
+    let disabled_result = disable_task
+        .await
+        .expect("join concurrent owner disable")
+        .expect("disable owner after worker commit");
+    assert_eq!(disabled_result.rows_affected(), 1);
+    assert_redacted(&projection(&pool, &generation).await);
+}
