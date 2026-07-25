@@ -130,12 +130,13 @@
 
 <style>
   .faden-card {
-    border: 1px solid rgba(24, 37, 31, 0.16);
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
     padding: 22px;
     margin-top: 16px;
     overflow: hidden;
+    box-shadow: 0 16px 54px rgba(0, 0, 0, 0.2);
   }
   .heading-row {
     display: flex;
@@ -146,8 +147,8 @@
   .heading-row strong {
     white-space: nowrap;
     border-radius: 999px;
-    background: #dcecdf;
-    color: #1f5b42;
+    background: var(--success-soft);
+    color: var(--success);
     padding: 7px 11px;
   }
   .eyebrow {
@@ -156,14 +157,14 @@
     letter-spacing: 0.09em;
     font-size: 0.72rem;
     font-weight: 750;
-    color: #4d6759;
+    color: var(--success);
   }
   h2 {
     margin: 0;
   }
   .explanation,
   figcaption {
-    color: #607168;
+    color: var(--muted);
     line-height: 1.5;
   }
   figure {
@@ -178,24 +179,24 @@
     fill: none;
     stroke-width: 2.5;
     stroke-linecap: round;
-    opacity: 0.72;
+    opacity: 0.82;
   }
   .applicant-threads path {
-    stroke: #315d48;
+    stroke: var(--success);
   }
   .veto-threads path {
-    stroke: #9b4d43;
+    stroke: var(--danger);
   }
   .message-threads path {
-    stroke: #476a8a;
+    stroke: var(--accent);
   }
   .vote-threads path {
-    stroke: #806b37;
+    stroke: var(--notice);
   }
   .endpoint circle,
   .proposal-node circle {
-    fill: #f8f7f1;
-    stroke: rgba(24, 37, 31, 0.34);
+    fill: var(--surface-raised);
+    stroke: var(--panel-border-strong);
     stroke-width: 2;
   }
   .endpoint.inactive {
@@ -206,21 +207,21 @@
     font-family: system-ui, sans-serif;
     font-size: 12px;
     font-weight: 700;
-    fill: #25382e;
+    fill: var(--text);
   }
   text.count {
     font-size: 14px;
   }
   .proposal-node circle {
-    fill: #1f5b42;
-    stroke: #163f30;
+    fill: var(--accent);
+    stroke: #91bdff;
   }
   .proposal-node text {
-    fill: #fff;
+    fill: #09111d;
   }
   .proposal-title {
     font-size: 10px;
-    font-weight: 600;
+    font-weight: 650;
   }
   figcaption {
     margin-top: 8px;
@@ -233,12 +234,13 @@
     margin: 18px 0 0;
   }
   .faden-counts div {
-    border-radius: 12px;
-    background: #eeece5;
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.035);
     padding: 10px;
   }
   dt {
-    color: #607168;
+    color: var(--muted);
     font-size: 0.76rem;
   }
   dd {

@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { authStore } from '$lib/auth/store';
+  import "$lib/styles/page-foundation.css";
+  import { authStore } from "$lib/auth/store";
 
-  let email = '';
+  let email = "";
   let error: string | null = null;
   let success = false;
   let loading = false;
@@ -13,13 +14,13 @@
     try {
       await authStore.requestLogin(email);
       success = true;
-    } catch (e) {
-      if (e instanceof Error && e.message.includes('disabled')) {
-        error = 'Öffentlicher Login ist derzeit deaktiviert.';
+    } catch (cause) {
+      if (cause instanceof Error && cause.message.includes("disabled")) {
+        error = "Öffentlicher Login ist derzeit deaktiviert.";
       } else {
-        error = 'Login fehlgeschlagen. Bitte versuche es erneut.';
+        error = "Anmeldung fehlgeschlagen. Bitte versuche es erneut.";
       }
-      console.error(e);
+      console.error(cause);
     } finally {
       loading = false;
     }
@@ -27,45 +28,85 @@
 </script>
 
 <svelte:head>
-  <title>Login</title>
+  <title>Anmelden · Weltgewebe</title>
+  <meta
+    name="description"
+    content="Im Weltgewebe anmelden, um Commons gemeinsam zu pflegen und zu verändern."
+  />
 </svelte:head>
 
-<div class="col" style="gap:1.5rem; padding:1.5rem; max-width:400px; margin:0 auto; margin-top: 10vh;">
-  <div class="panel col" style="gap:1rem;">
-    <h1 style="margin:0; font-size:1.5rem;">Login</h1>
+<main class="wg-page wg-page--center" aria-labelledby="login-heading">
+  <div class="wg-page__inner wg-page__inner--narrow">
+    <a class="wg-back-link" href="/map">← Zum Gewebe</a>
 
-    {#if success}
-      <div class="panel" style="border-color:var(--color-theme-2, #2ecc71);">
-        <p><strong>Postfach prüfen!</strong></p>
-        <p>Falls deine E-Mail registriert ist, haben wir dir einen Login-Link gesendet.</p>
-      </div>
-    {:else}
-      <form on:submit|preventDefault={handleSubmit} class="col" style="gap:1rem;">
-        <div class="col">
-          <label for="email" style="font-size:0.9rem; color:var(--muted);">E-Mail</label>
-          <input
-            id="email"
-            type="email"
-            bind:value={email}
-            placeholder="du@example.com"
-            required
-            disabled={loading}
-            style="padding:0.5rem; border-radius:6px; border:1px solid #263240; background:#101821; color:white;"
-          />
+    <header class="wg-page__header">
+      <p class="wg-eyebrow">Gemeingüter gemeinsam verwalten</p>
+      <h1 id="login-heading" class="wg-title wg-title--compact">Anmelden</h1>
+      <p class="wg-lede">
+        Mit deiner E-Mail erhältst du einen einmaligen Anmeldelink. Ein Passwort
+        ist nicht nötig.
+      </p>
+    </header>
+
+    <section class="wg-surface wg-surface--padded wg-surface--accent">
+      {#if success}
+        <div class="wg-status wg-status--success wg-stack" role="status">
+          <strong>Postfach prüfen</strong>
+          <p>
+            Falls deine E-Mail registriert ist, haben wir dir einen Anmeldelink
+            gesendet.
+          </p>
         </div>
-
-        {#if error}
-          <div style="color:var(--color-danger, #ff6b6b); font-size:0.9rem;">
-            {error}
+      {:else}
+        <form on:submit|preventDefault={handleSubmit} class="wg-stack">
+          <div class="wg-field">
+            <label for="email">E-Mail-Adresse</label>
+            <input
+              class="wg-input"
+              id="email"
+              type="email"
+              bind:value={email}
+              placeholder="du@example.com"
+              autocomplete="email"
+              inputmode="email"
+              aria-describedby="email-hint"
+              required
+              disabled={loading}
+            />
+            <span id="email-hint" class="wg-muted">
+              Der Link kann nur einmal verwendet werden und läuft automatisch
+              ab.
+            </span>
           </div>
-        {/if}
 
-        <div class="row" style="justify-content:flex-end;">
-          <button type="submit" class="btn" disabled={loading || !email}>
-            {#if loading}Wird gesendet...{:else}Login-Link senden{/if}
-          </button>
-        </div>
-      </form>
-    {/if}
+          {#if error}
+            <div class="wg-status wg-status--error" role="alert">{error}</div>
+          {/if}
+
+          <div class="login-actions">
+            <button
+              type="submit"
+              class="wg-button wg-button--primary"
+              disabled={loading || !email}
+            >
+              {loading ? "Wird gesendet…" : "Anmeldelink senden"}
+            </button>
+          </div>
+        </form>
+      {/if}
+    </section>
   </div>
-</div>
+</main>
+
+<style>
+  .login-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  @media (max-width: 480px) {
+    .login-actions .wg-button {
+      width: 100%;
+    }
+  }
+</style>

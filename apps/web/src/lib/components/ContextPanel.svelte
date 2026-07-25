@@ -33,14 +33,13 @@
     action: "updated" | "deleted";
   };
   type KompositionPanelHandle = { requestClose: () => void };
-  type SheetStage = "preview" | "half" | "full";
+  type SheetStage = "preview" | "full";
 
   const dispatch = createEventDispatcher<{
     selectRelated: RelatedSelection;
     domainChanged: DomainChanged;
   }>();
   let kompositionPanel: KompositionPanelHandle | null = null;
-  const SHEET_STAGES: SheetStage[] = ["preview", "half", "full"];
   let sheetStage: SheetStage = "preview";
   let previousPanelIdentity = "";
   let panelTitle = "Details";
@@ -48,6 +47,7 @@
   let dragStartHeight = 0;
   let dragHeight: number | null = null;
   let dragging = false;
+  let dragMoved = false;
 
   function derivePanelTitle(
     state: SystemState,
@@ -85,6 +85,7 @@
       sheetStage = $systemState === "komposition" ? "full" : "preview";
       dragHeight = null;
       dragging = false;
+      dragMoved = false;
     }
   }
 
@@ -92,79 +93,82 @@
     sheetStage = stage;
     dragHeight = null;
     dragging = false;
+    dragMoved = false;
   }
 
-  function stepSheetStage(direction: -1 | 1): void {
-    const index = SHEET_STAGES.indexOf(sheetStage);
-    const next = Math.min(
-      SHEET_STAGES.length - 1,
-      Math.max(0, index + direction),
-    );
-    setSheetStage(SHEET_STAGES[next]);
+  function toggleSheetStage(): void {
+    setSheetStage(sheetStage === "preview" ? "full" : "preview");
   }
 
   function nearestSheetStage(height: number): SheetStage {
     const viewport = window.innerHeight;
     const preview = Math.min(270, Math.max(190, viewport * 0.29));
-    const targets: Array<[SheetStage, number]> = [
-      ["preview", preview],
-      ["half", viewport * 0.55],
-      ["full", viewport * 0.88],
-    ];
-    return targets.reduce((nearest, current) =>
-      Math.abs(current[1] - height) < Math.abs(nearest[1] - height)
-        ? current
-        : nearest,
-    )[0];
+    return height < (preview + viewport * 0.88) / 2 ? "preview" : "full";
   }
 
   function handleSheetPointerDown(event: PointerEvent): void {
-    if (window.innerWidth > 768) return;
-    const panel = event.currentTarget as HTMLElement;
-    const aside = panel.closest<HTMLElement>('[data-testid="context-panel"]');
+    const handle = event.currentTarget as HTMLElement;
+    const aside = handle.closest<HTMLElement>('[data-testid="context-panel"]');
     if (!aside) return;
     event.preventDefault();
-    panel.setPointerCapture(event.pointerId);
+    handle.setPointerCapture(event.pointerId);
     dragStartY = event.clientY;
     dragStartHeight = aside.getBoundingClientRect().height;
     dragHeight = dragStartHeight;
     dragging = true;
+    dragMoved = false;
   }
 
   function handleSheetPointerMove(event: PointerEvent): void {
     if (!dragging) return;
     const minHeight = 190;
     const maxHeight = window.innerHeight * 0.88;
+    dragMoved = dragMoved || Math.abs(event.clientY - dragStartY) > 6;
     dragHeight = Math.min(
       maxHeight,
       Math.max(minHeight, dragStartHeight + dragStartY - event.clientY),
     );
   }
 
+  function releasePointer(event: PointerEvent): void {
+    const handle = event.currentTarget as HTMLElement;
+    if (handle.hasPointerCapture(event.pointerId)) {
+      handle.releasePointerCapture(event.pointerId);
+    }
+  }
+
   function handleSheetPointerUp(event: PointerEvent): void {
     if (!dragging) return;
-    const panel = event.currentTarget as HTMLElement;
-    if (panel.hasPointerCapture(event.pointerId)) {
-      panel.releasePointerCapture(event.pointerId);
-    }
-    const finalHeight = dragHeight ?? dragStartHeight;
-    setSheetStage(nearestSheetStage(finalHeight));
+    releasePointer(event);
+    setSheetStage(
+      dragMoved
+        ? nearestSheetStage(dragHeight ?? dragStartHeight)
+        : sheetStage === "preview"
+          ? "full"
+          : "preview",
+    );
+  }
+
+  function handleSheetPointerCancel(event: PointerEvent): void {
+    if (!dragging) return;
+    releasePointer(event);
+    setSheetStage(sheetStage);
+  }
+
+  function handleSheetClick(event: MouseEvent): void {
+    if (event.detail === 0) toggleSheetStage();
   }
 
   function handleSheetKeydown(event: KeyboardEvent): void {
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      stepSheetStage(1);
-    } else if (event.key === "ArrowDown") {
-      event.preventDefault();
-      stepSheetStage(-1);
-    } else if (event.key === "Home") {
-      event.preventDefault();
-      setSheetStage("preview");
-    } else if (event.key === "End") {
-      event.preventDefault();
-      setSheetStage("full");
-    }
+    const stage =
+      event.key === "ArrowUp" || event.key === "End"
+        ? "full"
+        : event.key === "ArrowDown" || event.key === "Home"
+          ? "preview"
+          : null;
+    if (!stage) return;
+    event.preventDefault();
+    setSheetStage(stage);
   }
 
   function closePanel() {
@@ -190,8 +194,9 @@
       $contextPanelOpen &&
       !$isSearchOpen &&
       !$isFilterOpen
-    )
+    ) {
       closePanel();
+    }
   }
 </script>
 
@@ -201,7 +206,6 @@
   <aside
     class="context-panel"
     class:stage-preview={sheetStage === "preview"}
-    class:stage-half={sheetStage === "half"}
     class:stage-full={sheetStage === "full"}
     class:composition={$systemState === "komposition"}
     class:dragging
@@ -214,17 +218,13 @@
       type="button"
       class="sheet-handle"
       data-testid="sheet-handle"
-      aria-label={`Panelhöhe ziehen, aktuell ${
-        sheetStage === "preview"
-          ? "Vorschau"
-          : sheetStage === "half"
-            ? "halbe Höhe"
-            : "Vollbild"
-      }`}
+      aria-label={`Panel, ${sheetStage === "preview" ? "Kompaktkarte" : "Vollansicht"}; ziehen oder wechseln`}
+      aria-pressed={sheetStage === "full"}
       on:pointerdown={handleSheetPointerDown}
       on:pointermove={handleSheetPointerMove}
       on:pointerup={handleSheetPointerUp}
-      on:pointercancel={handleSheetPointerUp}
+      on:pointercancel={handleSheetPointerCancel}
+      on:click={handleSheetClick}
       on:keydown={handleSheetKeydown}
     >
       <span aria-hidden="true"></span>
@@ -234,33 +234,22 @@
       class:composition={$systemState === "komposition"}
     >
       <div class="heading-group">
-        <h2>{panelTitle}</h2>
-      </div>
-      <div class="header-actions">
-        <div class="sheet-controls" role="group" aria-label="Panelgröße">
+        <h2 class="desktop-heading">{panelTitle}</h2>
+        <h2 class="mobile-heading">
           <button
             type="button"
-            aria-label="Vorschau"
-            aria-pressed={sheetStage === "preview"}
-            on:click={() => setSheetStage("preview")}>Vorschau</button
-          >
-          <button
-            type="button"
-            aria-label="Halbe Höhe"
-            aria-pressed={sheetStage === "half"}
-            on:click={() => setSheetStage("half")}>Halbe Höhe</button
-          >
-          <button
-            type="button"
-            aria-label="Vollbild"
+            class="heading-toggle"
+            aria-label={`${panelTitle}, ${sheetStage === "preview" ? "Kompaktkarte" : "Vollansicht"}; Ansicht wechseln`}
             aria-pressed={sheetStage === "full"}
-            on:click={() => setSheetStage("full")}>Vollbild</button
+            on:click={toggleSheetStage}
           >
-        </div>
-        <button class="close-btn" on:click={closePanel} aria-label="Schließen"
-          >✕</button
-        >
+            {panelTitle}
+          </button>
+        </h2>
       </div>
+      <button class="close-btn" on:click={closePanel} aria-label="Schließen"
+        >✕</button
+      >
     </header>
 
     <div class="panel-content">
@@ -311,6 +300,7 @@
 
   .heading-group {
     min-width: 0;
+    flex: 1;
   }
 
   .panel-header h2 {
@@ -322,43 +312,29 @@
     text-transform: uppercase;
   }
 
+  .heading-toggle {
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    text-align: left;
+    text-transform: inherit;
+  }
+
+  .mobile-heading {
+    display: none;
+  }
+
   .panel-header.composition h2 {
     color: var(--text);
     font-size: 1.1rem;
     letter-spacing: 0;
     text-transform: none;
-  }
-
-  .header-actions,
-  .sheet-controls {
-    display: flex;
-    align-items: center;
-  }
-
-  .header-actions {
-    gap: 0.35rem;
-  }
-
-  .sheet-controls {
-    gap: 0.2rem;
-  }
-
-  .sheet-controls button {
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0 0.55rem;
-    border: 1px solid transparent;
-    border-radius: 9px;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 0.76rem;
-  }
-
-  .sheet-controls button[aria-pressed="true"] {
-    border-color: var(--panel-border-strong);
-    background: var(--accent-soft);
-    color: var(--text);
   }
 
   .close-btn {
@@ -382,6 +358,14 @@
   }
 
   @media (max-width: 768px) {
+    .desktop-heading {
+      display: none;
+    }
+
+    .mobile-heading {
+      display: block;
+    }
+
     .context-panel {
       bottom: 0;
       left: 0;
@@ -391,15 +375,15 @@
       border-radius: 18px 18px 0 0;
       transition: height var(--motion-ui);
     }
+
     .context-panel.stage-preview {
       height: clamp(190px, 29dvh, 270px);
     }
-    .context-panel.stage-half {
-      height: 55dvh;
-    }
+
     .context-panel.stage-full {
       height: 88dvh;
     }
+
     .sheet-handle {
       width: 100%;
       min-height: 44px;
@@ -412,65 +396,41 @@
       cursor: ns-resize;
       touch-action: none;
     }
+
     .sheet-handle span {
       width: 44px;
       height: 4px;
       border-radius: 999px;
       background: var(--panel-border-strong);
     }
-    .sheet-handle:focus-visible {
+
+    .sheet-handle:focus-visible,
+    .heading-toggle:focus-visible {
       outline: 3px solid var(--accent);
       outline-offset: -4px;
     }
+
     .context-panel.dragging {
       transition: none;
       user-select: none;
     }
+
     .panel-header {
       min-height: 64px;
       padding-top: 0.25rem;
     }
-    .heading-group {
-      flex: 1;
-      text-align: left;
-    }
-    .sheet-controls button {
-      min-width: 44px;
+
+    .heading-toggle {
       min-height: 44px;
-      padding: 0 0.35rem;
-      font-size: 0.7rem;
+      cursor: pointer;
     }
+
     .stage-preview .panel-content {
       padding-top: 0.65rem;
     }
-  }
 
-  @media (max-width: 440px) {
-    .sheet-controls button {
-      width: 44px;
-      overflow: hidden;
-      color: transparent;
-      position: relative;
-    }
-    .sheet-controls button::after {
-      position: absolute;
-      inset: 0;
-      display: grid;
-      place-items: center;
-      color: var(--muted);
-      font-size: 1rem;
-    }
-    .sheet-controls button:nth-child(1)::after {
-      content: "▂";
-    }
-    .sheet-controls button:nth-child(2)::after {
-      content: "▅";
-    }
-    .sheet-controls button:nth-child(3)::after {
-      content: "▇";
-    }
-    .sheet-controls button[aria-pressed="true"]::after {
-      color: var(--accent);
+    .stage-preview .panel-content :global(.tabs) {
+      display: none;
     }
   }
 
@@ -481,9 +441,6 @@
       bottom: 0;
       width: var(--context-panel-width);
       box-shadow: -4px 0 16px rgba(0, 0, 0, 0.28);
-    }
-    .sheet-controls {
-      display: none;
     }
   }
 
