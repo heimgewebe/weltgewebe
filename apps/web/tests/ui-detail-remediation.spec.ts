@@ -88,8 +88,11 @@ test.describe("UI detail remediation", () => {
     page,
   }) => {
     const node = page.locator(".map-marker:not(.marker-account)").first();
-    await node.click({ force: true });
+    await node.evaluate((element) =>
+      element.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    );
     const panel = page.getByTestId("context-panel");
+    await expect(panel).toBeVisible();
     await expect(panel.getByRole("tab", { name: "Gespräch" })).toBeVisible();
     await expect(panel.getByRole("tab", { name: "Anträge" })).toHaveCount(0);
     await expect(panel).not.toContainText("Koordinaten:");

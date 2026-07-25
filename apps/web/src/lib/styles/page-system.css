@@ -1,0 +1,220 @@
+.wg-page {
+  --wg-surface: var(--panel-solid);
+  --wg-border: var(--panel-border);
+  --wg-border-strong: var(--panel-border-strong);
+  --wg-action: var(--accent);
+  --wg-action-soft: var(--accent-soft);
+  --wg-muted: var(--muted);
+  min-height: 100%;
+  box-sizing: border-box;
+  padding: clamp(1rem, 4vw, 2rem) 0 clamp(3rem, 8vw, 5rem);
+  background:
+    radial-gradient(circle at 12% 0, var(--accent-soft), transparent 34rem),
+    var(--bg);
+  color: var(--text);
+}
+
+.wg-page *,
+.wg-page *::before,
+.wg-page *::after {
+  box-sizing: border-box;
+}
+
+.wg-page__shell {
+  width: min(56rem, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+.wg-page__shell--narrow {
+  width: min(30rem, calc(100% - 2rem));
+  padding-top: clamp(2rem, 10vh, 6rem);
+}
+
+.wg-page__header {
+  display: grid;
+  gap: 1rem;
+  padding-block: 0.5rem clamp(2rem, 6vw, 3.5rem);
+}
+
+.wg-back-link {
+  width: fit-content;
+  color: var(--wg-muted);
+  text-decoration: none;
+  font-weight: 650;
+}
+
+.wg-back-link:hover {
+  color: var(--text);
+}
+
+.wg-eyebrow {
+  margin: 0;
+  color: var(--wg-action);
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.wg-title {
+  margin: 0;
+  font-size: clamp(2.5rem, 8vw, 4.5rem);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.wg-title--compact {
+  font-size: clamp(2rem, 8vw, 3rem);
+}
+
+.wg-lede {
+  max-width: 68ch;
+  margin: 0;
+  color: var(--wg-muted);
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+
+.wg-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.wg-card {
+  border: 1px solid var(--wg-border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--wg-surface) 94%, transparent);
+  box-shadow: var(--shadow);
+}
+
+.wg-card--padded {
+  padding: clamp(1.25rem, 4vw, 2rem);
+}
+
+.wg-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.wg-label {
+  color: var(--wg-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.wg-control {
+  width: 100%;
+  min-height: 46px;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--wg-border-strong);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 82%, black);
+  color: var(--text);
+  font: inherit;
+}
+
+textarea.wg-control {
+  min-height: 8rem;
+  resize: vertical;
+}
+
+.wg-control::placeholder {
+  color: color-mix(in srgb, var(--wg-muted) 70%, transparent);
+}
+
+.wg-control:disabled {
+  opacity: 0.6;
+}
+
+.wg-actions,
+.wg-section-heading,
+.wg-inline-spread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.wg-actions {
+  justify-content: flex-end;
+}
+
+.wg-section-heading {
+  margin-bottom: 1rem;
+}
+
+.wg-button {
+  width: fit-content;
+  min-height: 44px;
+  padding: 0.65rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.wg-button--primary {
+  background: var(--wg-action);
+  color: var(--bg);
+}
+
+.wg-button--secondary {
+  border-color: var(--wg-border-strong);
+  background: transparent;
+  color: var(--text);
+}
+
+.wg-button--danger {
+  padding-inline: 0;
+  background: transparent;
+  color: var(--danger);
+}
+
+.wg-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.wg-state {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--wg-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--wg-surface) 92%, transparent);
+}
+
+.wg-state p {
+  margin: 0;
+}
+
+.wg-state p + p {
+  margin-top: 0.4rem;
+}
+
+.wg-state--success {
+  border-color: color-mix(in srgb, #54e1a6 55%, transparent);
+  background: color-mix(in srgb, #54e1a6 12%, var(--wg-surface));
+}
+
+.wg-state--error {
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, var(--wg-surface));
+  color: var(--danger);
+}
+
+.wg-state--muted {
+  color: var(--wg-muted);
+}
+
+@media (max-width: 560px) {
+  .wg-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .wg-button--primary,
+  .wg-actions .wg-button {
+    width: 100%;
+  }
+}
