@@ -25,6 +25,10 @@ CACHE = ROOT / ".cache/weltgewebe-platform"
 OCI_MIRROR_STATE = CACHE / "oci-mirror"
 OCI_MIRROR_LOCK = ROOT / "platform/oci-proof-mirror.lock.json"
 OCI_STRICT_ENV = "WELTGEWEBE_PROOF_OCI_STRICT"
+OCI_DOCKERFILE_IMAGES = {
+    Path("apps/api/Dockerfile"): ("build_rust", "build_debian"),
+    Path("apps/web/Dockerfile"): ("build_node", "build_caddy"),
+}
 MARKERS = CACHE / "clusters"
 KUBECONFIGS = CACHE / "kubeconfigs"
 DEFAULT_CLUSTER = "weltgewebe-reference"
@@ -711,18 +715,61 @@ def wait_http_route_parent_condition(
     )
 
 
+def controlled_oci_dockerfile(path: Path) -> str:
+    source = path.read_text(encoding="utf-8")
+    if not controlled_oci_strict():
+        return source
+    relative = path.relative_to(ROOT) if path.is_absolute() else path
+    expected = OCI_DOCKERFILE_IMAGES.get(relative)
+    if expected is None:
+        raise ProofError(f"no controlled OCI Dockerfile contract for {relative}")
+    lock = _oci_mirror_lock()
+    for name in expected:
+        spec = lock["images"].get(name)
+        if not isinstance(spec, dict):
+            raise ProofError(f"controlled OCI build image is missing: {name}")
+        canonical = spec.get("canonical")
+        local_ref = spec.get("local_ref")
+        digest = spec.get("digest")
+        if (
+            not isinstance(canonical, str)
+            or not isinstance(local_ref, str)
+            or not isinstance(digest, str)
+            or canonical.rsplit("@", 1)[-1] != digest
+        ):
+            raise ProofError(f"controlled OCI build image is invalid: {name}")
+        dockerfile_ref = f"{local_ref}@{digest}"
+        if source.count(dockerfile_ref) != 1:
+            raise ProofError(
+                f"Dockerfile {relative} must contain controlled image {name} exactly once"
+            )
+        source = source.replace(dockerfile_ref, local_ref)
+    for line in source.splitlines():
+        if line.lstrip().upper().startswith("FROM ") and "@sha256:" in line:
+            raise ProofError(
+                f"Dockerfile {relative} retains a registry-resolved digest in strict mode"
+            )
+    return source
+
+
+def _build_dockerfile(path: Path) -> tuple[list[str], str | None]:
+    if not controlled_oci_strict():
+        return ["--file", str(path)], None
+    return ["--file", "-"], controlled_oci_dockerfile(path)
+
+
 def build_images(kind: str, cluster: str, commit: str, timestamp: str) -> dict[str, str]:
     images = {
         "api": "weltgewebe-api:local",
         "web": "weltgewebe-web:local",
     }
+    api_file_args, api_dockerfile = _build_dockerfile(Path("apps/api/Dockerfile"))
     run(
         [
             "docker",
             "build",
             "--pull=false",
-            "--file",
-            "apps/api/Dockerfile",
+            *api_file_args,
             "--build-arg",
             f"GIT_COMMIT_SHA={commit}",
             "--build-arg",
@@ -731,15 +778,16 @@ def build_images(kind: str, cluster: str, commit: str, timestamp: str) -> dict[s
             images["api"],
             ".",
         ],
+        input_text=api_dockerfile,
         timeout=3600,
     )
+    web_file_args, web_dockerfile = _build_dockerfile(Path("apps/web/Dockerfile"))
     run(
         [
             "docker",
             "build",
             "--pull=false",
-            "--file",
-            "apps/web/Dockerfile",
+            *web_file_args,
             "--build-arg",
             f"GIT_COMMIT_SHA={commit}",
             "--build-arg",
@@ -748,6 +796,7 @@ def build_images(kind: str, cluster: str, commit: str, timestamp: str) -> dict[s
             images["web"],
             ".",
         ],
+        input_text=web_dockerfile,
         timeout=1800,
     )
     for image in images.values():

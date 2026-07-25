@@ -91,6 +91,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
@@ -199,13 +202,18 @@ jobs:
             production.cloudflare.docker.com quay.io ghcr.io
           do
             echo "127.0.0.1 $host" | sudo tee -a /etc/hosts >/dev/null
+            echo "::1 $host" | sudo tee -a /etc/hosts >/dev/null
           done
           for host in \
             registry-1.docker.io auth.docker.io \
             production.cloudflare.docker.com quay.io ghcr.io
           do
-            addresses="$(getent ahostsv4 "$host" | awk '{print $1}' | sort -u)"
-            test "$addresses" = "127.0.0.1"
+            ipv4="$(getent ahostsv4 "$host" | awk '{print $1}' | sort -u)"
+            test "$ipv4" = "127.0.0.1"
+            ipv6="$(getent ahostsv6 "$host" 2>/dev/null | awk '{print $1}' | sort -u || true)"
+            if [[ -n "$ipv6" ]]; then
+              test "$ipv6" = "::1"
+            fi
           done
       - name: Verify loaded OCI inputs offline
         if: steps.proof-cache.outputs.cache-hit != 'true'
@@ -381,13 +389,18 @@ jobs:
             production.cloudflare.docker.com quay.io ghcr.io
           do
             echo "127.0.0.1 $host" | sudo tee -a /etc/hosts >/dev/null
+            echo "::1 $host" | sudo tee -a /etc/hosts >/dev/null
           done
           for host in \
             registry-1.docker.io auth.docker.io \
             production.cloudflare.docker.com quay.io ghcr.io
           do
-            addresses="$(getent ahostsv4 "$host" | awk '{print $1}' | sort -u)"
-            test "$addresses" = "127.0.0.1"
+            ipv4="$(getent ahostsv4 "$host" | awk '{print $1}' | sort -u)"
+            test "$ipv4" = "127.0.0.1"
+            ipv6="$(getent ahostsv6 "$host" 2>/dev/null | awk '{print $1}' | sort -u || true)"
+            if [[ -n "$ipv6" ]]; then
+              test "$ipv6" = "::1"
+            fi
           done
       - name: Verify loaded OCI inputs offline
         if: steps.proof-cache.outputs.cache-hit != 'true'

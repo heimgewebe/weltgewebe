@@ -318,6 +318,49 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 with self.assertRaises(self.oci_mirror.IntegrityError):
                     self.oci_mirror._load_lock()
 
+    def test_strict_oci_dockerfiles_use_verified_local_base_tags(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {self.reference.OCI_STRICT_ENV: "1"},
+            clear=False,
+        ):
+            api = self.reference.controlled_oci_dockerfile(
+                ROOT / "apps/api/Dockerfile"
+            )
+            web = self.reference.controlled_oci_dockerfile(
+                ROOT / "apps/web/Dockerfile"
+            )
+        api_from = [line for line in api.splitlines() if line.startswith("FROM ")]
+        web_from = [line for line in web.splitlines() if line.startswith("FROM ")]
+        self.assertTrue(api_from)
+        self.assertTrue(web_from)
+        self.assertFalse(any("@sha256:" in line for line in api_from + web_from))
+        self.assertIn("FROM rust:1.89.0-bookworm AS builder", api_from)
+        self.assertIn("FROM debian:bookworm-slim", api_from)
+        self.assertIn("FROM node:20.19.0-alpine AS builder", web_from)
+        self.assertIn("FROM caddy:2.7", web_from)
+
+    def test_strict_image_builds_consume_dockerfiles_from_stdin(self) -> None:
+        with mock.patch.object(
+            self.reference,
+            "_build_dockerfile",
+            side_effect=[
+                (["--file", "-"], "FROM rust:local AS builder\n"),
+                (["--file", "-"], "FROM node:local AS builder\n"),
+            ],
+        ), mock.patch.object(self.reference, "run") as run, mock.patch.object(
+            self.reference,
+            "output",
+            return_value="sha256:" + "a" * 64,
+        ):
+            self.reference.build_images("kind", "proof", "b" * 40, "timestamp")
+        api_build = run.call_args_list[0]
+        web_build = run.call_args_list[1]
+        self.assertEqual(api_build.args[0][:5], ["docker", "build", "--pull=false", "--file", "-"])
+        self.assertEqual(web_build.args[0][:5], ["docker", "build", "--pull=false", "--file", "-"])
+        self.assertEqual(api_build.kwargs["input_text"], "FROM rust:local AS builder\n")
+        self.assertEqual(web_build.kwargs["input_text"], "FROM node:local AS builder\n")
+
     def test_strict_oci_policy_sets_cnpg_cluster_pull_policy(self) -> None:
         cluster = {
             "apiVersion": "postgresql.cnpg.io/v1",
@@ -358,6 +401,7 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertNotIn("oci-proof-cache", workflow_text)
         for job_name in (
             "contract",
+            "trivy-rendered-security",
             "kind-gitops-proof",
             "kind-ha-recovery-proof",
         ):
@@ -413,7 +457,9 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             block_step = steps["Block all OCI registries after mirror load"]
             for registry in ("registry-1.docker.io", "quay.io", "ghcr.io"):
                 self.assertIn(registry, block_step["run"])
+            self.assertIn('echo "::1 $host"', block_step["run"])
             self.assertIn("getent ahostsv4", block_step["run"])
+            self.assertIn("getent ahostsv6", block_step["run"])
             offline_step = steps["Verify loaded OCI inputs offline"]
             self.assertIn("verify-host", offline_step["run"])
             self.assertIn(f"--suite {suite}", offline_step["run"])
