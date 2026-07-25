@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 
@@ -58,7 +59,7 @@ def test_activation_is_commit_locked_identity_bound_and_gate_first() -> None:
     assert "active generation has no public semantic probe candidate" in script
     assert "any(.items[]?; .id == $probe_id)" in script
     assert 'semantic_probe_status="candidate_bound"' in script
-    assert 'gate_ready="$(psql_exec -At -v gen=' in script
+    assert 'gate_ready="$(psql_exec_sql ' in script
     assert "rollback_activation()" in script
     assert 'rollback_status="verified"' in script
     assert "rollback could not be verified" in script
@@ -67,6 +68,67 @@ def test_activation_is_commit_locked_identity_bound_and_gate_first() -> None:
     assert "WELTGEWEBE_SEARCH_MIN_CPU_COUNT" in script
     assert "getconf _NPROCESSORS_ONLN" in script
     assert "SemantAH" in script
+
+
+
+def test_activation_routes_psql_variables_through_stdin() -> None:
+    script = ACTIVATE.read_text(encoding="utf-8")
+    helper_body = script.split("psql_exec_sql() {", 1)[1].split("\n}\n", 1)[0]
+    helper = "psql_exec_sql() {" + helper_body + "\n}\n"
+    command = (
+        r"""psql_exec() { printf 'argv=%s\n' "$*" >&2; cat; }
+"""
+        + helper
+        + """psql_exec_sql "SELECT :'gen';" -At -v gen=probe-value
+"""
+    )
+    result = subprocess.run(["bash", "-c", command], check=True, capture_output=True, text=True)
+    assert result.stdout == "SELECT :'gen';\n"
+    assert result.stderr == "argv=-At -v gen=probe-value\n"
+
+    variable_sql_lines = [line for line in script.splitlines() if ":'" in line]
+    assert variable_sql_lines
+    assert all("psql_exec_sql" in line for line in variable_sql_lines)
+    assert all(" -c " not in line and "-Atc" not in line for line in variable_sql_lines)
+
+def test_activation_derives_compose_identity_from_the_verified_release_commit() -> None:
+    script = ACTIVATE.read_text(encoding="utf-8")
+    assert 'build_identity_short="${COMMIT:0:8}"' in script
+    assert 'build_timestamp="$(git -C "$release_dir" show -s --format=%cI "$COMMIT")"' in script
+    assert 'export API_VERSION="$build_identity_short"' in script
+    assert 'export WELTGEWEBE_BUILD="$build_identity_short"' in script
+    assert 'export GIT_COMMIT_SHA="$COMMIT"' in script
+    assert 'export BUILD_TIMESTAMP="$build_timestamp"' in script
+    public_readback = script.index('public frontend commit mismatch')
+    identity_export = script.index('export API_VERSION="$build_identity_short"')
+    compose_config = script.index('compose=(docker compose')
+    assert public_readback < identity_export < compose_config
+
+
+def test_activation_compares_canonical_and_unprefixed_model_digests() -> None:
+    script = ACTIVATE.read_text(encoding="utf-8")
+    assert 'local digest="${1#sha256:}"' in script
+    assert '[[ "$digest" =~ ^[0-9a-f]{64}$ ]] || return 1' in script
+    assert 'observed_digest_normalized="$(normalize_sha256_digest "$observed_digest")"' in script
+    assert 'expected_digest_normalized="$(normalize_sha256_digest "$MODEL_REVISION")"' in script
+    assert '[[ "$observed_digest_normalized" == "$expected_digest_normalized" ]]' in script
+    assert '[[ "$observed_digest" == "$MODEL_REVISION" ]]' not in script
+
+
+def test_digest_normalizer_accepts_both_ollama_and_canonical_forms() -> None:
+    script = ACTIVATE.read_text(encoding="utf-8")
+    function = script.split("normalize_sha256_digest() {", 1)[1].split("\n}\n", 1)[0]
+    helper = "normalize_sha256_digest() {" + function + "\n}\n"
+    digest = "df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907"
+    command = helper + f'normalize_sha256_digest "{digest}"; normalize_sha256_digest "sha256:{digest}"'
+    result = subprocess.run(["bash", "-c", command], check=True, capture_output=True, text=True)
+    assert result.stdout.splitlines() == [digest, digest]
+    malformed = subprocess.run(
+        ["bash", "-c", helper + 'normalize_sha256_digest "sha256:not-a-digest"'],
+        capture_output=True,
+        text=True,
+    )
+    assert malformed.returncode != 0
 
 
 def test_persistent_worker_waits_for_exact_model_and_runs_bounded_batches() -> None:

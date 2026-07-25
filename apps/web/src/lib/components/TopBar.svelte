@@ -1,7 +1,8 @@
 <script lang="ts">
-  import Garnrolle from "./Garnrolle.svelte";
   import GovernanceFan from "./GovernanceFan.svelte";
+  import { authStore } from "$lib/auth/store";
   import { contextPanelOpen } from "$lib/stores/uiView";
+  import { garnrolleIcon } from "$lib/ui/icons";
 </script>
 
 <div
@@ -10,13 +11,20 @@
   role="toolbar"
   aria-label="Navigation"
 >
-  <div aria-hidden="true"></div>
   <div class="governance-slot">
     <GovernanceFan />
   </div>
-  <div class="actions">
-    <Garnrolle />
-  </div>
+  {#if $authStore.authenticated}
+    <a
+      class="garnrolle-link"
+      href="/settings#meine-garnrolle"
+      aria-label="Meine Garnrolle einrichten"
+    >
+      <img src={garnrolleIcon} alt="" />
+    </a>
+  {:else}
+    <a class="login-entry" href="/login">Anmelden</a>
+  {/if}
 </div>
 
 <style>
@@ -41,12 +49,48 @@
     pointer-events: auto;
   }
 
-  .actions {
+  .garnrolle-link,
+  .login-entry {
     grid-column: 3;
     justify-self: end;
-    display: flex;
-    align-items: center;
     pointer-events: auto;
+  }
+
+  .garnrolle-link {
+    display: block;
+    width: 44px;
+    height: 44px;
+    transition: transform 0.1s ease;
+  }
+
+  .garnrolle-link img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .garnrolle-link:active {
+    transform: scale(0.95);
+  }
+
+  .garnrolle-link:focus-visible,
+  .login-entry:focus-visible {
+    outline: 2px solid var(--accent, #6aa6ff);
+    outline-offset: 3px;
+  }
+
+  .login-entry {
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    padding: 0 0.9rem;
+    border: 1px solid var(--panel-border-strong);
+    border-radius: 999px;
+    background: var(--panel);
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 600;
   }
 
   @media (min-width: 769px) {

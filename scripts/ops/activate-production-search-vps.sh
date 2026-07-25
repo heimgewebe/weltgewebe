@@ -45,6 +45,12 @@ require_command() {
   command -v "$1" > /dev/null 2>&1 || fail "required command not found: $1"
 }
 
+normalize_sha256_digest() {
+  local digest="${1#sha256:}"
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || return 1
+  printf '%s\n' "$digest"
+}
+
 PREVIOUS_GENERATION_ID=""
 semantic_probe_status="unobserved"
 rollback_status="not_attempted"
@@ -135,6 +141,14 @@ remote_main="$(git -C "$SOURCE_CHECKOUT" ls-remote origin refs/heads/main | awk 
 [[ "$(curl -fsS "$API_VERSION_URL" | jq -er '.commit')" == "$COMMIT" ]] || fail "public API commit mismatch"
 [[ "$(curl -fsS "$FRONTEND_VERSION_URL" | jq -er '.commit')" == "$COMMIT" ]] || fail "public frontend commit mismatch"
 
+build_identity_short="${COMMIT:0:8}"
+build_timestamp="$(git -C "$release_dir" show -s --format=%cI "$COMMIT")"
+[[ "$build_timestamp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$ ]] || fail "release commit timestamp is not valid RFC3339"
+export API_VERSION="$build_identity_short"
+export WELTGEWEBE_BUILD="$build_identity_short"
+export GIT_COMMIT_SHA="$COMMIT"
+export BUILD_TIMESTAMP="$build_timestamp"
+
 available_disk="$(df -B1 --output=avail / | awk 'NR==2 {print $1}')"
 available_memory="$(awk '/^MemAvailable:/ {print $2 * 1024}' /proc/meminfo)"
 available_cpus="$(getconf _NPROCESSORS_ONLN)"
@@ -167,7 +181,9 @@ version_body="$("${compose[@]}" exec -T api wget -qO- "$OLLAMA_URL/api/version")
 [[ "$(jq -er '.version' <<< "$version_body")" == "0.12.6" ]] || fail "Ollama runtime version mismatch"
 tags_body="$("${compose[@]}" exec -T api wget -qO- "$OLLAMA_URL/api/tags")"
 observed_digest="$(jq -er --arg model "$MODEL_ID" '.models[] | select(.name == $model) | .digest' <<< "$tags_body")"
-[[ "$observed_digest" == "$MODEL_REVISION" ]] || fail "Ollama model digest mismatch"
+observed_digest_normalized="$(normalize_sha256_digest "$observed_digest")" || fail "Ollama model digest is malformed"
+expected_digest_normalized="$(normalize_sha256_digest "$MODEL_REVISION")" || fail "pinned Ollama model revision is malformed"
+[[ "$observed_digest_normalized" == "$expected_digest_normalized" ]] || fail "Ollama model digest mismatch"
 
 [[ "$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$api_cid" | awk -F= '$1=="WELTGEWEBE_SEARCH_OLLAMA_URL" {print $2}')" == "$OLLAMA_URL/" ]] || fail "API search provider URL is not literal loopback"
 
@@ -177,6 +193,12 @@ postgres_db="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}
 [[ -n "$postgres_user" && -n "$postgres_db" ]] || fail "PostgreSQL identity could not be resolved"
 psql_exec() {
   "${compose[@]}" exec -T db psql -v ON_ERROR_STOP=1 -U "$postgres_user" -d "$postgres_db" "$@"
+}
+
+psql_exec_sql() {
+  local sql="$1"
+  shift
+  printf '%s\n' "$sql" | psql_exec "$@"
 }
 
 if ! PREVIOUS_GENERATION_ID="$(psql_exec -Atc "SELECT generation_id FROM search_index_generations WHERE state = 'active' ORDER BY activated_at DESC LIMIT 1;")"; then
@@ -209,7 +231,7 @@ done
 
 [[ "$expected" =~ ^[0-9]+$ && "$completed" == "$expected" ]] || fail "search generation is incomplete"
 
-probe_json="$(psql_exec -At -v gen="$GENERATION_ID" -c "SELECT json_build_object('id', p.node_id, 'title', p.title)::text FROM search_node_projections p JOIN domain_nodes n ON n.id=p.node_id WHERE p.generation_id=:'gen' AND n.search_visibility='public' AND p.status='active' AND p.semantic_state='ready' AND cardinality(p.embedding)=$DIMENSION ORDER BY p.node_id LIMIT 1;")"
+probe_json="$(psql_exec_sql "SELECT json_build_object('id', p.node_id, 'title', p.title)::text FROM search_node_projections p JOIN domain_nodes n ON n.id=p.node_id WHERE p.generation_id=:'gen' AND n.search_visibility='public' AND p.status='active' AND p.semantic_state='ready' AND cardinality(p.embedding)=$DIMENSION ORDER BY p.node_id LIMIT 1;" -At -v gen="$GENERATION_ID")"
 
 probe_node_id=""
 probe_title=""
@@ -222,12 +244,12 @@ else
   echo "Notice: active generation has no public semantic probe candidate"
 fi
 
-gate_ready="$(psql_exec -At -v gen="$GENERATION_ID" -c "SELECT weltgewebe_search_generation_activation_ready(:'gen');")"
+gate_ready="$(psql_exec_sql "SELECT weltgewebe_search_generation_activation_ready(:'gen');" -At -v gen="$GENERATION_ID")"
 [[ "$gate_ready" == "t" ]] || fail "database activation gate rejected generation"
-psql_exec -v gen="$GENERATION_ID" -c "SELECT weltgewebe_activate_search_generation(:'gen');" > /dev/null
+psql_exec_sql "SELECT weltgewebe_activate_search_generation(:'gen');" -v gen="$GENERATION_ID" > /dev/null
 
 verify_activation() {
-  identity_ok="$(psql_exec -v gen="$GENERATION_ID" -v prov="$PROVIDER" -v model="$MODEL_ID" -v rev="$MODEL_REVISION" -v rid="$RUNTIME_IDENTITY" -v dim="$DIMENSION" -Atc "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'gen' AND state='active' AND provider=:'prov' AND model_id=:'model' AND model_revision=:'rev' AND runtime_identity=:'rid' AND dimension=:'dim'::integer AND completed_nodes=expected_nodes;")"
+  identity_ok="$(psql_exec_sql "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'gen' AND state='active' AND provider=:'prov' AND model_id=:'model' AND model_revision=:'rev' AND runtime_identity=:'rid' AND dimension=:'dim'::integer AND completed_nodes=expected_nodes;" -At -v gen="$GENERATION_ID" -v prov="$PROVIDER" -v model="$MODEL_ID" -v rev="$MODEL_REVISION" -v rid="$RUNTIME_IDENTITY" -v dim="$DIMENSION")"
   [[ "$identity_ok" == "t" ]] || return 1
 
   if [[ "$semantic_probe_status" == "candidate_bound" ]]; then
@@ -264,12 +286,12 @@ rollback_activation() {
   local rollback_ok
   if [[ -n "$PREVIOUS_GENERATION_ID" ]]; then
     if [[ "$PREVIOUS_GENERATION_ID" != "$GENERATION_ID" ]]; then
-      psql_exec -v prev_gen="$PREVIOUS_GENERATION_ID" -c "SELECT weltgewebe_activate_search_generation(:'prev_gen');" > /dev/null || return 1
+      psql_exec_sql "SELECT weltgewebe_activate_search_generation(:'prev_gen');" -v prev_gen="$PREVIOUS_GENERATION_ID" > /dev/null || return 1
     fi
-    rollback_ok="$(psql_exec -At -v prev_gen="$PREVIOUS_GENERATION_ID" -v gen="$GENERATION_ID" -c "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'prev_gen' AND state='active' AND (:'prev_gen'=:'gen' OR NOT EXISTS (SELECT 1 FROM search_index_generations WHERE generation_id=:'gen' AND state='active'));")" || return 1
+    rollback_ok="$(psql_exec_sql "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'prev_gen' AND state='active' AND (:'prev_gen'=:'gen' OR NOT EXISTS (SELECT 1 FROM search_index_generations WHERE generation_id=:'gen' AND state='active'));" -At -v prev_gen="$PREVIOUS_GENERATION_ID" -v gen="$GENERATION_ID")" || return 1
   else
-    psql_exec -v gen="$GENERATION_ID" -c "BEGIN; SELECT pg_advisory_xact_lock(hashtextextended('weltgewebe.search.generation.activation', 0)); UPDATE search_index_generations SET state='ready', activated_at=NULL WHERE generation_id=:'gen' AND state='active'; COMMIT;" > /dev/null || return 1
-    rollback_ok="$(psql_exec -At -v gen="$GENERATION_ID" -c "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'gen' AND state='ready' AND NOT EXISTS (SELECT 1 FROM search_index_generations WHERE state='active');")" || return 1
+    psql_exec_sql "BEGIN; SELECT pg_advisory_xact_lock(hashtextextended('weltgewebe.search.generation.activation', 0)); UPDATE search_index_generations SET state='ready', activated_at=NULL WHERE generation_id=:'gen' AND state='active'; COMMIT;" -v gen="$GENERATION_ID" > /dev/null || return 1
+    rollback_ok="$(psql_exec_sql "SELECT count(*)=1 FROM search_index_generations WHERE generation_id=:'gen' AND state='ready' AND NOT EXISTS (SELECT 1 FROM search_index_generations WHERE state='active');" -At -v gen="$GENERATION_ID")" || return 1
   fi
   [[ "$rollback_ok" == "t" ]]
 }

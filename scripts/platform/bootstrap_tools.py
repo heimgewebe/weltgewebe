@@ -2,24 +2,45 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
 import platform
 import shutil
 import stat
+import sys
 import tarfile
 import tempfile
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Iterator
 
 import yaml
-from pathlib import Path
-from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCK_PATH = ROOT / "platform/toolchain.lock.json"
 DEFAULT_CACHE = ROOT / ".cache/weltgewebe-platform"
+DOWNLOAD_ATTEMPTS = 4
+DOWNLOAD_BACKOFF_SECONDS = (1.0, 2.0, 4.0)
+RETRYABLE_HTTP_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
+MIRROR_ENV = "WELTGEWEBE_PLATFORM_DOWNLOAD_MIRROR"
+
+
+class DownloadError(RuntimeError):
+    failure_class = "download_error"
+
+
+class DownloadUnavailableError(DownloadError):
+    failure_class = "external_dependency_unavailable"
+
+
+class DownloadIntegrityError(DownloadError):
+    failure_class = "download_integrity_failure"
 
 
 def _sha256(path: Path) -> str:
@@ -30,22 +51,156 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _fsync_directory(path: Path) -> None:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+@contextmanager
+def _download_lock(destination: Path) -> Iterator[None]:
+    lock_path = destination.parent / f".{destination.name}.download.lock"
+    flags = os.O_CREAT | os.O_RDWR
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(lock_path, flags, 0o600)
+    with os.fdopen(descriptor, "a+b") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _mirror_url(url: str, mirror_base: str | None = None) -> str | None:
+    base = mirror_base if mirror_base is not None else os.environ.get(MIRROR_ENV)
+    if not base:
+        return None
+    parsed_base = urllib.parse.urlsplit(base)
+    if (
+        parsed_base.scheme != "https"
+        or not parsed_base.netloc
+        or parsed_base.username is not None
+        or parsed_base.password is not None
+        or parsed_base.query
+        or parsed_base.fragment
+    ):
+        raise DownloadError(
+            f"{MIRROR_ENV} must be an https origin/path without credentials, query, or fragment"
+        )
+    source = urllib.parse.urlsplit(url)
+    if source.scheme != "https" or not source.netloc or source.query or source.fragment:
+        raise DownloadError(f"unsupported canonical download URL: {url}")
+    prefix = parsed_base.path.rstrip("/")
+    path = f"{prefix}/{source.netloc}{source.path}"
+    return urllib.parse.urlunsplit((parsed_base.scheme, parsed_base.netloc, path, "", ""))
+
+
+def _download_urls(url: str) -> tuple[str, ...]:
+    mirror = _mirror_url(url)
+    return (mirror, url) if mirror and mirror != url else (url,)
+
+
+def _retry_delay(error: BaseException, attempt: int) -> float:
+    if isinstance(error, urllib.error.HTTPError):
+        retry_after = error.headers.get("Retry-After") if error.headers else None
+        if retry_after and retry_after.isdigit():
+            return min(float(retry_after), 30.0)
+    return DOWNLOAD_BACKOFF_SECONDS[min(attempt, len(DOWNLOAD_BACKOFF_SECONDS) - 1)]
+
+
+def _retryable(error: BaseException) -> bool:
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code in RETRYABLE_HTTP_STATUS
+    return isinstance(error, (urllib.error.URLError, TimeoutError, ConnectionError))
+
+
+def _download_once(url: str, temporary: Path) -> None:
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "weltgewebe-platform-bootstrap/2"}
+    )
+    with temporary.open("wb") as handle:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            shutil.copyfileobj(response, handle)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
 def _download(url: str, expected_sha256: str, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.is_file() and _sha256(destination) == expected_sha256:
-        return
-    with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-        request = urllib.request.Request(url, headers={"User-Agent": "weltgewebe-platform-bootstrap/1"})
-        with urllib.request.urlopen(request, timeout=90) as response:
-            shutil.copyfileobj(response, tmp)
-    actual = _sha256(tmp_path)
-    if actual != expected_sha256:
-        tmp_path.unlink(missing_ok=True)
-        raise RuntimeError(
-            f"download hash mismatch for {url}: expected {expected_sha256}, got {actual}"
+    if destination.is_symlink():
+        raise DownloadIntegrityError(
+            f"refusing symlinked download destination: {destination}"
         )
-    os.replace(tmp_path, destination)
+    with _download_lock(destination):
+        if destination.is_symlink():
+            raise DownloadIntegrityError(
+                f"refusing symlinked download destination: {destination}"
+            )
+        if destination.is_file() and _sha256(destination) == expected_sha256:
+            return
+        errors: list[str] = []
+        for candidate in _download_urls(url):
+            for attempt in range(DOWNLOAD_ATTEMPTS):
+                fd, temporary_name = tempfile.mkstemp(
+                    dir=destination.parent,
+                    prefix=f".{destination.name}.",
+                    suffix=".download.tmp",
+                )
+                os.close(fd)
+                temporary = Path(temporary_name)
+                try:
+                    _download_once(candidate, temporary)
+                    actual = _sha256(temporary)
+                    if actual != expected_sha256:
+                        raise DownloadIntegrityError(
+                            "download hash mismatch for "
+                            f"{candidate}: expected {expected_sha256}, got {actual}"
+                        )
+                    os.replace(temporary, destination)
+                    _fsync_directory(destination.parent)
+                    return
+                except DownloadIntegrityError:
+                    raise
+                except Exception as error:
+                    errors.append(
+                        f"{candidate} attempt {attempt + 1}/{DOWNLOAD_ATTEMPTS}: "
+                        f"{type(error).__name__}: {error}"
+                    )
+                    if not _retryable(error) or attempt + 1 >= DOWNLOAD_ATTEMPTS:
+                        break
+                    time.sleep(_retry_delay(error, attempt))
+                finally:
+                    temporary.unlink(missing_ok=True)
+        raise DownloadUnavailableError(
+            "external dependency download unavailable after bounded retries: "
+            + " | ".join(errors)
+        )
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        _fsync_directory(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _install_executable(source: Path, destination: Path) -> None:
@@ -91,15 +246,17 @@ def _assert_artifact_contract(name: str, path: Path, spec: dict[str, Any]) -> No
             f"artifact {name} must contain only CRD {required_kind}, got {observed}"
         )
 
+
 def _safe_extract_tar(archive: Path, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive, "r:gz") as handle:
         root = destination.resolve()
-        for member in handle.getmembers():
+        members = handle.getmembers()
+        for member in members:
             target = (destination / member.name).resolve()
             if root not in target.parents and target != root:
                 raise RuntimeError(f"unsafe archive member: {member.name}")
-        handle.extractall(destination, members=handle.getmembers())
+        handle.extractall(destination, members=members)
 
 
 def _check_host(lock: dict[str, Any]) -> None:
@@ -174,13 +331,17 @@ def install(
         "schema_version": 1,
         "lock_sha256": hashlib.sha256(LOCK_PATH.read_bytes()).hexdigest(),
         "cache": str(cache),
+        "download_policy": {
+            "attempts_per_source": DOWNLOAD_ATTEMPTS,
+            "canonical_fallback": True,
+            "digest_required": True,
+            "mirror_configured": bool(os.environ.get(MIRROR_ENV)),
+        },
         "tools": tool_paths,
         "artifacts": artifact_paths,
         "kubernetes": lock["kubernetes"],
     }
-    (cache / "receipt.json").write_text(
-        json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    _atomic_write_json(cache / "receipt.json", receipt)
     return receipt
 
 
@@ -191,11 +352,25 @@ def main() -> int:
     parser.add_argument("--tool", action="append", dest="tools")
     parser.add_argument("--skip-artifacts", action="store_true")
     args = parser.parse_args()
-    receipt = install(
-        args.cache.resolve(),
-        tool_names=args.tools,
-        include_artifacts=not args.skip_artifacts,
-    )
+    try:
+        receipt = install(
+            args.cache.resolve(),
+            tool_names=args.tools,
+            include_artifacts=not args.skip_artifacts,
+        )
+    except DownloadError as error:
+        print(
+            json.dumps(
+                {
+                    "status": "error",
+                    "failure_class": error.failure_class,
+                    "detail": str(error),
+                },
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+        return 2
     if args.json:
         print(json.dumps(receipt, sort_keys=True))
     else:

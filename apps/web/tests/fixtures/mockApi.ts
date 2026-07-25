@@ -314,15 +314,25 @@ export async function mockApiResponses(
         const location = payload.location as
           | { lat?: unknown; lon?: unknown }
           | undefined;
+        const clearAddress = payload.clear_address === true;
+        const clearLocation = payload.clear_location === true;
+        const suppliedLocation =
+          typeof location?.lat === "number" && typeof location?.lon === "number"
+            ? { lat: location.lat, lon: location.lon }
+            : null;
+        const effectiveLocation = clearLocation
+          ? null
+          : (suppliedLocation ?? privateProfile.location);
         if (
           typeof payload.title !== "string" ||
           !payload.title.trim() ||
           (mapState !== "not_on_map" &&
             mapState !== "exact" &&
             mapState !== "radius") ||
-          (mapState !== "not_on_map" &&
-            (typeof location?.lat !== "number" ||
-              typeof location?.lon !== "number"))
+          (clearAddress && payload.address !== undefined) ||
+          (clearLocation && location !== undefined) ||
+          (clearLocation && mapState !== "not_on_map") ||
+          (mapState !== "not_on_map" && effectiveLocation === null)
         ) {
           return route.fulfill({ status: 400 });
         }
@@ -337,14 +347,16 @@ export async function mockApiResponses(
           mapState === "radius" && typeof payload.radius_m === "number"
             ? payload.radius_m
             : 0;
-        if (location) {
-          privateProfile.location = {
-            lat: location.lat as number,
-            lon: location.lon as number,
-          };
+        if (clearLocation) {
+          privateProfile.location = null;
+        } else if (suppliedLocation) {
+          privateProfile.location = suppliedLocation;
         }
-        privateProfile.address =
-          typeof payload.address === "string" ? payload.address : "";
+        if (clearAddress) {
+          privateProfile.address = "";
+        } else if (typeof payload.address === "string") {
+          privateProfile.address = payload.address;
+        }
         if (mapState === "not_on_map") {
           delete account.public_pos;
         } else if (privateProfile.location) {

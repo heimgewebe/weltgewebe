@@ -207,7 +207,11 @@ class KubernetesHaContractTests(unittest.TestCase):
                 "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
             )
             self.assertNotIn("ref", step.get("with", {}))
-        self.assertNotIn("github.event.pull_request.head.sha", workflow_text)
+        self.assertIn(
+            "PROOF_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}",
+            workflow_text,
+        )
+        self.assertNotIn("ref: ${{ github.event.pull_request.head.sha", workflow_text)
 
     def test_kubernetes_workflow_covers_api_build_inputs(self) -> None:
         workflow = (ROOT / ".github/workflows/kubernetes-platform.yml").read_text()
