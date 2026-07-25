@@ -23,6 +23,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
     await expect(panel.locator(".panel-header h2")).toHaveCount(1);
     await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
     await expect(handle).toHaveAttribute("aria-expanded", "false");
+    await expect(panel.getByTestId("node-compact-summary")).toBeVisible();
     await expect(panel.locator(".tabs")).toBeHidden();
     await expect(page.getByLabel("Panelgröße")).toHaveCount(0);
     expect((await handle.boundingBox())?.height).toBeGreaterThanOrEqual(44);
@@ -65,14 +66,39 @@ test.describe("ContextPanel mobile compact and full states", () => {
     await panel.locator(".mobile-panel-title").click();
     await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
     await expect(panel.getByTestId("node-compact-summary")).toBeVisible();
-    await expect(panel.locator("#panel-gespraech")).toHaveCount(0);
+    await expect(panel.locator("#panel-gespraech")).toHaveCount(1);
+    await expect(panel.locator("#panel-gespraech")).toBeHidden();
 
     await handle.click();
+    await expect(panel.getByTestId("node-compact-summary")).toBeHidden();
     await expect(panel.locator("#panel-gespraech")).toBeVisible();
     await expect(panel.getByRole("tab", { name: "Gespräch" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
+  });
+
+  test("collapsing preserves an unsaved edit draft", async ({ page }) => {
+    await page.locator(".map-marker").first().click();
+    const panel = page.getByTestId("context-panel");
+    const handle = page.getByTestId("sheet-handle");
+
+    await handle.click();
+    await panel.getByRole("tab", { name: "Bearbeiten" }).click();
+    await panel
+      .getByRole("button", { name: "Bearbeiten", exact: true })
+      .click();
+    const titleInput = panel.getByLabel("Titel");
+    await titleInput.fill("Ungespeicherter Entwurf");
+
+    await panel.locator(".mobile-panel-title").click();
+    await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
+    await expect(titleInput).toBeHidden();
+    await expect(panel.getByTestId("node-compact-summary")).toBeVisible();
+
+    await handle.click();
+    await expect(titleInput).toBeVisible();
+    await expect(titleInput).toHaveValue("Ungespeicherter Entwurf");
   });
 
   test("Komposition starts full and can collapse through the same handle", async ({
@@ -119,6 +145,27 @@ test.describe("ContextPanel mobile compact and full states", () => {
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
   });
 
+  test("secondary mouse buttons do not start sheet dragging", async ({
+    page,
+  }) => {
+    await page.locator(".map-marker").first().click();
+    const panel = page.getByTestId("context-panel");
+    const handle = page.getByTestId("sheet-handle");
+
+    for (const event of [
+      { pointerId: 41, button: 1, buttons: 4 },
+      { pointerId: 42, button: 2, buttons: 2 },
+    ]) {
+      await handle.dispatchEvent("pointerdown", {
+        ...event,
+        pointerType: "mouse",
+        clientY: 700,
+      });
+      await expect(panel).not.toHaveClass(/dragging/);
+      await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
+    }
+  });
+
   test("reduced motion removes the height transition", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.locator(".map-marker").first().click();
@@ -128,11 +175,11 @@ test.describe("ContextPanel mobile compact and full states", () => {
     expect(transitionDuration).toBe("0s");
   });
 
-  test("a coarse-pointer phone keeps the mobile sheet in landscape", async ({
+  test("rotating a coarse-pointer phone keeps the live panel mobile", async ({
     browser,
   }) => {
     const context = await browser.newContext({
-      viewport: { width: 844, height: 390 },
+      viewport: { width: 390, height: 844 },
       hasTouch: true,
       isMobile: true,
     });
@@ -153,6 +200,12 @@ test.describe("ContextPanel mobile compact and full states", () => {
     const handle = landscapePage.getByTestId("sheet-handle");
     await expect(handle).toBeVisible();
     await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
+    await expect(panel.getByTestId("node-compact-summary")).toBeVisible();
+
+    await landscapePage.setViewportSize({ width: 844, height: 390 });
+    await expect(handle).toBeVisible();
+    await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
+    await expect(panel.getByTestId("node-compact-summary")).toBeVisible();
     await handle.click();
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
 

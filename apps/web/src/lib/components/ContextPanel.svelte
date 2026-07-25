@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from "svelte";
+  import { createEventDispatcher } from "svelte";
   import {
     selection,
     systemState,
@@ -40,8 +40,6 @@
     domainChanged: DomainChanged;
   }>();
   const DRAG_THRESHOLD_PX = 6;
-  const MOBILE_SHEET_MEDIA =
-    "(max-width: 768px), (max-height: 500px) and (pointer: coarse)";
 
   let kompositionPanel: KompositionPanelHandle | null = null;
   let sheetStage: SheetStage = "compact";
@@ -53,17 +51,6 @@
   let dragging = false;
   let dragMoved = false;
   let suppressNextHandleClick = false;
-  let mobileSheetMode = false;
-
-  onMount(() => {
-    const media = window.matchMedia(MOBILE_SHEET_MEDIA);
-    const updateMobileSheetMode = () => {
-      mobileSheetMode = media.matches;
-    };
-    updateMobileSheetMode();
-    media.addEventListener("change", updateMobileSheetMode);
-    return () => media.removeEventListener("change", updateMobileSheetMode);
-  });
 
   function derivePanelTitle(
     state: SystemState,
@@ -113,7 +100,6 @@
   }
 
   function toggleSheetStage(): void {
-    if (!mobileSheetMode) return;
     setSheetStage(sheetStage === "compact" ? "full" : "compact");
   }
 
@@ -126,8 +112,8 @@
   }
 
   function handleSheetPointerDown(event: PointerEvent): void {
-    if (!mobileSheetMode) return;
     const handle = event.currentTarget as HTMLElement;
+    if (event.button !== 0 || handle.getClientRects().length === 0) return;
     const aside = handle.closest<HTMLElement>('[data-testid="context-panel"]');
     if (!aside) return;
     handle.setPointerCapture(event.pointerId);
@@ -194,7 +180,8 @@
   }
 
   function handleSheetKeydown(event: KeyboardEvent): void {
-    if (!mobileSheetMode) return;
+    const handle = event.currentTarget as HTMLElement;
+    if (handle.getClientRects().length === 0) return;
     if (event.key === "ArrowUp" || event.key === "End") {
       event.preventDefault();
       setSheetStage("full");
@@ -294,7 +281,6 @@
       {:else if $selection}
         {#if $selection.type === "node"}
           <NodePanel
-            compact={mobileSheetMode && sheetStage === "compact"}
             on:selectRelated={handleRelated}
             on:domainChanged={handleDomainChanged}
           />
@@ -478,6 +464,11 @@
       padding-top: 0.65rem;
     }
 
+    .stage-compact :global(.compact-node-summary) {
+      display: block;
+    }
+
+    .stage-compact :global(.node-full-content),
     .stage-compact :global(.tabs) {
       display: none;
     }

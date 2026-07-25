@@ -32,8 +32,6 @@
     domainChanged: DomainChanged;
   }>();
 
-  export let compact = false;
-
   type NodeTab = "uebersicht" | "gespraech" | "verlauf" | "bearbeiten";
   let activeTab: NodeTab = "uebersicht";
   let tabs: NodeTab[] = ["uebersicht", "gespraech", "verlauf"];
@@ -321,14 +319,19 @@
 
 <div class="node-mode">
   <h3>{nodeDetails?.title || $selection?.data?.title || $selection?.id}</h3>
-  {#if summary && (!editing || compact)}<p class="summary">{summary}</p>{/if}
+  <div class="compact-node-summary" data-testid="node-compact-summary">
+    {#if summary}<p class="summary">{summary}</p>{/if}
+    <p><strong>Knotenart:</strong> {kind}</p>
+  </div>
+  {#if summary && !editing}<p class="summary node-full-content">
+      {summary}
+    </p>{/if}
 
-  {#if compact}
-    <div class="compact-node-summary" data-testid="node-compact-summary">
-      <p><strong>Knotenart:</strong> {kind}</p>
-    </div>
-  {:else if editing}
-    <form class="edit-form" on:submit|preventDefault={saveNode}>
+  {#if editing}
+    <form
+      class="edit-form node-full-content"
+      on:submit|preventDefault={saveNode}
+    >
       <label>
         Titel
         <input
@@ -414,7 +417,11 @@
       </div>
     </form>
   {:else}
-    <div class="tabs node-tabs" role="tablist" aria-label="Knoten-Tabs">
+    <div
+      class="tabs node-tabs node-full-content"
+      role="tablist"
+      aria-label="Knoten-Tabs"
+    >
       <button
         class:active={activeTab === "uebersicht"}
         on:click={() => setTab("uebersicht")}
@@ -461,7 +468,7 @@
       {/if}
     </div>
 
-    <div class="tab-content">
+    <div class="tab-content node-full-content">
       {#if activeTab === "uebersicht"}
         <div
           class="overview"
@@ -603,6 +610,9 @@
     margin: 0;
     font-size: 1.5rem;
     line-height: 1.2;
+  }
+  .compact-node-summary {
+    display: none;
   }
   .node-tabs {
     gap: 0;

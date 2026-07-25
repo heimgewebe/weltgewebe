@@ -70,7 +70,7 @@ test("application overview uses the same surfaces, controls and empty-state cont
   await expect(filters.getByRole("link")).toHaveCount(5);
   await expect(filters.getByRole("link", { name: "Alle" })).toHaveAttribute(
     "aria-current",
-    "page",
+    "true",
   );
 });
 
