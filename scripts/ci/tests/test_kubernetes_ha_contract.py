@@ -1189,7 +1189,7 @@ spec:
             },
         )
         build = run.call_args_list[0]
-        self.assertEqual(build.args[0][:4], ["docker", "build", "--file", "-"])
+        self.assertEqual(build.args[0][:5], ["docker", "build", "--pull=false", "--file", "-"])
         self.assertIn("org.opencontainers.image.revision=" + "c" * 40, build.kwargs["input_text"])
         self.assertEqual(
             run.call_args_list[1].args[0],

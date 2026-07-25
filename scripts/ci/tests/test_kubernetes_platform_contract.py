@@ -50,6 +50,10 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             "weltgewebe_proof_identity",
             ROOT / "scripts/platform/proof_identity.py",
         )
+        cls.oci_mirror = load_module(
+            "weltgewebe_oci_proof_mirror",
+            ROOT / "scripts/platform/oci_proof_mirror.py",
+        )
 
     def test_tool_bootstrap_selection_is_exact_and_deduplicated(self) -> None:
         lock = {"tools": {"kustomize": {"version": "x"}, "trivy": {"version": "y"}}}
@@ -169,12 +173,189 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         result = self.validator.validate(render=False)
         self.assertEqual(result["status"], "pass")
 
+    def test_oci_proof_mirror_contract_is_private_digest_bound_and_budgeted(self) -> None:
+        result = self.oci_mirror.validate_contract()
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["owner"], "heimgewebe/weltgewebe")
+        self.assertEqual(result["source_kind"], "private-ghcr-digest-mirror")
+        self.assertEqual(
+            result["mirror_repository"],
+            "ghcr.io/heimgewebe/weltgewebe-proof-oci",
+        )
+        self.assertEqual(result["visibility"], "private")
+        self.assertEqual(result["repository_binding"], "heimgewebe/weltgewebe")
+        self.assertEqual(result["image_count"], 25)
+        self.assertTrue(result["retention"]["unbounded_growth_prevented"])
+        self.assertEqual(result["retention"]["observed_package_versions"], 193)
+        self.assertEqual(result["retention"]["package_version_hard_limit"], 512)
+        self.assertEqual(result["retention"]["orphan_grace_days"], 14)
+
+    def test_oci_mirror_suite_selection_is_exact(self) -> None:
+        lock = self.oci_mirror._load_lock()
+        kind = self.oci_mirror._selected_images(
+            lock, ["kind-gitops", "app-build"]
+        )
+        ha = self.oci_mirror._selected_images(
+            lock, ["ha-recovery", "app-build"]
+        )
+        self.assertEqual(len(kind), 15)
+        self.assertEqual(len(ha), 23)
+        self.assertEqual(len({name for name, _spec in kind}), 15)
+        self.assertEqual(len({name for name, _spec in ha}), 23)
+
+    def test_oci_mirror_wrong_digest_fails_without_retry(self) -> None:
+        digest = "sha256:" + "a" * 64
+        spec = {
+            "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@" + digest,
+            "local_ref": "example.invalid/image:test",
+        }
+        budgets = {"pull_attempts": 3, "retry_backoff_seconds": [5, 10]}
+        with mock.patch.object(
+            self.oci_mirror, "_local_image", return_value=None
+        ), mock.patch.object(self.oci_mirror, "_run") as run, mock.patch.object(
+            self.oci_mirror,
+            "_repo_digests",
+            return_value=["ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:" + "b" * 64],
+        ), mock.patch.object(self.oci_mirror.time, "sleep") as sleep:
+            with self.assertRaises(self.oci_mirror.IntegrityError):
+                self.oci_mirror._pull_one("test", spec, budgets)
+        run.assert_called_once_with(["docker", "pull", spec["mirror"]], timeout=900)
+        sleep.assert_not_called()
+
+    def test_oci_mirror_unavailable_uses_bounded_retries(self) -> None:
+        digest = "sha256:" + "a" * 64
+        spec = {
+            "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@" + digest,
+            "local_ref": "example.invalid/image:test",
+        }
+        budgets = {"pull_attempts": 3, "retry_backoff_seconds": [5, 10]}
+        error = subprocess.CalledProcessError(1, ["docker", "pull"])
+        with mock.patch.object(
+            self.oci_mirror, "_local_image", return_value=None
+        ), mock.patch.object(
+            self.oci_mirror, "_run", side_effect=error
+        ) as run, mock.patch.object(self.oci_mirror.time, "sleep") as sleep:
+            with self.assertRaises(
+                self.oci_mirror.ControlledMirrorUnavailableError
+            ):
+                self.oci_mirror._pull_one("test", spec, budgets)
+        self.assertEqual(run.call_count, 3)
+        self.assertEqual(
+            [call.args[0] for call in sleep.call_args_list],
+            [5.0, 10.0],
+        )
+
+    def test_oci_mirror_pull_tags_only_after_exact_digest_verification(self) -> None:
+        digest = "sha256:" + "a" * 64
+        spec = {
+            "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@" + digest,
+            "local_ref": "example.invalid/image:test",
+        }
+        budgets = {"pull_attempts": 3, "retry_backoff_seconds": [5, 10]}
+        verified = {"image_id": "sha256:" + "c" * 64, "source": "local-verified"}
+        with mock.patch.object(
+            self.oci_mirror, "_local_image", side_effect=[None, verified]
+        ), mock.patch.object(self.oci_mirror, "_run") as run, mock.patch.object(
+            self.oci_mirror, "_repo_digests", return_value=[spec["mirror"]]
+        ):
+            result = self.oci_mirror._pull_one("test", spec, budgets)
+        self.assertEqual(result["action"], "pulled")
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [
+                ["docker", "pull", spec["mirror"]],
+                ["docker", "tag", spec["mirror"], spec["local_ref"]],
+            ],
+        )
+
+    def test_oci_mirror_live_package_budget_is_fail_closed(self) -> None:
+        lock = self.oci_mirror._load_lock()
+        package = {
+            "id": lock["mirror"]["package_id"],
+            "name": "weltgewebe-proof-oci",
+            "package_type": "container",
+            "visibility": "private",
+            "repository": {"full_name": "heimgewebe/weltgewebe"},
+            "version_count": lock["budgets"]["package_version_hard_limit"] + 1,
+        }
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            self.oci_mirror, "_output", return_value=json.dumps(package)
+        ):
+            state = Path(tmp)
+            with self.assertRaises(self.oci_mirror.BudgetError):
+                self.oci_mirror.verify_live_package(state)
+            receipt = json.loads((state / "live-package-receipt.json").read_text())
+        self.assertEqual(receipt["status"], "fail")
+        self.assertEqual(
+            receipt["failure_class"], "integrity_or_budget_mismatch"
+        )
+
+    def test_oci_mirror_lock_rejects_target_digest_injection(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text()
+        )
+        lock["images"]["kind_node"]["mirror"] = (
+            "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:" + "0" * 64
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "lock.json"
+            path.write_text(json.dumps(lock))
+            with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
+                with self.assertRaises(self.oci_mirror.IntegrityError):
+                    self.oci_mirror._load_lock()
+
+    def test_oci_mirror_lock_rejects_seed_binding_drift(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text()
+        )
+        lock["images"]["kind_node"]["canonical"] = (
+            "docker.io/kindest/node@sha256:" + "0" * 64
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "lock.json"
+            path.write_text(json.dumps(lock))
+            with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
+                with self.assertRaises(self.oci_mirror.IntegrityError):
+                    self.oci_mirror._load_lock()
+
+    def test_strict_oci_policy_sets_cnpg_cluster_pull_policy(self) -> None:
+        cluster = {
+            "apiVersion": "postgresql.cnpg.io/v1",
+            "kind": "Cluster",
+            "spec": {"instances": 3},
+        }
+        with mock.patch.dict(os.environ, {self.reference.OCI_STRICT_ENV: "1"}):
+            result = self.reference.enforce_controlled_oci_pull_policy([cluster])
+        self.assertEqual(result[0]["spec"]["imagePullPolicy"], "Never")
+
+    def test_strict_oci_policy_forces_never_for_every_pod_container(self) -> None:
+        documents = [
+            {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "spec": {
+                    "template": {
+                        "spec": {
+                            "initContainers": [{"name": "init", "image": "init:v1"}],
+                            "containers": [{"name": "app", "image": "app:v1"}],
+                        }
+                    }
+                },
+            }
+        ]
+        with mock.patch.dict(os.environ, {self.reference.OCI_STRICT_ENV: "1"}):
+            result = self.reference.enforce_controlled_oci_pull_policy(documents)
+        pod = result[0]["spec"]["template"]["spec"]
+        self.assertEqual(pod["initContainers"][0]["imagePullPolicy"], "Never")
+        self.assertEqual(pod["containers"][0]["imagePullPolicy"], "Never")
+
     def test_kubernetes_proof_workflow_is_reusable_and_auditable(self) -> None:
         workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
         workflow_text = workflow_path.read_text()
         workflow = yaml.safe_load(workflow_text)
         self.assertFalse(workflow["concurrency"]["cancel-in-progress"])
         self.assertIn("github.event.pull_request.head.sha || github.sha", workflow["concurrency"]["group"])
+        self.assertNotIn("oci-proof-cache", workflow_text)
 
         def named_steps(job_name: str) -> dict[str, dict]:
             return {
@@ -188,6 +369,46 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             ("kind-ha-recovery-proof", "ha-recovery", "Reconcile owned HA proof resources"),
         ):
             steps = named_steps(job_name)
+            self.assertEqual(workflow["jobs"][job_name]["needs"], "contract")
+            self.assertEqual(
+                workflow["jobs"][job_name]["env"]["WELTGEWEBE_PROOF_OCI_STRICT"],
+                "1",
+            )
+            self.assertEqual(
+                workflow["jobs"][job_name]["permissions"],
+                {"contents": "read", "packages": "read"},
+            )
+            init_step = steps["Initialize isolated OCI mirror credentials"]
+            self.assertIn("$RUNNER_TEMP", init_step["run"])
+            self.assertIn("$GITHUB_ENV", init_step["run"])
+            live_step = steps["Verify live OCI mirror package budget"]
+            self.assertEqual(live_step["env"], {"GH_TOKEN": "${{ github.token }}"})
+            self.assertIn("oci_proof_mirror.py", live_step["run"])
+            self.assertIn("verify-live", live_step["run"])
+            auth_step = steps["Authenticate controlled OCI mirror"]
+            self.assertEqual(auth_step["env"], {"GH_TOKEN": "${{ github.token }}"})
+            self.assertIn("docker login ghcr.io", auth_step["run"])
+            load_step = next(
+                step for name, step in steps.items() if name.startswith("Load controlled")
+            )
+            self.assertIn("oci_proof_mirror.py", load_step["run"])
+            self.assertIn("load-host", load_step["run"])
+            self.assertIn(f"--suite {suite}", load_step["run"])
+            self.assertIn("--suite app-build", load_step["run"])
+            logout_step = steps["Remove OCI mirror credentials"]
+            self.assertEqual(
+                logout_step["if"],
+                "always() && steps.proof-cache.outputs.cache-hit != 'true'",
+            )
+            self.assertIn("docker logout ghcr.io", logout_step["run"])
+            block_step = steps["Block all OCI registries after mirror load"]
+            for registry in ("registry-1.docker.io", "quay.io", "ghcr.io"):
+                self.assertIn(registry, block_step["run"])
+            self.assertIn("getent ahostsv4", block_step["run"])
+            offline_step = steps["Verify loaded OCI inputs offline"]
+            self.assertIn("verify-host", offline_step["run"])
+            self.assertIn(f"--suite {suite}", offline_step["run"])
+            self.assertIn("--suite app-build", offline_step["run"])
             compute = next(step for name, step in steps.items() if name.startswith("Compute immutable"))
             restore = next(step for name, step in steps.items() if name.startswith("Restore immutable"))
             validate = next(step for name, step in steps.items() if name.startswith("Validate restored"))
@@ -287,10 +508,12 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             (root / "scripts/platform").mkdir(parents=True)
             (root / "docs").mkdir()
             (root / "platform/toolchain.lock.json").write_text("{}\n")
+            (root / "platform/oci-proof-mirror.lock.json").write_text("{}\n")
             (root / "scripts/platform/proof_identity.py").write_text("helper-v1\n")
             (root / "docs/unrelated.md").write_text("one\n")
             tracked = (
                 "platform/toolchain.lock.json",
+                "platform/oci-proof-mirror.lock.json",
                 "scripts/platform/proof_identity.py",
                 "docs/unrelated.md",
             )

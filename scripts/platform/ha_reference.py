@@ -601,6 +601,7 @@ def render_cnpg_manifest(source: str) -> str:
             "topologyKey": "kubernetes.io/hostname",
         }
     )
+    documents = ref.enforce_controlled_oci_pull_policy(documents)
     return yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
 
 def verify_cnpg_operator_ha(kubectl: str) -> list[str]:
@@ -713,6 +714,7 @@ def apply_digest_locked_manifest(
         {tagged: (digest, 1) for tagged, digest in replacements.items()},
         "digest-locked release",
     )
+    documents = ref.enforce_controlled_oci_pull_policy(documents)
     source = yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
     ref.run(
         [
@@ -855,6 +857,7 @@ def render_barman_cloud_manifest(source: str) -> str:
             "topologyKey": "kubernetes.io/hostname",
         }
     )
+    documents = ref.enforce_controlled_oci_pull_policy(documents)
     return yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
 
 def apply_barman_cloud_manifest(kubectl: str, artifact: str) -> None:
@@ -1423,6 +1426,7 @@ def prepare_api_upgrade_candidate(
         [
             "docker",
             "build",
+            "--pull=false",
             "--file",
             "-",
             "--tag",
@@ -2324,6 +2328,13 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     )
     restore_name = f"{args.cluster}-restore"
     owner_id = args.owner_id or ref.generate_owner_id("ha-proof")
+    oci_host: dict[str, Any] | None = None
+    node_image = receipt["kubernetes"]["kind_node_image"]
+    if ref.controlled_oci_strict():
+        oci_host = ref.prepare_controlled_oci_host("ha-recovery")
+        node_image = oci_host["kind_node_image"]
+    primary_oci_cluster: dict[str, Any] | None = None
+    restore_oci_cluster: dict[str, Any] | None = None
     created_primary = created_restore = object_store_created = False
     stopped_node = ""
     object_store_address = ""
@@ -2331,10 +2342,14 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     s3_secret_key = secrets.token_urlsafe(32)
     try:
         create_kind_cluster(
-            kind, args.cluster, receipt["kubernetes"]["kind_node_image"],
+            kind, args.cluster, node_image,
             "platform/clusters/ha/kind.yaml", commit, owner_id
         )
         created_primary = True
+        if ref.controlled_oci_strict():
+            primary_oci_cluster = ref.load_controlled_oci_into_kind(
+                kind, args.cluster, "ha-recovery"
+            )
         kubectl = require_active_cluster_context(kind, kubectl, args.cluster)
         image_ids = ref.build_images(kind, args.cluster, commit, timestamp)
         image_ids.update(
@@ -2481,10 +2496,14 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         )
 
         create_kind_cluster(
-            kind, restore_name, receipt["kubernetes"]["kind_node_image"],
+            kind, restore_name, node_image,
             "platform/clusters/ha/restore-kind.yaml", commit, owner_id
         )
         created_restore = True
+        if ref.controlled_oci_strict():
+            restore_oci_cluster = ref.load_controlled_oci_into_kind(
+                kind, restore_name, "ha-recovery"
+            )
         restore_kubectl = require_active_cluster_context(
             kind, kubectl, restore_name
         )
@@ -2540,6 +2559,12 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             "schema_version": 1, "status": "pass", "commit": commit,
             "primary_cluster": args.cluster, "restore_cluster": restore_name,
             "tool_lock_sha256": receipt["lock_sha256"], "image_ids": image_ids,
+            "oci_controlled_source": {
+                "strict": ref.controlled_oci_strict(),
+                "host": oci_host,
+                "primary_cluster": primary_oci_cluster,
+                "restore_cluster": restore_oci_cluster,
+            },
             "operator_nodes": {
                 "primary": primary_operator_nodes,
                 "restore": restore_operator_nodes,

@@ -155,6 +155,47 @@ def _assert_images() -> None:
                 raise ContractError(f"unbounded latest image in {path.relative_to(ROOT)}")
 
 
+def _assert_oci_proof_mirror() -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/platform/oci_proof_mirror.py"),
+        "validate",
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        result = json.loads(completed.stdout)
+    except (
+        OSError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+    ) as error:
+        raise ContractError(f"OCI proof mirror contract failed: {error}") from error
+    expected = {
+        "status": "pass",
+        "owner": "heimgewebe/weltgewebe",
+        "source_kind": "private-ghcr-digest-mirror",
+        "mirror_repository": "ghcr.io/heimgewebe/weltgewebe-proof-oci",
+        "visibility": "private",
+        "repository_binding": "heimgewebe/weltgewebe",
+        "image_count": 25,
+    }
+    observed = {key: result.get(key) for key in expected}
+    if observed != expected:
+        raise ContractError(f"OCI proof mirror contract mismatch: {observed}")
+    retention = result.get("retention", {})
+    if retention.get("unbounded_growth_prevented") is not True:
+        raise ContractError("OCI proof mirror version growth is not bounded")
+    if retention.get("orphan_grace_days") != 14:
+        raise ContractError("OCI proof mirror orphan grace must remain 14 days")
+
 def _assert_local_fixture_scope() -> None:
     """Keep public disposable fixture credentials and names local."""
     for path in sorted(PLATFORM.rglob("*")):
@@ -547,6 +588,8 @@ def validate(render: bool) -> dict[str, Any]:
         PLATFORM / "apps/weltgewebe/migration/ha/kustomization.yaml",
         PLATFORM / "infrastructure/ha-data/kustomization.yaml",
         ROOT / "scripts/platform/ha_reference.py",
+        ROOT / "scripts/platform/oci_proof_mirror.py",
+        PLATFORM / "oci-proof-mirror.lock.json",
     ]
     missing = [str(path.relative_to(ROOT)) for path in required_paths if not path.is_file()]
     if missing:
@@ -554,6 +597,7 @@ def validate(render: bool) -> dict[str, Any]:
     _assert_no_secrets()
     _assert_first_party_deployments()
     _assert_images()
+    _assert_oci_proof_mirror()
     _assert_local_fixture_scope()
     _assert_migration_job()
     _assert_flux_chain()

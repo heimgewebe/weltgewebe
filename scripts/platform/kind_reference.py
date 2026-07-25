@@ -22,6 +22,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CACHE = ROOT / ".cache/weltgewebe-platform"
+OCI_MIRROR_STATE = CACHE / "oci-mirror"
+OCI_MIRROR_LOCK = ROOT / "platform/oci-proof-mirror.lock.json"
+OCI_STRICT_ENV = "WELTGEWEBE_PROOF_OCI_STRICT"
 MARKERS = CACHE / "clusters"
 KUBECONFIGS = CACHE / "kubeconfigs"
 DEFAULT_CLUSTER = "weltgewebe-reference"
@@ -120,6 +123,74 @@ def tool_receipt() -> dict[str, Any]:
         ]
     )
     return json.loads(raw)
+
+
+def _enabled(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes"}
+
+
+def controlled_oci_strict() -> bool:
+    return _enabled(OCI_STRICT_ENV)
+
+
+def _oci_mirror_lock() -> dict[str, Any]:
+    try:
+        payload = json.loads(OCI_MIRROR_LOCK.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ProofError(f"controlled OCI mirror lock is unreadable: {error}") from error
+    if payload.get("schema_version") != 1 or not isinstance(payload.get("images"), dict):
+        raise ProofError("controlled OCI mirror lock is invalid")
+    return payload
+
+
+def prepare_controlled_oci_host(suite: str) -> dict[str, Any]:
+    raw = output(
+        [
+            sys.executable,
+            "scripts/platform/oci_proof_mirror.py",
+            "--state",
+            str(OCI_MIRROR_STATE),
+            "verify-host",
+            "--suite",
+            suite,
+            "--suite",
+            "app-build",
+        ]
+    )
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ProofError("controlled OCI offline host verification receipt is malformed") from error
+    if result.get("status") != "pass" or result.get("strict") is not True:
+        raise ProofError(f"controlled OCI offline host verification did not pass strictly: {result}")
+    lock = _oci_mirror_lock()
+    result["kind_node_image"] = lock["images"]["kind_node"]["local_ref"]
+    return result
+
+
+def load_controlled_oci_into_kind(kind: str, cluster: str, suite: str) -> dict[str, Any]:
+    raw = output(
+        [
+            sys.executable,
+            "scripts/platform/oci_proof_mirror.py",
+            "--state",
+            str(OCI_MIRROR_STATE),
+            "load-kind",
+            "--suite",
+            suite,
+            "--kind",
+            kind,
+            "--cluster",
+            cluster,
+        ]
+    )
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ProofError("controlled OCI kind-load receipt is malformed") from error
+    if result.get("status") != "pass" or result.get("strict") is not True:
+        raise ProofError(f"controlled OCI kind load did not pass strictly: {result}")
+    return result
 
 
 def require_host_tools() -> None:
@@ -506,13 +577,68 @@ def create_kind_cluster(
             time.sleep(delay)
 
 
+def _pod_spec(document: dict[str, Any]) -> dict[str, Any] | None:
+    kind = document.get("kind")
+    spec = document.get("spec")
+    if not isinstance(spec, dict):
+        return None
+    if (
+        controlled_oci_strict()
+        and kind == "Cluster"
+        and document.get("apiVersion") == "postgresql.cnpg.io/v1"
+    ):
+        spec["imagePullPolicy"] = "Never"
+        return None
+    if kind == "Pod":
+        return spec
+    if kind in {"Deployment", "DaemonSet", "StatefulSet", "ReplicaSet", "Job"}:
+        template = spec.get("template")
+    elif kind == "CronJob":
+        template = spec.get("jobTemplate", {}).get("spec", {}).get("template")
+    else:
+        return None
+    if not isinstance(template, dict):
+        return None
+    pod = template.get("spec")
+    return pod if isinstance(pod, dict) else None
+
+
+def enforce_controlled_oci_pull_policy(
+    documents: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not controlled_oci_strict():
+        return documents
+    for document in documents:
+        pod = _pod_spec(document)
+        if pod is None:
+            continue
+        for key in ("initContainers", "containers", "ephemeralContainers"):
+            containers = pod.get(key, [])
+            if not isinstance(containers, list):
+                continue
+            for container in containers:
+                if isinstance(container, dict) and isinstance(container.get("image"), str):
+                    container["imagePullPolicy"] = "Never"
+    return documents
+
+
 def apply_yaml(kubectl: str, document: dict[str, Any] | list[dict[str, Any]]) -> None:
     documents = document if isinstance(document, list) else [document]
-    payload = yaml.safe_dump_all(documents, sort_keys=False)
+    payload = yaml.safe_dump_all(
+        enforce_controlled_oci_pull_policy(documents), sort_keys=False
+    )
     run([kubectl, "apply", "-f", "-"], input_text=payload)
 
 
 def apply_file(kubectl: str, path: Path) -> None:
+    if controlled_oci_strict():
+        documents = [
+            item
+            for item in yaml.safe_load_all(path.read_text(encoding="utf-8"))
+            if isinstance(item, dict)
+        ]
+        apply_yaml(kubectl, documents)
+        return
     run([kubectl, "apply", "-f", str(path)])
 
 
@@ -594,6 +720,7 @@ def build_images(kind: str, cluster: str, commit: str, timestamp: str) -> dict[s
         [
             "docker",
             "build",
+            "--pull=false",
             "--file",
             "apps/api/Dockerfile",
             "--build-arg",
@@ -610,6 +737,7 @@ def build_images(kind: str, cluster: str, commit: str, timestamp: str) -> dict[s
         [
             "docker",
             "build",
+            "--pull=false",
             "--file",
             "apps/web/Dockerfile",
             "--build-arg",
@@ -666,6 +794,20 @@ def install_platform_components(
             "hubble.ui.enabled=false",
             "--set",
             "operator.replicas=1",
+            *(
+                [
+                    "--set",
+                    "image.pullPolicy=Never",
+                    "--set",
+                    "operator.image.pullPolicy=Never",
+                    "--set",
+                    "envoy.image.pullPolicy=Never",
+                    "--set",
+                    "hubble.relay.image.pullPolicy=Never",
+                ]
+                if controlled_oci_strict()
+                else []
+            ),
             "--wait",
             "--timeout",
             "10m",
@@ -675,15 +817,20 @@ def install_platform_components(
     wait_rollout(kubectl, "kube-system", "daemonset/cilium")
     wait_rollout(kubectl, "kube-system", "deployment/cilium-operator")
     wait_rollout(kubectl, "kube-system", "deployment/hubble-relay")
-    run(
-        [
-            flux,
-            "install",
-            "--namespace=flux-system",
-            "--components=source-controller,kustomize-controller,helm-controller,notification-controller",
-        ],
-        timeout=600,
-    )
+    flux_command = [
+        flux,
+        "install",
+        "--namespace=flux-system",
+        "--components=source-controller,kustomize-controller,helm-controller,notification-controller",
+    ]
+    if controlled_oci_strict():
+        exported = output([*flux_command, "--export"])
+        flux_documents = [
+            item for item in yaml.safe_load_all(exported) if isinstance(item, dict)
+        ]
+        apply_yaml(kubectl, flux_documents)
+    else:
+        run(flux_command, timeout=600)
     for deployment in (
         "source-controller",
         "kustomize-controller",
@@ -754,6 +901,12 @@ def flux_source_document(
 
 def apply_direct(kubectl: str, kustomize: str, path: str) -> None:
     rendered = output([kustomize, "build", path])
+    if controlled_oci_strict():
+        documents = [
+            item for item in yaml.safe_load_all(rendered) if isinstance(item, dict)
+        ]
+        apply_yaml(kubectl, documents)
+        return
     run([kubectl, "apply", "-f", "-"], input_text=rendered)
 
 
@@ -1221,13 +1374,18 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
     helm = tools["helm"]
     owner_id = args.owner_id or generate_owner_id("kind-proof")
     app_namespace = "weltgewebe"
+    oci_host: dict[str, Any] | None = None
+    node_image = receipt["kubernetes"]["kind_node_image"]
+    if controlled_oci_strict():
+        oci_host = prepare_controlled_oci_host("kind-gitops")
+        node_image = oci_host["kind_node_image"]
     reserved = False
     created = False
     try:
         create_kind_cluster(
             kind,
             args.cluster,
-            receipt["kubernetes"]["kind_node_image"],
+            node_image,
             "platform/clusters/local/kind.yaml",
             commit,
             owner_id,
@@ -1235,6 +1393,11 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
         )
         reserved = True
         created = True
+        oci_cluster: dict[str, Any] | None = None
+        if controlled_oci_strict():
+            oci_cluster = load_controlled_oci_into_kind(
+                kind, args.cluster, "kind-gitops"
+            )
         api_server_host = control_plane_address(args.cluster)
         image_ids = build_images(kind, args.cluster, commit, timestamp)
         install_platform_components(
@@ -1268,6 +1431,11 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
             "commit": commit,
             "owner_id": owner_id,
             "tool_lock_sha256": receipt["lock_sha256"],
+            "oci_controlled_source": {
+                "strict": controlled_oci_strict(),
+                "host": oci_host,
+                "cluster": oci_cluster,
+            },
             "image_ids": image_ids,
             "bootstrap_api_server": {"host": api_server_host, "port": 6443},
             "api_restart": restart,

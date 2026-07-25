@@ -142,6 +142,9 @@ def compute_identity(suite: str, source_commit: str) -> dict[str, Any]:
         "tool_lock_sha256": _sha256_bytes(
             (ROOT / "platform/toolchain.lock.json").read_bytes()
         ),
+        "oci_mirror_lock_sha256": _sha256_bytes(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_bytes()
+        ),
         "invalidation_contract": list(SUITE_INPUTS[suite]),
     }
     payload["identity_sha256"] = _sha256_bytes(_canonical_json(payload))

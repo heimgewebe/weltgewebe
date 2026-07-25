@@ -68,6 +68,7 @@ jobs:
           python -m py_compile
           scripts/platform/bootstrap_tools.py
           scripts/platform/proof_identity.py
+          scripts/platform/oci_proof_mirror.py
           scripts/platform/validate_platform.py
           scripts/platform/kind_reference.py
           scripts/platform/ha_reference.py
@@ -104,12 +105,17 @@ jobs:
 
   kind-gitops-proof:
     needs: contract
+    permissions:
+      contents: read
+      packages: read
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       CLUSTER_NAME: wg-${{ github.run_id }}-${{ github.run_attempt }}
       PROOF_OWNER_ID: gha-kind-${{ github.run_id }}-${{ github.run_attempt }}
       PROOF_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      WELTGEWEBE_PROOF_OCI_STRICT: "1"
+      OCI_MIRROR_EVIDENCE: build/kubernetes-platform/kind-gitops-oci-mirror
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
@@ -144,6 +150,64 @@ jobs:
         with:
           path: .cache/weltgewebe-platform/downloads
           key: weltgewebe-platform-downloads-${{ runner.os }}-${{ hashFiles('platform/toolchain.lock.json') }}
+      - name: Initialize isolated OCI mirror credentials
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          docker_config="$RUNNER_TEMP/weltgewebe-kind-oci-mirror"
+          mkdir -p "$docker_config"
+          echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
+      - name: Verify live OCI mirror package budget
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python scripts/platform/oci_proof_mirror.py
+          --state "$OCI_MIRROR_EVIDENCE" verify-live
+      - name: Authenticate controlled OCI mirror
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          echo "$GH_TOKEN" | docker login ghcr.io
+          --username "$GITHUB_ACTOR" --password-stdin
+      - name: Load controlled kind and build OCI inputs
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: >-
+          python scripts/platform/oci_proof_mirror.py
+          --state "$OCI_MIRROR_EVIDENCE" load-host
+          --suite kind-gitops
+          --suite app-build
+      - name: Remove OCI mirror credentials
+        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          docker logout ghcr.io || true
+          rm -rf "$DOCKER_CONFIG"
+          mkdir -p "$DOCKER_CONFIG"
+      - name: Block all OCI registries after mirror load
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          for host in \
+            registry-1.docker.io auth.docker.io \
+            production.cloudflare.docker.com quay.io ghcr.io
+          do
+            echo "127.0.0.1 $host" | sudo tee -a /etc/hosts >/dev/null
+          done
+          for host in \
+            registry-1.docker.io auth.docker.io \
+            production.cloudflare.docker.com quay.io ghcr.io
+          do
+            addresses="$(getent ahostsv4 "$host" | awk '{print $1}' | sort -u)"
+            test "$addresses" = "127.0.0.1"
+          done
+      - name: Verify loaded OCI inputs offline
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: >-
+          python scripts/platform/oci_proof_mirror.py
+          --state "$OCI_MIRROR_EVIDENCE" verify-host
+          --suite kind-gitops
+          --suite app-build
       - name: Run pull-request direct reference proof
         if: steps.proof-cache.outputs.cache-hit != 'true' && github.event_name == 'pull_request'
         run: >-
@@ -180,6 +244,7 @@ jobs:
           path: |
             build/kubernetes-platform/kind-gitops-identity.json
             build/kubernetes-platform/reuse/kind-gitops/*.json
+            build/kubernetes-platform/kind-gitops-oci-mirror/*.json
           if-no-files-found: error
           retention-days: 14
       - name: Stage failure diagnostics
@@ -219,12 +284,17 @@ jobs:
 
   kind-ha-recovery-proof:
     needs: contract
+    permissions:
+      contents: read
+      packages: read
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
       CLUSTER_NAME: wg-ha-${{ github.run_id }}-${{ github.run_attempt }}
       PROOF_OWNER_ID: gha-ha-${{ github.run_id }}-${{ github.run_attempt }}
       PROOF_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      WELTGEWEBE_PROOF_OCI_STRICT: "1"
+      OCI_MIRROR_EVIDENCE: build/kubernetes-platform/ha-recovery-oci-mirror
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
@@ -259,6 +329,64 @@ jobs:
         with:
           path: .cache/weltgewebe-platform/downloads
           key: weltgewebe-platform-downloads-${{ runner.os }}-${{ hashFiles('platform/toolchain.lock.json') }}
+      - name: Initialize isolated OCI mirror credentials
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          docker_config="$RUNNER_TEMP/weltgewebe-ha-oci-mirror"
+          mkdir -p "$docker_config"
+          echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
+      - name: Verify live OCI mirror package budget
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python scripts/platform/oci_proof_mirror.py
+          --state "$OCI_MIRROR_EVIDENCE" verify-live
+      - name: Authenticate controlled OCI mirror
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          echo "$GH_TOKEN" | docker login ghcr.io
+          --username "$GITHUB_ACTOR" --password-stdin
+      - name: Load controlled HA and build OCI inputs
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: >-
+          python scripts/platform/oci_proof_mirror.py
+          --state "$OCI_MIRROR_EVIDENCE" load-host
+          --suite ha-recovery
+          --suite app-build
+      - name: Remove OCI mirror credentials
+        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          docker logout ghcr.io || true
+          rm -rf "$DOCKER_CONFIG"
+          mkdir -p "$DOCKER_CONFIG"
+      - name: Block all OCI registries after mirror load
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          for host in \
+            registry-1.docker.io auth.docker.io \
+            production.cloudflare.docker.com quay.io ghcr.io
+          do
+            echo "127.0.0.1 $host" | sudo tee -a /etc/hosts >/dev/null
+          done
+          for host in \
+            registry-1.docker.io auth.docker.io \
+            production.cloudflare.docker.com quay.io ghcr.io
+          do
+            addresses="$(getent ahostsv4 "$host" | awk '{print $1}' | sort -u)"
+            test "$addresses" = "127.0.0.1"
+          done
+      - name: Verify loaded OCI inputs offline
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: >-
+          python scripts/platform/oci_proof_mirror.py
+          --state "$OCI_MIRROR_EVIDENCE" verify-host
+          --suite ha-recovery
+          --suite app-build
       - name: Run HA failover and blank-cluster recovery proof
         if: steps.proof-cache.outputs.cache-hit != 'true'
         run: >-
@@ -286,6 +414,7 @@ jobs:
           mkdir -p build/kubernetes-platform/ha-recovery
           cp -- build/kubernetes-platform/reuse/ha-recovery/proof.json \
             build/kubernetes-platform/ha-recovery/proof.json
+            build/kubernetes-platform/ha-recovery-oci-mirror/*.json
       - name: Upload HA recovery receipt
         if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
