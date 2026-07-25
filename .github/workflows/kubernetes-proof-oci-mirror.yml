@@ -45,6 +45,19 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # tag: v4
+        with:
+          version: v0.35.0
+      - name: Verify pinned Buildx multi-architecture digest inspection
+        run: |
+          set -euo pipefail
+          expected="sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5"
+          reference="docker.io/kindest/node:v1.36.1@$expected"
+          observed="$(
+            docker buildx imagetools inspect "$reference"               --format '{{json .Manifest.Digest}}' | jq -r .
+          )"
+          test "$observed" = "$expected"
+          docker buildx imagetools create --help | grep -F -- '--prefer-index'
       - name: Verify trusted dispatch identity
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -105,7 +118,7 @@ jobs:
           test "$observed_seed" = "$EXPECTED_SEED_SHA256"
           python scripts/platform/publish_oci_mirror.py validate
           docker buildx imagetools create --help | grep -F -- '--prefer-index'
-      - name: Preflight existing package ownership and access
+      - name: Preflight existing package metadata
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -113,28 +126,15 @@ jobs:
           mkdir -p build/kubernetes-platform
           package_api="/orgs/heimgewebe/packages/container/weltgewebe-proof-oci"
           error_file="$RUNNER_TEMP/package-preflight-error.txt"
-          if package_before_json="$(gh api "$package_api" 2>"$error_file")"; then
-            repositories_before_json="$(gh api "$package_api/repositories")"
-            repository_count="$(jq 'length' <<<"$repositories_before_json")"
-            test "$repository_count" -le 1
-            if test "$repository_count" -eq 1; then
-              test "$(jq -r '.[0].full_name' <<<"$repositories_before_json")" = "heimgewebe/weltgewebe"
-            fi
-            gh api --method PATCH "$package_api" -f visibility=private >/dev/null
-            repository_id="$(gh api repos/heimgewebe/weltgewebe --jq .id)"
-            gh api --method PUT "$package_api/repositories/$repository_id" >/dev/null
-            package_json="$(gh api "$package_api")"
-            repositories_json="$(gh api "$package_api/repositories")"
-            test "$(jq 'length' <<<"$repositories_json")" -eq 1
-            test "$(jq -r '.[0].full_name' <<<"$repositories_json")" = "heimgewebe/weltgewebe"
+          if package_json="$(gh api "$package_api" 2>"$error_file")"; then
+            test "$(jq -r .owner.login <<<"$package_json")" = "heimgewebe"
+            test "$(jq -r .name <<<"$package_json")" = "weltgewebe-proof-oci"
+            test "$(jq -r .package_type <<<"$package_json")" = "container"
             test "$(jq -r .visibility <<<"$package_json")" = "private"
-            state="prepared-existing"
+            state="existing-private-visible-to-workflow"
           elif grep -Fq '(HTTP 404)' "$error_file"; then
-            package_before_json='null'
-            repositories_before_json='[]'
             package_json='null'
-            repositories_json='[]'
-            state="absent"
+            state="not-visible-or-absent"
           else
             cat "$error_file" >&2
             exit 1
@@ -142,15 +142,12 @@ jobs:
           jq -n \
             --arg status pass \
             --arg state "$state" \
-            --arg expected_repository heimgewebe/weltgewebe \
-            --argjson package_before "$package_before_json" \
-            --argjson repositories_before "$repositories_before_json" \
-            --argjson package_after "$package_json" \
-            --argjson repositories_after "$repositories_json" \
+            --arg workflow_repository "$GITHUB_REPOSITORY" \
+            --arg association_contract "first workflow GITHUB_TOKEN publication links the package automatically" \
+            --argjson package "$package_json" \
             '{schema_version: 1, status: $status, state: $state,
-              expected_repository: $expected_repository,
-              before: {package: $package_before, repositories: $repositories_before},
-              after: {package: $package_after, repositories: $repositories_after}}' \
+              workflow_repository: $workflow_repository,
+              association_contract: $association_contract, package: $package}' \
             > build/kubernetes-platform/oci-mirror-package-preflight.json
       - name: Authenticate source and target registries
         env:
@@ -173,29 +170,27 @@ jobs:
           --expected-head "$EXPECTED_HEAD"
           --expected-seed-sha256 "$EXPECTED_SEED_SHA256"
           --output build/kubernetes-platform/oci-mirror-provenance.json
-      - name: Enforce and attest private package access
+      - name: Attest private package metadata
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           package_api="/orgs/heimgewebe/packages/container/weltgewebe-proof-oci"
-          repository_id="$(gh api repos/heimgewebe/weltgewebe --jq .id)"
-          gh api --method PATCH "$package_api" -f visibility=private >/dev/null
-          gh api --method PUT "$package_api/repositories/$repository_id" >/dev/null
           package_json="$(gh api "$package_api")"
-          repositories_json="$(gh api "$package_api/repositories")"
+          test "$(jq -r .owner.login <<<"$package_json")" = "heimgewebe"
+          test "$(jq -r .name <<<"$package_json")" = "weltgewebe-proof-oci"
+          test "$(jq -r .package_type <<<"$package_json")" = "container"
           test "$(jq -r .visibility <<<"$package_json")" = "private"
-          test "$(jq 'length' <<<"$repositories_json")" -eq 1
-          test "$(jq -r '.[0].full_name' <<<"$repositories_json")" = "heimgewebe/weltgewebe"
+          test "$(jq -r .version_count <<<"$package_json")" -ge 1
           jq -n \
             --arg status pass \
-            --arg expected_repository heimgewebe/weltgewebe \
+            --arg workflow_repository "$GITHUB_REPOSITORY" \
+            --arg association_contract "published with this repository GITHUB_TOKEN" \
             --argjson package "$package_json" \
-            --argjson repositories "$repositories_json" \
             '{schema_version: 1, status: $status,
-              expected_repository: $expected_repository,
-              package: $package, repositories: $repositories}' \
-            > build/kubernetes-platform/oci-mirror-package-access.json
+              workflow_repository: $workflow_repository,
+              association_contract: $association_contract, package: $package}' \
+            > build/kubernetes-platform/oci-mirror-package-metadata.json
       - name: Logout registry credentials
         if: always()
         run: |
@@ -208,5 +203,90 @@ jobs:
         with:
           name: kubernetes-proof-oci-mirror-${{ inputs.expected_head }}
           path: build/kubernetes-platform/*.json
+          if-no-files-found: error
+          retention-days: 14
+  verify-read-access:
+    if: github.event_name == 'workflow_dispatch'
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    env:
+      EXPECTED_HEAD: ${{ inputs.expected_head }}
+      DOCKER_CONFIG: ${{ runner.temp }}/weltgewebe-docker-read-config
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # tag: v4
+        with:
+          version: v0.35.0
+      - name: Download publisher evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # tag: v8
+        with:
+          name: kubernetes-proof-oci-mirror-${{ inputs.expected_head }}
+          path: build/kubernetes-platform
+      - name: Authenticate repository read access
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$DOCKER_CONFIG"
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Verify repository read access and every mirror digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$EXPECTED_HEAD"
+          provenance="build/kubernetes-platform/oci-mirror-provenance.json"
+          test "$(jq -r .status "$provenance")" = "pass"
+          test "$(jq -r .source_head "$provenance")" = "$EXPECTED_HEAD"
+          checked=0
+          while IFS=$'\t' read -r name mirror expected; do
+            observed="$(
+              docker buildx imagetools inspect "$mirror" \
+                --format '{{json .Manifest.Digest}}' | jq -r .
+            )"
+            test "$observed" = "$expected"
+            checked=$((checked + 1))
+            printf 'verified %s %s\n' "$name" "$observed"
+          done < <(
+            jq -r '.images | to_entries[] |
+              [.key, .value.mirror, .value.mirror_digest] | @tsv' "$provenance"
+          )
+          test "$checked" -eq "$(jq -r .image_count "$provenance")"
+          package_api="/orgs/heimgewebe/packages/container/weltgewebe-proof-oci"
+          package_json="$(gh api "$package_api")"
+          test "$(jq -r .owner.login <<<"$package_json")" = "heimgewebe"
+          test "$(jq -r .name <<<"$package_json")" = "weltgewebe-proof-oci"
+          test "$(jq -r .package_type <<<"$package_json")" = "container"
+          test "$(jq -r .visibility <<<"$package_json")" = "private"
+          jq -n \
+            --arg status pass \
+            --arg source_head "$EXPECTED_HEAD" \
+            --arg workflow_repository "$GITHUB_REPOSITORY" \
+            --argjson checked_images "$checked" \
+            --argjson package "$package_json" \
+            '{schema_version: 1, status: $status, source_head: $source_head,
+              workflow_repository: $workflow_repository,
+              checked_images: $checked_images, package: $package}' \
+            > build/kubernetes-platform/oci-mirror-read-access.json
+      - name: Logout registry credentials
+        if: always()
+        run: |
+          docker logout ghcr.io || true
+          rm -rf "$DOCKER_CONFIG"
+      - name: Upload read-access evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-proof-oci-mirror-read-access-${{ inputs.expected_head }}
+          path: build/kubernetes-platform/oci-mirror-read-access.json
           if-no-files-found: error
           retention-days: 14

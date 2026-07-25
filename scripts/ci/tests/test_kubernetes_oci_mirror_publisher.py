@@ -225,7 +225,7 @@ class KubernetesOciMirrorPublisherContractTests(unittest.TestCase):
         jobs = workflow["jobs"]
         self.assertEqual(workflow["permissions"], {"contents": "read"})
         self.assertEqual(jobs["publish"]["permissions"], {"contents": "read", "packages": "write"})
-        for job_name in ("contract", "publish"):
+        for job_name in ("contract", "publish", "verify-read-access"):
             checkout = next(
                 step for step in jobs[job_name]["steps"]
                 if str(step.get("uses", "")).startswith("actions/checkout@")
@@ -242,7 +242,7 @@ class KubernetesOciMirrorPublisherContractTests(unittest.TestCase):
         self.assertIn("EXPECTED_SEED_SHA256", trusted)
         self.assertNotIn("GH_TOKEN", jobs["publish"]["env"])
 
-    def test_workflow_preflights_package_and_always_uploads_partial_evidence(self) -> None:
+    def test_workflow_preflights_metadata_and_always_uploads_partial_evidence(self) -> None:
         workflow = yaml.safe_load(
             (ROOT / ".github/workflows/kubernetes-proof-oci-mirror.yml").read_text(encoding="utf-8")
         )
@@ -250,15 +250,20 @@ class KubernetesOciMirrorPublisherContractTests(unittest.TestCase):
         named = {step["name"]: step for step in steps if "name" in step}
         order = [step.get("name") for step in steps]
         self.assertLess(
-            order.index("Preflight existing package ownership and access"),
+            order.index("Preflight existing package metadata"),
             order.index("Publish exact digest-preserving OCI mirror"),
         )
-        preflight = named["Preflight existing package ownership and access"]["run"]
-        self.assertIn("visibility=private", preflight)
-        self.assertIn("package_before", preflight)
-        self.assertIn("package_after", preflight)
-        self.assertIn("jq 'length'", preflight)
-        self.assertIn("heimgewebe/weltgewebe", preflight)
+        preflight = named["Preflight existing package metadata"]["run"]
+        self.assertIn(".owner.login", preflight)
+        self.assertIn(".package_type", preflight)
+        self.assertIn(".visibility", preflight)
+        self.assertIn("not-visible-or-absent", preflight)
+        self.assertNotIn("/repositories", preflight)
+        self.assertNotIn("--method PATCH", preflight)
+        postflight = named["Attest private package metadata"]["run"]
+        self.assertIn(".version_count", postflight)
+        self.assertNotIn("/repositories", postflight)
+        self.assertNotIn("--method PATCH", postflight)
         publish = named["Publish exact digest-preserving OCI mirror"]["run"]
         self.assertIn('--expected-head "$EXPECTED_HEAD"', publish)
         self.assertIn('--expected-seed-sha256 "$EXPECTED_SEED_SHA256"', publish)
@@ -267,22 +272,51 @@ class KubernetesOciMirrorPublisherContractTests(unittest.TestCase):
         self.assertEqual(named["Upload mirror provenance"]["with"]["retention-days"], 14)
         self.assertIn("DOCKERHUB_TOKEN", named["Authenticate source and target registries"]["env"])
 
-    def test_workflow_pins_runner_buildx_and_preserve_index_capability(self) -> None:
+    def test_workflow_has_separate_repository_read_access_proof(self) -> None:
         workflow = yaml.safe_load(
             (ROOT / ".github/workflows/kubernetes-proof-oci-mirror.yml").read_text(encoding="utf-8")
         )
-        publish = workflow["jobs"]["publish"]
-        self.assertEqual(publish["runs-on"], "ubuntu-24.04")
-        buildx = next(
-            step for step in publish["steps"]
-            if str(step.get("uses", "")).startswith("docker/setup-buildx-action@")
+        verify = workflow["jobs"]["verify-read-access"]
+        self.assertEqual(verify["needs"], "publish")
+        self.assertEqual(verify["permissions"], {"contents": "read", "packages": "read"})
+        named = {step["name"]: step for step in verify["steps"] if "name" in step}
+        download = named["Download publisher evidence"]
+        self.assertTrue(str(download["uses"]).startswith("actions/download-artifact@"))
+        check = named["Verify repository read access and every mirror digest"]["run"]
+        self.assertIn(".images | to_entries[]", check)
+        self.assertIn("docker buildx imagetools inspect", check)
+        self.assertIn("checked_images", check)
+        self.assertIn(".visibility", check)
+        self.assertNotIn("/repositories", check)
+        self.assertEqual(named["Logout registry credentials"]["if"], "always()")
+        self.assertEqual(named["Upload read-access evidence"]["if"], "always()")
+
+    def test_workflow_pins_runner_buildx_and_multiarch_inspection(self) -> None:
+        workflow = yaml.safe_load(
+            (ROOT / ".github/workflows/kubernetes-proof-oci-mirror.yml").read_text(encoding="utf-8")
         )
-        self.assertEqual(buildx["with"]["version"], "v0.35.0")
-        verify = next(
-            step for step in publish["steps"]
+        for job_name in ("contract", "publish", "verify-read-access"):
+            job = workflow["jobs"][job_name]
+            self.assertEqual(job["runs-on"], "ubuntu-24.04")
+            buildx = next(
+                step for step in job["steps"]
+                if str(step.get("uses", "")).startswith("docker/setup-buildx-action@")
+            )
+            self.assertEqual(buildx["with"]["version"], "v0.35.0")
+        contract = {
+            step["name"]: step
+            for step in workflow["jobs"]["contract"]["steps"]
+            if "name" in step
+        }
+        smoke = contract["Verify pinned Buildx multi-architecture digest inspection"]["run"]
+        self.assertIn("kindest/node", smoke)
+        self.assertIn(".Manifest.Digest", smoke)
+        self.assertIn("--prefer-index", smoke)
+        publish_verify = next(
+            step for step in workflow["jobs"]["publish"]["steps"]
             if step.get("name") == "Verify immutable trusted-main publisher inputs"
         )
-        self.assertIn("--prefer-index", verify["run"])
+        self.assertIn("--prefer-index", publish_verify["run"])
 
 
 if __name__ == "__main__":
