@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -30,7 +29,10 @@ class KubernetesOciMirrorPublisherContractTests(unittest.TestCase):
             ROOT / "scripts/platform/publish_oci_mirror.py",
         )
 
-    def test_seed_is_private_repository_owned_and_digest_only(self) -> None:
+    def policy(self) -> dict[str, object]:
+        return dict(self.publisher.EXPECTED_PUBLISHER_POLICY)
+
+    def test_seed_is_private_repository_owned_and_exactly_inventoried(self) -> None:
         result = self.publisher.validate()
         self.assertEqual(result["status"], "pass")
         self.assertEqual(result["owner"], "heimgewebe/weltgewebe")
@@ -39,125 +41,248 @@ class KubernetesOciMirrorPublisherContractTests(unittest.TestCase):
             "ghcr.io/heimgewebe/weltgewebe-proof-oci",
         )
         self.assertEqual(result["visibility"], "private")
-        self.assertEqual(result["image_count"], 25)
+        self.assertEqual(result["retention_state"], "bootstrap_pending_lock")
+        self.assertEqual(set(result["inventory"]), set(self.publisher.EXPECTED_IMAGES))
+        self.assertEqual(result["publisher_policy"]["max_parallelism"], 3)
         self.assertEqual(len(result["seed_sha256"]), 64)
 
-    def test_manifest_digest_mismatch_fails_without_retry(self) -> None:
-        canonical = "registry.invalid/image:v1@sha256:" + "a" * 64
+    def test_inventory_replacement_is_rejected_even_when_count_is_unchanged(self) -> None:
+        seed = json.loads(self.publisher.SEED_PATH.read_text(encoding="utf-8"))
+        seed["images"]["replacement"] = seed["images"].pop("kind_node")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "seed.json"
+            path.write_text(json.dumps(seed), encoding="utf-8")
+            with mock.patch.object(self.publisher, "SEED_PATH", path):
+                with self.assertRaisesRegex(self.publisher.PublisherError, "inventory mismatch"):
+                    self.publisher._load_seed()
+
+    def test_invalid_suite_and_non_boolean_kind_binding_are_rejected(self) -> None:
+        seed = json.loads(self.publisher.SEED_PATH.read_text(encoding="utf-8"))
+        seed["images"]["kind_node"]["suites"] = ["wrong"]
+        seed["images"]["kind_node"]["load_into_kind"] = "false"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "seed.json"
+            path.write_text(json.dumps(seed), encoding="utf-8")
+            with mock.patch.object(self.publisher, "SEED_PATH", path):
+                with self.assertRaisesRegex(self.publisher.PublisherError, "suite binding"):
+                    self.publisher._load_seed()
+
+    def test_every_source_is_registry_qualified_and_target_is_not_a_source(self) -> None:
+        seed = self.publisher._load_seed()
+        target = seed["target"]["repository"]
+        for spec in seed["images"].values():
+            repository = self.publisher._reference_repository(spec["canonical"])
+            self.assertIn(".", repository.split("/", 1)[0])
+            self.assertNotEqual(repository, target)
+            self.assertFalse(repository.startswith("ghcr.io/heimgewebe/"))
+
+    def test_canonical_manifest_availability_is_retried_with_bounded_backoff(self) -> None:
+        digest = "sha256:" + "a" * 64
+        deadline = self.publisher.Deadline.after(60)
         with mock.patch.object(
             self.publisher,
-            "_manifest_digest",
-            side_effect=["sha256:" + "a" * 64, "sha256:" + "b" * 64],
-        ), mock.patch.object(self.publisher, "_run") as run, mock.patch.object(
-            self.publisher.time, "sleep"
-        ) as sleep:
-            with self.assertRaises(self.publisher.PublisherError):
-                self.publisher._publish_one(
-                    "ghcr.io/heimgewebe/weltgewebe-proof-oci",
-                    "test",
-                    canonical,
-                    3,
-                )
-        run.assert_called_once()
-        sleep.assert_not_called()
+            "_manifest_digest_once",
+            side_effect=[self.publisher.AvailabilityError("429"), digest],
+        ) as inspect, mock.patch.object(self.publisher, "_sleep_backoff") as backoff:
+            observed = self.publisher._manifest_digest(
+                "docker.io/library/test:v1@" + digest,
+                attempts=3,
+                backoff_seconds=[5, 10],
+                operation_timeout=30,
+                deadline=deadline,
+            )
+        self.assertEqual(observed, digest)
+        self.assertEqual(inspect.call_count, 2)
+        backoff.assert_called_once_with(5, deadline)
 
-    def test_transient_publication_failure_is_bounded(self) -> None:
-        canonical = "registry.invalid/image:v1@sha256:" + "a" * 64
-        error = subprocess.CalledProcessError(1, ["docker", "buildx"])
+    def test_integrity_failure_is_not_retried(self) -> None:
+        deadline = self.publisher.Deadline.after(60)
         with mock.patch.object(
             self.publisher,
-            "_manifest_digest",
-            return_value="sha256:" + "a" * 64,
-        ), mock.patch.object(
-            self.publisher, "_run", side_effect=error
-        ) as run, mock.patch.object(self.publisher.time, "sleep") as sleep:
-            with self.assertRaises(self.publisher.PublisherError):
-                self.publisher._publish_one(
-                    "ghcr.io/heimgewebe/weltgewebe-proof-oci",
-                    "test",
-                    canonical,
-                    3,
+            "_manifest_digest_once",
+            side_effect=self.publisher.IntegrityError("wrong digest"),
+        ) as inspect, mock.patch.object(self.publisher, "_sleep_backoff") as backoff:
+            with self.assertRaises(self.publisher.IntegrityError):
+                self.publisher._manifest_digest(
+                    "docker.io/library/test:v1@sha256:" + "a" * 64,
+                    attempts=3,
+                    backoff_seconds=[5, 10],
+                    operation_timeout=30,
+                    deadline=deadline,
                 )
-        self.assertEqual(run.call_count, 3)
-        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1.0, 2.0])
+        inspect.assert_called_once()
+        backoff.assert_not_called()
 
-    def test_publish_requires_exact_head_and_seed_before_any_registry_write(self) -> None:
+    def test_existing_correct_mirror_tag_is_reused_without_mutation(self) -> None:
+        digest = "sha256:" + "a" * 64
+        canonical = "docker.io/library/test:v1@" + digest
+        with mock.patch.object(
+            self.publisher, "_manifest_digest", side_effect=[digest, digest]
+        ), mock.patch.object(self.publisher, "_create_mirror") as create:
+            result = self.publisher._publish_one(
+                "ghcr.io/heimgewebe/weltgewebe-proof-oci",
+                "test",
+                canonical,
+                self.policy(),
+                self.publisher.Deadline.after(60),
+            )
+        self.assertEqual(result["action"], "reused")
+        self.assertTrue(result["mirror_tag"].endswith("test-" + "a" * 64))
+        create.assert_not_called()
+
+    def test_copy_preserves_single_manifest_shape_and_uses_full_digest_tag(self) -> None:
+        result = mock.Mock(returncode=0)
+        with mock.patch.object(self.publisher.subprocess, "run", return_value=result) as run:
+            self.publisher._create_mirror_once(
+                "ghcr.io/heimgewebe/weltgewebe-proof-oci:test-" + "a" * 64,
+                "docker.io/library/test:v1@sha256:" + "a" * 64,
+                timeout=30,
+            )
+        argv = run.call_args.args[0]
+        self.assertIn("--prefer-index=false", argv)
+        self.assertTrue(any("test-" + "a" * 64 in item for item in argv))
+
+    def test_publish_rejects_unreviewed_head_before_registry_work(self) -> None:
         with mock.patch.object(self.publisher, "_git_head", return_value="a" * 40), mock.patch.object(
             self.publisher, "_sha256", return_value="b" * 64
-        ), mock.patch.object(self.publisher, "_publish_one") as publish_one:
-            with tempfile.TemporaryDirectory() as tmp:
-                with self.assertRaises(self.publisher.PublisherError):
-                    self.publisher.publish(
-                        "c" * 40,
-                        "b" * 64,
-                        Path(tmp) / "provenance.json",
-                    )
-        publish_one.assert_not_called()
+        ), mock.patch.object(self.publisher, "_load_seed") as load_seed:
+            with self.assertRaisesRegex(self.publisher.PublisherError, "head mismatch"):
+                self.publisher.publish(
+                    "c" * 40,
+                    "b" * 64,
+                    ROOT / "build/kubernetes-platform/provenance.json",
+                )
+        load_seed.assert_not_called()
 
-    def test_successful_publication_writes_head_and_seed_bound_provenance(self) -> None:
+    def test_partial_batch_failure_is_written_to_durable_provenance(self) -> None:
+        digest = "sha256:" + "a" * 64
         seed = {
-            "schema_version": 1,
             "owner": "heimgewebe/weltgewebe",
             "target": {
                 "repository": "ghcr.io/heimgewebe/weltgewebe-proof-oci",
                 "visibility": "private",
+                "retention": {"state": "bootstrap_pending_lock"},
             },
-            "publisher": {"canonical_attempts": 3},
+            "publisher": {
+                **self.policy(),
+                "max_parallelism": 2,
+            },
             "images": {
-                "test": {
-                    "canonical": "registry.invalid/image:v1@sha256:" + "a" * 64,
+                "one": {
+                    "canonical": "docker.io/library/one:v1@" + digest,
                     "suites": ["kind-gitops"],
-                }
+                    "load_into_kind": True,
+                },
+                "two": {
+                    "canonical": "docker.io/library/two:v1@" + digest,
+                    "suites": ["kind-gitops"],
+                    "load_into_kind": True,
+                },
             },
         }
-        published = {
-            "canonical": seed["images"]["test"]["canonical"],
-            "canonical_digest": "sha256:" + "a" * 64,
-            "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:test-aaaaaaaaaaaaaaaa",
-            "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:" + "a" * 64,
-            "mirror_digest": "sha256:" + "a" * 64,
-        }
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+
+        def publish_one(_target, name, canonical, _policy, _deadline):
+            if name == "two":
+                raise self.publisher.AvailabilityError("offline")
+            return {
+                "action": "published",
+                "canonical": canonical,
+                "canonical_digest": digest,
+                "mirror_tag": "mirror:one",
+                "mirror": "mirror@" + digest,
+                "mirror_digest": digest,
+            }
+
+        output_dir = ROOT / "build/kubernetes-platform"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=output_dir) as tmp, mock.patch.object(
             self.publisher, "_git_head", return_value="c" * 40
         ), mock.patch.object(
             self.publisher, "_sha256", return_value="d" * 64
         ), mock.patch.object(
             self.publisher, "_load_seed", return_value=seed
         ), mock.patch.object(
-            self.publisher, "_publish_one", return_value=published
+            self.publisher, "_tool_versions", return_value={"docker": "x", "buildx": "y"}
+        ), mock.patch.object(
+            self.publisher, "_publish_one", side_effect=publish_one
         ):
             output = Path(tmp) / "provenance.json"
-            result = self.publisher.publish("c" * 40, "d" * 64, output)
+            with self.assertRaisesRegex(self.publisher.PublisherError, "failed batch"):
+                self.publisher.publish("c" * 40, "d" * 64, output)
             observed = json.loads(output.read_text(encoding="utf-8"))
-        self.assertEqual(result, observed)
-        self.assertEqual(observed["source_head"], "c" * 40)
-        self.assertEqual(observed["seed_sha256"], "d" * 64)
-        self.assertEqual(observed["images"]["test"]["mirror_digest"], "sha256:" + "a" * 64)
+        self.assertEqual(observed["status"], "partial")
+        self.assertEqual(observed["completed_count"], 1)
+        self.assertEqual(observed["failures"]["two"]["error_class"], "registry_unavailable")
 
-    def test_workflow_separates_pr_contract_from_manual_package_write(self) -> None:
+    def test_provenance_output_cannot_escape_build_evidence_root(self) -> None:
+        with self.assertRaisesRegex(self.publisher.PublisherError, "must remain below"):
+            self.publisher._validated_output_path(Path("/tmp/provenance.json"))
+
+    def test_workflow_executes_privileged_code_only_from_current_main(self) -> None:
         path = ROOT / ".github/workflows/kubernetes-proof-oci-mirror.yml"
         source = path.read_text(encoding="utf-8")
         workflow = yaml.safe_load(source)
         jobs = workflow["jobs"]
         self.assertEqual(workflow["permissions"], {"contents": "read"})
         self.assertEqual(jobs["publish"]["permissions"], {"contents": "read", "packages": "write"})
-        self.assertEqual(jobs["publish"]["if"], "github.event_name == 'workflow_dispatch'")
-        steps = {
-            step["name"]: step
-            for step in jobs["publish"]["steps"]
-            if "name" in step
+        for job_name in ("contract", "publish"):
+            checkout = next(
+                step for step in jobs[job_name]["steps"]
+                if str(step.get("uses", "")).startswith("actions/checkout@")
+            )
+            self.assertEqual(checkout["with"]["ref"], "${{ github.sha }}")
+            self.assertFalse(checkout["with"]["persist-credentials"])
+        contract_steps = {
+            step["name"]: step for step in jobs["contract"]["steps"] if "name" in step
         }
-        verify = steps["Verify immutable publisher inputs"]["run"]
-        self.assertIn("git rev-parse HEAD", verify)
-        self.assertIn("sha256sum platform/oci-proof-mirror.seed.json", verify)
-        publish = steps["Publish exact digest-preserving OCI mirror"]["run"]
+        trusted = contract_steps["Verify trusted dispatch identity"]["run"]
+        self.assertIn('test "$GITHUB_REF" = "refs/heads/main"', trusted)
+        self.assertIn('test "$GITHUB_SHA" = "$EXPECTED_HEAD"', trusted)
+        self.assertIn("git/ref/heads/main", trusted)
+        self.assertIn("EXPECTED_SEED_SHA256", trusted)
+        self.assertNotIn("GH_TOKEN", jobs["publish"]["env"])
+
+    def test_workflow_preflights_package_and_always_uploads_partial_evidence(self) -> None:
+        workflow = yaml.safe_load(
+            (ROOT / ".github/workflows/kubernetes-proof-oci-mirror.yml").read_text(encoding="utf-8")
+        )
+        steps = workflow["jobs"]["publish"]["steps"]
+        named = {step["name"]: step for step in steps if "name" in step}
+        order = [step.get("name") for step in steps]
+        self.assertLess(
+            order.index("Preflight existing package ownership and access"),
+            order.index("Publish exact digest-preserving OCI mirror"),
+        )
+        preflight = named["Preflight existing package ownership and access"]["run"]
+        self.assertIn("visibility=private", preflight)
+        self.assertIn("package_before", preflight)
+        self.assertIn("package_after", preflight)
+        self.assertIn("jq 'length'", preflight)
+        self.assertIn("heimgewebe/weltgewebe", preflight)
+        publish = named["Publish exact digest-preserving OCI mirror"]["run"]
         self.assertIn('--expected-head "$EXPECTED_HEAD"', publish)
         self.assertIn('--expected-seed-sha256 "$EXPECTED_SEED_SHA256"', publish)
-        bind = steps["Bind private package access to this repository"]["run"]
-        self.assertIn("visibility", bind)
-        self.assertIn("heimgewebe/weltgewebe", bind)
-        self.assertNotIn("weltgewebe-api", source)
-        self.assertNotIn("weltgewebe-web", source)
+        self.assertEqual(named["Logout registry credentials"]["if"], "always()")
+        self.assertEqual(named["Upload mirror provenance"]["if"], "always()")
+        self.assertEqual(named["Upload mirror provenance"]["with"]["retention-days"], 14)
+        self.assertIn("DOCKERHUB_TOKEN", named["Authenticate source and target registries"]["env"])
+
+    def test_workflow_pins_runner_buildx_and_preserve_index_capability(self) -> None:
+        workflow = yaml.safe_load(
+            (ROOT / ".github/workflows/kubernetes-proof-oci-mirror.yml").read_text(encoding="utf-8")
+        )
+        publish = workflow["jobs"]["publish"]
+        self.assertEqual(publish["runs-on"], "ubuntu-24.04")
+        buildx = next(
+            step for step in publish["steps"]
+            if str(step.get("uses", "")).startswith("docker/setup-buildx-action@")
+        )
+        self.assertEqual(buildx["with"]["version"], "v0.35.0")
+        verify = next(
+            step for step in publish["steps"]
+            if step.get("name") == "Verify immutable trusted-main publisher inputs"
+        )
+        self.assertIn("--prefer-index", verify["run"])
 
 
 if __name__ == "__main__":

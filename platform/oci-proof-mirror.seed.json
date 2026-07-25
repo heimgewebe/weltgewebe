@@ -5,116 +5,212 @@
     "registry": "ghcr.io",
     "repository": "ghcr.io/heimgewebe/weltgewebe-proof-oci",
     "visibility": "private",
-    "retention": "retain every digest referenced by platform/oci-proof-mirror.lock.json; delete only unreferenced versions after 14 days",
-    "max_versions": 30
+    "retention": {
+      "state": "bootstrap_pending_lock",
+      "future_lock_path": "platform/oci-proof-mirror.lock.json",
+      "orphan_grace_days": 14
+    }
   },
   "publisher": {
-    "canonical_attempts": 3,
+    "canonical_inspect_attempts": 3,
+    "mirror_publish_attempts": 3,
+    "mirror_verify_attempts": 3,
+    "retry_backoff_seconds": [
+      5,
+      10
+    ],
+    "operation_timeout_seconds": 900,
+    "overall_deadline_seconds": 6300,
+    "max_parallelism": 3,
     "require_identical_manifest_digest": true,
     "require_expected_head": true,
-    "require_expected_seed_sha256": true
+    "require_expected_seed_sha256": true,
+    "require_protected_main": true
   },
   "images": {
     "kind_node": {
-      "canonical": "kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5",
-      "suites": ["kind-gitops", "ha-recovery"],
+      "canonical": "docker.io/kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5",
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ],
       "load_into_kind": false
     },
     "cilium_agent": {
       "canonical": "quay.io/cilium/cilium:v1.19.5@sha256:20fbbc14ac20b55a292c0dcda5571bf31cde30a7dbc68c29db3e709390ab0732",
-      "suites": ["kind-gitops", "ha-recovery"]
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "cilium_operator": {
       "canonical": "quay.io/cilium/operator-generic:v1.19.5@sha256:be848a365776e07d0c5a895eda7aec928ddc52a5a1fa2f432fd7a286609e1db4",
-      "suites": ["kind-gitops", "ha-recovery"]
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "cilium_envoy": {
       "canonical": "quay.io/cilium/cilium-envoy:v1.36.8-1781157951-a7f42a3390781539911b5b9107881b35ecc4e752@sha256:326f872e19ce8aa45170efbf583b3f301586ba3feead14b864676d4baf3b45ed",
-      "suites": ["kind-gitops", "ha-recovery"]
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "hubble_relay": {
       "canonical": "quay.io/cilium/hubble-relay:v1.19.5@sha256:24409bfa1bca075c92acb26ba4b49cd573d99d68d5370f7cc825078185222a0c",
-      "suites": ["kind-gitops", "ha-recovery"]
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "flux_source_controller": {
       "canonical": "ghcr.io/fluxcd/source-controller:v1.9.3@sha256:ff8f3c92f1bcb433e858c948040c3a3393fe73f5dd72048a4502bfaf0a4c26cd",
-      "suites": ["kind-gitops", "ha-recovery"]
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "flux_kustomize_controller": {
       "canonical": "ghcr.io/fluxcd/kustomize-controller:v1.9.3@sha256:0203eb80743814f67bebb5f0b22c7db620bc461cc0b23732e0367a38fce04e4c",
-      "suites": ["kind-gitops", "ha-recovery"]
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "flux_helm_controller": {
       "canonical": "ghcr.io/fluxcd/helm-controller:v1.6.2@sha256:e17ab0e5885d80cebb9890663f85d59cd3866adebfc09a4d8bd2d512ef980bc4",
-      "suites": ["kind-gitops", "ha-recovery"]
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "flux_notification_controller": {
       "canonical": "ghcr.io/fluxcd/notification-controller:v1.9.2@sha256:9ce503e7bcb8493fafe2aaef0c2ac4396df4f6890256acf9cd444a2dcd2a69ed",
-      "suites": ["kind-gitops", "ha-recovery"]
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "local_postgres": {
-      "canonical": "postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c",
-      "suites": ["kind-gitops"]
+      "canonical": "docker.io/library/postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c",
+      "suites": [
+        "kind-gitops"
+      ],
+      "load_into_kind": true
     },
     "local_nats": {
-      "canonical": "nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927",
-      "suites": ["kind-gitops"]
+      "canonical": "docker.io/library/nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927",
+      "suites": [
+        "kind-gitops"
+      ],
+      "load_into_kind": true
     },
     "cloudnative_pg_operator": {
       "canonical": "ghcr.io/cloudnative-pg/cloudnative-pg@sha256:a2701eb97cdd2a34b1fdb2cb51987f544b706e40bec72ae7146cd8580efefebb",
-      "suites": ["ha-recovery"]
+      "suites": [
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "cloudnative_pg_postgresql": {
       "canonical": "ghcr.io/cloudnative-pg/postgresql:16.14@sha256:05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1",
-      "suites": ["ha-recovery"]
+      "suites": [
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "ha_nats": {
-      "canonical": "nats@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0",
-      "suites": ["ha-recovery"]
+      "canonical": "docker.io/library/nats@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0",
+      "suites": [
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "nats_box": {
-      "canonical": "natsio/nats-box@sha256:9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d",
-      "suites": ["ha-recovery"]
+      "canonical": "docker.io/natsio/nats-box@sha256:9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d",
+      "suites": [
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "seaweedfs": {
-      "canonical": "chrislusf/seaweedfs@sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d",
-      "suites": ["ha-recovery"]
+      "canonical": "docker.io/chrislusf/seaweedfs@sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d",
+      "suites": [
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "cert_manager_controller": {
       "canonical": "quay.io/jetstack/cert-manager-controller@sha256:e370f7800a53078e9d74324287a7d52b553864e55f5b4e521f911c3f6c7da203",
-      "suites": ["ha-recovery"]
+      "suites": [
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "cert_manager_cainjector": {
       "canonical": "quay.io/jetstack/cert-manager-cainjector@sha256:ad1dcc5b2fccc420f9b3fbee7ce8a869450c540fd4f2f41de2d95b1ca0c4d701",
-      "suites": ["ha-recovery"]
+      "suites": [
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "cert_manager_webhook": {
       "canonical": "quay.io/jetstack/cert-manager-webhook@sha256:c33cca307541e2d58861a55b1af5f390b7e19c8741e48b433693b73a7cce88b3",
-      "suites": ["ha-recovery"]
+      "suites": [
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "barman_cloud_plugin": {
       "canonical": "ghcr.io/cloudnative-pg/plugin-barman-cloud@sha256:71589dbac582333442812b07b31f7ea4d00324a8358aac7ca507dabf9f4b6c96",
-      "suites": ["ha-recovery"]
+      "suites": [
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "barman_cloud_sidecar": {
       "canonical": "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar@sha256:990361af3319f9e23aafa0f6d7981f99bf1f69b4e6a85cf1bc7d71d6f09bb288",
-      "suites": ["ha-recovery"]
+      "suites": [
+        "ha-recovery"
+      ],
+      "load_into_kind": true
     },
     "build_rust": {
-      "canonical": "rust:1.89.0-bookworm@sha256:948f9b08a66e7fe01b03a98ef1c7568292e07ec2e4fe90d88c07bb14563c84ff",
-      "suites": ["app-build"]
+      "canonical": "docker.io/library/rust:1.89.0-bookworm@sha256:948f9b08a66e7fe01b03a98ef1c7568292e07ec2e4fe90d88c07bb14563c84ff",
+      "suites": [
+        "app-build"
+      ],
+      "load_into_kind": false
     },
     "build_debian": {
-      "canonical": "debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818",
-      "suites": ["app-build"]
+      "canonical": "docker.io/library/debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818",
+      "suites": [
+        "app-build"
+      ],
+      "load_into_kind": false
     },
     "build_node": {
-      "canonical": "node:20.19.0-alpine@sha256:8bda036ddd59ea51a23bc1a1035d3b5c614e72c01366d989f4120e8adca196d4",
-      "suites": ["app-build"]
+      "canonical": "docker.io/library/node:20.19.0-alpine@sha256:8bda036ddd59ea51a23bc1a1035d3b5c614e72c01366d989f4120e8adca196d4",
+      "suites": [
+        "app-build"
+      ],
+      "load_into_kind": false
     },
     "build_caddy": {
-      "canonical": "caddy:2.7@sha256:236c6a30ccb84fa412a5360ca8b586d804faba0621ea182fb45902608cd8a563",
-      "suites": ["app-build"]
+      "canonical": "docker.io/library/caddy:2.7@sha256:236c6a30ccb84fa412a5360ca8b586d804faba0621ea182fb45902608cd8a563",
+      "suites": [
+        "app-build"
+      ],
+      "load_into_kind": false
     }
   }
 }

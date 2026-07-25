@@ -1,6 +1,7 @@
+---
 name: Kubernetes proof OCI mirror publisher
 
-on:
+"on":
   pull_request:
     paths:
       - ".github/workflows/kubernetes-proof-oci-mirror.yml"
@@ -10,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       expected_head:
-        description: Full repository commit containing the reviewed mirror seed
+        description: Full reviewed main commit containing the mirror seed
         required: true
         type: string
       expected_seed_sha256:
@@ -22,18 +23,41 @@ permissions:
   contents: read
 
 concurrency:
-  group: kubernetes-proof-oci-mirror-${{ github.event.pull_request.head.sha || inputs.expected_head || github.sha }}
+  group: >-
+    kubernetes-proof-oci-mirror-${{
+      github.event.pull_request.head.sha || inputs.expected_head || github.sha
+    }}
   cancel-in-progress: false
 
 jobs:
   contract:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      EXPECTED_HEAD: ${{ inputs.expected_head }}
+      EXPECTED_SEED_SHA256: ${{ inputs.expected_seed_sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
+      - name: Verify trusted dispatch identity
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$EXPECTED_HEAD"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          main_head="$(gh api repos/heimgewebe/weltgewebe/git/ref/heads/main --jq .object.sha)"
+          test "$main_head" = "$EXPECTED_HEAD"
+          observed_seed="$(sha256sum platform/oci-proof-mirror.seed.json | cut -d' ' -f1)"
+          test "$observed_seed" = "$EXPECTED_SEED_SHA256"
       - name: Install contract dependency
         run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
       - name: Compile and validate publisher
@@ -46,7 +70,7 @@ jobs:
   publish:
     if: github.event_name == 'workflow_dispatch'
     needs: contract
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
       contents: read
@@ -54,41 +78,135 @@ jobs:
     env:
       EXPECTED_HEAD: ${{ inputs.expected_head }}
       EXPECTED_SEED_SHA256: ${{ inputs.expected_seed_sha256 }}
-      GH_TOKEN: ${{ github.token }}
+      DOCKER_CONFIG: ${{ runner.temp }}/weltgewebe-docker-config
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
         with:
-          ref: ${{ inputs.expected_head }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
-      - name: Verify immutable publisher inputs
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # tag: v4
+        with:
+          version: v0.35.0
+      - name: Verify immutable trusted-main publisher inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$EXPECTED_HEAD"
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-          test "$(sha256sum platform/oci-proof-mirror.seed.json | cut -d' ' -f1)" = "$EXPECTED_SEED_SHA256"
+          main_head="$(gh api repos/heimgewebe/weltgewebe/git/ref/heads/main --jq .object.sha)"
+          test "$main_head" = "$EXPECTED_HEAD"
+          observed_seed="$(sha256sum platform/oci-proof-mirror.seed.json | cut -d' ' -f1)"
+          test "$observed_seed" = "$EXPECTED_SEED_SHA256"
           python scripts/platform/publish_oci_mirror.py validate
-      - name: Authenticate repository-owned GHCR publisher
-        run: echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker buildx imagetools create --help | grep -F -- '--prefer-index'
+      - name: Preflight existing package ownership and access
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/kubernetes-platform
+          package_api="/orgs/heimgewebe/packages/container/weltgewebe-proof-oci"
+          error_file="$RUNNER_TEMP/package-preflight-error.txt"
+          if package_before_json="$(gh api "$package_api" 2>"$error_file")"; then
+            repositories_before_json="$(gh api "$package_api/repositories")"
+            repository_count="$(jq 'length' <<<"$repositories_before_json")"
+            test "$repository_count" -le 1
+            if test "$repository_count" -eq 1; then
+              test "$(jq -r '.[0].full_name' <<<"$repositories_before_json")" = "heimgewebe/weltgewebe"
+            fi
+            gh api --method PATCH "$package_api" -f visibility=private >/dev/null
+            repository_id="$(gh api repos/heimgewebe/weltgewebe --jq .id)"
+            gh api --method PUT "$package_api/repositories/$repository_id" >/dev/null
+            package_json="$(gh api "$package_api")"
+            repositories_json="$(gh api "$package_api/repositories")"
+            test "$(jq 'length' <<<"$repositories_json")" -eq 1
+            test "$(jq -r '.[0].full_name' <<<"$repositories_json")" = "heimgewebe/weltgewebe"
+            test "$(jq -r .visibility <<<"$package_json")" = "private"
+            state="prepared-existing"
+          elif grep -Fq '(HTTP 404)' "$error_file"; then
+            package_before_json='null'
+            repositories_before_json='[]'
+            package_json='null'
+            repositories_json='[]'
+            state="absent"
+          else
+            cat "$error_file" >&2
+            exit 1
+          fi
+          jq -n \
+            --arg status pass \
+            --arg state "$state" \
+            --arg expected_repository heimgewebe/weltgewebe \
+            --argjson package_before "$package_before_json" \
+            --argjson repositories_before "$repositories_before_json" \
+            --argjson package_after "$package_json" \
+            --argjson repositories_after "$repositories_json" \
+            '{schema_version: 1, status: $status, state: $state,
+              expected_repository: $expected_repository,
+              before: {package: $package_before, repositories: $repositories_before},
+              after: {package: $package_after, repositories: $repositories_after}}' \
+            > build/kubernetes-platform/oci-mirror-package-preflight.json
+      - name: Authenticate source and target registries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$DOCKER_CONFIG"
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          if test -n "$DOCKERHUB_USERNAME" && test -n "$DOCKERHUB_TOKEN"; then
+            echo "$DOCKERHUB_TOKEN" | docker login docker.io \
+              --username "$DOCKERHUB_USERNAME" --password-stdin
+          else
+            echo "Docker Hub credentials are not configured; bounded anonymous access will be used."
+          fi
       - name: Publish exact digest-preserving OCI mirror
         run: >-
           python scripts/platform/publish_oci_mirror.py publish
           --expected-head "$EXPECTED_HEAD"
           --expected-seed-sha256 "$EXPECTED_SEED_SHA256"
           --output build/kubernetes-platform/oci-mirror-provenance.json
-      - name: Bind private package access to this repository
+      - name: Enforce and attest private package access
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           package_api="/orgs/heimgewebe/packages/container/weltgewebe-proof-oci"
           repository_id="$(gh api repos/heimgewebe/weltgewebe --jq .id)"
-          gh api --method PUT "$package_api/repositories/$repository_id"
-          test "$(gh api "$package_api" --jq .visibility)" = "private"
-          gh api "$package_api/repositories" --jq '.[].full_name' | grep -Fx 'heimgewebe/weltgewebe'
+          gh api --method PATCH "$package_api" -f visibility=private >/dev/null
+          gh api --method PUT "$package_api/repositories/$repository_id" >/dev/null
+          package_json="$(gh api "$package_api")"
+          repositories_json="$(gh api "$package_api/repositories")"
+          test "$(jq -r .visibility <<<"$package_json")" = "private"
+          test "$(jq 'length' <<<"$repositories_json")" -eq 1
+          test "$(jq -r '.[0].full_name' <<<"$repositories_json")" = "heimgewebe/weltgewebe"
+          jq -n \
+            --arg status pass \
+            --arg expected_repository heimgewebe/weltgewebe \
+            --argjson package "$package_json" \
+            --argjson repositories "$repositories_json" \
+            '{schema_version: 1, status: $status,
+              expected_repository: $expected_repository,
+              package: $package, repositories: $repositories}' \
+            > build/kubernetes-platform/oci-mirror-package-access.json
+      - name: Logout registry credentials
+        if: always()
+        run: |
+          docker logout ghcr.io || true
+          docker logout docker.io || true
+          rm -rf "$DOCKER_CONFIG"
       - name: Upload mirror provenance
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: kubernetes-proof-oci-mirror-${{ inputs.expected_head }}
-          path: build/kubernetes-platform/oci-mirror-provenance.json
+          path: build/kubernetes-platform/*.json
           if-no-files-found: error
           retention-days: 14
