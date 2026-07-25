@@ -318,6 +318,29 @@ class KubernetesOciMirrorPublisherContractTests(unittest.TestCase):
         )
         self.assertIn("--prefer-index", publish_verify["run"])
 
+    def test_workflow_uses_runtime_temp_only_inside_steps(self) -> None:
+        path = ROOT / ".github/workflows/kubernetes-proof-oci-mirror.yml"
+        source = path.read_text(encoding="utf-8")
+        workflow = yaml.safe_load(source)
+        for job_name in ("contract", "publish", "verify-read-access"):
+            env = workflow["jobs"][job_name].get("env", {})
+            self.assertFalse(
+                any("runner." in str(value) for value in env.values()),
+                f"{job_name} job env must not use runner context",
+            )
+        for job_name, suffix in (
+            ("publish", "weltgewebe-docker-config"),
+            ("verify-read-access", "weltgewebe-docker-read-config"),
+        ):
+            step = next(
+                item
+                for item in workflow["jobs"][job_name]["steps"]
+                if item.get("name") == "Initialize isolated Docker config"
+            )
+            self.assertIn("$RUNNER_TEMP/" + suffix, step["run"])
+            self.assertIn('>> "$GITHUB_ENV"', step["run"])
+        self.assertNotIn("${{ runner.temp }}", source)
+
 
 if __name__ == "__main__":
     unittest.main()
