@@ -51,6 +51,34 @@ test.describe("ContextPanel mobile compact and full states", () => {
     await expect(panel.locator(".tabs")).toBeHidden();
   });
 
+  test("the compact card shows the overview while preserving the active full-view tab", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.locator(".map-marker:not(.marker-account)").first().click();
+
+    const panel = page.getByTestId("context-panel");
+    const handle = page.getByTestId("sheet-handle");
+    await handle.click();
+
+    const conversationTab = panel.getByRole("tab", { name: "Gespräch" });
+    await conversationTab.click();
+    await expect(conversationTab).toHaveAttribute("aria-selected", "true");
+    await expect(panel.locator("#panel-gespraech")).toBeVisible();
+
+    await panel.locator(".mobile-panel-title").click();
+    await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
+    await expect(panel.locator(".tabs")).toHaveCount(0);
+    await expect(
+      panel.getByRole("region", { name: "Knotenübersicht" }),
+    ).toBeVisible();
+    await expect(panel.locator("#panel-gespraech")).toHaveCount(0);
+
+    await panel.locator(".mobile-panel-title").click();
+    await expect(conversationTab).toHaveAttribute("aria-selected", "true");
+    await expect(panel.locator("#panel-gespraech")).toBeVisible();
+  });
+
   test("Komposition starts full and can collapse through the same handle", async ({
     page,
   }) => {
@@ -91,8 +119,26 @@ test.describe("ContextPanel mobile compact and full states", () => {
     await page.mouse.move(box!.x + box!.width / 2, box!.y - 360, { steps: 8 });
     await page.mouse.up();
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
-    await page.waitForTimeout(20);
+    await handle.dispatchEvent("click", { detail: 1 });
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
+  });
+
+  test("non-primary pointers cannot start a sheet drag", async ({ page }) => {
+    await page.locator(".map-marker").first().click();
+    const panel = page.getByTestId("context-panel");
+    const handle = page.getByTestId("sheet-handle");
+
+    await handle.dispatchEvent("pointerdown", {
+      pointerId: 23,
+      pointerType: "touch",
+      isPrimary: false,
+      button: 0,
+      clientY: 100,
+    });
+
+    await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
+    await expect(panel).not.toHaveClass(/dragging/);
+    await expect(panel).not.toHaveAttribute("style");
   });
 
   test("reduced motion removes the height transition", async ({ page }) => {
@@ -113,14 +159,14 @@ test.describe("ContextPanel mobile compact and full states", () => {
     await page.getByTestId("sheet-handle").click();
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
 
-    await page.setViewportSize({ width: 844, height: 390 });
+    await page.setViewportSize({ width: 740, height: 390 });
     const box = await panel.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.y).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(844);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(740);
     expect(box!.y + box!.height).toBeLessThanOrEqual(390);
-    await expect(page.getByTestId("sheet-handle")).toBeHidden();
+    await expect(page.getByTestId("sheet-handle")).toBeVisible();
   });
 
   test("switching the selected marker resets the sheet to compact", async ({
@@ -162,5 +208,33 @@ test.describe("ContextPanel desktop layout stays unchanged", () => {
 
     const box = await panel.boundingBox();
     expect(Math.round(box!.width)).toBe(400);
+  });
+});
+
+test.describe("ContextPanel touch input", () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+
+  test.beforeEach(async ({ page }) => {
+    await mockApiResponses(page, {
+      auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
+    });
+    await page.goto("/map");
+    await page.waitForSelector(".map-marker", { timeout: 10000 });
+  });
+
+  test("one touch tap toggles the handle exactly once", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.locator(".map-marker").first().click();
+    const panel = page.getByTestId("context-panel");
+    const handle = page.getByTestId("sheet-handle");
+    const box = await handle.boundingBox();
+    expect(box).not.toBeNull();
+
+    await page.touchscreen.tap(
+      box!.x + box!.width / 2,
+      box!.y + box!.height / 2,
+    );
+
+    await expect(panel).toHaveAttribute("data-sheet-stage", "full");
   });
 });

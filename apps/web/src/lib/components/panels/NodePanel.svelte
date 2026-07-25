@@ -16,6 +16,8 @@
   import type { MapEntityViewModel } from "$lib/map/types";
   import NodeConversation from "./NodeConversation.svelte";
 
+  export let compact = false;
+
   type DomainChanged = {
     kind: "node";
     id: string;
@@ -319,9 +321,9 @@
 
 <div class="node-mode">
   <h3>{nodeDetails?.title || $selection?.data?.title || $selection?.id}</h3>
-  {#if summary && !editing}<p class="summary">{summary}</p>{/if}
+  {#if summary && (!editing || compact)}<p class="summary">{summary}</p>{/if}
 
-  {#if editing}
+  {#if editing && !compact}
     <form class="edit-form" on:submit|preventDefault={saveNode}>
       <label>
         Titel
@@ -408,61 +410,65 @@
       </div>
     </form>
   {:else}
-    <div class="tabs node-tabs" role="tablist" aria-label="Knoten-Tabs">
-      <button
-        class:active={activeTab === "uebersicht"}
-        on:click={() => setTab("uebersicht")}
-        on:keydown={handleKeydown}
-        role="tab"
-        aria-selected={activeTab === "uebersicht"}
-        aria-controls="panel-uebersicht"
-        id="tab-uebersicht"
-        bind:this={overviewTab}
-        tabindex={activeTab === "uebersicht" ? 0 : -1}>Übersicht</button
-      >
-      <button
-        class:active={activeTab === "gespraech"}
-        on:click={() => setTab("gespraech")}
-        on:keydown={handleKeydown}
-        role="tab"
-        aria-selected={activeTab === "gespraech"}
-        aria-controls="panel-gespraech"
-        id="tab-gespraech"
-        tabindex={activeTab === "gespraech" ? 0 : -1}>Gespräch</button
-      >
-      <button
-        class:active={activeTab === "verlauf"}
-        on:click={() => setTab("verlauf")}
-        on:keydown={handleKeydown}
-        role="tab"
-        aria-selected={activeTab === "verlauf"}
-        aria-controls="panel-verlauf"
-        id="tab-verlauf"
-        tabindex={activeTab === "verlauf" ? 0 : -1}>Verlauf</button
-      >
-      {#if canMutate}
+    {#if !compact}
+      <div class="tabs node-tabs" role="tablist" aria-label="Knoten-Tabs">
         <button
-          class:active={activeTab === "bearbeiten"}
-          on:click={() => setTab("bearbeiten")}
+          class:active={activeTab === "uebersicht"}
+          on:click={() => setTab("uebersicht")}
           on:keydown={handleKeydown}
           role="tab"
-          aria-selected={activeTab === "bearbeiten"}
-          aria-controls="panel-bearbeiten"
-          id="tab-bearbeiten"
-          bind:this={editTab}
-          tabindex={activeTab === "bearbeiten" ? 0 : -1}>Bearbeiten</button
+          aria-selected={activeTab === "uebersicht"}
+          aria-controls="panel-uebersicht"
+          id="tab-uebersicht"
+          bind:this={overviewTab}
+          tabindex={activeTab === "uebersicht" ? 0 : -1}>Übersicht</button
         >
-      {/if}
-    </div>
+        <button
+          class:active={activeTab === "gespraech"}
+          on:click={() => setTab("gespraech")}
+          on:keydown={handleKeydown}
+          role="tab"
+          aria-selected={activeTab === "gespraech"}
+          aria-controls="panel-gespraech"
+          id="tab-gespraech"
+          tabindex={activeTab === "gespraech" ? 0 : -1}>Gespräch</button
+        >
+        <button
+          class:active={activeTab === "verlauf"}
+          on:click={() => setTab("verlauf")}
+          on:keydown={handleKeydown}
+          role="tab"
+          aria-selected={activeTab === "verlauf"}
+          aria-controls="panel-verlauf"
+          id="tab-verlauf"
+          tabindex={activeTab === "verlauf" ? 0 : -1}>Verlauf</button
+        >
+        {#if canMutate}
+          <button
+            class:active={activeTab === "bearbeiten"}
+            on:click={() => setTab("bearbeiten")}
+            on:keydown={handleKeydown}
+            role="tab"
+            aria-selected={activeTab === "bearbeiten"}
+            aria-controls="panel-bearbeiten"
+            id="tab-bearbeiten"
+            bind:this={editTab}
+            tabindex={activeTab === "bearbeiten" ? 0 : -1}>Bearbeiten</button
+          >
+        {/if}
+      </div>
+    {/if}
 
     <div class="tab-content">
-      {#if activeTab === "uebersicht"}
+      {#if compact || activeTab === "uebersicht"}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <div
           class="overview"
           id="panel-uebersicht"
-          role="tabpanel"
-          aria-labelledby="tab-uebersicht"
-          tabindex="0"
+          role={compact ? "region" : "tabpanel"}
+          aria-label={compact ? "Knotenübersicht" : undefined}
+          aria-labelledby={compact ? undefined : "tab-uebersicht"}
+          tabindex={compact ? undefined : 0}
         >
           {#if isLoadingDetails}<p class="ghost">Lade Details…</p>
           {:else}

@@ -8,6 +8,7 @@
   --muted: #9aa4b2;
   --accent: #6aa6ff;
   --accent-soft: rgba(106, 166, 255, 0.18);
+  --accent-contrast: #0f1115;
   --primary: var(--accent);
   --fg: var(--text);
   --ghost: var(--muted);

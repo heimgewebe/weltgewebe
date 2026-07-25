@@ -21,6 +21,19 @@ test("login uses the shared page, form and state contracts without changing the 
   await expect(loginPage.locator(".wg-card")).toHaveCount(1);
   await expect(loginPage.locator("[style]")).toHaveCount(0);
 
+  const loginBox = await loginPage.boundingBox();
+  expect(loginBox?.height).toBeGreaterThanOrEqual(
+    await page.evaluate(() => window.innerHeight),
+  );
+
+  const emailInput = page.getByLabel("E-Mail");
+  await emailInput.focus();
+  await expect
+    .poll(() =>
+      emailInput.evaluate((element) => getComputedStyle(element).outlineWidth),
+    )
+    .toBe("3px");
+
   await page.getByLabel("E-Mail").fill("person@example.org");
   await page.getByRole("button", { name: "Login-Link senden" }).click();
 
@@ -50,6 +63,13 @@ test("application overview uses the same surfaces, controls and empty-state cont
 
   const applicationsPage = page.getByTestId("applications-page");
   await expect(applicationsPage).toHaveClass(/wg-page--paper/);
+  await expect
+    .poll(() =>
+      applicationsPage.evaluate((element) =>
+        getComputedStyle(element).getPropertyValue("--wg-surface").trim(),
+      ),
+    )
+    .toContain("color-mix");
   await expect(
     page.getByRole("heading", { name: "Anträge", exact: true }),
   ).toBeVisible();

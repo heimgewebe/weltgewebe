@@ -40,6 +40,7 @@
     domainChanged: DomainChanged;
   }>();
   const DRAG_THRESHOLD_PX = 6;
+  const MOBILE_BREAKPOINT_PX = 768;
 
   let kompositionPanel: KompositionPanelHandle | null = null;
   let sheetStage: SheetStage = "compact";
@@ -50,7 +51,9 @@
   let dragHeight: number | null = null;
   let dragging = false;
   let dragMoved = false;
-  let suppressNextHandleClick = false;
+  let activePointerId: number | null = null;
+  let viewportWidth = MOBILE_BREAKPOINT_PX + 1;
+  let compactContent = false;
 
   function derivePanelTitle(
     state: SystemState,
@@ -74,6 +77,9 @@
     return "Details";
   }
 
+  $: compactContent =
+    viewportWidth <= MOBILE_BREAKPOINT_PX && sheetStage === "compact";
+
   $: {
     panelTitle = derivePanelTitle($systemState, $kompositionDraft, $selection);
     const nextPanelIdentity =
@@ -89,6 +95,7 @@
       dragHeight = null;
       dragging = false;
       dragMoved = false;
+      activePointerId = null;
     }
   }
 
@@ -97,10 +104,11 @@
     dragHeight = null;
     dragging = false;
     dragMoved = false;
+    activePointerId = null;
   }
 
   function toggleSheetStage(): void {
-    if (window.innerWidth > 768) return;
+    if (viewportWidth > MOBILE_BREAKPOINT_PX) return;
     setSheetStage(sheetStage === "compact" ? "full" : "compact");
   }
 
@@ -113,21 +121,28 @@
   }
 
   function handleSheetPointerDown(event: PointerEvent): void {
-    if (window.innerWidth > 768) return;
+    if (
+      viewportWidth > MOBILE_BREAKPOINT_PX ||
+      !event.isPrimary ||
+      event.button !== 0 ||
+      dragging
+    )
+      return;
     const handle = event.currentTarget as HTMLElement;
     const aside = handle.closest<HTMLElement>('[data-testid="context-panel"]');
     if (!aside) return;
+    event.preventDefault();
     handle.setPointerCapture(event.pointerId);
+    activePointerId = event.pointerId;
     dragStartY = event.clientY;
     dragStartHeight = aside.getBoundingClientRect().height;
     dragHeight = dragStartHeight;
     dragging = true;
     dragMoved = false;
-    suppressNextHandleClick = false;
   }
 
   function handleSheetPointerMove(event: PointerEvent): void {
-    if (!dragging) return;
+    if (!dragging || event.pointerId !== activePointerId) return;
     const delta = dragStartY - event.clientY;
     if (Math.abs(delta) >= DRAG_THRESHOLD_PX) dragMoved = true;
     if (!dragMoved) return;
@@ -142,25 +157,23 @@
   }
 
   function finishSheetPointer(event: PointerEvent, cancelled: boolean): void {
-    if (!dragging) return;
+    if (!dragging || event.pointerId !== activePointerId) return;
+    const moved = dragMoved;
+    const finalHeight = dragHeight ?? dragStartHeight;
     const handle = event.currentTarget as HTMLElement;
+
+    dragHeight = null;
+    dragging = false;
+    dragMoved = false;
+    activePointerId = null;
     if (handle.hasPointerCapture(event.pointerId)) {
       handle.releasePointerCapture(event.pointerId);
     }
 
-    if (cancelled || !dragMoved) {
-      dragHeight = null;
-      dragging = false;
-      dragMoved = false;
-      return;
-    }
+    if (cancelled) return;
 
-    const finalHeight = dragHeight ?? dragStartHeight;
-    setSheetStage(nearestSheetStage(finalHeight));
-    suppressNextHandleClick = true;
-    window.setTimeout(() => {
-      suppressNextHandleClick = false;
-    }, 0);
+    if (moved) setSheetStage(nearestSheetStage(finalHeight));
+    else toggleSheetStage();
   }
 
   function handleSheetPointerUp(event: PointerEvent): void {
@@ -171,17 +184,20 @@
     finishSheetPointer(event, true);
   }
 
+  function handleSheetLostPointerCapture(event: PointerEvent): void {
+    if (!dragging || event.pointerId !== activePointerId) return;
+    dragHeight = null;
+    dragging = false;
+    dragMoved = false;
+    activePointerId = null;
+  }
+
   function handleSheetHandleClick(event: MouseEvent): void {
-    if (suppressNextHandleClick) {
-      event.preventDefault();
-      suppressNextHandleClick = false;
-      return;
-    }
-    toggleSheetStage();
+    if (event.detail === 0) toggleSheetStage();
   }
 
   function handleSheetKeydown(event: KeyboardEvent): void {
-    if (window.innerWidth > 768) return;
+    if (viewportWidth > MOBILE_BREAKPOINT_PX) return;
     if (event.key === "ArrowUp" || event.key === "End") {
       event.preventDefault();
       setSheetStage("full");
@@ -219,7 +235,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window bind:innerWidth={viewportWidth} on:keydown={handleKeydown} />
 
 {#if $contextPanelOpen}
   <aside
@@ -246,6 +262,7 @@
       on:pointermove={handleSheetPointerMove}
       on:pointerup={handleSheetPointerUp}
       on:pointercancel={handleSheetPointerCancel}
+      on:lostpointercapture={handleSheetLostPointerCapture}
       on:click={handleSheetHandleClick}
       on:keydown={handleSheetKeydown}
     >
@@ -281,11 +298,15 @@
       {:else if $selection}
         {#if $selection.type === "node"}
           <NodePanel
+            compact={compactContent}
             on:selectRelated={handleRelated}
             on:domainChanged={handleDomainChanged}
           />
         {:else if $selection.type === "account" || $selection.type === "garnrolle"}
-          <AccountPanel on:selectRelated={handleRelated} />
+          <AccountPanel
+            compact={compactContent}
+            on:selectRelated={handleRelated}
+          />
         {:else if $selection.type === "edge"}
           <EdgePanel />
         {/if}
@@ -455,10 +476,6 @@
 
     .stage-compact .panel-content {
       padding-top: 0.65rem;
-    }
-
-    .stage-compact :global(.tabs) {
-      display: none;
     }
   }
 
