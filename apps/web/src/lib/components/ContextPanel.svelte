@@ -464,7 +464,8 @@
       padding-top: 0.65rem;
     }
 
-    .stage-compact :global(.compact-node-summary) {
+    .stage-compact :global(.compact-node-summary),
+    .stage-compact :global(.node-mode.editing .node-summary) {
       display: block;
     }
 

@@ -317,15 +317,12 @@
   }
 </script>
 
-<div class="node-mode">
+<div class="node-mode" class:editing>
   <h3>{nodeDetails?.title || $selection?.data?.title || $selection?.id}</h3>
+  {#if summary}<p class="summary node-summary">{summary}</p>{/if}
   <div class="compact-node-summary" data-testid="node-compact-summary">
-    {#if summary}<p class="summary">{summary}</p>{/if}
     <p><strong>Knotenart:</strong> {kind}</p>
   </div>
-  {#if summary && !editing}<p class="summary node-full-content">
-      {summary}
-    </p>{/if}
 
   {#if editing}
     <form
@@ -612,6 +609,9 @@
     line-height: 1.2;
   }
   .compact-node-summary {
+    display: none;
+  }
+  .node-mode.editing .node-summary {
     display: none;
   }
   .node-tabs {
