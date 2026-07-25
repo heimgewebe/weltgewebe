@@ -7,6 +7,8 @@
   } from "$lib/panels/panelDetails";
   import { formatDate } from "$lib/utils/formatDate";
 
+  export let compact = false;
+
   const dispatch = createEventDispatcher<{
     selectRelated: { type: "node"; id: string };
   }>();
@@ -95,48 +97,52 @@
   </h3>
   {#if summary}<p class="summary">{summary}</p>{/if}
 
-  <div class="tabs" role="tablist" aria-label="Garnrollen-Tabs">
-    <button
-      class:active={activeTab === "profil"}
-      on:click={() => setTab("profil")}
-      on:keydown={handleKeydown}
-      role="tab"
-      aria-selected={activeTab === "profil"}
-      aria-controls="panel-profil"
-      id="tab-profil"
-      tabindex={activeTab === "profil" ? 0 : -1}>Profil</button
-    >
-    <button
-      class:active={activeTab === "aktivitaet"}
-      on:click={() => setTab("aktivitaet")}
-      on:keydown={handleKeydown}
-      role="tab"
-      aria-selected={activeTab === "aktivitaet"}
-      aria-controls="panel-aktivitaet"
-      id="tab-aktivitaet"
-      tabindex={activeTab === "aktivitaet" ? 0 : -1}>Aktivität</button
-    >
-    <button
-      class:active={activeTab === "knoten"}
-      on:click={() => setTab("knoten")}
-      on:keydown={handleKeydown}
-      role="tab"
-      aria-selected={activeTab === "knoten"}
-      aria-controls="panel-knoten"
-      id="tab-knoten"
-      tabindex={activeTab === "knoten" ? 0 : -1}>Knoten</button
-    >
-  </div>
+  {#if !compact}
+    <div class="tabs" role="tablist" aria-label="Garnrollen-Tabs">
+      <button
+        class:active={activeTab === "profil"}
+        on:click={() => setTab("profil")}
+        on:keydown={handleKeydown}
+        role="tab"
+        aria-selected={activeTab === "profil"}
+        aria-controls="panel-profil"
+        id="tab-profil"
+        tabindex={activeTab === "profil" ? 0 : -1}>Profil</button
+      >
+      <button
+        class:active={activeTab === "aktivitaet"}
+        on:click={() => setTab("aktivitaet")}
+        on:keydown={handleKeydown}
+        role="tab"
+        aria-selected={activeTab === "aktivitaet"}
+        aria-controls="panel-aktivitaet"
+        id="tab-aktivitaet"
+        tabindex={activeTab === "aktivitaet" ? 0 : -1}>Aktivität</button
+      >
+      <button
+        class:active={activeTab === "knoten"}
+        on:click={() => setTab("knoten")}
+        on:keydown={handleKeydown}
+        role="tab"
+        aria-selected={activeTab === "knoten"}
+        aria-controls="panel-knoten"
+        id="tab-knoten"
+        tabindex={activeTab === "knoten" ? 0 : -1}>Knoten</button
+      >
+    </div>
+  {/if}
 
   <div class="tab-content">
     {#if isLoadingDetails && !accountDetails}
       <p class="ghost">Lade Details…</p>
-    {:else if activeTab === "profil"}
+    {:else if compact || activeTab === "profil"}
       <div
         class="overview"
         id="panel-profil"
-        role="tabpanel"
-        aria-labelledby="tab-profil"
+        role={compact ? "region" : "tabpanel"}
+        aria-label={compact ? "Garnrollenprofil" : undefined}
+        aria-labelledby={compact ? undefined : "tab-profil"}
+        data-testid={compact ? "account-compact-summary" : undefined}
       >
         {#if accountDetails?.created_at || $selection?.data?.created_at}<p>
             <strong>Dabei seit:</strong>

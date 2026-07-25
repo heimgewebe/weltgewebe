@@ -52,7 +52,7 @@
   let dragHeight: number | null = null;
   let dragging = false;
   let dragMoved = false;
-  let suppressNextHandleClick = false;
+  let activePointerId: number | null = null;
   let mobileSheetMode = false;
 
   onMount(() => {
@@ -102,6 +102,7 @@
       dragHeight = null;
       dragging = false;
       dragMoved = false;
+      activePointerId = null;
     }
   }
 
@@ -110,6 +111,7 @@
     dragHeight = null;
     dragging = false;
     dragMoved = false;
+    activePointerId = null;
   }
 
   function toggleSheetStage(): void {
@@ -126,21 +128,23 @@
   }
 
   function handleSheetPointerDown(event: PointerEvent): void {
-    if (!mobileSheetMode) return;
+    if (!mobileSheetMode || !event.isPrimary || event.button !== 0 || dragging)
+      return;
     const handle = event.currentTarget as HTMLElement;
     const aside = handle.closest<HTMLElement>('[data-testid="context-panel"]');
     if (!aside) return;
+    event.preventDefault();
     handle.setPointerCapture(event.pointerId);
+    activePointerId = event.pointerId;
     dragStartY = event.clientY;
     dragStartHeight = aside.getBoundingClientRect().height;
     dragHeight = dragStartHeight;
     dragging = true;
     dragMoved = false;
-    suppressNextHandleClick = false;
   }
 
   function handleSheetPointerMove(event: PointerEvent): void {
-    if (!dragging) return;
+    if (!dragging || event.pointerId !== activePointerId) return;
     const delta = dragStartY - event.clientY;
     if (Math.abs(delta) >= DRAG_THRESHOLD_PX) dragMoved = true;
     if (!dragMoved) return;
@@ -155,25 +159,22 @@
   }
 
   function finishSheetPointer(event: PointerEvent, cancelled: boolean): void {
-    if (!dragging) return;
+    if (!dragging || event.pointerId !== activePointerId) return;
+    const moved = dragMoved;
+    const finalHeight = dragHeight ?? dragStartHeight;
     const handle = event.currentTarget as HTMLElement;
+
+    dragHeight = null;
+    dragging = false;
+    dragMoved = false;
+    activePointerId = null;
     if (handle.hasPointerCapture(event.pointerId)) {
       handle.releasePointerCapture(event.pointerId);
     }
 
-    if (cancelled || !dragMoved) {
-      dragHeight = null;
-      dragging = false;
-      dragMoved = false;
-      return;
-    }
-
-    const finalHeight = dragHeight ?? dragStartHeight;
-    setSheetStage(nearestSheetStage(finalHeight));
-    suppressNextHandleClick = true;
-    window.setTimeout(() => {
-      suppressNextHandleClick = false;
-    }, 0);
+    if (cancelled) return;
+    if (moved) setSheetStage(nearestSheetStage(finalHeight));
+    else toggleSheetStage();
   }
 
   function handleSheetPointerUp(event: PointerEvent): void {
@@ -184,13 +185,18 @@
     finishSheetPointer(event, true);
   }
 
+  function handleSheetLostPointerCapture(event: PointerEvent): void {
+    if (!dragging || event.pointerId !== activePointerId) return;
+    dragHeight = null;
+    dragging = false;
+    dragMoved = false;
+    activePointerId = null;
+  }
+
   function handleSheetHandleClick(event: MouseEvent): void {
-    if (suppressNextHandleClick) {
-      event.preventDefault();
-      suppressNextHandleClick = false;
-      return;
-    }
-    toggleSheetStage();
+    // detail === 0 marks keyboard or synthetic activation. Pointer taps are
+    // already completed exactly once by finishSheetPointer.
+    if (event.detail === 0) toggleSheetStage();
   }
 
   function handleSheetKeydown(event: KeyboardEvent): void {
@@ -259,6 +265,7 @@
       on:pointermove={handleSheetPointerMove}
       on:pointerup={handleSheetPointerUp}
       on:pointercancel={handleSheetPointerCancel}
+      on:lostpointercapture={handleSheetLostPointerCapture}
       on:click={handleSheetHandleClick}
       on:keydown={handleSheetKeydown}
     >
@@ -299,7 +306,10 @@
             on:domainChanged={handleDomainChanged}
           />
         {:else if $selection.type === "account" || $selection.type === "garnrolle"}
-          <AccountPanel on:selectRelated={handleRelated} />
+          <AccountPanel
+            compact={mobileSheetMode && sheetStage === "compact"}
+            on:selectRelated={handleRelated}
+          />
         {:else if $selection.type === "edge"}
           <EdgePanel />
         {/if}
@@ -478,6 +488,8 @@
       padding-top: 0.65rem;
     }
 
+    /* CSS owns the first visible compact layout. The matching JS media query
+       then adds interaction and ARIA state without changing the breakpoint. */
     .stage-compact :global(.tabs) {
       display: none;
     }

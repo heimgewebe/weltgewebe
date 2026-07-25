@@ -32,6 +32,8 @@
     domainChanged: DomainChanged;
   }>();
 
+  // Compact mode temporarily replaces the rendered panel, but keeps the
+  // active tab and bound edit values in component state for lossless reopening.
   export let compact = false;
 
   type NodeTab = "uebersicht" | "gespraech" | "verlauf" | "bearbeiten";
@@ -324,7 +326,12 @@
   {#if summary && (!editing || compact)}<p class="summary">{summary}</p>{/if}
 
   {#if compact}
-    <div class="compact-node-summary" data-testid="node-compact-summary">
+    <div
+      class="compact-node-summary"
+      data-testid="node-compact-summary"
+      role="region"
+      aria-label="Knotenübersicht"
+    >
       <p><strong>Knotenart:</strong> {kind}</p>
     </div>
   {:else if editing}
