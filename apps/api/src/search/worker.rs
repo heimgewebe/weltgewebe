@@ -936,6 +936,29 @@ impl ProjectionWorker {
             // Private content remains searchable only as an authorized lexical
             // projection inside PostgreSQL. It is never sent to the embedding
             // provider and never receives a vector.
+            // Account lifecycle updates lock the account row before they
+            // redact projections and bump node versions. Lock the same row first
+            // here, before the existing version/job fence, so both paths have one
+            // global lock order and cannot deadlock each other.
+            let active_owner_account_id = owner_account_id
+                .as_deref()
+                .context("private projection missing active owner")?;
+            let mut tx = self.pool.begin().await?;
+            let owner_locked = sqlx::query_scalar::<_, String>(
+                "SELECT id FROM domain_accounts WHERE id=$1 AND disabled=FALSE FOR SHARE",
+            )
+            .bind(active_owner_account_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .is_some();
+            if !owner_locked {
+                tx.rollback().await?;
+                return Ok(Ok(if self.claim_is_current(job_id, attempts).await? {
+                    ProcessOutcome::Stale
+                } else {
+                    ProcessOutcome::LeaseLost
+                }));
+            }
             let written = sqlx::query("INSERT INTO search_node_projections (generation_id,node_id,source_version,source_revision,content_sha256,title,tags,searchable_text,language,kind,status,visibility_scopes,semantic_state,embedding) \
                 SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'active',ARRAY['owner']::TEXT[],'unavailable',NULL \
                 FROM (SELECT v.node_id FROM search_node_versions v JOIN domain_nodes n ON n.id=v.node_id JOIN search_index_generations g ON g.generation_id=$1 JOIN search_projection_jobs j ON j.id=$11 WHERE n.id=$2 AND n.search_visibility = 'private' AND weltgewebe_search_node_owner_account_id(n.payload) IS NOT NULL AND v.source_version=$3 AND v.source_revision=$4 AND v.deleted_at IS NULL AND g.state IN ('building','ready','active') AND j.generation_id=$1 AND j.node_id=$2 AND j.source_version=$3 AND j.source_revision=$4 AND j.operation='upsert' AND j.state='claimed' AND j.claimed_by=$12 AND j.attempt_count=$13 AND j.claim_until > NOW() FOR UPDATE OF v,j) current \
@@ -954,9 +977,10 @@ impl ProjectionWorker {
                 .bind(job_id)
                 .bind(&self.worker_id)
                 .bind(attempts)
-                .execute(&self.pool)
+                .execute(&mut *tx)
                 .await?
                 .rows_affected();
+            tx.commit().await?;
             return Ok(Ok(if written == 1 {
                 ProcessOutcome::Processed
             } else if self.claim_is_current(job_id, attempts).await? {
