@@ -27,7 +27,8 @@ test("login uses the shared page, form and state contracts without changing the 
   );
 
   const emailInput = page.getByLabel("E-Mail");
-  await emailInput.focus();
+  await page.keyboard.press("Tab");
+  await expect(emailInput).toBeFocused();
   await expect
     .poll(() =>
       emailInput.evaluate((element) => getComputedStyle(element).outlineWidth),
