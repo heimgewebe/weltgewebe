@@ -15,14 +15,29 @@ export class ApiRequestError extends Error {
   }
 }
 
+function isNodeVersionConflictBody(body: unknown): boolean {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return false;
+  }
+  const node = body as Record<string, unknown>;
+  return (
+    typeof node.id === "string" &&
+    typeof node.title === "string" &&
+    typeof node.updated_at === "string"
+  );
+}
+
 async function readErrorBody(response: Response): Promise<unknown> {
   const text = await response.text().catch(() => "");
   if (!text) return undefined;
 
   try {
-    return JSON.parse(text) as unknown;
+    const body = JSON.parse(text) as unknown;
+    return response.status === 412 && !isNodeVersionConflictBody(body)
+      ? undefined
+      : body;
   } catch {
-    return text;
+    return response.status === 412 ? undefined : text;
   }
 }
 
