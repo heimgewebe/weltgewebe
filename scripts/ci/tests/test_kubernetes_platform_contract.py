@@ -910,6 +910,68 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertNotIn("--pull=false", run.call_args_list[0].args[0])
         self.assertNotIn("--pull=false", run.call_args_list[1].args[0])
 
+    def test_cnpg_manifest_binds_operator_and_bootstrap_image_to_runtime_tag(
+        self,
+    ) -> None:
+        with mock.patch.dict(sys.modules, {"kind_reference": self.reference}):
+            ha_reference = load_module(
+                "weltgewebe_ha_reference_contract",
+                ROOT / "scripts/platform/ha_reference.py",
+            )
+        tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
+        runtime_image = (
+            "ghcr.io/cloudnative-pg/cloudnative-pg:weltgewebe-a2701eb97cdd"
+        )
+        source = yaml.safe_dump_all(
+            [
+                {
+                    "apiVersion": "apps/v1",
+                    "kind": "Deployment",
+                    "metadata": {
+                        "name": "cnpg-controller-manager",
+                        "namespace": "cnpg-system",
+                    },
+                    "spec": {
+                        "template": {
+                            "spec": {
+                                "containers": [
+                                    {
+                                        "name": "manager",
+                                        "image": tagged,
+                                        "env": [
+                                            {
+                                                "name": "OPERATOR_IMAGE_NAME",
+                                                "value": tagged,
+                                            }
+                                        ],
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                }
+            ],
+            sort_keys=False,
+        )
+        runtime_refs = {
+            ha_reference.ref._normalize_oci_reference(
+                ha_reference.CNPG_OPERATOR_IMAGE
+            ): runtime_image,
+            ha_reference.ref._normalize_oci_reference(runtime_image): runtime_image,
+        }
+        with mock.patch.dict(
+            os.environ, {ha_reference.ref.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            ha_reference.ref, "_CONTROLLED_OCI_RUNTIME_REFS", runtime_refs
+        ):
+            documents = list(
+                yaml.safe_load_all(ha_reference.render_cnpg_manifest(source))
+            )
+        manager = documents[0]["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(manager["image"], runtime_image)
+        self.assertEqual(manager["imagePullPolicy"], "Never")
+        self.assertEqual(manager["env"][0]["value"], runtime_image)
+
     def test_strict_oci_policy_sets_cnpg_cluster_pull_policy(self) -> None:
         cluster = {
             "apiVersion": "postgresql.cnpg.io/v1",

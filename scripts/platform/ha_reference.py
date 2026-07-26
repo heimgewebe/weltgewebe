@@ -574,9 +574,10 @@ def rewrite_yaml_documents(
 
 def render_cnpg_manifest(source: str) -> str:
     tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
+    runtime_image = ref.controlled_oci_runtime_image(CNPG_OPERATOR_IMAGE)
     documents = rewrite_yaml_documents(
         source,
-        {tagged: (CNPG_OPERATOR_IMAGE, 2)},
+        {tagged: (runtime_image, 2)},
         "CloudNativePG release",
     )
     deployments = [
