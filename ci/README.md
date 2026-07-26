@@ -1,21 +1,25 @@
-# CI – Roadmap
+# CI – aktive Prüfpfade
 
-- prose (vale)
-- web (budgets)
-- api (clippy/tests)
-- security (trivy)
+- Prosa und Dokumentation
+- Web-Build, Routenbudgets und Browserprüfungen
+- API-, Rust- und PostgreSQL-Prüfungen
+- Sicherheits- und Lieferkettenprüfungen
 
-## CI (Platzhalter)
+## Performancewahrheit
 
-Diese Repo-Phase ist Docs-only. `ci/budget.json` dient als Referenz für spätere Gates.
+`policies/performance.v1.json` ist die einzige kanonische Quelle für
+Performance-Metriken, Szenarien, Profile, Grenzwerte und deren Geltungsstatus.
 
-### Frontend
+- `ci/scripts/assert-web-budget.mjs` prüft den Vertrag und verhindert die
+  Rückkehr ersetzter Parallelquellen.
+- `apps/web/scripts/assert-route-performance-budget.mjs` misst beim Build die
+  tatsächlich erzeugten initialen JavaScript- und CSS-Artefakte je Route und
+  setzt den blockierenden `measurements.web_build`-Abschnitt durch.
+- Browser-, API- und Ressourcenprofile tragen zunächst den Status
+  `calibration_required`. Ihre eingetragenen Grenzwerte sind damit sichtbar,
+  aber noch kein Freibrief für Produktionskapazität und kein blockierendes Gate.
+- PostgreSQL-Planprüfungen bleiben als `blocking_plan_shape` gekennzeichnet;
+  sie belegen keine Ende-zu-Ende-Latenz.
 
-- `npm run ci` im Web-Paket prüft das Performance-Budget per
-  `ci/scripts/assert-web-budget.mjs` und lässt Linting sowie
-  `svelte-check --fail-on-warnings` laufen. Der Budget-Assert erwartet die
-  Schlüssel `js_kb_max`, `tti_ms_p95_max` und `inp_ms_p75_max` unter
-  `budgets.web`.
-- Ein dedizierter GitHub-Actions-Job `e2e` baut das Frontend, startet einen
-  Preview-Server unter `127.0.0.1:4173`, führt die Playwright-Suite via
-  `npm run test:ci` aus und lädt den HTML-Report als Artefakt hoch.
+Ein Performancebericht ohne exakte Quellrevision weist ausdrücklich aus, dass
+er keine revisionsgebundene Evidenz begründet.

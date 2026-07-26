@@ -298,7 +298,7 @@ This file only highlights operational implications:
 | `docs/techstack.md` | Technology decisions and rationale |
 | `docs/datenmodell.md` | Database schema and domain model |
 | `docs/adr/` | Architecture Decision Records |
-| `ci/budget.json` | Frontend performance budgets |
+| `policies/performance.v1.json` | Canonical performance contract |
 | `toolchain.versions.yml` | Pinned toolchain versions |
 | `Justfile` | All development tasks |
 
