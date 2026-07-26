@@ -190,13 +190,17 @@ test.describe("Knoten bearbeiten und löschen", () => {
         return;
       }
       observedIfMatch.push(request.headers()["if-match"] ?? "");
+      const requestedNodeId = decodeURIComponent(
+        new URL(request.url()).pathname.split("/").pop() ?? "",
+      );
+      expect(requestedNodeId).not.toBe("");
       putAttempt += 1;
       if (putAttempt === 1) {
         await route.fulfill({
           status: 412,
           contentType: "application/json",
           body: JSON.stringify({
-            id: "fake-id",
+            id: requestedNodeId,
             title: "Neuer Titel vom Server",
             kind: "Ort",
             summary: "Neue Kurzbeschreibung vom Server",
@@ -214,7 +218,7 @@ test.describe("Knoten bearbeiten und löschen", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          id: "fake-id",
+          id: requestedNodeId,
           ...payload,
           created_at: "2026-01-01T00:00:00Z",
           updated_at: "2026-07-18T10:01:00Z",

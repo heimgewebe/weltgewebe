@@ -15,13 +15,13 @@ export class ApiRequestError extends Error {
   }
 }
 
-function isNodeVersionConflictBody(body: unknown): boolean {
+function isNodeVersionConflictBody(body: unknown, expectedId: string): boolean {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return false;
   }
   const node = body as Record<string, unknown>;
   return (
-    typeof node.id === "string" &&
+    node.id === expectedId &&
     typeof node.title === "string" &&
     typeof node.updated_at === "string"
   );
@@ -32,13 +32,24 @@ async function readErrorBody(response: Response): Promise<unknown> {
   if (!text) return undefined;
 
   try {
-    const body = JSON.parse(text) as unknown;
-    return response.status === 412 && !isNodeVersionConflictBody(body)
-      ? undefined
-      : body;
+    return JSON.parse(text) as unknown;
   } catch {
-    return response.status === 412 ? undefined : text;
+    return text;
   }
+}
+
+function preserveOnlyMatchingNodeConflict(
+  error: unknown,
+  expectedId: string,
+): never {
+  if (
+    error instanceof ApiRequestError &&
+    error.status === 412 &&
+    !isNodeVersionConflictBody(error.body, expectedId)
+  ) {
+    error.body = undefined;
+  }
+  throw error;
 }
 
 async function requestJson<T>(
@@ -183,10 +194,16 @@ export function replaceNode(
   payload: ReplaceNodePayload,
   etag?: string,
 ): Promise<Node> {
-  return putJson<Node>(`/api/nodes/${encodeURIComponent(id)}`, payload, etag);
+  return putJson<Node>(
+    `/api/nodes/${encodeURIComponent(id)}`,
+    payload,
+    etag,
+  ).catch((error) => preserveOnlyMatchingNodeConflict(error, id));
 }
 
 /** DELETE /api/nodes/:id — delete a node and its derived connected edges. */
 export function deleteNode(id: string, etag?: string): Promise<void> {
-  return deleteResource(`/api/nodes/${encodeURIComponent(id)}`, etag);
+  return deleteResource(`/api/nodes/${encodeURIComponent(id)}`, etag).catch(
+    (error) => preserveOnlyMatchingNodeConflict(error, id),
+  );
 }
