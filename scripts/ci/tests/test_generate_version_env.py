@@ -198,9 +198,7 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
         self.assertEqual(payload["artifact_tree"]["schema_version"], 1)
         self.assertRegex(payload["artifact_tree"]["sha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(payload["artifact_tree"]["file_count"], 7)
-        self.assertEqual(
-            payload["artifact_tree"]["compile_revision"], self.commit
-        )
+        self.assertEqual(payload["artifact_tree"]["compile_revision"], self.commit)
         self.assertEqual(payload["artifact_tree"]["provenance"], "unattested")
 
     def test_artifact_tree_binding_selects_vercel_static_output(self) -> None:
@@ -227,9 +225,7 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
             marker = root / output_directory / "_app" / "compile-revision.json"
             marker.parent.mkdir(parents=True, exist_ok=True)
             marker.write_text(
-                json.dumps(
-                    {"schema_version": 1, "compile_revision": self.commit}
-                )
+                json.dumps({"schema_version": 1, "compile_revision": self.commit})
                 + "\n",
                 encoding="utf-8",
             )
