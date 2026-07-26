@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -10,14 +11,18 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { parseCliArguments } from "./assert-route-performance-budget.mjs";
+import { defaultPerformanceContractPath } from "./performance-contract.mjs";
 import {
   parsePerformanceBudget,
   routeIdToHtmlFile,
   validatePerformanceBudget,
 } from "./route-performance-budget-config.mjs";
 import {
+  formatTextReport,
   measureRoute,
   resolveBuildDirectory,
+  resolveSourceRevisionEvidence,
+  runBudgetCheck,
   validateEmittedAssetBudgets,
   validateRouteBudget,
 } from "./route-performance-budget-core.mjs";
@@ -325,6 +330,99 @@ test("enforces configurable emitted asset directories and regular files", (t) =>
   assert.match(
     validateEmittedAssetBudgets({ buildDir: root, budgets }).join("\n"),
     /not a regular file/,
+  );
+});
+
+test("verifies declared revisions against the measured checkout", () => {
+  const revision = "a".repeat(40);
+  const otherRevision = "b".repeat(40);
+
+  assert.deepEqual(
+    resolveSourceRevisionEvidence({
+      env: { GIT_COMMIT_SHA: "", GITHUB_SHA: revision },
+      checkoutRevision: revision,
+    }),
+    {
+      sourceRevision: revision,
+      checkoutRevision: revision,
+      verified: true,
+      status: "verified",
+    },
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { GIT_COMMIT_SHA: "unknown", GITHUB_SHA: revision },
+      checkoutRevision: revision,
+    }).status,
+    "invalid",
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { GIT_COMMIT_SHA: revision, GITHUB_SHA: otherRevision },
+      checkoutRevision: revision,
+    }).status,
+    "conflicting",
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { GIT_COMMIT_SHA: revision },
+      checkoutRevision: otherRevision,
+    }).status,
+    "mismatch",
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { GIT_COMMIT_SHA: revision },
+      checkoutRevision: null,
+    }).status,
+    "unverifiable",
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({ env: {}, checkoutRevision: revision })
+      .status,
+    "missing",
+  );
+});
+
+test("prints revision and evidence limitations in the default report", () => {
+  const text = formatTextReport({
+    build_directory: "/tmp/build",
+    source_revision: null,
+    source_revision_verified: false,
+    revision_evidence_status: "missing",
+    does_not_establish: [
+      "runtime performance from configured thresholds alone",
+      "revision-bound performance evidence",
+    ],
+    routes: [],
+  });
+  assert.match(text, /source revision: not available \(missing\)/);
+  assert.match(
+    text,
+    /does not establish: runtime performance from configured thresholds alone/,
+  );
+  assert.match(text, /does not establish: revision-bound performance evidence/);
+});
+
+test("route checks reject contracts reached through symlinked parents", (t) => {
+  const root = temporaryDirectory(t, "route-budget-contract-root-");
+  const outside = temporaryDirectory(t, "route-budget-contract-outside-");
+  writeFileSync(
+    join(outside, "performance.v1.json"),
+    readFileSync(defaultPerformanceContractPath),
+  );
+  symlinkSync(outside, join(root, "redirect"), "dir");
+
+  assert.throws(
+    () =>
+      runBudgetCheck({
+        buildDir: root,
+        budgetPath: join(root, "redirect/performance.v1.json"),
+        contractRoot: root,
+        revisionEnvironment: {},
+        checkoutRevision: null,
+      }),
+    /escapes repository root/,
   );
 });
 

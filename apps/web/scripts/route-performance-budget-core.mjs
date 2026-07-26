@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import {
   dirname,
@@ -13,7 +14,10 @@ import {
   assertSafeRelativeDirectory,
   routeIdToHtmlFile,
 } from "./route-performance-budget-config.mjs";
-import { parsePerformanceContract } from "./performance-contract.mjs";
+import {
+  loadPerformanceContract,
+  repositoryRoot as performanceRepositoryRoot,
+} from "./performance-contract.mjs";
 import { collectInitialAssetReferences } from "./route-performance-budget-html.mjs";
 
 const modulePath = fileURLToPath(import.meta.url);
@@ -23,6 +27,94 @@ const defaultBudgetPath = resolve(
   webRoot,
   "../../policies/performance.v1.json",
 );
+const SOURCE_REVISION_PATTERN = /^[0-9a-f]{40}$/;
+
+function readCheckoutRevision(root) {
+  const result = spawnSync(
+    "git",
+    ["-C", root, "rev-parse", "--verify", "HEAD"],
+    { encoding: "utf8", timeout: 5000, windowsHide: true },
+  );
+  if (result.status !== 0) return null;
+  const revision = result.stdout.trim().toLowerCase();
+  return SOURCE_REVISION_PATTERN.test(revision) ? revision : null;
+}
+
+export function resolveSourceRevisionEvidence({
+  env = process.env,
+  root = performanceRepositoryRoot,
+  checkoutRevision,
+} = {}) {
+  const declared = [];
+  const invalidVariables = [];
+  for (const name of ["GIT_COMMIT_SHA", "GITHUB_SHA"]) {
+    const raw = env[name];
+    if (typeof raw !== "string" || raw.trim() === "") continue;
+    const value = raw.trim().toLowerCase();
+    if (!SOURCE_REVISION_PATTERN.test(value)) {
+      invalidVariables.push(name);
+      continue;
+    }
+    declared.push(value);
+  }
+
+  const distinct = [...new Set(declared)];
+  const sourceRevision = distinct.length === 1 ? distinct[0] : null;
+  const observedCheckout =
+    checkoutRevision === undefined
+      ? readCheckoutRevision(root)
+      : typeof checkoutRevision === "string" &&
+          SOURCE_REVISION_PATTERN.test(checkoutRevision.trim().toLowerCase())
+        ? checkoutRevision.trim().toLowerCase()
+        : null;
+
+  if (invalidVariables.length > 0) {
+    return {
+      sourceRevision,
+      checkoutRevision: observedCheckout,
+      verified: false,
+      status: "invalid",
+    };
+  }
+  if (distinct.length > 1) {
+    return {
+      sourceRevision: null,
+      checkoutRevision: observedCheckout,
+      verified: false,
+      status: "conflicting",
+    };
+  }
+  if (!sourceRevision) {
+    return {
+      sourceRevision: null,
+      checkoutRevision: observedCheckout,
+      verified: false,
+      status: "missing",
+    };
+  }
+  if (!observedCheckout) {
+    return {
+      sourceRevision,
+      checkoutRevision: null,
+      verified: false,
+      status: "unverifiable",
+    };
+  }
+  if (sourceRevision !== observedCheckout) {
+    return {
+      sourceRevision,
+      checkoutRevision: observedCheckout,
+      verified: false,
+      status: "mismatch",
+    };
+  }
+  return {
+    sourceRevision,
+    checkoutRevision: observedCheckout,
+    verified: true,
+    status: "verified",
+  };
+}
 
 function isInside(root, target) {
   const pathFromRoot = relative(root, target);
@@ -362,15 +454,16 @@ export function validateEmittedAssetBudgets({ buildDir, budgets }) {
 export function runBudgetCheck({
   buildDir,
   budgetPath = defaultBudgetPath,
+  contractRoot = performanceRepositoryRoot,
   reportOnly = false,
+  revisionEnvironment = process.env,
+  checkoutRevision,
 } = {}) {
-  const contract = parsePerformanceContract(
-    readRegularFile(
-      budgetPath,
-      "Canonical performance contract",
-      dirname(budgetPath),
-    ).toString("utf8"),
-  );
+  const contract = loadPerformanceContract({
+    contractPath: budgetPath,
+    root: contractRoot,
+    enforceLegacyAbsence: true,
+  });
   const parsed = contract.measurements.web_build.budget;
   const routeEntries = Object.entries(parsed.routes).map(
     ([routeId, budget]) => ({
@@ -416,25 +509,42 @@ export function runBudgetCheck({
     );
   }
   if (errors.length > 0) throw new Error(errors.join("\n"));
+  const revisionEvidence = resolveSourceRevisionEvidence({
+    env: revisionEnvironment,
+    root: contractRoot,
+    checkoutRevision,
+  });
+  const limitations = [...contract.authority.does_not_establish];
+  if (!revisionEvidence.verified) {
+    limitations.push("revision-bound performance evidence");
+  }
   return {
     schema_version: 2,
     contract_id: contract.contract_id,
     contract_status: contract.measurements.web_build.status,
-    source_revision:
-      process.env.GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? null,
+    source_revision: revisionEvidence.sourceRevision,
+    source_revision_verified: revisionEvidence.verified,
+    revision_evidence_status: revisionEvidence.status,
     build_directory: resolvedBuildDir,
     measurement: parsed.measurement,
     report_only: reportOnly,
-    does_not_establish:
-      process.env.GIT_COMMIT_SHA || process.env.GITHUB_SHA
-        ? []
-        : ["revision-bound performance evidence"],
+    does_not_establish: [...new Set(limitations)],
     routes: reports,
   };
 }
 
 export function formatTextReport(result) {
-  const lines = ["build directory: " + result.build_directory];
+  const sourceRevision = result.source_revision ?? "not available";
+  const revisionStatus = result.source_revision_verified
+    ? "verified against checkout"
+    : result.revision_evidence_status;
+  const lines = [
+    "build directory: " + result.build_directory,
+    "source revision: " + sourceRevision + " (" + revisionStatus + ")",
+  ];
+  for (const limitation of result.does_not_establish) {
+    lines.push("does not establish: " + limitation);
+  }
   for (const report of result.routes) {
     lines.push(
       report.route +

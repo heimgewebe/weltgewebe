@@ -208,6 +208,34 @@ test("fails when a replaced legacy contract still exists", (t) => {
   );
   rmSync(join(root, "ci/budget.json"));
   assert.doesNotThrow(() => assertLegacyContractsAbsent(validContract(), root));
+
+  symlinkSync("missing.json", join(root, "ci/budget.json"));
+  assert.throws(
+    () => assertLegacyContractsAbsent(validContract(), root),
+    /Legacy performance contract still exists: ci\/budget.json \(symbolic link\)/,
+  );
+});
+
+test("ties replaced files to explicit absence enforcement", () => {
+  const missingAbsence = validContract();
+  missingAbsence.authority.replaces.push("policies/perf.json");
+  assert.throws(
+    () => validatePerformanceContract(missingAbsence),
+    /must be enforced by legacy_contracts\.must_not_exist: policies\/perf\.json/,
+  );
+
+  const undeclaredAbsence = validContract();
+  undeclaredAbsence.legacy_contracts.must_not_exist.push("policies/perf.json");
+  assert.throws(
+    () => validatePerformanceContract(undeclaredAbsence),
+    /must be declared by authority\.replaces: policies\/perf\.json/,
+  );
+
+  const fragmentReference = validContract();
+  fragmentReference.authority.replaces.push(
+    "policies/slo.yaml#/services/web/latency",
+  );
+  assert.doesNotThrow(() => validatePerformanceContract(fragmentReference));
 });
 
 test("fails closed on unsafe legacy paths", () => {
@@ -216,6 +244,25 @@ test("fails closed on unsafe legacy paths", () => {
   assert.throws(
     () => validatePerformanceContract(contract),
     /safe repository-relative path/,
+  );
+});
+
+test("rejects a canonical contract reached through a symlinked parent", (t) => {
+  const root = temporaryDirectory(t);
+  const outside = temporaryDirectory(t);
+  writeFileSync(
+    join(outside, "performance.v1.json"),
+    JSON.stringify(validContract()),
+  );
+  symlinkSync(outside, join(root, "redirect"), "dir");
+
+  assert.throws(
+    () =>
+      loadPerformanceContract({
+        contractPath: join(root, "redirect/performance.v1.json"),
+        root,
+      }),
+    /escapes repository root/,
   );
 });
 
