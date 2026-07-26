@@ -389,6 +389,36 @@ class KubernetesHaContractTests(unittest.TestCase):
                 )
             )
 
+    def test_strict_external_object_store_uses_verified_local_mirror_ref(self) -> None:
+        local_ref = "chrislusf/seaweedfs:weltgewebe-test"
+        lock = {
+            "images": {
+                "seaweedfs": {
+                    "canonical": f"docker.io/{self.ha.SEAWEEDFS_IMAGE}",
+                    "local_ref": local_ref,
+                }
+            }
+        }
+        with mock.patch.object(
+            self.ha.ref, "controlled_oci_strict", return_value=True
+        ), mock.patch.object(self.ha.ref, "_oci_mirror_lock", return_value=lock):
+            self.assertEqual(self.ha.external_object_store_runtime_image(), local_ref)
+
+    def test_strict_external_object_store_rejects_mirror_binding_drift(self) -> None:
+        lock = {
+            "images": {
+                "seaweedfs": {
+                    "canonical": "docker.io/chrislusf/seaweedfs@sha256:" + "0" * 64,
+                    "local_ref": "chrislusf/seaweedfs:weltgewebe-test",
+                }
+            }
+        }
+        with mock.patch.object(
+            self.ha.ref, "controlled_oci_strict", return_value=True
+        ), mock.patch.object(self.ha.ref, "_oci_mirror_lock", return_value=lock):
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "canonical reference drift"):
+                self.ha.external_object_store_runtime_image()
+
     def test_external_object_store_cleanup_is_ownership_bound(self) -> None:
         foreign = self.ha.external_object_store_binding(
             "proof", "a" * 40, "owner-foreign"

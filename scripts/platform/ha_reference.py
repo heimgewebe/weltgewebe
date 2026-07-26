@@ -231,6 +231,22 @@ def _require_object_store_binding(
         )
 
 
+def external_object_store_runtime_image() -> str:
+    if not ref.controlled_oci_strict():
+        return SEAWEEDFS_IMAGE
+    lock = ref._oci_mirror_lock()
+    spec = lock.get("images", {}).get("seaweedfs")
+    if not isinstance(spec, dict):
+        raise ref.ProofError("strict OCI mirror lock is missing seaweedfs")
+    expected_canonical = f"docker.io/{SEAWEEDFS_IMAGE}"
+    if spec.get("canonical") != expected_canonical:
+        raise ref.ProofError("strict OCI seaweedfs canonical reference drift")
+    local_ref = spec.get("local_ref")
+    if not isinstance(local_ref, str) or not local_ref or "@" in local_ref:
+        raise ref.ProofError("strict OCI seaweedfs local reference is invalid")
+    return local_ref
+
+
 def start_external_object_store(
     cluster: str, commit: str, owner_id: str, s3_secret_key: str
 ) -> tuple[str, str, str]:
@@ -262,7 +278,7 @@ def start_external_object_store(
                 "S3_BUCKET",
                 "--volume",
                 f"{volume}:/data",
-                SEAWEEDFS_IMAGE,
+                external_object_store_runtime_image(),
                 "mini",
                 "-dir=/data",
                 "-ip=0.0.0.0",

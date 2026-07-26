@@ -317,6 +317,34 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertEqual(result["containerd_local_ref"], canonical_local)
         self.assertEqual(result["containerd_digest_ref"], canonical_digest)
 
+    def test_oci_mirror_registers_canonical_workload_runtime_alias(self) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        platform_digest = "sha256:" + "c" * 64
+        local_ref = "quay.io/jetstack/controller:weltgewebe-test"
+        digest_ref = f"{local_ref}@{locked_digest}"
+        runtime_ref = f"quay.io/jetstack/controller@{locked_digest}"
+        with mock.patch.object(
+            self.oci_mirror,
+            "_kind_image_target",
+            side_effect=[platform_digest, platform_digest, platform_digest],
+        ) as target, mock.patch.object(self.oci_mirror, "_run") as run:
+            result = self.oci_mirror._register_kind_digest_alias(
+                "proof-control-plane",
+                local_ref,
+                digest_ref,
+                locked_digest,
+                runtime_ref,
+            )
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(
+            [call.args[1] for call in target.call_args_list],
+            [local_ref, digest_ref, runtime_ref],
+        )
+        self.assertEqual(result["containerd_runtime_ref"], runtime_ref)
+        self.assertEqual(
+            set(result["registered_aliases"]), {digest_ref, runtime_ref}
+        )
+
     def test_oci_mirror_registers_alias_to_imported_platform_target(self) -> None:
         locked_digest = "sha256:" + "a" * 64
         platform_digest = "sha256:" + "c" * 64
@@ -357,7 +385,7 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             source,
         )
         self.assertIn(
-            '"images", "tag", "--force", containerd_local_ref, containerd_digest_ref,\n        ],\n        capture=True,',
+            '"images", "tag", "--force", containerd_local_ref, alias_ref,\n            ],\n            capture=True,',
             source,
         )
 

@@ -549,32 +549,43 @@ def _kind_image_target(node: str, reference: str) -> str:
 
 
 def _register_kind_digest_alias(
-    node: str, local_ref: str, digest_ref: str, locked_digest: str
-) -> dict[str, str]:
+    node: str,
+    local_ref: str,
+    digest_ref: str,
+    locked_digest: str,
+    runtime_ref: str | None = None,
+) -> dict[str, Any]:
     containerd_local_ref = _containerd_reference(local_ref)
     containerd_digest_ref = _containerd_reference(digest_ref)
+    containerd_runtime_ref = _containerd_reference(runtime_ref or digest_ref)
     source_target = _kind_image_target(node, containerd_local_ref)
-    _run(
-        [
-            "docker", "exec", node, "ctr", "--namespace", "k8s.io",
-            "images", "tag", "--force", containerd_local_ref, containerd_digest_ref,
-        ],
-        capture=True,
-        timeout=60,
-    )
-    alias_target = _kind_image_target(node, containerd_digest_ref)
-    if alias_target != source_target:
-        raise IntegrityError(
-            "containerd digest alias target mismatch for "
-            f"{containerd_digest_ref} on {node}: {alias_target} != {source_target}"
+    registered_aliases: dict[str, str] = {}
+    for alias_ref in dict.fromkeys((containerd_digest_ref, containerd_runtime_ref)):
+        _run(
+            [
+                "docker", "exec", node, "ctr", "--namespace", "k8s.io",
+                "images", "tag", "--force", containerd_local_ref, alias_ref,
+            ],
+            capture=True,
+            timeout=60,
         )
+        alias_target = _kind_image_target(node, alias_ref)
+        if alias_target != source_target:
+            raise IntegrityError(
+                "containerd digest alias target mismatch for "
+                f"{alias_ref} on {node}: {alias_target} != {source_target}"
+            )
+        registered_aliases[alias_ref] = alias_target
     return {
         "node": node,
         "digest_ref": digest_ref,
+        "runtime_ref": runtime_ref or digest_ref,
         "containerd_local_ref": containerd_local_ref,
         "containerd_digest_ref": containerd_digest_ref,
+        "containerd_runtime_ref": containerd_runtime_ref,
+        "registered_aliases": registered_aliases,
         "locked_index_digest": locked_digest,
-        "platform_target_digest": alias_target,
+        "platform_target_digest": source_target,
     }
 
 
@@ -653,7 +664,13 @@ def load_kind(
         digest = spec["digest"]
         digest_ref = f"{spec['local_ref']}@{digest}"
         aliases = [
-            _register_kind_digest_alias(node, spec["local_ref"], digest_ref, digest)
+            _register_kind_digest_alias(
+                node,
+                spec["local_ref"],
+                digest_ref,
+                digest,
+                spec["canonical"],
+            )
             for node in nodes
         ]
         loaded[name] = {
