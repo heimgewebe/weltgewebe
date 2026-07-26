@@ -1,0 +1,351 @@
+{
+  "budgets": {
+    "cleanup_scope": "unreferenced-tagged-top-level-versions-only",
+    "max_inventory_images": 30,
+    "max_parallel_pulls": 3,
+    "observed_inventory_images": 25,
+    "observed_package_versions": 193,
+    "orphan_grace_days": 14,
+    "package_version_hard_limit": 512,
+    "proof_pull_images": {
+      "ha-recovery": 23,
+      "kind-gitops": 15
+    },
+    "pull_attempts": 3,
+    "retry_backoff_seconds": [
+      5,
+      10
+    ],
+    "suite_images": {
+      "app-build": 4,
+      "ha-recovery": 19,
+      "kind-gitops": 11
+    }
+  },
+  "generation": {
+    "buildx_version": "github.com/docker/buildx v0.35.0 a319e5b15052cf6557ceb666eb8ff6e32380b782",
+    "completed_at": "2026-07-25T08:03:51.587620Z",
+    "docker_version": "28.0.4",
+    "package_metadata": {
+      "bytes": 6567,
+      "sha256": "31c9e819c1bd27a959dc1168255b618add4a93ead23d53141a19aedc8f047db0"
+    },
+    "package_preflight": {
+      "bytes": 252,
+      "sha256": "ee89c3b39351daa9c67d1639f761e833425b38c948c8b4271563072d5959b7f2"
+    },
+    "provenance": {
+      "bytes": 19925,
+      "sha256": "78d2badbc30e8796c1810581e21606d0334790c984af994691f93cc9eb36ed91"
+    },
+    "publisher_actor": "alexdermohr",
+    "read_access": {
+      "bytes": 6579,
+      "checked_images": 25,
+      "sha256": "320a4e1fe72f0f2a0acbd590038b01ad532f63732b22959403feaf679487b8f3"
+    },
+    "seed_sha256": "7185ec4a3972a13465e1951fb22ceecbc96157af0c3128261c8bff6d47196b48",
+    "source_head": "c77025cd6cffe117378ac82d983038083c680cf0",
+    "started_at": "2026-07-25T07:57:26.648018Z",
+    "workflow_run_attempt": "1",
+    "workflow_run_id": "30150215347"
+  },
+  "images": {
+    "barman_cloud_plugin": {
+      "canonical": "ghcr.io/cloudnative-pg/plugin-barman-cloud@sha256:71589dbac582333442812b07b31f7ea4d00324a8358aac7ca507dabf9f4b6c96",
+      "digest": "sha256:71589dbac582333442812b07b31f7ea4d00324a8358aac7ca507dabf9f4b6c96",
+      "load_into_kind": true,
+      "local_ref": "ghcr.io/cloudnative-pg/plugin-barman-cloud:weltgewebe-71589dbac582",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:71589dbac582333442812b07b31f7ea4d00324a8358aac7ca507dabf9f4b6c96",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:barman_cloud_plugin-71589dbac582333442812b07b31f7ea4d00324a8358aac7ca507dabf9f4b6c96",
+      "suites": [
+        "ha-recovery"
+      ]
+    },
+    "barman_cloud_sidecar": {
+      "canonical": "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar@sha256:990361af3319f9e23aafa0f6d7981f99bf1f69b4e6a85cf1bc7d71d6f09bb288",
+      "digest": "sha256:990361af3319f9e23aafa0f6d7981f99bf1f69b4e6a85cf1bc7d71d6f09bb288",
+      "load_into_kind": true,
+      "local_ref": "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:weltgewebe-990361af3319",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:990361af3319f9e23aafa0f6d7981f99bf1f69b4e6a85cf1bc7d71d6f09bb288",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:barman_cloud_sidecar-990361af3319f9e23aafa0f6d7981f99bf1f69b4e6a85cf1bc7d71d6f09bb288",
+      "suites": [
+        "ha-recovery"
+      ]
+    },
+    "build_caddy": {
+      "canonical": "docker.io/library/caddy:2.7@sha256:236c6a30ccb84fa412a5360ca8b586d804faba0621ea182fb45902608cd8a563",
+      "digest": "sha256:236c6a30ccb84fa412a5360ca8b586d804faba0621ea182fb45902608cd8a563",
+      "load_into_kind": false,
+      "local_ref": "caddy:2.7",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:236c6a30ccb84fa412a5360ca8b586d804faba0621ea182fb45902608cd8a563",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:build_caddy-236c6a30ccb84fa412a5360ca8b586d804faba0621ea182fb45902608cd8a563",
+      "suites": [
+        "app-build"
+      ]
+    },
+    "build_debian": {
+      "canonical": "docker.io/library/debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818",
+      "digest": "sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818",
+      "load_into_kind": false,
+      "local_ref": "debian:bookworm-slim",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:build_debian-7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818",
+      "suites": [
+        "app-build"
+      ]
+    },
+    "build_node": {
+      "canonical": "docker.io/library/node:20.19.0-alpine@sha256:8bda036ddd59ea51a23bc1a1035d3b5c614e72c01366d989f4120e8adca196d4",
+      "digest": "sha256:8bda036ddd59ea51a23bc1a1035d3b5c614e72c01366d989f4120e8adca196d4",
+      "load_into_kind": false,
+      "local_ref": "node:20.19.0-alpine",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:8bda036ddd59ea51a23bc1a1035d3b5c614e72c01366d989f4120e8adca196d4",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:build_node-8bda036ddd59ea51a23bc1a1035d3b5c614e72c01366d989f4120e8adca196d4",
+      "suites": [
+        "app-build"
+      ]
+    },
+    "build_rust": {
+      "canonical": "docker.io/library/rust:1.89.0-bookworm@sha256:948f9b08a66e7fe01b03a98ef1c7568292e07ec2e4fe90d88c07bb14563c84ff",
+      "digest": "sha256:948f9b08a66e7fe01b03a98ef1c7568292e07ec2e4fe90d88c07bb14563c84ff",
+      "load_into_kind": false,
+      "local_ref": "rust:1.89.0-bookworm",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:948f9b08a66e7fe01b03a98ef1c7568292e07ec2e4fe90d88c07bb14563c84ff",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:build_rust-948f9b08a66e7fe01b03a98ef1c7568292e07ec2e4fe90d88c07bb14563c84ff",
+      "suites": [
+        "app-build"
+      ]
+    },
+    "cert_manager_cainjector": {
+      "canonical": "quay.io/jetstack/cert-manager-cainjector@sha256:ad1dcc5b2fccc420f9b3fbee7ce8a869450c540fd4f2f41de2d95b1ca0c4d701",
+      "digest": "sha256:ad1dcc5b2fccc420f9b3fbee7ce8a869450c540fd4f2f41de2d95b1ca0c4d701",
+      "load_into_kind": true,
+      "local_ref": "quay.io/jetstack/cert-manager-cainjector:weltgewebe-ad1dcc5b2fcc",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:ad1dcc5b2fccc420f9b3fbee7ce8a869450c540fd4f2f41de2d95b1ca0c4d701",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:cert_manager_cainjector-ad1dcc5b2fccc420f9b3fbee7ce8a869450c540fd4f2f41de2d95b1ca0c4d701",
+      "suites": [
+        "ha-recovery"
+      ]
+    },
+    "cert_manager_controller": {
+      "canonical": "quay.io/jetstack/cert-manager-controller@sha256:e370f7800a53078e9d74324287a7d52b553864e55f5b4e521f911c3f6c7da203",
+      "digest": "sha256:e370f7800a53078e9d74324287a7d52b553864e55f5b4e521f911c3f6c7da203",
+      "load_into_kind": true,
+      "local_ref": "quay.io/jetstack/cert-manager-controller:weltgewebe-e370f7800a53",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:e370f7800a53078e9d74324287a7d52b553864e55f5b4e521f911c3f6c7da203",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:cert_manager_controller-e370f7800a53078e9d74324287a7d52b553864e55f5b4e521f911c3f6c7da203",
+      "suites": [
+        "ha-recovery"
+      ]
+    },
+    "cert_manager_webhook": {
+      "canonical": "quay.io/jetstack/cert-manager-webhook@sha256:c33cca307541e2d58861a55b1af5f390b7e19c8741e48b433693b73a7cce88b3",
+      "digest": "sha256:c33cca307541e2d58861a55b1af5f390b7e19c8741e48b433693b73a7cce88b3",
+      "load_into_kind": true,
+      "local_ref": "quay.io/jetstack/cert-manager-webhook:weltgewebe-c33cca307541",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:c33cca307541e2d58861a55b1af5f390b7e19c8741e48b433693b73a7cce88b3",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:cert_manager_webhook-c33cca307541e2d58861a55b1af5f390b7e19c8741e48b433693b73a7cce88b3",
+      "suites": [
+        "ha-recovery"
+      ]
+    },
+    "cilium_agent": {
+      "canonical": "quay.io/cilium/cilium:v1.19.5@sha256:20fbbc14ac20b55a292c0dcda5571bf31cde30a7dbc68c29db3e709390ab0732",
+      "digest": "sha256:20fbbc14ac20b55a292c0dcda5571bf31cde30a7dbc68c29db3e709390ab0732",
+      "load_into_kind": true,
+      "local_ref": "quay.io/cilium/cilium:v1.19.5",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:20fbbc14ac20b55a292c0dcda5571bf31cde30a7dbc68c29db3e709390ab0732",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:cilium_agent-20fbbc14ac20b55a292c0dcda5571bf31cde30a7dbc68c29db3e709390ab0732",
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ]
+    },
+    "cilium_envoy": {
+      "canonical": "quay.io/cilium/cilium-envoy:v1.36.8-1781157951-a7f42a3390781539911b5b9107881b35ecc4e752@sha256:326f872e19ce8aa45170efbf583b3f301586ba3feead14b864676d4baf3b45ed",
+      "digest": "sha256:326f872e19ce8aa45170efbf583b3f301586ba3feead14b864676d4baf3b45ed",
+      "load_into_kind": true,
+      "local_ref": "quay.io/cilium/cilium-envoy:v1.36.8-1781157951-a7f42a3390781539911b5b9107881b35ecc4e752",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:326f872e19ce8aa45170efbf583b3f301586ba3feead14b864676d4baf3b45ed",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:cilium_envoy-326f872e19ce8aa45170efbf583b3f301586ba3feead14b864676d4baf3b45ed",
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ]
+    },
+    "cilium_operator": {
+      "canonical": "quay.io/cilium/operator-generic:v1.19.5@sha256:be848a365776e07d0c5a895eda7aec928ddc52a5a1fa2f432fd7a286609e1db4",
+      "digest": "sha256:be848a365776e07d0c5a895eda7aec928ddc52a5a1fa2f432fd7a286609e1db4",
+      "load_into_kind": true,
+      "local_ref": "quay.io/cilium/operator-generic:v1.19.5",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:be848a365776e07d0c5a895eda7aec928ddc52a5a1fa2f432fd7a286609e1db4",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:cilium_operator-be848a365776e07d0c5a895eda7aec928ddc52a5a1fa2f432fd7a286609e1db4",
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ]
+    },
+    "cloudnative_pg_operator": {
+      "canonical": "ghcr.io/cloudnative-pg/cloudnative-pg@sha256:a2701eb97cdd2a34b1fdb2cb51987f544b706e40bec72ae7146cd8580efefebb",
+      "digest": "sha256:a2701eb97cdd2a34b1fdb2cb51987f544b706e40bec72ae7146cd8580efefebb",
+      "load_into_kind": true,
+      "local_ref": "ghcr.io/cloudnative-pg/cloudnative-pg:weltgewebe-a2701eb97cdd",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:a2701eb97cdd2a34b1fdb2cb51987f544b706e40bec72ae7146cd8580efefebb",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:cloudnative_pg_operator-a2701eb97cdd2a34b1fdb2cb51987f544b706e40bec72ae7146cd8580efefebb",
+      "suites": [
+        "ha-recovery"
+      ]
+    },
+    "cloudnative_pg_postgresql": {
+      "canonical": "ghcr.io/cloudnative-pg/postgresql:16.14@sha256:05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1",
+      "digest": "sha256:05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1",
+      "load_into_kind": true,
+      "local_ref": "ghcr.io/cloudnative-pg/postgresql:16.14",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:cloudnative_pg_postgresql-05eae7037dc6a7077cc3fc91a65fe023279060572a237d11aa83e11179443ad1",
+      "suites": [
+        "ha-recovery"
+      ]
+    },
+    "flux_helm_controller": {
+      "canonical": "ghcr.io/fluxcd/helm-controller:v1.6.2@sha256:e17ab0e5885d80cebb9890663f85d59cd3866adebfc09a4d8bd2d512ef980bc4",
+      "digest": "sha256:e17ab0e5885d80cebb9890663f85d59cd3866adebfc09a4d8bd2d512ef980bc4",
+      "load_into_kind": true,
+      "local_ref": "ghcr.io/fluxcd/helm-controller:v1.6.2",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:e17ab0e5885d80cebb9890663f85d59cd3866adebfc09a4d8bd2d512ef980bc4",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:flux_helm_controller-e17ab0e5885d80cebb9890663f85d59cd3866adebfc09a4d8bd2d512ef980bc4",
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ]
+    },
+    "flux_kustomize_controller": {
+      "canonical": "ghcr.io/fluxcd/kustomize-controller:v1.9.3@sha256:0203eb80743814f67bebb5f0b22c7db620bc461cc0b23732e0367a38fce04e4c",
+      "digest": "sha256:0203eb80743814f67bebb5f0b22c7db620bc461cc0b23732e0367a38fce04e4c",
+      "load_into_kind": true,
+      "local_ref": "ghcr.io/fluxcd/kustomize-controller:v1.9.3",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:0203eb80743814f67bebb5f0b22c7db620bc461cc0b23732e0367a38fce04e4c",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:flux_kustomize_controller-0203eb80743814f67bebb5f0b22c7db620bc461cc0b23732e0367a38fce04e4c",
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ]
+    },
+    "flux_notification_controller": {
+      "canonical": "ghcr.io/fluxcd/notification-controller:v1.9.2@sha256:9ce503e7bcb8493fafe2aaef0c2ac4396df4f6890256acf9cd444a2dcd2a69ed",
+      "digest": "sha256:9ce503e7bcb8493fafe2aaef0c2ac4396df4f6890256acf9cd444a2dcd2a69ed",
+      "load_into_kind": true,
+      "local_ref": "ghcr.io/fluxcd/notification-controller:v1.9.2",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:9ce503e7bcb8493fafe2aaef0c2ac4396df4f6890256acf9cd444a2dcd2a69ed",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:flux_notification_controller-9ce503e7bcb8493fafe2aaef0c2ac4396df4f6890256acf9cd444a2dcd2a69ed",
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ]
+    },
+    "flux_source_controller": {
+      "canonical": "ghcr.io/fluxcd/source-controller:v1.9.3@sha256:ff8f3c92f1bcb433e858c948040c3a3393fe73f5dd72048a4502bfaf0a4c26cd",
+      "digest": "sha256:ff8f3c92f1bcb433e858c948040c3a3393fe73f5dd72048a4502bfaf0a4c26cd",
+      "load_into_kind": true,
+      "local_ref": "ghcr.io/fluxcd/source-controller:v1.9.3",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:ff8f3c92f1bcb433e858c948040c3a3393fe73f5dd72048a4502bfaf0a4c26cd",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:flux_source_controller-ff8f3c92f1bcb433e858c948040c3a3393fe73f5dd72048a4502bfaf0a4c26cd",
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ]
+    },
+    "ha_nats": {
+      "canonical": "docker.io/library/nats@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0",
+      "digest": "sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0",
+      "load_into_kind": true,
+      "local_ref": "nats:weltgewebe-c11af972c99a",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:ha_nats-c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0",
+      "suites": [
+        "ha-recovery"
+      ]
+    },
+    "hubble_relay": {
+      "canonical": "quay.io/cilium/hubble-relay:v1.19.5@sha256:24409bfa1bca075c92acb26ba4b49cd573d99d68d5370f7cc825078185222a0c",
+      "digest": "sha256:24409bfa1bca075c92acb26ba4b49cd573d99d68d5370f7cc825078185222a0c",
+      "load_into_kind": true,
+      "local_ref": "quay.io/cilium/hubble-relay:v1.19.5",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:24409bfa1bca075c92acb26ba4b49cd573d99d68d5370f7cc825078185222a0c",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:hubble_relay-24409bfa1bca075c92acb26ba4b49cd573d99d68d5370f7cc825078185222a0c",
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ]
+    },
+    "kind_node": {
+      "canonical": "docker.io/kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5",
+      "digest": "sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5",
+      "load_into_kind": false,
+      "local_ref": "kindest/node:v1.36.1",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:kind_node-3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5",
+      "suites": [
+        "kind-gitops",
+        "ha-recovery"
+      ]
+    },
+    "local_nats": {
+      "canonical": "docker.io/library/nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927",
+      "digest": "sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927",
+      "load_into_kind": true,
+      "local_ref": "nats:2.10-alpine",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:local_nats-b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927",
+      "suites": [
+        "kind-gitops"
+      ]
+    },
+    "local_postgres": {
+      "canonical": "docker.io/library/postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c",
+      "digest": "sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c",
+      "load_into_kind": true,
+      "local_ref": "postgres:16",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:local_postgres-be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c",
+      "suites": [
+        "kind-gitops"
+      ]
+    },
+    "nats_box": {
+      "canonical": "docker.io/natsio/nats-box@sha256:9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d",
+      "digest": "sha256:9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d",
+      "load_into_kind": true,
+      "local_ref": "natsio/nats-box:weltgewebe-9d5f35d286c3",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:nats_box-9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d",
+      "suites": [
+        "ha-recovery"
+      ]
+    },
+    "seaweedfs": {
+      "canonical": "docker.io/chrislusf/seaweedfs@sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d",
+      "digest": "sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d",
+      "load_into_kind": true,
+      "local_ref": "chrislusf/seaweedfs:weltgewebe-f898c91e42d7",
+      "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d",
+      "mirror_tag": "ghcr.io/heimgewebe/weltgewebe-proof-oci:seaweedfs-f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d",
+      "suites": [
+        "ha-recovery"
+      ]
+    }
+  },
+  "kind": "weltgewebe.oci-proof-mirror-lock",
+  "mirror": {
+    "created_at": "2026-07-25T07:57:34Z",
+    "package_id": 14022808,
+    "package_type": "container",
+    "repository": "ghcr.io/heimgewebe/weltgewebe-proof-oci",
+    "repository_binding": "heimgewebe/weltgewebe",
+    "updated_at": "2026-07-25T08:03:47Z",
+    "visibility": "private"
+  },
+  "owner": "heimgewebe/weltgewebe",
+  "schema_version": 1
+}

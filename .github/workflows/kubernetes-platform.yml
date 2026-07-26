@@ -7,30 +7,10 @@ permissions:
   contents: read
 
 "on":
-  workflow_dispatch:
   pull_request:
     paths:
       - ".github/workflows/kubernetes-platform.yml"
-      - ".dockerignore"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "toolchain.versions.yml"
-      - "apps/api/**"
-      - "apps/web/**"
-      - "scripts/dev/**"
-      - "policies/**"
-      - "infra/compose/compose.prod.yml"
-      - "platform/**"
-      - "scripts/platform/**"
-      - "scripts/security/**"
-      - "scripts/ci/tests/test_kubernetes_platform_contract.py"
-      - "scripts/ci/tests/test_trivy_rendered_manifests.py"
-      - "scripts/ci/tests/test_kubernetes_ha_contract.py"
-      - "repo.meta.yaml"
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/kubernetes-platform.yml"
+      - ".github/workflows/kubernetes-platform-proof.yml"
       - ".dockerignore"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -49,7 +29,7 @@ permissions:
       - "repo.meta.yaml"
 
 concurrency:
-  group: kubernetes-platform-${{ github.event.pull_request.head.sha || github.sha }}
+  group: kubernetes-platform-pr-${{ github.event.pull_request.head.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -58,6 +38,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
@@ -68,6 +51,7 @@ jobs:
           python -m py_compile
           scripts/platform/bootstrap_tools.py
           scripts/platform/proof_identity.py
+          scripts/platform/oci_proof_mirror.py
           scripts/platform/validate_platform.py
           scripts/platform/kind_reference.py
           scripts/platform/ha_reference.py
@@ -87,6 +71,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.10"
@@ -99,235 +86,5 @@ jobs:
         with:
           name: trivy-rendered-security-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/security/trivy/*.json
-          if-no-files-found: error
-          retention-days: 14
-
-  kind-gitops-proof:
-    needs: contract
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      CLUSTER_NAME: wg-${{ github.run_id }}-${{ github.run_attempt }}
-      PROOF_OWNER_ID: gha-kind-${{ github.run_id }}-${{ github.run_attempt }}
-      PROOF_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
-        with:
-          python-version: "3.10"
-      - name: Install proof dependency
-        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
-      - name: Compute immutable direct proof identity
-        id: proof-identity
-        run: >-
-          python scripts/platform/proof_identity.py compute
-          --suite kind-gitops
-          --source-commit "$PROOF_SOURCE_COMMIT"
-          --output build/kubernetes-platform/kind-gitops-identity.json
-          --github-output "$GITHUB_OUTPUT"
-      - name: Restore immutable direct proof evidence
-        id: proof-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
-        with:
-          path: build/kubernetes-platform/reuse/kind-gitops
-          key: kubernetes-proof-v1-${{ runner.os }}-${{ steps.proof-identity.outputs.identity }}
-      - name: Validate restored direct proof evidence
-        if: steps.proof-cache.outputs.cache-hit == 'true'
-        run: >-
-          python scripts/platform/proof_identity.py validate
-          --identity build/kubernetes-platform/kind-gitops-identity.json
-          --record build/kubernetes-platform/reuse/kind-gitops/record.json
-          --proof build/kubernetes-platform/reuse/kind-gitops/proof.json
-      - name: Restore verified platform downloads
-        if: steps.proof-cache.outputs.cache-hit != 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
-        with:
-          path: .cache/weltgewebe-platform/downloads
-          key: weltgewebe-platform-downloads-${{ runner.os }}-${{ hashFiles('platform/toolchain.lock.json') }}
-      - name: Run pull-request direct reference proof
-        if: steps.proof-cache.outputs.cache-hit != 'true' && github.event_name == 'pull_request'
-        run: >-
-          python scripts/platform/kind_reference.py proof
-          --cluster "$CLUSTER_NAME"
-          --mode direct
-          --owner-id "$PROOF_OWNER_ID"
-      - name: Run commit-bound GitOps reference proof
-        if: steps.proof-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
-        run: >-
-          python scripts/platform/kind_reference.py proof
-          --cluster "$CLUSTER_NAME"
-          --mode gitops
-          --source-commit "$GITHUB_SHA"
-          --owner-id "$PROOF_OWNER_ID"
-      - name: Record immutable direct proof evidence
-        if: steps.proof-cache.outputs.cache-hit != 'true' && success()
-        run: |
-          set -euo pipefail
-          receipt="$(
-            find .cache/weltgewebe-platform/receipts \
-              -maxdepth 1 -type f -name "${CLUSTER_NAME}-*.json" -print -quit
-          )"
-          test -n "$receipt"
-          python scripts/platform/proof_identity.py record \
-            --identity build/kubernetes-platform/kind-gitops-identity.json \
-            --proof-receipt "$receipt" \
-            --output-dir build/kubernetes-platform/reuse/kind-gitops
-      - name: Upload direct proof evidence
-        if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
-        with:
-          name: kubernetes-kind-proof-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            build/kubernetes-platform/kind-gitops-identity.json
-            build/kubernetes-platform/reuse/kind-gitops/*.json
-          if-no-files-found: error
-          retention-days: 14
-      - name: Stage failure diagnostics
-        if: failure() && steps.proof-cache.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          source=.cache/weltgewebe-platform/failures
-          target=build/kubernetes-platform/failures
-          if [[ -d "$source" ]]; then
-            mkdir -p "$target"
-            cp -a "$source"/. "$target"/
-          fi
-      - name: Collect failure diagnostics
-        if: failure() && steps.proof-cache.outputs.cache-hit != 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
-        with:
-          name: kubernetes-platform-failure-${{ github.run_id }}-${{ github.run_attempt }}
-          path: build/kubernetes-platform/failures/
-          if-no-files-found: ignore
-          retention-days: 7
-      - name: Reconcile owned kind proof resources
-        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
-        run: >-
-          python scripts/platform/kind_reference.py down
-          --cluster "$CLUSTER_NAME"
-          --commit "$(git rev-parse HEAD)"
-          --owner-id "$PROOF_OWNER_ID"
-          --receipt build/kubernetes-platform/kind-gitops-cleanup.json
-      - name: Upload direct cleanup evidence
-        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
-        with:
-          name: kubernetes-kind-cleanup-${{ github.run_id }}-${{ github.run_attempt }}
-          path: build/kubernetes-platform/kind-gitops-cleanup.json
-          if-no-files-found: error
-          retention-days: 14
-
-  kind-ha-recovery-proof:
-    needs: contract
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      CLUSTER_NAME: wg-ha-${{ github.run_id }}-${{ github.run_attempt }}
-      PROOF_OWNER_ID: gha-ha-${{ github.run_id }}-${{ github.run_attempt }}
-      PROOF_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
-        with:
-          python-version: "3.10"
-      - name: Install proof dependency
-        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
-      - name: Compute immutable HA proof identity
-        id: proof-identity
-        run: >-
-          python scripts/platform/proof_identity.py compute
-          --suite ha-recovery
-          --source-commit "$PROOF_SOURCE_COMMIT"
-          --output build/kubernetes-platform/ha-recovery-identity.json
-          --github-output "$GITHUB_OUTPUT"
-      - name: Restore immutable HA proof evidence
-        id: proof-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
-        with:
-          path: build/kubernetes-platform/reuse/ha-recovery
-          key: kubernetes-proof-v1-${{ runner.os }}-${{ steps.proof-identity.outputs.identity }}
-      - name: Validate restored HA proof evidence
-        if: steps.proof-cache.outputs.cache-hit == 'true'
-        run: >-
-          python scripts/platform/proof_identity.py validate
-          --identity build/kubernetes-platform/ha-recovery-identity.json
-          --record build/kubernetes-platform/reuse/ha-recovery/record.json
-          --proof build/kubernetes-platform/reuse/ha-recovery/proof.json
-      - name: Restore verified platform downloads
-        if: steps.proof-cache.outputs.cache-hit != 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
-        with:
-          path: .cache/weltgewebe-platform/downloads
-          key: weltgewebe-platform-downloads-${{ runner.os }}-${{ hashFiles('platform/toolchain.lock.json') }}
-      - name: Run HA failover and blank-cluster recovery proof
-        if: steps.proof-cache.outputs.cache-hit != 'true'
-        run: >-
-          python scripts/platform/ha_reference.py proof
-          --cluster "$CLUSTER_NAME"
-          --owner-id "$PROOF_OWNER_ID"
-      - name: Record immutable HA proof evidence
-        if: steps.proof-cache.outputs.cache-hit != 'true' && success()
-        run: |
-          set -euo pipefail
-          receipt="$(
-            find .cache/weltgewebe-platform/receipts \
-              -maxdepth 1 -type f \
-              -name "${CLUSTER_NAME}-*-ha-recovery.json" -print -quit
-          )"
-          test -n "$receipt"
-          python scripts/platform/proof_identity.py record \
-            --identity build/kubernetes-platform/ha-recovery-identity.json \
-            --proof-receipt "$receipt" \
-            --output-dir build/kubernetes-platform/reuse/ha-recovery
-      - name: Stage HA recovery receipt
-        if: success()
-        run: |
-          set -euo pipefail
-          mkdir -p build/kubernetes-platform/ha-recovery
-          cp -- build/kubernetes-platform/reuse/ha-recovery/proof.json \
-            build/kubernetes-platform/ha-recovery/proof.json
-      - name: Upload HA recovery receipt
-        if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
-        with:
-          name: kubernetes-ha-recovery-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            build/kubernetes-platform/ha-recovery-identity.json
-            build/kubernetes-platform/reuse/ha-recovery/record.json
-            build/kubernetes-platform/ha-recovery/proof.json
-          if-no-files-found: error
-          retention-days: 14
-      - name: Stage HA failure diagnostics
-        if: failure() && steps.proof-cache.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          source=.cache/weltgewebe-platform/failures
-          target=build/kubernetes-platform/failures
-          if [[ -d "$source" ]]; then
-            mkdir -p "$target"
-            cp -a "$source"/. "$target"/
-          fi
-      - name: Collect HA failure diagnostics
-        if: failure() && steps.proof-cache.outputs.cache-hit != 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
-        with:
-          name: kubernetes-ha-failure-${{ github.run_id }}-${{ github.run_attempt }}
-          path: build/kubernetes-platform/failures/
-          if-no-files-found: ignore
-          retention-days: 14
-      - name: Reconcile owned HA proof resources
-        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
-        run: >-
-          python scripts/platform/ha_reference.py down
-          --cluster "$CLUSTER_NAME"
-          --commit "$(git rev-parse HEAD)"
-          --owner-id "$PROOF_OWNER_ID"
-          --receipt build/kubernetes-platform/ha-recovery-cleanup.json
-      - name: Upload HA cleanup evidence
-        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
-        with:
-          name: kubernetes-ha-cleanup-${{ github.run_id }}-${{ github.run_attempt }}
-          path: build/kubernetes-platform/ha-recovery-cleanup.json
           if-no-files-found: error
           retention-days: 14

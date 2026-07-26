@@ -22,6 +22,16 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CACHE = ROOT / ".cache/weltgewebe-platform"
+OCI_MIRROR_STATE = CACHE / "oci-mirror"
+OCI_MIRROR_LOCK = ROOT / "platform/oci-proof-mirror.lock.json"
+OCI_STRICT_ENV = "WELTGEWEBE_PROOF_OCI_STRICT"
+OCI_DOCKERFILE_IMAGES = {
+    Path("apps/api/Dockerfile"): ("build_rust", "build_debian"),
+    Path("apps/web/Dockerfile"): ("build_node", "build_caddy"),
+}
+_CONTROLLED_OCI_RUNTIME_REFS: dict[str, str] = {}
+_CONTROLLED_OCI_RUNTIME_DIGESTS: dict[str, str] = {}
+_CONTROLLED_OCI_RUNTIME_IMAGE_IDS: dict[str, str] = {}
 MARKERS = CACHE / "clusters"
 KUBECONFIGS = CACHE / "kubeconfigs"
 DEFAULT_CLUSTER = "weltgewebe-reference"
@@ -120,6 +130,294 @@ def tool_receipt() -> dict[str, Any]:
         ]
     )
     return json.loads(raw)
+
+
+def _enabled(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes"}
+
+
+def controlled_oci_strict() -> bool:
+    return _enabled(OCI_STRICT_ENV)
+
+
+def _normalize_oci_reference(reference: str) -> str:
+    name, separator, digest = reference.partition("@")
+    first = name.split("/", 1)[0]
+    if "/" not in name:
+        canonical = f"docker.io/library/{name}"
+    elif first == "localhost" or "." in first or ":" in first:
+        canonical = name
+    else:
+        canonical = f"docker.io/{name}"
+    return canonical + (separator + digest if separator else "")
+
+
+def _full_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and re.fullmatch(r"sha256:[0-9a-f]{64}", value) is not None
+    )
+
+
+def _oci_mirror_lock() -> dict[str, Any]:
+    try:
+        payload = json.loads(OCI_MIRROR_LOCK.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ProofError(f"controlled OCI mirror lock is unreadable: {error}") from error
+    if payload.get("schema_version") != 1 or not isinstance(payload.get("images"), dict):
+        raise ProofError("controlled OCI mirror lock is invalid")
+    return payload
+
+
+def prepare_controlled_oci_host(suite: str) -> dict[str, Any]:
+    raw = output(
+        [
+            sys.executable,
+            "scripts/platform/oci_proof_mirror.py",
+            "--state",
+            str(OCI_MIRROR_STATE),
+            "verify-host",
+            "--suite",
+            suite,
+            "--suite",
+            "app-build",
+        ]
+    )
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ProofError("controlled OCI offline host verification receipt is malformed") from error
+    if result.get("status") != "pass" or result.get("strict") is not True:
+        raise ProofError(f"controlled OCI offline host verification did not pass strictly: {result}")
+    lock = _oci_mirror_lock()
+    result["kind_node_image"] = lock["images"]["kind_node"]["local_ref"]
+    return result
+
+
+def _validate_controlled_oci_kind_receipt(
+    result: dict[str, Any], suite: str, cluster: str
+) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+    if result.get("status") != "pass" or result.get("strict") is not True:
+        raise ProofError(f"controlled OCI kind load did not pass strictly: {result}")
+    if result.get("cluster") != cluster:
+        raise ProofError("controlled OCI kind-load receipt cluster binding drift")
+    lock = _oci_mirror_lock()
+    expected = {
+        name: spec
+        for name, spec in lock["images"].items()
+        if suite in spec.get("suites", []) and spec.get("load_into_kind") is True
+    }
+    images = result.get("images")
+    if not isinstance(images, dict) or set(images) != set(expected):
+        raise ProofError("controlled OCI kind-load receipt image inventory drift")
+    if result.get("loaded_count") != len(expected):
+        raise ProofError("controlled OCI kind-load receipt count drift")
+    blockades = result.get("registry_blockades")
+    if not isinstance(blockades, list) or not blockades:
+        raise ProofError("controlled OCI kind-load receipt lacks node registry blockade")
+    blockade_nodes = {
+        item.get("node") for item in blockades if isinstance(item, dict)
+    }
+    if None in blockade_nodes or len(blockade_nodes) != len(blockades):
+        raise ProofError("controlled OCI kind-load blockade node inventory is invalid")
+
+    runtime_refs: dict[str, str] = {}
+    runtime_digests: dict[str, str] = {}
+    runtime_image_ids: dict[str, str] = {}
+    image_nodes: set[str] | None = None
+    for name, spec in expected.items():
+        observed = images[name]
+        if not isinstance(observed, dict):
+            raise ProofError(f"controlled OCI image receipt is invalid: {name}")
+        canonical = spec.get("canonical")
+        local_ref = spec.get("local_ref")
+        locked_digest = spec.get("digest")
+        runtime_ref = observed.get("runtime_ref")
+        platform_digest = observed.get("platform_target_digest")
+        image_id = observed.get("cri_image_id")
+        expected_runtime = _normalize_oci_reference(str(local_ref))
+        if (
+            observed.get("canonical") != canonical
+            or observed.get("local_ref") != local_ref
+            or observed.get("locked_index_digest") != locked_digest
+            or runtime_ref != expected_runtime
+            or not _full_sha256(platform_digest)
+            or not _full_sha256(image_id)
+            or observed.get("image_id") != image_id
+            or not isinstance(canonical, str)
+            or not isinstance(local_ref, str)
+            or not isinstance(locked_digest, str)
+        ):
+            raise ProofError(f"controlled OCI CRI image binding drift: {name}")
+        nodes = observed.get("nodes")
+        if not isinstance(nodes, list) or not nodes:
+            raise ProofError(f"controlled OCI node image bindings are missing: {name}")
+        current_nodes: set[str] = set()
+        for node in nodes:
+            if not isinstance(node, dict) or not isinstance(node.get("node"), str):
+                raise ProofError(f"controlled OCI node image binding is invalid: {name}")
+            current_nodes.add(node["node"])
+            repo_tags = node.get("repo_tags")
+            repo_digests = node.get("repo_digests")
+            selected_repo_digest = node.get("selected_repo_digest")
+            containerd_target_digest = node.get("containerd_target_digest")
+            platform_evidence_kind = node.get("platform_evidence_kind")
+            canonical_name = _normalize_oci_reference(canonical).rsplit("@", 1)[0]
+            allowed_repo_digests = {
+                f"{expected_runtime}@{platform_digest}",
+                f"{canonical_name}@{platform_digest}",
+            }
+            import_digest = (
+                isinstance(selected_repo_digest, str)
+                and re.fullmatch(
+                    r"docker\.io/library/import-[0-9]{4}-[0-9]{2}-[0-9]{2}@"
+                    r"sha256:[0-9a-f]{64}",
+                    selected_repo_digest,
+                )
+                is not None
+                and selected_repo_digest.endswith(f"@{platform_digest}")
+            )
+            repo_digest_evidence = (
+                platform_evidence_kind == "cri_repo_digest"
+                and isinstance(repo_digests, list)
+                and selected_repo_digest in repo_digests
+                and (
+                    selected_repo_digest in allowed_repo_digests
+                    or import_digest
+                )
+                and containerd_target_digest is None
+            )
+            containerd_target_evidence = (
+                platform_evidence_kind == "containerd_target_digest"
+                and repo_digests == []
+                and selected_repo_digest is None
+                and containerd_target_digest == platform_digest
+            )
+            if (
+                node.get("cri_image_status_verified") is not True
+                or node.get("runtime_ref") != expected_runtime
+                or node.get("image_id") != image_id
+                or node.get("locked_index_digest") != locked_digest
+                or node.get("platform_target_digest") != platform_digest
+                or not isinstance(repo_tags, list)
+                or expected_runtime not in repo_tags
+                or not isinstance(repo_digests, list)
+                or not (repo_digest_evidence or containerd_target_evidence)
+            ):
+                raise ProofError(f"controlled OCI node CRI binding drift: {name}")
+        if image_nodes is None:
+            image_nodes = current_nodes
+        elif current_nodes != image_nodes:
+            raise ProofError("controlled OCI image node inventories disagree")
+        previous_digest = runtime_digests.setdefault(
+            expected_runtime, platform_digest
+        )
+        if previous_digest != platform_digest:
+            raise ProofError("controlled OCI runtime tag has conflicting digests")
+        previous_image_id = runtime_image_ids.setdefault(expected_runtime, image_id)
+        if previous_image_id != image_id:
+            raise ProofError("controlled OCI runtime tag has conflicting image IDs")
+        for source_ref in (
+            canonical,
+            f"{local_ref}@{locked_digest}",
+            local_ref,
+        ):
+            runtime_refs[_normalize_oci_reference(source_ref)] = expected_runtime
+    if image_nodes != blockade_nodes:
+        raise ProofError("controlled OCI image and blockade node inventories disagree")
+    return runtime_refs, runtime_digests, runtime_image_ids
+
+
+def load_controlled_oci_into_kind(kind: str, cluster: str, suite: str) -> dict[str, Any]:
+    raw = output(
+        [
+            sys.executable,
+            "scripts/platform/oci_proof_mirror.py",
+            "--state",
+            str(OCI_MIRROR_STATE),
+            "load-kind",
+            "--suite",
+            suite,
+            "--kind",
+            kind,
+            "--cluster",
+            cluster,
+        ]
+    )
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ProofError("controlled OCI kind-load receipt is malformed") from error
+    runtime_refs, runtime_digests, runtime_image_ids = (
+        _validate_controlled_oci_kind_receipt(result, suite, cluster)
+    )
+    global _CONTROLLED_OCI_RUNTIME_REFS
+    global _CONTROLLED_OCI_RUNTIME_DIGESTS
+    global _CONTROLLED_OCI_RUNTIME_IMAGE_IDS
+    _CONTROLLED_OCI_RUNTIME_REFS = runtime_refs
+    _CONTROLLED_OCI_RUNTIME_DIGESTS = runtime_digests
+    _CONTROLLED_OCI_RUNTIME_IMAGE_IDS = runtime_image_ids
+    return result
+
+
+def controlled_oci_runtime_image(reference: str) -> str:
+    if not controlled_oci_strict():
+        return reference
+    normalized = _normalize_oci_reference(reference)
+    runtime = _CONTROLLED_OCI_RUNTIME_REFS.get(normalized)
+    if runtime is not None:
+        return runtime
+    lock = _oci_mirror_lock()
+    locked_refs = {
+        _normalize_oci_reference(source_ref)
+        for spec in lock["images"].values()
+        if spec.get("load_into_kind") is True
+        for source_ref in (
+            str(spec.get("canonical", "")),
+            f"{spec.get('local_ref', '')}@{spec.get('digest', '')}",
+        )
+    }
+    if normalized in locked_refs:
+        raise ProofError(
+            f"controlled OCI runtime tag is unavailable for locked image: {reference}"
+        )
+    return reference
+
+
+def controlled_oci_runtime_digest(reference: str) -> str:
+    if not controlled_oci_strict():
+        digest = reference.rsplit("@", 1)[-1] if "@" in reference else ""
+        if not _full_sha256(digest):
+            raise ProofError(
+                f"non-strict OCI reference is not digest-bound: {reference}"
+            )
+        return digest
+    runtime_ref = controlled_oci_runtime_image(reference)
+    digest = _CONTROLLED_OCI_RUNTIME_DIGESTS.get(runtime_ref)
+    if not _full_sha256(digest):
+        raise ProofError(
+            f"controlled OCI runtime digest is unavailable for {reference}"
+        )
+    return digest
+
+
+def controlled_oci_runtime_identity_digests(reference: str) -> set[str]:
+    if not controlled_oci_strict():
+        return {controlled_oci_runtime_digest(reference)}
+    runtime_ref = controlled_oci_runtime_image(reference)
+    identities = {
+        value
+        for value in (
+            _CONTROLLED_OCI_RUNTIME_DIGESTS.get(runtime_ref),
+            _CONTROLLED_OCI_RUNTIME_IMAGE_IDS.get(runtime_ref),
+        )
+        if _full_sha256(value)
+    }
+    if not identities:
+        raise ProofError(
+            f"controlled OCI runtime identities are unavailable for {reference}"
+        )
+    return identities
 
 
 def require_host_tools() -> None:
@@ -506,13 +804,81 @@ def create_kind_cluster(
             time.sleep(delay)
 
 
+def _pod_spec(document: dict[str, Any]) -> dict[str, Any] | None:
+    kind = document.get("kind")
+    spec = document.get("spec")
+    if not isinstance(spec, dict):
+        return None
+    if (
+        controlled_oci_strict()
+        and kind == "Cluster"
+        and document.get("apiVersion") == "postgresql.cnpg.io/v1"
+    ):
+        spec["imagePullPolicy"] = "Never"
+        return None
+    if kind == "Pod":
+        return spec
+    if kind in {"Deployment", "DaemonSet", "StatefulSet", "ReplicaSet", "Job"}:
+        template = spec.get("template")
+    elif kind == "CronJob":
+        template = spec.get("jobTemplate", {}).get("spec", {}).get("template")
+    else:
+        return None
+    if not isinstance(template, dict):
+        return None
+    pod = template.get("spec")
+    return pod if isinstance(pod, dict) else None
+
+
+def _rewrite_controlled_oci_images(value: Any) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in {"image", "imageName"} and isinstance(item, str):
+                value[key] = controlled_oci_runtime_image(item)
+            else:
+                _rewrite_controlled_oci_images(item)
+    elif isinstance(value, list):
+        for item in value:
+            _rewrite_controlled_oci_images(item)
+
+
+def enforce_controlled_oci_pull_policy(
+    documents: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not controlled_oci_strict():
+        return documents
+    for document in documents:
+        _rewrite_controlled_oci_images(document)
+        pod = _pod_spec(document)
+        if pod is None:
+            continue
+        for key in ("initContainers", "containers", "ephemeralContainers"):
+            containers = pod.get(key, [])
+            if not isinstance(containers, list):
+                continue
+            for container in containers:
+                if isinstance(container, dict) and isinstance(container.get("image"), str):
+                    container["imagePullPolicy"] = "Never"
+    return documents
+
+
 def apply_yaml(kubectl: str, document: dict[str, Any] | list[dict[str, Any]]) -> None:
     documents = document if isinstance(document, list) else [document]
-    payload = yaml.safe_dump_all(documents, sort_keys=False)
+    payload = yaml.safe_dump_all(
+        enforce_controlled_oci_pull_policy(documents), sort_keys=False
+    )
     run([kubectl, "apply", "-f", "-"], input_text=payload)
 
 
 def apply_file(kubectl: str, path: Path) -> None:
+    if controlled_oci_strict():
+        documents = [
+            item
+            for item in yaml.safe_load_all(path.read_text(encoding="utf-8"))
+            if isinstance(item, dict)
+        ]
+        apply_yaml(kubectl, documents)
+        return
     run([kubectl, "apply", "-f", str(path)])
 
 
@@ -585,17 +951,103 @@ def wait_http_route_parent_condition(
     )
 
 
+def controlled_oci_dockerfile(path: Path) -> str:
+    source = path.read_text(encoding="utf-8")
+    if not controlled_oci_strict():
+        return source
+    relative = path.relative_to(ROOT) if path.is_absolute() else path
+    expected = OCI_DOCKERFILE_IMAGES.get(relative)
+    if expected is None:
+        raise ProofError(f"no controlled OCI Dockerfile contract for {relative}")
+    lock = _oci_mirror_lock()
+    controlled_refs: dict[str, tuple[str, str]] = {}
+    for name in expected:
+        spec = lock["images"].get(name)
+        if not isinstance(spec, dict):
+            raise ProofError(f"controlled OCI build image is missing: {name}")
+        canonical = spec.get("canonical")
+        local_ref = spec.get("local_ref")
+        digest = spec.get("digest")
+        if (
+            not isinstance(canonical, str)
+            or not isinstance(local_ref, str)
+            or not isinstance(digest, str)
+            or canonical.rsplit("@", 1)[-1] != digest
+        ):
+            raise ProofError(f"controlled OCI build image is invalid: {name}")
+        dockerfile_ref = f"{local_ref}@{digest}"
+        if dockerfile_ref in controlled_refs:
+            raise ProofError(
+                f"controlled OCI build images share Dockerfile reference {dockerfile_ref}"
+            )
+        controlled_refs[dockerfile_ref] = (name, local_ref)
+
+    from_instruction = re.compile(
+        r"^(?P<prefix>\s*FROM(?:\s+--[^\s]+)*\s+)"
+        r"(?P<image>[^\s]+)"
+        r"(?P<suffix>(?:\s+AS\s+(?P<alias>[A-Za-z0-9._-]+))?\s*)$",
+        re.IGNORECASE,
+    )
+    observed: dict[str, int] = {name: 0 for name in expected}
+    stage_aliases: set[str] = set()
+    rewritten: list[str] = []
+    for line in source.splitlines(keepends=True):
+        body = line.rstrip("\r\n")
+        ending = line[len(body) :]
+        if not body.lstrip().upper().startswith("FROM "):
+            rewritten.append(line)
+            continue
+        match = from_instruction.fullmatch(body)
+        if match is None:
+            raise ProofError(f"Dockerfile {relative} has unsupported FROM syntax: {body}")
+        image = match.group("image")
+        replacement = controlled_refs.get(image)
+        if replacement is None:
+            if image not in stage_aliases:
+                raise ProofError(
+                    f"Dockerfile {relative} uses uncontrolled OCI base image {image}"
+                )
+            rewritten.append(line)
+        else:
+            name, local_ref = replacement
+            observed[name] += 1
+            rewritten.append(
+                f"{match.group('prefix')}{local_ref}{match.group('suffix')}{ending}"
+            )
+        alias = match.group("alias")
+        if alias is not None:
+            stage_aliases.add(alias)
+
+    invalid_counts = {name: count for name, count in observed.items() if count != 1}
+    if invalid_counts:
+        detail = ", ".join(
+            f"{name}={count}" for name, count in sorted(invalid_counts.items())
+        )
+        raise ProofError(
+            f"Dockerfile {relative} must use each controlled OCI base exactly once: {detail}"
+        )
+    return "".join(rewritten)
+
+
+def _build_dockerfile(path: Path) -> tuple[list[str], str | None]:
+    if not controlled_oci_strict():
+        return ["--file", str(path)], None
+    return ["--file", "-"], controlled_oci_dockerfile(path)
+
+
 def build_images(kind: str, cluster: str, commit: str, timestamp: str) -> dict[str, str]:
     images = {
         "api": "weltgewebe-api:local",
         "web": "weltgewebe-web:local",
     }
+    pull_args = ["--pull=false"] if controlled_oci_strict() else []
+    api_file_args, api_dockerfile = _build_dockerfile(Path("apps/api/Dockerfile"))
     run(
         [
             "docker",
             "build",
-            "--file",
-            "apps/api/Dockerfile",
+            *pull_args,
+            *api_file_args,
             "--build-arg",
             f"GIT_COMMIT_SHA={commit}",
             "--build-arg",
@@ -604,14 +1056,16 @@ def build_images(kind: str, cluster: str, commit: str, timestamp: str) -> dict[s
             images["api"],
             ".",
         ],
+        input_text=api_dockerfile,
         timeout=3600,
     )
+    web_file_args, web_dockerfile = _build_dockerfile(Path("apps/web/Dockerfile"))
     run(
         [
             "docker",
             "build",
-            "--file",
-            "apps/web/Dockerfile",
+            *pull_args,
+            *web_file_args,
             "--build-arg",
             f"GIT_COMMIT_SHA={commit}",
             "--build-arg",
@@ -620,6 +1074,7 @@ def build_images(kind: str, cluster: str, commit: str, timestamp: str) -> dict[s
             images["web"],
             ".",
         ],
+        input_text=web_dockerfile,
         timeout=1800,
     )
     for image in images.values():
@@ -666,6 +1121,28 @@ def install_platform_components(
             "hubble.ui.enabled=false",
             "--set",
             "operator.replicas=1",
+            *(
+                [
+                    "--set",
+                    "image.pullPolicy=Never",
+                    "--set",
+                    "operator.image.pullPolicy=Never",
+                    "--set",
+                    "envoy.image.pullPolicy=Never",
+                    "--set",
+                    "hubble.relay.image.pullPolicy=Never",
+                    "--set",
+                    "image.useDigest=false",
+                    "--set",
+                    "operator.image.useDigest=false",
+                    "--set",
+                    "envoy.image.useDigest=false",
+                    "--set",
+                    "hubble.relay.image.useDigest=false",
+                ]
+                if controlled_oci_strict()
+                else []
+            ),
             "--wait",
             "--timeout",
             "10m",
@@ -675,15 +1152,20 @@ def install_platform_components(
     wait_rollout(kubectl, "kube-system", "daemonset/cilium")
     wait_rollout(kubectl, "kube-system", "deployment/cilium-operator")
     wait_rollout(kubectl, "kube-system", "deployment/hubble-relay")
-    run(
-        [
-            flux,
-            "install",
-            "--namespace=flux-system",
-            "--components=source-controller,kustomize-controller,helm-controller,notification-controller",
-        ],
-        timeout=600,
-    )
+    flux_command = [
+        flux,
+        "install",
+        "--namespace=flux-system",
+        "--components=source-controller,kustomize-controller,helm-controller,notification-controller",
+    ]
+    if controlled_oci_strict():
+        exported = output([*flux_command, "--export"])
+        flux_documents = [
+            item for item in yaml.safe_load_all(exported) if isinstance(item, dict)
+        ]
+        apply_yaml(kubectl, flux_documents)
+    else:
+        run(flux_command, timeout=600)
     for deployment in (
         "source-controller",
         "kustomize-controller",
@@ -752,8 +1234,73 @@ def flux_source_document(
     return document
 
 
+def flux_kustomization_document(path: Path) -> dict[str, Any]:
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ProofError(f"Flux Kustomization document is invalid: {path}")
+    if not controlled_oci_strict():
+        return document
+    name = document.get("metadata", {}).get("name")
+    if name != "weltgewebe-local-data":
+        return document
+    spec = document.get("spec")
+    if not isinstance(spec, dict) or "patches" in spec:
+        raise ProofError("local-data Flux Kustomization patch contract drift")
+    lock = _oci_mirror_lock()
+    runtime_images: dict[str, str] = {}
+    for image_name in ("local_postgres", "local_nats"):
+        image = lock["images"].get(image_name)
+        if not isinstance(image, dict) or not isinstance(image.get("canonical"), str):
+            raise ProofError(f"controlled OCI image is missing: {image_name}")
+        runtime_images[image_name] = controlled_oci_runtime_image(image["canonical"])
+    patches = []
+    for deployment, container, image_name in (
+        ("postgres", "postgres", "local_postgres"),
+        ("nats", "nats", "local_nats"),
+    ):
+        patch_document = {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": {
+                "name": deployment,
+                "namespace": "weltgewebe-data",
+            },
+            "spec": {
+                "template": {
+                    "spec": {
+                        "containers": [
+                            {
+                                "name": container,
+                                "image": runtime_images[image_name],
+                                "imagePullPolicy": "Never",
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+        patches.append(
+            {
+                "target": {
+                    "kind": "Deployment",
+                    "name": deployment,
+                    "namespace": "weltgewebe-data",
+                },
+                "patch": yaml.safe_dump(patch_document, sort_keys=False),
+            }
+        )
+    spec["patches"] = patches
+    return document
+
+
 def apply_direct(kubectl: str, kustomize: str, path: str) -> None:
     rendered = output([kustomize, "build", path])
+    if controlled_oci_strict():
+        documents = [
+            item for item in yaml.safe_load_all(rendered) if isinstance(item, dict)
+        ]
+        apply_yaml(kubectl, documents)
+        return
     run([kubectl, "apply", "-f", "-"], input_text=rendered)
 
 
@@ -764,7 +1311,12 @@ def apply_flux_data(
         kubectl,
         flux_source_document(branch=source_ref, commit=source_commit),
     )
-    apply_file(kubectl, ROOT / "platform/clusters/local/local-data.yaml")
+    apply_yaml(
+        kubectl,
+        flux_kustomization_document(
+            ROOT / "platform/clusters/local/local-data.yaml"
+        ),
+    )
     apply_file(kubectl, ROOT / "platform/clusters/local/migration.yaml")
     wait_condition(kubectl, "flux-system", "gitrepository/weltgewebe", "Ready")
     wait_condition(kubectl, "flux-system", "kustomization/weltgewebe-local-data", "Ready")
@@ -1221,13 +1773,18 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
     helm = tools["helm"]
     owner_id = args.owner_id or generate_owner_id("kind-proof")
     app_namespace = "weltgewebe"
+    oci_host: dict[str, Any] | None = None
+    node_image = receipt["kubernetes"]["kind_node_image"]
+    if controlled_oci_strict():
+        oci_host = prepare_controlled_oci_host("kind-gitops")
+        node_image = oci_host["kind_node_image"]
     reserved = False
     created = False
     try:
         create_kind_cluster(
             kind,
             args.cluster,
-            receipt["kubernetes"]["kind_node_image"],
+            node_image,
             "platform/clusters/local/kind.yaml",
             commit,
             owner_id,
@@ -1235,6 +1792,11 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
         )
         reserved = True
         created = True
+        oci_cluster: dict[str, Any] | None = None
+        if controlled_oci_strict():
+            oci_cluster = load_controlled_oci_into_kind(
+                kind, args.cluster, "kind-gitops"
+            )
         api_server_host = control_plane_address(args.cluster)
         image_ids = build_images(kind, args.cluster, commit, timestamp)
         install_platform_components(
@@ -1268,6 +1830,11 @@ def proof(args: argparse.Namespace) -> dict[str, Any]:
             "commit": commit,
             "owner_id": owner_id,
             "tool_lock_sha256": receipt["lock_sha256"],
+            "oci_controlled_source": {
+                "strict": controlled_oci_strict(),
+                "host": oci_host,
+                "cluster": oci_cluster,
+            },
             "image_ids": image_ids,
             "bootstrap_api_server": {"host": api_server_host, "port": 6443},
             "api_restart": restart,

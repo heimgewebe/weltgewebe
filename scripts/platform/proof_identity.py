@@ -17,6 +17,7 @@ FULL_GIT_OBJECT_ID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 SUITE_INPUTS = {
     "kind-gitops": (
         ".github/workflows/kubernetes-platform.yml",
+        ".github/workflows/kubernetes-platform-proof.yml",
         ".dockerignore",
         "Cargo.toml",
         "Cargo.lock",
@@ -36,6 +37,7 @@ SUITE_INPUTS = {
     ),
     "ha-recovery": (
         ".github/workflows/kubernetes-platform.yml",
+        ".github/workflows/kubernetes-platform-proof.yml",
         ".dockerignore",
         "Cargo.toml",
         "Cargo.lock",
@@ -142,6 +144,9 @@ def compute_identity(suite: str, source_commit: str) -> dict[str, Any]:
         "tool_lock_sha256": _sha256_bytes(
             (ROOT / "platform/toolchain.lock.json").read_bytes()
         ),
+        "oci_mirror_lock_sha256": _sha256_bytes(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_bytes()
+        ),
         "invalidation_contract": list(SUITE_INPUTS[suite]),
     }
     payload["identity_sha256"] = _sha256_bytes(_canonical_json(payload))
@@ -172,6 +177,220 @@ def _read_object(path: Path) -> dict[str, Any]:
     return payload
 
 
+BLOCKED_REGISTRIES = frozenset(
+    {
+        "registry-1.docker.io",
+        "auth.docker.io",
+        "production.cloudflare.docker.com",
+        "quay.io",
+        "ghcr.io",
+    }
+)
+
+
+def _validate_receipt_header(
+    receipt: Any,
+    *,
+    label: str,
+    lock_sha256: str,
+) -> dict[str, Any]:
+    if not isinstance(receipt, dict):
+        raise IdentityError(f"reusable proof {label} OCI receipt is missing")
+    if receipt.get("status") != "pass" or receipt.get("strict") is not True:
+        raise IdentityError(f"reusable proof {label} OCI receipt is not strictly passing")
+    if receipt.get("lock_sha256") != lock_sha256:
+        raise IdentityError(f"reusable proof {label} OCI receipt uses a different mirror lock")
+    return receipt
+
+
+def _containerd_reference(reference: str) -> str:
+    name, separator, digest = reference.partition("@")
+    first = name.split("/", 1)[0]
+    if "/" not in name:
+        canonical = f"docker.io/library/{name}"
+    elif first == "localhost" or "." in first or ":" in first:
+        canonical = name
+    else:
+        canonical = f"docker.io/{name}"
+    return canonical + (separator + digest if separator else "")
+
+
+def _validate_registry_blockades(
+    receipt: dict[str, Any], *, label: str
+) -> set[str]:
+    blockades = receipt.get("registry_blockades")
+    if not isinstance(blockades, list) or not blockades:
+        raise IdentityError(f"reusable proof {label} lacks registry blockade evidence")
+    observed_nodes: set[str] = set()
+    for blockade in blockades:
+        if not isinstance(blockade, dict):
+            raise IdentityError(f"reusable proof {label} registry blockade is malformed")
+        node = blockade.get("node")
+        registries = blockade.get("registries")
+        if not isinstance(node, str) or not node or node in observed_nodes:
+            raise IdentityError(f"reusable proof {label} registry blockade nodes are invalid")
+        observed_nodes.add(node)
+        if not isinstance(registries, dict) or set(registries) != BLOCKED_REGISTRIES:
+            raise IdentityError(f"reusable proof {label} registry blockade inventory drifted")
+        for registry, addresses in registries.items():
+            if not isinstance(addresses, dict):
+                raise IdentityError(
+                    f"reusable proof {label} registry blockade for {registry} is malformed"
+                )
+            if addresses.get("ipv4") != ["127.0.0.1"]:
+                raise IdentityError(
+                    f"reusable proof {label} registry IPv4 blockade did not pass for {registry}"
+                )
+            if addresses.get("ipv6") not in ([], ["::1"]):
+                raise IdentityError(
+                    f"reusable proof {label} registry IPv6 blockade did not pass for {registry}"
+                )
+    return observed_nodes
+
+
+def _validate_controlled_oci_proof(
+    identity: dict[str, Any], proof: dict[str, Any]
+) -> None:
+    suite = identity.get("suite")
+    if suite not in SUITE_INPUTS:
+        raise IdentityError(f"reusable proof has unsupported OCI suite: {suite}")
+    lock_path = ROOT / "platform/oci-proof-mirror.lock.json"
+    try:
+        lock_bytes = lock_path.read_bytes()
+        lock = json.loads(lock_bytes)
+    except (OSError, json.JSONDecodeError) as error:
+        raise IdentityError(f"current OCI mirror lock is unreadable: {error}") from error
+    lock_sha256 = _sha256_bytes(lock_bytes)
+    if identity.get("oci_mirror_lock_sha256") != lock_sha256:
+        raise IdentityError("proof identity OCI mirror lock does not match current inputs")
+    images = lock.get("images")
+    if not isinstance(images, dict) or not images:
+        raise IdentityError("current OCI mirror lock image inventory is invalid")
+    requested_suites = {suite, "app-build"}
+    expected_host = {
+        name
+        for name, spec in images.items()
+        if isinstance(spec, dict)
+        and isinstance(spec.get("suites"), list)
+        and set(spec["suites"]).intersection(requested_suites)
+    }
+    expected_cluster = {
+        name
+        for name in expected_host
+        if images[name].get("load_into_kind") is True
+    }
+    if not expected_host or not expected_cluster:
+        raise IdentityError("current OCI mirror suite inventory is incomplete")
+
+    controlled = proof.get("oci_controlled_source")
+    if not isinstance(controlled, dict) or controlled.get("strict") is not True:
+        raise IdentityError("reusable proof lacks strict controlled OCI source evidence")
+    host = _validate_receipt_header(
+        controlled.get("host"), label="host", lock_sha256=lock_sha256
+    )
+    host_images = host.get("images")
+    if not isinstance(host_images, dict) or set(host_images) != expected_host:
+        raise IdentityError("reusable proof host OCI image inventory drifted")
+    if host.get("selected_count") != len(expected_host) or host.get("failures") != {}:
+        raise IdentityError("reusable proof host OCI count or failure contract drifted")
+    host_image_ids: dict[str, str] = {}
+    for name, observed in host_images.items():
+        if (
+            not isinstance(observed, dict)
+            or observed.get("source") != "local-verified"
+            or not isinstance(observed.get("image_id"), str)
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", observed["image_id"])
+        ):
+            raise IdentityError(f"reusable proof host OCI image binding is invalid: {name}")
+        host_image_ids[name] = observed["image_id"]
+
+    cluster_fields = (
+        (("cluster", proof.get("cluster")),)
+        if suite == "kind-gitops"
+        else (
+            ("primary_cluster", proof.get("primary_cluster")),
+            ("restore_cluster", proof.get("restore_cluster")),
+        )
+    )
+    platform_digests: dict[str, str] = {}
+    for field, expected_cluster_name in cluster_fields:
+        receipt = _validate_receipt_header(
+            controlled.get(field), label=field, lock_sha256=lock_sha256
+        )
+        if not isinstance(expected_cluster_name, str) or not expected_cluster_name:
+            raise IdentityError(f"reusable proof {field} cluster binding is missing")
+        if receipt.get("cluster") != expected_cluster_name:
+            raise IdentityError(f"reusable proof {field} cluster binding drifted")
+        cluster_images = receipt.get("images")
+        if not isinstance(cluster_images, dict) or set(cluster_images) != expected_cluster:
+            raise IdentityError(f"reusable proof {field} OCI image inventory drifted")
+        if receipt.get("loaded_count") != len(expected_cluster):
+            raise IdentityError(f"reusable proof {field} OCI image count drifted")
+        image_nodes: set[str] | None = None
+        for name, observed in cluster_images.items():
+            spec = images[name]
+            host_image_id = host_image_ids[name]
+            expected_runtime = _containerd_reference(str(spec.get("local_ref", "")))
+            platform_digest = (
+                observed.get("platform_target_digest")
+                if isinstance(observed, dict)
+                else None
+            )
+            if (
+                not isinstance(observed, dict)
+                or observed.get("canonical") != spec.get("canonical")
+                or observed.get("local_ref") != spec.get("local_ref")
+                or observed.get("runtime_ref") != expected_runtime
+                or observed.get("locked_index_digest") != spec.get("digest")
+                or observed.get("cri_image_id") != host_image_id
+                or observed.get("image_id") != host_image_id
+                or not isinstance(platform_digest, str)
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", platform_digest)
+            ):
+                raise IdentityError(
+                    f"reusable proof {field} OCI image binding is invalid: {name}"
+                )
+            prior_platform_digest = platform_digests.setdefault(name, platform_digest)
+            if prior_platform_digest != platform_digest:
+                raise IdentityError(
+                    f"reusable proof cluster OCI platform digest drifted: {name}"
+                )
+            nodes = observed.get("nodes")
+            if not isinstance(nodes, list) or not nodes:
+                raise IdentityError(
+                    f"reusable proof {field} OCI node image bindings are missing: {name}"
+                )
+            current_nodes: set[str] = set()
+            for node_binding in nodes:
+                node = node_binding.get("node") if isinstance(node_binding, dict) else None
+                if not isinstance(node, str) or not node or node in current_nodes:
+                    raise IdentityError(
+                        f"reusable proof {field} OCI node inventory is invalid: {name}"
+                    )
+                current_nodes.add(node)
+                if (
+                    node_binding.get("cri_image_status_verified") is not True
+                    or node_binding.get("runtime_ref") != expected_runtime
+                    or node_binding.get("image_id") != host_image_id
+                    or node_binding.get("locked_index_digest") != spec.get("digest")
+                    or node_binding.get("platform_target_digest") != platform_digest
+                ):
+                    raise IdentityError(
+                        f"reusable proof {field} OCI node image binding drifted: {name}"
+                    )
+            if image_nodes is None:
+                image_nodes = current_nodes
+            elif image_nodes != current_nodes:
+                raise IdentityError(
+                    f"reusable proof {field} OCI image node inventories disagree"
+                )
+        blockade_nodes = _validate_registry_blockades(receipt, label=field)
+        if image_nodes != blockade_nodes:
+            raise IdentityError(
+                f"reusable proof {field} OCI image and blockade node inventories disagree"
+            )
+
+
 def record(identity_path: Path, proof_receipt: Path, output_dir: Path) -> dict[str, Any]:
     identity = _read_object(identity_path)
     expected = compute_identity(identity.get("suite", ""), identity.get("source_commit", ""))
@@ -187,6 +406,7 @@ def record(identity_path: Path, proof_receipt: Path, output_dir: Path) -> dict[s
         raise IdentityError("proof receipt is not bound to the current checkout commit")
     if proof.get("production_changed") is not False:
         raise IdentityError("reusable proof must explicitly assert production_changed=false")
+    _validate_controlled_oci_proof(identity, proof)
     output_dir.mkdir(parents=True, exist_ok=True)
     proof_bytes = _canonical_json(proof)
     proof_path = output_dir / "proof.json"
@@ -230,6 +450,7 @@ def validate(identity_path: Path, record_path: Path, proof_path: Path) -> dict[s
         raise IdentityError("reusable proof record commit does not match the proof payload")
     if reusable.get("proof_source_commit") != proof.get("source_commit"):
         raise IdentityError("reusable proof record source commit does not match the proof payload")
+    _validate_controlled_oci_proof(identity, proof)
     return reusable
 
 

@@ -231,6 +231,22 @@ def _require_object_store_binding(
         )
 
 
+def external_object_store_runtime_image() -> str:
+    if not ref.controlled_oci_strict():
+        return SEAWEEDFS_IMAGE
+    lock = ref._oci_mirror_lock()
+    spec = lock.get("images", {}).get("seaweedfs")
+    if not isinstance(spec, dict):
+        raise ref.ProofError("strict OCI mirror lock is missing seaweedfs")
+    expected_canonical = f"docker.io/{SEAWEEDFS_IMAGE}"
+    if spec.get("canonical") != expected_canonical:
+        raise ref.ProofError("strict OCI seaweedfs canonical reference drift")
+    local_ref = spec.get("local_ref")
+    if not isinstance(local_ref, str) or not local_ref or "@" in local_ref:
+        raise ref.ProofError("strict OCI seaweedfs local reference is invalid")
+    return local_ref
+
+
 def start_external_object_store(
     cluster: str, commit: str, owner_id: str, s3_secret_key: str
 ) -> tuple[str, str, str]:
@@ -262,7 +278,7 @@ def start_external_object_store(
                 "S3_BUCKET",
                 "--volume",
                 f"{volume}:/data",
-                SEAWEEDFS_IMAGE,
+                external_object_store_runtime_image(),
                 "mini",
                 "-dir=/data",
                 "-ip=0.0.0.0",
@@ -558,9 +574,10 @@ def rewrite_yaml_documents(
 
 def render_cnpg_manifest(source: str) -> str:
     tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
+    runtime_image = ref.controlled_oci_runtime_image(CNPG_OPERATOR_IMAGE)
     documents = rewrite_yaml_documents(
         source,
-        {tagged: (CNPG_OPERATOR_IMAGE, 2)},
+        {tagged: (runtime_image, 2)},
         "CloudNativePG release",
     )
     deployments = [
@@ -601,6 +618,7 @@ def render_cnpg_manifest(source: str) -> str:
             "topologyKey": "kubernetes.io/hostname",
         }
     )
+    documents = ref.enforce_controlled_oci_pull_policy(documents)
     return yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
 
 def verify_cnpg_operator_ha(kubectl: str) -> list[str]:
@@ -696,9 +714,10 @@ def install_cnpg(kubectl: str, artifact: str) -> list[str]:
             "jsonpath={.spec.template.spec.containers[0].image}",
         ]
     )
-    if observed != CNPG_OPERATOR_IMAGE:
+    expected_runtime_image = ref.controlled_oci_runtime_image(CNPG_OPERATOR_IMAGE)
+    if observed != expected_runtime_image:
         raise ref.ProofError(
-            f"CloudNativePG operator image is not digest-bound: {observed}"
+            f"CloudNativePG operator image is not runtime-bound: {observed}"
         )
     return operator_nodes
 
@@ -713,6 +732,7 @@ def apply_digest_locked_manifest(
         {tagged: (digest, 1) for tagged, digest in replacements.items()},
         "digest-locked release",
     )
+    documents = ref.enforce_controlled_oci_pull_policy(documents)
     source = yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
     ref.run(
         [
@@ -739,15 +759,15 @@ def install_cert_manager(kubectl: str, artifact: str) -> None:
         ]
     )
     deployments = {
-        "cert-manager": CERT_MANAGER_IMAGES[
-            "quay.io/jetstack/cert-manager-controller:v1.21.0"
-        ],
-        "cert-manager-cainjector": CERT_MANAGER_IMAGES[
-            "quay.io/jetstack/cert-manager-cainjector:v1.21.0"
-        ],
-        "cert-manager-webhook": CERT_MANAGER_IMAGES[
-            "quay.io/jetstack/cert-manager-webhook:v1.21.0"
-        ],
+        "cert-manager": ref.controlled_oci_runtime_image(
+            CERT_MANAGER_IMAGES["quay.io/jetstack/cert-manager-controller:v1.21.0"]
+        ),
+        "cert-manager-cainjector": ref.controlled_oci_runtime_image(
+            CERT_MANAGER_IMAGES["quay.io/jetstack/cert-manager-cainjector:v1.21.0"]
+        ),
+        "cert-manager-webhook": ref.controlled_oci_runtime_image(
+            CERT_MANAGER_IMAGES["quay.io/jetstack/cert-manager-webhook:v1.21.0"]
+        ),
     }
     for deployment, expected_image in deployments.items():
         ref.wait_rollout(kubectl, "cert-manager", f"deployment/{deployment}", "8m")
@@ -818,8 +838,11 @@ def render_barman_cloud_manifest(source: str) -> str:
         raise ref.ProofError(
             f"Barman Cloud sidecar reference changed unexpectedly: {decoded}"
         )
+    sidecar_runtime_image = ref.controlled_oci_runtime_image(
+        BARMAN_CLOUD_SIDECAR_IMAGE
+    )
     secret["data"]["SIDECAR_IMAGE"] = base64.b64encode(
-        BARMAN_CLOUD_SIDECAR_IMAGE.encode("utf-8")
+        sidecar_runtime_image.encode("utf-8")
     ).decode("ascii")
 
     deployments = [
@@ -855,6 +878,7 @@ def render_barman_cloud_manifest(source: str) -> str:
             "topologyKey": "kubernetes.io/hostname",
         }
     )
+    documents = ref.enforce_controlled_oci_pull_policy(documents)
     return yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
 
 def apply_barman_cloud_manifest(kubectl: str, artifact: str) -> None:
@@ -896,7 +920,8 @@ def barman_plugin_state(kubectl: str, *, require_three_nodes: bool) -> dict[str,
                 container
                 for container in containers
                 if container.get("name") == "barman-cloud"
-                and container.get("image") == BARMAN_CLOUD_PLUGIN_IMAGE
+                and container.get("image")
+                == ref.controlled_oci_runtime_image(BARMAN_CLOUD_PLUGIN_IMAGE)
             ),
             None,
         )
@@ -1129,7 +1154,10 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> dict[str, Any]:
             raise ref.ProofError(
                 "installed Barman Cloud sidecar secret is invalid"
             ) from exc
-    if sidecar_images != [BARMAN_CLOUD_SIDECAR_IMAGE]:
+    expected_sidecar_image = ref.controlled_oci_runtime_image(
+        BARMAN_CLOUD_SIDECAR_IMAGE
+    )
+    if sidecar_images != [expected_sidecar_image]:
         raise ref.ProofError(
             "Barman Cloud sidecar image is not digest-bound: "
             f"{sidecar_images}"
@@ -1145,8 +1173,11 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> dict[str, Any]:
             "jsonpath={.spec.template.spec.containers[0].image}",
         ]
     )
-    if observed != BARMAN_CLOUD_PLUGIN_IMAGE:
-        raise ref.ProofError(f"Barman Cloud plugin image is not digest-bound: {observed}")
+    expected_plugin_image = ref.controlled_oci_runtime_image(
+        BARMAN_CLOUD_PLUGIN_IMAGE
+    )
+    if observed != expected_plugin_image:
+        raise ref.ProofError(f"Barman Cloud plugin image is not runtime-bound: {observed}")
     return plugin_nodes
 
 
@@ -1168,7 +1199,12 @@ def verify_barman_sidecar_images(
             ]
         )
     )
-    expected_digest = BARMAN_CLOUD_SIDECAR_IMAGE.rsplit("@", 1)[1]
+    expected_sidecar_image = ref.controlled_oci_runtime_image(
+        BARMAN_CLOUD_SIDECAR_IMAGE
+    )
+    expected_digests = ref.controlled_oci_runtime_identity_digests(
+        BARMAN_CLOUD_SIDECAR_IMAGE
+    )
     observed: dict[str, dict[str, object]] = {}
     for pod in payload.get("items", []):
         name = str(pod.get("metadata", {}).get("name", ""))
@@ -1186,7 +1222,7 @@ def verify_barman_sidecar_images(
                 f"PostgreSQL pod {name} has {len(sidecars)} Barman sidecars"
             )
         declared_image = str(sidecars[0].get("image", ""))
-        if declared_image != BARMAN_CLOUD_SIDECAR_IMAGE:
+        if declared_image != expected_sidecar_image:
             raise ref.ProofError(
                 f"PostgreSQL pod {name} has an unbound Barman sidecar: "
                 f"{declared_image}"
@@ -1208,7 +1244,7 @@ def verify_barman_sidecar_images(
         image_id = str(status.get("imageID", ""))
         running = status.get("state", {}).get("running", {})
         started_at = running.get("startedAt")
-        if not image_id.endswith(expected_digest):
+        if not any(image_id.endswith(digest) for digest in expected_digests):
             raise ref.ProofError(
                 f"PostgreSQL pod {name} runs an unbound Barman image ID: {image_id}"
             )
@@ -1423,6 +1459,7 @@ def prepare_api_upgrade_candidate(
         [
             "docker",
             "build",
+            "--pull=false",
             "--file",
             "-",
             "--tag",
@@ -2324,6 +2361,13 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     )
     restore_name = f"{args.cluster}-restore"
     owner_id = args.owner_id or ref.generate_owner_id("ha-proof")
+    oci_host: dict[str, Any] | None = None
+    node_image = receipt["kubernetes"]["kind_node_image"]
+    if ref.controlled_oci_strict():
+        oci_host = ref.prepare_controlled_oci_host("ha-recovery")
+        node_image = oci_host["kind_node_image"]
+    primary_oci_cluster: dict[str, Any] | None = None
+    restore_oci_cluster: dict[str, Any] | None = None
     created_primary = created_restore = object_store_created = False
     stopped_node = ""
     object_store_address = ""
@@ -2331,10 +2375,14 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     s3_secret_key = secrets.token_urlsafe(32)
     try:
         create_kind_cluster(
-            kind, args.cluster, receipt["kubernetes"]["kind_node_image"],
+            kind, args.cluster, node_image,
             "platform/clusters/ha/kind.yaml", commit, owner_id
         )
         created_primary = True
+        if ref.controlled_oci_strict():
+            primary_oci_cluster = ref.load_controlled_oci_into_kind(
+                kind, args.cluster, "ha-recovery"
+            )
         kubectl = require_active_cluster_context(kind, kubectl, args.cluster)
         image_ids = ref.build_images(kind, args.cluster, commit, timestamp)
         image_ids.update(
@@ -2481,10 +2529,14 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         )
 
         create_kind_cluster(
-            kind, restore_name, receipt["kubernetes"]["kind_node_image"],
+            kind, restore_name, node_image,
             "platform/clusters/ha/restore-kind.yaml", commit, owner_id
         )
         created_restore = True
+        if ref.controlled_oci_strict():
+            restore_oci_cluster = ref.load_controlled_oci_into_kind(
+                kind, restore_name, "ha-recovery"
+            )
         restore_kubectl = require_active_cluster_context(
             kind, kubectl, restore_name
         )
@@ -2540,6 +2592,12 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             "schema_version": 1, "status": "pass", "commit": commit,
             "primary_cluster": args.cluster, "restore_cluster": restore_name,
             "tool_lock_sha256": receipt["lock_sha256"], "image_ids": image_ids,
+            "oci_controlled_source": {
+                "strict": ref.controlled_oci_strict(),
+                "host": oci_host,
+                "primary_cluster": primary_oci_cluster,
+                "restore_cluster": restore_oci_cluster,
+            },
             "operator_nodes": {
                 "primary": primary_operator_nodes,
                 "restore": restore_operator_nodes,
@@ -2675,6 +2733,17 @@ def argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _captured_subprocess_evidence(error: subprocess.CalledProcessError) -> str:
+    fields: list[str] = []
+    for label, value in (("stdout", error.stdout), ("stderr", error.stderr)):
+        if not value:
+            continue
+        payload = value if isinstance(value, bytes) else str(value).encode("utf-8")
+        fields.append(f"{label}_bytes={len(payload)}")
+        fields.append(f"{label}_sha256={hashlib.sha256(payload).hexdigest()}")
+    return "; ".join(fields)
+
+
 def main() -> int:
     args = argument_parser().parse_args()
     try:
@@ -2701,6 +2770,9 @@ def main() -> int:
     except (ref.ProofError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         if isinstance(error, subprocess.CalledProcessError):
             detail = f"subprocess exited with status {error.returncode}"
+            evidence = _captured_subprocess_evidence(error)
+            if evidence:
+                detail += f"; {evidence}"
         elif isinstance(error, subprocess.TimeoutExpired):
             detail = "subprocess timed out"
         else:
