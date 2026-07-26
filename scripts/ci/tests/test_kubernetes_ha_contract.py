@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import io
 import json
 import sys
@@ -190,32 +191,53 @@ class KubernetesHaContractTests(unittest.TestCase):
                 relative,
             )
 
-    def test_kubernetes_workflow_checks_out_the_event_merge_state(self) -> None:
-        workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
-        workflow_text = workflow_path.read_text()
-        workflow = yaml.safe_load(workflow_text)
-        checkout_steps = [
+    def test_kubernetes_workflows_separate_pr_and_privileged_proofs(self) -> None:
+        pr_path = ROOT / ".github/workflows/kubernetes-platform.yml"
+        proof_path = ROOT / ".github/workflows/kubernetes-platform-proof.yml"
+        pr_text = pr_path.read_text()
+        proof_text = proof_path.read_text()
+        pr_workflow = yaml.safe_load(pr_text)
+        proof_workflow = yaml.safe_load(proof_text)
+        self.assertEqual(set(pr_workflow["on"]), {"pull_request"})
+        self.assertEqual(set(proof_workflow["on"]), {"push", "workflow_dispatch"})
+        expected_head = proof_workflow["on"]["workflow_dispatch"]["inputs"]["expected_head"]
+        self.assertIs(expected_head["required"], True)
+        self.assertEqual(expected_head["type"], "string")
+        self.assertNotIn("packages: read", pr_text)
+        self.assertNotIn("github.token", pr_text)
+        self.assertNotIn("pull_request", proof_workflow["on"])
+
+        pr_checkout_steps = [
             step
-            for job in workflow["jobs"].values()
+            for job in pr_workflow["jobs"].values()
             for step in job.get("steps", [])
             if str(step.get("uses", "")).startswith("actions/checkout@")
         ]
-        self.assertEqual(len(checkout_steps), 4)
-        for step in checkout_steps:
+        proof_checkout_steps = [
+            step
+            for job in proof_workflow["jobs"].values()
+            for step in job.get("steps", [])
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+        ]
+        self.assertEqual(len(pr_checkout_steps), 2)
+        self.assertEqual(len(proof_checkout_steps), 4)
+        for step in pr_checkout_steps + proof_checkout_steps:
             self.assertEqual(
                 step["uses"],
                 "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
             )
             self.assertNotIn("ref", step.get("with", {}))
-        self.assertIn(
-            "PROOF_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}",
-            workflow_text,
-        )
-        self.assertNotIn("ref: ${{ github.event.pull_request.head.sha", workflow_text)
+        self.assertIn("PROOF_SOURCE_COMMIT: ${{ github.sha }}", proof_text)
+        self.assertNotIn("github.event.pull_request", proof_text)
 
-    def test_kubernetes_workflow_covers_api_build_inputs(self) -> None:
-        workflow = (ROOT / ".github/workflows/kubernetes-platform.yml").read_text()
+    def test_kubernetes_workflows_cover_api_build_inputs(self) -> None:
+        workflows = (
+            (ROOT / ".github/workflows/kubernetes-platform.yml").read_text(),
+            (ROOT / ".github/workflows/kubernetes-platform-proof.yml").read_text(),
+        )
         for path in (
+            '".github/workflows/kubernetes-platform.yml"',
+            '".github/workflows/kubernetes-platform-proof.yml"',
             '".dockerignore"',
             '"Cargo.toml"',
             '"Cargo.lock"',
@@ -224,7 +246,8 @@ class KubernetesHaContractTests(unittest.TestCase):
             '"scripts/dev/**"',
             '"policies/**"',
         ):
-            self.assertEqual(workflow.count(f"- {path}"), 2, path)
+            for workflow in workflows:
+                self.assertEqual(workflow.count(f"- {path}"), 1, path)
 
     def test_zone_contract_requires_three_distinct_zones(self) -> None:
         valid = {
@@ -387,6 +410,36 @@ class KubernetesHaContractTests(unittest.TestCase):
                     "volume", "proof-object-store-data"
                 )
             )
+
+    def test_strict_external_object_store_uses_verified_local_mirror_ref(self) -> None:
+        local_ref = "chrislusf/seaweedfs:weltgewebe-test"
+        lock = {
+            "images": {
+                "seaweedfs": {
+                    "canonical": f"docker.io/{self.ha.SEAWEEDFS_IMAGE}",
+                    "local_ref": local_ref,
+                }
+            }
+        }
+        with mock.patch.object(
+            self.ha.ref, "controlled_oci_strict", return_value=True
+        ), mock.patch.object(self.ha.ref, "_oci_mirror_lock", return_value=lock):
+            self.assertEqual(self.ha.external_object_store_runtime_image(), local_ref)
+
+    def test_strict_external_object_store_rejects_mirror_binding_drift(self) -> None:
+        lock = {
+            "images": {
+                "seaweedfs": {
+                    "canonical": "docker.io/chrislusf/seaweedfs@sha256:" + "0" * 64,
+                    "local_ref": "chrislusf/seaweedfs:weltgewebe-test",
+                }
+            }
+        }
+        with mock.patch.object(
+            self.ha.ref, "controlled_oci_strict", return_value=True
+        ), mock.patch.object(self.ha.ref, "_oci_mirror_lock", return_value=lock):
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "canonical reference drift"):
+                self.ha.external_object_store_runtime_image()
 
     def test_external_object_store_cleanup_is_ownership_bound(self) -> None:
         foreign = self.ha.external_object_store_binding(
@@ -1189,7 +1242,7 @@ spec:
             },
         )
         build = run.call_args_list[0]
-        self.assertEqual(build.args[0][:4], ["docker", "build", "--file", "-"])
+        self.assertEqual(build.args[0][:5], ["docker", "build", "--pull=false", "--file", "-"])
         self.assertIn("org.opencontainers.image.revision=" + "c" * 40, build.kwargs["input_text"])
         self.assertEqual(
             run.call_args_list[1].args[0],
@@ -1524,6 +1577,9 @@ spec:
             self.assertEqual(self.ha.main(), 1)
         self.assertNotIn(secret, stderr.getvalue())
         self.assertIn("status 23", stderr.getvalue())
+        expected_hash = hashlib.sha256(secret.encode()).hexdigest()
+        self.assertIn(f"stdout_sha256={expected_hash}", stderr.getvalue())
+        self.assertIn(f"stderr_sha256={expected_hash}", stderr.getvalue())
 
         with (
             mock.patch.object(self.ha, "argument_parser", return_value=parser),

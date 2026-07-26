@@ -50,6 +50,10 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             "weltgewebe_proof_identity",
             ROOT / "scripts/platform/proof_identity.py",
         )
+        cls.oci_mirror = load_module(
+            "weltgewebe_oci_proof_mirror",
+            ROOT / "scripts/platform/oci_proof_mirror.py",
+        )
 
     def test_tool_bootstrap_selection_is_exact_and_deduplicated(self) -> None:
         lock = {"tools": {"kustomize": {"version": "x"}, "trivy": {"version": "y"}}}
@@ -169,12 +173,936 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         result = self.validator.validate(render=False)
         self.assertEqual(result["status"], "pass")
 
+    def test_oci_proof_mirror_contract_is_private_digest_bound_and_budgeted(self) -> None:
+        result = self.oci_mirror.validate_contract()
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["owner"], "heimgewebe/weltgewebe")
+        self.assertEqual(result["source_kind"], "private-ghcr-digest-mirror")
+        self.assertEqual(
+            result["mirror_repository"],
+            "ghcr.io/heimgewebe/weltgewebe-proof-oci",
+        )
+        self.assertEqual(result["visibility"], "private")
+        self.assertEqual(result["repository_binding"], "heimgewebe/weltgewebe")
+        self.assertEqual(result["image_count"], 25)
+        self.assertTrue(result["retention"]["unbounded_growth_prevented"])
+        self.assertEqual(result["retention"]["observed_package_versions"], 193)
+        self.assertEqual(result["retention"]["package_version_hard_limit"], 512)
+        self.assertEqual(result["retention"]["orphan_grace_days"], 14)
+
+    def test_oci_mirror_suite_selection_is_exact(self) -> None:
+        lock = self.oci_mirror._load_lock()
+        kind = self.oci_mirror._selected_images(
+            lock, ["kind-gitops", "app-build"]
+        )
+        ha = self.oci_mirror._selected_images(
+            lock, ["ha-recovery", "app-build"]
+        )
+        self.assertEqual(len(kind), 15)
+        self.assertEqual(len(ha), 23)
+        self.assertEqual(len({name for name, _spec in kind}), 15)
+        self.assertEqual(len({name for name, _spec in ha}), 23)
+
+    def test_oci_mirror_wrong_digest_fails_without_retry(self) -> None:
+        digest = "sha256:" + "a" * 64
+        spec = {
+            "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@" + digest,
+            "local_ref": "example.invalid/image:test",
+        }
+        budgets = {"pull_attempts": 3, "retry_backoff_seconds": [5, 10]}
+        with mock.patch.object(
+            self.oci_mirror, "_local_image", return_value=None
+        ), mock.patch.object(self.oci_mirror, "_run") as run, mock.patch.object(
+            self.oci_mirror,
+            "_repo_digests",
+            return_value=["ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:" + "b" * 64],
+        ), mock.patch.object(self.oci_mirror.time, "sleep") as sleep:
+            with self.assertRaises(self.oci_mirror.IntegrityError):
+                self.oci_mirror._pull_one("test", spec, budgets)
+        run.assert_called_once_with(["docker", "pull", spec["mirror"]], timeout=900)
+        sleep.assert_not_called()
+
+    def test_oci_mirror_unavailable_uses_bounded_retries(self) -> None:
+        digest = "sha256:" + "a" * 64
+        spec = {
+            "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@" + digest,
+            "local_ref": "example.invalid/image:test",
+        }
+        budgets = {"pull_attempts": 3, "retry_backoff_seconds": [5, 10]}
+        error = subprocess.CalledProcessError(1, ["docker", "pull"])
+        with mock.patch.object(
+            self.oci_mirror, "_local_image", return_value=None
+        ), mock.patch.object(
+            self.oci_mirror, "_run", side_effect=error
+        ) as run, mock.patch.object(self.oci_mirror.time, "sleep") as sleep:
+            with self.assertRaises(
+                self.oci_mirror.ControlledMirrorUnavailableError
+            ):
+                self.oci_mirror._pull_one("test", spec, budgets)
+        self.assertEqual(run.call_count, 3)
+        self.assertEqual(
+            [call.args[0] for call in sleep.call_args_list],
+            [5.0, 10.0],
+        )
+
+    def test_oci_mirror_pull_tags_only_after_exact_digest_verification(self) -> None:
+        digest = "sha256:" + "a" * 64
+        spec = {
+            "mirror": "ghcr.io/heimgewebe/weltgewebe-proof-oci@" + digest,
+            "local_ref": "example.invalid/image:test",
+        }
+        budgets = {"pull_attempts": 3, "retry_backoff_seconds": [5, 10]}
+        verified = {"image_id": "sha256:" + "c" * 64, "source": "local-verified"}
+        with mock.patch.object(
+            self.oci_mirror, "_local_image", side_effect=[None, verified]
+        ), mock.patch.object(self.oci_mirror, "_run") as run, mock.patch.object(
+            self.oci_mirror, "_repo_digests", return_value=[spec["mirror"]]
+        ):
+            result = self.oci_mirror._pull_one("test", spec, budgets)
+        self.assertEqual(result["action"], "pulled")
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [
+                ["docker", "pull", spec["mirror"]],
+                ["docker", "tag", spec["mirror"], spec["local_ref"]],
+            ],
+        )
+
+    def test_oci_mirror_normalizes_containerd_references(self) -> None:
+        digest = "sha256:" + "a" * 64
+        cases = {
+            "nats:2.10-alpine": "docker.io/library/nats:2.10-alpine",
+            "natsio/nats-box:v1": "docker.io/natsio/nats-box:v1",
+            f"postgres:16@{digest}": f"docker.io/library/postgres:16@{digest}",
+            "quay.io/cilium/cilium:v1": "quay.io/cilium/cilium:v1",
+            "localhost:5000/proof:v1": "localhost:5000/proof:v1",
+        }
+        for reference, expected in cases.items():
+            with self.subTest(reference=reference):
+                self.assertEqual(
+                    self.oci_mirror._containerd_reference(reference), expected
+                )
+
+    def test_oci_mirror_cri_binding_uses_exact_runtime_tag(self) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        platform_digest = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        local_ref = "nats:2.10-alpine"
+        runtime_ref = "docker.io/library/nats:2.10-alpine"
+        payload = {
+            "status": {
+                "id": image_id,
+                "repoTags": [runtime_ref],
+                "repoDigests": [f"{runtime_ref}@{platform_digest}"],
+            }
+        }
+        with mock.patch.object(
+            self.oci_mirror, "_output", return_value=json.dumps(payload)
+        ) as output:
+            result = self.oci_mirror._kind_cri_image_binding(
+                "proof-control-plane",
+                local_ref,
+                f"{runtime_ref}@{locked_digest}",
+                locked_digest,
+                image_id,
+            )
+        output.assert_called_once_with(
+            [
+                "docker",
+                "exec",
+                "proof-control-plane",
+                "crictl",
+                "--runtime-endpoint",
+                "unix:///run/containerd/containerd.sock",
+                "inspecti",
+                runtime_ref,
+            ],
+            timeout=60,
+        )
+        self.assertEqual(result["runtime_ref"], runtime_ref)
+        self.assertEqual(result["image_id"], image_id)
+        self.assertEqual(result["locked_index_digest"], locked_digest)
+        self.assertEqual(result["platform_target_digest"], platform_digest)
+        self.assertEqual(result["platform_evidence_kind"], "cri_repo_digest")
+        self.assertIsNone(result["containerd_target_digest"])
+        self.assertIs(result["cri_image_status_verified"], True)
+
+    def test_oci_mirror_cri_binding_falls_back_to_exact_containerd_target(
+        self,
+    ) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        platform_digest = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        local_ref = "quay.io/cilium/cilium:v1.19.5"
+        payload = {
+            "status": {
+                "id": image_id,
+                "repoTags": [local_ref],
+                "repoDigests": [],
+            }
+        }
+        listing = (
+            "REF TYPE DIGEST SIZE PLATFORMS LABELS\n"
+            f"{local_ref} application/vnd.oci.image.index.v1+json "
+            f"{platform_digest} 1.0MiB linux/amd64 -"
+        )
+        with mock.patch.object(
+            self.oci_mirror,
+            "_output",
+            side_effect=[json.dumps(payload), listing],
+        ) as output:
+            result = self.oci_mirror._kind_cri_image_binding(
+                "proof-control-plane",
+                local_ref,
+                f"{local_ref}@{locked_digest}",
+                locked_digest,
+                image_id,
+            )
+        self.assertEqual(output.call_count, 2)
+        self.assertEqual(result["runtime_ref"], local_ref)
+        self.assertEqual(result["repo_digests"], [])
+        self.assertIsNone(result["selected_repo_digest"])
+        self.assertEqual(result["containerd_target_digest"], platform_digest)
+        self.assertEqual(
+            result["platform_evidence_kind"], "containerd_target_digest"
+        )
+        self.assertEqual(result["platform_target_digest"], platform_digest)
+
+    def test_oci_mirror_cri_binding_rejects_unrelated_repo_digest(
+        self,
+    ) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        platform_digest = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        runtime_ref = "quay.io/cilium/cilium:v1.19.5"
+        payload = {
+            "status": {
+                "id": image_id,
+                "repoTags": [runtime_ref],
+                "repoDigests": [
+                    "quay.io/other/image@" + platform_digest
+                ],
+            }
+        }
+        with mock.patch.object(
+            self.oci_mirror, "_output", return_value=json.dumps(payload)
+        ) as output:
+            with self.assertRaisesRegex(
+                self.oci_mirror.IntegrityError, "ambiguous platform evidence"
+            ):
+                self.oci_mirror._kind_cri_image_binding(
+                    "proof-control-plane",
+                    runtime_ref,
+                    f"{runtime_ref}@{locked_digest}",
+                    locked_digest,
+                    image_id,
+                )
+        output.assert_called_once()
+
+    def test_oci_mirror_cri_binding_accepts_single_kind_import_digest(self) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        platform_digest = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        local_ref = "chrislusf/seaweedfs:weltgewebe-test"
+        runtime_ref = "docker.io/chrislusf/seaweedfs:weltgewebe-test"
+        import_ref = f"docker.io/library/import-2026-07-26@{platform_digest}"
+        payload = {
+            "status": {
+                "id": image_id,
+                "repoTags": [runtime_ref],
+                "repoDigests": [import_ref],
+            }
+        }
+        with mock.patch.object(
+            self.oci_mirror, "_output", return_value=json.dumps(payload)
+        ):
+            result = self.oci_mirror._kind_cri_image_binding(
+                "proof-control-plane",
+                local_ref,
+                f"docker.io/chrislusf/seaweedfs@{locked_digest}",
+                locked_digest,
+                image_id,
+            )
+        self.assertEqual(result["runtime_ref"], runtime_ref)
+        self.assertEqual(result["selected_repo_digest"], import_ref)
+        self.assertEqual(result["platform_evidence_kind"], "cri_repo_digest")
+        self.assertIsNone(result["containerd_target_digest"])
+        self.assertEqual(result["platform_target_digest"], platform_digest)
+
+    def test_oci_mirror_cri_binding_rejects_host_image_id_drift(self) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        platform_digest = "sha256:" + "b" * 64
+        runtime_ref = "docker.io/library/nats:2.10-alpine"
+        payload = {
+            "status": {
+                "id": "sha256:" + "c" * 64,
+                "repoTags": [runtime_ref],
+                "repoDigests": [f"{runtime_ref}@{platform_digest}"],
+            }
+        }
+        with mock.patch.object(
+            self.oci_mirror, "_output", return_value=json.dumps(payload)
+        ):
+            with self.assertRaisesRegex(
+                self.oci_mirror.IntegrityError, "CRI image ID drift"
+            ):
+                self.oci_mirror._kind_cri_image_binding(
+                    "proof-control-plane",
+                    "nats:2.10-alpine",
+                    f"{runtime_ref}@{locked_digest}",
+                    locked_digest,
+                    "sha256:" + "d" * 64,
+                )
+
+    def test_oci_mirror_cri_binding_rejects_missing_runtime_tag(self) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        image_id = "sha256:" + "c" * 64
+        payload = {
+            "status": {
+                "id": image_id,
+                "repoTags": ["docker.io/library/other:v1"],
+                "repoDigests": [],
+            }
+        }
+        with mock.patch.object(
+            self.oci_mirror, "_output", return_value=json.dumps(payload)
+        ):
+            with self.assertRaisesRegex(
+                self.oci_mirror.IntegrityError, "runtime tag is absent"
+            ):
+                self.oci_mirror._kind_cri_image_binding(
+                    "proof-control-plane",
+                    "nats:2.10-alpine",
+                    "docker.io/library/nats:2.10-alpine@" + locked_digest,
+                    locked_digest,
+                    image_id,
+                )
+
+    def test_oci_mirror_internal_kind_commands_do_not_pollute_json_stdout(self) -> None:
+        source = (ROOT / "scripts/platform/oci_proof_mirror.py").read_text()
+        self.assertIn(
+            '[kind, "load", "docker-image", "--name", cluster, *local_refs],\n        capture=True,',
+            source,
+        )
+        self.assertNotIn('"images", "tag", "--force"', source)
+        self.assertIn('"crictl",\n            "--runtime-endpoint"', source)
+
+    def test_oci_mirror_blocks_registries_inside_kind_node(self) -> None:
+        def output(argv, *, timeout=120):
+            del timeout
+            address = "127.0.0.1" if "ahostsv4" in argv else "::1"
+            return f"{address} STREAM {argv[-1]}"
+
+        with mock.patch.object(self.oci_mirror, "_run") as run, mock.patch.object(
+            self.oci_mirror, "_output", side_effect=output
+        ):
+            result = self.oci_mirror._block_kind_registries("proof-control-plane")
+        run.assert_called_once_with(
+            [
+                "docker", "exec", "proof-control-plane", "sh", "-ceu",
+                mock.ANY,
+            ],
+            capture=True,
+            timeout=60,
+        )
+        command = run.call_args.args[0][-1]
+        self.assertIn("weltgewebe strict OCI registry blockade", command)
+        for registry in self.oci_mirror.BLOCKED_REGISTRIES:
+            self.assertIn(registry, command)
+            self.assertEqual(result["registries"][registry]["ipv4"], ["127.0.0.1"])
+            self.assertEqual(result["registries"][registry]["ipv6"], ["::1"])
+
+    def test_oci_mirror_live_package_budget_is_fail_closed(self) -> None:
+        lock = self.oci_mirror._load_lock()
+        package = {
+            "id": lock["mirror"]["package_id"],
+            "name": "weltgewebe-proof-oci",
+            "package_type": "container",
+            "visibility": "private",
+            "repository": {"full_name": "heimgewebe/weltgewebe"},
+            "version_count": lock["budgets"]["package_version_hard_limit"] + 1,
+        }
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            self.oci_mirror, "_output", return_value=json.dumps(package)
+        ):
+            state = Path(tmp)
+            with self.assertRaises(self.oci_mirror.BudgetError):
+                self.oci_mirror.verify_live_package(state)
+            receipt = json.loads((state / "live-package-receipt.json").read_text())
+        self.assertEqual(receipt["status"], "fail")
+        self.assertEqual(
+            receipt["failure_class"], "integrity_or_budget_mismatch"
+        )
+
+    def test_oci_mirror_lock_rejects_target_digest_injection(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text()
+        )
+        lock["images"]["kind_node"]["mirror"] = (
+            "ghcr.io/heimgewebe/weltgewebe-proof-oci@sha256:" + "0" * 64
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "lock.json"
+            path.write_text(json.dumps(lock))
+            with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
+                with self.assertRaises(self.oci_mirror.IntegrityError):
+                    self.oci_mirror._load_lock()
+
+    def test_oci_mirror_lock_rejects_seed_binding_drift(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text()
+        )
+        lock["images"]["kind_node"]["canonical"] = (
+            "docker.io/kindest/node@sha256:" + "0" * 64
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "lock.json"
+            path.write_text(json.dumps(lock))
+            with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
+                with self.assertRaises(self.oci_mirror.IntegrityError):
+                    self.oci_mirror._load_lock()
+
+    def test_strict_oci_rewrites_locked_digests_to_verified_runtime_tags(self) -> None:
+        locked = "sha256:" + "a" * 64
+        source = f"nats:2.10-alpine@{locked}"
+        runtime = "docker.io/library/nats:2.10-alpine"
+        documents = [
+            {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "spec": {
+                    "template": {
+                        "spec": {
+                            "containers": [{"name": "nats", "image": source}]
+                        }
+                    }
+                },
+            },
+            {
+                "apiVersion": "postgresql.cnpg.io/v1",
+                "kind": "Cluster",
+                "spec": {"imageName": source},
+            },
+        ]
+        refs = {self.reference._normalize_oci_reference(source): runtime}
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(self.reference, "_CONTROLLED_OCI_RUNTIME_REFS", refs):
+            result = self.reference.enforce_controlled_oci_pull_policy(documents)
+        self.assertEqual(
+            result[0]["spec"]["template"]["spec"]["containers"][0]["image"],
+            runtime,
+        )
+        self.assertEqual(result[1]["spec"]["imageName"], runtime)
+        self.assertEqual(
+            result[0]["spec"]["template"]["spec"]["containers"][0]["imagePullPolicy"],
+            "Never",
+        )
+        self.assertEqual(result[1]["spec"]["imagePullPolicy"], "Never")
+
+    def test_strict_oci_locked_digest_without_runtime_tag_fails_closed(self) -> None:
+        locked = "sha256:" + "a" * 64
+        reference = f"nats:2.10-alpine@{locked}"
+        lock = {
+            "images": {
+                "local_nats": {
+                    "canonical": f"docker.io/library/nats:2.10-alpine@{locked}",
+                    "local_ref": "nats:2.10-alpine",
+                    "digest": locked,
+                    "load_into_kind": True,
+                }
+            }
+        }
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(self.reference, "_CONTROLLED_OCI_RUNTIME_REFS", {}), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ):
+            with self.assertRaisesRegex(
+                self.reference.ProofError, "runtime tag is unavailable"
+            ):
+                self.reference.controlled_oci_runtime_image(reference)
+
+    def test_strict_oci_kind_receipt_binds_host_image_to_cri_tag(self) -> None:
+        locked = "sha256:" + "a" * 64
+        platform = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        canonical = f"docker.io/library/nats:2.10-alpine@{locked}"
+        runtime = "docker.io/library/nats:2.10-alpine"
+        lock = {
+            "images": {
+                "local_nats": {
+                    "canonical": canonical,
+                    "local_ref": "nats:2.10-alpine",
+                    "digest": locked,
+                    "suites": ["kind-gitops"],
+                    "load_into_kind": True,
+                }
+            }
+        }
+        node = {
+            "node": "proof-control-plane",
+            "runtime_ref": runtime,
+            "image_id": image_id,
+            "repo_tags": [runtime],
+            "repo_digests": [f"{runtime}@{platform}"],
+            "selected_repo_digest": f"{runtime}@{platform}",
+            "containerd_target_digest": None,
+            "platform_evidence_kind": "cri_repo_digest",
+            "locked_index_digest": locked,
+            "platform_target_digest": platform,
+            "cri_image_status_verified": True,
+        }
+        receipt = {
+            "status": "pass",
+            "strict": True,
+            "cluster": "proof",
+            "loaded_count": 1,
+            "registry_blockades": [{"node": "proof-control-plane"}],
+            "images": {
+                "local_nats": {
+                    "canonical": canonical,
+                    "local_ref": "nats:2.10-alpine",
+                    "runtime_ref": runtime,
+                    "locked_index_digest": locked,
+                    "platform_target_digest": platform,
+                    "cri_image_id": image_id,
+                    "image_id": image_id,
+                    "nodes": [node],
+                }
+            },
+        }
+        with mock.patch.object(self.reference, "_oci_mirror_lock", return_value=lock):
+            refs, digests, image_ids = (
+                self.reference._validate_controlled_oci_kind_receipt(
+                    receipt, "kind-gitops", "proof"
+                )
+            )
+        self.assertEqual(refs[self.reference._normalize_oci_reference(canonical)], runtime)
+        self.assertEqual(
+            refs[self.reference._normalize_oci_reference("nats:2.10-alpine")],
+            runtime,
+        )
+        self.assertEqual(digests[runtime], platform)
+        self.assertEqual(image_ids[runtime], image_id)
+
+    def test_strict_oci_kind_receipt_accepts_containerd_target_fallback(
+        self,
+    ) -> None:
+        locked = "sha256:" + "a" * 64
+        platform = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        canonical = f"quay.io/cilium/cilium:v1.19.5@{locked}"
+        runtime = "quay.io/cilium/cilium:v1.19.5"
+        lock = {
+            "images": {
+                "cilium_agent": {
+                    "canonical": canonical,
+                    "local_ref": runtime,
+                    "digest": locked,
+                    "suites": ["kind-gitops"],
+                    "load_into_kind": True,
+                }
+            }
+        }
+        node = {
+            "node": "proof-control-plane",
+            "runtime_ref": runtime,
+            "image_id": image_id,
+            "repo_tags": [runtime],
+            "repo_digests": [],
+            "selected_repo_digest": None,
+            "containerd_target_digest": platform,
+            "platform_evidence_kind": "containerd_target_digest",
+            "locked_index_digest": locked,
+            "platform_target_digest": platform,
+            "cri_image_status_verified": True,
+        }
+        receipt = {
+            "status": "pass",
+            "strict": True,
+            "cluster": "proof",
+            "loaded_count": 1,
+            "registry_blockades": [{"node": "proof-control-plane"}],
+            "images": {
+                "cilium_agent": {
+                    "canonical": canonical,
+                    "local_ref": runtime,
+                    "runtime_ref": runtime,
+                    "locked_index_digest": locked,
+                    "platform_target_digest": platform,
+                    "cri_image_id": image_id,
+                    "image_id": image_id,
+                    "nodes": [node],
+                }
+            },
+        }
+        with mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ):
+            refs, digests, image_ids = (
+                self.reference._validate_controlled_oci_kind_receipt(
+                    receipt, "kind-gitops", "proof"
+                )
+            )
+        self.assertEqual(refs[self.reference._normalize_oci_reference(canonical)], runtime)
+        self.assertEqual(digests[runtime], platform)
+        self.assertEqual(image_ids[runtime], image_id)
+
+    def test_strict_cilium_helm_disables_digest_resolution(self) -> None:
+        artifacts = {
+            **{name: f"/{name}.yaml" for name in self.reference.GATEWAY_API_ARTIFACTS},
+            "cilium_chart": "/cilium.tgz",
+        }
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(self.reference, "apply_file"), mock.patch.object(
+            self.reference, "run"
+        ) as run, mock.patch.object(
+            self.reference, "wait_rollout"
+        ), mock.patch.object(
+            self.reference, "output", return_value=""
+        ), mock.patch.object(
+            self.reference, "apply_yaml"
+        ):
+            self.reference.install_platform_components(
+                "kubectl", "flux", "helm", artifacts, "127.0.0.1"
+            )
+        helm_argv = run.call_args_list[0].args[0]
+        for value in (
+            "image.useDigest=false",
+            "operator.image.useDigest=false",
+            "envoy.image.useDigest=false",
+            "hubble.relay.image.useDigest=false",
+        ):
+            self.assertIn(value, helm_argv)
+
+    def test_strict_flux_local_data_patches_digest_images_to_runtime_tags(self) -> None:
+        lock = {
+            "images": {
+                "local_postgres": {"canonical": "postgres@sha256:" + "a" * 64},
+                "local_nats": {"canonical": "nats@sha256:" + "b" * 64},
+            }
+        }
+        runtime = {
+            self.reference._normalize_oci_reference(lock["images"]["local_postgres"]["canonical"]): "docker.io/library/postgres:16",
+            self.reference._normalize_oci_reference(lock["images"]["local_nats"]["canonical"]): "docker.io/library/nats:2.10-alpine",
+        }
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference, "_CONTROLLED_OCI_RUNTIME_REFS", runtime
+        ):
+            document = self.reference.flux_kustomization_document(
+                ROOT / "platform/clusters/local/local-data.yaml"
+            )
+        patches = document["spec"]["patches"]
+        self.assertEqual(len(patches), 2)
+        rendered = [yaml.safe_load(item["patch"]) for item in patches]
+        observed = {
+            item["metadata"]["name"]: item["spec"]["template"]["spec"]["containers"][0]
+            for item in rendered
+        }
+        self.assertEqual(observed["postgres"]["image"], "docker.io/library/postgres:16")
+        self.assertEqual(observed["nats"]["image"], "docker.io/library/nats:2.10-alpine")
+        self.assertEqual({item["imagePullPolicy"] for item in observed.values()}, {"Never"})
+
+    def test_strict_oci_runtime_digest_is_receipt_bound(self) -> None:
+        locked = "sha256:" + "a" * 64
+        platform = "sha256:" + "b" * 64
+        source = f"nats:2.10-alpine@{locked}"
+        runtime = "docker.io/library/nats:2.10-alpine"
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference,
+            "_CONTROLLED_OCI_RUNTIME_REFS",
+            {self.reference._normalize_oci_reference(source): runtime},
+        ), mock.patch.object(
+            self.reference,
+            "_CONTROLLED_OCI_RUNTIME_DIGESTS",
+            {runtime: platform},
+        ):
+            self.assertEqual(
+                self.reference.controlled_oci_runtime_digest(source), platform
+            )
+
+    def test_strict_oci_runtime_identities_include_target_and_image_id(
+        self,
+    ) -> None:
+        locked = "sha256:" + "a" * 64
+        platform = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        source = f"nats:2.10-alpine@{locked}"
+        runtime = "docker.io/library/nats:2.10-alpine"
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference,
+            "_CONTROLLED_OCI_RUNTIME_REFS",
+            {self.reference._normalize_oci_reference(source): runtime},
+        ), mock.patch.object(
+            self.reference,
+            "_CONTROLLED_OCI_RUNTIME_DIGESTS",
+            {runtime: platform},
+        ), mock.patch.object(
+            self.reference,
+            "_CONTROLLED_OCI_RUNTIME_IMAGE_IDS",
+            {runtime: image_id},
+        ):
+            identities = self.reference.controlled_oci_runtime_identity_digests(
+                source
+            )
+        self.assertEqual(identities, {platform, image_id})
+
+    def test_strict_oci_dockerfiles_use_verified_local_base_tags(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {self.reference.OCI_STRICT_ENV: "1"},
+            clear=False,
+        ):
+            api = self.reference.controlled_oci_dockerfile(
+                ROOT / "apps/api/Dockerfile"
+            )
+            web = self.reference.controlled_oci_dockerfile(
+                ROOT / "apps/web/Dockerfile"
+            )
+        api_from = [line for line in api.splitlines() if line.startswith("FROM ")]
+        web_from = [line for line in web.splitlines() if line.startswith("FROM ")]
+        self.assertTrue(api_from)
+        self.assertTrue(web_from)
+        self.assertFalse(any("@sha256:" in line for line in api_from + web_from))
+        self.assertIn("FROM rust:1.89.0-bookworm AS builder", api_from)
+        self.assertIn("FROM debian:bookworm-slim", api_from)
+        self.assertIn("FROM node:20.19.0-alpine AS builder", web_from)
+        self.assertIn("FROM caddy:2.7", web_from)
+
+    def test_strict_oci_dockerfile_rejects_comment_only_contract_tokens(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        source = (
+            f"# {rust['local_ref']}@{rust['digest']}\n"
+            f"# {debian['local_ref']}@{debian['digest']}\n"
+            "FROM attacker.example/unreviewed:latest\n"
+        )
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference.Path, "read_text", return_value=source
+        ):
+            with self.assertRaisesRegex(
+                self.reference.ProofError, "uncontrolled OCI base image"
+            ):
+                self.reference.controlled_oci_dockerfile(Path("apps/api/Dockerfile"))
+
+    def test_strict_oci_dockerfile_rejects_additional_external_stage(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        source = (
+            f"FROM {rust['local_ref']}@{rust['digest']} AS builder\n"
+            f"FROM {debian['local_ref']}@{debian['digest']}\n"
+            "FROM attacker.example/unreviewed:latest AS injected\n"
+        )
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference.Path, "read_text", return_value=source
+        ):
+            with self.assertRaisesRegex(
+                self.reference.ProofError, "uncontrolled OCI base image"
+            ):
+                self.reference.controlled_oci_dockerfile(Path("apps/api/Dockerfile"))
+
+    def test_strict_oci_dockerfile_allows_prior_stage_alias(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        source = (
+            f"FROM {rust['local_ref']}@{rust['digest']} AS builder\n"
+            f"FROM {debian['local_ref']}@{debian['digest']} AS runtime\n"
+            "FROM builder AS exported-builder\n"
+        )
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference.Path, "read_text", return_value=source
+        ):
+            rewritten = self.reference.controlled_oci_dockerfile(
+                Path("apps/api/Dockerfile")
+            )
+        self.assertIn(f"FROM {rust['local_ref']} AS builder", rewritten)
+        self.assertIn(f"FROM {debian['local_ref']} AS runtime", rewritten)
+        self.assertIn("FROM builder AS exported-builder", rewritten)
+
+    def test_strict_image_builds_consume_dockerfiles_from_stdin(self) -> None:
+        with mock.patch.dict(os.environ, {self.reference.OCI_STRICT_ENV: "1"}), mock.patch.object(
+            self.reference,
+            "_build_dockerfile",
+            side_effect=[
+                (["--file", "-"], "FROM rust:local AS builder\n"),
+                (["--file", "-"], "FROM node:local AS builder\n"),
+            ],
+        ), mock.patch.object(self.reference, "run") as run, mock.patch.object(
+            self.reference,
+            "output",
+            return_value="sha256:" + "a" * 64,
+        ):
+            self.reference.build_images("kind", "proof", "b" * 40, "timestamp")
+        api_build = run.call_args_list[0]
+        web_build = run.call_args_list[1]
+        self.assertEqual(api_build.args[0][:5], ["docker", "build", "--pull=false", "--file", "-"])
+        self.assertEqual(web_build.args[0][:5], ["docker", "build", "--pull=false", "--file", "-"])
+        self.assertEqual(api_build.kwargs["input_text"], "FROM rust:local AS builder\n")
+        self.assertEqual(web_build.kwargs["input_text"], "FROM node:local AS builder\n")
+
+    def test_non_strict_image_builds_allow_normal_pull_behavior(self) -> None:
+        with mock.patch.dict(os.environ, {self.reference.OCI_STRICT_ENV: ""}), mock.patch.object(
+            self.reference, "run"
+        ) as run, mock.patch.object(
+            self.reference, "output", return_value="sha256:" + "a" * 64
+        ):
+            self.reference.build_images("kind", "proof", "b" * 40, "timestamp")
+        self.assertNotIn("--pull=false", run.call_args_list[0].args[0])
+        self.assertNotIn("--pull=false", run.call_args_list[1].args[0])
+
+    def test_cnpg_manifest_binds_operator_and_bootstrap_image_to_runtime_tag(
+        self,
+    ) -> None:
+        with mock.patch.dict(sys.modules, {"kind_reference": self.reference}):
+            ha_reference = load_module(
+                "weltgewebe_ha_reference_contract",
+                ROOT / "scripts/platform/ha_reference.py",
+            )
+        tagged = "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"
+        runtime_image = (
+            "ghcr.io/cloudnative-pg/cloudnative-pg:weltgewebe-a2701eb97cdd"
+        )
+        source = yaml.safe_dump_all(
+            [
+                {
+                    "apiVersion": "apps/v1",
+                    "kind": "Deployment",
+                    "metadata": {
+                        "name": "cnpg-controller-manager",
+                        "namespace": "cnpg-system",
+                    },
+                    "spec": {
+                        "template": {
+                            "spec": {
+                                "containers": [
+                                    {
+                                        "name": "manager",
+                                        "image": tagged,
+                                        "env": [
+                                            {
+                                                "name": "OPERATOR_IMAGE_NAME",
+                                                "value": tagged,
+                                            }
+                                        ],
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                }
+            ],
+            sort_keys=False,
+        )
+        runtime_refs = {
+            ha_reference.ref._normalize_oci_reference(
+                ha_reference.CNPG_OPERATOR_IMAGE
+            ): runtime_image,
+            ha_reference.ref._normalize_oci_reference(runtime_image): runtime_image,
+        }
+        with mock.patch.dict(
+            os.environ, {ha_reference.ref.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            ha_reference.ref, "_CONTROLLED_OCI_RUNTIME_REFS", runtime_refs
+        ):
+            documents = list(
+                yaml.safe_load_all(ha_reference.render_cnpg_manifest(source))
+            )
+        manager = documents[0]["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(manager["image"], runtime_image)
+        self.assertEqual(manager["imagePullPolicy"], "Never")
+        self.assertEqual(manager["env"][0]["value"], runtime_image)
+
+    def test_strict_oci_policy_sets_cnpg_cluster_pull_policy(self) -> None:
+        cluster = {
+            "apiVersion": "postgresql.cnpg.io/v1",
+            "kind": "Cluster",
+            "spec": {"instances": 3},
+        }
+        with mock.patch.dict(os.environ, {self.reference.OCI_STRICT_ENV: "1"}):
+            result = self.reference.enforce_controlled_oci_pull_policy([cluster])
+        self.assertEqual(result[0]["spec"]["imagePullPolicy"], "Never")
+
+    def test_strict_oci_policy_forces_never_for_every_pod_container(self) -> None:
+        documents = [
+            {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "spec": {
+                    "template": {
+                        "spec": {
+                            "initContainers": [{"name": "init", "image": "init:v1"}],
+                            "containers": [{"name": "app", "image": "app:v1"}],
+                        }
+                    }
+                },
+            }
+        ]
+        with mock.patch.dict(os.environ, {self.reference.OCI_STRICT_ENV: "1"}):
+            result = self.reference.enforce_controlled_oci_pull_policy(documents)
+        pod = result[0]["spec"]["template"]["spec"]
+        self.assertEqual(pod["initContainers"][0]["imagePullPolicy"], "Never")
+        self.assertEqual(pod["containers"][0]["imagePullPolicy"], "Never")
+
     def test_kubernetes_proof_workflow_is_reusable_and_auditable(self) -> None:
-        workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
+        pr_workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
+        pr_workflow_text = pr_workflow_path.read_text()
+        pr_workflow = yaml.safe_load(pr_workflow_text)
+        workflow_path = ROOT / ".github/workflows/kubernetes-platform-proof.yml"
         workflow_text = workflow_path.read_text()
         workflow = yaml.safe_load(workflow_text)
+        self.assertEqual(set(pr_workflow["on"]), {"pull_request"})
+        self.assertEqual(
+            set(pr_workflow["jobs"]), {"contract", "trivy-rendered-security"}
+        )
+        self.assertNotIn("packages: read", pr_workflow_text)
+        self.assertNotIn("github.token", pr_workflow_text)
+        self.assertNotIn("pull_request", workflow["on"])
+        self.assertEqual(set(workflow["on"]), {"push", "workflow_dispatch"})
         self.assertFalse(workflow["concurrency"]["cancel-in-progress"])
-        self.assertIn("github.event.pull_request.head.sha || github.sha", workflow["concurrency"]["group"])
+        self.assertIn("github.sha", workflow["concurrency"]["group"])
+        self.assertNotIn("github.event.pull_request", workflow_text)
+        self.assertNotIn("oci-proof-cache", workflow_text)
+        for job_name in (
+            "contract",
+            "trivy-rendered-security",
+            "kind-gitops-proof",
+            "kind-ha-recovery-proof",
+        ):
+            checkout = workflow["jobs"][job_name]["steps"][0]
+            self.assertTrue(str(checkout["uses"]).startswith("actions/checkout@"))
+            self.assertEqual(checkout["with"]["fetch-depth"], 0)
+            self.assertIs(checkout["with"]["persist-credentials"], False)
 
         def named_steps(job_name: str) -> dict[str, dict]:
             return {
@@ -188,6 +1116,64 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             ("kind-ha-recovery-proof", "ha-recovery", "Reconcile owned HA proof resources"),
         ):
             steps = named_steps(job_name)
+            self.assertEqual(workflow["jobs"][job_name]["needs"], "contract")
+            self.assertEqual(
+                workflow["jobs"][job_name]["env"]["WELTGEWEBE_PROOF_OCI_STRICT"],
+                "1",
+            )
+            self.assertEqual(
+                workflow["jobs"][job_name]["permissions"],
+                {"contents": "read", "packages": "read"},
+            )
+            init_step = steps["Initialize isolated OCI mirror credentials"]
+            self.assertIn("$RUNNER_TEMP", init_step["run"])
+            self.assertIn("$GITHUB_ENV", init_step["run"])
+            live_step = steps["Verify live OCI mirror package budget"]
+            self.assertEqual(live_step["env"], {"GH_TOKEN": "${{ github.token }}"})
+            self.assertIn("oci_proof_mirror.py", live_step["run"])
+            self.assertIn("verify-live", live_step["run"])
+            auth_step = steps["Authenticate controlled OCI mirror"]
+            self.assertEqual(auth_step["env"], {"GH_TOKEN": "${{ github.token }}"})
+            self.assertIn("docker login ghcr.io", auth_step["run"])
+            load_step = next(
+                step for name, step in steps.items() if name.startswith("Load controlled")
+            )
+            self.assertIn("oci_proof_mirror.py", load_step["run"])
+            self.assertIn("load-host", load_step["run"])
+            self.assertIn(f"--suite {suite}", load_step["run"])
+            self.assertIn("--suite app-build", load_step["run"])
+            logout_step = steps["Remove OCI mirror credentials"]
+            self.assertEqual(
+                logout_step["if"],
+                "always() && steps.proof-cache.outputs.cache-hit != 'true'",
+            )
+            self.assertIn("docker logout ghcr.io", logout_step["run"])
+            self.assertIn('[[ -n "${DOCKER_CONFIG:-}" ]]', logout_step["run"])
+            self.assertLess(
+                logout_step["run"].index('[[ -n "${DOCKER_CONFIG:-}" ]]'),
+                logout_step["run"].index("docker logout ghcr.io"),
+            )
+            self.assertIn("install -d -m 0700", init_step["run"])
+            self.assertIn("install -d -m 0700", logout_step["run"])
+            block_step = steps["Block all OCI registries after mirror load"]
+            for registry in ("registry-1.docker.io", "quay.io", "ghcr.io"):
+                self.assertIn(registry, block_step["run"])
+            self.assertIn('echo "::1 $host"', block_step["run"])
+            self.assertIn("getent ahostsv4", block_step["run"])
+            self.assertIn("getent ahostsv6", block_step["run"])
+            self.assertIn("cp -- /etc/hosts", block_step["run"])
+            self.assertIn("sha256sum", block_step["run"])
+            restore_hosts = steps["Restore OCI registry host resolution"]
+            self.assertEqual(
+                restore_hosts["if"],
+                "always() && steps.proof-cache.outputs.cache-hit != 'true'",
+            )
+            self.assertIn("sudo tee /etc/hosts", restore_hosts["run"])
+            self.assertIn('test "$observed" = "$expected"', restore_hosts["run"])
+            offline_step = steps["Verify loaded OCI inputs offline"]
+            self.assertIn("verify-host", offline_step["run"])
+            self.assertIn(f"--suite {suite}", offline_step["run"])
+            self.assertIn("--suite app-build", offline_step["run"])
             compute = next(step for name, step in steps.items() if name.startswith("Compute immutable"))
             restore = next(step for name, step in steps.items() if name.startswith("Restore immutable"))
             validate = next(step for name, step in steps.items() if name.startswith("Validate restored"))
@@ -217,47 +1203,92 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         ha = named_steps("kind-ha-recovery-proof")
         stage_receipt = ha["Stage HA recovery receipt"]
         self.assertEqual(stage_receipt["if"], "success()")
-        self.assertIn("build/kubernetes-platform/reuse/ha-recovery/proof.json", stage_receipt["run"])
+        self.assertIn(
+            "build/kubernetes-platform/reuse/ha-recovery/proof.json",
+            stage_receipt["run"],
+        )
+        self.assertNotIn("ha-recovery-oci-mirror", stage_receipt["run"])
         upload_receipt = ha["Upload HA recovery receipt"]
-        self.assertEqual(upload_receipt["if"], "success()")
-        self.assertIn("ha-recovery-identity.json", upload_receipt["with"]["path"] )
+        self.assertEqual(
+            upload_receipt["if"],
+            "success() && steps.proof-cache.outputs.cache-hit != 'true'",
+        )
+        self.assertIn("ha-recovery-identity.json", upload_receipt["with"]["path"])
+        self.assertIn(
+            "build/kubernetes-platform/ha-recovery-oci-mirror/*.json",
+            upload_receipt["with"]["path"],
+        )
+        restored_ha = ha["Upload restored HA recovery receipt"]
+        self.assertEqual(
+            restored_ha["if"],
+            "success() && steps.proof-cache.outputs.cache-hit == 'true'",
+        )
+        self.assertNotIn("ha-recovery-oci-mirror", restored_ha["with"]["path"])
+
+        direct_upload = gitops["Upload GitOps proof evidence"]
+        self.assertEqual(
+            direct_upload["if"],
+            "success() && steps.proof-cache.outputs.cache-hit != 'true'",
+        )
+        restored_direct = gitops["Upload restored GitOps proof evidence"]
+        self.assertEqual(
+            restored_direct["if"],
+            "success() && steps.proof-cache.outputs.cache-hit == 'true'",
+        )
+        self.assertNotIn("kind-gitops-oci-mirror", restored_direct["with"]["path"])
 
         for job_name in ("kind-gitops-proof", "kind-ha-recovery-proof"):
             for step in workflow["jobs"][job_name]["steps"]:
                 if str(step.get("uses", "")).startswith("actions/upload-artifact@"):
                     self.assertNotIn(".cache/", str((step.get("with") or {}).get("path", "")))
 
-    def test_ci_proof_binds_pull_requests_to_checked_out_merge_state(self) -> None:
-        workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
-        workflow_text = workflow_path.read_text()
-        workflow = yaml.safe_load(workflow_text)
-        steps = workflow["jobs"]["kind-gitops-proof"]["steps"]
+    def test_privileged_ci_proofs_are_isolated_from_pull_requests(self) -> None:
+        pr_path = ROOT / ".github/workflows/kubernetes-platform.yml"
+        proof_path = ROOT / ".github/workflows/kubernetes-platform-proof.yml"
+        pr_text = pr_path.read_text()
+        proof_text = proof_path.read_text()
+        pr_workflow = yaml.safe_load(pr_text)
+        proof_workflow = yaml.safe_load(proof_text)
+
+        self.assertEqual(set(pr_workflow["on"]), {"pull_request"})
+        self.assertNotIn("kind-gitops-proof", pr_workflow["jobs"])
+        self.assertNotIn("kind-ha-recovery-proof", pr_workflow["jobs"])
+        self.assertNotIn("packages: read", pr_text)
+        self.assertNotIn("github.token", pr_text)
+        self.assertNotIn("pull_request", proof_workflow["on"])
+        self.assertEqual(set(proof_workflow["on"]), {"push", "workflow_dispatch"})
+        expected_head = proof_workflow["on"]["workflow_dispatch"]["inputs"]["expected_head"]
+        self.assertIs(expected_head["required"], True)
+        self.assertEqual(expected_head["type"], "string")
+        guard = proof_workflow["jobs"]["dispatch-head-contract"]
+        self.assertEqual(guard["timeout-minutes"], 2)
+        self.assertEqual(proof_workflow["jobs"]["contract"]["needs"], "dispatch-head-contract")
+        guard_step = guard["steps"][0]
+        self.assertEqual(guard_step["env"]["EVENT_NAME"], "${{ github.event_name }}")
+        self.assertEqual(guard_step["env"]["EXPECTED_HEAD"], "${{ inputs.expected_head }}")
+        self.assertEqual(guard_step["env"]["CHECKED_OUT_HEAD"], "${{ github.sha }}")
+        self.assertEqual(guard_step["env"]["CHECKED_OUT_REF"], "${{ github.ref }}")
+        self.assertIn('[[ "$EXPECTED_HEAD" =~ ^[0-9a-f]{40}$ ]]', guard_step["run"])
+        self.assertIn('test "$CHECKED_OUT_REF" = "refs/heads/main"', guard_step["run"])
+        self.assertIn('test "$CHECKED_OUT_HEAD" = "$EXPECTED_HEAD"', guard_step["run"])
+
+        for job_name in ("kind-gitops-proof", "kind-ha-recovery-proof"):
+            job = proof_workflow["jobs"][job_name]
+            self.assertEqual(
+                job["if"],
+                "github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.sha == inputs.expected_head)",
+            )
+            self.assertEqual(
+                job["permissions"], {"contents": "read", "packages": "read"}
+            )
+            self.assertEqual(job["env"]["PROOF_SOURCE_COMMIT"], "${{ github.sha }}")
+
+        steps = proof_workflow["jobs"]["kind-gitops-proof"]["steps"]
         named_steps = {step["name"]: step for step in steps if "name" in step}
-
-        direct = named_steps["Run pull-request direct reference proof"]
+        self.assertNotIn("Run pull-request direct reference proof", named_steps)
         gitops = named_steps["Run commit-bound GitOps reference proof"]
-
         self.assertEqual(
-            direct["if"],
-            "steps.proof-cache.outputs.cache-hit != 'true' && github.event_name == 'pull_request'",
-        )
-        self.assertEqual(
-            gitops["if"],
-            "steps.proof-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'",
-        )
-        self.assertEqual(
-            shlex.split(direct["run"]),
-            [
-                "python",
-                "scripts/platform/kind_reference.py",
-                "proof",
-                "--cluster",
-                "$CLUSTER_NAME",
-                "--mode",
-                "direct",
-                "--owner-id",
-                "$PROOF_OWNER_ID",
-            ],
+            gitops["if"], "steps.proof-cache.outputs.cache-hit != 'true'"
         )
         self.assertEqual(
             shlex.split(gitops["run"]),
@@ -275,9 +1306,9 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 "$PROOF_OWNER_ID",
             ],
         )
-        self.assertIn("PROOF_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}", workflow_text)
-        self.assertNotIn("SOURCE_REF:", workflow_text)
-        self.assertNotIn("github.head_ref || github.ref_name", workflow_text)
+        self.assertNotIn("github.event.pull_request", proof_text)
+        self.assertNotIn("SOURCE_REF:", proof_text)
+        self.assertNotIn("github.head_ref || github.ref_name", proof_text)
 
     def test_proof_identity_ignores_unrelated_inputs_and_rejects_tampering(self) -> None:
         commit = "0123456789abcdef0123456789abcdef01234567"
@@ -287,10 +1318,12 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             (root / "scripts/platform").mkdir(parents=True)
             (root / "docs").mkdir()
             (root / "platform/toolchain.lock.json").write_text("{}\n")
+            (root / "platform/oci-proof-mirror.lock.json").write_text("{}\n")
             (root / "scripts/platform/proof_identity.py").write_text("helper-v1\n")
             (root / "docs/unrelated.md").write_text("one\n")
             tracked = (
                 "platform/toolchain.lock.json",
+                "platform/oci-proof-mirror.lock.json",
                 "scripts/platform/proof_identity.py",
                 "docs/unrelated.md",
             )
@@ -322,17 +1355,19 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 reuse = root / "reuse"
                 with mock.patch.object(
                     self.proof_identity, "_checkout_commit", return_value=commit
+                ), mock.patch.object(
+                    self.proof_identity, "_validate_controlled_oci_proof"
                 ):
                     self.proof_identity.record(identity_path, proof_path, reuse)
-                self.proof_identity.validate(
-                    identity_path, reuse / "record.json", reuse / "proof.json"
-                )
-                with (reuse / "proof.json").open("a") as handle:
-                    handle.write(" ")
-                with self.assertRaises(self.proof_identity.IdentityError):
                     self.proof_identity.validate(
                         identity_path, reuse / "record.json", reuse / "proof.json"
                     )
+                    with (reuse / "proof.json").open("a") as handle:
+                        handle.write(" ")
+                    with self.assertRaises(self.proof_identity.IdentityError):
+                        self.proof_identity.validate(
+                            identity_path, reuse / "record.json", reuse / "proof.json"
+                        )
 
     def test_proof_validate_rejects_crafted_policy_and_record_fields(self) -> None:
         identity = {
@@ -362,6 +1397,8 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 self.proof_identity, "compute_identity", return_value=identity
             ), mock.patch.object(
                 self.proof_identity, "_checkout_commit", return_value="5" * 40
+            ), mock.patch.object(
+                self.proof_identity, "_validate_controlled_oci_proof"
             ):
                 self.proof_identity.record(identity_path, source_proof_path, reuse)
 
@@ -388,6 +1425,131 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                     self.proof_identity.IdentityError, "record commit"
                 ):
                     self.proof_identity.validate(identity_path, record_path, proof_path)
+
+    def test_proof_oci_receipts_are_semantically_bound(self) -> None:
+        digest = "sha256:" + "a" * 64
+        image_id = "sha256:" + "b" * 64
+        platform_digest = "sha256:" + "c" * 64
+        lock = {
+            "images": {
+                "runtime": {
+                    "canonical": f"registry.example/runtime@{digest}",
+                    "local_ref": "registry.example/runtime:local",
+                    "digest": digest,
+                    "suites": ["kind-gitops"],
+                    "load_into_kind": True,
+                },
+                "builder": {
+                    "canonical": f"registry.example/builder@{digest}",
+                    "local_ref": "registry.example/builder:local",
+                    "digest": digest,
+                    "suites": ["app-build"],
+                    "load_into_kind": False,
+                },
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lock_path = root / "platform/oci-proof-mirror.lock.json"
+            lock_path.parent.mkdir(parents=True)
+            lock_bytes = (json.dumps(lock, sort_keys=True) + "\n").encode()
+            lock_path.write_bytes(lock_bytes)
+            lock_sha256 = hashlib.sha256(lock_bytes).hexdigest()
+            identity = {
+                "suite": "kind-gitops",
+                "oci_mirror_lock_sha256": lock_sha256,
+            }
+            host_images = {
+                name: {"source": "local-verified", "image_id": image_id}
+                for name in lock["images"]
+            }
+            blockade = {
+                "node": "proof-control-plane",
+                "registries": {
+                    registry: {"ipv4": ["127.0.0.1"], "ipv6": ["::1"]}
+                    for registry in self.proof_identity.BLOCKED_REGISTRIES
+                },
+            }
+            runtime_ref = lock["images"]["runtime"]["local_ref"]
+            cluster_image = {
+                "canonical": lock["images"]["runtime"]["canonical"],
+                "local_ref": runtime_ref,
+                "runtime_ref": runtime_ref,
+                "locked_index_digest": digest,
+                "cri_image_id": image_id,
+                "image_id": image_id,
+                "platform_target_digest": platform_digest,
+                "nodes": [
+                    {
+                        "node": "proof-control-plane",
+                        "runtime_ref": runtime_ref,
+                        "image_id": image_id,
+                        "locked_index_digest": digest,
+                        "platform_target_digest": platform_digest,
+                        "cri_image_status_verified": True,
+                    }
+                ],
+            }
+            proof = {
+                "cluster": "proof",
+                "oci_controlled_source": {
+                    "strict": True,
+                    "host": {
+                        "status": "pass",
+                        "strict": True,
+                        "lock_sha256": lock_sha256,
+                        "selected_count": 2,
+                        "images": host_images,
+                        "failures": {},
+                    },
+                    "cluster": {
+                        "status": "pass",
+                        "strict": True,
+                        "lock_sha256": lock_sha256,
+                        "cluster": "proof",
+                        "loaded_count": 1,
+                        "images": {"runtime": cluster_image},
+                        "registry_blockades": [blockade],
+                    },
+                },
+            }
+            with mock.patch.object(self.proof_identity, "ROOT", root):
+                self.proof_identity._validate_controlled_oci_proof(identity, proof)
+                drifted = json.loads(json.dumps(proof))
+                drifted["oci_controlled_source"]["cluster"]["registry_blockades"] = []
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "registry blockade evidence"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
+                drifted = json.loads(json.dumps(proof))
+                drifted["oci_controlled_source"]["host"]["lock_sha256"] = "d" * 64
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "different mirror lock"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
+                drifted = json.loads(json.dumps(proof))
+                drifted["oci_controlled_source"]["strict"] = False
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "strict controlled OCI"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
+                drifted = json.loads(json.dumps(proof))
+                drifted["oci_controlled_source"]["cluster"]["images"]["runtime"][
+                    "cri_image_id"
+                ] = "sha256:" + "d" * 64
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "OCI image binding is invalid"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
+                drifted = json.loads(json.dumps(proof))
+                drifted["oci_controlled_source"]["cluster"]["images"]["runtime"][
+                    "nodes"
+                ][0]["node"] = "different-control-plane"
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError,
+                    "image and blockade node inventories disagree",
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
 
     def test_proof_record_rejects_receipt_from_different_checkout(self) -> None:
         identity = {
@@ -1040,6 +2202,9 @@ time.sleep(60)
             "COPY --from=builder /workspace/build /srv/weltgewebe",
             dockerfile,
         )
+        self.assertIn("pnpm run build:container", dockerfile)
+        package = (ROOT / "apps/web/package.json").read_text()
+        self.assertIn("assert-route-performance-budget.mjs --budget-only", package)
 
     def test_web_container_removes_caddy_capability_before_nonroot_user(self) -> None:
         dockerfile = (ROOT / "apps/web/Dockerfile").read_text()

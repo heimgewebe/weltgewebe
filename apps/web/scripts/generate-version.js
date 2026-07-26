@@ -1,36 +1,80 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
+import { computeBuildArtifactTree } from "./build-artifact-evidence.mjs";
+import { resolveConfiguredBuildDirectory } from "./route-performance-budget-core.mjs";
 
 const args = process.argv.slice(2);
-const allowedArgs = ["--client", "--server"];
+const allowedArgs = ["--client", "--server", "--artifact-tree"];
 const unknownArgs = args.filter((a) => !allowedArgs.includes(a));
 
 if (unknownArgs.length > 0) {
   console.error(`ERROR: Unknown arguments: ${unknownArgs.join(", ")}`);
-  console.error(`Usage: node generate-version.js [--client] [--server]`);
+  console.error(
+    `Usage: node generate-version.js [--client] [--server] [--artifact-tree]`,
+  );
   process.exit(1);
 }
 
 const writeClient = args.length === 0 || args.includes("--client");
 const writeServer = args.length === 0 || args.includes("--server");
+const bindArtifactTree = args.includes("--artifact-tree");
 
-const targetFile = path.resolve(process.cwd(), "build/_app/version.json");
-const targetDir = path.dirname(targetFile);
+if (bindArtifactTree && !args.includes("--server")) {
+  console.error("ERROR: --artifact-tree requires --server.");
+  process.exit(1);
+}
+
+const defaultBuildDir = path.resolve(process.cwd(), "build");
 const clientDir = path.resolve(process.cwd(), "src/lib/generated");
 const clientFile = path.join(clientDir, "buildVersion.json");
 const clientModuleFile = path.join(clientDir, "buildVersion.ts");
+const compileRevisionFile = path.resolve(
+  process.cwd(),
+  "static/_app/compile-revision.json",
+);
 
 let commit = null;
-const suppliedCommit = process.env.GIT_COMMIT_SHA?.trim();
-if (suppliedCommit) {
-  if (!/^[0-9a-f]{40}$/.test(suppliedCommit)) {
+const revisionVariables = [
+  { name: "GIT_COMMIT_SHA" },
+  { name: "GITHUB_SHA" },
+  { name: "VERCEL_GIT_COMMIT_SHA", providerFlag: "VERCEL" },
+  { name: "VITE_VERCEL_GIT_COMMIT_SHA", providerFlag: "VERCEL" },
+  { name: "PUBLIC_VERCEL_GIT_COMMIT_SHA", providerFlag: "VERCEL" },
+  { name: "CF_PAGES_COMMIT_SHA", providerFlag: "CF_PAGES" },
+];
+const suppliedRevisions = [];
+for (const { name, providerFlag } of revisionVariables) {
+  const raw = process.env[name];
+  if (typeof raw !== "string" || raw.trim() === "") continue;
+  if (providerFlag && process.env[providerFlag] !== "1") {
     console.error(
-      "ERROR: GIT_COMMIT_SHA must be a full 40-character lowercase hexadecimal commit.",
+      `ERROR: ${name} requires ${providerFlag}=1 to establish a platform build context.`,
     );
     process.exit(1);
   }
-  commit = suppliedCommit;
+  const value = raw.trim().toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(value)) {
+    console.error(
+      `ERROR: ${name} must be a full 40-character lowercase hexadecimal commit.`,
+    );
+    process.exit(1);
+  }
+  suppliedRevisions.push({ name, value });
+}
+const distinctSuppliedRevisions = [
+  ...new Set(suppliedRevisions.map(({ value }) => value)),
+];
+if (distinctSuppliedRevisions.length > 1) {
+  console.error(
+    `ERROR: Conflicting build revisions: ${suppliedRevisions
+      .map(({ name, value }) => `${name}=${value}`)
+      .join(", ")}.`,
+  );
+  process.exit(1);
+}
+if (distinctSuppliedRevisions.length === 1) {
+  commit = distinctSuppliedRevisions[0];
 } else {
   try {
     const resolvedCommit = execSync("git rev-parse HEAD", {
@@ -72,11 +116,73 @@ if (commit) payload.commit = commit;
 
 const filesWritten = [];
 if (writeServer) {
-  fs.mkdirSync(targetDir, { recursive: true });
-  fs.writeFileSync(targetFile, JSON.stringify(payload, null, 2) + "\n", "utf8");
+  if (!commit) {
+    console.error(
+      "ERROR: Server build identity requires a canonical Git commit.",
+    );
+    process.exit(1);
+  }
+  let serverPayload = payload;
+  let serverBuildDir = defaultBuildDir;
+  if (bindArtifactTree) {
+    let artifactTree;
+    try {
+      serverBuildDir = resolveConfiguredBuildDirectory({
+        root: process.cwd(),
+      });
+      artifactTree = computeBuildArtifactTree(serverBuildDir);
+    } catch (error) {
+      console.error(
+        `ERROR: Could not bind the completed build artifact: ${error.message}`,
+      );
+      process.exit(1);
+    }
+    if (artifactTree.fileCount < 1) {
+      console.error(
+        "ERROR: --artifact-tree requires a completed build with at least one regular file.",
+      );
+      process.exit(1);
+    }
+    if (artifactTree.compileRevision !== commit) {
+      console.error(
+        `ERROR: Compiled client revision ${artifactTree.compileRevision ?? "missing"} does not match server revision ${commit}.`,
+      );
+      process.exit(1);
+    }
+    serverPayload = {
+      ...payload,
+      artifact_tree: {
+        schema_version: artifactTree.schemaVersion,
+        sha256: artifactTree.sha256,
+        file_count: artifactTree.fileCount,
+        compile_revision: artifactTree.compileRevision,
+        provenance: "unattested",
+      },
+    };
+  }
+  const targetFile = path.join(serverBuildDir, "_app/version.json");
+  fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+  fs.writeFileSync(
+    targetFile,
+    JSON.stringify(serverPayload, null, 2) + "\n",
+    "utf8",
+  );
   filesWritten.push(targetFile);
 }
 if (writeClient) {
+  if (!commit) {
+    console.error(
+      "ERROR: Client build identity requires a canonical Git commit.",
+    );
+    process.exit(1);
+  }
+  fs.mkdirSync(path.dirname(compileRevisionFile), { recursive: true });
+  fs.writeFileSync(
+    compileRevisionFile,
+    JSON.stringify({ schema_version: 1, compile_revision: commit }, null, 2) +
+      "\n",
+    "utf8",
+  );
   fs.mkdirSync(clientDir, { recursive: true });
   fs.writeFileSync(clientFile, JSON.stringify(payload, null, 2) + "\n", "utf8");
   const moduleSource =
@@ -88,7 +194,7 @@ if (writeClient) {
     JSON.stringify(payload, null, 2) +
     " as const;\n";
   fs.writeFileSync(clientModuleFile, moduleSource, "utf8");
-  filesWritten.push(clientFile, clientModuleFile);
+  filesWritten.push(compileRevisionFile, clientFile, clientModuleFile);
 }
 console.log(
   filesWritten.length > 0
