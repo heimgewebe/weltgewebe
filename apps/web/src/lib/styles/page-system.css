@@ -4,14 +4,20 @@
   --wg-border-strong: var(--panel-border-strong);
   --wg-action: var(--accent);
   --wg-action-soft: var(--accent-soft);
+  --wg-on-action: var(--accent-contrast);
   --wg-muted: var(--muted);
-  min-height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
   box-sizing: border-box;
   padding: clamp(1rem, 4vw, 2rem) 0 clamp(3rem, 8vw, 5rem);
   background:
     radial-gradient(circle at 12% 0, var(--accent-soft), transparent 34rem),
     var(--bg);
   color: var(--text);
+}
+
+.wg-page--paper {
+  --wg-surface: color-mix(in srgb, var(--panel-solid) 96%, var(--accent));
 }
 
 .wg-page *,
@@ -43,7 +49,8 @@
   font-weight: 650;
 }
 
-.wg-back-link:hover {
+.wg-back-link:hover,
+.wg-back-link:focus-visible {
   color: var(--text);
 }
 
@@ -113,6 +120,13 @@
   font: inherit;
 }
 
+.wg-back-link:focus-visible,
+.wg-button:focus-visible,
+.wg-control:focus-visible {
+  outline: 3px solid var(--wg-action);
+  outline-offset: 2px;
+}
+
 textarea.wg-control {
   min-height: 8rem;
   resize: vertical;
@@ -156,7 +170,7 @@ textarea.wg-control {
 
 .wg-button--primary {
   background: var(--wg-action);
-  color: var(--bg);
+  color: var(--wg-on-action);
 }
 
 .wg-button--secondary {

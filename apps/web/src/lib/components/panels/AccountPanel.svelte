@@ -95,7 +95,41 @@
   </h3>
   {#if summary}<p class="summary">{summary}</p>{/if}
 
-  <div class="tabs" role="tablist" aria-label="Garnrollen-Tabs">
+  <div
+    class="compact-account-summary"
+    data-testid="account-compact-summary"
+    role="region"
+    aria-label="Garnrollenprofil"
+  >
+    {#if isLoadingDetails && !accountDetails}
+      <p class="ghost">Lade Profil…</p>
+    {:else}
+      {#if accountDetails?.created_at || $selection?.data?.created_at}<p>
+          <strong>Dabei seit:</strong>
+          {formatDate(
+            accountDetails?.created_at || $selection?.data?.created_at,
+          )}
+        </p>{/if}
+      {#if skills.length > 0}<p>
+          <strong>Fähigkeiten:</strong>
+          {skills.join(", ")}
+        </p>{/if}
+      {#if goods.length > 0}<p>
+          <strong>Güter:</strong>
+          {goods.join(", ")}
+        </p>{/if}
+      {#if interests.length > 0}<p>
+          <strong>Interessen:</strong>
+          {interests.join(", ")}
+        </p>{/if}
+    {/if}
+  </div>
+
+  <div
+    class="tabs account-full-content"
+    role="tablist"
+    aria-label="Garnrollen-Tabs"
+  >
     <button
       class:active={activeTab === "profil"}
       on:click={() => setTab("profil")}
@@ -128,7 +162,7 @@
     >
   </div>
 
-  <div class="tab-content">
+  <div class="tab-content account-full-content">
     {#if isLoadingDetails && !accountDetails}
       <p class="ghost">Lade Details…</p>
     {:else if activeTab === "profil"}
@@ -208,6 +242,10 @@
     color: var(--muted);
     font-size: 0.9rem;
   }
+  .compact-account-summary {
+    display: none;
+  }
+  .compact-account-summary p,
   .overview p {
     margin: 0 0 0.65rem;
     font-size: 0.95rem;
