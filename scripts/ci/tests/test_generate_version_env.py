@@ -30,6 +30,15 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(contents, encoding="utf-8")
         env = os.environ.copy()
+        for name in (
+            "GIT_COMMIT_SHA",
+            "GITHUB_SHA",
+            "VERCEL_GIT_COMMIT_SHA",
+            "VITE_VERCEL_GIT_COMMIT_SHA",
+            "PUBLIC_VERCEL_GIT_COMMIT_SHA",
+            "CF_PAGES_COMMIT_SHA",
+        ):
+            env.pop(name, None)
         env.update({"GIT_COMMIT_SHA": commit, "SOURCE_DATE_EPOCH": source_date_epoch})
         command = ["node", str(SCRIPT), "--server"]
         if bind_artifact_tree:
@@ -83,6 +92,100 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
             marker,
             {"schema_version": 1, "compile_revision": self.commit},
         )
+
+    def test_vercel_commit_generates_client_identity_without_git(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        env = os.environ.copy()
+        for name in (
+            "GIT_COMMIT_SHA",
+            "GITHUB_SHA",
+            "VERCEL_GIT_COMMIT_SHA",
+            "VITE_VERCEL_GIT_COMMIT_SHA",
+            "PUBLIC_VERCEL_GIT_COMMIT_SHA",
+            "CF_PAGES_COMMIT_SHA",
+        ):
+            env.pop(name, None)
+        env.update(
+            {
+                "VERCEL": "1",
+                "VERCEL_GIT_COMMIT_SHA": self.commit,
+                "SOURCE_DATE_EPOCH": "1784139708",
+            }
+        )
+        result = subprocess.run(
+            ["node", str(SCRIPT), "--client"],
+            cwd=root,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(
+            (root / "src" / "lib" / "generated" / "buildVersion.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(payload["commit"], self.commit)
+
+    def test_conflicting_platform_and_explicit_commits_fail_closed(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        env = os.environ.copy()
+        env.update(
+            {
+                "GIT_COMMIT_SHA": self.commit,
+                "VERCEL": "1",
+                "VERCEL_GIT_COMMIT_SHA": "a" * 40,
+                "SOURCE_DATE_EPOCH": "1784139708",
+            }
+        )
+        result = subprocess.run(
+            ["node", str(SCRIPT), "--server"],
+            cwd=root,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Conflicting build revisions", result.stderr)
+
+    def test_platform_commit_without_provider_flag_fails_closed(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        env = os.environ.copy()
+        for name in (
+            "GIT_COMMIT_SHA",
+            "GITHUB_SHA",
+            "VERCEL",
+            "VERCEL_GIT_COMMIT_SHA",
+            "VITE_VERCEL_GIT_COMMIT_SHA",
+            "PUBLIC_VERCEL_GIT_COMMIT_SHA",
+            "CF_PAGES",
+            "CF_PAGES_COMMIT_SHA",
+        ):
+            env.pop(name, None)
+        env.update(
+            {
+                "VERCEL_GIT_COMMIT_SHA": self.commit,
+                "SOURCE_DATE_EPOCH": "1784139708",
+            }
+        )
+        result = subprocess.run(
+            ["node", str(SCRIPT), "--client"],
+            cwd=root,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("requires VERCEL=1", result.stderr)
 
     def test_artifact_tree_binding_requires_a_completed_build(self) -> None:
         result, version_file = self.run_generator(

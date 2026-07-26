@@ -36,15 +36,46 @@ const compileRevisionFile = path.resolve(
 );
 
 let commit = null;
-const suppliedCommit = process.env.GIT_COMMIT_SHA?.trim();
-if (suppliedCommit) {
-  if (!/^[0-9a-f]{40}$/.test(suppliedCommit)) {
+const revisionVariables = [
+  { name: "GIT_COMMIT_SHA" },
+  { name: "GITHUB_SHA" },
+  { name: "VERCEL_GIT_COMMIT_SHA", providerFlag: "VERCEL" },
+  { name: "VITE_VERCEL_GIT_COMMIT_SHA", providerFlag: "VERCEL" },
+  { name: "PUBLIC_VERCEL_GIT_COMMIT_SHA", providerFlag: "VERCEL" },
+  { name: "CF_PAGES_COMMIT_SHA", providerFlag: "CF_PAGES" },
+];
+const suppliedRevisions = [];
+for (const { name, providerFlag } of revisionVariables) {
+  const raw = process.env[name];
+  if (typeof raw !== "string" || raw.trim() === "") continue;
+  if (providerFlag && process.env[providerFlag] !== "1") {
     console.error(
-      "ERROR: GIT_COMMIT_SHA must be a full 40-character lowercase hexadecimal commit.",
+      `ERROR: ${name} requires ${providerFlag}=1 to establish a platform build context.`,
     );
     process.exit(1);
   }
-  commit = suppliedCommit;
+  const value = raw.trim().toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(value)) {
+    console.error(
+      `ERROR: ${name} must be a full 40-character lowercase hexadecimal commit.`,
+    );
+    process.exit(1);
+  }
+  suppliedRevisions.push({ name, value });
+}
+const distinctSuppliedRevisions = [
+  ...new Set(suppliedRevisions.map(({ value }) => value)),
+];
+if (distinctSuppliedRevisions.length > 1) {
+  console.error(
+    `ERROR: Conflicting build revisions: ${suppliedRevisions
+      .map(({ name, value }) => `${name}=${value}`)
+      .join(", ")}.`,
+  );
+  process.exit(1);
+}
+if (distinctSuppliedRevisions.length === 1) {
+  commit = distinctSuppliedRevisions[0];
 } else {
   try {
     const resolvedCommit = execSync("git rev-parse HEAD", {

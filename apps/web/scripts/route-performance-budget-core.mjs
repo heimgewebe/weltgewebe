@@ -29,6 +29,20 @@ const defaultBudgetPath = resolve(
   "../../policies/performance.v1.json",
 );
 const SOURCE_REVISION_PATTERN = /^[0-9a-f]{40}$/;
+const DECLARED_REVISION_VARIABLES = [
+  "GIT_COMMIT_SHA",
+  "GITHUB_SHA",
+  "VERCEL_GIT_COMMIT_SHA",
+  "VITE_VERCEL_GIT_COMMIT_SHA",
+  "PUBLIC_VERCEL_GIT_COMMIT_SHA",
+  "CF_PAGES_COMMIT_SHA",
+];
+const PLATFORM_REVISION_FLAGS = new Map([
+  ["VERCEL_GIT_COMMIT_SHA", "VERCEL"],
+  ["VITE_VERCEL_GIT_COMMIT_SHA", "VERCEL"],
+  ["PUBLIC_VERCEL_GIT_COMMIT_SHA", "VERCEL"],
+  ["CF_PAGES_COMMIT_SHA", "CF_PAGES"],
+]);
 
 export function readBuildRevisionEvidence(buildDir) {
   return readBuildArtifactEvidence(buildDir).revision;
@@ -73,16 +87,25 @@ export function resolveSourceRevisionEvidence({
   artifactTreeVerified,
 } = {}) {
   const declared = [];
+  const platformDeclared = [];
   const invalidVariables = [];
-  for (const name of ["GIT_COMMIT_SHA", "GITHUB_SHA"]) {
+  for (const name of DECLARED_REVISION_VARIABLES) {
     const raw = env[name];
     if (typeof raw !== "string" || raw.trim() === "") continue;
     const value = raw.trim().toLowerCase();
+    const providerFlag = PLATFORM_REVISION_FLAGS.get(name);
+    if (providerFlag && env[providerFlag] !== "1") {
+      invalidVariables.push(name);
+      continue;
+    }
     if (!SOURCE_REVISION_PATTERN.test(value)) {
       invalidVariables.push(name);
       continue;
     }
     declared.push(value);
+    if (providerFlag) {
+      platformDeclared.push(value);
+    }
   }
 
   const suppliedArtifactEvidence =
@@ -111,6 +134,9 @@ export function resolveSourceRevisionEvidence({
       : "artifact_unverifiable";
 
   const distinct = [...new Set(declared)];
+  const distinctPlatform = [...new Set(platformDeclared)];
+  const platformRevision =
+    distinctPlatform.length === 1 ? distinctPlatform[0] : null;
   if (invalidVariables.length > 0) {
     return {
       sourceRevision: distinct.length === 1 ? distinct[0] : null,
@@ -156,11 +182,43 @@ export function resolveSourceRevisionEvidence({
     };
   }
   if (!observedCheckout) {
+    if (!platformRevision || platformRevision !== sourceRevision) {
+      return {
+        sourceRevision,
+        checkoutRevision: null,
+        verified: false,
+        status: "unverifiable",
+      };
+    }
+    if (!observedArtifact) {
+      return {
+        sourceRevision,
+        checkoutRevision: null,
+        verified: false,
+        status: artifactStatus,
+      };
+    }
+    if (observedArtifact !== sourceRevision) {
+      return {
+        sourceRevision,
+        checkoutRevision: null,
+        verified: false,
+        status: "artifact_mismatch",
+      };
+    }
+    if (suppliedArtifactEvidence.verified !== true) {
+      return {
+        sourceRevision,
+        checkoutRevision: null,
+        verified: false,
+        status: artifactStatus,
+      };
+    }
     return {
       sourceRevision,
       checkoutRevision: null,
-      verified: false,
-      status: "unverifiable",
+      verified: true,
+      status: "verified_platform",
     };
   }
   if (sourceRevision !== observedCheckout) {
@@ -626,6 +684,11 @@ export function runBudgetCheck({
   if (!revisionClaimEnforced || !revisionEvidence.verified) {
     limitations.push("revision-bound performance evidence");
   }
+  if (revisionEvidence.status === "verified_platform") {
+    limitations.push(
+      "clean checkout provenance outside the platform build environment",
+    );
+  }
   if (revisionClaimEnforced && !revisionEvidence.verified) {
     throw new Error(
       "Revision-bound performance evidence is required: " +
@@ -654,7 +717,9 @@ export function runBudgetCheck({
 export function formatTextReport(result) {
   const sourceRevision = result.source_revision ?? "not available";
   const revisionStatus = result.source_revision_verified
-    ? "verified against checkout"
+    ? result.revision_evidence_status === "verified_platform"
+      ? "verified against platform revision and artifact"
+      : "verified against checkout"
     : result.revision_evidence_status;
   const lines = [
     "build directory: " + result.build_directory,

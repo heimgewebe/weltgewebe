@@ -446,6 +446,75 @@ test("verifies declared revisions against checkout and artifact tree", () => {
     }).status,
     "artifact_tree_mismatch",
   );
+
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { VERCEL_GIT_COMMIT_SHA: revision },
+      checkoutRevision: null,
+      checkoutClean: null,
+      artifactEvidence: verifiedArtifact(),
+    }).status,
+    "invalid",
+  );
+
+  assert.deepEqual(
+    resolveSourceRevisionEvidence({
+      env: { VERCEL: "1", VERCEL_GIT_COMMIT_SHA: revision },
+      checkoutRevision: null,
+      checkoutClean: null,
+      artifactEvidence: verifiedArtifact(),
+    }),
+    {
+      sourceRevision: revision,
+      checkoutRevision: null,
+      verified: true,
+      status: "verified_platform",
+    },
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { VERCEL: "1", VERCEL_GIT_COMMIT_SHA: revision },
+      checkoutRevision: null,
+      checkoutClean: null,
+      artifactEvidence: verifiedArtifact(otherRevision),
+    }).status,
+    "artifact_mismatch",
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { VERCEL: "1", VERCEL_GIT_COMMIT_SHA: revision },
+      checkoutRevision: null,
+      checkoutClean: null,
+      artifactEvidence: {
+        revision,
+        verified: false,
+        status: "artifact_tree_mismatch",
+      },
+    }).status,
+    "artifact_tree_mismatch",
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { VERCEL: "1", VERCEL_GIT_COMMIT_SHA: revision },
+      checkoutRevision: revision,
+      checkoutClean: false,
+      artifactEvidence: verifiedArtifact(),
+    }).status,
+    "dirty",
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: {
+        GIT_COMMIT_SHA: revision,
+        VERCEL: "1",
+        VERCEL_GIT_COMMIT_SHA: otherRevision,
+      },
+      checkoutRevision: null,
+      checkoutClean: null,
+      artifactEvidence: verifiedArtifact(),
+    }).status,
+    "conflicting",
+  );
 });
 
 test("refuses revision binding when the measured checkout is dirty", (t) => {
