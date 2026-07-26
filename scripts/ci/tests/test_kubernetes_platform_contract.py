@@ -1283,6 +1283,17 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         expected_head = proof_workflow["on"]["workflow_dispatch"]["inputs"]["expected_head"]
         self.assertIs(expected_head["required"], True)
         self.assertEqual(expected_head["type"], "string")
+        guard = proof_workflow["jobs"]["dispatch-head-contract"]
+        self.assertEqual(guard["timeout-minutes"], 2)
+        self.assertEqual(proof_workflow["jobs"]["contract"]["needs"], "dispatch-head-contract")
+        guard_step = guard["steps"][0]
+        self.assertEqual(guard_step["env"]["EVENT_NAME"], "${{ github.event_name }}")
+        self.assertEqual(guard_step["env"]["EXPECTED_HEAD"], "${{ inputs.expected_head }}")
+        self.assertEqual(guard_step["env"]["CHECKED_OUT_HEAD"], "${{ github.sha }}")
+        self.assertEqual(guard_step["env"]["CHECKED_OUT_REF"], "${{ github.ref }}")
+        self.assertIn('[[ "$EXPECTED_HEAD" =~ ^[0-9a-f]{40}$ ]]', guard_step["run"])
+        self.assertIn('test "$CHECKED_OUT_REF" = "refs/heads/main"', guard_step["run"])
+        self.assertIn('test "$CHECKED_OUT_HEAD" = "$EXPECTED_HEAD"', guard_step["run"])
 
         for job_name in ("kind-gitops-proof", "kind-ha-recovery-proof"):
             job = proof_workflow["jobs"][job_name]

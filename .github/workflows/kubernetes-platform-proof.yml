@@ -42,7 +42,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  dispatch-head-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require exact main head for manual proofs
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXPECTED_HEAD: ${{ inputs.expected_head }}
+          CHECKED_OUT_HEAD: ${{ github.sha }}
+          CHECKED_OUT_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "workflow_dispatch" ]]; then
+            exit 0
+          fi
+          [[ "$EXPECTED_HEAD" =~ ^[0-9a-f]{40}$ ]]
+          test "$CHECKED_OUT_REF" = "refs/heads/main"
+          test "$CHECKED_OUT_HEAD" = "$EXPECTED_HEAD"
+
   contract:
+    needs: dispatch-head-contract
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

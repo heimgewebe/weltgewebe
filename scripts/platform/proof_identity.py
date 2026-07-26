@@ -416,6 +416,7 @@ def _validate_controlled_oci_proof(
             ("restore_cluster", proof.get("restore_cluster")),
         )
     )
+    platform_digests: dict[str, str] = {}
     for field, expected_cluster_name in cluster_fields:
         receipt = _validate_receipt_header(
             controlled.get(field), label=field, lock_sha256=lock_sha256
@@ -439,6 +440,12 @@ def _validate_controlled_oci_proof(
                 label=field,
                 name=name,
             )
+            platform_digest = observed["platform_target_digest"]
+            prior_platform_digest = platform_digests.setdefault(name, platform_digest)
+            if prior_platform_digest != platform_digest:
+                raise IdentityError(
+                    f"reusable proof cluster OCI platform digest drifted: {name}"
+                )
             if image_nodes is None:
                 image_nodes = current_nodes
             elif current_nodes != image_nodes:
