@@ -844,6 +844,15 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             self.assertIn('echo "::1 $host"', block_step["run"])
             self.assertIn("getent ahostsv4", block_step["run"])
             self.assertIn("getent ahostsv6", block_step["run"])
+            self.assertIn("cp -- /etc/hosts", block_step["run"])
+            self.assertIn("sha256sum", block_step["run"])
+            restore_hosts = steps["Restore OCI registry host resolution"]
+            self.assertEqual(
+                restore_hosts["if"],
+                "always() && steps.proof-cache.outputs.cache-hit != 'true'",
+            )
+            self.assertIn("sudo tee /etc/hosts", restore_hosts["run"])
+            self.assertIn('test "$observed" = "$expected"', restore_hosts["run"])
             offline_step = steps["Verify loaded OCI inputs offline"]
             self.assertIn("verify-host", offline_step["run"])
             self.assertIn(f"--suite {suite}", offline_step["run"])
@@ -883,12 +892,33 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         )
         self.assertNotIn("ha-recovery-oci-mirror", stage_receipt["run"])
         upload_receipt = ha["Upload HA recovery receipt"]
-        self.assertEqual(upload_receipt["if"], "success()")
+        self.assertEqual(
+            upload_receipt["if"],
+            "success() && steps.proof-cache.outputs.cache-hit != 'true'",
+        )
         self.assertIn("ha-recovery-identity.json", upload_receipt["with"]["path"])
         self.assertIn(
             "build/kubernetes-platform/ha-recovery-oci-mirror/*.json",
             upload_receipt["with"]["path"],
         )
+        restored_ha = ha["Upload restored HA recovery receipt"]
+        self.assertEqual(
+            restored_ha["if"],
+            "success() && steps.proof-cache.outputs.cache-hit == 'true'",
+        )
+        self.assertNotIn("ha-recovery-oci-mirror", restored_ha["with"]["path"])
+
+        direct_upload = gitops["Upload direct proof evidence"]
+        self.assertEqual(
+            direct_upload["if"],
+            "success() && steps.proof-cache.outputs.cache-hit != 'true'",
+        )
+        restored_direct = gitops["Upload restored direct proof evidence"]
+        self.assertEqual(
+            restored_direct["if"],
+            "success() && steps.proof-cache.outputs.cache-hit == 'true'",
+        )
+        self.assertNotIn("kind-gitops-oci-mirror", restored_direct["with"]["path"])
 
         for job_name in ("kind-gitops-proof", "kind-ha-recovery-proof"):
             for step in workflow["jobs"][job_name]["steps"]:

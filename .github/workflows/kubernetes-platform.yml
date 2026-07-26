@@ -199,6 +199,13 @@ jobs:
         if: steps.proof-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
+          backup="$RUNNER_TEMP/weltgewebe-kind-hosts.before"
+          digest_file="$backup.sha256"
+          test ! -e "$backup"
+          test ! -e "$digest_file"
+          cp -- /etc/hosts "$backup"
+          chmod 0600 "$backup"
+          sha256sum "$backup" | awk '{print $1}' > "$digest_file"
           for host in \
             registry-1.docker.io auth.docker.io \
             production.cloudflare.docker.com quay.io ghcr.io
@@ -253,7 +260,7 @@ jobs:
             --proof-receipt "$receipt" \
             --output-dir build/kubernetes-platform/reuse/kind-gitops
       - name: Upload direct proof evidence
-        if: success()
+        if: success() && steps.proof-cache.outputs.cache-hit != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: kubernetes-kind-proof-${{ github.run_id }}-${{ github.run_attempt }}
@@ -261,6 +268,16 @@ jobs:
             build/kubernetes-platform/kind-gitops-identity.json
             build/kubernetes-platform/reuse/kind-gitops/*.json
             build/kubernetes-platform/kind-gitops-oci-mirror/*.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload restored direct proof evidence
+        if: success() && steps.proof-cache.outputs.cache-hit == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-kind-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/kubernetes-platform/kind-gitops-identity.json
+            build/kubernetes-platform/reuse/kind-gitops/*.json
           if-no-files-found: error
           retention-days: 14
       - name: Stage failure diagnostics
@@ -281,6 +298,22 @@ jobs:
           path: build/kubernetes-platform/failures/
           if-no-files-found: ignore
           retention-days: 7
+      - name: Restore OCI registry host resolution
+        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          backup="$RUNNER_TEMP/weltgewebe-kind-hosts.before"
+          digest_file="$backup.sha256"
+          if [[ -e "$backup" || -e "$digest_file" ]]; then
+            test -f "$backup"
+            test -f "$digest_file"
+            expected="$(cat "$digest_file")"
+            [[ "$expected" =~ ^[0-9a-f]{64}$ ]]
+            sudo tee /etc/hosts < "$backup" >/dev/null
+            observed="$(sha256sum /etc/hosts | awk '{print $1}')"
+            test "$observed" = "$expected"
+            rm -f -- "$backup" "$digest_file"
+          fi
       - name: Reconcile owned kind proof resources
         if: always() && steps.proof-cache.outputs.cache-hit != 'true'
         run: >-
@@ -388,6 +421,13 @@ jobs:
         if: steps.proof-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
+          backup="$RUNNER_TEMP/weltgewebe-ha-hosts.before"
+          digest_file="$backup.sha256"
+          test ! -e "$backup"
+          test ! -e "$digest_file"
+          cp -- /etc/hosts "$backup"
+          chmod 0600 "$backup"
+          sha256sum "$backup" | awk '{print $1}' > "$digest_file"
           for host in \
             registry-1.docker.io auth.docker.io \
             production.cloudflare.docker.com quay.io ghcr.io
@@ -441,7 +481,7 @@ jobs:
           cp -- build/kubernetes-platform/reuse/ha-recovery/proof.json \
             build/kubernetes-platform/ha-recovery/proof.json
       - name: Upload HA recovery receipt
-        if: success()
+        if: success() && steps.proof-cache.outputs.cache-hit != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: kubernetes-ha-recovery-${{ github.run_id }}-${{ github.run_attempt }}
@@ -450,6 +490,17 @@ jobs:
             build/kubernetes-platform/reuse/ha-recovery/record.json
             build/kubernetes-platform/ha-recovery/proof.json
             build/kubernetes-platform/ha-recovery-oci-mirror/*.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload restored HA recovery receipt
+        if: success() && steps.proof-cache.outputs.cache-hit == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-ha-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/kubernetes-platform/ha-recovery-identity.json
+            build/kubernetes-platform/reuse/ha-recovery/record.json
+            build/kubernetes-platform/ha-recovery/proof.json
           if-no-files-found: error
           retention-days: 14
       - name: Stage HA failure diagnostics
@@ -470,6 +521,22 @@ jobs:
           path: build/kubernetes-platform/failures/
           if-no-files-found: ignore
           retention-days: 14
+      - name: Restore OCI registry host resolution
+        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          backup="$RUNNER_TEMP/weltgewebe-ha-hosts.before"
+          digest_file="$backup.sha256"
+          if [[ -e "$backup" || -e "$digest_file" ]]; then
+            test -f "$backup"
+            test -f "$digest_file"
+            expected="$(cat "$digest_file")"
+            [[ "$expected" =~ ^[0-9a-f]{64}$ ]]
+            sudo tee /etc/hosts < "$backup" >/dev/null
+            observed="$(sha256sum /etc/hosts | awk '{print $1}')"
+            test "$observed" = "$expected"
+            rm -f -- "$backup" "$digest_file"
+          fi
       - name: Reconcile owned HA proof resources
         if: always() && steps.proof-cache.outputs.cache-hit != 'true'
         run: >-
