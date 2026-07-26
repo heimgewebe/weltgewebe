@@ -12,6 +12,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { parseCliArguments } from "./assert-route-performance-budget.mjs";
+import {
+  computeBuildArtifactTree,
+  readBuildArtifactEvidence,
+} from "./build-artifact-evidence.mjs";
 import { defaultPerformanceContractPath } from "./performance-contract.mjs";
 import {
   parsePerformanceBudget,
@@ -335,16 +339,23 @@ test("enforces configurable emitted asset directories and regular files", (t) =>
   );
 });
 
-test("verifies declared revisions against the measured checkout", () => {
+test("verifies declared revisions against checkout and artifact tree", () => {
   const revision = "a".repeat(40);
   const otherRevision = "b".repeat(40);
+  const verifiedArtifact = (value = revision) => ({
+    revision: value,
+    verified: true,
+    status: "verified",
+    treeSha256: "c".repeat(64),
+    fileCount: 3,
+  });
 
   assert.deepEqual(
     resolveSourceRevisionEvidence({
       env: { GIT_COMMIT_SHA: "", GITHUB_SHA: revision },
       checkoutRevision: revision,
       checkoutClean: true,
-      artifactRevision: revision,
+      artifactEvidence: verifiedArtifact(),
     }),
     {
       sourceRevision: revision,
@@ -355,8 +366,26 @@ test("verifies declared revisions against the measured checkout", () => {
   );
   assert.equal(
     resolveSourceRevisionEvidence({
+      env: {},
+      checkoutRevision: revision,
+      checkoutClean: true,
+      artifactEvidence: verifiedArtifact(),
+    }).status,
+    "verified",
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: {},
+      checkoutRevision: revision,
+      checkoutClean: true,
+    }).status,
+    "missing",
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({
       env: { GIT_COMMIT_SHA: "unknown", GITHUB_SHA: revision },
       checkoutRevision: revision,
+      artifactEvidence: verifiedArtifact(),
     }).status,
     "invalid",
   );
@@ -364,6 +393,7 @@ test("verifies declared revisions against the measured checkout", () => {
     resolveSourceRevisionEvidence({
       env: { GIT_COMMIT_SHA: revision, GITHUB_SHA: otherRevision },
       checkoutRevision: revision,
+      artifactEvidence: verifiedArtifact(),
     }).status,
     "conflicting",
   );
@@ -372,7 +402,7 @@ test("verifies declared revisions against the measured checkout", () => {
       env: { GIT_COMMIT_SHA: revision },
       checkoutRevision: otherRevision,
       checkoutClean: true,
-      artifactRevision: revision,
+      artifactEvidence: verifiedArtifact(),
     }).status,
     "mismatch",
   );
@@ -381,25 +411,16 @@ test("verifies declared revisions against the measured checkout", () => {
       env: { GIT_COMMIT_SHA: revision },
       checkoutRevision: null,
       checkoutClean: null,
-      artifactRevision: revision,
+      artifactEvidence: verifiedArtifact(),
     }).status,
     "unverifiable",
-  );
-  assert.equal(
-    resolveSourceRevisionEvidence({
-      env: {},
-      checkoutRevision: revision,
-      checkoutClean: true,
-      artifactRevision: revision,
-    }).status,
-    "missing",
   );
   assert.equal(
     resolveSourceRevisionEvidence({
       env: { GIT_COMMIT_SHA: revision },
       checkoutRevision: revision,
       checkoutClean: false,
-      artifactRevision: revision,
+      artifactEvidence: verifiedArtifact(),
     }).status,
     "dirty",
   );
@@ -408,7 +429,7 @@ test("verifies declared revisions against the measured checkout", () => {
       env: { GIT_COMMIT_SHA: revision },
       checkoutRevision: revision,
       checkoutClean: true,
-      artifactRevision: otherRevision,
+      artifactEvidence: verifiedArtifact(otherRevision),
     }).status,
     "artifact_mismatch",
   );
@@ -417,9 +438,13 @@ test("verifies declared revisions against the measured checkout", () => {
       env: { GIT_COMMIT_SHA: revision },
       checkoutRevision: revision,
       checkoutClean: true,
-      artifactRevision: null,
+      artifactEvidence: {
+        revision,
+        verified: false,
+        status: "artifact_tree_mismatch",
+      },
     }).status,
-    "artifact_unverifiable",
+    "artifact_tree_mismatch",
   );
 });
 
@@ -444,11 +469,16 @@ test("refuses revision binding when the measured checkout is dirty", (t) => {
     ["-C", root, "rev-parse", "--verify", "HEAD"],
     { encoding: "utf8" },
   ).stdout.trim();
+  const artifactEvidence = {
+    revision,
+    verified: true,
+    status: "verified",
+  };
   assert.equal(
     resolveSourceRevisionEvidence({
       env: { GIT_COMMIT_SHA: revision },
       root,
-      artifactRevision: revision,
+      artifactEvidence,
     }).status,
     "verified",
   );
@@ -458,25 +488,125 @@ test("refuses revision binding when the measured checkout is dirty", (t) => {
     resolveSourceRevisionEvidence({
       env: { GIT_COMMIT_SHA: revision },
       root,
-      artifactRevision: revision,
+      artifactEvidence,
     }).status,
     "dirty",
   );
 });
 
-test("reads only a valid embedded build revision", (t) => {
+test("binds embedded revision to the complete generated build tree", (t) => {
   const root = temporaryDirectory(t, "route-budget-version-");
   const appDirectory = join(root, "_app");
-  mkdirSync(appDirectory);
+  mkdirSync(join(appDirectory, "immutable"), { recursive: true });
   const revision = "c".repeat(40);
   const versionPath = join(appDirectory, "version.json");
-  writeFileSync(versionPath, JSON.stringify({ commit: revision }));
-  assert.equal(readBuildRevisionEvidence(root), revision);
+  const assetPath = join(appDirectory, "immutable/app.js");
+  writeFileSync(join(root, "index.html"), "<main>Weltgewebe</main>\n");
+  writeFileSync(assetPath, "export const build = 1;\n");
+  const tree = computeBuildArtifactTree(root);
+  writeFileSync(
+    versionPath,
+    JSON.stringify({
+      commit: revision,
+      artifact_tree: {
+        schema_version: tree.schemaVersion,
+        sha256: tree.sha256,
+        file_count: tree.fileCount,
+      },
+    }),
+  );
 
-  writeFileSync(versionPath, JSON.stringify({ commit: "unknown" }));
-  assert.equal(readBuildRevisionEvidence(root), null);
-  rmSync(versionPath);
-  assert.equal(readBuildRevisionEvidence(root), null);
+  assert.match(tree.sha256, /^[0-9a-f]{64}$/);
+  assert.equal(readBuildRevisionEvidence(root), revision);
+  assert.deepEqual(readBuildArtifactEvidence(root), {
+    revision,
+    verified: true,
+    status: "verified",
+    treeSha256: tree.sha256,
+    observedTreeSha256: tree.sha256,
+    fileCount: tree.fileCount,
+    observedFileCount: tree.fileCount,
+  });
+
+  writeFileSync(assetPath, "export const build = 2;\n");
+  assert.equal(
+    readBuildArtifactEvidence(root).status,
+    "artifact_tree_mismatch",
+  );
+});
+
+test("normal checks fail closed while report-only exposes revision gaps", (t) => {
+  const root = temporaryDirectory(t, "route-budget-gate-");
+  const buildDir = join(root, "build");
+  mkdirSync(join(buildDir, "_app"), { recursive: true });
+  writeFileSync(
+    join(buildDir, "login.html"),
+    '<link rel="modulepreload" href="./_app/app.js"><link rel="stylesheet" href="./_app/app.css">',
+  );
+  writeFileSync(join(buildDir, "_app/app.js"), "export const ok = true;\n");
+  writeFileSync(join(buildDir, "_app/app.css"), ".login{display:block}\n");
+
+  const contract = JSON.parse(readFileSync(defaultPerformanceContractPath));
+  contract.measurements.web_build.budget = validBudget({
+    output_directories: ["build"],
+  });
+  const budgetPath = join(root, "performance.v1.json");
+  writeFileSync(budgetPath, JSON.stringify(contract));
+  const revision = "d".repeat(40);
+  const mismatchedEvidence = {
+    revision,
+    verified: false,
+    status: "artifact_tree_mismatch",
+  };
+
+  assert.throws(
+    () =>
+      runBudgetCheck({
+        buildDir,
+        budgetPath,
+        contractRoot: root,
+        revisionEnvironment: { GIT_COMMIT_SHA: revision },
+        checkoutRevision: revision,
+        checkoutClean: true,
+        buildEvidence: mismatchedEvidence,
+      }),
+    /Revision-bound performance evidence is required: artifact_tree_mismatch/,
+  );
+
+  const budgetOnly = runBudgetCheck({
+    buildDir,
+    budgetPath,
+    contractRoot: root,
+    requireRevisionEvidence: false,
+    revisionEnvironment: { GIT_COMMIT_SHA: revision },
+    checkoutRevision: null,
+    checkoutClean: null,
+    buildEvidence: mismatchedEvidence,
+  });
+  assert.equal(budgetOnly.report_only, false);
+  assert.equal(budgetOnly.revision_evidence_required, false);
+  assert.equal(budgetOnly.source_revision_verified, false);
+  assert.ok(
+    budgetOnly.does_not_establish.includes(
+      "revision-bound performance evidence",
+    ),
+  );
+
+  const report = runBudgetCheck({
+    buildDir,
+    budgetPath,
+    contractRoot: root,
+    reportOnly: true,
+    revisionEnvironment: { GIT_COMMIT_SHA: revision },
+    checkoutRevision: revision,
+    checkoutClean: true,
+    buildEvidence: mismatchedEvidence,
+  });
+  assert.equal(report.source_revision_verified, false);
+  assert.equal(report.revision_evidence_status, "artifact_tree_mismatch");
+  assert.ok(
+    report.does_not_establish.includes("revision-bound performance evidence"),
+  );
 });
 
 test("prints revision and evidence limitations in the default report", () => {
@@ -517,20 +647,28 @@ test("route checks reject contracts reached through symlinked parents", (t) => {
         revisionEnvironment: {},
         checkoutRevision: null,
       }),
-    /escapes repository root/,
+    /path contains symbolic link: redirect/,
   );
 });
 
 test("parses CLI arguments without silent or duplicate options", () => {
   assert.deepEqual(
-    parseCliArguments(["--build-dir", "build", "--report-only", "--json"]),
+    parseCliArguments([
+      "--budget-only",
+      "--build-dir",
+      "build",
+      "--report-only",
+      "--json",
+    ]),
     {
+      budgetOnly: true,
       buildDir: "build",
       json: true,
       reportOnly: true,
     },
   );
   assert.deepEqual(parseCliArguments(["--build-dir=build"]), {
+    budgetOnly: false,
     buildDir: "build",
     json: false,
     reportOnly: false,

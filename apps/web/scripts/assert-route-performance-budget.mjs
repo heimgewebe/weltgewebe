@@ -11,13 +11,19 @@ const scriptPath = fileURLToPath(import.meta.url);
 
 export function parseCliArguments(arguments_) {
   const result = {
+    budgetOnly: false,
     buildDir: undefined,
     json: false,
     reportOnly: false,
   };
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
-    if (argument === "--json") {
+    if (argument === "--budget-only") {
+      if (result.budgetOnly) {
+        throw new Error("--budget-only may only be provided once");
+      }
+      result.budgetOnly = true;
+    } else if (argument === "--json") {
       if (result.json) throw new Error("--json may only be provided once");
       result.json = true;
     } else if (argument === "--report-only") {
@@ -58,6 +64,7 @@ export function main(arguments_ = process.argv.slice(2)) {
         : resolve(webRoot, options.buildDir)
       : undefined,
     reportOnly: options.reportOnly,
+    requireRevisionEvidence: !options.budgetOnly,
   });
   console.log(
     options.json ? JSON.stringify(result, null, 2) : formatTextReport(result),

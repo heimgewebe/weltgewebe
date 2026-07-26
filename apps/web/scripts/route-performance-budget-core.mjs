@@ -10,6 +10,7 @@ import {
 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
+import { readBuildArtifactEvidence } from "./build-artifact-evidence.mjs";
 import {
   assertSafeRelativeDirectory,
   routeIdToHtmlFile,
@@ -30,25 +31,7 @@ const defaultBudgetPath = resolve(
 const SOURCE_REVISION_PATTERN = /^[0-9a-f]{40}$/;
 
 export function readBuildRevisionEvidence(buildDir) {
-  try {
-    const payload = JSON.parse(
-      readRegularFile(
-        resolve(buildDir, "_app/version.json"),
-        "Build revision evidence",
-        buildDir,
-      ).toString("utf8"),
-    );
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-      return null;
-    }
-    const revision =
-      typeof payload.commit === "string"
-        ? payload.commit.trim().toLowerCase()
-        : "";
-    return SOURCE_REVISION_PATTERN.test(revision) ? revision : null;
-  } catch {
-    return null;
-  }
+  return readBuildArtifactEvidence(buildDir).revision;
 }
 
 function readCheckoutState(root) {
@@ -85,7 +68,9 @@ export function resolveSourceRevisionEvidence({
   root = performanceRepositoryRoot,
   checkoutRevision,
   checkoutClean,
+  artifactEvidence,
   artifactRevision,
+  artifactTreeVerified,
 } = {}) {
   const declared = [];
   const invalidVariables = [];
@@ -100,8 +85,50 @@ export function resolveSourceRevisionEvidence({
     declared.push(value);
   }
 
+  const suppliedArtifactEvidence =
+    artifactEvidence &&
+    typeof artifactEvidence === "object" &&
+    !Array.isArray(artifactEvidence)
+      ? artifactEvidence
+      : {
+          revision: artifactRevision,
+          verified: artifactTreeVerified === true,
+          status:
+            artifactTreeVerified === true
+              ? "verified"
+              : "artifact_unverifiable",
+        };
+  const observedArtifact =
+    typeof suppliedArtifactEvidence.revision === "string" &&
+    SOURCE_REVISION_PATTERN.test(
+      suppliedArtifactEvidence.revision.trim().toLowerCase(),
+    )
+      ? suppliedArtifactEvidence.revision.trim().toLowerCase()
+      : null;
+  const artifactStatus =
+    typeof suppliedArtifactEvidence.status === "string"
+      ? suppliedArtifactEvidence.status
+      : "artifact_unverifiable";
+
   const distinct = [...new Set(declared)];
-  const sourceRevision = distinct.length === 1 ? distinct[0] : null;
+  if (invalidVariables.length > 0) {
+    return {
+      sourceRevision: distinct.length === 1 ? distinct[0] : null,
+      checkoutRevision: null,
+      verified: false,
+      status: "invalid",
+    };
+  }
+  if (distinct.length > 1) {
+    return {
+      sourceRevision: null,
+      checkoutRevision: null,
+      verified: false,
+      status: "conflicting",
+    };
+  }
+  const sourceRevision = distinct.length === 1 ? distinct[0] : observedArtifact;
+
   const observedState =
     checkoutRevision === undefined || checkoutClean === undefined
       ? readCheckoutState(root)
@@ -119,29 +146,7 @@ export function resolveSourceRevisionEvidence({
       : typeof checkoutClean === "boolean"
         ? checkoutClean
         : null;
-  const artifactWasProvided = artifactRevision !== undefined;
-  const observedArtifact =
-    typeof artifactRevision === "string" &&
-    SOURCE_REVISION_PATTERN.test(artifactRevision.trim().toLowerCase())
-      ? artifactRevision.trim().toLowerCase()
-      : null;
 
-  if (invalidVariables.length > 0) {
-    return {
-      sourceRevision,
-      checkoutRevision: observedCheckout,
-      verified: false,
-      status: "invalid",
-    };
-  }
-  if (distinct.length > 1) {
-    return {
-      sourceRevision: null,
-      checkoutRevision: observedCheckout,
-      verified: false,
-      status: "conflicting",
-    };
-  }
   if (!sourceRevision) {
     return {
       sourceRevision: null,
@@ -179,10 +184,7 @@ export function resolveSourceRevisionEvidence({
       sourceRevision,
       checkoutRevision: observedCheckout,
       verified: false,
-      status:
-        artifactWasProvided && artifactRevision !== null
-          ? "artifact_invalid"
-          : "artifact_unverifiable",
+      status: artifactStatus,
     };
   }
   if (observedArtifact !== sourceRevision) {
@@ -191,6 +193,14 @@ export function resolveSourceRevisionEvidence({
       checkoutRevision: observedCheckout,
       verified: false,
       status: "artifact_mismatch",
+    };
+  }
+  if (suppliedArtifactEvidence.verified !== true) {
+    return {
+      sourceRevision,
+      checkoutRevision: observedCheckout,
+      verified: false,
+      status: artifactStatus,
     };
   }
   return {
@@ -541,10 +551,11 @@ export function runBudgetCheck({
   budgetPath = defaultBudgetPath,
   contractRoot = performanceRepositoryRoot,
   reportOnly = false,
+  requireRevisionEvidence = true,
   revisionEnvironment = process.env,
   checkoutRevision,
   checkoutClean,
-  buildRevision,
+  buildEvidence,
 } = {}) {
   const contract = loadPerformanceContract({
     contractPath: budgetPath,
@@ -596,19 +607,26 @@ export function runBudgetCheck({
     );
   }
   if (errors.length > 0) throw new Error(errors.join("\n"));
+  const artifactEvidence =
+    buildEvidence === undefined
+      ? readBuildArtifactEvidence(resolvedBuildDir)
+      : buildEvidence;
   const revisionEvidence = resolveSourceRevisionEvidence({
     env: revisionEnvironment,
     root: contractRoot,
     checkoutRevision,
     checkoutClean,
-    artifactRevision:
-      buildRevision === undefined
-        ? readBuildRevisionEvidence(resolvedBuildDir)
-        : buildRevision,
+    artifactEvidence,
   });
   const limitations = [...contract.authority.does_not_establish];
   if (!revisionEvidence.verified) {
     limitations.push("revision-bound performance evidence");
+    if (!reportOnly && requireRevisionEvidence) {
+      throw new Error(
+        "Revision-bound performance evidence is required: " +
+          revisionEvidence.status,
+      );
+    }
   }
   return {
     schema_version: 2,
@@ -617,9 +635,12 @@ export function runBudgetCheck({
     source_revision: revisionEvidence.sourceRevision,
     source_revision_verified: revisionEvidence.verified,
     revision_evidence_status: revisionEvidence.status,
+    artifact_tree_sha256: artifactEvidence.treeSha256 ?? null,
+    artifact_file_count: artifactEvidence.fileCount ?? null,
     build_directory: resolvedBuildDir,
     measurement: parsed.measurement,
     report_only: reportOnly,
+    revision_evidence_required: requireRevisionEvidence,
     does_not_establish: [...new Set(limitations)],
     routes: reports,
   };

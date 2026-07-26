@@ -138,11 +138,11 @@ test("packages the canonical contract before the Docker web build", () => {
   const contractCopy =
     "COPY policies/performance.v1.json /policies/performance.v1.json";
   const copyIndex = dockerfile.indexOf(contractCopy);
-  const buildIndex = dockerfile.indexOf("pnpm build");
+  const buildIndex = dockerfile.indexOf("pnpm run build:container");
   assert.ok(copyIndex >= 0, "Docker builder must copy the canonical contract");
   assert.ok(
     buildIndex >= 0 && copyIndex < buildIndex,
-    "Docker builder must copy the canonical contract before pnpm build",
+    "Docker builder must copy the canonical contract before the container build",
   );
 });
 
@@ -279,7 +279,27 @@ test("rejects a canonical contract reached through a symlinked parent", (t) => {
         contractPath: join(root, "redirect/performance.v1.json"),
         root,
       }),
-    /escapes repository root/,
+    /path contains symbolic link: redirect/,
+  );
+});
+
+test("rejects same-root symlink parents for the canonical contract", (t) => {
+  const root = temporaryDirectory(t);
+  const canonical = join(root, "canonical");
+  mkdirSync(canonical);
+  writeFileSync(
+    join(canonical, "performance.v1.json"),
+    JSON.stringify(validContract()),
+  );
+  symlinkSync(canonical, join(root, "redirect"), "dir");
+
+  assert.throws(
+    () =>
+      loadPerformanceContract({
+        contractPath: join(root, "redirect/performance.v1.json"),
+        root,
+      }),
+    /path contains symbolic link: redirect/,
   );
 });
 
@@ -294,6 +314,6 @@ test("rejects a symlinked canonical contract", (t) => {
 
   assert.throws(
     () => loadPerformanceContract({ contractPath, root }),
-    /must be a regular file/,
+    /path contains symbolic link: policies\/performance\.v1\.json/,
   );
 });

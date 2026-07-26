@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
+import { computeBuildArtifactTree } from "./build-artifact-evidence.mjs";
 
 const args = process.argv.slice(2);
 const allowedArgs = ["--client", "--server"];
@@ -15,7 +16,8 @@ if (unknownArgs.length > 0) {
 const writeClient = args.length === 0 || args.includes("--client");
 const writeServer = args.length === 0 || args.includes("--server");
 
-const targetFile = path.resolve(process.cwd(), "build/_app/version.json");
+const buildDir = path.resolve(process.cwd(), "build");
+const targetFile = path.join(buildDir, "_app/version.json");
 const targetDir = path.dirname(targetFile);
 const clientDir = path.resolve(process.cwd(), "src/lib/generated");
 const clientFile = path.join(clientDir, "buildVersion.json");
@@ -72,8 +74,27 @@ if (commit) payload.commit = commit;
 
 const filesWritten = [];
 if (writeServer) {
+  if (!commit) {
+    console.error(
+      "ERROR: Server build identity requires a canonical Git commit.",
+    );
+    process.exit(1);
+  }
+  const artifactTree = computeBuildArtifactTree(buildDir);
+  const serverPayload = {
+    ...payload,
+    artifact_tree: {
+      schema_version: artifactTree.schemaVersion,
+      sha256: artifactTree.sha256,
+      file_count: artifactTree.fileCount,
+    },
+  };
   fs.mkdirSync(targetDir, { recursive: true });
-  fs.writeFileSync(targetFile, JSON.stringify(payload, null, 2) + "\n", "utf8");
+  fs.writeFileSync(
+    targetFile,
+    JSON.stringify(serverPayload, null, 2) + "\n",
+    "utf8",
+  );
   filesWritten.push(targetFile);
 }
 if (writeClient) {

@@ -393,10 +393,38 @@ export function assertLegacyContractsAbsent(contract, root = repositoryRoot) {
 function readPerformanceContractFile(contractPath, root) {
   const resolvedRoot = realpathSync(resolve(root));
   const resolvedContract = resolve(contractPath);
-  const metadata = lstatSync(resolvedContract);
-  if (!metadata.isFile() || metadata.isSymbolicLink()) {
-    throw new Error("Performance contract must be a regular file");
+  const lexicalFromRoot = relative(resolvedRoot, resolvedContract);
+  if (
+    lexicalFromRoot === "" ||
+    lexicalFromRoot === ".." ||
+    lexicalFromRoot.startsWith(`..${sep}`) ||
+    isAbsolute(lexicalFromRoot)
+  ) {
+    throw new Error("Performance contract escapes repository root");
   }
+
+  const components = lexicalFromRoot.split(sep);
+  let current = resolvedRoot;
+  for (let index = 0; index < components.length; index += 1) {
+    current = resolve(current, components[index]);
+    const metadata = lstatSync(current);
+    const component = relative(resolvedRoot, current);
+    if (metadata.isSymbolicLink()) {
+      throw new Error(
+        `Performance contract path contains symbolic link: ${component}`,
+      );
+    }
+    const isLeaf = index === components.length - 1;
+    if (!isLeaf && !metadata.isDirectory()) {
+      throw new Error(
+        `Performance contract path has non-directory ancestor: ${component}`,
+      );
+    }
+    if (isLeaf && !metadata.isFile()) {
+      throw new Error("Performance contract must be a regular file");
+    }
+  }
+
   const realContract = realpathSync(resolvedContract);
   const fromRoot = relative(resolvedRoot, realContract);
   if (
