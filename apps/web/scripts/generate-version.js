@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import { computeBuildArtifactTree } from "./build-artifact-evidence.mjs";
+import { resolveConfiguredBuildDirectory } from "./route-performance-budget-core.mjs";
 
 const args = process.argv.slice(2);
 const allowedArgs = ["--client", "--server", "--artifact-tree"];
@@ -24,9 +25,7 @@ if (bindArtifactTree && !args.includes("--server")) {
   process.exit(1);
 }
 
-const buildDir = path.resolve(process.cwd(), "build");
-const targetFile = path.join(buildDir, "_app/version.json");
-const targetDir = path.dirname(targetFile);
+const defaultBuildDir = path.resolve(process.cwd(), "build");
 const clientDir = path.resolve(process.cwd(), "src/lib/generated");
 const clientFile = path.join(clientDir, "buildVersion.json");
 const clientModuleFile = path.join(clientDir, "buildVersion.ts");
@@ -124,10 +123,14 @@ if (writeServer) {
     process.exit(1);
   }
   let serverPayload = payload;
+  let serverBuildDir = defaultBuildDir;
   if (bindArtifactTree) {
     let artifactTree;
     try {
-      artifactTree = computeBuildArtifactTree(buildDir);
+      serverBuildDir = resolveConfiguredBuildDirectory({
+        root: process.cwd(),
+      });
+      artifactTree = computeBuildArtifactTree(serverBuildDir);
     } catch (error) {
       console.error(
         `ERROR: Could not bind the completed build artifact: ${error.message}`,
@@ -153,10 +156,12 @@ if (writeServer) {
         sha256: artifactTree.sha256,
         file_count: artifactTree.fileCount,
         compile_revision: artifactTree.compileRevision,
+        provenance: "unattested",
       },
     };
   }
-  fs.mkdirSync(targetDir, { recursive: true });
+  const targetFile = path.join(serverBuildDir, "_app/version.json");
+  fs.mkdirSync(path.dirname(targetFile), { recursive: true });
   fs.writeFileSync(
     targetFile,
     JSON.stringify(serverPayload, null, 2) + "\n",

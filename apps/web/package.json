@@ -29,7 +29,7 @@
     "build": "vite build",
     "build:container": "pnpm run sync && rimraf build && vite build && node scripts/generate-version.js --server --artifact-tree && node scripts/assert-route-performance-budget.mjs --budget-only",
     "prebuild": "pnpm run sync && rimraf build",
-    "postbuild": "node scripts/generate-version.js --server --artifact-tree && node scripts/assert-route-performance-budget.mjs",
+    "postbuild": "node scripts/generate-version.js --server --artifact-tree && node scripts/assert-route-performance-budget.mjs --budget-only",
     "preview": "vite preview",
     "clean": "rimraf node_modules .svelte-kit build",
     "postinstall": "node ./scripts/verify-cookie-version.js",

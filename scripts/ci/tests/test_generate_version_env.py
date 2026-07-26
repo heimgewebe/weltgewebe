@@ -21,12 +21,29 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
         *,
         bind_artifact_tree: bool = False,
         build_files: dict[str, str] | None = None,
+        output_directory: str = "build",
+        populate_complete_output: bool = True,
     ) -> tuple[subprocess.CompletedProcess[str], Path]:
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
-        for relative_path, contents in (build_files or {}).items():
-            target = root / "build" / relative_path
+        files: dict[str, str] = {}
+        if bind_artifact_tree and populate_complete_output:
+            files.update(
+                {
+                    "login.html": "<main>login</main>\n",
+                    "antraege.html": "<main>antraege</main>\n",
+                    "settings.html": "<main>settings</main>\n",
+                    "map.html": "<main>map</main>\n",
+                    "_app/compile-revision.json": json.dumps(
+                        {"schema_version": 1, "compile_revision": commit}
+                    )
+                    + "\n",
+                }
+            )
+        files.update(build_files or {})
+        for relative_path, contents in files.items():
+            target = root / output_directory / relative_path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(contents, encoding="utf-8")
         env = os.environ.copy()
@@ -51,7 +68,8 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
             capture_output=True,
             check=False,
         )
-        return result, root / "build" / "_app" / "version.json"
+        version_root = output_directory if bind_artifact_tree else "build"
+        return result, root / version_root / "_app" / "version.json"
 
     def test_explicit_commit_produces_deterministic_identity_without_git(self) -> None:
         result, version_file = self.run_generator(self.commit)
@@ -194,20 +212,65 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
             build_files={
                 "index.html": "<main>Weltgewebe</main>\n",
                 "_app/immutable/app.js": "export const ready = true;\n",
-                "_app/compile-revision.json": json.dumps(
-                    {"schema_version": 1, "compile_revision": self.commit}
-                )
-                + "\n",
             },
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(version_file.read_text(encoding="utf-8"))
         self.assertEqual(payload["artifact_tree"]["schema_version"], 1)
         self.assertRegex(payload["artifact_tree"]["sha256"], r"^[0-9a-f]{64}$")
-        self.assertEqual(payload["artifact_tree"]["file_count"], 3)
+        self.assertEqual(payload["artifact_tree"]["file_count"], 7)
         self.assertEqual(
             payload["artifact_tree"]["compile_revision"], self.commit
         )
+        self.assertEqual(payload["artifact_tree"]["provenance"], "unattested")
+
+    def test_artifact_tree_binding_selects_vercel_static_output(self) -> None:
+        result, version_file = self.run_generator(
+            self.commit,
+            bind_artifact_tree=True,
+            output_directory=".vercel/output/static",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(version_file.is_file())
+        payload = json.loads(version_file.read_text(encoding="utf-8"))
+        self.assertEqual(payload["commit"], self.commit)
+        self.assertEqual(payload["artifact_tree"]["provenance"], "unattested")
+
+    def test_artifact_tree_binding_rejects_ambiguous_complete_outputs(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        for output_directory in ("build", ".vercel/output/static"):
+            for route in ("login.html", "antraege.html", "settings.html", "map.html"):
+                target = root / output_directory / route
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("<main>complete</main>\n", encoding="utf-8")
+            marker = root / output_directory / "_app" / "compile-revision.json"
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text(
+                json.dumps(
+                    {"schema_version": 1, "compile_revision": self.commit}
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        env = os.environ.copy()
+        env.update(
+            {
+                "GIT_COMMIT_SHA": self.commit,
+                "SOURCE_DATE_EPOCH": "1784139708",
+            }
+        )
+        result = subprocess.run(
+            ["node", str(SCRIPT), "--server", "--artifact-tree"],
+            cwd=root,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Multiple complete route build directories", result.stderr)
 
     def test_stale_client_build_cannot_be_relabelled(self) -> None:
         stale_commit = "a" * 40
@@ -228,7 +291,9 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
 
     def test_artifact_tree_binding_fails_without_a_completed_build(self) -> None:
         result, version_file = self.run_generator(
-            self.commit, bind_artifact_tree=True
+            self.commit,
+            bind_artifact_tree=True,
+            populate_complete_output=False,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(version_file.exists())

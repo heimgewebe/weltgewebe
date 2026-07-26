@@ -146,7 +146,8 @@ export function readBuildArtifactEvidence(buildDir) {
     declared.file_count < 1 ||
     typeof declared.compile_revision !== "string" ||
     !REVISION_PATTERN.test(declared.compile_revision) ||
-    declared.compile_revision !== revision
+    declared.compile_revision !== revision ||
+    declared.provenance !== "unattested"
   ) {
     return { revision, verified: false, status: "artifact_unverifiable" };
   }
@@ -178,5 +179,7 @@ export function readBuildArtifactEvidence(buildDir) {
     observedFileCount: observed.fileCount,
     compileRevision: declared.compile_revision,
     observedCompileRevision: observed.compileRevision,
+    provenanceVerified: false,
+    provenanceStatus: "unattested",
   };
 }

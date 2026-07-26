@@ -339,7 +339,7 @@ test("enforces configurable emitted asset directories and regular files", (t) =>
   );
 });
 
-test("verifies declared revisions against checkout and artifact tree", () => {
+test("reports artifact consistency without claiming source provenance", () => {
   const revision = "a".repeat(40);
   const otherRevision = "b".repeat(40);
   const verifiedArtifact = (value = revision) => ({
@@ -360,8 +360,8 @@ test("verifies declared revisions against checkout and artifact tree", () => {
     {
       sourceRevision: revision,
       checkoutRevision: revision,
-      verified: true,
-      status: "verified",
+      verified: false,
+      status: "artifact_consistent_unattested",
     },
   );
   assert.equal(
@@ -371,7 +371,7 @@ test("verifies declared revisions against checkout and artifact tree", () => {
       checkoutClean: true,
       artifactEvidence: verifiedArtifact(),
     }).status,
-    "verified",
+    "artifact_consistent_unattested",
   );
   assert.equal(
     resolveSourceRevisionEvidence({
@@ -467,8 +467,8 @@ test("verifies declared revisions against checkout and artifact tree", () => {
     {
       sourceRevision: revision,
       checkoutRevision: null,
-      verified: true,
-      status: "verified_platform",
+      verified: false,
+      status: "platform_artifact_consistent_unattested",
     },
   );
   assert.equal(
@@ -549,7 +549,7 @@ test("refuses revision binding when the measured checkout is dirty", (t) => {
       root,
       artifactEvidence,
     }).status,
-    "verified",
+    "artifact_consistent_unattested",
   );
 
   writeFileSync(input, "modified\n");
@@ -586,6 +586,7 @@ test("binds embedded revision to the complete generated build tree", (t) => {
         sha256: tree.sha256,
         file_count: tree.fileCount,
         compile_revision: tree.compileRevision,
+        provenance: "unattested",
       },
     }),
   );
@@ -602,6 +603,8 @@ test("binds embedded revision to the complete generated build tree", (t) => {
     observedFileCount: tree.fileCount,
     compileRevision: revision,
     observedCompileRevision: revision,
+    provenanceVerified: false,
+    provenanceStatus: "unattested",
   });
 
   writeFileSync(assetPath, "export const build = 2;\n");
@@ -669,6 +672,20 @@ test("normal checks fail closed while report-only exposes revision gaps", (t) =>
     /Revision-bound performance evidence is required: artifact_tree_mismatch/,
   );
 
+  assert.throws(
+    () =>
+      runBudgetCheck({
+        buildDir,
+        budgetPath,
+        contractRoot: root,
+        revisionEnvironment: { GIT_COMMIT_SHA: revision },
+        checkoutRevision: revision,
+        checkoutClean: true,
+        buildEvidence: verifiedEvidence,
+      }),
+    /Revision-bound performance evidence is required: artifact_consistent_unattested/,
+  );
+
   const budgetOnly = runBudgetCheck({
     buildDir,
     budgetPath,
@@ -729,7 +746,10 @@ test("normal checks fail closed while report-only exposes revision gaps", (t) =>
     });
     assert.equal(nonGating.source_revision_verified, false);
     assert.equal(nonGating.revision_evidence_status, "not_enforced");
-    assert.equal(nonGating.observed_revision_evidence_status, "verified");
+    assert.equal(
+      nonGating.observed_revision_evidence_status,
+      "artifact_consistent_unattested",
+    );
     assert.ok(
       nonGating.does_not_establish.includes(
         "revision-bound performance evidence",

@@ -217,8 +217,8 @@ export function resolveSourceRevisionEvidence({
     return {
       sourceRevision,
       checkoutRevision: null,
-      verified: true,
-      status: "verified_platform",
+      verified: false,
+      status: "platform_artifact_consistent_unattested",
     };
   }
   if (sourceRevision !== observedCheckout) {
@@ -264,8 +264,8 @@ export function resolveSourceRevisionEvidence({
   return {
     sourceRevision,
     checkoutRevision: observedCheckout,
-    verified: true,
-    status: "verified",
+    verified: false,
+    status: "artifact_consistent_unattested",
   };
 }
 
@@ -387,6 +387,24 @@ export function resolveBuildDirectory({
       ". Checked: " +
       absoluteCandidates.join(", "),
   );
+}
+
+export function resolveConfiguredBuildDirectory({
+  root = webRoot,
+  budgetPath = defaultBudgetPath,
+  contractRoot = performanceRepositoryRoot,
+} = {}) {
+  const contract = loadPerformanceContract({
+    contractPath: budgetPath,
+    root: contractRoot,
+    enforceLegacyAbsence: true,
+  });
+  const budget = contract.measurements.web_build.budget;
+  return resolveBuildDirectory({
+    root,
+    routeFiles: Object.keys(budget.routes).map(routeIdToHtmlFile),
+    candidates: budget.output_directories,
+  });
 }
 
 export function measureRoute({ buildDir, routeId, routeFile }) {
@@ -630,10 +648,10 @@ export function runBudgetCheck({
   );
   const resolvedBuildDir = buildDir
     ? resolve(buildDir)
-    : resolveBuildDirectory({
+    : resolveConfiguredBuildDirectory({
         root: webRoot,
-        routeFiles: routeEntries.map((entry) => entry.routeFile),
-        candidates: parsed.output_directories,
+        budgetPath,
+        contractRoot,
       });
   const reports = [];
   const errors = [];
@@ -684,11 +702,6 @@ export function runBudgetCheck({
   if (!revisionClaimEnforced || !revisionEvidence.verified) {
     limitations.push("revision-bound performance evidence");
   }
-  if (revisionEvidence.status === "verified_platform") {
-    limitations.push(
-      "clean checkout provenance outside the platform build environment",
-    );
-  }
   if (revisionClaimEnforced && !revisionEvidence.verified) {
     throw new Error(
       "Revision-bound performance evidence is required: " +
@@ -703,6 +716,12 @@ export function runBudgetCheck({
     source_revision_verified: reportedRevisionEvidence.verified,
     revision_evidence_status: reportedRevisionEvidence.status,
     observed_revision_evidence_status: revisionEvidence.status,
+    artifact_integrity_verified: artifactEvidence.verified === true,
+    artifact_integrity_status:
+      artifactEvidence.status ?? "artifact_unverifiable",
+    artifact_provenance_verified: artifactEvidence.provenanceVerified === true,
+    artifact_provenance_status:
+      artifactEvidence.provenanceStatus ?? "unattested",
     artifact_tree_sha256: artifactEvidence.treeSha256 ?? null,
     artifact_file_count: artifactEvidence.fileCount ?? null,
     build_directory: resolvedBuildDir,
@@ -717,9 +736,7 @@ export function runBudgetCheck({
 export function formatTextReport(result) {
   const sourceRevision = result.source_revision ?? "not available";
   const revisionStatus = result.source_revision_verified
-    ? result.revision_evidence_status === "verified_platform"
-      ? "verified against platform revision and artifact"
-      : "verified against checkout"
+    ? "verified by trusted provenance evidence"
     : result.revision_evidence_status;
   const lines = [
     "build directory: " + result.build_directory,
