@@ -558,6 +558,13 @@ test("normal checks fail closed while report-only exposes revision gaps", (t) =>
     verified: false,
     status: "artifact_tree_mismatch",
   };
+  const verifiedEvidence = {
+    revision,
+    verified: true,
+    status: "verified",
+    treeSha256: "e".repeat(64),
+    fileCount: 3,
+  };
 
   assert.throws(
     () =>
@@ -579,13 +586,18 @@ test("normal checks fail closed while report-only exposes revision gaps", (t) =>
     contractRoot: root,
     requireRevisionEvidence: false,
     revisionEnvironment: { GIT_COMMIT_SHA: revision },
-    checkoutRevision: null,
-    checkoutClean: null,
+    checkoutRevision: revision,
+    checkoutClean: true,
     buildEvidence: mismatchedEvidence,
   });
   assert.equal(budgetOnly.report_only, false);
   assert.equal(budgetOnly.revision_evidence_required, false);
   assert.equal(budgetOnly.source_revision_verified, false);
+  assert.equal(budgetOnly.revision_evidence_status, "not_enforced");
+  assert.equal(
+    budgetOnly.observed_revision_evidence_status,
+    "artifact_tree_mismatch",
+  );
   assert.ok(
     budgetOnly.does_not_establish.includes(
       "revision-bound performance evidence",
@@ -603,10 +615,38 @@ test("normal checks fail closed while report-only exposes revision gaps", (t) =>
     buildEvidence: mismatchedEvidence,
   });
   assert.equal(report.source_revision_verified, false);
-  assert.equal(report.revision_evidence_status, "artifact_tree_mismatch");
+  assert.equal(report.revision_evidence_status, "not_enforced");
+  assert.equal(
+    report.observed_revision_evidence_status,
+    "artifact_tree_mismatch",
+  );
   assert.ok(
     report.does_not_establish.includes("revision-bound performance evidence"),
   );
+
+  for (const options of [
+    { reportOnly: true, requireRevisionEvidence: true },
+    { reportOnly: false, requireRevisionEvidence: false },
+  ]) {
+    const nonGating = runBudgetCheck({
+      buildDir,
+      budgetPath,
+      contractRoot: root,
+      ...options,
+      revisionEnvironment: { GIT_COMMIT_SHA: revision },
+      checkoutRevision: revision,
+      checkoutClean: true,
+      buildEvidence: verifiedEvidence,
+    });
+    assert.equal(nonGating.source_revision_verified, false);
+    assert.equal(nonGating.revision_evidence_status, "not_enforced");
+    assert.equal(nonGating.observed_revision_evidence_status, "verified");
+    assert.ok(
+      nonGating.does_not_establish.includes(
+        "revision-bound performance evidence",
+      ),
+    );
+  }
 });
 
 test("prints revision and evidence limitations in the default report", () => {

@@ -618,23 +618,28 @@ export function runBudgetCheck({
     checkoutClean,
     artifactEvidence,
   });
+  const revisionClaimEnforced = !reportOnly && requireRevisionEvidence;
+  const reportedRevisionEvidence = revisionClaimEnforced
+    ? revisionEvidence
+    : { ...revisionEvidence, verified: false, status: "not_enforced" };
   const limitations = [...contract.authority.does_not_establish];
-  if (!revisionEvidence.verified) {
+  if (!revisionClaimEnforced || !revisionEvidence.verified) {
     limitations.push("revision-bound performance evidence");
-    if (!reportOnly && requireRevisionEvidence) {
-      throw new Error(
-        "Revision-bound performance evidence is required: " +
-          revisionEvidence.status,
-      );
-    }
+  }
+  if (revisionClaimEnforced && !revisionEvidence.verified) {
+    throw new Error(
+      "Revision-bound performance evidence is required: " +
+        revisionEvidence.status,
+    );
   }
   return {
     schema_version: 2,
     contract_id: contract.contract_id,
     contract_status: contract.measurements.web_build.status,
     source_revision: revisionEvidence.sourceRevision,
-    source_revision_verified: revisionEvidence.verified,
-    revision_evidence_status: revisionEvidence.status,
+    source_revision_verified: reportedRevisionEvidence.verified,
+    revision_evidence_status: reportedRevisionEvidence.status,
+    observed_revision_evidence_status: revisionEvidence.status,
     artifact_tree_sha256: artifactEvidence.treeSha256 ?? null,
     artifact_file_count: artifactEvidence.fileCount ?? null,
     build_directory: resolvedBuildDir,
