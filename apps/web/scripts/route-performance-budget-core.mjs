@@ -11,15 +11,18 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import {
   assertSafeRelativeDirectory,
-  parsePerformanceBudget,
   routeIdToHtmlFile,
 } from "./route-performance-budget-config.mjs";
+import { parsePerformanceContract } from "./performance-contract.mjs";
 import { collectInitialAssetReferences } from "./route-performance-budget-html.mjs";
 
 const modulePath = fileURLToPath(import.meta.url);
 const scriptDir = dirname(modulePath);
 export const webRoot = resolve(scriptDir, "..");
-const defaultBudgetPath = resolve(webRoot, "route-performance-budget.json");
+const defaultBudgetPath = resolve(
+  webRoot,
+  "../../policies/performance.v1.json",
+);
 
 function isInside(root, target) {
   const pathFromRoot = relative(root, target);
@@ -361,13 +364,14 @@ export function runBudgetCheck({
   budgetPath = defaultBudgetPath,
   reportOnly = false,
 } = {}) {
-  const parsed = parsePerformanceBudget(
+  const contract = parsePerformanceContract(
     readRegularFile(
       budgetPath,
-      "Route performance budget",
+      "Canonical performance contract",
       dirname(budgetPath),
     ).toString("utf8"),
   );
+  const parsed = contract.measurements.web_build.budget;
   const routeEntries = Object.entries(parsed.routes).map(
     ([routeId, budget]) => ({
       routeId,
@@ -413,10 +417,18 @@ export function runBudgetCheck({
   }
   if (errors.length > 0) throw new Error(errors.join("\n"));
   return {
-    schema_version: 1,
+    schema_version: 2,
+    contract_id: contract.contract_id,
+    contract_status: contract.measurements.web_build.status,
+    source_revision:
+      process.env.GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? null,
     build_directory: resolvedBuildDir,
     measurement: parsed.measurement,
     report_only: reportOnly,
+    does_not_establish:
+      process.env.GIT_COMMIT_SHA || process.env.GITHUB_SHA
+        ? []
+        : ["revision-bound performance evidence"],
     routes: reports,
   };
 }

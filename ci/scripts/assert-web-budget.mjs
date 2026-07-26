@@ -1,49 +1,37 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import {
+  loadPerformanceContract,
+  repositoryRoot,
+} from "../../apps/web/scripts/performance-contract.mjs";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(__dirname, '..', '..');
-const budgetPath = resolve(repoRoot, 'ci', 'budget.json');
+const contract = loadPerformanceContract({
+  enforceLegacyAbsence: true,
+  root: repositoryRoot,
+});
+const webBuild = contract.measurements.web_build;
+const webRuntime = contract.measurements.web_runtime;
+const apiRuntime = contract.measurements.api_runtime;
 
-const expected = {
-  js_kb_max: 60,
-  tti_ms_p95_max: 2000,
-  inp_ms_p75_max: 200,
-};
-
-let raw;
-try {
-  raw = readFileSync(budgetPath, 'utf8');
-} catch (error) {
-  console.error(`Failed to read performance budget at ${budgetPath}`);
-  throw error;
+if (webBuild.status !== "blocking") {
+  throw new Error("The generated web-build measurement must remain blocking");
+}
+if (webRuntime.status === "blocking") {
+  throw new Error(
+    "Web runtime thresholds cannot block until a revision-bound calibration artifact exists",
+  );
+}
+if (apiRuntime.status === "blocking") {
+  throw new Error(
+    "API runtime thresholds cannot block until a revision-bound workload artifact exists",
+  );
 }
 
-let parsed;
-try {
-  parsed = JSON.parse(raw);
-} catch (error) {
-  console.error('Performance budget file is not valid JSON');
-  throw error;
-}
-
-const webBudget = parsed?.budgets?.web;
-if (!webBudget) {
-  throw new Error('Performance budget missing "budgets.web" entry');
-}
-
-for (const [key, expectedValue] of Object.entries(expected)) {
-  const actual = webBudget[key];
-  if (typeof actual !== 'number' || Number.isNaN(actual)) {
-    throw new Error(`Performance budget value "${key}" must be a number`);
-  }
-  if (actual !== expectedValue) {
-    throw new Error(
-      `Performance budget "${key}" expected ${expectedValue} but found ${actual}`
-    );
-  }
-}
-
-console.log('✅ Frontend performance budget matches expected thresholds');
+console.log(
+  [
+    "Canonical performance contract validated:",
+    contract.contract_id,
+    "web-build=" + webBuild.status,
+    "web-runtime=" + webRuntime.status,
+    "api-runtime=" + apiRuntime.status,
+  ].join(" "),
+);

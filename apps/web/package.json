@@ -63,7 +63,7 @@
     "dev:cs": "node scripts/generate-version.js --client && pnpm run generate:basemap-config && vite dev --host 0.0.0.0 --port 5173",
     "preview:cs": "vite preview --host 0.0.0.0 --port 4173",
     "generate:client-version": "node scripts/generate-version.js --client",
-    "test:route-performance-budget": "node --test scripts/assert-route-performance-budget.test.mjs"
+    "test:route-performance-budget": "node --test scripts/assert-route-performance-budget.test.mjs scripts/performance-contract.test.mjs"
   },
   "devDependencies": {
     "@mapbox/vector-tile": "1.3.1",
