@@ -268,6 +268,54 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             ],
         )
 
+    def test_oci_mirror_normalizes_containerd_references(self) -> None:
+        digest = "sha256:" + "a" * 64
+        cases = {
+            "nats:2.10-alpine": "docker.io/library/nats:2.10-alpine",
+            "natsio/nats-box:v1": "docker.io/natsio/nats-box:v1",
+            f"postgres:16@{digest}": f"docker.io/library/postgres:16@{digest}",
+            "quay.io/cilium/cilium:v1": "quay.io/cilium/cilium:v1",
+            "localhost:5000/proof:v1": "localhost:5000/proof:v1",
+        }
+        for reference, expected in cases.items():
+            with self.subTest(reference=reference):
+                self.assertEqual(
+                    self.oci_mirror._containerd_reference(reference), expected
+                )
+
+    def test_oci_mirror_alias_uses_containerd_canonical_reference(self) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        platform_digest = "sha256:" + "c" * 64
+        local_ref = "nats:2.10-alpine"
+        digest_ref = f"{local_ref}@{locked_digest}"
+        canonical_local = "docker.io/library/nats:2.10-alpine"
+        canonical_digest = f"{canonical_local}@{locked_digest}"
+        with mock.patch.object(
+            self.oci_mirror,
+            "_kind_image_target",
+            side_effect=[platform_digest, platform_digest],
+        ) as target, mock.patch.object(self.oci_mirror, "_run") as run:
+            result = self.oci_mirror._register_kind_digest_alias(
+                "proof-control-plane", local_ref, digest_ref, locked_digest
+            )
+        self.assertEqual(
+            [call.args for call in target.call_args_list],
+            [
+                ("proof-control-plane", canonical_local),
+                ("proof-control-plane", canonical_digest),
+            ],
+        )
+        run.assert_called_once_with(
+            [
+                "docker", "exec", "proof-control-plane", "ctr",
+                "--namespace", "k8s.io", "images", "tag", "--force",
+                canonical_local, canonical_digest,
+            ],
+            timeout=60,
+        )
+        self.assertEqual(result["containerd_local_ref"], canonical_local)
+        self.assertEqual(result["containerd_digest_ref"], canonical_digest)
+
     def test_oci_mirror_registers_alias_to_imported_platform_target(self) -> None:
         locked_digest = "sha256:" + "a" * 64
         platform_digest = "sha256:" + "c" * 64
@@ -300,6 +348,24 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 self.oci_mirror._register_kind_digest_alias(
                     "proof-control-plane", local_ref, digest_ref, locked_digest
                 )
+
+    def test_oci_mirror_blocks_registries_inside_kind_node(self) -> None:
+        def output(argv, *, timeout=120):
+            del timeout
+            address = "127.0.0.1" if "ahostsv4" in argv else "::1"
+            return f"{address} STREAM {argv[-1]}"
+
+        with mock.patch.object(self.oci_mirror, "_run") as run, mock.patch.object(
+            self.oci_mirror, "_output", side_effect=output
+        ):
+            result = self.oci_mirror._block_kind_registries("proof-control-plane")
+        run.assert_called_once()
+        command = run.call_args.args[0][-1]
+        self.assertIn("weltgewebe strict OCI registry blockade", command)
+        for registry in self.oci_mirror.BLOCKED_REGISTRIES:
+            self.assertIn(registry, command)
+            self.assertEqual(result["registries"][registry]["ipv4"], ["127.0.0.1"])
+            self.assertEqual(result["registries"][registry]["ipv6"], ["::1"])
 
     def test_oci_mirror_live_package_budget_is_fail_closed(self) -> None:
         lock = self.oci_mirror._load_lock()
@@ -498,6 +564,12 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             )
             self.assertIn("docker logout ghcr.io", logout_step["run"])
             self.assertIn('[[ -n "${DOCKER_CONFIG:-}" ]]', logout_step["run"])
+            self.assertLess(
+                logout_step["run"].index('[[ -n "${DOCKER_CONFIG:-}" ]]'),
+                logout_step["run"].index("docker logout ghcr.io"),
+            )
+            self.assertIn("install -d -m 0700", init_step["run"])
+            self.assertIn("install -d -m 0700", logout_step["run"])
             block_step = steps["Block all OCI registries after mirror load"]
             for registry in ("registry-1.docker.io", "quay.io", "ghcr.io"):
                 self.assertIn(registry, block_step["run"])

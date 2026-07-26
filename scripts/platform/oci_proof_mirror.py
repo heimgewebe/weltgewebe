@@ -22,6 +22,13 @@ DEFAULT_STATE = ROOT / ".cache/weltgewebe-platform/oci-mirror"
 FULL_SHA256 = re.compile(r"sha256:[0-9a-f]{64}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
 ALLOWED_SUITES = frozenset({"kind-gitops", "ha-recovery", "app-build"})
+BLOCKED_REGISTRIES = (
+    "registry-1.docker.io",
+    "auth.docker.io",
+    "production.cloudflare.docker.com",
+    "quay.io",
+    "ghcr.io",
+)
 EXPECTED_IMAGES = frozenset(
     {
         "kind_node",
@@ -512,6 +519,18 @@ def _kind_nodes(kind: str, cluster: str) -> list[str]:
     return nodes
 
 
+def _containerd_reference(reference: str) -> str:
+    name, separator, digest = reference.partition("@")
+    first = name.split("/", 1)[0]
+    if "/" not in name:
+        canonical = f"docker.io/library/{name}"
+    elif first == "localhost" or "." in first or ":" in first:
+        canonical = name
+    else:
+        canonical = f"docker.io/{name}"
+    return canonical + (separator + digest if separator else "")
+
+
 def _kind_image_target(node: str, reference: str) -> str:
     raw = _output(
         [
@@ -532,26 +551,69 @@ def _kind_image_target(node: str, reference: str) -> str:
 def _register_kind_digest_alias(
     node: str, local_ref: str, digest_ref: str, locked_digest: str
 ) -> dict[str, str]:
-    source_target = _kind_image_target(node, local_ref)
+    containerd_local_ref = _containerd_reference(local_ref)
+    containerd_digest_ref = _containerd_reference(digest_ref)
+    source_target = _kind_image_target(node, containerd_local_ref)
     _run(
         [
             "docker", "exec", node, "ctr", "--namespace", "k8s.io",
-            "images", "tag", "--force", local_ref, digest_ref,
+            "images", "tag", "--force", containerd_local_ref, containerd_digest_ref,
         ],
         timeout=60,
     )
-    alias_target = _kind_image_target(node, digest_ref)
+    alias_target = _kind_image_target(node, containerd_digest_ref)
     if alias_target != source_target:
         raise IntegrityError(
             "containerd digest alias target mismatch for "
-            f"{digest_ref} on {node}: {alias_target} != {source_target}"
+            f"{containerd_digest_ref} on {node}: {alias_target} != {source_target}"
         )
     return {
         "node": node,
         "digest_ref": digest_ref,
+        "containerd_local_ref": containerd_local_ref,
+        "containerd_digest_ref": containerd_digest_ref,
         "locked_index_digest": locked_digest,
         "platform_target_digest": alias_target,
     }
+
+
+def _block_kind_registries(node: str) -> dict[str, Any]:
+    entries = "".join(
+        f"127.0.0.1 {host}\n::1 {host}\n" for host in BLOCKED_REGISTRIES
+    )
+    marker = "# weltgewebe strict OCI registry blockade"
+    command = (
+        f"if ! grep -qFx '{marker}' /etc/hosts; then "
+        "cat >> /etc/hosts <<'WELTGEWEBE_OCI_BLOCK'\n"
+        + marker
+        + "\n"
+        + entries
+        + "WELTGEWEBE_OCI_BLOCK\nfi"
+    )
+    _run(["docker", "exec", node, "sh", "-ceu", command], timeout=60)
+    observed: dict[str, Any] = {}
+    for host in BLOCKED_REGISTRIES:
+        ipv4_raw = _output(
+            ["docker", "exec", node, "getent", "ahostsv4", host], timeout=60
+        )
+        ipv4 = sorted({line.split()[0] for line in ipv4_raw.splitlines() if line.strip()})
+        if ipv4 != ["127.0.0.1"]:
+            raise IntegrityError(
+                f"kind node registry IPv4 blockade failed for {host} on {node}: {ipv4}"
+            )
+        try:
+            ipv6_raw = _output(
+                ["docker", "exec", node, "getent", "ahostsv6", host], timeout=60
+            )
+        except subprocess.CalledProcessError:
+            ipv6_raw = ""
+        ipv6 = sorted({line.split()[0] for line in ipv6_raw.splitlines() if line.strip()})
+        if ipv6 and ipv6 != ["::1"]:
+            raise IntegrityError(
+                f"kind node registry IPv6 blockade failed for {host} on {node}: {ipv6}"
+            )
+        observed[host] = {"ipv4": ipv4, "ipv6": ipv6}
+    return {"node": node, "registries": observed}
 
 
 def load_kind(
@@ -591,6 +653,7 @@ def load_kind(
             "nodes": aliases,
             **verified,
         }
+    registry_blockades = [_block_kind_registries(node) for node in nodes]
     receipt = {
         "schema_version": 1,
         "status": "pass",
@@ -602,6 +665,7 @@ def load_kind(
         "suites": list(dict.fromkeys(suites)),
         "loaded_count": len(loaded),
         "images": loaded,
+        "registry_blockades": registry_blockades,
     }
     _atomic_write(state / f"load-kind-{cluster}.json", receipt)
     return receipt

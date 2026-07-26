@@ -2700,6 +2700,17 @@ def argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _captured_subprocess_evidence(error: subprocess.CalledProcessError) -> str:
+    fields: list[str] = []
+    for label, value in (("stdout", error.stdout), ("stderr", error.stderr)):
+        if not value:
+            continue
+        payload = value if isinstance(value, bytes) else str(value).encode("utf-8")
+        fields.append(f"{label}_bytes={len(payload)}")
+        fields.append(f"{label}_sha256={hashlib.sha256(payload).hexdigest()}")
+    return "; ".join(fields)
+
+
 def main() -> int:
     args = argument_parser().parse_args()
     try:
@@ -2726,6 +2737,9 @@ def main() -> int:
     except (ref.ProofError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         if isinstance(error, subprocess.CalledProcessError):
             detail = f"subprocess exited with status {error.returncode}"
+            evidence = _captured_subprocess_evidence(error)
+            if evidence:
+                detail += f"; {evidence}"
         elif isinstance(error, subprocess.TimeoutExpired):
             detail = "subprocess timed out"
         else:

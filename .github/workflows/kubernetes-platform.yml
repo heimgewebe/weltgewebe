@@ -164,7 +164,7 @@ jobs:
         run: |
           set -euo pipefail
           docker_config="$RUNNER_TEMP/weltgewebe-kind-oci-mirror"
-          mkdir -p "$docker_config"
+          install -d -m 0700 "$docker_config"
           echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
       - name: Verify live OCI mirror package budget
         if: steps.proof-cache.outputs.cache-hit != 'true'
@@ -190,10 +190,10 @@ jobs:
       - name: Remove OCI mirror credentials
         if: always() && steps.proof-cache.outputs.cache-hit != 'true'
         run: |
-          docker logout ghcr.io || true
           if [[ -n "${DOCKER_CONFIG:-}" ]]; then
+            docker logout ghcr.io || true
             rm -rf "$DOCKER_CONFIG"
-            mkdir -p "$DOCKER_CONFIG"
+            install -d -m 0700 "$DOCKER_CONFIG"
           fi
       - name: Block all OCI registries after mirror load
         if: steps.proof-cache.outputs.cache-hit != 'true'
@@ -353,7 +353,7 @@ jobs:
         run: |
           set -euo pipefail
           docker_config="$RUNNER_TEMP/weltgewebe-ha-oci-mirror"
-          mkdir -p "$docker_config"
+          install -d -m 0700 "$docker_config"
           echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
       - name: Verify live OCI mirror package budget
         if: steps.proof-cache.outputs.cache-hit != 'true'
@@ -379,10 +379,10 @@ jobs:
       - name: Remove OCI mirror credentials
         if: always() && steps.proof-cache.outputs.cache-hit != 'true'
         run: |
-          docker logout ghcr.io || true
           if [[ -n "${DOCKER_CONFIG:-}" ]]; then
+            docker logout ghcr.io || true
             rm -rf "$DOCKER_CONFIG"
-            mkdir -p "$DOCKER_CONFIG"
+            install -d -m 0700 "$DOCKER_CONFIG"
           fi
       - name: Block all OCI registries after mirror load
         if: steps.proof-cache.outputs.cache-hit != 'true'

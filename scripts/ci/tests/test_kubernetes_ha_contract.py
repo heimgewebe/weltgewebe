@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import io
 import json
 import sys
@@ -1524,6 +1525,9 @@ spec:
             self.assertEqual(self.ha.main(), 1)
         self.assertNotIn(secret, stderr.getvalue())
         self.assertIn("status 23", stderr.getvalue())
+        expected_hash = hashlib.sha256(secret.encode()).hexdigest()
+        self.assertIn(f"stdout_sha256={expected_hash}", stderr.getvalue())
+        self.assertIn(f"stderr_sha256={expected_hash}", stderr.getvalue())
 
         with (
             mock.patch.object(self.ha, "argument_parser", return_value=parser),
