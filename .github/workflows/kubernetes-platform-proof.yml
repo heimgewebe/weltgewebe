@@ -1,0 +1,541 @@
+---
+name: kubernetes-platform-proof
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: read
+
+"on":
+  workflow_dispatch:
+    inputs:
+      expected_head:
+        description: Full reviewed main commit to prove
+        required: true
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/kubernetes-platform.yml"
+      - ".github/workflows/kubernetes-platform-proof.yml"
+      - ".dockerignore"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "toolchain.versions.yml"
+      - "apps/api/**"
+      - "apps/web/**"
+      - "scripts/dev/**"
+      - "policies/**"
+      - "infra/compose/compose.prod.yml"
+      - "platform/**"
+      - "scripts/platform/**"
+      - "scripts/security/**"
+      - "scripts/ci/tests/test_kubernetes_platform_contract.py"
+      - "scripts/ci/tests/test_trivy_rendered_manifests.py"
+      - "scripts/ci/tests/test_kubernetes_ha_contract.py"
+      - "repo.meta.yaml"
+
+concurrency:
+  group: kubernetes-platform-proof-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
+        with:
+          python-version: "3.10"
+      - name: Install validator dependency
+        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
+      - name: Compile platform tools
+        run: >-
+          python -m py_compile
+          scripts/platform/bootstrap_tools.py
+          scripts/platform/proof_identity.py
+          scripts/platform/oci_proof_mirror.py
+          scripts/platform/validate_platform.py
+          scripts/platform/kind_reference.py
+          scripts/platform/ha_reference.py
+          scripts/security/trivy_rendered_manifests.py
+      - name: Run platform contract tests
+        run: >-
+          python -m unittest
+          scripts.ci.tests.test_kubernetes_platform_contract
+          scripts.ci.tests.test_kubernetes_ha_contract
+          scripts.ci.tests.test_trivy_rendered_manifests
+      - name: Render and validate all platform targets
+        run: python scripts/platform/validate_platform.py --render
+
+  trivy-rendered-security:
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
+        with:
+          python-version: "3.10"
+      - name: Install validator dependency
+        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
+      - name: Scan canonical rendered manifests and generate CycloneDX SBOM
+        run: python scripts/security/trivy_rendered_manifests.py
+      - name: Upload Trivy evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: trivy-rendered-security-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/security/trivy/*.json
+          if-no-files-found: error
+          retention-days: 14
+
+  kind-gitops-proof:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.sha == inputs.expected_head)
+    needs: contract
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLUSTER_NAME: wg-${{ github.run_id }}-${{ github.run_attempt }}
+      PROOF_OWNER_ID: gha-kind-${{ github.run_id }}-${{ github.run_attempt }}
+      PROOF_SOURCE_COMMIT: ${{ github.sha }}
+      WELTGEWEBE_PROOF_OCI_STRICT: "1"
+      OCI_MIRROR_EVIDENCE: build/kubernetes-platform/kind-gitops-oci-mirror
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
+        with:
+          python-version: "3.10"
+      - name: Install proof dependency
+        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
+      - name: Compute immutable direct proof identity
+        id: proof-identity
+        run: >-
+          python scripts/platform/proof_identity.py compute
+          --suite kind-gitops
+          --source-commit "$PROOF_SOURCE_COMMIT"
+          --output build/kubernetes-platform/kind-gitops-identity.json
+          --github-output "$GITHUB_OUTPUT"
+      - name: Restore immutable direct proof evidence
+        id: proof-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
+        with:
+          path: build/kubernetes-platform/reuse/kind-gitops
+          key: kubernetes-proof-v1-${{ runner.os }}-${{ steps.proof-identity.outputs.identity }}
+      - name: Validate restored direct proof evidence
+        if: steps.proof-cache.outputs.cache-hit == 'true'
+        run: >-
+          python scripts/platform/proof_identity.py validate
+          --identity build/kubernetes-platform/kind-gitops-identity.json
+          --record build/kubernetes-platform/reuse/kind-gitops/record.json
+          --proof build/kubernetes-platform/reuse/kind-gitops/proof.json
+      - name: Restore verified platform downloads
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
+        with:
+          path: .cache/weltgewebe-platform/downloads
+          key: weltgewebe-platform-downloads-${{ runner.os }}-${{ hashFiles('platform/toolchain.lock.json') }}
+      - name: Initialize isolated OCI mirror credentials
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          docker_config="$RUNNER_TEMP/weltgewebe-kind-oci-mirror"
+          install -d -m 0700 "$docker_config"
+          echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
+      - name: Verify live OCI mirror package budget
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python scripts/platform/oci_proof_mirror.py
+          --state "$OCI_MIRROR_EVIDENCE" verify-live
+      - name: Authenticate controlled OCI mirror
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          echo "$GH_TOKEN" | docker login ghcr.io
+          --username "$GITHUB_ACTOR" --password-stdin
+      - name: Load controlled kind and build OCI inputs
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: >-
+          python scripts/platform/oci_proof_mirror.py
+          --state "$OCI_MIRROR_EVIDENCE" load-host
+          --suite kind-gitops
+          --suite app-build
+      - name: Remove OCI mirror credentials
+        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          if [[ -n "${DOCKER_CONFIG:-}" ]]; then
+            docker logout ghcr.io || true
+            rm -rf "$DOCKER_CONFIG"
+            install -d -m 0700 "$DOCKER_CONFIG"
+          fi
+      - name: Block all OCI registries after mirror load
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          backup="$RUNNER_TEMP/weltgewebe-kind-hosts.before"
+          digest_file="$backup.sha256"
+          test ! -e "$backup"
+          test ! -e "$digest_file"
+          cp -- /etc/hosts "$backup"
+          chmod 0600 "$backup"
+          sha256sum "$backup" | awk '{print $1}' > "$digest_file"
+          for host in \
+            registry-1.docker.io auth.docker.io \
+            production.cloudflare.docker.com quay.io ghcr.io
+          do
+            echo "127.0.0.1 $host" | sudo tee -a /etc/hosts >/dev/null
+            echo "::1 $host" | sudo tee -a /etc/hosts >/dev/null
+          done
+          for host in \
+            registry-1.docker.io auth.docker.io \
+            production.cloudflare.docker.com quay.io ghcr.io
+          do
+            ipv4="$(getent ahostsv4 "$host" | awk '{print $1}' | sort -u)"
+            test "$ipv4" = "127.0.0.1"
+            ipv6="$(getent ahostsv6 "$host" 2>/dev/null | awk '{print $1}' | sort -u || true)"
+            if [[ -n "$ipv6" ]]; then
+              test "$ipv6" = "::1"
+            fi
+          done
+      - name: Verify loaded OCI inputs offline
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: >-
+          python scripts/platform/oci_proof_mirror.py
+          --state "$OCI_MIRROR_EVIDENCE" verify-host
+          --suite kind-gitops
+          --suite app-build
+      - name: Run commit-bound GitOps reference proof
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: >-
+          python scripts/platform/kind_reference.py proof
+          --cluster "$CLUSTER_NAME"
+          --mode gitops
+          --source-commit "$GITHUB_SHA"
+          --owner-id "$PROOF_OWNER_ID"
+      - name: Record immutable GitOps proof evidence
+        if: steps.proof-cache.outputs.cache-hit != 'true' && success()
+        run: |
+          set -euo pipefail
+          receipt="$(
+            find .cache/weltgewebe-platform/receipts \
+              -maxdepth 1 -type f -name "${CLUSTER_NAME}-*.json" -print -quit
+          )"
+          test -n "$receipt"
+          python scripts/platform/proof_identity.py record \
+            --identity build/kubernetes-platform/kind-gitops-identity.json \
+            --proof-receipt "$receipt" \
+            --output-dir build/kubernetes-platform/reuse/kind-gitops
+      - name: Upload GitOps proof evidence
+        if: success() && steps.proof-cache.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-kind-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/kubernetes-platform/kind-gitops-identity.json
+            build/kubernetes-platform/reuse/kind-gitops/*.json
+            build/kubernetes-platform/kind-gitops-oci-mirror/*.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload restored GitOps proof evidence
+        if: success() && steps.proof-cache.outputs.cache-hit == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-kind-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/kubernetes-platform/kind-gitops-identity.json
+            build/kubernetes-platform/reuse/kind-gitops/*.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Stage failure diagnostics
+        if: failure() && steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          source=.cache/weltgewebe-platform/failures
+          target=build/kubernetes-platform/failures
+          if [[ -d "$source" ]]; then
+            mkdir -p "$target"
+            cp -a "$source"/. "$target"/
+          fi
+      - name: Collect failure diagnostics
+        if: failure() && steps.proof-cache.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-platform-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/kubernetes-platform/failures/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Restore OCI registry host resolution
+        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          backup="$RUNNER_TEMP/weltgewebe-kind-hosts.before"
+          digest_file="$backup.sha256"
+          if [[ -e "$backup" || -e "$digest_file" ]]; then
+            test -f "$backup"
+            test -f "$digest_file"
+            expected="$(cat "$digest_file")"
+            [[ "$expected" =~ ^[0-9a-f]{64}$ ]]
+            sudo tee /etc/hosts < "$backup" >/dev/null
+            observed="$(sha256sum /etc/hosts | awk '{print $1}')"
+            test "$observed" = "$expected"
+            rm -f -- "$backup" "$digest_file"
+          fi
+      - name: Reconcile owned kind proof resources
+        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
+        run: >-
+          python scripts/platform/kind_reference.py down
+          --cluster "$CLUSTER_NAME"
+          --commit "$(git rev-parse HEAD)"
+          --owner-id "$PROOF_OWNER_ID"
+          --receipt build/kubernetes-platform/kind-gitops-cleanup.json
+      - name: Upload GitOps cleanup evidence
+        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-kind-cleanup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/kubernetes-platform/kind-gitops-cleanup.json
+          if-no-files-found: error
+          retention-days: 14
+
+  kind-ha-recovery-proof:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.sha == inputs.expected_head)
+    needs: contract
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CLUSTER_NAME: wg-ha-${{ github.run_id }}-${{ github.run_attempt }}
+      PROOF_OWNER_ID: gha-ha-${{ github.run_id }}-${{ github.run_attempt }}
+      PROOF_SOURCE_COMMIT: ${{ github.sha }}
+      WELTGEWEBE_PROOF_OCI_STRICT: "1"
+      OCI_MIRROR_EVIDENCE: build/kubernetes-platform/ha-recovery-oci-mirror
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
+        with:
+          python-version: "3.10"
+      - name: Install proof dependency
+        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
+      - name: Compute immutable HA proof identity
+        id: proof-identity
+        run: >-
+          python scripts/platform/proof_identity.py compute
+          --suite ha-recovery
+          --source-commit "$PROOF_SOURCE_COMMIT"
+          --output build/kubernetes-platform/ha-recovery-identity.json
+          --github-output "$GITHUB_OUTPUT"
+      - name: Restore immutable HA proof evidence
+        id: proof-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
+        with:
+          path: build/kubernetes-platform/reuse/ha-recovery
+          key: kubernetes-proof-v1-${{ runner.os }}-${{ steps.proof-identity.outputs.identity }}
+      - name: Validate restored HA proof evidence
+        if: steps.proof-cache.outputs.cache-hit == 'true'
+        run: >-
+          python scripts/platform/proof_identity.py validate
+          --identity build/kubernetes-platform/ha-recovery-identity.json
+          --record build/kubernetes-platform/reuse/ha-recovery/record.json
+          --proof build/kubernetes-platform/reuse/ha-recovery/proof.json
+      - name: Restore verified platform downloads
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
+        with:
+          path: .cache/weltgewebe-platform/downloads
+          key: weltgewebe-platform-downloads-${{ runner.os }}-${{ hashFiles('platform/toolchain.lock.json') }}
+      - name: Initialize isolated OCI mirror credentials
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          docker_config="$RUNNER_TEMP/weltgewebe-ha-oci-mirror"
+          install -d -m 0700 "$docker_config"
+          echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
+      - name: Verify live OCI mirror package budget
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python scripts/platform/oci_proof_mirror.py
+          --state "$OCI_MIRROR_EVIDENCE" verify-live
+      - name: Authenticate controlled OCI mirror
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          echo "$GH_TOKEN" | docker login ghcr.io
+          --username "$GITHUB_ACTOR" --password-stdin
+      - name: Load controlled HA and build OCI inputs
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: >-
+          python scripts/platform/oci_proof_mirror.py
+          --state "$OCI_MIRROR_EVIDENCE" load-host
+          --suite ha-recovery
+          --suite app-build
+      - name: Remove OCI mirror credentials
+        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          if [[ -n "${DOCKER_CONFIG:-}" ]]; then
+            docker logout ghcr.io || true
+            rm -rf "$DOCKER_CONFIG"
+            install -d -m 0700 "$DOCKER_CONFIG"
+          fi
+      - name: Block all OCI registries after mirror load
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          backup="$RUNNER_TEMP/weltgewebe-ha-hosts.before"
+          digest_file="$backup.sha256"
+          test ! -e "$backup"
+          test ! -e "$digest_file"
+          cp -- /etc/hosts "$backup"
+          chmod 0600 "$backup"
+          sha256sum "$backup" | awk '{print $1}' > "$digest_file"
+          for host in \
+            registry-1.docker.io auth.docker.io \
+            production.cloudflare.docker.com quay.io ghcr.io
+          do
+            echo "127.0.0.1 $host" | sudo tee -a /etc/hosts >/dev/null
+            echo "::1 $host" | sudo tee -a /etc/hosts >/dev/null
+          done
+          for host in \
+            registry-1.docker.io auth.docker.io \
+            production.cloudflare.docker.com quay.io ghcr.io
+          do
+            ipv4="$(getent ahostsv4 "$host" | awk '{print $1}' | sort -u)"
+            test "$ipv4" = "127.0.0.1"
+            ipv6="$(getent ahostsv6 "$host" 2>/dev/null | awk '{print $1}' | sort -u || true)"
+            if [[ -n "$ipv6" ]]; then
+              test "$ipv6" = "::1"
+            fi
+          done
+      - name: Verify loaded OCI inputs offline
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: >-
+          python scripts/platform/oci_proof_mirror.py
+          --state "$OCI_MIRROR_EVIDENCE" verify-host
+          --suite ha-recovery
+          --suite app-build
+      - name: Run HA failover and blank-cluster recovery proof
+        if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: >-
+          python scripts/platform/ha_reference.py proof
+          --cluster "$CLUSTER_NAME"
+          --owner-id "$PROOF_OWNER_ID"
+      - name: Record immutable HA proof evidence
+        if: steps.proof-cache.outputs.cache-hit != 'true' && success()
+        run: |
+          set -euo pipefail
+          receipt="$(
+            find .cache/weltgewebe-platform/receipts \
+              -maxdepth 1 -type f \
+              -name "${CLUSTER_NAME}-*-ha-recovery.json" -print -quit
+          )"
+          test -n "$receipt"
+          python scripts/platform/proof_identity.py record \
+            --identity build/kubernetes-platform/ha-recovery-identity.json \
+            --proof-receipt "$receipt" \
+            --output-dir build/kubernetes-platform/reuse/ha-recovery
+      - name: Stage HA recovery receipt
+        if: success()
+        run: |
+          set -euo pipefail
+          mkdir -p build/kubernetes-platform/ha-recovery
+          cp -- build/kubernetes-platform/reuse/ha-recovery/proof.json \
+            build/kubernetes-platform/ha-recovery/proof.json
+      - name: Upload HA recovery receipt
+        if: success() && steps.proof-cache.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-ha-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/kubernetes-platform/ha-recovery-identity.json
+            build/kubernetes-platform/reuse/ha-recovery/record.json
+            build/kubernetes-platform/ha-recovery/proof.json
+            build/kubernetes-platform/ha-recovery-oci-mirror/*.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload restored HA recovery receipt
+        if: success() && steps.proof-cache.outputs.cache-hit == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-ha-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/kubernetes-platform/ha-recovery-identity.json
+            build/kubernetes-platform/reuse/ha-recovery/record.json
+            build/kubernetes-platform/ha-recovery/proof.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Stage HA failure diagnostics
+        if: failure() && steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          source=.cache/weltgewebe-platform/failures
+          target=build/kubernetes-platform/failures
+          if [[ -d "$source" ]]; then
+            mkdir -p "$target"
+            cp -a "$source"/. "$target"/
+          fi
+      - name: Collect HA failure diagnostics
+        if: failure() && steps.proof-cache.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-ha-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/kubernetes-platform/failures/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Restore OCI registry host resolution
+        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          backup="$RUNNER_TEMP/weltgewebe-ha-hosts.before"
+          digest_file="$backup.sha256"
+          if [[ -e "$backup" || -e "$digest_file" ]]; then
+            test -f "$backup"
+            test -f "$digest_file"
+            expected="$(cat "$digest_file")"
+            [[ "$expected" =~ ^[0-9a-f]{64}$ ]]
+            sudo tee /etc/hosts < "$backup" >/dev/null
+            observed="$(sha256sum /etc/hosts | awk '{print $1}')"
+            test "$observed" = "$expected"
+            rm -f -- "$backup" "$digest_file"
+          fi
+      - name: Reconcile owned HA proof resources
+        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
+        run: >-
+          python scripts/platform/ha_reference.py down
+          --cluster "$CLUSTER_NAME"
+          --commit "$(git rev-parse HEAD)"
+          --owner-id "$PROOF_OWNER_ID"
+          --receipt build/kubernetes-platform/ha-recovery-cleanup.json
+      - name: Upload HA cleanup evidence
+        if: always() && steps.proof-cache.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-ha-cleanup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/kubernetes-platform/ha-recovery-cleanup.json
+          if-no-files-found: error
+          retention-days: 14

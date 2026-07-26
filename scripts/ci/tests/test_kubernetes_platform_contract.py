@@ -879,6 +879,77 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertIn("FROM node:20.19.0-alpine AS builder", web_from)
         self.assertIn("FROM caddy:2.7", web_from)
 
+    def test_strict_oci_dockerfile_rejects_comment_only_contract_tokens(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        source = (
+            f"# {rust['local_ref']}@{rust['digest']}\n"
+            f"# {debian['local_ref']}@{debian['digest']}\n"
+            "FROM attacker.example/unreviewed:latest\n"
+        )
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference.Path, "read_text", return_value=source
+        ):
+            with self.assertRaisesRegex(
+                self.reference.ProofError, "uncontrolled OCI base image"
+            ):
+                self.reference.controlled_oci_dockerfile(Path("apps/api/Dockerfile"))
+
+    def test_strict_oci_dockerfile_rejects_additional_external_stage(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        source = (
+            f"FROM {rust['local_ref']}@{rust['digest']} AS builder\n"
+            f"FROM {debian['local_ref']}@{debian['digest']}\n"
+            "FROM attacker.example/unreviewed:latest AS injected\n"
+        )
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference.Path, "read_text", return_value=source
+        ):
+            with self.assertRaisesRegex(
+                self.reference.ProofError, "uncontrolled OCI base image"
+            ):
+                self.reference.controlled_oci_dockerfile(Path("apps/api/Dockerfile"))
+
+    def test_strict_oci_dockerfile_allows_prior_stage_alias(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        source = (
+            f"FROM {rust['local_ref']}@{rust['digest']} AS builder\n"
+            f"FROM {debian['local_ref']}@{debian['digest']} AS runtime\n"
+            "FROM builder AS exported-builder\n"
+        )
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference.Path, "read_text", return_value=source
+        ):
+            rewritten = self.reference.controlled_oci_dockerfile(
+                Path("apps/api/Dockerfile")
+            )
+        self.assertIn(f"FROM {rust['local_ref']} AS builder", rewritten)
+        self.assertIn(f"FROM {debian['local_ref']} AS runtime", rewritten)
+        self.assertIn("FROM builder AS exported-builder", rewritten)
+
     def test_strict_image_builds_consume_dockerfiles_from_stdin(self) -> None:
         with mock.patch.dict(os.environ, {self.reference.OCI_STRICT_ENV: "1"}), mock.patch.object(
             self.reference,
@@ -1004,11 +1075,23 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertEqual(pod["containers"][0]["imagePullPolicy"], "Never")
 
     def test_kubernetes_proof_workflow_is_reusable_and_auditable(self) -> None:
-        workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
+        pr_workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
+        pr_workflow_text = pr_workflow_path.read_text()
+        pr_workflow = yaml.safe_load(pr_workflow_text)
+        workflow_path = ROOT / ".github/workflows/kubernetes-platform-proof.yml"
         workflow_text = workflow_path.read_text()
         workflow = yaml.safe_load(workflow_text)
+        self.assertEqual(set(pr_workflow["on"]), {"pull_request"})
+        self.assertEqual(
+            set(pr_workflow["jobs"]), {"contract", "trivy-rendered-security"}
+        )
+        self.assertNotIn("packages: read", pr_workflow_text)
+        self.assertNotIn("github.token", pr_workflow_text)
+        self.assertNotIn("pull_request", workflow["on"])
+        self.assertEqual(set(workflow["on"]), {"push", "workflow_dispatch"})
         self.assertFalse(workflow["concurrency"]["cancel-in-progress"])
-        self.assertIn("github.event.pull_request.head.sha || github.sha", workflow["concurrency"]["group"])
+        self.assertIn("github.sha", workflow["concurrency"]["group"])
+        self.assertNotIn("github.event.pull_request", workflow_text)
         self.assertNotIn("oci-proof-cache", workflow_text)
         for job_name in (
             "contract",
@@ -1142,12 +1225,12 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         )
         self.assertNotIn("ha-recovery-oci-mirror", restored_ha["with"]["path"])
 
-        direct_upload = gitops["Upload direct proof evidence"]
+        direct_upload = gitops["Upload GitOps proof evidence"]
         self.assertEqual(
             direct_upload["if"],
             "success() && steps.proof-cache.outputs.cache-hit != 'true'",
         )
-        restored_direct = gitops["Upload restored direct proof evidence"]
+        restored_direct = gitops["Upload restored GitOps proof evidence"]
         self.assertEqual(
             restored_direct["if"],
             "success() && steps.proof-cache.outputs.cache-hit == 'true'",
@@ -1159,37 +1242,42 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 if str(step.get("uses", "")).startswith("actions/upload-artifact@"):
                     self.assertNotIn(".cache/", str((step.get("with") or {}).get("path", "")))
 
-    def test_ci_proof_binds_pull_requests_to_checked_out_merge_state(self) -> None:
-        workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
-        workflow_text = workflow_path.read_text()
-        workflow = yaml.safe_load(workflow_text)
-        steps = workflow["jobs"]["kind-gitops-proof"]["steps"]
+    def test_privileged_ci_proofs_are_isolated_from_pull_requests(self) -> None:
+        pr_path = ROOT / ".github/workflows/kubernetes-platform.yml"
+        proof_path = ROOT / ".github/workflows/kubernetes-platform-proof.yml"
+        pr_text = pr_path.read_text()
+        proof_text = proof_path.read_text()
+        pr_workflow = yaml.safe_load(pr_text)
+        proof_workflow = yaml.safe_load(proof_text)
+
+        self.assertEqual(set(pr_workflow["on"]), {"pull_request"})
+        self.assertNotIn("kind-gitops-proof", pr_workflow["jobs"])
+        self.assertNotIn("kind-ha-recovery-proof", pr_workflow["jobs"])
+        self.assertNotIn("packages: read", pr_text)
+        self.assertNotIn("github.token", pr_text)
+        self.assertNotIn("pull_request", proof_workflow["on"])
+        self.assertEqual(set(proof_workflow["on"]), {"push", "workflow_dispatch"})
+        expected_head = proof_workflow["on"]["workflow_dispatch"]["inputs"]["expected_head"]
+        self.assertIs(expected_head["required"], True)
+        self.assertEqual(expected_head["type"], "string")
+
+        for job_name in ("kind-gitops-proof", "kind-ha-recovery-proof"):
+            job = proof_workflow["jobs"][job_name]
+            self.assertEqual(
+                job["if"],
+                "github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.sha == inputs.expected_head)",
+            )
+            self.assertEqual(
+                job["permissions"], {"contents": "read", "packages": "read"}
+            )
+            self.assertEqual(job["env"]["PROOF_SOURCE_COMMIT"], "${{ github.sha }}")
+
+        steps = proof_workflow["jobs"]["kind-gitops-proof"]["steps"]
         named_steps = {step["name"]: step for step in steps if "name" in step}
-
-        direct = named_steps["Run pull-request direct reference proof"]
+        self.assertNotIn("Run pull-request direct reference proof", named_steps)
         gitops = named_steps["Run commit-bound GitOps reference proof"]
-
         self.assertEqual(
-            direct["if"],
-            "steps.proof-cache.outputs.cache-hit != 'true' && github.event_name == 'pull_request'",
-        )
-        self.assertEqual(
-            gitops["if"],
-            "steps.proof-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'",
-        )
-        self.assertEqual(
-            shlex.split(direct["run"]),
-            [
-                "python",
-                "scripts/platform/kind_reference.py",
-                "proof",
-                "--cluster",
-                "$CLUSTER_NAME",
-                "--mode",
-                "direct",
-                "--owner-id",
-                "$PROOF_OWNER_ID",
-            ],
+            gitops["if"], "steps.proof-cache.outputs.cache-hit != 'true'"
         )
         self.assertEqual(
             shlex.split(gitops["run"]),
@@ -1207,9 +1295,9 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 "$PROOF_OWNER_ID",
             ],
         )
-        self.assertIn("PROOF_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}", workflow_text)
-        self.assertNotIn("SOURCE_REF:", workflow_text)
-        self.assertNotIn("github.head_ref || github.ref_name", workflow_text)
+        self.assertNotIn("github.event.pull_request", proof_text)
+        self.assertNotIn("SOURCE_REF:", proof_text)
+        self.assertNotIn("github.head_ref || github.ref_name", proof_text)
 
     def test_proof_identity_ignores_unrelated_inputs_and_rejects_tampering(self) -> None:
         commit = "0123456789abcdef0123456789abcdef01234567"
@@ -1256,17 +1344,19 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 reuse = root / "reuse"
                 with mock.patch.object(
                     self.proof_identity, "_checkout_commit", return_value=commit
+                ), mock.patch.object(
+                    self.proof_identity, "_validate_controlled_oci_proof"
                 ):
                     self.proof_identity.record(identity_path, proof_path, reuse)
-                self.proof_identity.validate(
-                    identity_path, reuse / "record.json", reuse / "proof.json"
-                )
-                with (reuse / "proof.json").open("a") as handle:
-                    handle.write(" ")
-                with self.assertRaises(self.proof_identity.IdentityError):
                     self.proof_identity.validate(
                         identity_path, reuse / "record.json", reuse / "proof.json"
                     )
+                    with (reuse / "proof.json").open("a") as handle:
+                        handle.write(" ")
+                    with self.assertRaises(self.proof_identity.IdentityError):
+                        self.proof_identity.validate(
+                            identity_path, reuse / "record.json", reuse / "proof.json"
+                        )
 
     def test_proof_validate_rejects_crafted_policy_and_record_fields(self) -> None:
         identity = {
@@ -1296,6 +1386,8 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 self.proof_identity, "compute_identity", return_value=identity
             ), mock.patch.object(
                 self.proof_identity, "_checkout_commit", return_value="5" * 40
+            ), mock.patch.object(
+                self.proof_identity, "_validate_controlled_oci_proof"
             ):
                 self.proof_identity.record(identity_path, source_proof_path, reuse)
 
@@ -1322,6 +1414,101 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                     self.proof_identity.IdentityError, "record commit"
                 ):
                     self.proof_identity.validate(identity_path, record_path, proof_path)
+
+    def test_proof_oci_receipts_are_semantically_bound(self) -> None:
+        digest = "sha256:" + "a" * 64
+        image_id = "sha256:" + "b" * 64
+        platform_digest = "sha256:" + "c" * 64
+        lock = {
+            "images": {
+                "runtime": {
+                    "canonical": f"registry.example/runtime@{digest}",
+                    "local_ref": "registry.example/runtime:local",
+                    "digest": digest,
+                    "suites": ["kind-gitops"],
+                    "load_into_kind": True,
+                },
+                "builder": {
+                    "canonical": f"registry.example/builder@{digest}",
+                    "local_ref": "registry.example/builder:local",
+                    "digest": digest,
+                    "suites": ["app-build"],
+                    "load_into_kind": False,
+                },
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lock_path = root / "platform/oci-proof-mirror.lock.json"
+            lock_path.parent.mkdir(parents=True)
+            lock_bytes = (json.dumps(lock, sort_keys=True) + "\n").encode()
+            lock_path.write_bytes(lock_bytes)
+            lock_sha256 = hashlib.sha256(lock_bytes).hexdigest()
+            identity = {
+                "suite": "kind-gitops",
+                "oci_mirror_lock_sha256": lock_sha256,
+            }
+            host_images = {
+                name: {"source": "local-verified", "image_id": image_id}
+                for name in lock["images"]
+            }
+            blockade = {
+                "node": "proof-control-plane",
+                "registries": {
+                    registry: {"ipv4": ["127.0.0.1"], "ipv6": ["::1"]}
+                    for registry in self.proof_identity.BLOCKED_REGISTRIES
+                },
+            }
+            cluster_image = {
+                "canonical": lock["images"]["runtime"]["canonical"],
+                "local_ref": lock["images"]["runtime"]["local_ref"],
+                "locked_index_digest": digest,
+                "cri_image_id": image_id,
+                "platform_target_digest": platform_digest,
+            }
+            proof = {
+                "cluster": "proof",
+                "oci_controlled_source": {
+                    "strict": True,
+                    "host": {
+                        "status": "pass",
+                        "strict": True,
+                        "lock_sha256": lock_sha256,
+                        "selected_count": 2,
+                        "images": host_images,
+                        "failures": {},
+                    },
+                    "cluster": {
+                        "status": "pass",
+                        "strict": True,
+                        "lock_sha256": lock_sha256,
+                        "cluster": "proof",
+                        "loaded_count": 1,
+                        "images": {"runtime": cluster_image},
+                        "registry_blockades": [blockade],
+                    },
+                },
+            }
+            with mock.patch.object(self.proof_identity, "ROOT", root):
+                self.proof_identity._validate_controlled_oci_proof(identity, proof)
+                drifted = json.loads(json.dumps(proof))
+                drifted["oci_controlled_source"]["cluster"]["registry_blockades"] = []
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "registry blockade evidence"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
+                drifted = json.loads(json.dumps(proof))
+                drifted["oci_controlled_source"]["host"]["lock_sha256"] = "d" * 64
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "different mirror lock"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
+                drifted = json.loads(json.dumps(proof))
+                drifted["oci_controlled_source"]["strict"] = False
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "strict controlled OCI"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
 
     def test_proof_record_rejects_receipt_from_different_checkout(self) -> None:
         identity = {

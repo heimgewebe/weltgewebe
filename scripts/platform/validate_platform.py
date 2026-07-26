@@ -435,7 +435,9 @@ def _assert_ha_contract() -> None:
     if "kind: Secret" in "\n".join(path.read_text() for path in (PLATFORM / "infrastructure/ha-data").glob("*.yaml")):
         raise ContractError("HA manifests commit a Secret")
 
-    workflow = yaml.safe_load((ROOT / ".github/workflows/kubernetes-platform.yml").read_text())
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/kubernetes-platform-proof.yml").read_text()
+    )
     steps = workflow["jobs"]["kind-ha-recovery-proof"]["steps"]
     cleanup = next(
         (item for item in steps if item.get("name") == "Reconcile owned HA proof resources"),

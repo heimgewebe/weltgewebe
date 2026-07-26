@@ -960,6 +960,7 @@ def controlled_oci_dockerfile(path: Path) -> str:
     if expected is None:
         raise ProofError(f"no controlled OCI Dockerfile contract for {relative}")
     lock = _oci_mirror_lock()
+    controlled_refs: dict[str, tuple[str, str]] = {}
     for name in expected:
         spec = lock["images"].get(name)
         if not isinstance(spec, dict):
@@ -975,17 +976,57 @@ def controlled_oci_dockerfile(path: Path) -> str:
         ):
             raise ProofError(f"controlled OCI build image is invalid: {name}")
         dockerfile_ref = f"{local_ref}@{digest}"
-        if source.count(dockerfile_ref) != 1:
+        if dockerfile_ref in controlled_refs:
             raise ProofError(
-                f"Dockerfile {relative} must contain controlled image {name} exactly once"
+                f"controlled OCI build images share Dockerfile reference {dockerfile_ref}"
             )
-        source = source.replace(dockerfile_ref, local_ref)
-    for line in source.splitlines():
-        if line.lstrip().upper().startswith("FROM ") and "@sha256:" in line:
-            raise ProofError(
-                f"Dockerfile {relative} retains a registry-resolved digest in strict mode"
+        controlled_refs[dockerfile_ref] = (name, local_ref)
+
+    from_instruction = re.compile(
+        r"^(?P<prefix>\s*FROM(?:\s+--[^\s]+)*\s+)"
+        r"(?P<image>[^\s]+)"
+        r"(?P<suffix>(?:\s+AS\s+(?P<alias>[A-Za-z0-9._-]+))?\s*)$",
+        re.IGNORECASE,
+    )
+    observed: dict[str, int] = {name: 0 for name in expected}
+    stage_aliases: set[str] = set()
+    rewritten: list[str] = []
+    for line in source.splitlines(keepends=True):
+        body = line.rstrip("\r\n")
+        ending = line[len(body) :]
+        if not body.lstrip().upper().startswith("FROM "):
+            rewritten.append(line)
+            continue
+        match = from_instruction.fullmatch(body)
+        if match is None:
+            raise ProofError(f"Dockerfile {relative} has unsupported FROM syntax: {body}")
+        image = match.group("image")
+        replacement = controlled_refs.get(image)
+        if replacement is None:
+            if image not in stage_aliases:
+                raise ProofError(
+                    f"Dockerfile {relative} uses uncontrolled OCI base image {image}"
+                )
+            rewritten.append(line)
+        else:
+            name, local_ref = replacement
+            observed[name] += 1
+            rewritten.append(
+                f"{match.group('prefix')}{local_ref}{match.group('suffix')}{ending}"
             )
-    return source
+        alias = match.group("alias")
+        if alias is not None:
+            stage_aliases.add(alias)
+
+    invalid_counts = {name: count for name, count in observed.items() if count != 1}
+    if invalid_counts:
+        detail = ", ".join(
+            f"{name}={count}" for name, count in sorted(invalid_counts.items())
+        )
+        raise ProofError(
+            f"Dockerfile {relative} must use each controlled OCI base exactly once: {detail}"
+        )
+    return "".join(rewritten)
 
 
 def _build_dockerfile(path: Path) -> tuple[list[str], str | None]:

@@ -191,32 +191,53 @@ class KubernetesHaContractTests(unittest.TestCase):
                 relative,
             )
 
-    def test_kubernetes_workflow_checks_out_the_event_merge_state(self) -> None:
-        workflow_path = ROOT / ".github/workflows/kubernetes-platform.yml"
-        workflow_text = workflow_path.read_text()
-        workflow = yaml.safe_load(workflow_text)
-        checkout_steps = [
+    def test_kubernetes_workflows_separate_pr_and_privileged_proofs(self) -> None:
+        pr_path = ROOT / ".github/workflows/kubernetes-platform.yml"
+        proof_path = ROOT / ".github/workflows/kubernetes-platform-proof.yml"
+        pr_text = pr_path.read_text()
+        proof_text = proof_path.read_text()
+        pr_workflow = yaml.safe_load(pr_text)
+        proof_workflow = yaml.safe_load(proof_text)
+        self.assertEqual(set(pr_workflow["on"]), {"pull_request"})
+        self.assertEqual(set(proof_workflow["on"]), {"push", "workflow_dispatch"})
+        expected_head = proof_workflow["on"]["workflow_dispatch"]["inputs"]["expected_head"]
+        self.assertIs(expected_head["required"], True)
+        self.assertEqual(expected_head["type"], "string")
+        self.assertNotIn("packages: read", pr_text)
+        self.assertNotIn("github.token", pr_text)
+        self.assertNotIn("pull_request", proof_workflow["on"])
+
+        pr_checkout_steps = [
             step
-            for job in workflow["jobs"].values()
+            for job in pr_workflow["jobs"].values()
             for step in job.get("steps", [])
             if str(step.get("uses", "")).startswith("actions/checkout@")
         ]
-        self.assertEqual(len(checkout_steps), 4)
-        for step in checkout_steps:
+        proof_checkout_steps = [
+            step
+            for job in proof_workflow["jobs"].values()
+            for step in job.get("steps", [])
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+        ]
+        self.assertEqual(len(pr_checkout_steps), 2)
+        self.assertEqual(len(proof_checkout_steps), 4)
+        for step in pr_checkout_steps + proof_checkout_steps:
             self.assertEqual(
                 step["uses"],
                 "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
             )
             self.assertNotIn("ref", step.get("with", {}))
-        self.assertIn(
-            "PROOF_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}",
-            workflow_text,
-        )
-        self.assertNotIn("ref: ${{ github.event.pull_request.head.sha", workflow_text)
+        self.assertIn("PROOF_SOURCE_COMMIT: ${{ github.sha }}", proof_text)
+        self.assertNotIn("github.event.pull_request", proof_text)
 
-    def test_kubernetes_workflow_covers_api_build_inputs(self) -> None:
-        workflow = (ROOT / ".github/workflows/kubernetes-platform.yml").read_text()
+    def test_kubernetes_workflows_cover_api_build_inputs(self) -> None:
+        workflows = (
+            (ROOT / ".github/workflows/kubernetes-platform.yml").read_text(),
+            (ROOT / ".github/workflows/kubernetes-platform-proof.yml").read_text(),
+        )
         for path in (
+            '".github/workflows/kubernetes-platform.yml"',
+            '".github/workflows/kubernetes-platform-proof.yml"',
             '".dockerignore"',
             '"Cargo.toml"',
             '"Cargo.lock"',
@@ -225,7 +246,8 @@ class KubernetesHaContractTests(unittest.TestCase):
             '"scripts/dev/**"',
             '"policies/**"',
         ):
-            self.assertEqual(workflow.count(f"- {path}"), 2, path)
+            for workflow in workflows:
+                self.assertEqual(workflow.count(f"- {path}"), 1, path)
 
     def test_zone_contract_requires_three_distinct_zones(self) -> None:
         valid = {
