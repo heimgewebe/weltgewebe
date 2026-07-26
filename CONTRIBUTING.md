@@ -15,7 +15,7 @@ Weitere Referenzen:
 - [`docs/techstack.md`](docs/techstack.md) — Stack-Referenz (SvelteKit, Rust/Axum, Postgres + Outbox, JetStream, Caddy).
 - [`docs/runbook.md`](docs/runbook.md) — Betrieb, DR/DSGVO-Drills.
 - [`docs/datenmodell.md`](docs/datenmodell.md) — Tabellen, Projektionen, Events.
-- [`ci/budget.json`](ci/budget.json) — Performance-Budgets.
+- [`policies/performance.v1.json`](policies/performance.v1.json) — Performance-Budgets.
 
 Kurzprinzip: **„Richtig routen, klein schneiden, sauber messen.“**
 
@@ -66,7 +66,7 @@ Nur reale Zielordner. Was nicht existiert, wird hier nicht als Gegenwart aufgeli
 - **Compose-Profile:** `infra/compose/*.yml`.
 - **Proxy, Headers, CSP:** `infra/caddy/`.
 - **CI-Workflow:** `.github/workflows/*.yml`.
-- **Performance-Budget:** `ci/budget.json`.
+- **Performance-Budget:** `policies/performance.v1.json`.
 - **Soft-Limits / SLOs:** `policies/`.
 - **App-Defaults:** `configs/app.defaults.yml`.
 - **Architektur-Entscheidung:** `docs/adr/ADR-xxx__<slug>.md`.
@@ -162,7 +162,7 @@ Check-Logik:
 
 CI-Gates können Builds brechen:
 
-- Frontend-Budget aus `ci/budget.json`.
+- Frontend-Budget aus `policies/performance.v1.json`.
 - Lints/Formatter: Web (ESLint/Prettier, `max-warnings=0`), Rust (`cargo fmt`, `cargo clippy -D warnings`).
 - Tests (`pnpm test`, `cargo test --locked`).
 - Sicherheits- und Konsistenzchecks (`cargo deny`, `docs-guard.yml`, Compose-Smoke).

@@ -15,6 +15,32 @@ export class ApiRequestError extends Error {
   }
 }
 
+function isNodeVersionConflictBody(body: unknown): boolean {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return false;
+  }
+  const node = body as Record<string, unknown>;
+  return (
+    typeof node.id === "string" &&
+    typeof node.title === "string" &&
+    typeof node.updated_at === "string"
+  );
+}
+
+async function readErrorBody(response: Response): Promise<unknown> {
+  const text = await response.text().catch(() => "");
+  if (!text) return undefined;
+
+  try {
+    const body = JSON.parse(text) as unknown;
+    return response.status === 412 && !isNodeVersionConflictBody(body)
+      ? undefined
+      : body;
+  } catch {
+    return response.status === 412 ? undefined : text;
+  }
+}
+
 async function requestJson<T>(
   path: string,
   method: "POST" | "PATCH" | "PUT",
@@ -34,9 +60,7 @@ async function requestJson<T>(
     signal,
   });
   if (!res.ok) {
-    const body =
-      res.status === 412 ? await res.json().catch(() => undefined) : undefined;
-    throw new ApiRequestError(res.status, body);
+    throw new ApiRequestError(res.status, await readErrorBody(res));
   }
   return res.json();
 }
@@ -73,16 +97,14 @@ async function deleteResource(path: string, etag?: string): Promise<void> {
     credentials: "include",
   });
   if (!res.ok) {
-    const body =
-      res.status === 412 ? await res.json().catch(() => undefined) : undefined;
-    throw new ApiRequestError(res.status, body);
+    throw new ApiRequestError(res.status, await readErrorBody(res));
   }
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(path, { credentials: "include", signal });
   if (!res.ok) {
-    throw new ApiRequestError(res.status);
+    throw new ApiRequestError(res.status, await readErrorBody(res));
   }
   return res.json();
 }

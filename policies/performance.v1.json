@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "contract_id": "weltgewebe-performance-v1",
+  "authority": {
+    "status": "canonical",
+    "replaces": [
+      "ci/budget.json",
+      "policies/perf.json",
+      "apps/web/route-performance-budget.json",
+      "policies/slo.yaml#/services/web/latency",
+      "policies/slo.yaml#/services/api/latency"
+    ],
+    "does_not_establish": [
+      "production capacity without a revision-bound measurement artifact",
+      "runtime performance from configured thresholds alone",
+      "database scalability from query-plan shape alone"
+    ]
+  },
+  "measurements": {
+    "web_build": {
+      "status": "blocking",
+      "runner": "apps/web/scripts/assert-route-performance-budget.mjs",
+      "artifact_kind": "generated-route-assets",
+      "budget": {
+        "schema_version": 2,
+        "measurement": "sum of unique modulepreload and stylesheet assets referenced by prerendered route HTML, gzip level 9",
+        "output_directories": [
+          "build",
+          ".vercel/output/static"
+        ],
+        "routes": {
+          "/login": {
+            "max_initial_js_gzip_bytes": 46000,
+            "max_initial_css_gzip_bytes": 3200,
+            "forbid_css_markers": [
+              ".maplibregl-"
+            ],
+            "require_css_markers": [
+              ".wg-page"
+            ],
+            "min_initial_js_assets": 1,
+            "min_initial_css_assets": 1
+          },
+          "/antraege": {
+            "max_initial_js_gzip_bytes": 55000,
+            "max_initial_css_gzip_bytes": 5000,
+            "forbid_css_markers": [
+              ".maplibregl-"
+            ],
+            "require_css_markers": [
+              ".wg-page"
+            ],
+            "min_initial_js_assets": 1,
+            "min_initial_css_assets": 1
+          },
+          "/settings": {
+            "max_initial_js_gzip_bytes": 57000,
+            "max_initial_css_gzip_bytes": 3600,
+            "forbid_css_markers": [
+              ".maplibregl-",
+              ".wg-page"
+            ],
+            "require_css_markers": [],
+            "min_initial_js_assets": 1,
+            "min_initial_css_assets": 1
+          },
+          "/map": {
+            "max_initial_js_gzip_bytes": 80500,
+            "max_initial_css_gzip_bytes": 18000,
+            "forbid_css_markers": [],
+            "require_css_markers": [
+              ".maplibregl-"
+            ],
+            "min_initial_js_assets": 1,
+            "min_initial_css_assets": 1
+          }
+        },
+        "emitted_assets": {
+          "garnrolle": {
+            "directory": "_app/immutable/assets",
+            "filename_prefix": "garnrolle.",
+            "required_extension": ".webp",
+            "forbid_extensions": [
+              ".png"
+            ],
+            "max_bytes": 80000
+          }
+        }
+      }
+    },
+    "web_runtime": {
+      "status": "calibration_required",
+      "runner": "playwright",
+      "artifact_kind": "browser-runtime-samples",
+      "profiles": {
+        "desktop": {
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          },
+          "network_profile": "unthrottled-ci",
+          "runs": 5
+        },
+        "mobile": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "network_profile": "fast-3g",
+          "runs": 5
+        }
+      },
+      "scenarios": {
+        "public_map": {
+          "path": "/map",
+          "metrics": {
+            "largest_contentful_paint_ms": {
+              "percentile": 75,
+              "max": 2500
+            },
+            "interaction_to_next_paint_ms": {
+              "percentile": 75,
+              "max": 200
+            },
+            "usable_map_ms": {
+              "percentile": 95,
+              "max": 3000
+            }
+          }
+        }
+      },
+      "limitations": [
+        "The thresholds are inherited from prior policy files and are not blocking until a revision-bound calibration artifact exists.",
+        "Synthetic browser samples do not establish production field performance."
+      ]
+    },
+    "api_runtime": {
+      "status": "calibration_required",
+      "runner": "k6",
+      "artifact_kind": "api-load-samples",
+      "scenario": {
+        "virtual_users": 10,
+        "duration_seconds": 30,
+        "dataset_profile": "domain-scale-ci",
+        "concurrency_profile": "mixed-health-and-read"
+      },
+      "metrics": {
+        "http_request_duration_ms": {
+          "percentile": 95,
+          "max": 300
+        },
+        "http_request_duration_p99_ms": {
+          "percentile": 99,
+          "max": 750
+        },
+        "http_request_failed_rate": {
+          "max": 0.01
+        }
+      },
+      "limitations": [
+        "The p95 threshold is inherited from prior policy files and is not blocking until the workload is wired to a revision-bound application and dataset.",
+        "Health-endpoint smoke checks alone do not establish API capacity."
+      ]
+    },
+    "database_scale": {
+      "status": "blocking_plan_shape",
+      "runner": "scripts/performance/domain_scale.py",
+      "artifact_kind": "postgresql-plan-evidence",
+      "config": "configs/performance/domain-scale.v1.json",
+      "profiles": [
+        "ci",
+        "million_nodes"
+      ],
+      "limitations": [
+        "Plan-shape checks do not establish end-to-end latency or concurrent throughput."
+      ]
+    },
+    "api_replica_resources": {
+      "status": "calibration_required",
+      "artifact_kind": "container-resource-samples",
+      "metrics": [
+        "cpu_seconds",
+        "max_rss_bytes",
+        "database_connections"
+      ],
+      "limitations": [
+        "No blocking resource thresholds exist until reproducible measurements cover projection refresh and steady-state traffic."
+      ]
+    }
+  },
+  "legacy_contracts": {
+    "must_not_exist": [
+      "ci/budget.json",
+      "policies/perf.json",
+      "apps/web/route-performance-budget.json"
+    ],
+    "slo_reference": "policies/slo.yaml"
+  }
+}
