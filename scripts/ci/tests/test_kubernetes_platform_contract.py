@@ -323,7 +323,81 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertEqual(result["image_id"], image_id)
         self.assertEqual(result["locked_index_digest"], locked_digest)
         self.assertEqual(result["platform_target_digest"], platform_digest)
+        self.assertEqual(result["platform_evidence_kind"], "cri_repo_digest")
+        self.assertIsNone(result["containerd_target_digest"])
         self.assertIs(result["cri_image_status_verified"], True)
+
+    def test_oci_mirror_cri_binding_falls_back_to_exact_containerd_target(
+        self,
+    ) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        platform_digest = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        local_ref = "quay.io/cilium/cilium:v1.19.5"
+        payload = {
+            "status": {
+                "id": image_id,
+                "repoTags": [local_ref],
+                "repoDigests": [],
+            }
+        }
+        listing = (
+            "REF TYPE DIGEST SIZE PLATFORMS LABELS\n"
+            f"{local_ref} application/vnd.oci.image.index.v1+json "
+            f"{platform_digest} 1.0MiB linux/amd64 -"
+        )
+        with mock.patch.object(
+            self.oci_mirror,
+            "_output",
+            side_effect=[json.dumps(payload), listing],
+        ) as output:
+            result = self.oci_mirror._kind_cri_image_binding(
+                "proof-control-plane",
+                local_ref,
+                f"{local_ref}@{locked_digest}",
+                locked_digest,
+                image_id,
+            )
+        self.assertEqual(output.call_count, 2)
+        self.assertEqual(result["runtime_ref"], local_ref)
+        self.assertEqual(result["repo_digests"], [])
+        self.assertIsNone(result["selected_repo_digest"])
+        self.assertEqual(result["containerd_target_digest"], platform_digest)
+        self.assertEqual(
+            result["platform_evidence_kind"], "containerd_target_digest"
+        )
+        self.assertEqual(result["platform_target_digest"], platform_digest)
+
+    def test_oci_mirror_cri_binding_rejects_unrelated_repo_digest(
+        self,
+    ) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        platform_digest = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        runtime_ref = "quay.io/cilium/cilium:v1.19.5"
+        payload = {
+            "status": {
+                "id": image_id,
+                "repoTags": [runtime_ref],
+                "repoDigests": [
+                    "quay.io/other/image@" + platform_digest
+                ],
+            }
+        }
+        with mock.patch.object(
+            self.oci_mirror, "_output", return_value=json.dumps(payload)
+        ) as output:
+            with self.assertRaisesRegex(
+                self.oci_mirror.IntegrityError, "ambiguous platform evidence"
+            ):
+                self.oci_mirror._kind_cri_image_binding(
+                    "proof-control-plane",
+                    runtime_ref,
+                    f"{runtime_ref}@{locked_digest}",
+                    locked_digest,
+                    image_id,
+                )
+        output.assert_called_once()
 
     def test_oci_mirror_cri_binding_accepts_single_kind_import_digest(self) -> None:
         locked_digest = "sha256:" + "a" * 64
@@ -351,6 +425,8 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             )
         self.assertEqual(result["runtime_ref"], runtime_ref)
         self.assertEqual(result["selected_repo_digest"], import_ref)
+        self.assertEqual(result["platform_evidence_kind"], "cri_repo_digest")
+        self.assertIsNone(result["containerd_target_digest"])
         self.assertEqual(result["platform_target_digest"], platform_digest)
 
     def test_oci_mirror_cri_binding_rejects_host_image_id_drift(self) -> None:
@@ -571,6 +647,8 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             "repo_tags": [runtime],
             "repo_digests": [f"{runtime}@{platform}"],
             "selected_repo_digest": f"{runtime}@{platform}",
+            "containerd_target_digest": None,
+            "platform_evidence_kind": "cri_repo_digest",
             "locked_index_digest": locked,
             "platform_target_digest": platform,
             "cri_image_status_verified": True,
@@ -595,8 +673,10 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             },
         }
         with mock.patch.object(self.reference, "_oci_mirror_lock", return_value=lock):
-            refs, digests = self.reference._validate_controlled_oci_kind_receipt(
-                receipt, "kind-gitops", "proof"
+            refs, digests, image_ids = (
+                self.reference._validate_controlled_oci_kind_receipt(
+                    receipt, "kind-gitops", "proof"
+                )
             )
         self.assertEqual(refs[self.reference._normalize_oci_reference(canonical)], runtime)
         self.assertEqual(
@@ -604,6 +684,70 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             runtime,
         )
         self.assertEqual(digests[runtime], platform)
+        self.assertEqual(image_ids[runtime], image_id)
+
+    def test_strict_oci_kind_receipt_accepts_containerd_target_fallback(
+        self,
+    ) -> None:
+        locked = "sha256:" + "a" * 64
+        platform = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        canonical = f"quay.io/cilium/cilium:v1.19.5@{locked}"
+        runtime = "quay.io/cilium/cilium:v1.19.5"
+        lock = {
+            "images": {
+                "cilium_agent": {
+                    "canonical": canonical,
+                    "local_ref": runtime,
+                    "digest": locked,
+                    "suites": ["kind-gitops"],
+                    "load_into_kind": True,
+                }
+            }
+        }
+        node = {
+            "node": "proof-control-plane",
+            "runtime_ref": runtime,
+            "image_id": image_id,
+            "repo_tags": [runtime],
+            "repo_digests": [],
+            "selected_repo_digest": None,
+            "containerd_target_digest": platform,
+            "platform_evidence_kind": "containerd_target_digest",
+            "locked_index_digest": locked,
+            "platform_target_digest": platform,
+            "cri_image_status_verified": True,
+        }
+        receipt = {
+            "status": "pass",
+            "strict": True,
+            "cluster": "proof",
+            "loaded_count": 1,
+            "registry_blockades": [{"node": "proof-control-plane"}],
+            "images": {
+                "cilium_agent": {
+                    "canonical": canonical,
+                    "local_ref": runtime,
+                    "runtime_ref": runtime,
+                    "locked_index_digest": locked,
+                    "platform_target_digest": platform,
+                    "cri_image_id": image_id,
+                    "image_id": image_id,
+                    "nodes": [node],
+                }
+            },
+        }
+        with mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ):
+            refs, digests, image_ids = (
+                self.reference._validate_controlled_oci_kind_receipt(
+                    receipt, "kind-gitops", "proof"
+                )
+            )
+        self.assertEqual(refs[self.reference._normalize_oci_reference(canonical)], runtime)
+        self.assertEqual(digests[runtime], platform)
+        self.assertEqual(image_ids[runtime], image_id)
 
     def test_strict_cilium_helm_disables_digest_resolution(self) -> None:
         artifacts = {
@@ -684,6 +828,34 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             self.assertEqual(
                 self.reference.controlled_oci_runtime_digest(source), platform
             )
+
+    def test_strict_oci_runtime_identities_include_target_and_image_id(
+        self,
+    ) -> None:
+        locked = "sha256:" + "a" * 64
+        platform = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        source = f"nats:2.10-alpine@{locked}"
+        runtime = "docker.io/library/nats:2.10-alpine"
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference,
+            "_CONTROLLED_OCI_RUNTIME_REFS",
+            {self.reference._normalize_oci_reference(source): runtime},
+        ), mock.patch.object(
+            self.reference,
+            "_CONTROLLED_OCI_RUNTIME_DIGESTS",
+            {runtime: platform},
+        ), mock.patch.object(
+            self.reference,
+            "_CONTROLLED_OCI_RUNTIME_IMAGE_IDS",
+            {runtime: image_id},
+        ):
+            identities = self.reference.controlled_oci_runtime_identity_digests(
+                source
+            )
+        self.assertEqual(identities, {platform, image_id})
 
     def test_strict_oci_dockerfiles_use_verified_local_base_tags(self) -> None:
         with mock.patch.dict(

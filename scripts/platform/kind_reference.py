@@ -31,6 +31,7 @@ OCI_DOCKERFILE_IMAGES = {
 }
 _CONTROLLED_OCI_RUNTIME_REFS: dict[str, str] = {}
 _CONTROLLED_OCI_RUNTIME_DIGESTS: dict[str, str] = {}
+_CONTROLLED_OCI_RUNTIME_IMAGE_IDS: dict[str, str] = {}
 MARKERS = CACHE / "clusters"
 KUBECONFIGS = CACHE / "kubeconfigs"
 DEFAULT_CLUSTER = "weltgewebe-reference"
@@ -195,7 +196,7 @@ def prepare_controlled_oci_host(suite: str) -> dict[str, Any]:
 
 def _validate_controlled_oci_kind_receipt(
     result: dict[str, Any], suite: str, cluster: str
-) -> tuple[dict[str, str], dict[str, str]]:
+) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
     if result.get("status") != "pass" or result.get("strict") is not True:
         raise ProofError(f"controlled OCI kind load did not pass strictly: {result}")
     if result.get("cluster") != cluster:
@@ -222,6 +223,7 @@ def _validate_controlled_oci_kind_receipt(
 
     runtime_refs: dict[str, str] = {}
     runtime_digests: dict[str, str] = {}
+    runtime_image_ids: dict[str, str] = {}
     image_nodes: set[str] | None = None
     for name, spec in expected.items():
         observed = images[name]
@@ -258,6 +260,8 @@ def _validate_controlled_oci_kind_receipt(
             repo_tags = node.get("repo_tags")
             repo_digests = node.get("repo_digests")
             selected_repo_digest = node.get("selected_repo_digest")
+            containerd_target_digest = node.get("containerd_target_digest")
+            platform_evidence_kind = node.get("platform_evidence_kind")
             canonical_name = _normalize_oci_reference(canonical).rsplit("@", 1)[0]
             allowed_repo_digests = {
                 f"{expected_runtime}@{platform_digest}",
@@ -273,6 +277,22 @@ def _validate_controlled_oci_kind_receipt(
                 is not None
                 and selected_repo_digest.endswith(f"@{platform_digest}")
             )
+            repo_digest_evidence = (
+                platform_evidence_kind == "cri_repo_digest"
+                and isinstance(repo_digests, list)
+                and selected_repo_digest in repo_digests
+                and (
+                    selected_repo_digest in allowed_repo_digests
+                    or import_digest
+                )
+                and containerd_target_digest is None
+            )
+            containerd_target_evidence = (
+                platform_evidence_kind == "containerd_target_digest"
+                and repo_digests == []
+                and selected_repo_digest is None
+                and containerd_target_digest == platform_digest
+            )
             if (
                 node.get("cri_image_status_verified") is not True
                 or node.get("runtime_ref") != expected_runtime
@@ -282,11 +302,7 @@ def _validate_controlled_oci_kind_receipt(
                 or not isinstance(repo_tags, list)
                 or expected_runtime not in repo_tags
                 or not isinstance(repo_digests, list)
-                or selected_repo_digest not in repo_digests
-                or (
-                    selected_repo_digest not in allowed_repo_digests
-                    and not import_digest
-                )
+                or not (repo_digest_evidence or containerd_target_evidence)
             ):
                 raise ProofError(f"controlled OCI node CRI binding drift: {name}")
         if image_nodes is None:
@@ -298,6 +314,9 @@ def _validate_controlled_oci_kind_receipt(
         )
         if previous_digest != platform_digest:
             raise ProofError("controlled OCI runtime tag has conflicting digests")
+        previous_image_id = runtime_image_ids.setdefault(expected_runtime, image_id)
+        if previous_image_id != image_id:
+            raise ProofError("controlled OCI runtime tag has conflicting image IDs")
         for source_ref in (
             canonical,
             f"{local_ref}@{locked_digest}",
@@ -306,7 +325,7 @@ def _validate_controlled_oci_kind_receipt(
             runtime_refs[_normalize_oci_reference(source_ref)] = expected_runtime
     if image_nodes != blockade_nodes:
         raise ProofError("controlled OCI image and blockade node inventories disagree")
-    return runtime_refs, runtime_digests
+    return runtime_refs, runtime_digests, runtime_image_ids
 
 
 def load_controlled_oci_into_kind(kind: str, cluster: str, suite: str) -> dict[str, Any]:
@@ -329,12 +348,15 @@ def load_controlled_oci_into_kind(kind: str, cluster: str, suite: str) -> dict[s
         result = json.loads(raw)
     except json.JSONDecodeError as error:
         raise ProofError("controlled OCI kind-load receipt is malformed") from error
-    runtime_refs, runtime_digests = _validate_controlled_oci_kind_receipt(
-        result, suite, cluster
+    runtime_refs, runtime_digests, runtime_image_ids = (
+        _validate_controlled_oci_kind_receipt(result, suite, cluster)
     )
-    global _CONTROLLED_OCI_RUNTIME_REFS, _CONTROLLED_OCI_RUNTIME_DIGESTS
+    global _CONTROLLED_OCI_RUNTIME_REFS
+    global _CONTROLLED_OCI_RUNTIME_DIGESTS
+    global _CONTROLLED_OCI_RUNTIME_IMAGE_IDS
     _CONTROLLED_OCI_RUNTIME_REFS = runtime_refs
     _CONTROLLED_OCI_RUNTIME_DIGESTS = runtime_digests
+    _CONTROLLED_OCI_RUNTIME_IMAGE_IDS = runtime_image_ids
     return result
 
 
@@ -377,6 +399,25 @@ def controlled_oci_runtime_digest(reference: str) -> str:
             f"controlled OCI runtime digest is unavailable for {reference}"
         )
     return digest
+
+
+def controlled_oci_runtime_identity_digests(reference: str) -> set[str]:
+    if not controlled_oci_strict():
+        return {controlled_oci_runtime_digest(reference)}
+    runtime_ref = controlled_oci_runtime_image(reference)
+    identities = {
+        value
+        for value in (
+            _CONTROLLED_OCI_RUNTIME_DIGESTS.get(runtime_ref),
+            _CONTROLLED_OCI_RUNTIME_IMAGE_IDS.get(runtime_ref),
+        )
+        if _full_sha256(value)
+    }
+    if not identities:
+        raise ProofError(
+            f"controlled OCI runtime identities are unavailable for {reference}"
+        )
+    return identities
 
 
 def require_host_tools() -> None:

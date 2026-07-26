@@ -1201,7 +1201,7 @@ def verify_barman_sidecar_images(
     expected_sidecar_image = ref.controlled_oci_runtime_image(
         BARMAN_CLOUD_SIDECAR_IMAGE
     )
-    expected_digest = ref.controlled_oci_runtime_digest(
+    expected_digests = ref.controlled_oci_runtime_identity_digests(
         BARMAN_CLOUD_SIDECAR_IMAGE
     )
     observed: dict[str, dict[str, object]] = {}
@@ -1243,7 +1243,7 @@ def verify_barman_sidecar_images(
         image_id = str(status.get("imageID", ""))
         running = status.get("state", {}).get("running", {})
         started_at = running.get("startedAt")
-        if not image_id.endswith(expected_digest):
+        if not any(image_id.endswith(digest) for digest in expected_digests):
             raise ref.ProofError(
                 f"PostgreSQL pod {name} runs an unbound Barman image ID: {image_id}"
             )

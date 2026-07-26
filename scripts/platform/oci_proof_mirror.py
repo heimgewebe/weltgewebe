@@ -531,6 +531,34 @@ def _containerd_reference(reference: str) -> str:
     return canonical + (separator + digest if separator else "")
 
 
+def _kind_image_target(node: str, runtime_ref: str) -> str:
+    raw = _output(
+        [
+            "docker",
+            "exec",
+            node,
+            "ctr",
+            "--namespace",
+            "k8s.io",
+            "images",
+            "list",
+            f"name=={runtime_ref}",
+        ],
+        timeout=60,
+    )
+    rows = [line.split() for line in raw.splitlines() if line.strip()]
+    if len(rows) != 2 or len(rows[1]) < 3 or rows[1][0] != runtime_ref:
+        raise IntegrityError(
+            f"containerd returned invalid image listing for {runtime_ref} on {node}"
+        )
+    target = rows[1][2]
+    if not FULL_SHA256.fullmatch(target):
+        raise IntegrityError(
+            f"containerd returned invalid target digest for {runtime_ref} on {node}"
+        )
+    return target
+
+
 def _kind_cri_image_binding(
     node: str,
     local_ref: str,
@@ -611,13 +639,24 @@ def _kind_cri_image_binding(
     ]
     selected = preferred if preferred else imported
     selected_digests = {item.rsplit("@", 1)[-1] for item in selected}
-    if len(selected) != 1 or len(selected_digests) != 1:
+    selected_repo_digest: str | None
+    containerd_target_digest: str | None
+    if len(selected) == 1 and len(selected_digests) == 1:
+        selected_repo_digest = selected[0]
+        containerd_target_digest = None
+        platform_digest = next(iter(selected_digests))
+        platform_evidence_kind = "cri_repo_digest"
+    elif not valid_repo_digests:
+        selected_repo_digest = None
+        containerd_target_digest = _kind_image_target(node, runtime_ref)
+        platform_digest = containerd_target_digest
+        platform_evidence_kind = "containerd_target_digest"
+    else:
         raise IntegrityError(
             f"CRI runtime tag has ambiguous platform evidence for {runtime_ref} "
-            f"on {node}: preferred={preferred}, imported={imported}"
+            f"on {node}: preferred={preferred}, imported={imported}, "
+            f"repo_digests={valid_repo_digests}"
         )
-    selected_repo_digest = selected[0]
-    platform_digest = next(iter(selected_digests))
     return {
         "node": node,
         "runtime_ref": runtime_ref,
@@ -625,6 +664,8 @@ def _kind_cri_image_binding(
         "repo_tags": sorted(repo_tags),
         "repo_digests": sorted(repo_digests),
         "selected_repo_digest": selected_repo_digest,
+        "containerd_target_digest": containerd_target_digest,
+        "platform_evidence_kind": platform_evidence_kind,
         "locked_index_digest": locked_digest,
         "platform_target_digest": platform_digest,
         "cri_image_status_verified": True,
