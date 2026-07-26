@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deleteNode, replaceNode } from "./domainWrites";
+import { deleteNode, replaceNode, updateOwnGarnrolle } from "./domainWrites";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -91,6 +91,14 @@ describe("domain writes", () => {
       "a non-node JSON problem",
       JSON.stringify({ code: "node_version_conflict", message: "conflict" }),
     ],
+    [
+      "a node-shaped response for another id",
+      JSON.stringify({
+        id: "node-b",
+        title: "Andere Version",
+        updated_at: "2026-07-26T08:00:00Z",
+      }),
+    ],
   ])("drops %s from 412 responses", async (_label, body) => {
     vi.stubGlobal(
       "fetch",
@@ -101,5 +109,26 @@ describe("domain writes", () => {
       status: 412,
       body: undefined,
     });
+  });
+
+  it("keeps non-node 412 bodies on non-node write paths", async () => {
+    const body = { code: "profile_version_conflict", message: "conflict" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(body), {
+          status: 412,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(
+      updateOwnGarnrolle({
+        title: "Garnrolle",
+        tags: [],
+        map_state: "not_on_map",
+      }),
+    ).rejects.toMatchObject({ status: 412, body });
   });
 });
