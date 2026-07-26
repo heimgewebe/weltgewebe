@@ -294,8 +294,11 @@ implementations:
     verified_by:
       - scripts/platform/validate_platform.py
       - scripts/platform/kind_reference.py
+      - scripts/platform/oci_proof_mirror.py
+      - scripts/platform/proof_identity.py
       - scripts/ci/tests/test_kubernetes_platform_contract.py
       - .github/workflows/kubernetes-platform.yml
+      - .github/workflows/kubernetes-platform-proof.yml
 
 
   - id: impl.api.migration-only
@@ -338,7 +341,10 @@ implementations:
       - docs/reports/kubernetes-platform-foundation-status.md
     verified_by:
       - scripts/ci/tests/test_kubernetes_platform_contract.py
+      - scripts/platform/oci_proof_mirror.py
+      - scripts/platform/proof_identity.py
       - .github/workflows/kubernetes-platform.yml
+      - .github/workflows/kubernetes-platform-proof.yml
 
   - id: impl.api.federation-core-v1
     path: apps/api/src/federation.rs

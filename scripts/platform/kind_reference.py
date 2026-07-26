@@ -994,7 +994,7 @@ def controlled_oci_dockerfile(path: Path) -> str:
     for line in source.splitlines(keepends=True):
         body = line.rstrip("\r\n")
         ending = line[len(body) :]
-        if not body.lstrip().upper().startswith("FROM "):
+        if re.match(r"^\s*FROM(?:\s|$)", body, re.IGNORECASE) is None:
             rewritten.append(line)
             continue
         match = from_instruction.fullmatch(body)

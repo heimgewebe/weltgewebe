@@ -243,7 +243,9 @@ class KubernetesHaContractTests(unittest.TestCase):
             '"Cargo.lock"',
             '"toolchain.versions.yml"',
             '"apps/api/**"',
+            '"configs/**"',
             '"scripts/dev/**"',
+            '"scripts/ops/**"',
             '"policies/**"',
         ):
             for workflow in workflows:
