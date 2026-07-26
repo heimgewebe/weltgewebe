@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validatePerformanceBudget } from "./route-performance-budget-config.mjs";
@@ -84,6 +84,18 @@ function safePath(value, label) {
   ) {
     throw new Error(`${label} must be a safe repository-relative path`);
   }
+}
+
+function replacementReference(value, label) {
+  const reference = string(value, label);
+  const separator = reference.indexOf("#");
+  const path = separator >= 0 ? reference.slice(0, separator) : reference;
+  const fragment = separator >= 0 ? reference.slice(separator + 1) : null;
+  safePath(path, label);
+  if (fragment !== null && fragment.length === 0) {
+    throw new Error(`${label} fragment must not be empty`);
+  }
+  return { reference, path, fragment };
 }
 
 function status(record, expected, label) {
@@ -250,7 +262,9 @@ export function validatePerformanceContract(value) {
   if (authority.status !== "canonical") {
     throw new Error("authority.status must be canonical");
   }
-  strings(authority.replaces, "authority.replaces");
+  const replacements = strings(authority.replaces, "authority.replaces").map(
+    (value) => replacementReference(value, "authority.replaces entry"),
+  );
   strings(authority.does_not_establish, "authority.does_not_establish");
 
   const measurementsRecord = exact(
@@ -277,11 +291,33 @@ export function validatePerformanceContract(value) {
     ["must_not_exist", "slo_reference"],
     "legacy_contracts",
   );
-  for (const path of strings(
+  const absentPaths = strings(
     legacy.must_not_exist,
     "legacy_contracts.must_not_exist",
-  )) {
+  );
+  for (const path of absentPaths) {
     safePath(path, "legacy_contracts.must_not_exist entry");
+  }
+  const replacedFiles = replacements
+    .filter((replacement) => replacement.fragment === null)
+    .map((replacement) => replacement.path);
+  const absentSet = new Set(absentPaths);
+  const replacedSet = new Set(replacedFiles);
+  const missingAbsenceRules = replacedFiles.filter(
+    (path) => !absentSet.has(path),
+  );
+  if (missingAbsenceRules.length > 0) {
+    throw new Error(
+      `authority.replaces file paths must be enforced by legacy_contracts.must_not_exist: ${missingAbsenceRules.join(", ")}`,
+    );
+  }
+  const undeclaredAbsenceRules = absentPaths.filter(
+    (path) => !replacedSet.has(path),
+  );
+  if (undeclaredAbsenceRules.length > 0) {
+    throw new Error(
+      `legacy_contracts.must_not_exist paths must be declared by authority.replaces: ${undeclaredAbsenceRules.join(", ")}`,
+    );
   }
   safePath(legacy.slo_reference, "legacy_contracts.slo_reference");
   return contract;
@@ -301,7 +337,7 @@ export function parsePerformanceContract(text) {
 }
 
 export function assertLegacyContractsAbsent(contract, root = repositoryRoot) {
-  const resolvedRoot = resolve(root);
+  const resolvedRoot = realpathSync(resolve(root));
   for (const relativePath of contract.legacy_contracts.must_not_exist) {
     const target = resolve(resolvedRoot, relativePath);
     const fromRoot = relative(resolvedRoot, target);
@@ -315,11 +351,41 @@ export function assertLegacyContractsAbsent(contract, root = repositoryRoot) {
         `Legacy contract path escapes repository: ${relativePath}`,
       );
     }
-    if (existsSync(target)) {
-      const metadata = lstatSync(target);
-      throw new Error(
-        `Legacy performance contract still exists: ${relativePath} (${metadata.isFile() ? "file" : "non-file"})`,
-      );
+
+    const components = fromRoot.split(sep);
+    let current = resolvedRoot;
+    for (let index = 0; index < components.length; index += 1) {
+      current = resolve(current, components[index]);
+      let metadata;
+      try {
+        metadata = lstatSync(current);
+      } catch (error) {
+        if (error && typeof error === "object" && error.code === "ENOENT") {
+          break;
+        }
+        throw new Error(
+          `Cannot inspect legacy performance contract ${relativePath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      if (metadata.isSymbolicLink()) {
+        const component = relative(resolvedRoot, current);
+        throw new Error(
+          `Legacy contract path contains symbolic link: ${relativePath} (${component})`,
+        );
+      }
+      const isLeaf = index === components.length - 1;
+      if (!isLeaf && !metadata.isDirectory()) {
+        const component = relative(resolvedRoot, current);
+        throw new Error(
+          `Legacy contract path has non-directory ancestor: ${relativePath} (${component})`,
+        );
+      }
+      if (isLeaf) {
+        const kind = metadata.isFile() ? "file" : "non-file";
+        throw new Error(
+          `Legacy performance contract still exists: ${relativePath} (${kind})`,
+        );
+      }
     }
   }
 }
@@ -327,10 +393,38 @@ export function assertLegacyContractsAbsent(contract, root = repositoryRoot) {
 function readPerformanceContractFile(contractPath, root) {
   const resolvedRoot = realpathSync(resolve(root));
   const resolvedContract = resolve(contractPath);
-  const metadata = lstatSync(resolvedContract);
-  if (!metadata.isFile() || metadata.isSymbolicLink()) {
-    throw new Error("Performance contract must be a regular file");
+  const lexicalFromRoot = relative(resolvedRoot, resolvedContract);
+  if (
+    lexicalFromRoot === "" ||
+    lexicalFromRoot === ".." ||
+    lexicalFromRoot.startsWith(`..${sep}`) ||
+    isAbsolute(lexicalFromRoot)
+  ) {
+    throw new Error("Performance contract escapes repository root");
   }
+
+  const components = lexicalFromRoot.split(sep);
+  let current = resolvedRoot;
+  for (let index = 0; index < components.length; index += 1) {
+    current = resolve(current, components[index]);
+    const metadata = lstatSync(current);
+    const component = relative(resolvedRoot, current);
+    if (metadata.isSymbolicLink()) {
+      throw new Error(
+        `Performance contract path contains symbolic link: ${component}`,
+      );
+    }
+    const isLeaf = index === components.length - 1;
+    if (!isLeaf && !metadata.isDirectory()) {
+      throw new Error(
+        `Performance contract path has non-directory ancestor: ${component}`,
+      );
+    }
+    if (isLeaf && !metadata.isFile()) {
+      throw new Error("Performance contract must be a regular file");
+    }
+  }
+
   const realContract = realpathSync(resolvedContract);
   const fromRoot = relative(resolvedRoot, realContract);
   if (

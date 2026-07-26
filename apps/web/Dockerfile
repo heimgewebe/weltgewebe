@@ -8,7 +8,7 @@ COPY apps/web ./
 COPY policies/performance.v1.json /policies/performance.v1.json
 ARG GIT_COMMIT_SHA
 ARG BUILD_TIMESTAMP
-RUN printf '%s' "${GIT_COMMIT_SHA}" | grep -Eq '^[0-9a-f]{40}$'     && printf '%s' "${BUILD_TIMESTAMP}" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$'     && GIT_COMMIT_SHA="${GIT_COMMIT_SHA}" BUILD_TIMESTAMP="${BUILD_TIMESTAMP}"        pnpm build
+RUN printf '%s' "${GIT_COMMIT_SHA}" | grep -Eq '^[0-9a-f]{40}$'     && printf '%s' "${BUILD_TIMESTAMP}" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$'     && GIT_COMMIT_SHA="${GIT_COMMIT_SHA}" BUILD_TIMESTAMP="${BUILD_TIMESTAMP}"        pnpm run build:container
 
 FROM caddy:2.7@sha256:236c6a30ccb84fa412a5360ca8b586d804faba0621ea182fb45902608cd8a563
 COPY apps/web/Caddyfile.container /etc/caddy/Caddyfile
