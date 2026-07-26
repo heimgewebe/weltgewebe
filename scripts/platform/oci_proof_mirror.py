@@ -559,6 +559,7 @@ def _register_kind_digest_alias(
             "docker", "exec", node, "ctr", "--namespace", "k8s.io",
             "images", "tag", "--force", containerd_local_ref, containerd_digest_ref,
         ],
+        capture=True,
         timeout=60,
     )
     alias_target = _kind_image_target(node, containerd_digest_ref)
@@ -590,7 +591,11 @@ def _block_kind_registries(node: str) -> dict[str, Any]:
         + entries
         + "WELTGEWEBE_OCI_BLOCK\nfi"
     )
-    _run(["docker", "exec", node, "sh", "-ceu", command], timeout=60)
+    _run(
+        ["docker", "exec", node, "sh", "-ceu", command],
+        capture=True,
+        timeout=60,
+    )
     observed: dict[str, Any] = {}
     for host in BLOCKED_REGISTRIES:
         ipv4_raw = _output(
@@ -635,7 +640,11 @@ def load_kind(
         if _local_image(spec) is None:
             raise IntegrityError(f"cannot load unverified mirror image into kind: {name}")
     local_refs = [spec["local_ref"] for _name, spec in selected]
-    _run([kind, "load", "docker-image", "--name", cluster, *local_refs], timeout=900)
+    _run(
+        [kind, "load", "docker-image", "--name", cluster, *local_refs],
+        capture=True,
+        timeout=900,
+    )
     loaded: dict[str, Any] = {}
     for name, spec in selected:
         verified = _local_image(spec)

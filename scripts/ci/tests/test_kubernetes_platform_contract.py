@@ -311,6 +311,7 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 "--namespace", "k8s.io", "images", "tag", "--force",
                 canonical_local, canonical_digest,
             ],
+            capture=True,
             timeout=60,
         )
         self.assertEqual(result["containerd_local_ref"], canonical_local)
@@ -349,6 +350,17 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                     "proof-control-plane", local_ref, digest_ref, locked_digest
                 )
 
+    def test_oci_mirror_internal_kind_commands_do_not_pollute_json_stdout(self) -> None:
+        source = (ROOT / "scripts/platform/oci_proof_mirror.py").read_text()
+        self.assertIn(
+            '[kind, "load", "docker-image", "--name", cluster, *local_refs],\n        capture=True,',
+            source,
+        )
+        self.assertIn(
+            '"images", "tag", "--force", containerd_local_ref, containerd_digest_ref,\n        ],\n        capture=True,',
+            source,
+        )
+
     def test_oci_mirror_blocks_registries_inside_kind_node(self) -> None:
         def output(argv, *, timeout=120):
             del timeout
@@ -359,7 +371,14 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             self.oci_mirror, "_output", side_effect=output
         ):
             result = self.oci_mirror._block_kind_registries("proof-control-plane")
-        run.assert_called_once()
+        run.assert_called_once_with(
+            [
+                "docker", "exec", "proof-control-plane", "sh", "-ceu",
+                mock.ANY,
+            ],
+            capture=True,
+            timeout=60,
+        )
         command = run.call_args.args[0][-1]
         self.assertIn("weltgewebe strict OCI registry blockade", command)
         for registry in self.oci_mirror.BLOCKED_REGISTRIES:
