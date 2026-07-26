@@ -1040,6 +1040,9 @@ time.sleep(60)
             "COPY --from=builder /workspace/build /srv/weltgewebe",
             dockerfile,
         )
+        self.assertIn("pnpm run build:container", dockerfile)
+        package = (ROOT / "apps/web/package.json").read_text()
+        self.assertIn("assert-route-performance-budget.mjs --budget-only", package)
 
     def test_web_container_removes_caddy_capability_before_nonroot_user(self) -> None:
         dockerfile = (ROOT / "apps/web/Dockerfile").read_text()
