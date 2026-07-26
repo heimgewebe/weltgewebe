@@ -61,6 +61,11 @@ pub enum NodeMutationError {
     Status(StatusCode),
     DomainReadSourceReadOnly,
     Message(StatusCode, String),
+    Problem {
+        status: StatusCode,
+        code: &'static str,
+        message: &'static str,
+    },
 }
 
 impl IntoResponse for NodeMutationError {
@@ -74,6 +79,11 @@ impl IntoResponse for NodeMutationError {
                 (StatusCode::CONFLICT, body).into_response()
             }
             NodeMutationError::Message(status, body) => (status, body).into_response(),
+            NodeMutationError::Problem {
+                status,
+                code,
+                message,
+            } => (status, Json(json!({ "code": code, "message": message }))).into_response(),
         }
     }
 }
@@ -2652,6 +2662,26 @@ pub async fn replace_node(
     Ok(Json(node))
 }
 
+fn map_postgres_node_delete_error(error: NodeWriteError, id: &str) -> NodeMutationError {
+    match error {
+        NodeWriteError::NotFound => NodeMutationError::Status(StatusCode::NOT_FOUND),
+        NodeWriteError::InvalidEdgeReference(_) => NodeMutationError::Message(
+            StatusCode::CONFLICT,
+            "node deletion blocked by ambiguous edge endpoint".to_string(),
+        ),
+        NodeWriteError::ConversationNotEmpty => NodeMutationError::Problem {
+            status: StatusCode::CONFLICT,
+            code: "node_conversation_not_empty",
+            message:
+                "node deletion is blocked because its public conversation contains contributions",
+        },
+        other => {
+            tracing::error!(%other, node_id = %id, "failed to delete node in PostgreSQL");
+            NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
 pub async fn delete_node(
     State(state): State<ApiState>,
     Path(id): Path<String>,
@@ -2744,21 +2774,9 @@ pub async fn delete_node(
                 .db_pool
                 .as_ref()
                 .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
-            delete_node_with_edges_in_postgres(pool, &id).await.map_err(|error| match error {
-                NodeWriteError::NotFound => NodeMutationError::Status(StatusCode::NOT_FOUND),
-                NodeWriteError::InvalidEdgeReference(_) => NodeMutationError::Message(
-                    StatusCode::CONFLICT,
-                    "node deletion blocked by ambiguous edge endpoint".to_string(),
-                ),
-                NodeWriteError::ConversationNotEmpty => NodeMutationError::Message(
-                    StatusCode::CONFLICT,
-                    "node deletion blocked because its public conversation contains contributions".to_string(),
-                ),
-                other => {
-                    tracing::error!(%other, node_id = %id, "failed to delete node in PostgreSQL");
-                    NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
-                }
-            })?
+            delete_node_with_edges_in_postgres(pool, &id)
+                .await
+                .map_err(|error| map_postgres_node_delete_error(error, &id))?
         }
     };
 
@@ -3087,6 +3105,37 @@ pub async fn list_nodes(
             .cloned()
             .collect();
         Ok(Json(ListResponse::Legacy(out)))
+    }
+}
+
+#[cfg(test)]
+mod node_mutation_error_response_tests {
+    use super::*;
+    use axum::body;
+
+    #[tokio::test]
+    async fn conversation_history_guard_has_a_stable_json_problem_code() {
+        let response = map_postgres_node_delete_error(NodeWriteError::ConversationNotEmpty, "n1")
+            .into_response();
+
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert_eq!(
+            response
+                .headers()
+                .get(axum::http::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("application/json")
+        );
+
+        let body = body::to_bytes(response.into_body(), 4096)
+            .await
+            .expect("problem body");
+        let payload: Value = serde_json::from_slice(&body).expect("problem JSON");
+        assert_eq!(payload["code"], "node_conversation_not_empty");
+        assert_eq!(
+            payload["message"],
+            "node deletion is blocked because its public conversation contains contributions"
+        );
     }
 }
 
