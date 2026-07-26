@@ -50,7 +50,14 @@
   let dragHeight: number | null = null;
   let dragging = false;
   let dragMoved = false;
-  let suppressNextHandleClick = false;
+  let activePointerId: number | null = null;
+
+  function resetSheetPointerState(): void {
+    dragHeight = null;
+    dragging = false;
+    dragMoved = false;
+    activePointerId = null;
+  }
 
   function derivePanelTitle(
     state: SystemState,
@@ -86,17 +93,13 @@
     if (nextPanelIdentity !== previousPanelIdentity) {
       previousPanelIdentity = nextPanelIdentity;
       sheetStage = $systemState === "komposition" ? "full" : "compact";
-      dragHeight = null;
-      dragging = false;
-      dragMoved = false;
+      resetSheetPointerState();
     }
   }
 
   function setSheetStage(stage: SheetStage): void {
     sheetStage = stage;
-    dragHeight = null;
-    dragging = false;
-    dragMoved = false;
+    resetSheetPointerState();
   }
 
   function toggleSheetStage(): void {
@@ -112,21 +115,23 @@
   }
 
   function handleSheetPointerDown(event: PointerEvent): void {
+    if (!event.isPrimary || event.button !== 0 || dragging) return;
     const handle = event.currentTarget as HTMLElement;
-    if (event.button !== 0 || handle.getClientRects().length === 0) return;
+    if (handle.getClientRects().length === 0) return;
     const aside = handle.closest<HTMLElement>('[data-testid="context-panel"]');
     if (!aside) return;
+    event.preventDefault();
     handle.setPointerCapture(event.pointerId);
+    activePointerId = event.pointerId;
     dragStartY = event.clientY;
     dragStartHeight = aside.getBoundingClientRect().height;
     dragHeight = dragStartHeight;
     dragging = true;
     dragMoved = false;
-    suppressNextHandleClick = false;
   }
 
   function handleSheetPointerMove(event: PointerEvent): void {
-    if (!dragging) return;
+    if (!dragging || event.pointerId !== activePointerId) return;
     const delta = dragStartY - event.clientY;
     if (Math.abs(delta) >= DRAG_THRESHOLD_PX) dragMoved = true;
     if (!dragMoved) return;
@@ -141,25 +146,21 @@
   }
 
   function finishSheetPointer(event: PointerEvent, cancelled: boolean): void {
-    if (!dragging) return;
+    if (!dragging || event.pointerId !== activePointerId) return;
+    const moved = dragMoved;
+    const finalHeight = dragHeight ?? dragStartHeight;
     const handle = event.currentTarget as HTMLElement;
+
+    // Reset before releasePointerCapture(): browsers may synchronously dispatch
+    // lostpointercapture, which must then observe an already-clean state.
+    resetSheetPointerState();
     if (handle.hasPointerCapture(event.pointerId)) {
       handle.releasePointerCapture(event.pointerId);
     }
 
-    if (cancelled || !dragMoved) {
-      dragHeight = null;
-      dragging = false;
-      dragMoved = false;
-      return;
-    }
-
-    const finalHeight = dragHeight ?? dragStartHeight;
-    setSheetStage(nearestSheetStage(finalHeight));
-    suppressNextHandleClick = true;
-    window.setTimeout(() => {
-      suppressNextHandleClick = false;
-    }, 0);
+    if (cancelled) return;
+    if (moved) setSheetStage(nearestSheetStage(finalHeight));
+    else toggleSheetStage();
   }
 
   function handleSheetPointerUp(event: PointerEvent): void {
@@ -170,12 +171,15 @@
     finishSheetPointer(event, true);
   }
 
+  function handleSheetLostPointerCapture(event: PointerEvent): void {
+    if (!dragging || event.pointerId !== activePointerId) return;
+    resetSheetPointerState();
+  }
+
   function handleSheetHandleClick(event: MouseEvent): void {
-    if (suppressNextHandleClick) {
-      event.preventDefault();
-      suppressNextHandleClick = false;
-      return;
-    }
+    if (event.detail !== 0) return;
+    const handle = event.currentTarget as HTMLElement;
+    if (handle.getClientRects().length === 0) return;
     toggleSheetStage();
   }
 
@@ -246,6 +250,7 @@
       on:pointermove={handleSheetPointerMove}
       on:pointerup={handleSheetPointerUp}
       on:pointercancel={handleSheetPointerCancel}
+      on:lostpointercapture={handleSheetLostPointerCapture}
       on:click={handleSheetHandleClick}
       on:keydown={handleSheetKeydown}
     >
@@ -465,12 +470,14 @@
     }
 
     .stage-compact :global(.compact-node-summary),
+    .stage-compact :global(.compact-account-summary),
     .stage-compact :global(.node-mode.editing .node-summary) {
       display: block;
     }
 
     .stage-compact :global(.node-full-content),
-    .stage-compact :global(.tabs) {
+    .stage-compact :global(.tabs),
+    .stage-compact :global(.account-full-content) {
       display: none;
     }
   }

@@ -320,7 +320,12 @@
 <div class="node-mode" class:editing>
   <h3>{nodeDetails?.title || $selection?.data?.title || $selection?.id}</h3>
   {#if summary}<p class="summary node-summary">{summary}</p>{/if}
-  <div class="compact-node-summary" data-testid="node-compact-summary">
+  <div
+    class="compact-node-summary"
+    data-testid="node-compact-summary"
+    role="region"
+    aria-label="Knotenübersicht"
+  >
     <p><strong>Knotenart:</strong> {kind}</p>
   </div>
 
