@@ -512,51 +512,46 @@ def _kind_nodes(kind: str, cluster: str) -> list[str]:
     return nodes
 
 
-def _register_kind_digest_alias(
-    node: str, local_ref: str, digest_ref: str, digest: str
-) -> dict[str, str]:
-    _run(
-        [
-            "docker",
-            "exec",
-            node,
-            "ctr",
-            "--namespace",
-            "k8s.io",
-            "images",
-            "tag",
-            "--force",
-            local_ref,
-            digest_ref,
-        ],
-        timeout=60,
-    )
+def _kind_image_target(node: str, reference: str) -> str:
     raw = _output(
         [
-            "docker",
-            "exec",
-            node,
-            "ctr",
-            "--namespace",
-            "k8s.io",
-            "images",
-            "list",
-            f"name=={digest_ref}",
+            "docker", "exec", node, "ctr", "--namespace", "k8s.io",
+            "images", "list", f"name=={reference}",
         ],
         timeout=60,
     )
     rows = [line.split() for line in raw.splitlines() if line.strip()]
-    if len(rows) != 2 or rows[1][0] != digest_ref or len(rows[1]) < 3:
-        raise IntegrityError(
-            f"containerd returned invalid image listing for {digest_ref} on {node}"
-        )
-    observed = rows[1][2]
-    if observed != digest:
+    if len(rows) != 2 or rows[1][0] != reference or len(rows[1]) < 3:
+        raise IntegrityError(f"containerd returned invalid image listing for {reference} on {node}")
+    target = rows[1][2]
+    if not FULL_SHA256.fullmatch(target):
+        raise IntegrityError(f"containerd returned invalid target digest for {reference} on {node}")
+    return target
+
+
+def _register_kind_digest_alias(
+    node: str, local_ref: str, digest_ref: str, locked_digest: str
+) -> dict[str, str]:
+    source_target = _kind_image_target(node, local_ref)
+    _run(
+        [
+            "docker", "exec", node, "ctr", "--namespace", "k8s.io",
+            "images", "tag", "--force", local_ref, digest_ref,
+        ],
+        timeout=60,
+    )
+    alias_target = _kind_image_target(node, digest_ref)
+    if alias_target != source_target:
         raise IntegrityError(
             "containerd digest alias target mismatch for "
-            f"{digest_ref} on {node}: {observed} != {digest}"
+            f"{digest_ref} on {node}: {alias_target} != {source_target}"
         )
-    return {"node": node, "digest_ref": digest_ref, "target_digest": observed}
+    return {
+        "node": node,
+        "digest_ref": digest_ref,
+        "locked_index_digest": locked_digest,
+        "platform_target_digest": alias_target,
+    }
 
 
 def load_kind(
@@ -574,15 +569,16 @@ def load_kind(
         if spec["load_into_kind"]
     ]
     nodes = _kind_nodes(kind, cluster)
+    for name, spec in selected:
+        if _local_image(spec) is None:
+            raise IntegrityError(f"cannot load unverified mirror image into kind: {name}")
+    local_refs = [spec["local_ref"] for _name, spec in selected]
+    _run([kind, "load", "docker-image", "--name", cluster, *local_refs], timeout=900)
     loaded: dict[str, Any] = {}
     for name, spec in selected:
         verified = _local_image(spec)
         if verified is None:
-            raise IntegrityError(f"cannot load unverified mirror image into kind: {name}")
-        _run(
-            [kind, "load", "docker-image", "--name", cluster, spec["local_ref"]],
-            timeout=900,
-        )
+            raise IntegrityError(f"verified mirror image disappeared during kind load: {name}")
         digest = spec["digest"]
         digest_ref = f"{spec['local_ref']}@{digest}"
         aliases = [

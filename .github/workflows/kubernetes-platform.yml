@@ -191,8 +191,10 @@ jobs:
         if: always() && steps.proof-cache.outputs.cache-hit != 'true'
         run: |
           docker logout ghcr.io || true
-          rm -rf "$DOCKER_CONFIG"
-          mkdir -p "$DOCKER_CONFIG"
+          if [[ -n "${DOCKER_CONFIG:-}" ]]; then
+            rm -rf "$DOCKER_CONFIG"
+            mkdir -p "$DOCKER_CONFIG"
+          fi
       - name: Block all OCI registries after mirror load
         if: steps.proof-cache.outputs.cache-hit != 'true'
         run: |
@@ -378,8 +380,10 @@ jobs:
         if: always() && steps.proof-cache.outputs.cache-hit != 'true'
         run: |
           docker logout ghcr.io || true
-          rm -rf "$DOCKER_CONFIG"
-          mkdir -p "$DOCKER_CONFIG"
+          if [[ -n "${DOCKER_CONFIG:-}" ]]; then
+            rm -rf "$DOCKER_CONFIG"
+            mkdir -p "$DOCKER_CONFIG"
+          fi
       - name: Block all OCI registries after mirror load
         if: steps.proof-cache.outputs.cache-hit != 'true'
         run: |

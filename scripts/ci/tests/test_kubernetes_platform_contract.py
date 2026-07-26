@@ -268,62 +268,37 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             ],
         )
 
-    def test_oci_mirror_registers_and_verifies_kind_digest_alias(self) -> None:
-        digest = "sha256:" + "a" * 64
+    def test_oci_mirror_registers_alias_to_imported_platform_target(self) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        platform_digest = "sha256:" + "c" * 64
         local_ref = "docker.io/library/test:v1"
-        digest_ref = f"{local_ref}@{digest}"
-        payload = f"REF TYPE DIGEST SIZE PLATFORMS LABELS\n{digest_ref} type {digest} 1B linux/amd64 -"
+        digest_ref = f"{local_ref}@{locked_digest}"
+        source = f"REF TYPE DIGEST SIZE PLATFORMS LABELS\n{local_ref} type {platform_digest} 1B linux/amd64 -"
+        alias = f"REF TYPE DIGEST SIZE PLATFORMS LABELS\n{digest_ref} type {platform_digest} 1B linux/amd64 -"
         with mock.patch.object(self.oci_mirror, "_run") as run, mock.patch.object(
-            self.oci_mirror, "_output", return_value=payload
-        ) as output:
+            self.oci_mirror, "_output", side_effect=[source, alias]
+        ):
             result = self.oci_mirror._register_kind_digest_alias(
-                "proof-control-plane", local_ref, digest_ref, digest
+                "proof-control-plane", local_ref, digest_ref, locked_digest
             )
-        run.assert_called_once_with(
-            [
-                "docker",
-                "exec",
-                "proof-control-plane",
-                "ctr",
-                "--namespace",
-                "k8s.io",
-                "images",
-                "tag",
-                "--force",
-                local_ref,
-                digest_ref,
-            ],
-            timeout=60,
-        )
-        output.assert_called_once_with(
-            [
-                "docker",
-                "exec",
-                "proof-control-plane",
-                "ctr",
-                "--namespace",
-                "k8s.io",
-                "images",
-                "list",
-                f"name=={digest_ref}",
-            ],
-            timeout=60,
-        )
-        self.assertEqual(result["target_digest"], digest)
+        run.assert_called_once()
+        self.assertEqual(result["locked_index_digest"], locked_digest)
+        self.assertEqual(result["platform_target_digest"], platform_digest)
 
     def test_oci_mirror_kind_digest_alias_mismatch_fails_closed(self) -> None:
-        digest = "sha256:" + "a" * 64
+        locked_digest = "sha256:" + "a" * 64
+        source_digest = "sha256:" + "b" * 64
+        alias_digest = "sha256:" + "c" * 64
         local_ref = "docker.io/library/test:v1"
-        digest_ref = f"{local_ref}@{digest}"
-        payload = f"REF TYPE DIGEST SIZE PLATFORMS LABELS\n{digest_ref} type sha256:{'b' * 64} 1B linux/amd64 -"
+        digest_ref = f"{local_ref}@{locked_digest}"
+        source = f"REF TYPE DIGEST SIZE PLATFORMS LABELS\n{local_ref} type {source_digest} 1B linux/amd64 -"
+        alias = f"REF TYPE DIGEST SIZE PLATFORMS LABELS\n{digest_ref} type {alias_digest} 1B linux/amd64 -"
         with mock.patch.object(self.oci_mirror, "_run"), mock.patch.object(
-            self.oci_mirror, "_output", return_value=payload
+            self.oci_mirror, "_output", side_effect=[source, alias]
         ):
-            with self.assertRaisesRegex(
-                self.oci_mirror.IntegrityError, "digest alias target mismatch"
-            ):
+            with self.assertRaisesRegex(self.oci_mirror.IntegrityError, "digest alias target mismatch"):
                 self.oci_mirror._register_kind_digest_alias(
-                    "proof-control-plane", local_ref, digest_ref, digest
+                    "proof-control-plane", local_ref, digest_ref, locked_digest
                 )
 
     def test_oci_mirror_live_package_budget_is_fail_closed(self) -> None:
@@ -399,7 +374,7 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertIn("FROM caddy:2.7", web_from)
 
     def test_strict_image_builds_consume_dockerfiles_from_stdin(self) -> None:
-        with mock.patch.object(
+        with mock.patch.dict(os.environ, {self.reference.OCI_STRICT_ENV: "1"}), mock.patch.object(
             self.reference,
             "_build_dockerfile",
             side_effect=[
@@ -418,6 +393,16 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertEqual(web_build.args[0][:5], ["docker", "build", "--pull=false", "--file", "-"])
         self.assertEqual(api_build.kwargs["input_text"], "FROM rust:local AS builder\n")
         self.assertEqual(web_build.kwargs["input_text"], "FROM node:local AS builder\n")
+
+    def test_non_strict_image_builds_allow_normal_pull_behavior(self) -> None:
+        with mock.patch.dict(os.environ, {self.reference.OCI_STRICT_ENV: ""}), mock.patch.object(
+            self.reference, "run"
+        ) as run, mock.patch.object(
+            self.reference, "output", return_value="sha256:" + "a" * 64
+        ):
+            self.reference.build_images("kind", "proof", "b" * 40, "timestamp")
+        self.assertNotIn("--pull=false", run.call_args_list[0].args[0])
+        self.assertNotIn("--pull=false", run.call_args_list[1].args[0])
 
     def test_strict_oci_policy_sets_cnpg_cluster_pull_policy(self) -> None:
         cluster = {
@@ -512,6 +497,7 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 "always() && steps.proof-cache.outputs.cache-hit != 'true'",
             )
             self.assertIn("docker logout ghcr.io", logout_step["run"])
+            self.assertIn('[[ -n "${DOCKER_CONFIG:-}" ]]', logout_step["run"])
             block_step = steps["Block all OCI registries after mirror load"]
             for registry in ("registry-1.docker.io", "quay.io", "ghcr.io"):
                 self.assertIn(registry, block_step["run"])

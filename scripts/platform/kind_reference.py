@@ -763,12 +763,13 @@ def build_images(kind: str, cluster: str, commit: str, timestamp: str) -> dict[s
         "api": "weltgewebe-api:local",
         "web": "weltgewebe-web:local",
     }
+    pull_args = ["--pull=false"] if controlled_oci_strict() else []
     api_file_args, api_dockerfile = _build_dockerfile(Path("apps/api/Dockerfile"))
     run(
         [
             "docker",
             "build",
-            "--pull=false",
+            *pull_args,
             *api_file_args,
             "--build-arg",
             f"GIT_COMMIT_SHA={commit}",
@@ -786,7 +787,7 @@ def build_images(kind: str, cluster: str, commit: str, timestamp: str) -> dict[s
         [
             "docker",
             "build",
-            "--pull=false",
+            *pull_args,
             *web_file_args,
             "--build-arg",
             f"GIT_COMMIT_SHA={commit}",
