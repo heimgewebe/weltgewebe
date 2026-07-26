@@ -15,6 +15,17 @@ export class ApiRequestError extends Error {
   }
 }
 
+async function readErrorBody(response: Response): Promise<unknown> {
+  const text = await response.text().catch(() => "");
+  if (!text) return undefined;
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
 async function requestJson<T>(
   path: string,
   method: "POST" | "PATCH" | "PUT",
@@ -34,9 +45,7 @@ async function requestJson<T>(
     signal,
   });
   if (!res.ok) {
-    const body =
-      res.status === 412 ? await res.json().catch(() => undefined) : undefined;
-    throw new ApiRequestError(res.status, body);
+    throw new ApiRequestError(res.status, await readErrorBody(res));
   }
   return res.json();
 }
@@ -73,16 +82,14 @@ async function deleteResource(path: string, etag?: string): Promise<void> {
     credentials: "include",
   });
   if (!res.ok) {
-    const body =
-      res.status === 412 ? await res.json().catch(() => undefined) : undefined;
-    throw new ApiRequestError(res.status, body);
+    throw new ApiRequestError(res.status, await readErrorBody(res));
   }
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(path, { credentials: "include", signal });
   if (!res.ok) {
-    throw new ApiRequestError(res.status);
+    throw new ApiRequestError(res.status, await readErrorBody(res));
   }
   return res.json();
 }

@@ -15,6 +15,7 @@
   import { nodeKindLabel } from "$lib/ui/productLanguage";
   import type { MapEntityViewModel } from "$lib/map/types";
   import NodeConversation from "./NodeConversation.svelte";
+  import { nodeMutationMessage } from "./nodeMutationMessage";
 
   type DomainChanged = {
     kind: "node";
@@ -189,25 +190,6 @@
     void focusAfterRender(() => editTab);
   }
 
-  function mutationMessage(error: unknown): string {
-    if (error instanceof ApiRequestError) {
-      if (error.status === 401 || error.status === 403) {
-        return "Diese Garnrolle darf derzeit nicht schreiben.";
-      }
-      if (error.status === 404) return "Der Knoten existiert nicht mehr.";
-      if (error.status === 400) {
-        return "Die Eingaben sind ungültig. Bitte prüfe alle Felder.";
-      }
-      if (error.status === 409) {
-        return "Der Knoten konnte wegen eines Datenkonflikts nicht geändert werden. Es wurde nichts verändert.";
-      }
-      if (error.status === 428) {
-        return "Die geladene Knotenversion ist unvollständig. Bitte öffne den Knoten erneut und versuche es noch einmal.";
-      }
-    }
-    return "Die Änderung konnte nicht gespeichert werden.";
-  }
-
   async function saveNode() {
     const id = nodeDetails?.id || $selection?.id;
     const lat = Number(formLat);
@@ -276,7 +258,7 @@
           ...currentNode,
         } as NodeDetails);
       } else {
-        mutationError = mutationMessage(error);
+        mutationError = nodeMutationMessage(error, "save");
       }
     } finally {
       saving = false;
@@ -309,7 +291,7 @@
           ...(error.body as object),
         } as NodeDetails);
       } else {
-        mutationError = mutationMessage(error);
+        mutationError = nodeMutationMessage(error, "delete");
       }
     } finally {
       deleting = false;
