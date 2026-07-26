@@ -24,6 +24,11 @@ const MEASUREMENT_FIELDS = [
   "database_scale",
   "api_replica_resources",
 ];
+const WEB_RUNTIME_METRICS = [
+  "largest_contentful_paint_ms",
+  "interaction_to_next_paint_ms",
+  "usable_map_ms",
+];
 
 function object(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -49,6 +54,13 @@ function exact(value, fields, label) {
 function string(value, label) {
   if (typeof value !== "string" || value.length === 0) {
     throw new Error(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function boolean(value, label) {
+  if (typeof value !== "boolean") {
+    throw new Error(`${label} must be a boolean`);
   }
   return value;
 }
@@ -123,13 +135,15 @@ function metric(value, label) {
   }
 }
 
-function metrics(value, label) {
-  const record = object(value, label);
+function metrics(value, label, requiredFields = null) {
+  const record = requiredFields
+    ? exact(value, requiredFields, label)
+    : object(value, label);
   if (Object.keys(record).length === 0) {
     throw new Error(`${label} must not be empty`);
   }
-  for (const [name, value] of Object.entries(record)) {
-    metric(value, `${label}.${name}`);
+  for (const [name, metricValue] of Object.entries(record)) {
+    metric(metricValue, `${label}.${name}`);
   }
 }
 
@@ -139,6 +153,41 @@ function calibratedLater(value, fields, label) {
   strings(record.limitations, `${label}.limitations`);
   string(record.artifact_kind, `${label}.artifact_kind`);
   return record;
+}
+
+function validateNetworkConditions(value, label) {
+  const conditions = exact(
+    value,
+    [
+      "throttled",
+      "latency_ms",
+      "download_kbps",
+      "upload_kbps",
+      "connection_type",
+    ],
+    label,
+  );
+  boolean(conditions.throttled, `${label}.throttled`);
+  integer(conditions.latency_ms, `${label}.latency_ms`);
+  integer(conditions.download_kbps, `${label}.download_kbps`);
+  integer(conditions.upload_kbps, `${label}.upload_kbps`);
+  string(conditions.connection_type, `${label}.connection_type`);
+  if (
+    conditions.throttled &&
+    (conditions.download_kbps === 0 || conditions.upload_kbps === 0)
+  ) {
+    throw new Error(`${label} throttled profiles require non-zero throughput`);
+  }
+  if (
+    !conditions.throttled &&
+    (conditions.latency_ms !== 0 ||
+      conditions.download_kbps !== 0 ||
+      conditions.upload_kbps !== 0)
+  ) {
+    throw new Error(
+      `${label} unthrottled profiles must use zero network limits`,
+    );
+  }
 }
 
 function validateWebRuntime(value) {
@@ -155,7 +204,7 @@ function validateWebRuntime(value) {
     ],
     label,
   );
-  string(record.runner, `${label}.runner`);
+  safePath(record.runner, `${label}.runner`);
 
   const profiles = object(record.profiles, `${label}.profiles`);
   if (Object.keys(profiles).length === 0) {
@@ -165,7 +214,7 @@ function validateWebRuntime(value) {
     const profileLabel = `${label}.profiles.${name}`;
     const profile = exact(
       value,
-      ["viewport", "network_profile", "runs"],
+      ["viewport", "network_profile", "network_conditions", "runs"],
       profileLabel,
     );
     const viewport = exact(
@@ -176,6 +225,10 @@ function validateWebRuntime(value) {
     integer(viewport.width, `${profileLabel}.viewport.width`, 1);
     integer(viewport.height, `${profileLabel}.viewport.height`, 1);
     string(profile.network_profile, `${profileLabel}.network_profile`);
+    validateNetworkConditions(
+      profile.network_conditions,
+      `${profileLabel}.network_conditions`,
+    );
     integer(profile.runs, `${profileLabel}.runs`, 1);
   }
 
@@ -185,11 +238,40 @@ function validateWebRuntime(value) {
   }
   for (const [name, value] of Object.entries(scenarios)) {
     const scenarioLabel = `${label}.scenarios.${name}`;
-    const scenario = exact(value, ["path", "metrics"], scenarioLabel);
+    const scenario = exact(
+      value,
+      ["path", "readiness", "interaction", "metrics"],
+      scenarioLabel,
+    );
     if (typeof scenario.path !== "string" || !scenario.path.startsWith("/")) {
       throw new Error(`${scenarioLabel}.path must be absolute`);
     }
-    metrics(scenario.metrics, `${scenarioLabel}.metrics`);
+    const readiness = exact(
+      scenario.readiness,
+      ["required_selectors", "timeout_ms"],
+      `${scenarioLabel}.readiness`,
+    );
+    strings(
+      readiness.required_selectors,
+      `${scenarioLabel}.readiness.required_selectors`,
+    );
+    integer(readiness.timeout_ms, `${scenarioLabel}.readiness.timeout_ms`, 1);
+    const interaction = exact(
+      scenario.interaction,
+      ["test_ids", "expected_test_id", "settle_frames"],
+      `${scenarioLabel}.interaction`,
+    );
+    strings(interaction.test_ids, `${scenarioLabel}.interaction.test_ids`);
+    string(
+      interaction.expected_test_id,
+      `${scenarioLabel}.interaction.expected_test_id`,
+    );
+    integer(
+      interaction.settle_frames,
+      `${scenarioLabel}.interaction.settle_frames`,
+      1,
+    );
+    metrics(scenario.metrics, `${scenarioLabel}.metrics`, WEB_RUNTIME_METRICS);
   }
 }
 
