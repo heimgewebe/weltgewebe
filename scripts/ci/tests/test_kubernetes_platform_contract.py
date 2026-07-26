@@ -1260,6 +1260,17 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         expected_head = proof_workflow["on"]["workflow_dispatch"]["inputs"]["expected_head"]
         self.assertIs(expected_head["required"], True)
         self.assertEqual(expected_head["type"], "string")
+        guard = proof_workflow["jobs"]["dispatch-head-contract"]
+        self.assertEqual(guard["timeout-minutes"], 2)
+        self.assertEqual(proof_workflow["jobs"]["contract"]["needs"], "dispatch-head-contract")
+        guard_step = guard["steps"][0]
+        self.assertEqual(guard_step["env"]["EVENT_NAME"], "${{ github.event_name }}")
+        self.assertEqual(guard_step["env"]["EXPECTED_HEAD"], "${{ inputs.expected_head }}")
+        self.assertEqual(guard_step["env"]["CHECKED_OUT_HEAD"], "${{ github.sha }}")
+        self.assertEqual(guard_step["env"]["CHECKED_OUT_REF"], "${{ github.ref }}")
+        self.assertIn('[[ "$EXPECTED_HEAD" =~ ^[0-9a-f]{40}$ ]]', guard_step["run"])
+        self.assertIn('test "$CHECKED_OUT_REF" = "refs/heads/main"', guard_step["run"])
+        self.assertIn('test "$CHECKED_OUT_HEAD" = "$EXPECTED_HEAD"', guard_step["run"])
 
         for job_name in ("kind-gitops-proof", "kind-ha-recovery-proof"):
             job = proof_workflow["jobs"][job_name]
@@ -1459,12 +1470,25 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                     for registry in self.proof_identity.BLOCKED_REGISTRIES
                 },
             }
+            runtime_ref = lock["images"]["runtime"]["local_ref"]
             cluster_image = {
                 "canonical": lock["images"]["runtime"]["canonical"],
-                "local_ref": lock["images"]["runtime"]["local_ref"],
+                "local_ref": runtime_ref,
+                "runtime_ref": runtime_ref,
                 "locked_index_digest": digest,
                 "cri_image_id": image_id,
+                "image_id": image_id,
                 "platform_target_digest": platform_digest,
+                "nodes": [
+                    {
+                        "node": "proof-control-plane",
+                        "runtime_ref": runtime_ref,
+                        "image_id": image_id,
+                        "locked_index_digest": digest,
+                        "platform_target_digest": platform_digest,
+                        "cri_image_status_verified": True,
+                    }
+                ],
             }
             proof = {
                 "cluster": "proof",
@@ -1507,6 +1531,23 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 drifted["oci_controlled_source"]["strict"] = False
                 with self.assertRaisesRegex(
                     self.proof_identity.IdentityError, "strict controlled OCI"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
+                drifted = json.loads(json.dumps(proof))
+                drifted["oci_controlled_source"]["cluster"]["images"]["runtime"][
+                    "cri_image_id"
+                ] = "sha256:" + "d" * 64
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "OCI image binding is invalid"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
+                drifted = json.loads(json.dumps(proof))
+                drifted["oci_controlled_source"]["cluster"]["images"]["runtime"][
+                    "nodes"
+                ][0]["node"] = "different-control-plane"
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError,
+                    "image and blockade node inventories disagree",
                 ):
                     self.proof_identity._validate_controlled_oci_proof(identity, drifted)
 

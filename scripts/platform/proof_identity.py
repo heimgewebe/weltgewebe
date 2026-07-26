@@ -203,7 +203,21 @@ def _validate_receipt_header(
     return receipt
 
 
-def _validate_registry_blockades(receipt: dict[str, Any], *, label: str) -> None:
+def _containerd_reference(reference: str) -> str:
+    name, separator, digest = reference.partition("@")
+    first = name.split("/", 1)[0]
+    if "/" not in name:
+        canonical = f"docker.io/library/{name}"
+    elif first == "localhost" or "." in first or ":" in first:
+        canonical = name
+    else:
+        canonical = f"docker.io/{name}"
+    return canonical + (separator + digest if separator else "")
+
+
+def _validate_registry_blockades(
+    receipt: dict[str, Any], *, label: str
+) -> set[str]:
     blockades = receipt.get("registry_blockades")
     if not isinstance(blockades, list) or not blockades:
         raise IdentityError(f"reusable proof {label} lacks registry blockade evidence")
@@ -231,6 +245,7 @@ def _validate_registry_blockades(receipt: dict[str, Any], *, label: str) -> None
                 raise IdentityError(
                     f"reusable proof {label} registry IPv6 blockade did not pass for {registry}"
                 )
+    return observed_nodes
 
 
 def _validate_controlled_oci_proof(
@@ -278,6 +293,7 @@ def _validate_controlled_oci_proof(
         raise IdentityError("reusable proof host OCI image inventory drifted")
     if host.get("selected_count") != len(expected_host) or host.get("failures") != {}:
         raise IdentityError("reusable proof host OCI count or failure contract drifted")
+    host_image_ids: dict[str, str] = {}
     for name, observed in host_images.items():
         if (
             not isinstance(observed, dict)
@@ -286,6 +302,7 @@ def _validate_controlled_oci_proof(
             or not re.fullmatch(r"sha256:[0-9a-f]{64}", observed["image_id"])
         ):
             raise IdentityError(f"reusable proof host OCI image binding is invalid: {name}")
+        host_image_ids[name] = observed["image_id"]
 
     cluster_fields = (
         (("cluster", proof.get("cluster")),)
@@ -295,6 +312,7 @@ def _validate_controlled_oci_proof(
             ("restore_cluster", proof.get("restore_cluster")),
         )
     )
+    platform_digests: dict[str, str] = {}
     for field, expected_cluster_name in cluster_fields:
         receipt = _validate_receipt_header(
             controlled.get(field), label=field, lock_sha256=lock_sha256
@@ -308,24 +326,69 @@ def _validate_controlled_oci_proof(
             raise IdentityError(f"reusable proof {field} OCI image inventory drifted")
         if receipt.get("loaded_count") != len(expected_cluster):
             raise IdentityError(f"reusable proof {field} OCI image count drifted")
+        image_nodes: set[str] | None = None
         for name, observed in cluster_images.items():
             spec = images[name]
+            host_image_id = host_image_ids[name]
+            expected_runtime = _containerd_reference(str(spec.get("local_ref", "")))
+            platform_digest = (
+                observed.get("platform_target_digest")
+                if isinstance(observed, dict)
+                else None
+            )
             if (
                 not isinstance(observed, dict)
                 or observed.get("canonical") != spec.get("canonical")
                 or observed.get("local_ref") != spec.get("local_ref")
+                or observed.get("runtime_ref") != expected_runtime
                 or observed.get("locked_index_digest") != spec.get("digest")
-                or not isinstance(observed.get("cri_image_id"), str)
-                or not re.fullmatch(r"sha256:[0-9a-f]{64}", observed["cri_image_id"])
-                or not isinstance(observed.get("platform_target_digest"), str)
-                or not re.fullmatch(
-                    r"sha256:[0-9a-f]{64}", observed["platform_target_digest"]
-                )
+                or observed.get("cri_image_id") != host_image_id
+                or observed.get("image_id") != host_image_id
+                or not isinstance(platform_digest, str)
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", platform_digest)
             ):
                 raise IdentityError(
                     f"reusable proof {field} OCI image binding is invalid: {name}"
                 )
-        _validate_registry_blockades(receipt, label=field)
+            prior_platform_digest = platform_digests.setdefault(name, platform_digest)
+            if prior_platform_digest != platform_digest:
+                raise IdentityError(
+                    f"reusable proof cluster OCI platform digest drifted: {name}"
+                )
+            nodes = observed.get("nodes")
+            if not isinstance(nodes, list) or not nodes:
+                raise IdentityError(
+                    f"reusable proof {field} OCI node image bindings are missing: {name}"
+                )
+            current_nodes: set[str] = set()
+            for node_binding in nodes:
+                node = node_binding.get("node") if isinstance(node_binding, dict) else None
+                if not isinstance(node, str) or not node or node in current_nodes:
+                    raise IdentityError(
+                        f"reusable proof {field} OCI node inventory is invalid: {name}"
+                    )
+                current_nodes.add(node)
+                if (
+                    node_binding.get("cri_image_status_verified") is not True
+                    or node_binding.get("runtime_ref") != expected_runtime
+                    or node_binding.get("image_id") != host_image_id
+                    or node_binding.get("locked_index_digest") != spec.get("digest")
+                    or node_binding.get("platform_target_digest") != platform_digest
+                ):
+                    raise IdentityError(
+                        f"reusable proof {field} OCI node image binding drifted: {name}"
+                    )
+            if image_nodes is None:
+                image_nodes = current_nodes
+            elif image_nodes != current_nodes:
+                raise IdentityError(
+                    f"reusable proof {field} OCI image node inventories disagree"
+                )
+        blockade_nodes = _validate_registry_blockades(receipt, label=field)
+        if image_nodes != blockade_nodes:
+            raise IdentityError(
+                f"reusable proof {field} OCI image and blockade node inventories disagree"
+            )
 
 
 def record(identity_path: Path, proof_receipt: Path, output_dir: Path) -> dict[str, Any]:
