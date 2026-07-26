@@ -15,15 +15,27 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
     commit = "7b65127e852561997fa6a45b8cb3bfcef38e1eb8"
 
     def run_generator(
-        self, commit: str, source_date_epoch: str = "1784139708"
+        self,
+        commit: str,
+        source_date_epoch: str = "1784139708",
+        *,
+        bind_artifact_tree: bool = False,
+        build_files: dict[str, str] | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], Path]:
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
+        for relative_path, contents in (build_files or {}).items():
+            target = root / "build" / relative_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(contents, encoding="utf-8")
         env = os.environ.copy()
         env.update({"GIT_COMMIT_SHA": commit, "SOURCE_DATE_EPOCH": source_date_epoch})
+        command = ["node", str(SCRIPT), "--server"]
+        if bind_artifact_tree:
+            command.append("--artifact-tree")
         result = subprocess.run(
-            ["node", str(SCRIPT), "--server"],
+            command,
             cwd=root,
             env=env,
             text=True,
@@ -40,6 +52,29 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
         self.assertEqual(payload["version"], self.commit[:8])
         self.assertEqual(payload["build_id"], f"{self.commit[:8]}-1784139708000")
         self.assertEqual(payload["built_at"], "2026-07-15T18:21:48.000Z")
+        self.assertNotIn("artifact_tree", payload)
+
+    def test_artifact_tree_binding_requires_a_completed_build(self) -> None:
+        result, version_file = self.run_generator(
+            self.commit,
+            bind_artifact_tree=True,
+            build_files={
+                "index.html": "<main>Weltgewebe</main>\n",
+                "_app/immutable/app.js": "export const ready = true;\n",
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(version_file.read_text(encoding="utf-8"))
+        self.assertEqual(payload["artifact_tree"]["schema_version"], 1)
+        self.assertRegex(payload["artifact_tree"]["sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(payload["artifact_tree"]["file_count"], 2)
+
+    def test_artifact_tree_binding_fails_without_a_completed_build(self) -> None:
+        result, version_file = self.run_generator(
+            self.commit, bind_artifact_tree=True
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(version_file.exists())
 
     def test_invalid_explicit_commit_fails_closed(self) -> None:
         result, version_file = self.run_generator("7b65127e")

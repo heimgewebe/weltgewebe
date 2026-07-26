@@ -4,17 +4,25 @@ import { execSync } from "node:child_process";
 import { computeBuildArtifactTree } from "./build-artifact-evidence.mjs";
 
 const args = process.argv.slice(2);
-const allowedArgs = ["--client", "--server"];
+const allowedArgs = ["--client", "--server", "--artifact-tree"];
 const unknownArgs = args.filter((a) => !allowedArgs.includes(a));
 
 if (unknownArgs.length > 0) {
   console.error(`ERROR: Unknown arguments: ${unknownArgs.join(", ")}`);
-  console.error(`Usage: node generate-version.js [--client] [--server]`);
+  console.error(
+    `Usage: node generate-version.js [--client] [--server] [--artifact-tree]`,
+  );
   process.exit(1);
 }
 
 const writeClient = args.length === 0 || args.includes("--client");
 const writeServer = args.length === 0 || args.includes("--server");
+const bindArtifactTree = args.includes("--artifact-tree");
+
+if (bindArtifactTree && !args.includes("--server")) {
+  console.error("ERROR: --artifact-tree requires --server.");
+  process.exit(1);
+}
 
 const buildDir = path.resolve(process.cwd(), "build");
 const targetFile = path.join(buildDir, "_app/version.json");
@@ -80,15 +88,24 @@ if (writeServer) {
     );
     process.exit(1);
   }
-  const artifactTree = computeBuildArtifactTree(buildDir);
-  const serverPayload = {
-    ...payload,
-    artifact_tree: {
-      schema_version: artifactTree.schemaVersion,
-      sha256: artifactTree.sha256,
-      file_count: artifactTree.fileCount,
-    },
-  };
+  let serverPayload = payload;
+  if (bindArtifactTree) {
+    const artifactTree = computeBuildArtifactTree(buildDir);
+    if (artifactTree.fileCount < 1) {
+      console.error(
+        "ERROR: --artifact-tree requires a completed build with at least one regular file.",
+      );
+      process.exit(1);
+    }
+    serverPayload = {
+      ...payload,
+      artifact_tree: {
+        schema_version: artifactTree.schemaVersion,
+        sha256: artifactTree.sha256,
+        file_count: artifactTree.fileCount,
+      },
+    };
+  }
   fs.mkdirSync(targetDir, { recursive: true });
   fs.writeFileSync(
     targetFile,
