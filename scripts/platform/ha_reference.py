@@ -713,9 +713,10 @@ def install_cnpg(kubectl: str, artifact: str) -> list[str]:
             "jsonpath={.spec.template.spec.containers[0].image}",
         ]
     )
-    if observed != CNPG_OPERATOR_IMAGE:
+    expected_runtime_image = ref.controlled_oci_runtime_image(CNPG_OPERATOR_IMAGE)
+    if observed != expected_runtime_image:
         raise ref.ProofError(
-            f"CloudNativePG operator image is not digest-bound: {observed}"
+            f"CloudNativePG operator image is not runtime-bound: {observed}"
         )
     return operator_nodes
 
@@ -757,15 +758,15 @@ def install_cert_manager(kubectl: str, artifact: str) -> None:
         ]
     )
     deployments = {
-        "cert-manager": CERT_MANAGER_IMAGES[
-            "quay.io/jetstack/cert-manager-controller:v1.21.0"
-        ],
-        "cert-manager-cainjector": CERT_MANAGER_IMAGES[
-            "quay.io/jetstack/cert-manager-cainjector:v1.21.0"
-        ],
-        "cert-manager-webhook": CERT_MANAGER_IMAGES[
-            "quay.io/jetstack/cert-manager-webhook:v1.21.0"
-        ],
+        "cert-manager": ref.controlled_oci_runtime_image(
+            CERT_MANAGER_IMAGES["quay.io/jetstack/cert-manager-controller:v1.21.0"]
+        ),
+        "cert-manager-cainjector": ref.controlled_oci_runtime_image(
+            CERT_MANAGER_IMAGES["quay.io/jetstack/cert-manager-cainjector:v1.21.0"]
+        ),
+        "cert-manager-webhook": ref.controlled_oci_runtime_image(
+            CERT_MANAGER_IMAGES["quay.io/jetstack/cert-manager-webhook:v1.21.0"]
+        ),
     }
     for deployment, expected_image in deployments.items():
         ref.wait_rollout(kubectl, "cert-manager", f"deployment/{deployment}", "8m")
@@ -836,8 +837,11 @@ def render_barman_cloud_manifest(source: str) -> str:
         raise ref.ProofError(
             f"Barman Cloud sidecar reference changed unexpectedly: {decoded}"
         )
+    sidecar_runtime_image = ref.controlled_oci_runtime_image(
+        BARMAN_CLOUD_SIDECAR_IMAGE
+    )
     secret["data"]["SIDECAR_IMAGE"] = base64.b64encode(
-        BARMAN_CLOUD_SIDECAR_IMAGE.encode("utf-8")
+        sidecar_runtime_image.encode("utf-8")
     ).decode("ascii")
 
     deployments = [
@@ -915,7 +919,8 @@ def barman_plugin_state(kubectl: str, *, require_three_nodes: bool) -> dict[str,
                 container
                 for container in containers
                 if container.get("name") == "barman-cloud"
-                and container.get("image") == BARMAN_CLOUD_PLUGIN_IMAGE
+                and container.get("image")
+                == ref.controlled_oci_runtime_image(BARMAN_CLOUD_PLUGIN_IMAGE)
             ),
             None,
         )
@@ -1148,7 +1153,10 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> dict[str, Any]:
             raise ref.ProofError(
                 "installed Barman Cloud sidecar secret is invalid"
             ) from exc
-    if sidecar_images != [BARMAN_CLOUD_SIDECAR_IMAGE]:
+    expected_sidecar_image = ref.controlled_oci_runtime_image(
+        BARMAN_CLOUD_SIDECAR_IMAGE
+    )
+    if sidecar_images != [expected_sidecar_image]:
         raise ref.ProofError(
             "Barman Cloud sidecar image is not digest-bound: "
             f"{sidecar_images}"
@@ -1164,8 +1172,11 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> dict[str, Any]:
             "jsonpath={.spec.template.spec.containers[0].image}",
         ]
     )
-    if observed != BARMAN_CLOUD_PLUGIN_IMAGE:
-        raise ref.ProofError(f"Barman Cloud plugin image is not digest-bound: {observed}")
+    expected_plugin_image = ref.controlled_oci_runtime_image(
+        BARMAN_CLOUD_PLUGIN_IMAGE
+    )
+    if observed != expected_plugin_image:
+        raise ref.ProofError(f"Barman Cloud plugin image is not runtime-bound: {observed}")
     return plugin_nodes
 
 
@@ -1187,7 +1198,12 @@ def verify_barman_sidecar_images(
             ]
         )
     )
-    expected_digest = BARMAN_CLOUD_SIDECAR_IMAGE.rsplit("@", 1)[1]
+    expected_sidecar_image = ref.controlled_oci_runtime_image(
+        BARMAN_CLOUD_SIDECAR_IMAGE
+    )
+    expected_digest = ref.controlled_oci_runtime_digest(
+        BARMAN_CLOUD_SIDECAR_IMAGE
+    )
     observed: dict[str, dict[str, object]] = {}
     for pod in payload.get("items", []):
         name = str(pod.get("metadata", {}).get("name", ""))
@@ -1205,7 +1221,7 @@ def verify_barman_sidecar_images(
                 f"PostgreSQL pod {name} has {len(sidecars)} Barman sidecars"
             )
         declared_image = str(sidecars[0].get("image", ""))
-        if declared_image != BARMAN_CLOUD_SIDECAR_IMAGE:
+        if declared_image != expected_sidecar_image:
             raise ref.ProofError(
                 f"PostgreSQL pod {name} has an unbound Barman sidecar: "
                 f"{declared_image}"

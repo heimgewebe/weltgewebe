@@ -283,99 +283,123 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                     self.oci_mirror._containerd_reference(reference), expected
                 )
 
-    def test_oci_mirror_alias_uses_containerd_canonical_reference(self) -> None:
+    def test_oci_mirror_cri_binding_uses_exact_runtime_tag(self) -> None:
         locked_digest = "sha256:" + "a" * 64
-        platform_digest = "sha256:" + "c" * 64
+        platform_digest = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
         local_ref = "nats:2.10-alpine"
-        digest_ref = f"{local_ref}@{locked_digest}"
-        canonical_local = "docker.io/library/nats:2.10-alpine"
-        canonical_digest = f"{canonical_local}@{locked_digest}"
+        runtime_ref = "docker.io/library/nats:2.10-alpine"
+        payload = {
+            "status": {
+                "id": image_id,
+                "repoTags": [runtime_ref],
+                "repoDigests": [f"{runtime_ref}@{platform_digest}"],
+            }
+        }
         with mock.patch.object(
-            self.oci_mirror,
-            "_kind_image_target",
-            side_effect=[platform_digest, platform_digest],
-        ) as target, mock.patch.object(self.oci_mirror, "_run") as run:
-            result = self.oci_mirror._register_kind_digest_alias(
-                "proof-control-plane", local_ref, digest_ref, locked_digest
-            )
-        self.assertEqual(
-            [call.args for call in target.call_args_list],
-            [
-                ("proof-control-plane", canonical_local),
-                ("proof-control-plane", canonical_digest),
-            ],
-        )
-        run.assert_called_once_with(
-            [
-                "docker", "exec", "proof-control-plane", "ctr",
-                "--namespace", "k8s.io", "images", "tag", "--force",
-                canonical_local, canonical_digest,
-            ],
-            capture=True,
-            timeout=60,
-        )
-        self.assertEqual(result["containerd_local_ref"], canonical_local)
-        self.assertEqual(result["containerd_digest_ref"], canonical_digest)
-
-    def test_oci_mirror_registers_canonical_workload_runtime_alias(self) -> None:
-        locked_digest = "sha256:" + "a" * 64
-        platform_digest = "sha256:" + "c" * 64
-        local_ref = "quay.io/jetstack/controller:weltgewebe-test"
-        digest_ref = f"{local_ref}@{locked_digest}"
-        runtime_ref = f"quay.io/jetstack/controller@{locked_digest}"
-        with mock.patch.object(
-            self.oci_mirror,
-            "_kind_image_target",
-            side_effect=[platform_digest, platform_digest, platform_digest],
-        ) as target, mock.patch.object(self.oci_mirror, "_run") as run:
-            result = self.oci_mirror._register_kind_digest_alias(
+            self.oci_mirror, "_output", return_value=json.dumps(payload)
+        ) as output:
+            result = self.oci_mirror._kind_cri_image_binding(
                 "proof-control-plane",
                 local_ref,
-                digest_ref,
+                f"{runtime_ref}@{locked_digest}",
                 locked_digest,
+                image_id,
+            )
+        output.assert_called_once_with(
+            [
+                "docker",
+                "exec",
+                "proof-control-plane",
+                "crictl",
+                "--runtime-endpoint",
+                "unix:///run/containerd/containerd.sock",
+                "inspecti",
                 runtime_ref,
-            )
-        self.assertEqual(run.call_count, 2)
-        self.assertEqual(
-            [call.args[1] for call in target.call_args_list],
-            [local_ref, digest_ref, runtime_ref],
+            ],
+            timeout=60,
         )
-        self.assertEqual(result["containerd_runtime_ref"], runtime_ref)
-        self.assertEqual(
-            set(result["registered_aliases"]), {digest_ref, runtime_ref}
-        )
-
-    def test_oci_mirror_registers_alias_to_imported_platform_target(self) -> None:
-        locked_digest = "sha256:" + "a" * 64
-        platform_digest = "sha256:" + "c" * 64
-        local_ref = "docker.io/library/test:v1"
-        digest_ref = f"{local_ref}@{locked_digest}"
-        source = f"REF TYPE DIGEST SIZE PLATFORMS LABELS\n{local_ref} type {platform_digest} 1B linux/amd64 -"
-        alias = f"REF TYPE DIGEST SIZE PLATFORMS LABELS\n{digest_ref} type {platform_digest} 1B linux/amd64 -"
-        with mock.patch.object(self.oci_mirror, "_run") as run, mock.patch.object(
-            self.oci_mirror, "_output", side_effect=[source, alias]
-        ):
-            result = self.oci_mirror._register_kind_digest_alias(
-                "proof-control-plane", local_ref, digest_ref, locked_digest
-            )
-        run.assert_called_once()
+        self.assertEqual(result["runtime_ref"], runtime_ref)
+        self.assertEqual(result["image_id"], image_id)
         self.assertEqual(result["locked_index_digest"], locked_digest)
         self.assertEqual(result["platform_target_digest"], platform_digest)
+        self.assertIs(result["cri_image_status_verified"], True)
 
-    def test_oci_mirror_kind_digest_alias_mismatch_fails_closed(self) -> None:
+    def test_oci_mirror_cri_binding_accepts_single_kind_import_digest(self) -> None:
         locked_digest = "sha256:" + "a" * 64
-        source_digest = "sha256:" + "b" * 64
-        alias_digest = "sha256:" + "c" * 64
-        local_ref = "docker.io/library/test:v1"
-        digest_ref = f"{local_ref}@{locked_digest}"
-        source = f"REF TYPE DIGEST SIZE PLATFORMS LABELS\n{local_ref} type {source_digest} 1B linux/amd64 -"
-        alias = f"REF TYPE DIGEST SIZE PLATFORMS LABELS\n{digest_ref} type {alias_digest} 1B linux/amd64 -"
-        with mock.patch.object(self.oci_mirror, "_run"), mock.patch.object(
-            self.oci_mirror, "_output", side_effect=[source, alias]
+        platform_digest = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        local_ref = "chrislusf/seaweedfs:weltgewebe-test"
+        runtime_ref = "docker.io/chrislusf/seaweedfs:weltgewebe-test"
+        import_ref = f"docker.io/library/import-2026-07-26@{platform_digest}"
+        payload = {
+            "status": {
+                "id": image_id,
+                "repoTags": [runtime_ref],
+                "repoDigests": [import_ref],
+            }
+        }
+        with mock.patch.object(
+            self.oci_mirror, "_output", return_value=json.dumps(payload)
         ):
-            with self.assertRaisesRegex(self.oci_mirror.IntegrityError, "digest alias target mismatch"):
-                self.oci_mirror._register_kind_digest_alias(
-                    "proof-control-plane", local_ref, digest_ref, locked_digest
+            result = self.oci_mirror._kind_cri_image_binding(
+                "proof-control-plane",
+                local_ref,
+                f"docker.io/chrislusf/seaweedfs@{locked_digest}",
+                locked_digest,
+                image_id,
+            )
+        self.assertEqual(result["runtime_ref"], runtime_ref)
+        self.assertEqual(result["selected_repo_digest"], import_ref)
+        self.assertEqual(result["platform_target_digest"], platform_digest)
+
+    def test_oci_mirror_cri_binding_rejects_host_image_id_drift(self) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        platform_digest = "sha256:" + "b" * 64
+        runtime_ref = "docker.io/library/nats:2.10-alpine"
+        payload = {
+            "status": {
+                "id": "sha256:" + "c" * 64,
+                "repoTags": [runtime_ref],
+                "repoDigests": [f"{runtime_ref}@{platform_digest}"],
+            }
+        }
+        with mock.patch.object(
+            self.oci_mirror, "_output", return_value=json.dumps(payload)
+        ):
+            with self.assertRaisesRegex(
+                self.oci_mirror.IntegrityError, "CRI image ID drift"
+            ):
+                self.oci_mirror._kind_cri_image_binding(
+                    "proof-control-plane",
+                    "nats:2.10-alpine",
+                    f"{runtime_ref}@{locked_digest}",
+                    locked_digest,
+                    "sha256:" + "d" * 64,
+                )
+
+    def test_oci_mirror_cri_binding_rejects_missing_runtime_tag(self) -> None:
+        locked_digest = "sha256:" + "a" * 64
+        image_id = "sha256:" + "c" * 64
+        payload = {
+            "status": {
+                "id": image_id,
+                "repoTags": ["docker.io/library/other:v1"],
+                "repoDigests": [],
+            }
+        }
+        with mock.patch.object(
+            self.oci_mirror, "_output", return_value=json.dumps(payload)
+        ):
+            with self.assertRaisesRegex(
+                self.oci_mirror.IntegrityError, "runtime tag is absent"
+            ):
+                self.oci_mirror._kind_cri_image_binding(
+                    "proof-control-plane",
+                    "nats:2.10-alpine",
+                    "docker.io/library/nats:2.10-alpine@" + locked_digest,
+                    locked_digest,
+                    image_id,
                 )
 
     def test_oci_mirror_internal_kind_commands_do_not_pollute_json_stdout(self) -> None:
@@ -384,10 +408,8 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             '[kind, "load", "docker-image", "--name", cluster, *local_refs],\n        capture=True,',
             source,
         )
-        self.assertIn(
-            '"images", "tag", "--force", containerd_local_ref, alias_ref,\n            ],\n            capture=True,',
-            source,
-        )
+        self.assertNotIn('"images", "tag", "--force"', source)
+        self.assertIn('"crictl",\n            "--runtime-endpoint"', source)
 
     def test_oci_mirror_blocks_registries_inside_kind_node(self) -> None:
         def output(argv, *, timeout=120):
@@ -463,6 +485,205 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
                 with self.assertRaises(self.oci_mirror.IntegrityError):
                     self.oci_mirror._load_lock()
+
+    def test_strict_oci_rewrites_locked_digests_to_verified_runtime_tags(self) -> None:
+        locked = "sha256:" + "a" * 64
+        source = f"nats:2.10-alpine@{locked}"
+        runtime = "docker.io/library/nats:2.10-alpine"
+        documents = [
+            {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "spec": {
+                    "template": {
+                        "spec": {
+                            "containers": [{"name": "nats", "image": source}]
+                        }
+                    }
+                },
+            },
+            {
+                "apiVersion": "postgresql.cnpg.io/v1",
+                "kind": "Cluster",
+                "spec": {"imageName": source},
+            },
+        ]
+        refs = {self.reference._normalize_oci_reference(source): runtime}
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(self.reference, "_CONTROLLED_OCI_RUNTIME_REFS", refs):
+            result = self.reference.enforce_controlled_oci_pull_policy(documents)
+        self.assertEqual(
+            result[0]["spec"]["template"]["spec"]["containers"][0]["image"],
+            runtime,
+        )
+        self.assertEqual(result[1]["spec"]["imageName"], runtime)
+        self.assertEqual(
+            result[0]["spec"]["template"]["spec"]["containers"][0]["imagePullPolicy"],
+            "Never",
+        )
+        self.assertEqual(result[1]["spec"]["imagePullPolicy"], "Never")
+
+    def test_strict_oci_locked_digest_without_runtime_tag_fails_closed(self) -> None:
+        locked = "sha256:" + "a" * 64
+        reference = f"nats:2.10-alpine@{locked}"
+        lock = {
+            "images": {
+                "local_nats": {
+                    "canonical": f"docker.io/library/nats:2.10-alpine@{locked}",
+                    "local_ref": "nats:2.10-alpine",
+                    "digest": locked,
+                    "load_into_kind": True,
+                }
+            }
+        }
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(self.reference, "_CONTROLLED_OCI_RUNTIME_REFS", {}), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ):
+            with self.assertRaisesRegex(
+                self.reference.ProofError, "runtime tag is unavailable"
+            ):
+                self.reference.controlled_oci_runtime_image(reference)
+
+    def test_strict_oci_kind_receipt_binds_host_image_to_cri_tag(self) -> None:
+        locked = "sha256:" + "a" * 64
+        platform = "sha256:" + "b" * 64
+        image_id = "sha256:" + "c" * 64
+        canonical = f"docker.io/library/nats:2.10-alpine@{locked}"
+        runtime = "docker.io/library/nats:2.10-alpine"
+        lock = {
+            "images": {
+                "local_nats": {
+                    "canonical": canonical,
+                    "local_ref": "nats:2.10-alpine",
+                    "digest": locked,
+                    "suites": ["kind-gitops"],
+                    "load_into_kind": True,
+                }
+            }
+        }
+        node = {
+            "node": "proof-control-plane",
+            "runtime_ref": runtime,
+            "image_id": image_id,
+            "repo_tags": [runtime],
+            "repo_digests": [f"{runtime}@{platform}"],
+            "selected_repo_digest": f"{runtime}@{platform}",
+            "locked_index_digest": locked,
+            "platform_target_digest": platform,
+            "cri_image_status_verified": True,
+        }
+        receipt = {
+            "status": "pass",
+            "strict": True,
+            "cluster": "proof",
+            "loaded_count": 1,
+            "registry_blockades": [{"node": "proof-control-plane"}],
+            "images": {
+                "local_nats": {
+                    "canonical": canonical,
+                    "local_ref": "nats:2.10-alpine",
+                    "runtime_ref": runtime,
+                    "locked_index_digest": locked,
+                    "platform_target_digest": platform,
+                    "cri_image_id": image_id,
+                    "image_id": image_id,
+                    "nodes": [node],
+                }
+            },
+        }
+        with mock.patch.object(self.reference, "_oci_mirror_lock", return_value=lock):
+            refs, digests = self.reference._validate_controlled_oci_kind_receipt(
+                receipt, "kind-gitops", "proof"
+            )
+        self.assertEqual(refs[self.reference._normalize_oci_reference(canonical)], runtime)
+        self.assertEqual(
+            refs[self.reference._normalize_oci_reference("nats:2.10-alpine")],
+            runtime,
+        )
+        self.assertEqual(digests[runtime], platform)
+
+    def test_strict_cilium_helm_disables_digest_resolution(self) -> None:
+        artifacts = {
+            **{name: f"/{name}.yaml" for name in self.reference.GATEWAY_API_ARTIFACTS},
+            "cilium_chart": "/cilium.tgz",
+        }
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(self.reference, "apply_file"), mock.patch.object(
+            self.reference, "run"
+        ) as run, mock.patch.object(
+            self.reference, "wait_rollout"
+        ), mock.patch.object(
+            self.reference, "output", return_value=""
+        ), mock.patch.object(
+            self.reference, "apply_yaml"
+        ):
+            self.reference.install_platform_components(
+                "kubectl", "flux", "helm", artifacts, "127.0.0.1"
+            )
+        helm_argv = run.call_args_list[0].args[0]
+        for value in (
+            "image.useDigest=false",
+            "operator.image.useDigest=false",
+            "envoy.image.useDigest=false",
+            "hubble.relay.image.useDigest=false",
+        ):
+            self.assertIn(value, helm_argv)
+
+    def test_strict_flux_local_data_patches_digest_images_to_runtime_tags(self) -> None:
+        lock = {
+            "images": {
+                "local_postgres": {"canonical": "postgres@sha256:" + "a" * 64},
+                "local_nats": {"canonical": "nats@sha256:" + "b" * 64},
+            }
+        }
+        runtime = {
+            self.reference._normalize_oci_reference(lock["images"]["local_postgres"]["canonical"]): "docker.io/library/postgres:16",
+            self.reference._normalize_oci_reference(lock["images"]["local_nats"]["canonical"]): "docker.io/library/nats:2.10-alpine",
+        }
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference, "_CONTROLLED_OCI_RUNTIME_REFS", runtime
+        ):
+            document = self.reference.flux_kustomization_document(
+                ROOT / "platform/clusters/local/local-data.yaml"
+            )
+        patches = document["spec"]["patches"]
+        self.assertEqual(len(patches), 2)
+        rendered = [yaml.safe_load(item["patch"]) for item in patches]
+        observed = {
+            item["metadata"]["name"]: item["spec"]["template"]["spec"]["containers"][0]
+            for item in rendered
+        }
+        self.assertEqual(observed["postgres"]["image"], "docker.io/library/postgres:16")
+        self.assertEqual(observed["nats"]["image"], "docker.io/library/nats:2.10-alpine")
+        self.assertEqual({item["imagePullPolicy"] for item in observed.values()}, {"Never"})
+
+    def test_strict_oci_runtime_digest_is_receipt_bound(self) -> None:
+        locked = "sha256:" + "a" * 64
+        platform = "sha256:" + "b" * 64
+        source = f"nats:2.10-alpine@{locked}"
+        runtime = "docker.io/library/nats:2.10-alpine"
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference,
+            "_CONTROLLED_OCI_RUNTIME_REFS",
+            {self.reference._normalize_oci_reference(source): runtime},
+        ), mock.patch.object(
+            self.reference,
+            "_CONTROLLED_OCI_RUNTIME_DIGESTS",
+            {runtime: platform},
+        ):
+            self.assertEqual(
+                self.reference.controlled_oci_runtime_digest(source), platform
+            )
 
     def test_strict_oci_dockerfiles_use_verified_local_base_tags(self) -> None:
         with mock.patch.dict(

@@ -531,61 +531,103 @@ def _containerd_reference(reference: str) -> str:
     return canonical + (separator + digest if separator else "")
 
 
-def _kind_image_target(node: str, reference: str) -> str:
+def _kind_cri_image_binding(
+    node: str,
+    local_ref: str,
+    canonical_ref: str,
+    locked_digest: str,
+    expected_image_id: str,
+) -> dict[str, Any]:
+    runtime_ref = _containerd_reference(local_ref)
     raw = _output(
         [
-            "docker", "exec", node, "ctr", "--namespace", "k8s.io",
-            "images", "list", f"name=={reference}",
+            "docker",
+            "exec",
+            node,
+            "crictl",
+            "--runtime-endpoint",
+            "unix:///run/containerd/containerd.sock",
+            "inspecti",
+            runtime_ref,
         ],
         timeout=60,
     )
-    rows = [line.split() for line in raw.splitlines() if line.strip()]
-    if len(rows) != 2 or rows[1][0] != reference or len(rows[1]) < 3:
-        raise IntegrityError(f"containerd returned invalid image listing for {reference} on {node}")
-    target = rows[1][2]
-    if not FULL_SHA256.fullmatch(target):
-        raise IntegrityError(f"containerd returned invalid target digest for {reference} on {node}")
-    return target
-
-
-def _register_kind_digest_alias(
-    node: str,
-    local_ref: str,
-    digest_ref: str,
-    locked_digest: str,
-    runtime_ref: str | None = None,
-) -> dict[str, Any]:
-    containerd_local_ref = _containerd_reference(local_ref)
-    containerd_digest_ref = _containerd_reference(digest_ref)
-    containerd_runtime_ref = _containerd_reference(runtime_ref or digest_ref)
-    source_target = _kind_image_target(node, containerd_local_ref)
-    registered_aliases: dict[str, str] = {}
-    for alias_ref in dict.fromkeys((containerd_digest_ref, containerd_runtime_ref)):
-        _run(
-            [
-                "docker", "exec", node, "ctr", "--namespace", "k8s.io",
-                "images", "tag", "--force", containerd_local_ref, alias_ref,
-            ],
-            capture=True,
-            timeout=60,
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise IntegrityError(
+            f"CRI returned malformed image status for {runtime_ref} on {node}"
+        ) from error
+    status = payload.get("status")
+    if not isinstance(status, dict):
+        raise IntegrityError(
+            f"CRI returned no image status for {runtime_ref} on {node}"
         )
-        alias_target = _kind_image_target(node, alias_ref)
-        if alias_target != source_target:
-            raise IntegrityError(
-                "containerd digest alias target mismatch for "
-                f"{alias_ref} on {node}: {alias_target} != {source_target}"
-            )
-        registered_aliases[alias_ref] = alias_target
+    image_id = status.get("id")
+    repo_tags = status.get("repoTags")
+    repo_digests = status.get("repoDigests")
+    if image_id != expected_image_id:
+        raise IntegrityError(
+            f"CRI image ID drift for {runtime_ref} on {node}: "
+            f"{image_id} != {expected_image_id}"
+        )
+    if (
+        not isinstance(repo_tags, list)
+        or runtime_ref not in repo_tags
+        or not all(isinstance(item, str) for item in repo_tags)
+    ):
+        raise IntegrityError(
+            f"CRI runtime tag is absent for {runtime_ref} on {node}: {repo_tags}"
+        )
+    if not isinstance(repo_digests, list) or not all(
+        isinstance(item, str) for item in repo_digests
+    ):
+        raise IntegrityError(
+            f"CRI returned invalid repo digests for {runtime_ref} on {node}"
+        )
+    valid_repo_digests = [
+        item
+        for item in repo_digests
+        if "@" in item and FULL_SHA256.fullmatch(item.rsplit("@", 1)[-1])
+    ]
+    if len(valid_repo_digests) != len(repo_digests):
+        raise IntegrityError(
+            f"CRI returned malformed repo digests for {runtime_ref} on {node}"
+        )
+    canonical_name = _containerd_reference(canonical_ref).rsplit("@", 1)[0]
+    preferred = [
+        item
+        for item in valid_repo_digests
+        if item.startswith(f"{runtime_ref}@")
+        or item.startswith(f"{canonical_name}@")
+    ]
+    imported = [
+        item
+        for item in valid_repo_digests
+        if re.fullmatch(
+            r"docker\.io/library/import-[0-9]{4}-[0-9]{2}-[0-9]{2}@sha256:[0-9a-f]{64}",
+            item,
+        )
+    ]
+    selected = preferred if preferred else imported
+    selected_digests = {item.rsplit("@", 1)[-1] for item in selected}
+    if len(selected) != 1 or len(selected_digests) != 1:
+        raise IntegrityError(
+            f"CRI runtime tag has ambiguous platform evidence for {runtime_ref} "
+            f"on {node}: preferred={preferred}, imported={imported}"
+        )
+    selected_repo_digest = selected[0]
+    platform_digest = next(iter(selected_digests))
     return {
         "node": node,
-        "digest_ref": digest_ref,
-        "runtime_ref": runtime_ref or digest_ref,
-        "containerd_local_ref": containerd_local_ref,
-        "containerd_digest_ref": containerd_digest_ref,
-        "containerd_runtime_ref": containerd_runtime_ref,
-        "registered_aliases": registered_aliases,
+        "runtime_ref": runtime_ref,
+        "image_id": image_id,
+        "repo_tags": sorted(repo_tags),
+        "repo_digests": sorted(repo_digests),
+        "selected_repo_digest": selected_repo_digest,
         "locked_index_digest": locked_digest,
-        "platform_target_digest": source_target,
+        "platform_target_digest": platform_digest,
+        "cri_image_status_verified": True,
     }
 
 
@@ -663,20 +705,34 @@ def load_kind(
             raise IntegrityError(f"verified mirror image disappeared during kind load: {name}")
         digest = spec["digest"]
         digest_ref = f"{spec['local_ref']}@{digest}"
-        aliases = [
-            _register_kind_digest_alias(
+        bindings = [
+            _kind_cri_image_binding(
                 node,
                 spec["local_ref"],
-                digest_ref,
-                digest,
                 spec["canonical"],
+                digest,
+                verified["image_id"],
             )
             for node in nodes
         ]
+        runtime_refs = {binding["runtime_ref"] for binding in bindings}
+        platform_targets = {
+            binding["platform_target_digest"] for binding in bindings
+        }
+        image_ids = {binding["image_id"] for binding in bindings}
+        if len(runtime_refs) != 1 or len(platform_targets) != 1 or len(image_ids) != 1:
+            raise IntegrityError(
+                f"kind nodes disagree on CRI image binding for {name}: {bindings}"
+            )
         loaded[name] = {
+            "canonical": spec["canonical"],
             "local_ref": spec["local_ref"],
             "digest_ref": digest_ref,
-            "nodes": aliases,
+            "runtime_ref": next(iter(runtime_refs)),
+            "locked_index_digest": digest,
+            "platform_target_digest": next(iter(platform_targets)),
+            "cri_image_id": next(iter(image_ids)),
+            "nodes": bindings,
             **verified,
         }
     registry_blockades = [_block_kind_registries(node) for node in nodes]
