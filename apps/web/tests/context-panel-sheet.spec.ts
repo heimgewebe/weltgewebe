@@ -23,7 +23,11 @@ test.describe("ContextPanel mobile compact and full states", () => {
     await expect(panel.locator(".panel-header h2")).toHaveCount(1);
     await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
     await expect(handle).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      panel.getByRole("region", { name: "Knotenübersicht" }),
+    ).toBeVisible();
     await expect(panel.locator(".tabs")).toBeHidden();
+    await expect(panel.getByRole("tab")).toHaveCount(0);
     await expect(page.getByLabel("Panelgröße")).toHaveCount(0);
     expect((await handle.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   });
@@ -65,14 +69,39 @@ test.describe("ContextPanel mobile compact and full states", () => {
     await panel.locator(".mobile-panel-title").click();
     await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
     await expect(panel.getByTestId("node-compact-summary")).toBeVisible();
-    await expect(panel.locator("#panel-gespraech")).toHaveCount(0);
+    await expect(panel.locator("#panel-gespraech")).toHaveCount(1);
+    await expect(panel.locator("#panel-gespraech")).toBeHidden();
 
     await handle.click();
+    await expect(panel.getByTestId("node-compact-summary")).toBeHidden();
     await expect(panel.locator("#panel-gespraech")).toBeVisible();
     await expect(panel.getByRole("tab", { name: "Gespräch" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
+  });
+
+  test("collapsing preserves an unsaved edit draft", async ({ page }) => {
+    await page.locator(".map-marker").first().click();
+    const panel = page.getByTestId("context-panel");
+    const handle = page.getByTestId("sheet-handle");
+
+    await handle.click();
+    await panel.getByRole("tab", { name: "Bearbeiten" }).click();
+    await panel
+      .getByRole("button", { name: "Bearbeiten", exact: true })
+      .click();
+    const titleInput = panel.getByLabel("Titel");
+    await titleInput.fill("Ungespeicherter Entwurf");
+
+    await panel.locator(".mobile-panel-title").click();
+    await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
+    await expect(titleInput).toBeHidden();
+    await expect(panel.getByTestId("node-compact-summary")).toBeVisible();
+
+    await handle.click();
+    await expect(titleInput).toBeVisible();
+    await expect(titleInput).toHaveValue("Ungespeicherter Entwurf");
   });
 
   test("Komposition starts full and can collapse through the same handle", async ({
@@ -90,7 +119,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
     await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
   });
 
-  test("keyboard and dragging select the two states without a post-drag double toggle", async ({
+  test("keyboard, taps and dragging change state exactly once", async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -99,6 +128,11 @@ test.describe("ContextPanel mobile compact and full states", () => {
     const handle = page.getByTestId("sheet-handle");
 
     await handle.focus();
+    await handle.press("Enter");
+    await expect(panel).toHaveAttribute("data-sheet-stage", "full");
+    await handle.press(" ");
+    await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
+
     await handle.press("ArrowUp");
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
     await handle.press("ArrowDown");
@@ -127,44 +161,108 @@ test.describe("ContextPanel mobile compact and full states", () => {
     const handle = page.getByTestId("sheet-handle");
 
     for (const event of [
-      { pointerId: 23, pointerType: "touch", isPrimary: false, button: 0 },
-      { pointerId: 24, pointerType: "mouse", isPrimary: true, button: 1 },
-      { pointerId: 25, pointerType: "mouse", isPrimary: true, button: 2 },
+      { pointerId: 40, pointerType: "touch", isPrimary: false, button: 0 },
+      { pointerId: 41, pointerType: "mouse", isPrimary: true, button: 1 },
+      { pointerId: 42, pointerType: "mouse", isPrimary: true, button: 2 },
     ]) {
       await handle.dispatchEvent("pointerdown", {
         ...event,
-        clientY: 100,
+        clientY: 700,
       });
-      await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
       await expect(panel).not.toHaveClass(/dragging/);
+      await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
       await expect(panel).not.toHaveAttribute("style");
     }
   });
 
-  test("collapsing preserves an unsaved edit draft for reopening", async ({
+  test("foreign pointer ids and pointercancel leave no drag state", async ({
     page,
   }) => {
-    await page.locator(".map-marker:not(.marker-account)").first().click();
+    await page.locator(".map-marker").first().click();
     const panel = page.getByTestId("context-panel");
     const handle = page.getByTestId("sheet-handle");
-    await handle.click();
+    const box = await handle.boundingBox();
+    expect(box).not.toBeNull();
 
-    await panel.getByRole("tab", { name: "Bearbeiten" }).click();
-    await panel.getByRole("button", { name: "Bearbeiten" }).click();
-    const titleInput = panel.getByLabel("Titel");
-    await titleInput.fill("Ungespeicherter Entwurf");
+    await handle.evaluate((element) => {
+      element.addEventListener(
+        "pointerdown",
+        (event) =>
+          element.setAttribute(
+            "data-test-pointer-id",
+            String((event as PointerEvent).pointerId),
+          ),
+        { once: true },
+      );
+    });
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.mouse.down();
+    const pointerId = Number(await handle.getAttribute("data-test-pointer-id"));
+    expect(Number.isFinite(pointerId)).toBe(true);
+    await expect(panel).toHaveClass(/dragging/);
 
-    await panel.locator(".mobile-panel-title").click();
+    await handle.dispatchEvent("pointermove", {
+      pointerId: pointerId + 1,
+      pointerType: "mouse",
+      isPrimary: true,
+      clientY: box!.y - 300,
+    });
+    await handle.dispatchEvent("pointerup", {
+      pointerId: pointerId + 1,
+      pointerType: "mouse",
+      isPrimary: true,
+      button: 0,
+    });
+    await expect(panel).toHaveClass(/dragging/);
     await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
-    await expect(titleInput).toHaveCount(0);
 
-    await handle.click();
-    await expect(panel.getByLabel("Titel")).toHaveValue(
-      "Ungespeicherter Entwurf",
-    );
+    await handle.dispatchEvent("pointercancel", {
+      pointerId,
+      pointerType: "mouse",
+      isPrimary: true,
+      button: 0,
+    });
+    await expect(panel).not.toHaveClass(/dragging/);
+    await expect(panel).not.toHaveAttribute("style");
+    await page.mouse.up();
   });
 
-  test("compact Garnrolle exposes its profile region and restores the selected tab", async ({
+  test("lostpointercapture deterministically clears an active drag", async ({
+    page,
+  }) => {
+    await page.locator(".map-marker").first().click();
+    const panel = page.getByTestId("context-panel");
+    const handle = page.getByTestId("sheet-handle");
+    const box = await handle.boundingBox();
+    expect(box).not.toBeNull();
+
+    await handle.evaluate((element) => {
+      element.addEventListener(
+        "pointerdown",
+        (event) =>
+          element.setAttribute(
+            "data-test-pointer-id",
+            String((event as PointerEvent).pointerId),
+          ),
+        { once: true },
+      );
+    });
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.mouse.down();
+    const pointerId = Number(await handle.getAttribute("data-test-pointer-id"));
+    await expect(panel).toHaveClass(/dragging/);
+
+    await handle.dispatchEvent("lostpointercapture", {
+      pointerId,
+      pointerType: "mouse",
+      isPrimary: true,
+    });
+    await expect(panel).not.toHaveClass(/dragging/);
+    await expect(panel).not.toHaveAttribute("style");
+    await page.mouse.up();
+  });
+
+  test("compact Garnrolle keeps tabs and the selected panel in the DOM", async ({
     page,
   }) => {
     await page.locator(".map-marker.marker-account").first().click();
@@ -174,7 +272,8 @@ test.describe("ContextPanel mobile compact and full states", () => {
     await expect(
       panel.getByRole("region", { name: "Garnrollenprofil" }),
     ).toBeVisible();
-    await expect(panel.locator(".tabs")).toHaveCount(0);
+    await expect(panel.locator('[role="tab"]')).toHaveCount(3);
+    await expect(panel.getByRole("tab")).toHaveCount(0);
 
     await handle.click();
     await panel.getByRole("tab", { name: "Aktivität" }).click();
@@ -182,9 +281,12 @@ test.describe("ContextPanel mobile compact and full states", () => {
 
     await panel.locator(".mobile-panel-title").click();
     await expect(panel.getByTestId("account-compact-summary")).toBeVisible();
-    await expect(panel.locator("#panel-aktivitaet")).toHaveCount(0);
+    await expect(panel.locator('[role="tablist"]')).toBeHidden();
+    await expect(panel.locator("#panel-aktivitaet")).toHaveCount(1);
+    await expect(panel.locator("#panel-aktivitaet")).toBeHidden();
 
     await handle.click();
+    await expect(panel.getByTestId("account-compact-summary")).toBeHidden();
     await expect(panel.locator("#panel-aktivitaet")).toBeVisible();
     await expect(panel.getByRole("tab", { name: "Aktivität" })).toHaveAttribute(
       "aria-selected",
@@ -201,11 +303,11 @@ test.describe("ContextPanel mobile compact and full states", () => {
     expect(transitionDuration).toBe("0s");
   });
 
-  test("a coarse-pointer phone keeps the mobile sheet in landscape", async ({
+  test("rotating a coarse-pointer phone keeps the live panel mobile", async ({
     browser,
   }) => {
     const context = await browser.newContext({
-      viewport: { width: 844, height: 390 },
+      viewport: { width: 390, height: 844 },
       hasTouch: true,
       isMobile: true,
     });
@@ -226,6 +328,12 @@ test.describe("ContextPanel mobile compact and full states", () => {
     const handle = landscapePage.getByTestId("sheet-handle");
     await expect(handle).toBeVisible();
     await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
+    await expect(panel.getByTestId("node-compact-summary")).toBeVisible();
+
+    await landscapePage.setViewportSize({ width: 844, height: 390 });
+    await expect(handle).toBeVisible();
+    await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
+    await expect(panel.getByTestId("node-compact-summary")).toBeVisible();
     await handle.click();
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
 
@@ -269,9 +377,12 @@ test.describe("ContextPanel desktop layout stays unchanged", () => {
     await page.locator(".map-marker").first().click();
     const panel = page.getByTestId("context-panel");
     await expect(panel).toBeVisible();
-    await expect(page.getByTestId("sheet-handle")).toBeHidden();
+    const handle = page.getByTestId("sheet-handle");
+    await expect(handle).toBeHidden();
     await expect(panel.locator(".mobile-panel-title")).toBeHidden();
     await expect(panel.locator(".tabs")).toBeVisible();
+    await handle.dispatchEvent("click", { detail: 0 });
+    await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
 
     const box = await panel.boundingBox();
     expect(Math.round(box!.width)).toBe(400);
@@ -289,7 +400,9 @@ test.describe("ContextPanel touch input", () => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
   });
 
-  test("one touch tap toggles the handle exactly once", async ({ page }) => {
+  test("one real touch tap toggles the handle exactly once", async ({
+    page,
+  }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.locator(".map-marker").first().click();
     const panel = page.getByTestId("context-panel");

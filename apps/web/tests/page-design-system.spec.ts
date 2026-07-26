@@ -77,9 +77,17 @@ test("application overview uses the same surfaces, controls and empty-state cont
   await expect(
     page.getByLabel("Kurze Vorstellung oder Begründung"),
   ).toHaveClass(/wg-control/);
-  await expect(
-    page.getByRole("button", { name: "Weberstatus beantragen" }),
-  ).toHaveClass(/wg-button--primary/);
+  const primaryAction = page.getByRole("button", {
+    name: "Weberstatus beantragen",
+  });
+  await expect(primaryAction).toHaveClass(/wg-button--primary/);
+  const primaryActionColors = await primaryAction.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { foreground: style.color, background: style.backgroundColor };
+  });
+  expect(primaryActionColors.foreground).not.toBe(
+    primaryActionColors.background,
+  );
   await expect(page.getByText("Noch liegen keine Anträge vor.")).toHaveClass(
     /wg-state/,
   );
@@ -90,7 +98,7 @@ test("application overview uses the same surfaces, controls and empty-state cont
   await expect(filters.getByRole("link")).toHaveCount(5);
   await expect(filters.getByRole("link", { name: "Alle" })).toHaveAttribute(
     "aria-current",
-    "page",
+    "true",
   );
 });
 

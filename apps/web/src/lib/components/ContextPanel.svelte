@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from "svelte";
+  import { createEventDispatcher } from "svelte";
   import {
     selection,
     systemState,
@@ -40,8 +40,6 @@
     domainChanged: DomainChanged;
   }>();
   const DRAG_THRESHOLD_PX = 6;
-  const MOBILE_SHEET_MEDIA =
-    "(max-width: 768px), (max-height: 500px) and (pointer: coarse)";
 
   let kompositionPanel: KompositionPanelHandle | null = null;
   let sheetStage: SheetStage = "compact";
@@ -53,17 +51,13 @@
   let dragging = false;
   let dragMoved = false;
   let activePointerId: number | null = null;
-  let mobileSheetMode = false;
 
-  onMount(() => {
-    const media = window.matchMedia(MOBILE_SHEET_MEDIA);
-    const updateMobileSheetMode = () => {
-      mobileSheetMode = media.matches;
-    };
-    updateMobileSheetMode();
-    media.addEventListener("change", updateMobileSheetMode);
-    return () => media.removeEventListener("change", updateMobileSheetMode);
-  });
+  function resetSheetPointerState(): void {
+    dragHeight = null;
+    dragging = false;
+    dragMoved = false;
+    activePointerId = null;
+  }
 
   function derivePanelTitle(
     state: SystemState,
@@ -99,23 +93,16 @@
     if (nextPanelIdentity !== previousPanelIdentity) {
       previousPanelIdentity = nextPanelIdentity;
       sheetStage = $systemState === "komposition" ? "full" : "compact";
-      dragHeight = null;
-      dragging = false;
-      dragMoved = false;
-      activePointerId = null;
+      resetSheetPointerState();
     }
   }
 
   function setSheetStage(stage: SheetStage): void {
     sheetStage = stage;
-    dragHeight = null;
-    dragging = false;
-    dragMoved = false;
-    activePointerId = null;
+    resetSheetPointerState();
   }
 
   function toggleSheetStage(): void {
-    if (!mobileSheetMode) return;
     setSheetStage(sheetStage === "compact" ? "full" : "compact");
   }
 
@@ -128,9 +115,9 @@
   }
 
   function handleSheetPointerDown(event: PointerEvent): void {
-    if (!mobileSheetMode || !event.isPrimary || event.button !== 0 || dragging)
-      return;
+    if (!event.isPrimary || event.button !== 0 || dragging) return;
     const handle = event.currentTarget as HTMLElement;
+    if (handle.getClientRects().length === 0) return;
     const aside = handle.closest<HTMLElement>('[data-testid="context-panel"]');
     if (!aside) return;
     event.preventDefault();
@@ -164,10 +151,9 @@
     const finalHeight = dragHeight ?? dragStartHeight;
     const handle = event.currentTarget as HTMLElement;
 
-    dragHeight = null;
-    dragging = false;
-    dragMoved = false;
-    activePointerId = null;
+    // Reset before releasePointerCapture(): browsers may synchronously dispatch
+    // lostpointercapture, which must then observe an already-clean state.
+    resetSheetPointerState();
     if (handle.hasPointerCapture(event.pointerId)) {
       handle.releasePointerCapture(event.pointerId);
     }
@@ -187,20 +173,19 @@
 
   function handleSheetLostPointerCapture(event: PointerEvent): void {
     if (!dragging || event.pointerId !== activePointerId) return;
-    dragHeight = null;
-    dragging = false;
-    dragMoved = false;
-    activePointerId = null;
+    resetSheetPointerState();
   }
 
   function handleSheetHandleClick(event: MouseEvent): void {
-    // detail === 0 marks keyboard or synthetic activation. Pointer taps are
-    // already completed exactly once by finishSheetPointer.
-    if (event.detail === 0) toggleSheetStage();
+    if (event.detail !== 0) return;
+    const handle = event.currentTarget as HTMLElement;
+    if (handle.getClientRects().length === 0) return;
+    toggleSheetStage();
   }
 
   function handleSheetKeydown(event: KeyboardEvent): void {
-    if (!mobileSheetMode) return;
+    const handle = event.currentTarget as HTMLElement;
+    if (handle.getClientRects().length === 0) return;
     if (event.key === "ArrowUp" || event.key === "End") {
       event.preventDefault();
       setSheetStage("full");
@@ -301,15 +286,11 @@
       {:else if $selection}
         {#if $selection.type === "node"}
           <NodePanel
-            compact={mobileSheetMode && sheetStage === "compact"}
             on:selectRelated={handleRelated}
             on:domainChanged={handleDomainChanged}
           />
         {:else if $selection.type === "account" || $selection.type === "garnrolle"}
-          <AccountPanel
-            compact={mobileSheetMode && sheetStage === "compact"}
-            on:selectRelated={handleRelated}
-          />
+          <AccountPanel on:selectRelated={handleRelated} />
         {:else if $selection.type === "edge"}
           <EdgePanel />
         {/if}
@@ -488,9 +469,15 @@
       padding-top: 0.65rem;
     }
 
-    /* CSS owns the first visible compact layout. The matching JS media query
-       then adds interaction and ARIA state without changing the breakpoint. */
-    .stage-compact :global(.tabs) {
+    .stage-compact :global(.compact-node-summary),
+    .stage-compact :global(.compact-account-summary),
+    .stage-compact :global(.node-mode.editing .node-summary) {
+      display: block;
+    }
+
+    .stage-compact :global(.node-full-content),
+    .stage-compact :global(.tabs),
+    .stage-compact :global(.account-full-content) {
       display: none;
     }
   }

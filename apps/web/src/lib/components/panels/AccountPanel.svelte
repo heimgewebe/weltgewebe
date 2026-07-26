@@ -7,8 +7,6 @@
   } from "$lib/panels/panelDetails";
   import { formatDate } from "$lib/utils/formatDate";
 
-  export let compact = false;
-
   const dispatch = createEventDispatcher<{
     selectRelated: { type: "node"; id: string };
   }>();
@@ -97,52 +95,82 @@
   </h3>
   {#if summary}<p class="summary">{summary}</p>{/if}
 
-  {#if !compact}
-    <div class="tabs" role="tablist" aria-label="Garnrollen-Tabs">
-      <button
-        class:active={activeTab === "profil"}
-        on:click={() => setTab("profil")}
-        on:keydown={handleKeydown}
-        role="tab"
-        aria-selected={activeTab === "profil"}
-        aria-controls="panel-profil"
-        id="tab-profil"
-        tabindex={activeTab === "profil" ? 0 : -1}>Profil</button
-      >
-      <button
-        class:active={activeTab === "aktivitaet"}
-        on:click={() => setTab("aktivitaet")}
-        on:keydown={handleKeydown}
-        role="tab"
-        aria-selected={activeTab === "aktivitaet"}
-        aria-controls="panel-aktivitaet"
-        id="tab-aktivitaet"
-        tabindex={activeTab === "aktivitaet" ? 0 : -1}>Aktivität</button
-      >
-      <button
-        class:active={activeTab === "knoten"}
-        on:click={() => setTab("knoten")}
-        on:keydown={handleKeydown}
-        role="tab"
-        aria-selected={activeTab === "knoten"}
-        aria-controls="panel-knoten"
-        id="tab-knoten"
-        tabindex={activeTab === "knoten" ? 0 : -1}>Knoten</button
-      >
-    </div>
-  {/if}
+  <div
+    class="compact-account-summary"
+    data-testid="account-compact-summary"
+    role="region"
+    aria-label="Garnrollenprofil"
+  >
+    {#if isLoadingDetails && !accountDetails}
+      <p class="ghost">Lade Profil…</p>
+    {:else}
+      {#if accountDetails?.created_at || $selection?.data?.created_at}<p>
+          <strong>Dabei seit:</strong>
+          {formatDate(
+            accountDetails?.created_at || $selection?.data?.created_at,
+          )}
+        </p>{/if}
+      {#if skills.length > 0}<p>
+          <strong>Fähigkeiten:</strong>
+          {skills.join(", ")}
+        </p>{/if}
+      {#if goods.length > 0}<p>
+          <strong>Güter:</strong>
+          {goods.join(", ")}
+        </p>{/if}
+      {#if interests.length > 0}<p>
+          <strong>Interessen:</strong>
+          {interests.join(", ")}
+        </p>{/if}
+    {/if}
+  </div>
 
-  <div class="tab-content">
+  <div
+    class="tabs account-full-content"
+    role="tablist"
+    aria-label="Garnrollen-Tabs"
+  >
+    <button
+      class:active={activeTab === "profil"}
+      on:click={() => setTab("profil")}
+      on:keydown={handleKeydown}
+      role="tab"
+      aria-selected={activeTab === "profil"}
+      aria-controls="panel-profil"
+      id="tab-profil"
+      tabindex={activeTab === "profil" ? 0 : -1}>Profil</button
+    >
+    <button
+      class:active={activeTab === "aktivitaet"}
+      on:click={() => setTab("aktivitaet")}
+      on:keydown={handleKeydown}
+      role="tab"
+      aria-selected={activeTab === "aktivitaet"}
+      aria-controls="panel-aktivitaet"
+      id="tab-aktivitaet"
+      tabindex={activeTab === "aktivitaet" ? 0 : -1}>Aktivität</button
+    >
+    <button
+      class:active={activeTab === "knoten"}
+      on:click={() => setTab("knoten")}
+      on:keydown={handleKeydown}
+      role="tab"
+      aria-selected={activeTab === "knoten"}
+      aria-controls="panel-knoten"
+      id="tab-knoten"
+      tabindex={activeTab === "knoten" ? 0 : -1}>Knoten</button
+    >
+  </div>
+
+  <div class="tab-content account-full-content">
     {#if isLoadingDetails && !accountDetails}
       <p class="ghost">Lade Details…</p>
-    {:else if compact || activeTab === "profil"}
+    {:else if activeTab === "profil"}
       <div
         class="overview"
         id="panel-profil"
-        role={compact ? "region" : "tabpanel"}
-        aria-label={compact ? "Garnrollenprofil" : undefined}
-        aria-labelledby={compact ? undefined : "tab-profil"}
-        data-testid={compact ? "account-compact-summary" : undefined}
+        role="tabpanel"
+        aria-labelledby="tab-profil"
       >
         {#if accountDetails?.created_at || $selection?.data?.created_at}<p>
             <strong>Dabei seit:</strong>
@@ -214,6 +242,10 @@
     color: var(--muted);
     font-size: 0.9rem;
   }
+  .compact-account-summary {
+    display: none;
+  }
+  .compact-account-summary p,
   .overview p {
     margin: 0 0 0.65rem;
     font-size: 0.95rem;
