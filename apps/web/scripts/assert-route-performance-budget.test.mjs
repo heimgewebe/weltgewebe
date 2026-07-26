@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   mkdtempSync,
   mkdirSync,
@@ -20,6 +21,7 @@ import {
 import {
   formatTextReport,
   measureRoute,
+  readBuildRevisionEvidence,
   resolveBuildDirectory,
   resolveSourceRevisionEvidence,
   runBudgetCheck,
@@ -341,6 +343,8 @@ test("verifies declared revisions against the measured checkout", () => {
     resolveSourceRevisionEvidence({
       env: { GIT_COMMIT_SHA: "", GITHUB_SHA: revision },
       checkoutRevision: revision,
+      checkoutClean: true,
+      artifactRevision: revision,
     }),
     {
       sourceRevision: revision,
@@ -367,6 +371,8 @@ test("verifies declared revisions against the measured checkout", () => {
     resolveSourceRevisionEvidence({
       env: { GIT_COMMIT_SHA: revision },
       checkoutRevision: otherRevision,
+      checkoutClean: true,
+      artifactRevision: revision,
     }).status,
     "mismatch",
   );
@@ -374,14 +380,103 @@ test("verifies declared revisions against the measured checkout", () => {
     resolveSourceRevisionEvidence({
       env: { GIT_COMMIT_SHA: revision },
       checkoutRevision: null,
+      checkoutClean: null,
+      artifactRevision: revision,
     }).status,
     "unverifiable",
   );
   assert.equal(
-    resolveSourceRevisionEvidence({ env: {}, checkoutRevision: revision })
-      .status,
+    resolveSourceRevisionEvidence({
+      env: {},
+      checkoutRevision: revision,
+      checkoutClean: true,
+      artifactRevision: revision,
+    }).status,
     "missing",
   );
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { GIT_COMMIT_SHA: revision },
+      checkoutRevision: revision,
+      checkoutClean: false,
+      artifactRevision: revision,
+    }).status,
+    "dirty",
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { GIT_COMMIT_SHA: revision },
+      checkoutRevision: revision,
+      checkoutClean: true,
+      artifactRevision: otherRevision,
+    }).status,
+    "artifact_mismatch",
+  );
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { GIT_COMMIT_SHA: revision },
+      checkoutRevision: revision,
+      checkoutClean: true,
+      artifactRevision: null,
+    }).status,
+    "artifact_unverifiable",
+  );
+});
+
+test("refuses revision binding when the measured checkout is dirty", (t) => {
+  const root = temporaryDirectory(t, "route-budget-git-");
+  const input = join(root, "input.txt");
+  writeFileSync(input, "committed\n");
+  for (const arguments_ of [
+    ["init", "--quiet"],
+    ["config", "user.email", "ci@example.invalid"],
+    ["config", "user.name", "CI"],
+    ["add", "input.txt"],
+    ["commit", "--quiet", "-m", "fixture"],
+  ]) {
+    const result = spawnSync("git", ["-C", root, ...arguments_], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+  }
+  const revision = spawnSync(
+    "git",
+    ["-C", root, "rev-parse", "--verify", "HEAD"],
+    { encoding: "utf8" },
+  ).stdout.trim();
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { GIT_COMMIT_SHA: revision },
+      root,
+      artifactRevision: revision,
+    }).status,
+    "verified",
+  );
+
+  writeFileSync(input, "modified\n");
+  assert.equal(
+    resolveSourceRevisionEvidence({
+      env: { GIT_COMMIT_SHA: revision },
+      root,
+      artifactRevision: revision,
+    }).status,
+    "dirty",
+  );
+});
+
+test("reads only a valid embedded build revision", (t) => {
+  const root = temporaryDirectory(t, "route-budget-version-");
+  const appDirectory = join(root, "_app");
+  mkdirSync(appDirectory);
+  const revision = "c".repeat(40);
+  const versionPath = join(appDirectory, "version.json");
+  writeFileSync(versionPath, JSON.stringify({ commit: revision }));
+  assert.equal(readBuildRevisionEvidence(root), revision);
+
+  writeFileSync(versionPath, JSON.stringify({ commit: "unknown" }));
+  assert.equal(readBuildRevisionEvidence(root), null);
+  rmSync(versionPath);
+  assert.equal(readBuildRevisionEvidence(root), null);
 });
 
 test("prints revision and evidence limitations in the default report", () => {

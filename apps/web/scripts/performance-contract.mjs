@@ -337,7 +337,7 @@ export function parsePerformanceContract(text) {
 }
 
 export function assertLegacyContractsAbsent(contract, root = repositoryRoot) {
-  const resolvedRoot = resolve(root);
+  const resolvedRoot = realpathSync(resolve(root));
   for (const relativePath of contract.legacy_contracts.must_not_exist) {
     const target = resolve(resolvedRoot, relativePath);
     const fromRoot = relative(resolvedRoot, target);
@@ -351,25 +351,42 @@ export function assertLegacyContractsAbsent(contract, root = repositoryRoot) {
         `Legacy contract path escapes repository: ${relativePath}`,
       );
     }
-    let metadata;
-    try {
-      metadata = lstatSync(target);
-    } catch (error) {
-      if (error && typeof error === "object" && error.code === "ENOENT") {
-        continue;
+
+    const components = fromRoot.split(sep);
+    let current = resolvedRoot;
+    for (let index = 0; index < components.length; index += 1) {
+      current = resolve(current, components[index]);
+      let metadata;
+      try {
+        metadata = lstatSync(current);
+      } catch (error) {
+        if (error && typeof error === "object" && error.code === "ENOENT") {
+          break;
+        }
+        throw new Error(
+          `Cannot inspect legacy performance contract ${relativePath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
-      throw new Error(
-        `Cannot inspect legacy performance contract ${relativePath}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      if (metadata.isSymbolicLink()) {
+        const component = relative(resolvedRoot, current);
+        throw new Error(
+          `Legacy contract path contains symbolic link: ${relativePath} (${component})`,
+        );
+      }
+      const isLeaf = index === components.length - 1;
+      if (!isLeaf && !metadata.isDirectory()) {
+        const component = relative(resolvedRoot, current);
+        throw new Error(
+          `Legacy contract path has non-directory ancestor: ${relativePath} (${component})`,
+        );
+      }
+      if (isLeaf) {
+        const kind = metadata.isFile() ? "file" : "non-file";
+        throw new Error(
+          `Legacy performance contract still exists: ${relativePath} (${kind})`,
+        );
+      }
     }
-    const kind = metadata.isSymbolicLink()
-      ? "symbolic link"
-      : metadata.isFile()
-        ? "file"
-        : "non-file";
-    throw new Error(
-      `Legacy performance contract still exists: ${relativePath} (${kind})`,
-    );
   }
 }
 

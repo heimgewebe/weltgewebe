@@ -29,21 +29,63 @@ const defaultBudgetPath = resolve(
 );
 const SOURCE_REVISION_PATTERN = /^[0-9a-f]{40}$/;
 
-function readCheckoutRevision(root) {
-  const result = spawnSync(
+export function readBuildRevisionEvidence(buildDir) {
+  try {
+    const payload = JSON.parse(
+      readRegularFile(
+        resolve(buildDir, "_app/version.json"),
+        "Build revision evidence",
+        buildDir,
+      ).toString("utf8"),
+    );
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return null;
+    }
+    const revision =
+      typeof payload.commit === "string"
+        ? payload.commit.trim().toLowerCase()
+        : "";
+    return SOURCE_REVISION_PATTERN.test(revision) ? revision : null;
+  } catch {
+    return null;
+  }
+}
+
+function readCheckoutState(root) {
+  const options = {
+    encoding: "utf8",
+    timeout: 5000,
+    windowsHide: true,
+  };
+  const revisionResult = spawnSync(
     "git",
     ["-C", root, "rev-parse", "--verify", "HEAD"],
-    { encoding: "utf8", timeout: 5000, windowsHide: true },
+    options,
   );
-  if (result.status !== 0) return null;
-  const revision = result.stdout.trim().toLowerCase();
-  return SOURCE_REVISION_PATTERN.test(revision) ? revision : null;
+  if (revisionResult.status !== 0) {
+    return { revision: null, clean: null };
+  }
+  const revision = revisionResult.stdout.trim().toLowerCase();
+  if (!SOURCE_REVISION_PATTERN.test(revision)) {
+    return { revision: null, clean: null };
+  }
+  const statusResult = spawnSync(
+    "git",
+    ["-C", root, "status", "--porcelain=v1", "--untracked-files=all"],
+    options,
+  );
+  return {
+    revision,
+    clean: statusResult.status === 0 ? statusResult.stdout === "" : null,
+  };
 }
 
 export function resolveSourceRevisionEvidence({
   env = process.env,
   root = performanceRepositoryRoot,
   checkoutRevision,
+  checkoutClean,
+  artifactRevision,
 } = {}) {
   const declared = [];
   const invalidVariables = [];
@@ -60,13 +102,29 @@ export function resolveSourceRevisionEvidence({
 
   const distinct = [...new Set(declared)];
   const sourceRevision = distinct.length === 1 ? distinct[0] : null;
+  const observedState =
+    checkoutRevision === undefined || checkoutClean === undefined
+      ? readCheckoutState(root)
+      : null;
   const observedCheckout =
     checkoutRevision === undefined
-      ? readCheckoutRevision(root)
+      ? observedState.revision
       : typeof checkoutRevision === "string" &&
           SOURCE_REVISION_PATTERN.test(checkoutRevision.trim().toLowerCase())
         ? checkoutRevision.trim().toLowerCase()
         : null;
+  const observedClean =
+    checkoutClean === undefined
+      ? observedState.clean
+      : typeof checkoutClean === "boolean"
+        ? checkoutClean
+        : null;
+  const artifactWasProvided = artifactRevision !== undefined;
+  const observedArtifact =
+    typeof artifactRevision === "string" &&
+    SOURCE_REVISION_PATTERN.test(artifactRevision.trim().toLowerCase())
+      ? artifactRevision.trim().toLowerCase()
+      : null;
 
   if (invalidVariables.length > 0) {
     return {
@@ -106,6 +164,33 @@ export function resolveSourceRevisionEvidence({
       checkoutRevision: observedCheckout,
       verified: false,
       status: "mismatch",
+    };
+  }
+  if (observedClean !== true) {
+    return {
+      sourceRevision,
+      checkoutRevision: observedCheckout,
+      verified: false,
+      status: observedClean === false ? "dirty" : "unverifiable",
+    };
+  }
+  if (!observedArtifact) {
+    return {
+      sourceRevision,
+      checkoutRevision: observedCheckout,
+      verified: false,
+      status:
+        artifactWasProvided && artifactRevision !== null
+          ? "artifact_invalid"
+          : "artifact_unverifiable",
+    };
+  }
+  if (observedArtifact !== sourceRevision) {
+    return {
+      sourceRevision,
+      checkoutRevision: observedCheckout,
+      verified: false,
+      status: "artifact_mismatch",
     };
   }
   return {
@@ -458,6 +543,8 @@ export function runBudgetCheck({
   reportOnly = false,
   revisionEnvironment = process.env,
   checkoutRevision,
+  checkoutClean,
+  buildRevision,
 } = {}) {
   const contract = loadPerformanceContract({
     contractPath: budgetPath,
@@ -513,6 +600,11 @@ export function runBudgetCheck({
     env: revisionEnvironment,
     root: contractRoot,
     checkoutRevision,
+    checkoutClean,
+    artifactRevision:
+      buildRevision === undefined
+        ? readBuildRevisionEvidence(resolvedBuildDir)
+        : buildRevision,
   });
   const limitations = [...contract.authority.does_not_establish];
   if (!revisionEvidence.verified) {

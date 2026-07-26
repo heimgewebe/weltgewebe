@@ -212,7 +212,24 @@ test("fails when a replaced legacy contract still exists", (t) => {
   symlinkSync("missing.json", join(root, "ci/budget.json"));
   assert.throws(
     () => assertLegacyContractsAbsent(validContract(), root),
-    /Legacy performance contract still exists: ci\/budget.json \(symbolic link\)/,
+    /Legacy contract path contains symbolic link: ci\/budget.json \(ci\/budget.json\)/,
+  );
+});
+
+test("rejects symlinked ancestors of absent legacy contracts", (t) => {
+  const externalDirectory = temporaryDirectory(t);
+  const linkedRoot = temporaryDirectory(t);
+  symlinkSync(externalDirectory, join(linkedRoot, "ci"), "dir");
+  assert.throws(
+    () => assertLegacyContractsAbsent(validContract(), linkedRoot),
+    /Legacy contract path contains symbolic link: ci\/budget.json \(ci\)/,
+  );
+
+  const danglingRoot = temporaryDirectory(t);
+  symlinkSync("missing-directory", join(danglingRoot, "ci"), "dir");
+  assert.throws(
+    () => assertLegacyContractsAbsent(validContract(), danglingRoot),
+    /Legacy contract path contains symbolic link: ci\/budget.json \(ci\)/,
   );
 });
 
