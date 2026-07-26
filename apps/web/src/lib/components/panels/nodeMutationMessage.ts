@@ -2,6 +2,13 @@ import { ApiRequestError } from "$lib/api/domainWrites";
 
 export type NodeMutationAction = "save" | "delete";
 
+function problemCode(body: unknown): string | undefined {
+  if (typeof body !== "object" || body === null || !("code" in body)) {
+    return undefined;
+  }
+  return typeof body.code === "string" ? body.code : undefined;
+}
+
 export function nodeMutationMessage(
   error: unknown,
   action: NodeMutationAction,
@@ -17,9 +24,7 @@ export function nodeMutationMessage(
     }
     if (error.status === 409) {
       const reason =
-        typeof error.body === "string"
-          ? error.body
-          : (error.body as { code?: unknown } | undefined)?.code;
+        typeof error.body === "string" ? error.body : problemCode(error.body);
       if (
         deleting &&
         (reason === "node_conversation_not_empty" ||

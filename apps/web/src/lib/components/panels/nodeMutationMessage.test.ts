@@ -26,6 +26,15 @@ describe("node mutation messages", () => {
     expect(nodeMutationMessage(error, "save")).toContain("nicht geändert");
   });
 
+  it("ignores malformed structured codes", () => {
+    const error = new ApiRequestError(409, {
+      code: 42,
+      message: "protected",
+    });
+
+    expect(nodeMutationMessage(error, "delete")).toContain("nicht gelöscht");
+  });
+
   it("keeps generic save and delete conflicts distinct", () => {
     const error = new ApiRequestError(409, "other conflict");
 

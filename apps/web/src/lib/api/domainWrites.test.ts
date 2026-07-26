@@ -45,26 +45,23 @@ describe("domain writes", () => {
     });
   });
 
-  it("keeps structured version-conflict evidence from JSON responses", async () => {
+  it("keeps the current node from direct 412 JSON responses", async () => {
     const current = {
       id: "node-a",
       title: "Aktuell",
+      kind: "Ort",
+      address: "Testweg 1",
+      location: { lat: 54, lon: 8 },
+      tags: [],
       updated_at: "2026-07-26T08:00:00Z",
     };
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            code: "node_version_conflict",
-            message: "conflict",
-            current,
-          }),
-          {
-            status: 412,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
+        new Response(JSON.stringify(current), {
+          status: 412,
+          headers: { "Content-Type": "application/json" },
+        }),
       ),
     );
 
@@ -82,11 +79,7 @@ describe("domain writes", () => {
       ),
     ).rejects.toMatchObject({
       status: 412,
-      body: {
-        code: "node_version_conflict",
-        message: "conflict",
-        current,
-      },
+      body: current,
     });
   });
 });
