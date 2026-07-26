@@ -15,7 +15,6 @@
   import { nodeKindLabel } from "$lib/ui/productLanguage";
   import type { MapEntityViewModel } from "$lib/map/types";
   import NodeConversation from "./NodeConversation.svelte";
-  import { nodeMutationMessage } from "./nodeMutationMessage";
 
   type DomainChanged = {
     kind: "node";
@@ -143,6 +142,14 @@
     resolveTarget()?.focus();
   }
 
+  async function describeMutationError(
+    error: unknown,
+    action: "save" | "delete",
+  ): Promise<string> {
+    const { nodeMutationMessage } = await import("./nodeMutationMessage");
+    return nodeMutationMessage(error, action);
+  }
+
   function setTab(tab: NodeTab) {
     activeTab = tab;
   }
@@ -258,7 +265,7 @@
           ...currentNode,
         } as NodeDetails);
       } else {
-        mutationError = nodeMutationMessage(error, "save");
+        mutationError = await describeMutationError(error, "save");
       }
     } finally {
       saving = false;
@@ -291,7 +298,7 @@
           ...(error.body as object),
         } as NodeDetails);
       } else {
-        mutationError = nodeMutationMessage(error, "delete");
+        mutationError = await describeMutationError(error, "delete");
       }
     } finally {
       deleting = false;
