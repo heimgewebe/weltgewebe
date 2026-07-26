@@ -247,28 +247,28 @@
               <a
                 class:active={!statusFilter && !eventFilter}
                 aria-current={!statusFilter && !eventFilter
-                  ? "page"
+                  ? "true"
                   : undefined}
                 href="/antraege">Alle</a
               >
               <a
                 class:active={statusFilter === "consent"}
-                aria-current={statusFilter === "consent" ? "page" : undefined}
+                aria-current={statusFilter === "consent" ? "true" : undefined}
                 href="/antraege?status=consent">Offen</a
               >
               <a
                 class:active={eventFilter === "veto"}
-                aria-current={eventFilter === "veto" ? "page" : undefined}
+                aria-current={eventFilter === "veto" ? "true" : undefined}
                 href="/antraege?ereignis=veto">Vetos</a
               >
               <a
                 class:active={eventFilter === "gespraech"}
-                aria-current={eventFilter === "gespraech" ? "page" : undefined}
+                aria-current={eventFilter === "gespraech" ? "true" : undefined}
                 href="/antraege?ereignis=gespraech">Gespräche</a
               >
               <a
                 class:active={statusFilter === "voting"}
-                aria-current={statusFilter === "voting" ? "page" : undefined}
+                aria-current={statusFilter === "voting" ? "true" : undefined}
                 href="/antraege?status=voting">Abstimmungen</a
               >
             </nav>

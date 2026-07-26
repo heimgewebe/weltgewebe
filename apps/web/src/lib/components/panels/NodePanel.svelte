@@ -32,10 +32,6 @@
     domainChanged: DomainChanged;
   }>();
 
-  // Compact mode temporarily replaces the rendered panel, but keeps the
-  // active tab and bound edit values in component state for lossless reopening.
-  export let compact = false;
-
   type NodeTab = "uebersicht" | "gespraech" | "verlauf" | "bearbeiten";
   let activeTab: NodeTab = "uebersicht";
   let tabs: NodeTab[] = ["uebersicht", "gespraech", "verlauf"];
@@ -321,21 +317,23 @@
   }
 </script>
 
-<div class="node-mode">
+<div class="node-mode" class:editing>
   <h3>{nodeDetails?.title || $selection?.data?.title || $selection?.id}</h3>
-  {#if summary && (!editing || compact)}<p class="summary">{summary}</p>{/if}
+  {#if summary}<p class="summary node-summary">{summary}</p>{/if}
+  <div
+    class="compact-node-summary"
+    data-testid="node-compact-summary"
+    role="region"
+    aria-label="Knotenübersicht"
+  >
+    <p><strong>Knotenart:</strong> {kind}</p>
+  </div>
 
-  {#if compact}
-    <div
-      class="compact-node-summary"
-      data-testid="node-compact-summary"
-      role="region"
-      aria-label="Knotenübersicht"
+  {#if editing}
+    <form
+      class="edit-form node-full-content"
+      on:submit|preventDefault={saveNode}
     >
-      <p><strong>Knotenart:</strong> {kind}</p>
-    </div>
-  {:else if editing}
-    <form class="edit-form" on:submit|preventDefault={saveNode}>
       <label>
         Titel
         <input
@@ -421,7 +419,11 @@
       </div>
     </form>
   {:else}
-    <div class="tabs node-tabs" role="tablist" aria-label="Knoten-Tabs">
+    <div
+      class="tabs node-tabs node-full-content"
+      role="tablist"
+      aria-label="Knoten-Tabs"
+    >
       <button
         class:active={activeTab === "uebersicht"}
         on:click={() => setTab("uebersicht")}
@@ -468,7 +470,7 @@
       {/if}
     </div>
 
-    <div class="tab-content">
+    <div class="tab-content node-full-content">
       {#if activeTab === "uebersicht"}
         <div
           class="overview"
@@ -610,6 +612,12 @@
     margin: 0;
     font-size: 1.5rem;
     line-height: 1.2;
+  }
+  .compact-node-summary {
+    display: none;
+  }
+  .node-mode.editing .node-summary {
+    display: none;
   }
   .node-tabs {
     gap: 0;
