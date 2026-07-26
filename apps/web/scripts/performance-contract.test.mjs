@@ -1,13 +1,20 @@
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { mkdtempSync } from "node:fs";
 import test from "node:test";
 import {
   assertLegacyContractsAbsent,
   loadPerformanceContract,
   parsePerformanceContract,
+  repositoryRoot,
   validatePerformanceContract,
 } from "./performance-contract.mjs";
 
@@ -120,6 +127,22 @@ test("loads the repository canonical contract", () => {
   assert.equal(
     contract.measurements.web_runtime.status,
     "calibration_required",
+  );
+});
+
+test("packages the canonical contract before the Docker web build", () => {
+  const dockerfile = readFileSync(
+    resolve(repositoryRoot, "apps/web/Dockerfile"),
+    "utf8",
+  );
+  const contractCopy =
+    "COPY policies/performance.v1.json /policies/performance.v1.json";
+  const copyIndex = dockerfile.indexOf(contractCopy);
+  const buildIndex = dockerfile.indexOf("pnpm build");
+  assert.ok(copyIndex >= 0, "Docker builder must copy the canonical contract");
+  assert.ok(
+    buildIndex >= 0 && copyIndex < buildIndex,
+    "Docker builder must copy the canonical contract before pnpm build",
   );
 });
 

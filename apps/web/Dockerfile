@@ -5,6 +5,7 @@ COPY apps/web/package.json apps/web/pnpm-lock.yaml ./
 COPY apps/web/scripts/verify-cookie-version.js ./scripts/verify-cookie-version.js
 RUN pnpm install --frozen-lockfile
 COPY apps/web ./
+COPY policies/performance.v1.json /policies/performance.v1.json
 ARG GIT_COMMIT_SHA
 ARG BUILD_TIMESTAMP
 RUN printf '%s' "${GIT_COMMIT_SHA}" | grep -Eq '^[0-9a-f]{40}$'     && printf '%s' "${BUILD_TIMESTAMP}" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$'     && GIT_COMMIT_SHA="${GIT_COMMIT_SHA}" BUILD_TIMESTAMP="${BUILD_TIMESTAMP}"        pnpm build
