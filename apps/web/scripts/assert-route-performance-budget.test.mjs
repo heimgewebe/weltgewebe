@@ -503,6 +503,10 @@ test("binds embedded revision to the complete generated build tree", (t) => {
   const assetPath = join(appDirectory, "immutable/app.js");
   writeFileSync(join(root, "index.html"), "<main>Weltgewebe</main>\n");
   writeFileSync(assetPath, "export const build = 1;\n");
+  writeFileSync(
+    join(appDirectory, "compile-revision.json"),
+    JSON.stringify({ schema_version: 1, compile_revision: revision }),
+  );
   const tree = computeBuildArtifactTree(root);
   writeFileSync(
     versionPath,
@@ -512,6 +516,7 @@ test("binds embedded revision to the complete generated build tree", (t) => {
         schema_version: tree.schemaVersion,
         sha256: tree.sha256,
         file_count: tree.fileCount,
+        compile_revision: tree.compileRevision,
       },
     }),
   );
@@ -526,12 +531,27 @@ test("binds embedded revision to the complete generated build tree", (t) => {
     observedTreeSha256: tree.sha256,
     fileCount: tree.fileCount,
     observedFileCount: tree.fileCount,
+    compileRevision: revision,
+    observedCompileRevision: revision,
   });
 
   writeFileSync(assetPath, "export const build = 2;\n");
   assert.equal(
     readBuildArtifactEvidence(root).status,
     "artifact_tree_mismatch",
+  );
+
+  writeFileSync(assetPath, "export const build = 1;\n");
+  writeFileSync(
+    join(appDirectory, "compile-revision.json"),
+    JSON.stringify({
+      schema_version: 1,
+      compile_revision: "d".repeat(40),
+    }),
+  );
+  assert.equal(
+    readBuildArtifactEvidence(root).status,
+    "artifact_compile_revision_mismatch",
   );
 });
 

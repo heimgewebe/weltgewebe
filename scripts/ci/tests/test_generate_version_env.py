@@ -54,6 +54,36 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
         self.assertEqual(payload["built_at"], "2026-07-15T18:21:48.000Z")
         self.assertNotIn("artifact_tree", payload)
 
+    def test_client_generation_writes_compile_revision_marker(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        env = os.environ.copy()
+        env.update(
+            {
+                "GIT_COMMIT_SHA": self.commit,
+                "SOURCE_DATE_EPOCH": "1784139708",
+            }
+        )
+        result = subprocess.run(
+            ["node", str(SCRIPT), "--client"],
+            cwd=root,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        marker = json.loads(
+            (root / "static" / "_app" / "compile-revision.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            marker,
+            {"schema_version": 1, "compile_revision": self.commit},
+        )
+
     def test_artifact_tree_binding_requires_a_completed_build(self) -> None:
         result, version_file = self.run_generator(
             self.commit,
@@ -61,13 +91,37 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
             build_files={
                 "index.html": "<main>Weltgewebe</main>\n",
                 "_app/immutable/app.js": "export const ready = true;\n",
+                "_app/compile-revision.json": json.dumps(
+                    {"schema_version": 1, "compile_revision": self.commit}
+                )
+                + "\n",
             },
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(version_file.read_text(encoding="utf-8"))
         self.assertEqual(payload["artifact_tree"]["schema_version"], 1)
         self.assertRegex(payload["artifact_tree"]["sha256"], r"^[0-9a-f]{64}$")
-        self.assertEqual(payload["artifact_tree"]["file_count"], 2)
+        self.assertEqual(payload["artifact_tree"]["file_count"], 3)
+        self.assertEqual(
+            payload["artifact_tree"]["compile_revision"], self.commit
+        )
+
+    def test_stale_client_build_cannot_be_relabelled(self) -> None:
+        stale_commit = "a" * 40
+        result, version_file = self.run_generator(
+            self.commit,
+            bind_artifact_tree=True,
+            build_files={
+                "index.html": "<main>stale build</main>\n",
+                "_app/compile-revision.json": json.dumps(
+                    {"schema_version": 1, "compile_revision": stale_commit}
+                )
+                + "\n",
+            },
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not match server revision", result.stderr)
+        self.assertFalse(version_file.exists())
 
     def test_artifact_tree_binding_fails_without_a_completed_build(self) -> None:
         result, version_file = self.run_generator(

@@ -30,6 +30,10 @@ const targetDir = path.dirname(targetFile);
 const clientDir = path.resolve(process.cwd(), "src/lib/generated");
 const clientFile = path.join(clientDir, "buildVersion.json");
 const clientModuleFile = path.join(clientDir, "buildVersion.ts");
+const compileRevisionFile = path.resolve(
+  process.cwd(),
+  "static/_app/compile-revision.json",
+);
 
 let commit = null;
 const suppliedCommit = process.env.GIT_COMMIT_SHA?.trim();
@@ -90,10 +94,24 @@ if (writeServer) {
   }
   let serverPayload = payload;
   if (bindArtifactTree) {
-    const artifactTree = computeBuildArtifactTree(buildDir);
+    let artifactTree;
+    try {
+      artifactTree = computeBuildArtifactTree(buildDir);
+    } catch (error) {
+      console.error(
+        `ERROR: Could not bind the completed build artifact: ${error.message}`,
+      );
+      process.exit(1);
+    }
     if (artifactTree.fileCount < 1) {
       console.error(
         "ERROR: --artifact-tree requires a completed build with at least one regular file.",
+      );
+      process.exit(1);
+    }
+    if (artifactTree.compileRevision !== commit) {
+      console.error(
+        `ERROR: Compiled client revision ${artifactTree.compileRevision ?? "missing"} does not match server revision ${commit}.`,
       );
       process.exit(1);
     }
@@ -103,6 +121,7 @@ if (writeServer) {
         schema_version: artifactTree.schemaVersion,
         sha256: artifactTree.sha256,
         file_count: artifactTree.fileCount,
+        compile_revision: artifactTree.compileRevision,
       },
     };
   }
@@ -115,6 +134,19 @@ if (writeServer) {
   filesWritten.push(targetFile);
 }
 if (writeClient) {
+  if (!commit) {
+    console.error(
+      "ERROR: Client build identity requires a canonical Git commit.",
+    );
+    process.exit(1);
+  }
+  fs.mkdirSync(path.dirname(compileRevisionFile), { recursive: true });
+  fs.writeFileSync(
+    compileRevisionFile,
+    JSON.stringify({ schema_version: 1, compile_revision: commit }, null, 2) +
+      "\n",
+    "utf8",
+  );
   fs.mkdirSync(clientDir, { recursive: true });
   fs.writeFileSync(clientFile, JSON.stringify(payload, null, 2) + "\n", "utf8");
   const moduleSource =
@@ -126,7 +158,7 @@ if (writeClient) {
     JSON.stringify(payload, null, 2) +
     " as const;\n";
   fs.writeFileSync(clientModuleFile, moduleSource, "utf8");
-  filesWritten.push(clientFile, clientModuleFile);
+  filesWritten.push(compileRevisionFile, clientFile, clientModuleFile);
 }
 console.log(
   filesWritten.length > 0

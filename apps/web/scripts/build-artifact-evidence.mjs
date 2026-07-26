@@ -5,6 +5,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const REVISION_PATTERN = /^[0-9a-f]{40}$/;
 const VERSION_PATH = "_app/version.json";
+const COMPILE_REVISION_PATH = "_app/compile-revision.json";
 
 function isInside(root, target) {
   const pathFromRoot = relative(root, target);
@@ -18,6 +19,30 @@ function isInside(root, target) {
 
 function portablePath(path) {
   return path.split(sep).join("/");
+}
+
+function readCompileRevision(root) {
+  const markerPath = resolve(root, COMPILE_REVISION_PATH);
+  const metadata = lstatSync(markerPath);
+  if (!metadata.isFile() || metadata.isSymbolicLink()) {
+    throw new Error("Compiled revision marker is not a regular file");
+  }
+  const resolvedMarker = realpathSync(markerPath);
+  if (!isInside(root, resolvedMarker)) {
+    throw new Error("Compiled revision marker escapes the build root");
+  }
+  const payload = JSON.parse(readFileSync(markerPath, "utf8"));
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload) ||
+    payload.schema_version !== 1 ||
+    typeof payload.compile_revision !== "string" ||
+    !REVISION_PATTERN.test(payload.compile_revision)
+  ) {
+    throw new Error("Compiled revision marker is invalid");
+  }
+  return payload.compile_revision;
 }
 
 function collectFiles(root, directory = root, files = []) {
@@ -50,6 +75,7 @@ function collectFiles(root, directory = root, files = []) {
 
 export function computeBuildArtifactTree(buildDir) {
   const root = realpathSync(resolve(buildDir));
+  const compileRevision = readCompileRevision(root);
   const files = collectFiles(root).sort((left, right) =>
     left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
   );
@@ -66,11 +92,17 @@ export function computeBuildArtifactTree(buildDir) {
     schemaVersion: 1,
     sha256: digest.digest("hex"),
     fileCount: files.length,
+    compileRevision,
   };
 }
 
 export function readBuildArtifactEvidence(buildDir) {
-  const root = realpathSync(resolve(buildDir));
+  let root;
+  try {
+    root = realpathSync(resolve(buildDir));
+  } catch {
+    return { revision: null, verified: false, status: "artifact_unverifiable" };
+  }
   const versionPath = resolve(root, VERSION_PATH);
   let metadata;
   try {
@@ -111,7 +143,10 @@ export function readBuildArtifactEvidence(buildDir) {
     typeof declared.sha256 !== "string" ||
     !SHA256_PATTERN.test(declared.sha256) ||
     !Number.isSafeInteger(declared.file_count) ||
-    declared.file_count < 1
+    declared.file_count < 1 ||
+    typeof declared.compile_revision !== "string" ||
+    !REVISION_PATTERN.test(declared.compile_revision) ||
+    declared.compile_revision !== revision
   ) {
     return { revision, verified: false, status: "artifact_unverifiable" };
   }
@@ -122,16 +157,26 @@ export function readBuildArtifactEvidence(buildDir) {
   } catch {
     return { revision, verified: false, status: "artifact_invalid" };
   }
-  const verified =
+  const treeMatches =
     observed.sha256 === declared.sha256 &&
     observed.fileCount === declared.file_count;
+  const compileRevisionMatches =
+    observed.compileRevision === declared.compile_revision &&
+    observed.compileRevision === revision;
+  const verified = treeMatches && compileRevisionMatches;
   return {
     revision,
     verified,
-    status: verified ? "verified" : "artifact_tree_mismatch",
+    status: verified
+      ? "verified"
+      : compileRevisionMatches
+        ? "artifact_tree_mismatch"
+        : "artifact_compile_revision_mismatch",
     treeSha256: declared.sha256,
     observedTreeSha256: observed.sha256,
     fileCount: declared.file_count,
     observedFileCount: observed.fileCount,
+    compileRevision: declared.compile_revision,
+    observedCompileRevision: observed.compileRevision,
   };
 }
