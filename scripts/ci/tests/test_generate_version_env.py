@@ -9,6 +9,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[3]
 SCRIPT = ROOT / "apps" / "web" / "scripts" / "generate-version.js"
+REVISION_ENV_NAMES = (
+    "GIT_COMMIT_SHA",
+    "GITHUB_SHA",
+    "VERCEL",
+    "VERCEL_GIT_COMMIT_SHA",
+    "VITE_VERCEL_GIT_COMMIT_SHA",
+    "PUBLIC_VERCEL_GIT_COMMIT_SHA",
+    "CF_PAGES",
+    "CF_PAGES_COMMIT_SHA",
+)
+
+
+def clean_revision_environment(**overrides: str) -> dict[str, str]:
+    env = os.environ.copy()
+    for name in REVISION_ENV_NAMES:
+        env.pop(name, None)
+    env.update(overrides)
+    return env
 
 
 class GenerateVersionEnvironmentTests(unittest.TestCase):
@@ -46,17 +64,10 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
             target = root / output_directory / relative_path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(contents, encoding="utf-8")
-        env = os.environ.copy()
-        for name in (
-            "GIT_COMMIT_SHA",
-            "GITHUB_SHA",
-            "VERCEL_GIT_COMMIT_SHA",
-            "VITE_VERCEL_GIT_COMMIT_SHA",
-            "PUBLIC_VERCEL_GIT_COMMIT_SHA",
-            "CF_PAGES_COMMIT_SHA",
-        ):
-            env.pop(name, None)
-        env.update({"GIT_COMMIT_SHA": commit, "SOURCE_DATE_EPOCH": source_date_epoch})
+        env = clean_revision_environment(
+            GIT_COMMIT_SHA=commit,
+            SOURCE_DATE_EPOCH=source_date_epoch,
+        )
         command = ["node", str(SCRIPT), "--server"]
         if bind_artifact_tree:
             command.append("--artifact-tree")
@@ -85,12 +96,9 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
-        env = os.environ.copy()
-        env.update(
-            {
-                "GIT_COMMIT_SHA": self.commit,
-                "SOURCE_DATE_EPOCH": "1784139708",
-            }
+        env = clean_revision_environment(
+            GIT_COMMIT_SHA=self.commit,
+            SOURCE_DATE_EPOCH="1784139708",
         )
         result = subprocess.run(
             ["node", str(SCRIPT), "--client"],
@@ -115,22 +123,10 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
-        env = os.environ.copy()
-        for name in (
-            "GIT_COMMIT_SHA",
-            "GITHUB_SHA",
-            "VERCEL_GIT_COMMIT_SHA",
-            "VITE_VERCEL_GIT_COMMIT_SHA",
-            "PUBLIC_VERCEL_GIT_COMMIT_SHA",
-            "CF_PAGES_COMMIT_SHA",
-        ):
-            env.pop(name, None)
-        env.update(
-            {
-                "VERCEL": "1",
-                "VERCEL_GIT_COMMIT_SHA": self.commit,
-                "SOURCE_DATE_EPOCH": "1784139708",
-            }
+        env = clean_revision_environment(
+            VERCEL="1",
+            VERCEL_GIT_COMMIT_SHA=self.commit,
+            SOURCE_DATE_EPOCH="1784139708",
         )
         result = subprocess.run(
             ["node", str(SCRIPT), "--client"],
@@ -152,14 +148,11 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
-        env = os.environ.copy()
-        env.update(
-            {
-                "GIT_COMMIT_SHA": self.commit,
-                "VERCEL": "1",
-                "VERCEL_GIT_COMMIT_SHA": "a" * 40,
-                "SOURCE_DATE_EPOCH": "1784139708",
-            }
+        env = clean_revision_environment(
+            GIT_COMMIT_SHA=self.commit,
+            VERCEL="1",
+            VERCEL_GIT_COMMIT_SHA="a" * 40,
+            SOURCE_DATE_EPOCH="1784139708",
         )
         result = subprocess.run(
             ["node", str(SCRIPT), "--server"],
@@ -176,23 +169,9 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
-        env = os.environ.copy()
-        for name in (
-            "GIT_COMMIT_SHA",
-            "GITHUB_SHA",
-            "VERCEL",
-            "VERCEL_GIT_COMMIT_SHA",
-            "VITE_VERCEL_GIT_COMMIT_SHA",
-            "PUBLIC_VERCEL_GIT_COMMIT_SHA",
-            "CF_PAGES",
-            "CF_PAGES_COMMIT_SHA",
-        ):
-            env.pop(name, None)
-        env.update(
-            {
-                "VERCEL_GIT_COMMIT_SHA": self.commit,
-                "SOURCE_DATE_EPOCH": "1784139708",
-            }
+        env = clean_revision_environment(
+            VERCEL_GIT_COMMIT_SHA=self.commit,
+            SOURCE_DATE_EPOCH="1784139708",
         )
         result = subprocess.run(
             ["node", str(SCRIPT), "--client"],
@@ -254,12 +233,9 @@ class GenerateVersionEnvironmentTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-        env = os.environ.copy()
-        env.update(
-            {
-                "GIT_COMMIT_SHA": self.commit,
-                "SOURCE_DATE_EPOCH": "1784139708",
-            }
+        env = clean_revision_environment(
+            GIT_COMMIT_SHA=self.commit,
+            SOURCE_DATE_EPOCH="1784139708",
         )
         result = subprocess.run(
             ["node", str(SCRIPT), "--server", "--artifact-tree"],
