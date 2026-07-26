@@ -501,6 +501,64 @@ def verify_host(state: Path, suites: Iterable[str]) -> dict[str, Any]:
     return receipt
 
 
+def _kind_nodes(kind: str, cluster: str) -> list[str]:
+    raw = _output([kind, "get", "nodes", "--name", cluster], timeout=60)
+    nodes = [line.strip() for line in raw.splitlines() if line.strip()]
+    if not nodes or any(
+        not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}", node)
+        for node in nodes
+    ):
+        raise IntegrityError(f"kind returned invalid node inventory for {cluster}")
+    return nodes
+
+
+def _register_kind_digest_alias(
+    node: str, local_ref: str, digest_ref: str, digest: str
+) -> dict[str, str]:
+    _run(
+        [
+            "docker",
+            "exec",
+            node,
+            "ctr",
+            "--namespace",
+            "k8s.io",
+            "images",
+            "tag",
+            "--force",
+            local_ref,
+            digest_ref,
+        ],
+        timeout=60,
+    )
+    raw = _output(
+        [
+            "docker",
+            "exec",
+            node,
+            "ctr",
+            "--namespace",
+            "k8s.io",
+            "images",
+            "list",
+            f"name=={digest_ref}",
+        ],
+        timeout=60,
+    )
+    rows = [line.split() for line in raw.splitlines() if line.strip()]
+    if len(rows) != 2 or rows[1][0] != digest_ref or len(rows[1]) < 3:
+        raise IntegrityError(
+            f"containerd returned invalid image listing for {digest_ref} on {node}"
+        )
+    observed = rows[1][2]
+    if observed != digest:
+        raise IntegrityError(
+            "containerd digest alias target mismatch for "
+            f"{digest_ref} on {node}: {observed} != {digest}"
+        )
+    return {"node": node, "digest_ref": digest_ref, "target_digest": observed}
+
+
 def load_kind(
     state: Path,
     suites: Iterable[str],
@@ -515,6 +573,7 @@ def load_kind(
         for name, spec in _selected_images(lock, suites)
         if spec["load_into_kind"]
     ]
+    nodes = _kind_nodes(kind, cluster)
     loaded: dict[str, Any] = {}
     for name, spec in selected:
         verified = _local_image(spec)
@@ -524,7 +583,18 @@ def load_kind(
             [kind, "load", "docker-image", "--name", cluster, spec["local_ref"]],
             timeout=900,
         )
-        loaded[name] = {"local_ref": spec["local_ref"], **verified}
+        digest = spec["digest"]
+        digest_ref = f"{spec['local_ref']}@{digest}"
+        aliases = [
+            _register_kind_digest_alias(node, spec["local_ref"], digest_ref, digest)
+            for node in nodes
+        ]
+        loaded[name] = {
+            "local_ref": spec["local_ref"],
+            "digest_ref": digest_ref,
+            "nodes": aliases,
+            **verified,
+        }
     receipt = {
         "schema_version": 1,
         "status": "pass",

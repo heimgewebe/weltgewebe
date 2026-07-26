@@ -268,6 +268,64 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             ],
         )
 
+    def test_oci_mirror_registers_and_verifies_kind_digest_alias(self) -> None:
+        digest = "sha256:" + "a" * 64
+        local_ref = "docker.io/library/test:v1"
+        digest_ref = f"{local_ref}@{digest}"
+        payload = f"REF TYPE DIGEST SIZE PLATFORMS LABELS\n{digest_ref} type {digest} 1B linux/amd64 -"
+        with mock.patch.object(self.oci_mirror, "_run") as run, mock.patch.object(
+            self.oci_mirror, "_output", return_value=payload
+        ) as output:
+            result = self.oci_mirror._register_kind_digest_alias(
+                "proof-control-plane", local_ref, digest_ref, digest
+            )
+        run.assert_called_once_with(
+            [
+                "docker",
+                "exec",
+                "proof-control-plane",
+                "ctr",
+                "--namespace",
+                "k8s.io",
+                "images",
+                "tag",
+                "--force",
+                local_ref,
+                digest_ref,
+            ],
+            timeout=60,
+        )
+        output.assert_called_once_with(
+            [
+                "docker",
+                "exec",
+                "proof-control-plane",
+                "ctr",
+                "--namespace",
+                "k8s.io",
+                "images",
+                "list",
+                f"name=={digest_ref}",
+            ],
+            timeout=60,
+        )
+        self.assertEqual(result["target_digest"], digest)
+
+    def test_oci_mirror_kind_digest_alias_mismatch_fails_closed(self) -> None:
+        digest = "sha256:" + "a" * 64
+        local_ref = "docker.io/library/test:v1"
+        digest_ref = f"{local_ref}@{digest}"
+        payload = f"REF TYPE DIGEST SIZE PLATFORMS LABELS\n{digest_ref} type sha256:{'b' * 64} 1B linux/amd64 -"
+        with mock.patch.object(self.oci_mirror, "_run"), mock.patch.object(
+            self.oci_mirror, "_output", return_value=payload
+        ):
+            with self.assertRaisesRegex(
+                self.oci_mirror.IntegrityError, "digest alias target mismatch"
+            ):
+                self.oci_mirror._register_kind_digest_alias(
+                    "proof-control-plane", local_ref, digest_ref, digest
+                )
+
     def test_oci_mirror_live_package_budget_is_fail_closed(self) -> None:
         lock = self.oci_mirror._load_lock()
         package = {
