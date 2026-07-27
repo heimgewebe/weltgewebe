@@ -57,8 +57,7 @@
         (proposal.status === "consent" || proposal.status === "voting"),
     );
 
-  function proposalMessageCount(proposal: Proposal): number {
-    const count = proposal.message_count;
+  function normalizeMessageCount(count: unknown): number {
     return typeof count === "number" &&
       Number.isFinite(count) &&
       Number.isSafeInteger(count) &&
@@ -67,14 +66,26 @@
       : 0;
   }
 
+  function proposalMessageCount(proposal: Proposal): number {
+    return normalizeMessageCount(proposal.message_count);
+  }
+
   function updateProposalMessageCount(
     event: CustomEvent<{ proposalId: string; messageCount: number }>,
   ) {
     const { proposalId, messageCount } = event.detail;
-    localMessageCountFloors.set(proposalId, messageCount);
+    const currentProposal = proposals.find(
+      (proposal) => proposal.id === proposalId,
+    );
+    const nextCount = Math.max(
+      localMessageCountFloors.get(proposalId) ?? 0,
+      currentProposal ? proposalMessageCount(currentProposal) : 0,
+      normalizeMessageCount(messageCount),
+    );
+    localMessageCountFloors.set(proposalId, nextCount);
     proposals = proposals.map((proposal) =>
       proposal.id === proposalId
-        ? { ...proposal, message_count: messageCount }
+        ? { ...proposal, message_count: nextCount }
         : proposal,
     );
   }

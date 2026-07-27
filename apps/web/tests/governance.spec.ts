@@ -49,6 +49,7 @@ async function installGovernanceRoutes(
     omitMessageCount?: boolean;
     rawListMessageCount?: string;
     deferListResponse?: boolean;
+    deferMessagesResponse?: boolean;
   } = {},
 ) {
   let currentStatus = options.initialStatus ?? "consent";
@@ -56,6 +57,12 @@ async function installGovernanceRoutes(
   const listResponseGate = options.deferListResponse
     ? new Promise<void>((resolve) => {
         resolveListResponse = resolve;
+      })
+    : null;
+  let resolveMessagesResponse: (() => void) | null = null;
+  const messagesResponseGate = options.deferMessagesResponse
+    ? new Promise<void>((resolve) => {
+        resolveMessagesResponse = resolve;
       })
     : null;
   const requests: Array<{ method: string; pathname: string; body: unknown }> =
@@ -117,6 +124,7 @@ async function installGovernanceRoutes(
       url.pathname === `/api/proposals/${PROPOSAL_ID}/messages` &&
       method === "GET"
     ) {
+      if (messagesResponseGate) await messagesResponseGate;
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -180,6 +188,7 @@ async function installGovernanceRoutes(
     requests,
     setStatus: (status: "consent" | "voting") => (currentStatus = status),
     releaseListResponse: () => resolveListResponse?.(),
+    releaseMessagesResponse: () => resolveMessagesResponse?.(),
   };
 }
 
@@ -362,6 +371,38 @@ test("a late list response cannot undo the first confirmed contribution", async 
   await expect(page.getByText("Beitrag vor später Liste")).toBeVisible();
 
   governance.releaseListResponse();
+  await page.getByRole("link", { name: "Alle Anträge" }).click();
+  await expect(page.getByText("1 Beitrag", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Gespräche" }).click();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
+});
+
+test("a late empty detail snapshot cannot lower a fresher proposal count", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  const governance = await installGovernanceRoutes(page, {
+    initialStatus: "consent",
+    initialMessageCount: 1,
+    initialMessages: 0,
+    deferMessagesResponse: true,
+  });
+  const listResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/proposals" && response.request().method() === "GET"
+    );
+  });
+
+  await page.goto(`/antraege?id=${PROPOSAL_ID}`);
+  await listResponse;
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+  );
+  governance.releaseMessagesResponse();
   await page.getByRole("link", { name: "Alle Anträge" }).click();
   await expect(page.getByText("1 Beitrag", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Gespräche" }).click();
