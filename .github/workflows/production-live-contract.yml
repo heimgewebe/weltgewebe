@@ -18,6 +18,7 @@ name: Production live contract
       - "scripts/ci/tests/test_validate_web_deploy_archive.py"
       - "scripts/ci/tests/test_production_reconciler_contract.py"
       - "scripts/ci/tests/test_deploy_exact_commit_integration.py"
+      - "scripts/ci/tests/test_production_receipt_resilience.py"
       - "infra/systemd/**"
       - ".github/workflows/production-live-contract.yml"
   push:
@@ -87,6 +88,8 @@ jobs:
             scripts/ci/tests/test_production_reconciler_contract.py -v
           python -m unittest \
             scripts/ci/tests/test_deploy_exact_commit_integration.py -v
+          python -m unittest \
+            scripts/ci/tests/test_production_receipt_resilience.py -v
 
   review-diff:
     name: Exact review diff artifact
