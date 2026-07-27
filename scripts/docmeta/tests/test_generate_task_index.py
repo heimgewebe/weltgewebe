@@ -55,10 +55,31 @@ def _status(items):
     }
 
 
-def _board(active=(), blocker=(), candidates=(), deferred=(), done=()):
-    def table(ids):
-        rows = ["| ID | Info |", "|---|---|"]
-        rows.extend(f"| {tid} | x |" for tid in ids)
+def _board(
+    active=(),
+    blocker=(),
+    candidates=(),
+    deferred=(),
+    done=(),
+    active_statuses=None,
+    blocker_missing=None,
+):
+    def table(ids, statuses=None):
+        if statuses is not None:
+            rows = ["| ID | Status | Info |", "|---|---|---|"]
+            rows.extend(f"| {tid} | {statuses[tid]} | x |" for tid in ids)
+        else:
+            rows = ["| ID | Info |", "|---|---|"]
+            rows.extend(f"| {tid} | x |" for tid in ids)
+        return "\n".join(rows)
+
+    def blocker_table(ids):
+        if blocker_missing is None:
+            return table(ids)
+        rows = ["| ID | Blocker | Fehlt | Folge |", "|---|---|---|---|"]
+        rows.extend(
+            f"| {tid} | x | {blocker_missing[tid]} | x |" for tid in ids
+        )
         return "\n".join(rows)
 
     return (
@@ -74,10 +95,10 @@ def _board(active=(), blocker=(), candidates=(), deferred=(), done=()):
                 "# Board",
                 "",
                 "## Aktive Prioritäten",
-                table(active),
+                table(active, active_statuses),
                 "",
                 "## Blocker",
-                table(blocker),
+                blocker_table(blocker),
                 "",
                 "## Nächste PR-Kandidaten",
                 table(candidates),
@@ -293,6 +314,54 @@ class TestGenerateTaskIndex(unittest.TestCase):
         )
         errors = self._run()
         self.assertTrue(any("mismatch" in e for e in errors), errors)
+
+    def test_explicit_board_status_mismatch_fails(self):
+        self._touch("apps/api/x.rs")
+        self._write(
+            _index([_task(status="done", priority="medium", evidence=["apps/api/x.rs"])]),
+            _board(
+                active=["OPT-API-001"],
+                active_statuses={"OPT-API-001": "open"},
+            ),
+            _status([{"id": "OPT-API-001", "status": "done"}]),
+        )
+        errors = self._run()
+        self.assertTrue(
+            any(
+                "OPT-API-001" in e
+                and "board.md='open'" in e
+                and "index.json='done'" in e
+                for e in errors
+            ),
+            errors,
+        )
+
+    def test_done_task_claimed_unproven_in_blocker_fails(self):
+        self._touch("apps/api/x.rs")
+        self._write(
+            _index([_task(status="done", priority="medium", evidence=["apps/api/x.rs"])]),
+            _board(
+                blocker=["OPT-API-001"],
+                blocker_missing={"OPT-API-001": "OPT-API-001 ist nicht belegt."},
+            ),
+            _status([{"id": "OPT-API-001", "status": "done"}]),
+        )
+        errors = self._run()
+        self.assertTrue(
+            any("stale blocker" in e and "OPT-API-001" in e for e in errors),
+            errors,
+        )
+
+    def test_open_task_claimed_unproven_in_blocker_passes(self):
+        self._write(
+            _index([_task(status="open", priority="medium")]),
+            _board(
+                blocker=["OPT-API-001"],
+                blocker_missing={"OPT-API-001": "OPT-API-001 ist nicht belegt."},
+            ),
+            _status([{"id": "OPT-API-001", "status": "open"}]),
+        )
+        self.assertEqual(self._run(), [])
 
     def test_task_003_open_not_candidate_fails(self):
         self._touch("apps/api/x.rs")

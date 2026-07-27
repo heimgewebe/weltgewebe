@@ -10,7 +10,7 @@ Schema-structural validation of docs/tasks/index.json remains the job of
 scripts/docmeta/validate_task_index.py (run as a separate CI step). This script
 focuses on cross-artifact drift that the schema validator does not cover:
 
-  - docs/tasks/board.md   (human work card)
+  - docs/tasks/board.md   (human work card, including explicit status cells and blocker claims)
   - docs/tasks/index.json (machine-readable task index)
   - docs/reports/optimierungsstatus.json (machine twin of the OPT-* status matrix)
 
@@ -40,6 +40,8 @@ STATUS_PATH = os.path.join(REPO_ROOT, "docs", "reports", "optimierungsstatus.jso
 # uppercase letter segments separated by '-', terminated by a three-digit number.
 # Matches TASK-CTL-003, OPT-API-001, OPT-MAP-001, AUTH-XYZ-001, MAP-XYZ-001.
 TASK_ID_RE = re.compile(r"\b[A-Z]+(?:-[A-Z]+)*-[0-9]{3}\b")
+VALID_TASK_STATUSES = {"open", "partial", "done", "blocked", "obsolete", "contradicted"}
+UNPROVEN_PHRASES = ("nicht belegt", "not proven")
 
 # Generated diagnostics are never canonical and must not be manual write targets.
 GENERATED_PREFIX = "docs/_generated/"
@@ -118,15 +120,14 @@ def _classify_section(heading):
     return "other"
 
 
-def parse_board(text):
-    """
-    Parse board.md into a mapping of section-key -> set of task ids.
+def parse_board_details(text):
+    """Parse board sections plus machine-checkable status and blocker claims.
 
-    Task ids are collected from the *first* cell (the ID column) of Markdown
-    table rows (lines starting with '|') within each section. Restricting to
-    the first cell prevents task ids that are only mentioned in evidence,
-    rationale or next-action columns from being treated as board entries.
-    Header and separator rows contain no matching ids and are harmless.
+    Task ids are collected only from the first table cell. A table with a
+    ``Status`` column contributes explicit status claims. In the blocker
+    table, clauses in the ``Fehlt`` column that say a task is "nicht belegt"
+    (or "not proven") contribute an explicit unproven claim. Free-form task
+    mentions elsewhere stay informational and are not interpreted as status.
     """
     sections = {
         "active": set(),
@@ -136,20 +137,56 @@ def parse_board(text):
         "done": set(),
         "other": set(),
     }
+    explicit_statuses = {}
+    unproven_blocker_refs = set()
     current = None
+    header_cells = None
+
     for line in text.splitlines():
         stripped = line.strip()
         heading = re.match(r"^#{1,6}\s+(.*)$", stripped)
         if heading:
             current = _classify_section(heading.group(1))
+            header_cells = None
             continue
-        if current and stripped.startswith("|"):
-            cells = [cell.strip() for cell in stripped.strip("|").split("|")]
-            if not cells:
-                continue
-            first_cell = cells[0]
-            for match in TASK_ID_RE.finditer(first_cell):
-                sections[current].add(match.group(0))
+        if not current or not stripped.startswith("|"):
+            continue
+
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if not cells:
+            continue
+        if cells[0].strip().lower() == "id":
+            header_cells = [cell.strip().lower() for cell in cells]
+            continue
+
+        task_ids = [match.group(0) for match in TASK_ID_RE.finditer(cells[0])]
+        if not task_ids:
+            continue
+        for tid in task_ids:
+            sections[current].add(tid)
+
+        if header_cells and "status" in header_cells:
+            status_index = header_cells.index("status")
+            if status_index < len(cells):
+                status_value = cells[status_index].strip().lower()
+                if status_value:
+                    for tid in task_ids:
+                        explicit_statuses.setdefault(tid, set()).add(status_value)
+
+        if current == "blocker" and header_cells and "fehlt" in header_cells:
+            missing_index = header_cells.index("fehlt")
+            if missing_index < len(cells):
+                for clause in re.split(r"[.;]", cells[missing_index]):
+                    lowered = clause.lower()
+                    if any(phrase in lowered for phrase in UNPROVEN_PHRASES):
+                        unproven_blocker_refs.update(TASK_ID_RE.findall(clause))
+
+    return sections, explicit_statuses, unproven_blocker_refs
+
+
+def parse_board(text):
+    """Return the historical section mapping used by callers and tests."""
+    sections, _statuses, _unproven = parse_board_details(text)
     return sections
 
 
@@ -168,12 +205,21 @@ def _explained(path, missing_evidence):
     return any(path in m for m in missing_evidence)
 
 
-def check_task_control(index, board_sections, status, repo_root):
+def check_task_control(
+    index,
+    board_sections,
+    status,
+    repo_root,
+    board_statuses=None,
+    unproven_blocker_refs=None,
+):
     """
     Compare task-control artifacts and return a sorted list of drift messages.
     Empty list means no drift. Does not write any files.
     """
     errors = []
+    board_statuses = board_statuses or {}
+    unproven_blocker_refs = unproven_blocker_refs or set()
 
     tasks = index.get("tasks") if isinstance(index, dict) else None
     if not isinstance(tasks, list):
@@ -199,6 +245,35 @@ def check_task_control(index, board_sections, status, repo_root):
     candidates = board_sections.get("candidates", set())
     active = board_sections.get("active", set())
     deferred = board_sections.get("deferred", set())
+
+    # Explicit board status cells are claims and must match the canonical index.
+    for tid in sorted(board_statuses):
+        claimed_statuses = board_statuses[tid]
+        if len(claimed_statuses) > 1:
+            errors.append(
+                f"board.md contains multiple explicit statuses for '{tid}': "
+                f"{', '.join(sorted(claimed_statuses))}"
+            )
+        for claimed_status in sorted(claimed_statuses):
+            if claimed_status not in VALID_TASK_STATUSES:
+                errors.append(
+                    f"board.md has invalid explicit status for '{tid}': '{claimed_status}'"
+                )
+            indexed = index_tasks.get(tid)
+            if indexed is not None and claimed_status != indexed.get("status"):
+                errors.append(
+                    f"status mismatch for '{tid}': board.md='{claimed_status}' vs "
+                    f"docs/tasks/index.json='{indexed.get('status')}'"
+                )
+
+    # A blocker claim may not call a canonically done task "not proven".
+    for tid in sorted(unproven_blocker_refs):
+        indexed = index_tasks.get(tid)
+        if indexed is not None and indexed.get("status") == "done":
+            errors.append(
+                f"stale blocker for '{tid}': board.md says not proven but "
+                "docs/tasks/index.json='done'"
+            )
 
     # 1. Board active/candidate/blocker tasks must exist in index.json.
     for tid in sorted(live_board):
@@ -330,8 +405,17 @@ def run_check(index_path, board_path, status_path, repo_root):
     if index is None or status is None or board_text is None:
         return errors
 
-    board_sections = parse_board(board_text)
-    errors.extend(check_task_control(index, board_sections, status, repo_root))
+    board_sections, board_statuses, unproven_blocker_refs = parse_board_details(board_text)
+    errors.extend(
+        check_task_control(
+            index,
+            board_sections,
+            status,
+            repo_root,
+            board_statuses=board_statuses,
+            unproven_blocker_refs=unproven_blocker_refs,
+        )
+    )
     return errors
 
 
