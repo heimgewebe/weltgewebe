@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-umask 077
+umask 022
 
 SOURCE_CHECKOUT="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 RELEASE_ROOT="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
@@ -63,8 +63,11 @@ run_release_deploy() {
       fail "unsupported release deployment scope: $scope"
       ;;
   esac
-  DEPLOY_TARGET=vps ENV_FILE="$RUNTIME_ENV" \
-    "$release_dir/scripts/weltgewebe-up" "${arguments[@]}" 9>&-
+  (
+    umask 077
+    DEPLOY_TARGET=vps ENV_FILE="$RUNTIME_ENV" \
+      "$release_dir/scripts/weltgewebe-up" "${arguments[@]}" 9>&-
+  )
 }
 
 require_command() {
@@ -72,9 +75,16 @@ require_command() {
 }
 
 write_lock_contention_receipt() {
-  local receipt="$STATE_ROOT/receipts/last-contention.json"
-  python3 - "$receipt" "$PRODUCTION_LOCK_DOMAIN" "$PRODUCTION_LOCK_FILE" \
-    "$lock_owner_entrypoint" "$COMMIT" "$deploy_invocation_id" << 'PY'
+  local receipt
+  local legacy_receipt="$STATE_ROOT/receipts/last-contention.json"
+  if [[ -n "$deploy_invocation_id" ]]; then
+    receipt="$STATE_ROOT/receipts/contention/$deploy_invocation_id.json"
+  else
+    receipt="$legacy_receipt"
+  fi
+  python3 - "$receipt" "$legacy_receipt" "$PRODUCTION_LOCK_DOMAIN" \
+    "$PRODUCTION_LOCK_FILE" "$lock_owner_entrypoint" "$COMMIT" \
+    "$deploy_invocation_id" << 'PY'
 import json
 import os
 import secrets
@@ -84,16 +94,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 path = Path(sys.argv[1])
+legacy_path = Path(sys.argv[2])
 payload = {
     "schema_version": 2,
     "kind": "weltgewebe_production_lock_contention",
     "environment": "production",
-    "lock_domain": sys.argv[2],
-    "lock_file": sys.argv[3],
-    "entrypoint": sys.argv[4],
-    "requested_commit": sys.argv[5] or None,
+    "lock_domain": sys.argv[3],
+    "lock_file": sys.argv[4],
+    "entrypoint": sys.argv[5],
+    "requested_commit": sys.argv[6] or None,
     "result": "already_running",
-    "deploy_invocation_id": sys.argv[6] or None,
+    "deploy_invocation_id": sys.argv[7] or None,
     "recorded_at": datetime.now(timezone.utc).isoformat(),
 }
 def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
@@ -155,6 +166,8 @@ def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
 
 
 write_atomic_root_json(path, payload)
+if legacy_path != path:
+    write_atomic_root_json(legacy_path, payload)
 PY
   printf '%s\n' "$receipt"
 }
@@ -421,6 +434,7 @@ done
 
 install -d -o root -g root -m 0711 "$STATE_ROOT"
 install -d -o root -g root -m 0700 "$STATE_ROOT/receipts" "$ARTIFACT_ROOT"
+install -d -o root -g root -m 0700 "$STATE_ROOT/receipts/contention"
 install -d -o root -g root -m 0755 "$RELEASE_ROOT"
 
 artifact_real="$(realpath "$WEB_ARTIFACT")"

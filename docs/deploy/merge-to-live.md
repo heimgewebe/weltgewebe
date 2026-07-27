@@ -183,10 +183,16 @@ dieselbe Sperre selbst. Bei Konkurrenz verändert der abgewiesene Lauf weder
 Container noch öffentliche Zustände. Der Reconciler endet geordnet mit Exit 0;
 der direkte Helfer verwendet bei Konkurrenz `EX_TEMPFAIL` 75. Fachliche
 Überholung nach Migration beziehungsweise Volldeploy verwendet intern die
-getrennten Codes 79 und 80. Beide Einstiegspfade schreiben atomare
-`already_running`-Belege als `last-contention.json` in die bereits kanonischen
-Receipt-Verzeichnisse. Diese Belege sind Diagnoseflächen, keine zweite
-Zustandswahrheit. Maßgeblich für Besitz ist ausschließlich die vom Kernel gehaltene
+getrennten Codes 79 und 80. Bei einem geerbten Handoff schreibt der Helfer den
+autoritativen `already_running`-Beleg zunächst aufrufspezifisch nach
+`receipts/contention/<deploy-invocation-id>.json`. Zusätzlich aktualisiert er für
+die unmittelbare Rolling-Kompatibilität den gemeinsamen Diagnosepfad
+`receipts/last-contention.json`. Ein direkter Recovery-Aufruf ohne Aufruf-ID
+schreibt ausschließlich diesen gemeinsamen Pfad. Der Reconciler greift nur dann
+auf den gemeinsamen Beleg zurück, wenn der aufrufspezifische Beleg fehlt; ein
+vorhandener widersprüchlicher Aufrufbeleg bleibt fail-closed. Diese Belege sind
+Diagnoseflächen, keine zweite Zustandswahrheit. Maßgeblich für Besitz ist
+ausschließlich die vom Kernel gehaltene
 `flock`-Sperre. Eine liegengebliebene Lockdatei ohne offenen Besitzer blockiert
 daher keinen späteren Lauf.
 
