@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-umask 077
 
 SOURCE_CHECKOUT="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 RELEASE_ROOT="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
@@ -72,7 +71,12 @@ require_command() {
 }
 
 write_lock_contention_receipt() {
-  local receipt="$STATE_ROOT/receipts/last-contention.json"
+  local receipt
+  if [[ -n "$deploy_invocation_id" ]]; then
+    receipt="$STATE_ROOT/receipts/contention/$deploy_invocation_id.json"
+  else
+    receipt="$STATE_ROOT/receipts/last-contention.json"
+  fi
   python3 - "$receipt" "$PRODUCTION_LOCK_DOMAIN" "$PRODUCTION_LOCK_FILE" \
     "$lock_owner_entrypoint" "$COMMIT" "$deploy_invocation_id" << 'PY'
 import json
@@ -420,7 +424,8 @@ for command_name in git docker curl jq sha256sum tar flock install rm python3 aw
 done
 
 install -d -o root -g root -m 0711 "$STATE_ROOT"
-install -d -o root -g root -m 0700 "$STATE_ROOT/receipts" "$ARTIFACT_ROOT"
+install -d -o root -g root -m 0700 \
+  "$STATE_ROOT/receipts" "$STATE_ROOT/receipts/contention" "$ARTIFACT_ROOT"
 install -d -o root -g root -m 0755 "$RELEASE_ROOT"
 
 artifact_real="$(realpath "$WEB_ARTIFACT")"
