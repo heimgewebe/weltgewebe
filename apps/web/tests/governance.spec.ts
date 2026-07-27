@@ -4,6 +4,7 @@ import { mockApiResponses } from "./fixtures/mockApi";
 const GUEST_ID = "guest-governance-e2e";
 const WEBER_ID = "weber-governance-e2e";
 const PROPOSAL_ID = "11111111-1111-4111-8111-111111111111";
+const SECOND_PROPOSAL_ID = "22222222-2222-4222-8222-222222222222";
 
 function proposal(
   status: "consent" | "voting" = "consent",
@@ -327,6 +328,125 @@ test("the conversation view rejects a non-finite message count", async ({
   await expect(
     page.getByText("Noch gibt es keine Gespräche mit Beiträgen."),
   ).toBeVisible();
+});
+
+test("query navigation rebinds detail and mutations to the selected proposal", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+
+  let releaseFirstDetail!: () => void;
+  const firstDetailGate = new Promise<void>((resolve) => {
+    releaseFirstDetail = resolve;
+  });
+  let markFirstDetailRequested!: () => void;
+  const firstDetailRequested = new Promise<void>((resolve) => {
+    markFirstDetailRequested = resolve;
+  });
+  const messagePosts: string[] = [];
+
+  await page.route("**/api/proposals**", async (route: Route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+
+    if (url.pathname === "/api/proposals" && method === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            ...proposal("consent", 0),
+            id: PROPOSAL_ID,
+            applicant_title: "Antrag Alpha",
+          },
+          {
+            ...proposal("consent", 0),
+            id: SECOND_PROPOSAL_ID,
+            applicant_title: "Antrag Beta",
+          },
+        ]),
+      });
+    }
+
+    const detailMatch = url.pathname.match(/^\/api\/proposals\/([^/]+)$/);
+    if (detailMatch && method === "GET") {
+      const proposalId = detailMatch[1];
+      if (proposalId === PROPOSAL_ID) {
+        markFirstDetailRequested();
+        await firstDetailGate;
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ...proposal("consent", 0),
+          id: proposalId,
+          applicant_title:
+            proposalId === PROPOSAL_ID ? "Antrag Alpha" : "Antrag Beta",
+          own_vote: undefined,
+        }),
+      });
+    }
+
+    const messagesMatch = url.pathname.match(
+      /^\/api\/proposals\/([^/]+)\/messages$/,
+    );
+    if (messagesMatch && method === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "[]",
+      });
+    }
+    if (messagesMatch && method === "POST") {
+      messagePosts.push(url.pathname);
+      const body = request.postDataJSON() as { body: string };
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "message-beta",
+          author_account_id: WEBER_ID,
+          author_title: "Weber im Test",
+          body: body.body,
+          created_at: "2026-07-27T15:00:00Z",
+        }),
+      });
+    }
+
+    return route.fulfill({ status: 404 });
+  });
+
+  await page.goto(`/antraege?id=${PROPOSAL_ID}`);
+  await firstDetailRequested;
+  await page.evaluate((proposalId) => {
+    const link = document.createElement("a");
+    link.href = `/antraege?id=${proposalId}`;
+    link.textContent = "Zu Antrag Beta";
+    document.body.append(link);
+  }, SECOND_PROPOSAL_ID);
+  await page.getByRole("link", { name: "Zu Antrag Beta" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Antrag Beta" }),
+  ).toBeVisible();
+  await page.getByLabel("Beitrag verfassen").fill("Beitrag für Beta");
+  await page.getByRole("button", { name: "Beitrag senden" }).click();
+  await expect(page.getByText("Beitrag für Beta")).toBeVisible();
+  expect(messagePosts).toEqual([
+    `/api/proposals/${SECOND_PROPOSAL_ID}/messages`,
+  ]);
+
+  releaseFirstDetail();
+  await expect(
+    page.getByRole("heading", { name: "Antrag Beta" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Antrag Alpha" })).toHaveCount(
+    0,
+  );
 });
 
 test("the first contribution updates the retained proposal projection", async ({

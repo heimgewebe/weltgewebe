@@ -205,10 +205,12 @@
 </svelte:head>
 
 {#if selectedProposalId}
-  <ProposalDetail
-    proposalId={selectedProposalId}
-    on:messagecountchange={updateProposalMessageCount}
-  />
+  {#key selectedProposalId}
+    <ProposalDetail
+      proposalId={selectedProposalId}
+      on:messagecountchange={updateProposalMessageCount}
+    />
+  {/key}
 {:else}
   <main class="wg-page wg-page--paper" data-testid="applications-page">
     <div class="wg-page__shell">
