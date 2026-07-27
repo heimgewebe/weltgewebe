@@ -276,7 +276,7 @@
     const id = nodeDetails?.id || $selection?.id;
     if (!id) return;
     const confirmed = window.confirm(
-      "Knoten wirklich löschen? Alle Fäden, die mit ihm verbunden sind, werden ebenfalls gelöscht.",
+      "Knoten wirklich löschen? Alle verbundenen Fäden werden gelöscht. Bestehende Gesprächsbeiträge bleiben als schreibgeschütztes Archiv erhalten.",
     );
     if (!confirmed) return;
 

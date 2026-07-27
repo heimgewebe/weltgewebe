@@ -22,7 +22,7 @@ use weltgewebe_api::{
         AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
         DomainReadSource,
     },
-    domain_db::{delete_node_with_edges_in_postgres, NodeWriteError},
+    domain_db::delete_node_with_edges_in_postgres,
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
@@ -259,32 +259,28 @@ async fn json_response(
 }
 
 async fn cleanup(pool: &sqlx::PgPool) {
-    let mut aggregate_ids: Vec<String> = sqlx::query_scalar(
-        "SELECT message.id::text
-         FROM domain_messages AS message
-         JOIN domain_conversations AS conversation ON conversation.id = message.conversation_id
-         WHERE conversation.node_id = $1",
-    )
-    .bind(NODE_ID)
-    .fetch_all(pool)
-    .await
-    .expect("collect message ids for cleanup");
     let conversation_id: String =
         sqlx::query_scalar("SELECT weltgewebe_node_conversation_id($1)::text")
             .bind(NODE_ID)
             .fetch_one(pool)
             .await
             .expect("derive conversation id for cleanup");
-    aggregate_ids.push(conversation_id);
+    let mut aggregate_ids: Vec<String> =
+        sqlx::query_scalar("SELECT id::text FROM domain_messages WHERE conversation_id = $1::uuid")
+            .bind(&conversation_id)
+            .fetch_all(pool)
+            .await
+            .expect("collect message ids for cleanup");
+    aggregate_ids.push(conversation_id.clone());
     aggregate_ids.push(NODE_ID.to_string());
-    sqlx::query(
-        "DELETE FROM domain_messages
-         WHERE conversation_id IN (SELECT id FROM domain_conversations WHERE node_id = $1)",
-    )
-    .bind(NODE_ID)
-    .execute(pool)
-    .await
-    .expect("clean messages before guarded node deletion");
+    // Conversation deletion is an administrative test cleanup path. Its existing
+    // cascade removes messages after the parent row is gone, while direct edits
+    // or deletes inside an archived conversation remain blocked.
+    sqlx::query("DELETE FROM domain_conversations WHERE id = $1::uuid")
+        .bind(&conversation_id)
+        .execute(pool)
+        .await
+        .expect("clean conversation and cascaded messages");
     sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
         .bind(NODE_ID)
         .execute(pool)
@@ -325,6 +321,51 @@ async fn node_conversation_vertical_slice() {
         invalid_author_title.is_err(),
         "new canonical accounts must satisfy the author snapshot title contract"
     );
+
+    const EMPTY_NODE_ID: &str = "conversation-proof-empty-node";
+    sqlx::query("DELETE FROM domain_conversations WHERE node_id = $1")
+        .bind(EMPTY_NODE_ID)
+        .execute(&pool)
+        .await
+        .expect("clean empty-node conversation proof");
+    sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
+        .bind(EMPTY_NODE_ID)
+        .execute(&pool)
+        .await
+        .expect("clean empty-node proof");
+    sqlx::query(
+        "INSERT INTO domain_nodes (id, kind, title, created_at, updated_at, payload)
+         VALUES ($1, 'Ort', 'Leerer Gesprächsknoten', NOW(), NOW(), '{}')",
+    )
+    .bind(EMPTY_NODE_ID)
+    .execute(&pool)
+    .await
+    .expect("insert empty node and generated conversation");
+    let empty_conversation_id: String =
+        sqlx::query_scalar("SELECT weltgewebe_node_conversation_id($1)::text")
+            .bind(EMPTY_NODE_ID)
+            .fetch_one(&pool)
+            .await
+            .expect("derive empty conversation id");
+    delete_node_with_edges_in_postgres(&pool, EMPTY_NODE_ID)
+        .await
+        .expect("empty node deletion remains available");
+    let empty_conversation_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM domain_conversations WHERE id = $1::uuid)",
+    )
+    .bind(&empty_conversation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("read empty conversation after node deletion");
+    assert!(
+        !empty_conversation_exists,
+        "an empty generated conversation still cascades away with its node"
+    );
+    sqlx::query("DELETE FROM domain_outbox WHERE aggregate_id = ANY($1::text[])")
+        .bind(vec![EMPTY_NODE_ID.to_string(), empty_conversation_id])
+        .execute(&pool)
+        .await
+        .expect("clean empty-node outbox proof");
 
     let version_before_node: i64 =
         sqlx::query_scalar("SELECT version FROM domain_projection_state WHERE singleton")
@@ -950,28 +991,165 @@ async fn node_conversation_vertical_slice() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(reclaim_denied["code"], "message_author_required");
 
-    let guarded_delete = delete_node_with_edges_in_postgres(&pool, NODE_ID)
+    let removed_edges = delete_node_with_edges_in_postgres(&pool, NODE_ID)
         .await
-        .expect_err("node deletion must preserve a non-empty public conversation");
-    assert!(matches!(
-        guarded_delete,
-        NodeWriteError::ConversationNotEmpty
-    ));
-    let raw_delete = sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
-        .bind(NODE_ID)
-        .execute(&pool)
-        .await;
-    assert!(
-        raw_delete.is_err(),
-        "the database trigger must block deletion even outside the API helper"
-    );
+        .expect("node deletion must archive a non-empty public conversation");
+    assert!(removed_edges.is_empty());
+
     let node_still_exists: bool =
         sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
             .bind(NODE_ID)
             .fetch_one(&pool)
             .await
-            .expect("read node after rejected deletion");
-    assert!(node_still_exists);
+            .expect("read node after deletion");
+    assert!(!node_still_exists);
+
+    let (active_node_id, node_id_snapshot, node_title_snapshot, archived_at): (
+        Option<String>,
+        String,
+        String,
+        Option<chrono::DateTime<chrono::Utc>>,
+    ) = sqlx::query_as(
+        "SELECT node_id, node_id_snapshot, node_title_snapshot, archived_at
+         FROM domain_conversations WHERE id = $1::uuid",
+    )
+    .bind(&conversation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("read archived conversation");
+    assert_eq!(active_node_id, None);
+    assert_eq!(node_id_snapshot, NODE_ID);
+    assert_eq!(node_title_snapshot, "Gesprächsknoten");
+    assert!(archived_at.is_some());
+
+    let archive_path = format!("/conversations/{conversation_id}");
+    let (status, archive_view) =
+        json_response(&app, request("GET", &archive_path, None, None, None, None)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(archive_view["node_id"].is_null());
+    assert_eq!(archive_view["node_id_snapshot"], NODE_ID);
+    assert_eq!(archive_view["node_title_snapshot"], "Gesprächsknoten");
+    assert!(archive_view["archived_at"].is_string());
+
+    let (status, archived_messages) =
+        json_response(&app, request("GET", &message_path, None, None, None, None)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        archived_messages["items"]
+            .as_array()
+            .is_some_and(|items| !items.is_empty()),
+        "archived history remains publicly readable"
+    );
+
+    let (status, archived_write) = json_response(
+        &app,
+        request(
+            "POST",
+            &message_path,
+            Some(&author),
+            Some(r#"{"content":"Nachträglicher Beitrag"}"#),
+            Some("70000000-0000-4000-8000-000000000018"),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(archived_write["code"], "conversation_archived");
+
+    let (status, archived_edit) = json_response(
+        &app,
+        request(
+            "PATCH",
+            &item_path,
+            Some(&admin),
+            Some(r#"{"content":"Nachträgliche Änderung"}"#),
+            None,
+            tombstone["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(archived_edit["code"], "conversation_archived");
+
+    let (status, archived_delete) = json_response(
+        &app,
+        request(
+            "DELETE",
+            &item_path,
+            Some(&admin),
+            None,
+            None,
+            tombstone["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(archived_delete["code"], "conversation_archived");
+
+    let direct_insert_error = sqlx::query(
+        "INSERT INTO domain_messages (
+             id, conversation_id, author_account_id, author_title, content, idempotency_key
+         ) VALUES (
+             '74000000-0000-4000-8000-000000000001'::uuid,
+             $1::uuid,
+             $2,
+             'Neu verwendete Kennung',
+             'Direkter Archivbeitrag',
+             '74000000-0000-4000-8000-000000000002'::uuid
+         )",
+    )
+    .bind(&conversation_id)
+    .bind(AUTHOR_ID)
+    .execute(&pool)
+    .await
+    .expect_err("PostgreSQL must reject direct inserts into an archived conversation");
+    assert_eq!(
+        direct_insert_error
+            .as_database_error()
+            .and_then(|error| error.constraint()),
+        Some("domain_messages_archived_conversation_guard")
+    );
+
+    let direct_update_error = sqlx::query(
+        "UPDATE domain_messages SET content = 'Direkte Archivänderung' WHERE id = $1::uuid",
+    )
+    .bind(guest_message["id"].as_str().unwrap())
+    .execute(&pool)
+    .await
+    .expect_err("PostgreSQL must reject direct content changes in an archive");
+    assert_eq!(
+        direct_update_error
+            .as_database_error()
+            .and_then(|error| error.constraint()),
+        Some("domain_messages_archived_conversation_guard")
+    );
+
+    let deleted_guest = sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
+        .bind(GUEST_ID)
+        .execute(&pool)
+        .await
+        .expect("account exit may still detach identity from an archived contribution");
+    assert_eq!(deleted_guest.rows_affected(), 1);
+    let guest_snapshot: (Option<String>, String) = sqlx::query_as(
+        "SELECT author_account_id, author_title FROM domain_messages WHERE id = $1::uuid",
+    )
+    .bind(guest_message["id"].as_str().unwrap())
+    .fetch_one(&pool)
+    .await
+    .expect("read archived guest contribution after account exit");
+    assert_eq!(guest_snapshot, (None, "Gast".to_string()));
+
+    let direct_delete_error = sqlx::query("DELETE FROM domain_messages WHERE id = $1::uuid")
+        .bind(guest_message["id"].as_str().unwrap())
+        .execute(&pool)
+        .await
+        .expect_err("PostgreSQL must reject direct deletes from an archive");
+    assert_eq!(
+        direct_delete_error
+            .as_database_error()
+            .and_then(|error| error.constraint()),
+        Some("domain_messages_archived_conversation_guard")
+    );
 
     cleanup(&pool).await;
     pool.close().await;

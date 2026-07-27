@@ -833,26 +833,9 @@ pub async fn delete_node_with_edges_in_postgres(
         return Err(NodeWriteError::NotFound);
     }
 
-    let conversation_id: Option<String> = sqlx::query_scalar(
-        "SELECT id::text FROM domain_conversations WHERE node_id = $1 FOR UPDATE",
-    )
-    .bind(id)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(NodeWriteError::Database)?;
-    if let Some(conversation_id) = conversation_id {
-        let conversation_has_messages: bool = sqlx::query_scalar(
-            "SELECT EXISTS (SELECT 1 FROM domain_messages WHERE conversation_id = $1::uuid)",
-        )
-        .bind(conversation_id)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(NodeWriteError::Database)?;
-        if conversation_has_messages {
-            tx.rollback().await.ok();
-            return Err(NodeWriteError::ConversationNotEmpty);
-        }
-    }
+    // The database BEFORE DELETE trigger owns the history decision. Empty
+    // generated conversations cascade away; non-empty conversations are detached
+    // and archived atomically before this transaction removes the node.
 
     let account_collision_exists: bool =
         sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_accounts WHERE id = $1)")

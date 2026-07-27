@@ -212,6 +212,20 @@ eine aktive Accountbindung:
 - beim Löschen eines Accounts wird die aktive Accountbindung entfernt, der
   historische Anzeigename und der Beitrag bleiben erhalten.
 
+Ein Knoten darf unabhängig von vorhandenen Gesprächsbeiträgen aus dem aktiven
+Gewebe gelöscht werden. Dabei gelten drei getrennte Wirkungen:
+
+- der Knoten und seine verbundenen Fadenprojektionen werden regulär entfernt;
+- ein leerer, automatisch erzeugter Gesprächsraum wird mit dem Knoten gelöscht;
+- ein Gesprächsraum mit Beiträgen wird im selben Datenbankvorgang vom Knoten
+  entkoppelt, mit Knoten-ID und letztem Knotentitel gekennzeichnet und als
+  schreibgeschütztes Archiv erhalten.
+
+Das Archiv bleibt über seine stabile Gesprächs-ID öffentlich lesbar. Nach der
+Archivierung sind neue Beiträge, Änderungen und Entfernungen ausgeschlossen;
+die frühere Diskussion darf nicht durch das Löschen ihres Kartenobjekts
+verschwinden oder nachträglich umgeschrieben werden.
+
 ## Aufnahme als Weber
 
 Die Aufnahme folgt `docs/specs/governance-antraege.md`. Ein angenommener

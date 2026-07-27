@@ -40,10 +40,13 @@ const MESSAGE_RATE_LIMIT_PER_MINUTE: i64 = 10;
 type ConversationRow = (
     String,
     Option<String>,
+    Option<String>,
+    Option<String>,
     String,
     String,
     DateTime<Utc>,
     DateTime<Utc>,
+    Option<DateTime<Utc>>,
     Option<DateTime<Utc>>,
 );
 
@@ -63,9 +66,12 @@ pub struct ConversationView {
     pub id: String,
     pub conversation_type: String,
     pub node_id: Option<String>,
+    pub node_id_snapshot: Option<String>,
+    pub node_title_snapshot: Option<String>,
     pub visibility: String,
     pub created_at: String,
     pub updated_at: String,
+    pub archived_at: Option<String>,
     pub deleted_at: Option<String>,
 }
 
@@ -153,11 +159,14 @@ fn conversation_from_row(row: ConversationRow) -> ConversationView {
     ConversationView {
         id: row.0,
         node_id: row.1,
-        conversation_type: row.2,
-        visibility: row.3,
-        created_at: timestamp(row.4),
-        updated_at: timestamp(row.5),
-        deleted_at: row.6.map(timestamp),
+        node_id_snapshot: row.2,
+        node_title_snapshot: row.3,
+        conversation_type: row.4,
+        visibility: row.5,
+        created_at: timestamp(row.6),
+        updated_at: timestamp(row.7),
+        archived_at: row.8.map(timestamp),
+        deleted_at: row.9.map(timestamp),
     }
 }
 
@@ -336,16 +345,26 @@ async fn require_conversation_writable(
     })?;
 
     if observed_type == "node" {
-        let locked_type: Option<String> = sqlx::query_scalar(
-            "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL FOR SHARE",
-        )
-        .bind(conversation_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(|error| database_error("lock node conversation write target", error))?;
+        let locked_target: Option<(String, Option<String>, Option<DateTime<Utc>>)> =
+            sqlx::query_as(
+                "SELECT conversation_type, node_id, archived_at \
+                 FROM domain_conversations \
+                 WHERE id = $1::uuid AND deleted_at IS NULL FOR SHARE",
+            )
+            .bind(conversation_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|error| database_error("lock node conversation write target", error))?;
 
-        return match locked_type.as_deref() {
-            Some("node") => Ok(()),
+        return match locked_target {
+            Some((conversation_type, Some(_), None)) if conversation_type == "node" => Ok(()),
+            Some((conversation_type, None, Some(_))) if conversation_type == "node" => {
+                Err(ConversationApiError::new(
+                    StatusCode::CONFLICT,
+                    "conversation_archived",
+                    "the node conversation is archived and read-only",
+                ))
+            }
             None => Err(ConversationApiError::new(
                 StatusCode::NOT_FOUND,
                 "conversation_not_found",
@@ -471,8 +490,8 @@ pub async fn get_node_conversation(
 ) -> Result<Json<ConversationView>, ConversationApiError> {
     let pool = require_pool(&state)?;
     let row: Option<ConversationRow> = sqlx::query_as(
-        "SELECT id::text, node_id, conversation_type, visibility, \
-                created_at, updated_at, deleted_at \
+        "SELECT id::text, node_id, node_id_snapshot, node_title_snapshot, \
+                conversation_type, visibility, created_at, updated_at, archived_at, deleted_at \
          FROM domain_conversations WHERE node_id = $1 AND deleted_at IS NULL",
     )
     .bind(node_id)
@@ -496,8 +515,8 @@ pub async fn get_conversation(
     let pool = require_pool(&state)?;
     let id = parse_conversation_id(&id)?;
     let row: Option<ConversationRow> = sqlx::query_as(
-        "SELECT id::text, node_id, conversation_type, visibility, \
-                created_at, updated_at, deleted_at \
+        "SELECT id::text, node_id, node_id_snapshot, node_title_snapshot, \
+                conversation_type, visibility, created_at, updated_at, archived_at, deleted_at \
          FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL",
     )
     .bind(id)
@@ -902,15 +921,50 @@ mod tests {
         let view = conversation_from_row((
             Uuid::new_v4().to_string(),
             None,
+            None,
+            None,
             "governance_proposal".to_string(),
             "public".to_string(),
             created_at,
             updated_at,
             None,
+            None,
         ));
 
         assert_eq!(view.conversation_type, "governance_proposal");
         assert_eq!(view.node_id, None);
+        assert_eq!(view.node_id_snapshot, None);
+        assert_eq!(view.archived_at, None);
+    }
+
+    #[test]
+    fn conversation_view_exposes_archived_node_context() {
+        let created_at = DateTime::parse_from_rfc3339("2026-07-27T09:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let archived_at = DateTime::parse_from_rfc3339("2026-07-27T09:05:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let view = conversation_from_row((
+            Uuid::new_v4().to_string(),
+            None,
+            Some("deleted-node".to_string()),
+            Some("Gelöschter Knoten".to_string()),
+            "node".to_string(),
+            "public".to_string(),
+            created_at,
+            archived_at,
+            Some(archived_at),
+            None,
+        ));
+
+        assert_eq!(view.node_id, None);
+        assert_eq!(view.node_id_snapshot.as_deref(), Some("deleted-node"));
+        assert_eq!(
+            view.node_title_snapshot.as_deref(),
+            Some("Gelöschter Knoten")
+        );
+        assert_eq!(view.archived_at.as_deref(), Some("2026-07-27T09:05:00Z"));
     }
 
     #[test]
