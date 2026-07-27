@@ -819,8 +819,8 @@ done
 
 install -d -o root -g root -m 0711 "$STATE_ROOT"
 install -d -o root -g root -m 0700 \
-  "$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT" \
-  "$DEPLOY_RECEIPT_ROOT/contention" "$DOCKER_CONFIG"
+  "$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT" "$DOCKER_CONFIG"
+install -d -o root -g root -m 0700 "$DEPLOY_RECEIPT_ROOT/contention"
 install -d -o root -g root -m 0755 "$RELEASE_ROOT"
 acquire_production_lock
 prune_deploy_contention_receipts
