@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -70,7 +72,6 @@ def test_activation_is_commit_locked_identity_bound_and_gate_first() -> None:
     assert "SemantAH" in script
 
 
-
 def test_activation_routes_psql_variables_through_stdin() -> None:
     script = ACTIVATE.read_text(encoding="utf-8")
     helper_body = script.split("psql_exec_sql() {", 1)[1].split("\n}\n", 1)[0]
@@ -90,6 +91,7 @@ def test_activation_routes_psql_variables_through_stdin() -> None:
     assert variable_sql_lines
     assert all("psql_exec_sql" in line for line in variable_sql_lines)
     assert all(" -c " not in line and "-Atc" not in line for line in variable_sql_lines)
+
 
 def test_activation_derives_compose_identity_from_the_verified_release_commit() -> None:
     script = ACTIVATE.read_text(encoding="utf-8")
@@ -131,10 +133,32 @@ def test_digest_normalizer_accepts_both_ollama_and_canonical_forms() -> None:
     assert malformed.returncode != 0
 
 
+def _shell_function(script: str, name: str) -> str:
+    function = script.split(f"{name}() {{", 1)[1].split("\n}\n", 1)[0]
+    return f"{name}() {{" + function + "\n}\n"
+
+
 def _worker_digest_helper() -> str:
+    return _shell_function(WORKER.read_text(encoding="utf-8"), "normalize_sha256_digest")
+
+
+def _worker_provider_ready_helper() -> str:
     script = WORKER.read_text(encoding="utf-8")
-    function = script.split("normalize_sha256_digest() {", 1)[1].split("\n}\n", 1)[0]
-    return "normalize_sha256_digest() {" + function + "\n}\n"
+    return _shell_function(script, "normalize_sha256_digest") + _shell_function(script, "provider_ready")
+
+
+def _worker_provider_ready_result(*, observed: str, expected: str) -> subprocess.CompletedProcess[str]:
+    payload = json.dumps({"models": [{"name": "qwen3-embedding:8b", "digest": observed}]})
+    command = (
+        "set -Eeuo pipefail\n"
+        "readonly OLLAMA_URL=http://127.0.0.1:11434/\n"
+        "readonly MODEL_ID=qwen3-embedding:8b\n"
+        f"readonly MODEL_REVISION={shlex.quote(expected)}\n"
+        f"wget() {{ printf '%s\\n' {shlex.quote(payload)}; }}\n"
+        + _worker_provider_ready_helper()
+        + "provider_ready\n"
+    )
+    return subprocess.run(["bash", "-c", command], capture_output=True, text=True)
 
 
 def test_worker_digest_normalizer_accepts_canonical_and_ollama_forms() -> None:
@@ -157,6 +181,21 @@ def test_worker_digest_normalizer_rejects_missing_or_invalid_digests() -> None:
             text=True,
         )
         assert result.returncode != 0
+
+
+def test_worker_provider_ready_reproduces_prefix_difference_and_stays_fail_closed() -> None:
+    digest = "df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907"
+    accepted = _worker_provider_ready_result(observed=digest, expected=f"sha256:{digest}")
+    assert accepted.returncode == 0, accepted.stderr
+
+    for observed, expected in (
+        ("a" * 64, f"sha256:{digest}"),
+        ("sha256:not-a-digest", f"sha256:{digest}"),
+        (digest, "sha256:not-a-digest"),
+        ("", f"sha256:{digest}"),
+    ):
+        rejected = _worker_provider_ready_result(observed=observed, expected=expected)
+        assert rejected.returncode != 0
 
 
 def test_worker_compares_normalized_digests_and_stays_fail_closed() -> None:
