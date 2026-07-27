@@ -444,6 +444,27 @@ def reconcile_owned_ha_resources(
     }
 
 
+def retire_primary_cluster_before_restore(
+    kind: str, cluster: str, commit: str, owner_id: str
+) -> dict[str, Any]:
+    result = reconcile_owned_ha_resources(
+        kind,
+        cluster,
+        commit,
+        owner_id,
+        include_restore=False,
+        include_primary=True,
+        include_object_store=False,
+    )
+    primary_state = result["resources"].get("primary_cluster")
+    if result["errors"] or primary_state != "deleted":
+        raise ref.ProofError(
+            "primary cluster retirement before blank restore failed: "
+            f"{json.dumps(result, sort_keys=True)}"
+        )
+    return result
+
+
 def apply_object_store_endpoint(kubectl: str, address: str) -> None:
     ref.apply_yaml(
         kubectl,
@@ -2368,6 +2389,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         node_image = oci_host["kind_node_image"]
     primary_oci_cluster: dict[str, Any] | None = None
     restore_oci_cluster: dict[str, Any] | None = None
+    primary_cluster_retirement: dict[str, Any] | None = None
     created_primary = created_restore = object_store_created = False
     stopped_node = ""
     object_store_address = ""
@@ -2528,6 +2550,12 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             kubectl, cluster="postgres-ha"
         )
 
+        if not args.keep:
+            primary_cluster_retirement = retire_primary_cluster_before_restore(
+                kind, args.cluster, commit, owner_id
+            )
+            created_primary = False
+
         create_kind_cluster(
             kind, restore_name, node_image,
             "platform/clusters/ha/restore-kind.yaml", commit, owner_id
@@ -2591,6 +2619,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         result = {
             "schema_version": 1, "status": "pass", "commit": commit,
             "primary_cluster": args.cluster, "restore_cluster": restore_name,
+            "primary_cluster_retired_before_restore": (
+                primary_cluster_retirement is not None
+            ),
+            "primary_cluster_retirement": primary_cluster_retirement,
             "tool_lock_sha256": receipt["lock_sha256"], "image_ids": image_ids,
             "oci_controlled_source": {
                 "strict": ref.controlled_oci_strict(),

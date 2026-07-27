@@ -559,6 +559,70 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertEqual(set(result["resources"].values()), {"absent"})
         self.assertEqual(result["errors"], {})
 
+    def test_primary_cluster_retirement_deletes_only_the_primary_cluster(self) -> None:
+        expected = {
+            "status": "deleted",
+            "cluster": "proof",
+            "commit": "a" * 40,
+            "owner_id": "owner-proof",
+            "resources": {"primary_cluster": "deleted"},
+            "errors": {},
+        }
+        with mock.patch.object(
+            self.ha, "reconcile_owned_ha_resources", return_value=expected
+        ) as reconcile:
+            result = self.ha.retire_primary_cluster_before_restore(
+                "kind", "proof", "a" * 40, "owner-proof"
+            )
+        self.assertIs(result, expected)
+        reconcile.assert_called_once_with(
+            "kind",
+            "proof",
+            "a" * 40,
+            "owner-proof",
+            include_restore=False,
+            include_primary=True,
+            include_object_store=False,
+        )
+
+    def test_primary_cluster_retirement_fails_closed_on_drift(self) -> None:
+        cases = (
+            {
+                "status": "absent",
+                "resources": {"primary_cluster": "absent"},
+                "errors": {},
+            },
+            {
+                "status": "error",
+                "resources": {"primary_cluster": "error"},
+                "errors": {"primary_cluster": "ownership mismatch"},
+            },
+        )
+        for result in cases:
+            with self.subTest(result=result), mock.patch.object(
+                self.ha, "reconcile_owned_ha_resources", return_value=result
+            ):
+                with self.assertRaisesRegex(
+                    self.ha.ref.ProofError,
+                    "primary cluster retirement before blank restore failed",
+                ):
+                    self.ha.retire_primary_cluster_before_restore(
+                        "kind", "proof", "a" * 40, "owner-proof"
+                    )
+
+    def test_primary_cluster_is_retired_before_restore_cluster_creation(self) -> None:
+        source = (self.ha.ROOT / "scripts/platform/ha_reference.py").read_text()
+        retirement = source.index(
+            "primary_cluster_retirement = retire_primary_cluster_before_restore("
+        )
+        restore_creation = source.index(
+            "create_kind_cluster(\n            kind, restore_name", retirement
+        )
+        self.assertLess(retirement, restore_creation)
+        transition = source[retirement:restore_creation]
+        self.assertIn("created_primary = False", transition)
+        self.assertIn("if not args.keep:", source[retirement - 40 : retirement])
+
     def test_digest_locked_manifest_replaces_each_release_image_once(self) -> None:
         tagged = {
             "registry.example/controller:v1": "registry.example/controller@sha256:" + "a" * 64,
