@@ -425,8 +425,8 @@ for command_name in git docker curl jq sha256sum tar flock install rm python3 aw
 done
 
 install -d -o root -g root -m 0711 "$STATE_ROOT"
-install -d -o root -g root -m 0700 \
-  "$STATE_ROOT/receipts" "$STATE_ROOT/receipts/contention" "$ARTIFACT_ROOT"
+install -d -o root -g root -m 0700 "$STATE_ROOT/receipts" "$ARTIFACT_ROOT"
+install -d -o root -g root -m 0700 "$STATE_ROOT/receipts/contention"
 install -d -o root -g root -m 0755 "$RELEASE_ROOT"
 
 artifact_real="$(realpath "$WEB_ARTIFACT")"
