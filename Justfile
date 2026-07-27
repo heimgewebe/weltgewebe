@@ -23,15 +23,15 @@ reset-web:
 alias c := ci
 
 ci:
-	# Web: build, lint, typecheck (budget + prettier + eslint + svelte-check).
-	# Unit tests (vitest) run canonically in web.yml, not here, to avoid
-	# double execution when both ci.yml and web.yml trigger on the same PR.
-	# web.yml is path-scoped to apps/web/** and runs test:unit before Playwright.
-	@echo "==> Web: install, sync, build, typecheck"
+	# Web: unit tests, build, lint and typecheck. Run Vitest directly so the
+	# package pretest generator hook is not repeated after the explicit sync.
+	# PRs and main pushes delegate unit tests here; non-main web pushes use the equivalent fallback.
+	@echo "==> Web: install, sync, unit tests, build, typecheck"
 	if [ -d apps/web ]; then \
 		pushd apps/web >/dev/null; \
 		pnpm install --frozen-lockfile; \
 		pnpm sync; \
+		pnpm exec vitest run; \
 		pnpm build; \
 		pnpm run ci; \
 		popd >/dev/null; \
@@ -45,6 +45,8 @@ ci:
 		cargo test --locked; \
 		popd >/dev/null; \
 	fi
+	@echo "==> Root: local CI contract"
+	python3 -m unittest scripts.ci.tests.test_justfile_contract -v
 	@echo "==> Root: dependency check"
 	cargo deny check
 
