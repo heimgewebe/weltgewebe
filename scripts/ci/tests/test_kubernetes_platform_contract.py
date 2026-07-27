@@ -1809,6 +1809,55 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             with mock.patch.object(self.proof_identity, "ROOT", root):
                 self.proof_identity._validate_controlled_oci_proof(identity, proof)
 
+                duplicate_cluster = json.loads(json.dumps(proof))
+                duplicate_cluster["restore_cluster"] = "primary"
+                duplicate_cluster["oci_controlled_source"]["restore_cluster"][
+                    "cluster"
+                ] = "primary"
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "cluster bindings must be distinct"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(
+                        identity, duplicate_cluster
+                    )
+
+                foreign_node = json.loads(json.dumps(proof))
+                primary_receipt = foreign_node["oci_controlled_source"][
+                    "primary_cluster"
+                ]
+                primary_receipt["images"]["runtime"]["nodes"][0][
+                    "node"
+                ] = "foreign-control-plane"
+                primary_receipt["registry_blockades"][0][
+                    "node"
+                ] = "foreign-control-plane"
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "node cluster binding drifted"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(
+                        identity, foreign_node
+                    )
+
+                overlapping_nodes = json.loads(json.dumps(proof))
+                overlapping_nodes["restore_cluster"] = "primary-restore"
+                restore_receipt = overlapping_nodes["oci_controlled_source"][
+                    "restore_cluster"
+                ]
+                restore_receipt["cluster"] = "primary-restore"
+                shared_node = "primary-restore-control-plane"
+                for field in ("primary_cluster", "restore_cluster"):
+                    receipt_value = overlapping_nodes["oci_controlled_source"][field]
+                    receipt_value["images"]["runtime"]["nodes"][0][
+                        "node"
+                    ] = shared_node
+                    receipt_value["registry_blockades"][0]["node"] = shared_node
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "node inventories overlap"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(
+                        identity, overlapping_nodes
+                    )
+
     def test_proof_record_rejects_receipt_from_different_checkout(self) -> None:
         identity = {
             "schema_version": 1,

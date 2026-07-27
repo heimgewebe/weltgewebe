@@ -256,6 +256,7 @@ def _validate_cached_cluster_image(
     observed: Any,
     spec: dict[str, Any],
     *,
+    expected_cluster: str,
     host_image_id: str,
     label: str,
     name: str,
@@ -302,6 +303,10 @@ def _validate_cached_cluster_image(
         if not isinstance(node_name, str) or not node_name or node_name in node_names:
             raise IdentityError(
                 f"reusable proof {label} OCI node inventory is invalid: {name}"
+            )
+        if not node_name.startswith(f"{expected_cluster}-"):
+            raise IdentityError(
+                f"reusable proof {label} OCI node cluster binding drifted: {name}"
             )
         node_names.add(node_name)
         repo_tags = node.get("repo_tags")
@@ -408,14 +413,22 @@ def _validate_controlled_oci_proof(
         ):
             raise IdentityError(f"reusable proof host OCI image binding is invalid: {name}")
 
-    cluster_fields = (
-        (("cluster", proof.get("cluster")),)
-        if suite == "kind-gitops"
-        else (
-            ("primary_cluster", proof.get("primary_cluster")),
-            ("restore_cluster", proof.get("restore_cluster")),
+    if suite == "kind-gitops":
+        cluster_fields = (("cluster", proof.get("cluster")),)
+    else:
+        primary_cluster = proof.get("primary_cluster")
+        restore_cluster = proof.get("restore_cluster")
+        if not isinstance(primary_cluster, str) or not primary_cluster:
+            raise IdentityError("reusable proof primary_cluster binding is missing")
+        if not isinstance(restore_cluster, str) or not restore_cluster:
+            raise IdentityError("reusable proof restore_cluster binding is missing")
+        if primary_cluster == restore_cluster:
+            raise IdentityError("reusable proof HA cluster bindings must be distinct")
+        cluster_fields = (
+            ("primary_cluster", primary_cluster),
+            ("restore_cluster", restore_cluster),
         )
-    )
+    cluster_node_inventories: dict[str, set[str]] = {}
     for field, expected_cluster_name in cluster_fields:
         receipt = _validate_receipt_header(
             controlled.get(field), label=field, lock_sha256=lock_sha256
@@ -435,6 +448,7 @@ def _validate_controlled_oci_proof(
             current_nodes = _validate_cached_cluster_image(
                 observed,
                 images[name],
+                expected_cluster=expected_cluster_name,
                 host_image_id=host_image_id,
                 label=field,
                 name=name,
@@ -450,6 +464,11 @@ def _validate_controlled_oci_proof(
             raise IdentityError(
                 f"reusable proof {field} OCI image and blockade nodes disagree"
             )
+        if image_nodes is None:
+            raise IdentityError(f"reusable proof {field} OCI node inventory is missing")
+        if any(image_nodes.intersection(nodes) for nodes in cluster_node_inventories.values()):
+            raise IdentityError("reusable proof HA cluster node inventories overlap")
+        cluster_node_inventories[field] = image_nodes
 
 
 def record(identity_path: Path, proof_receipt: Path, output_dir: Path) -> dict[str, Any]:
