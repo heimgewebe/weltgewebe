@@ -23,7 +23,7 @@
       "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"
     },
     "protocol_head": {
-      "const": "83ed435bf9eb490e81a6ff2103b6c1397440d40b"
+      "const": "fae4c26faa22d62d148d39e1995fe5492211cb43"
     },
     "adapter": {
       "const": "weltgewebe-os-convergence-adapter"

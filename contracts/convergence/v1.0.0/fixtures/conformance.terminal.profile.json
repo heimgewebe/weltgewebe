@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "profile_id": "weltgewebe-os-v1-t013-conformance-fixture",
-  "protocol_head": "83ed435bf9eb490e81a6ff2103b6c1397440d40b",
+  "protocol_head": "fae4c26faa22d62d148d39e1995fe5492211cb43",
   "adapter": "weltgewebe-os-convergence-adapter",
   "intent": {
     "objective": "Emit a synthetic public Assessment Request v1 for deterministic protocol conformance testing only.",
