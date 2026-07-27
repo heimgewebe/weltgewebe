@@ -350,7 +350,9 @@ read_deploy_tempfail_diagnostic() {
   local invocation_id="$2"
   local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$commit.json"
   local contention_receipt="$DEPLOY_RECEIPT_ROOT/contention/$invocation_id.json"
-  python3 - "$deployment_receipt" "$contention_receipt" "$commit" "$invocation_id" << 'PY'
+  local legacy_contention_receipt="$DEPLOY_RECEIPT_ROOT/last-contention.json"
+  python3 - "$deployment_receipt" "$contention_receipt" \
+    "$legacy_contention_receipt" "$commit" "$invocation_id" << 'PY'
 import json
 import os
 import stat
@@ -360,8 +362,9 @@ from pathlib import Path
 MAX_RECEIPT_BYTES = 1048576
 deployment_path = Path(sys.argv[1])
 contention_path = Path(sys.argv[2])
-commit = sys.argv[3]
-invocation_id = sys.argv[4]
+legacy_contention_path = Path(sys.argv[3])
+commit = sys.argv[4]
+invocation_id = sys.argv[5]
 
 
 def read_safe(path: Path):
@@ -412,6 +415,19 @@ def read_safe(path: Path):
             os.close(directory_fd)
 
 
+def is_current_contention(payload: object) -> bool:
+    return (
+        isinstance(payload, dict)
+        and payload.get("schema_version") == 2
+        and payload.get("kind") == "weltgewebe_production_lock_contention"
+        and payload.get("requested_commit") == commit
+        and payload.get("deploy_invocation_id") == invocation_id
+        and payload.get("lock_domain") == "weltgewebe-production-deployment-v1"
+        and payload.get("entrypoint") == "reconciler"
+        and payload.get("result") == "already_running"
+    )
+
+
 deployment = read_safe(deployment_path)
 if deployment == "unsafe":
     print("untrusted_receipt")
@@ -430,19 +446,16 @@ else:
     contention = read_safe(contention_path)
     if contention == "unsafe":
         print("untrusted_receipt")
-    elif (
-        isinstance(contention, dict)
-        and contention.get("schema_version") == 2
-        and contention.get("kind") == "weltgewebe_production_lock_contention"
-        and contention.get("requested_commit") == commit
-        and contention.get("deploy_invocation_id") == invocation_id
-        and contention.get("lock_domain") == "weltgewebe-production-deployment-v1"
-        and contention.get("entrypoint") == "reconciler"
-        and contention.get("result") == "already_running"
-    ):
+    elif is_current_contention(contention):
         print("lock_contention")
     else:
-        print("unexplained")
+        legacy_contention = read_safe(legacy_contention_path)
+        if legacy_contention == "unsafe":
+            print("untrusted_receipt")
+        elif is_current_contention(legacy_contention):
+            print("lock_contention")
+        else:
+            print("unexplained")
 PY
 }
 
