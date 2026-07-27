@@ -61,7 +61,6 @@
     deriveVisibleEdges,
     selectMapEntity,
   } from "$lib/stores/mapView";
-  import { authStore } from "$lib/auth/store";
   import { get } from "svelte/store";
 
   import { currentBasemap } from "$lib/map/config/basemap.current";
@@ -642,6 +641,7 @@
   onMount(() => {
     void preloadSearchOverlay();
     let releasePmtilesProtocol: (() => void) | undefined;
+    let cleanupAuthCamera: (() => void) | undefined;
     // onMount returns its cleanup synchronously while the initialiser below is
     // still suspended on `await import('maplibre-gl')`. If the component is
     // destroyed in that window the cleanup finds `map`/`nodesOverlay` still
@@ -685,7 +685,7 @@
       // store continues its deduplicated background check; a result that is
       // already available may still influence the initial own-Garnrolle camera.
       const maplibregl = await import("maplibre-gl");
-      const initialAuth = get(authStore);
+      const initialAuth = { authenticated: false };
       if (destroyed) return;
       const container = mapContainer;
       if (!container) {
@@ -744,6 +744,16 @@
       });
       updateGarnrolleMarkerScale();
       map.on("zoom", updateGarnrolleMarkerScale);
+      if (!initialUrlState.focus) {
+        void import("$lib/map/authCameraConvergence").then((module) => {
+          if (!destroyed && map) {
+            cleanupAuthCamera = module.installAuthCameraConvergence(
+              map,
+              markersData,
+            );
+          }
+        });
+      }
       map.addControl(
         new maplibregl.NavigationControl({ showZoom: true }),
         "bottom-right",
@@ -813,6 +823,7 @@
       cleanupKomposition?.();
       cleanupFocus?.();
       unsubscribeSysState?.();
+      cleanupAuthCamera?.();
       searchViewportResizeObserver?.disconnect();
       searchViewportResizeObserver = null;
       if (searchDirectionFrame !== null) {

@@ -1,12 +1,14 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import GovernanceFan from "./GovernanceFan.svelte";
-  import { authStore } from "$lib/auth/store";
   import { contextPanelOpen } from "$lib/stores/uiView";
-  import { garnrolleIcon } from "$lib/ui/icons";
 
-  function retryAuth() {
-    void authStore.checkAuth({ force: true });
-  }
+  let AuthSlot: any;
+  onMount(() => {
+    void import("./TopBarAuth.svelte").then((module) => {
+      AuthSlot = module.default;
+    });
+  });
 </script>
 
 <div
@@ -18,26 +20,8 @@
   <div class="governance-slot">
     <GovernanceFan />
   </div>
-  {#if $authStore.state === "authenticated"}
-    <a
-      class="garnrolle-link"
-      href="/settings#meine-garnrolle"
-      aria-label="Meine Garnrolle einrichten"
-    >
-      <img src={garnrolleIcon} alt="" />
-    </a>
-  {:else if $authStore.state === "unauthenticated"}
-    <a class="login-entry" href="/login">Anmelden</a>
-  {:else}
-    <button
-      class="login-entry"
-      disabled={$authStore.state === "checking"}
-      on:click={retryAuth}
-    >
-      {$authStore.state === "checking"
-        ? "Prüfe Anmeldung …"
-        : "Verbindung gestört"}
-    </button>
+  {#if AuthSlot}
+    <svelte:component this={AuthSlot} />
   {/if}
 </div>
 
@@ -61,51 +45,6 @@
     grid-column: 2;
     justify-self: center;
     pointer-events: auto;
-  }
-
-  .garnrolle-link,
-  .login-entry {
-    grid-column: 3;
-    justify-self: end;
-    pointer-events: auto;
-  }
-
-  .garnrolle-link {
-    display: block;
-    width: 44px;
-    height: 44px;
-    transition: transform 0.1s ease;
-  }
-
-  .garnrolle-link img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-
-  .garnrolle-link:active {
-    transform: scale(0.95);
-  }
-
-  .garnrolle-link:focus-visible,
-  .login-entry:focus-visible {
-    outline: 2px solid var(--accent, #6aa6ff);
-    outline-offset: 3px;
-  }
-
-  .login-entry {
-    display: grid;
-    place-items: center;
-    min-height: 44px;
-    padding: 0 0.9rem;
-    border: 1px solid var(--panel-border-strong);
-    border-radius: 999px;
-    background: var(--panel);
-    color: var(--text);
-    text-decoration: none;
-    font: inherit;
-    font-weight: 600;
   }
 
   @media (min-width: 769px) {

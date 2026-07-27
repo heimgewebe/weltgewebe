@@ -18,6 +18,7 @@ interface MockOptions {
   devices?: DeviceInfo[];
   logoutAllResponse?: { status: number; body: unknown };
   stepUpRequestStatus?: number;
+  logoutStatus?: number;
   onDevicesRequest?: () => void;
 }
 
@@ -32,6 +33,7 @@ async function setupAuthMocks(page: Page, opts: MockOptions): Promise<void> {
     },
   };
   const stepUpRequestStatus = opts.stepUpRequestStatus ?? 200;
+  const logoutStatus = opts.logoutStatus ?? 200;
 
   // Pin a stable build version mock so the update banner does not appear.
   await page.route("**/_app/version.json", (route: Route) =>
@@ -44,7 +46,7 @@ async function setupAuthMocks(page: Page, opts: MockOptions): Promise<void> {
 
   await page.route("**/api/auth/me", (route: Route) => {
     route.fulfill({
-      status: authState.authenticated ? 200 : 401,
+      status: 200,
       contentType: "application/json",
       body: JSON.stringify(authState),
     });
@@ -68,9 +70,11 @@ async function setupAuthMocks(page: Page, opts: MockOptions): Promise<void> {
   });
 
   await page.route("**/api/auth/logout", (route: Route) => {
-    authState = { authenticated: false, role: "gast" };
+    if (logoutStatus < 400) {
+      authState = { authenticated: false, role: "gast" };
+    }
     route.fulfill({
-      status: 200,
+      status: logoutStatus,
       contentType: "application/json",
       body: JSON.stringify({}),
     });
@@ -211,6 +215,31 @@ test.describe("Settings — AccountSection", () => {
     await expect(
       section.locator('[data-testid="account-section-anonymous"]'),
     ).toBeVisible();
+  });
+
+  test("logout failure keeps account visible and reports error", async ({
+    page,
+  }) => {
+    await setupAuthMocks(page, {
+      initial: {
+        authenticated: true,
+        account_id: "acc-failure",
+        role: "weber",
+      },
+      logoutStatus: 503,
+    });
+    await page.goto("/settings");
+    const section = page.locator('[data-testid="account-section"]');
+    await section.locator('[data-testid="account-section-logout"]').click();
+    await expect(
+      section.locator('[data-testid="account-section-status"]'),
+    ).toBeVisible();
+    await expect(
+      section.locator('[data-testid="account-section-anonymous"]'),
+    ).toHaveCount(0);
+    await expect(
+      section.locator('[data-testid="account-section-action-message"]'),
+    ).toContainText("nicht bestätigt");
   });
 
   test("passkey entry stub is present and disabled", async ({ page }) => {

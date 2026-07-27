@@ -1335,19 +1335,11 @@ pub async fn logout_all(
 }
 
 pub async fn me(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
-    let status = AuthStatus {
+    Json(AuthStatus {
         authenticated: ctx.authenticated,
         account_id: ctx.account_id,
         role: ctx.role,
-    };
-    if status.authenticated {
-        (StatusCode::OK, Json(status)).into_response()
-    } else {
-        // The web client treats only 401/403 as authoritative proof that a
-        // session is absent. Transport, decoding and server failures therefore
-        // cannot silently collapse an existing account into guest state.
-        (StatusCode::UNAUTHORIZED, Json(status)).into_response()
-    }
+    })
 }
 
 #[derive(Deserialize)]
@@ -3412,7 +3404,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn me_uses_unauthorized_as_the_logged_out_contract() {
+    async fn me_returns_ok_for_an_unauthenticated_status() {
         let response = me(Extension(AuthContext {
             authenticated: false,
             account_id: None,
@@ -3423,13 +3415,14 @@ mod tests {
         .await
         .into_response();
 
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(response.status(), StatusCode::OK);
         let bytes = body::to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("read auth status body");
         let payload: serde_json::Value =
             serde_json::from_slice(&bytes).expect("parse auth status body");
         assert_eq!(payload["authenticated"], false);
+        assert_eq!(payload["role"], "gast");
     }
 
     #[tokio::test]

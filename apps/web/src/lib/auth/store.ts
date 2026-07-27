@@ -20,6 +20,7 @@ export interface AuthCheckOptions {
 export interface AuthStoreOptions {
   isBrowser?: boolean;
   fetcher?: typeof fetch;
+  authCheckTimeoutMs?: number;
 }
 
 const anonymous = (state: AuthState = "unauthenticated"): AuthStatus => ({
@@ -52,6 +53,7 @@ function clearSensitiveSession(enabled: boolean, keepAccountId?: string) {
 export const createAuthStore = (options: AuthStoreOptions = {}) => {
   const isBrowser = options.isBrowser ?? browser;
   const fetcher = options.fetcher ?? fetch;
+  const authCheckTimeoutMs = Math.max(1, options.authCheckTimeoutMs ?? 5000);
   const store = writable<AuthStatus>(
     anonymous(isBrowser ? "checking" : "unauthenticated"),
   );
@@ -83,47 +85,27 @@ export const createAuthStore = (options: AuthStoreOptions = {}) => {
     const previous = get(store);
     const current = ++revision;
     const requestController = new AbortController();
+    const timeout = setTimeout(
+      () => requestController.abort(),
+      authCheckTimeoutMs,
+    );
     controller = requestController;
     publish({ ...previous, state: "checking" });
 
     pending = (async () => {
       try {
-        const response = await fetcher("/api/auth/me", {
-          credentials: "include",
-          signal: requestController.signal,
-        });
+        const next = await (
+          await import("./check")
+        ).fetchAuthStatus(fetcher, requestController.signal);
         if (current !== revision) return get(store);
-        if (response.status === 401 || response.status === 403) {
-          return publish(anonymous(), true);
-        }
-        if (!response.ok) {
-          return publish({ ...previous, state: "degraded" });
-        }
-
-        const data = (await response.json()) as Partial<AuthStatus>;
-        if (
-          data?.authenticated === true &&
-          typeof data.role === "string" &&
-          typeof data.account_id === "string"
-        ) {
-          return publish(
-            {
-              state: "authenticated",
-              authenticated: true,
-              role: data.role,
-              account_id: data.account_id,
-            },
-            true,
-          );
-        }
-        return publish({ ...previous, state: "degraded" });
-      } catch (error) {
+        return next
+          ? publish(next, true)
+          : publish({ ...previous, state: "degraded" });
+      } catch {
         if (current !== revision) return get(store);
-        if ((error as { name?: string })?.name === "AbortError") {
-          return publish(previous);
-        }
         return publish({ ...previous, state: "degraded" });
       } finally {
+        clearTimeout(timeout);
         if (current === revision) {
           controller = undefined;
           pending = undefined;
@@ -138,13 +120,7 @@ export const createAuthStore = (options: AuthStoreOptions = {}) => {
     checkAuth,
     devLogin: async (accountId: string) => {
       if (!isBrowser) return;
-      const response = await fetcher("/api/auth/dev/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account_id: accountId }),
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Login failed");
+      await (await import("./actions")).devLogin(fetcher, accountId);
       const next = await checkAuth({ force: true });
       if (!next.authenticated) {
         throw new Error("Login succeeded but no session was established.");
@@ -152,38 +128,20 @@ export const createAuthStore = (options: AuthStoreOptions = {}) => {
     },
     requestLogin: async (email: string) => {
       if (!isBrowser) return;
-      const response = await fetcher("/api/auth/magic-link/request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-        credentials: "include",
-      });
-      if (!response.ok) {
-        if (response.status === 404 || response.status === 403) {
-          throw new Error("Public login is disabled.");
-        }
-        throw new Error(`Request failed: ${response.status}`);
-      }
+      await (await import("./actions")).requestLogin(fetcher, email);
     },
     logout: async () => {
       if (!isBrowser) return;
-      clearSensitiveSession(isBrowser);
+      const previous = get(store);
       try {
-        const response = await fetcher("/api/auth/logout", {
-          method: "POST",
-          credentials: "include",
-        });
-        if (
-          !response.ok &&
-          response.status !== 401 &&
-          response.status !== 403
-        ) {
-          throw new Error(`Logout failed: ${response.status}`);
+        await (await import("./actions")).endSession(fetcher);
+        const verified = await checkAuth({ force: true });
+        if (verified.state !== "unauthenticated") {
+          throw new Error("Logout could not be verified.");
         }
-        await checkAuth({ force: true });
       } catch (error) {
-        console.error("Logout error:", error);
-        publish(anonymous(), true);
+        publish({ ...previous, state: "degraded" });
+        throw error;
       }
     },
   };
