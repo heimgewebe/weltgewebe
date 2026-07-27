@@ -500,7 +500,7 @@ test("a late list response cannot undo the first confirmed contribution", async 
   await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
 });
 
-test("a fresher detail count survives older empty list and message snapshots", async ({
+test("a confirmed post increments a fresher retained detail count", async ({
   page,
 }) => {
   await mockApiResponses(page, {
@@ -527,8 +527,12 @@ test("a fresher detail count survives older empty list and message snapshots", a
       new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
   );
   governance.releaseMessagesResponse();
+  await page.getByLabel("Beitrag verfassen").fill("Zweiter belegter Beitrag");
+  await page.getByRole("button", { name: "Beitrag senden" }).click();
+  await expect(page.getByText("Zweiter belegter Beitrag")).toBeVisible();
+
   await page.getByRole("link", { name: "Alle Anträge" }).click();
-  await expect(page.getByText("1 Beitrag", { exact: true })).toBeVisible();
+  await expect(page.getByText("2 Beiträge", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Gespräche" }).click();
   await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
 });

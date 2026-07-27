@@ -389,11 +389,11 @@
                         : "s"}</span
                     >
                     <span
-                      >{proposalMessageCount(proposal)} Beitrag{proposalMessageCount(
+                      >{proposalMessageCount(proposal)} {proposalMessageCount(
                         proposal,
                       ) === 1
-                        ? ""
-                        : "e"}</span
+                        ? "Beitrag"
+                        : "Beiträge"}</span
                     >
                     <span
                       >{proposal.yes_votes} Ja · {proposal.no_votes} Nein</span

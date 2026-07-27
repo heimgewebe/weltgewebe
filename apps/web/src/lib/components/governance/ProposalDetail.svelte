@@ -24,6 +24,7 @@
 
   let proposal: ProposalDetail | null = null;
   let messages: ProposalMessage[] = [];
+  let knownMessageCount = 0;
   let loading = true;
   let error = "";
   let vetoReason = "";
@@ -47,6 +48,10 @@
       : 0;
   }
 
+  function incrementMessageCount(count: number): number {
+    return count < Number.MAX_SAFE_INTEGER ? count + 1 : count;
+  }
+
   function describeError(cause: unknown): string {
     if (cause instanceof GovernanceApiError) {
       if (cause.status === 403) return "Über den eigenen Weberantrag kannst du nicht selbst entscheiden.";
@@ -66,12 +71,14 @@
       ]);
       proposal = loadedProposal;
       messages = loadedMessages;
+      knownMessageCount = Math.max(
+        knownMessageCount,
+        normalizeMessageCount(loadedProposal.message_count),
+        loadedMessages.length,
+      );
       dispatch("messagecountchange", {
         proposalId,
-        messageCount: Math.max(
-          normalizeMessageCount(loadedProposal.message_count),
-          loadedMessages.length,
-        ),
+        messageCount: knownMessageCount,
       });
     } catch (cause) {
       error = describeError(cause);
@@ -116,9 +123,13 @@
     try {
       const created = await postProposalMessage(proposal.id, messageBody);
       messages = [...messages, created];
+      knownMessageCount = Math.max(
+        incrementMessageCount(knownMessageCount),
+        messages.length,
+      );
       dispatch("messagecountchange", {
         proposalId: proposal.id,
-        messageCount: messages.length,
+        messageCount: knownMessageCount,
       });
       messageBody = "";
     } catch (cause) {
