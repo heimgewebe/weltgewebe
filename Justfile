@@ -25,7 +25,7 @@ alias c := ci
 ci:
 	# Web: unit tests, build, lint and typecheck. Run Vitest directly so the
 	# package pretest generator hook is not repeated after the explicit sync.
-	# Hosted workflows delegate unit tests here; browser jobs keep E2E separate.
+	# PRs and main pushes delegate unit tests here; non-main web pushes use the equivalent fallback.
 	@echo "==> Web: install, sync, unit tests, build, typecheck"
 	if [ -d apps/web ]; then \
 		pushd apps/web >/dev/null; \

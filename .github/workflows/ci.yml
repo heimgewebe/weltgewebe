@@ -354,8 +354,9 @@ jobs:
           just --version
 
       # CI Test Architecture:
-      #   just ci — canonical web unit tests, build/lint/typecheck, API tests and cargo-deny.
-      #   ci.yml / web.yml browser jobs — Playwright E2E only.
+      #   just ci — canonical web unit tests for pull requests and main pushes,
+      #             plus build/lint/typecheck, API tests and cargo-deny.
+      #   web.yml — push-only unit fallback for non-main web branches, plus Playwright E2E.
       #   Core Guard Tests remain in the independent guard-tests job.
       - name: Validate project
         env:

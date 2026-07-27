@@ -1,6 +1,7 @@
 ---
 # Web Check (Gate A) — path-scoped web build, lint, typecheck and Playwright E2E.
-# The canonical Vitest execution lives in `just ci`, invoked by ci.yml.
+# Pull requests and main pushes receive Vitest through `just ci`; non-main branch
+# pushes use the conditional fallback below because ci.yml does not cover them.
 name: Web Check (Gate A)
 
 env:
@@ -62,6 +63,10 @@ jobs:
 
       - name: SvelteKit prepare
         run: pnpm sync
+
+      - name: Unit tests (non-main branch pushes)
+        if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+        run: pnpm test:unit
 
       - name: Typecheck
         run: pnpm check
