@@ -159,6 +159,16 @@ unabhängig anfordert und sich selbst blockiert. Der Helfer schließt den
 Lock-Deskriptor gezielt für `weltgewebe-up`; dadurch können dessen mögliche
 Hintergrundprozesse die Produktionssperre nicht unbeabsichtigt festhalten.
 
+Jede Übergabe an den Deploy-Helfer erhält zusätzlich eine neue zufällige
+Aufruf-ID. Terminale Deployment-Belege und Konkurrenzbelege binden diese ID.
+Ein Beleg eines früheren Aufrufs darf deshalb selbst beim selben Commit keinen
+neuen Exit 79 oder 80 legitimieren. Exit 75 bleibt grundsätzlich ein Fehler:
+Der Reconciler unterscheidet nur anhand sicherer, root-eigener und nicht von
+Gruppe oder Welt beschreibbarer Belege, ob der aktuelle Kindaufruf bereits als
+fehlgeschlagen protokolliert wurde oder tatsächlich eine Sperrkonkurrenz meldete.
+Diese Diagnose erweitert nicht die Lock-Wahrheit; Besitz wird weiterhin nur
+durch die Kernel-Sperre bestimmt.
+
 Ein ausdrücklich unterstützter direkter Recovery-Aufruf des Deploy-Helfers erwirbt
 dieselbe Sperre selbst. Bei Konkurrenz verändert der abgewiesene Lauf weder
 Container noch öffentliche Zustände. Der Reconciler endet geordnet mit Exit 0;

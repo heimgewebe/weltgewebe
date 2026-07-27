@@ -30,6 +30,7 @@ source_archive=""
 target_commit=""
 artifact_sha=""
 state_result=""
+deploy_invocation_id=""
 
 fail() {
   echo "ERROR: $*" >&2
@@ -103,6 +104,10 @@ acquire_production_lock() {
   fi
 }
 
+new_deploy_invocation_id() {
+  python3 -c 'import secrets; print(secrets.token_hex(32))'
+}
+
 fetch_main() {
   git -C "$SOURCE_CHECKOUT" fetch --no-tags origin \
     "+refs/heads/main:refs/remotes/origin/main"
@@ -152,6 +157,7 @@ PY
 
 read_deploy_terminal_result() {
   local commit="$1"
+  local invocation_id="$2"
   local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$commit.json"
   [[ -f "$deployment_receipt" && ! -L "$deployment_receipt" ]] ||
     fail "terminal deployment receipt is missing or unsafe: $deployment_receipt"
@@ -162,25 +168,103 @@ read_deploy_terminal_result() {
   (((8#$receipt_mode & 022) == 0)) ||
     fail "terminal deployment receipt is group- or world-writable: $deployment_receipt"
 
-  python3 - "$deployment_receipt" "$commit" << 'PY'
+  python3 - "$deployment_receipt" "$commit" "$invocation_id" << 'PY'
 import json
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
 commit = sys.argv[2]
+invocation_id = sys.argv[3]
 try:
     payload = json.loads(path.read_text(encoding="utf-8"))
 except (OSError, json.JSONDecodeError) as exc:
     raise SystemExit(f"terminal deployment receipt is unreadable: {exc}") from exc
 if not isinstance(payload, dict):
     raise SystemExit("terminal deployment receipt is not an object")
+if payload.get("schema_version") != 5:
+    raise SystemExit("terminal deployment receipt schema is not current")
 if payload.get("commit") != commit:
     raise SystemExit("terminal deployment receipt targets another commit")
+if payload.get("deploy_invocation_id") != invocation_id:
+    raise SystemExit("terminal deployment receipt does not match current invocation")
+if payload.get("lock_domain") != "weltgewebe-production-deployment-v1":
+    raise SystemExit("terminal deployment receipt has another lock domain")
+if payload.get("lock_owner_entrypoint") != "reconciler":
+    raise SystemExit("terminal deployment receipt has another lock owner")
+if payload.get("lock_handoff") != "inherited":
+    raise SystemExit("terminal deployment receipt is not bound to inherited handoff")
 result = payload.get("result")
 if result not in {"superseded_after_migration", "superseded_after_deploy"}:
     raise SystemExit(f"unexpected terminal deployment result: {result!r}")
 print(result)
+PY
+}
+
+read_deploy_tempfail_diagnostic() {
+  local commit="$1"
+  local invocation_id="$2"
+  local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$commit.json"
+  local contention_receipt="$DEPLOY_RECEIPT_ROOT/last-contention.json"
+  python3 - "$deployment_receipt" "$contention_receipt" "$commit" "$invocation_id" << 'PY'
+import json
+import stat
+import sys
+from pathlib import Path
+
+deployment_path = Path(sys.argv[1])
+contention_path = Path(sys.argv[2])
+commit = sys.argv[3]
+invocation_id = sys.argv[4]
+
+def read_safe(path: Path):
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return "unsafe"
+    if not stat.S_ISREG(metadata.st_mode):
+        return "unsafe"
+    if metadata.st_uid != 0 or metadata.st_mode & 0o022:
+        return "unsafe"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "unsafe"
+    return payload if isinstance(payload, dict) else "unsafe"
+
+deployment = read_safe(deployment_path)
+if deployment == "unsafe":
+    print("untrusted_receipt")
+elif (
+    isinstance(deployment, dict)
+    and deployment.get("schema_version") == 5
+    and deployment.get("commit") == commit
+    and deployment.get("deploy_invocation_id") == invocation_id
+    and deployment.get("lock_domain") == "weltgewebe-production-deployment-v1"
+    and deployment.get("lock_owner_entrypoint") == "reconciler"
+    and deployment.get("lock_handoff") == "inherited"
+    and deployment.get("result") == "failed"
+):
+    print("failed_deployment")
+else:
+    contention = read_safe(contention_path)
+    if contention == "unsafe":
+        print("untrusted_receipt")
+    elif (
+        isinstance(contention, dict)
+        and contention.get("schema_version") == 2
+        and contention.get("kind") == "weltgewebe_production_lock_contention"
+        and contention.get("requested_commit") == commit
+        and contention.get("deploy_invocation_id") == invocation_id
+        and contention.get("lock_domain") == "weltgewebe-production-deployment-v1"
+        and contention.get("entrypoint") == "reconciler"
+        and contention.get("result") == "already_running"
+    ):
+        print("lock_contention")
+    else:
+        print("unexplained")
 PY
 }
 
@@ -226,7 +310,7 @@ if preserve:
     raise SystemExit(0)
 
 payload = {
-    "schema_version": 4,
+    "schema_version": 5,
     "environment": "production",
     "commit": commit,
     "web_artifact_sha256": None,
@@ -240,6 +324,7 @@ payload = {
     "lock_owner_entrypoint": "reconciler",
     "lock_handoff": "public-observation",
     "result": "verified_observed",
+    "deploy_invocation_id": None,
     "evidence_boundary": (
         "Recovered from exact public readback; original web artifact hash and "
         "deployment start time are unavailable."
@@ -478,10 +563,14 @@ if [[ "$current_main" != "$target_commit" ]]; then
   exit 0
 fi
 
+deploy_invocation_id="$(new_deploy_invocation_id)"
+[[ "$deploy_invocation_id" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "deploy invocation identity generation failed"
 set +e
 WELTGEWEBE_PRODUCTION_LOCK_FD="$PRODUCTION_LOCK_FD" \
   WELTGEWEBE_PRODUCTION_LOCK_DOMAIN="$PRODUCTION_LOCK_DOMAIN" \
   WELTGEWEBE_PRODUCTION_LOCK_OWNER_ENTRYPOINT="reconciler" \
+  WELTGEWEBE_DEPLOY_INVOCATION_ID="$deploy_invocation_id" \
   "$DEPLOY_HELPER" \
   --commit "$target_commit" \
   --web-artifact "$artifact" \
@@ -493,17 +582,31 @@ case "$deploy_rc" in
   0) ;;
 
   "$EXIT_SUPERSEDED_AFTER_MIGRATION")
-    deploy_result="$(read_deploy_terminal_result "$target_commit")"
+    deploy_result="$(read_deploy_terminal_result "$target_commit" "$deploy_invocation_id")"
     [[ "$deploy_result" == "superseded_after_migration" ]] ||
       fail "deploy helper exit/result mismatch: exit=$deploy_rc result=$deploy_result"
     ;;
   "$EXIT_SUPERSEDED_AFTER_DEPLOY")
-    deploy_result="$(read_deploy_terminal_result "$target_commit")"
+    deploy_result="$(read_deploy_terminal_result "$target_commit" "$deploy_invocation_id")"
     [[ "$deploy_result" == "superseded_after_deploy" ]] ||
       fail "deploy helper exit/result mismatch: exit=$deploy_rc result=$deploy_result"
     ;;
   "$EX_TEMPFAIL")
-    fail "deploy helper returned temporary failure under inherited production lock"
+    tempfail_diagnostic="$(read_deploy_tempfail_diagnostic "$target_commit" "$deploy_invocation_id")"
+    case "$tempfail_diagnostic" in
+      failed_deployment)
+        fail "deploy helper returned child temporary failure after writing a failed receipt for the current invocation"
+        ;;
+      lock_contention)
+        fail "deploy helper reported production lock contention during inherited handoff"
+        ;;
+      untrusted_receipt)
+        fail "deploy helper returned temporary failure with unsafe receipt evidence"
+        ;;
+      *)
+        fail "deploy helper returned unexplained temporary failure under inherited production lock"
+        ;;
+    esac
     ;;
   *)
     fail "deploy helper failed with exit code $deploy_rc"

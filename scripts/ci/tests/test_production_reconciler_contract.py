@@ -66,19 +66,27 @@ class ProductionReconcilerContractTests(unittest.TestCase):
             script,
         )
         self.assertIn("WELTGEWEBE_PRODUCTION_LOCK_FD", script)
+        self.assertIn("WELTGEWEBE_DEPLOY_INVOCATION_ID", script)
+        self.assertIn("inherited deploy invocation identity is invalid", script)
         self.assertIn('lock_handoff="inherited"', script)
         self.assertIn("production_deployment=already_running", script)
-        self.assertIn('"$release_dir/scripts/weltgewebe-up" "${arguments[@]}" 9>&-', script)
-        self.assertNotIn('${STATE_ROOT}/deploy.lock', script)
+        self.assertIn(
+            '"$release_dir/scripts/weltgewebe-up" "${arguments[@]}" 9>&-', script
+        )
+        self.assertNotIn("${STATE_ROOT}/deploy.lock", script)
         self.assertIn("ARCHIVE_VALIDATOR", script)
         self.assertIn("validate_release_tree", script)
         self.assertIn("release contains unexpected state", script)
         self.assertIn("release directory is not root-owned", script)
-        self.assertIn('find "$release_dir/apps/web/build" -type f -exec chmod 0644', script)
+        self.assertIn(
+            'find "$release_dir/apps/web/build" -type f -exec chmod 0644', script
+        )
         self.assertIn('ln -s "$basemap_real" "$release_dir/build/basemap"', script)
         self.assertIn("basemap link escapes the canonical data root", script)
         self.assertIn("-type l -print0", script)
-        self.assertIn('install -d -o root -g root -m 0700 "$STATE_ROOT/receipts"', script)
+        self.assertIn(
+            'install -d -o root -g root -m 0700 "$STATE_ROOT/receipts"', script
+        )
 
     def test_deploy_helper_requires_immutable_root_artifact(self) -> None:
         script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
@@ -129,13 +137,18 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("readonly EXIT_SUPERSEDED_AFTER_MIGRATION=79", script)
         self.assertIn("readonly EXIT_SUPERSEDED_AFTER_DEPLOY=80", script)
         self.assertIn('case "$deploy_rc" in', script)
-        self.assertIn("temporary failure under inherited production lock", script)
+        self.assertIn("new_deploy_invocation_id", script)
+        self.assertIn('WELTGEWEBE_DEPLOY_INVOCATION_ID="$deploy_invocation_id"', script)
+        self.assertIn("does not match current invocation", script)
+        self.assertIn("read_deploy_tempfail_diagnostic", script)
+        self.assertIn("production lock contention during inherited handoff", script)
+        self.assertIn("child temporary failure", script)
         self.assertIn("unexpected superseded reason", script)
         self.assertIn(
             'WELTGEWEBE_PRODUCTION_LOCK_OWNER_ENTRYPOINT="reconciler"',
             script,
         )
-        self.assertNotIn('$STATE_ROOT/reconcile.lock', script)
+        self.assertNotIn("$STATE_ROOT/reconcile.lock", script)
 
     def test_reconciler_build_cannot_write_release_or_source(self) -> None:
         script = self.read("scripts/ops/reconcile-production-main-vps.sh")
@@ -166,9 +179,13 @@ class ProductionReconcilerContractTests(unittest.TestCase):
             self.assertNotIn(forbidden, script)
 
     def test_systemd_timer_uses_completion_relative_cadence(self) -> None:
-        service = self.read("infra/systemd/system/weltgewebe-production-reconcile.service")
+        service = self.read(
+            "infra/systemd/system/weltgewebe-production-reconcile.service"
+        )
         timer = self.read("infra/systemd/system/weltgewebe-production-reconcile.timer")
-        self.assertIn("EnvironmentFile=-/etc/weltgewebe/production-reconciler.env", service)
+        self.assertIn(
+            "EnvironmentFile=-/etc/weltgewebe/production-reconciler.env", service
+        )
         self.assertIn("TimeoutStartSec=7200", service)
         self.assertIn("NoNewPrivileges=true", service)
         self.assertIn("OnUnitInactiveSec=2min", timer)
@@ -189,9 +206,7 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("installed-contract.sha256", script)
         self.assertIn("/var/lib/weltgewebe-main-reconciler/docker-config", script)
         self.assertNotIn("Environment=WELTGEWEBE_BUILD_USER=alex", script)
-        self.assertIn(
-            "systemctl start weltgewebe-production-reconcile.service", script
-        )
+        self.assertIn("systemctl start weltgewebe-production-reconcile.service", script)
 
     def test_installer_deferred_update_is_atomic_and_non_recursive(self) -> None:
         script = self.read("scripts/ops/install-production-reconciler.sh")
@@ -242,9 +257,7 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         )
         up = self.read("scripts/weltgewebe-up")
         self.assertIn("production reconciler activation must run as root", activator)
-        self.assertIn(
-            '"$release_dir_real" == "$release_root_real/$COMMIT"', activator
-        )
+        self.assertIn('"$release_dir_real" == "$release_root_real/$COMMIT"', activator)
         self.assertIn("require_root_safe_directory", activator)
         self.assertIn("require_root_safe_regular_file", activator)
         self.assertIn(
@@ -268,7 +281,7 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn('release_commit="$(basename -- "$release_dir")"', up)
         self.assertIn('activation_owner_uid="$(id -u)"', up)
         self.assertIn('stat --format=%u -- "$reconciler_activator"', up)
-        self.assertIn('((8#$activation_mode & 022))', up)
+        self.assertIn("((8#$activation_mode & 022))", up)
         activation = up.index(">> Production reconciler contract activation:")
         bake = up.index("# --- Bake Configuration ---")
         docker_config = up.index('docker compose "${BASE_ARGS[@]}" config', bake)
@@ -276,7 +289,9 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertLess(bake, docker_config)
 
     def test_weltgewebe_up_normalizes_release_trailing_slashes(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="weltgewebe-release-activation-") as tmp:
+        with tempfile.TemporaryDirectory(
+            prefix="weltgewebe-release-activation-"
+        ) as tmp:
             root = Path(tmp)
             commit = "a" * 40
             release_root = root / "releases"
@@ -366,7 +381,9 @@ class ProductionReconcilerContractTests(unittest.TestCase):
 
         base = Path(tempfile.mkdtemp(prefix="weltgewebe-activator-root-"))
         commit = "b" * 40
-        script = ROOT / "scripts" / "ops" / "activate-production-reconciler-from-release.sh"
+        script = (
+            ROOT / "scripts" / "ops" / "activate-production-reconciler-from-release.sh"
+        )
         build_user = os.environ.get("USER", "runner")
         try:
             unsafe_root = base / "unsafe-releases"
@@ -395,7 +412,9 @@ class ProductionReconcilerContractTests(unittest.TestCase):
 
             safe_root = base / "safe-releases"
             safe_dir = safe_root / commit
-            installer = safe_dir / "scripts" / "ops" / "install-production-reconciler.sh"
+            installer = (
+                safe_dir / "scripts" / "ops" / "install-production-reconciler.sh"
+            )
             subprocess.run(
                 [
                     "sudo",
@@ -447,7 +466,9 @@ class ProductionReconcilerContractTests(unittest.TestCase):
                 text=True,
             )
             self.assertNotEqual(invalid_git.returncode, 0)
-            self.assertIn("release directory is not a valid Git repository", invalid_git.stderr)
+            self.assertIn(
+                "release directory is not a valid Git repository", invalid_git.stderr
+            )
 
             release_root_link = base / "release-root-link"
             release_root_link.symlink_to(safe_root, target_is_directory=True)
@@ -519,7 +540,10 @@ class ProductionReconcilerContractTests(unittest.TestCase):
     def test_github_contract_serializes_main_observers(self) -> None:
         workflow = self.read(".github/workflows/production-live-contract.yml")
         self.assertIn("production-live-main", workflow)
-        self.assertIn("github.event_name == 'pull_request' || github.event_name == 'push'", workflow)
+        self.assertIn(
+            "github.event_name == 'pull_request' || github.event_name == 'push'",
+            workflow,
+        )
         self.assertIn("ref: main", workflow)
         self.assertIn('cron: "*/5 * * * *"', workflow)
         self.assertIn("wait_seconds=1200", workflow)

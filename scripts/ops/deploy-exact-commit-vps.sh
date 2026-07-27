@@ -30,6 +30,7 @@ last_observed_main=""
 migration_completed_at=""
 lock_owner_entrypoint="${WELTGEWEBE_PRODUCTION_LOCK_OWNER_ENTRYPOINT:-deploy-helper}"
 lock_handoff=""
+deploy_invocation_id="${WELTGEWEBE_DEPLOY_INVOCATION_ID:-}"
 receipt_started=false
 receipt_terminal=false
 
@@ -72,7 +73,7 @@ require_command() {
 write_lock_contention_receipt() {
   local receipt="$STATE_ROOT/receipts/last-contention.json"
   python3 - "$receipt" "$PRODUCTION_LOCK_DOMAIN" "$PRODUCTION_LOCK_FILE" \
-    "$lock_owner_entrypoint" "$COMMIT" << 'PY'
+    "$lock_owner_entrypoint" "$COMMIT" "$deploy_invocation_id" << 'PY'
 import json
 import os
 import sys
@@ -81,7 +82,7 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 payload = {
-    "schema_version": 1,
+    "schema_version": 2,
     "kind": "weltgewebe_production_lock_contention",
     "environment": "production",
     "lock_domain": sys.argv[2],
@@ -89,6 +90,7 @@ payload = {
     "entrypoint": sys.argv[4],
     "requested_commit": sys.argv[5] or None,
     "result": "already_running",
+    "deploy_invocation_id": sys.argv[6] or None,
     "recorded_at": datetime.now(timezone.utc).isoformat(),
 }
 temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
@@ -139,6 +141,8 @@ acquire_production_lock() {
       fail "inherited production lock domain is invalid"
     [[ "$lock_owner_entrypoint" == "reconciler" ]] ||
       fail "inherited production lock owner is invalid"
+    [[ "$deploy_invocation_id" =~ ^[0-9a-f]{64}$ ]] ||
+      fail "inherited deploy invocation identity is invalid"
     [[ -e "/proc/$$/fd/$PRODUCTION_LOCK_FD" ]] ||
       fail "inherited production lock descriptor is not open"
     inherited_lock="$(readlink -f "/proc/$$/fd/$PRODUCTION_LOCK_FD")"
@@ -155,6 +159,8 @@ acquire_production_lock() {
 
   [[ "$lock_owner_entrypoint" == "deploy-helper" ]] ||
     fail "direct production lock owner is invalid"
+  [[ -z "$deploy_invocation_id" ]] ||
+    fail "direct deploy invocation identity is unexpected"
   exec 9<> "$PRODUCTION_LOCK_FILE"
   if ! flock -n "$PRODUCTION_LOCK_FD"; then
     contention_receipt="$(write_lock_contention_receipt)"
@@ -203,7 +209,8 @@ write_deploy_receipt() {
   local receipt="$STATE_ROOT/receipts/$COMMIT.json"
   python3 - "$receipt" "$COMMIT" "$WEB_SHA256" "$started_at" "$completed_at" \
     "$api_commit_value" "$frontend_commit_value" "$observed_main" "$migration_completed_at" \
-    "$PRODUCTION_LOCK_DOMAIN" "$lock_owner_entrypoint" "$lock_handoff" "$result" << 'PY'
+    "$PRODUCTION_LOCK_DOMAIN" "$lock_owner_entrypoint" "$lock_handoff" "$result" \
+    "$deploy_invocation_id" << 'PY'
 import json
 import os
 import sys
@@ -211,7 +218,7 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 payload = {
-    "schema_version": 4,
+    "schema_version": 5,
     "environment": "production",
     "commit": sys.argv[2],
     "web_artifact_sha256": sys.argv[3],
@@ -225,6 +232,7 @@ payload = {
     "lock_owner_entrypoint": sys.argv[11],
     "lock_handoff": sys.argv[12],
     "result": sys.argv[13],
+    "deploy_invocation_id": sys.argv[14] or None,
 }
 temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
 with temporary.open("w", encoding="utf-8") as handle:
