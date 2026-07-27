@@ -1,0 +1,310 @@
+---
+name: PR1596 Deletion Effect Patch
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: write
+
+"on":
+  push:
+    branches:
+      - fix/node-delete-archive-history-v1
+    paths:
+      - '.github/workflows/pr1596-delete-effect-patch.yml'
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Apply exact backend deletion-effect patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected 1 match, observed {count}")
+              return text.replace(old, new, 1)
+
+          domain_path = Path("apps/api/src/domain_db.rs")
+          domain = domain_path.read_text(encoding="utf-8")
+          domain = replace_once(
+              domain,
+              '''pub async fn delete_node_with_edges_in_postgres(
+                  pool: &PgPool,
+                  id: &str,
+              ) -> Result<Vec<String>, NodeWriteError> {
+                  let mut tx = pool.begin().await.map_err(NodeWriteError::Database)?;''',
+              '''#[derive(Clone, Debug, PartialEq, Eq)]
+              pub enum NodeConversationDeleteEffect {
+                  DeletedEmpty,
+                  Archived { conversation_id: String },
+              }
+
+              #[derive(Clone, Debug, PartialEq, Eq)]
+              pub struct NodeDeleteOutcome {
+                  pub removed_edge_ids: Vec<String>,
+                  pub conversation_effect: NodeConversationDeleteEffect,
+              }
+
+              pub async fn delete_node_with_edges_in_postgres(
+                  pool: &PgPool,
+                  id: &str,
+              ) -> Result<Vec<String>, NodeWriteError> {
+                  Ok(delete_node_with_effects_in_postgres(pool, id)
+                      .await?
+                      .removed_edge_ids)
+              }
+
+              pub async fn delete_node_with_effects_in_postgres(
+                  pool: &PgPool,
+                  id: &str,
+              ) -> Result<NodeDeleteOutcome, NodeWriteError> {
+                  let mut tx = pool.begin().await.map_err(NodeWriteError::Database)?;''',
+              "domain delete outcome types and wrapper",
+          )
+          domain = replace_once(
+              domain,
+              '''    if node_id.is_none() {
+                      tx.rollback().await.ok();
+                      return Err(NodeWriteError::NotFound);
+                  }
+
+                  // The database BEFORE DELETE trigger owns the history decision.''',
+              '''    if node_id.is_none() {
+                      tx.rollback().await.ok();
+                      return Err(NodeWriteError::NotFound);
+                  }
+
+                  let conversation_id: String = sqlx::query_scalar(
+                      "SELECT id::text FROM domain_conversations WHERE node_id = $1 FOR UPDATE",
+                  )
+                  .bind(id)
+                  .fetch_one(&mut *tx)
+                  .await
+                  .map_err(NodeWriteError::Database)?;
+                  let conversation_has_messages: bool = sqlx::query_scalar(
+                      "SELECT EXISTS (SELECT 1 FROM domain_messages WHERE conversation_id = $1::uuid)",
+                  )
+                  .bind(&conversation_id)
+                  .fetch_one(&mut *tx)
+                  .await
+                  .map_err(NodeWriteError::Database)?;
+
+                  // The database BEFORE DELETE trigger owns the history decision.''',
+              "lock conversation effect before node delete",
+          )
+          domain = replace_once(
+              domain,
+              '''    tx.commit().await.map_err(NodeWriteError::Database)?;
+                  Ok(edge_ids)
+              }''',
+              '''    tx.commit().await.map_err(NodeWriteError::Database)?;
+                  Ok(NodeDeleteOutcome {
+                      removed_edge_ids: edge_ids,
+                      conversation_effect: if conversation_has_messages {
+                          NodeConversationDeleteEffect::Archived { conversation_id }
+                      } else {
+                          NodeConversationDeleteEffect::DeletedEmpty
+                      },
+                  })
+              }''',
+              "return structured database delete outcome",
+          )
+          domain_path.write_text(domain, encoding="utf-8")
+
+          nodes_path = Path("apps/api/src/routes/nodes.rs")
+          nodes = nodes_path.read_text(encoding="utf-8")
+          nodes = replace_once(
+              nodes,
+              '''    delete_node_with_edges_in_postgres, insert_domain_node_with_creator_limit,
+                  patch_node_in_postgres, replace_node_in_postgres, CreateOperationKey, CreateWriteOutcome,
+                  NodeCreateError, NodePatchInput, NodeWriteError,''',
+              '''    delete_node_with_edges_in_postgres, delete_node_with_effects_in_postgres,
+                  insert_domain_node_with_creator_limit, patch_node_in_postgres, replace_node_in_postgres,
+                  CreateOperationKey, CreateWriteOutcome, NodeConversationDeleteEffect, NodeCreateError,
+                  NodePatchInput, NodeWriteError,''',
+              "import structured delete helper",
+          )
+
+          response_marker = '''fn map_postgres_node_delete_error(error: NodeWriteError, id: &str) -> NodeMutationError {'''
+          response_types = '''#[derive(Debug, Serialize)]
+              #[serde(tag = "effect", rename_all = "snake_case")]
+              pub enum NodeDeleteConversationEffect {
+                  NotApplicable,
+                  DeletedEmpty,
+                  Archived {
+                      archive_id: String,
+                      archive_url: String,
+                  },
+              }
+
+              #[derive(Debug, Serialize)]
+              pub struct NodeDeleteResponse {
+                  pub node_id: String,
+                  pub node_state: &'static str,
+                  pub removed_edge_ids: Vec<String>,
+                  pub conversation: NodeDeleteConversationEffect,
+              }
+
+              fn map_postgres_node_delete_error(error: NodeWriteError, id: &str) -> NodeMutationError {'''
+          nodes = replace_once(nodes, response_marker, response_types, "node delete response types")
+          nodes = replace_once(
+              nodes,
+              ''') -> Result<StatusCode, NodeMutationError> {''',
+              ''') -> Result<Json<NodeDeleteResponse>, NodeMutationError> {''',
+              "node delete response signature",
+          )
+
+          old_match = '''    let persisted_edge_ids = match state.config.domain_node_write_source {
+                  DomainNodeWriteSource::Jsonl => {
+                      // Keep the edge lock until the node file has also been replaced. Otherwise a
+                      // concurrent edge create could attach a new edge between cascade cleanup and
+                      // node deletion, leaving an orphan behind.
+                      let _edge_persist_guard = edge_create_persist_lock().lock().await;
+                      let outcome = delete_node_and_edges_jsonl(
+                          &id,
+                          EdgeEndpointCollisionEvidence {
+                              account_exists: account_collision_exists,
+                              role_exists: false,
+                          },
+                      )
+                      .await
+                      .map_err(|error| {
+                          tracing::error!(%error, node_id = %id, "failed to delete node and edges from JSONL");
+                          if error.kind() == std::io::ErrorKind::InvalidData {
+                              NodeMutationError::Message(
+                                  StatusCode::CONFLICT,
+                                  "node deletion blocked by ambiguous edge endpoint".to_string(),
+                              )
+                          } else {
+                              NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                          }
+                      })?;
+                      if !outcome.node_deleted {
+                          return Err(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+                      }
+                      outcome.removed_edge_ids
+                  }
+                  DomainNodeWriteSource::Postgres => {
+                      let pool = state
+                          .db_pool
+                          .as_ref()
+                          .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+                      delete_node_with_edges_in_postgres(pool, &id)
+                          .await
+                          .map_err(|error| map_postgres_node_delete_error(error, &id))?
+                  }
+              };'''
+          new_match = '''    let (mut persisted_edge_ids, conversation_effect) =
+                  match state.config.domain_node_write_source {
+                      DomainNodeWriteSource::Jsonl => {
+                          // Keep the edge lock until the node file has also been replaced. Otherwise a
+                          // concurrent edge create could attach a new edge between cascade cleanup and
+                          // node deletion, leaving an orphan behind.
+                          let _edge_persist_guard = edge_create_persist_lock().lock().await;
+                          let outcome = delete_node_and_edges_jsonl(
+                              &id,
+                              EdgeEndpointCollisionEvidence {
+                                  account_exists: account_collision_exists,
+                                  role_exists: false,
+                              },
+                          )
+                          .await
+                          .map_err(|error| {
+                              tracing::error!(%error, node_id = %id, "failed to delete node and edges from JSONL");
+                              if error.kind() == std::io::ErrorKind::InvalidData {
+                                  NodeMutationError::Message(
+                                      StatusCode::CONFLICT,
+                                      "node deletion blocked by ambiguous edge endpoint".to_string(),
+                                  )
+                              } else {
+                                  NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                              }
+                          })?;
+                          if !outcome.node_deleted {
+                              return Err(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+                          }
+                          (
+                              outcome.removed_edge_ids,
+                              NodeDeleteConversationEffect::NotApplicable,
+                          )
+                      }
+                      DomainNodeWriteSource::Postgres => {
+                          let pool = state
+                              .db_pool
+                              .as_ref()
+                              .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+                          let outcome = delete_node_with_effects_in_postgres(pool, &id)
+                              .await
+                              .map_err(|error| map_postgres_node_delete_error(error, &id))?;
+                          let effect = match outcome.conversation_effect {
+                              NodeConversationDeleteEffect::DeletedEmpty => {
+                                  NodeDeleteConversationEffect::DeletedEmpty
+                              }
+                              NodeConversationDeleteEffect::Archived { conversation_id } => {
+                                  NodeDeleteConversationEffect::Archived {
+                                      archive_url: format!("/api/conversations/{conversation_id}"),
+                                      archive_id: conversation_id,
+                                  }
+                              }
+                          };
+                          (outcome.removed_edge_ids, effect)
+                      }
+                  };
+              persisted_edge_ids.sort();'''
+          nodes = replace_once(nodes, old_match, new_match, "route maps structured delete outcome")
+          nodes = replace_once(
+              nodes,
+              '''    tracing::info!(event = "node.deleted.collective", node_id = %id, removed_edges = persisted_edge_ids.len(), "Node collectively deleted");
+                  Ok(StatusCode::NO_CONTENT)''',
+              '''    tracing::info!(event = "node.deleted.collective", node_id = %id, removed_edges = persisted_edge_ids.len(), "Node collectively deleted");
+                  Ok(Json(NodeDeleteResponse {
+                      node_id: id,
+                      node_state: "removed",
+                      removed_edge_ids: persisted_edge_ids,
+                      conversation: conversation_effect,
+                  }))''',
+              "return structured node delete response",
+          )
+          nodes_path.write_text(nodes, encoding="utf-8")
+
+          api_test_path = Path("apps/api/tests/api_collective_mutations.rs")
+          api_test = api_test_path.read_text(encoding="utf-8")
+          api_test = replace_once(
+              api_test,
+              '''    let response = app.clone().oneshot(delete_node).await?;
+                  assert_eq!(response.status(), StatusCode::NO_CONTENT);
+                  assert!(state.nodes.read().await.get("n1").is_none());''',
+              '''    let response = app.clone().oneshot(delete_node).await?;
+                  assert_eq!(response.status(), StatusCode::OK);
+                  let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+                  let effect: serde_json::Value = serde_json::from_slice(&bytes)?;
+                  assert_eq!(effect["node_id"], "n1");
+                  assert_eq!(effect["node_state"], "removed");
+                  assert_eq!(effect["removed_edge_ids"], serde_json::json!(["e1"]));
+                  assert_eq!(effect["conversation"]["effect"], "not_applicable");
+                  assert!(state.nodes.read().await.get("n1").is_none());''',
+              "JSONL node delete effect test",
+          )
+          api_test_path.write_text(api_test, encoding="utf-8")
+          PY
+
+      - name: Format, inspect and commit backend patch
+        shell: bash
+        run: |
+          cargo fmt --manifest-path apps/api/Cargo.toml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/api/src/domain_db.rs apps/api/src/routes/nodes.rs apps/api/tests/api_collective_mutations.rs
+          git diff --cached --check
+          git diff --cached --stat
+          git commit -m "feat(nodes): return canonical removal effects"
+          git push origin HEAD:${GITHUB_REF_NAME}
