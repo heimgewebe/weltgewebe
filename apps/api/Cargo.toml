@@ -42,6 +42,9 @@ url = "2"
 serde_jcs = "0.1"
 unicode-normalization = "0.1"
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [features]
 # Enables test-helper APIs (e.g. token introspection) used by integration tests.
 # Must never be enabled in production builds.
