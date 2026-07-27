@@ -229,6 +229,13 @@ def trigger_block(path: Path) -> str:
     return text[start : min(candidates)]
 
 
+def job_block(path: Path, job: str, next_job: str) -> str:
+    text = path.read_text(encoding="utf-8")
+    start = text.index(f"\n  {job}:\n")
+    end = text.index(f"\n  {next_job}:\n", start)
+    return text[start:end]
+
+
 def workflow_steps(path: Path) -> list[dict[str, str]]:
     lines = path.read_text(encoding="utf-8").splitlines()
     steps: list[dict[str, str]] = []
@@ -369,6 +376,14 @@ class JustfileContractTests(unittest.TestCase):
                 for step in web_steps
             )
         )
+        ci_web_e2e = job_block(CI_WORKFLOW, "web-e2e", "web-runtime-proof")
+        install = ci_web_e2e.index(
+            "- name: Install dependencies\n        run: pnpm install --frozen-lockfile"
+        )
+        prepare = ci_web_e2e.index("- name: SvelteKit prepare\n        run: pnpm sync")
+        browser = ci_web_e2e.index("- name: Run Playwright tests\n        env:")
+        self.assertLess(install, prepare)
+        self.assertLess(prepare, browser)
 
     def test_local_package_scripts_do_not_reach_playwright(self) -> None:
         scripts = self.web_scripts()
