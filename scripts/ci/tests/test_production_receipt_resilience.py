@@ -15,8 +15,8 @@ from scripts.ci.tests.test_deploy_exact_commit_integration import (
 class ProductionReceiptResilienceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.fixture = DeployExactCommitIntegrationTests(methodName="runTest")
-        self.fixture.setUp()
         self.addCleanup(self.fixture.doCleanups)
+        self.fixture.setUp()
 
     def test_public_observation_repairs_safe_malformed_deployment_receipt(self) -> None:
         fixture = self.fixture
