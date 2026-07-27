@@ -27,7 +27,15 @@
   let applicationSection: HTMLElement | null = null;
   let pendingApplicationFocus: ApplicationFocusRequest | null = null;
 
+  let detailProposalId: string | null = null;
+  let requestedDetailProposalId: string | null = null;
+  let detailRebindVersion = 0;
+
   $: selectedProposalId = $page.url.searchParams.get("id");
+  $: if (selectedProposalId !== requestedDetailProposalId) {
+    requestedDetailProposalId = selectedProposalId;
+    void rebindProposalDetail(selectedProposalId);
+  }
   $: statusFilter = $page.url.searchParams.get("status");
   $: eventFilter = $page.url.searchParams.get("ereignis");
   $: visibleProposals =
@@ -157,6 +165,15 @@
     }
   }
 
+  async function rebindProposalDetail(
+    proposalId: string | null,
+  ): Promise<void> {
+    const version = ++detailRebindVersion;
+    detailProposalId = null;
+    await tick();
+    if (version === detailRebindVersion) detailProposalId = proposalId;
+  }
+
   async function focusPendingApplicationSection(): Promise<boolean> {
     const request = pendingApplicationFocus;
     if (!request) return false;
@@ -205,12 +222,12 @@
 </svelte:head>
 
 {#if selectedProposalId}
-  {#key selectedProposalId}
+  {#if detailProposalId}
     <ProposalDetail
-      proposalId={selectedProposalId}
+      proposalId={detailProposalId}
       on:messagecountchange={updateProposalMessageCount}
     />
-  {/key}
+  {/if}
 {:else}
   <main class="wg-page wg-page--paper" data-testid="applications-page">
     <div class="wg-page__shell">
