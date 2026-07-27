@@ -57,4 +57,4 @@ make platform-render
 make platform-kind-proof
 ```
 
-Der Workflow `kubernetes-platform` prüft Pull Requests im Direct-Modus gegen den exakt ausgecheckten Merge-Zustand. Nach einem Push auf `main` und bei manuellen Läufen prüft er zusätzlich die vollständige Flux-/GitOps-Kette gegen einen eindeutig benannten, kurzlebigen kind-Cluster.
+Der unprivilegierte Workflow `kubernetes-platform` prüft Pull Requests gegen den exakt ausgecheckten Merge-Zustand, ohne Zugriff auf private OCI-Pakete. Der getrennte Workflow `kubernetes-platform-proof` läuft nach passenden Pushes auf `main` oder bei einem ausdrücklich an den vollständigen aktuellen Main-Commit gebundenen Handstart. Er prüft den privaten OCI-Mirror sowie die vollständige Flux-/GitOps- und HA-Wiederherstellungskette gegen eindeutig benannte, kurzlebige kind-Cluster. Wiederverwendete Beweise sind an Commit, Eingabemanifest, Werkzeug-Lock, OCI-Lock, Image- und Knotenbindungen sowie Registry-Sperren gebunden.

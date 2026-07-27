@@ -24,7 +24,9 @@ SUITE_INPUTS = {
         "toolchain.versions.yml",
         "apps/api/",
         "apps/web/",
+        "configs/",
         "scripts/dev/",
+        "scripts/ops/",
         "policies/",
         "infra/compose/compose.prod.yml",
         "platform/",
@@ -44,7 +46,9 @@ SUITE_INPUTS = {
         "toolchain.versions.yml",
         "apps/api/",
         "apps/web/",
+        "configs/",
         "scripts/dev/",
+        "scripts/ops/",
         "policies/",
         "infra/compose/compose.prod.yml",
         "platform/",
@@ -203,7 +207,7 @@ def _validate_receipt_header(
     return receipt
 
 
-def _containerd_reference(reference: str) -> str:
+def _normalize_oci_reference(reference: str) -> str:
     name, separator, digest = reference.partition("@")
     first = name.split("/", 1)[0]
     if "/" not in name:
@@ -246,6 +250,113 @@ def _validate_registry_blockades(
                     f"reusable proof {label} registry IPv6 blockade did not pass for {registry}"
                 )
     return observed_nodes
+
+
+def _validate_cached_cluster_image(
+    observed: Any,
+    spec: dict[str, Any],
+    *,
+    expected_cluster: str,
+    host_image_id: str,
+    label: str,
+    name: str,
+) -> set[str]:
+    canonical = spec.get("canonical")
+    local_ref = spec.get("local_ref")
+    locked_digest = spec.get("digest")
+    if not all(isinstance(value, str) for value in (canonical, local_ref, locked_digest)):
+        raise IdentityError(f"current OCI mirror image is invalid: {name}")
+    expected_runtime = _normalize_oci_reference(local_ref)
+    if not isinstance(observed, dict):
+        raise IdentityError(f"reusable proof {label} OCI image is invalid: {name}")
+    image_id = observed.get("cri_image_id")
+    platform_digest = observed.get("platform_target_digest")
+    if (
+        observed.get("canonical") != canonical
+        or observed.get("local_ref") != local_ref
+        or observed.get("digest_ref") != f"{local_ref}@{locked_digest}"
+        or observed.get("runtime_ref") != expected_runtime
+        or observed.get("locked_index_digest") != locked_digest
+        or observed.get("image_id") != image_id
+        or image_id != host_image_id
+        or not isinstance(image_id, str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", image_id) is None
+        or not isinstance(platform_digest, str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", platform_digest) is None
+    ):
+        raise IdentityError(
+            f"reusable proof {label} OCI image binding is invalid: {name}"
+        )
+    nodes = observed.get("nodes")
+    if not isinstance(nodes, list) or not nodes:
+        raise IdentityError(
+            f"reusable proof {label} OCI node image bindings are missing: {name}"
+        )
+    node_names: set[str] = set()
+    canonical_name = _normalize_oci_reference(canonical).rsplit("@", 1)[0]
+    for node in nodes:
+        if not isinstance(node, dict):
+            raise IdentityError(
+                f"reusable proof {label} OCI node binding is invalid: {name}"
+            )
+        node_name = node.get("node")
+        if not isinstance(node_name, str) or not node_name or node_name in node_names:
+            raise IdentityError(
+                f"reusable proof {label} OCI node inventory is invalid: {name}"
+            )
+        if not node_name.startswith(f"{expected_cluster}-"):
+            raise IdentityError(
+                f"reusable proof {label} OCI node cluster binding drifted: {name}"
+            )
+        node_names.add(node_name)
+        repo_tags = node.get("repo_tags")
+        repo_digests = node.get("repo_digests")
+        selected_repo_digest = node.get("selected_repo_digest")
+        containerd_target_digest = node.get("containerd_target_digest")
+        evidence_kind = node.get("platform_evidence_kind")
+        allowed_repo_digests = {
+            f"{expected_runtime}@{platform_digest}",
+            f"{canonical_name}@{platform_digest}",
+        }
+        import_digest = (
+            isinstance(selected_repo_digest, str)
+            and re.fullmatch(
+                r"docker\.io/library/import-[0-9]{4}-[0-9]{2}-[0-9]{2}@"
+                r"sha256:[0-9a-f]{64}",
+                selected_repo_digest,
+            )
+            is not None
+            and selected_repo_digest.endswith(f"@{platform_digest}")
+        )
+        repo_digest_evidence = (
+            evidence_kind == "cri_repo_digest"
+            and isinstance(repo_digests, list)
+            and all(isinstance(item, str) for item in repo_digests)
+            and selected_repo_digest in repo_digests
+            and (selected_repo_digest in allowed_repo_digests or import_digest)
+            and containerd_target_digest is None
+        )
+        containerd_evidence = (
+            evidence_kind == "containerd_target_digest"
+            and repo_digests == []
+            and selected_repo_digest is None
+            and containerd_target_digest == platform_digest
+        )
+        if (
+            node.get("cri_image_status_verified") is not True
+            or node.get("runtime_ref") != expected_runtime
+            or node.get("image_id") != image_id
+            or node.get("locked_index_digest") != locked_digest
+            or node.get("platform_target_digest") != platform_digest
+            or not isinstance(repo_tags, list)
+            or not all(isinstance(item, str) for item in repo_tags)
+            or expected_runtime not in repo_tags
+            or not (repo_digest_evidence or containerd_evidence)
+        ):
+            raise IdentityError(
+                f"reusable proof {label} OCI node binding drifted: {name}"
+            )
+    return node_names
 
 
 def _validate_controlled_oci_proof(
@@ -293,7 +404,6 @@ def _validate_controlled_oci_proof(
         raise IdentityError("reusable proof host OCI image inventory drifted")
     if host.get("selected_count") != len(expected_host) or host.get("failures") != {}:
         raise IdentityError("reusable proof host OCI count or failure contract drifted")
-    host_image_ids: dict[str, str] = {}
     for name, observed in host_images.items():
         if (
             not isinstance(observed, dict)
@@ -302,17 +412,23 @@ def _validate_controlled_oci_proof(
             or not re.fullmatch(r"sha256:[0-9a-f]{64}", observed["image_id"])
         ):
             raise IdentityError(f"reusable proof host OCI image binding is invalid: {name}")
-        host_image_ids[name] = observed["image_id"]
 
-    cluster_fields = (
-        (("cluster", proof.get("cluster")),)
-        if suite == "kind-gitops"
-        else (
-            ("primary_cluster", proof.get("primary_cluster")),
-            ("restore_cluster", proof.get("restore_cluster")),
+    if suite == "kind-gitops":
+        cluster_fields = (("cluster", proof.get("cluster")),)
+    else:
+        primary_cluster = proof.get("primary_cluster")
+        restore_cluster = proof.get("restore_cluster")
+        if not isinstance(primary_cluster, str) or not primary_cluster:
+            raise IdentityError("reusable proof primary_cluster binding is missing")
+        if not isinstance(restore_cluster, str) or not restore_cluster:
+            raise IdentityError("reusable proof restore_cluster binding is missing")
+        if primary_cluster == restore_cluster:
+            raise IdentityError("reusable proof HA cluster bindings must be distinct")
+        cluster_fields = (
+            ("primary_cluster", primary_cluster),
+            ("restore_cluster", restore_cluster),
         )
-    )
-    platform_digests: dict[str, str] = {}
+    cluster_node_inventories: dict[str, set[str]] = {}
     for field, expected_cluster_name in cluster_fields:
         receipt = _validate_receipt_header(
             controlled.get(field), label=field, lock_sha256=lock_sha256
@@ -328,67 +444,31 @@ def _validate_controlled_oci_proof(
             raise IdentityError(f"reusable proof {field} OCI image count drifted")
         image_nodes: set[str] | None = None
         for name, observed in cluster_images.items():
-            spec = images[name]
-            host_image_id = host_image_ids[name]
-            expected_runtime = _containerd_reference(str(spec.get("local_ref", "")))
-            platform_digest = (
-                observed.get("platform_target_digest")
-                if isinstance(observed, dict)
-                else None
+            host_image_id = host_images[name]["image_id"]
+            current_nodes = _validate_cached_cluster_image(
+                observed,
+                images[name],
+                expected_cluster=expected_cluster_name,
+                host_image_id=host_image_id,
+                label=field,
+                name=name,
             )
-            if (
-                not isinstance(observed, dict)
-                or observed.get("canonical") != spec.get("canonical")
-                or observed.get("local_ref") != spec.get("local_ref")
-                or observed.get("runtime_ref") != expected_runtime
-                or observed.get("locked_index_digest") != spec.get("digest")
-                or observed.get("cri_image_id") != host_image_id
-                or observed.get("image_id") != host_image_id
-                or not isinstance(platform_digest, str)
-                or not re.fullmatch(r"sha256:[0-9a-f]{64}", platform_digest)
-            ):
-                raise IdentityError(
-                    f"reusable proof {field} OCI image binding is invalid: {name}"
-                )
-            prior_platform_digest = platform_digests.setdefault(name, platform_digest)
-            if prior_platform_digest != platform_digest:
-                raise IdentityError(
-                    f"reusable proof cluster OCI platform digest drifted: {name}"
-                )
-            nodes = observed.get("nodes")
-            if not isinstance(nodes, list) or not nodes:
-                raise IdentityError(
-                    f"reusable proof {field} OCI node image bindings are missing: {name}"
-                )
-            current_nodes: set[str] = set()
-            for node_binding in nodes:
-                node = node_binding.get("node") if isinstance(node_binding, dict) else None
-                if not isinstance(node, str) or not node or node in current_nodes:
-                    raise IdentityError(
-                        f"reusable proof {field} OCI node inventory is invalid: {name}"
-                    )
-                current_nodes.add(node)
-                if (
-                    node_binding.get("cri_image_status_verified") is not True
-                    or node_binding.get("runtime_ref") != expected_runtime
-                    or node_binding.get("image_id") != host_image_id
-                    or node_binding.get("locked_index_digest") != spec.get("digest")
-                    or node_binding.get("platform_target_digest") != platform_digest
-                ):
-                    raise IdentityError(
-                        f"reusable proof {field} OCI node image binding drifted: {name}"
-                    )
             if image_nodes is None:
                 image_nodes = current_nodes
-            elif image_nodes != current_nodes:
+            elif current_nodes != image_nodes:
                 raise IdentityError(
                     f"reusable proof {field} OCI image node inventories disagree"
                 )
         blockade_nodes = _validate_registry_blockades(receipt, label=field)
         if image_nodes != blockade_nodes:
             raise IdentityError(
-                f"reusable proof {field} OCI image and blockade node inventories disagree"
+                f"reusable proof {field} OCI image and blockade nodes disagree"
             )
+        if image_nodes is None:
+            raise IdentityError(f"reusable proof {field} OCI node inventory is missing")
+        if any(image_nodes.intersection(nodes) for nodes in cluster_node_inventories.values()):
+            raise IdentityError("reusable proof HA cluster node inventories overlap")
+        cluster_node_inventories[field] = image_nodes
 
 
 def record(identity_path: Path, proof_receipt: Path, output_dir: Path) -> dict[str, Any]:
