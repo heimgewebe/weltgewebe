@@ -106,9 +106,7 @@ class KubernetesHaContractTests(unittest.TestCase):
             )
         )
         container = job["spec"]["template"]["spec"]["containers"][0]
-        database = next(
-            item for item in container["env"] if item["name"] == "DATABASE_URL"
-        )
+        database = next(item for item in container["env"] if item["name"] == "DATABASE_URL")
         self.assertEqual(
             database["valueFrom"].get("secretKeyRef"),
             {"name": "weltgewebe-ha-runtime", "key": "database-url"},
@@ -140,7 +138,9 @@ class KubernetesHaContractTests(unittest.TestCase):
                 {
                     "name": "barman-cloud.cloudnative-pg.io",
                     "isWALArchiver": True,
-                    "parameters": {"barmanObjectName": "weltgewebe-ha-backup"},
+                    "parameters": {
+                        "barmanObjectName": "weltgewebe-ha-backup"
+                    },
                 }
             ],
         )
@@ -159,7 +159,9 @@ class KubernetesHaContractTests(unittest.TestCase):
                 {
                     "name": "barman-cloud.cloudnative-pg.io",
                     "isWALArchiver": True,
-                    "parameters": {"barmanObjectName": "weltgewebe-ha-backup"},
+                    "parameters": {
+                        "barmanObjectName": "weltgewebe-ha-backup"
+                    },
                 }
             ],
         )
@@ -198,9 +200,7 @@ class KubernetesHaContractTests(unittest.TestCase):
         proof_workflow = yaml.safe_load(proof_text)
         self.assertEqual(set(pr_workflow["on"]), {"pull_request"})
         self.assertEqual(set(proof_workflow["on"]), {"push", "workflow_dispatch"})
-        expected_head = proof_workflow["on"]["workflow_dispatch"]["inputs"][
-            "expected_head"
-        ]
+        expected_head = proof_workflow["on"]["workflow_dispatch"]["inputs"]["expected_head"]
         self.assertIs(expected_head["required"], True)
         self.assertEqual(expected_head["type"], "string")
         self.assertNotIn("packages: read", pr_text)
@@ -334,13 +334,11 @@ class KubernetesHaContractTests(unittest.TestCase):
             "coredns-b": {"node": "node-b", "zone": "zone-b"},
             "coredns-c": {"node": "node-c", "zone": "zone-c"},
         }
-        with (
-            mock.patch.object(self.ha.ref, "run") as run,
-            mock.patch.object(self.ha.ref, "wait_rollout") as wait_rollout,
-            mock.patch.object(
-                self.ha, "pod_topology", return_value=topology
-            ) as pod_topology,
-        ):
+        with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
+            self.ha.ref, "wait_rollout"
+        ) as wait_rollout, mock.patch.object(
+            self.ha, "pod_topology", return_value=topology
+        ) as pod_topology:
             observed = self.ha.configure_cluster_dns_ha("kubectl")
 
         self.assertEqual(observed, topology)
@@ -373,7 +371,9 @@ class KubernetesHaContractTests(unittest.TestCase):
             required,
             [
                 {
-                    "labelSelector": {"matchLabels": {"k8s-app": "kube-dns"}},
+                    "labelSelector": {
+                        "matchLabels": {"k8s-app": "kube-dns"}
+                    },
                     "topologyKey": "topology.kubernetes.io/zone",
                 }
             ],
@@ -391,17 +391,13 @@ class KubernetesHaContractTests(unittest.TestCase):
             "coredns-b": {"node": "node-a", "zone": "zone-a"},
             "coredns-c": {"node": "node-b", "zone": "zone-b"},
         }
-        with (
-            mock.patch.object(self.ha.ref, "run"),
-            mock.patch.object(self.ha.ref, "wait_rollout"),
-            mock.patch.object(self.ha, "pod_topology", return_value=topology),
-        ):
+        with mock.patch.object(self.ha.ref, "run"), mock.patch.object(
+            self.ha.ref, "wait_rollout"
+        ), mock.patch.object(self.ha, "pod_topology", return_value=topology):
             with self.assertRaisesRegex(self.ha.ref.ProofError, "not spread"):
                 self.ha.configure_cluster_dns_ha("kubectl")
 
-    def test_external_object_store_missing_volume_is_absent_case_insensitively(
-        self,
-    ) -> None:
+    def test_external_object_store_missing_volume_is_absent_case_insensitively(self) -> None:
         result = mock.Mock(
             returncode=1,
             stdout="",
@@ -412,7 +408,9 @@ class KubernetesHaContractTests(unittest.TestCase):
         )
         with mock.patch.object(self.ha.subprocess, "run", return_value=result):
             self.assertIsNone(
-                self.ha._object_store_labels("volume", "proof-object-store-data")
+                self.ha._object_store_labels(
+                    "volume", "proof-object-store-data"
+                )
             )
 
     def test_strict_external_object_store_uses_verified_local_mirror_ref(self) -> None:
@@ -425,10 +423,9 @@ class KubernetesHaContractTests(unittest.TestCase):
                 }
             }
         }
-        with (
-            mock.patch.object(self.ha.ref, "controlled_oci_strict", return_value=True),
-            mock.patch.object(self.ha.ref, "_oci_mirror_lock", return_value=lock),
-        ):
+        with mock.patch.object(
+            self.ha.ref, "controlled_oci_strict", return_value=True
+        ), mock.patch.object(self.ha.ref, "_oci_mirror_lock", return_value=lock):
             self.assertEqual(self.ha.external_object_store_runtime_image(), local_ref)
 
     def test_strict_external_object_store_rejects_mirror_binding_drift(self) -> None:
@@ -440,23 +437,19 @@ class KubernetesHaContractTests(unittest.TestCase):
                 }
             }
         }
-        with (
-            mock.patch.object(self.ha.ref, "controlled_oci_strict", return_value=True),
-            mock.patch.object(self.ha.ref, "_oci_mirror_lock", return_value=lock),
-        ):
-            with self.assertRaisesRegex(
-                self.ha.ref.ProofError, "canonical reference drift"
-            ):
+        with mock.patch.object(
+            self.ha.ref, "controlled_oci_strict", return_value=True
+        ), mock.patch.object(self.ha.ref, "_oci_mirror_lock", return_value=lock):
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "canonical reference drift"):
                 self.ha.external_object_store_runtime_image()
 
     def test_external_object_store_cleanup_is_ownership_bound(self) -> None:
         foreign = self.ha.external_object_store_binding(
             "proof", "a" * 40, "owner-foreign"
         )
-        with (
-            mock.patch.object(self.ha, "_object_store_labels", return_value=foreign),
-            mock.patch.object(self.ha.ref, "run") as delete,
-        ):
+        with mock.patch.object(
+            self.ha, "_object_store_labels", return_value=foreign
+        ), mock.patch.object(self.ha.ref, "run") as delete:
             with self.assertRaisesRegex(self.ha.ref.ProofError, "foreign"):
                 self.ha.delete_external_object_store(
                     "proof", "a" * 40, "owner-expected"
@@ -464,25 +457,18 @@ class KubernetesHaContractTests(unittest.TestCase):
         delete.assert_not_called()
 
     def test_external_object_store_start_cleans_partial_owned_resources(self) -> None:
-        with (
-            mock.patch.object(
-                self.ha, "_object_store_labels", side_effect=[None, None]
-            ),
-            mock.patch.object(self.ha.ref, "run"),
-            mock.patch.object(
-                self.ha,
-                "run_with_environment",
-                side_effect=self.ha.ref.ProofError("container start failed"),
-            ),
-            mock.patch.object(
-                self.ha,
-                "reconcile_external_object_store",
-                return_value={"resources": {}, "errors": {}},
-            ) as cleanup,
-        ):
-            with self.assertRaisesRegex(
-                self.ha.ref.ProofError, "container start failed"
-            ):
+        with mock.patch.object(
+            self.ha, "_object_store_labels", side_effect=[None, None]
+        ), mock.patch.object(self.ha.ref, "run"), mock.patch.object(
+            self.ha,
+            "run_with_environment",
+            side_effect=self.ha.ref.ProofError("container start failed"),
+        ), mock.patch.object(
+            self.ha,
+            "reconcile_external_object_store",
+            return_value={"resources": {}, "errors": {}},
+        ) as cleanup:
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "container start failed"):
                 self.ha.start_external_object_store(
                     "proof", "a" * 40, "owner-proof", "secret"
                 )
@@ -492,15 +478,12 @@ class KubernetesHaContractTests(unittest.TestCase):
         reservation_context = mock.MagicMock()
         reservation_context.__enter__.return_value = None
         reservation_context.__exit__.return_value = False
-        with (
-            mock.patch.object(
-                self.ha.ref,
-                "cluster_creation_reservation",
-                return_value=reservation_context,
-            ) as reservation,
-            mock.patch.object(
-                self.ha.ref, "run", side_effect=self.ha.ref.ProofError("kind failed")
-            ),
+        with mock.patch.object(
+            self.ha.ref,
+            "cluster_creation_reservation",
+            return_value=reservation_context,
+        ) as reservation, mock.patch.object(
+            self.ha.ref, "run", side_effect=self.ha.ref.ProofError("kind failed")
         ):
             with self.assertRaisesRegex(self.ha.ref.ProofError, "kind failed"):
                 self.ha.create_kind_cluster(
@@ -511,27 +494,26 @@ class KubernetesHaContractTests(unittest.TestCase):
                     "b" * 40,
                     "owner-proof",
                 )
-        reservation.assert_called_once_with("kind", "proof", "b" * 40, "owner-proof")
+        reservation.assert_called_once_with(
+            "kind", "proof", "b" * 40, "owner-proof"
+        )
 
     def test_ha_cleanup_continues_after_one_cluster_failure(self) -> None:
-        with (
-            mock.patch.object(
-                self.ha.ref,
-                "delete_owned_cluster_if_present",
-                side_effect=[self.ha.ref.ProofError("restore marker unreadable"), True],
-            ) as delete_cluster,
-            mock.patch.object(
-                self.ha,
-                "reconcile_external_object_store",
-                return_value={
-                    "resources": {
-                        "object_store_container": "deleted",
-                        "object_store_volume": "absent",
-                    },
-                    "errors": {},
+        with mock.patch.object(
+            self.ha.ref,
+            "delete_owned_cluster_if_present",
+            side_effect=[self.ha.ref.ProofError("restore marker unreadable"), True],
+        ) as delete_cluster, mock.patch.object(
+            self.ha,
+            "reconcile_external_object_store",
+            return_value={
+                "resources": {
+                    "object_store_container": "deleted",
+                    "object_store_volume": "absent",
                 },
-            ) as object_store,
-        ):
+                "errors": {},
+            },
+        ) as object_store:
             result = self.ha.reconcile_owned_ha_resources(
                 "kind", "proof", "a" * 40, "owner-proof"
             )
@@ -557,21 +539,18 @@ class KubernetesHaContractTests(unittest.TestCase):
         )
 
     def test_ha_cleanup_reports_absent_when_nothing_exists(self) -> None:
-        with (
-            mock.patch.object(
-                self.ha.ref, "delete_owned_cluster_if_present", return_value=False
-            ),
-            mock.patch.object(
-                self.ha,
-                "reconcile_external_object_store",
-                return_value={
-                    "resources": {
-                        "object_store_container": "absent",
-                        "object_store_volume": "absent",
-                    },
-                    "errors": {},
+        with mock.patch.object(
+            self.ha.ref, "delete_owned_cluster_if_present", return_value=False
+        ), mock.patch.object(
+            self.ha,
+            "reconcile_external_object_store",
+            return_value={
+                "resources": {
+                    "object_store_container": "absent",
+                    "object_store_volume": "absent",
                 },
-            ),
+                "errors": {},
+            },
         ):
             result = self.ha.reconcile_owned_ha_resources(
                 "kind", "proof", "a" * 40, "owner-proof"
@@ -627,15 +606,11 @@ class KubernetesHaContractTests(unittest.TestCase):
             ({"status": "invalid"}, "got None"),
         )
         for result, expected_state in cases:
-            with (
-                self.subTest(result=result),
-                mock.patch.object(
-                    self.ha, "reconcile_owned_ha_resources", return_value=result
-                ),
+            with self.subTest(result=result), mock.patch.object(
+                self.ha, "reconcile_owned_ha_resources", return_value=result
             ):
                 with self.assertRaisesRegex(
-                    self.ha.ref.ProofError,
-                    expected_state,
+                    self.ha.ref.ProofError, expected_state
                 ):
                     self.ha.retire_primary_cluster_before_restore(
                         "kind", "proof", "a" * 40, "owner-proof"
@@ -653,10 +628,9 @@ class KubernetesHaContractTests(unittest.TestCase):
         create = mock.Mock()
         calls.attach_mock(retire, "retire")
         calls.attach_mock(create, "create")
-        with (
-            mock.patch.object(self.ha, "retire_primary_cluster_before_restore", retire),
-            mock.patch.object(self.ha, "create_kind_cluster", create),
-        ):
+        with mock.patch.object(
+            self.ha, "retire_primary_cluster_before_restore", retire
+        ), mock.patch.object(self.ha, "create_kind_cluster", create):
             result = self.ha.create_blank_restore_cluster(
                 "kind",
                 "proof",
@@ -688,12 +662,9 @@ class KubernetesHaContractTests(unittest.TestCase):
 
     def test_blank_restore_keep_mode_skips_primary_retirement(self) -> None:
         lifecycle = self.ha.ClusterLifecycle(primary_created=True)
-        with (
-            mock.patch.object(
-                self.ha, "retire_primary_cluster_before_restore"
-            ) as retire,
-            mock.patch.object(self.ha, "create_kind_cluster") as create,
-        ):
+        with mock.patch.object(
+            self.ha, "retire_primary_cluster_before_restore"
+        ) as retire, mock.patch.object(self.ha, "create_kind_cluster") as create:
             result = self.ha.create_blank_restore_cluster(
                 "kind",
                 "proof",
@@ -720,17 +691,14 @@ class KubernetesHaContractTests(unittest.TestCase):
 
     def test_blank_restore_creation_failure_preserves_cleanup_truth(self) -> None:
         lifecycle = self.ha.ClusterLifecycle(primary_created=True)
-        with (
-            mock.patch.object(
-                self.ha,
-                "retire_primary_cluster_before_restore",
-                return_value={"status": "deleted"},
-            ),
-            mock.patch.object(
-                self.ha,
-                "create_kind_cluster",
-                side_effect=self.ha.ref.ProofError("restore create failed"),
-            ),
+        with mock.patch.object(
+            self.ha,
+            "retire_primary_cluster_before_restore",
+            return_value={"status": "deleted"},
+        ), mock.patch.object(
+            self.ha,
+            "create_kind_cluster",
+            side_effect=self.ha.ref.ProofError("restore create failed"),
         ):
             with self.assertRaisesRegex(
                 self.ha.ref.ProofError, "restore create failed"
@@ -751,10 +719,8 @@ class KubernetesHaContractTests(unittest.TestCase):
 
     def test_digest_locked_manifest_replaces_each_release_image_once(self) -> None:
         tagged = {
-            "registry.example/controller:v1": "registry.example/controller@sha256:"
-            + "a" * 64,
-            "registry.example/webhook:v1": "registry.example/webhook@sha256:"
-            + "b" * 64,
+            "registry.example/controller:v1": "registry.example/controller@sha256:" + "a" * 64,
+            "registry.example/webhook:v1": "registry.example/webhook@sha256:" + "b" * 64,
         }
         with tempfile.TemporaryDirectory() as directory:
             artifact = Path(directory) / "release.yaml"
@@ -775,14 +741,16 @@ class KubernetesHaContractTests(unittest.TestCase):
 
     def test_cert_manager_install_waits_and_verifies_digest_images(self) -> None:
         expected = list(self.ha.CERT_MANAGER_IMAGES.values())
-        with (
-            mock.patch.object(
-                self.ha, "apply_digest_locked_manifest"
-            ) as apply_manifest,
-            mock.patch.object(self.ha.ref, "run") as run,
-            mock.patch.object(self.ha.ref, "wait_rollout") as wait_rollout,
-            mock.patch.object(self.ha, "wait_until") as wait_until,
-            mock.patch.object(self.ha.ref, "output", side_effect=expected),
+        with mock.patch.object(
+            self.ha, "apply_digest_locked_manifest"
+        ) as apply_manifest, mock.patch.object(
+            self.ha.ref, "run"
+        ) as run, mock.patch.object(
+            self.ha.ref, "wait_rollout"
+        ) as wait_rollout, mock.patch.object(
+            self.ha, "wait_until"
+        ) as wait_until, mock.patch.object(
+            self.ha.ref, "output", side_effect=expected
         ):
             self.ha.install_cert_manager("kubectl", "cert-manager.yaml")
         apply_manifest.assert_called_once_with(
@@ -793,7 +761,9 @@ class KubernetesHaContractTests(unittest.TestCase):
         wait_until.assert_called_once()
 
     def test_barman_manifest_pins_operator_and_sidecar_images(self) -> None:
-        sidecar_tag = "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0"
+        sidecar_tag = (
+            "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0"
+        )
         encoded = self.ha.base64.b64encode(sidecar_tag.encode()).decode()
         source = (
             "apiVersion: v1\nkind: Secret\nmetadata:\n  name: sidecar\n"
@@ -858,7 +828,9 @@ class KubernetesHaContractTests(unittest.TestCase):
                                     "name": "barman-cloud",
                                     "ready": index == leader_index,
                                     "state": {
-                                        "running": {"startedAt": "2026-07-18T11:32:39Z"}
+                                        "running": {
+                                            "startedAt": "2026-07-18T11:32:39Z"
+                                        }
                                     },
                                 }
                             ],
@@ -904,17 +876,21 @@ class KubernetesHaContractTests(unittest.TestCase):
                 self.barman_plugin_endpoint_payload(2),
             ],
         ):
-            state = self.ha.barman_plugin_state("kubectl", require_three_nodes=True)
+            state = self.ha.barman_plugin_state(
+                "kubectl", require_three_nodes=True
+            )
         self.assertEqual(state["nodes"], ["worker-1", "worker-2", "worker-3"])
-        self.assertEqual(state["leader"], {"pod": "barman-cloud-2", "node": "worker-2"})
+        self.assertEqual(
+            state["leader"], {"pod": "barman-cloud-2", "node": "worker-2"}
+        )
 
-    def test_barman_plugin_state_ignores_stale_container_ready_after_node_loss(
-        self,
-    ) -> None:
+    def test_barman_plugin_state_ignores_stale_container_ready_after_node_loss(self) -> None:
         pods = json.loads(self.barman_plugin_pod_payload(2))
         old_leader = pods["items"][0]
         old_leader["status"]["containerStatuses"][0]["ready"] = True
-        old_leader["status"]["conditions"] = [{"type": "Ready", "status": "False"}]
+        old_leader["status"]["conditions"] = [
+            {"type": "Ready", "status": "False"}
+        ]
         with mock.patch.object(
             self.ha.ref,
             "output",
@@ -923,8 +899,12 @@ class KubernetesHaContractTests(unittest.TestCase):
                 self.barman_plugin_endpoint_payload(2),
             ],
         ):
-            state = self.ha.barman_plugin_state("kubectl", require_three_nodes=False)
-        self.assertEqual(state["leader"], {"pod": "barman-cloud-2", "node": "worker-2"})
+            state = self.ha.barman_plugin_state(
+                "kubectl", require_three_nodes=False
+            )
+        self.assertEqual(
+            state["leader"], {"pod": "barman-cloud-2", "node": "worker-2"}
+        )
 
     def test_barman_plugin_install_waits_and_verifies_digest_images(self) -> None:
         secret_payload = json.dumps(
@@ -949,20 +929,22 @@ class KubernetesHaContractTests(unittest.TestCase):
             },
             "leader": {"pod": "barman-cloud-1", "node": "worker-1"},
         }
-        with (
-            mock.patch.object(self.ha, "apply_barman_cloud_manifest") as apply_manifest,
-            mock.patch.object(self.ha.ref, "run") as run,
-            mock.patch.object(self.ha.ref, "wait_condition") as wait_condition,
-            mock.patch.object(
-                self.ha, "verify_barman_plugin_ha", return_value=state
-            ) as verify_ha,
-            mock.patch.object(
-                self.ha.ref,
-                "output",
-                side_effect=[secret_payload, self.ha.BARMAN_CLOUD_PLUGIN_IMAGE],
-            ),
+        with mock.patch.object(
+            self.ha, "apply_barman_cloud_manifest"
+        ) as apply_manifest, mock.patch.object(
+            self.ha.ref, "run"
+        ) as run, mock.patch.object(
+            self.ha.ref, "wait_condition"
+        ) as wait_condition, mock.patch.object(
+            self.ha, "verify_barman_plugin_ha", return_value=state
+        ) as verify_ha, mock.patch.object(
+            self.ha.ref,
+            "output",
+            side_effect=[secret_payload, self.ha.BARMAN_CLOUD_PLUGIN_IMAGE],
         ):
-            observed = self.ha.install_barman_cloud_plugin("kubectl", "barman.yaml")
+            observed = self.ha.install_barman_cloud_plugin(
+                "kubectl", "barman.yaml"
+            )
         apply_manifest.assert_called_once_with("kubectl", "barman.yaml")
         self.assertIn("crd/objectstores.barmancloud.cnpg.io", run.call_args.args[0])
         self.assertEqual(wait_condition.call_count, 2)
@@ -981,7 +963,9 @@ class KubernetesHaContractTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 self.ha.ref.ProofError, "exactly its elected ready leader"
             ):
-                self.ha.barman_plugin_state("kubectl", require_three_nodes=True)
+                self.ha.barman_plugin_state(
+                    "kubectl", require_three_nodes=True
+                )
 
     def test_barman_plugin_backup_proves_completed_plugin_rpc(self) -> None:
         completed = {
@@ -991,12 +975,9 @@ class KubernetesHaContractTests(unittest.TestCase):
                 "instanceID": {"podName": "postgres-ha-2"},
             }
         }
-        with (
-            mock.patch.object(self.ha.ref, "apply_yaml") as apply_yaml,
-            mock.patch.object(
-                self.ha, "wait_backup_complete", return_value=completed
-            ) as wait_backup,
-        ):
+        with mock.patch.object(self.ha.ref, "apply_yaml") as apply_yaml, mock.patch.object(
+            self.ha, "wait_backup_complete", return_value=completed
+        ) as wait_backup:
             result = self.ha.prove_barman_plugin_backup(
                 "kubectl", "postgres-ha", "probe-backup"
             )
@@ -1018,9 +999,7 @@ class KubernetesHaContractTests(unittest.TestCase):
             },
         )
 
-    def test_postgres_primary_alignment_promotes_to_existing_barman_leader(
-        self,
-    ) -> None:
+    def test_postgres_primary_alignment_promotes_to_existing_barman_leader(self) -> None:
         plugin_state = {
             "nodes": ["worker-1", "worker-2", "worker-3"],
             "pods": {
@@ -1041,26 +1020,17 @@ class KubernetesHaContractTests(unittest.TestCase):
             "method": "plugin",
             "pod": "postgres-ha-2",
         }
-        with (
-            mock.patch.object(
-                self.ha,
-                "verify_barman_plugin_ha",
-                side_effect=[plugin_state, plugin_state],
-            ),
-            mock.patch.object(
-                self.ha,
-                "current_primary",
-                side_effect=["postgres-ha-1", "postgres-ha-2"],
-            ),
-            mock.patch.object(
-                self.ha, "wait_until", return_value="postgres-ha-2"
-            ) as wait_until,
-            mock.patch.object(self.ha, "wait_cluster_ready") as wait_ready,
-            mock.patch.object(
-                self.ha, "prove_barman_plugin_backup", return_value=communication
-            ) as prove_backup,
-            mock.patch.object(self.ha.ref, "run") as run,
-        ):
+        with mock.patch.object(
+            self.ha, "verify_barman_plugin_ha", side_effect=[plugin_state, plugin_state]
+        ), mock.patch.object(
+            self.ha, "current_primary", side_effect=["postgres-ha-1", "postgres-ha-2"]
+        ), mock.patch.object(
+            self.ha, "wait_until", return_value="postgres-ha-2"
+        ) as wait_until, mock.patch.object(
+            self.ha, "wait_cluster_ready"
+        ) as wait_ready, mock.patch.object(
+            self.ha, "prove_barman_plugin_backup", return_value=communication
+        ) as prove_backup, mock.patch.object(self.ha.ref, "run") as run:
             result = self.ha.align_postgres_primary_with_barman_leader(
                 "kubectl-cnpg",
                 "kubectl",
@@ -1082,7 +1052,9 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertNotIn("delete", run.call_args.args[0])
         wait_until.assert_called_once()
         wait_ready.assert_called_once_with("kubectl", "postgres-ha", "10m")
-        prove_backup.assert_called_once_with("kubectl", "postgres-ha", "probe-backup")
+        prove_backup.assert_called_once_with(
+            "kubectl", "postgres-ha", "probe-backup"
+        )
         self.assertEqual(result["target_node"], "worker-2")
         self.assertEqual(result["postgres_primary_before"], "postgres-ha-1")
         self.assertEqual(result["postgres_primary_aligned"], "postgres-ha-2")
@@ -1097,7 +1069,9 @@ class KubernetesHaContractTests(unittest.TestCase):
             },
             "leader": {"pod": "barman-cloud-2", "node": "worker-2"},
         }
-        with mock.patch.object(self.ha, "barman_plugin_state", return_value=surviving):
+        with mock.patch.object(
+            self.ha, "barman_plugin_state", return_value=surviving
+        ):
             leader = self.ha.wait_barman_plugin_leader_after_node_loss(
                 "kubectl", "worker-3"
             )
@@ -1124,7 +1098,9 @@ class KubernetesHaContractTests(unittest.TestCase):
                             "name": "plugin-barman-cloud",
                             "imageID": f"ghcr.io/cloudnative-pg/sidecar@{digest}",
                             "ready": True,
-                            "state": {"running": {"startedAt": "2026-07-18T08:00:00Z"}},
+                            "state": {
+                                "running": {"startedAt": "2026-07-18T08:00:00Z"}
+                            },
                         }
                     ]
                 },
@@ -1137,13 +1113,13 @@ class KubernetesHaContractTests(unittest.TestCase):
                 {"items": [pod("postgres-1"), pod("postgres-2"), pod("postgres-3")]}
             ),
         ):
-            observed = self.ha.verify_barman_sidecar_images("kubectl", "postgres-ha")
+            observed = self.ha.verify_barman_sidecar_images(
+                "kubectl", "postgres-ha"
+            )
         self.assertEqual(sorted(observed), ["postgres-1", "postgres-2", "postgres-3"])
         self.assertTrue(all(item["ready"] is True for item in observed.values()))
 
-    def test_barman_instance_sidecar_validation_fails_closed_when_not_ready(
-        self,
-    ) -> None:
+    def test_barman_instance_sidecar_validation_fails_closed_when_not_ready(self) -> None:
         payload = {
             "items": [
                 {
@@ -1169,10 +1145,10 @@ class KubernetesHaContractTests(unittest.TestCase):
                 }
             ]
         }
-        with mock.patch.object(self.ha.ref, "output", return_value=json.dumps(payload)):
-            with self.assertRaisesRegex(
-                self.ha.ref.ProofError, "not running and ready"
-            ):
+        with mock.patch.object(
+            self.ha.ref, "output", return_value=json.dumps(payload)
+        ):
+            with self.assertRaisesRegex(self.ha.ref.ProofError, "not running and ready"):
                 self.ha.verify_barman_sidecar_images("kubectl", "postgres-ha")
 
     def cnpg_release_fixture(self) -> str:
@@ -1227,14 +1203,14 @@ spec:
             required,
             [
                 {
-                    "labelSelector": {
-                        "matchLabels": {"app.kubernetes.io/name": "cloudnative-pg"}
-                    },
+                    "labelSelector": {"matchLabels": {"app.kubernetes.io/name": "cloudnative-pg"}},
                     "topologyKey": "kubernetes.io/hostname",
                 }
             ],
         )
-        self.assertNotIn("ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0", rendered)
+        self.assertNotIn(
+            "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0", rendered
+        )
         self.assertEqual(rendered.count(self.ha.CNPG_OPERATOR_IMAGE), 2)
 
     def test_cnpg_release_uses_server_side_apply(self) -> None:
@@ -1242,17 +1218,14 @@ spec:
         artifact.parent.mkdir(parents=True, exist_ok=True)
         artifact.write_text(self.cnpg_release_fixture())
         try:
-            with (
-                mock.patch.object(self.ha.ref, "run") as run,
-                mock.patch.object(
-                    self.ha,
-                    "verify_cnpg_operator_ha",
-                    return_value=["node-a", "node-b", "node-c"],
-                ) as verify_ha,
-                mock.patch.object(self.ha, "wait_until"),
-                mock.patch.object(
-                    self.ha.ref, "output", return_value=self.ha.CNPG_OPERATOR_IMAGE
-                ),
+            with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
+                self.ha,
+                "verify_cnpg_operator_ha",
+                return_value=["node-a", "node-b", "node-c"],
+            ) as verify_ha, mock.patch.object(
+                self.ha, "wait_until"
+            ), mock.patch.object(
+                self.ha.ref, "output", return_value=self.ha.CNPG_OPERATOR_IMAGE
             ):
                 observed_nodes = self.ha.install_cnpg("kubectl", str(artifact))
             verify_ha.assert_called_once_with("kubectl")
@@ -1290,9 +1263,10 @@ spec:
                 ]
             }
         )
-        with (
-            mock.patch.object(self.ha.ref, "wait_rollout") as wait_rollout,
-            mock.patch.object(self.ha.ref, "output", side_effect=["3", pods]),
+        with mock.patch.object(
+            self.ha.ref, "wait_rollout"
+        ) as wait_rollout, mock.patch.object(
+            self.ha.ref, "output", side_effect=["3", pods]
         ):
             observed_nodes = self.ha.verify_cnpg_operator_ha("kubectl")
         self.assertEqual(observed_nodes, ["node-a", "node-b", "node-c"])
@@ -1302,12 +1276,8 @@ spec:
 
     def test_cnpg_webhook_probe_requires_endpoint_and_server_dry_run(self) -> None:
         endpoint = mock.Mock(returncode=0, stdout="10.0.0.12")
-        dry_run = mock.Mock(
-            returncode=0, stdout="cluster.postgresql.cnpg.io/probe serverside-applied"
-        )
-        with mock.patch.object(
-            self.ha.subprocess, "run", side_effect=[endpoint, dry_run]
-        ) as run:
+        dry_run = mock.Mock(returncode=0, stdout="cluster.postgresql.cnpg.io/probe serverside-applied")
+        with mock.patch.object(self.ha.subprocess, "run", side_effect=[endpoint, dry_run]) as run:
             self.assertTrue(self.ha.cnpg_webhook_ready("kubectl"))
         endpoint_argv = run.call_args_list[0].args[0]
         dry_run_argv = run.call_args_list[1].args[0]
@@ -1326,11 +1296,11 @@ spec:
 
     def test_ha_diagnostic_snapshot_captures_cnpg_and_storage_evidence(self) -> None:
         completed = mock.Mock(stdout="evidence\n", stderr="")
-        with (
-            tempfile.TemporaryDirectory() as directory,
-            mock.patch.object(self.ha, "CACHE", Path(directory)),
-            mock.patch.object(self.ha.subprocess, "run", return_value=completed) as run,
-        ):
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            self.ha, "CACHE", Path(directory)
+        ), mock.patch.object(
+            self.ha.subprocess, "run", return_value=completed
+        ) as run:
             self.ha.ha_diagnostic_snapshot("kubectl", "proof")
             target = Path(directory) / "failures" / "proof"
             self.assertEqual(
@@ -1386,7 +1356,8 @@ spec:
         documents = list(
             self.ha.yaml.safe_load_all(
                 (
-                    ROOT / "platform/apps/weltgewebe/overlays/ha/deployment-patch.yaml"
+                    ROOT
+                    / "platform/apps/weltgewebe/overlays/ha/deployment-patch.yaml"
                 ).read_text()
             )
         )
@@ -1399,10 +1370,12 @@ spec:
         self.assertEqual(spec["replicas"], 3)
         self.assertEqual(spec["strategy"]["type"], "RollingUpdate")
         self.assertEqual(spec["strategy"]["rollingUpdate"]["maxSurge"], 1)
-        self.assertEqual(spec["strategy"]["rollingUpdate"]["maxUnavailable"], 0)
-        preferred = spec["template"]["spec"]["affinity"]["podAntiAffinity"][
-            "preferredDuringSchedulingIgnoredDuringExecution"
-        ]
+        self.assertEqual(
+            spec["strategy"]["rollingUpdate"]["maxUnavailable"], 0
+        )
+        preferred = spec["template"]["spec"]["affinity"][
+            "podAntiAffinity"
+        ]["preferredDuringSchedulingIgnoredDuringExecution"]
         self.assertEqual(preferred[0]["weight"], 100)
         self.assertEqual(
             preferred[0]["podAffinityTerm"]["topologyKey"],
@@ -1415,11 +1388,12 @@ spec:
     def test_upgrade_candidate_is_distinct_and_loaded_into_kind(self) -> None:
         baseline = "sha256:" + "a" * 64
         candidate = "sha256:" + "b" * 64
-        with (
-            mock.patch.object(self.ha.ref, "run") as run,
-            mock.patch.object(self.ha.ref, "output", side_effect=[baseline, candidate]),
+        with mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
+            self.ha.ref, "output", side_effect=[baseline, candidate]
         ):
-            observed = self.ha.prepare_api_upgrade_candidate("kind", "proof", "c" * 40)
+            observed = self.ha.prepare_api_upgrade_candidate(
+                "kind", "proof", "c" * 40
+            )
         self.assertEqual(
             observed,
             {
@@ -1428,12 +1402,8 @@ spec:
             },
         )
         build = run.call_args_list[0]
-        self.assertEqual(
-            build.args[0][:5], ["docker", "build", "--pull=false", "--file", "-"]
-        )
-        self.assertIn(
-            "org.opencontainers.image.revision=" + "c" * 40, build.kwargs["input_text"]
-        )
+        self.assertEqual(build.args[0][:5], ["docker", "build", "--pull=false", "--file", "-"])
+        self.assertIn("org.opencontainers.image.revision=" + "c" * 40, build.kwargs["input_text"])
         self.assertEqual(
             run.call_args_list[1].args[0],
             [
@@ -1483,9 +1453,7 @@ spec:
         self.assertEqual(run.call_args.kwargs["timeout"], 5)
         self.assertFalse(run.call_args.kwargs["check"])
 
-    def test_gateway_owner_sample_tolerates_one_failed_advertised_listener(
-        self,
-    ) -> None:
+    def test_gateway_owner_sample_tolerates_one_failed_advertised_listener(self) -> None:
         node_addresses = {
             "node-a": "10.0.0.1",
             "node-b": "10.0.0.2",
@@ -1504,12 +1472,12 @@ spec:
                 "returncode": 0 if available else 28,
             }
 
-        with (
-            mock.patch.object(
-                self.ha.ref, "kind_nodes", return_value=["node-a", "node-b"]
-            ),
-            mock.patch.object(self.ha.ref, "output", side_effect=output),
-            mock.patch.object(self.ha, "gateway_projection_sample", side_effect=sample),
+        with mock.patch.object(
+            self.ha.ref, "kind_nodes", return_value=["node-a", "node-b"]
+        ), mock.patch.object(
+            self.ha.ref, "output", side_effect=output
+        ), mock.patch.object(
+            self.ha, "gateway_projection_sample", side_effect=sample
         ):
             observed = self.ha.gateway_owner_sample(
                 "kind", "proof", ["10.0.0.1", "10.0.0.2"], 80, "marker"
@@ -1518,30 +1486,26 @@ spec:
         self.assertTrue(observed["available"])
         self.assertEqual(observed["failed_paths"], 1)
         self.assertEqual(observed["successful_addresses"], ["10.0.0.2"])
-        self.assertEqual(observed["probe_mode"], "owner-node-any-advertised-address")
+        self.assertEqual(
+            observed["probe_mode"], "owner-node-any-advertised-address"
+        )
 
-    def test_gateway_owner_sample_fails_when_all_advertised_listeners_fail(
-        self,
-    ) -> None:
+    def test_gateway_owner_sample_fails_when_all_advertised_listeners_fail(self) -> None:
         node_addresses = {
             "node-a": "10.0.0.1",
             "node-b": "10.0.0.2",
         }
 
-        with (
-            mock.patch.object(
-                self.ha.ref, "kind_nodes", return_value=["node-a", "node-b"]
-            ),
-            mock.patch.object(
-                self.ha.ref,
-                "output",
-                side_effect=lambda argv: node_addresses[argv[-1]],
-            ),
-            mock.patch.object(
-                self.ha,
-                "gateway_projection_sample",
-                return_value={"available": False, "returncode": 28},
-            ),
+        with mock.patch.object(
+            self.ha.ref, "kind_nodes", return_value=["node-a", "node-b"]
+        ), mock.patch.object(
+            self.ha.ref,
+            "output",
+            side_effect=lambda argv: node_addresses[argv[-1]],
+        ), mock.patch.object(
+            self.ha,
+            "gateway_projection_sample",
+            return_value={"available": False, "returncode": 28},
         ):
             observed = self.ha.gateway_owner_sample(
                 "kind", "proof", ["10.0.0.1", "10.0.0.2"], 80, "marker"
@@ -1552,9 +1516,10 @@ spec:
         self.assertEqual(observed["failed_paths"], 2)
 
     def test_gateway_owner_sample_rejects_unowned_advertised_address(self) -> None:
-        with (
-            mock.patch.object(self.ha.ref, "kind_nodes", return_value=["node-a"]),
-            mock.patch.object(self.ha.ref, "output", return_value="10.0.0.1"),
+        with mock.patch.object(
+            self.ha.ref, "kind_nodes", return_value=["node-a"]
+        ), mock.patch.object(
+            self.ha.ref, "output", return_value="10.0.0.1"
         ):
             with self.assertRaisesRegex(
                 self.ha.ref.ProofError, "exactly one kind node owner"
@@ -1569,7 +1534,9 @@ spec:
             stdout="",
             stderr="curl: (28) Operation timed out",
         )
-        with mock.patch.object(self.ha.subprocess, "run", return_value=completed):
+        with mock.patch.object(
+            self.ha.subprocess, "run", return_value=completed
+        ):
             sample = self.ha.gateway_projection_sample(
                 "kind-worker", "10.0.0.10", 80, "marker"
             )
@@ -1584,7 +1551,9 @@ spec:
             stdout=json.dumps(42),
             stderr="",
         )
-        with mock.patch.object(self.ha.subprocess, "run", return_value=completed):
+        with mock.patch.object(
+            self.ha.subprocess, "run", return_value=completed
+        ):
             sample = self.ha.gateway_projection_sample(
                 "kind-worker", "10.0.0.10", 80, "marker"
             )
@@ -1604,17 +1573,21 @@ spec:
             },
         )
         self.assertEqual(budget["measurement_window_seconds"], 50.0)
-        self.assertEqual(budget["objective"], self.ha.REFERENCE_AVAILABILITY_OBJECTIVE)
+        self.assertEqual(
+            budget["objective"], self.ha.REFERENCE_AVAILABILITY_OBJECTIVE
+        )
         self.assertEqual(budget["consumed_ratio"], 0.0)
         self.assertTrue(budget["within_budget"])
 
-    def test_change_management_contract_uses_rollout_undo_and_receipt_fields(
-        self,
-    ) -> None:
+    def test_change_management_contract_uses_rollout_undo_and_receipt_fields(self) -> None:
         source = (ROOT / "scripts/platform/ha_reference.py").read_text()
-        self.assertIn('"rollout",\n            "undo"', source)
+        self.assertIn(
+            '"rollout",\n            "undo"', source
+        )
         self.assertIn('"change_management": change_management', source)
-        self.assertIn("kubectl, kind, args.cluster, marker, gateway_before", source)
+        self.assertIn(
+            "kubectl, kind, args.cluster, marker, gateway_before", source
+        )
         self.assertIn('probe_node = gateway_probe["probe_node"]', source)
         self.assertIn('probe_address = gateway_probe["address"]', source)
         self.assertIn("gateway_owner_sample(", source)
@@ -1636,11 +1609,15 @@ spec:
         ready = source.index(
             'wait_cluster_ready(restore_kubectl, "postgres-restore", "20m")'
         )
-        rto = source.index("restore_rto = time.monotonic() - restore_started", ready)
+        rto = source.index(
+            "restore_rto = time.monotonic() - restore_started", ready
+        )
         sidecars = source.index(
             "restore_barman_sidecars = verify_barman_sidecar_images(", rto
         )
-        archive = source.index('restore_kubectl, cluster="postgres-restore"', sidecars)
+        archive = source.index(
+            'restore_kubectl, cluster="postgres-restore"', sidecars
+        )
         self.assertLess(ready, rto)
         self.assertLess(rto, sidecars)
         self.assertLess(sidecars, archive)
@@ -1648,11 +1625,9 @@ spec:
 
     def test_zone_rejoin_waits_for_cilium_before_database_readiness(self) -> None:
         source = (ROOT / "scripts/platform/ha_reference.py").read_text()
-        node_ready = source.index("f\"node/{primary_topology['node']}\"")
+        node_ready = source.index('f"node/{primary_topology[\'node\']}"')
         cilium_ready = source.index('"daemonset/cilium"', node_ready)
-        postgres_ready = source.index(
-            'wait_cluster_ready(kubectl, "postgres-ha", "15m")', cilium_ready
-        )
+        postgres_ready = source.index('wait_cluster_ready(kubectl, "postgres-ha", "15m")', cilium_ready)
         self.assertLess(node_ready, cilium_ready)
         self.assertLess(cilium_ready, postgres_ready)
         self.assertIn('["docker", "stop", "--timeout", "10", stopped_node]', source)
@@ -1661,15 +1636,9 @@ spec:
         required = "000000020000000A000000FE"
         self.assertEqual(self.ha.wal_segment_position(required), (2, 10, 254))
         self.assertTrue(self.ha.wal_archived_at_or_after(required, required))
-        self.assertTrue(
-            self.ha.wal_archived_at_or_after("000000020000000A000000FF", required)
-        )
-        self.assertTrue(
-            self.ha.wal_archived_at_or_after("000000030000000000000001", required)
-        )
-        self.assertFalse(
-            self.ha.wal_archived_at_or_after("000000020000000A000000FD", required)
-        )
+        self.assertTrue(self.ha.wal_archived_at_or_after("000000020000000A000000FF", required))
+        self.assertTrue(self.ha.wal_archived_at_or_after("000000030000000000000001", required))
+        self.assertFalse(self.ha.wal_archived_at_or_after("000000020000000A000000FD", required))
         with self.assertRaisesRegex(self.ha.ref.ProofError, "invalid PostgreSQL WAL"):
             self.ha.wal_segment_position("not-a-wal")
         source = (ROOT / "scripts/platform/ha_reference.py").read_text()
@@ -1688,29 +1657,21 @@ spec:
         self.assertNotIn("status.lastArchivedWAL", source)
 
     def test_ha_diagnostics_are_bounded_and_do_not_raise_on_timeout(self) -> None:
-        with (
-            tempfile.TemporaryDirectory() as directory,
-            mock.patch.object(self.ha, "CACHE", Path(directory)),
-            mock.patch.object(
-                self.ha.subprocess,
-                "run",
-                side_effect=self.ha.subprocess.TimeoutExpired(["kubectl"], 30),
-            ) as run,
-        ):
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            self.ha, "CACHE", Path(directory)
+        ), mock.patch.object(
+            self.ha.subprocess, "run", side_effect=self.ha.subprocess.TimeoutExpired(["kubectl"], 30)
+        ) as run:
             self.ha.ha_diagnostic_snapshot("kubectl", "timeout")
             target = Path(directory) / "failures" / "timeout"
             for evidence in target.iterdir():
                 self.assertIn("diagnostic command failed", evidence.read_text())
         self.assertTrue(run.call_args_list)
-        self.assertTrue(
-            all(call.kwargs["timeout"] == 30 for call in run.call_args_list)
-        )
+        self.assertTrue(all(call.kwargs["timeout"] == 30 for call in run.call_args_list))
 
     def test_sensitive_environment_values_never_enter_argv(self) -> None:
         completed = mock.Mock(returncode=0)
-        with mock.patch.object(
-            self.ha.subprocess, "run", return_value=completed
-        ) as run:
+        with mock.patch.object(self.ha.subprocess, "run", return_value=completed) as run:
             self.ha.run_with_environment(
                 ["docker", "run", "--env", "PROOF_SECRET"],
                 {"PROOF_SECRET": "ephemeral-sensitive-value"},
@@ -1722,7 +1683,9 @@ spec:
 
     def test_pitr_boundary_uses_and_verifies_postgres_clock(self) -> None:
         with mock.patch.object(self.ha, "psql", side_effect=["", "t"]) as psql:
-            self.ha.wait_for_pitr_boundary("kubectl", "2026-07-18T08:00:00.000000Z")
+            self.ha.wait_for_pitr_boundary(
+                "kubectl", "2026-07-18T08:00:00.000000Z"
+            )
         self.assertEqual(psql.call_args_list[0].args[1], "SELECT pg_sleep(2)")
         self.assertIn("clock_timestamp()", psql.call_args_list[1].args[1])
 
@@ -1731,7 +1694,9 @@ spec:
             with self.assertRaisesRegex(
                 self.ha.ref.ProofError, "did not cross PITR target"
             ):
-                self.ha.wait_for_pitr_boundary("kubectl", "2026-07-18T08:00:00.000000Z")
+                self.ha.wait_for_pitr_boundary(
+                    "kubectl", "2026-07-18T08:00:00.000000Z"
+                )
 
     def test_cluster_context_binding_uses_cluster_specific_kubeconfig(self) -> None:
         path = ROOT / ".cache/test-restore-kubeconfig.yaml"
@@ -1789,9 +1754,7 @@ spec:
         image = self.ha.POSTGRES_IMAGE
         self.assertIn(":16.14@sha256:", image)
         self.assertNotIn("postgresql@sha256:", image)
-        catalog = (
-            ROOT / "platform/infrastructure/ha-data/postgres-image-catalog.yaml"
-        ).read_text()
+        catalog = (ROOT / "platform/infrastructure/ha-data/postgres-image-catalog.yaml").read_text()
         self.assertIn(image, catalog)
         manifest = (ROOT / "platform/infrastructure/ha-data/postgres.yaml").read_text()
         self.assertNotIn("imageName:", manifest)
