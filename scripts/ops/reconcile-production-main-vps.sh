@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 022
 
 SOURCE_CHECKOUT="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 RELEASE_ROOT="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
@@ -30,6 +31,7 @@ source_archive=""
 target_commit=""
 artifact_sha=""
 state_result=""
+deploy_invocation_id=""
 
 fail() {
   echo "ERROR: $*" >&2
@@ -45,6 +47,8 @@ write_lock_contention_receipt() {
   python3 - "$receipt" "$PRODUCTION_LOCK_DOMAIN" "$PRODUCTION_LOCK_FILE" << 'PY'
 import json
 import os
+import secrets
+import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -61,18 +65,65 @@ payload = {
     "result": "already_running",
     "recorded_at": datetime.now(timezone.utc).isoformat(),
 }
-temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-with temporary.open("w", encoding="utf-8") as handle:
-    json.dump(payload, handle, sort_keys=True, indent=2)
-    handle.write("\n")
-    handle.flush()
-    os.fsync(handle.fileno())
-os.replace(temporary, path)
-directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-try:
-    os.fsync(directory_fd)
-finally:
-    os.close(directory_fd)
+def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    directory_fd = os.open(path.parent, directory_flags)
+    temporary_name = f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    temporary_created = False
+    try:
+        directory_metadata = os.fstat(directory_fd)
+        if (
+            not stat.S_ISDIR(directory_metadata.st_mode)
+            or directory_metadata.st_uid != 0
+            or directory_metadata.st_mode & 0o022
+        ):
+            raise SystemExit(f"receipt directory is unsafe: {path.parent}")
+
+        file_flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | os.O_CLOEXEC
+            | os.O_NOFOLLOW
+        )
+        file_fd = os.open(temporary_name, file_flags, 0o600, dir_fd=directory_fd)
+        temporary_created = True
+        try:
+            os.fchmod(file_fd, 0o600)
+            with os.fdopen(file_fd, "w", encoding="utf-8", closefd=False) as handle:
+                json.dump(payload, handle, sort_keys=True, indent=2)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(file_fd)
+            metadata = os.fstat(file_fd)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != 0
+                or metadata.st_nlink != 1
+                or metadata.st_mode & 0o777 != 0o600
+            ):
+                raise SystemExit("temporary receipt metadata is unsafe")
+        finally:
+            os.close(file_fd)
+
+        os.replace(
+            temporary_name,
+            path.name,
+            src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd,
+        )
+        temporary_created = False
+        os.fsync(directory_fd)
+    finally:
+        if temporary_created:
+            try:
+                os.unlink(temporary_name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
+        os.close(directory_fd)
+
+
+write_atomic_root_json(path, payload)
 PY
   printf '%s\n' "$receipt"
 }
@@ -103,6 +154,10 @@ acquire_production_lock() {
   fi
 }
 
+new_deploy_invocation_id() {
+  python3 -c 'import secrets; print(secrets.token_hex(32))'
+}
+
 fetch_main() {
   git -C "$SOURCE_CHECKOUT" fetch --no-tags origin \
     "+refs/heads/main:refs/remotes/origin/main"
@@ -118,6 +173,8 @@ write_state() {
   python3 - "$receipt" "$target_commit" "$result" "$artifact_sha" "$observed_main" "$detail" << 'PY'
 import json
 import os
+import secrets
+import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -134,49 +191,153 @@ payload = {
     "lock_owner_entrypoint": "reconciler",
     "recorded_at": datetime.now(timezone.utc).isoformat(),
 }
-temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-with temporary.open("w", encoding="utf-8") as handle:
-    json.dump(payload, handle, sort_keys=True, indent=2)
-    handle.write("\n")
-    handle.flush()
-    os.fsync(handle.fileno())
-os.replace(temporary, path)
-directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-try:
-    os.fsync(directory_fd)
-finally:
-    os.close(directory_fd)
+def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    directory_fd = os.open(path.parent, directory_flags)
+    temporary_name = f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    temporary_created = False
+    try:
+        directory_metadata = os.fstat(directory_fd)
+        if (
+            not stat.S_ISDIR(directory_metadata.st_mode)
+            or directory_metadata.st_uid != 0
+            or directory_metadata.st_mode & 0o022
+        ):
+            raise SystemExit(f"receipt directory is unsafe: {path.parent}")
+
+        file_flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | os.O_CLOEXEC
+            | os.O_NOFOLLOW
+        )
+        file_fd = os.open(temporary_name, file_flags, 0o600, dir_fd=directory_fd)
+        temporary_created = True
+        try:
+            os.fchmod(file_fd, 0o600)
+            with os.fdopen(file_fd, "w", encoding="utf-8", closefd=False) as handle:
+                json.dump(payload, handle, sort_keys=True, indent=2)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(file_fd)
+            metadata = os.fstat(file_fd)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != 0
+                or metadata.st_nlink != 1
+                or metadata.st_mode & 0o777 != 0o600
+            ):
+                raise SystemExit("temporary receipt metadata is unsafe")
+        finally:
+            os.close(file_fd)
+
+        os.replace(
+            temporary_name,
+            path.name,
+            src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd,
+        )
+        temporary_created = False
+        os.fsync(directory_fd)
+    finally:
+        if temporary_created:
+            try:
+                os.unlink(temporary_name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
+        os.close(directory_fd)
+
+
+write_atomic_root_json(path, payload)
 PY
   state_result="$result"
 }
 
 read_deploy_terminal_result() {
   local commit="$1"
+  local invocation_id="$2"
   local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$commit.json"
-  [[ -f "$deployment_receipt" && ! -L "$deployment_receipt" ]] ||
-    fail "terminal deployment receipt is missing or unsafe: $deployment_receipt"
-  [[ "$(stat --format=%u "$deployment_receipt")" == "0" ]] ||
-    fail "terminal deployment receipt is not root-owned: $deployment_receipt"
-  local receipt_mode
-  receipt_mode="$(stat --format=%a "$deployment_receipt")"
-  (((8#$receipt_mode & 022) == 0)) ||
-    fail "terminal deployment receipt is group- or world-writable: $deployment_receipt"
 
-  python3 - "$deployment_receipt" "$commit" << 'PY'
+  python3 - "$deployment_receipt" "$commit" "$invocation_id" << 'PY'
 import json
+import os
+import stat
 import sys
 from pathlib import Path
 
+MAX_RECEIPT_BYTES = 1048576
 path = Path(sys.argv[1])
 commit = sys.argv[2]
+invocation_id = sys.argv[3]
+
+
+def read_root_receipt(path: Path) -> dict[str, object]:
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    directory_fd = os.open(path.parent, directory_flags)
+    try:
+        directory_metadata = os.fstat(directory_fd)
+        if (
+            not stat.S_ISDIR(directory_metadata.st_mode)
+            or directory_metadata.st_uid != 0
+            or directory_metadata.st_mode & 0o022
+        ):
+            raise ValueError("receipt directory is unsafe")
+        file_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
+        file_fd = os.open(path.name, file_flags, dir_fd=directory_fd)
+        try:
+            metadata = os.fstat(file_fd)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ValueError("receipt is not a regular file")
+            if metadata.st_uid != 0:
+                raise ValueError("receipt is not root-owned")
+            if metadata.st_mode & 0o022:
+                raise ValueError("receipt is group- or world-writable")
+            if metadata.st_nlink != 1:
+                raise ValueError("receipt has more than one hard link")
+            if metadata.st_size > MAX_RECEIPT_BYTES:
+                raise ValueError("receipt exceeds the byte limit")
+            chunks: list[bytes] = []
+            remaining = MAX_RECEIPT_BYTES + 1
+            while remaining > 0:
+                chunk = os.read(file_fd, min(65536, remaining))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            raw = b"".join(chunks)
+            if len(raw) > MAX_RECEIPT_BYTES:
+                raise ValueError("receipt exceeds the byte limit")
+        finally:
+            os.close(file_fd)
+    finally:
+        os.close(directory_fd)
+
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"receipt is unreadable: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("receipt is not an object")
+    return payload
+
+
 try:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-except (OSError, json.JSONDecodeError) as exc:
-    raise SystemExit(f"terminal deployment receipt is unreadable: {exc}") from exc
-if not isinstance(payload, dict):
-    raise SystemExit("terminal deployment receipt is not an object")
+    payload = read_root_receipt(path)
+except (OSError, ValueError) as exc:
+    raise SystemExit(f"terminal deployment receipt is unsafe: {exc}") from exc
+if payload.get("schema_version") != 5:
+    raise SystemExit("terminal deployment receipt schema is not current")
 if payload.get("commit") != commit:
     raise SystemExit("terminal deployment receipt targets another commit")
+if payload.get("deploy_invocation_id") != invocation_id:
+    raise SystemExit("terminal deployment receipt does not match current invocation")
+if payload.get("lock_domain") != "weltgewebe-production-deployment-v1":
+    raise SystemExit("terminal deployment receipt has another lock domain")
+if payload.get("lock_owner_entrypoint") != "reconciler":
+    raise SystemExit("terminal deployment receipt has another lock owner")
+if payload.get("lock_handoff") != "inherited":
+    raise SystemExit("terminal deployment receipt is not bound to inherited handoff")
 result = payload.get("result")
 if result not in {"superseded_after_migration", "superseded_after_deploy"}:
     raise SystemExit(f"unexpected terminal deployment result: {result!r}")
@@ -184,24 +345,272 @@ print(result)
 PY
 }
 
+read_deploy_tempfail_diagnostic() {
+  local commit="$1"
+  local invocation_id="$2"
+  local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$commit.json"
+  local contention_receipt="$DEPLOY_RECEIPT_ROOT/contention/$invocation_id.json"
+  local legacy_contention_receipt="$DEPLOY_RECEIPT_ROOT/last-contention.json"
+  python3 - "$deployment_receipt" "$contention_receipt" \
+    "$legacy_contention_receipt" "$commit" "$invocation_id" << 'PY'
+import json
+import os
+import stat
+import sys
+from pathlib import Path
+
+MAX_RECEIPT_BYTES = 1048576
+deployment_path = Path(sys.argv[1])
+contention_path = Path(sys.argv[2])
+legacy_contention_path = Path(sys.argv[3])
+commit = sys.argv[4]
+invocation_id = sys.argv[5]
+
+
+def read_safe(path: Path):
+    directory_fd = None
+    file_fd = None
+    try:
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+        directory_fd = os.open(path.parent, directory_flags)
+        directory_metadata = os.fstat(directory_fd)
+        if (
+            not stat.S_ISDIR(directory_metadata.st_mode)
+            or directory_metadata.st_uid != 0
+            or directory_metadata.st_mode & 0o022
+        ):
+            return "unsafe"
+        file_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
+        file_fd = os.open(path.name, file_flags, dir_fd=directory_fd)
+        metadata = os.fstat(file_fd)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != 0
+            or metadata.st_mode & 0o022
+            or metadata.st_nlink != 1
+            or metadata.st_size > MAX_RECEIPT_BYTES
+        ):
+            return "unsafe"
+        chunks: list[bytes] = []
+        remaining = MAX_RECEIPT_BYTES + 1
+        while remaining > 0:
+            chunk = os.read(file_fd, min(65536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        if len(raw) > MAX_RECEIPT_BYTES:
+            return "unsafe"
+        payload = json.loads(raw.decode("utf-8"))
+        return payload if isinstance(payload, dict) else "unsafe"
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return "unsafe"
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+
+def is_current_contention(payload: object) -> bool:
+    return (
+        isinstance(payload, dict)
+        and payload.get("schema_version") == 2
+        and payload.get("kind") == "weltgewebe_production_lock_contention"
+        and payload.get("requested_commit") == commit
+        and payload.get("deploy_invocation_id") == invocation_id
+        and payload.get("lock_domain") == "weltgewebe-production-deployment-v1"
+        and payload.get("entrypoint") == "reconciler"
+        and payload.get("result") == "already_running"
+    )
+
+
+deployment = read_safe(deployment_path)
+if deployment == "unsafe":
+    print("untrusted_receipt")
+elif (
+    isinstance(deployment, dict)
+    and deployment.get("schema_version") == 5
+    and deployment.get("commit") == commit
+    and deployment.get("deploy_invocation_id") == invocation_id
+    and deployment.get("lock_domain") == "weltgewebe-production-deployment-v1"
+    and deployment.get("lock_owner_entrypoint") == "reconciler"
+    and deployment.get("lock_handoff") == "inherited"
+    and deployment.get("result") == "failed"
+):
+    print("failed_deployment")
+else:
+    contention = read_safe(contention_path)
+    if contention == "unsafe":
+        print("untrusted_receipt")
+    elif is_current_contention(contention):
+        print("lock_contention")
+    elif contention is None:
+        legacy_contention = read_safe(legacy_contention_path)
+        if legacy_contention == "unsafe":
+            print("untrusted_receipt")
+        elif is_current_contention(legacy_contention):
+            print("lock_contention")
+        else:
+            print("unexplained")
+    else:
+        # The invocation-specific slot is authoritative when present. A
+        # conflicting object must not be overruled by the shared legacy slot.
+        print("unexplained")
+PY
+}
+
 repair_observed_deployment_state() {
   local verification_receipt="$1"
   local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$target_commit.json"
-  if [[ -e "$deployment_receipt" || -L "$deployment_receipt" ]]; then
-    [[ -f "$deployment_receipt" && ! -L "$deployment_receipt" ]] ||
-      fail "deployment receipt is not a regular file: $deployment_receipt"
-  fi
 
   python3 - "$verification_receipt" "$deployment_receipt" "$target_commit" << 'PY'
 import json
 import os
+import secrets
+import stat
 import sys
 from pathlib import Path
 
+MAX_RECEIPT_BYTES = 1048576
 verification_path = Path(sys.argv[1])
 deployment_path = Path(sys.argv[2])
 commit = sys.argv[3]
-verification = json.loads(verification_path.read_text(encoding="utf-8"))
+
+
+class UnsafeReceiptError(ValueError):
+    pass
+
+
+class InvalidReceiptContent(ValueError):
+    pass
+
+
+def read_root_json(path: Path, *, missing_ok: bool = False):
+    directory_fd = None
+    file_fd = None
+    try:
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+        directory_fd = os.open(path.parent, directory_flags)
+        directory_metadata = os.fstat(directory_fd)
+        if (
+            not stat.S_ISDIR(directory_metadata.st_mode)
+            or directory_metadata.st_uid != 0
+            or directory_metadata.st_mode & 0o022
+        ):
+            raise UnsafeReceiptError(f"receipt directory is unsafe: {path.parent}")
+        file_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
+        file_fd = os.open(path.name, file_flags, dir_fd=directory_fd)
+        metadata = os.fstat(file_fd)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise UnsafeReceiptError(f"receipt is not a regular file: {path}")
+        if metadata.st_uid != 0:
+            raise UnsafeReceiptError(f"receipt is not root-owned: {path}")
+        if metadata.st_mode & 0o022:
+            raise UnsafeReceiptError(f"receipt is group- or world-writable: {path}")
+        if metadata.st_nlink != 1:
+            raise UnsafeReceiptError(f"receipt has more than one hard link: {path}")
+        if metadata.st_size > MAX_RECEIPT_BYTES:
+            raise UnsafeReceiptError(f"receipt exceeds the byte limit: {path}")
+        chunks: list[bytes] = []
+        remaining = MAX_RECEIPT_BYTES + 1
+        while remaining > 0:
+            chunk = os.read(file_fd, min(65536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        if len(raw) > MAX_RECEIPT_BYTES:
+            raise UnsafeReceiptError(f"receipt exceeds the byte limit: {path}")
+    except FileNotFoundError:
+        if missing_ok:
+            return None
+        raise
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise InvalidReceiptContent(f"receipt is unreadable: {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise InvalidReceiptContent(f"receipt is not an object: {path}")
+    return payload
+
+
+def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    directory_fd = os.open(path.parent, directory_flags)
+    temporary_name = f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    temporary_created = False
+    try:
+        directory_metadata = os.fstat(directory_fd)
+        if (
+            not stat.S_ISDIR(directory_metadata.st_mode)
+            or directory_metadata.st_uid != 0
+            or directory_metadata.st_mode & 0o022
+        ):
+            raise SystemExit(f"receipt directory is unsafe: {path.parent}")
+        file_flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | os.O_CLOEXEC
+            | os.O_NOFOLLOW
+        )
+        file_fd = os.open(temporary_name, file_flags, 0o600, dir_fd=directory_fd)
+        temporary_created = True
+        try:
+            os.fchmod(file_fd, 0o600)
+            with os.fdopen(file_fd, "w", encoding="utf-8", closefd=False) as handle:
+                json.dump(payload, handle, sort_keys=True, indent=2)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(file_fd)
+            metadata = os.fstat(file_fd)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != 0
+                or metadata.st_nlink != 1
+                or metadata.st_mode & 0o777 != 0o600
+            ):
+                raise SystemExit("temporary receipt metadata is unsafe")
+        finally:
+            os.close(file_fd)
+        os.replace(
+            temporary_name,
+            path.name,
+            src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd,
+        )
+        temporary_created = False
+        os.fsync(directory_fd)
+    finally:
+        if temporary_created:
+            try:
+                os.unlink(temporary_name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
+        os.close(directory_fd)
+
+
+try:
+    verification = read_root_json(verification_path)
+except (OSError, UnsafeReceiptError, InvalidReceiptContent) as exc:
+    raise SystemExit(f"public verification receipt evidence is unsafe: {exc}") from exc
+try:
+    existing = read_root_json(deployment_path, missing_ok=True)
+except InvalidReceiptContent:
+    existing = None
+except (OSError, UnsafeReceiptError) as exc:
+    raise SystemExit(f"deployment receipt evidence is unsafe: {exc}") from exc
 if verification.get("pass") is not True:
     raise SystemExit("public verification receipt is not passing")
 if verification.get("expected_commit") != commit:
@@ -211,22 +620,68 @@ api = verification.get("api") or {}
 if frontend.get("commit") != commit or api.get("commit") != commit:
     raise SystemExit("public verification receipt does not bind both endpoints")
 
-preserve = False
-if deployment_path.exists():
-    try:
-        existing = json.loads(deployment_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        existing = None
-    if isinstance(existing, dict):
-        preserve = (
-            existing.get("commit") == commit
-            and existing.get("result") in {"verified", "verified_observed"}
+
+def is_lower_hex(value: object, length: int) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == length
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def is_current_verified_receipt(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    if (
+        payload.get("schema_version") != 5
+        or payload.get("environment") != "production"
+        or payload.get("commit") != commit
+        or payload.get("lock_domain") != "weltgewebe-production-deployment-v1"
+        or payload.get("api_commit") != commit
+        or payload.get("frontend_commit") != commit
+        or payload.get("observed_main_after_deploy") != commit
+        or not isinstance(payload.get("completed_at"), str)
+    ):
+        return False
+
+    result = payload.get("result")
+    owner = payload.get("lock_owner_entrypoint")
+    handoff = payload.get("lock_handoff")
+    invocation_id = payload.get("deploy_invocation_id")
+    if result == "verified":
+        if (
+            not is_lower_hex(payload.get("web_artifact_sha256"), 64)
+            or not isinstance(payload.get("started_at"), str)
+            or not isinstance(payload.get("migration_completed_at"), str)
+        ):
+            return False
+        return (
+            owner == "deploy-helper"
+            and handoff == "direct"
+            and invocation_id is None
+        ) or (
+            owner == "reconciler"
+            and handoff == "inherited"
+            and is_lower_hex(invocation_id, 64)
         )
-if preserve:
+    if result == "verified_observed":
+        return (
+            owner == "reconciler"
+            and handoff == "public-observation"
+            and invocation_id is None
+            and payload.get("web_artifact_sha256") is None
+            and payload.get("started_at") is None
+            and payload.get("migration_completed_at") is None
+            and isinstance(payload.get("evidence_boundary"), str)
+        )
+    return False
+
+
+if is_current_verified_receipt(existing):
     raise SystemExit(0)
 
 payload = {
-    "schema_version": 4,
+    "schema_version": 5,
     "environment": "production",
     "commit": commit,
     "web_artifact_sha256": None,
@@ -240,25 +695,13 @@ payload = {
     "lock_owner_entrypoint": "reconciler",
     "lock_handoff": "public-observation",
     "result": "verified_observed",
+    "deploy_invocation_id": None,
     "evidence_boundary": (
         "Recovered from exact public readback; original web artifact hash and "
         "deployment start time are unavailable."
     ),
 }
-temporary = deployment_path.with_name(
-    f".{deployment_path.name}.{os.getpid()}.tmp"
-)
-with temporary.open("w", encoding="utf-8") as handle:
-    json.dump(payload, handle, sort_keys=True, indent=2)
-    handle.write("\n")
-    handle.flush()
-    os.fsync(handle.fileno())
-os.replace(temporary, deployment_path)
-directory_fd = os.open(deployment_path.parent, os.O_RDONLY | os.O_DIRECTORY)
-try:
-    os.fsync(directory_fd)
-finally:
-    os.close(directory_fd)
+write_atomic_root_json(deployment_path, payload)
 PY
 
   ln -sfn "receipts/$target_commit.json" "$STATE_ROOT/current.json"
@@ -335,6 +778,23 @@ prune_artifacts() {
   fi
 }
 
+prune_deploy_contention_receipts() {
+  local contention_root="$DEPLOY_RECEIPT_ROOT/contention"
+  local old_receipt
+  local -a receipts=()
+
+  find "$contention_root" -maxdepth 1 -type f -name '*.json' -mtime +7 -delete
+  mapfile -t receipts < <(
+    find "$contention_root" -maxdepth 1 -type f -name '*.json' \
+      -printf '%T@ %p\n' | sort -nr | cut -d' ' -f2-
+  )
+  if ((${#receipts[@]} > 20)); then
+    for old_receipt in "${receipts[@]:20}"; do
+      rm -f -- "$old_receipt"
+    done
+  fi
+}
+
 prune_releases() {
   local current_release=""
   local previous_release=""
@@ -377,8 +837,10 @@ done
 install -d -o root -g root -m 0711 "$STATE_ROOT"
 install -d -o root -g root -m 0700 \
   "$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT" "$DOCKER_CONFIG"
+install -d -o root -g root -m 0700 "$DEPLOY_RECEIPT_ROOT/contention"
 install -d -o root -g root -m 0755 "$RELEASE_ROOT"
 acquire_production_lock
+prune_deploy_contention_receipts
 
 available_kib="$(df -Pk "$ARTIFACT_ROOT" | awk 'NR==2 {print $4}')"
 [[ "$available_kib" =~ ^[0-9]+$ ]] || fail "could not determine free disk space"
@@ -478,10 +940,14 @@ if [[ "$current_main" != "$target_commit" ]]; then
   exit 0
 fi
 
+deploy_invocation_id="$(new_deploy_invocation_id)"
+[[ "$deploy_invocation_id" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "deploy invocation identity generation failed"
 set +e
 WELTGEWEBE_PRODUCTION_LOCK_FD="$PRODUCTION_LOCK_FD" \
   WELTGEWEBE_PRODUCTION_LOCK_DOMAIN="$PRODUCTION_LOCK_DOMAIN" \
   WELTGEWEBE_PRODUCTION_LOCK_OWNER_ENTRYPOINT="reconciler" \
+  WELTGEWEBE_DEPLOY_INVOCATION_ID="$deploy_invocation_id" \
   "$DEPLOY_HELPER" \
   --commit "$target_commit" \
   --web-artifact "$artifact" \
@@ -493,17 +959,31 @@ case "$deploy_rc" in
   0) ;;
 
   "$EXIT_SUPERSEDED_AFTER_MIGRATION")
-    deploy_result="$(read_deploy_terminal_result "$target_commit")"
+    deploy_result="$(read_deploy_terminal_result "$target_commit" "$deploy_invocation_id")"
     [[ "$deploy_result" == "superseded_after_migration" ]] ||
       fail "deploy helper exit/result mismatch: exit=$deploy_rc result=$deploy_result"
     ;;
   "$EXIT_SUPERSEDED_AFTER_DEPLOY")
-    deploy_result="$(read_deploy_terminal_result "$target_commit")"
+    deploy_result="$(read_deploy_terminal_result "$target_commit" "$deploy_invocation_id")"
     [[ "$deploy_result" == "superseded_after_deploy" ]] ||
       fail "deploy helper exit/result mismatch: exit=$deploy_rc result=$deploy_result"
     ;;
   "$EX_TEMPFAIL")
-    fail "deploy helper returned temporary failure under inherited production lock"
+    tempfail_diagnostic="$(read_deploy_tempfail_diagnostic "$target_commit" "$deploy_invocation_id")"
+    case "$tempfail_diagnostic" in
+      failed_deployment)
+        fail "deploy helper returned child temporary failure after writing a failed receipt for the current invocation"
+        ;;
+      lock_contention)
+        fail "deploy helper reported production lock contention during inherited handoff"
+        ;;
+      untrusted_receipt)
+        fail "deploy helper returned temporary failure with unsafe receipt evidence"
+        ;;
+      *)
+        fail "deploy helper returned unexplained temporary failure under inherited production lock"
+        ;;
+    esac
     ;;
   *)
     fail "deploy helper failed with exit code $deploy_rc"

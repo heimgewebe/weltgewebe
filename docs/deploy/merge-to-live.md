@@ -159,15 +159,40 @@ unabhängig anfordert und sich selbst blockiert. Der Helfer schließt den
 Lock-Deskriptor gezielt für `weltgewebe-up`; dadurch können dessen mögliche
 Hintergrundprozesse die Produktionssperre nicht unbeabsichtigt festhalten.
 
+Jede Übergabe an den Deploy-Helfer erhält zusätzlich eine neue zufällige
+Aufruf-ID. Terminale Deployment-Belege und Konkurrenzbelege binden diese ID.
+Ein Beleg eines früheren Aufrufs darf deshalb selbst beim selben Commit keinen
+neuen Exit 79 oder 80 legitimieren. Exit 75 bleibt grundsätzlich ein Fehler:
+Der Reconciler unterscheidet nur anhand sicherer, root-eigener und nicht von
+Gruppe oder Welt beschreibbarer Belege, ob der aktuelle Kindaufruf bereits als
+fehlgeschlagen protokolliert wurde oder tatsächlich eine Sperrkonkurrenz meldete.
+Diese Diagnose erweitert nicht die Lock-Wahrheit; Besitz wird weiterhin nur
+durch die Kernel-Sperre bestimmt.
+
+Alle autorisierenden Deployment- und Konkurrenzbelege werden in einem
+root-eigenen, nicht gruppen- oder weltbeschreibbaren Verzeichnis über exklusiv
+angelegte, symlinkfreie Deskriptoren geschrieben. Der Modus wird unabhängig von
+der aufrufenden `umask` auf `0600` gesetzt; vor dem atomaren Austausch werden
+Dateityp, Eigentümer und einfache Linkzahl per `fstat` geprüft. Beim Lesen werden
+die Sicherheitsmetadaten und die begrenzten JSON-Bytes über denselben mit
+`O_NOFOLLOW` geöffneten Deskriptor ausgewertet. Dadurch kann ein Pfadtausch
+zwischen Prüfung und Auswertung keinen anderen Beleg unterschieben.
+
 Ein ausdrücklich unterstützter direkter Recovery-Aufruf des Deploy-Helfers erwirbt
 dieselbe Sperre selbst. Bei Konkurrenz verändert der abgewiesene Lauf weder
 Container noch öffentliche Zustände. Der Reconciler endet geordnet mit Exit 0;
 der direkte Helfer verwendet bei Konkurrenz `EX_TEMPFAIL` 75. Fachliche
 Überholung nach Migration beziehungsweise Volldeploy verwendet intern die
-getrennten Codes 79 und 80. Beide Einstiegspfade schreiben atomare
-`already_running`-Belege als `last-contention.json` in die bereits kanonischen
-Receipt-Verzeichnisse. Diese Belege sind Diagnoseflächen, keine zweite
-Zustandswahrheit. Maßgeblich für Besitz ist ausschließlich die vom Kernel gehaltene
+getrennten Codes 79 und 80. Bei einem geerbten Handoff schreibt der Helfer den
+autoritativen `already_running`-Beleg zunächst aufrufspezifisch nach
+`receipts/contention/<deploy-invocation-id>.json`. Zusätzlich aktualisiert er für
+die unmittelbare Rolling-Kompatibilität den gemeinsamen Diagnosepfad
+`receipts/last-contention.json`. Ein direkter Recovery-Aufruf ohne Aufruf-ID
+schreibt ausschließlich diesen gemeinsamen Pfad. Der Reconciler greift nur dann
+auf den gemeinsamen Beleg zurück, wenn der aufrufspezifische Beleg fehlt; ein
+vorhandener widersprüchlicher Aufrufbeleg bleibt fail-closed. Diese Belege sind
+Diagnoseflächen, keine zweite Zustandswahrheit. Maßgeblich für Besitz ist
+ausschließlich die vom Kernel gehaltene
 `flock`-Sperre. Eine liegengebliebene Lockdatei ohne offenen Besitzer blockiert
 daher keinen späteren Lauf.
 
