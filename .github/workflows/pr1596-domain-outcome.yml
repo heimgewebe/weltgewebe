@@ -1,0 +1,48 @@
+name: PR1596 Domain Outcome
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: write
+
+"on":
+  push:
+    branches: [fix/node-delete-archive-history-v1]
+    paths: ['.github/workflows/pr1596-domain-outcome.yml']
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Verify staged inputs
+        run: |
+          set -euo pipefail
+          base=4c3b3b6183e7e3c3c46ea32db1c1511ef7697bf3
+          test "$(git diff --name-only "$base" HEAD | sort)" = $'.github/pr1596-domain-outcome.py\n.github/workflows/pr1596-domain-outcome.yml'
+      - name: Apply
+        run: python3 .github/pr1596-domain-outcome.py
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
+        with:
+          toolchain: stable
+      - name: Validate
+        run: |
+          set -euo pipefail
+          test "$(git diff --name-only | sort)" = 'apps/api/src/domain_db.rs'
+          cargo fmt --manifest-path apps/api/Cargo.toml -- --check
+          cargo clippy --locked --manifest-path apps/api/Cargo.toml --all-targets -- -D warnings
+          cargo test --locked --manifest-path apps/api/Cargo.toml --test db_domain_node_write_path --no-run
+          git diff --check
+      - name: Publish
+        run: |
+          set -euo pipefail
+          rm .github/pr1596-domain-outcome.py .github/workflows/pr1596-domain-outcome.yml
+          git config user.name weltgewebe-operator
+          git config user.email actions@users.noreply.github.com
+          git add apps/api/src/domain_db.rs .github/pr1596-domain-outcome.py .github/workflows/pr1596-domain-outcome.yml
+          git commit -m 'feat(nodes): return conversation removal effects'
+          git push origin HEAD:fix/node-delete-archive-history-v1
