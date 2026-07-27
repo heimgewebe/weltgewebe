@@ -112,6 +112,53 @@ class ProductionReceiptResilienceTests(unittest.TestCase):
         self.assertEqual(len(invocation_receipts), 1)
         self.assertTrue((fixture.state / "receipts" / "last-contention.json").exists())
 
+    def test_present_invalid_invocation_contention_cannot_fall_back_to_legacy(
+        self,
+    ) -> None:
+        fixture = self.fixture
+        wrapper = fixture.bin / "invalid-invocation-contention-deploy"
+        wrapper.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env bash
+                set -euo pipefail
+                exec 9<> "$WELTGEWEBE_DEPLOY_STATE_ROOT/production-deployment.lock"
+                set +e
+                "$TEST_DEPLOY_SCRIPT" "$@"
+                inherited_rc=$?
+                set -e
+                invocation_receipt="$WELTGEWEBE_DEPLOY_STATE_ROOT/receipts/contention/$WELTGEWEBE_DEPLOY_INVOCATION_ID.json"
+                printf '{}\n' > "$invocation_receipt"
+                chmod 0600 "$invocation_receipt"
+                exit "$inherited_rc"
+                """
+            ),
+            encoding="utf-8",
+        )
+        wrapper.chmod(0o755)
+
+        result = fixture.reconcile_stale_public_commit(
+            deploy_helper=wrapper,
+            extra_env={"TEST_DEPLOY_SCRIPT": str(DEPLOY_SCRIPT)},
+        )
+        fixture.restore_test_ownership()
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "unexplained temporary failure under inherited production lock",
+            result.stderr,
+        )
+        self.assertNotIn(
+            "production lock contention during inherited handoff",
+            result.stderr,
+        )
+        legacy = json.loads(
+            (fixture.state / "receipts" / "last-contention.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(legacy["result"], "already_running")
+
     def test_permissive_caller_umask_produces_canonical_release_modes(
         self,
     ) -> None:
@@ -128,6 +175,12 @@ class ProductionReceiptResilienceTests(unittest.TestCase):
         )
         receipt = fixture.state / "receipts" / f"{fixture.commit}.json"
         self.assertEqual(receipt.stat().st_mode & 0o777, 0o600)
+        child_umasks = (
+            (fixture.root / "weltgewebe-up-umask.log")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        )
+        self.assertEqual(child_umasks, ["0077", "0077"])
 
     def test_reviewed_resilience_preconditions_are_already_present(self) -> None:
         deploy = Path(DEPLOY_SCRIPT).read_text(encoding="utf-8")

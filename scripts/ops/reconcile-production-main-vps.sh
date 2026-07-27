@@ -448,7 +448,7 @@ else:
         print("untrusted_receipt")
     elif is_current_contention(contention):
         print("lock_contention")
-    else:
+    elif contention is None:
         legacy_contention = read_safe(legacy_contention_path)
         if legacy_contention == "unsafe":
             print("untrusted_receipt")
@@ -456,6 +456,10 @@ else:
             print("lock_contention")
         else:
             print("unexplained")
+    else:
+        # The invocation-specific slot is authoritative when present. A
+        # conflicting object must not be overruled by the shared legacy slot.
+        print("unexplained")
 PY
 }
 

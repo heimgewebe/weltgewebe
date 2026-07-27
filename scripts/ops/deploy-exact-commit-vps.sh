@@ -63,8 +63,11 @@ run_release_deploy() {
       fail "unsupported release deployment scope: $scope"
       ;;
   esac
-  DEPLOY_TARGET=vps ENV_FILE="$RUNTIME_ENV" \
-    "$release_dir/scripts/weltgewebe-up" "${arguments[@]}" 9>&-
+  (
+    umask 077
+    DEPLOY_TARGET=vps ENV_FILE="$RUNTIME_ENV" \
+      "$release_dir/scripts/weltgewebe-up" "${arguments[@]}" 9>&-
+  )
 }
 
 require_command() {
