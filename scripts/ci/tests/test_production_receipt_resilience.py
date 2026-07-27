@@ -110,9 +110,7 @@ class ProductionReceiptResilienceTests(unittest.TestCase):
             (fixture.state / "receipts" / "contention").glob("*.json")
         )
         self.assertEqual(len(invocation_receipts), 1)
-        self.assertTrue(
-            (fixture.state / "receipts" / "last-contention.json").exists()
-        )
+        self.assertTrue((fixture.state / "receipts" / "last-contention.json").exists())
 
     def test_permissive_caller_umask_produces_canonical_release_modes(
         self,
@@ -134,20 +132,18 @@ class ProductionReceiptResilienceTests(unittest.TestCase):
     def test_reviewed_resilience_preconditions_are_already_present(self) -> None:
         deploy = Path(DEPLOY_SCRIPT).read_text(encoding="utf-8")
         reconciler = (
-            Path(DEPLOY_SCRIPT).with_name("reconcile-production-main-vps.sh").read_text(
-                encoding="utf-8"
-            )
+            Path(DEPLOY_SCRIPT)
+            .with_name("reconcile-production-main-vps.sh")
+            .read_text(encoding="utf-8")
         )
 
         for initialized in ('started_at=""', 'api_commit=""', 'frontend_commit=""'):
             self.assertIn(initialized, deploy)
         receipt_root_creation = reconciler.index(
-            '"$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT" '
-            '"$DOCKER_CONFIG"'
+            '"$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT" "$DOCKER_CONFIG"'
         )
         contention_root_creation = reconciler.index(
-            'install -d -o root -g root -m 0700 '
-            '"$DEPLOY_RECEIPT_ROOT/contention"'
+            'install -d -o root -g root -m 0700 "$DEPLOY_RECEIPT_ROOT/contention"'
         )
         observation = reconciler.index('if "$LIVE_VERIFIER"')
         self.assertLess(receipt_root_creation, observation)
