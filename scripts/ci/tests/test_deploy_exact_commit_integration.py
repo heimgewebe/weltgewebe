@@ -417,7 +417,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         forbidden_deploy.chmod(0o755)
 
         tempfail_deploy = self.bin / "tempfail-deploy"
-        tempfail_deploy.write_text("#!/usr/bin/env bash\nexit 75\n", encoding="utf-8")
+        tempfail_deploy.write_text(
+            "#!/usr/bin/env bash\nexit 75\n", encoding="utf-8"
+        )
         tempfail_deploy.chmod(0o755)
 
         inherited_deploy = self.bin / "inherited-deploy"
@@ -704,9 +706,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         deployment_receipt = json.loads(
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(
-            deployment_receipt["lock_domain"], "weltgewebe-production-deployment-v1"
-        )
+        self.assertEqual(deployment_receipt["lock_domain"], "weltgewebe-production-deployment-v1")
         self.assertEqual(deployment_receipt["lock_owner_entrypoint"], "reconciler")
         self.assertEqual(deployment_receipt["lock_handoff"], "inherited")
         self.assertRegex(
@@ -765,7 +765,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             (self.state / "reconcile-receipts" / f"{self.commit}.json").read_text()
         )
         self.assertEqual(receipt["result"], "failed")
-        self.assertFalse((self.state / "receipts" / f"{self.commit}.json").exists())
+        self.assertFalse(
+            (self.state / "receipts" / f"{self.commit}.json").exists()
+        )
 
     def test_deploy_helper_rejects_each_invalid_inherited_handoff_branch(self) -> None:
         cases = (
@@ -889,6 +891,60 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.assertEqual(receipt["result"], "failed")
         self.assertRegex(receipt["deploy_invocation_id"], r"^[0-9a-f]{64}$")
 
+    def test_reconciler_ignores_stale_failed_receipt_for_tempfail(self) -> None:
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json",
+            {
+                "schema_version": 5,
+                "commit": self.commit,
+                "result": "failed",
+                "lock_domain": "weltgewebe-production-deployment-v1",
+                "lock_owner_entrypoint": "reconciler",
+                "lock_handoff": "inherited",
+                "deploy_invocation_id": "b" * 64,
+            },
+        )
+        result = self.reconcile_stale_public_commit(
+            deploy_helper=self.bin / "exit-code-deploy",
+            extra_env={"TEST_DEPLOY_EXIT_CODE": "75"},
+        )
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "unexplained temporary failure under inherited production lock",
+            result.stderr,
+        )
+        self.assertNotIn("child temporary failure", result.stderr)
+
+    def test_reconciler_rejects_unsafe_tempfail_receipt(self) -> None:
+        receipt = self.state / "receipts" / f"{self.commit}.json"
+        run(
+            self.privileged(
+                [
+                    "install",
+                    "-d",
+                    "-o",
+                    "root",
+                    "-g",
+                    "root",
+                    "-m",
+                    "0700",
+                    str(receipt.parent),
+                ]
+            )
+        )
+        run(self.privileged(["ln", "-s", str(self.runtime_env), str(receipt)]))
+        result = self.reconcile_stale_public_commit(
+            deploy_helper=self.bin / "exit-code-deploy",
+            extra_env={"TEST_DEPLOY_EXIT_CODE": "75"},
+        )
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "deploy helper returned temporary failure with unsafe receipt evidence",
+            result.stderr,
+        )
+
     def test_reconciler_identifies_actual_inherited_lock_contention(self) -> None:
         result = self.reconcile_stale_public_commit(
             deploy_helper=self.bin / "lock-contention-deploy",
@@ -982,9 +1038,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.assertEqual(receipt["lock_domain"], "weltgewebe-production-deployment-v1")
         self.assertFalse((self.root / "weltgewebe-up.log").exists())
 
-    def test_reconciler_owner_rejects_direct_helper_without_deploy_effects(
-        self,
-    ) -> None:
+    def test_reconciler_owner_rejects_direct_helper_without_deploy_effects(self) -> None:
         owner, release = self.start_blocking_reconciler()
         try:
             contender = self.deploy(advance=False)
@@ -1020,9 +1074,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         result = self.deploy(advance=False)
         self.restore_test_ownership()
         self.assertEqual(result.returncode, 0, result.stderr)
-        deploy_calls = (
-            (self.root / "weltgewebe-up.log").read_text(encoding="utf-8").splitlines()
-        )
+        deploy_calls = (self.root / "weltgewebe-up.log").read_text(
+            encoding="utf-8"
+        ).splitlines()
         self.assertEqual(len(deploy_calls), 2)
         self.assertIn("--deploy-scope migration", deploy_calls[0])
         self.assertNotIn("--with-caddy", deploy_calls[0])
@@ -1041,15 +1095,13 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         current = (self.state / "current.json").resolve()
         self.assertEqual(current, receipt_path)
 
-    def test_main_advancing_after_migration_is_superseded_before_full_deploy(
-        self,
-    ) -> None:
+    def test_main_advancing_after_migration_is_superseded_before_full_deploy(self) -> None:
         result = self.deploy(advance=False, advance_after_migration=True)
         self.restore_test_ownership()
         self.assertEqual(result.returncode, 79, result.stderr)
-        deploy_calls = (
-            (self.root / "weltgewebe-up.log").read_text(encoding="utf-8").splitlines()
-        )
+        deploy_calls = (self.root / "weltgewebe-up.log").read_text(
+            encoding="utf-8"
+        ).splitlines()
         self.assertEqual(len(deploy_calls), 1)
         self.assertIn("--deploy-scope migration", deploy_calls[0])
         receipt_path = self.state / "receipts" / f"{self.commit}.json"
@@ -1065,9 +1117,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         result = self.deploy(advance=False, fail_full=True)
         self.restore_test_ownership()
         self.assertEqual(result.returncode, 42, result.stderr)
-        deploy_calls = (
-            (self.root / "weltgewebe-up.log").read_text(encoding="utf-8").splitlines()
-        )
+        deploy_calls = (self.root / "weltgewebe-up.log").read_text(
+            encoding="utf-8"
+        ).splitlines()
         self.assertEqual(len(deploy_calls), 2)
         self.assertIn("--deploy-scope migration", deploy_calls[0])
         self.assertIn("--with-caddy", deploy_calls[1])
@@ -1085,9 +1137,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.restore_test_ownership()
         self.assertNotEqual(result.returncode, 0, result.stderr)
         self.assertNotEqual(result.returncode, 75, result.stderr)
-        deploy_calls = (
-            (self.root / "weltgewebe-up.log").read_text(encoding="utf-8").splitlines()
-        )
+        deploy_calls = (self.root / "weltgewebe-up.log").read_text(
+            encoding="utf-8"
+        ).splitlines()
         self.assertEqual(len(deploy_calls), 1)
         self.assertIn("--deploy-scope migration", deploy_calls[0])
         receipt = json.loads(
