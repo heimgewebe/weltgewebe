@@ -57,7 +57,23 @@
     );
 
   function proposalMessageCount(proposal: Proposal): number {
-    return Math.max(0, proposal.message_count ?? 0);
+    const count = proposal.message_count;
+    return typeof count === "number" &&
+      Number.isFinite(count) &&
+      Number.isSafeInteger(count) &&
+      count >= 0
+      ? count
+      : 0;
+  }
+
+  function updateProposalMessageCount(
+    event: CustomEvent<{ proposalId: string; messageCount: number }>,
+  ) {
+    proposals = proposals.map((proposal) =>
+      proposal.id === event.detail.proposalId
+        ? { ...proposal, message_count: event.detail.messageCount }
+        : proposal,
+    );
   }
 
   function describeError(cause: unknown): string {
@@ -163,7 +179,10 @@
 </svelte:head>
 
 {#if selectedProposalId}
-  <ProposalDetail proposalId={selectedProposalId} />
+  <ProposalDetail
+    proposalId={selectedProposalId}
+    on:messagecountchange={updateProposalMessageCount}
+  />
 {:else}
   <main class="wg-page wg-page--paper" data-testid="applications-page">
     <div class="wg-page__shell">

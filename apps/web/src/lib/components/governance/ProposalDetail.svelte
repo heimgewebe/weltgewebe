@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { createEventDispatcher, onMount } from "svelte";
   import { authStore } from "$lib/auth/store";
   import GovernanceFaden from "./GovernanceFaden.svelte";
   import {
@@ -17,6 +17,10 @@
   } from "$lib/api/governance";
 
   export let proposalId: string;
+
+  const dispatch = createEventDispatcher<{
+    messagecountchange: { proposalId: string; messageCount: number };
+  }>();
 
   let proposal: ProposalDetail | null = null;
   let messages: ProposalMessage[] = [];
@@ -51,6 +55,10 @@
         getProposal(proposalId),
         listProposalMessages(proposalId),
       ]);
+      dispatch("messagecountchange", {
+        proposalId,
+        messageCount: messages.length,
+      });
     } catch (cause) {
       error = describeError(cause);
     } finally {
@@ -94,6 +102,10 @@
     try {
       const created = await postProposalMessage(proposal.id, messageBody);
       messages = [...messages, created];
+      dispatch("messagecountchange", {
+        proposalId: proposal.id,
+        messageCount: messages.length,
+      });
       messageBody = "";
     } catch (cause) {
       error = describeError(cause);

@@ -45,7 +45,9 @@ async function installGovernanceRoutes(
     initialStatus?: "consent" | "voting";
     existingApplicantId?: string;
     initialMessageCount?: number;
+    initialMessages?: number;
     omitMessageCount?: boolean;
+    rawListMessageCount?: string;
     deferListResponse?: boolean;
   } = {},
 ) {
@@ -68,20 +70,24 @@ async function installGovernanceRoutes(
 
     if (url.pathname === "/api/proposals" && method === "GET") {
       if (listResponseGate) await listResponseGate;
+      const listedProposal = {
+        ...proposal(
+          currentStatus,
+          options.omitMessageCount ? null : (options.initialMessageCount ?? 1),
+        ),
+        applicant_account_id: options.existingApplicantId ?? GUEST_ID,
+      };
+      let responseBody = JSON.stringify([listedProposal]);
+      if (options.rawListMessageCount) {
+        responseBody = responseBody.replace(
+          /"message_count":-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/i,
+          `"message_count":${options.rawListMessageCount}`,
+        );
+      }
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            ...proposal(
-              currentStatus,
-              options.omitMessageCount
-                ? null
-                : (options.initialMessageCount ?? 1),
-            ),
-            applicant_account_id: options.existingApplicantId ?? GUEST_ID,
-          },
-        ]),
+        body: responseBody,
       });
     }
     if (url.pathname === "/api/proposals" && method === "POST") {
@@ -114,15 +120,15 @@ async function installGovernanceRoutes(
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "message-1",
+        body: JSON.stringify(
+          Array.from({ length: options.initialMessages ?? 1 }, (_, index) => ({
+            id: `message-${index + 1}`,
             author_account_id: WEBER_ID,
             author_title: "Weber im Test",
             body: "Willkommen im öffentlichen Gesprächsraum.",
             created_at: "2026-07-14T12:00:00Z",
-          },
-        ]),
+          })),
+        ),
       });
     }
     if (
@@ -294,6 +300,47 @@ test("the conversation view treats a legacy API without message_count as empty",
   await expect(
     page.getByText("Noch gibt es keine Gespräche mit Beiträgen."),
   ).toBeVisible();
+});
+
+test("the conversation view rejects a non-finite message count", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  await installGovernanceRoutes(page, {
+    initialStatus: "voting",
+    rawListMessageCount: "1e400",
+  });
+
+  await page.goto("/antraege?ereignis=gespraech");
+  await expect(page.getByText("Weberstatus für Gast im Test")).toHaveCount(0);
+  await expect(
+    page.getByText("Noch gibt es keine Gespräche mit Beiträgen."),
+  ).toBeVisible();
+});
+
+test("the first contribution updates the retained proposal projection", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  await installGovernanceRoutes(page, {
+    initialStatus: "consent",
+    initialMessageCount: 0,
+    initialMessages: 0,
+  });
+
+  await page.goto(`/antraege?id=${PROPOSAL_ID}`);
+  await page.getByLabel("Beitrag verfassen").fill("Erster belegter Beitrag");
+  await page.getByRole("button", { name: "Beitrag senden" }).click();
+  await expect(page.getByText("Erster belegter Beitrag")).toBeVisible();
+
+  await page.getByRole("link", { name: "Alle Anträge" }).click();
+  await expect(page.getByText("1 Beitrag", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Gespräche" }).click();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
 });
 
 test("the conversation view excludes voting proposals without contributions", async ({
