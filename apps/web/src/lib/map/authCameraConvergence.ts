@@ -28,6 +28,10 @@ export function shouldApplyOwnGarnrolleCamera(
   );
 }
 
+/**
+ * Compare against the camera used at map construction so movement that happens
+ * before the delayed auth module loads still blocks a later recenter.
+ */
 export function hasMapCameraChanged(
   map: CameraReader,
   initialCenter: [number, number],
