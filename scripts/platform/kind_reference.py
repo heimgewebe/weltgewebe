@@ -951,6 +951,121 @@ def wait_http_route_parent_condition(
     )
 
 
+def _dockerfile_physical_lines(source: str) -> list[str]:
+    parts = source.split("\n")
+    return [
+        part + ("\n" if index < len(parts) - 1 else "")
+        for index, part in enumerate(parts)
+    ]
+
+
+def _dockerfile_line_parts(line: str) -> tuple[str, str]:
+    if line.endswith("\r\n"):
+        return line[:-2], "\r\n"
+    if line.endswith("\n"):
+        return line[:-1], "\n"
+    return line, ""
+
+
+def _dockerfile_logical_instructions(
+    source: str, relative: Path
+) -> list[tuple[str, str, str]]:
+    instructions: list[tuple[str, str, str]] = []
+    logical_parts: list[str] = []
+    original_parts: list[str] = []
+    for line in _dockerfile_physical_lines(source):
+        body, ending = _dockerfile_line_parts(line)
+        if re.match(
+            r"^\s*#\s*(?:syntax|escape)\s*=",
+            body,
+            re.IGNORECASE,
+        ):
+            raise ProofError(
+                f"Dockerfile {relative} uses a forbidden parser directive: {body}"
+            )
+        if logical_parts and not body.strip():
+            raise ProofError(
+                f"Dockerfile {relative} has a blank line inside a continued instruction"
+            )
+        if body.lstrip().startswith("#"):
+            if logical_parts:
+                raise ProofError(
+                    f"Dockerfile {relative} has a comment inside a continued instruction"
+                )
+            instructions.append((body, line, ending))
+            continue
+        original_parts.append(line)
+        continuation_candidate = body.rstrip(" \t")
+        continued = continuation_candidate.endswith("\\")
+        if continued:
+            logical_parts.append(continuation_candidate[:-1])
+            continue
+        logical_parts.append(body)
+        instructions.append(
+            ("".join(logical_parts), "".join(original_parts), ending)
+        )
+        logical_parts = []
+        original_parts = []
+    if logical_parts or original_parts:
+        raise ProofError(f"Dockerfile {relative} has a dangling line continuation")
+    return instructions
+
+
+def _dockerfile_stage_source_allowed(
+    source: str, stage_aliases: set[str], stage_count: int
+) -> bool:
+    normalized = source.casefold()
+    if normalized in stage_aliases:
+        return True
+    return source.isdecimal() and int(source) < stage_count
+
+
+def _validate_dockerfile_external_sources(
+    logical: str,
+    *,
+    keyword: str,
+    relative: Path,
+    stage_aliases: set[str],
+    stage_count: int,
+) -> None:
+    if keyword == "ADD":
+        raise ProofError(
+            f"Dockerfile {relative} uses ADD, which is forbidden in strict OCI mode"
+        )
+    if keyword == "ONBUILD":
+        raise ProofError(
+            f"Dockerfile {relative} uses ONBUILD, which is forbidden in strict OCI mode"
+        )
+    if keyword in {"COPY", "ADD"}:
+        sources = re.findall(
+            r"(?:^|\s)--from(?:=|\s+)([^\s]+)", logical, re.IGNORECASE
+        )
+        for source in sources:
+            if not _dockerfile_stage_source_allowed(
+                source, stage_aliases, stage_count
+            ):
+                raise ProofError(
+                    f"Dockerfile {relative} uses uncontrolled --from source {source}"
+                )
+    if keyword == "RUN":
+        mounts = re.findall(
+            r"(?:^|\s)--mount=([^\s]+)", logical, re.IGNORECASE
+        )
+        for mount in mounts:
+            options: dict[str, str] = {}
+            for item in mount.split(","):
+                key, separator, value = item.partition("=")
+                if separator:
+                    options[key.casefold()] = value
+            source = options.get("from")
+            if source is not None and not _dockerfile_stage_source_allowed(
+                source, stage_aliases, stage_count
+            ):
+                raise ProofError(
+                    f"Dockerfile {relative} uses uncontrolled RUN mount source {source}"
+                )
+
+
 def controlled_oci_dockerfile(path: Path) -> str:
     source = path.read_text(encoding="utf-8")
     if source.startswith("\ufeff"):
@@ -990,26 +1105,49 @@ def controlled_oci_dockerfile(path: Path) -> str:
         r"(?P<suffix>(?:\s+AS\s+(?P<alias>[A-Za-z0-9._-]+))?\s*)$",
         re.IGNORECASE,
     )
+    instruction = re.compile(
+        r"^\s*(?P<keyword>[A-Za-z]+)(?=\s|$)", re.IGNORECASE
+    )
     observed: dict[str, int] = {name: 0 for name in expected}
     stage_aliases: set[str] = set()
+    stage_count = 0
     rewritten: list[str] = []
-    for line in source.splitlines(keepends=True):
-        body = line.rstrip("\r\n")
-        ending = line[len(body) :]
-        if re.match(r"^\s*FROM(?:\s|$)", body, re.IGNORECASE) is None:
-            rewritten.append(line)
+    for logical, original, ending in _dockerfile_logical_instructions(
+        source, relative
+    ):
+        stripped = logical.lstrip()
+        if not stripped or stripped.startswith("#"):
+            rewritten.append(original)
             continue
-        match = from_instruction.fullmatch(body)
+        instruction_match = instruction.match(logical)
+        if instruction_match is None:
+            raise ProofError(
+                f"Dockerfile {relative} has unsupported instruction syntax: {logical}"
+            )
+        keyword = instruction_match.group("keyword").upper()
+        if keyword != "FROM":
+            _validate_dockerfile_external_sources(
+                logical,
+                keyword=keyword,
+                relative=relative,
+                stage_aliases=stage_aliases,
+                stage_count=stage_count,
+            )
+            rewritten.append(original)
+            continue
+        match = from_instruction.fullmatch(logical)
         if match is None:
-            raise ProofError(f"Dockerfile {relative} has unsupported FROM syntax: {body}")
+            raise ProofError(
+                f"Dockerfile {relative} has unsupported FROM syntax: {logical}"
+            )
         image = match.group("image")
         replacement = controlled_refs.get(image)
         if replacement is None:
-            if image not in stage_aliases:
+            if image.casefold() not in stage_aliases:
                 raise ProofError(
                     f"Dockerfile {relative} uses uncontrolled OCI base image {image}"
                 )
-            rewritten.append(line)
+            rewritten.append(original)
         else:
             name, local_ref = replacement
             observed[name] += 1
@@ -1018,7 +1156,8 @@ def controlled_oci_dockerfile(path: Path) -> str:
             )
         alias = match.group("alias")
         if alias is not None:
-            stage_aliases.add(alias)
+            stage_aliases.add(alias.casefold())
+        stage_count += 1
 
     invalid_counts = {name: count for name, count in observed.items() if count != 1}
     if invalid_counts:

