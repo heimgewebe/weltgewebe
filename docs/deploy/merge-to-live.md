@@ -169,6 +169,15 @@ fehlgeschlagen protokolliert wurde oder tatsächlich eine Sperrkonkurrenz meldet
 Diese Diagnose erweitert nicht die Lock-Wahrheit; Besitz wird weiterhin nur
 durch die Kernel-Sperre bestimmt.
 
+Alle autorisierenden Deployment- und Konkurrenzbelege werden in einem
+root-eigenen, nicht gruppen- oder weltbeschreibbaren Verzeichnis über exklusiv
+angelegte, symlinkfreie Deskriptoren geschrieben. Der Modus wird unabhängig von
+der aufrufenden `umask` auf `0600` gesetzt; vor dem atomaren Austausch werden
+Dateityp, Eigentümer und einfache Linkzahl per `fstat` geprüft. Beim Lesen werden
+die Sicherheitsmetadaten und die begrenzten JSON-Bytes über denselben mit
+`O_NOFOLLOW` geöffneten Deskriptor ausgewertet. Dadurch kann ein Pfadtausch
+zwischen Prüfung und Auswertung keinen anderen Beleg unterschieben.
+
 Ein ausdrücklich unterstützter direkter Recovery-Aufruf des Deploy-Helfers erwirbt
 dieselbe Sperre selbst. Bei Konkurrenz verändert der abgewiesene Lauf weder
 Container noch öffentliche Zustände. Der Reconciler endet geordnet mit Exit 0;
