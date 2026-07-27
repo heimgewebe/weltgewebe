@@ -24,7 +24,7 @@ jobs:
           args: >
             --accept 200,429
             --max-redirects 5
-            --exclude-mail
+            --include-mail=false
             --no-progress
             --config .lychee.toml
             --exclude "https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?"
