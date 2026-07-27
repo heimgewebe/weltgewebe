@@ -38,6 +38,7 @@ test("login uses the shared page, form and state contracts without changing the 
   await emailInput.fill("person@example.org");
   await page.getByRole("button", { name: "Login-Link senden" }).click();
 
+  // The action module loads lazily, so observe the dispatched request rather than a synchronous implementation detail.
   await expect.poll(() => requestBody).toEqual({ email: "person@example.org" });
   await expect(page.getByRole("status")).toContainText("Postfach prüfen");
 });
