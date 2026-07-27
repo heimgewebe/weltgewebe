@@ -2,10 +2,12 @@
 -- node is gone, its archive cannot be reattached without inventing canonical
 -- map state, so the migration fails closed instead of erasing public history.
 
-DROP TRIGGER IF EXISTS domain_messages_archived_conversation_guard ON domain_messages;
-DROP FUNCTION IF EXISTS weltgewebe_protect_archived_conversation_messages();
-DROP TRIGGER IF EXISTS domain_conversations_archived_record_guard ON domain_conversations;
-DROP FUNCTION IF EXISTS weltgewebe_protect_archived_conversation_record();
+DROP TRIGGER IF EXISTS domain_conversations_archived_outbox ON domain_conversations;
+DROP FUNCTION IF EXISTS weltgewebe_enqueue_conversation_archived_event();
+DROP TRIGGER IF EXISTS domain_messages_conversation_lifecycle_guard ON domain_messages;
+DROP FUNCTION IF EXISTS weltgewebe_protect_conversation_messages();
+DROP TRIGGER IF EXISTS domain_conversations_history_guard ON domain_conversations;
+DROP FUNCTION IF EXISTS weltgewebe_protect_conversation_record_history();
 
 LOCK TABLE domain_nodes IN SHARE ROW EXCLUSIVE MODE;
 LOCK TABLE domain_conversations IN SHARE ROW EXCLUSIVE MODE;
