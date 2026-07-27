@@ -40,18 +40,32 @@ UPGRADE_API_IMAGE = "weltgewebe-api:ha-upgrade-candidate"
 REFERENCE_AVAILABILITY_OBJECTIVE = 0.999
 
 
+class ClusterLifecycle:
+    def __init__(
+        self, *, primary_created: bool = False, restore_created: bool = False
+    ) -> None:
+        self.primary_created = primary_created
+        self.restore_created = restore_created
+
+
 def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def run_with_environment(argv: list[str], values: dict[str, str], *, timeout: int | None = None) -> None:
+def run_with_environment(
+    argv: list[str], values: dict[str, str], *, timeout: int | None = None
+) -> None:
     print("+", " ".join(argv), f"[env: {','.join(sorted(values))}]", flush=True)
     environment = os.environ.copy()
     environment.update(values)
-    subprocess.run(argv, cwd=ROOT, check=True, text=True, env=environment, timeout=timeout)
+    subprocess.run(
+        argv, cwd=ROOT, check=True, text=True, env=environment, timeout=timeout
+    )
 
 
-def wait_until(description: str, probe, *, timeout_seconds: int = 600, interval: float = 2.0):
+def wait_until(
+    description: str, probe, *, timeout_seconds: int = 600, interval: float = 2.0
+):
     deadline = time.monotonic() + timeout_seconds
     last: Any = None
     while time.monotonic() < deadline:
@@ -107,14 +121,23 @@ def apply_secret_contracts(kubectl: str, app_password: str, s3_secret_key: str) 
             {
                 "apiVersion": "v1",
                 "kind": "Secret",
-                "metadata": {"name": "weltgewebe-ha-s3", "namespace": "weltgewebe-data"},
+                "metadata": {
+                    "name": "weltgewebe-ha-s3",
+                    "namespace": "weltgewebe-data",
+                },
                 "type": "Opaque",
-                "stringData": {"ACCESS_KEY_ID": S3_ACCESS_KEY, "ACCESS_SECRET_KEY": s3_secret_key},
+                "stringData": {
+                    "ACCESS_KEY_ID": S3_ACCESS_KEY,
+                    "ACCESS_SECRET_KEY": s3_secret_key,
+                },
             },
             {
                 "apiVersion": "v1",
                 "kind": "Secret",
-                "metadata": {"name": "weltgewebe-ha-app", "namespace": "weltgewebe-data"},
+                "metadata": {
+                    "name": "weltgewebe-ha-app",
+                    "namespace": "weltgewebe-data",
+                },
                 "type": "kubernetes.io/basic-auth",
                 "stringData": {"username": APP_USER, "password": app_password},
             },
@@ -122,10 +145,10 @@ def apply_secret_contracts(kubectl: str, app_password: str, s3_secret_key: str) 
     )
 
 
-def apply_runtime_secret(kubectl: str, app_password: str, *, postgres_service: str = "postgres-ha-rw") -> None:
-    database_url = (
-        f"postgres://{APP_USER}:{app_password}@{postgres_service}.weltgewebe-data.svc.cluster.local:5432/weltgewebe"
-    )
+def apply_runtime_secret(
+    kubectl: str, app_password: str, *, postgres_service: str = "postgres-ha-rw"
+) -> None:
+    database_url = f"postgres://{APP_USER}:{app_password}@{postgres_service}.weltgewebe-data.svc.cluster.local:5432/weltgewebe"
     ref.apply_yaml(
         kubectl,
         {
@@ -184,9 +207,7 @@ def _object_store_labels(resource_kind: str, name: str) -> dict[str, str] | None
         ]
     else:
         raise ValueError(f"unsupported object-store resource kind: {resource_kind}")
-    result = subprocess.run(
-        argv, cwd=ROOT, text=True, capture_output=True, timeout=30
-    )
+    result = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True, timeout=30)
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
         missing_markers = (
@@ -253,12 +274,12 @@ def start_external_object_store(
     container, volume = external_object_store_names(cluster)
     binding = external_object_store_binding(cluster, commit, owner_id)
     if _object_store_labels("container", container) is not None:
-        raise ref.ProofError(f"external object-store container already exists: {container}")
+        raise ref.ProofError(
+            f"external object-store container already exists: {container}"
+        )
     if _object_store_labels("volume", volume) is not None:
         raise ref.ProofError(f"external object-store volume already exists: {volume}")
-    ref.run(
-        ["docker", "volume", "create", *_docker_label_args(binding), volume]
-    )
+    ref.run(["docker", "volume", "create", *_docker_label_args(binding), volume])
     try:
         run_with_environment(
             [
@@ -297,7 +318,7 @@ def start_external_object_store(
                     "docker",
                     "inspect",
                     "--format",
-                    "{{(index .NetworkSettings.Networks \"kind\").IPAddress}}",
+                    '{{(index .NetworkSettings.Networks "kind").IPAddress}}',
                     container,
                 ]
             )
@@ -447,6 +468,8 @@ def reconcile_owned_ha_resources(
 def retire_primary_cluster_before_restore(
     kind: str, cluster: str, commit: str, owner_id: str
 ) -> dict[str, Any]:
+    # Retire only the ownership-bound primary. The future restore cluster and the
+    # external object store must remain untouched so the blank restore can start.
     result = reconcile_owned_ha_resources(
         kind,
         cluster,
@@ -456,13 +479,51 @@ def retire_primary_cluster_before_restore(
         include_primary=True,
         include_object_store=False,
     )
-    primary_state = result["resources"].get("primary_cluster")
-    if result["errors"] or primary_state != "deleted":
+    resources = result.get("resources")
+    primary_state = (
+        resources.get("primary_cluster") if isinstance(resources, dict) else None
+    )
+    # "absent" is not enough: this proof must establish that this exact run
+    # deleted the ownership-bound primary instead of merely observing it gone.
+    if result.get("errors") or primary_state != "deleted":
         raise ref.ProofError(
-            "primary cluster retirement before blank restore failed: "
+            "primary cluster retirement before blank restore failed "
+            f"(expected primary_cluster='deleted', got {primary_state!r}): "
             f"{json.dumps(result, sort_keys=True)}"
         )
     return result
+
+
+def create_blank_restore_cluster(
+    kind: str,
+    primary_name: str,
+    restore_name: str,
+    node_image: str,
+    commit: str,
+    owner_id: str,
+    *,
+    keep_primary: bool,
+    lifecycle: ClusterLifecycle,
+) -> dict[str, Any] | None:
+    retirement: dict[str, Any] | None = None
+    if not keep_primary:
+        retirement = retire_primary_cluster_before_restore(
+            kind, primary_name, commit, owner_id
+        )
+        # The primary is gone now. Exception cleanup must not diagnose or delete
+        # it again if creation of the blank restore cluster fails afterwards.
+        lifecycle.primary_created = False
+
+    create_kind_cluster(
+        kind,
+        restore_name,
+        node_image,
+        "platform/clusters/ha/restore-kind.yaml",
+        commit,
+        owner_id,
+    )
+    lifecycle.restore_created = True
+    return retirement
 
 
 def apply_object_store_endpoint(kubectl: str, address: str) -> None:
@@ -530,9 +591,7 @@ def cnpg_webhook_ready(kubectl: str) -> bool:
 def _load_yaml_documents(source: str, release_name: str) -> list[Any]:
     try:
         documents = [
-            document
-            for document in yaml.safe_load_all(source)
-            if document is not None
+            document for document in yaml.safe_load_all(source) if document is not None
         ]
     except yaml.YAMLError as error:
         raise ref.ProofError(f"{release_name} is not valid YAML") from error
@@ -606,14 +665,11 @@ def render_cnpg_manifest(source: str) -> str:
         for document in documents
         if isinstance(document, dict)
         and document.get("kind") == "Deployment"
-        and document.get("metadata", {}).get("name")
-        == "cnpg-controller-manager"
+        and document.get("metadata", {}).get("name") == "cnpg-controller-manager"
         and document.get("metadata", {}).get("namespace") == "cnpg-system"
     ]
     if len(deployments) != 1:
-        raise ref.ProofError(
-            "CloudNativePG controller deployment changed unexpectedly"
-        )
+        raise ref.ProofError("CloudNativePG controller deployment changed unexpectedly")
     deployment = deployments[0]
     spec = deployment.setdefault("spec", {})
     spec["replicas"] = 3
@@ -641,6 +697,7 @@ def render_cnpg_manifest(source: str) -> str:
     )
     documents = ref.enforce_controlled_oci_pull_policy(documents)
     return yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
+
 
 def verify_cnpg_operator_ha(kubectl: str) -> list[str]:
     ref.wait_rollout(
@@ -693,9 +750,7 @@ def verify_cnpg_operator_ha(kubectl: str) -> list[str]:
 
 
 def install_cnpg(kubectl: str, artifact: str) -> list[str]:
-    source = render_cnpg_manifest(
-        Path(artifact).read_text(encoding="utf-8")
-    )
+    source = render_cnpg_manifest(Path(artifact).read_text(encoding="utf-8"))
     ref.run(
         [
             kubectl,
@@ -767,6 +822,7 @@ def apply_digest_locked_manifest(
         ],
         input_text=source,
     )
+
 
 def install_cert_manager(kubectl: str, artifact: str) -> None:
     apply_digest_locked_manifest(kubectl, artifact, CERT_MANAGER_IMAGES)
@@ -852,16 +908,12 @@ def render_barman_cloud_manifest(source: str) -> str:
         raise ref.ProofError(
             "Barman Cloud sidecar secret is not valid UTF-8 base64"
         ) from error
-    sidecar_tagged = (
-        "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0"
-    )
+    sidecar_tagged = "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0"
     if decoded != sidecar_tagged:
         raise ref.ProofError(
             f"Barman Cloud sidecar reference changed unexpectedly: {decoded}"
         )
-    sidecar_runtime_image = ref.controlled_oci_runtime_image(
-        BARMAN_CLOUD_SIDECAR_IMAGE
-    )
+    sidecar_runtime_image = ref.controlled_oci_runtime_image(BARMAN_CLOUD_SIDECAR_IMAGE)
     secret["data"]["SIDECAR_IMAGE"] = base64.b64encode(
         sidecar_runtime_image.encode("utf-8")
     ).decode("ascii")
@@ -902,10 +954,9 @@ def render_barman_cloud_manifest(source: str) -> str:
     documents = ref.enforce_controlled_oci_pull_policy(documents)
     return yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
 
+
 def apply_barman_cloud_manifest(kubectl: str, artifact: str) -> None:
-    source = render_barman_cloud_manifest(
-        Path(artifact).read_text(encoding="utf-8")
-    )
+    source = render_barman_cloud_manifest(Path(artifact).read_text(encoding="utf-8"))
     ref.run(
         [
             kubectl,
@@ -923,7 +974,17 @@ def apply_barman_cloud_manifest(kubectl: str, artifact: str) -> None:
 def barman_plugin_state(kubectl: str, *, require_three_nodes: bool) -> dict[str, Any]:
     payload = json.loads(
         ref.output(
-            [kubectl, "-n", "cnpg-system", "get", "pods", "-l", "app=barman-cloud", "-o", "json"]
+            [
+                kubectl,
+                "-n",
+                "cnpg-system",
+                "get",
+                "pods",
+                "-l",
+                "app=barman-cloud",
+                "-o",
+                "json",
+            ]
         )
     )
     observed: dict[str, str] = {}
@@ -967,16 +1028,22 @@ def barman_plugin_state(kubectl: str, *, require_three_nodes: bool) -> dict[str,
         observed[name] = node
         if pod_conditions.get("Ready") == "True":
             ready_pods.add(name)
-    if require_three_nodes and (
-        len(observed) != 3 or len(set(observed.values())) != 3
-    ):
+    if require_three_nodes and (len(observed) != 3 or len(set(observed.values())) != 3):
         raise ref.ProofError(
             "Barman Cloud plugin processes are not running on three distinct nodes: "
             f"{observed}"
         )
     endpoints = json.loads(
         ref.output(
-            [kubectl, "-n", "cnpg-system", "get", "endpoints/barman-cloud", "-o", "json"]
+            [
+                kubectl,
+                "-n",
+                "cnpg-system",
+                "get",
+                "endpoints/barman-cloud",
+                "-o",
+                "json",
+            ]
         )
     )
     endpoint_pods = {
@@ -1028,9 +1095,7 @@ def prove_barman_plugin_backup(
                 "method": "plugin",
                 "target": "primary",
                 "cluster": {"name": cluster},
-                "pluginConfiguration": {
-                    "name": "barman-cloud.cloudnative-pg.io"
-                },
+                "pluginConfiguration": {"name": "barman-cloud.cloudnative-pg.io"},
             },
         },
     )
@@ -1083,9 +1148,11 @@ def align_postgres_primary_with_barman_leader(
         )
         wait_until(
             f"PostgreSQL primary {target_primary} on Barman Cloud leader node",
-            lambda: target_primary
-            if current_primary(kubectl, cluster) == target_primary
-            else False,
+            lambda: (
+                target_primary
+                if current_primary(kubectl, cluster) == target_primary
+                else False
+            ),
             timeout_seconds=240,
         )
     wait_cluster_ready(kubectl, cluster, "10m")
@@ -1128,6 +1195,7 @@ def wait_barman_plugin_leader_after_node_loss(
             timeout_seconds=180,
         )
     )
+
 
 def install_barman_cloud_plugin(kubectl: str, artifact: str) -> dict[str, Any]:
     apply_barman_cloud_manifest(kubectl, artifact)
@@ -1180,8 +1248,7 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> dict[str, Any]:
     )
     if sidecar_images != [expected_sidecar_image]:
         raise ref.ProofError(
-            "Barman Cloud sidecar image is not digest-bound: "
-            f"{sidecar_images}"
+            f"Barman Cloud sidecar image is not digest-bound: {sidecar_images}"
         )
     observed = ref.output(
         [
@@ -1194,11 +1261,11 @@ def install_barman_cloud_plugin(kubectl: str, artifact: str) -> dict[str, Any]:
             "jsonpath={.spec.template.spec.containers[0].image}",
         ]
     )
-    expected_plugin_image = ref.controlled_oci_runtime_image(
-        BARMAN_CLOUD_PLUGIN_IMAGE
-    )
+    expected_plugin_image = ref.controlled_oci_runtime_image(BARMAN_CLOUD_PLUGIN_IMAGE)
     if observed != expected_plugin_image:
-        raise ref.ProofError(f"Barman Cloud plugin image is not runtime-bound: {observed}")
+        raise ref.ProofError(
+            f"Barman Cloud plugin image is not runtime-bound: {observed}"
+        )
     return plugin_nodes
 
 
@@ -1245,17 +1312,14 @@ def verify_barman_sidecar_images(
         declared_image = str(sidecars[0].get("image", ""))
         if declared_image != expected_sidecar_image:
             raise ref.ProofError(
-                f"PostgreSQL pod {name} has an unbound Barman sidecar: "
-                f"{declared_image}"
+                f"PostgreSQL pod {name} has an unbound Barman sidecar: {declared_image}"
             )
         statuses = [
             *pod.get("status", {}).get("initContainerStatuses", []),
             *pod.get("status", {}).get("containerStatuses", []),
         ]
         sidecar_statuses = [
-            status
-            for status in statuses
-            if status.get("name") == "plugin-barman-cloud"
+            status for status in statuses if status.get("name") == "plugin-barman-cloud"
         ]
         if len(sidecar_statuses) != 1:
             raise ref.ProofError(
@@ -1286,66 +1350,192 @@ def verify_barman_sidecar_images(
         )
     return observed
 
+
 def current_primary(kubectl: str, cluster: str = "postgres-ha") -> str:
-    return ref.output([kubectl, "-n", "weltgewebe-data", "get", f"cluster/{cluster}", "-o", "jsonpath={.status.currentPrimary}"])
+    return ref.output(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe-data",
+            "get",
+            f"cluster/{cluster}",
+            "-o",
+            "jsonpath={.status.currentPrimary}",
+        ]
+    )
 
 
 def wait_cluster_ready(kubectl: str, cluster: str, timeout: str = "15m") -> None:
-    ref.wait_condition(kubectl, "weltgewebe-data", f"cluster/{cluster}", "Ready", timeout)
+    ref.wait_condition(
+        kubectl, "weltgewebe-data", f"cluster/{cluster}", "Ready", timeout
+    )
 
 
 def ha_diagnostic_snapshot(kubectl: str, name: str) -> None:
     target = CACHE / "failures" / name
     target.mkdir(parents=True, exist_ok=True)
     commands = {
-        "cnpg-clusters.yaml": [kubectl, "get", "clusters.postgresql.cnpg.io", "-A", "-o", "yaml"],
-        "cnpg-pods-describe.txt": [kubectl, "-n", "weltgewebe-data", "describe", "pods", "-l", "cnpg.io/cluster"],
-        "cnpg-pods-logs.txt": [kubectl, "-n", "weltgewebe-data", "logs", "-l", "cnpg.io/cluster", "--all-containers=true", "--prefix=true", "--tail=2000"],
-        "cnpg-pods-previous-logs.txt": [kubectl, "-n", "weltgewebe-data", "logs", "-l", "cnpg.io/cluster", "--all-containers=true", "--prefix=true", "--previous=true", "--tail=2000"],
+        "cnpg-clusters.yaml": [
+            kubectl,
+            "get",
+            "clusters.postgresql.cnpg.io",
+            "-A",
+            "-o",
+            "yaml",
+        ],
+        "cnpg-pods-describe.txt": [
+            kubectl,
+            "-n",
+            "weltgewebe-data",
+            "describe",
+            "pods",
+            "-l",
+            "cnpg.io/cluster",
+        ],
+        "cnpg-pods-logs.txt": [
+            kubectl,
+            "-n",
+            "weltgewebe-data",
+            "logs",
+            "-l",
+            "cnpg.io/cluster",
+            "--all-containers=true",
+            "--prefix=true",
+            "--tail=2000",
+        ],
+        "cnpg-pods-previous-logs.txt": [
+            kubectl,
+            "-n",
+            "weltgewebe-data",
+            "logs",
+            "-l",
+            "cnpg.io/cluster",
+            "--all-containers=true",
+            "--prefix=true",
+            "--previous=true",
+            "--tail=2000",
+        ],
         "cnpg-operator-deployment.yaml": [
-            kubectl, "-n", "cnpg-system", "get",
-            "deployment/cnpg-controller-manager", "-o", "yaml",
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "get",
+            "deployment/cnpg-controller-manager",
+            "-o",
+            "yaml",
         ],
         "cnpg-operator-replicasets.yaml": [
-            kubectl, "-n", "cnpg-system", "get",
-            "replicasets", "-l", "app.kubernetes.io/name=cloudnative-pg",
-            "-o", "yaml",
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "get",
+            "replicasets",
+            "-l",
+            "app.kubernetes.io/name=cloudnative-pg",
+            "-o",
+            "yaml",
         ],
         "cnpg-operator-logs.txt": [
-            kubectl, "-n", "cnpg-system", "logs",
-            "-l", "app.kubernetes.io/name=cloudnative-pg",
-            "--all-containers=true", "--prefix=true", "--tail=2000",
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "logs",
+            "-l",
+            "app.kubernetes.io/name=cloudnative-pg",
+            "--all-containers=true",
+            "--prefix=true",
+            "--tail=2000",
         ],
         "barman-plugin-deployment.yaml": [
-            kubectl, "-n", "cnpg-system", "get", "deployment/barman-cloud", "-o", "yaml",
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "get",
+            "deployment/barman-cloud",
+            "-o",
+            "yaml",
         ],
         "barman-plugin-pods-describe.txt": [
-            kubectl, "-n", "cnpg-system", "describe", "pods", "-l", "app=barman-cloud",
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "describe",
+            "pods",
+            "-l",
+            "app=barman-cloud",
         ],
         "barman-plugin-endpoints.yaml": [
-            kubectl, "-n", "cnpg-system", "get", "endpoints/barman-cloud", "-o", "yaml",
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "get",
+            "endpoints/barman-cloud",
+            "-o",
+            "yaml",
         ],
         "barman-plugin-logs.txt": [
-            kubectl, "-n", "cnpg-system", "logs", "-l", "app=barman-cloud",
-            "--all-containers=true", "--prefix=true", "--tail=2000",
+            kubectl,
+            "-n",
+            "cnpg-system",
+            "logs",
+            "-l",
+            "app=barman-cloud",
+            "--all-containers=true",
+            "--prefix=true",
+            "--tail=2000",
         ],
-        "barman-objectstores.yaml": [kubectl, "get", "objectstores.barmancloud.cnpg.io", "-A", "-o", "yaml"],
-        "certificates.yaml": [kubectl, "get", "certificates.cert-manager.io", "-A", "-o", "yaml"],
+        "barman-objectstores.yaml": [
+            kubectl,
+            "get",
+            "objectstores.barmancloud.cnpg.io",
+            "-A",
+            "-o",
+            "yaml",
+        ],
+        "certificates.yaml": [
+            kubectl,
+            "get",
+            "certificates.cert-manager.io",
+            "-A",
+            "-o",
+            "yaml",
+        ],
         "cluster-dns-deployment.yaml": [
-            kubectl, "-n", "kube-system", "get", "deployment/coredns", "-o", "yaml",
+            kubectl,
+            "-n",
+            "kube-system",
+            "get",
+            "deployment/coredns",
+            "-o",
+            "yaml",
         ],
         "cluster-dns-pods-describe.txt": [
-            kubectl, "-n", "kube-system", "describe", "pods", "-l", "k8s-app=kube-dns",
+            kubectl,
+            "-n",
+            "kube-system",
+            "describe",
+            "pods",
+            "-l",
+            "k8s-app=kube-dns",
         ],
         "cluster-dns-logs.txt": [
-            kubectl, "-n", "kube-system", "logs", "-l", "k8s-app=kube-dns",
-            "--all-containers=true", "--prefix=true", "--tail=2000",
+            kubectl,
+            "-n",
+            "kube-system",
+            "logs",
+            "-l",
+            "k8s-app=kube-dns",
+            "--all-containers=true",
+            "--prefix=true",
+            "--tail=2000",
         ],
         "storage.txt": [kubectl, "get", "pv,pvc", "-A", "-o", "wide"],
     }
     for filename, argv in commands.items():
         try:
-            result = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True, timeout=30)
+            result = subprocess.run(
+                argv, cwd=ROOT, text=True, capture_output=True, timeout=30
+            )
             evidence = result.stdout + result.stderr
         except (OSError, subprocess.TimeoutExpired) as error:
             evidence = f"diagnostic command failed: {error}\n"
@@ -1354,7 +1544,9 @@ def ha_diagnostic_snapshot(kubectl: str, name: str) -> None:
 
 def wal_segment_position(name: str) -> tuple[int, int, int]:
     normalized = name.strip().upper()
-    if len(normalized) != 24 or any(character not in "0123456789ABCDEF" for character in normalized):
+    if len(normalized) != 24 or any(
+        character not in "0123456789ABCDEF" for character in normalized
+    ):
         raise ref.ProofError(f"invalid PostgreSQL WAL segment name: {name!r}")
     return tuple(int(normalized[offset : offset + 8], 16) for offset in (0, 8, 16))
 
@@ -1367,7 +1559,21 @@ def psql(kubectl: str, sql: str, *, cluster: str = "postgres-ha") -> str:
     primary = current_primary(kubectl, cluster)
     if not primary:
         raise ref.ProofError(f"PostgreSQL cluster {cluster} has no current primary")
-    return ref.output([kubectl, "-n", "weltgewebe-data", "exec", primary, "--", "psql", "-d", "weltgewebe", "-Atqc", sql])
+    return ref.output(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe-data",
+            "exec",
+            primary,
+            "--",
+            "psql",
+            "-d",
+            "weltgewebe",
+            "-Atqc",
+            sql,
+        ]
+    )
 
 
 def wait_for_pitr_boundary(kubectl: str, target_time: str) -> None:
@@ -1383,10 +1589,21 @@ def wait_for_pitr_boundary(kubectl: str, target_time: str) -> None:
         )
 
 
-def pod_topology(kubectl: str, namespace: str, selector: str) -> dict[str, dict[str, str]]:
-    pods = json.loads(ref.output([kubectl, "-n", namespace, "get", "pods", "-l", selector, "-o", "json"]))
+def pod_topology(
+    kubectl: str, namespace: str, selector: str
+) -> dict[str, dict[str, str]]:
+    pods = json.loads(
+        ref.output(
+            [kubectl, "-n", namespace, "get", "pods", "-l", selector, "-o", "json"]
+        )
+    )
     nodes = json.loads(ref.output([kubectl, "get", "nodes", "-o", "json"]))
-    zones = {item["metadata"]["name"]: item["metadata"].get("labels", {}).get("topology.kubernetes.io/zone", "") for item in nodes["items"]}
+    zones = {
+        item["metadata"]["name"]: item["metadata"]
+        .get("labels", {})
+        .get("topology.kubernetes.io/zone", "")
+        for item in nodes["items"]
+    }
     result: dict[str, dict[str, str]] = {}
     for item in pods["items"]:
         metadata = item.get("metadata", {})
@@ -1405,10 +1622,14 @@ def pod_topology(kubectl: str, namespace: str, selector: str) -> dict[str, dict[
     return result
 
 
-def require_zones(topology: dict[str, dict[str, str]], expected: int, component: str) -> None:
+def require_zones(
+    topology: dict[str, dict[str, str]], expected: int, component: str
+) -> None:
     zones = {item["zone"] for item in topology.values() if item["zone"]}
     if len(topology) < expected or len(zones) != expected:
-        raise ref.ProofError(f"{component} is not spread across {expected} zones: {topology}")
+        raise ref.ProofError(
+            f"{component} is not spread across {expected} zones: {topology}"
+        )
 
 
 def configure_cluster_dns_ha(kubectl: str) -> dict[str, dict[str, str]]:
@@ -1453,18 +1674,28 @@ def configure_cluster_dns_ha(kubectl: str) -> dict[str, dict[str, str]]:
     ref.wait_rollout(kubectl, "kube-system", "deployment/coredns", "8m")
     topology = pod_topology(kubectl, "kube-system", "k8s-app=kube-dns")
     if len(topology) != 3:
-        raise ref.ProofError(
-            f"cluster DNS requires exactly three replicas: {topology}"
-        )
+        raise ref.ProofError(f"cluster DNS requires exactly three replicas: {topology}")
     require_zones(topology, 3, "cluster DNS")
     return topology
 
 
 def wait_api_replicas(kubectl: str, expected: int = 3) -> None:
     ref.wait_rollout(kubectl, "weltgewebe", "deployment/weltgewebe-api", "10m")
-    available = ref.output([kubectl, "-n", "weltgewebe", "get", "deployment/weltgewebe-api", "-o", "jsonpath={.status.availableReplicas}"])
+    available = ref.output(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe",
+            "get",
+            "deployment/weltgewebe-api",
+            "-o",
+            "jsonpath={.status.availableReplicas}",
+        ]
+    )
     if available != str(expected):
-        raise ref.ProofError(f"expected {expected} available API replicas, got {available!r}")
+        raise ref.ProofError(
+            f"expected {expected} available API replicas, got {available!r}"
+        )
     ref.wait_rollout(kubectl, "weltgewebe", "deployment/weltgewebe-web", "10m")
 
 
@@ -1555,7 +1786,7 @@ def api_deployment_image(kubectl: str) -> str:
             "get",
             "deployment/weltgewebe-api",
             "-o",
-            "jsonpath={.spec.template.spec.containers[?(@.name==\"api\")].image}",
+            'jsonpath={.spec.template.spec.containers[?(@.name=="api")].image}',
         ]
     )
 
@@ -1579,9 +1810,7 @@ def api_rollout_complete(kubectl: str, expected_image: str) -> bool:
     status = deployment.get("status", {})
     images = {
         container.get("name"): container.get("image")
-        for container in spec.get("template", {})
-        .get("spec", {})
-        .get("containers", [])
+        for container in spec.get("template", {}).get("spec", {}).get("containers", [])
     }
     return (
         images.get("api") == expected_image
@@ -1643,17 +1872,13 @@ def projection_sample_url(node: str, url: str, marker: str) -> dict[str, Any]:
 def gateway_projection_sample(
     node: str, address: str, port: int, marker: str
 ) -> dict[str, Any]:
-    return projection_sample_url(
-        node, f"http://{address}:{port}/api/nodes", marker
-    )
+    return projection_sample_url(node, f"http://{address}:{port}/api/nodes", marker)
 
 
 def gateway_projection_available(
     node: str, address: str, port: int, marker: str
 ) -> bool:
-    return bool(
-        gateway_projection_sample(node, address, port, marker)["available"]
-    )
+    return bool(gateway_projection_sample(node, address, port, marker)["available"])
 
 
 def gateway_owner_sample(
@@ -1693,8 +1918,7 @@ def gateway_owner_sample(
         )
 
     targets = [
-        (owners_by_address[address][0], address)
-        for address in gateway_addresses
+        (owners_by_address[address][0], address) for address in gateway_addresses
     ]
 
     def run_target(target: tuple[str, str]) -> dict[str, Any]:
@@ -1714,9 +1938,7 @@ def gateway_owner_sample(
 
     failed_paths = [probe for probe in probes if probe.get("available") is not True]
     successful_addresses = [
-        str(probe["address"])
-        for probe in probes
-        if probe.get("available") is True
+        str(probe["address"]) for probe in probes if probe.get("available") is True
     ]
     return {
         "available": bool(successful_addresses),
@@ -1764,8 +1986,7 @@ def projection_path_diagnostic(
         {
             address
             for endpoint in endpoint_state
-            if endpoint.get("ready") is True
-            and endpoint.get("terminating") is not True
+            if endpoint.get("ready") is True and endpoint.get("terminating") is not True
             for address in endpoint.get("addresses", [])
             if isinstance(address, str) and address
         }
@@ -1781,9 +2002,7 @@ def projection_path_diagnostic(
             )
         )
     for pod_ip in ready_pod_ips:
-        targets.append(
-            ("pod", probe_node, pod_ip, f"http://{pod_ip}:8080/nodes")
-        )
+        targets.append(("pod", probe_node, pod_ip, f"http://{pod_ip}:8080/nodes"))
     gateway_addresses = sorted(set(ref.gateway_addresses(kubectl)))
     gateway_nodes = sorted(set(ref.kind_nodes(kind, cluster)))
     for node in gateway_nodes:
@@ -1902,15 +2121,11 @@ def api_transition_diagnostic(
                 "pod_ip": item.get("status", {}).get("podIP"),
                 "phase": item.get("status", {}).get("phase"),
                 "ready": conditions.get("Ready") == "True",
-                "deleting": bool(
-                    item.get("metadata", {}).get("deletionTimestamp")
-                ),
+                "deleting": bool(item.get("metadata", {}).get("deletionTimestamp")),
                 "image": next(
                     (
                         container.get("image")
-                        for container in item.get("spec", {}).get(
-                            "containers", []
-                        )
+                        for container in item.get("spec", {}).get("containers", [])
                         if container.get("name") == "api"
                     ),
                     None,
@@ -1927,9 +2142,7 @@ def api_transition_diagnostic(
                     "target": endpoint.get("targetRef", {}).get("name"),
                     "ready": endpoint.get("conditions", {}).get("ready"),
                     "serving": endpoint.get("conditions", {}).get("serving"),
-                    "terminating": endpoint.get("conditions", {}).get(
-                        "terminating"
-                    ),
+                    "terminating": endpoint.get("conditions", {}).get("terminating"),
                 }
             )
     status = deployment.get("status", {})
@@ -2006,9 +2219,7 @@ def measure_api_transition(
                     max_failed_gateway_paths, sample_failed_paths
                 )
             if available:
-                rollout_complete = api_rollout_complete(
-                    kubectl, expected_image
-                )
+                rollout_complete = api_rollout_complete(kubectl, expected_image)
         except (
             subprocess.CalledProcessError,
             subprocess.TimeoutExpired,
@@ -2026,9 +2237,7 @@ def measure_api_transition(
             if outage_started is not None:
                 outage = sampled_at - outage_started
                 unavailable_seconds += outage
-                longest_unavailable_seconds = max(
-                    longest_unavailable_seconds, outage
-                )
+                longest_unavailable_seconds = max(longest_unavailable_seconds, outage)
                 outage_started = None
         else:
             failed_samples += 1
@@ -2056,9 +2265,7 @@ def measure_api_transition(
                         "diagnostic_error": f"{type(error).__name__}: {error}",
                     }
                 diagnostic["sample"] = samples
-                diagnostic["elapsed_seconds"] = round(
-                    sampled_at - started, 3
-                )
+                diagnostic["elapsed_seconds"] = round(sampled_at - started, 3)
                 outage_diagnostics.append(diagnostic)
         if available and rollout_complete:
             break
@@ -2113,9 +2320,7 @@ def measure_api_transition(
 def compute_error_budget(
     upgrade: dict[str, Any], rollback: dict[str, Any]
 ) -> dict[str, Any]:
-    window = float(upgrade["duration_seconds"]) + float(
-        rollback["duration_seconds"]
-    )
+    window = float(upgrade["duration_seconds"]) + float(rollback["duration_seconds"])
     if window <= 0:
         raise ref.ProofError("change-management measurement window is empty")
     unavailable = float(upgrade["observed_unavailable_seconds"]) + float(
@@ -2212,13 +2417,9 @@ def prove_api_upgrade_and_rollback(
     }
 
 
-def measure_wal_archive(
-    kubectl: str, *, cluster: str
-) -> dict[str, Any]:
+def measure_wal_archive(kubectl: str, *, cluster: str) -> dict[str, Any]:
     started = time.monotonic()
-    required = psql(
-        kubectl, "SELECT pg_walfile_name(pg_switch_wal())", cluster=cluster
-    )
+    required = psql(kubectl, "SELECT pg_walfile_name(pg_switch_wal())", cluster=cluster)
     wal_segment_position(required)
 
     def archived_probe() -> str | bool:
@@ -2247,27 +2448,60 @@ def measure_wal_archive(
     }
 
 
-def insert_domain_node(kubectl: str, node_id: str, title: str, *, cluster: str = "postgres-ha") -> None:
-    payload = json.dumps({"summary": "HA recovery proof", "tags": ["ha-proof"]}, separators=(",", ":"))
+def insert_domain_node(
+    kubectl: str, node_id: str, title: str, *, cluster: str = "postgres-ha"
+) -> None:
+    payload = json.dumps(
+        {"summary": "HA recovery proof", "tags": ["ha-proof"]}, separators=(",", ":")
+    )
     sql = (
         "INSERT INTO domain_nodes (id,kind,title,lat,lon,created_at,updated_at,payload) VALUES ("
-        + "'" + node_id + "','Werkstatt','" + title.replace("'", "''") + "',53.55,9.99,clock_timestamp(),clock_timestamp(),'"
-        + payload.replace("'", "''") + "'::jsonb) ON CONFLICT (id) DO NOTHING"
+        + "'"
+        + node_id
+        + "','Werkstatt','"
+        + title.replace("'", "''")
+        + "',53.55,9.99,clock_timestamp(),clock_timestamp(),'"
+        + payload.replace("'", "''")
+        + "'::jsonb) ON CONFLICT (id) DO NOTHING"
     )
     psql(kubectl, sql, cluster=cluster)
 
 
 def node_exists(kubectl: str, node_id: str, *, cluster: str = "postgres-ha") -> bool:
-    return psql(kubectl, f"SELECT count(*) FROM domain_nodes WHERE id='{node_id}'", cluster=cluster) == "1"
+    return (
+        psql(
+            kubectl,
+            f"SELECT count(*) FROM domain_nodes WHERE id='{node_id}'",
+            cluster=cluster,
+        )
+        == "1"
+    )
 
 
 def gateway_contains_node(kubectl: str, kind: str, cluster: str, node_id: str) -> bool:
-    ref.wait_condition(kubectl, "weltgewebe-gateway", "gateway/weltgewebe", "Programmed", "5m")
-    service = ref.output([kubectl, "-n", "weltgewebe-gateway", "get", "service", "-l", "gateway.networking.k8s.io/gateway-name=weltgewebe", "-o", "jsonpath={.items[0].metadata.name}"])
+    ref.wait_condition(
+        kubectl, "weltgewebe-gateway", "gateway/weltgewebe", "Programmed", "5m"
+    )
+    service = ref.output(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe-gateway",
+            "get",
+            "service",
+            "-l",
+            "gateway.networking.k8s.io/gateway-name=weltgewebe",
+            "-o",
+            "jsonpath={.items[0].metadata.name}",
+        ]
+    )
     port = ref.gateway_listener_port(kubectl)
     _, _, _, _, body = ref.probe_gateway_http(
-        kind, cluster, ref.gateway_addresses(kubectl),
-        ref.gateway_service_listener_port(kubectl, service, port), timeout_seconds=30,
+        kind,
+        cluster,
+        ref.gateway_addresses(kubectl),
+        ref.gateway_service_listener_port(kubectl, service, port),
+        timeout_seconds=30,
     )
     payload = json.loads(body)
     return any(isinstance(item, dict) and item.get("id") == node_id for item in payload)
@@ -2277,45 +2511,101 @@ def create_nats_box(kubectl: str, zone: str) -> None:
     ref.apply_yaml(
         kubectl,
         {
-            "apiVersion": "v1", "kind": "Pod",
+            "apiVersion": "v1",
+            "kind": "Pod",
             "metadata": {"name": "nats-box", "namespace": "weltgewebe-data"},
             "spec": {
                 "automountServiceAccountToken": False,
                 "nodeSelector": {"topology.kubernetes.io/zone": zone},
                 "restartPolicy": "Never",
-                "securityContext": {"runAsNonRoot": True, "runAsUser": 1000, "runAsGroup": 1000, "seccompProfile": {"type": "RuntimeDefault"}},
-                "containers": [{
-                    "name": "nats-box", "image": NATS_BOX_IMAGE,
-                    "command": ["/bin/sh", "-c", "sleep 7200"],
-                    "securityContext": {"allowPrivilegeEscalation": False, "capabilities": {"drop": ["ALL"]}},
-                    "resources": {"requests": {"cpu": "20m", "memory": "32Mi"}, "limits": {"cpu": "200m", "memory": "128Mi"}},
-                }],
+                "securityContext": {
+                    "runAsNonRoot": True,
+                    "runAsUser": 1000,
+                    "runAsGroup": 1000,
+                    "seccompProfile": {"type": "RuntimeDefault"},
+                },
+                "containers": [
+                    {
+                        "name": "nats-box",
+                        "image": NATS_BOX_IMAGE,
+                        "command": ["/bin/sh", "-c", "sleep 7200"],
+                        "securityContext": {
+                            "allowPrivilegeEscalation": False,
+                            "capabilities": {"drop": ["ALL"]},
+                        },
+                        "resources": {
+                            "requests": {"cpu": "20m", "memory": "32Mi"},
+                            "limits": {"cpu": "200m", "memory": "128Mi"},
+                        },
+                    }
+                ],
             },
         },
     )
     ref.wait_condition(kubectl, "weltgewebe-data", "pod/nats-box", "Ready", "5m")
 
 
-def nats(kubectl: str, args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
-    argv = [kubectl, "-n", "weltgewebe-data", "exec", "nats-box", "--", "nats", "--server", "nats://nats:4222", "--js-domain", "weltgewebe-ha", *args]
-    return ref.run(argv, capture=True) if check else subprocess.run(argv, cwd=ROOT, text=True, capture_output=True)
+def nats(
+    kubectl: str, args: list[str], *, check: bool = True
+) -> subprocess.CompletedProcess[str]:
+    argv = [
+        kubectl,
+        "-n",
+        "weltgewebe-data",
+        "exec",
+        "nats-box",
+        "--",
+        "nats",
+        "--server",
+        "nats://nats:4222",
+        "--js-domain",
+        "weltgewebe-ha",
+        *args,
+    ]
+    return (
+        ref.run(argv, capture=True)
+        if check
+        else subprocess.run(argv, cwd=ROOT, text=True, capture_output=True)
+    )
 
 
 def nats_message_count(kubectl: str) -> int:
-    document = json.loads(nats(kubectl, ["stream", "info", "WG_PROOF", "--json"]).stdout)
+    document = json.loads(
+        nats(kubectl, ["stream", "info", "WG_PROOF", "--json"]).stdout
+    )
     return int(document.get("state", {}).get("messages", -1))
 
 
 def wait_backup_complete(kubectl: str, name: str) -> dict[str, Any]:
     def probe():
-        document = json.loads(ref.output([kubectl, "-n", "weltgewebe-data", "get", f"backup/{name}", "-o", "json"]))
-        return document if str(document.get("status", {}).get("phase", "")).lower() == "completed" else False
-    return wait_until(f"CloudNativePG backup {name}", probe, timeout_seconds=1200, interval=5)
+        document = json.loads(
+            ref.output(
+                [
+                    kubectl,
+                    "-n",
+                    "weltgewebe-data",
+                    "get",
+                    f"backup/{name}",
+                    "-o",
+                    "json",
+                ]
+            )
+        )
+        return (
+            document
+            if str(document.get("status", {}).get("phase", "")).lower() == "completed"
+            else False
+        )
+
+    return wait_until(
+        f"CloudNativePG backup {name}", probe, timeout_seconds=1200, interval=5
+    )
 
 
 def restore_cluster_document(target_time: str) -> dict[str, Any]:
     return {
-        "apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
+        "apiVersion": "postgresql.cnpg.io/v1",
+        "kind": "Cluster",
         "metadata": {"name": "postgres-restore", "namespace": "weltgewebe-data"},
         "spec": {
             "instances": 3,
@@ -2328,32 +2618,39 @@ def restore_cluster_document(target_time: str) -> dict[str, Any]:
             "bootstrap": {
                 "recovery": {
                     "source": "postgres-ha",
-                    "database": "weltgewebe", "owner": APP_USER,
+                    "database": "weltgewebe",
+                    "owner": APP_USER,
                     "secret": {"name": "weltgewebe-ha-app"},
                     "recoveryTarget": {"targetTime": target_time, "exclusive": True},
                 }
             },
-            "externalClusters": [{
-                "name": "postgres-ha",
-                "plugin": {
-                    "name": "barman-cloud.cloudnative-pg.io",
-                    "parameters": {
-                        "barmanObjectName": "weltgewebe-ha-backup",
-                        "serverName": "postgres-ha",
+            "externalClusters": [
+                {
+                    "name": "postgres-ha",
+                    "plugin": {
+                        "name": "barman-cloud.cloudnative-pg.io",
+                        "parameters": {
+                            "barmanObjectName": "weltgewebe-ha-backup",
+                            "serverName": "postgres-ha",
+                        },
                     },
-                },
-            }],
-            "plugins": [{
-                "name": "barman-cloud.cloudnative-pg.io",
-                "isWALArchiver": True,
-                "parameters": {
-                    "barmanObjectName": "weltgewebe-ha-backup"
-                },
-            }],
+                }
+            ],
+            "plugins": [
+                {
+                    "name": "barman-cloud.cloudnative-pg.io",
+                    "isWALArchiver": True,
+                    "parameters": {"barmanObjectName": "weltgewebe-ha-backup"},
+                }
+            ],
             "storage": {"size": "1Gi"},
-            "resources": {"requests": {"cpu": "100m", "memory": "256Mi"}, "limits": {"cpu": "1", "memory": "1Gi"}},
+            "resources": {
+                "requests": {"cpu": "100m", "memory": "256Mi"},
+                "limits": {"cpu": "1", "memory": "1Gi"},
+            },
             "affinity": {
-                "enablePodAntiAffinity": True, "podAntiAffinityType": "required",
+                "enablePodAntiAffinity": True,
+                "podAntiAffinityType": "required",
                 "topologyKey": "topology.kubernetes.io/zone",
                 "nodeSelector": {"weltgewebe.net/data-node": "true"},
             },
@@ -2363,7 +2660,9 @@ def restore_cluster_document(target_time: str) -> dict[str, Any]:
 
 def prove(args: argparse.Namespace) -> dict[str, Any]:
     if ref.output(["git", "status", "--porcelain"]):
-        raise ref.ProofError("HA recovery proof requires a clean, commit-bound worktree")
+        raise ref.ProofError(
+            "HA recovery proof requires a clean, commit-bound worktree"
+        )
     commit = ref.output(["git", "rev-parse", "HEAD"])
     timestamp = ref.output(["git", "show", "-s", "--format=%cI", "HEAD"])
     ref.require_host_tools()
@@ -2390,28 +2689,39 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     primary_oci_cluster: dict[str, Any] | None = None
     restore_oci_cluster: dict[str, Any] | None = None
     primary_cluster_retirement: dict[str, Any] | None = None
-    created_primary = created_restore = object_store_created = False
+    lifecycle = ClusterLifecycle()
+    object_store_created = False
     stopped_node = ""
     object_store_address = ""
     app_password = secrets.token_urlsafe(24)
     s3_secret_key = secrets.token_urlsafe(32)
     try:
         create_kind_cluster(
-            kind, args.cluster, node_image,
-            "platform/clusters/ha/kind.yaml", commit, owner_id
+            kind,
+            args.cluster,
+            node_image,
+            "platform/clusters/ha/kind.yaml",
+            commit,
+            owner_id,
         )
-        created_primary = True
+        lifecycle.primary_created = True
         if ref.controlled_oci_strict():
             primary_oci_cluster = ref.load_controlled_oci_into_kind(
                 kind, args.cluster, "ha-recovery"
             )
         kubectl = require_active_cluster_context(kind, kubectl, args.cluster)
         image_ids = ref.build_images(kind, args.cluster, commit, timestamp)
-        image_ids.update(
-            prepare_api_upgrade_candidate(kind, args.cluster, commit)
+        image_ids.update(prepare_api_upgrade_candidate(kind, args.cluster, commit))
+        ref.install_platform_components(
+            kubectl,
+            flux,
+            helm,
+            receipt["artifacts"],
+            ref.control_plane_address(args.cluster),
         )
-        ref.install_platform_components(kubectl, flux, helm, receipt["artifacts"], ref.control_plane_address(args.cluster))
-        ref.run([kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=8m"])
+        ref.run(
+            [kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=8m"]
+        )
         primary_dns_topology = configure_cluster_dns_ha(kubectl)
         _, _, object_store_address = start_external_object_store(
             args.cluster, commit, owner_id, s3_secret_key
@@ -2419,7 +2729,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         object_store_created = True
         ref.apply_file(kubectl, ROOT / "platform/infrastructure/ha-data/namespace.yaml")
         apply_secret_contracts(kubectl, app_password, s3_secret_key)
-        ref.apply_file(kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml")
+        ref.apply_file(
+            kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml"
+        )
         apply_object_store_endpoint(kubectl, object_store_address)
         install_cert_manager(kubectl, receipt["artifacts"]["cert_manager"])
         primary_operator_nodes = install_cnpg(
@@ -2432,29 +2744,41 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         ref.apply_direct(kubectl, kustomize, "platform/infrastructure/ha-data")
         ref.wait_rollout(kubectl, "weltgewebe-data", "statefulset/nats", "12m")
         wait_cluster_ready(kubectl, "postgres-ha", "15m")
-        primary_barman_sidecars = verify_barman_sidecar_images(
-            kubectl, "postgres-ha"
+        primary_barman_sidecars = verify_barman_sidecar_images(kubectl, "postgres-ha")
+        ref.apply_file(
+            kubectl, ROOT / "platform/apps/weltgewebe/migration/ha/namespace.yaml"
         )
-        ref.apply_file(kubectl, ROOT / "platform/apps/weltgewebe/migration/ha/namespace.yaml")
         apply_runtime_secret(kubectl, app_password)
         ref.apply_direct(kubectl, kustomize, "platform/apps/weltgewebe/migration/ha")
-        ref.wait_condition(kubectl, "weltgewebe", "job/weltgewebe-migration", "Complete", "10m")
+        ref.wait_condition(
+            kubectl, "weltgewebe", "job/weltgewebe-migration", "Complete", "10m"
+        )
         ref.apply_direct(kubectl, kustomize, "platform/apps/weltgewebe/overlays/ha")
         ref.apply_direct(kubectl, kustomize, "platform/infrastructure/gateway")
         wait_api_replicas(kubectl)
         gateway_before = ref.prove_gateway(kubectl, kind, args.cluster)
 
         topology = {
-            "postgres": pod_topology(kubectl, "weltgewebe-data", "cnpg.io/cluster=postgres-ha"),
-            "nats": pod_topology(kubectl, "weltgewebe-data", "app.kubernetes.io/name=nats"),
-            "api": pod_topology(kubectl, "weltgewebe", "app.kubernetes.io/name=weltgewebe-api"),
+            "postgres": pod_topology(
+                kubectl, "weltgewebe-data", "cnpg.io/cluster=postgres-ha"
+            ),
+            "nats": pod_topology(
+                kubectl, "weltgewebe-data", "app.kubernetes.io/name=nats"
+            ),
+            "api": pod_topology(
+                kubectl, "weltgewebe", "app.kubernetes.io/name=weltgewebe-api"
+            ),
         }
         for component, observed in topology.items():
             require_zones(observed, 3, component)
 
         marker = "00000000-0000-4000-8000-00000000a004"
         insert_domain_node(kubectl, marker, "T004 acknowledged domain mutation")
-        wait_until("domain mutation in API projection", lambda: gateway_contains_node(kubectl, kind, args.cluster, marker), timeout_seconds=180)
+        wait_until(
+            "domain mutation in API projection",
+            lambda: gateway_contains_node(kubectl, kind, args.cluster, marker),
+            timeout_seconds=180,
+        )
         change_management = prove_api_upgrade_and_rollback(
             kubectl, kind, args.cluster, marker, gateway_before
         )
@@ -2477,9 +2801,29 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "PostgreSQL primary and Barman Cloud leader are not co-located "
                 f"before failure: {barman_leader_alignment}"
             )
-        alternate_zone = next(zone for zone in ("zone-a", "zone-b", "zone-c") if zone != failure_zone)
+        alternate_zone = next(
+            zone for zone in ("zone-a", "zone-b", "zone-c") if zone != failure_zone
+        )
         create_nats_box(kubectl, alternate_zone)
-        nats(kubectl, ["stream", "add", "WG_PROOF", "--subjects", "wg.proof", "--storage", "file", "--replicas", "3", "--retention", "limits", "--max-msgs", "100", "--defaults"])
+        nats(
+            kubectl,
+            [
+                "stream",
+                "add",
+                "WG_PROOF",
+                "--subjects",
+                "wg.proof",
+                "--storage",
+                "file",
+                "--replicas",
+                "3",
+                "--retention",
+                "limits",
+                "--max-msgs",
+                "100",
+                "--defaults",
+            ],
+        )
         nats(kubectl, ["pub", "wg.proof", "before-zone-failure"])
         if nats_message_count(kubectl) != 1:
             raise ref.ProofError("JetStream did not acknowledge the baseline message")
@@ -2490,10 +2834,16 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             kubectl, stopped_node
         )
         barman_leader_rto = time.monotonic() - failure_started
+
         def new_primary_probe():
             candidate = current_primary(kubectl)
             return candidate if candidate and candidate != primary_before else False
-        primary_after = str(wait_until("PostgreSQL primary failover", new_primary_probe, timeout_seconds=180))
+
+        primary_after = str(
+            wait_until(
+                "PostgreSQL primary failover", new_primary_probe, timeout_seconds=180
+            )
+        )
         postgres_rto = time.monotonic() - failure_started
         barman_communication_after_failure = prove_barman_plugin_backup(
             kubectl,
@@ -2501,20 +2851,47 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             f"t004-failover-{commit[:8]}",
         )
         barman_rto = time.monotonic() - failure_started
-        wait_until("acknowledged domain mutation after failover", lambda: node_exists(kubectl, marker), timeout_seconds=60)
-        wait_until("API projection after zone failure", lambda: gateway_contains_node(kubectl, kind, args.cluster, marker), timeout_seconds=180)
+        wait_until(
+            "acknowledged domain mutation after failover",
+            lambda: node_exists(kubectl, marker),
+            timeout_seconds=60,
+        )
+        wait_until(
+            "API projection after zone failure",
+            lambda: gateway_contains_node(kubectl, kind, args.cluster, marker),
+            timeout_seconds=180,
+        )
         api_rto = time.monotonic() - failure_started
+
         def nats_publish_probe():
-            result = nats(kubectl, ["pub", "wg.proof", "after-zone-failure"], check=False)
+            result = nats(
+                kubectl, ["pub", "wg.proof", "after-zone-failure"], check=False
+            )
             return result.returncode == 0
-        wait_until("JetStream publish after zone failure", nats_publish_probe, timeout_seconds=120, interval=1)
+
+        wait_until(
+            "JetStream publish after zone failure",
+            nats_publish_probe,
+            timeout_seconds=120,
+            interval=1,
+        )
         nats_rto = time.monotonic() - failure_started
         if nats_message_count(kubectl) != 2:
-            raise ref.ProofError("JetStream lost an acknowledged message during zone failure")
+            raise ref.ProofError(
+                "JetStream lost an acknowledged message during zone failure"
+            )
 
         ref.run(["docker", "start", stopped_node], timeout=60)
         stopped_node = ""
-        ref.run([kubectl, "wait", "--for=condition=Ready", f"node/{primary_topology['node']}", "--timeout=8m"])
+        ref.run(
+            [
+                kubectl,
+                "wait",
+                "--for=condition=Ready",
+                f"node/{primary_topology['node']}",
+                "--timeout=8m",
+            ]
+        )
         ref.wait_rollout(kubectl, "kube-system", "daemonset/cilium", "8m")
         ref.wait_rollout(kubectl, "kube-system", "daemonset/cilium-envoy", "8m")
         primary_barman_plugin_recovered = verify_barman_plugin_ha(kubectl)
@@ -2536,43 +2913,52 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                     "method": "plugin",
                     "target": "prefer-standby",
                     "cluster": {"name": "postgres-ha"},
-                    "pluginConfiguration": {
-                        "name": "barman-cloud.cloudnative-pg.io"
-                    },
+                    "pluginConfiguration": {"name": "barman-cloud.cloudnative-pg.io"},
                 },
             },
         )
         backup = wait_backup_complete(kubectl, backup_name)
-        target_time = psql(kubectl, "SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')")
+        target_time = psql(
+            kubectl,
+            "SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')",
+        )
         wait_for_pitr_boundary(kubectl, target_time)
         insert_domain_node(kubectl, after_id, "T004 after PITR target")
-        primary_wal_archive = measure_wal_archive(
-            kubectl, cluster="postgres-ha"
-        )
+        primary_wal_archive = measure_wal_archive(kubectl, cluster="postgres-ha")
 
-        if not args.keep:
-            primary_cluster_retirement = retire_primary_cluster_before_restore(
-                kind, args.cluster, commit, owner_id
-            )
-            created_primary = False
-
-        create_kind_cluster(
-            kind, restore_name, node_image,
-            "platform/clusters/ha/restore-kind.yaml", commit, owner_id
+        primary_cluster_retirement = create_blank_restore_cluster(
+            kind,
+            args.cluster,
+            restore_name,
+            node_image,
+            commit,
+            owner_id,
+            keep_primary=args.keep,
+            lifecycle=lifecycle,
         )
-        created_restore = True
         if ref.controlled_oci_strict():
             restore_oci_cluster = ref.load_controlled_oci_into_kind(
                 kind, restore_name, "ha-recovery"
             )
-        restore_kubectl = require_active_cluster_context(
-            kind, kubectl, restore_name
+        restore_kubectl = require_active_cluster_context(kind, kubectl, restore_name)
+        ref.run(
+            [
+                restore_kubectl,
+                "wait",
+                "--for=condition=Ready",
+                "nodes",
+                "--all",
+                "--timeout=8m",
+            ]
         )
-        ref.run([restore_kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=8m"])
         restore_dns_topology = configure_cluster_dns_ha(restore_kubectl)
-        ref.apply_file(restore_kubectl, ROOT / "platform/infrastructure/ha-data/namespace.yaml")
+        ref.apply_file(
+            restore_kubectl, ROOT / "platform/infrastructure/ha-data/namespace.yaml"
+        )
         apply_secret_contracts(restore_kubectl, app_password, s3_secret_key)
-        ref.apply_file(restore_kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml")
+        ref.apply_file(
+            restore_kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml"
+        )
         apply_object_store_endpoint(restore_kubectl, object_store_address)
         install_cert_manager(
             restore_kubectl,
@@ -2606,24 +2992,34 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             restore_kubectl, cluster="postgres-restore"
         )
         continuity_validation_seconds = time.monotonic() - continuity_started
-        restored_topology = pod_topology(restore_kubectl, "weltgewebe-data", "cnpg.io/cluster=postgres-restore")
+        restored_topology = pod_topology(
+            restore_kubectl, "weltgewebe-data", "cnpg.io/cluster=postgres-restore"
+        )
         require_zones(restored_topology, 3, "restored postgres")
         preserved = {
             marker: node_exists(restore_kubectl, marker, cluster="postgres-restore"),
-            before_id: node_exists(restore_kubectl, before_id, cluster="postgres-restore"),
-            after_id: node_exists(restore_kubectl, after_id, cluster="postgres-restore"),
+            before_id: node_exists(
+                restore_kubectl, before_id, cluster="postgres-restore"
+            ),
+            after_id: node_exists(
+                restore_kubectl, after_id, cluster="postgres-restore"
+            ),
         }
         if preserved != {marker: True, before_id: True, after_id: False}:
             raise ref.ProofError(f"PITR data comparison failed: {preserved}")
 
         result = {
-            "schema_version": 1, "status": "pass", "commit": commit,
-            "primary_cluster": args.cluster, "restore_cluster": restore_name,
+            "schema_version": 1,
+            "status": "pass",
+            "commit": commit,
+            "primary_cluster": args.cluster,
+            "restore_cluster": restore_name,
             "primary_cluster_retired_before_restore": (
                 primary_cluster_retirement is not None
             ),
             "primary_cluster_retirement": primary_cluster_retirement,
-            "tool_lock_sha256": receipt["lock_sha256"], "image_ids": image_ids,
+            "tool_lock_sha256": receipt["lock_sha256"],
+            "image_ids": image_ids,
             "oci_controlled_source": {
                 "strict": ref.controlled_oci_strict(),
                 "host": oci_host,
@@ -2650,14 +3046,18 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "primary": primary_barman_sidecars,
                 "restore": restore_barman_sidecars,
             },
-            "topology": topology, "restored_topology": restored_topology,
+            "topology": topology,
+            "restored_topology": restored_topology,
             "zone_failure": {
-                "zone": failure_zone, "node": primary_topology["node"],
-                "postgres_primary_before": primary_before, "postgres_primary_after": primary_after,
+                "zone": failure_zone,
+                "node": primary_topology["node"],
+                "postgres_primary_before": primary_before,
+                "postgres_primary_after": primary_after,
                 "barman_leader_rto_seconds": round(barman_leader_rto, 3),
                 "barman_plugin_rto_seconds": round(barman_rto, 3),
                 "postgres_rto_seconds": round(postgres_rto, 3),
-                "api_rto_seconds": round(api_rto, 3), "nats_rto_seconds": round(nats_rto, 3),
+                "api_rto_seconds": round(api_rto, 3),
+                "nats_rto_seconds": round(nats_rto, 3),
                 "acknowledged_domain_mutation_preserved": True,
                 "acknowledged_jetstream_messages": 2,
             },
@@ -2689,16 +3089,22 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                     "maximum observed forced-WAL archive latency under the "
                     "reference-cell workload"
                 ),
-                "primary_wal_archive_latency_seconds": primary_wal_archive["latency_seconds"],
-                "restore_wal_archive_latency_seconds": restore_wal_archive["latency_seconds"],
+                "primary_wal_archive_latency_seconds": primary_wal_archive[
+                    "latency_seconds"
+                ],
+                "restore_wal_archive_latency_seconds": restore_wal_archive[
+                    "latency_seconds"
+                ],
             },
             "change_management": change_management,
             "gateway_before": gateway_before,
             "proof_owner_id": owner_id,
             "production_changed": False,
             "does_not_establish": [
-                "production rollout", "managed multi-region object-store durability",
-                "RTO or RPO under production load", "survival of two simultaneous failure domains",
+                "production rollout",
+                "managed multi-region object-store durability",
+                "RTO or RPO under production load",
+                "survival of two simultaneous failure domains",
                 "semantic compatibility of a distinct application release",
                 "production error-budget consumption under representative traffic",
                 "external load-balancer reachability from outside the kind bridge",
@@ -2715,11 +3121,11 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         result["receipt_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         return result
     except Exception:
-        if created_primary:
+        if lifecycle.primary_created:
             ref.configure_cluster_access(kind, args.cluster)
             ha_diagnostic_snapshot(kubectl, args.cluster)
             ref.diagnostic_snapshot(kubectl, args.cluster)
-        if created_restore:
+        if lifecycle.restore_created:
             ref.configure_cluster_access(kind, restore_name)
             ha_diagnostic_snapshot(kubectl, restore_name)
             ref.diagnostic_snapshot(kubectl, restore_name)
@@ -2728,22 +3134,24 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         active_error = sys.exc_info()[1]
         if stopped_node:
             subprocess.run(["docker", "start", stopped_node], capture_output=True)
-        if not args.keep and (created_restore or created_primary or object_store_created):
+        if not args.keep and (
+            lifecycle.restore_created
+            or lifecycle.primary_created
+            or object_store_created
+        ):
             cleanup = reconcile_owned_ha_resources(
                 kind,
                 args.cluster,
                 commit,
                 owner_id,
-                include_restore=created_restore,
-                include_primary=created_primary,
+                include_restore=lifecycle.restore_created,
+                include_primary=lifecycle.primary_created,
                 include_object_store=object_store_created,
             )
             if cleanup["errors"]:
                 detail = json.dumps(cleanup, sort_keys=True)
                 if active_error is None:
-                    raise ref.ProofError(
-                        f"HA proof cleanup incomplete: {detail}"
-                    )
+                    raise ref.ProofError(f"HA proof cleanup incomplete: {detail}")
                 print(
                     f"HA proof cleanup incomplete while preserving original failure: {detail}",
                     file=sys.stderr,
@@ -2799,7 +3207,11 @@ def main() -> int:
             print(json.dumps(cleanup_receipt, sort_keys=True))
             return 1 if cleanup["errors"] else 0
         prove(args)
-    except (ref.ProofError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+    except (
+        ref.ProofError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+    ) as error:
         if isinstance(error, subprocess.CalledProcessError):
             detail = f"subprocess exited with status {error.returncode}"
             evidence = _captured_subprocess_evidence(error)
@@ -2813,6 +3225,7 @@ def main() -> int:
         return 1
     print(json.dumps({"status": "pass"}, sort_keys=True))
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
