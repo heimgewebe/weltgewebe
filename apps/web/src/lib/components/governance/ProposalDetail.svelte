@@ -38,6 +38,15 @@
     proposal.applicant_account_id !== $authStore.account_id;
   $: isOpen = proposal?.status === "consent" || proposal?.status === "voting";
 
+  function normalizeMessageCount(count: unknown): number {
+    return typeof count === "number" &&
+      Number.isFinite(count) &&
+      Number.isSafeInteger(count) &&
+      count >= 0
+      ? count
+      : 0;
+  }
+
   function describeError(cause: unknown): string {
     if (cause instanceof GovernanceApiError) {
       if (cause.status === 403) return "Über den eigenen Weberantrag kannst du nicht selbst entscheiden.";
@@ -51,13 +60,18 @@
     loading = true;
     error = "";
     try {
-      [proposal, messages] = await Promise.all([
+      const [loadedProposal, loadedMessages] = await Promise.all([
         getProposal(proposalId),
         listProposalMessages(proposalId),
       ]);
+      proposal = loadedProposal;
+      messages = loadedMessages;
       dispatch("messagecountchange", {
         proposalId,
-        messageCount: messages.length,
+        messageCount: Math.max(
+          normalizeMessageCount(loadedProposal.message_count),
+          loadedMessages.length,
+        ),
       });
     } catch (cause) {
       error = describeError(cause);
