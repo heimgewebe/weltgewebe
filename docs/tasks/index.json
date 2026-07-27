@@ -734,6 +734,165 @@
       "updated_at": "2026-05-31"
     },
     {
+      "id": "OPT-MAP-001",
+      "title": "Basemap Runtime Proof",
+      "area": "map",
+      "status": "done",
+      "priority": "high",
+      "effort": "M",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "scripts/guard/basemap-runtime-proof.sh",
+        ".github/workflows/basemap-runtime-proof.yml",
+        "infra/caddy/Caddyfile.proof",
+        "scripts/basemap/build-hamburg-pmtiles.sh",
+        "apps/web/tests/basemap-client-integration.spec.ts"
+      ],
+      "missing_evidence": [],
+      "acceptance": [
+        "HTTP-206-Range-Auslieferung ist gegen einen laufenden Caddy in CI belegt",
+        "PMTiles-Magic und SHA-256 sind gegen das reale Basemap-Artefakt verifiziert",
+        "Die Browser-Integration des Basemap-Artefakts ist automatisiert getestet"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/optimierungsstatus.md",
+          "docs/reports/map-status-matrix.md"
+        ]
+      },
+      "updated_at": "2026-07-27"
+    },
+    {
+      "id": "OPT-API-002",
+      "title": "Session-Persistenz PostgreSQL",
+      "area": "auth",
+      "status": "done",
+      "priority": "high",
+      "effort": "M",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "apps/api/src/auth/session_db.rs",
+        "apps/api/src/lib.rs",
+        "apps/api/src/auth/session.rs",
+        "apps/api/tests/db_session_store_persistence.rs",
+        "docs/adr/ADR-0007__auth-persistence-production-db-path.md"
+      ],
+      "missing_evidence": [],
+      "acceptance": [
+        "DbSessionStore persistiert Sessions direkt in PostgreSQL",
+        "Die Backend-Auswahl über DATABASE_URL scheitert bei Fehlkonfiguration hart statt still zurückzufallen",
+        "Ein verpflichtender PostgreSQL-CI-Beweis deckt Persistenz und Reload ab"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/adr/ADR-0007__auth-persistence-production-db-path.md",
+          "docs/reports/optimierungsstatus.md"
+        ]
+      },
+      "updated_at": "2026-07-27"
+    },
+    {
+      "id": "OPT-API-003",
+      "title": "DB-Migrationen für Sessions",
+      "area": "api",
+      "status": "done",
+      "priority": "high",
+      "effort": "S",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "apps/api/migrations/20260428000000_create_sessions.up.sql",
+        "apps/api/migrations/20260428000000_create_sessions.down.sql",
+        "apps/api/src/lib.rs",
+        "apps/api/tests/db_session_store_persistence.rs",
+        "apps/api/README.md",
+        "Justfile"
+      ],
+      "missing_evidence": [],
+      "acceptance": [
+        "Vorwärts- und Rückwärtsmigration für Sessions sind versioniert",
+        "Der API-Start führt eingebettete SQLx-Migrationen gegen PostgreSQL aus",
+        "Der PostgreSQL-Integrationstest belegt Migration und anschließende Session-Persistenz"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "apps/api/README.md",
+          "docs/reports/optimierungsstatus.md"
+        ]
+      },
+      "updated_at": "2026-07-27"
+    },
+    {
+      "id": "OPT-API-004",
+      "title": "Limit-Obergrenze für Listen-Endpunkte",
+      "area": "api",
+      "status": "done",
+      "priority": "high",
+      "effort": "S",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [
+        "apps/api/src/routes/query.rs",
+        "apps/api/src/routes/nodes.rs",
+        "apps/api/src/routes/accounts.rs",
+        "apps/api/src/routes/edges.rs",
+        "apps/api/tests/api_nodes.rs",
+        "apps/api/tests/api_accounts.rs"
+      ],
+      "missing_evidence": [],
+      "acceptance": [
+        "Nodes-, Accounts- und Edges-Listen verwenden dieselbe MAX_PAGE_SIZE-Obergrenze",
+        "Überhöhte Limit-Werte werden deterministisch gekappt",
+        "API-Tests belegen die Kappung für Nodes und Accounts"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/optimierungsstatus.md"
+        ]
+      },
+      "updated_at": "2026-07-27"
+    },
+    {
+      "id": "OPT-FE-003",
+      "title": "Panel-Detail-Fetch-Logik extrahieren",
+      "area": "web",
+      "status": "done",
+      "priority": "low",
+      "effort": "M",
+      "risk": "low",
+      "owner": "unknown",
+      "evidence": [
+        "apps/web/src/lib/panels/panelDetails.ts",
+        "apps/web/src/lib/panels/panelDetails.test.ts",
+        "apps/web/src/lib/utils/formatDate.ts",
+        "apps/web/src/lib/utils/formatDate.test.ts"
+      ],
+      "missing_evidence": [],
+      "acceptance": [
+        "Node-, Account- und Edge-Panel nutzen die gemeinsame Detail-Ladelogik",
+        "Endpunktbildung und Datumsformatierung sind separat testbar",
+        "Unit-Tests decken Loader und Datumsformatierung ab"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/optimierungsstatus.md"
+        ]
+      },
+      "updated_at": "2026-07-27"
+    },
+    {
       "id": "OPT-CON-001",
       "title": "additionalProperties: false und String-Constraints in Domain-Schemas",
       "area": "ci",

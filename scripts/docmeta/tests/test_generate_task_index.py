@@ -379,7 +379,7 @@ class TestGenerateTaskIndex(unittest.TestCase):
                 blocker=["WELTGEWEBE-OS-009"],
                 blocker_missing={
                     "WELTGEWEBE-OS-009": (
-                        "WELTGEWEBE-OS-004 bis WELTGEWEBE-OS-008 "
+                        "WELTGEWEBE-OS-004 bis 008 "
                         "sind nicht belegt."
                     )
                 },
@@ -416,6 +416,89 @@ class TestGenerateTaskIndex(unittest.TestCase):
                 blocker_missing={"OPT-API-001": "OPT-API-001 ist nicht belegt."},
             ),
             _status([{"id": "OPT-API-001", "status": "open"}]),
+        )
+        self.assertEqual(self._run(), [])
+
+    def test_board_status_requires_canonical_index_entry(self):
+        self._write(
+            _index([]),
+            _board(done=["OPT-API-001"]),
+            _status([{"id": "OPT-API-001", "status": "open"}]),
+        )
+        errors = self._run()
+        self.assertTrue(
+            any(
+                "OPT-API-001" in error
+                and "asserts a status" in error
+                and "canonical docs/tasks/index.json" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_markdown_wrapped_done_status_passes_without_duplicate_claim(self):
+        self._touch("apps/api/x.rs")
+        board = "\n".join(
+            [
+                "# Board",
+                "## Erledigte Tasks",
+                "| ID | Status | Info |",
+                "|---|---|---|",
+                "| OPT-API-001 | **done** | x |",
+                "",
+            ]
+        )
+        self._write(
+            _index([_task(status="done", evidence=["apps/api/x.rs"])]),
+            board,
+            _status([{"id": "OPT-API-001", "status": "done"}]),
+        )
+        self.assertEqual(self._run(), [])
+
+    def test_unproven_comma_contrast_does_not_capture_proven_task(self):
+        self._touch("apps/api/x.rs")
+        self._write(
+            _index(
+                [
+                    _task(
+                        id="WELTGEWEBE-OS-004",
+                        status="done",
+                        priority="low",
+                        evidence=["apps/api/x.rs"],
+                    ),
+                    _task(id="WELTGEWEBE-OS-005", status="open", priority="low"),
+                    _task(id="WELTGEWEBE-OS-009", status="open", priority="low"),
+                ]
+            ),
+            _board(
+                blocker=["WELTGEWEBE-OS-009"],
+                blocker_missing={
+                    "WELTGEWEBE-OS-009": (
+                        "WELTGEWEBE-OS-004 ist belegt, "
+                        "WELTGEWEBE-OS-005 ist nicht belegt."
+                    )
+                },
+            ),
+            _status(
+                [
+                    {"id": "WELTGEWEBE-OS-004", "status": "done"},
+                    {"id": "WELTGEWEBE-OS-005", "status": "open"},
+                    {"id": "WELTGEWEBE-OS-009", "status": "open"},
+                ]
+            ),
+        )
+        self.assertEqual(self._run(), [])
+
+    def test_unknown_unproven_reference_is_not_a_stale_blocker(self):
+        self._write(
+            _index([_task(id="WELTGEWEBE-OS-009", status="open", priority="low")]),
+            _board(
+                blocker=["WELTGEWEBE-OS-009"],
+                blocker_missing={
+                    "WELTGEWEBE-OS-009": "WELTGEWEBE-OS-099 ist nicht belegt."
+                },
+            ),
+            _status([{"id": "WELTGEWEBE-OS-009", "status": "open"}]),
         )
         self.assertEqual(self._run(), [])
 
@@ -527,6 +610,51 @@ class TestGenerateTaskIndex(unittest.TestCase):
         sections = parse_board(text)
         self.assertEqual(sections["active"], {"OPT-API-001"})
         self.assertNotIn("TASK-CTL-003", sections["active"])
+
+    def test_parse_board_supports_reordered_columns(self):
+        text = "\n".join(
+            [
+                "# Board",
+                "## Aktive Prioritäten",
+                "| Status | Info | ID |",
+                "|---|---|---|",
+                "| partial | x | OPT-API-001 |",
+                "",
+            ]
+        )
+        sections, statuses, _unproven = gen.parse_board_details(text)
+        self.assertEqual(sections["active"], {"OPT-API-001"})
+        self.assertEqual(statuses["OPT-API-001"], {"partial"})
+
+    def test_parse_board_keeps_escaped_and_inline_code_pipes_in_one_cell(self):
+        text = "\n".join(
+            [
+                "# Board",
+                "## Aktive Prioritäten",
+                "| ID | Status | Info |",
+                "|---|---|---|",
+                r"| OPT-API-001 | partial | `A | B` und A \| B |",
+                "",
+            ]
+        )
+        sections, statuses, _unproven = gen.parse_board_details(text)
+        self.assertEqual(sections["active"], {"OPT-API-001"})
+        self.assertEqual(statuses["OPT-API-001"], {"partial"})
+
+    def test_data_cell_named_id_is_not_misread_as_header(self):
+        text = "\n".join(
+            [
+                "# Board",
+                "## Aktive Prioritäten",
+                "| ID | Status | Info |",
+                "|---|---|---|",
+                "| OPT-API-001 | partial | ID |",
+                "",
+            ]
+        )
+        sections, statuses, _unproven = gen.parse_board_details(text)
+        self.assertEqual(sections["active"], {"OPT-API-001"})
+        self.assertEqual(statuses["OPT-API-001"], {"partial"})
 
 
 if __name__ == "__main__":

@@ -41,19 +41,28 @@ STATUS_PATH = os.path.join(REPO_ROOT, "docs", "reports", "optimierungsstatus.jso
 # Matches TASK-CTL-003, OPT-API-001, OPT-MAP-001, AUTH-XYZ-001, MAP-XYZ-001.
 TASK_ID_RE = re.compile(r"\b[A-Z]+(?:-[A-Z]+)*-[0-9]{3}\b")
 TASK_ID_RANGE_RE = re.compile(
-    r"(?P<prefix>[A-Z]+(?:-[A-Z]+)*-)(?P<start>[0-9]{3})"
-    r"\s+(?:(?i:bis|to|through)|[-–—])\s+"
-    r"(?P=prefix)(?P<end>[0-9]{3})"
+    r"\b(?P<prefix>[A-Z]+(?:-[A-Z]+)*-)(?P<start>[0-9]{3})"
+    r"\s*(?:(?i:bis|to|through)|[-–—])\s*"
+    r"(?:(?P=prefix))?(?P<end>[0-9]{3})\b"
 )
-VALID_TASK_STATUSES = {
-    "open",
-    "partial",
-    "done",
-    "blocked",
-    "obsolete",
-    "contradicted",
-}
+VALID_TASK_STATUSES = frozenset(
+    {
+        "open",
+        "partial",
+        "done",
+        "blocked",
+        "obsolete",
+        "contradicted",
+    }
+)
 UNPROVEN_PHRASES = ("nicht belegt", "not proven")
+CLAUSE_BOUNDARY_RE = re.compile(r"[.;!?]|\b(?:aber|but)\b", re.IGNORECASE)
+STATUS_ASSERTION_RE = re.compile(
+    r"\b(?:ist|sind|bleibt|bleiben|is|are|remains?)\b"
+    r"[^,;.!?]{0,32}"
+    r"\b(?:belegt|proven|done|erledigt|open|offen|blocked|blockiert|partial|teilweise)\b",
+    re.IGNORECASE,
+)
 
 # Generated diagnostics are never canonical and must not be manual write targets.
 GENERATED_PREFIX = "docs/_generated/"
@@ -132,6 +141,99 @@ def _classify_section(heading):
     return "other"
 
 
+def _normalize_markdown_token(value):
+    """Return one table token without common surrounding Markdown markup."""
+    value = value.strip()
+    wrappers = (
+        ("**", "**"),
+        ("__", "__"),
+        ("~~", "~~"),
+        ("`", "`"),
+        ("*", "*"),
+        ("_", "_"),
+    )
+    changed = True
+    while changed:
+        changed = False
+        for left, right in wrappers:
+            if (
+                len(value) > len(left) + len(right)
+                and value.startswith(left)
+                and value.endswith(right)
+            ):
+                value = value[len(left) : -len(right)].strip()
+                changed = True
+                break
+    return value.lower()
+
+
+def _split_markdown_row(line):
+    """Split a Markdown table row without breaking escaped or inline-code pipes."""
+    stripped = line.strip()
+    if not stripped.startswith("|"):
+        return []
+    body = stripped[1:-1] if stripped.endswith("|") else stripped[1:]
+    cells = []
+    buffer = []
+    code_delimiter = None
+    index = 0
+
+    while index < len(body):
+        char = body[index]
+        if char == "\\" and index + 1 < len(body):
+            buffer.extend((char, body[index + 1]))
+            index += 2
+            continue
+        if char == "`":
+            end = index
+            while end < len(body) and body[end] == "`":
+                end += 1
+            delimiter = body[index:end]
+            if code_delimiter is None:
+                code_delimiter = delimiter
+            elif delimiter == code_delimiter:
+                code_delimiter = None
+            buffer.append(delimiter)
+            index = end
+            continue
+        if char == "|" and code_delimiter is None:
+            cells.append("".join(buffer).strip())
+            buffer = []
+        else:
+            buffer.append(char)
+        index += 1
+
+    cells.append("".join(buffer).strip())
+    return cells
+
+
+def _is_markdown_separator(cells):
+    """Return whether every cell is a Markdown table delimiter cell."""
+    return bool(cells) and all(
+        re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells
+    )
+
+
+def _status_claim_clauses(text):
+    """Split status prose without losing comma-separated task subjects."""
+    clauses = []
+    for sentence in CLAUSE_BOUNDARY_RE.split(text):
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        start = 0
+        for comma in re.finditer(",", sentence):
+            before = sentence[start : comma.start()]
+            after = sentence[comma.end() :]
+            if STATUS_ASSERTION_RE.search(before) and TASK_ID_RE.search(after):
+                clauses.append(before.strip())
+                start = comma.end()
+        tail = sentence[start:].strip()
+        if tail:
+            clauses.append(tail)
+    return clauses
+
+
 def _task_ids_in_claim(text):
     """Return direct task IDs plus every member of recognized ID ranges."""
     task_ids = set(TASK_ID_RE.findall(text))
@@ -147,12 +249,13 @@ def _task_ids_in_claim(text):
 def parse_board_details(text):
     """Parse board sections plus machine-checkable status and blocker claims.
 
-    Task ids are collected only from the first table cell. A table with a
-    ``Status`` column contributes explicit status claims; membership in the
-    completed section contributes an implied ``done`` claim. In the blocker
-    table, clauses in the ``Fehlt`` column that say a task is "nicht belegt"
-    (or "not proven") contribute an explicit unproven claim. Free-form task
-    mentions elsewhere stay informational and are not interpreted as status.
+    Task ids are collected from the column named ``ID``; headerless legacy
+    tables fall back to the first cell. A table with a ``Status`` column
+    contributes explicit status claims; membership in the completed section
+    contributes an implied ``done`` claim. In the blocker table, clauses in
+    the ``Fehlt`` column that say a task is "nicht belegt" (or "not proven")
+    contribute an explicit unproven claim. Free-form task mentions elsewhere
+    stay informational and are not interpreted as status.
     """
     sections = {
         "active": set(),
@@ -163,11 +266,11 @@ def parse_board_details(text):
         "other": set(),
     }
     explicit_statuses = {}
-    unproven_blocker_refs = set()
+    unproven_blocker_refs = {}
     current = None
     header_cells = None
 
-    for line in text.splitlines():
+    for line_number, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
         heading = re.match(r"^#{1,6}\s+(.*)$", stripped)
         if heading:
@@ -175,16 +278,26 @@ def parse_board_details(text):
             header_cells = None
             continue
         if not current or not stripped.startswith("|"):
+            if current:
+                header_cells = None
             continue
 
-        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        cells = _split_markdown_row(stripped)
         if not cells:
             continue
-        if cells[0].strip().lower() == "id":
-            header_cells = [cell.strip().lower() for cell in cells]
+        if _is_markdown_separator(cells):
             continue
 
-        task_ids = [match.group(0) for match in TASK_ID_RE.finditer(cells[0])]
+        normalized_cells = [_normalize_markdown_token(cell) for cell in cells]
+        row_contains_task_id = any(TASK_ID_RE.search(cell) for cell in cells)
+        if "id" in normalized_cells and not row_contains_task_id:
+            header_cells = normalized_cells
+            continue
+
+        id_index = header_cells.index("id") if header_cells and "id" in header_cells else 0
+        if id_index >= len(cells):
+            continue
+        task_ids = [match.group(0) for match in TASK_ID_RE.finditer(cells[id_index])]
         if not task_ids:
             continue
         for tid in task_ids:
@@ -195,7 +308,7 @@ def parse_board_details(text):
         if header_cells and "status" in header_cells:
             status_index = header_cells.index("status")
             if status_index < len(cells):
-                status_value = cells[status_index].strip().lower()
+                status_value = _normalize_markdown_token(cells[status_index])
                 if status_value:
                     for tid in task_ids:
                         explicit_statuses.setdefault(tid, set()).add(status_value)
@@ -203,10 +316,12 @@ def parse_board_details(text):
         if current == "blocker" and header_cells and "fehlt" in header_cells:
             missing_index = header_cells.index("fehlt")
             if missing_index < len(cells):
-                for clause in re.split(r"[.;]", cells[missing_index]):
+                for clause in _status_claim_clauses(cells[missing_index]):
                     lowered = clause.lower()
                     if any(phrase in lowered for phrase in UNPROVEN_PHRASES):
-                        unproven_blocker_refs.update(_task_ids_in_claim(clause))
+                        source = f"line {line_number}: {clause.strip()}"
+                        for tid in _task_ids_in_claim(clause):
+                            unproven_blocker_refs.setdefault(tid, set()).add(source)
 
     return sections, explicit_statuses, unproven_blocker_refs
 
@@ -276,6 +391,12 @@ def check_task_control(
     # Explicit board status cells are claims and must match the canonical index.
     for tid in sorted(board_statuses):
         claimed_statuses = board_statuses[tid]
+        indexed = index_tasks.get(tid)
+        if indexed is None:
+            errors.append(
+                f"board.md asserts a status for '{tid}' but it is missing from "
+                "canonical docs/tasks/index.json"
+            )
         if len(claimed_statuses) > 1:
             errors.append(
                 f"board.md contains multiple explicit statuses for '{tid}': "
@@ -286,7 +407,6 @@ def check_task_control(
                 errors.append(
                     f"board.md has invalid explicit status for '{tid}': '{claimed_status}'"
                 )
-            indexed = index_tasks.get(tid)
             if indexed is not None and claimed_status != indexed.get("status"):
                 errors.append(
                     f"status mismatch for '{tid}': board.md='{claimed_status}' vs "
@@ -297,9 +417,11 @@ def check_task_control(
     for tid in sorted(unproven_blocker_refs):
         indexed = index_tasks.get(tid)
         if indexed is not None and indexed.get("status") == "done":
+            sources = unproven_blocker_refs.get(tid, set())
+            source_suffix = f" ({sorted(sources)[0]})" if sources else ""
             errors.append(
                 f"stale blocker for '{tid}': board.md says not proven but "
-                "docs/tasks/index.json='done'"
+                f"docs/tasks/index.json='done'{source_suffix}"
             )
 
     # 1. Board active/candidate/blocker tasks must exist in index.json.
