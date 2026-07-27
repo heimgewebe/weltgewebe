@@ -90,7 +90,7 @@
     },
     "web_runtime": {
       "status": "calibration_required",
-      "runner": "playwright",
+      "runner": "apps/web/playwright.performance.config.ts",
       "artifact_kind": "browser-runtime-samples",
       "profiles": {
         "desktop": {
@@ -99,6 +99,13 @@
             "height": 900
           },
           "network_profile": "unthrottled-ci",
+          "network_conditions": {
+            "throttled": false,
+            "latency_ms": 0,
+            "download_kbps": 0,
+            "upload_kbps": 0,
+            "connection_type": "none"
+          },
           "runs": 5
         },
         "mobile": {
@@ -106,13 +113,36 @@
             "width": 390,
             "height": 844
           },
-          "network_profile": "fast-3g",
+          "network_profile": "project-fast-3g",
+          "network_conditions": {
+            "throttled": true,
+            "latency_ms": 150,
+            "download_kbps": 1600,
+            "upload_kbps": 750,
+            "connection_type": "cellular3g"
+          },
           "runs": 5
         }
       },
       "scenarios": {
         "public_map": {
           "path": "/map",
+          "readiness": {
+            "required_selectors": [
+              "canvas.maplibregl-canvas",
+              ".map-marker",
+              "[data-testid=\"tool-fan-trigger\"]"
+            ],
+            "timeout_ms": 10000
+          },
+          "interaction": {
+            "test_ids": [
+              "tool-fan-trigger",
+              "tool-fan-find"
+            ],
+            "expected_test_id": "search-overlay",
+            "settle_frames": 2
+          },
           "metrics": {
             "largest_contentful_paint_ms": {
               "percentile": 75,
@@ -131,7 +161,8 @@
       },
       "limitations": [
         "The thresholds are inherited from prior policy files and are not blocking until a revision-bound calibration artifact exists.",
-        "Synthetic browser samples do not establish production field performance."
+        "Synthetic browser samples do not establish production field performance.",
+        "The canonical browser proof uses deterministic API and basemap fixtures; real backend capacity belongs to api_runtime evidence."
       ]
     },
     "api_runtime": {
