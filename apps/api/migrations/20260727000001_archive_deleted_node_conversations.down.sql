@@ -4,6 +4,8 @@
 
 DROP TRIGGER IF EXISTS domain_messages_archived_conversation_guard ON domain_messages;
 DROP FUNCTION IF EXISTS weltgewebe_protect_archived_conversation_messages();
+DROP TRIGGER IF EXISTS domain_conversations_archived_record_guard ON domain_conversations;
+DROP FUNCTION IF EXISTS weltgewebe_protect_archived_conversation_record();
 
 LOCK TABLE domain_nodes IN SHARE ROW EXCLUSIVE MODE;
 LOCK TABLE domain_conversations IN SHARE ROW EXCLUSIVE MODE;

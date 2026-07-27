@@ -80,6 +80,33 @@ BEGIN
 END;
 $$;
 
+-- The transition from an active node conversation to an archive is allowed once:
+-- the node-deletion trigger above updates a row whose OLD.archived_at is NULL.
+-- After that transition the archive row itself is immutable and cannot be
+-- deleted to bypass the message-level history guard below.
+CREATE OR REPLACE FUNCTION weltgewebe_protect_archived_conversation_record()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF OLD.archived_at IS NOT NULL THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '55000',
+            CONSTRAINT = 'domain_conversations_archived_record_guard',
+            MESSAGE = 'archived node conversations are immutable';
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER domain_conversations_archived_record_guard
+BEFORE UPDATE OR DELETE ON domain_conversations
+FOR EACH ROW EXECUTE FUNCTION weltgewebe_protect_archived_conversation_record();
+
 CREATE OR REPLACE FUNCTION weltgewebe_protect_archived_conversation_messages()
 RETURNS TRIGGER
 LANGUAGE plpgsql

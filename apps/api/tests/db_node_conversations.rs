@@ -273,14 +273,31 @@ async fn cleanup(pool: &sqlx::PgPool) {
             .expect("collect message ids for cleanup");
     aggregate_ids.push(conversation_id.clone());
     aggregate_ids.push(NODE_ID.to_string());
-    // Conversation deletion is an administrative test cleanup path. Its existing
-    // cascade removes messages after the parent row is gone, while direct edits
-    // or deletes inside an archived conversation remain blocked.
+    // The production invariant forbids deleting an archived conversation. This
+    // disposable-database cleanup temporarily disables exactly that trigger in
+    // one transaction; rollback restores it if any cleanup statement fails.
+    let mut cleanup_tx = pool.begin().await.expect("begin conversation cleanup");
+    sqlx::query(
+        "ALTER TABLE domain_conversations DISABLE TRIGGER domain_conversations_archived_record_guard",
+    )
+    .execute(&mut *cleanup_tx)
+    .await
+    .expect("disable archived conversation guard for disposable cleanup");
     sqlx::query("DELETE FROM domain_conversations WHERE id = $1::uuid")
         .bind(&conversation_id)
-        .execute(pool)
+        .execute(&mut *cleanup_tx)
         .await
         .expect("clean conversation and cascaded messages");
+    sqlx::query(
+        "ALTER TABLE domain_conversations ENABLE TRIGGER domain_conversations_archived_record_guard",
+    )
+    .execute(&mut *cleanup_tx)
+    .await
+    .expect("restore archived conversation guard after disposable cleanup");
+    cleanup_tx
+        .commit()
+        .await
+        .expect("commit disposable conversation cleanup");
     sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
         .bind(NODE_ID)
         .execute(pool)
@@ -1150,6 +1167,41 @@ async fn node_conversation_vertical_slice() {
             .and_then(|error| error.constraint()),
         Some("domain_messages_archived_conversation_guard")
     );
+
+    let direct_archive_update_error = sqlx::query(
+        "UPDATE domain_conversations SET node_title_snapshot = 'Manipulierter Titel' WHERE id = $1::uuid",
+    )
+    .bind(&conversation_id)
+    .execute(&pool)
+    .await
+    .expect_err("PostgreSQL must reject direct updates of an archived conversation record");
+    assert_eq!(
+        direct_archive_update_error
+            .as_database_error()
+            .and_then(|error| error.constraint()),
+        Some("domain_conversations_archived_record_guard")
+    );
+
+    let direct_archive_delete_error =
+        sqlx::query("DELETE FROM domain_conversations WHERE id = $1::uuid")
+            .bind(&conversation_id)
+            .execute(&pool)
+            .await
+            .expect_err("PostgreSQL must reject deletion of an archived conversation record");
+    assert_eq!(
+        direct_archive_delete_error
+            .as_database_error()
+            .and_then(|error| error.constraint()),
+        Some("domain_conversations_archived_record_guard")
+    );
+    let archive_still_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM domain_conversations WHERE id = $1::uuid)",
+    )
+    .bind(&conversation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("read archive after rejected direct deletion");
+    assert!(archive_still_exists);
 
     cleanup(&pool).await;
     pool.close().await;
