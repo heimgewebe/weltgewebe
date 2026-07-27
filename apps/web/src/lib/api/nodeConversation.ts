@@ -1,12 +1,31 @@
-export interface NodeConversation {
+interface NodeConversationBase {
   id: string;
   conversation_type: "node";
-  node_id: string;
   visibility: "public";
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
 }
+
+export interface ActiveNodeConversation extends NodeConversationBase {
+  lifecycle_state: "active";
+  node_id: string;
+  node_id_snapshot: null;
+  node_title_snapshot: null;
+  archived_at: null;
+}
+
+export interface ArchivedNodeConversation extends NodeConversationBase {
+  lifecycle_state: "archived";
+  node_id: null;
+  node_id_snapshot: string;
+  node_title_snapshot: string;
+  archived_at: string;
+}
+
+export type NodeConversation =
+  | ActiveNodeConversation
+  | ArchivedNodeConversation;
 
 export interface ConversationMessage {
   id: string;
@@ -86,9 +105,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export function getNodeConversation(
   nodeId: string,
   signal?: AbortSignal,
+): Promise<ActiveNodeConversation> {
+  return request<ActiveNodeConversation>(
+    `/api/nodes/${encodeURIComponent(nodeId)}/conversation`,
+    { signal },
+  );
+}
+
+export function getConversation(
+  conversationId: string,
+  signal?: AbortSignal,
 ): Promise<NodeConversation> {
   return request<NodeConversation>(
-    `/api/nodes/${encodeURIComponent(nodeId)}/conversation`,
+    `/api/conversations/${encodeURIComponent(conversationId)}`,
     { signal },
   );
 }
