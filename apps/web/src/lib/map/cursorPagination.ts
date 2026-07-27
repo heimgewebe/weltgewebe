@@ -272,6 +272,12 @@ export async function loadMapResources(
     loadResource<Account>("accounts"),
     loadResource<Edge>("edges"),
   ]);
+  const resourceOrder: MapResourceName[] = ["nodes", "accounts", "edges"];
+  resourceStatus.sort(
+    (left, right) =>
+      resourceOrder.indexOf(left.resource) -
+      resourceOrder.indexOf(right.resource),
+  );
   const failedCount = resourceStatus.filter(
     (status) => status.status === "failed",
   ).length;
@@ -284,7 +290,6 @@ export async function loadMapResources(
       : completeCount === resourceStatus.length
         ? "ok"
         : "partial";
-  const resourceOrder: MapResourceName[] = ["nodes", "accounts", "edges"];
   const resourceLabels: Record<MapResourceName, string> = {
     nodes: "Knoten",
     accounts: "Garnrollen",
