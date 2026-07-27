@@ -497,6 +497,7 @@ jobs:
       - name: Measure exact-revision browser runtime
         env:
           GIT_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           pnpm test:proof:web-runtime
