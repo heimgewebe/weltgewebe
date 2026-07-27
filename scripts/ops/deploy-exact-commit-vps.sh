@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 SOURCE_CHECKOUT="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 RELEASE_ROOT="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
@@ -30,6 +31,7 @@ last_observed_main=""
 migration_completed_at=""
 lock_owner_entrypoint="${WELTGEWEBE_PRODUCTION_LOCK_OWNER_ENTRYPOINT:-deploy-helper}"
 lock_handoff=""
+deploy_invocation_id="${WELTGEWEBE_DEPLOY_INVOCATION_ID:-}"
 receipt_started=false
 receipt_terminal=false
 
@@ -72,16 +74,18 @@ require_command() {
 write_lock_contention_receipt() {
   local receipt="$STATE_ROOT/receipts/last-contention.json"
   python3 - "$receipt" "$PRODUCTION_LOCK_DOMAIN" "$PRODUCTION_LOCK_FILE" \
-    "$lock_owner_entrypoint" "$COMMIT" << 'PY'
+    "$lock_owner_entrypoint" "$COMMIT" "$deploy_invocation_id" << 'PY'
 import json
 import os
+import secrets
+import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 path = Path(sys.argv[1])
 payload = {
-    "schema_version": 1,
+    "schema_version": 2,
     "kind": "weltgewebe_production_lock_contention",
     "environment": "production",
     "lock_domain": sys.argv[2],
@@ -89,20 +93,68 @@ payload = {
     "entrypoint": sys.argv[4],
     "requested_commit": sys.argv[5] or None,
     "result": "already_running",
+    "deploy_invocation_id": sys.argv[6] or None,
     "recorded_at": datetime.now(timezone.utc).isoformat(),
 }
-temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-with temporary.open("w", encoding="utf-8") as handle:
-    json.dump(payload, handle, sort_keys=True, indent=2)
-    handle.write("\n")
-    handle.flush()
-    os.fsync(handle.fileno())
-os.replace(temporary, path)
-directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-try:
-    os.fsync(directory_fd)
-finally:
-    os.close(directory_fd)
+def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    directory_fd = os.open(path.parent, directory_flags)
+    temporary_name = f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    temporary_created = False
+    try:
+        directory_metadata = os.fstat(directory_fd)
+        if (
+            not stat.S_ISDIR(directory_metadata.st_mode)
+            or directory_metadata.st_uid != 0
+            or directory_metadata.st_mode & 0o022
+        ):
+            raise SystemExit(f"receipt directory is unsafe: {path.parent}")
+
+        file_flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | os.O_CLOEXEC
+            | os.O_NOFOLLOW
+        )
+        file_fd = os.open(temporary_name, file_flags, 0o600, dir_fd=directory_fd)
+        temporary_created = True
+        try:
+            os.fchmod(file_fd, 0o600)
+            with os.fdopen(file_fd, "w", encoding="utf-8", closefd=False) as handle:
+                json.dump(payload, handle, sort_keys=True, indent=2)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(file_fd)
+            metadata = os.fstat(file_fd)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != 0
+                or metadata.st_nlink != 1
+                or metadata.st_mode & 0o777 != 0o600
+            ):
+                raise SystemExit("temporary receipt metadata is unsafe")
+        finally:
+            os.close(file_fd)
+
+        os.replace(
+            temporary_name,
+            path.name,
+            src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd,
+        )
+        temporary_created = False
+        os.fsync(directory_fd)
+    finally:
+        if temporary_created:
+            try:
+                os.unlink(temporary_name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
+        os.close(directory_fd)
+
+
+write_atomic_root_json(path, payload)
 PY
   printf '%s\n' "$receipt"
 }
@@ -139,6 +191,8 @@ acquire_production_lock() {
       fail "inherited production lock domain is invalid"
     [[ "$lock_owner_entrypoint" == "reconciler" ]] ||
       fail "inherited production lock owner is invalid"
+    [[ "$deploy_invocation_id" =~ ^[0-9a-f]{64}$ ]] ||
+      fail "inherited deploy invocation identity is invalid"
     [[ -e "/proc/$$/fd/$PRODUCTION_LOCK_FD" ]] ||
       fail "inherited production lock descriptor is not open"
     inherited_lock="$(readlink -f "/proc/$$/fd/$PRODUCTION_LOCK_FD")"
@@ -155,6 +209,8 @@ acquire_production_lock() {
 
   [[ "$lock_owner_entrypoint" == "deploy-helper" ]] ||
     fail "direct production lock owner is invalid"
+  [[ -z "$deploy_invocation_id" ]] ||
+    fail "direct deploy invocation identity is unexpected"
   exec 9<> "$PRODUCTION_LOCK_FILE"
   if ! flock -n "$PRODUCTION_LOCK_FD"; then
     contention_receipt="$(write_lock_contention_receipt)"
@@ -203,15 +259,18 @@ write_deploy_receipt() {
   local receipt="$STATE_ROOT/receipts/$COMMIT.json"
   python3 - "$receipt" "$COMMIT" "$WEB_SHA256" "$started_at" "$completed_at" \
     "$api_commit_value" "$frontend_commit_value" "$observed_main" "$migration_completed_at" \
-    "$PRODUCTION_LOCK_DOMAIN" "$lock_owner_entrypoint" "$lock_handoff" "$result" << 'PY'
+    "$PRODUCTION_LOCK_DOMAIN" "$lock_owner_entrypoint" "$lock_handoff" "$result" \
+    "$deploy_invocation_id" << 'PY'
 import json
 import os
+import secrets
+import stat
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
 payload = {
-    "schema_version": 4,
+    "schema_version": 5,
     "environment": "production",
     "commit": sys.argv[2],
     "web_artifact_sha256": sys.argv[3],
@@ -225,19 +284,67 @@ payload = {
     "lock_owner_entrypoint": sys.argv[11],
     "lock_handoff": sys.argv[12],
     "result": sys.argv[13],
+    "deploy_invocation_id": sys.argv[14] or None,
 }
-temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-with temporary.open("w", encoding="utf-8") as handle:
-    json.dump(payload, handle, sort_keys=True, indent=2)
-    handle.write("\n")
-    handle.flush()
-    os.fsync(handle.fileno())
-os.replace(temporary, path)
-directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-try:
-    os.fsync(directory_fd)
-finally:
-    os.close(directory_fd)
+def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    directory_fd = os.open(path.parent, directory_flags)
+    temporary_name = f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    temporary_created = False
+    try:
+        directory_metadata = os.fstat(directory_fd)
+        if (
+            not stat.S_ISDIR(directory_metadata.st_mode)
+            or directory_metadata.st_uid != 0
+            or directory_metadata.st_mode & 0o022
+        ):
+            raise SystemExit(f"receipt directory is unsafe: {path.parent}")
+
+        file_flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | os.O_CLOEXEC
+            | os.O_NOFOLLOW
+        )
+        file_fd = os.open(temporary_name, file_flags, 0o600, dir_fd=directory_fd)
+        temporary_created = True
+        try:
+            os.fchmod(file_fd, 0o600)
+            with os.fdopen(file_fd, "w", encoding="utf-8", closefd=False) as handle:
+                json.dump(payload, handle, sort_keys=True, indent=2)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(file_fd)
+            metadata = os.fstat(file_fd)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != 0
+                or metadata.st_nlink != 1
+                or metadata.st_mode & 0o777 != 0o600
+            ):
+                raise SystemExit("temporary receipt metadata is unsafe")
+        finally:
+            os.close(file_fd)
+
+        os.replace(
+            temporary_name,
+            path.name,
+            src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd,
+        )
+        temporary_created = False
+        os.fsync(directory_fd)
+    finally:
+        if temporary_created:
+            try:
+                os.unlink(temporary_name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
+        os.close(directory_fd)
+
+
+write_atomic_root_json(path, payload)
 PY
 }
 

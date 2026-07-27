@@ -7,6 +7,8 @@ import argparse
 import json
 import os
 import re
+import secrets
+import stat
 import sys
 import time
 import urllib.error
@@ -137,7 +139,9 @@ def fetch_endpoint(
         return EndpointResult(url, status, None, None, headers, f"invalid JSON: {exc}")
 
     if not isinstance(payload, dict):
-        return EndpointResult(url, status, None, None, headers, "JSON body is not an object")
+        return EndpointResult(
+            url, status, None, None, headers, "JSON body is not an object"
+        )
 
     commit = payload.get("commit")
     version = payload.get("version")
@@ -174,7 +178,9 @@ def evaluate(
 
     frontend_cache = frontend.headers.get("cache-control", "").lower()
     if "no-store" not in frontend_cache:
-        reasons.append("frontend version readback is not served with Cache-Control: no-store")
+        reasons.append(
+            "frontend version readback is not served with Cache-Control: no-store"
+        )
 
     api_build = api.headers.get("x-weltgewebe-api-build")
     if api_build != expected_commit:
@@ -200,18 +206,62 @@ def evaluate(
 
 
 def write_receipt(path: Path, result: VerificationResult) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with temporary.open("w", encoding="utf-8") as handle:
-        json.dump(result.as_json(), handle, ensure_ascii=False, indent=2, sort_keys=True)
-        handle.write("\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
-    directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    expected_uid = os.geteuid()
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    directory_fd = os.open(path.parent, directory_flags)
+    temporary_name = f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    temporary_created = False
     try:
+        directory_metadata = os.fstat(directory_fd)
+        if (
+            not stat.S_ISDIR(directory_metadata.st_mode)
+            or directory_metadata.st_uid != expected_uid
+            or directory_metadata.st_mode & 0o022
+        ):
+            raise PermissionError(f"receipt directory is unsafe: {path.parent}")
+
+        file_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW
+        file_fd = os.open(temporary_name, file_flags, 0o600, dir_fd=directory_fd)
+        temporary_created = True
+        try:
+            os.fchmod(file_fd, 0o600)
+            with os.fdopen(file_fd, "w", encoding="utf-8", closefd=False) as handle:
+                json.dump(
+                    result.as_json(),
+                    handle,
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+                handle.write("\n")
+                handle.flush()
+                os.fsync(file_fd)
+            metadata = os.fstat(file_fd)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != expected_uid
+                or metadata.st_nlink != 1
+                or metadata.st_mode & 0o777 != 0o600
+            ):
+                raise PermissionError("temporary receipt metadata is unsafe")
+        finally:
+            os.close(file_fd)
+
+        os.replace(
+            temporary_name,
+            path.name,
+            src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd,
+        )
+        temporary_created = False
         os.fsync(directory_fd)
     finally:
+        if temporary_created:
+            try:
+                os.unlink(temporary_name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
         os.close(directory_fd)
 
 
