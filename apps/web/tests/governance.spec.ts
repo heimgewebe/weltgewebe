@@ -5,7 +5,10 @@ const GUEST_ID = "guest-governance-e2e";
 const WEBER_ID = "weber-governance-e2e";
 const PROPOSAL_ID = "11111111-1111-4111-8111-111111111111";
 
-function proposal(status: "consent" | "voting" = "consent", messageCount = 1) {
+function proposal(
+  status: "consent" | "voting" = "consent",
+  messageCount: number | null = 1,
+) {
   return {
     id: PROPOSAL_ID,
     kind: "weberantrag",
@@ -17,7 +20,7 @@ function proposal(status: "consent" | "voting" = "consent", messageCount = 1) {
     consent_until: "2026-07-21T10:00:00Z",
     voting_until: status === "voting" ? "2026-07-28T10:00:00Z" : undefined,
     veto_count: status === "voting" ? 1 : 0,
-    message_count: messageCount,
+    ...(messageCount === null ? {} : { message_count: messageCount }),
     yes_votes: 0,
     no_votes: 0,
     abstain_votes: 0,
@@ -42,6 +45,7 @@ async function installGovernanceRoutes(
     initialStatus?: "consent" | "voting";
     existingApplicantId?: string;
     initialMessageCount?: number;
+    omitMessageCount?: boolean;
     deferListResponse?: boolean;
   } = {},
 ) {
@@ -69,7 +73,12 @@ async function installGovernanceRoutes(
         contentType: "application/json",
         body: JSON.stringify([
           {
-            ...proposal(currentStatus, options.initialMessageCount ?? 1),
+            ...proposal(
+              currentStatus,
+              options.omitMessageCount
+                ? null
+                : (options.initialMessageCount ?? 1),
+            ),
             applicant_account_id: options.existingApplicantId ?? GUEST_ID,
           },
         ]),
@@ -87,7 +96,12 @@ async function installGovernanceRoutes(
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          ...proposal(currentStatus, options.initialMessageCount ?? 1),
+          ...proposal(
+            currentStatus,
+            options.omitMessageCount
+              ? undefined
+              : (options.initialMessageCount ?? 1),
+          ),
           applicant_account_id: options.existingApplicantId ?? GUEST_ID,
           own_vote: undefined,
         }),
@@ -261,6 +275,25 @@ test("veto and conversation links resolve to their factual governance views", as
   await expect(page.getByRole("heading", { name: "Gespräche" })).toBeVisible();
   await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
   await expect(page.getByText("1 Beitrag", { exact: true })).toBeVisible();
+});
+
+test("the conversation view treats a legacy API without message_count as empty", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  await installGovernanceRoutes(page, {
+    initialStatus: "voting",
+    omitMessageCount: true,
+  });
+
+  await page.goto("/antraege?ereignis=gespraech");
+  await expect(page.getByRole("heading", { name: "Gespräche" })).toBeVisible();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toHaveCount(0);
+  await expect(
+    page.getByText("Noch gibt es keine Gespräche mit Beiträgen."),
+  ).toBeVisible();
 });
 
 test("the conversation view excludes voting proposals without contributions", async ({

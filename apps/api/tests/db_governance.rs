@@ -439,6 +439,15 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
         .await
         .expect("delete guest");
 
+    let listed_after_exit = list_proposals(&pool)
+        .await
+        .expect("list proposal projections after guest exit");
+    let retained_projection = listed_after_exit
+        .iter()
+        .find(|candidate| candidate.id == foreign_proposal.id)
+        .expect("foreign proposal remains in list after guest exit");
+    assert_eq!(retained_projection.message_count, 1);
+
     let account_exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM domain_accounts WHERE id = $1)")
             .bind(GUEST_C)
