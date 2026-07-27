@@ -336,6 +336,62 @@ class TestGenerateTaskIndex(unittest.TestCase):
             errors,
         )
 
+    def test_done_section_implies_done_status(self):
+        self._write(
+            _index([_task(status="open", priority="medium")]),
+            _board(done=["OPT-API-001"]),
+            _status([{"id": "OPT-API-001", "status": "open"}]),
+        )
+        errors = self._run()
+        self.assertTrue(
+            any(
+                "OPT-API-001" in e
+                and "board.md='done'" in e
+                and "index.json='open'" in e
+                for e in errors
+            ),
+            errors,
+        )
+
+    def test_intermediate_done_task_in_unproven_range_fails(self):
+        self._touch("apps/api/x.rs")
+        tasks = []
+        status_items = []
+        for number in range(4, 9):
+            task_id = f"WELTGEWEBE-OS-{number:03d}"
+            task_status = "done" if number == 7 else "open"
+            tasks.append(
+                _task(
+                    id=task_id,
+                    status=task_status,
+                    priority="low",
+                    evidence=["apps/api/x.rs"] if task_status == "done" else [],
+                )
+            )
+            status_items.append({"id": task_id, "status": task_status})
+        tasks.append(
+            _task(id="WELTGEWEBE-OS-009", status="open", priority="low")
+        )
+        status_items.append({"id": "WELTGEWEBE-OS-009", "status": "open"})
+        self._write(
+            _index(tasks),
+            _board(
+                blocker=["WELTGEWEBE-OS-009"],
+                blocker_missing={
+                    "WELTGEWEBE-OS-009": (
+                        "WELTGEWEBE-OS-004 bis WELTGEWEBE-OS-008 "
+                        "sind nicht belegt."
+                    )
+                },
+            ),
+            _status(status_items),
+        )
+        errors = self._run()
+        self.assertTrue(
+            any("stale blocker" in e and "WELTGEWEBE-OS-007" in e for e in errors),
+            errors,
+        )
+
     def test_done_task_claimed_unproven_in_blocker_fails(self):
         self._touch("apps/api/x.rs")
         self._write(

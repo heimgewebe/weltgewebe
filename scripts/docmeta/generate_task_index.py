@@ -40,7 +40,19 @@ STATUS_PATH = os.path.join(REPO_ROOT, "docs", "reports", "optimierungsstatus.jso
 # uppercase letter segments separated by '-', terminated by a three-digit number.
 # Matches TASK-CTL-003, OPT-API-001, OPT-MAP-001, AUTH-XYZ-001, MAP-XYZ-001.
 TASK_ID_RE = re.compile(r"\b[A-Z]+(?:-[A-Z]+)*-[0-9]{3}\b")
-VALID_TASK_STATUSES = {"open", "partial", "done", "blocked", "obsolete", "contradicted"}
+TASK_ID_RANGE_RE = re.compile(
+    r"(?P<prefix>[A-Z]+(?:-[A-Z]+)*-)(?P<start>[0-9]{3})"
+    r"\s+(?:(?i:bis|to|through)|[-–—])\s+"
+    r"(?P=prefix)(?P<end>[0-9]{3})"
+)
+VALID_TASK_STATUSES = {
+    "open",
+    "partial",
+    "done",
+    "blocked",
+    "obsolete",
+    "contradicted",
+}
 UNPROVEN_PHRASES = ("nicht belegt", "not proven")
 
 # Generated diagnostics are never canonical and must not be manual write targets.
@@ -120,11 +132,24 @@ def _classify_section(heading):
     return "other"
 
 
+def _task_ids_in_claim(text):
+    """Return direct task IDs plus every member of recognized ID ranges."""
+    task_ids = set(TASK_ID_RE.findall(text))
+    for match in TASK_ID_RANGE_RE.finditer(text):
+        prefix = match.group("prefix")
+        start = int(match.group("start"))
+        end = int(match.group("end"))
+        lower, upper = sorted((start, end))
+        task_ids.update(f"{prefix}{number:03d}" for number in range(lower, upper + 1))
+    return task_ids
+
+
 def parse_board_details(text):
     """Parse board sections plus machine-checkable status and blocker claims.
 
     Task ids are collected only from the first table cell. A table with a
-    ``Status`` column contributes explicit status claims. In the blocker
+    ``Status`` column contributes explicit status claims; membership in the
+    completed section contributes an implied ``done`` claim. In the blocker
     table, clauses in the ``Fehlt`` column that say a task is "nicht belegt"
     (or "not proven") contribute an explicit unproven claim. Free-form task
     mentions elsewhere stay informational and are not interpreted as status.
@@ -164,6 +189,8 @@ def parse_board_details(text):
             continue
         for tid in task_ids:
             sections[current].add(tid)
+            if current == "done":
+                explicit_statuses.setdefault(tid, set()).add("done")
 
         if header_cells and "status" in header_cells:
             status_index = header_cells.index("status")
@@ -179,7 +206,7 @@ def parse_board_details(text):
                 for clause in re.split(r"[.;]", cells[missing_index]):
                     lowered = clause.lower()
                     if any(phrase in lowered for phrase in UNPROVEN_PHRASES):
-                        unproven_blocker_refs.update(TASK_ID_RE.findall(clause))
+                        unproven_blocker_refs.update(_task_ids_in_claim(clause))
 
     return sections, explicit_statuses, unproven_blocker_refs
 
