@@ -25,16 +25,13 @@ alias c := ci
 ci:
 	# Web: unit tests, build, lint and typecheck. Run Vitest directly so the
 	# package pretest generator hook is not repeated after the explicit sync.
-	# GitHub Actions already runs Vitest; this extra invocation is local-only.
-	# Browser E2E remains the separate complete profile in web.yml.
+	# Hosted workflows delegate unit tests here; browser jobs keep E2E separate.
 	@echo "==> Web: install, sync, unit tests, build, typecheck"
 	if [ -d apps/web ]; then \
 		pushd apps/web >/dev/null; \
 		pnpm install --frozen-lockfile; \
 		pnpm sync; \
-		if [ "${GITHUB_ACTIONS:-false}" != "true" ]; then \
-			pnpm exec vitest run; \
-		fi; \
+		pnpm exec vitest run; \
 		pnpm build; \
 		pnpm run ci; \
 		popd >/dev/null; \

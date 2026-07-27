@@ -7,11 +7,72 @@ import unittest
 ROOT = Path(__file__).resolve().parents[3]
 JUSTFILE = ROOT / "Justfile"
 WEB_PACKAGE = ROOT / "apps" / "web" / "package.json"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+WEB_WORKFLOW = ROOT / ".github" / "workflows" / "web.yml"
 CONTINUATION = chr(92)
+SHELL_OPERATORS = {";", "&&", "||", "|"}
 
 
 def continued(command: str) -> str:
     return f"{command}; {CONTINUATION}"
+
+
+def shell_commands(command: str) -> list[list[str]]:
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|")
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    commands: list[list[str]] = [[]]
+    for token in lexer:
+        if token in SHELL_OPERATORS:
+            if commands[-1]:
+                commands.append([])
+            continue
+        commands[-1].append(token)
+    return [tokens for tokens in commands if tokens]
+
+
+def package_script_reference(tokens: list[str], scripts: dict[str, str]) -> str | None:
+    if not tokens:
+        return None
+    executable_index = 0
+    while executable_index < len(tokens) and "=" in tokens[executable_index]:
+        executable_index += 1
+    if executable_index >= len(tokens):
+        return None
+    tool = tokens[executable_index]
+    if tool not in {"pnpm", "npm"}:
+        return None
+    index = executable_index + 1
+    while index < len(tokens) and tokens[index].startswith("-"):
+        index += 1
+    if index >= len(tokens):
+        return None
+    if tokens[index] == "run":
+        index += 1
+    return tokens[index] if index < len(tokens) and tokens[index] in scripts else None
+
+
+def command_invokes_playwright(tokens: list[str]) -> bool:
+    if not tokens:
+        return False
+    index = 0
+    while index < len(tokens) and "=" in tokens[index]:
+        index += 1
+    if index >= len(tokens):
+        return False
+    executable = tokens[index]
+    if executable == "playwright":
+        return True
+    if executable not in {"pnpm", "npm", "npx"}:
+        return False
+    index += 1
+    while index < len(tokens) and tokens[index].startswith("-"):
+        index += 1
+    if index < len(tokens) and tokens[index] in {"exec", "dlx"}:
+        index += 1
+        while index < len(tokens) and tokens[index].startswith("-"):
+            index += 1
+    return index < len(tokens) and tokens[index] == "playwright"
 
 
 def script_uses_playwright(
@@ -23,26 +84,20 @@ def script_uses_playwright(
     if script in seen:
         return False
     seen.add(script)
-    command = scripts.get(script)
-    if command is None:
-        return False
-    try:
-        tokens = shlex.split(command)
-    except ValueError:
-        return True
-    if "playwright" in tokens:
-        return True
-    for index, token in enumerate(tokens):
-        if token != "pnpm" or index + 1 >= len(tokens):
-            continue
-        next_token = tokens[index + 1]
-        nested = (
-            tokens[index + 2]
-            if next_token == "run" and index + 2 < len(tokens)
-            else next_token
-        )
-        if nested in scripts and script_uses_playwright(nested, scripts, seen):
+    lifecycle = [
+        name for name in (f"pre{script}", script, f"post{script}") if name in scripts
+    ]
+    for name in lifecycle:
+        try:
+            commands = shell_commands(scripts[name])
+        except ValueError:
             return True
+        for tokens in commands:
+            if command_invokes_playwright(tokens):
+                return True
+            nested = package_script_reference(tokens, scripts)
+            if nested is not None and script_uses_playwright(nested, scripts, seen):
+                return True
     return False
 
 
@@ -63,48 +118,56 @@ class JustfileContractTests(unittest.TestCase):
         ]
 
     def web_scripts(self) -> dict[str, str]:
-        payload = json.loads(WEB_PACKAGE.read_text(encoding="utf-8"))
-        scripts = payload.get("scripts")
+        scripts = json.loads(WEB_PACKAGE.read_text(encoding="utf-8")).get("scripts")
         self.assertIsInstance(scripts, dict)
         self.assertTrue(
             all(isinstance(k, str) and isinstance(v, str) for k, v in scripts.items())
         )
         return scripts
 
-    def test_local_ci_runs_full_web_unit_suite_only_outside_github_actions(
-        self,
-    ) -> None:
+    def test_just_ci_owns_one_exact_full_vitest_execution(self) -> None:
         lines = self.executable_lines()
-        vitest_line = continued("pnpm exec vitest run")
-        self.assertEqual(lines.count(vitest_line), 1)
-        index = lines.index(vitest_line)
-        self.assertEqual(
-            lines[index - 1],
-            f'if [ "${{GITHUB_ACTIONS:-false}}" != "true" ]; then {CONTINUATION}',
-        )
-        self.assertEqual(lines[index + 1], continued("fi"))
-        self.assertLess(lines.index(continued("pnpm sync")), index)
-        self.assertLess(index, lines.index(continued("pnpm build")))
-        self.assertNotIn(continued("pnpm test:unit"), lines)
+        expected_pnpm = {
+            continued("pnpm install --frozen-lockfile"),
+            continued("pnpm sync"),
+            continued("pnpm exec vitest run"),
+            continued("pnpm build"),
+            continued("pnpm run ci"),
+        }
+        actual_pnpm = {line for line in lines if line.startswith("pnpm ")}
+        self.assertEqual(actual_pnpm, expected_pnpm)
+        vitest = lines.index(continued("pnpm exec vitest run"))
+        self.assertLess(lines.index(continued("pnpm sync")), vitest)
+        self.assertLess(vitest, lines.index(continued("pnpm build")))
 
-    def test_browser_e2e_commands_remain_outside_local_ci_recipe(self) -> None:
+    def test_hosted_browser_workflows_do_not_repeat_unit_tests(self) -> None:
+        for workflow in (CI_WORKFLOW, WEB_WORKFLOW):
+            lines = [
+                line.strip()
+                for line in workflow.read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertNotIn("run: pnpm test:unit", lines, workflow.name)
+            self.assertIn("run: pnpm test:ci", lines, workflow.name)
+
+    def test_local_package_scripts_do_not_reach_playwright(self) -> None:
         scripts = self.web_scripts()
-        for line in self.executable_lines():
-            normalized = line.rstrip(f"; {CONTINUATION}")
-            try:
-                tokens = shlex.split(normalized)
-            except ValueError as error:
-                self.fail(f"unparseable CI command {normalized!r}: {error}")
-            if "playwright" in tokens[:3]:
-                self.fail(f"direct Playwright command in local CI: {normalized}")
-            if len(tokens) < 2 or tokens[0] != "pnpm":
-                continue
-            script = tokens[2] if tokens[1] == "run" and len(tokens) > 2 else tokens[1]
-            if script in scripts:
-                self.assertFalse(
-                    script_uses_playwright(script, scripts),
-                    f"pnpm script {script!r} reaches Playwright",
-                )
+        for script in ("sync", "build", "ci"):
+            self.assertFalse(script_uses_playwright(script, scripts), script)
+
+    def test_resolver_handles_flags_hooks_cycles_and_harmless_names(self) -> None:
+        scripts = {
+            "browser": "playwright test",
+            "wrapper": "pnpm --silent run browser",
+            "ci": "echo ok",
+            "preci": "npm run wrapper",
+            "cycle-a": "pnpm cycle-b",
+            "cycle-b": "pnpm cycle-a",
+            "safe": "echo playwright && test -d playwright",
+        }
+        self.assertTrue(script_uses_playwright("wrapper", scripts))
+        self.assertTrue(script_uses_playwright("ci", scripts))
+        self.assertFalse(script_uses_playwright("cycle-a", scripts))
+        self.assertFalse(script_uses_playwright("safe", scripts))
 
     def test_rust_formatting_stays_check_only(self) -> None:
         lines = self.executable_lines()

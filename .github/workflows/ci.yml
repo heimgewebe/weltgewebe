@@ -354,11 +354,9 @@ jobs:
           just --version
 
       # CI Test Architecture:
-      #   ci.yml — build, lint, typecheck (web + API), cargo test, cargo-deny (via just ci),
-      #            plus always-on Core Guard Tests in the independent guard-tests job.
-      #   web.yml (Gate A) — web unit tests (vitest) + Playwright E2E. Path-scoped to apps/web/**.
-      #   Vitest deliberately runs only in web.yml to avoid double execution on PRs
-      #   that trigger both workflows. See also: Justfile ci recipe, web.yml header.
+      #   just ci — canonical web unit tests, build/lint/typecheck, API tests and cargo-deny.
+      #   ci.yml / web.yml browser jobs — Playwright E2E only.
+      #   Core Guard Tests remain in the independent guard-tests job.
       - name: Validate project
         env:
           CARGO_TERM_COLOR: always
@@ -405,9 +403,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Run web unit tests
-        run: pnpm test:unit
 
       - name: Cache Playwright browser binaries
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0

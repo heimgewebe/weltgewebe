@@ -1,7 +1,6 @@
 ---
-# Web Check (Gate A) — canonical location for web unit tests (vitest) and Playwright E2E.
-# ci.yml does NOT run vitest; it handles build/lint/typecheck + API tests + guard tests.
-# This split avoids double vitest execution when both workflows trigger on the same PR.
+# Web Check (Gate A) — path-scoped web build, lint, typecheck and Playwright E2E.
+# The canonical Vitest execution lives in `just ci`, invoked by ci.yml.
 name: Web Check (Gate A)
 
 env:
@@ -87,9 +86,6 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-playwright-
-
-      - name: Unit tests (Vitest)
-        run: pnpm test:unit
 
       - name: "Playwright: setup browsers (CI)"
         # WICHTIG: Nicht "0" setzen – jede nicht-leere Zeichenkette gilt als truthy
