@@ -136,7 +136,7 @@ class ProductionReceiptResilienceTests(unittest.TestCase):
         for initialized in ('started_at=""', 'api_commit=""', 'frontend_commit=""'):
             self.assertIn(initialized, deploy)
         directory_creation = reconciler.index(
-            '"$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT" "$DOCKER_CONFIG"'
+            '"$DEPLOY_RECEIPT_ROOT/contention" "$DOCKER_CONFIG"'
         )
         observation = reconciler.index('if "$LIVE_VERIFIER"')
         self.assertLess(directory_creation, observation)
