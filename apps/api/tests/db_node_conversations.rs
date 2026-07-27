@@ -121,7 +121,8 @@ async fn seed_account(pool: &sqlx::PgPool, id: &str, title: &str, role: &str) {
     sqlx::query(
         "INSERT INTO domain_accounts
          (id, kind, title, map_state, radius_m, disabled, role, public_payload, private_payload)
-         VALUES ($1, 'garnrolle', $2, 'not_on_map', 0, FALSE, $3, '{}', '{}')",
+         VALUES ($1, 'garnrolle', $2, 'not_on_map', 0, FALSE, $3, '{}', '{}')
+         ON CONFLICT (id) DO NOTHING",
     )
     .bind(id)
     .bind(title)
@@ -1207,22 +1208,6 @@ async fn governance_conversation_write_gate_blocks_legacy_and_allows_canonical_h
         .execute(&pool)
         .await
         .expect("reset governance source");
-    sqlx::query("DELETE FROM domain_messages WHERE conversation_id IN (SELECT id FROM domain_conversations WHERE proposal_id = $1::uuid)")
-        .bind(PROPOSAL_ID)
-        .execute(&pool)
-        .await
-        .expect("clean governance messages");
-    sqlx::query("DELETE FROM governance_proposals WHERE id = $1::uuid")
-        .bind(PROPOSAL_ID)
-        .execute(&pool)
-        .await
-        .expect("clean governance proposal");
-    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
-        .bind(AUTHOR_ID)
-        .execute(&pool)
-        .await
-        .expect("clean author account");
-
     seed_account(&pool, AUTHOR_ID, "Autorin", "weber").await;
     sqlx::query(
         "INSERT INTO governance_proposals (
@@ -1364,24 +1349,11 @@ async fn governance_conversation_write_gate_blocks_legacy_and_allows_canonical_h
     assert_eq!(status, StatusCode::OK);
     assert!(deleted["deleted_at"].is_string());
 
-    sqlx::query("DELETE FROM domain_messages WHERE conversation_id = $1::uuid")
-        .bind(&conversation_id)
-        .execute(&pool)
-        .await
-        .expect("clean governance messages");
+    // CI provides a fresh disposable PostgreSQL database. Historical conversation and message
+    // fixtures intentionally remain because the production contract forbids physical cleanup.
     sqlx::query("UPDATE domain_conversation_cutover_state SET governance_source = 'legacy', updated_at = NOW() WHERE singleton")
         .execute(&pool)
         .await
         .expect("restore legacy governance source");
-    sqlx::query("DELETE FROM governance_proposals WHERE id = $1::uuid")
-        .bind(PROPOSAL_ID)
-        .execute(&pool)
-        .await
-        .expect("clean governance proposal");
-    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
-        .bind(AUTHOR_ID)
-        .execute(&pool)
-        .await
-        .expect("clean author account");
     pool.close().await;
 }
