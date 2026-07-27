@@ -76,18 +76,26 @@ jobs:
           systemd-analyze verify \
             infra/systemd/system/weltgewebe-production-reconcile.service \
             infra/systemd/system/weltgewebe-production-reconcile.timer
-      - name: Run existing contract tests
-        run: |
-          python -m unittest \
-            scripts/ci/tests/test_generate_version_env.py -v
-          python -m unittest \
-            scripts/ci/tests/test_verify_public_release_commit.py -v
-          python -m unittest \
-            scripts/ci/tests/test_validate_web_deploy_archive.py -v
-          python -m unittest \
-            scripts/ci/tests/test_production_reconciler_contract.py -v
-          python -m unittest \
-            scripts/ci/tests/test_deploy_exact_commit_integration.py -v
+      - name: Verify generated version environment
+        run: >-
+          python -m unittest -v
+          scripts/ci/tests/test_generate_version_env.py
+      - name: Verify public release reader
+        run: >-
+          python -m unittest -v
+          scripts/ci/tests/test_verify_public_release_commit.py
+      - name: Verify deployment archive validator
+        run: >-
+          python -m unittest -v
+          scripts/ci/tests/test_validate_web_deploy_archive.py
+      - name: Verify production reconciler source contract
+        run: >-
+          python -m unittest -v
+          scripts/ci/tests/test_production_reconciler_contract.py
+      - name: Verify exact-commit deployment integration
+        run: >-
+          python -m unittest -v
+          scripts/ci/tests/test_deploy_exact_commit_integration.py
       - name: Repair safe malformed deployment receipt
         run: >-
           python -m unittest -v
