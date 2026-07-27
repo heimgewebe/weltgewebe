@@ -16,6 +16,7 @@
   } from "$lib/api/governance";
 
   let proposals: Proposal[] = [];
+  const localMessageCountFloors = new Map<string, number>();
   let loading = true;
   let error = "";
   let summary = "";
@@ -69,11 +70,25 @@
   function updateProposalMessageCount(
     event: CustomEvent<{ proposalId: string; messageCount: number }>,
   ) {
+    const { proposalId, messageCount } = event.detail;
+    localMessageCountFloors.set(proposalId, messageCount);
     proposals = proposals.map((proposal) =>
-      proposal.id === event.detail.proposalId
-        ? { ...proposal, message_count: event.detail.messageCount }
+      proposal.id === proposalId
+        ? { ...proposal, message_count: messageCount }
         : proposal,
     );
+  }
+
+  function mergeLocalMessageCountFloors(listed: Proposal[]): Proposal[] {
+    return listed.map((proposal) => {
+      const floor = localMessageCountFloors.get(proposal.id);
+      if (floor === undefined) return proposal;
+      if (proposalMessageCount(proposal) >= floor) {
+        localMessageCountFloors.delete(proposal.id);
+        return proposal;
+      }
+      return { ...proposal, message_count: floor };
+    });
   }
 
   function describeError(cause: unknown): string {
@@ -90,7 +105,7 @@
     loading = true;
     error = "";
     try {
-      proposals = await listProposals();
+      proposals = mergeLocalMessageCountFloors(await listProposals());
     } catch (cause) {
       error = describeError(cause);
     } finally {

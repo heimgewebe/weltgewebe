@@ -343,6 +343,31 @@ test("the first contribution updates the retained proposal projection", async ({
   await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
 });
 
+test("a late list response cannot undo the first confirmed contribution", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  const governance = await installGovernanceRoutes(page, {
+    initialStatus: "consent",
+    initialMessageCount: 0,
+    initialMessages: 0,
+    deferListResponse: true,
+  });
+
+  await page.goto(`/antraege?id=${PROPOSAL_ID}`);
+  await page.getByLabel("Beitrag verfassen").fill("Beitrag vor später Liste");
+  await page.getByRole("button", { name: "Beitrag senden" }).click();
+  await expect(page.getByText("Beitrag vor später Liste")).toBeVisible();
+
+  governance.releaseListResponse();
+  await page.getByRole("link", { name: "Alle Anträge" }).click();
+  await expect(page.getByText("1 Beitrag", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Gespräche" }).click();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
+});
+
 test("the conversation view excludes voting proposals without contributions", async ({
   page,
 }) => {
