@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-umask 077
+umask 022
 
 SOURCE_CHECKOUT="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 RELEASE_ROOT="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
@@ -349,7 +349,7 @@ read_deploy_tempfail_diagnostic() {
   local commit="$1"
   local invocation_id="$2"
   local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$commit.json"
-  local contention_receipt="$DEPLOY_RECEIPT_ROOT/last-contention.json"
+  local contention_receipt="$DEPLOY_RECEIPT_ROOT/contention/$invocation_id.json"
   python3 - "$deployment_receipt" "$contention_receipt" "$commit" "$invocation_id" << 'PY'
 import json
 import os
@@ -464,6 +464,14 @@ deployment_path = Path(sys.argv[2])
 commit = sys.argv[3]
 
 
+class UnsafeReceiptError(ValueError):
+    pass
+
+
+class InvalidReceiptContent(ValueError):
+    pass
+
+
 def read_root_json(path: Path, *, missing_ok: bool = False):
     directory_fd = None
     file_fd = None
@@ -476,20 +484,20 @@ def read_root_json(path: Path, *, missing_ok: bool = False):
             or directory_metadata.st_uid != 0
             or directory_metadata.st_mode & 0o022
         ):
-            raise ValueError(f"receipt directory is unsafe: {path.parent}")
+            raise UnsafeReceiptError(f"receipt directory is unsafe: {path.parent}")
         file_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
         file_fd = os.open(path.name, file_flags, dir_fd=directory_fd)
         metadata = os.fstat(file_fd)
         if not stat.S_ISREG(metadata.st_mode):
-            raise ValueError(f"receipt is not a regular file: {path}")
+            raise UnsafeReceiptError(f"receipt is not a regular file: {path}")
         if metadata.st_uid != 0:
-            raise ValueError(f"receipt is not root-owned: {path}")
+            raise UnsafeReceiptError(f"receipt is not root-owned: {path}")
         if metadata.st_mode & 0o022:
-            raise ValueError(f"receipt is group- or world-writable: {path}")
+            raise UnsafeReceiptError(f"receipt is group- or world-writable: {path}")
         if metadata.st_nlink != 1:
-            raise ValueError(f"receipt has more than one hard link: {path}")
+            raise UnsafeReceiptError(f"receipt has more than one hard link: {path}")
         if metadata.st_size > MAX_RECEIPT_BYTES:
-            raise ValueError(f"receipt exceeds the byte limit: {path}")
+            raise UnsafeReceiptError(f"receipt exceeds the byte limit: {path}")
         chunks: list[bytes] = []
         remaining = MAX_RECEIPT_BYTES + 1
         while remaining > 0:
@@ -500,7 +508,7 @@ def read_root_json(path: Path, *, missing_ok: bool = False):
             remaining -= len(chunk)
         raw = b"".join(chunks)
         if len(raw) > MAX_RECEIPT_BYTES:
-            raise ValueError(f"receipt exceeds the byte limit: {path}")
+            raise UnsafeReceiptError(f"receipt exceeds the byte limit: {path}")
     except FileNotFoundError:
         if missing_ok:
             return None
@@ -514,9 +522,9 @@ def read_root_json(path: Path, *, missing_ok: bool = False):
     try:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f"receipt is unreadable: {path}: {exc}") from exc
+        raise InvalidReceiptContent(f"receipt is unreadable: {path}: {exc}") from exc
     if not isinstance(payload, dict):
-        raise ValueError(f"receipt is not an object: {path}")
+        raise InvalidReceiptContent(f"receipt is not an object: {path}")
     return payload
 
 
@@ -578,8 +586,13 @@ def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
 
 try:
     verification = read_root_json(verification_path)
+except (OSError, UnsafeReceiptError, InvalidReceiptContent) as exc:
+    raise SystemExit(f"public verification receipt evidence is unsafe: {exc}") from exc
+try:
     existing = read_root_json(deployment_path, missing_ok=True)
-except (OSError, ValueError) as exc:
+except InvalidReceiptContent:
+    existing = None
+except (OSError, UnsafeReceiptError) as exc:
     raise SystemExit(f"deployment receipt evidence is unsafe: {exc}") from exc
 if verification.get("pass") is not True:
     raise SystemExit("public verification receipt is not passing")
@@ -589,6 +602,7 @@ frontend = verification.get("frontend") or {}
 api = verification.get("api") or {}
 if frontend.get("commit") != commit or api.get("commit") != commit:
     raise SystemExit("public verification receipt does not bind both endpoints")
+
 
 def is_lower_hex(value: object, length: int) -> bool:
     return (
@@ -747,6 +761,23 @@ prune_artifacts() {
   fi
 }
 
+prune_deploy_contention_receipts() {
+  local contention_root="$DEPLOY_RECEIPT_ROOT/contention"
+  local old_receipt
+  local -a receipts=()
+
+  find "$contention_root" -maxdepth 1 -type f -name '*.json' -mtime +7 -delete
+  mapfile -t receipts < <(
+    find "$contention_root" -maxdepth 1 -type f -name '*.json' \
+      -printf '%T@ %p\n' | sort -nr | cut -d' ' -f2-
+  )
+  if ((${#receipts[@]} > 20)); then
+    for old_receipt in "${receipts[@]:20}"; do
+      rm -f -- "$old_receipt"
+    done
+  fi
+}
+
 prune_releases() {
   local current_release=""
   local previous_release=""
@@ -788,9 +819,11 @@ done
 
 install -d -o root -g root -m 0711 "$STATE_ROOT"
 install -d -o root -g root -m 0700 \
-  "$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT" "$DOCKER_CONFIG"
+  "$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT" \
+  "$DEPLOY_RECEIPT_ROOT/contention" "$DOCKER_CONFIG"
 install -d -o root -g root -m 0755 "$RELEASE_ROOT"
 acquire_production_lock
+prune_deploy_contention_receipts
 
 available_kib="$(df -Pk "$ARTIFACT_ROOT" | awk 'NR==2 {print $4}')"
 [[ "$available_kib" =~ ^[0-9]+$ ]] || fail "could not determine free disk space"
