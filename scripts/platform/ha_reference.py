@@ -40,6 +40,14 @@ UPGRADE_API_IMAGE = "weltgewebe-api:ha-upgrade-candidate"
 REFERENCE_AVAILABILITY_OBJECTIVE = 0.999
 
 
+class ClusterLifecycle:
+    def __init__(
+        self, *, primary_created: bool = False, restore_created: bool = False
+    ) -> None:
+        self.primary_created = primary_created
+        self.restore_created = restore_created
+
+
 def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -442,6 +450,67 @@ def reconcile_owned_ha_resources(
         "resources": resources,
         "errors": errors,
     }
+
+
+def retire_primary_cluster_before_restore(
+    kind: str, cluster: str, commit: str, owner_id: str
+) -> dict[str, Any]:
+    # Retire only the ownership-bound primary. The future restore cluster and the
+    # external object store must remain untouched so the blank restore can start.
+    result = reconcile_owned_ha_resources(
+        kind,
+        cluster,
+        commit,
+        owner_id,
+        include_restore=False,
+        include_primary=True,
+        include_object_store=False,
+    )
+    resources = result.get("resources")
+    primary_state = (
+        resources.get("primary_cluster") if isinstance(resources, dict) else None
+    )
+    # "absent" is not enough: this proof must establish that this exact run
+    # deleted the ownership-bound primary instead of merely observing it gone.
+    if result.get("errors") or primary_state != "deleted":
+        raise ref.ProofError(
+            "primary cluster retirement before blank restore failed "
+            f"(expected primary_cluster='deleted', got {primary_state!r}): "
+            f"{json.dumps(result, sort_keys=True)}"
+        )
+    return result
+
+
+def create_blank_restore_cluster(
+    kind: str,
+    primary_name: str,
+    restore_name: str,
+    node_image: str,
+    commit: str,
+    owner_id: str,
+    *,
+    keep_primary: bool,
+    lifecycle: ClusterLifecycle,
+) -> dict[str, Any] | None:
+    retirement: dict[str, Any] | None = None
+    if not keep_primary:
+        retirement = retire_primary_cluster_before_restore(
+            kind, primary_name, commit, owner_id
+        )
+        # The primary is gone now. Exception cleanup must not diagnose or delete
+        # it again if creation of the blank restore cluster fails afterwards.
+        lifecycle.primary_created = False
+
+    create_kind_cluster(
+        kind,
+        restore_name,
+        node_image,
+        "platform/clusters/ha/restore-kind.yaml",
+        commit,
+        owner_id,
+    )
+    lifecycle.restore_created = True
+    return retirement
 
 
 def apply_object_store_endpoint(kubectl: str, address: str) -> None:
@@ -2368,7 +2437,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         node_image = oci_host["kind_node_image"]
     primary_oci_cluster: dict[str, Any] | None = None
     restore_oci_cluster: dict[str, Any] | None = None
-    created_primary = created_restore = object_store_created = False
+    primary_cluster_retirement: dict[str, Any] | None = None
+    lifecycle = ClusterLifecycle()
+    object_store_created = False
     stopped_node = ""
     object_store_address = ""
     app_password = secrets.token_urlsafe(24)
@@ -2378,7 +2449,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             kind, args.cluster, node_image,
             "platform/clusters/ha/kind.yaml", commit, owner_id
         )
-        created_primary = True
+        lifecycle.primary_created = True
         if ref.controlled_oci_strict():
             primary_oci_cluster = ref.load_controlled_oci_into_kind(
                 kind, args.cluster, "ha-recovery"
@@ -2528,11 +2599,16 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             kubectl, cluster="postgres-ha"
         )
 
-        create_kind_cluster(
-            kind, restore_name, node_image,
-            "platform/clusters/ha/restore-kind.yaml", commit, owner_id
+        primary_cluster_retirement = create_blank_restore_cluster(
+            kind,
+            args.cluster,
+            restore_name,
+            node_image,
+            commit,
+            owner_id,
+            keep_primary=args.keep,
+            lifecycle=lifecycle,
         )
-        created_restore = True
         if ref.controlled_oci_strict():
             restore_oci_cluster = ref.load_controlled_oci_into_kind(
                 kind, restore_name, "ha-recovery"
@@ -2591,6 +2667,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         result = {
             "schema_version": 1, "status": "pass", "commit": commit,
             "primary_cluster": args.cluster, "restore_cluster": restore_name,
+            "primary_cluster_retired_before_restore": (
+                primary_cluster_retirement is not None
+            ),
+            "primary_cluster_retirement": primary_cluster_retirement,
             "tool_lock_sha256": receipt["lock_sha256"], "image_ids": image_ids,
             "oci_controlled_source": {
                 "strict": ref.controlled_oci_strict(),
@@ -2683,11 +2763,11 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         result["receipt_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         return result
     except Exception:
-        if created_primary:
+        if lifecycle.primary_created:
             ref.configure_cluster_access(kind, args.cluster)
             ha_diagnostic_snapshot(kubectl, args.cluster)
             ref.diagnostic_snapshot(kubectl, args.cluster)
-        if created_restore:
+        if lifecycle.restore_created:
             ref.configure_cluster_access(kind, restore_name)
             ha_diagnostic_snapshot(kubectl, restore_name)
             ref.diagnostic_snapshot(kubectl, restore_name)
@@ -2696,14 +2776,18 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         active_error = sys.exc_info()[1]
         if stopped_node:
             subprocess.run(["docker", "start", stopped_node], capture_output=True)
-        if not args.keep and (created_restore or created_primary or object_store_created):
+        if not args.keep and (
+            lifecycle.restore_created
+            or lifecycle.primary_created
+            or object_store_created
+        ):
             cleanup = reconcile_owned_ha_resources(
                 kind,
                 args.cluster,
                 commit,
                 owner_id,
-                include_restore=created_restore,
-                include_primary=created_primary,
+                include_restore=lifecycle.restore_created,
+                include_primary=lifecycle.primary_created,
                 include_object_store=object_store_created,
             )
             if cleanup["errors"]:

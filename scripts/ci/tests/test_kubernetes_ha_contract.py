@@ -559,6 +559,164 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertEqual(set(result["resources"].values()), {"absent"})
         self.assertEqual(result["errors"], {})
 
+    def test_primary_cluster_retirement_deletes_only_the_primary_cluster(self) -> None:
+        expected = {
+            "status": "deleted",
+            "cluster": "proof",
+            "commit": "a" * 40,
+            "owner_id": "owner-proof",
+            "resources": {"primary_cluster": "deleted"},
+            "errors": {},
+        }
+        with mock.patch.object(
+            self.ha, "reconcile_owned_ha_resources", return_value=expected
+        ) as reconcile:
+            result = self.ha.retire_primary_cluster_before_restore(
+                "kind", "proof", "a" * 40, "owner-proof"
+            )
+        self.assertIs(result, expected)
+        reconcile.assert_called_once_with(
+            "kind",
+            "proof",
+            "a" * 40,
+            "owner-proof",
+            include_restore=False,
+            include_primary=True,
+            include_object_store=False,
+        )
+
+    def test_primary_cluster_retirement_fails_closed_on_drift(self) -> None:
+        cases = (
+            (
+                {
+                    "status": "absent",
+                    "resources": {"primary_cluster": "absent"},
+                    "errors": {},
+                },
+                "got 'absent'",
+            ),
+            (
+                {
+                    "status": "error",
+                    "resources": {"primary_cluster": "error"},
+                    "errors": {"primary_cluster": "ownership mismatch"},
+                },
+                "got 'error'",
+            ),
+            ({"status": "invalid"}, "got None"),
+        )
+        for result, expected_state in cases:
+            with self.subTest(result=result), mock.patch.object(
+                self.ha, "reconcile_owned_ha_resources", return_value=result
+            ):
+                with self.assertRaisesRegex(
+                    self.ha.ref.ProofError, expected_state
+                ):
+                    self.ha.retire_primary_cluster_before_restore(
+                        "kind", "proof", "a" * 40, "owner-proof"
+                    )
+
+    def test_blank_restore_retires_primary_before_cluster_creation(self) -> None:
+        retirement = {
+            "status": "deleted",
+            "resources": {"primary_cluster": "deleted"},
+            "errors": {},
+        }
+        lifecycle = self.ha.ClusterLifecycle(primary_created=True)
+        calls = mock.Mock()
+        retire = mock.Mock(return_value=retirement)
+        create = mock.Mock()
+        calls.attach_mock(retire, "retire")
+        calls.attach_mock(create, "create")
+        with mock.patch.object(
+            self.ha, "retire_primary_cluster_before_restore", retire
+        ), mock.patch.object(self.ha, "create_kind_cluster", create):
+            result = self.ha.create_blank_restore_cluster(
+                "kind",
+                "proof",
+                "proof-restore",
+                "node-image",
+                "a" * 40,
+                "owner-proof",
+                keep_primary=False,
+                lifecycle=lifecycle,
+            )
+
+        self.assertIs(result, retirement)
+        self.assertEqual(
+            calls.mock_calls,
+            [
+                mock.call.retire("kind", "proof", "a" * 40, "owner-proof"),
+                mock.call.create(
+                    "kind",
+                    "proof-restore",
+                    "node-image",
+                    "platform/clusters/ha/restore-kind.yaml",
+                    "a" * 40,
+                    "owner-proof",
+                ),
+            ],
+        )
+        self.assertFalse(lifecycle.primary_created)
+        self.assertTrue(lifecycle.restore_created)
+
+    def test_blank_restore_keep_mode_skips_primary_retirement(self) -> None:
+        lifecycle = self.ha.ClusterLifecycle(primary_created=True)
+        with mock.patch.object(
+            self.ha, "retire_primary_cluster_before_restore"
+        ) as retire, mock.patch.object(self.ha, "create_kind_cluster") as create:
+            result = self.ha.create_blank_restore_cluster(
+                "kind",
+                "proof",
+                "proof-restore",
+                "node-image",
+                "a" * 40,
+                "owner-proof",
+                keep_primary=True,
+                lifecycle=lifecycle,
+            )
+
+        self.assertIsNone(result)
+        retire.assert_not_called()
+        create.assert_called_once_with(
+            "kind",
+            "proof-restore",
+            "node-image",
+            "platform/clusters/ha/restore-kind.yaml",
+            "a" * 40,
+            "owner-proof",
+        )
+        self.assertTrue(lifecycle.primary_created)
+        self.assertTrue(lifecycle.restore_created)
+
+    def test_blank_restore_creation_failure_preserves_cleanup_truth(self) -> None:
+        lifecycle = self.ha.ClusterLifecycle(primary_created=True)
+        with mock.patch.object(
+            self.ha,
+            "retire_primary_cluster_before_restore",
+            return_value={"status": "deleted"},
+        ), mock.patch.object(
+            self.ha,
+            "create_kind_cluster",
+            side_effect=self.ha.ref.ProofError("restore create failed"),
+        ):
+            with self.assertRaisesRegex(
+                self.ha.ref.ProofError, "restore create failed"
+            ):
+                self.ha.create_blank_restore_cluster(
+                    "kind",
+                    "proof",
+                    "proof-restore",
+                    "node-image",
+                    "a" * 40,
+                    "owner-proof",
+                    keep_primary=False,
+                    lifecycle=lifecycle,
+                )
+
+        self.assertFalse(lifecycle.primary_created)
+        self.assertFalse(lifecycle.restore_created)
+
     def test_digest_locked_manifest_replaces_each_release_image_once(self) -> None:
         tagged = {
             "registry.example/controller:v1": "registry.example/controller@sha256:" + "a" * 64,
