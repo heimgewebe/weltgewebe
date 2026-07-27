@@ -3,12 +3,14 @@ id: domain.vocabulary
 title: Domänenvokabular
 doc_type: reference
 status: active
-summary: Aktuelle Zuordnung der Produktbegriffe Garnrolle, Knoten und Faden zu den vorhandenen API- und Datenbegriffen.
+summary: Aktuelle Zuordnung der Produkt- und Lebenszyklusbegriffe zu API und Datenmodell.
 relations:
   - type: relates_to
     target: docs/domain/modules.md
   - type: relates_to
     target: docs/datenmodell.md
+  - type: relates_to
+    target: docs/specs/objektlebenszyklen-und-loeschwirkungen.md
   - type: relates_to
     target: docs/specs/contract.md
   - type: relates_to
@@ -17,15 +19,34 @@ relations:
 
 # Domänenvokabular
 
+## Objekte
+
 | Produktbegriff | Technik/API | Bedeutung | Aktueller Status |
 |---|---|---|---|
 | Garnrolle | Account, `/accounts` | genau ein persönlicher Ausgangspunkt je Account | produktiver PostgreSQL-Pfad belegt |
 | Kartenstatus | `map_state` | `not_on_map`, `exact` oder `radius`; Eigenschaft der Garnrolle, kein Kontotyp | produktiv |
 | Knoten | Node, `/nodes` | Ort, Kollektivgut, Ressource oder Vorhaben | API- und Browser-Schreibpfad produktiv belegt |
 | Faden | Edge, `/edges` | serverseitig abgeleitete Beziehung zwischen Garnrollen und/oder Knoten | öffentliche Leseprojektion; Erzeugung durch fachliche Webungsaktionen |
-| Gesprächsraum | Conversation, `/conversations` | Öffentlicher Diskussionsraum eines Knotens; weitere Gesprächstypen geplant | Knotengespräch produktiv |
-| Beitrag | Message, `/conversations/{id}/messages` | Klartextbeitrag mit Autoren-Snapshot und Tombstone | Knotengespräch produktiv |
+| Gesprächsraum | Conversation, `/conversations` | öffentlicher Diskussionsraum; Knotengespräche können aktiv oder archiviert sein | Knotengespräch produktiv |
+| Gesprächsarchiv | Conversation mit `lifecycle_state=archived` | vom früheren Elternobjekt gelöste, stabile und öffentlich lesbare Gesprächsgeschichte | für Knotengespräche implementiert |
+| Beitrag | Message, `/conversations/{id}/messages` | Klartextbeitrag mit Autoren-Snapshot und möglichem Tombstone | Knotengespräch produktiv |
 | Berechtigungsrolle | `role` (`gast`, `weber`, `admin`) | Gast webt und spricht mit; Weber pflegt zusätzlich fremde gemeinschaftliche Inhalte und besitzt formale Veto-/Stimmrechte; Admin moderiert | implementiert |
+
+## Lebenszyklusverben
+
+| Begriff | Bedeutung |
+|---|---|
+| Aus dem Gewebe entfernen | Objekt aus aktiver Karte, Listen und Schreibpfaden nehmen; keine Aussage über historische Datensätze |
+| Archivieren | Geschichte lesbar und stabil erhalten, aber gewöhnliche Fortsetzung sperren |
+| Tombstonen | Nutzinhalt entfernen, minimale Ereignis- und Zuordnungsspur erhalten |
+| Anonymisieren | aktive Personenbindung lösen, zulässige historische Snapshots erhalten |
+| Redigieren | Inhalt aus Moderations-, Sicherheits- oder Rechtsgründen aus der öffentlichen Projektion nehmen |
+| Purgen | Primärdatensatz und alle geregelten Kopien physisch vernichten; eigener Hochrisikopfad |
+| Projektion verwerfen | berechenbare Ableitung entfernen, ohne ihre fachliche Quelle zu löschen |
+
+Ein unqualifiziertes **„löschen“** ist in neuen Produktspezifikationen, API-
+Verträgen und Benutzertexten zu vermeiden, sobald mehr als eine dieser Wirkungen
+möglich ist.
 
 ## Entfernte Begriffe
 
