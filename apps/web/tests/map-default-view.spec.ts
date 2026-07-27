@@ -130,3 +130,50 @@ test("delayed authentication recenters once without blocking public map startup"
     { timeout: 15000 },
   );
 });
+
+test("camera movement before delayed auth prevents recentering", async ({
+  page,
+}) => {
+  const ownAccountId = "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8";
+  await mockApiResponses(page);
+  let releaseAuth!: () => void;
+  const authGate = new Promise<void>((resolve) => {
+    releaseAuth = resolve;
+  });
+  await page.route("**/api/auth/me", async (route) => {
+    await authGate;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        authenticated: true,
+        account_id: ownAccountId,
+        role: "weber",
+      }),
+    });
+  });
+  await page.goto("/map");
+  await page.waitForFunction(
+    () => (window as any).__TEST_MAP__ !== undefined,
+    undefined,
+    { timeout: 15000 },
+  );
+  await page.evaluate(() => {
+    (window as any).__TEST_MAP__.jumpTo({
+      center: [10.071, 53.571],
+      zoom: 13,
+    });
+  });
+  releaseAuth();
+  await expect(
+    page.getByRole("link", { name: "Meine Garnrolle einrichten" }),
+  ).toBeVisible();
+  const finalCamera = await page.evaluate(() => {
+    const map = (window as any).__TEST_MAP__;
+    const center = map.getCenter();
+    return { lng: center.lng, lat: center.lat, zoom: map.getZoom() };
+  });
+  expect(finalCamera.lng).toBeCloseTo(10.071, 3);
+  expect(finalCamera.lat).toBeCloseTo(53.571, 3);
+  expect(finalCamera.zoom).toBeCloseTo(13, 3);
+});

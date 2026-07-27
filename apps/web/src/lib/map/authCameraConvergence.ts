@@ -9,6 +9,11 @@ export interface AuthCameraConvergenceState {
   alreadyApplied: boolean;
 }
 
+interface CameraReader {
+  getCenter(): { lng: number; lat: number };
+  getZoom(): number;
+}
+
 export function shouldApplyOwnGarnrolleCamera(
   state: AuthCameraConvergenceState,
   auth: AuthStatus,
@@ -23,22 +28,33 @@ export function shouldApplyOwnGarnrolleCamera(
   );
 }
 
+export function hasMapCameraChanged(
+  map: CameraReader,
+  initialCenter: [number, number],
+  initialZoom: number,
+): boolean {
+  const center = map.getCenter();
+  const epsilon = 1e-7;
+  return (
+    Math.abs(center.lng - initialCenter[0]) > epsilon ||
+    Math.abs(center.lat - initialCenter[1]) > epsilon ||
+    Math.abs(map.getZoom() - initialZoom) > epsilon
+  );
+}
+
 export function installAuthCameraConvergence(
   map: MapLibreMap,
   markers: MapEntityViewModel[],
+  initialCenter: [number, number],
+  initialZoom: number,
 ): () => void {
-  let userMovedMap = false;
   let alreadyApplied = false;
-  const markUserMove = (event: { originalEvent?: unknown }) => {
-    if (event.originalEvent) userMovedMap = true;
-  };
-  map.on("movestart", markUserMove);
   const unsubscribe = authStore.subscribe((status) => {
     if (
       !shouldApplyOwnGarnrolleCamera(
         {
           hasExplicitFocus: false,
-          userMovedMap,
+          userMovedMap: hasMapCameraChanged(map, initialCenter, initialZoom),
           alreadyApplied,
         },
         status,
@@ -64,8 +80,5 @@ export function installAuthCameraConvergence(
       zoom: Math.max(map.getZoom(), 14),
     });
   });
-  return () => {
-    unsubscribe();
-    map.off("movestart", markUserMove);
-  };
+  return unsubscribe;
 }

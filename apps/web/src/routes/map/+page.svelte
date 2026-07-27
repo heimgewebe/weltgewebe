@@ -681,9 +681,8 @@
     };
 
     (async () => {
-      // Public map rendering must never wait for session verification. The auth
-      // store continues its deduplicated background check; a result that is
-      // already available may still influence the initial own-Garnrolle camera.
+      // Public map rendering never waits for session verification. Auth loads
+      // after map creation and may perform one guarded convergence later.
       const maplibregl = await import("maplibre-gl");
       const initialAuth = { authenticated: false };
       if (destroyed) return;
@@ -750,6 +749,8 @@
             cleanupAuthCamera = module.installAuthCameraConvergence(
               map,
               markersData,
+              initialCamera.center,
+              initialCamera.zoom,
             );
           }
         });

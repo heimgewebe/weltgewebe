@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { shouldApplyOwnGarnrolleCamera } from "$lib/map/authCameraConvergence";
+import {
+  hasMapCameraChanged,
+  shouldApplyOwnGarnrolleCamera,
+} from "$lib/map/authCameraConvergence";
 
 const authenticated = {
   state: "authenticated" as const,
@@ -59,5 +62,21 @@ describe("delayed map auth convergence", () => {
         authenticated,
       ),
     ).toBe(false);
+  });
+
+  it("detects camera movement that happened before auth became ready", () => {
+    const map = {
+      getCenter: () => ({ lng: 10.071, lat: 53.571 }),
+      getZoom: () => 13,
+    };
+    expect(hasMapCameraChanged(map, [10.058, 53.5585], 12)).toBe(true);
+  });
+
+  it("keeps an untouched initial camera eligible", () => {
+    const map = {
+      getCenter: () => ({ lng: 10.058, lat: 53.5585 }),
+      getZoom: () => 12,
+    };
+    expect(hasMapCameraChanged(map, [10.058, 53.5585], 12)).toBe(false);
   });
 });
