@@ -258,68 +258,11 @@ async fn json_response(
     (status, value)
 }
 
-async fn cleanup(pool: &sqlx::PgPool) {
-    let conversation_id: String =
-        sqlx::query_scalar("SELECT weltgewebe_node_conversation_id($1)::text")
-            .bind(NODE_ID)
-            .fetch_one(pool)
-            .await
-            .expect("derive conversation id for cleanup");
-    let mut aggregate_ids: Vec<String> =
-        sqlx::query_scalar("SELECT id::text FROM domain_messages WHERE conversation_id = $1::uuid")
-            .bind(&conversation_id)
-            .fetch_all(pool)
-            .await
-            .expect("collect message ids for cleanup");
-    aggregate_ids.push(conversation_id.clone());
-    aggregate_ids.push(NODE_ID.to_string());
-    // The production invariant forbids deleting an archived conversation. This
-    // disposable-database cleanup temporarily disables exactly that trigger in
-    // one transaction; rollback restores it if any cleanup statement fails.
-    let mut cleanup_tx = pool.begin().await.expect("begin conversation cleanup");
-    sqlx::query(
-        "ALTER TABLE domain_conversations DISABLE TRIGGER domain_conversations_archived_record_guard",
-    )
-    .execute(&mut *cleanup_tx)
-    .await
-    .expect("disable archived conversation guard for disposable cleanup");
-    sqlx::query("DELETE FROM domain_conversations WHERE id = $1::uuid")
-        .bind(&conversation_id)
-        .execute(&mut *cleanup_tx)
-        .await
-        .expect("clean conversation and cascaded messages");
-    sqlx::query(
-        "ALTER TABLE domain_conversations ENABLE TRIGGER domain_conversations_archived_record_guard",
-    )
-    .execute(&mut *cleanup_tx)
-    .await
-    .expect("restore archived conversation guard after disposable cleanup");
-    cleanup_tx
-        .commit()
-        .await
-        .expect("commit disposable conversation cleanup");
-    sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
-        .bind(NODE_ID)
-        .execute(pool)
-        .await
-        .expect("clean node");
-    sqlx::query("DELETE FROM domain_accounts WHERE id LIKE 'conversation-proof-%'")
-        .execute(pool)
-        .await
-        .expect("clean accounts");
-    sqlx::query("DELETE FROM domain_outbox WHERE aggregate_id = ANY($1::text[])")
-        .bind(&aggregate_ids)
-        .execute(pool)
-        .await
-        .expect("clean outbox");
-}
-
 #[tokio::test]
 #[serial]
 #[ignore = "requires direct PostgreSQL"]
 async fn node_conversation_vertical_slice() {
     let pool = pool().await;
-    cleanup(&pool).await;
     seed_account(&pool, AUTHOR_ID, "Autorin", "weber").await;
     seed_account(&pool, OTHER_ID, "Anderer Weber", "weber").await;
     seed_account(&pool, ADMIN_ID, "Administration", "admin").await;
@@ -480,6 +423,7 @@ async fn node_conversation_vertical_slice() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(conversation["id"], conversation_id);
+    assert_eq!(conversation["lifecycle_state"], "active");
     assert_eq!(conversation["visibility"], "public");
 
     for (method, path, body) in [
@@ -1008,6 +952,19 @@ async fn node_conversation_vertical_slice() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(reclaim_denied["code"], "message_author_required");
 
+    let direct_active_delete_error =
+        sqlx::query("DELETE FROM domain_conversations WHERE id = $1::uuid")
+            .bind(&conversation_id)
+            .execute(&pool)
+            .await
+            .expect_err("PostgreSQL must reject deletion of a non-empty active conversation");
+    assert_eq!(
+        direct_active_delete_error
+            .as_database_error()
+            .and_then(|error| error.constraint()),
+        Some("domain_conversations_history_guard")
+    );
+
     let removed_edges = delete_node_with_edges_in_postgres(&pool, NODE_ID)
         .await
         .expect("node deletion must archive a non-empty public conversation");
@@ -1038,11 +995,20 @@ async fn node_conversation_vertical_slice() {
     assert_eq!(node_id_snapshot, NODE_ID);
     assert_eq!(node_title_snapshot, "Gesprächsknoten");
     assert!(archived_at.is_some());
+    let archive_event_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_outbox          WHERE aggregate_type = 'conversation' AND aggregate_id = $1            AND event_type = 'domain.conversation.archived'",
+    )
+    .bind(&conversation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("read conversation archive outbox event");
+    assert_eq!(archive_event_count, 1);
 
     let archive_path = format!("/conversations/{conversation_id}");
     let (status, archive_view) =
         json_response(&app, request("GET", &archive_path, None, None, None, None)).await;
     assert_eq!(status, StatusCode::OK);
+    assert_eq!(archive_view["lifecycle_state"], "archived");
     assert!(archive_view["node_id"].is_null());
     assert_eq!(archive_view["node_id_snapshot"], NODE_ID);
     assert_eq!(archive_view["node_title_snapshot"], "Gesprächsknoten");
@@ -1088,20 +1054,41 @@ async fn node_conversation_vertical_slice() {
     assert_eq!(status, StatusCode::CONFLICT);
     assert_eq!(archived_edit["code"], "conversation_archived");
 
-    let (status, archived_delete) = json_response(
+    let archived_guest_path = format!(
+        "{message_path}/{}",
+        guest_message["id"].as_str().expect("guest message id")
+    );
+    let (status, archived_tombstone) = json_response(
         &app,
         request(
             "DELETE",
-            &item_path,
-            Some(&admin),
+            &archived_guest_path,
+            Some(&guest),
             None,
             None,
-            tombstone["updated_at"].as_str(),
+            guest_message["updated_at"].as_str(),
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::CONFLICT);
-    assert_eq!(archived_delete["code"], "conversation_archived");
+    assert_eq!(status, StatusCode::OK);
+    assert!(archived_tombstone["content"].is_null());
+    assert!(archived_tombstone["deleted_at"].is_string());
+
+    let direct_tombstone_target: String = sqlx::query_scalar(
+        "SELECT id::text FROM domain_messages          WHERE conversation_id = $1::uuid AND content = 'Zweiter'",
+    )
+    .bind(&conversation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("message for direct archive tombstone proof");
+    let direct_tombstone = sqlx::query(
+        "UPDATE domain_messages          SET content = NULL,              deleted_at = GREATEST(NOW(), updated_at + INTERVAL '1 microsecond'),              updated_at = GREATEST(NOW(), updated_at + INTERVAL '1 microsecond')          WHERE id = $1::uuid",
+    )
+    .bind(&direct_tombstone_target)
+    .execute(&pool)
+    .await
+    .expect("PostgreSQL must allow the canonical one-way archive tombstone");
+    assert_eq!(direct_tombstone.rows_affected(), 1);
 
     let direct_insert_error = sqlx::query(
         "INSERT INTO domain_messages (
@@ -1165,7 +1152,7 @@ async fn node_conversation_vertical_slice() {
         direct_delete_error
             .as_database_error()
             .and_then(|error| error.constraint()),
-        Some("domain_messages_archived_conversation_guard")
+        Some("domain_messages_physical_delete_guard")
     );
 
     let direct_archive_update_error = sqlx::query(
@@ -1179,7 +1166,7 @@ async fn node_conversation_vertical_slice() {
         direct_archive_update_error
             .as_database_error()
             .and_then(|error| error.constraint()),
-        Some("domain_conversations_archived_record_guard")
+        Some("domain_conversations_history_guard")
     );
 
     let direct_archive_delete_error =
@@ -1192,7 +1179,7 @@ async fn node_conversation_vertical_slice() {
         direct_archive_delete_error
             .as_database_error()
             .and_then(|error| error.constraint()),
-        Some("domain_conversations_archived_record_guard")
+        Some("domain_conversations_history_guard")
     );
     let archive_still_exists: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM domain_conversations WHERE id = $1::uuid)",
@@ -1203,7 +1190,6 @@ async fn node_conversation_vertical_slice() {
     .expect("read archive after rejected direct deletion");
     assert!(archive_still_exists);
 
-    cleanup(&pool).await;
     pool.close().await;
 }
 
