@@ -15,6 +15,7 @@ const proposal: ProposalDetail = {
   consent_until: "2026-07-21T10:00:00Z",
   voting_until: "2026-07-28T10:00:00Z",
   veto_count: 2,
+  message_count: 1,
   yes_votes: 3,
   no_votes: 1,
   abstain_votes: 2,

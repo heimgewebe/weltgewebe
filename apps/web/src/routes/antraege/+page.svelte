@@ -35,7 +35,7 @@
       : eventFilter === "veto"
         ? proposals.filter((proposal) => proposal.veto_count > 0)
         : eventFilter === "gespraech"
-          ? proposals.filter((proposal) => proposal.status === "voting")
+          ? proposals.filter((proposal) => proposalMessageCount(proposal) > 0)
           : proposals;
   $: proposalListTitle =
     statusFilter === "consent"
@@ -45,7 +45,7 @@
         : eventFilter === "veto"
           ? "Anträge mit Veto"
           : eventFilter === "gespraech"
-            ? "Gesprächsphasen"
+            ? "Gespräche"
             : "Alle Anträge";
   $: isGuest = $authStore.authenticated && $authStore.role === "gast";
   $: hasOpenOwnProposal =
@@ -55,6 +55,10 @@
         proposal.applicant_account_id === $authStore.account_id &&
         (proposal.status === "consent" || proposal.status === "voting"),
     );
+
+  function proposalMessageCount(proposal: Proposal): number {
+    return Math.max(0, proposal.message_count ?? 0);
+  }
 
   function describeError(cause: unknown): string {
     if (cause instanceof GovernanceApiError) {
@@ -288,7 +292,11 @@
           {#if proposals.length === 0}
             <p class="wg-state">Noch liegen keine Anträge vor.</p>
           {:else if visibleProposals.length === 0}
-            <p class="wg-state">Für diese Ansicht liegen keine Anträge vor.</p>
+            <p class="wg-state">
+              {eventFilter === "gespraech"
+                ? "Noch gibt es keine Gespräche mit Beiträgen."
+                : "Für diese Ansicht liegen keine Anträge vor."}
+            </p>
           {:else}
             <div class="proposal-list">
               {#each visibleProposals as proposal}
@@ -315,6 +323,13 @@
                       >{proposal.veto_count} Veto{proposal.veto_count === 1
                         ? ""
                         : "s"}</span
+                    >
+                    <span
+                      >{proposalMessageCount(proposal)} Beitrag{proposalMessageCount(
+                        proposal,
+                      ) === 1
+                        ? ""
+                        : "e"}</span
                     >
                     <span
                       >{proposal.yes_votes} Ja · {proposal.no_votes} Nein</span

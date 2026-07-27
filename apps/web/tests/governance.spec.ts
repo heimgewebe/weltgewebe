@@ -5,7 +5,7 @@ const GUEST_ID = "guest-governance-e2e";
 const WEBER_ID = "weber-governance-e2e";
 const PROPOSAL_ID = "11111111-1111-4111-8111-111111111111";
 
-function proposal(status: "consent" | "voting" = "consent") {
+function proposal(status: "consent" | "voting" = "consent", messageCount = 1) {
   return {
     id: PROPOSAL_ID,
     kind: "weberantrag",
@@ -17,6 +17,7 @@ function proposal(status: "consent" | "voting" = "consent") {
     consent_until: "2026-07-21T10:00:00Z",
     voting_until: status === "voting" ? "2026-07-28T10:00:00Z" : undefined,
     veto_count: status === "voting" ? 1 : 0,
+    message_count: messageCount,
     yes_votes: 0,
     no_votes: 0,
     abstain_votes: 0,
@@ -40,6 +41,7 @@ async function installGovernanceRoutes(
   options: {
     initialStatus?: "consent" | "voting";
     existingApplicantId?: string;
+    initialMessageCount?: number;
     deferListResponse?: boolean;
   } = {},
 ) {
@@ -67,7 +69,7 @@ async function installGovernanceRoutes(
         contentType: "application/json",
         body: JSON.stringify([
           {
-            ...proposal(currentStatus),
+            ...proposal(currentStatus, options.initialMessageCount ?? 1),
             applicant_account_id: options.existingApplicantId ?? GUEST_ID,
           },
         ]),
@@ -77,7 +79,7 @@ async function installGovernanceRoutes(
       return route.fulfill({
         status: 201,
         contentType: "application/json",
-        body: JSON.stringify(proposal("consent")),
+        body: JSON.stringify(proposal("consent", 0)),
       });
     }
     if (url.pathname === `/api/proposals/${PROPOSAL_ID}` && method === "GET") {
@@ -85,7 +87,7 @@ async function installGovernanceRoutes(
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          ...proposal(currentStatus),
+          ...proposal(currentStatus, options.initialMessageCount ?? 1),
           applicant_account_id: options.existingApplicantId ?? GUEST_ID,
           own_vote: undefined,
         }),
@@ -237,13 +239,16 @@ test("the five governance actions stay usable on a 320 pixel viewport", async ({
   }
 });
 
-test("veto and conversation links resolve to real filtered governance views", async ({
+test("veto and conversation links resolve to their factual governance views", async ({
   page,
 }) => {
   await mockApiResponses(page, {
     auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
   });
-  await installGovernanceRoutes(page, { initialStatus: "voting" });
+  const governance = await installGovernanceRoutes(page, {
+    initialStatus: "voting",
+    initialMessageCount: 1,
+  });
 
   await page.goto("/antraege?ereignis=veto");
   await expect(
@@ -251,11 +256,30 @@ test("veto and conversation links resolve to real filtered governance views", as
   ).toBeVisible();
   await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
 
+  governance.setStatus("consent");
   await page.goto("/antraege?ereignis=gespraech");
-  await expect(
-    page.getByRole("heading", { name: "Gesprächsphasen" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Gespräche" })).toBeVisible();
   await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
+  await expect(page.getByText("1 Beitrag", { exact: true })).toBeVisible();
+});
+
+test("the conversation view excludes voting proposals without contributions", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  await installGovernanceRoutes(page, {
+    initialStatus: "voting",
+    initialMessageCount: 0,
+  });
+
+  await page.goto("/antraege?ereignis=gespraech");
+  await expect(page.getByRole("heading", { name: "Gespräche" })).toBeVisible();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toHaveCount(0);
+  await expect(
+    page.getByText("Noch gibt es keine Gespräche mit Beiträgen."),
+  ).toBeVisible();
 });
 
 test("a guest reaches the Weber application as a distinct weaving action", async ({
