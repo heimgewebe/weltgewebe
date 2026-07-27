@@ -34,7 +34,7 @@ verifies_with:
 The pinned public protocol head is:
 
 ```text
-fae4c26faa22d62d148d39e1995fe5492211cb43
+7a8dfd944fce4d2f45fb21fcec2fae3fd3ff0f96
 ```
 
 The input profile and adapter envelope carry that `protocol_head`. The emitted request does not. A public request remains the exact protocol object with `schema_version: 1`, `risk_level: R0|R1|R2|R3`, `observation`, `classification`, `effects`, `verifications` and optional `closure`.
@@ -102,7 +102,7 @@ Negative control is represented as a passing `verification` with `kind: negative
 
 ## Evaluator Compatibility
 
-The regression test `scripts/ci/tests/test_convergence_adapter_contract.py` reads the protocol checkout from `KONVERGENZREGELKREIS_ROOT`. CI creates that checkout in the runner's temporary directory, fetches only the exact commit `fae4c26faa22d62d148d39e1995fe5492211cb43`, verifies `HEAD`, and treats a missing or different checkout as failure. Local protocol-integration runs require an explicit `KONVERGENZREGELKREIS_ROOT`; without it, those integration cases are skipped while repository-local validation and safety tests remain independently runnable. CI always supplies the explicit temporary checkout at the pinned commit.
+The regression test `scripts/ci/tests/test_convergence_adapter_contract.py` reads the protocol checkout from `KONVERGENZREGELKREIS_ROOT`. CI creates that checkout in the runner's temporary directory, fetches only the exact commit `7a8dfd944fce4d2f45fb21fcec2fae3fd3ff0f96`, verifies `HEAD`, and treats a missing or different checkout as failure. Local protocol-integration runs require an explicit `KONVERGENZREGELKREIS_ROOT`; without it, those integration cases are skipped while repository-local validation and safety tests remain independently runnable. CI always supplies the explicit temporary checkout at the pinned commit.
 
 The mirror test compares the adapter's request keys, nested receipt keys, enums and R2 requirements directly with the pinned schemas and profile. The positive request must then evaluate to `terminally_closed` under the public R2 profile. A request missing required evidence must block with `evidence_missing`. A request with conflicting receipt hashes must block with `conflicting_evidence`. A request with adapter metadata such as `protocol_head` at top level must be rejected by the public request schema.
 
@@ -129,7 +129,7 @@ Abbreviated output shape:
 ```json
 {
   "adapter": "weltgewebe-os-convergence-adapter",
-  "protocol_head": "fae4c26faa22d62d148d39e1995fe5492211cb43",
+  "protocol_head": "7a8dfd944fce4d2f45fb21fcec2fae3fd3ff0f96",
   "request": {"schema_version": 1, "...": "..."},
   "request_sha256": "<64 lowercase hex characters>",
   "profile_sha256": "<64 lowercase hex characters>",
