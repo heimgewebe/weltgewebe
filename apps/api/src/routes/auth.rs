@@ -1335,11 +1335,19 @@ pub async fn logout_all(
 }
 
 pub async fn me(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
-    Json(AuthStatus {
+    let status = AuthStatus {
         authenticated: ctx.authenticated,
         account_id: ctx.account_id,
         role: ctx.role,
-    })
+    };
+    if status.authenticated {
+        (StatusCode::OK, Json(status)).into_response()
+    } else {
+        // The web client treats only 401/403 as authoritative proof that a
+        // session is absent. Transport, decoding and server failures therefore
+        // cannot silently collapse an existing account into guest state.
+        (StatusCode::UNAUTHORIZED, Json(status)).into_response()
+    }
 }
 
 #[derive(Deserialize)]
@@ -3401,6 +3409,42 @@ mod tests {
         let payload: serde_json::Value =
             serde_json::from_slice(&bytes).expect("parse JSON error body");
         assert_eq!(payload["error"], "AUTH_BACKEND_UNAVAILABLE");
+    }
+
+    #[tokio::test]
+    async fn me_uses_unauthorized_as_the_logged_out_contract() {
+        let response = me(Extension(AuthContext {
+            authenticated: false,
+            account_id: None,
+            device_id: None,
+            role: Role::Gast,
+            expires_at: None,
+        }))
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let bytes = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read auth status body");
+        let payload: serde_json::Value =
+            serde_json::from_slice(&bytes).expect("parse auth status body");
+        assert_eq!(payload["authenticated"], false);
+    }
+
+    #[tokio::test]
+    async fn me_returns_ok_for_an_authenticated_identity() {
+        let response = me(Extension(AuthContext {
+            authenticated: true,
+            account_id: Some("account-a".to_owned()),
+            device_id: Some("device-a".to_owned()),
+            role: Role::Weber,
+            expires_at: None,
+        }))
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[test]

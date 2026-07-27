@@ -480,7 +480,7 @@ export async function mockApiResponses(
         });
       } else {
         return route.fulfill({
-          status: 200,
+          status: 401,
           contentType: "application/json",
           body: JSON.stringify({
             authenticated: false,

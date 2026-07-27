@@ -3,6 +3,10 @@
   import { authStore } from "$lib/auth/store";
   import { contextPanelOpen } from "$lib/stores/uiView";
   import { garnrolleIcon } from "$lib/ui/icons";
+
+  function retryAuth() {
+    void authStore.checkAuth({ force: true });
+  }
 </script>
 
 <div
@@ -14,7 +18,7 @@
   <div class="governance-slot">
     <GovernanceFan />
   </div>
-  {#if $authStore.authenticated}
+  {#if $authStore.state === "authenticated"}
     <a
       class="garnrolle-link"
       href="/settings#meine-garnrolle"
@@ -22,8 +26,18 @@
     >
       <img src={garnrolleIcon} alt="" />
     </a>
-  {:else}
+  {:else if $authStore.state === "unauthenticated"}
     <a class="login-entry" href="/login">Anmelden</a>
+  {:else}
+    <button
+      class="login-entry"
+      disabled={$authStore.state === "checking"}
+      on:click={retryAuth}
+    >
+      {$authStore.state === "checking"
+        ? "Prüfe Anmeldung …"
+        : "Verbindung gestört"}
+    </button>
   {/if}
 </div>
 
@@ -90,6 +104,7 @@
     background: var(--panel);
     color: var(--text);
     text-decoration: none;
+    font: inherit;
     font-weight: 600;
   }
 

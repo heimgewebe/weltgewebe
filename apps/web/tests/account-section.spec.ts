@@ -44,7 +44,7 @@ async function setupAuthMocks(page: Page, opts: MockOptions): Promise<void> {
 
   await page.route("**/api/auth/me", (route: Route) => {
     route.fulfill({
-      status: 200,
+      status: authState.authenticated ? 200 : 401,
       contentType: "application/json",
       body: JSON.stringify(authState),
     });

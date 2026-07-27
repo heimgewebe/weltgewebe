@@ -29,12 +29,14 @@ const markers: MapEntityViewModel[] = [
 ];
 
 const authenticated: AuthStatus = {
+  state: "authenticated",
   authenticated: true,
   account_id: "own",
   role: "weber",
 };
 
 const guest: AuthStatus = {
+  state: "unauthenticated",
   authenticated: false,
   role: "gast",
 };

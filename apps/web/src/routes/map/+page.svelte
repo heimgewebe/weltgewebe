@@ -61,7 +61,7 @@
     deriveVisibleEdges,
     selectMapEntity,
   } from "$lib/stores/mapView";
-  import { authStore, type AuthStatus } from "$lib/auth/store";
+  import { authStore } from "$lib/auth/store";
   import { get } from "svelte/store";
 
   import { currentBasemap } from "$lib/map/config/basemap.current";
@@ -215,28 +215,6 @@
   let usableSearchViewportCache: ViewportBounds | null = null;
   let searchViewportGeometryDirty = true;
   let searchViewportResizeObserver: ResizeObserver | null = null;
-
-  async function resolveInitialAuthStatus(
-    timeoutMs = 2500,
-  ): Promise<AuthStatus> {
-    const known = get(authStore);
-    if (known.authenticated) return known;
-
-    return new Promise((resolve) => {
-      let settled = false;
-      const finish = (status: AuthStatus) => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timeout);
-        resolve(status);
-      };
-      const timeout = window.setTimeout(() => {
-        finish(get(authStore));
-      }, timeoutMs);
-
-      authStore.checkAuth().then(finish, () => finish(get(authStore)));
-    });
-  }
 
   function measureUsableSearchViewport(): ViewportBounds | null {
     if (!mapContainer) return null;
@@ -652,19 +630,6 @@
     });
   }
 
-  async function toggleLogin() {
-    if ($authStore.authenticated) {
-      await authStore.logout();
-    } else {
-      try {
-        await authStore.devLogin("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8");
-      } catch (e: any) {
-        // Simple UI feedback for dev login issues
-        window.alert(`Login failed: ${e.message}\nCheck console for details.`);
-      }
-    }
-  }
-
   let cleanupKomposition: (() => void) | undefined = undefined;
   let cleanupFocus: (() => void) | undefined = undefined;
   let unsubscribeSysState: (() => void) | undefined = undefined;
@@ -715,10 +680,11 @@
     };
 
     (async () => {
-      const [maplibregl, initialAuth] = await Promise.all([
-        import("maplibre-gl"),
-        resolveInitialAuthStatus(),
-      ]);
+      // Public map rendering must never wait for session verification. The auth
+      // store continues its deduplicated background check; a result that is
+      // already available may still influence the initial own-Garnrolle camera.
+      const maplibregl = await import("maplibre-gl");
+      const initialAuth = get(authStore);
       if (destroyed) return;
       const container = mapContainer;
       if (!container) {
@@ -931,14 +897,6 @@
       {#if diagnostics.degraded}
         <br />⚠ Load: {loadState}
       {/if}
-      <br />
-      <button
-        on:click={toggleLogin}
-        style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;"
-        data-testid="debug-logout"
-      >
-        {$authStore.authenticated ? "Logout" : "Login Demo"}
-      </button>
     </div>
   {/if}
   <TopBar />
