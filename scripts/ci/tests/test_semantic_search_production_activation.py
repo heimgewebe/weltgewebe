@@ -131,6 +131,42 @@ def test_digest_normalizer_accepts_both_ollama_and_canonical_forms() -> None:
     assert malformed.returncode != 0
 
 
+def _worker_digest_helper() -> str:
+    script = WORKER.read_text(encoding="utf-8")
+    function = script.split("normalize_sha256_digest() {", 1)[1].split("\n}\n", 1)[0]
+    return "normalize_sha256_digest() {" + function + "\n}\n"
+
+
+def test_worker_digest_normalizer_accepts_canonical_and_ollama_forms() -> None:
+    digest = "df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907"
+    result = subprocess.run(
+        ["bash", "-c", _worker_digest_helper() + f'normalize_sha256_digest "{digest}"; normalize_sha256_digest "sha256:{digest}"'],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.splitlines() == [digest, digest]
+
+
+def test_worker_digest_normalizer_rejects_missing_or_invalid_digests() -> None:
+    helper = _worker_digest_helper()
+    for value in ("", "sha256:", "sha256:not-a-digest", "a" * 63, "A" * 64):
+        result = subprocess.run(
+            ["bash", "-c", helper + f'normalize_sha256_digest "{value}"'],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+
+
+def test_worker_compares_normalized_digests_and_stays_fail_closed() -> None:
+    script = WORKER.read_text(encoding="utf-8")
+    assert 'observed_normalized="$(normalize_sha256_digest "$observed")" || return 1' in script
+    assert 'expected_normalized="$(normalize_sha256_digest "$MODEL_REVISION")" || return 1' in script
+    assert '[[ "$observed_normalized" == "$expected_normalized" ]]' in script
+    assert '[[ "$observed" == "$MODEL_REVISION" ]]' not in script
+
+
 def test_persistent_worker_waits_for_exact_model_and_runs_bounded_batches() -> None:
     compose = COMPOSE.read_text(encoding="utf-8")
     worker = WORKER.read_text(encoding="utf-8")

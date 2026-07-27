@@ -15,11 +15,19 @@ if [[ ! "$INTERVAL_SECONDS" =~ ^[0-9]+$ ]] || ((INTERVAL_SECONDS < 5 || INTERVAL
   exit 1
 fi
 
+normalize_sha256_digest() {
+  local digest="${1#sha256:}"
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || return 1
+  printf '%s\n' "$digest"
+}
+
 provider_ready() {
-  local body observed
+  local body observed observed_normalized expected_normalized
   body="$(wget -qO- "${OLLAMA_URL}api/tags" 2> /dev/null)" || return 1
   observed="$(jq -er --arg model "$MODEL_ID" '.models[] | select(.name == $model) | .digest' <<< "$body" 2> /dev/null)" || return 1
-  [[ "$observed" == "$MODEL_REVISION" ]]
+  observed_normalized="$(normalize_sha256_digest "$observed")" || return 1
+  expected_normalized="$(normalize_sha256_digest "$MODEL_REVISION")" || return 1
+  [[ "$observed_normalized" == "$expected_normalized" ]]
 }
 
 while true; do
