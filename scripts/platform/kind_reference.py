@@ -996,7 +996,10 @@ def _dockerfile_logical_instructions(
             continue
         original_parts.append(line)
         continuation_candidate = body.rstrip(" \t")
-        continued = continuation_candidate.endswith("\\")
+        trailing_escape_count = len(continuation_candidate) - len(
+            continuation_candidate.rstrip("\\")
+        )
+        continued = trailing_escape_count % 2 == 1
         if continued:
             logical_parts.append(continuation_candidate[:-1])
             continue
@@ -1017,7 +1020,7 @@ def _dockerfile_stage_source_allowed(
     normalized = source.casefold()
     if normalized in stage_aliases:
         return True
-    return source.isdecimal() and int(source) < stage_count
+    return re.fullmatch(r"[0-9]+", source) is not None and int(source) < stage_count
 
 
 def _validate_dockerfile_external_sources(
@@ -1028,6 +1031,14 @@ def _validate_dockerfile_external_sources(
     stage_aliases: set[str],
     stage_count: int,
 ) -> None:
+    remainder = logical.lstrip()[len(keyword) :].lstrip()
+    for token in re.split(r"\s+", remainder):
+        if not token.startswith("--"):
+            break
+        if "\\" in token:
+            raise ProofError(
+                f"Dockerfile {relative} uses unsupported escaped option syntax: {token}"
+            )
     if keyword == "ADD":
         raise ProofError(
             f"Dockerfile {relative} uses ADD, which is forbidden in strict OCI mode"
@@ -1056,7 +1067,9 @@ def _validate_dockerfile_external_sources(
             for item in mount.split(","):
                 key, separator, value = item.partition("=")
                 if separator:
-                    options[key.casefold()] = value
+                    normalized_key = key.strip().strip("\"'").casefold()
+                    normalized_value = value.strip().strip("\"'")
+                    options[normalized_key] = normalized_value
             source = options.get("from")
             if source is not None and not _dockerfile_stage_source_allowed(
                 source, stage_aliases, stage_count
