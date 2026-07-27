@@ -4,6 +4,7 @@ import { mockApiResponses } from "../fixtures/mockApi";
 import { loadPerformanceContract } from "../../scripts/performance-contract.mjs";
 import {
   assertExactGitCheckout,
+  resolveExactSourceRevision,
   buildWebRuntimeEvidence,
   writeWebRuntimeEvidence,
 } from "../../scripts/web-runtime-evidence.mjs";
@@ -44,9 +45,14 @@ type RuntimeSample = {
   largest_contentful_paint_ms: number;
   interaction_to_next_paint_ms: number;
   usable_map_ms: number;
-  interaction_metric_source: "event-timing" | "next-paint-fallback";
+  interaction_metric_source:
+    | "event-timing-and-next-paint-fallback"
+    | "next-paint-fallback";
   observed_interactions: number;
   observed_event_entries: number;
+  observed_fallback_samples: number;
+  observed_fallback_test_ids: string[];
+  observed_event_timing_test_ids: string[];
   lcp_entry_count: number;
 };
 
@@ -64,8 +70,18 @@ async function installPerformanceObservers(
         interactionId: number;
         duration: number;
         name: string;
+        startTime: number;
+        targetTestId: string | null;
       }>,
-      nextPaintFallback: [] as number[],
+      scriptedFallbacks: [] as Array<{
+        index: number;
+        testId: string;
+        duration: number;
+      }>,
+      expectedScriptedTestIds: [] as string[],
+      nextScriptedIndex: 0,
+      unexpectedClicks: [] as string[],
+      measurementStartedAt: 0,
     };
     Object.defineProperty(window, "__weltgewebeRuntimePerformance", {
       value: state,
@@ -89,12 +105,19 @@ async function installPerformanceObservers(
           const eventEntry = entry as PerformanceEntry & {
             interactionId?: number;
             duration: number;
+            target?: EventTarget | null;
           };
           if ((eventEntry.interactionId ?? 0) > 0) {
+            const target =
+              eventEntry.target instanceof Element
+                ? eventEntry.target.closest<HTMLElement>("[data-testid]")
+                : null;
             state.eventEntries.push({
               interactionId: eventEntry.interactionId ?? 0,
               duration: eventEntry.duration,
               name: eventEntry.name,
+              startTime: eventEntry.startTime,
+              targetTestId: target?.dataset.testid ?? null,
             });
           }
         }
@@ -111,12 +134,28 @@ async function installPerformanceObservers(
     document.addEventListener(
       "click",
       (event) => {
+        if (state.expectedScriptedTestIds.length === 0) return;
+        const expectedTestId =
+          state.expectedScriptedTestIds[state.nextScriptedIndex];
+        const target =
+          event.target instanceof Element
+            ? event.target.closest<HTMLElement>("[data-testid]")
+            : null;
+        const targetTestId = target?.dataset.testid ?? "<unknown>";
+        if (!expectedTestId || targetTestId !== expectedTestId) {
+          state.unexpectedClicks.push(targetTestId);
+          return;
+        }
+        const index = state.nextScriptedIndex;
+        state.nextScriptedIndex += 1;
         const startedAt = event.timeStamp;
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            state.nextPaintFallback.push(
-              Math.max(0, performance.now() - startedAt),
-            );
+            state.scriptedFallbacks.push({
+              index,
+              testId: expectedTestId,
+              duration: Math.max(0, performance.now() - startedAt),
+            });
           });
         });
       },
@@ -162,12 +201,40 @@ async function settleAnimationFrames(
   );
 }
 
+async function startScriptedInteractionMeasurement(
+  page: Page,
+  expectedTestIds: string[],
+): Promise<void> {
+  await page.evaluate((testIds) => {
+    const state = (
+      window as Window & {
+        __weltgewebeRuntimePerformance?: {
+          eventEntries: unknown[];
+          scriptedFallbacks: unknown[];
+          expectedScriptedTestIds: string[];
+          nextScriptedIndex: number;
+          unexpectedClicks: string[];
+          measurementStartedAt: number;
+        };
+      }
+    ).__weltgewebeRuntimePerformance;
+    if (!state) throw new Error("runtime performance state is unavailable");
+    state.eventEntries.length = 0;
+    state.scriptedFallbacks.length = 0;
+    state.expectedScriptedTestIds = [...testIds];
+    state.nextScriptedIndex = 0;
+    state.unexpectedClicks.length = 0;
+    state.measurementStartedAt = performance.now();
+  }, expectedTestIds);
+}
+
 async function collectSample(
   page: Page,
   runIndex: number,
   usableMapMs: number,
+  expectedTestIds: string[],
 ): Promise<RuntimeSample> {
-  const result = await page.evaluate(() => {
+  const result = await page.evaluate((requiredTestIds) => {
     const state = (
       window as Window & {
         __weltgewebeRuntimePerformance?: {
@@ -176,39 +243,85 @@ async function collectSample(
             interactionId: number;
             duration: number;
             name: string;
+            startTime: number;
+            targetTestId: string | null;
           }>;
-          nextPaintFallback: number[];
+          scriptedFallbacks: Array<{
+            index: number;
+            testId: string;
+            duration: number;
+          }>;
+          expectedScriptedTestIds: string[];
+          nextScriptedIndex: number;
+          unexpectedClicks: string[];
+          measurementStartedAt: number;
         };
       }
     ).__weltgewebeRuntimePerformance;
     if (!state || state.lcp.length === 0) {
       throw new Error("largest-contentful-paint was not observed");
     }
-    const interactions = new Map<number, number>();
-    for (const entry of state.eventEntries) {
-      interactions.set(
-        entry.interactionId,
-        Math.max(interactions.get(entry.interactionId) ?? 0, entry.duration),
+    if (
+      state.nextScriptedIndex !== requiredTestIds.length ||
+      state.unexpectedClicks.length > 0
+    ) {
+      throw new Error(
+        `scripted click sequence is incomplete or contaminated: completed=${state.nextScriptedIndex}, unexpected=${state.unexpectedClicks.join(",")}`,
       );
     }
-    const eventTimingValue = Math.max(0, ...interactions.values());
-    const fallbackValue = Math.max(0, ...state.nextPaintFallback);
-    if (eventTimingValue === 0 && fallbackValue === 0) {
-      throw new Error("no interaction-to-next-paint measurement was observed");
+    const fallbacks = [...state.scriptedFallbacks].sort(
+      (left, right) => left.index - right.index,
+    );
+    const fallbackTestIds = fallbacks.map((fallback) => fallback.testId);
+    if (
+      fallbacks.length !== requiredTestIds.length ||
+      fallbackTestIds.some((testId, index) => testId !== requiredTestIds[index])
+    ) {
+      throw new Error(
+        "next-paint fallbacks do not match scripted interactions",
+      );
+    }
+    const eventEntries = state.eventEntries.filter(
+      (entry) =>
+        entry.startTime >= state.measurementStartedAt &&
+        entry.targetTestId !== null &&
+        requiredTestIds.includes(entry.targetTestId),
+    );
+    const eventTimingByTestId = new Map<string, number>();
+    for (const entry of eventEntries) {
+      const testId = entry.targetTestId;
+      if (testId === null) continue;
+      eventTimingByTestId.set(
+        testId,
+        Math.max(eventTimingByTestId.get(testId) ?? 0, entry.duration),
+      );
+    }
+    const eventTimingTestIds = requiredTestIds.filter((testId) =>
+      eventTimingByTestId.has(testId),
+    );
+    const eventTimingValue = Math.max(0, ...eventTimingByTestId.values());
+    const fallbackValue = Math.max(
+      0,
+      ...fallbacks.map((fallback) => fallback.duration),
+    );
+    if (fallbackValue <= 0) {
+      throw new Error("scripted next-paint fallback was not observed");
     }
     return {
       largest_contentful_paint_ms: state.lcp.at(-1) ?? 0,
-      interaction_to_next_paint_ms:
-        eventTimingValue > 0 ? eventTimingValue : fallbackValue,
+      interaction_to_next_paint_ms: Math.max(eventTimingValue, fallbackValue),
       interaction_metric_source:
-        eventTimingValue > 0
-          ? ("event-timing" as const)
+        eventTimingTestIds.length > 0
+          ? ("event-timing-and-next-paint-fallback" as const)
           : ("next-paint-fallback" as const),
-      observed_interactions: interactions.size,
-      observed_event_entries: state.eventEntries.length,
+      observed_interactions: eventTimingTestIds.length,
+      observed_event_entries: eventEntries.length,
+      observed_fallback_samples: fallbacks.length,
+      observed_fallback_test_ids: fallbackTestIds,
+      observed_event_timing_test_ids: eventTimingTestIds,
       lcp_entry_count: state.lcp.length,
     };
-  });
+  }, expectedTestIds);
   return {
     run_index: runIndex,
     usable_map_ms: roundMilliseconds(usableMapMs),
@@ -221,6 +334,9 @@ async function collectSample(
     interaction_metric_source: result.interaction_metric_source,
     observed_interactions: result.observed_interactions,
     observed_event_entries: result.observed_event_entries,
+    observed_fallback_samples: result.observed_fallback_samples,
+    observed_fallback_test_ids: result.observed_fallback_test_ids,
+    observed_event_timing_test_ids: result.observed_event_timing_test_ids,
     lcp_entry_count: result.lcp_entry_count,
   };
 }
@@ -228,9 +344,7 @@ async function collectSample(
 test("creates exact-revision web runtime evidence", async ({
   browser,
 }, testInfo) => {
-  const sourceRevision =
-    process.env.GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? "";
-  expect(sourceRevision).toMatch(/^[0-9a-f]{40}$/);
+  const sourceRevision = resolveExactSourceRevision();
   assertExactGitCheckout({ revision: sourceRevision });
 
   const contract = loadPerformanceContract();
@@ -259,6 +373,10 @@ test("creates exact-revision web runtime evidence", async ({
           });
         }
         const usableMapMs = await page.evaluate(() => performance.now());
+        await startScriptedInteractionMeasurement(
+          page,
+          scenario.interaction.test_ids,
+        );
         for (const testId of scenario.interaction.test_ids) {
           await page.getByTestId(testId).click();
         }
@@ -266,7 +384,12 @@ test("creates exact-revision web runtime evidence", async ({
           page.getByTestId(scenario.interaction.expected_test_id),
         ).toBeVisible();
         await settleAnimationFrames(page, scenario.interaction.settle_frames);
-        const sample = await collectSample(page, runIndex, usableMapMs);
+        const sample = await collectSample(
+          page,
+          runIndex,
+          usableMapMs,
+          scenario.interaction.test_ids,
+        );
         samples.push(sample);
       } finally {
         await context.close();

@@ -17,10 +17,13 @@ import {
 } from "./performance-contract.mjs";
 import {
   assertExactGitCheckout,
+  assertExactRevisionEnvironment,
+  buildExactRevisionAliases,
   buildWebRuntimeEvidence,
   defaultEvidencePath,
   nearestRankPercentile,
   readAndValidateWebRuntimeEvidence,
+  resolveExactSourceRevision,
   validateWebRuntimeEvidence,
   writeWebRuntimeEvidence,
 } from "./web-runtime-evidence.mjs";
@@ -33,9 +36,12 @@ function sample(runIndex, offset = 0) {
     largest_contentful_paint_ms: 1000 + offset,
     interaction_to_next_paint_ms: 40 + offset,
     usable_map_ms: 1500 + offset,
-    interaction_metric_source: "event-timing",
+    interaction_metric_source: "event-timing-and-next-paint-fallback",
     observed_interactions: 2,
     observed_event_entries: 6,
+    observed_fallback_samples: 2,
+    observed_fallback_test_ids: ["tool-fan-trigger", "tool-fan-find"],
+    observed_event_timing_test_ids: ["tool-fan-trigger", "tool-fan-find"],
     lcp_entry_count: 1,
   };
 }
@@ -68,6 +74,41 @@ function evidence(overrides = {}) {
     ...overrides,
   });
 }
+
+test("uses one explicit revision authority and rejects conflicting child aliases", () => {
+  const otherRevision = "b".repeat(40);
+  const parentEnvironment = {
+    WELTGEWEBE_EXACT_REVISION: REVISION,
+    GIT_COMMIT_SHA: REVISION,
+    GITHUB_SHA: otherRevision,
+  };
+  assert.equal(resolveExactSourceRevision(parentEnvironment), REVISION);
+  assert.throws(
+    () => assertExactRevisionEnvironment(parentEnvironment),
+    /GITHUB_SHA does not match the exact source revision/,
+  );
+  const childEnvironment = {
+    ...parentEnvironment,
+    ...buildExactRevisionAliases(parentEnvironment),
+  };
+  assert.equal(assertExactRevisionEnvironment(childEnvironment), REVISION);
+  assert.throws(
+    () =>
+      resolveExactSourceRevision({
+        GIT_COMMIT_SHA: REVISION,
+        GITHUB_SHA: otherRevision,
+      }),
+    /conflict without WELTGEWEBE_EXACT_REVISION/,
+  );
+  assert.equal(
+    assertExactRevisionEnvironment({
+      WELTGEWEBE_EXACT_REVISION: REVISION,
+      GIT_COMMIT_SHA: REVISION,
+      GITHUB_SHA: REVISION,
+    }),
+    REVISION,
+  );
+});
 
 test("binds evidence to the exact clean Git checkout", (t) => {
   const root = mkdtempSync(join(tmpdir(), "web-runtime-git-binding-"));
@@ -167,6 +208,82 @@ test("rejects missing runs, stale revisions and manipulated aggregates", () => {
   assert.throws(
     () => validateWebRuntimeEvidence(result, { expectedRevision: REVISION }),
     /aggregate does not match samples/,
+  );
+});
+
+test("rejects incomplete or internally impossible interaction evidence", () => {
+  const missingFallbackCoverage = evidence();
+  missingFallbackCoverage.profiles.desktop.samples[0].observed_fallback_samples = 1;
+  assert.throws(
+    () =>
+      validateWebRuntimeEvidence(missingFallbackCoverage, {
+        expectedRevision: REVISION,
+      }),
+    /observed_fallback_samples must equal the scripted interaction count/,
+  );
+
+  const wrongFallbackIdentity = evidence();
+  wrongFallbackIdentity.profiles.desktop.samples[0].observed_fallback_test_ids =
+    ["tool-fan-trigger", "unscripted-click"];
+  assert.throws(
+    () =>
+      validateWebRuntimeEvidence(wrongFallbackIdentity, {
+        expectedRevision: REVISION,
+      }),
+    /observed_fallback_test_ids must exactly match the scripted interactions/,
+  );
+
+  const impossibleExtraInteraction = evidence();
+  Object.assign(impossibleExtraInteraction.profiles.desktop.samples[0], {
+    observed_interactions: 3,
+    observed_event_entries: 3,
+    observed_fallback_samples: 3,
+    observed_fallback_test_ids: [
+      "tool-fan-trigger",
+      "tool-fan-find",
+      "unscripted-click",
+    ],
+    observed_event_timing_test_ids: [
+      "tool-fan-trigger",
+      "tool-fan-find",
+      "unscripted-click",
+    ],
+  });
+  assert.throws(
+    () =>
+      validateWebRuntimeEvidence(impossibleExtraInteraction, {
+        expectedRevision: REVISION,
+      }),
+    /observed_fallback_test_ids must exactly match the scripted interactions|must not contain duplicates/,
+  );
+
+  const impossibleEventTiming = evidence();
+  Object.assign(impossibleEventTiming.profiles.desktop.samples[0], {
+    interaction_to_next_paint_ms: 0,
+    observed_interactions: 0,
+    observed_event_entries: 0,
+    observed_event_timing_test_ids: [],
+  });
+  assert.throws(
+    () =>
+      validateWebRuntimeEvidence(impossibleEventTiming, {
+        expectedRevision: REVISION,
+      }),
+    /interaction_to_next_paint_ms must be > 0/,
+  );
+
+  const incoherentCombinedSource = evidence();
+  Object.assign(incoherentCombinedSource.profiles.desktop.samples[0], {
+    observed_interactions: 0,
+    observed_event_entries: 0,
+    observed_event_timing_test_ids: [],
+  });
+  assert.throws(
+    () =>
+      validateWebRuntimeEvidence(incoherentCombinedSource, {
+        expectedRevision: REVISION,
+      }),
+    /combined interaction samples require coherent Event Timing observations/,
   );
 });
 

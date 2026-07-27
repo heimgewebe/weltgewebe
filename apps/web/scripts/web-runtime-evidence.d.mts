@@ -5,9 +5,14 @@ export interface WebRuntimeSample {
   largest_contentful_paint_ms: number;
   interaction_to_next_paint_ms: number;
   usable_map_ms: number;
-  interaction_metric_source: "event-timing" | "next-paint-fallback";
+  interaction_metric_source:
+    | "event-timing-and-next-paint-fallback"
+    | "next-paint-fallback";
   observed_interactions: number;
   observed_event_entries: number;
+  observed_fallback_samples: number;
+  observed_fallback_test_ids: string[];
+  observed_event_timing_test_ids: string[];
   lcp_entry_count: number;
 }
 
@@ -29,6 +34,15 @@ export interface WebRuntimeEvidence {
   };
 }
 
+export function resolveExactSourceRevision(
+  environment?: Record<string, string | undefined>,
+): string;
+export function buildExactRevisionAliases(
+  environment?: Record<string, string | undefined>,
+): Record<string, string>;
+export function assertExactRevisionEnvironment(
+  environment?: Record<string, string | undefined>,
+): string;
 export function assertExactGitCheckout(options: {
   revision: string;
   root?: string;

@@ -2,16 +2,12 @@
 import { resolve } from "node:path";
 import {
   assertExactGitCheckout,
+  resolveExactSourceRevision,
   defaultEvidencePath,
   readAndValidateWebRuntimeEvidence,
 } from "./web-runtime-evidence.mjs";
 
-const revision = process.env.GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? "";
-if (!/^[0-9a-f]{40}$/.test(revision)) {
-  throw new Error(
-    "GIT_COMMIT_SHA or GITHUB_SHA must contain the exact lowercase commit SHA",
-  );
-}
+const revision = resolveExactSourceRevision();
 assertExactGitCheckout({ revision });
 const path = process.env.WELTGEWEBE_WEB_RUNTIME_EVIDENCE_PATH
   ? resolve(process.env.WELTGEWEBE_WEB_RUNTIME_EVIDENCE_PATH)

@@ -23,7 +23,7 @@ const METRICS = [
 ];
 const EXTRA_LIMITATIONS = [
   "API responses and the local basemap style are deterministic Playwright fixtures.",
-  "Interaction latency uses Chromium Event Timing when available and a two-animation-frame next-paint fallback otherwise.",
+  "Interaction latency uses the slower of Chromium Event Timing and a two-animation-frame next-paint fallback; fallback coverage must include every scripted click.",
 ];
 const VALIDITY_ESTABLISHES = [
   "synthetic browser runtime samples for the exact source revision",
@@ -64,6 +64,17 @@ function nonEmptyString(value, label) {
   return value;
 }
 
+function stringList(value, label) {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
+  const items = value.map((item, index) =>
+    nonEmptyString(item, `${label}[${index}]`),
+  );
+  if (new Set(items).size !== items.length) {
+    throw new Error(`${label} must not contain duplicates`);
+  }
+  return items;
+}
+
 function finite(value, label, minimum = 0) {
   if (!Number.isFinite(value) || value < minimum) {
     throw new Error(`${label} must be a finite number >= ${minimum}`);
@@ -82,6 +93,58 @@ function sourceRevision(value) {
   const revision = nonEmptyString(value, "source_revision");
   if (!SOURCE_REVISION_RE.test(revision)) {
     throw new Error("source_revision must be a lowercase 40-character Git SHA");
+  }
+  return revision;
+}
+
+export function resolveExactSourceRevision(environment = process.env) {
+  const explicitRevision = environment.WELTGEWEBE_EXACT_REVISION;
+  const gitRevision = environment.GIT_COMMIT_SHA;
+  const githubRevision = environment.GITHUB_SHA;
+  if (explicitRevision !== undefined) {
+    const revision = sourceRevision(explicitRevision);
+    if (gitRevision !== undefined && sourceRevision(gitRevision) !== revision) {
+      throw new Error(
+        "GIT_COMMIT_SHA does not match WELTGEWEBE_EXACT_REVISION",
+      );
+    }
+    return revision;
+  }
+  const candidates = [gitRevision, githubRevision].filter(
+    (value) => value !== undefined,
+  );
+  if (candidates.length === 0) {
+    throw new Error(
+      "WELTGEWEBE_EXACT_REVISION, GIT_COMMIT_SHA or GITHUB_SHA must define the exact source revision",
+    );
+  }
+  const revisions = candidates.map((value) => sourceRevision(value));
+  if (new Set(revisions).size !== 1) {
+    throw new Error(
+      "GIT_COMMIT_SHA and GITHUB_SHA conflict without WELTGEWEBE_EXACT_REVISION",
+    );
+  }
+  return revisions[0];
+}
+
+export function buildExactRevisionAliases(environment = process.env) {
+  const revision = resolveExactSourceRevision(environment);
+  return {
+    WELTGEWEBE_EXACT_REVISION: revision,
+    GIT_COMMIT_SHA: revision,
+    GITHUB_SHA: revision,
+  };
+}
+
+export function assertExactRevisionEnvironment(environment = process.env) {
+  const revision = resolveExactSourceRevision(environment);
+  for (const variable of ["GIT_COMMIT_SHA", "GITHUB_SHA"]) {
+    const value = environment[variable];
+    if (value !== undefined && sourceRevision(value) !== revision) {
+      throw new Error(
+        `${variable} does not match the exact source revision ${revision}`,
+      );
+    }
   }
   return revision;
 }
@@ -152,7 +215,7 @@ export function nearestRankPercentile(values, percentile) {
   return sorted[Math.ceil((percentile / 100) * sorted.length) - 1];
 }
 
-function validateSample(sample, label) {
+function validateSample(sample, label, expectedInteractionTestIds) {
   const record = exact(
     sample,
     [
@@ -163,21 +226,100 @@ function validateSample(sample, label) {
       "interaction_metric_source",
       "observed_interactions",
       "observed_event_entries",
+      "observed_fallback_samples",
+      "observed_fallback_test_ids",
+      "observed_event_timing_test_ids",
       "lcp_entry_count",
     ],
     label,
   );
   integer(record.run_index, `${label}.run_index`, 1);
   for (const metric of METRICS) finite(record[metric], `${label}.${metric}`);
+  if (record.interaction_to_next_paint_ms <= 0) {
+    throw new Error(`${label}.interaction_to_next_paint_ms must be > 0`);
+  }
   if (
-    !new Set(["event-timing", "next-paint-fallback"]).has(
-      record.interaction_metric_source,
-    )
+    !new Set([
+      "event-timing-and-next-paint-fallback",
+      "next-paint-fallback",
+    ]).has(record.interaction_metric_source)
   ) {
     throw new Error(`${label}.interaction_metric_source is unsupported`);
   }
-  integer(record.observed_interactions, `${label}.observed_interactions`, 0);
-  integer(record.observed_event_entries, `${label}.observed_event_entries`, 0);
+  const requiredTestIds = stringList(
+    expectedInteractionTestIds,
+    "expected interaction test ids",
+  );
+  if (requiredTestIds.length === 0) {
+    throw new Error("expected interaction test ids must not be empty");
+  }
+  const fallbackTestIds = stringList(
+    record.observed_fallback_test_ids,
+    `${label}.observed_fallback_test_ids`,
+  );
+  if (!isDeepStrictEqual(fallbackTestIds, requiredTestIds)) {
+    throw new Error(
+      `${label}.observed_fallback_test_ids must exactly match the scripted interactions`,
+    );
+  }
+  const eventTimingTestIds = stringList(
+    record.observed_event_timing_test_ids,
+    `${label}.observed_event_timing_test_ids`,
+  );
+  if (eventTimingTestIds.some((testId) => !requiredTestIds.includes(testId))) {
+    throw new Error(
+      `${label}.observed_event_timing_test_ids contains an unscripted interaction`,
+    );
+  }
+  const observedInteractions = integer(
+    record.observed_interactions,
+    `${label}.observed_interactions`,
+    0,
+  );
+  const observedEventEntries = integer(
+    record.observed_event_entries,
+    `${label}.observed_event_entries`,
+    0,
+  );
+  const observedFallbackSamples = integer(
+    record.observed_fallback_samples,
+    `${label}.observed_fallback_samples`,
+    0,
+  );
+  if (
+    observedFallbackSamples !== requiredTestIds.length ||
+    observedFallbackSamples !== fallbackTestIds.length
+  ) {
+    throw new Error(
+      `${label}.observed_fallback_samples must equal the scripted interaction count`,
+    );
+  }
+  if (
+    observedInteractions !== eventTimingTestIds.length ||
+    observedInteractions > requiredTestIds.length
+  ) {
+    throw new Error(
+      `${label}.observed_interactions must match the scripted Event Timing identities`,
+    );
+  }
+  if (record.interaction_metric_source === "next-paint-fallback") {
+    if (
+      observedInteractions !== 0 ||
+      observedEventEntries !== 0 ||
+      eventTimingTestIds.length !== 0
+    ) {
+      throw new Error(
+        `${label} fallback-only samples must not claim Event Timing observations`,
+      );
+    }
+  } else if (
+    observedInteractions < 1 ||
+    observedEventEntries < observedInteractions
+  ) {
+    throw new Error(
+      `${label} combined interaction samples require coherent Event Timing observations`,
+    );
+  }
   integer(record.lcp_entry_count, `${label}.lcp_entry_count`, 1);
   return record;
 }
@@ -218,6 +360,13 @@ export function buildWebRuntimeEvidence({
     );
   }
   const [scenarioId, scenario] = scenarioEntries[0];
+  const expectedInteractionTestIds = stringList(
+    scenario.interaction.test_ids,
+    "public_map scripted interaction test ids",
+  );
+  if (expectedInteractionTestIds.length === 0) {
+    throw new Error("public_map must define scripted interactions");
+  }
   const profileEvidence = {};
   for (const [profileId, profile] of Object.entries(runtime.profiles)) {
     const samples = samplesByProfile[profileId];
@@ -227,7 +376,11 @@ export function buildWebRuntimeEvidence({
       );
     }
     const validated = samples.map((sample, index) =>
-      validateSample(sample, `profiles.${profileId}.samples[${index}]`),
+      validateSample(
+        sample,
+        `profiles.${profileId}.samples[${index}]`,
+        expectedInteractionTestIds,
+      ),
     );
     const runIndexes = validated.map((sample) => sample.run_index);
     if (new Set(runIndexes).size !== runIndexes.length) {
@@ -412,7 +565,11 @@ export function validateWebRuntimeEvidence(
       );
     }
     const validatedSamples = profile.samples.map((sample, index) =>
-      validateSample(sample, `profiles.${profileId}.samples[${index}]`),
+      validateSample(
+        sample,
+        `profiles.${profileId}.samples[${index}]`,
+        contractScenario.interaction.test_ids,
+      ),
     );
     const runIndexes = validatedSamples.map((sample) => sample.run_index);
     const expectedRunIndexes = Array.from(

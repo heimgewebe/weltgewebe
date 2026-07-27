@@ -474,9 +474,9 @@ jobs:
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
-          node-version-file: ".node-version"
+          node-version-file: '.node-version'
           check-latest: false
-          cache: "pnpm"
+          cache: 'pnpm'
           cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Install dependencies
@@ -496,8 +496,8 @@ jobs:
 
       - name: Measure exact-revision browser runtime
         env:
+          WELTGEWEBE_EXACT_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
           GIT_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           pnpm test:proof:web-runtime
