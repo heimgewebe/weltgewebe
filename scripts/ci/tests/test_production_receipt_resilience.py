@@ -18,7 +18,9 @@ class ProductionReceiptResilienceTests(unittest.TestCase):
         self.addCleanup(self.fixture.doCleanups)
         self.fixture.setUp()
 
-    def test_public_observation_repairs_safe_malformed_deployment_receipt(self) -> None:
+    def test_public_observation_repairs_safe_malformed_deployment_receipt(
+        self,
+    ) -> None:
         fixture = self.fixture
         malformed = fixture.root / "malformed-receipt.json"
         malformed.write_text("{not-json\n", encoding="utf-8")
@@ -108,9 +110,13 @@ class ProductionReceiptResilienceTests(unittest.TestCase):
             (fixture.state / "receipts" / "contention").glob("*.json")
         )
         self.assertEqual(len(invocation_receipts), 1)
-        self.assertTrue((fixture.state / "receipts" / "last-contention.json").exists())
+        self.assertTrue(
+            (fixture.state / "receipts" / "last-contention.json").exists()
+        )
 
-    def test_permissive_caller_umask_produces_canonical_release_modes(self) -> None:
+    def test_permissive_caller_umask_produces_canonical_release_modes(
+        self,
+    ) -> None:
         fixture = self.fixture
         result = fixture.deploy(advance=False, umask="000")
         fixture.restore_test_ownership()
@@ -135,11 +141,17 @@ class ProductionReceiptResilienceTests(unittest.TestCase):
 
         for initialized in ('started_at=""', 'api_commit=""', 'frontend_commit=""'):
             self.assertIn(initialized, deploy)
-        directory_creation = reconciler.index(
-            '"$DEPLOY_RECEIPT_ROOT/contention" "$DOCKER_CONFIG"'
+        receipt_root_creation = reconciler.index(
+            '"$ARTIFACT_ROOT" "$RECEIPT_ROOT" "$DEPLOY_RECEIPT_ROOT" '
+            '"$DOCKER_CONFIG"'
+        )
+        contention_root_creation = reconciler.index(
+            'install -d -o root -g root -m 0700 '
+            '"$DEPLOY_RECEIPT_ROOT/contention"'
         )
         observation = reconciler.index('if "$LIVE_VERIFIER"')
-        self.assertLess(directory_creation, observation)
+        self.assertLess(receipt_root_creation, observation)
+        self.assertLess(contention_root_creation, observation)
 
 
 if __name__ == "__main__":
