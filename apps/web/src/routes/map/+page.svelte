@@ -66,6 +66,7 @@
 
   import { currentBasemap } from "$lib/map/config/basemap.current";
   import { resolveBasemapStyle, rewritePmtilesUrl } from "$lib/map/basemap";
+  import { registerPmtilesProtocol } from "$lib/map/pmtilesProtocol";
   import { getGarnrolleMarkerScale } from "$lib/map/markerScale";
   import { buildMapScene } from "$lib/map/scene";
 
@@ -675,7 +676,7 @@
 
   onMount(() => {
     void preloadSearchOverlay();
-    let maplibreModule: any = null;
+    let releasePmtilesProtocol: (() => void) | undefined;
     // onMount returns its cleanup synchronously while the initialiser below is
     // still suspended on `await import('maplibre-gl')`. If the component is
     // destroyed in that window the cleanup finds `map`/`nodesOverlay` still
@@ -733,20 +734,17 @@
         | ((url: string, resourceType?: any) => { url: string })
         | undefined = undefined;
 
-      // PMTiles dev infrastructure is intentionally prepared now, including the runtime
-      // dependency 'pmtiles'. The current runtime stays strictly on 'remote-style', since
-      // real local artifact proof is still missing. This setup exists solely to reduce later
-      // activation cost and does NOT claim that 'local-sovereign' is already working end-to-end.
+      // MapLibre keeps custom protocols in a module-global registry. A fresh
+      // Protocol per map mount avoids sharing stale PMTiles header/directory
+      // caches, while the lease prevents an older overlapping teardown from
+      // deleting the handler that a newer map already installed.
       if (currentBasemap.mode === "local-sovereign") {
         const pmtiles = await import("pmtiles");
         if (destroyed) return;
-        try {
-          maplibregl.addProtocol("pmtiles", new pmtiles.Protocol().tile);
-        } catch (e: any) {
-          if (!e.message?.includes("already registered")) {
-            console.warn("Unexpected error registering PMTiles protocol:", e);
-          }
-        }
+        releasePmtilesProtocol = registerPmtilesProtocol(
+          maplibregl,
+          new pmtiles.Protocol().tile,
+        );
 
         transformRequestFn = (url: string, resourceType?: any) => {
           return { url: rewritePmtilesUrl(url, window.location.origin) };
@@ -754,10 +752,7 @@
       }
 
       // Past the last await boundary: from here on the cleanup below observes
-      // every resource this initialiser creates. `maplibreModule` gates the
-      // pmtiles protocol removal, so it must not be published before the
-      // protocol is actually registered.
-      maplibreModule = maplibregl;
+      // every resource this initialiser creates, including the protocol lease.
       container.addEventListener("click", handleMarkerClick);
 
       const initialUrlState = parseMapUrlState(get(page).url.searchParams);
@@ -867,15 +862,8 @@
         if (typeof map.remove === "function") map.remove();
       }
       mapContainer?.removeEventListener("click", handleMarkerClick);
-      if (currentBasemap.mode === "local-sovereign" && maplibreModule) {
-        try {
-          maplibreModule.removeProtocol("pmtiles");
-        } catch (e: any) {
-          if (!e.message?.includes("not registered")) {
-            console.warn("Unexpected error removing PMTiles protocol:", e);
-          }
-        }
-      }
+      releasePmtilesProtocol?.();
+      releasePmtilesProtocol = undefined;
     };
   });
 </script>
