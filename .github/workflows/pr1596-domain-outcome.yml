@@ -1,5 +1,5 @@
 name: PR1596 Domain Outcome
-# activation revision: 2
+# activation revision: 3
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -11,6 +11,11 @@ permissions:
   push:
     branches: [fix/node-delete-archive-history-v1]
     paths: ['.github/workflows/pr1596-domain-outcome.yml']
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/pr1596-domain-outcome.yml'
+      - '.github/pr1596-domain-outcome.py'
 
 jobs:
   apply:
@@ -20,6 +25,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
+          ref: fix/node-delete-archive-history-v1
       - name: Verify staged inputs
         run: |
           set -euo pipefail
