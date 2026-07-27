@@ -146,6 +146,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                   printf 'production lock descriptor leaked into weltgewebe-up\n' >&2
                   exit 94
                 fi
+                if [[ -n "${TEST_UP_UMASK_LOG:-}" ]]; then
+                  umask >> "$TEST_UP_UMASK_LOG"
+                fi
                 if [[ -n "${TEST_UP_LOG:-}" ]]; then
                   printf '%s\n' "$*" >> "$TEST_UP_LOG"
                 fi
@@ -595,6 +598,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             "TEST_REMOTE": str(self.remote),
             "TEST_WEB_ARTIFACT": str(self.artifact),
             "TEST_UP_LOG": str(self.root / "weltgewebe-up.log"),
+            "TEST_UP_UMASK_LOG": str(self.root / "weltgewebe-up-umask.log"),
         }
 
     def deploy(
