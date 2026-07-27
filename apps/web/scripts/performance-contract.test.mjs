@@ -55,20 +55,38 @@ function validContract(overrides = {}) {
       },
       web_runtime: {
         status: "calibration_required",
-        runner: "playwright",
+        runner: "apps/web/playwright.performance.config.ts",
         artifact_kind: "browser-runtime-samples",
         profiles: {
           mobile: {
             viewport: { width: 390, height: 844 },
-            network_profile: "fast-3g",
+            network_profile: "project-fast-3g",
+            network_conditions: {
+              throttled: true,
+              latency_ms: 150,
+              download_kbps: 1600,
+              upload_kbps: 750,
+              connection_type: "cellular3g",
+            },
             runs: 5,
           },
         },
         scenarios: {
-          map: {
+          public_map: {
             path: "/map",
+            readiness: {
+              required_selectors: ["canvas.maplibregl-canvas", ".map-marker"],
+              timeout_ms: 10000,
+            },
+            interaction: {
+              test_ids: ["tool-fan-trigger", "tool-fan-find"],
+              expected_test_id: "search-overlay",
+              settle_frames: 2,
+            },
             metrics: {
               largest_contentful_paint_ms: { percentile: 75, max: 2500 },
+              interaction_to_next_paint_ms: { percentile: 75, max: 200 },
+              usable_map_ms: { percentile: 95, max: 3000 },
             },
           },
         },
@@ -128,6 +146,15 @@ test("loads the repository canonical contract", () => {
     contract.measurements.web_runtime.status,
     "calibration_required",
   );
+  assert.equal(
+    contract.measurements.web_runtime.runner,
+    "apps/web/playwright.performance.config.ts",
+  );
+  assert.equal(
+    contract.measurements.web_runtime.profiles.mobile.network_conditions
+      .throttled,
+    true,
+  );
 });
 
 test("packages the canonical contract before the Docker web build", () => {
@@ -158,12 +185,49 @@ test("rejects magic fields, missing measurements and invalid percentiles", () =>
     /must define api_runtime/,
   );
   const percentile = validContract();
-  percentile.measurements.web_runtime.scenarios.map.metrics.largest_contentful_paint_ms.percentile = 101;
+  percentile.measurements.web_runtime.scenarios.public_map.metrics.largest_contentful_paint_ms.percentile = 101;
   assert.throws(
     () => validatePerformanceContract(percentile),
     /percentile must be <= 100/,
   );
   assert.throws(() => parsePerformanceContract("{broken"), /not valid JSON/);
+});
+
+test("requires executable network and scenario definitions", () => {
+  const missingNetwork = validContract();
+  delete missingNetwork.measurements.web_runtime.profiles.mobile
+    .network_conditions;
+  assert.throws(
+    () => validatePerformanceContract(missingNetwork),
+    /must define network_conditions/,
+  );
+
+  const zeroThroughput = validContract();
+  zeroThroughput.measurements.web_runtime.profiles.mobile.network_conditions.download_kbps = 0;
+  assert.throws(
+    () => validatePerformanceContract(zeroThroughput),
+    /require non-zero throughput/,
+  );
+
+  const missingReadiness = validContract();
+  delete missingReadiness.measurements.web_runtime.scenarios.public_map
+    .readiness;
+  assert.throws(
+    () => validatePerformanceContract(missingReadiness),
+    /must define readiness/,
+  );
+
+  const wrongMetric = validContract();
+  delete wrongMetric.measurements.web_runtime.scenarios.public_map.metrics
+    .usable_map_ms;
+  wrongMetric.measurements.web_runtime.scenarios.public_map.metrics.magic_ms = {
+    percentile: 95,
+    max: 1,
+  };
+  assert.throws(
+    () => validatePerformanceContract(wrongMetric),
+    /unsupported field "magic_ms"/,
+  );
 });
 
 test("rejects blocking claims for uncalibrated measurement classes", () => {
