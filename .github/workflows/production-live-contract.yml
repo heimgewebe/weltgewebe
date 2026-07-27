@@ -76,7 +76,7 @@ jobs:
           systemd-analyze verify \
             infra/systemd/system/weltgewebe-production-reconcile.service \
             infra/systemd/system/weltgewebe-production-reconcile.timer
-      - name: Run contract tests
+      - name: Run existing contract tests
         run: |
           python -m unittest \
             scripts/ci/tests/test_generate_version_env.py -v
@@ -88,8 +88,22 @@ jobs:
             scripts/ci/tests/test_production_reconciler_contract.py -v
           python -m unittest \
             scripts/ci/tests/test_deploy_exact_commit_integration.py -v
-          python -m unittest \
-            scripts/ci/tests/test_production_receipt_resilience.py -v
+      - name: Repair safe malformed deployment receipt
+        run: >-
+          python -m unittest -v
+          scripts.ci.tests.test_production_receipt_resilience.ProductionReceiptResilienceTests.test_public_observation_repairs_safe_malformed_deployment_receipt
+      - name: Preserve invocation contention evidence
+        run: >-
+          python -m unittest -v
+          scripts.ci.tests.test_production_receipt_resilience.ProductionReceiptResilienceTests.test_inherited_contention_survives_shared_slot_overwrite
+      - name: Normalize release modes independently of caller umask
+        run: >-
+          python -m unittest -v
+          scripts.ci.tests.test_production_receipt_resilience.ProductionReceiptResilienceTests.test_permissive_caller_umask_produces_canonical_release_modes
+      - name: Preserve reviewed cold-start preconditions
+        run: >-
+          python -m unittest -v
+          scripts.ci.tests.test_production_receipt_resilience.ProductionReceiptResilienceTests.test_reviewed_resilience_preconditions_are_already_present
 
   review-diff:
     name: Exact review diff artifact
