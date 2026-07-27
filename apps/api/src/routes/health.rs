@@ -2,7 +2,7 @@ use std::{
     env,
     path::{Path, PathBuf},
 };
-use tokio::fs;
+use tokio::{fs, io::AsyncReadExt};
 
 use axum::{
     extract::State,
@@ -108,10 +108,43 @@ impl PolicyLimits {
     }
 }
 
-async fn check_policy_file(path: &Path) -> Result<(), String> {
-    let metadata = fs::metadata(path).await.map_err(|error| {
+async fn read_policy_bytes(
+    file: fs::File,
+    path: &Path,
+    expected_len: u64,
+) -> Result<Vec<u8>, String> {
+    let capacity = usize::try_from(expected_len.min(MAX_POLICY_FILE_BYTES))
+        .expect("policy size limit fits usize");
+    let mut limited = file.take(MAX_POLICY_FILE_BYTES + 1);
+    let mut raw = Vec::with_capacity(capacity);
+    limited.read_to_end(&mut raw).await.map_err(|error| {
         format!(
-            "failed to access policy file at {}: {}",
+            "failed to read policy file at {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+    if raw.is_empty() || raw.len() as u64 > MAX_POLICY_FILE_BYTES {
+        return Err(format!(
+            "policy file at {} must contain between 1 and {} bytes",
+            path.display(),
+            MAX_POLICY_FILE_BYTES
+        ));
+    }
+    Ok(raw)
+}
+
+async fn check_policy_file(path: &Path) -> Result<(), String> {
+    let file = fs::File::open(path).await.map_err(|error| {
+        format!(
+            "failed to open policy file at {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+    let metadata = file.metadata().await.map_err(|error| {
+        format!(
+            "failed to inspect policy file at {}: {}",
             path.display(),
             error
         )
@@ -131,14 +164,15 @@ async fn check_policy_file(path: &Path) -> Result<(), String> {
         ));
     }
 
-    let raw = fs::read_to_string(path).await.map_err(|error| {
+    let raw = read_policy_bytes(file, path, metadata.len()).await?;
+    let raw = std::str::from_utf8(&raw).map_err(|error| {
         format!(
-            "failed to read policy file at {}: {}",
+            "policy file at {} is not valid UTF-8: {}",
             path.display(),
             error
         )
     })?;
-    let policy: PolicyLimits = serde_yaml::from_str(&raw).map_err(|error| {
+    let policy: PolicyLimits = serde_yaml::from_str(raw).map_err(|error| {
         format!(
             "failed to parse policy file at {}: {}",
             path.display(),
@@ -532,6 +566,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn policy_check_rejects_growth_after_metadata_snapshot() -> Result<()> {
+        let file = policy_file("max_nodes_jsonl_mb: 10\nmax_edges_jsonl_mb: 10\n")?;
+        let reader = fs::File::open(file.path()).await?;
+        let initial_len = reader.metadata().await?.len();
+
+        let mut writer = std::fs::OpenOptions::new().append(true).open(file.path())?;
+        writer.write_all(&vec![b' '; MAX_POLICY_FILE_BYTES as usize])?;
+        writer.flush()?;
+
+        let error = read_policy_bytes(reader, file.path(), initial_len)
+            .await
+            .expect_err("grown policy must exceed the bounded read");
+        assert!(error.contains("must contain between 1 and"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn policy_check_rejects_non_utf8_content() -> Result<()> {
+        let mut file = NamedTempFile::new()?;
+        file.write_all(&[0xff, 0xfe])?;
+        file.flush()?;
+
+        let error = check_policy_file(file.path())
+            .await
+            .expect_err("non-UTF-8 policy");
+        assert!(error.contains("is not valid UTF-8"));
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn policy_check_rejects_oversized_files_before_parsing() -> Result<()> {
         let mut file = NamedTempFile::new()?;
         file.write_all(&vec![b'a'; MAX_POLICY_FILE_BYTES as usize + 1])?;
@@ -633,7 +697,7 @@ mod tests {
         assert!(errors
             .iter()
             .filter_map(|value| value.as_str())
-            .any(|message| message.contains("failed to access policy file")));
+            .any(|message| message.contains("failed to open policy file")));
 
         Ok(())
     }
