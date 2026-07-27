@@ -948,6 +948,30 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             ):
                 self.reference.controlled_oci_dockerfile(Path("apps/api/Dockerfile"))
 
+    def test_strict_oci_dockerfile_rejects_bom_prefixed_external_stage(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        rust = lock["images"]["build_rust"]
+        debian = lock["images"]["build_debian"]
+        source = (
+            "\ufeffFROM attacker.example/unreviewed:latest AS injected\n"
+            f"FROM {rust['local_ref']}@{rust['digest']} AS builder\n"
+            f"FROM {debian['local_ref']}@{debian['digest']}\n"
+            "COPY --from=injected /payload /payload\n"
+        )
+        with mock.patch.dict(
+            os.environ, {self.reference.OCI_STRICT_ENV: "1"}
+        ), mock.patch.object(
+            self.reference, "_oci_mirror_lock", return_value=lock
+        ), mock.patch.object(
+            self.reference.Path, "read_text", return_value=source
+        ):
+            with self.assertRaisesRegex(
+                self.reference.ProofError, "uncontrolled OCI base image"
+            ):
+                self.reference.controlled_oci_dockerfile(Path("apps/api/Dockerfile"))
+
     def test_strict_oci_dockerfile_allows_prior_stage_alias(self) -> None:
         lock = json.loads(
             (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")

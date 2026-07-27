@@ -953,6 +953,8 @@ def wait_http_route_parent_condition(
 
 def controlled_oci_dockerfile(path: Path) -> str:
     source = path.read_text(encoding="utf-8")
+    if source.startswith("\ufeff"):
+        source = source.removeprefix("\ufeff")
     if not controlled_oci_strict():
         return source
     relative = path.relative_to(ROOT) if path.is_absolute() else path
