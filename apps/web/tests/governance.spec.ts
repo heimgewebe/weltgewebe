@@ -46,6 +46,7 @@ async function installGovernanceRoutes(
     initialStatus?: "consent" | "voting";
     existingApplicantId?: string;
     initialMessageCount?: number;
+    detailMessageCount?: number;
     initialMessages?: number;
     omitMessageCount?: boolean;
     rawListMessageCount?: string;
@@ -114,7 +115,9 @@ async function installGovernanceRoutes(
             currentStatus,
             options.omitMessageCount
               ? undefined
-              : (options.initialMessageCount ?? 1),
+              : (options.detailMessageCount ??
+                  options.initialMessageCount ??
+                  1),
           ),
           applicant_account_id: options.existingApplicantId ?? GUEST_ID,
           own_vote: undefined,
@@ -497,7 +500,7 @@ test("a late list response cannot undo the first confirmed contribution", async 
   await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
 });
 
-test("a late empty detail snapshot cannot lower a fresher proposal count", async ({
+test("a fresher detail count survives older empty list and message snapshots", async ({
   page,
 }) => {
   await mockApiResponses(page, {
@@ -505,7 +508,8 @@ test("a late empty detail snapshot cannot lower a fresher proposal count", async
   });
   const governance = await installGovernanceRoutes(page, {
     initialStatus: "consent",
-    initialMessageCount: 1,
+    initialMessageCount: 0,
+    detailMessageCount: 1,
     initialMessages: 0,
     deferMessagesResponse: true,
   });
