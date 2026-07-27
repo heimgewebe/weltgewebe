@@ -1,13 +1,16 @@
--- Allow a node to leave the active map while preserving its contributed public
--- conversation as an immutable historical record.
+-- Allow a node to leave the active map while preserving contributed public
+-- conversation history under an explicit lifecycle contract.
 --
--- Active node conversations remain attached only through node_id. When a node
--- with messages is deleted, the deletion trigger snapshots the node identity
--- and title, detaches the conversation from the cascading foreign key, and
--- marks it archived in the same transaction. Empty generated conversations
--- still follow the existing ON DELETE CASCADE path and disappear with their
--- node. Snapshot columns stay NULL before archival, avoiding a second mutable
--- copy of active node data.
+-- Active node conversations remain attached through node_id. When a node with
+-- messages is removed, the deletion trigger snapshots the node identity and
+-- title, detaches the conversation from the cascading foreign key, and marks it
+-- archived in the same transaction. Empty generated conversations still follow
+-- the existing ON DELETE CASCADE path and disappear with their node.
+--
+-- A contribution is never physically deleted through ordinary SQL. Active and
+-- archived contributions use tombstones; archives additionally reject new
+-- messages and ordinary content edits. Account deletion may still sever only the
+-- live author_account_id binding.
 
 ALTER TABLE domain_conversations
     ADD COLUMN node_id_snapshot TEXT,
@@ -80,20 +83,33 @@ BEGIN
 END;
 $$;
 
--- The transition from an active node conversation to an archive is allowed once:
--- the node-deletion trigger above updates a row whose OLD.archived_at is NULL.
--- After that transition the archive row itself is immutable and cannot be
--- deleted to bypass the message-level history guard below.
-CREATE OR REPLACE FUNCTION weltgewebe_protect_archived_conversation_record()
+-- Hard deletion is valid only for an empty active generated conversation. A
+-- non-empty active conversation and every archive are durable history records.
+-- The active -> archived transition remains possible because UPDATE is rejected
+-- only after OLD.archived_at is already set.
+CREATE OR REPLACE FUNCTION weltgewebe_protect_conversation_record_history()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    IF OLD.archived_at IS NOT NULL THEN
+    IF TG_OP = 'DELETE' AND (
+        OLD.archived_at IS NOT NULL
+        OR EXISTS (
+            SELECT 1 FROM domain_messages
+            WHERE conversation_id = OLD.id
+        )
+    ) THEN
         RAISE EXCEPTION USING
             ERRCODE = '55000',
-            CONSTRAINT = 'domain_conversations_archived_record_guard',
-            MESSAGE = 'archived node conversations are immutable';
+            CONSTRAINT = 'domain_conversations_history_guard',
+            MESSAGE = 'non-empty or archived conversations cannot be physically deleted';
+    END IF;
+
+    IF TG_OP = 'UPDATE' AND OLD.archived_at IS NOT NULL THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '55000',
+            CONSTRAINT = 'domain_conversations_history_guard',
+            MESSAGE = 'archived conversation records are immutable';
     END IF;
 
     IF TG_OP = 'DELETE' THEN
@@ -103,47 +119,57 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER domain_conversations_archived_record_guard
+CREATE TRIGGER domain_conversations_history_guard
 BEFORE UPDATE OR DELETE ON domain_conversations
-FOR EACH ROW EXECUTE FUNCTION weltgewebe_protect_archived_conversation_record();
+FOR EACH ROW EXECUTE FUNCTION weltgewebe_protect_conversation_record_history();
 
-CREATE OR REPLACE FUNCTION weltgewebe_protect_archived_conversation_messages()
+CREATE OR REPLACE FUNCTION weltgewebe_protect_conversation_messages()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    archived BOOLEAN;
-    conversation_identifier UUID;
+    target_archived BOOLEAN;
+    source_archived BOOLEAN := FALSE;
 BEGIN
+    -- Public history is removed through a tombstone UPDATE, never a physical
+    -- row DELETE. This also makes parent-cascade behavior fail closed.
     IF TG_OP = 'DELETE' THEN
-        conversation_identifier := OLD.conversation_id;
-    ELSE
-        conversation_identifier := NEW.conversation_id;
+        RAISE EXCEPTION USING
+            ERRCODE = '55000',
+            CONSTRAINT = 'domain_messages_physical_delete_guard',
+            MESSAGE = 'conversation messages must be tombstoned, not physically deleted';
     END IF;
 
-    SELECT archived_at IS NOT NULL INTO archived
+    SELECT archived_at IS NOT NULL INTO target_archived
     FROM domain_conversations
-    WHERE id = conversation_identifier
+    WHERE id = NEW.conversation_id
     FOR SHARE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '23503',
+            CONSTRAINT = 'domain_messages_conversation_required',
+            MESSAGE = 'message conversation does not exist';
+    END IF;
 
-    IF NOT COALESCE(archived, FALSE) AND TG_OP = 'UPDATE'
+    IF TG_OP = 'UPDATE'
        AND OLD.conversation_id IS DISTINCT FROM NEW.conversation_id THEN
-        SELECT archived_at IS NOT NULL INTO archived
+        SELECT archived_at IS NOT NULL INTO source_archived
         FROM domain_conversations
         WHERE id = OLD.conversation_id
         FOR SHARE;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION USING
+                ERRCODE = '23503',
+                CONSTRAINT = 'domain_messages_conversation_required',
+                MESSAGE = 'source conversation does not exist';
+        END IF;
     END IF;
 
-    IF NOT COALESCE(archived, FALSE) THEN
-        IF TG_OP = 'DELETE' THEN
-            RETURN OLD;
-        END IF;
+    IF NOT target_archived AND NOT source_archived THEN
         RETURN NEW;
     END IF;
 
-    -- Account deletion may still sever the live ownership link. This is the
-    -- only permitted mutation of an archived contribution: content, snapshot,
-    -- timestamps, idempotency and conversation membership remain unchanged.
+    -- Account deletion may sever only the live ownership link.
     IF TG_OP = 'UPDATE'
        AND OLD.author_account_id IS NOT NULL
        AND NEW.author_account_id IS NULL
@@ -158,13 +184,63 @@ BEGIN
         RETURN NEW;
     END IF;
 
+    -- Author withdrawal and administrative moderation remain available after
+    -- archival, but only as the canonical one-way content -> tombstone change.
+    IF TG_OP = 'UPDATE'
+       AND OLD.deleted_at IS NULL
+       AND OLD.content IS NOT NULL
+       AND NEW.content IS NULL
+       AND NEW.deleted_at IS NOT NULL
+       AND NEW.updated_at >= NEW.deleted_at
+       AND NEW.updated_at > OLD.updated_at
+       AND NEW.id = OLD.id
+       AND NEW.conversation_id = OLD.conversation_id
+       AND NEW.author_account_id IS NOT DISTINCT FROM OLD.author_account_id
+       AND NEW.author_title = OLD.author_title
+       AND NEW.idempotency_key = OLD.idempotency_key
+       AND NEW.created_at = OLD.created_at THEN
+        RETURN NEW;
+    END IF;
+
     RAISE EXCEPTION USING
         ERRCODE = '55000',
         CONSTRAINT = 'domain_messages_archived_conversation_guard',
-        MESSAGE = 'archived conversation messages are immutable';
+        MESSAGE = 'archived conversations reject new messages and ordinary edits';
 END;
 $$;
 
-CREATE TRIGGER domain_messages_archived_conversation_guard
+CREATE TRIGGER domain_messages_conversation_lifecycle_guard
 BEFORE INSERT OR UPDATE OR DELETE ON domain_messages
-FOR EACH ROW EXECUTE FUNCTION weltgewebe_protect_archived_conversation_messages();
+FOR EACH ROW EXECUTE FUNCTION weltgewebe_protect_conversation_messages();
+
+CREATE OR REPLACE FUNCTION weltgewebe_enqueue_conversation_archived_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO domain_outbox (
+        aggregate_type,
+        aggregate_id,
+        event_type,
+        payload
+    ) VALUES (
+        'conversation',
+        NEW.id::text,
+        'domain.conversation.archived',
+        jsonb_build_object(
+            'schema_version', 1,
+            'aggregate_type', 'conversation',
+            'aggregate_id', NEW.id::text,
+            'event_type', 'domain.conversation.archived',
+            'lifecycle_state', 'archived'
+        )
+    );
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER domain_conversations_archived_outbox
+AFTER UPDATE OF archived_at ON domain_conversations
+FOR EACH ROW
+WHEN (OLD.archived_at IS NULL AND NEW.archived_at IS NOT NULL)
+EXECUTE FUNCTION weltgewebe_enqueue_conversation_archived_event();
