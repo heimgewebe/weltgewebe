@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { mockApiResponses } from "./fixtures/mockApi";
+import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 import { activateToolFanAction } from "./fixtures/toolFan";
 
 const SOURCE_NODE = {
@@ -37,11 +37,13 @@ async function openSearch(page: Page) {
 test.describe("T007 authorized server search contract", () => {
   test.beforeEach(async ({ page }) => {
     await mockApiResponses(page);
-    await page.route("**/api/nodes", async (route) => {
+    await page.route("**/api/nodes*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([SOURCE_NODE]),
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [SOURCE_NODE]),
+        ),
       });
     });
     await page.route("**/api/node/source-node", async (route) => {

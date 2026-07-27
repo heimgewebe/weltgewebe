@@ -142,11 +142,27 @@ export interface RenderableMapPoint {
 // Phase 1: Explicit load state – replaces silent fallback-to-empty semantics
 export type MapLoadState = "ok" | "partial" | "failed";
 
-export type MapResourceStatus = {
-  resource: "nodes" | "accounts" | "edges";
-  status: "ok" | "failed";
-  error?: string;
-};
+export type MapResourceName = "nodes" | "accounts" | "edges";
+
+export type MapResourceStatus =
+  | {
+      resource: MapResourceName;
+      status: "complete";
+      loaded: number;
+      pages: number;
+    }
+  | {
+      resource: MapResourceName;
+      status: "truncated";
+      loaded: number;
+      pages: number;
+      reason: "page_limit" | "item_limit";
+    }
+  | {
+      resource: MapResourceName;
+      status: "failed";
+      error: string;
+    };
 
 // Phase 4: Diagnostics – separates API mode from basemap mode
 export type MapDiagnostics = {

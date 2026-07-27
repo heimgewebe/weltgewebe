@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { mockListResponse } from "../fixtures/mockApi";
 
 /**
  * Visual Runtime Proof: real Schleswig-Holstein PMTiles via MapLibre.
@@ -154,7 +155,7 @@ test.describe("Basemap Real Schleswig-Holstein Visual Runtime Proof", () => {
           return route.fulfill({
             status: 200,
             contentType: "application/json",
-            body: JSON.stringify([]),
+            body: JSON.stringify(mockListResponse(route.request().url(), [])),
           });
         }
         if (pathname === "/api/health" || pathname.startsWith("/api/health/")) {

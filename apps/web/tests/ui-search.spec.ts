@@ -1,26 +1,28 @@
 import { test, expect } from "@playwright/test";
-import { mockApiResponses } from "./fixtures/mockApi";
+import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 import { activateToolFanAction } from "./fixtures/toolFan";
 
 test.describe("Search mode", () => {
   test.beforeEach(async ({ page }) => {
     await mockApiResponses(page);
 
-    await page.route("**/api/nodes", async (route) => {
+    await page.route("**/api/nodes*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "mock-node-1",
-            title: "Abendliches Stricken",
-            summary: "Wir stricken gemeinsam",
-            kind: "Treffen",
-            location: { lat: 51, lon: 10 },
-            modules: [],
-            created_at: new Date().toISOString(),
-          },
-        ]),
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [
+            {
+              id: "mock-node-1",
+              title: "Abendliches Stricken",
+              summary: "Wir stricken gemeinsam",
+              kind: "Treffen",
+              location: { lat: 51, lon: 10 },
+              modules: [],
+              created_at: new Date().toISOString(),
+            },
+          ]),
+        ),
       });
     });
 
@@ -240,18 +242,20 @@ test.describe("Search mode", () => {
   test("node and Garnrolle with the same id keep unique option ids", async ({
     page,
   }) => {
-    await page.route("**/api/accounts", async (route) => {
+    await page.route("**/api/accounts*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "mock-node-1",
-            title: "Abendliches Stricken Garnrolle",
-            role: "weber",
-            public_pos: { lat: 51.01, lon: 10.01 },
-          },
-        ]),
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [
+            {
+              id: "mock-node-1",
+              title: "Abendliches Stricken Garnrolle",
+              role: "weber",
+              public_pos: { lat: 51.01, lon: 10.01 },
+            },
+          ]),
+        ),
       });
     });
     await page.goto("/map");
@@ -282,11 +286,13 @@ test.describe("Search mode", () => {
       modules: [],
       created_at: new Date().toISOString(),
     }));
-    await page.route("**/api/nodes", async (route) => {
+    await page.route("**/api/nodes*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(manyNodes),
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), manyNodes),
+        ),
       });
     });
     await page.route("**/api/search**", async (route) => {

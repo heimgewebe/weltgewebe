@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { mockApiResponses } from "./fixtures/mockApi";
+import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 
 /**
  * Map URL addressing (UI Interaction Doctrine — first executable slice).
@@ -34,52 +34,56 @@ test.describe("Map URL addressing", () => {
       },
     );
 
-    await page.route("**/api/nodes", async (route) => {
+    await page.route("**/api/nodes*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "url-node-1",
-            title: "URL Deep-Link Node",
-            kind: "Event",
-            location: { lat: 53.5, lon: 10.0 },
-            summary: "A node reachable via focus deep link.",
-            tags: [],
-            modules: [],
-            created_at: "2025-01-01T12:00:00Z",
-            updated_at: "2025-01-01T12:00:00Z",
-          },
-        ]),
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [
+            {
+              id: "url-node-1",
+              title: "URL Deep-Link Node",
+              kind: "Event",
+              location: { lat: 53.5, lon: 10.0 },
+              summary: "A node reachable via focus deep link.",
+              tags: [],
+              modules: [],
+              created_at: "2025-01-01T12:00:00Z",
+              updated_at: "2025-01-01T12:00:00Z",
+            },
+          ]),
+        ),
       });
     });
 
-    await page.route("**/api/accounts", async (route) => {
+    await page.route("**/api/accounts*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "url-acc-1",
-            type: "garnrolle",
-            title: "URL Deep-Link Garnrolle",
-            summary: "A garnrolle reachable via focus deep link.",
-            public_pos: { lat: 53.55, lon: 10.05 },
-            map_state: "exact",
-            radius_m: 0,
-            tags: [],
-            modules: [],
-            created_at: "2025-01-01T12:00:00Z",
-          },
-        ]),
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [
+            {
+              id: "url-acc-1",
+              type: "garnrolle",
+              title: "URL Deep-Link Garnrolle",
+              summary: "A garnrolle reachable via focus deep link.",
+              public_pos: { lat: 53.55, lon: 10.05 },
+              map_state: "exact",
+              radius_m: 0,
+              tags: [],
+              modules: [],
+              created_at: "2025-01-01T12:00:00Z",
+            },
+          ]),
+        ),
       });
     });
 
-    await page.route("**/api/edges", async (route) => {
+    await page.route("**/api/edges*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([]),
+        body: JSON.stringify(mockListResponse(route.request().url(), [])),
       });
     });
   });
@@ -216,25 +220,25 @@ test.describe("Map URL addressing", () => {
   }) => {
     // Empty datasets (registered after the beforeEach defaults, so they win):
     // the lens is an immediate intent and must not depend on map data.
-    await page.route("**/api/nodes", async (route) => {
+    await page.route("**/api/nodes*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([]),
+        body: JSON.stringify(mockListResponse(route.request().url(), [])),
       });
     });
-    await page.route("**/api/accounts", async (route) => {
+    await page.route("**/api/accounts*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([]),
+        body: JSON.stringify(mockListResponse(route.request().url(), [])),
       });
     });
-    await page.route("**/api/edges", async (route) => {
+    await page.route("**/api/edges*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([]),
+        body: JSON.stringify(mockListResponse(route.request().url(), [])),
       });
     });
 

@@ -41,7 +41,6 @@
  *    It is deliberately kept out of this module so map runtime state and URL
  *    state never blur into each other.
  */
-import type { MapSceneModel } from "$lib/map/scene";
 import {
   getMapSearchTermsNormalized,
   normalizeMapSearchTerm,
@@ -49,19 +48,6 @@ import {
 import type { Edge, MapEntityViewModel } from "$lib/map/types";
 import { isRecord } from "$lib/utils/guards";
 import { enterFokus, type Selection } from "./uiView";
-
-const RESOURCE_LABELS: Record<string, string> = {
-  nodes: "Knoten",
-  accounts: "Garnrollen",
-  edges: "Fäden",
-};
-
-/** Human-readable labels for resources that failed to load. */
-export function deriveFailedResourceLabels(scene: MapSceneModel): string[] {
-  return scene.resourceStatus
-    .filter((r) => r.status === "failed")
-    .map((r) => RESOURCE_LABELS[r.resource] ?? r.resource);
-}
 
 /** Diagnostic counts for the debug badge (nodes vs. accounts). */
 export function deriveMarkerCounts(markers: MapEntityViewModel[]): {

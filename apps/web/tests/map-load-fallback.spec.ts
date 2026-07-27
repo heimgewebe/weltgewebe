@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { mockApiResponses } from "./fixtures/mockApi";
+import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 
 test.describe("Map Loader Data Resilience", () => {
   test("gracefully handles partial API failures and displays degraded state banner", async ({
@@ -16,24 +16,26 @@ test.describe("Map Loader Data Resilience", () => {
     // Override specific endpoints to simulate partial failure:
 
     // Nodes will succeed (1 item)
-    await page.route("**/api/nodes", async (route) => {
+    await page.route("**/api/nodes*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "node-1",
-            title: "Successful Node",
-            kind: "Event",
-            location: { lat: 53.5, lon: 10.0 },
-            summary: "A test event node.",
-          },
-        ]),
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [
+            {
+              id: "node-1",
+              title: "Successful Node",
+              kind: "Event",
+              location: { lat: 53.5, lon: 10.0 },
+              summary: "A test event node.",
+            },
+          ]),
+        ),
       });
     });
 
     // Accounts will fail with a 500 error
-    await page.route("**/api/accounts", async (route) => {
+    await page.route("**/api/accounts*", async (route) => {
       await route.fulfill({
         status: 500,
         contentType: "text/plain",
@@ -42,7 +44,7 @@ test.describe("Map Loader Data Resilience", () => {
     });
 
     // Edges will fail completely (network abort)
-    await page.route("**/api/edges", async (route) => {
+    await page.route("**/api/edges*", async (route) => {
       await route.abort("failed");
     });
 
@@ -67,13 +69,62 @@ test.describe("Map Loader Data Resilience", () => {
     );
     await expect(partialBanner).toContainText("Garnrollen");
     await expect(partialBanner).toContainText("Fäden");
+    await expect(partialBanner).not.toContainText("bewusst unvollständig");
+  });
+
+  test("shows an explicit incomplete-data notice when the cursor safety limit is reached", async ({
+    page,
+  }) => {
+    await mockApiResponses(page);
+
+    await page.route("**/api/nodes*", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      const cursor = requestUrl.searchParams.get("cursor");
+      const pageIndex = cursor === null ? 0 : Number(cursor.slice(7));
+      const nextCursor = `cursor-${pageIndex + 1}`;
+      const timestamp = "2026-07-27T00:00:00Z";
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: [
+            {
+              id: `node-${pageIndex}`,
+              title: `Node ${pageIndex}`,
+              kind: "Event",
+              location: { lat: 53.5, lon: 10 + pageIndex * 0.001 },
+              summary: "Cursor limit test",
+              tags: [],
+              created_at: timestamp,
+              updated_at: timestamp,
+            },
+          ],
+          page: {
+            limit: 1000,
+            next_cursor: nextCursor,
+            has_more: true,
+          },
+        }),
+      });
+    });
+
+    await page.goto("/map");
+
+    const partialBanner = page.getByTestId("load-state-partial");
+    await expect(partialBanner).toBeVisible();
+    await expect(partialBanner).toContainText("bewusst unvollständig");
+    await expect(partialBanner).toContainText("Knoten");
+    await expect(partialBanner).not.toContainText(
+      "konnten nicht geladen werden",
+    );
+    await expect(page.getByTestId("debug-badge")).toContainText("Nodes: 10");
   });
 
   test("shows failed state when all API resources fail", async ({ page }) => {
     await mockApiResponses(page);
 
     // All three endpoints fail
-    await page.route("**/api/nodes", async (route) => {
+    await page.route("**/api/nodes*", async (route) => {
       await route.fulfill({
         status: 500,
         contentType: "text/plain",
@@ -81,11 +132,11 @@ test.describe("Map Loader Data Resilience", () => {
       });
     });
 
-    await page.route("**/api/accounts", async (route) => {
+    await page.route("**/api/accounts*", async (route) => {
       await route.abort("failed");
     });
 
-    await page.route("**/api/edges", async (route) => {
+    await page.route("**/api/edges*", async (route) => {
       await route.fulfill({
         status: 503,
         contentType: "text/plain",
