@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
 import sys
+import tempfile
 import unittest
 from email.message import Message
 from pathlib import Path
 from unittest.mock import patch
 
 MODULE_PATH = Path(__file__).parents[2] / "ops" / "verify_public_release_commit.py"
-SPEC = importlib.util.spec_from_file_location("verify_public_release_commit", MODULE_PATH)
+SPEC = importlib.util.spec_from_file_location(
+    "verify_public_release_commit", MODULE_PATH
+)
 assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
@@ -19,12 +24,15 @@ _normalize_headers = MODULE._normalize_headers
 evaluate = MODULE.evaluate
 fetch_endpoint = MODULE.fetch_endpoint
 validate_commit = MODULE.validate_commit
+write_receipt = MODULE.write_receipt
 
 
 class FakeResponse:
     status = 200
 
-    def __init__(self, body: bytes, url: str = "https://example.invalid/version") -> None:
+    def __init__(
+        self, body: bytes, url: str = "https://example.invalid/version"
+    ) -> None:
         self.body = body
         self.url = url
         self.headers = Message()
@@ -46,7 +54,9 @@ class FakeResponse:
 class VerifyPublicReleaseCommitTests(unittest.TestCase):
     commit = "7b65127e852561997fa6a45b8cb3bfcef38e1eb8"
 
-    def endpoint(self, *, api: bool = False, commit: str | None = None) -> EndpointResult:
+    def endpoint(
+        self, *, api: bool = False, commit: str | None = None
+    ) -> EndpointResult:
         resolved = self.commit if commit is None else commit
         headers = (
             {
@@ -76,14 +86,18 @@ class VerifyPublicReleaseCommitTests(unittest.TestCase):
             self.endpoint(api=True),
         )
         self.assertFalse(result.pass_)
-        self.assertTrue(any("frontend commit mismatch" in reason for reason in result.reasons))
+        self.assertTrue(
+            any("frontend commit mismatch" in reason for reason in result.reasons)
+        )
 
     def test_rejects_missing_api_build_header(self) -> None:
         api = self.endpoint(api=True)
         api = EndpointResult(api.url, api.status, api.commit, api.version, {})
         result = evaluate(self.commit, self.endpoint(), api)
         self.assertFalse(result.pass_)
-        self.assertTrue(any("API build header mismatch" in reason for reason in result.reasons))
+        self.assertTrue(
+            any("API build header mismatch" in reason for reason in result.reasons)
+        )
 
     def test_requires_full_lowercase_sha(self) -> None:
         self.assertEqual(validate_commit(self.commit), self.commit)
@@ -109,6 +123,65 @@ class VerifyPublicReleaseCommitTests(unittest.TestCase):
         with patch.object(MODULE.urllib.request, "urlopen", return_value=response):
             result = fetch_endpoint("https://example.invalid/version", timeout=1)
         self.assertIn("unexpected redirect target", result.error or "")
+
+    def verification_result(self):
+        return evaluate(self.commit, self.endpoint(), self.endpoint(api=True))
+
+    def test_receipt_writer_forces_mode_0600_under_permissive_umask(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_root:
+            receipt = Path(raw_root) / "receipt.json"
+            previous_umask = os.umask(0)
+            try:
+                write_receipt(receipt, self.verification_result())
+            finally:
+                os.umask(previous_umask)
+            self.assertEqual(receipt.stat().st_mode & 0o777, 0o600)
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+            self.assertTrue(payload["pass"])
+
+    def test_receipt_writer_rejects_precreated_temporary_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            receipt = root / "receipt.json"
+            target = root / "target.txt"
+            target.write_text("unchanged\n", encoding="utf-8")
+            token = "a" * 16
+            temporary = root / f".{receipt.name}.{os.getpid()}.{token}.tmp"
+            temporary.symlink_to(target)
+            with (
+                patch.object(MODULE.secrets, "token_hex", return_value=token),
+                self.assertRaises(FileExistsError),
+            ):
+                write_receipt(receipt, self.verification_result())
+            self.assertEqual(target.read_text(encoding="utf-8"), "unchanged\n")
+            self.assertTrue(temporary.is_symlink())
+            self.assertFalse(receipt.exists())
+
+    def test_receipt_writer_replaces_output_symlink_without_following_it(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            receipt = root / "receipt.json"
+            target = root / "target.txt"
+            target.write_text("unchanged\n", encoding="utf-8")
+            receipt.symlink_to(target)
+            write_receipt(receipt, self.verification_result())
+            self.assertFalse(receipt.is_symlink())
+            self.assertEqual(target.read_text(encoding="utf-8"), "unchanged\n")
+            self.assertTrue(json.loads(receipt.read_text(encoding="utf-8"))["pass"])
+
+    def test_receipt_writer_rejects_writable_parent_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            receipt = root / "receipt.json"
+            root.chmod(0o777)
+            try:
+                with self.assertRaisesRegex(
+                    PermissionError, "receipt directory is unsafe"
+                ):
+                    write_receipt(receipt, self.verification_result())
+            finally:
+                root.chmod(0o700)
+            self.assertFalse(receipt.exists())
 
 
 if __name__ == "__main__":

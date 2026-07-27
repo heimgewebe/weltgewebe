@@ -194,6 +194,19 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, script)
 
+    def test_public_verifier_writes_receipts_through_safe_descriptors(self) -> None:
+        script = self.read("scripts/ops/verify_public_release_commit.py")
+        for guard in (
+            "os.O_EXCL",
+            "os.O_NOFOLLOW",
+            "os.fchmod(file_fd, 0o600)",
+            "os.fstat(file_fd)",
+            "metadata.st_nlink != 1",
+            "os.replace(",
+        ):
+            self.assertIn(guard, script)
+        self.assertNotIn('temporary.open("w"', script)
+
     def test_systemd_timer_uses_completion_relative_cadence(self) -> None:
         service = self.read(
             "infra/systemd/system/weltgewebe-production-reconcile.service"

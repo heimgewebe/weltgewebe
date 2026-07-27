@@ -590,13 +590,63 @@ api = verification.get("api") or {}
 if frontend.get("commit") != commit or api.get("commit") != commit:
     raise SystemExit("public verification receipt does not bind both endpoints")
 
-preserve = (
-    isinstance(existing, dict)
-    and existing.get("schema_version") == 5
-    and existing.get("commit") == commit
-    and existing.get("result") in {"verified", "verified_observed"}
-)
-if preserve:
+def is_lower_hex(value: object, length: int) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == length
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def is_current_verified_receipt(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    if (
+        payload.get("schema_version") != 5
+        or payload.get("environment") != "production"
+        or payload.get("commit") != commit
+        or payload.get("lock_domain") != "weltgewebe-production-deployment-v1"
+        or payload.get("api_commit") != commit
+        or payload.get("frontend_commit") != commit
+        or payload.get("observed_main_after_deploy") != commit
+        or not isinstance(payload.get("completed_at"), str)
+    ):
+        return False
+
+    result = payload.get("result")
+    owner = payload.get("lock_owner_entrypoint")
+    handoff = payload.get("lock_handoff")
+    invocation_id = payload.get("deploy_invocation_id")
+    if result == "verified":
+        if (
+            not is_lower_hex(payload.get("web_artifact_sha256"), 64)
+            or not isinstance(payload.get("started_at"), str)
+            or not isinstance(payload.get("migration_completed_at"), str)
+        ):
+            return False
+        return (
+            owner == "deploy-helper"
+            and handoff == "direct"
+            and invocation_id is None
+        ) or (
+            owner == "reconciler"
+            and handoff == "inherited"
+            and is_lower_hex(invocation_id, 64)
+        )
+    if result == "verified_observed":
+        return (
+            owner == "reconciler"
+            and handoff == "public-observation"
+            and invocation_id is None
+            and payload.get("web_artifact_sha256") is None
+            and payload.get("started_at") is None
+            and payload.get("migration_completed_at") is None
+            and isinstance(payload.get("evidence_boundary"), str)
+        )
+    return False
+
+
+if is_current_verified_receipt(existing):
     raise SystemExit(0)
 
 payload = {

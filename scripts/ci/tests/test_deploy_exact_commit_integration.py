@@ -488,6 +488,8 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 elif shape == "symlink":
                     receipt.unlink()
                     receipt.symlink_to(Path(os.environ["WELTGEWEBE_RUNTIME_ENV"]))
+                elif shape == "oversize":
+                    receipt.write_bytes(b"x" * 1048577)
                 elif shape != "regular":
                     raise SystemExit(f"unknown receipt shape: {shape}")
                 raise SystemExit(int(os.environ["TEST_DEPLOY_EXIT_CODE"]))
@@ -540,6 +542,8 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 elif shape == "symlink":
                     receipt.unlink()
                     receipt.symlink_to(Path(os.environ["WELTGEWEBE_RUNTIME_ENV"]))
+                elif shape == "oversize":
+                    receipt.write_bytes(b"x" * 1048577)
                 elif shape != "regular":
                     raise SystemExit(f"unknown contention receipt shape: {shape}")
                 raise SystemExit(75)
@@ -984,34 +988,24 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         )
         self.assertNotIn("child temporary failure", result.stderr)
 
-    def test_reconciler_rejects_unsafe_tempfail_receipt(self) -> None:
-        receipt = self.state / "receipts" / f"{self.commit}.json"
-        run(
-            self.privileged(
-                [
-                    "install",
-                    "-d",
-                    "-o",
-                    "root",
-                    "-g",
-                    "root",
-                    "-m",
-                    "0700",
-                    str(receipt.parent),
-                ]
-            )
-        )
-        run(self.privileged(["ln", "-s", str(self.runtime_env), str(receipt)]))
-        result = self.reconcile_stale_public_commit(
-            deploy_helper=self.bin / "exit-code-deploy",
-            extra_env={"TEST_DEPLOY_EXIT_CODE": "75"},
-        )
+    def test_reconciler_rejects_each_unsafe_tempfail_receipt_shape(self) -> None:
+        for shape in ("mode", "owner", "hardlink", "symlink", "oversize"):
+            with self.subTest(shape=shape):
+                self.remove_deploy_test_receipts()
+                result = self.reconcile_stale_public_commit(
+                    deploy_helper=self.bin / "terminal-receipt-deploy",
+                    extra_env={
+                        "TEST_DEPLOY_EXIT_CODE": "75",
+                        "TEST_DEPLOY_RECEIPT_RESULT": "failed",
+                        "TEST_DEPLOY_RECEIPT_SHAPE": shape,
+                    },
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    "deploy helper returned temporary failure with unsafe receipt evidence",
+                    result.stderr,
+                )
         self.restore_test_ownership()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(
-            "deploy helper returned temporary failure with unsafe receipt evidence",
-            result.stderr,
-        )
 
     def test_reconciler_identifies_actual_inherited_lock_contention(self) -> None:
         result = self.reconcile_stale_public_commit(
@@ -1047,7 +1041,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         )
 
     def test_reconciler_rejects_unsafe_terminal_receipt_shapes(self) -> None:
-        for shape in ("mode", "owner", "hardlink", "symlink"):
+        for shape in ("mode", "owner", "hardlink", "symlink", "oversize"):
             with self.subTest(shape=shape):
                 self.remove_deploy_test_receipts()
                 result = self.reconcile_stale_public_commit(
@@ -1078,7 +1072,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         )
 
     def test_reconciler_rejects_unsafe_contention_receipt_shapes(self) -> None:
-        for shape in ("mode", "owner", "hardlink", "symlink"):
+        for shape in ("mode", "owner", "hardlink", "symlink", "oversize"):
             with self.subTest(shape=shape):
                 self.remove_deploy_test_receipts()
                 result = self.reconcile_stale_public_commit(
@@ -1262,6 +1256,37 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(receipt["schema_version"], 5)
         self.assertEqual(receipt["result"], "verified_observed")
+
+    def test_public_noop_rewrites_invalid_schema5_verified_receipt(self) -> None:
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json",
+            {
+                "schema_version": 5,
+                "environment": "production",
+                "commit": self.commit,
+                "web_artifact_sha256": "a" * 64,
+                "started_at": "2026-07-27T00:00:00+00:00",
+                "completed_at": "2026-07-27T00:01:00+00:00",
+                "api_commit": self.commit,
+                "frontend_commit": self.commit,
+                "observed_main_after_deploy": self.commit,
+                "migration_completed_at": "2026-07-27T00:00:30+00:00",
+                "lock_domain": "unexpected-domain",
+                "lock_owner_entrypoint": "deploy-helper",
+                "lock_handoff": "direct",
+                "result": "verified",
+                "deploy_invocation_id": None,
+            },
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["schema_version"], 5)
+        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["lock_domain"], "weltgewebe-production-deployment-v1")
 
     def test_main_advancing_after_migration_is_superseded_before_full_deploy(
         self,
