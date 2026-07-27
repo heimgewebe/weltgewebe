@@ -11,6 +11,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use serde::Deserialize;
 use serde_json::{json, Map};
 use sqlx::query_scalar;
 
@@ -86,6 +87,27 @@ fn readiness_verbose() -> bool {
         .unwrap_or(false)
 }
 
+const MAX_POLICY_FILE_BYTES: u64 = 64 * 1024;
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PolicyLimits {
+    max_nodes_jsonl_mb: u64,
+    max_edges_jsonl_mb: u64,
+}
+
+impl PolicyLimits {
+    fn validate(self) -> Result<(), String> {
+        if self.max_nodes_jsonl_mb == 0 {
+            return Err("max_nodes_jsonl_mb must be greater than zero".to_string());
+        }
+        if self.max_edges_jsonl_mb == 0 {
+            return Err("max_edges_jsonl_mb must be greater than zero".to_string());
+        }
+        Ok(())
+    }
+}
+
 async fn check_policy_file(path: &Path) -> Result<(), String> {
     let metadata = fs::metadata(path).await.map_err(|error| {
         format!(
@@ -101,35 +123,77 @@ async fn check_policy_file(path: &Path) -> Result<(), String> {
             path.display()
         ));
     }
+    if metadata.len() == 0 || metadata.len() > MAX_POLICY_FILE_BYTES {
+        return Err(format!(
+            "policy file at {} must contain between 1 and {} bytes",
+            path.display(),
+            MAX_POLICY_FILE_BYTES
+        ));
+    }
 
-    Ok(())
+    let raw = fs::read_to_string(path).await.map_err(|error| {
+        format!(
+            "failed to read policy file at {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+    let policy: PolicyLimits = serde_yaml::from_str(&raw).map_err(|error| {
+        format!(
+            "failed to parse policy file at {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+    policy
+        .validate()
+        .map_err(|error| format!("invalid policy file at {}: {}", path.display(), error))
 }
 
 async fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
     let mut errors = Vec::new();
     for path in paths {
-        match check_policy_file(path).await {
-            Ok(()) => return CheckResult::ready(),
-            Err(message) => errors.push(message),
+        match fs::metadata(path).await {
+            Ok(_) => match check_policy_file(path).await {
+                Ok(()) => return CheckResult::ready(),
+                Err(message) => {
+                    readiness_check_failed("policy", &message);
+                    return CheckResult::failure_with_message(message);
+                }
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                errors.push(format!(
+                    "failed to access policy file at {}: {}",
+                    path.display(),
+                    error
+                ));
+            }
+            Err(error) => {
+                let message = format!(
+                    "failed to access policy file at {}: {}",
+                    path.display(),
+                    error
+                );
+                readiness_check_failed("policy", &message);
+                return CheckResult::failure_with_message(message);
+            }
         }
     }
 
-    if !errors.is_empty() {
-        for error in &errors {
-            readiness_check_failed("policy", error);
-        }
-
-        let message = format!(
-            "no policy file found in fallback locations: {}",
-            paths
-                .iter()
-                .map(|path| path.display().to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-        readiness_check_failed("policy", &message);
-        errors.push(message);
+    for error in &errors {
+        readiness_check_failed("policy", error);
     }
+
+    let message = format!(
+        "no policy file found in fallback locations: {}",
+        paths
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    readiness_check_failed("policy", &message);
+    errors.push(message);
 
     CheckResult::failure(errors)
 }
@@ -278,7 +342,8 @@ mod tests {
     use axum::{body, extract::State, http::header};
     use serde_json::Value;
     use serial_test::serial;
-    use std::sync::Arc;
+    use std::{io::Write, sync::Arc};
+    use tempfile::NamedTempFile;
     use tokio::sync::RwLock;
 
     fn test_state() -> Result<ApiState> {
@@ -417,6 +482,96 @@ mod tests {
         assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], false);
 
+        Ok(())
+    }
+
+    fn policy_file(content: &str) -> Result<NamedTempFile> {
+        let mut file = NamedTempFile::new()?;
+        file.write_all(content.as_bytes())?;
+        file.flush()?;
+        Ok(file)
+    }
+
+    #[tokio::test]
+    async fn policy_check_accepts_valid_contract() -> Result<()> {
+        let file = policy_file("max_nodes_jsonl_mb: 10\nmax_edges_jsonl_mb: 10\n")?;
+        assert!(check_policy_file(file.path()).await.is_ok());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn policy_check_rejects_malformed_yaml() -> Result<()> {
+        let file = policy_file("max_nodes_jsonl_mb: [\n")?;
+        let error = check_policy_file(file.path())
+            .await
+            .expect_err("malformed YAML");
+        assert!(error.contains("failed to parse policy file"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn policy_check_rejects_missing_or_unknown_fields() -> Result<()> {
+        let missing = policy_file("max_nodes_jsonl_mb: 10\n")?;
+        assert!(check_policy_file(missing.path()).await.is_err());
+
+        let unknown =
+            policy_file("max_nodes_jsonl_mb: 10\nmax_edges_jsonl_mb: 10\nunwired_limit: 1\n")?;
+        assert!(check_policy_file(unknown.path()).await.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn policy_fallbacks_fail_closed_on_first_existing_invalid_file() -> Result<()> {
+        let invalid = policy_file("max_nodes_jsonl_mb: [\n")?;
+        let valid = policy_file("max_nodes_jsonl_mb: 10\nmax_edges_jsonl_mb: 10\n")?;
+        let paths = [invalid.path().to_path_buf(), valid.path().to_path_buf()];
+
+        let result = check_policy_fallbacks(&paths).await;
+        assert!(matches!(result.status, CheckStatus::Failed));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn policy_check_rejects_oversized_files_before_parsing() -> Result<()> {
+        let mut file = NamedTempFile::new()?;
+        file.write_all(&vec![b'a'; MAX_POLICY_FILE_BYTES as usize + 1])?;
+        file.flush()?;
+
+        let error = check_policy_file(file.path())
+            .await
+            .expect_err("oversized policy");
+        assert!(error.contains("must contain between 1 and"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn policy_check_rejects_zero_limits() -> Result<()> {
+        let file = policy_file("max_nodes_jsonl_mb: 0\nmax_edges_jsonl_mb: 10\n")?;
+        let error = check_policy_file(file.path())
+            .await
+            .expect_err("zero limit");
+        assert!(error.contains("max_nodes_jsonl_mb must be greater than zero"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn readiness_fails_when_policy_yaml_is_invalid() -> Result<()> {
+        let file = policy_file("max_nodes_jsonl_mb: [\n")?;
+        let _policy = EnvGuard::set(
+            "POLICY_LIMITS_PATH",
+            file.path().to_str().expect("temporary path is valid UTF-8"),
+        );
+        let state = test_state()?;
+
+        let response = ready(State(state)).await;
+        let status = response.status();
+        let body_bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+        let body: Value = serde_json::from_slice(&body_bytes)?;
+
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(body["status"], "error");
+        assert_eq!(body["checks"]["policy"], false);
         Ok(())
     }
 
