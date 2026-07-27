@@ -135,7 +135,11 @@ async fn read_policy_bytes(
 }
 
 async fn check_policy_file(path: &Path) -> Result<(), String> {
-    let file = fs::File::open(path).await.map_err(|error| {
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    options.custom_flags(libc::O_NONBLOCK);
+    let file = options.open(path).await.map_err(|error| {
         format!(
             "failed to open policy file at {}: {}",
             path.display(),
@@ -376,6 +380,8 @@ mod tests {
     use axum::{body, extract::State, http::header};
     use serde_json::Value;
     use serial_test::serial;
+    #[cfg(unix)]
+    use std::{ffi::CString, os::unix::ffi::OsStrExt, time::Duration};
     use std::{io::Write, sync::Arc};
     use tempfile::NamedTempFile;
     use tokio::sync::RwLock;
@@ -562,6 +568,23 @@ mod tests {
 
         let result = check_policy_fallbacks(&paths).await;
         assert!(matches!(result.status, CheckStatus::Failed));
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn policy_check_rejects_fifo_without_blocking() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("limits.yaml");
+        let c_path = CString::new(path.as_os_str().as_bytes())?;
+        let created = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
+        assert_eq!(created, 0, "mkfifo must succeed");
+
+        let result = tokio::time::timeout(Duration::from_millis(500), check_policy_file(&path))
+            .await
+            .expect("FIFO policy check must not block");
+        let error = result.expect_err("FIFO is not a regular policy file");
+        assert!(error.contains("is not a regular file"));
         Ok(())
     }
 
