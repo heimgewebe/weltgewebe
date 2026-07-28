@@ -1,5 +1,6 @@
 ---
 name: PR1596 Isolated Conversation DB Proof
+# activation revision: 2
 
 permissions:
   contents: write
