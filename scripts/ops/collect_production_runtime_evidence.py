@@ -627,29 +627,32 @@ def write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
     name = path.name
     if name in {"", ".", ".."}:
         raise EvidenceError("output target must have a regular filename")
-    directory_fd = open_output_directory(path)
-    temp_name = f".{name}.{uuid.uuid4().hex}.tmp"
-    temp_fd: int | None = None
     try:
-        validate_existing_output_target(directory_fd, name, path)
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-        temp_fd = os.open(temp_name, flags, 0o600, dir_fd=directory_fd)
-        encoded = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
-        with os.fdopen(temp_fd, "wb") as handle:
-            temp_fd = None
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp_name, name, src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
-        os.fsync(directory_fd)
-    finally:
-        if temp_fd is not None:
-            os.close(temp_fd)
+        directory_fd = open_output_directory(path)
+        temp_name = f".{name}.{uuid.uuid4().hex}.tmp"
+        temp_fd: int | None = None
         try:
-            os.unlink(temp_name, dir_fd=directory_fd)
-        except FileNotFoundError:
-            pass
-        os.close(directory_fd)
+            validate_existing_output_target(directory_fd, name, path)
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+            temp_fd = os.open(temp_name, flags, 0o600, dir_fd=directory_fd)
+            encoded = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+            with os.fdopen(temp_fd, "wb") as handle:
+                temp_fd = None
+                handle.write(encoded)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_name, name, src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
+            os.fsync(directory_fd)
+        finally:
+            if temp_fd is not None:
+                os.close(temp_fd)
+            try:
+                os.unlink(temp_name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
+            os.close(directory_fd)
+    except OSError as exc:
+        raise EvidenceError(f"could not atomically write output: {path}") from exc
 
 
 def positive_hours(value: str) -> float:

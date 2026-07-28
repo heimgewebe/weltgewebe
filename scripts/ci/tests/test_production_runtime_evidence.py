@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
+import io
 import json
 import os
 import stat
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 from scripts.ops import collect_production_runtime_evidence as evidence
 from scripts.ops.check_public_live_readiness import FetchResult
@@ -390,6 +394,81 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
             self.assertEqual(actual.read_text(encoding="utf-8"), "unchanged\n")
             self.assertTrue(target.is_symlink())
 
+    def test_atomic_json_output_wraps_temporary_file_permission_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "evidence.json"
+            real_open = os.open
+
+            def fail_temporary_open(path, flags, mode=0o777, *, dir_fd=None):
+                if dir_fd is not None:
+                    raise PermissionError(errno.EACCES, "permission denied")
+                return real_open(path, flags, mode)
+
+            with mock.patch.object(evidence.os, "open", side_effect=fail_temporary_open):
+                with self.assertRaisesRegex(
+                    evidence.EvidenceError,
+                    "could not atomically write output",
+                ) as caught:
+                    evidence.write_json_atomic(target, {"status": "partial"})
+
+            self.assertIsInstance(caught.exception.__cause__, PermissionError)
+            self.assertFalse(target.exists())
+            self.assertEqual(list(target.parent.glob(f".{target.name}.*")), [])
+
+    def test_atomic_json_output_replace_enospc_is_bounded_at_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "evidence.json"
+            passing = {"status": "pass"}
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            with (
+                mock.patch.object(evidence, "collect_public_evidence", return_value=passing),
+                mock.patch.object(evidence, "collect_runtime_modes", return_value=passing),
+                mock.patch.object(evidence, "collect_backup_evidence", return_value=passing),
+                mock.patch.object(evidence, "collect_restore_evidence", return_value=passing),
+                mock.patch.object(
+                    evidence,
+                    "collect_secondary_copy_evidence",
+                    return_value={"status": "not-provided"},
+                ),
+                mock.patch.object(
+                    evidence.os,
+                    "replace",
+                    side_effect=OSError(errno.ENOSPC, "no space left on device"),
+                ),
+                redirect_stdout(stdout),
+                redirect_stderr(stderr),
+            ):
+                result = evidence.main(
+                    [
+                        "--backup-manifest",
+                        "unused-backup.manifest",
+                        "--restore-proof",
+                        "unused-restore.proof",
+                        "--output",
+                        str(target),
+                    ]
+                )
+
+            self.assertEqual(result, 1)
+            self.assertEqual(stdout.getvalue(), "")
+            self.assertEqual(
+                stderr.getvalue(),
+                f"runtime evidence output failed: could not atomically write output: {target}\n",
+            )
+            self.assertNotIn("Traceback", stderr.getvalue())
+            self.assertNotIn('"status": "partial"', stderr.getvalue())
+            self.assertFalse(target.exists())
+            self.assertEqual(list(target.parent.glob(f".{target.name}.*")), [])
+
+    def test_atomic_json_output_keeps_programmer_errors_visible(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "evidence.json"
+            with self.assertRaises(TypeError):
+                evidence.write_json_atomic(target, {"not-json-serializable": object()})
+            self.assertFalse(target.exists())
+            self.assertEqual(list(target.parent.glob(f".{target.name}.*")), [])
 
     def test_deploy_docs_preserve_redaction_and_partial_status_contract(self) -> None:
         repo = Path(__file__).resolve().parents[3]
