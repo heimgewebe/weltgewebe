@@ -14,8 +14,8 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tokio::time::{sleep, timeout, Duration as TokioDuration};
 use weltgewebe_api::governance::{
     add_message, add_veto, create_weber_proposal, delete_guest_account, finalize_due_proposals,
-    get_proposal, upsert_vote, CreateProposalError, MessageError, ProposalStatus, VetoError,
-    VoteChoice, VoteError,
+    get_proposal, list_proposals, upsert_vote, CreateProposalError, MessageError, ProposalStatus,
+    VetoError, VoteChoice, VoteError,
 };
 
 const GUEST_A: &str = "gov-proof-guest-a";
@@ -394,6 +394,21 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
     )
     .await
     .expect("guest contribution to foreign proposal");
+
+    let listed = list_proposals(&pool)
+        .await
+        .expect("list proposal projections");
+    let foreign_projection = listed
+        .iter()
+        .find(|candidate| candidate.id == foreign_proposal.id)
+        .expect("foreign proposal in list");
+    assert_eq!(foreign_projection.message_count, 1);
+    let empty_projection = listed
+        .iter()
+        .find(|candidate| candidate.id == second.id)
+        .expect("empty proposal in list");
+    assert_eq!(empty_projection.message_count, 0);
+
     sqlx::query(
         "INSERT INTO domain_nodes \
          (id, kind, title, lat, lon, created_at, updated_at, payload) \
@@ -423,6 +438,15 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
     delete_guest_account(&pool, GUEST_C)
         .await
         .expect("delete guest");
+
+    let listed_after_exit = list_proposals(&pool)
+        .await
+        .expect("list proposal projections after guest exit");
+    let retained_projection = listed_after_exit
+        .iter()
+        .find(|candidate| candidate.id == foreign_proposal.id)
+        .expect("foreign proposal remains in list after guest exit");
+    assert_eq!(retained_projection.message_count, 1);
 
     let account_exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM domain_accounts WHERE id = $1)")

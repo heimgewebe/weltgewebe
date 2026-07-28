@@ -13,6 +13,7 @@ export interface Proposal {
   voting_until?: string;
   finalized_at?: string;
   veto_count: number;
+  message_count?: number;
   yes_votes: number;
   no_votes: number;
   abstain_votes: number;
