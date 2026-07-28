@@ -20,6 +20,12 @@
     | "error";
 
   const archiveMonths: { label: string; path: string }[] = [];
+  // Beispiel-Daten (auskommentiert, da Routen noch nicht existieren)
+  // [
+  //   { label: "Mai 2024", path: "/archive/2024/05" },
+  //   { label: "April 2024", path: "/archive/2024/04" },
+  //   { label: "März 2024", path: "/archive/2024/03" }
+  // ];
   let state: ArchiveState = "overview";
   let archive: ArchivedConversationView | null = null;
   let controller: AbortController | null = null;
