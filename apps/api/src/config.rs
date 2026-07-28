@@ -293,8 +293,6 @@ impl AutoProvisionRole {
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
-    pub fade_days: u32,
-    pub ron_days: u32,
     pub anonymize_opt_in: bool,
     pub delegation_expire_days: u32,
 
@@ -390,6 +388,33 @@ pub struct AppConfig {
 impl AppConfig {
     const DEFAULT_CONFIG: &'static str = include_str!("../../../configs/app.defaults.yml");
 
+    fn parse_yaml(raw: &str) -> Result<Self> {
+        let value: serde_yaml::Value =
+            serde_yaml::from_str(raw).context("failed to parse YAML configuration")?;
+        for removed_key in ["fade_days", "ron_days"] {
+            let key = serde_yaml::Value::String(removed_key.to_string());
+            if value
+                .as_mapping()
+                .is_some_and(|mapping| mapping.contains_key(&key))
+            {
+                match removed_key {
+                    "fade_days" => anyhow::bail!(
+                        "fade_days has been removed from runtime configuration; the lifetime of newly \
+                         derived, unverzwirnte Fäden is the fixed constitutional value of \
+                         {FIXED_FADEN_FADE_DAYS} days"
+                    ),
+                    "ron_days" => anyhow::bail!(concat!(
+                        "ron_days has been removed from runtime configuration; ",
+                        "no runtime RON retention consumer exists, so the setting must not be ",
+                        "presented as operator-tunable"
+                    )),
+                    _ => unreachable!(),
+                }
+            }
+        }
+        serde_yaml::from_value(value).context("failed to decode YAML configuration")
+    }
+
     pub fn load() -> Result<Self> {
         let config = match env::var("APP_CONFIG_PATH") {
             Ok(path) => Self::load_from_path(&path).with_context(|| {
@@ -398,7 +423,7 @@ impl AppConfig {
                     path
                 )
             })?,
-            Err(env::VarError::NotPresent) => serde_yaml::from_str(Self::DEFAULT_CONFIG)
+            Err(env::VarError::NotPresent) => Self::parse_yaml(Self::DEFAULT_CONFIG)
                 .context("failed to parse embedded default configuration")?,
             Err(env::VarError::NotUnicode(value)) => {
                 anyhow::bail!(
@@ -415,34 +440,30 @@ impl AppConfig {
         let path = path.as_ref();
         let raw = fs::read_to_string(path)
             .with_context(|| format!("failed to read configuration file at {}", path.display()))?;
-        let config: Self = serde_yaml::from_str(&raw)
+        let config = Self::parse_yaml(&raw)
             .with_context(|| format!("failed to parse configuration file at {}", path.display()))?;
         config.apply_env_overrides()
     }
 
     /// Parse configuration from a YAML string (primarily for tests).
     pub fn load_from_str(yaml: &str) -> Result<Self> {
-        let config: Self =
-            serde_yaml::from_str(yaml).context("failed to parse YAML configuration string")?;
+        let config = Self::parse_yaml(yaml).context("failed to parse YAML configuration string")?;
         config.apply_env_overrides()
     }
 
     fn apply_env_overrides(mut self) -> Result<Self> {
-        match env::var("HA_FADE_DAYS") {
-            Ok(value) => {
-                self.fade_days = value.trim().parse::<u32>().with_context(|| {
-                    format!(
-                        "HA_FADE_DAYS must be an integer equal to {FIXED_FADEN_FADE_DAYS}; \
-                         it mirrors the fixed constitutional Faden lifetime and is not a tuning setting"
-                    )
-                })?;
-            }
-            Err(env::VarError::NotPresent) => {}
-            Err(env::VarError::NotUnicode(value)) => {
-                anyhow::bail!("HA_FADE_DAYS is set but is not valid Unicode: {:?}", value);
-            }
+        if env::var_os("HA_FADE_DAYS").is_some() {
+            anyhow::bail!(
+                "HA_FADE_DAYS has been removed; the lifetime of newly derived, unverzwirnte \
+                 Fäden is the fixed constitutional value of {FIXED_FADEN_FADE_DAYS} days"
+            );
         }
-        apply_env_override!(self, ron_days, "HA_RON_DAYS");
+        if env::var_os("HA_RON_DAYS").is_some() {
+            anyhow::bail!(concat!(
+                "HA_RON_DAYS has been removed; ",
+                "no runtime RON retention consumer exists for this setting"
+            ));
+        }
         apply_env_override!(self, anonymize_opt_in, "HA_ANONYMIZE_OPT_IN");
         apply_env_override!(self, delegation_expire_days, "HA_DELEGATION_EXPIRE_DAYS");
         apply_env_override!(self, max_guest_owned_nodes, "MAX_GUEST_OWNED_NODES");
@@ -651,15 +672,6 @@ impl AppConfig {
     }
 
     fn validate(self) -> Result<Self> {
-        if self.fade_days != FIXED_FADEN_FADE_DAYS {
-            anyhow::bail!(
-                "fade_days must be exactly {FIXED_FADEN_FADE_DAYS}; it is a declarative mirror of \
-                 the fixed constitutional lifetime for newly derived, unverzwirnte Fäden, not a \
-                 tuning setting (got {})",
-                self.fade_days
-            );
-        }
-
         if self.max_guest_owned_nodes == 0 {
             anyhow::bail!("MAX_GUEST_OWNED_NODES must be greater than zero");
         }
@@ -868,27 +880,53 @@ impl AppConfig {
 mod tests {
     use super::{
         AppConfig, AutoProvisionRole, DomainAccountWriteSource, DomainEdgeWriteSource,
-        DomainNodeWriteSource, DomainReadSource, PasskeyCredentialSource, FIXED_FADEN_FADE_DAYS,
+        DomainNodeWriteSource, DomainReadSource, PasskeyCredentialSource,
     };
     use crate::test_helpers::{DirGuard, EnvGuard};
     use anyhow::Result;
     use serial_test::serial;
     use tempfile::{tempdir, NamedTempFile};
 
-    const YAML: &str = r#"fade_days: 7
-ron_days: 84
+    const YAML: &str = r#"
 anonymize_opt_in: true
 delegation_expire_days: 28
 "#;
 
     #[test]
     #[serial]
+    fn ron_days_yaml_key_is_rejected_as_removed_setting() {
+        let _ron = EnvGuard::unset("HA_RON_DAYS");
+        let yaml = format!("ron_days: 84\n{YAML}");
+
+        let error = AppConfig::load_from_str(&yaml)
+            .expect_err("the removed ron_days YAML key must fail closed");
+        let error = format!("{error:#}");
+
+        assert!(error.contains("ron_days has been removed"));
+        assert!(error.contains("no runtime RON retention consumer exists"));
+    }
+
+    #[test]
+    #[serial]
+    fn ron_days_env_override_is_rejected_as_removed_setting() {
+        let _ron = EnvGuard::set("HA_RON_DAYS", "84");
+
+        let error = AppConfig::load_from_str(YAML)
+            .expect_err("the removed HA_RON_DAYS override must fail closed");
+        let error = format!("{error:#}");
+
+        assert!(error.contains("HA_RON_DAYS has been removed"));
+        assert!(error.contains("no runtime RON retention consumer exists"));
+    }
+
+    #[test]
+    #[serial]
     fn load_from_path_reads_defaults() -> Result<()> {
+        let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let file = NamedTempFile::new()?;
         std::fs::write(file.path(), YAML)?;
 
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
-        let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
         let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
@@ -896,8 +934,6 @@ delegation_expire_days: 28
         let _cookie_secure = EnvGuard::unset("AUTH_COOKIE_SECURE");
 
         let cfg = AppConfig::load_from_path(file.path())?;
-        assert_eq!(cfg.fade_days, FIXED_FADEN_FADE_DAYS);
-        assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
         assert_eq!(cfg.max_guest_owned_nodes, 1_000);
@@ -908,52 +944,32 @@ delegation_expire_days: 28
 
     #[test]
     #[serial]
-    fn fade_days_accepts_fixed_constitutional_value() -> Result<()> {
+    fn fade_days_yaml_key_is_rejected_as_removed_setting() {
         let _fade = EnvGuard::unset("HA_FADE_DAYS");
+        let yaml = format!(
+            "fade_days: 7
+{YAML}"
+        );
 
-        let cfg = AppConfig::load_from_str(YAML)?;
+        let error = AppConfig::load_from_str(&yaml)
+            .expect_err("the removed fade_days YAML key must fail closed");
 
-        assert_eq!(cfg.fade_days, FIXED_FADEN_FADE_DAYS);
-        Ok(())
+        let error = format!("{error:#}");
+        assert!(error.contains("fade_days has been removed"));
+        assert!(error.contains("fixed constitutional value of 7 days"));
     }
 
     #[test]
     #[serial]
-    fn fade_days_rejects_yaml_value_other_than_fixed_constitutional_value() {
-        let _fade = EnvGuard::unset("HA_FADE_DAYS");
-        let invalid_yaml = YAML.replacen("fade_days: 7", "fade_days: 6", 1);
-
-        let error = AppConfig::load_from_str(&invalid_yaml)
-            .expect_err("a non-constitutional YAML fade_days value must fail closed");
-
-        assert!(error.to_string().contains("fade_days must be exactly 7"));
-        assert!(error.to_string().contains("not a tuning setting (got 6)"));
-    }
-
-    #[test]
-    #[serial]
-    fn fade_days_rejects_env_override_other_than_fixed_constitutional_value() {
-        let _fade = EnvGuard::set("HA_FADE_DAYS", "8");
+    fn fade_days_env_override_is_rejected_as_removed_setting() {
+        let _fade = EnvGuard::set("HA_FADE_DAYS", "7");
 
         let error = AppConfig::load_from_str(YAML)
-            .expect_err("a non-constitutional HA_FADE_DAYS override must fail closed");
+            .expect_err("the removed HA_FADE_DAYS override must fail closed");
 
-        assert!(error.to_string().contains("fade_days must be exactly 7"));
-        assert!(error.to_string().contains("not a tuning setting (got 8)"));
-    }
-
-    #[test]
-    #[serial]
-    fn fade_days_rejects_malformed_env_override() {
-        let _fade = EnvGuard::set("HA_FADE_DAYS", "not-a-number");
-
-        let error = AppConfig::load_from_str(YAML)
-            .expect_err("a malformed HA_FADE_DAYS override must fail closed");
-
-        assert!(error
-            .to_string()
-            .contains("HA_FADE_DAYS must be an integer equal to 7"));
-        assert!(error.to_string().contains("not a tuning setting"));
+        let error = format!("{error:#}");
+        assert!(error.contains("HA_FADE_DAYS has been removed"));
+        assert!(error.contains("fixed constitutional value of 7 days"));
     }
 
     #[test]
@@ -1000,20 +1016,18 @@ delegation_expire_days: 28
     #[test]
     #[serial]
     fn load_from_path_applies_env_overrides() -> Result<()> {
+        let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let file = NamedTempFile::new()?;
         std::fs::write(file.path(), YAML)?;
 
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
-        let _fade = EnvGuard::set("HA_FADE_DAYS", "7");
-        let _ron = EnvGuard::set("HA_RON_DAYS", "90");
+        let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::set("HA_ANONYMIZE_OPT_IN", "false");
         let _delegation = EnvGuard::set("HA_DELEGATION_EXPIRE_DAYS", "14");
         let _guest_nodes = EnvGuard::set("MAX_GUEST_OWNED_NODES", "321");
         let _cookie_secure = EnvGuard::set("AUTH_COOKIE_SECURE", "false");
 
         let cfg = AppConfig::load_from_path(file.path())?;
-        assert_eq!(cfg.fade_days, FIXED_FADEN_FADE_DAYS);
-        assert_eq!(cfg.ron_days, 90);
         assert!(!cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 14);
         assert_eq!(cfg.max_guest_owned_nodes, 321);
@@ -1025,11 +1039,11 @@ delegation_expire_days: 28
     #[test]
     #[serial]
     fn load_uses_defaults_when_app_config_path_is_unset() -> Result<()> {
+        let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let temp_dir = tempdir()?;
         let _dir = DirGuard::change_to(temp_dir.path())?;
 
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
-        let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
         let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
@@ -1039,8 +1053,6 @@ delegation_expire_days: 28
         let _edge_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
 
         let cfg = AppConfig::load()?;
-        assert_eq!(cfg.fade_days, FIXED_FADEN_FADE_DAYS);
-        assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
         assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
@@ -1100,7 +1112,7 @@ delegation_expire_days: 28
     #[serial]
     fn load_errors_when_app_config_path_yaml_is_invalid() -> Result<()> {
         let file = NamedTempFile::new()?;
-        std::fs::write(file.path(), "fade_days: [")?;
+        std::fs::write(file.path(), "ron_days: [")?;
 
         let _config_path = EnvGuard::set(
             "APP_CONFIG_PATH",
@@ -1123,8 +1135,7 @@ delegation_expire_days: 28
     #[serial]
     fn load_errors_when_explicit_config_fails_domain_write_validation() -> Result<()> {
         let file = NamedTempFile::new()?;
-        let invalid_yaml = r#"fade_days: 7
-ron_days: 14
+        let invalid_yaml = r#"
 anonymize_opt_in: false
 delegation_expire_days: 365
 domain_read_source: jsonl
@@ -1153,9 +1164,9 @@ domain_account_write_source: postgres
     #[test]
     #[serial]
     fn load_uses_explicit_app_config_path_when_valid() -> Result<()> {
+        let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let file = NamedTempFile::new()?;
-        let valid_yaml = r#"fade_days: 7
-ron_days: 84
+        let valid_yaml = r#"
 anonymize_opt_in: true
 delegation_expire_days: 28
 "#;
@@ -1165,7 +1176,6 @@ delegation_expire_days: 28
             "APP_CONFIG_PATH",
             file.path().to_str().expect("path is valid utf-8"),
         );
-        let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
         let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
@@ -1175,8 +1185,6 @@ delegation_expire_days: 28
         let _edge_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
 
         let cfg = AppConfig::load()?;
-        assert_eq!(cfg.fade_days, FIXED_FADEN_FADE_DAYS);
-        assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
         assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
