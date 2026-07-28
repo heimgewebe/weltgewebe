@@ -103,8 +103,10 @@ Es beschreibt:
   - Richtwert: 28 Tage (4 Wochen).
   - Herkunft: § IV Delegation.
 
-> **Hinweis:** Die Werte 7/7/28 Tage sind aus der Beschreibung im Repo abgeleitet –
-> nicht normativ festgelegt. Änderungen erfordern Governance-Beschluss +
+> **Hinweis:** Die Fadenfrist von 7 Tagen ist verfassungsfest; das 7+7-Tage-Modell
+> für Anträge ist im kanonischen Governance-Vertrag normativ festgelegt. Die
+> 28-Tage-Werte für Anonymisierung und Delegation bleiben hier Richtwerte.
+> Änderungen erfordern den jeweils einschlägigen Governance-Beschluss und einen
 > Changelog-Eintrag.
 
 ---
