@@ -281,6 +281,7 @@ import os
 import secrets
 import stat
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 sys.path.insert(0, os.environ["WELTGEWEBE_OPS_SCRIPT_DIR"])
 from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
@@ -367,7 +368,76 @@ def is_current_verified_receipt(payload: object) -> bool:
     return False
 
 
+def parse_aware_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return None
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        return None
+
+
+def migrate_schema4_verified_receipt(payload: object) -> dict[str, object] | None:
+    if not isinstance(payload, dict):
+        return None
+    started_at = parse_aware_timestamp(payload.get("started_at"))
+    completed_at = parse_aware_timestamp(payload.get("completed_at"))
+    migration_completed_at = parse_aware_timestamp(
+        payload.get("migration_completed_at")
+    )
+    expected_keys = {
+        "schema_version",
+        "environment",
+        "commit",
+        "web_artifact_sha256",
+        "started_at",
+        "completed_at",
+        "api_commit",
+        "frontend_commit",
+        "observed_main_after_deploy",
+        "migration_completed_at",
+        "lock_domain",
+        "lock_owner_entrypoint",
+        "lock_handoff",
+        "result",
+    }
+    if set(payload) != expected_keys:
+        return None
+    if (
+        payload.get("schema_version") != 4
+        or payload.get("environment") != "production"
+        or payload.get("commit") != commit
+        or not is_lower_hex(payload.get("web_artifact_sha256"), 64)
+        or started_at is None
+        or completed_at is None
+        or payload.get("api_commit") != commit
+        or payload.get("frontend_commit") != commit
+        or payload.get("observed_main_after_deploy") != commit
+        or migration_completed_at is None
+        or payload.get("lock_domain") != "weltgewebe-production-deployment-v1"
+        or payload.get("lock_owner_entrypoint") != "deploy-helper"
+        or payload.get("lock_handoff") != "direct"
+        or payload.get("result") != "verified"
+    ):
+        return None
+    if not started_at <= migration_completed_at <= completed_at:
+        return None
+    migrated = dict(payload)
+    migrated["schema_version"] = 5
+    migrated["deploy_invocation_id"] = None
+    return migrated
+
+
 if is_current_verified_receipt(existing):
+    raise SystemExit(0)
+
+migrated_schema4 = migrate_schema4_verified_receipt(existing)
+if migrated_schema4 is not None:
+    write_secure_json(deployment_path, migrated_schema4)
     raise SystemExit(0)
 
 payload = {
