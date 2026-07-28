@@ -8,7 +8,7 @@ export class ApiRequestError extends Error {
   status: number;
   body?: unknown;
   constructor(status: number, body?: unknown) {
-    super(`API request failed with status ${status}`);
+    super(`API request failed: ${status}`);
     this.status = status;
     this.body = body;
   }
