@@ -170,6 +170,8 @@ async fn test_open_registration_rejects_invalid_email_shapes_without_side_effect
         " user@example.org",
         "user@example.org ",
         "user@example.org\n",
+        "foo..bar@example.org",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.org",
     ];
 
     for email in invalid_emails {

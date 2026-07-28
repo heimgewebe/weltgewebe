@@ -58,17 +58,15 @@ fn normalize_login_email(input: &str) -> Option<String> {
     if input.is_empty()
         || input.len() > MAX_EMAIL_LEN
         || input.chars().any(|c| c.is_whitespace() || c.is_control())
-        || input.matches('@').count() != 1
     {
         return None;
     }
 
-    let (local, domain) = input.split_once('@')?;
-    if local.is_empty() || domain.is_empty() {
-        return None;
-    }
-
-    Some(input.to_ascii_lowercase())
+    // Use the same address parser as the delivery layer before any account,
+    // token, rate-limit, or mailer side effect can occur.
+    let normalized = input.to_ascii_lowercase();
+    normalized.parse::<lettre::Address>().ok()?;
+    Some(normalized)
 }
 
 fn shared_auth_backend_json_response(
