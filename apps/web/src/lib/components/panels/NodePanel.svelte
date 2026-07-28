@@ -6,6 +6,7 @@
     ApiRequestError,
     deleteNode,
     replaceNode,
+    type NodeDeleteReceipt,
   } from "$lib/api/domainWrites";
   import {
     buildPanelEndpoint,
@@ -19,7 +20,7 @@
   type DomainChanged = {
     kind: "node";
     id: string;
-    action: "updated" | "deleted";
+    action: "updated" | "deleted" | "archived";
   };
 
   const dispatch = createEventDispatcher<{
@@ -42,6 +43,9 @@
   let saving = false;
   let deleting = false;
   let mutationError = "";
+  let archiveReceipt:
+    | Extract<NodeDeleteReceipt["conversation"], { effect: "archived" }>
+    | null = null;
   let formTitle = "";
   let formKind = "";
   let formSummary = "";
@@ -89,6 +93,7 @@
     saving = false;
     deleting = false;
     mutationError = "";
+    archiveReceipt = null;
   }
 
   const detailsLoader = createPanelDetailsLoader<NodeDetails>(selection, {
@@ -276,15 +281,22 @@
     const id = nodeDetails?.id || $selection?.id;
     if (!id) return;
     const confirmed = window.confirm(
-      "Knoten wirklich löschen? Alle Fäden, die mit ihm verbunden sind, werden ebenfalls gelöscht.",
+      "Aus dem Gewebe entfernen? Alle verbundenen Fäden werden entfernt. Bestehende Gesprächsbeiträge bleiben als schreibgeschütztes Archiv erhalten.",
     );
     if (!confirmed) return;
 
     deleting = true;
     mutationError = "";
     try {
-      await deleteNode(id, nodeDetails?.updated_at);
-      dispatch("domainChanged", { kind: "node", id, action: "deleted" });
+      const receipt = await deleteNode(id, nodeDetails?.updated_at);
+      if (receipt.conversation.effect === "archived") {
+        archiveReceipt = receipt.conversation;
+        editing = false;
+        activeTab = "uebersicht";
+        dispatch("domainChanged", { kind: "node", id, action: "archived" });
+      } else {
+        dispatch("domainChanged", { kind: "node", id, action: "deleted" });
+      }
     } catch (error) {
       if (
         error instanceof ApiRequestError &&
@@ -307,6 +319,12 @@
 </script>
 
 <div class="node-mode" class:editing>
+  {#if archiveReceipt}
+    <section data-testid="node-archive-receipt" role="status">
+      <h3>Knoten aus dem Gewebe entfernt</h3>
+      <a href={archiveReceipt.archive_url}>Archiv öffnen</a>
+    </section>
+  {:else}
   <h3>{nodeDetails?.title || $selection?.data?.title || $selection?.id}</h3>
   {#if summary}<p class="summary node-summary">{summary}</p>{/if}
   <div
@@ -584,7 +602,7 @@
             class="danger"
             on:click={removeNode}
             disabled={deleting}
-            >{deleting ? "Löscht…" : "Knoten löschen"}</button
+            >{deleting ? "Entfernt…" : "Aus dem Gewebe entfernen"}</button
           >
           <p class="collective-note">
             Eigene Knoten kannst du selbst pflegen. Weber können zusätzlich
@@ -593,6 +611,7 @@
         </div>
       {/if}
     </div>
+  {/if}
   {/if}
 </div>
 

@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 185 |
-| Dokumente mit ausgehenden Relationen | 184 |
-| Dokumente als Ziel referenziert | 139 |
-| Relationen gesamt | 650 |
+| Dokumente gesamt | 186 |
+| Dokumente mit ausgehenden Relationen | 185 |
+| Dokumente als Ziel referenziert | 140 |
+| Relationen gesamt | 658 |
 | — depends_on | 25 |
-| — relates_to | 608 |
+| — relates_to | 616 |
 | — supersedes | 12 |
 | — verifies | 5 |
 | Isolierte Dokumente | 0 |
@@ -45,8 +45,8 @@ Generated automatically. Do not edit.
 - ⚠️ High inbound count (12): `docs/blueprints/domain-data-postgres-cutover.md` — central dependency, review carefully
 - ⚠️ High inbound count (12): `docs/deployment.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/blueprints/auth-roadmap.md` — central dependency, review carefully
+- ⚠️ High inbound count (11): `docs/datenmodell.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/roadmap.md` — central dependency, review carefully
-- ⚠️ High inbound count (10): `docs/datenmodell.md` — central dependency, review carefully
 
 ### Zyklen (depends_on)
 
@@ -75,8 +75,8 @@ _Keine Zyklen gefunden._
 - `docs/blueprints/domain-data-postgres-cutover.md` — 12 eingehende Relationen
 - `docs/deployment.md` — 12 eingehende Relationen
 - `docs/blueprints/auth-roadmap.md` — 11 eingehende Relationen
+- `docs/datenmodell.md` — 11 eingehende Relationen
 - `docs/roadmap.md` — 11 eingehende Relationen
-- `docs/datenmodell.md` — 10 eingehende Relationen
 
 ### Isolierte Dokumente
 

@@ -20,7 +20,7 @@ use crate::config::{
 use crate::domain_db::{
     delete_node_with_edges_in_postgres, insert_domain_node_with_creator_limit,
     patch_node_in_postgres, replace_node_in_postgres, CreateOperationKey, CreateWriteOutcome,
-    NodeCreateError, NodePatchInput, NodeWriteError,
+    NodeConversationDeleteEffect, NodeCreateError, NodePatchInput, NodeWriteError,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::{ApiState, OrderedCache};
@@ -66,6 +66,37 @@ pub enum NodeMutationError {
         code: &'static str,
         message: &'static str,
     },
+}
+
+#[derive(Debug, Serialize)]
+pub struct NodeDeleteResponse {
+    pub node_id: String,
+    pub node_state: &'static str,
+    pub removed_edge_ids: Vec<String>,
+    pub conversation: NodeDeleteConversationResponse,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "effect", rename_all = "snake_case")]
+pub enum NodeDeleteConversationResponse {
+    NotApplicable,
+    DeletedEmpty,
+    Archived {
+        archive_id: String,
+        archive_url: String,
+    },
+}
+
+impl From<NodeConversationDeleteEffect> for NodeDeleteConversationResponse {
+    fn from(effect: NodeConversationDeleteEffect) -> Self {
+        match effect {
+            NodeConversationDeleteEffect::DeletedEmpty => Self::DeletedEmpty,
+            NodeConversationDeleteEffect::Archived { archive_id } => Self::Archived {
+                archive_url: format!("/api/conversations/{archive_id}"),
+                archive_id,
+            },
+        }
+    }
 }
 
 impl IntoResponse for NodeMutationError {
@@ -1010,6 +1041,7 @@ async fn rollback_newly_created_node_after_faden_failure(
             delete_node_with_edges_in_postgres(pool, node_id)
                 .await
                 .map_err(|error| format!("failed to compensate PostgreSQL node create: {error}"))?
+                .removed_edge_ids
         }
     };
 
@@ -2743,7 +2775,7 @@ fn map_postgres_node_delete_error(error: NodeWriteError, id: &str) -> NodeMutati
 pub async fn delete_node(
     State(state): State<ApiState>,
     Path(id): Path<String>,
-) -> Result<StatusCode, NodeMutationError> {
+) -> Result<(StatusCode, Json<NodeDeleteResponse>), NodeMutationError> {
     reject_node_patch_unless_writable(&state)
         .map_err(|(status, body)| NodeMutationError::Message(status, body))?;
     let persistence_is_coherent = matches!(
@@ -2797,7 +2829,7 @@ pub async fn delete_node(
         edge_ids
     };
 
-    let persisted_edge_ids = match state.config.domain_node_write_source {
+    let (persisted_edge_ids, conversation) = match state.config.domain_node_write_source {
         DomainNodeWriteSource::Jsonl => {
             // Keep the edge lock until the node file has also been replaced. Otherwise a
             // concurrent edge create could attach a new edge between cascade cleanup and
@@ -2825,16 +2857,20 @@ pub async fn delete_node(
             if !outcome.node_deleted {
                 return Err(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR));
             }
-            outcome.removed_edge_ids
+            (
+                outcome.removed_edge_ids,
+                NodeDeleteConversationResponse::NotApplicable,
+            )
         }
         DomainNodeWriteSource::Postgres => {
             let pool = state
                 .db_pool
                 .as_ref()
                 .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
-            delete_node_with_edges_in_postgres(pool, &id)
+            let outcome = delete_node_with_edges_in_postgres(pool, &id)
                 .await
-                .map_err(|error| map_postgres_node_delete_error(error, &id))?
+                .map_err(|error| map_postgres_node_delete_error(error, &id))?;
+            (outcome.removed_edge_ids, outcome.conversation.into())
         }
     };
 
@@ -2849,7 +2885,13 @@ pub async fn delete_node(
     nodes.remove(&id);
     state.metrics.set_nodes_cache_count(nodes.len() as i64);
     tracing::info!(event = "node.deleted.collective", node_id = %id, removed_edges = persisted_edge_ids.len(), "Node collectively deleted");
-    Ok(StatusCode::NO_CONTENT)
+    let response = NodeDeleteResponse {
+        node_id: id,
+        node_state: "removed",
+        removed_edge_ids: persisted_edge_ids,
+        conversation,
+    };
+    Ok((StatusCode::OK, Json(response)))
 }
 
 pub async fn patch_node(
@@ -2906,6 +2948,10 @@ async fn patch_node_postgres(
             }
             NodeWriteError::ConversationNotEmpty => {
                 tracing::error!(node_id = %id, "unexpected conversation guard during node patch");
+                NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            NodeWriteError::ConversationLifecycle(err) => {
+                tracing::error!(%err, node_id = %id, "unexpected conversation lifecycle error during node patch");
                 NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
             }
             NodeWriteError::Mapping(err) => {

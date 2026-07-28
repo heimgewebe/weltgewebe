@@ -432,6 +432,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
 - [relates_to] docs/runbooks/db-recovery.md
 - [relates_to] docs/specs/contract.md
+- [relates_to] docs/specs/objektlebenszyklen-und-loeschwirkungen.md
 - [relates_to] docs/techstack.md
 
 ## docs/deploy/DRIFT_POLICY.md
@@ -568,6 +569,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/specs/contract.md
 - [relates_to] docs/specs/garnrolle-knoten-faden.md
 - [relates_to] docs/specs/governance-antraege.md
+- [relates_to] docs/specs/objektlebenszyklen-und-loeschwirkungen.md
 
 ## docs/inhalt.md
 
@@ -1014,6 +1016,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/policies/architecture-critique.md
 - [relates_to] docs/reports/domain-edge-faden-lifecycle-proof.md
 - [relates_to] docs/specs/federation-core.md
+- [relates_to] docs/specs/objektlebenszyklen-und-loeschwirkungen.md
 - [relates_to] docs/specs/privacy-api.md
 - [relates_to] docs/vision.md
 
@@ -1021,6 +1024,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
 - [relates_to] docs/specs/garnrolle-knoten-faden.md
+- [relates_to] docs/specs/objektlebenszyklen-und-loeschwirkungen.md
 
 ## docs/specs/list-pagination-api.md
 
@@ -1032,6 +1036,13 @@ Generated automatically. Do not edit.
 - [verifies] docs/reports/map-status.md
 - [depends_on] docs/roadmap.md
 - [relates_to] docs/vision.md
+
+## docs/specs/objektlebenszyklen-und-loeschwirkungen.md
+
+- [relates_to] docs/datenmodell.md
+- [relates_to] docs/domain/vocabulary.md
+- [relates_to] docs/specs/contract.md
+- [relates_to] docs/specs/garnrolle-knoten-faden.md
 
 ## docs/specs/privacy-api.md
 

@@ -10,6 +10,8 @@ relations:
   - type: relates_to
     target: docs/domain/vocabulary.md
   - type: relates_to
+    target: docs/specs/objektlebenszyklen-und-loeschwirkungen.md
+  - type: relates_to
     target: docs/techstack.md
   - type: relates_to
     target: docs/deploy/README.md
@@ -55,9 +57,8 @@ ein Account-Endpunkt nur beteiligt sein, wenn der Faden von der eigenen
 angemeldeten Garnrolle ausgeht. Bereits bekannte Account-IDs müssen als
 `account` typisiert sein; öffentliche Projektionen vertrauen niemals einer
 bloßen ID-Kollision mit einem als `node` deklarierten Endpunkt. Eingehende
-Account-Fäden sind dem administrativen
-Import-/Reparaturpfad vorbehalten und werden als eingehende Beziehung statt als
-Eigenhandlung projiziert.
+Account-Fäden sind dem administrativen Import-/Reparaturpfad vorbehalten und
+werden als eingehende Beziehung statt als Eigenhandlung projiziert.
 
 ## Physische PostgreSQL-Tabellen
 
@@ -109,16 +110,16 @@ oder `radius`. Eine separate Identitäts- oder Modusspalte existiert nicht mehr.
 | `lat`, `lon` | `DOUBLE PRECISION` | optionale Position |
 | `created_at`, `updated_at` | `TIMESTAMPTZ` | Zeitangaben |
 | `payload` | `JSONB` | übrige JSONL-Felder einschließlich optionaler unveränderlicher `created_by_account_id` |
+| `create_actor_id`, `create_operation_id` | `TEXT`, nullable | accountgebundene Wiederholungssicherheit für `POST /nodes` |
 
 Neue Knoten erhalten `created_by_account_id` ausschließlich aus der
 Authentifizierungssitzung. Das Feld wird bei späteren Ersetzungen beibehalten.
 Altbestand und nach einem Gast-Austritt anonymisierte Knoten besitzen keine
 aktive Urheberbindung; Gäste können sie deshalb nicht bearbeiten, Weber und
 Administratoren jedoch gemeinschaftlich pflegen.
-| `create_actor_id`, `create_operation_id` | `TEXT`, nullable | accountgebundene Wiederholungssicherheit für `POST /nodes` |
 
-Es gibt derzeit keine PostGIS-Geometrie. Der Geoindex ist ein einfacher
-B-Tree auf `(lat, lon)`.
+Es gibt derzeit keine PostGIS-Geometrie. Der Geoindex ist ein einfacher B-Tree
+auf `(lat, lon)`.
 
 `create_actor_id` und `create_operation_id` sind entweder gemeinsam gesetzt
 oder gemeinsam `NULL`. Der Accountwert muss nichtleer und die Vorgangskennung
@@ -161,6 +162,44 @@ Die Tabelle speichert keine privaten Passkey-Schlüssel. Ein Foreign Key zu
 `domain_accounts` bleibt bis zum belegten Legacy-Backfill und zur abschließenden
 Identitätsbereinigung bewusst ausgesetzt.
 
+### `domain_conversations`
+
+Ein aktives Knotengespräch referenziert seinen Knoten über `node_id`. Wird ein
+Knoten mit Beiträgen aus dem Gewebe entfernt, setzt dieselbe Transaktion
+`node_id` auf `NULL`, übernimmt letzte Knoten-ID und letzten Knotentitel nach
+`node_id_snapshot` und `node_title_snapshot` und setzt `archived_at`.
+
+Der öffentliche Zustand wird ohne zweite Wahrheitsquelle aus diesen Feldern
+abgeleitet:
+
+| Zustand | `node_id` | Snapshots | `archived_at` |
+|---|---|---|---|
+| `active` | gesetzt | `NULL` | `NULL` |
+| `archived` | `NULL` | gesetzt | gesetzt |
+
+Ein leerer automatisch erzeugter Gesprächsraum darf mit seinem Knoten
+kaskadierend verschwinden. Eine nichtleere aktive oder archivierte Conversation
+ist dagegen auf Datenbankebene gegen direktes Hard-Delete geschützt. Das
+Archivieren erzeugt zusätzlich zum generischen Änderungsereignis das spezifische
+Outboxereignis `domain.conversation.archived`.
+
+### `domain_messages`
+
+`domain_messages` speichert Klartextbeiträge, Autoren-Snapshots, Idempotenz und
+Tombstones. Ein gewöhnliches SQL-`DELETE` ist nicht der fachliche Löschpfad und
+wird abgewiesen. Rückzug und Moderation setzen `content = NULL` sowie
+`deleted_at`; die Message-ID, Gesprächszuordnung und Zeitspur bleiben erhalten.
+
+In einem Archiv gelten folgende Regeln:
+
+- neue Beiträge und normale Inhaltsänderungen sind gesperrt;
+- Autor oder Administrator dürfen einen vorhandenen Beitrag tombstonen;
+- Accountlöschung darf ausschließlich `author_account_id` auf `NULL` setzen;
+- direkte physische Löschung der Conversation oder ihrer Messages ist gesperrt.
+
+Der Autorenname bleibt als öffentlicher Snapshot bestehen. Eine später
+wiederverwendete Account-ID kann damit keine alten Beiträge übernehmen.
+
 ## JSONL-Modell
 
 JSONL-Datensätze folgen den JSON-Schemas in `contracts/domain`. Im lokalen oder
@@ -173,16 +212,14 @@ fehlgeschlagenen PostgreSQL-Pfad.
 
 ## Gesprächs- und Rollenverträge
 
-`conversation.schema.json` und `message.schema.json` spiegeln den produktiven,
-öffentlichen Knotengesprächsschnitt. Genau ein `domain_conversations`-Datensatz
-gehört zu jedem PostgreSQL-Knoten; `domain_messages` speichert Klartextbeiträge,
-Autoren-Snapshots, Idempotenz und Tombstones. Beim Löschen eines Accounts wird
-die bearbeitungsberechtigte Account-Referenz entfernt, während der öffentliche
-Namens-Snapshot erhalten bleibt; eine später wiederverwendete Account-ID kann
-damit keine alten Beiträge übernehmen. Knoten mit vorhandenen Beiträgen dürfen
-nicht hart gelöscht werden, weil sonst fremde Gesprächsgeschichte per Kaskade
-verschwände. Conversation-/Message-Ereignisse landen atomar in `domain_outbox`,
-erhöhen aber nicht die Kartenprojektion.
+`conversation.schema.json` beschreibt aktive und archivierte Knotengespräche als
+explizite Zustände. `message.schema.json` beschreibt Beiträge und Tombstones.
+Das Entfernen eines Knotens ist vom Erhalt einer nichtleeren Conversation
+getrennt; Details und weitere Objektklassen normiert
+`docs/specs/objektlebenszyklen-und-loeschwirkungen.md`.
+
+Conversation-/Message-Ereignisse landen atomar in `domain_outbox`, erhöhen aber
+nicht die Kartenprojektion.
 
 `role.schema.json` beschreibt weiterhin ein geplantes Objekt ohne produktive
 `roles`-Tabelle. Private Gespräche, Anhänge und föderierte Zustellung sind nicht

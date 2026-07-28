@@ -176,11 +176,12 @@ Generated automatically. Do not edit.
 | specs.auth-blueprint | Auth Blueprint | reference | active | docs/specs/auth-blueprint.md |
 | specs.auth-state-machine | Auth State Machine | reference | active | docs/specs/auth-state-machine.md |
 | specs.auth-ui | Auth UI Spec | reference | active | docs/specs/auth-ui.md |
-| specs.contract | Datenvertrag | reference | active | docs/specs/contract.md |
+| specs.contract | Historischer Entwurf: Tombstone und Key-Erase | reference | active | docs/specs/contract.md |
 | specs.garnrolle-knoten-faden | Garnrolle, Knoten und Faden | specification | canonical | docs/specs/garnrolle-knoten-faden.md |
 | specs.governance-antraege | Anträge, Konsent, Veto und Abstimmung | specification | canonical | docs/specs/governance-antraege.md |
 | specs.list-pagination-api | List Pagination API Spec | reference | active | docs/specs/list-pagination-api.md |
 | specs.map-experience | Kartenerlebnis | specification | canonical | docs/specs/map-experience.md |
+| specs.objektlebenszyklen-und-loeschwirkungen | Objektlebenszyklen und Löschwirkungen | specification | canonical | docs/specs/objektlebenszyklen-und-loeschwirkungen.md |
 | specs.privacy-api | Garnrollen-Sichtbarkeit API | reference | active | docs/specs/privacy-api.md |
 | specs.privacy-ui | Garnrollen-Sichtbarkeit UI | reference | deprecated | docs/specs/privacy-ui.md |
 | specs.ui-interaction | UI-Interaktionsvertrag | specification | canonical | docs/specs/ui-interaction.md |

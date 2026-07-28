@@ -183,9 +183,12 @@ Ein Gast kann den eigenen Account vollständig auflösen. Details zur Erhaltung
 und Anonymisierung gemeinschaftlicher Spuren stehen in
 `docs/specs/garnrolle-knoten-faden.md`.
 
-Der Austritt entfernt eigene Weberanträge, Passkeys, Sitzungen und die
-Garnrolle. Gemeinschaftlich sichtbare Knoten und Beiträge werden nicht
-stillschweigend vernichtet. Der Pfad ist für Weber und Administratoren gesperrt,
+Der Austritt entfernt leere eigene Weberanträge, Passkeys, Sitzungen und die
+Garnrolle. Anträge mit Beiträgen, Veto, Stimme oder bereits gefällter Entscheidung
+bleiben als Verfahrensspur erhalten: Die aktive Accountbindung wird gelöst, der
+Anzeigename bleibt als Snapshot, und ein noch offenes Verfahren wird abgelehnt.
+Gemeinschaftlich sichtbare Knoten und Beiträge werden nicht stillschweigend
+vernichtet. Der Pfad ist für Weber und Administratoren gesperrt,
 weil deren Austritt bereits übernommene gemeinschaftliche Verantwortung berührt
 und einen eigenen späteren Governance- und Datenschutzprozess benötigt.
 

@@ -141,7 +141,7 @@ async fn finalize_due(state: &ApiState, pool: &PgPool) -> Result<(), ApiError> {
 pub struct ProposalView {
     pub id: String,
     pub kind: String,
-    pub applicant_account_id: String,
+    pub applicant_account_id: Option<String>,
     pub applicant_title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,

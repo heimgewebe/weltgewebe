@@ -1,72 +1,94 @@
 ---
 id: specs.contract
-title: Datenvertrag
+title: Historischer Entwurf: Tombstone und Key-Erase
 doc_type: reference
 status: active
-summary: Spezifikation der Datenverträge zwischen Frontend und API.
+canonicality: supporting
+lifecycle_state: superseded
+summary: Historischer Zielentwurf für Event-Sourcing, Inhaltsverschlüsselung und Key-Erase; keine Beschreibung der heutigen Weltgewebe-Runtime.
 relations:
   - type: relates_to
     target: docs/domain/vocabulary.md
   - type: relates_to
     target: docs/datenmodell.md
----
-# Weltgewebe Contract – Löschkonzept (Tombstone & Key-Erase)
-
-**Status:** Draft v0.1 · **Scope:** Beiträge, Kommentare, Artefakte
-
-## 1. Modell
-
-- **Event-Sourcing:** Jede Änderung ist ein Event. Historie ist unveränderlich.
-- **Inhalt:** Nutzinhalte werden _verschlüsselt_ gespeichert (objektbezogener Daten-Key).
-- **Identität:** Nutzer signieren Events (Ed25519). Server versieht Batches mit Transparency-Log
-  (Merkle-Hash + Timestamp).
-
-## 2. Löschen („jederzeit möglich“)
-
-- **Semantik:** _Logisch löschen_ durch `DeleteEvent` (Tombstone). Der zugehörige **Daten-Key wird verworfen**
-  (Key-Erase).
-- **Effekt:**
-  - UI zeigt „Gelöscht durch Autor“ (Zeitstempel, optional Grund).
-  - Inhaltstext/Binary ist selbst für Admins nicht mehr rekonstruierbar.
-  - Event-Spur bleibt (Minimalmetadaten: Objekt-ID, Autor-ID Hash, Zeit, Typ).
-- **Unwiderruflichkeit:** Key-Erase ist irreversibel. Wiederherstellung nur möglich, wenn der Autor
-  einen **lokal gesicherten Key** besitzt und freiwillig re-upploadet.
-
-## 3. Rechts-/Moderationsbezug
-
-- **Rechtswidrige Inhalte:** Sofortiger **Takedown-Hold**: Inhalt unzugänglich; Forensik-Snapshot
-  (Hash + Signatur) intern versiegelt. Öffentlich nur Meta-Ticket.
-- **DSGVO:** „Löschen“ i. S. d. Betroffenenrechte = Tombstone + Key-Erase. Historische
-  Minimaldaten werden als _technische Protokollierung_ mit berechtigtem Interesse (Art. 6 (1) f)
-  geführt.
-
-## 4. API-Verhalten
-
-- `GET /items/{id}`:
-  - bei Tombstone: `{ status:"deleted", deleted_at, deleted_by, reason? }`
-  - kein Content-Payload, keine Wiederherstellungs-Links
-- `DELETE /items/{id}`:
-  - idempotent; erzeugt `DeleteEvent` + triggert Key-Erase.
-
-## 5. Migrationshinweis
-
-- Bis zur produktiven Verschlüsselung gilt: _Soft-Delete + Scrub_: Inhalt wird überschrieben (z. B.
-  mit Zufallsbytes), Backups erhalten Löschmarker, Replikate werden re-keyed.
-
-## 6. Telemetrie/Transparenz
-
-- Wöchentliche Veröffentlichung eines **Transparency-Anchors** (Root-Hash der Woche).
-- Öffentliche Statistik: Anzahl Tombstones, Takedown-Holds, mediane Löschzeit.
-
-## 7. Garnrolle, Verortung & Sichtbarkeit
-
-- Der Contract trägt das Zielmodell einer einzigen Garnrolle pro Account:
-  - **Garnrolle**: Der handelnde Account-Ursprung im Gewebe.
-  - **Location**: Optionaler realer Ort der Garnrolle.
-  - **Sichtbarkeit**: Keine öffentliche Position, exakt sichtbar oder im Umkreis sichtbar.
-  - **Interne Verortung**: Exakte Adresse und Koordinate bleiben getrennt von der öffentlichen Projektion, sofern keine exakte Sichtbarkeit gewählt wurde.
-
+  - type: relates_to
+    target: docs/specs/objektlebenszyklen-und-loeschwirkungen.md
 ---
 
-**Kurzfassung:** Löschen = _Tombstone_ (sichtbar) + _Key-Erase_ (Inhalt weg).
-Historie bleibt integer, Privatsphäre bleibt gewahrt.
+# Historischer Entwurf – Tombstone und Key-Erase
+
+> **Nicht kanonisch:** Dieses Dokument beschreibt einen früheren Zielentwurf.
+> Event-Sourcing, objektbezogene Inhaltsverschlüsselung, Transparency-Log und
+> Key-Erase sind nicht als heutige produktive Weltgewebe-Wahrheit belegt.
+> Maßgeblich für aktuelle Löschwirkungen ist
+> `docs/specs/objektlebenszyklen-und-loeschwirkungen.md`; das reale physische
+> Modell steht in `docs/datenmodell.md`.
+
+## Ursprünglicher Scope
+
+Der Entwurf bezog sich auf Beiträge, Kommentare und Artefakte und verband eine
+unveränderliche Ereignisspur mit verschlüsselten Nutzinhalten. Diese Architektur
+ist als mögliche spätere Ausbaurichtung dokumentiert, aber nicht implementiert.
+
+## 1. Entworfenes Modell
+
+- **Event-Sourcing:** Jede Änderung wäre ein Event; die Ereignisspur bliebe
+  unveränderlich.
+- **Inhalt:** Nutzinhalte würden mit einem objektbezogenen Daten-Key
+  verschlüsselt.
+- **Identität:** Nutzer würden Events signieren; der Server würde Batches über
+  ein Transparency-Log verankern.
+
+Keine dieser drei Aussagen darf ohne einen frischen Implementierungs- und
+Runtimebeleg als heutiger Zustand ausgegeben werden.
+
+## 2. Entworfene Löschwirkung
+
+Der frühere Entwurf kombinierte:
+
+1. ein logisches `DeleteEvent` beziehungsweise einen Tombstone;
+2. das Verwerfen des zugehörigen Daten-Keys;
+3. eine minimale verbleibende Ereignisspur.
+
+In diesem Zielbild wäre der Inhalt selbst für Administratoren nicht mehr
+rekonstruierbar. Das heutige System besitzt jedoch keinen belegten allgemeinen
+Key-Erase-Pfad. Aktuell gelten deshalb die expliziten Wirkungen Stilllegen,
+Archivieren, Tombstonen, Anonymisieren, Redigieren, Purgen und Projektion
+verwerfen aus der kanonischen Lebenszyklus-Spezifikation.
+
+## 3. Frühere Rechts- und Moderationsidee
+
+Der Entwurf sah für rechtswidrige Inhalte einen sofortigen Takedown und einen
+intern versiegelten Forensiknachweis vor. Auch dieser Pfad ist nicht als heutige
+Funktion implementiert. Ein späterer Rechts- oder Purgepfad benötigt einen
+eigenen engen Vertrag, Autorisierung, Wirkungsplan und auditfähigen Receipt.
+
+## 4. Frühere API-Idee
+
+Vorgesehen war eine Tombstone-Antwort ohne Content-Payload sowie ein idempotentes
+`DELETE`, das Tombstone und Key-Erase gemeinsam auslöst. Die heutigen Endpunkte
+sind daran nicht stillschweigend zu messen. Ihre tatsächliche Semantik wird in
+den aktiven Domain-Spezifikationen, JSON-Schemas und Implementierungstests
+festgelegt.
+
+## 5. Migrationsidee
+
+Bis zu einer möglichen produktiven Inhaltsverschlüsselung wurde Soft-Delete plus
+Scrub als Zwischenweg erwogen. Auch daraus folgt keine heutige Verpflichtung,
+Backups oder Replikate ohne einen implementierten und geprüften Purgevertrag zu
+verändern.
+
+## 6. Transparenzidee
+
+Wöchentliche Transparency-Anker und öffentliche Löschstatistiken waren Teil des
+Zielbilds. Sie sind nicht als aktive Runtime belegt.
+
+## 7. Weiterhin verwendbare Grundintuition
+
+Die weiterhin tragfähige Aussage des Entwurfs lautet:
+
+> Nutzinhalt, historische Minimalspur und aktive Projektion besitzen verschiedene
+> Lebenszyklen.
+
+Die konkrete heutige Auslegung dieser Trennung steht ausschließlich im
+kanonischen Objektlebenszyklusvertrag.

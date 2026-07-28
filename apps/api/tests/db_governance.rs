@@ -25,6 +25,7 @@ const WEBER_A: &str = "gov-proof-weber-a";
 const WEBER_B: &str = "gov-proof-weber-b";
 const GUEST_NODE: &str = "gov-proof-guest-node";
 const GUEST_EDGE: &str = "gov-proof-guest-edge";
+const DETACHED_PROOF_APPLICANT_TITLE: &str = "gov-proof:Gast C";
 
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL")
@@ -60,10 +61,14 @@ async fn cleanup(pool: &sqlx::PgPool) {
         .execute(pool)
         .await
         .expect("clean nodes");
-    sqlx::query("DELETE FROM governance_proposals WHERE applicant_account_id LIKE 'gov-proof-%'")
-        .execute(pool)
-        .await
-        .expect("clean proposals");
+    sqlx::query(
+        "DELETE FROM governance_proposals \
+         WHERE applicant_account_id LIKE 'gov-proof-%' \
+            OR (applicant_account_id IS NULL AND applicant_title LIKE 'gov-proof:%')",
+    )
+    .execute(pool)
+    .await
+    .expect("clean proposals");
     sqlx::query("DELETE FROM passkey_credentials WHERE account_id LIKE 'gov-proof-%'")
         .execute(pool)
         .await
@@ -332,7 +337,7 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
     seed_account(&pool, WEBER_A, "weber").await;
 
     let t0 = Utc.with_ymd_and_hms(2026, 7, 1, 12, 0, 0).unwrap();
-    let proposal = create_weber_proposal(&pool, GUEST_C, "Gast C", None, t0)
+    let proposal = create_weber_proposal(&pool, GUEST_C, DETACHED_PROOF_APPLICANT_TITLE, None, t0)
         .await
         .expect("create proposal");
     add_veto(
@@ -460,6 +465,14 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
             .fetch_one(&pool)
             .await
             .expect("proposal existence");
+    let retained_procedure: (Option<String>, String, String, bool) = sqlx::query_as(
+        "SELECT applicant_account_id, applicant_title, status, finalized_at IS NOT NULL
+         FROM governance_proposals WHERE id = $1::uuid",
+    )
+    .bind(&proposal.id)
+    .fetch_one(&pool)
+    .await
+    .expect("retained procedural history");
     let node_creator: Option<String> = sqlx::query_scalar(
         "SELECT payload ->> 'created_by_account_id' FROM domain_nodes WHERE id = $1",
     )
@@ -486,7 +499,20 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
             .await
             .expect("retained message body");
     assert!(!account_exists);
-    assert!(!proposal_exists);
+    assert!(!proposal_exists, "empty own proposal still disappears");
+    assert_eq!(
+        retained_procedure.0, None,
+        "procedural history loses only the live applicant binding"
+    );
+    assert_eq!(
+        retained_procedure.1, DETACHED_PROOF_APPLICANT_TITLE,
+        "applicant title snapshot survives"
+    );
+    assert_eq!(
+        retained_procedure.2, "rejected",
+        "an open applicant-less procedure cannot continue"
+    );
+    assert!(retained_procedure.3, "detached procedure is final");
     assert_eq!(node_creator, None, "retained node must be anonymized");
     assert!(!edge_exists, "account-bound Faden must be removed");
     assert_eq!(

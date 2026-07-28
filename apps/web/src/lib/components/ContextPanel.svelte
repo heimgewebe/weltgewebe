@@ -30,7 +30,7 @@
   type DomainChanged = {
     kind: "node";
     id: string;
-    action: "updated" | "deleted";
+    action: "updated" | "deleted" | "archived";
   };
   type KompositionPanelHandle = { requestClose: () => void };
   type SheetStage = "compact" | "full";

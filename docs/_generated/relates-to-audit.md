@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 650 |
+| Relationen gesamt | 658 |
 | — depends_on | 25 |
-| — relates_to | 608 |
+| — relates_to | 616 |
 | — supersedes | 12 |
 | — verifies | 5 |
 | relates_to Anteil | 94% |
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (261 Dokumente):
+**Cluster 1** (262 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -235,6 +235,7 @@ _Keine Lücken erkannt._
 - `docs/specs/governance-antraege.md`
 - `docs/specs/list-pagination-api.md`
 - `docs/specs/map-experience.md`
+- `docs/specs/objektlebenszyklen-und-loeschwirkungen.md`
 - `docs/specs/privacy-api.md`
 - `docs/specs/privacy-ui.md`
 - `docs/specs/ui-interaction.md`

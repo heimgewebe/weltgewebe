@@ -341,7 +341,13 @@ async fn weber_can_replace_shared_node_and_delete_node_cascade() -> Result<()> {
     let delete_node =
         mutation_request_with_etag("DELETE", "/nodes/n1", &cookie, "", Some(&current_etag));
     let response = app.clone().oneshot(delete_node).await?;
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(response.status(), StatusCode::OK);
+    let receipt: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(response.into_body(), usize::MAX).await?)?;
+    assert_eq!(receipt["node_id"], "n1");
+    assert_eq!(receipt["node_state"], "removed");
+    assert_eq!(receipt["removed_edge_ids"], serde_json::json!(["e1"]));
+    assert_eq!(receipt["conversation"]["effect"], "not_applicable");
     assert!(state.nodes.read().await.get("n1").is_none());
     assert!(state.edges.read().await.get("e1").is_none());
     assert!(!fs::read_to_string(&nodes_path)?.contains(r#""id":"n1""#));
@@ -446,7 +452,7 @@ async fn node_delete_jsonl_keeps_account_and_role_endpoint_collisions() -> Resul
     let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
     assert_eq!(
         status,
-        StatusCode::NO_CONTENT,
+        StatusCode::OK,
         "unexpected delete response: {}",
         String::from_utf8_lossy(&bytes)
     );
@@ -516,7 +522,7 @@ async fn node_delete_jsonl_deletes_unique_untyped_legacy_edge() -> Result<()> {
     let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
     assert_eq!(
         status,
-        StatusCode::NO_CONTENT,
+        StatusCode::OK,
         "unexpected delete response: {}",
         String::from_utf8_lossy(&bytes)
     );
@@ -793,7 +799,7 @@ async fn concurrent_replace_and_delete_leave_one_coherent_jsonl_result() -> Resu
             assert!(fs::read_to_string(&nodes_path)?.contains("Parallel gepflegt"));
             assert!(fs::read_to_string(&edges_path)?.contains(r#""id":"e1""#));
         }
-        (StatusCode::NOT_FOUND, StatusCode::NO_CONTENT) => {
+        (StatusCode::NOT_FOUND, StatusCode::OK) => {
             assert!(state.nodes.read().await.get("n1").is_none());
             assert!(state.edges.read().await.get("e1").is_none());
             assert!(!fs::read_to_string(&nodes_path)?.contains(r#""id":"n1""#));

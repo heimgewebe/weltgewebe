@@ -51,7 +51,9 @@ jobs:
 
           for example in contracts/domain/examples/*.example.json; do
             filename=$(basename "$example")
-            entity="${filename%.example.json}"
+            # Variant examples such as conversation.archived.example.json and
+            # conversation.governance.example.json share conversation.schema.json.
+            entity="${filename%%.*}"
             schema="contracts/domain/${entity}.schema.json"
             echo "Validating $example against $schema"
             ajv validate -s "$schema" -d "$example" -c ajv-formats
