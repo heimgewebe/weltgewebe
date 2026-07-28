@@ -50,7 +50,6 @@ import os
 import secrets
 import stat
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 path = Path(sys.argv[1])
@@ -264,6 +263,7 @@ import json
 import os
 import stat
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 MAX_RECEIPT_BYTES = 1048576
@@ -473,6 +473,7 @@ import os
 import secrets
 import stat
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 MAX_RECEIPT_BYTES = 1048576
@@ -677,13 +678,27 @@ def is_current_verified_receipt(payload: object) -> bool:
     return False
 
 
-def is_nonempty_string(value: object) -> bool:
-    return isinstance(value, str) and bool(value)
+def parse_aware_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(timezone.utc)
 
 
 def migrate_schema4_verified_receipt(payload: object) -> dict[str, object] | None:
     if not isinstance(payload, dict):
         return None
+    started_at = parse_aware_timestamp(payload.get("started_at"))
+    completed_at = parse_aware_timestamp(payload.get("completed_at"))
+    migration_completed_at = parse_aware_timestamp(
+        payload.get("migration_completed_at")
+    )
     expected_keys = {
         "schema_version",
         "environment",
@@ -707,17 +722,19 @@ def migrate_schema4_verified_receipt(payload: object) -> dict[str, object] | Non
         or payload.get("environment") != "production"
         or payload.get("commit") != commit
         or not is_lower_hex(payload.get("web_artifact_sha256"), 64)
-        or not is_nonempty_string(payload.get("started_at"))
-        or not is_nonempty_string(payload.get("completed_at"))
+        or started_at is None
+        or completed_at is None
         or payload.get("api_commit") != commit
         or payload.get("frontend_commit") != commit
         or payload.get("observed_main_after_deploy") != commit
-        or not is_nonempty_string(payload.get("migration_completed_at"))
+        or migration_completed_at is None
         or payload.get("lock_domain") != "weltgewebe-production-deployment-v1"
         or payload.get("lock_owner_entrypoint") != "deploy-helper"
         or payload.get("lock_handoff") != "direct"
         or payload.get("result") != "verified"
     ):
+        return None
+    if not started_at <= migration_completed_at <= completed_at:
         return None
     migrated = dict(payload)
     migrated["schema_version"] = 5

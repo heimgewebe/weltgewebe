@@ -1260,6 +1260,16 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         payload.update(overrides)
         return payload
 
+    def assert_observed_recovery_timestamps(self, receipt: dict[str, object]) -> None:
+        verification = json.loads(
+            (
+                self.state / "reconcile-receipts" / f"observed-{self.commit}.json"
+            ).read_text()
+        )
+        self.assertIsNone(receipt["started_at"])
+        self.assertEqual(receipt["completed_at"], verification["verified_at"])
+        self.assertIsNone(receipt["migration_completed_at"])
+
     def test_public_noop_migrates_trusted_direct_schema4_verified_receipt(
         self,
     ) -> None:
@@ -1330,8 +1340,41 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
         self.assertEqual(receipt["result"], "verified_observed")
-        self.assertIsNone(receipt["started_at"])
-        self.assertIsNone(receipt["completed_at"])
+        self.assert_observed_recovery_timestamps(receipt)
+
+    def test_public_noop_does_not_promote_schema4_with_invalid_timestamps(
+        self,
+    ) -> None:
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json",
+            self.schema4_verified_receipt(started_at="not-a-time"),
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["result"], "verified_observed")
+        self.assert_observed_recovery_timestamps(receipt)
+
+    def test_public_noop_does_not_promote_schema4_with_inconsistent_timestamps(
+        self,
+    ) -> None:
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json",
+            self.schema4_verified_receipt(
+                migration_completed_at="2026-07-27T00:02:00+00:00"
+            ),
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["result"], "verified_observed")
+        self.assert_observed_recovery_timestamps(receipt)
 
     def test_public_noop_does_not_promote_schema4_with_unknown_metadata(
         self,
