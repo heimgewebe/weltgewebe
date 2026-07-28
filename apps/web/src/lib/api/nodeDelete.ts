@@ -45,9 +45,9 @@ export async function deleteNode(
         effect === "not_applicable" ||
         effect === "deleted_empty" ||
         (effect === "archived" &&
-          typeof conversation.archive_id === "string" &&
-          conversation.archive_url ===
-            `/api/conversations/${conversation.archive_id}`)
+          typeof conversation?.archive_id === "string" &&
+          conversation?.archive_url ===
+            `/api/conversations/${conversation?.archive_id}`)
       )
     ) {
       throw new ApiRequestError(502, receipt ?? undefined);
