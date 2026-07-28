@@ -1,5 +1,6 @@
 ---
 name: PR1596 Product Convergence
+# activation revision: 2
 
 permissions:
   contents: write
