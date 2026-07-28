@@ -1,5 +1,6 @@
 ---
 name: PR1596 Doc Index Diagnostic
+# activation revision: 2
 
 permissions:
   contents: read
