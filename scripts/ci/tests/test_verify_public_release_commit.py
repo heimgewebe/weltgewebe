@@ -11,6 +11,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 MODULE_PATH = Path(__file__).parents[2] / "ops" / "verify_public_release_commit.py"
+OPS_PATH = MODULE_PATH.parent
+sys.path.insert(0, str(OPS_PATH))
 SPEC = importlib.util.spec_from_file_location(
     "verify_public_release_commit", MODULE_PATH
 )
@@ -18,6 +20,8 @@ assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
+
+SECURE_IO = sys.modules["weltgewebe_secure_receipt_io"]
 
 EndpointResult = MODULE.EndpointResult
 _normalize_headers = MODULE._normalize_headers
@@ -149,7 +153,7 @@ class VerifyPublicReleaseCommitTests(unittest.TestCase):
             temporary = root / f".{receipt.name}.{os.getpid()}.{token}.tmp"
             temporary.symlink_to(target)
             with (
-                patch.object(MODULE.secrets, "token_hex", return_value=token),
+                patch.object(SECURE_IO.secrets, "token_hex", return_value=token),
                 self.assertRaises(FileExistsError),
             ):
                 write_receipt(receipt, self.verification_result())
@@ -176,7 +180,7 @@ class VerifyPublicReleaseCommitTests(unittest.TestCase):
             root.chmod(0o777)
             try:
                 with self.assertRaisesRegex(
-                    PermissionError, "receipt directory is unsafe"
+                    SECURE_IO.SecureMetadataError, "unsafe mode"
                 ):
                     write_receipt(receipt, self.verification_result())
             finally:

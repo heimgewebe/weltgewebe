@@ -2,6 +2,9 @@
 set -Eeuo pipefail
 umask 022
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+export PYTHONPATH="$SCRIPT_DIR"
+
 SOURCE_CHECKOUT="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 RELEASE_ROOT="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
 RUNTIME_ENV="${WELTGEWEBE_RUNTIME_ENV:-/etc/weltgewebe/weltgewebe.env}"
@@ -52,6 +55,7 @@ import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 path = Path(sys.argv[1])
 payload = {
@@ -65,65 +69,7 @@ payload = {
     "result": "already_running",
     "recorded_at": datetime.now(timezone.utc).isoformat(),
 }
-def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
-    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
-    directory_fd = os.open(path.parent, directory_flags)
-    temporary_name = f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
-    temporary_created = False
-    try:
-        directory_metadata = os.fstat(directory_fd)
-        if (
-            not stat.S_ISDIR(directory_metadata.st_mode)
-            or directory_metadata.st_uid != 0
-            or directory_metadata.st_mode & 0o022
-        ):
-            raise SystemExit(f"receipt directory is unsafe: {path.parent}")
-
-        file_flags = (
-            os.O_WRONLY
-            | os.O_CREAT
-            | os.O_EXCL
-            | os.O_CLOEXEC
-            | os.O_NOFOLLOW
-        )
-        file_fd = os.open(temporary_name, file_flags, 0o600, dir_fd=directory_fd)
-        temporary_created = True
-        try:
-            os.fchmod(file_fd, 0o600)
-            with os.fdopen(file_fd, "w", encoding="utf-8", closefd=False) as handle:
-                json.dump(payload, handle, sort_keys=True, indent=2)
-                handle.write("\n")
-                handle.flush()
-                os.fsync(file_fd)
-            metadata = os.fstat(file_fd)
-            if (
-                not stat.S_ISREG(metadata.st_mode)
-                or metadata.st_uid != 0
-                or metadata.st_nlink != 1
-                or metadata.st_mode & 0o777 != 0o600
-            ):
-                raise SystemExit("temporary receipt metadata is unsafe")
-        finally:
-            os.close(file_fd)
-
-        os.replace(
-            temporary_name,
-            path.name,
-            src_dir_fd=directory_fd,
-            dst_dir_fd=directory_fd,
-        )
-        temporary_created = False
-        os.fsync(directory_fd)
-    finally:
-        if temporary_created:
-            try:
-                os.unlink(temporary_name, dir_fd=directory_fd)
-            except FileNotFoundError:
-                pass
-        os.close(directory_fd)
-
-
-write_atomic_root_json(path, payload)
+write_secure_json(path, payload)
 PY
   printf '%s\n' "$receipt"
 }
@@ -178,6 +124,7 @@ import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 path = Path(sys.argv[1])
 payload = {
@@ -191,65 +138,7 @@ payload = {
     "lock_owner_entrypoint": "reconciler",
     "recorded_at": datetime.now(timezone.utc).isoformat(),
 }
-def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
-    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
-    directory_fd = os.open(path.parent, directory_flags)
-    temporary_name = f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
-    temporary_created = False
-    try:
-        directory_metadata = os.fstat(directory_fd)
-        if (
-            not stat.S_ISDIR(directory_metadata.st_mode)
-            or directory_metadata.st_uid != 0
-            or directory_metadata.st_mode & 0o022
-        ):
-            raise SystemExit(f"receipt directory is unsafe: {path.parent}")
-
-        file_flags = (
-            os.O_WRONLY
-            | os.O_CREAT
-            | os.O_EXCL
-            | os.O_CLOEXEC
-            | os.O_NOFOLLOW
-        )
-        file_fd = os.open(temporary_name, file_flags, 0o600, dir_fd=directory_fd)
-        temporary_created = True
-        try:
-            os.fchmod(file_fd, 0o600)
-            with os.fdopen(file_fd, "w", encoding="utf-8", closefd=False) as handle:
-                json.dump(payload, handle, sort_keys=True, indent=2)
-                handle.write("\n")
-                handle.flush()
-                os.fsync(file_fd)
-            metadata = os.fstat(file_fd)
-            if (
-                not stat.S_ISREG(metadata.st_mode)
-                or metadata.st_uid != 0
-                or metadata.st_nlink != 1
-                or metadata.st_mode & 0o777 != 0o600
-            ):
-                raise SystemExit("temporary receipt metadata is unsafe")
-        finally:
-            os.close(file_fd)
-
-        os.replace(
-            temporary_name,
-            path.name,
-            src_dir_fd=directory_fd,
-            dst_dir_fd=directory_fd,
-        )
-        temporary_created = False
-        os.fsync(directory_fd)
-    finally:
-        if temporary_created:
-            try:
-                os.unlink(temporary_name, dir_fd=directory_fd)
-            except FileNotFoundError:
-                pass
-        os.close(directory_fd)
-
-
-write_atomic_root_json(path, payload)
+write_secure_json(path, payload)
 PY
   state_result="$result"
 }
@@ -265,6 +154,7 @@ import os
 import stat
 import sys
 from pathlib import Path
+from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 MAX_RECEIPT_BYTES = 1048576
 path = Path(sys.argv[1])
@@ -272,58 +162,8 @@ commit = sys.argv[2]
 invocation_id = sys.argv[3]
 
 
-def read_root_receipt(path: Path) -> dict[str, object]:
-    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
-    directory_fd = os.open(path.parent, directory_flags)
-    try:
-        directory_metadata = os.fstat(directory_fd)
-        if (
-            not stat.S_ISDIR(directory_metadata.st_mode)
-            or directory_metadata.st_uid != 0
-            or directory_metadata.st_mode & 0o022
-        ):
-            raise ValueError("receipt directory is unsafe")
-        file_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
-        file_fd = os.open(path.name, file_flags, dir_fd=directory_fd)
-        try:
-            metadata = os.fstat(file_fd)
-            if not stat.S_ISREG(metadata.st_mode):
-                raise ValueError("receipt is not a regular file")
-            if metadata.st_uid != 0:
-                raise ValueError("receipt is not root-owned")
-            if metadata.st_mode & 0o022:
-                raise ValueError("receipt is group- or world-writable")
-            if metadata.st_nlink != 1:
-                raise ValueError("receipt has more than one hard link")
-            if metadata.st_size > MAX_RECEIPT_BYTES:
-                raise ValueError("receipt exceeds the byte limit")
-            chunks: list[bytes] = []
-            remaining = MAX_RECEIPT_BYTES + 1
-            while remaining > 0:
-                chunk = os.read(file_fd, min(65536, remaining))
-                if not chunk:
-                    break
-                chunks.append(chunk)
-                remaining -= len(chunk)
-            raw = b"".join(chunks)
-            if len(raw) > MAX_RECEIPT_BYTES:
-                raise ValueError("receipt exceeds the byte limit")
-        finally:
-            os.close(file_fd)
-    finally:
-        os.close(directory_fd)
-
-    try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f"receipt is unreadable: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError("receipt is not an object")
-    return payload
-
-
 try:
-    payload = read_root_receipt(path)
+    payload = read_secure_json(path)
 except (OSError, ValueError) as exc:
     raise SystemExit(f"terminal deployment receipt is unsafe: {exc}") from exc
 if payload.get("schema_version") != 5:
@@ -358,6 +198,7 @@ import os
 import stat
 import sys
 from pathlib import Path
+from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 MAX_RECEIPT_BYTES = 1048576
 deployment_path = Path(sys.argv[1])
@@ -368,51 +209,12 @@ invocation_id = sys.argv[5]
 
 
 def read_safe(path: Path):
-    directory_fd = None
-    file_fd = None
     try:
-        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
-        directory_fd = os.open(path.parent, directory_flags)
-        directory_metadata = os.fstat(directory_fd)
-        if (
-            not stat.S_ISDIR(directory_metadata.st_mode)
-            or directory_metadata.st_uid != 0
-            or directory_metadata.st_mode & 0o022
-        ):
-            return "unsafe"
-        file_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
-        file_fd = os.open(path.name, file_flags, dir_fd=directory_fd)
-        metadata = os.fstat(file_fd)
-        if (
-            not stat.S_ISREG(metadata.st_mode)
-            or metadata.st_uid != 0
-            or metadata.st_mode & 0o022
-            or metadata.st_nlink != 1
-            or metadata.st_size > MAX_RECEIPT_BYTES
-        ):
-            return "unsafe"
-        chunks: list[bytes] = []
-        remaining = MAX_RECEIPT_BYTES + 1
-        while remaining > 0:
-            chunk = os.read(file_fd, min(65536, remaining))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            remaining -= len(chunk)
-        raw = b"".join(chunks)
-        if len(raw) > MAX_RECEIPT_BYTES:
-            return "unsafe"
-        payload = json.loads(raw.decode("utf-8"))
-        return payload if isinstance(payload, dict) else "unsafe"
+        return read_secure_json(path)
     except FileNotFoundError:
         return None
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+    except (OSError, SecureMetadataError, SecurePayloadError):
         return "unsafe"
-    finally:
-        if file_fd is not None:
-            os.close(file_fd)
-        if directory_fd is not None:
-            os.close(directory_fd)
 
 
 def is_current_contention(payload: object) -> bool:
@@ -474,6 +276,7 @@ import secrets
 import stat
 import sys
 from pathlib import Path
+from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 MAX_RECEIPT_BYTES = 1048576
 verification_path = Path(sys.argv[1])
@@ -481,135 +284,15 @@ deployment_path = Path(sys.argv[2])
 commit = sys.argv[3]
 
 
-class UnsafeReceiptError(ValueError):
-    pass
-
-
-class InvalidReceiptContent(ValueError):
-    pass
-
-
-def read_root_json(path: Path, *, missing_ok: bool = False):
-    directory_fd = None
-    file_fd = None
-    try:
-        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
-        directory_fd = os.open(path.parent, directory_flags)
-        directory_metadata = os.fstat(directory_fd)
-        if (
-            not stat.S_ISDIR(directory_metadata.st_mode)
-            or directory_metadata.st_uid != 0
-            or directory_metadata.st_mode & 0o022
-        ):
-            raise UnsafeReceiptError(f"receipt directory is unsafe: {path.parent}")
-        file_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
-        file_fd = os.open(path.name, file_flags, dir_fd=directory_fd)
-        metadata = os.fstat(file_fd)
-        if not stat.S_ISREG(metadata.st_mode):
-            raise UnsafeReceiptError(f"receipt is not a regular file: {path}")
-        if metadata.st_uid != 0:
-            raise UnsafeReceiptError(f"receipt is not root-owned: {path}")
-        if metadata.st_mode & 0o022:
-            raise UnsafeReceiptError(f"receipt is group- or world-writable: {path}")
-        if metadata.st_nlink != 1:
-            raise UnsafeReceiptError(f"receipt has more than one hard link: {path}")
-        if metadata.st_size > MAX_RECEIPT_BYTES:
-            raise UnsafeReceiptError(f"receipt exceeds the byte limit: {path}")
-        chunks: list[bytes] = []
-        remaining = MAX_RECEIPT_BYTES + 1
-        while remaining > 0:
-            chunk = os.read(file_fd, min(65536, remaining))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            remaining -= len(chunk)
-        raw = b"".join(chunks)
-        if len(raw) > MAX_RECEIPT_BYTES:
-            raise UnsafeReceiptError(f"receipt exceeds the byte limit: {path}")
-    except FileNotFoundError:
-        if missing_ok:
-            return None
-        raise
-    finally:
-        if file_fd is not None:
-            os.close(file_fd)
-        if directory_fd is not None:
-            os.close(directory_fd)
-
-    try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise InvalidReceiptContent(f"receipt is unreadable: {path}: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise InvalidReceiptContent(f"receipt is not an object: {path}")
-    return payload
-
-
-def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
-    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
-    directory_fd = os.open(path.parent, directory_flags)
-    temporary_name = f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
-    temporary_created = False
-    try:
-        directory_metadata = os.fstat(directory_fd)
-        if (
-            not stat.S_ISDIR(directory_metadata.st_mode)
-            or directory_metadata.st_uid != 0
-            or directory_metadata.st_mode & 0o022
-        ):
-            raise SystemExit(f"receipt directory is unsafe: {path.parent}")
-        file_flags = (
-            os.O_WRONLY
-            | os.O_CREAT
-            | os.O_EXCL
-            | os.O_CLOEXEC
-            | os.O_NOFOLLOW
-        )
-        file_fd = os.open(temporary_name, file_flags, 0o600, dir_fd=directory_fd)
-        temporary_created = True
-        try:
-            os.fchmod(file_fd, 0o600)
-            with os.fdopen(file_fd, "w", encoding="utf-8", closefd=False) as handle:
-                json.dump(payload, handle, sort_keys=True, indent=2)
-                handle.write("\n")
-                handle.flush()
-                os.fsync(file_fd)
-            metadata = os.fstat(file_fd)
-            if (
-                not stat.S_ISREG(metadata.st_mode)
-                or metadata.st_uid != 0
-                or metadata.st_nlink != 1
-                or metadata.st_mode & 0o777 != 0o600
-            ):
-                raise SystemExit("temporary receipt metadata is unsafe")
-        finally:
-            os.close(file_fd)
-        os.replace(
-            temporary_name,
-            path.name,
-            src_dir_fd=directory_fd,
-            dst_dir_fd=directory_fd,
-        )
-        temporary_created = False
-        os.fsync(directory_fd)
-    finally:
-        if temporary_created:
-            try:
-                os.unlink(temporary_name, dir_fd=directory_fd)
-            except FileNotFoundError:
-                pass
-        os.close(directory_fd)
-
-
 try:
-    verification = read_root_json(verification_path)
-except (OSError, UnsafeReceiptError, InvalidReceiptContent) as exc:
+    verification = read_secure_json(verification_path)
+except (OSError, SecureMetadataError, SecurePayloadError) as exc:
     raise SystemExit(f"public verification receipt evidence is unsafe: {exc}") from exc
 try:
-    existing = read_root_json(deployment_path, missing_ok=True)
-except InvalidReceiptContent:
+    existing = read_secure_json(deployment_path, missing_ok=True)
+except SecurePayloadError:
     existing = None
-except (OSError, UnsafeReceiptError) as exc:
+except (OSError, SecureMetadataError) as exc:
     raise SystemExit(f"deployment receipt evidence is unsafe: {exc}") from exc
 if verification.get("pass") is not True:
     raise SystemExit("public verification receipt is not passing")
@@ -701,7 +384,7 @@ payload = {
         "deployment start time are unavailable."
     ),
 }
-write_atomic_root_json(deployment_path, payload)
+write_secure_json(deployment_path, payload)
 PY
 
   ln -sfn "receipts/$target_commit.json" "$STATE_ROOT/current.json"
