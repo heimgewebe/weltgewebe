@@ -1240,17 +1240,54 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt = self.state / "receipts" / f"{self.commit}.json"
         self.assertEqual(receipt.stat().st_mode & 0o777, 0o600)
 
-    def test_public_noop_migrates_schema4_verified_receipt(self) -> None:
+    def schema4_verified_receipt(self, **overrides: object) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "schema_version": 4,
+            "environment": "production",
+            "commit": self.commit,
+            "web_artifact_sha256": "a" * 64,
+            "started_at": "2026-07-27T00:00:00+00:00",
+            "completed_at": "2026-07-27T00:01:00+00:00",
+            "api_commit": self.commit,
+            "frontend_commit": self.commit,
+            "observed_main_after_deploy": self.commit,
+            "migration_completed_at": "2026-07-27T00:00:30+00:00",
+            "lock_domain": "weltgewebe-production-deployment-v1",
+            "lock_owner_entrypoint": "deploy-helper",
+            "lock_handoff": "direct",
+            "result": "verified",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_public_noop_migrates_trusted_direct_schema4_verified_receipt(
+        self,
+    ) -> None:
+        original = self.schema4_verified_receipt()
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json", original
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["schema_version"], 5)
+        self.assertEqual(receipt["result"], "verified")
+        self.assertIsNone(receipt["deploy_invocation_id"])
+        for key, value in original.items():
+            if key != "schema_version":
+                self.assertEqual(receipt[key], value)
+
+    def test_public_noop_does_not_promote_inherited_schema4_receipt(
+        self,
+    ) -> None:
         self.install_root_json(
             self.state / "receipts" / f"{self.commit}.json",
-            {
-                "schema_version": 4,
-                "commit": self.commit,
-                "result": "verified",
-                "lock_domain": "weltgewebe-production-deployment-v1",
-                "lock_owner_entrypoint": "deploy-helper",
-                "lock_handoff": "direct",
-            },
+            self.schema4_verified_receipt(
+                lock_owner_entrypoint="reconciler", lock_handoff="inherited"
+            ),
         )
         result = self.reconcile_existing_public_commit()
         self.restore_test_ownership()
@@ -1260,6 +1297,57 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(receipt["schema_version"], 5)
         self.assertEqual(receipt["result"], "verified_observed")
+        self.assertIsNone(receipt["deploy_invocation_id"])
+        self.assertIsNone(receipt["web_artifact_sha256"])
+
+    def test_public_noop_does_not_promote_inconsistent_schema4_receipt(
+        self,
+    ) -> None:
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json",
+            self.schema4_verified_receipt(api_commit="f" * 40),
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertIsNone(receipt["web_artifact_sha256"])
+
+    def test_public_noop_does_not_promote_incomplete_schema4_receipt(
+        self,
+    ) -> None:
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json",
+            self.schema4_verified_receipt(completed_at=""),
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertIsNone(receipt["started_at"])
+        self.assertIsNone(receipt["completed_at"])
+
+    def test_public_noop_does_not_promote_schema4_with_unknown_metadata(
+        self,
+    ) -> None:
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json",
+            self.schema4_verified_receipt(untrusted_extension="value"),
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertNotIn("untrusted_extension", receipt)
 
     def test_public_noop_rewrites_invalid_schema5_verified_receipt(self) -> None:
         self.install_root_json(

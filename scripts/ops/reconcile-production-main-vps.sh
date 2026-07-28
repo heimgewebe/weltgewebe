@@ -677,7 +677,60 @@ def is_current_verified_receipt(payload: object) -> bool:
     return False
 
 
+def is_nonempty_string(value: object) -> bool:
+    return isinstance(value, str) and bool(value)
+
+
+def migrate_schema4_verified_receipt(payload: object) -> dict[str, object] | None:
+    if not isinstance(payload, dict):
+        return None
+    expected_keys = {
+        "schema_version",
+        "environment",
+        "commit",
+        "web_artifact_sha256",
+        "started_at",
+        "completed_at",
+        "api_commit",
+        "frontend_commit",
+        "observed_main_after_deploy",
+        "migration_completed_at",
+        "lock_domain",
+        "lock_owner_entrypoint",
+        "lock_handoff",
+        "result",
+    }
+    if set(payload) != expected_keys:
+        return None
+    if (
+        payload.get("schema_version") != 4
+        or payload.get("environment") != "production"
+        or payload.get("commit") != commit
+        or not is_lower_hex(payload.get("web_artifact_sha256"), 64)
+        or not is_nonempty_string(payload.get("started_at"))
+        or not is_nonempty_string(payload.get("completed_at"))
+        or payload.get("api_commit") != commit
+        or payload.get("frontend_commit") != commit
+        or payload.get("observed_main_after_deploy") != commit
+        or not is_nonempty_string(payload.get("migration_completed_at"))
+        or payload.get("lock_domain") != "weltgewebe-production-deployment-v1"
+        or payload.get("lock_owner_entrypoint") != "deploy-helper"
+        or payload.get("lock_handoff") != "direct"
+        or payload.get("result") != "verified"
+    ):
+        return None
+    migrated = dict(payload)
+    migrated["schema_version"] = 5
+    migrated["deploy_invocation_id"] = None
+    return migrated
+
+
 if is_current_verified_receipt(existing):
+    raise SystemExit(0)
+
+migrated_schema4 = migrate_schema4_verified_receipt(existing)
+if migrated_schema4 is not None:
+    write_atomic_root_json(deployment_path, migrated_schema4)
     raise SystemExit(0)
 
 payload = {
