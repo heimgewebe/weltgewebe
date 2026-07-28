@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  hasMapCameraChanged,
+  installAuthCameraConvergence,
   shouldApplyOwnGarnrolleCamera,
 } from "$lib/map/authCameraConvergence";
 
@@ -8,7 +8,7 @@ const authenticated = {
   state: "authenticated" as const,
   authenticated: true,
   account_id: "account-a",
-  role: "weber",
+  role: "weber" as const,
 };
 
 describe("delayed map auth convergence", () => {
@@ -25,7 +25,7 @@ describe("delayed map auth convergence", () => {
     ).toBe(true);
   });
 
-  it("does not override explicit URL focus", () => {
+  it("does not override current URL focus", () => {
     expect(
       shouldApplyOwnGarnrolleCamera(
         {
@@ -64,19 +64,46 @@ describe("delayed map auth convergence", () => {
     ).toBe(false);
   });
 
-  it("detects camera movement that happened before auth became ready", () => {
+  it("consults live focus state and unsubscribes the auth source", () => {
+    let emit!: (status: typeof authenticated) => void;
+    let unsubscribed = false;
+    let hasExplicitFocus = false;
+    let jumpCount = 0;
     const map = {
-      getCenter: () => ({ lng: 10.071, lat: 53.571 }),
-      getZoom: () => 13,
-    };
-    expect(hasMapCameraChanged(map, [10.058, 53.5585], 12)).toBe(true);
-  });
-
-  it("keeps an untouched initial camera eligible", () => {
-    const map = {
-      getCenter: () => ({ lng: 10.058, lat: 53.5585 }),
       getZoom: () => 12,
+      jumpTo: () => {
+        jumpCount += 1;
+      },
     };
-    expect(hasMapCameraChanged(map, [10.058, 53.5585], 12)).toBe(false);
+    const markers = [
+      {
+        id: "account-a",
+        type: "garnrolle",
+        lat: 53.5604148,
+        lon: 10.0629844,
+      },
+    ];
+    const dispose = installAuthCameraConvergence(
+      map as unknown as Parameters<typeof installAuthCameraConvergence>[0],
+      markers as unknown as Parameters<typeof installAuthCameraConvergence>[1],
+      () => false,
+      {
+        hasExplicitFocus: () => hasExplicitFocus,
+        store: {
+          subscribe: (run) => {
+            emit = run as (status: typeof authenticated) => void;
+            return () => {
+              unsubscribed = true;
+            };
+          },
+        },
+      },
+    );
+
+    hasExplicitFocus = true;
+    emit(authenticated);
+    expect(jumpCount).toBe(0);
+    dispose();
+    expect(unsubscribed).toBe(true);
   });
 });

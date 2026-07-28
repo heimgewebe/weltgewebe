@@ -1,6 +1,9 @@
+import { get } from "svelte/store";
+import { page } from "$app/stores";
 import type { AuthStatus } from "$lib/auth/store";
 import { authStore } from "$lib/auth/store";
 import type { MapEntityViewModel } from "$lib/map/types";
+import { parseMapUrlState } from "$lib/map/urlState";
 import type { Map as MapLibreMap } from "maplibre-gl";
 
 export interface AuthCameraConvergenceState {
@@ -9,9 +12,13 @@ export interface AuthCameraConvergenceState {
   alreadyApplied: boolean;
 }
 
-interface CameraReader {
-  getCenter(): { lng: number; lat: number };
-  getZoom(): number;
+interface AuthStatusSource {
+  subscribe(run: (status: AuthStatus) => void): () => void;
+}
+
+export interface AuthCameraConvergenceDependencies {
+  store?: AuthStatusSource;
+  hasExplicitFocus?: () => boolean;
 }
 
 export function shouldApplyOwnGarnrolleCamera(
@@ -28,37 +35,23 @@ export function shouldApplyOwnGarnrolleCamera(
   );
 }
 
-/**
- * Compare against the camera used at map construction so movement that happens
- * before the delayed auth module loads still blocks a later recenter.
- */
-export function hasMapCameraChanged(
-  map: CameraReader,
-  initialCenter: [number, number],
-  initialZoom: number,
-): boolean {
-  const center = map.getCenter();
-  const epsilon = 1e-7;
-  return (
-    Math.abs(center.lng - initialCenter[0]) > epsilon ||
-    Math.abs(center.lat - initialCenter[1]) > epsilon ||
-    Math.abs(map.getZoom() - initialZoom) > epsilon
-  );
-}
-
 export function installAuthCameraConvergence(
   map: MapLibreMap,
   markers: MapEntityViewModel[],
-  initialCenter: [number, number],
-  initialZoom: number,
+  userMovedMap: () => boolean,
+  dependencies: AuthCameraConvergenceDependencies = {},
 ): () => void {
   let alreadyApplied = false;
-  const unsubscribe = authStore.subscribe((status) => {
+  const source = dependencies.store ?? authStore;
+  const hasExplicitFocus =
+    dependencies.hasExplicitFocus ??
+    (() => Boolean(parseMapUrlState(get(page).url.searchParams).focus));
+  return source.subscribe((status) => {
     if (
       !shouldApplyOwnGarnrolleCamera(
         {
-          hasExplicitFocus: false,
-          userMovedMap: hasMapCameraChanged(map, initialCenter, initialZoom),
+          hasExplicitFocus: hasExplicitFocus(),
+          userMovedMap: userMovedMap(),
           alreadyApplied,
         },
         status,
@@ -84,5 +77,4 @@ export function installAuthCameraConvergence(
       zoom: Math.max(map.getZoom(), 14),
     });
   });
-  return unsubscribe;
 }

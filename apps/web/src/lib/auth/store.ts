@@ -6,11 +6,12 @@ export type AuthState =
   | "authenticated"
   | "unauthenticated"
   | "degraded";
+export type AuthRole = "gast" | "weber" | "admin";
 export interface AuthStatus {
   state: AuthState;
   authenticated: boolean;
   account_id?: string;
-  role: string;
+  role: AuthRole;
 }
 
 export interface AuthCheckOptions {
@@ -36,24 +37,22 @@ const SENSITIVE_SESSION_PREFIXES = [
 
 function clearSensitiveSession(enabled: boolean, keepAccountId?: string) {
   if (!enabled || typeof sessionStorage === "undefined") return;
-  const remove: string[] = [];
-  for (let index = 0; index < sessionStorage.length; index += 1) {
+  for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
     const key = sessionStorage.key(index);
     if (!key) continue;
     const prefix = SENSITIVE_SESSION_PREFIXES.find((value) =>
       key.startsWith(value),
     );
     if (prefix && key !== (keepAccountId ? `${prefix}${keepAccountId}` : "")) {
-      remove.push(key);
+      sessionStorage.removeItem(key);
     }
   }
-  remove.forEach((key) => sessionStorage.removeItem(key));
 }
 
 export const createAuthStore = (options: AuthStoreOptions = {}) => {
   const isBrowser = options.isBrowser ?? browser;
   const fetcher = options.fetcher ?? fetch;
-  const authCheckTimeoutMs = Math.max(1, options.authCheckTimeoutMs ?? 5000);
+  const authCheckTimeoutMs = options.authCheckTimeoutMs ?? 5000;
   const store = writable<AuthStatus>(
     anonymous(isBrowser ? "checking" : "unauthenticated"),
   );
@@ -73,30 +72,38 @@ export const createAuthStore = (options: AuthStoreOptions = {}) => {
     return next;
   };
 
+  const supersedePending = (): number => {
+    revision += 1;
+    controller?.abort();
+    controller = undefined;
+    pending = undefined;
+    return revision;
+  };
+
   const checkAuth = (options: AuthCheckOptions = {}): Promise<AuthStatus> => {
     if (!isBrowser) return Promise.resolve(get(store));
     if (pending && !options.force) return pending;
-    if (pending) {
-      revision += 1;
-      controller?.abort();
-      pending = undefined;
-    }
+    if (pending) supersedePending();
 
     const previous = get(store);
     const current = ++revision;
     const requestController = new AbortController();
-    const timeout = setTimeout(
-      () => requestController.abort(),
-      authCheckTimeoutMs,
-    );
+    let timeout!: ReturnType<typeof setTimeout>;
     controller = requestController;
     publish({ ...previous, state: "checking" });
 
     pending = (async () => {
       try {
-        const next = await (
-          await import("./check")
-        ).fetchAuthStatus(fetcher, requestController.signal);
+        const operation = import("./check").then((module) =>
+          module.fetchAuthStatus(fetcher, requestController.signal),
+        );
+        const timedOut = new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            requestController.abort();
+            reject(new Error());
+          }, authCheckTimeoutMs);
+        });
+        const next = await Promise.race([operation, timedOut]);
         if (current !== revision) return get(store);
         return next
           ? publish(next, true)
@@ -123,7 +130,7 @@ export const createAuthStore = (options: AuthStoreOptions = {}) => {
       await (await import("./actions")).devLogin(fetcher, accountId);
       const next = await checkAuth({ force: true });
       if (!next.authenticated) {
-        throw new Error("Login succeeded but no session was established.");
+        throw new Error("Login invalid");
       }
     },
     requestLogin: async (email: string) => {
@@ -133,16 +140,17 @@ export const createAuthStore = (options: AuthStoreOptions = {}) => {
     logout: async () => {
       if (!isBrowser) return;
       const previous = get(store);
-      try {
-        await (await import("./actions")).endSession(fetcher);
-        const verified = await checkAuth({ force: true });
-        if (verified.state !== "unauthenticated") {
-          throw new Error("Logout could not be verified.");
-        }
-      } catch (error) {
-        publish({ ...previous, state: "degraded" });
-        throw error;
-      }
+      const ownedRevision = supersedePending();
+      await (
+        await import("./actions")
+      ).logoutAndVerify(
+        fetcher,
+        previous,
+        ownedRevision,
+        () => revision,
+        (status) => publish({ ...status, state: "degraded" }),
+        () => checkAuth({ force: true }),
+      );
     },
   };
 };

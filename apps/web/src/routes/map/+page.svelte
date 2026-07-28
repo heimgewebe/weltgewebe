@@ -642,6 +642,7 @@
     void preloadSearchOverlay();
     let releasePmtilesProtocol: (() => void) | undefined;
     let cleanupAuthCamera: (() => void) | undefined;
+    let authCameraMoved = false;
     // onMount returns its cleanup synchronously while the initialiser below is
     // still suspended on `await import('maplibre-gl')`. If the component is
     // destroyed in that window the cleanup finds `map`/`nodesOverlay` still
@@ -658,6 +659,7 @@
     // before the style loads leaves a 10s timer pointing at dead state.
     let loadingTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
     const handleSearchMapMove = () => {
+      authCameraMoved = true;
       scheduleSearchDirectionIndicators();
     };
     const handleSearchMapResize = () => {
@@ -741,20 +743,18 @@
         attributionControl: false,
         transformRequest: transformRequestFn,
       });
+      map.on("move", handleSearchMapMove);
       updateGarnrolleMarkerScale();
       map.on("zoom", updateGarnrolleMarkerScale);
-      if (!initialUrlState.focus) {
-        void import("$lib/map/authCameraConvergence").then((module) => {
-          if (!destroyed && map) {
-            cleanupAuthCamera = module.installAuthCameraConvergence(
-              map,
-              markersData,
-              initialCamera.center,
-              initialCamera.zoom,
-            );
-          }
-        });
-      }
+      void import("$lib/map/authCameraConvergence").then((module) => {
+        if (!destroyed && map) {
+          cleanupAuthCamera = module.installAuthCameraConvergence(
+            map,
+            markersData,
+            () => authCameraMoved,
+          );
+        }
+      });
       map.addControl(
         new maplibregl.NavigationControl({ showZoom: true }),
         "bottom-right",
@@ -775,7 +775,6 @@
         sysStateStr = val;
       });
       cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
-      map.on("move", handleSearchMapMove);
       map.on("resize", handleSearchMapResize);
 
       loadingTimeout = setTimeout(() => {

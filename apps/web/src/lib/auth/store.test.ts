@@ -128,6 +128,31 @@ describe("authStore", () => {
     });
   });
 
+  it("rejects malformed authenticated roles as non-authoritative", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(authResponse("account-preserved"))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            authenticated: true,
+            account_id: "attacker-controlled",
+            role: "bogus",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    const store = createAuthStore({ isBrowser: true, fetcher });
+    await store.checkAuth();
+    await store.checkAuth();
+    expect(get(store)).toEqual({
+      state: "degraded",
+      authenticated: true,
+      account_id: "account-preserved",
+      role: "weber",
+    });
+  });
+
   it("can cancel and replace an in-flight auth check without stale writes", async () => {
     let firstSignal: AbortSignal | undefined;
     const fetcher = vi
@@ -173,6 +198,42 @@ describe("authStore", () => {
     });
   });
 
+  it("does not restore a stale identity when logout loses an auth race", async () => {
+    let resolveLogout!: (response: Response) => void;
+    let authChecks = 0;
+    const fetcher = vi.fn<typeof fetch>().mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/api/auth/me")) {
+        authChecks += 1;
+        return Promise.resolve(
+          authResponse(authChecks === 1 ? "account-a" : "account-b"),
+        );
+      }
+      if (url.endsWith("/api/auth/logout")) {
+        return new Promise<Response>((resolve) => {
+          resolveLogout = resolve;
+        });
+      }
+      throw new Error(`unexpected request: ${url}`);
+    });
+    const store = createAuthStore({ isBrowser: true, fetcher });
+    await store.checkAuth();
+
+    const logout = store.logout();
+    await vi.waitFor(() => expect(resolveLogout).toBeTypeOf("function"));
+    await expect(store.checkAuth({ force: true })).resolves.toMatchObject({
+      state: "authenticated",
+      account_id: "account-b",
+    });
+    resolveLogout(new Response("unavailable", { status: 503 }));
+    await expect(logout).rejects.toThrow("Logout failed: 503");
+    expect(get(store)).toMatchObject({
+      state: "authenticated",
+      account_id: "account-b",
+      role: "weber",
+    });
+  });
+
   it("requires server verification before completing logout", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
@@ -181,9 +242,7 @@ describe("authStore", () => {
       .mockResolvedValueOnce(new Response("unavailable", { status: 503 }));
     const store = createAuthStore({ isBrowser: true, fetcher });
     await store.checkAuth();
-    await expect(store.logout()).rejects.toThrow(
-      "Logout could not be verified.",
-    );
+    await expect(store.logout()).rejects.toThrow("Logout unverified");
     expect(get(store)).toMatchObject({
       state: "degraded",
       authenticated: true,

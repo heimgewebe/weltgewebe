@@ -131,7 +131,7 @@ test("delayed authentication recenters once without blocking public map startup"
   );
 });
 
-test("camera movement before delayed auth prevents recentering", async ({
+test("camera movement remains sticky after returning to the initial view", async ({
   page,
 }) => {
   const ownAccountId = "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8";
@@ -159,9 +159,13 @@ test("camera movement before delayed auth prevents recentering", async ({
     { timeout: 15000 },
   );
   await page.evaluate(() => {
-    (window as any).__TEST_MAP__.jumpTo({
-      center: [10.071, 53.571],
-      zoom: 13,
+    const map = (window as any).__TEST_MAP__;
+    map.jumpTo({ center: [10.071, 53.571], zoom: 13 });
+    map.jumpTo({
+      center: [10.058, 53.5585],
+      zoom: 12,
+      bearing: 15,
+      pitch: 20,
     });
   });
   releaseAuth();
@@ -171,9 +175,17 @@ test("camera movement before delayed auth prevents recentering", async ({
   const finalCamera = await page.evaluate(() => {
     const map = (window as any).__TEST_MAP__;
     const center = map.getCenter();
-    return { lng: center.lng, lat: center.lat, zoom: map.getZoom() };
+    return {
+      lng: center.lng,
+      lat: center.lat,
+      zoom: map.getZoom(),
+      bearing: map.getBearing(),
+      pitch: map.getPitch(),
+    };
   });
-  expect(finalCamera.lng).toBeCloseTo(10.071, 3);
-  expect(finalCamera.lat).toBeCloseTo(53.571, 3);
-  expect(finalCamera.zoom).toBeCloseTo(13, 3);
+  expect(finalCamera.lng).toBeCloseTo(10.058, 3);
+  expect(finalCamera.lat).toBeCloseTo(53.5585, 3);
+  expect(finalCamera.zoom).toBeCloseTo(12, 3);
+  expect(finalCamera.bearing).toBeCloseTo(15, 3);
+  expect(finalCamera.pitch).toBeCloseTo(20, 3);
 });

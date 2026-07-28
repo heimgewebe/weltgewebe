@@ -1,3 +1,5 @@
+import type { AuthStatus } from "./store";
+
 export async function devLogin(
   fetcher: typeof fetch,
   accountId: string,
@@ -34,4 +36,27 @@ export async function endSession(fetcher: typeof fetch): Promise<void> {
     credentials: "include",
   });
   if (!response.ok) throw new Error(`Logout failed: ${response.status}`);
+}
+
+export async function logoutAndVerify(
+  fetcher: typeof fetch,
+  previous: AuthStatus,
+  ownedRevision: number,
+  currentRevision: () => number,
+  publishDegraded: (previous: AuthStatus) => void,
+  verify: () => Promise<AuthStatus>,
+): Promise<void> {
+  try {
+    await endSession(fetcher);
+    if (ownedRevision !== currentRevision()) return;
+    ownedRevision = currentRevision() + 1;
+    const verified = await verify();
+    if (ownedRevision !== currentRevision()) return;
+    if (verified.state !== "unauthenticated") {
+      throw new Error("Logout unverified");
+    }
+  } catch (error) {
+    if (ownedRevision === currentRevision()) publishDegraded(previous);
+    throw error;
+  }
 }

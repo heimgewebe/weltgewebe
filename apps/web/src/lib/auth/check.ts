@@ -1,5 +1,13 @@
 import { isRecord } from "$lib/utils/guards";
-import type { AuthStatus } from "./store";
+import type { AuthRole, AuthStatus } from "./store";
+
+const AUTHENTICATED_ROLES = new Set<AuthRole>(["weber", "admin"]);
+
+function isAuthenticatedRole(value: unknown): value is "weber" | "admin" {
+  return (
+    typeof value === "string" && AUTHENTICATED_ROLES.has(value as AuthRole)
+  );
+}
 
 export async function fetchAuthStatus(
   fetcher: typeof fetch,
@@ -10,13 +18,14 @@ export async function fetchAuthStatus(
     signal,
   });
   const value: unknown = await response.json().catch(() => null);
-  if (!isRecord(value) || typeof value.role !== "string") return null;
+  if (!isRecord(value)) return null;
 
   let status: AuthStatus | null = null;
   if (
     value.authenticated === true &&
     typeof value.account_id === "string" &&
-    value.account_id
+    value.account_id.length > 0 &&
+    isAuthenticatedRole(value.role)
   ) {
     status = {
       state: "authenticated",
