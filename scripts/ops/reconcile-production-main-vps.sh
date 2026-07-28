@@ -3,7 +3,9 @@ set -Eeuo pipefail
 umask 022
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-export PYTHONPATH="$SCRIPT_DIR"
+run_ops_python() {
+  WELTGEWEBE_OPS_SCRIPT_DIR="$SCRIPT_DIR" python3 -I - "$@"
+}
 
 SOURCE_CHECKOUT="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 RELEASE_ROOT="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
@@ -47,7 +49,7 @@ require_command() {
 
 write_lock_contention_receipt() {
   local receipt="$RECEIPT_ROOT/last-contention.json"
-  python3 - "$receipt" "$PRODUCTION_LOCK_DOMAIN" "$PRODUCTION_LOCK_FILE" << 'PY'
+  run_ops_python "$receipt" "$PRODUCTION_LOCK_DOMAIN" "$PRODUCTION_LOCK_FILE" << 'PY'
 import json
 import os
 import secrets
@@ -55,6 +57,7 @@ import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+sys.path.insert(0, os.environ["WELTGEWEBE_OPS_SCRIPT_DIR"])
 from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 path = Path(sys.argv[1])
@@ -101,7 +104,7 @@ acquire_production_lock() {
 }
 
 new_deploy_invocation_id() {
-  python3 -c 'import secrets; print(secrets.token_hex(32))'
+  python3 -I -c 'import secrets; print(secrets.token_hex(32))'
 }
 
 fetch_main() {
@@ -116,7 +119,7 @@ write_state() {
   local detail="${3:-}"
   [[ -n "$target_commit" ]] || return 0
   local receipt="$RECEIPT_ROOT/$target_commit.json"
-  python3 - "$receipt" "$target_commit" "$result" "$artifact_sha" "$observed_main" "$detail" << 'PY'
+  run_ops_python "$receipt" "$target_commit" "$result" "$artifact_sha" "$observed_main" "$detail" << 'PY'
 import json
 import os
 import secrets
@@ -124,6 +127,7 @@ import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+sys.path.insert(0, os.environ["WELTGEWEBE_OPS_SCRIPT_DIR"])
 from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 path = Path(sys.argv[1])
@@ -148,12 +152,13 @@ read_deploy_terminal_result() {
   local invocation_id="$2"
   local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$commit.json"
 
-  python3 - "$deployment_receipt" "$commit" "$invocation_id" << 'PY'
+  run_ops_python "$deployment_receipt" "$commit" "$invocation_id" << 'PY'
 import json
 import os
 import stat
 import sys
 from pathlib import Path
+sys.path.insert(0, os.environ["WELTGEWEBE_OPS_SCRIPT_DIR"])
 from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 MAX_RECEIPT_BYTES = 1048576
@@ -191,13 +196,14 @@ read_deploy_tempfail_diagnostic() {
   local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$commit.json"
   local contention_receipt="$DEPLOY_RECEIPT_ROOT/contention/$invocation_id.json"
   local legacy_contention_receipt="$DEPLOY_RECEIPT_ROOT/last-contention.json"
-  python3 - "$deployment_receipt" "$contention_receipt" \
+  run_ops_python "$deployment_receipt" "$contention_receipt" \
     "$legacy_contention_receipt" "$commit" "$invocation_id" << 'PY'
 import json
 import os
 import stat
 import sys
 from pathlib import Path
+sys.path.insert(0, os.environ["WELTGEWEBE_OPS_SCRIPT_DIR"])
 from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 MAX_RECEIPT_BYTES = 1048576
@@ -269,13 +275,14 @@ repair_observed_deployment_state() {
   local verification_receipt="$1"
   local deployment_receipt="$DEPLOY_RECEIPT_ROOT/$target_commit.json"
 
-  python3 - "$verification_receipt" "$deployment_receipt" "$target_commit" << 'PY'
+  run_ops_python "$verification_receipt" "$deployment_receipt" "$target_commit" << 'PY'
 import json
 import os
 import secrets
 import stat
 import sys
 from pathlib import Path
+sys.path.insert(0, os.environ["WELTGEWEBE_OPS_SCRIPT_DIR"])
 from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 MAX_RECEIPT_BYTES = 1048576

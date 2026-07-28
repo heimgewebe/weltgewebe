@@ -3,7 +3,9 @@ set -Eeuo pipefail
 umask 022
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-export PYTHONPATH="$SCRIPT_DIR"
+run_ops_python() {
+  WELTGEWEBE_OPS_SCRIPT_DIR="$SCRIPT_DIR" python3 -I - "$@"
+}
 
 SOURCE_CHECKOUT="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 RELEASE_ROOT="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
@@ -85,7 +87,7 @@ write_lock_contention_receipt() {
   else
     receipt="$legacy_receipt"
   fi
-  python3 - "$receipt" "$legacy_receipt" "$PRODUCTION_LOCK_DOMAIN" \
+  run_ops_python "$receipt" "$legacy_receipt" "$PRODUCTION_LOCK_DOMAIN" \
     "$PRODUCTION_LOCK_FILE" "$lock_owner_entrypoint" "$COMMIT" \
     "$deploy_invocation_id" << 'PY'
 import json
@@ -95,6 +97,7 @@ import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+sys.path.insert(0, os.environ["WELTGEWEBE_OPS_SCRIPT_DIR"])
 from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 path = Path(sys.argv[1])
@@ -182,7 +185,7 @@ acquire_production_lock() {
 write_bounded_response() {
   local output="$1"
   local limit="$2"
-  python3 -c '
+  python3 -I -c '
 import os
 import sys
 from pathlib import Path
@@ -216,7 +219,7 @@ write_deploy_receipt() {
   local frontend_commit_value="$4"
   local observed_main="$5"
   local receipt="$STATE_ROOT/receipts/$COMMIT.json"
-  python3 - "$receipt" "$COMMIT" "$WEB_SHA256" "$started_at" "$completed_at" \
+  run_ops_python "$receipt" "$COMMIT" "$WEB_SHA256" "$started_at" "$completed_at" \
     "$api_commit_value" "$frontend_commit_value" "$observed_main" "$migration_completed_at" \
     "$PRODUCTION_LOCK_DOMAIN" "$lock_owner_entrypoint" "$lock_handoff" "$result" \
     "$deploy_invocation_id" << 'PY'
@@ -226,6 +229,7 @@ import secrets
 import stat
 import sys
 from pathlib import Path
+sys.path.insert(0, os.environ["WELTGEWEBE_OPS_SCRIPT_DIR"])
 from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 path = Path(sys.argv[1])

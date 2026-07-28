@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,65 @@ ROOT = Path(__file__).parents[3]
 class ProductionReconcilerContractTests(unittest.TestCase):
     def read(self, relative: str) -> str:
         return (ROOT / relative).read_text(encoding="utf-8")
+
+    def test_privileged_inline_python_uses_isolated_import_path(self) -> None:
+        scripts = (
+            self.read("scripts/ops/deploy-exact-commit-vps.sh"),
+            self.read("scripts/ops/reconcile-production-main-vps.sh"),
+        )
+        for script in scripts:
+            self.assertNotIn('export PYTHONPATH="$SCRIPT_DIR"', script)
+            self.assertIn(
+                'WELTGEWEBE_OPS_SCRIPT_DIR="$SCRIPT_DIR" python3 -I - "$@"',
+                script,
+            )
+            self.assertNotIn("python3 - ", script)
+            self.assertNotIn("python3 -c ", script)
+            self.assertEqual(
+                script.count("from weltgewebe_secure_receipt_io import"),
+                script.count(
+                    'sys.path.insert(0, os.environ["WELTGEWEBE_OPS_SCRIPT_DIR"])'
+                ),
+            )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            attacker = root / "attacker"
+            trusted = root / "trusted"
+            attacker.mkdir()
+            trusted.mkdir()
+            marker = root / "attacker-ran"
+            (attacker / "sitecustomize.py").write_text(
+                f"from pathlib import Path\nPath({str(marker)!r}).write_text('site')\n",
+                encoding="utf-8",
+            )
+            (attacker / "weltgewebe_secure_receipt_io.py").write_text(
+                f"from pathlib import Path\nPath({str(marker)!r}).write_text('module')\nSOURCE = 'attacker'\n",
+                encoding="utf-8",
+            )
+            (trusted / "weltgewebe_secure_receipt_io.py").write_text(
+                "SOURCE = 'trusted'\n",
+                encoding="utf-8",
+            )
+            environment = os.environ.copy()
+            environment["WELTGEWEBE_OPS_SCRIPT_DIR"] = str(trusted)
+            result = subprocess.run(
+                [sys.executable, "-I", "-"],
+                cwd=attacker,
+                env=environment,
+                input=(
+                    "import os\n"
+                    "import sys\n"
+                    "sys.path.insert(0, os.environ['WELTGEWEBE_OPS_SCRIPT_DIR'])\n"
+                    "from weltgewebe_secure_receipt_io import SOURCE\n"
+                    "print(SOURCE)\n"
+                ),
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            self.assertEqual(result.stdout.strip(), "trusted")
+            self.assertFalse(marker.exists())
 
     def test_deploy_helper_rechecks_main_after_public_readback(self) -> None:
         script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
