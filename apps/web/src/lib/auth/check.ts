@@ -1,9 +1,9 @@
 import { isRecord } from "$lib/utils/guards";
 import type { AuthRole, AuthStatus } from "./store";
 
-const AUTHENTICATED_ROLES = new Set<AuthRole>(["weber", "admin"]);
+const AUTHENTICATED_ROLES = new Set<AuthRole>(["gast", "weber", "admin"]);
 
-function isAuthenticatedRole(value: unknown): value is "weber" | "admin" {
+function isAuthenticatedRole(value: unknown): value is AuthRole {
   return (
     typeof value === "string" && AUTHENTICATED_ROLES.has(value as AuthRole)
   );

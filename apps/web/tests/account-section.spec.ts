@@ -172,7 +172,7 @@ test.describe("Settings — AccountSection", () => {
       initial: {
         authenticated: true,
         account_id: "acc-2",
-        role: "weber",
+        role: "gast",
       },
       devices: [
         {
@@ -199,7 +199,7 @@ test.describe("Settings — AccountSection", () => {
       initial: {
         authenticated: true,
         account_id: "acc-3",
-        role: "weber",
+        role: "gast",
       },
     });
 
@@ -247,7 +247,7 @@ test.describe("Settings — AccountSection", () => {
       initial: {
         authenticated: true,
         account_id: "acc-4",
-        role: "weber",
+        role: "gast",
       },
     });
 
@@ -295,7 +295,7 @@ test.describe("Settings — AccountSection", () => {
       initial: {
         authenticated: true,
         account_id: "acc-6",
-        role: "weber",
+        role: "gast",
       },
       devices: [
         {

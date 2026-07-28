@@ -48,10 +48,7 @@ export async function logoutAndVerify(
 ): Promise<void> {
   try {
     await endSession(fetcher);
-    if (ownedRevision !== currentRevision()) return;
-    ownedRevision = currentRevision() + 1;
     const verified = await verify();
-    if (ownedRevision !== currentRevision()) return;
     if (verified.state !== "unauthenticated") {
       throw new Error("Logout unverified");
     }

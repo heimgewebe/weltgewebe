@@ -128,6 +128,27 @@ describe("authStore", () => {
     });
   });
 
+  it("accepts authenticated guest accounts as authoritative identities", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          authenticated: true,
+          account_id: "guest-account",
+          role: "gast",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const store = createAuthStore({ isBrowser: true, fetcher });
+    await store.checkAuth();
+    expect(get(store)).toEqual({
+      state: "authenticated",
+      authenticated: true,
+      account_id: "guest-account",
+      role: "gast",
+    });
+  });
+
   it("rejects malformed authenticated roles as non-authoritative", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
@@ -198,7 +219,7 @@ describe("authStore", () => {
     });
   });
 
-  it("does not restore a stale identity when logout loses an auth race", async () => {
+  it("verifies logout after a concurrent auth check observed the old session", async () => {
     let resolveLogout!: (response: Response) => void;
     let authChecks = 0;
     const fetcher = vi.fn<typeof fetch>().mockImplementation((input) => {
@@ -206,7 +227,7 @@ describe("authStore", () => {
       if (url.endsWith("/api/auth/me")) {
         authChecks += 1;
         return Promise.resolve(
-          authResponse(authChecks === 1 ? "account-a" : "account-b"),
+          authChecks < 3 ? authResponse("account-a") : guestResponse(),
         );
       }
       if (url.endsWith("/api/auth/logout")) {
@@ -223,14 +244,15 @@ describe("authStore", () => {
     await vi.waitFor(() => expect(resolveLogout).toBeTypeOf("function"));
     await expect(store.checkAuth({ force: true })).resolves.toMatchObject({
       state: "authenticated",
-      account_id: "account-b",
+      account_id: "account-a",
     });
-    resolveLogout(new Response("unavailable", { status: 503 }));
-    await expect(logout).rejects.toThrow("Logout failed: 503");
+    resolveLogout(new Response(null, { status: 200 }));
+    await expect(logout).resolves.toBeUndefined();
+    expect(authChecks).toBe(3);
     expect(get(store)).toMatchObject({
-      state: "authenticated",
-      account_id: "account-b",
-      role: "weber",
+      state: "unauthenticated",
+      authenticated: false,
+      role: "gast",
     });
   });
 
