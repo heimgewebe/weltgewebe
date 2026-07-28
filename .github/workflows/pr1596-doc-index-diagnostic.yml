@@ -1,6 +1,6 @@
 ---
 name: PR1596 Doc Index Diagnostic
-# activation revision: 2
+# activation revision: 3
 
 permissions:
   contents: read
@@ -19,4 +19,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: fix/node-delete-archive-history-v1
-      - run: python3 scripts/docmeta/check_repo_index_consistency.py
+      - name: Read exact index errors
+        run: |
+          set -o pipefail
+          python3 scripts/docmeta/check_repo_index_consistency.py 2>&1 | tail -n 80
