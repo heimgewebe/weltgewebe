@@ -420,19 +420,6 @@ def is_current_verified_receipt(payload: object) -> bool:
     )
 
 
-def parse_aware_timestamp(value: object) -> datetime | None:
-    if not isinstance(value, str) or not value:
-        return None
-    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
-    try:
-        parsed = datetime.fromisoformat(normalized)
-        if parsed.tzinfo is None or parsed.utcoffset() is None:
-            return None
-        return parsed.astimezone(timezone.utc)
-    except (ValueError, OverflowError):
-        return None
-
-
 def migrate_schema4_verified_receipt(payload: object) -> dict[str, object] | None:
     if not isinstance(payload, dict):
         return None
