@@ -225,6 +225,7 @@ function parseNodeDeleteReceipt(
     receipt?.node_id !== expectedNodeId ||
     receipt.node_state !== "removed" ||
     !Array.isArray(receipt.removed_edge_ids) ||
+    !receipt.removed_edge_ids.every((edgeId) => typeof edgeId === "string") ||
     !(
       effect === "not_applicable" ||
       effect === "deleted_empty" ||
