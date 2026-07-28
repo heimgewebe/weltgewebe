@@ -27,6 +27,8 @@ const SIMILAR_NODE = {
   updated_at: "2026-07-23T00:00:00Z",
 };
 
+const SIMILARITY_QUIESCENCE_MS = 500;
+
 async function openSearch(page: Page) {
   await page.goto("/map");
   await page.waitForSelector(".map-marker");
@@ -202,6 +204,7 @@ test.describe("T007 authorized server search contract", () => {
     await expect(section).toContainText(
       "Erst beim Anklicken wird eine Suche an den Server gesendet.",
     );
+    await page.waitForTimeout(SIMILARITY_QUIESCENCE_MS);
     expect(similarityRequests).toBe(0);
 
     await section
@@ -210,6 +213,7 @@ test.describe("T007 authorized server search contract", () => {
     await expect(
       section.getByRole("button", { name: /Gemeinschaftliche Radstation/ }),
     ).toBeVisible();
+    await page.waitForTimeout(SIMILARITY_QUIESCENCE_MS);
     expect(similarityRequests).toBe(1);
     expect(mutationRequests).toBe(0);
 
