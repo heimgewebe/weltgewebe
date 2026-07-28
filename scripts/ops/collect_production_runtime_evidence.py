@@ -17,7 +17,8 @@ import os
 import re
 import stat
 import subprocess
-import tempfile
+import sys
+import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -29,7 +30,7 @@ try:
 except ModuleNotFoundError:  # direct execution from scripts/ops
     from check_public_live_readiness import FetchResult, fetch_url
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 EVIDENCE_KIND = "weltgewebe.production-runtime-evidence"
 EXPECTED_TABLES = (
     "domain_accounts",
@@ -487,7 +488,7 @@ def collect_restore_evidence(
     }
 
 
-def collect_offhost_evidence(
+def collect_secondary_copy_evidence(
     *,
     manifest_path: Path | None,
     backup: Mapping[str, Any],
@@ -495,45 +496,49 @@ def collect_offhost_evidence(
     if manifest_path is None:
         return {
             "status": "not-provided",
+            "kind": "secondary_copy",
             "required_for_overall_pass": False,
-            "detail": "no off-host manifest was supplied",
+            "proves_offhost_boundary": False,
+            "detail": "no secondary-copy manifest was supplied",
         }
     values = read_key_value_file(manifest_path, allowed_keys=BACKUP_MANIFEST_KEYS)
     if values.get("contract") != "weltgewebe-postgres-backup-v1":
-        raise EvidenceError("off-host manifest contract is not supported")
-    offhost_name = values.get("file", "")
-    offhost_sha_expected = values.get("sha256", "")
-    if not SAFE_BACKUP_FILE_RE.fullmatch(offhost_name) or Path(offhost_name).name != offhost_name:
-        raise EvidenceError("off-host manifest file must be a safe .sql.gz basename")
-    if not SHA256_RE.fullmatch(offhost_sha_expected):
-        raise EvidenceError("off-host manifest sha256 is invalid")
+        raise EvidenceError("secondary-copy manifest contract is not supported")
+    copy_name = values.get("file", "")
+    copy_sha_expected = values.get("sha256", "")
+    if not SAFE_BACKUP_FILE_RE.fullmatch(copy_name) or Path(copy_name).name != copy_name:
+        raise EvidenceError("secondary-copy manifest file must be a safe .sql.gz basename")
+    if not SHA256_RE.fullmatch(copy_sha_expected):
+        raise EvidenceError("secondary-copy manifest sha256 is invalid")
     try:
-        offhost_bytes_expected = int(values.get("bytes", ""))
+        copy_bytes_expected = int(values.get("bytes", ""))
     except ValueError as exc:
-        raise EvidenceError("off-host manifest bytes is invalid") from exc
-    require_exact_tables(values.get("tables", ""), source="off-host manifest")
+        raise EvidenceError("secondary-copy manifest bytes is invalid") from exc
+    require_exact_tables(values.get("tables", ""), source="secondary-copy manifest")
     same_artifact = (
-        offhost_name == backup.get("file")
-        and offhost_sha_expected == backup.get("sha256")
-        and offhost_bytes_expected == backup.get("bytes")
+        copy_name == backup.get("file")
+        and copy_sha_expected == backup.get("sha256")
+        and copy_bytes_expected == backup.get("bytes")
         and values.get("created_at") == backup.get("created_at")
     )
     try:
-        offhost_sha, offhost_bytes = sha256_and_size(manifest_path.parent / offhost_name)
+        copy_sha, copy_bytes = sha256_and_size(manifest_path.parent / copy_name)
     except EvidenceError:
         hash_matches = False
     else:
         hash_matches = (
-            offhost_sha == offhost_sha_expected
-            and offhost_bytes == offhost_bytes_expected
+            copy_sha == copy_sha_expected
+            and copy_bytes == copy_bytes_expected
         )
     ok = same_artifact and hash_matches
     return {
         "status": "pass" if ok else "fail",
-        "required_for_overall_pass": True,
-        "file": offhost_name,
-        "sha256": offhost_sha_expected,
-        "bytes": offhost_bytes_expected,
+        "kind": "secondary_copy",
+        "required_for_overall_pass": False,
+        "proves_offhost_boundary": False,
+        "file": copy_name,
+        "sha256": copy_sha_expected,
+        "bytes": copy_bytes_expected,
         "same_artifact_as_production_manifest": same_artifact,
         "copied_file_hash_matches": hash_matches,
     }
@@ -545,15 +550,13 @@ def build_evidence(
     runtime: Mapping[str, Any],
     backup: Mapping[str, Any],
     restore: Mapping[str, Any],
-    offhost: Mapping[str, Any],
+    secondary_copy: Mapping[str, Any],
     generated_at: datetime,
 ) -> dict[str, Any]:
     required_sections = (public, runtime, backup, restore)
     required_ok = all(section.get("status") == "pass" for section in required_sections)
-    if not required_ok or offhost.get("status") == "fail":
+    if not required_ok or secondary_copy.get("status") == "fail":
         overall_status = "fail"
-    elif offhost.get("status") == "pass":
-        overall_status = "pass"
     else:
         overall_status = "partial"
     return {
@@ -569,7 +572,7 @@ def build_evidence(
         "runtime_configuration": dict(runtime),
         "backup": dict(backup),
         "restore": dict(restore),
-        "offhost_backup": dict(offhost),
+        "secondary_copy": dict(secondary_copy),
         "evidence_boundary": {
             "proves": [
                 "public API readiness at collection time",
@@ -577,39 +580,79 @@ def build_evidence(
                 "allowlisted persistence and migration modes in the running API container",
                 "integrity and freshness of the explicitly selected local backup",
                 "fresh successful restore proof bound to that backup",
-                "off-host copy identity only when an off-host manifest is supplied",
+                "hash-identical secondary copy when a secondary-copy manifest is supplied",
             ],
             "does_not_prove": [
                 "future availability",
                 "absence of latent application defects",
                 "completeness or semantic correctness of every database row",
-                "off-host recovery when no off-host manifest is supplied",
+                "off-host storage or recovery boundary",
                 "disaster recovery for infrastructure outside the selected PostgreSQL artifacts",
             ],
         },
     }
 
 
-def write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    encoded = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    temp_path = Path(temp_name)
+def open_output_directory(path: Path) -> int:
+    flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
     try:
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp_path, path)
-        directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        directory_fd = os.open(path.parent, flags)
+    except FileNotFoundError as exc:
+        raise EvidenceError(f"output parent directory does not exist: {path.parent}") from exc
+    except OSError as exc:
+        raise EvidenceError(
+            f"output parent must be an existing non-symlink directory: {path.parent}"
+        ) from exc
+    directory_stat = os.fstat(directory_fd)
+    if not stat.S_ISDIR(directory_stat.st_mode):
+        os.close(directory_fd)
+        raise EvidenceError(
+            f"output parent must be an existing non-symlink directory: {path.parent}"
+        )
+    return directory_fd
+
+
+def validate_existing_output_target(directory_fd: int, name: str, path: Path) -> None:
+    try:
+        target_stat = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise EvidenceError(f"could not inspect output target: {path}") from exc
+    if stat.S_ISLNK(target_stat.st_mode) or not stat.S_ISREG(target_stat.st_mode):
+        raise EvidenceError(f"output target must be absent or a regular non-symlink file: {path}")
+
+
+def write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
+    name = path.name
+    if name in {"", ".", ".."}:
+        raise EvidenceError("output target must have a regular filename")
+    try:
+        directory_fd = open_output_directory(path)
+        temp_name = f".{name}.{uuid.uuid4().hex}.tmp"
+        temp_fd: int | None = None
         try:
+            validate_existing_output_target(directory_fd, name, path)
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+            temp_fd = os.open(temp_name, flags, 0o600, dir_fd=directory_fd)
+            encoded = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+            with os.fdopen(temp_fd, "wb") as handle:
+                temp_fd = None
+                handle.write(encoded)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_name, name, src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
             os.fsync(directory_fd)
         finally:
+            if temp_fd is not None:
+                os.close(temp_fd)
+            try:
+                os.unlink(temp_name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
             os.close(directory_fd)
-    finally:
-        if temp_path.exists():
-            temp_path.unlink()
+    except OSError as exc:
+        raise EvidenceError(f"could not atomically write output: {path}") from exc
 
 
 def positive_hours(value: str) -> float:
@@ -641,7 +684,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--service", default="api")
     parser.add_argument("--backup-manifest", type=Path, required=True)
     parser.add_argument("--restore-proof", type=Path, required=True)
-    parser.add_argument("--offhost-backup-manifest", type=Path)
+    secondary_copy_group = parser.add_mutually_exclusive_group()
+    secondary_copy_group.add_argument("--secondary-copy-manifest", type=Path)
+    secondary_copy_group.add_argument(
+        "--offhost-backup-manifest",
+        dest="secondary_copy_manifest",
+        type=Path,
+        help=argparse.SUPPRESS,
+    )
     parser.add_argument("--backup-max-age-hours", type=positive_hours, default=26.0)
     parser.add_argument("--restore-max-age-hours", type=positive_hours, default=192.0)
     parser.add_argument("--output", type=Path)
@@ -681,8 +731,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             now=now,
             max_age=timedelta(hours=args.restore_max_age_hours),
         )
-        offhost = collect_offhost_evidence(
-            manifest_path=args.offhost_backup_manifest,
+        secondary_copy = collect_secondary_copy_evidence(
+            manifest_path=args.secondary_copy_manifest,
             backup=backup,
         )
         payload = build_evidence(
@@ -690,7 +740,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             runtime=runtime,
             backup=backup,
             restore=restore,
-            offhost=offhost,
+            secondary_copy=secondary_copy,
             generated_at=now,
         )
     except EvidenceError as exc:
@@ -707,7 +757,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         }
 
     if args.output:
-        write_json_atomic(args.output, payload)
+        try:
+            write_json_atomic(args.output, payload)
+        except EvidenceError as exc:
+            print(f"runtime evidence output failed: {exc}", file=sys.stderr)
+            return 1
     else:
         print(json.dumps(payload, indent=2, sort_keys=True))
     if payload["status"] == "pass":
