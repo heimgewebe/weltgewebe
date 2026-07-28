@@ -97,7 +97,7 @@ async function putJson<T>(
   return requestJson<T>(path, "PUT", payload, etag);
 }
 
-async function deleteJson<T>(path: string, etag?: string): Promise<T> {
+async function deleteJson(path: string, etag?: string): Promise<unknown> {
   const headers: HeadersInit = {};
   if (etag) {
     headers["If-Match"] = `"${etag}"`;
@@ -110,9 +110,7 @@ async function deleteJson<T>(path: string, etag?: string): Promise<T> {
   if (!res.ok) {
     throw new ApiRequestError(res.status, await readErrorBody(res));
   }
-  return res.json().catch(() => {
-    throw new ApiRequestError(502);
-  });
+  return res.json().catch(() => undefined);
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -227,7 +225,7 @@ function parseNodeDeleteReceipt(
     receipt?.node_id !== expectedNodeId ||
     receipt.node_state !== "removed" ||
     !Array.isArray(receipt.removed_edge_ids) ||
-    !receipt.removed_edge_ids.every((edgeId) => typeof edgeId === "string") ||
+    receipt.removed_edge_ids.some((id) => typeof id !== "string") ||
     !(
       effect === "not_applicable" ||
       effect === "deleted_empty" ||
@@ -247,7 +245,7 @@ export function deleteNode(
   id: string,
   etag?: string,
 ): Promise<NodeDeleteReceipt> {
-  return deleteJson<unknown>(`/api/nodes/${encodeURIComponent(id)}`, etag)
+  return deleteJson(`/api/nodes/${encodeURIComponent(id)}`, etag)
     .then((value) => parseNodeDeleteReceipt(value, id))
     .catch((error) => preserveOnlyMatchingNodeConflict(error, id));
 }
