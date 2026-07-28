@@ -531,7 +531,7 @@
           <textarea
             bind:value={summary}
             rows="3"
-            maxlength="2000"
+            maxlength="500"
             placeholder="Was bringst du ins Gewebe ein?"></textarea>
         </label>
         <label>
