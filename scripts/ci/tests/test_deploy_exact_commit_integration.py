@@ -1358,6 +1358,22 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.assertEqual(receipt["result"], "verified_observed")
         self.assert_observed_recovery_timestamps(receipt)
 
+    def test_public_noop_does_not_promote_schema4_with_overflowing_timestamp(
+        self,
+    ) -> None:
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json",
+            self.schema4_verified_receipt(started_at="0001-01-01T00:00:00+23:59"),
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["result"], "verified_observed")
+        self.assert_observed_recovery_timestamps(receipt)
+
     def test_public_noop_does_not_promote_schema4_with_inconsistent_timestamps(
         self,
     ) -> None:
