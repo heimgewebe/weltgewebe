@@ -1,11 +1,15 @@
 ---
 name: PR1596 Isolated Conversation DB Proof
-# activation revision: 3
+# activation revision: 4
 
 permissions:
   contents: write
 
 "on":
+  push:
+    branches: [fix/node-delete-archive-history-v1]
+    paths:
+      - '.github/workflows/pr1596-isolate-conversation-db-tests.yml'
   pull_request:
     branches: [main]
     paths:
@@ -82,7 +86,7 @@ jobs:
       - name: Verify no isolated schemas remain
         run: |
           set -euo pipefail
-          count="$(PGPASSWORD=gewebe psql -h localhost -U welt -d weltgewebe_ci_proof -Atc "SELECT count(*) FROM pg_namespace WHERE nspname LIKE 'pr1596_conversations_%'")"
+          count="$(PGPASSWORD=gewebe psql -h localhost -U welt -d weltgewebe_ci_proof -Atc \"SELECT count(*) FROM pg_namespace WHERE nspname LIKE 'pr1596_conversations_%'\")"
           test "$count" = 0
 
       - name: Publish
