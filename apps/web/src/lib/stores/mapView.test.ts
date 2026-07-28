@@ -3,7 +3,6 @@ import { get } from "svelte/store";
 import { buildMapScene, type MapSceneModel } from "$lib/map/scene";
 import type { Account, Edge, MapEntityViewModel, Node } from "$lib/map/types";
 import {
-  deriveFailedResourceLabels,
   deriveMarkerCounts,
   deriveAvailableFilterTypes,
   deriveFilteredMarkers,
@@ -65,25 +64,6 @@ describe("mapView presentation helpers", () => {
     const scene = sceneFrom([], []);
     expect(scene.entities).toHaveLength(0);
     expect(scene.diagnostics.degraded).toBe(false);
-    expect(deriveFailedResourceLabels(scene)).toEqual([]);
-  });
-
-  it("derives failed resource labels from the scene", () => {
-    const scene = buildMapScene({
-      nodes: [],
-      accounts: [],
-      edges: [],
-      loadState: "partial",
-      resourceStatus: [
-        { resource: "nodes", status: "ok" },
-        { resource: "edges", status: "failed", error: "HTTP 500" },
-      ],
-      apiBase: undefined,
-      basemapMode: "local-sovereign",
-    });
-
-    expect(scene.loadState).toBe("partial");
-    expect(deriveFailedResourceLabels(scene)).toEqual(["Fäden"]);
   });
 
   it("exposes markers and diagnostic counts", () => {

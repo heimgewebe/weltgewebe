@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { mockListResponse } from "../fixtures/mockApi";
 
 /**
  * Visual Runtime Proof: Real Hamburg PMTiles via MapLibre
@@ -164,7 +165,7 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
           return route.fulfill({
             status: 200,
             contentType: "application/json",
-            body: JSON.stringify([]),
+            body: JSON.stringify(mockListResponse(route.request().url(), [])),
           });
         }
         if (
@@ -174,14 +175,14 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
           return route.fulfill({
             status: 200,
             contentType: "application/json",
-            body: JSON.stringify([]),
+            body: JSON.stringify(mockListResponse(route.request().url(), [])),
           });
         }
         if (pathname === "/api/edges" || pathname.startsWith("/api/edges/")) {
           return route.fulfill({
             status: 200,
             contentType: "application/json",
-            body: JSON.stringify([]),
+            body: JSON.stringify(mockListResponse(route.request().url(), [])),
           });
         }
         if (pathname === "/api/health" || pathname.startsWith("/api/health/")) {

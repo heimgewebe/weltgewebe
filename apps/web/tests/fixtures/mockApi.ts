@@ -18,6 +18,24 @@ import {
 import fs from "node:fs";
 import path from "node:path";
 
+export function mockListResponse<T>(requestUrl: string, items: T[]) {
+  const url = new URL(requestUrl);
+  const cursorMode =
+    url.searchParams.get("pagination") === "cursor" ||
+    url.searchParams.has("cursor");
+  if (!cursorMode) return items;
+
+  const requestedLimit = Number(url.searchParams.get("limit") ?? 1000);
+  const limit =
+    Number.isInteger(requestedLimit) && requestedLimit > 0
+      ? requestedLimit
+      : 1000;
+  return {
+    items,
+    page: { limit, next_cursor: null, has_more: false },
+  };
+}
+
 export interface MockApiOptions {
   /**
    * Pre-authenticate the mock without going through the dev-login flow.
@@ -285,11 +303,13 @@ export async function mockApiResponses(
       return route.fulfill({ status: 405 });
     }
 
-    if (url.endsWith("/api/nodes")) {
+    if (new URL(url).pathname === "/api/nodes" && method === "GET") {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([...mutableDemoNodes, ...createdNodes]),
+        body: JSON.stringify(
+          mockListResponse(url, [...mutableDemoNodes, ...createdNodes]),
+        ),
       });
     }
 
@@ -396,11 +416,11 @@ export async function mockApiResponses(
       });
     }
 
-    if (url.endsWith("/api/accounts")) {
+    if (new URL(url).pathname === "/api/accounts" && method === "GET") {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(mockAccounts),
+        body: JSON.stringify(mockListResponse(url, mockAccounts)),
       });
     }
 
@@ -408,19 +428,18 @@ export async function mockApiResponses(
       return route.fulfill({ status: 405 });
     }
 
-    if (url.endsWith("/api/edges")) {
+    if (new URL(url).pathname === "/api/edges" && method === "GET") {
+      const edges = [...demoEdges, ...createdEdges].filter(
+        (edge) =>
+          (typeof edge.source_id !== "string" ||
+            !deletedNodeIds.has(edge.source_id)) &&
+          (typeof edge.target_id !== "string" ||
+            !deletedNodeIds.has(edge.target_id)),
+      );
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(
-          [...demoEdges, ...createdEdges].filter(
-            (edge) =>
-              (typeof edge.source_id !== "string" ||
-                !deletedNodeIds.has(edge.source_id)) &&
-              (typeof edge.target_id !== "string" ||
-                !deletedNodeIds.has(edge.target_id)),
-          ),
-        ),
+        body: JSON.stringify(mockListResponse(url, edges)),
       });
     }
 

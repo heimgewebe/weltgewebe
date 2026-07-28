@@ -55,7 +55,9 @@ describe("buildMapScene", () => {
       accounts: [],
       edges: [],
       loadState: "ok",
-      resourceStatus: [{ resource: "nodes", status: "ok" }],
+      resourceStatus: [
+        { resource: "nodes", status: "complete", loaded: 1, pages: 1 },
+      ],
       apiBase: undefined,
       basemapMode: "local-sovereign",
     });
@@ -73,7 +75,9 @@ describe("buildMapScene", () => {
       accounts: [makeAccount({ tags: ["skill:Kochen", "interest:Commons"] })],
       edges: [],
       loadState: "ok",
-      resourceStatus: [{ resource: "accounts", status: "ok" }],
+      resourceStatus: [
+        { resource: "accounts", status: "complete", loaded: 1, pages: 1 },
+      ],
       apiBase: undefined,
       basemapMode: "local-sovereign",
     });
@@ -130,7 +134,7 @@ describe("buildMapScene", () => {
       edges: [],
       loadState: "partial",
       resourceStatus: [
-        { resource: "nodes", status: "ok" },
+        { resource: "nodes", status: "complete", loaded: 1, pages: 1 },
         { resource: "accounts", status: "failed", error: "HTTP 500" },
       ],
       apiBase: undefined,

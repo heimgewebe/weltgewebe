@@ -52,7 +52,6 @@
     type ParsedMapUrlState,
   } from "$lib/map/urlState";
   import {
-    deriveFailedResourceLabels,
     deriveMarkerCounts,
     deriveAvailableFilterTypes,
     deriveFilteredMarkers,
@@ -98,7 +97,6 @@
   // Presentation state derived via pure functions from the local scene + UI state.
   $: loadState = scene.loadState;
   $: diagnostics = scene.diagnostics;
-  $: failedLabels = deriveFailedResourceLabels(scene);
   $: markersData = scene.entities;
   $: markerCounts = deriveMarkerCounts(markersData);
   $: availableTypes = deriveAvailableFilterTypes(markersData);
@@ -853,9 +851,7 @@
 >
   {#if loadState === "partial"}
     <div class="degraded-banner" role="alert" data-testid="load-state-partial">
-      Einige Kartendaten konnten nicht geladen werden ({failedLabels.join(
-        ", ",
-      )}).
+      {data.loadNotice}
     </div>
   {/if}
   {#if loadState === "failed"}
