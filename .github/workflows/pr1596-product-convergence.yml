@@ -1,6 +1,6 @@
 ---
 name: PR1596 Product Convergence
-# activation revision: 3
+# activation revision: 4
 
 permissions:
   contents: write
@@ -31,9 +31,19 @@ jobs:
       - name: Apply product convergence
         run: python3 .github/pr1596-product-convergence.py
 
+      - name: Read Rust version
+        id: rust-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
+          test -n "${RUST_VERSION}"
+          printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
+
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
         with:
-          toolchain: stable
+          toolchain: ${{ steps.rust-version.outputs.rust_version }}
           components: rustfmt, clippy
 
       - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34
@@ -58,7 +68,7 @@ jobs:
       - name: Clippy
         run: |
           set -o pipefail
-          cargo clippy --locked --manifest-path apps/api/Cargo.toml --all-targets -- -D warnings 2>&1 | tee /tmp/pr1596-clippy.log
+          cargo clippy --all-targets --all-features -- -D warnings 2>&1 | tee /tmp/pr1596-clippy.log
 
       - name: JSONL mutation tests
         run: |
