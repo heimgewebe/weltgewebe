@@ -258,6 +258,48 @@ fn post_step_up_consume(cookie: &str, token: &str, challenge_id: &str) -> Reques
         .unwrap()
 }
 
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn invalid_profile_fields_do_not_reach_postgres_or_cache() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = postgres_write_app(pool.clone(), "writepath-admin-invalid").await?;
+    let id = "66666666-6666-4666-8666-666666666666";
+    let payload = serde_json::json!({
+        "id": id,
+        "title": "Invalid profile fields",
+        "location": {"lat": 53.55, "lon": 9.99},
+        "summary": "x".repeat(2_001)
+    });
+
+    let response = app
+        .oneshot(post_accounts(&cookie, &payload.to_string()))
+        .await?;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let persisted: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM domain_accounts WHERE id = $1)")
+            .bind(id)
+            .fetch_one(&pool)
+            .await?;
+    assert!(
+        !persisted,
+        "invalid profile fields must not reach PostgreSQL"
+    );
+    assert!(state.accounts.read().await.get(id).is_none());
+    assert!(!in_dir.join("demo.accounts.jsonl").exists());
+
+    Ok(())
+}
+
 /// Core success proof: account create writes domain_accounts, updates the cache,
 /// does not append JSONL, and reloads with the same public projection and
 /// WebAuthn user identity.

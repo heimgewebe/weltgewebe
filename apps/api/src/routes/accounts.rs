@@ -720,6 +720,48 @@ const MAX_PROFILE_ADDRESS_LEN: usize = 500;
 const MAX_PROFILE_TAGS: usize = 64;
 const MAX_PROFILE_TAG_LEN: usize = 80;
 
+fn normalise_profile_summary(raw: Option<&str>) -> Result<Option<String>, &'static str> {
+    let summary = raw
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    if summary
+        .as_ref()
+        .is_some_and(|value| value.len() > MAX_PROFILE_SUMMARY_LEN)
+    {
+        return Err("summary is too long");
+    }
+    Ok(summary)
+}
+
+fn normalise_profile_tags<'a>(
+    raw_tags: impl IntoIterator<Item = &'a str>,
+    required_tags: &[&str],
+) -> Result<Vec<String>, &'static str> {
+    let mut tags = Vec::new();
+    for raw in raw_tags {
+        let tag = raw.trim();
+        if tag.is_empty() {
+            continue;
+        }
+        if tag.len() > MAX_PROFILE_TAG_LEN {
+            return Err("a tag is too long");
+        }
+        if !tags.iter().any(|existing| existing == tag) {
+            tags.push(tag.to_string());
+        }
+    }
+    for required in required_tags {
+        if !tags.iter().any(|tag| tag == required) {
+            tags.push((*required).to_string());
+        }
+    }
+    if tags.len() > MAX_PROFILE_TAGS {
+        return Err("too many tags");
+    }
+    Ok(tags)
+}
+
 fn profile_response(
     account: &AccountInternal,
     address: Option<String>,
@@ -779,16 +821,7 @@ fn validate_profile_update(
     if title.is_empty() || title.len() > MAX_PROFILE_TITLE_LEN {
         return Err(bad("title must be between 1 and 160 bytes"));
     }
-    let summary = payload
-        .summary
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
-    if summary
-        .as_ref()
-        .is_some_and(|value| value.len() > MAX_PROFILE_SUMMARY_LEN)
-    {
-        return Err(bad("summary is too long"));
-    }
+    let summary = normalise_profile_summary(payload.summary.as_deref()).map_err(bad)?;
     let address_was_provided = payload.address.is_some();
     let address = payload
         .address
@@ -810,27 +843,11 @@ fn validate_profile_update(
         return Err(bad("clear_location requires map_state not_on_map"));
     }
 
-    let mut tags = Vec::new();
-    for raw in payload.tags {
-        let tag = raw.trim();
-        if tag.is_empty() {
-            continue;
-        }
-        if tag.len() > MAX_PROFILE_TAG_LEN {
-            return Err(bad("a tag is too long"));
-        }
-        if !tags.iter().any(|existing| existing == tag) {
-            tags.push(tag.to_string());
-        }
-    }
-    for required in ["account", "garnrolle"] {
-        if !tags.iter().any(|tag| tag == required) {
-            tags.push(required.to_string());
-        }
-    }
-    if tags.len() > MAX_PROFILE_TAGS {
-        return Err(bad("too many tags"));
-    }
+    let tags = normalise_profile_tags(
+        payload.tags.iter().map(String::as_str),
+        &["account", "garnrolle"],
+    )
+    .map_err(bad)?;
 
     if let Some(location) = &payload.location {
         if !location.lat.is_finite()
@@ -1220,21 +1237,18 @@ pub async fn create_account(
     };
 
     // --- optional summary / tags / email ---
-    let summary = payload
-        .get("summary")
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string);
-    let tags: Vec<String> = payload
-        .get("tags")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|x| x.as_str().map(String::from))
-                .collect()
-        })
-        .unwrap_or_default();
+    let summary =
+        normalise_profile_summary(payload.get("summary").and_then(Value::as_str)).map_err(bad)?;
+    let tags = normalise_profile_tags(
+        payload
+            .get("tags")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str),
+        &[],
+    )
+    .map_err(bad)?;
     let email = payload
         .get("email")
         .and_then(|v| v.as_str())
