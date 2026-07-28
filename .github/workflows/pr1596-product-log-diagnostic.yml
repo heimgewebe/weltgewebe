@@ -1,6 +1,6 @@
 ---
 name: PR1596 Product Log Diagnostic
-# activation revision: 2
+# activation revision: 3
 
 permissions:
   actions: read
@@ -27,5 +27,5 @@ jobs:
             /repos/${GITHUB_REPOSITORY}/actions/jobs/90210728355/logs \
             > /tmp/pr1596-product.log
           echo 'BEGIN_PR1596_PRODUCT_TAIL'
-          tail -n 100 /tmp/pr1596-product.log
+          tail -n 30 /tmp/pr1596-product.log
           echo 'END_PR1596_PRODUCT_TAIL'
