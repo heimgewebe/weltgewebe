@@ -20,6 +20,7 @@
   }>();
 
   let similarNodes: MapEntityNode[] = [];
+  let requested = false;
   let loading = false;
   let error = "";
   let mode: string | null = null;
@@ -30,10 +31,12 @@
   $: query = buildSimilarNodeQuery({ title, kind, summary, info, tags });
 
   async function load(query: string) {
+    if (!sourceId || !query) return;
     abortController?.abort();
     const controller = new AbortController();
     abortController = controller;
     const sequence = ++requestSequence;
+    requested = true;
     loading = true;
     error = "";
     mode = null;
@@ -67,10 +70,10 @@
       abortController?.abort();
       abortController = null;
       similarNodes = [];
+      requested = false;
       loading = false;
       error = "";
       mode = null;
-      if (sourceId && query) void load(query);
     }
   }
 
@@ -84,7 +87,7 @@
   class="similar-nodes"
   aria-labelledby="similar-nodes-heading"
   aria-describedby="similar-nodes-explainer"
-  aria-busy={loading}
+  aria-busy={requested && loading}
 >
   <h4 id="similar-nodes-heading">Ähnliche Knoten</h4>
   <p id="similar-nodes-explainer" class="similar-explainer">
@@ -92,12 +95,27 @@
     Vorschläge – keine Fäden, keine kuratierten Beziehungen und keine Aussage
     über gemeinsame Autorenschaft.
   </p>
-  {#if loading}
+  {#if !requested}
+    <button
+      class="similar-trigger"
+      type="button"
+      disabled={!sourceId || !query}
+      on:click={() => void load(query)}>Ähnliche Knoten suchen</button
+    >
+    <p class="similar-note">
+      Erst beim Anklicken wird eine Suche an den Server gesendet.
+    </p>
+  {:else if loading}
     <p class="ghost" role="status" aria-live="polite">
       Ähnliche Knoten werden berechnet…
     </p>
   {:else if error}
     <p class="similar-error" role="status" aria-live="polite">{error}</p>
+    <button
+      class="similar-trigger"
+      type="button"
+      on:click={() => void load(query)}>Erneut versuchen</button
+    >
   {:else}
     {#if mode === "lexical_fallback"}
       <p class="similar-note" role="status" aria-live="polite">
@@ -187,6 +205,14 @@
   button:hover,
   button:focus-visible {
     border-color: var(--accent);
+  }
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  .similar-trigger {
+    margin-top: 0.75rem;
+    font-weight: 650;
   }
   button span {
     font-weight: 650;
