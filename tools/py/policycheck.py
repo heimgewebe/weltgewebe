@@ -23,12 +23,6 @@ def main() -> int:
         print("::error::data_lifecycle section missing")
         return 1
 
-    try:
-        ron_days = int(lifecycle["ron_days"])
-    except (KeyError, TypeError, ValueError) as exc:
-        print(f"::error::invalid lifecycle values: {exc}")
-        return 1
-
     default_path = pathlib.Path("configs/app.defaults.yml")
     if not default_path.exists():
         print("::error::configs/app.defaults.yml missing")
@@ -45,13 +39,12 @@ def main() -> int:
                 f"the fixed constitutional value of {FIXED_FADEN_FADE_DAYS} days"
             )
             return 1
-
-    if ron_days < FIXED_FADEN_FADE_DAYS:
-        print(
-            "::error::ron_days must be >= the fixed constitutional Faden lifetime "
-            f"of {FIXED_FADEN_FADE_DAYS} days"
-        )
-        return 1
+        if "ron_days" in mapping:
+            print(
+                f"::error::{source} must not publish ron_days; "
+                "no runtime RON retention consumer exists"
+            )
+            return 1
 
     print("policy ok")
     return 0

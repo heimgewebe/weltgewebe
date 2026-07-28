@@ -920,10 +920,9 @@ mod tests {
     #[test]
     #[serial]
     fn build_webauthn_returns_none_when_unconfigured() {
-        let config = AppConfig::load_from_str(
-            "ron_days: 84\nanonymize_opt_in: true\ndelegation_expire_days: 28\n",
-        )
-        .unwrap();
+        let config =
+            AppConfig::load_from_str("anonymize_opt_in: true\ndelegation_expire_days: 28\n")
+                .unwrap();
         let result = build_webauthn(&config).unwrap();
         assert!(
             result.is_none(),
@@ -935,7 +934,6 @@ mod tests {
     #[serial]
     fn build_webauthn_succeeds_with_valid_config() {
         let yaml = "\
-ron_days: 84\n\
 anonymize_opt_in: true\n\
 delegation_expire_days: 28\n\
 webauthn_rp_id: localhost\n\
@@ -949,7 +947,6 @@ webauthn_rp_origin: \"http://localhost:3000\"\n";
     #[serial]
     fn build_webauthn_fails_when_only_rp_id_set() {
         let yaml = "\
-ron_days: 84\n\
 anonymize_opt_in: true\n\
 delegation_expire_days: 28\n\
 webauthn_rp_id: example.com\n";

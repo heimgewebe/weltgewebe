@@ -293,7 +293,6 @@ impl AutoProvisionRole {
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
-    pub ron_days: u32,
     pub anonymize_opt_in: bool,
     pub delegation_expire_days: u32,
 
@@ -392,16 +391,26 @@ impl AppConfig {
     fn parse_yaml(raw: &str) -> Result<Self> {
         let value: serde_yaml::Value =
             serde_yaml::from_str(raw).context("failed to parse YAML configuration")?;
-        let removed_key = serde_yaml::Value::String("fade_days".to_string());
-        if value
-            .as_mapping()
-            .is_some_and(|mapping| mapping.contains_key(&removed_key))
-        {
-            anyhow::bail!(
-                "fade_days has been removed from runtime configuration; the lifetime of newly \
-                 derived, unverzwirnte Fäden is the fixed constitutional value of \
-                 {FIXED_FADEN_FADE_DAYS} days"
-            );
+        for removed_key in ["fade_days", "ron_days"] {
+            let key = serde_yaml::Value::String(removed_key.to_string());
+            if value
+                .as_mapping()
+                .is_some_and(|mapping| mapping.contains_key(&key))
+            {
+                match removed_key {
+                    "fade_days" => anyhow::bail!(
+                        "fade_days has been removed from runtime configuration; the lifetime of newly \
+                         derived, unverzwirnte Fäden is the fixed constitutional value of \
+                         {FIXED_FADEN_FADE_DAYS} days"
+                    ),
+                    "ron_days" => anyhow::bail!(concat!(
+                        "ron_days has been removed from runtime configuration; ",
+                        "no runtime RON retention consumer exists, so the setting must not be ",
+                        "presented as operator-tunable"
+                    )),
+                    _ => unreachable!(),
+                }
+            }
         }
         serde_yaml::from_value(value).context("failed to decode YAML configuration")
     }
@@ -449,7 +458,12 @@ impl AppConfig {
                  Fäden is the fixed constitutional value of {FIXED_FADEN_FADE_DAYS} days"
             );
         }
-        apply_env_override!(self, ron_days, "HA_RON_DAYS");
+        if env::var_os("HA_RON_DAYS").is_some() {
+            anyhow::bail!(concat!(
+                "HA_RON_DAYS has been removed; ",
+                "no runtime RON retention consumer exists for this setting"
+            ));
+        }
         apply_env_override!(self, anonymize_opt_in, "HA_ANONYMIZE_OPT_IN");
         apply_env_override!(self, delegation_expire_days, "HA_DELEGATION_EXPIRE_DAYS");
         apply_env_override!(self, max_guest_owned_nodes, "MAX_GUEST_OWNED_NODES");
@@ -873,10 +887,37 @@ mod tests {
     use serial_test::serial;
     use tempfile::{tempdir, NamedTempFile};
 
-    const YAML: &str = r#"ron_days: 84
+    const YAML: &str = r#"
 anonymize_opt_in: true
 delegation_expire_days: 28
 "#;
+
+    #[test]
+    #[serial]
+    fn ron_days_yaml_key_is_rejected_as_removed_setting() {
+        let _ron = EnvGuard::unset("HA_RON_DAYS");
+        let yaml = format!("ron_days: 84\n{YAML}");
+
+        let error = AppConfig::load_from_str(&yaml)
+            .expect_err("the removed ron_days YAML key must fail closed");
+        let error = format!("{error:#}");
+
+        assert!(error.contains("ron_days has been removed"));
+        assert!(error.contains("no runtime RON retention consumer exists"));
+    }
+
+    #[test]
+    #[serial]
+    fn ron_days_env_override_is_rejected_as_removed_setting() {
+        let _ron = EnvGuard::set("HA_RON_DAYS", "84");
+
+        let error = AppConfig::load_from_str(YAML)
+            .expect_err("the removed HA_RON_DAYS override must fail closed");
+        let error = format!("{error:#}");
+
+        assert!(error.contains("HA_RON_DAYS has been removed"));
+        assert!(error.contains("no runtime RON retention consumer exists"));
+    }
 
     #[test]
     #[serial]
@@ -893,7 +934,6 @@ delegation_expire_days: 28
         let _cookie_secure = EnvGuard::unset("AUTH_COOKIE_SECURE");
 
         let cfg = AppConfig::load_from_path(file.path())?;
-        assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
         assert_eq!(cfg.max_guest_owned_nodes, 1_000);
@@ -981,14 +1021,13 @@ delegation_expire_days: 28
         std::fs::write(file.path(), YAML)?;
 
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
-        let _ron = EnvGuard::set("HA_RON_DAYS", "90");
+        let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::set("HA_ANONYMIZE_OPT_IN", "false");
         let _delegation = EnvGuard::set("HA_DELEGATION_EXPIRE_DAYS", "14");
         let _guest_nodes = EnvGuard::set("MAX_GUEST_OWNED_NODES", "321");
         let _cookie_secure = EnvGuard::set("AUTH_COOKIE_SECURE", "false");
 
         let cfg = AppConfig::load_from_path(file.path())?;
-        assert_eq!(cfg.ron_days, 90);
         assert!(!cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 14);
         assert_eq!(cfg.max_guest_owned_nodes, 321);
@@ -1014,7 +1053,6 @@ delegation_expire_days: 28
         let _edge_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
 
         let cfg = AppConfig::load()?;
-        assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
         assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
@@ -1097,7 +1135,7 @@ delegation_expire_days: 28
     #[serial]
     fn load_errors_when_explicit_config_fails_domain_write_validation() -> Result<()> {
         let file = NamedTempFile::new()?;
-        let invalid_yaml = r#"ron_days: 14
+        let invalid_yaml = r#"
 anonymize_opt_in: false
 delegation_expire_days: 365
 domain_read_source: jsonl
@@ -1128,7 +1166,7 @@ domain_account_write_source: postgres
     fn load_uses_explicit_app_config_path_when_valid() -> Result<()> {
         let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let file = NamedTempFile::new()?;
-        let valid_yaml = r#"ron_days: 84
+        let valid_yaml = r#"
 anonymize_opt_in: true
 delegation_expire_days: 28
 "#;
@@ -1147,7 +1185,6 @@ delegation_expire_days: 28
         let _edge_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
 
         let cfg = AppConfig::load()?;
-        assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
         assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
