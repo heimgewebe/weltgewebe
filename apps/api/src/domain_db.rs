@@ -556,6 +556,8 @@ pub enum NodeWriteError {
     InvalidEdgeReference(String),
     #[error("node deletion is blocked because its public conversation has messages")]
     ConversationNotEmpty,
+    #[error("node conversation lifecycle is inconsistent: {0}")]
+    ConversationLifecycle(String),
     #[error("failed to map node row: {0}")]
     Mapping(#[source] anyhow::Error),
     #[error("failed to serialize node payload: {0}")]
@@ -810,10 +812,22 @@ pub async fn replace_node_in_postgres(
     Ok(updated_at)
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum NodeConversationDeleteEffect {
+    DeletedEmpty,
+    Archived { archive_id: String },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NodeDeleteOutcome {
+    pub removed_edge_ids: Vec<String>,
+    pub conversation: NodeConversationDeleteEffect,
+}
+
 pub async fn delete_node_with_edges_in_postgres(
     pool: &PgPool,
     id: &str,
-) -> Result<Vec<String>, NodeWriteError> {
+) -> Result<NodeDeleteOutcome, NodeWriteError> {
     let mut tx = pool.begin().await.map_err(NodeWriteError::Database)?;
     // Edge creation uses the same table lock. Holding it through the node and
     // projection deletes prevents an edge insert from interleaving with the
@@ -832,6 +846,25 @@ pub async fn delete_node_with_edges_in_postgres(
         tx.rollback().await.ok();
         return Err(NodeWriteError::NotFound);
     }
+
+    let conversation: Option<(String, bool)> = sqlx::query_as(
+        "SELECT conversation.id::text, EXISTS (\
+             SELECT 1 FROM domain_messages AS message \
+             WHERE message.conversation_id = conversation.id\
+         ) AS has_messages \
+         FROM domain_conversations AS conversation \
+         WHERE conversation.node_id = $1 FOR UPDATE",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(NodeWriteError::Database)?;
+    let Some((conversation_id, conversation_has_messages)) = conversation else {
+        tx.rollback().await.ok();
+        return Err(NodeWriteError::ConversationLifecycle(
+            "node has no generated conversation".to_string(),
+        ));
+    };
 
     // The database BEFORE DELETE trigger owns the history decision. Empty
     // generated conversations cascade away; non-empty conversations are detached
@@ -892,7 +925,7 @@ pub async fn delete_node_with_edges_in_postgres(
         )));
     }
 
-    let edge_ids: Vec<String> = sqlx::query_scalar(
+    let mut edge_ids: Vec<String> = sqlx::query_scalar(
         "DELETE FROM domain_edges \
          WHERE (source_id = $1 AND (\
                     payload->>'source_type' = 'node' \
@@ -909,13 +942,57 @@ pub async fn delete_node_with_edges_in_postgres(
     .fetch_all(&mut *tx)
     .await
     .map_err(NodeWriteError::Database)?;
+    edge_ids.sort();
     sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
         .bind(id)
         .execute(&mut *tx)
         .await
         .map_err(NodeWriteError::Database)?;
+
+    let conversation = if conversation_has_messages {
+        let archived: bool = sqlx::query_scalar(
+            "SELECT EXISTS (\
+                 SELECT 1 FROM domain_conversations \
+                 WHERE id = $1::uuid \
+                   AND node_id IS NULL \
+                   AND archived_at IS NOT NULL\
+             )",
+        )
+        .bind(&conversation_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(NodeWriteError::Database)?;
+        if !archived {
+            tx.rollback().await.ok();
+            return Err(NodeWriteError::ConversationLifecycle(
+                "non-empty conversation was not archived by node deletion".to_string(),
+            ));
+        }
+        NodeConversationDeleteEffect::Archived {
+            archive_id: conversation_id,
+        }
+    } else {
+        let still_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM domain_conversations WHERE id = $1::uuid)",
+        )
+        .bind(&conversation_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(NodeWriteError::Database)?;
+        if still_exists {
+            tx.rollback().await.ok();
+            return Err(NodeWriteError::ConversationLifecycle(
+                "empty conversation did not cascade with node deletion".to_string(),
+            ));
+        }
+        NodeConversationDeleteEffect::DeletedEmpty
+    };
+
     tx.commit().await.map_err(NodeWriteError::Database)?;
-    Ok(edge_ids)
+    Ok(NodeDeleteOutcome {
+        removed_edge_ids: edge_ids,
+        conversation,
+    })
 }
 
 // ── node-create write path ──────────────────────────────────────────────────

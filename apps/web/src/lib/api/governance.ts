@@ -4,7 +4,7 @@ export type VoteChoice = "ja" | "nein" | "enthaltung";
 export interface Proposal {
   id: string;
   kind: "weberantrag";
-  applicant_account_id: string;
+  applicant_account_id: string | null;
   applicant_title: string;
   summary?: string;
   status: ProposalStatus;

@@ -17,6 +17,68 @@ ALTER TABLE domain_conversations
     ADD COLUMN node_title_snapshot TEXT,
     ADD COLUMN archived_at TIMESTAMPTZ;
 
+-- Applicant identity is an active binding, while applicant_title is the durable
+-- procedural snapshot. Account deletion may therefore detach only proposals
+-- that already carry public or procedural history. Empty open proposals remain
+-- attached and continue to follow the existing ON DELETE CASCADE contract.
+ALTER TABLE governance_proposals
+    ALTER COLUMN applicant_account_id DROP NOT NULL;
+
+ALTER TABLE governance_proposals
+    ADD CONSTRAINT governance_proposals_applicant_lifecycle CHECK (
+        applicant_account_id IS NOT NULL
+        OR (status IN ('accepted', 'rejected') AND finalized_at IS NOT NULL)
+    );
+
+CREATE OR REPLACE FUNCTION weltgewebe_detach_governance_history_on_account_delete()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    detach_timestamp TIMESTAMPTZ := clock_timestamp();
+BEGIN
+    UPDATE governance_proposals AS proposal
+    SET applicant_account_id = NULL,
+        status = CASE
+            WHEN proposal.status IN ('consent', 'voting') THEN 'rejected'
+            ELSE proposal.status
+        END,
+        finalized_at = CASE
+            WHEN proposal.status IN ('consent', 'voting') THEN detach_timestamp
+            ELSE proposal.finalized_at
+        END
+    WHERE proposal.applicant_account_id = OLD.id
+      AND (
+          proposal.status IN ('accepted', 'rejected')
+          OR EXISTS (
+              SELECT 1 FROM governance_vetoes AS veto
+              WHERE veto.proposal_id = proposal.id
+          )
+          OR EXISTS (
+              SELECT 1 FROM governance_votes AS vote
+              WHERE vote.proposal_id = proposal.id
+          )
+          OR EXISTS (
+              SELECT 1 FROM governance_messages AS legacy_message
+              WHERE legacy_message.proposal_id = proposal.id
+          )
+          OR EXISTS (
+              SELECT 1
+              FROM domain_conversations AS conversation
+              JOIN domain_messages AS message
+                ON message.conversation_id = conversation.id
+              WHERE conversation.proposal_id = proposal.id
+          )
+      );
+
+    RETURN OLD;
+END;
+$$;
+
+CREATE TRIGGER domain_accounts_detach_governance_history
+BEFORE DELETE ON domain_accounts
+FOR EACH ROW EXECUTE FUNCTION weltgewebe_detach_governance_history_on_account_delete();
+
 ALTER TABLE domain_conversations
     DROP CONSTRAINT domain_conversations_subject_kind;
 

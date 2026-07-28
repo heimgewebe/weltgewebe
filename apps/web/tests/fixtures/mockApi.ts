@@ -279,7 +279,16 @@ export async function mockApiResponses(
             createdEdges.splice(index, 1);
           }
         }
-        return route.fulfill({ status: 204, body: "" });
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            node_id: nodeId,
+            node_state: "removed",
+            removed_edge_ids: [],
+            conversation: { effect: "deleted_empty" },
+          }),
+        });
       }
 
       return route.fulfill({ status: 405 });

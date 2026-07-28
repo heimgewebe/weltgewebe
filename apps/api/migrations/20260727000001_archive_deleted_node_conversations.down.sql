@@ -1,6 +1,7 @@
--- Rollback is safe only before any node conversation has been detached. Once a
--- node is gone, its archive cannot be reattached without inventing canonical
--- map state, so the migration fails closed instead of erasing public history.
+-- Rollback is safe only before any node conversation or governance applicant
+-- binding has been detached. Once a parent identity is gone, the old NOT NULL
+-- and cascade contracts cannot be restored without inventing or erasing public
+-- history, so the migration fails closed.
 
 DROP TRIGGER IF EXISTS domain_conversations_archived_outbox ON domain_conversations;
 DROP FUNCTION IF EXISTS weltgewebe_enqueue_conversation_archived_event();
@@ -9,6 +10,8 @@ DROP FUNCTION IF EXISTS weltgewebe_protect_conversation_messages();
 DROP TRIGGER IF EXISTS domain_conversations_history_guard ON domain_conversations;
 DROP FUNCTION IF EXISTS weltgewebe_protect_conversation_record_history();
 
+LOCK TABLE domain_accounts IN SHARE ROW EXCLUSIVE MODE;
+LOCK TABLE governance_proposals IN SHARE ROW EXCLUSIVE MODE;
 LOCK TABLE domain_nodes IN SHARE ROW EXCLUSIVE MODE;
 LOCK TABLE domain_conversations IN SHARE ROW EXCLUSIVE MODE;
 
@@ -27,6 +30,27 @@ BEGIN
     END IF;
 END;
 $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM governance_proposals
+        WHERE applicant_account_id IS NULL
+    ) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '55000',
+            MESSAGE = 'cannot roll back detached governance applicant history after account deletion';
+    END IF;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS domain_accounts_detach_governance_history ON domain_accounts;
+DROP FUNCTION IF EXISTS weltgewebe_detach_governance_history_on_account_delete();
+
+ALTER TABLE governance_proposals
+    DROP CONSTRAINT governance_proposals_applicant_lifecycle,
+    ALTER COLUMN applicant_account_id SET NOT NULL;
 
 ALTER TABLE domain_conversations
     DROP CONSTRAINT domain_conversations_subject_kind;

@@ -18,6 +18,35 @@ function replaceWithStaleVersion() {
 }
 
 describe("domain writes", () => {
+  it("returns the structured node deletion receipt", async () => {
+    const receipt = {
+      node_id: "node-a",
+      node_state: "removed",
+      removed_edge_ids: ["edge-a"],
+      conversation: {
+        effect: "archived",
+        archive_id: "conversation-a",
+        archive_url: "/api/conversations/conversation-a",
+      },
+    } as const;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(receipt), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(deleteNode("node-a", "version-a")).resolves.toEqual(receipt);
+    expect(fetch).toHaveBeenCalledWith("/api/nodes/node-a", {
+      method: "DELETE",
+      headers: { "If-Match": '"version-a"' },
+      credentials: "include",
+    });
+  });
+
   it("keeps the structured delete conflict from JSON responses", async () => {
     const body = {
       code: "node_conversation_not_empty",

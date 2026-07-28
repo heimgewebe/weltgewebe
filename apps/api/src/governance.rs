@@ -101,7 +101,7 @@ impl VoteChoice {
 pub struct ProposalWithCounts {
     pub id: String,
     pub kind: String,
-    pub applicant_account_id: String,
+    pub applicant_account_id: Option<String>,
     pub applicant_title: String,
     pub summary: Option<String>,
     pub status: ProposalStatus,
@@ -305,7 +305,7 @@ pub async fn create_weber_proposal(
     Ok(ProposalWithCounts {
         id,
         kind: "weberantrag".to_string(),
-        applicant_account_id: applicant_account_id.to_string(),
+        applicant_account_id: Some(applicant_account_id.to_string()),
         applicant_title: applicant_title.to_string(),
         summary: summary.map(str::to_string),
         status: ProposalStatus::Consent,
@@ -324,7 +324,15 @@ pub async fn create_weber_proposal(
 async fn lock_proposal_phase(
     tx: &mut Transaction<'_, Postgres>,
     proposal_id: &str,
-) -> Result<Option<(ProposalStatus, String, DateTime<Utc>, Option<DateTime<Utc>>)>, sqlx::Error> {
+) -> Result<
+    Option<(
+        ProposalStatus,
+        Option<String>,
+        DateTime<Utc>,
+        Option<DateTime<Utc>>,
+    )>,
+    sqlx::Error,
+> {
     let row = sqlx::query(
         "SELECT status, applicant_account_id, consent_until, voting_until \
          FROM governance_proposals WHERE id = $1::uuid FOR UPDATE",
@@ -377,7 +385,7 @@ pub async fn add_veto(
             .await
             .map_err(VetoError::Database)?
             .ok_or(VetoError::NotFound)?;
-    if applicant_account_id == weber_account_id {
+    if applicant_account_id.as_deref() == Some(weber_account_id) {
         return Err(VetoError::ApplicantCannotDecide);
     }
     if status != ProposalStatus::Consent || now >= consent_until {
@@ -442,7 +450,7 @@ pub async fn upsert_vote(
         .await
         .map_err(VoteError::Database)?
         .ok_or(VoteError::NotFound)?;
-    if applicant_account_id == voter_account_id {
+    if applicant_account_id.as_deref() == Some(voter_account_id) {
         return Err(VoteError::ApplicantCannotDecide);
     }
     let open_voting = status == ProposalStatus::Voting
@@ -542,6 +550,8 @@ pub async fn add_message(
 ///   entfernt, weil ihr Account-Endpunkt nicht mehr existiert.
 /// - Beiträge in fremden Anträgen behalten Text und Anzeigenamen, verlieren
 ///   aber die live Account-ID.
+/// - Leere eigene Anträge verschwinden; eigene Anträge mit Verfahrensgeschichte
+///   bleiben als abgeschlossener Snapshot ohne aktive Accountbindung erhalten.
 /// - Passkeys, Sessions und die Gastidentität werden atomar entfernt.
 ///
 /// Die Rollenbedingung schützt gegen versehentliches Löschen eines Webers oder
@@ -637,10 +647,6 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
     .execute(&mut *tx)
     .await?;
 
-    sqlx::query("DELETE FROM governance_proposals WHERE applicant_account_id = $1")
-        .bind(account_id)
-        .execute(&mut *tx)
-        .await?;
     sqlx::query("DELETE FROM passkey_credentials WHERE account_id = $1")
         .bind(account_id)
         .execute(&mut *tx)
@@ -839,20 +845,24 @@ async fn finalize_one(
     // order, otherwise the two transactions can deadlock. The first read only
     // discovers the immutable applicant id; all decisions use the row re-read
     // below after both locks are held.
-    let Some(applicant_account_id) = sqlx::query_scalar::<_, String>(
+    let applicant_account_id = match sqlx::query_scalar::<_, Option<String>>(
         "SELECT applicant_account_id FROM governance_proposals WHERE id = $1::uuid",
     )
     .bind(proposal_id)
     .fetch_optional(&mut *tx)
     .await?
-    else {
-        return Ok(None);
+    {
+        Some(Some(account_id)) => account_id,
+        Some(None) | None => return Ok(None),
     };
 
-    sqlx::query("SELECT id FROM domain_accounts WHERE id = $1 FOR UPDATE")
+    let account_lock = sqlx::query("SELECT id FROM domain_accounts WHERE id = $1 FOR UPDATE")
         .bind(&applicant_account_id)
         .execute(&mut *tx)
         .await?;
+    if account_lock.rows_affected() == 0 {
+        return Ok(None);
+    }
 
     let Some(row) = sqlx::query(
         "SELECT status, applicant_account_id, consent_until, voting_until \
@@ -866,8 +876,10 @@ async fn finalize_one(
     };
 
     let status = ProposalStatus::from_db(row.try_get::<String, _>("status")?.as_str())?;
-    let locked_applicant_account_id: String = row.try_get("applicant_account_id")?;
-    debug_assert_eq!(applicant_account_id, locked_applicant_account_id);
+    let locked_applicant_account_id: Option<String> = row.try_get("applicant_account_id")?;
+    if locked_applicant_account_id.as_deref() != Some(applicant_account_id.as_str()) {
+        return Ok(None);
+    }
     let consent_until: DateTime<Utc> = row.try_get("consent_until")?;
     let voting_until: Option<DateTime<Utc>> = row.try_get("voting_until")?;
 

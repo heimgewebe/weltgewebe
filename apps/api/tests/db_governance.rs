@@ -436,6 +436,14 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
             .fetch_one(&pool)
             .await
             .expect("proposal existence");
+    let retained_procedure: (Option<String>, String, String, bool) = sqlx::query_as(
+        "SELECT applicant_account_id, applicant_title, status, finalized_at IS NOT NULL
+         FROM governance_proposals WHERE id = $1::uuid",
+    )
+    .bind(&proposal.id)
+    .fetch_one(&pool)
+    .await
+    .expect("retained procedural history");
     let node_creator: Option<String> = sqlx::query_scalar(
         "SELECT payload ->> 'created_by_account_id' FROM domain_nodes WHERE id = $1",
     )
@@ -462,7 +470,20 @@ async fn zero_to_zero_is_rejected_and_guest_exit_removes_identity() {
             .await
             .expect("retained message body");
     assert!(!account_exists);
-    assert!(!proposal_exists);
+    assert!(!proposal_exists, "empty own proposal still disappears");
+    assert_eq!(
+        retained_procedure.0, None,
+        "procedural history loses only the live applicant binding"
+    );
+    assert_eq!(
+        retained_procedure.1, "Gast C",
+        "applicant title snapshot survives"
+    );
+    assert_eq!(
+        retained_procedure.2, "rejected",
+        "an open applicant-less procedure cannot continue"
+    );
+    assert!(retained_procedure.3, "detached procedure is final");
     assert_eq!(node_creator, None, "retained node must be anonymized");
     assert!(!edge_exists, "account-bound Faden must be removed");
     assert_eq!(

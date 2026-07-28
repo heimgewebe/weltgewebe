@@ -22,7 +22,7 @@ use weltgewebe_api::{
         AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
         DomainReadSource,
     },
-    domain_db::delete_node_with_edges_in_postgres,
+    domain_db::{delete_node_with_edges_in_postgres, NodeConversationDeleteEffect},
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
@@ -308,9 +308,14 @@ async fn node_conversation_vertical_slice() {
             .fetch_one(&pool)
             .await
             .expect("derive empty conversation id");
-    delete_node_with_edges_in_postgres(&pool, EMPTY_NODE_ID)
+    let empty_outcome = delete_node_with_edges_in_postgres(&pool, EMPTY_NODE_ID)
         .await
         .expect("empty node deletion remains available");
+    assert!(empty_outcome.removed_edge_ids.is_empty());
+    assert_eq!(
+        empty_outcome.conversation,
+        NodeConversationDeleteEffect::DeletedEmpty
+    );
     let empty_conversation_exists: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM domain_conversations WHERE id = $1::uuid)",
     )
@@ -889,12 +894,15 @@ async fn node_conversation_vertical_slice() {
     // Binding check (account exit): a hard account delete must not be blocked by
     // existing public contributions, and the author snapshot must survive so the
     // history stays readable.
-    let author_messages_before: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM domain_messages WHERE author_account_id = $1")
-            .bind(AUTHOR_ID)
-            .fetch_one(&pool)
-            .await
-            .expect("count author messages");
+    let author_messages_before: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_messages
+         WHERE conversation_id = $1::uuid AND author_account_id = $2",
+    )
+    .bind(&conversation_id)
+    .bind(AUTHOR_ID)
+    .fetch_one(&pool)
+    .await
+    .expect("count author messages in the exercised conversation");
     assert!(
         author_messages_before >= 1,
         "the author must hold contributions before the deletion is exercised"
@@ -966,10 +974,16 @@ async fn node_conversation_vertical_slice() {
         Some("domain_conversations_history_guard")
     );
 
-    let removed_edges = delete_node_with_edges_in_postgres(&pool, NODE_ID)
+    let outcome = delete_node_with_edges_in_postgres(&pool, NODE_ID)
         .await
         .expect("node deletion must archive a non-empty public conversation");
-    assert!(removed_edges.is_empty());
+    assert!(outcome.removed_edge_ids.is_empty());
+    assert_eq!(
+        outcome.conversation,
+        NodeConversationDeleteEffect::Archived {
+            archive_id: conversation_id.clone()
+        }
+    );
 
     let node_still_exists: bool =
         sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")

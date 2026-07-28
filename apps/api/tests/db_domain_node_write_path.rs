@@ -43,8 +43,8 @@ use weltgewebe_api::{
     },
     domain_db::{
         delete_node_with_edges_in_postgres, insert_domain_node, load_nodes_from_postgres,
-        patch_node_in_postgres, replace_node_in_postgres, NodeCreateError, NodePatchInput,
-        NodeWriteError,
+        patch_node_in_postgres, replace_node_in_postgres, NodeConversationDeleteEffect,
+        NodeCreateError, NodePatchInput, NodeWriteError,
     },
     governance::delete_guest_account,
     middleware::{
@@ -2106,11 +2106,18 @@ async fn replace_and_delete_node_cascade_is_transactional_in_postgres() -> Resul
     assert_eq!(row.4["address"], "Neue Straße 1");
     assert_eq!(row.4["tags"], serde_json::json!(["commons"]));
 
-    let mut removed = delete_node_with_edges_in_postgres(&pool, NODE_A)
+    let mut outcome = delete_node_with_edges_in_postgres(&pool, NODE_A)
         .await
         .context("delete node with projections")?;
-    removed.sort();
-    assert_eq!(removed, vec!["writepath-edge-node".to_string()]);
+    outcome.removed_edge_ids.sort();
+    assert_eq!(
+        outcome.removed_edge_ids,
+        vec!["writepath-edge-node".to_string()]
+    );
+    assert_eq!(
+        outcome.conversation,
+        NodeConversationDeleteEffect::DeletedEmpty
+    );
 
     let node_exists: bool =
         sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
@@ -2173,16 +2180,20 @@ async fn delete_node_removes_unique_untyped_legacy_postgres_edge() -> Result<()>
     .await
     .context("seed unique untyped edge fixtures")?;
 
-    let mut removed = delete_node_with_edges_in_postgres(&pool, NODE_A)
+    let mut outcome = delete_node_with_edges_in_postgres(&pool, NODE_A)
         .await
         .context("delete node with legacy edge")?;
-    removed.sort();
+    outcome.removed_edge_ids.sort();
     assert_eq!(
-        removed,
+        outcome.removed_edge_ids,
         vec![
             "writepath-edge-node".to_string(),
             "writepath-edge-untyped-legacy".to_string()
         ]
+    );
+    assert_eq!(
+        outcome.conversation,
+        NodeConversationDeleteEffect::DeletedEmpty
     );
 
     let node_exists: bool =
