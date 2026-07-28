@@ -193,20 +193,32 @@ und einen eigenen späteren Governance- und Datenschutzprozess benötigt.
 
 Der Wurzelknopf **Gemeinsam** befindet sich im Kartenkopf oben mittig. Er zeigt
 reale Governance-Sichten: alle Anträge, offene Konsentverfahren, Vetos,
-Gesprächsphasen und laufende Abstimmungen. Das Stellen eines Antrags erscheint
+Gespräche mit tatsächlichen Beiträgen und laufende Abstimmungen. Das Stellen
+eines Antrags erscheint
 als eigene Webungsaktion im unteren Werkzeugfächer.
 
 Die Oberfläche bietet:
 
 - Liste und Informationsseite aller Anträge;
 - Status und verbleibende Zeit;
-- Vetos und Stimmenzahlen;
+- Vetos, Beitrags- und Stimmenzahlen;
 - ein aus belegten Aktionen abgeleitetes, nicht editierbares Antragsgewebe;
 - den öffentlichen Gesprächsraum;
 - für angemeldete Accounts das Beitragsfeld;
 - für Weber und Administratoren bei fremden Anträgen die kontextabhängigen
   Veto- und Abstimmungsaktionen;
 - für Gäste Weberantrag und Gast-Austritt.
+
+`GET /api/proposals` liefert für jeden Antrag `message_count`. Solange die
+Governance-Gespräche noch nicht auf die kanonische Release-B-Konversation
+umgeschaltet sind, stammt dieser Zähler aus `governance_messages`, der derzeit
+maßgeblichen Beitragstabelle. Die Sicht `?ereignis=gespraech` zeigt genau
+Anträge mit `message_count > 0` — unabhängig davon, ob sie sich in Konsent,
+Abstimmung oder bereits im Abschluss befinden. Ein Abstimmungsstatus allein
+belegt kein Gespräch. Der Zähler ist eine Momentaufnahme der Listenabfrage; er
+ersetzt weder das Laden der Beiträge noch deren eigene spätere Pagination.
+Während eines gestaffelten Rollouts behandelt die neue Oberfläche eine noch
+fehlende Zählung aus einer älteren API-Version sicher als null.
 
 Die Oberfläche darf keine Rechte simulieren. Jeder Schutz wird zusätzlich auf
 dem Server durchgesetzt.

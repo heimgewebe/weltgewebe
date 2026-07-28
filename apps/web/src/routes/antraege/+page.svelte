@@ -16,6 +16,7 @@
   } from "$lib/api/governance";
 
   let proposals: Proposal[] = [];
+  const localMessageCountFloors = new Map<string, number>();
   let loading = true;
   let error = "";
   let summary = "";
@@ -26,7 +27,15 @@
   let applicationSection: HTMLElement | null = null;
   let pendingApplicationFocus: ApplicationFocusRequest | null = null;
 
+  let detailProposalId: string | null = null;
+  let requestedDetailProposalId: string | null = null;
+  let detailRebindVersion = 0;
+
   $: selectedProposalId = $page.url.searchParams.get("id");
+  $: if (selectedProposalId !== requestedDetailProposalId) {
+    requestedDetailProposalId = selectedProposalId;
+    void rebindProposalDetail(selectedProposalId);
+  }
   $: statusFilter = $page.url.searchParams.get("status");
   $: eventFilter = $page.url.searchParams.get("ereignis");
   $: visibleProposals =
@@ -35,7 +44,7 @@
       : eventFilter === "veto"
         ? proposals.filter((proposal) => proposal.veto_count > 0)
         : eventFilter === "gespraech"
-          ? proposals.filter((proposal) => proposal.status === "voting")
+          ? proposals.filter((proposal) => proposalMessageCount(proposal) > 0)
           : proposals;
   $: proposalListTitle =
     statusFilter === "consent"
@@ -45,7 +54,7 @@
         : eventFilter === "veto"
           ? "Anträge mit Veto"
           : eventFilter === "gespraech"
-            ? "Gesprächsphasen"
+            ? "Gespräche"
             : "Alle Anträge";
   $: isGuest = $authStore.authenticated && $authStore.role === "gast";
   $: hasOpenOwnProposal =
@@ -55,6 +64,51 @@
         proposal.applicant_account_id === $authStore.account_id &&
         (proposal.status === "consent" || proposal.status === "voting"),
     );
+
+  function normalizeMessageCount(count: unknown): number {
+    return typeof count === "number" &&
+      Number.isFinite(count) &&
+      Number.isSafeInteger(count) &&
+      count >= 0
+      ? count
+      : 0;
+  }
+
+  function proposalMessageCount(proposal: Proposal): number {
+    return normalizeMessageCount(proposal.message_count);
+  }
+
+  function updateProposalMessageCount(
+    event: CustomEvent<{ proposalId: string; messageCount: number }>,
+  ) {
+    const { proposalId, messageCount } = event.detail;
+    const currentProposal = proposals.find(
+      (proposal) => proposal.id === proposalId,
+    );
+    const nextCount = Math.max(
+      localMessageCountFloors.get(proposalId) ?? 0,
+      currentProposal ? proposalMessageCount(currentProposal) : 0,
+      normalizeMessageCount(messageCount),
+    );
+    localMessageCountFloors.set(proposalId, nextCount);
+    proposals = proposals.map((proposal) =>
+      proposal.id === proposalId
+        ? { ...proposal, message_count: nextCount }
+        : proposal,
+    );
+  }
+
+  function mergeLocalMessageCountFloors(listed: Proposal[]): Proposal[] {
+    return listed.map((proposal) => {
+      const floor = localMessageCountFloors.get(proposal.id);
+      if (floor === undefined) return proposal;
+      if (proposalMessageCount(proposal) >= floor) {
+        localMessageCountFloors.delete(proposal.id);
+        return proposal;
+      }
+      return { ...proposal, message_count: floor };
+    });
+  }
 
   function describeError(cause: unknown): string {
     if (cause instanceof GovernanceApiError) {
@@ -70,7 +124,7 @@
     loading = true;
     error = "";
     try {
-      proposals = await listProposals();
+      proposals = mergeLocalMessageCountFloors(await listProposals());
     } catch (cause) {
       error = describeError(cause);
     } finally {
@@ -109,6 +163,15 @@
       error = describeError(cause);
       leaving = false;
     }
+  }
+
+  async function rebindProposalDetail(
+    proposalId: string | null,
+  ): Promise<void> {
+    const version = ++detailRebindVersion;
+    detailProposalId = null;
+    await tick();
+    if (version === detailRebindVersion) detailProposalId = proposalId;
   }
 
   async function focusPendingApplicationSection(): Promise<boolean> {
@@ -159,7 +222,12 @@
 </svelte:head>
 
 {#if selectedProposalId}
-  <ProposalDetail proposalId={selectedProposalId} />
+  {#if detailProposalId}
+    <ProposalDetail
+      proposalId={detailProposalId}
+      on:messagecountchange={updateProposalMessageCount}
+    />
+  {/if}
 {:else}
   <main class="wg-page wg-page--paper" data-testid="applications-page">
     <div class="wg-page__shell">
@@ -288,7 +356,11 @@
           {#if proposals.length === 0}
             <p class="wg-state">Noch liegen keine Anträge vor.</p>
           {:else if visibleProposals.length === 0}
-            <p class="wg-state">Für diese Ansicht liegen keine Anträge vor.</p>
+            <p class="wg-state">
+              {eventFilter === "gespraech"
+                ? "Noch gibt es keine Gespräche mit Beiträgen."
+                : "Für diese Ansicht liegen keine Anträge vor."}
+            </p>
           {:else}
             <div class="proposal-list">
               {#each visibleProposals as proposal}
@@ -315,6 +387,13 @@
                       >{proposal.veto_count} Veto{proposal.veto_count === 1
                         ? ""
                         : "s"}</span
+                    >
+                    <span
+                      >{proposalMessageCount(proposal)} {proposalMessageCount(
+                        proposal,
+                      ) === 1
+                        ? "Beitrag"
+                        : "Beiträge"}</span
                     >
                     <span
                       >{proposal.yes_votes} Ja · {proposal.no_votes} Nein</span

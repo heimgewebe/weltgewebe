@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-ui
 owner: product-ui
-last_reviewed: 2026-07-17
+last_reviewed: 2026-07-27
 review_after: 2026-10-11
 depends_on:
   - specs.ui-state-machine
@@ -116,7 +116,7 @@ Gemeinsame Entscheidungsereignisse besitzen einen getrennten Wurzelknopf oben mi
 - alle Anträge;
 - offene Konsentverfahren;
 - Anträge mit Veto;
-- laufende Gesprächsphasen;
+- Gespräche mit tatsächlichen Beiträgen;
 - laufende Abstimmungen.
 
 Werkzeug- und Governancefächer sind gegenseitig exklusiv. Dadurch konkurrieren nicht zwei offene Menüs um dieselbe Kartenfläche. Das Stellen eines Antrags gehört nicht in den lesenden Governancefächer, sondern als Webungsaktion in die untere Webungsebene.
