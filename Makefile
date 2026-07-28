@@ -89,7 +89,7 @@ diagnose: generate
 prepare-commit: validate
 
 up:
-	docker compose -f infra/compose/compose.core.yml --profile dev up -d --build
+	GIT_COMMIT_SHA="$$(git rev-parse HEAD)" docker compose -f infra/compose/compose.core.yml --profile dev up -d --build
 
 down:
 	docker compose -f infra/compose/compose.core.yml --profile dev down -v
