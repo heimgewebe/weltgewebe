@@ -1,8 +1,9 @@
 ---
 name: PR1596 Doc Index Diagnostic
-# activation revision: 3
+# activation revision: 4
 
 permissions:
+  actions: read
   contents: read
 
 "on":
@@ -16,10 +17,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: fix/node-delete-archive-history-v1
       - name: Read exact index errors
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          set -o pipefail
-          python3 scripts/docmeta/check_repo_index_consistency.py 2>&1 | tail -n 80
+          set -euo pipefail
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            /repos/${GITHUB_REPOSITORY}/actions/jobs/90216718637/logs \
+            > /tmp/pr1596-doc-index.log
+          echo 'BEGIN_PR1596_DOC_INDEX_ERROR'
+          tail -n 50 /tmp/pr1596-doc-index.log
+          echo 'END_PR1596_DOC_INDEX_ERROR'
