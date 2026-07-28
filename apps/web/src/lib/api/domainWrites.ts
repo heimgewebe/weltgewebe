@@ -111,15 +111,11 @@ async function deleteJson<T>(path: string, etag?: string): Promise<T> {
     throw new ApiRequestError(res.status, await readErrorBody(res));
   }
 
-  const text = await res.text().catch(() => "");
-  if (!text) {
-    throw new ApiRequestError(502);
+  const body = await readErrorBody(res);
+  if (body === undefined || typeof body === "string") {
+    throw new ApiRequestError(502, body);
   }
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    throw new ApiRequestError(502, text);
-  }
+  return body as T;
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
