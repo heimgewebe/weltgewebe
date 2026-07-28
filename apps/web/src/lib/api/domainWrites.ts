@@ -110,12 +110,9 @@ async function deleteJson<T>(path: string, etag?: string): Promise<T> {
   if (!res.ok) {
     throw new ApiRequestError(res.status, await readErrorBody(res));
   }
-
-  const body = await readErrorBody(res);
-  if (body === undefined || typeof body === "string") {
-    throw new ApiRequestError(502, body);
-  }
-  return body as T;
+  return res.json().catch(() => {
+    throw new ApiRequestError(502);
+  });
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
