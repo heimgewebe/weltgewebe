@@ -139,7 +139,7 @@ describe("domain writes", () => {
 
     const error = await deleteNode("node-a").catch((reason) => reason);
     expect(error).toBeInstanceOf(ApiRequestError);
-    expect(error).toMatchObject({ status: 502, body: "not-json" });
+    expect(error).toMatchObject({ status: 502, body: undefined });
   });
 
   it("keeps the structured delete conflict from JSON responses", async () => {
