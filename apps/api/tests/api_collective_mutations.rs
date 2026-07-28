@@ -39,7 +39,6 @@ async fn state_for_role(role: Role) -> Result<ApiState> {
     })?;
     let config = AppConfig {
         fade_days: 7,
-        ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
         max_guest_owned_nodes: 1_000,

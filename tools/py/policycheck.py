@@ -25,7 +25,6 @@ def main() -> int:
 
     try:
         fade_days = lifecycle["fade_days"]
-        ron_days = int(lifecycle["ron_days"])
     except (KeyError, TypeError, ValueError) as exc:
         print(f"::error::invalid lifecycle values: {exc}")
         return 1
@@ -52,9 +51,16 @@ def main() -> int:
             )
             return 1
 
-    if ron_days < fade_days:
-        print("::error::ron_days must be >= fade_days")
-        return 1
+    for source, mapping in (
+        ("policies/retention.yml data_lifecycle", lifecycle),
+        ("configs/app.defaults.yml", defaults),
+    ):
+        if "ron_days" in mapping:
+            print(
+                f"::error::{source} must not publish ron_days; "
+                "no runtime RON retention consumer exists"
+            )
+            return 1
 
     print("policy ok")
     return 0
