@@ -185,3 +185,14 @@ export function replaceNode(
     etag,
   ).catch((error) => preserveOnlyMatchingNodeConflict(error, id));
 }
+
+export type {
+  NodeDeleteConversationEffect,
+  NodeDeleteReceipt,
+} from "./nodeDelete";
+
+/** Lazily load node removal so unrelated routes do not ship its receipt parser. */
+export async function deleteNode(id: string, etag?: string) {
+  const { deleteNode: remove } = await import("./nodeDelete");
+  return remove(id, etag);
+}
