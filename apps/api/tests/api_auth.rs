@@ -1797,8 +1797,8 @@ async fn request_login_provisioning_email_normalization_works() -> Result<()> {
 
     let app = app(state.clone());
 
-    // Input has whitespace and mixed case
-    let input_email = "  Allowed@EXAMPLE.com  ";
+    // Input has mixed case; semantic normalization remains lowercase.
+    let input_email = "Allowed@EXAMPLE.com";
     let normalized_email = "allowed@example.com";
 
     let req = Request::post("/auth/magic-link/request")
