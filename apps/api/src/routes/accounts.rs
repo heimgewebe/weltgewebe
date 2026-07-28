@@ -737,7 +737,13 @@ fn profile_response(
     }
 }
 
-async fn latest_jsonl_account_record(account_id: &str) -> std::io::Result<Option<Value>> {
+/// Return the latest append-only JSONL record for one account.
+///
+/// Shared with the step-up email update path so every successful JSONL-mode
+/// account mutation is durable before the in-memory cache is changed.
+pub(crate) async fn latest_jsonl_account_record(
+    account_id: &str,
+) -> std::io::Result<Option<Value>> {
     let file = match File::open(accounts_path()).await {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),

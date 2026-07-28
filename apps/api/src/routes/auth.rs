@@ -38,7 +38,10 @@ use crate::{
         update_account_email_in_postgres, AccountEmailUpdateError, AccountWriteError,
     },
     middleware::auth::AuthContext,
-    routes::accounts::{append_account_line, map_json_to_public_account, AccountInternal},
+    routes::accounts::{
+        append_account_line, latest_jsonl_account_record, map_json_to_public_account,
+        AccountInternal,
+    },
     state::ApiState,
 };
 use webauthn_rs::prelude::{PublicKeyCredential, RegisterPublicKeyCredential};
@@ -2178,40 +2181,92 @@ pub async fn consume_step_up(
                 return (StatusCode::NO_CONTENT, jar).into_response();
             }
 
-            let mut accounts = state.accounts.write().await;
-            // JSONL-mode behaviour remains cache-local, but conflict checking and
-            // mutation stay under the same write lock so concurrent in-memory
-            // email updates cannot bypass the duplicate guard.
-            if let Some(existing) = accounts.get_by_email(&new_email) {
-                if existing.public.id != account_id {
-                    tracing::warn!(
-                        event = "auth.step_up.consume.update_email.conflict",
+            let _persist_guard = state.accounts_persist.lock().await;
+            // The persistence guard serializes every JSONL account write. Keep the
+            // cache lock out of filesystem awaits while preserving an atomic
+            // conflict-check/read snapshot for this mutation.
+            let mut account = {
+                let accounts = state.accounts.read().await;
+                if let Some(existing) = accounts.get_by_email(&new_email) {
+                    if existing.public.id != account_id {
+                        tracing::warn!(
+                            event = "auth.step_up.consume.update_email.conflict",
+                            request_id = %request_id,
+                            account_id = %account_id,
+                            "Email was taken by another account before step-up was consumed"
+                        );
+                        let err = serde_json::json!({
+                            "error": "CONFLICT",
+                            "message": "Email already in use"
+                        });
+                        return (StatusCode::CONFLICT, jar, Json(err)).into_response();
+                    }
+                }
+
+                let Some(account) = accounts.get(&account_id).cloned() else {
+                    tracing::error!(
+                        event = "auth.step_up.consume.update_email.missing_account",
                         request_id = %request_id,
                         account_id = %account_id,
-                        "Email was taken by another account before step-up was consumed"
+                        "Account missing during email update step-up consume"
                     );
-                    let err = serde_json::json!({
-                        "error": "CONFLICT",
-                        "message": "Email already in use"
-                    });
-                    return (StatusCode::CONFLICT, jar, Json(err)).into_response();
-                }
-            }
+                    let err = serde_json::json!({"error": "ACCOUNT_INVALID"});
+                    return (StatusCode::BAD_REQUEST, jar, Json(err)).into_response();
+                };
+                account
+            };
 
-            if let Some(mut account) = accounts.get(&account_id).cloned() {
-                account.email = Some(new_email);
-                accounts.insert(account);
-                (StatusCode::NO_CONTENT, jar).into_response()
-            } else {
+            let mut record = match latest_jsonl_account_record(&account_id).await {
+                Ok(Some(record)) => record,
+                Ok(None) => {
+                    tracing::error!(
+                        event = "auth.step_up.consume.update_email.jsonl_missing_record",
+                        request_id = %request_id,
+                        account_id = %account_id,
+                        "Account cache entry has no durable JSONL record"
+                    );
+                    let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+                    return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(err)).into_response();
+                }
+                Err(error) => {
+                    tracing::error!(
+                        event = "auth.step_up.consume.update_email.jsonl_read_failed",
+                        request_id = %request_id,
+                        account_id = %account_id,
+                        error = %error,
+                        "Failed to read durable JSONL account before email update"
+                    );
+                    let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+                    return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(err)).into_response();
+                }
+            };
+            let Some(record_object) = record.as_object_mut() else {
                 tracing::error!(
-                    event = "auth.step_up.consume.update_email.missing_account",
+                    event = "auth.step_up.consume.update_email.jsonl_invalid_record",
                     request_id = %request_id,
                     account_id = %account_id,
-                    "Account missing during email update step-up consume"
+                    "Latest durable JSONL account record is not an object"
                 );
-                let err = serde_json::json!({"error": "ACCOUNT_INVALID"});
-                (StatusCode::BAD_REQUEST, jar, Json(err)).into_response()
+                let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+                return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(err)).into_response();
+            };
+            record_object.insert("email".to_string(), json!(new_email));
+            if let Err(error) = append_account_line(&record).await {
+                tracing::error!(
+                    event = "auth.step_up.consume.update_email.jsonl_persist_failed",
+                    request_id = %request_id,
+                    account_id = %account_id,
+                    error = %error,
+                    "Failed to persist step-up email update to JSONL"
+                );
+                let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+                return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(err)).into_response();
             }
+
+            account.email = Some(new_email);
+            let mut accounts = state.accounts.write().await;
+            accounts.insert(account);
+            (StatusCode::NO_CONTENT, jar).into_response()
         }
         ChallengeIntent::BeginPasskeyRegistration => {
             let grant_id = match state
