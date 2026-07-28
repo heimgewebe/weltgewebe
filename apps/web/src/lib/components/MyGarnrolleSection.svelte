@@ -11,6 +11,10 @@
   import type { Account, GarnrolleMapState, Location } from "$lib/map/types";
   import { createAccountRequestGuard } from "$lib/garnrolle/accountRequestGuard";
   import {
+    constrainCodePointInput,
+    countUnicodeCodePoints,
+  } from "$lib/garnrolle/codePointInput";
+  import {
     describeGarnrolleVisibility,
     findOwnGarnrolle,
   } from "$lib/garnrolle/visibility";
@@ -33,6 +37,8 @@
     clearLocation: boolean;
   };
 
+  const DISPLAY_NAME_MAX_CODE_POINTS = 200;
+  const SUMMARY_MAX_CODE_POINTS = 500;
   const accountRequestGuard = createAccountRequestGuard();
   const saveRequestGuard = createAccountRequestGuard();
   let loadAbortController: AbortController | null = null;
@@ -67,12 +73,19 @@
   $: canEdit = $authStore.authenticated;
   $: radiusIsValid =
     Number.isInteger(radiusM) && radiusM >= 50 && radiusM <= 5000;
+  $: displayNameCodePointCount = countUnicodeCodePoints(displayName);
+  $: displayNameTooLong =
+    displayNameCodePointCount > DISPLAY_NAME_MAX_CODE_POINTS;
+  $: summaryCodePointCount = countUnicodeCodePoints(summary);
+  $: summaryTooLong = summaryCodePointCount > SUMMARY_MAX_CODE_POINTS;
   $: formDisabled =
     isLoadingProfile || isSaving || loadedProfileAccountId !== activeAccountId;
   $: canSave =
     canEdit &&
     loadedProfileAccountId === activeAccountId &&
     !!displayName.trim() &&
+    !displayNameTooLong &&
+    !summaryTooLong &&
     !isLoadingProfile &&
     !isSaving &&
     (visibilityChoice === "not_on_map" || selectedLocation !== null) &&
@@ -378,6 +391,39 @@
     ];
   }
 
+  function codePointBoundedInputValue(
+    event: Event,
+    currentValue: string,
+    maxCodePoints: number,
+  ): string {
+    const input = event.currentTarget as HTMLInputElement | HTMLTextAreaElement;
+    const constrainedValue = constrainCodePointInput(
+      currentValue,
+      input.value,
+      maxCodePoints,
+    );
+    if (input.value !== constrainedValue) input.value = constrainedValue;
+    return constrainedValue;
+  }
+
+  function handleDisplayNameInput(event: Event) {
+    if ((event as InputEvent).isComposing) return;
+    displayName = codePointBoundedInputValue(
+      event,
+      displayName,
+      DISPLAY_NAME_MAX_CODE_POINTS,
+    );
+  }
+
+  function handleSummaryInput(event: Event) {
+    if ((event as InputEvent).isComposing) return;
+    summary = codePointBoundedInputValue(
+      event,
+      summary,
+      SUMMARY_MAX_CODE_POINTS,
+    );
+  }
+
   function describeSaveError(error: unknown): string {
     if (error instanceof ApiRequestError) {
       if (error.status === 401) {
@@ -520,19 +566,39 @@
         <label>
           Anzeigename
           <input
-            bind:value={displayName}
+            value={displayName}
+            on:input={handleDisplayNameInput}
             placeholder="Meine Garnrolle"
-            maxlength="160"
+            aria-invalid={displayNameTooLong}
+            aria-describedby="garnrolle-display-name-length"
             required
           />
+          <small id="garnrolle-display-name-length" class="field-intro">
+            Anzeigename: {displayNameCodePointCount}/{DISPLAY_NAME_MAX_CODE_POINTS}
+            Unicode-Zeichen.
+          </small>
         </label>
         <label>
           Kurzbeschreibung
           <textarea
-            bind:value={summary}
+            value={summary}
+            on:input={handleSummaryInput}
             rows="3"
-            maxlength="500"
+            aria-invalid={summaryTooLong}
+            aria-describedby="garnrolle-summary-length"
             placeholder="Was bringst du ins Gewebe ein?"></textarea>
+          <small
+            id="garnrolle-summary-length"
+            class={summaryTooLong
+              ? "field-intro form-message error"
+              : "field-intro"}
+            role={summaryTooLong ? "alert" : undefined}
+          >
+            Kurzbeschreibung: {summaryCodePointCount}/{SUMMARY_MAX_CODE_POINTS}
+            Unicode-Zeichen{summaryTooLong
+              ? " – bitte vor dem Speichern kürzen"
+              : ""}.
+          </small>
         </label>
         <label>
           Fähigkeiten

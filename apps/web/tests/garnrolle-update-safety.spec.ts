@@ -71,6 +71,97 @@ async function openProfile(page: Page, accountId = ACCOUNT_ID) {
 }
 
 test.describe("Garnrolle update safety", () => {
+  test("keeps an overlong loaded summary visible and blocks saving until it is corrected", async ({
+    page,
+  }) => {
+    await mockApiResponses(page, {
+      auth: { authenticated: true, account_id: ACCOUNT_ID, role: "weber" },
+    });
+    const legacySummary = "🐋".repeat(501);
+    const validSummary = "🐋".repeat(500);
+    const profile: Profile = {
+      id: ACCOUNT_ID,
+      title: "Bestehende Garnrolle",
+      summary: legacySummary,
+      tags: ["account", "garnrolle"],
+      location: null,
+      map_state: "not_on_map",
+      radius_m: 0,
+    };
+    let savedPayload: Record<string, unknown> | null = null;
+    await installProfileRoute(page, profile, async (route, payload) => {
+      savedPayload = payload;
+      profile.title = String(payload.title);
+      profile.summary = String(payload.summary);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(profile),
+      });
+    });
+
+    await page.goto("/settings#meine-garnrolle");
+    const section = page.locator('[data-testid="my-garnrolle-section"]');
+    const summary = section.getByLabel("Kurzbeschreibung");
+    const save = section.locator('[data-testid="save-garnrolle"]');
+
+    await expect(summary).toHaveValue(legacySummary);
+    await expect(summary).toHaveAttribute("aria-invalid", "true");
+    await expect(section.locator("#garnrolle-summary-length")).toContainText(
+      "501/500 Unicode-Zeichen",
+    );
+    await expect(save).toBeDisabled();
+
+    await summary.fill(validSummary);
+    await expect(summary).toHaveValue(validSummary);
+    await expect(summary).toHaveAttribute("aria-invalid", "false");
+    await expect(save).toBeEnabled();
+    await save.click();
+
+    expect(savedPayload).toMatchObject({ summary: validSummary });
+  });
+
+  test("keeps an overlong summary restored from session storage visible and invalid", async ({
+    page,
+  }) => {
+    const legacySummary = "🐋".repeat(501);
+    await page.addInitScript(
+      ({ accountId, restoredSummary }) => {
+        sessionStorage.setItem(
+          `weltgewebe:garnrolle-draft:${accountId}`,
+          JSON.stringify({ summary: restoredSummary }),
+        );
+      },
+      { accountId: ACCOUNT_ID, restoredSummary: legacySummary },
+    );
+    await mockApiResponses(page, {
+      auth: { authenticated: true, account_id: ACCOUNT_ID, role: "weber" },
+    });
+    const profile: Profile = {
+      id: ACCOUNT_ID,
+      title: "Bestehende Garnrolle",
+      summary: "Bereits eingerichtet",
+      tags: ["account", "garnrolle"],
+      location: null,
+      map_state: "not_on_map",
+      radius_m: 0,
+    };
+    await installProfileRoute(page, profile);
+
+    await page.goto("/settings#meine-garnrolle");
+    const section = page.locator('[data-testid="my-garnrolle-section"]');
+    const summary = section.getByLabel("Kurzbeschreibung");
+
+    await expect(summary).toHaveValue(legacySummary);
+    await expect(summary).toHaveAttribute("aria-invalid", "true");
+    await expect(section.locator("#garnrolle-summary-length")).toContainText(
+      "501/500 Unicode-Zeichen",
+    );
+    await expect(
+      section.locator('[data-testid="save-garnrolle"]'),
+    ).toBeDisabled();
+  });
+
   test("preserves an untouched private address by omission", async ({
     page,
   }) => {

@@ -29,6 +29,5 @@ describe("Garnrolle account request guard", () => {
 
     expect(component).toContain('import { onDestroy, tick } from "svelte";');
     expect(component).toContain("onDestroy(invalidateAccountOperations);");
-    expect(component).toContain('maxlength="500"');
   });
 });

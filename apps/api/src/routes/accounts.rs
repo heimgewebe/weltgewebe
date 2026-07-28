@@ -714,11 +714,19 @@ pub(crate) async fn append_account_line(record: &Value) -> std::io::Result<()> {
     Ok(())
 }
 
-const MAX_PROFILE_TITLE_LEN: usize = 160;
+const MAX_ACCOUNT_TITLE_LEN: usize = 200;
 const MAX_PROFILE_SUMMARY_LEN: usize = 500;
 const MAX_PROFILE_ADDRESS_LEN: usize = 500;
 const MAX_PROFILE_TAGS: usize = 64;
 const MAX_PROFILE_TAG_LEN: usize = 64;
+
+fn normalise_profile_title(raw: &str) -> Result<String, &'static str> {
+    let title = raw.trim();
+    if title.is_empty() || title.chars().count() > MAX_ACCOUNT_TITLE_LEN {
+        return Err("title must contain between 1 and 200 characters");
+    }
+    Ok(title.to_string())
+}
 
 fn normalise_profile_summary(raw: Option<&str>) -> Result<Option<String>, &'static str> {
     let summary = raw
@@ -820,10 +828,7 @@ fn validate_profile_update(
     payload: UpdateOwnGarnrolleRequest,
 ) -> Result<AccountProfileUpdate, (StatusCode, String)> {
     let bad = |message: &str| (StatusCode::BAD_REQUEST, message.to_string());
-    let title = payload.title.trim().to_string();
-    if title.is_empty() || title.len() > MAX_PROFILE_TITLE_LEN {
-        return Err(bad("title must be between 1 and 160 bytes"));
-    }
+    let title = normalise_profile_title(&payload.title).map_err(bad)?;
     let summary = normalise_profile_summary(payload.summary.as_deref()).map_err(bad)?;
     let address_was_provided = payload.address.is_some();
     let address = payload
@@ -1175,7 +1180,7 @@ pub async fn create_account(
         .and_then(|v| v.as_str())
         .map(str::trim)
         .unwrap_or("");
-    if title.is_empty() || title.chars().count() > 200 {
+    if title.is_empty() || title.chars().count() > MAX_ACCOUNT_TITLE_LEN {
         return Err(bad("title must contain between 1 and 200 characters"));
     }
 
@@ -1741,6 +1746,21 @@ mod profile_update_tests {
             location,
             clear_location: false,
         }
+    }
+
+    #[test]
+    fn profile_title_limit_uses_schema_characters() {
+        let valid = "🐋".repeat(MAX_ACCOUNT_TITLE_LEN);
+        let invalid = "🐋".repeat(MAX_ACCOUNT_TITLE_LEN + 1);
+
+        assert_eq!(
+            normalise_profile_title(&valid).expect("200 Unicode characters"),
+            valid
+        );
+        assert_eq!(
+            normalise_profile_title(&invalid),
+            Err("title must contain between 1 and 200 characters")
+        );
     }
 
     #[test]
