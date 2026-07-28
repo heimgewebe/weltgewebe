@@ -423,6 +423,57 @@ async fn postgres_node_patch_persists_and_reload_sees_change() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_patch_rejects_oversized_info_without_side_effects() -> Result<()> {
+    const INFO_MAX_LEN: usize = 20_000;
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+    seed_node(&pool, NODE_A, Some("initial"), None).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) =
+        postgres_write_app(pool.clone(), "10000000-0000-0000-0000-000000000099").await?;
+    let request_body = serde_json::json!({ "info": "a".repeat(INFO_MAX_LEN + 1) }).to_string();
+    let response = app
+        .oneshot(patch_node_req(
+            &cookie,
+            NODE_A,
+            &request_body,
+            SEEDED_NODE_ETAG,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    assert_eq!(
+        String::from_utf8(response_body.to_vec())?,
+        "invalid node patch request: info exceeds the maximum length of 20000"
+    );
+
+    let persisted_info: Option<String> =
+        sqlx::query_scalar("SELECT payload->>'info' FROM domain_nodes WHERE id = $1")
+            .bind(NODE_A)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(persisted_info.as_deref(), Some("initial"));
+    let cached_info = state
+        .nodes
+        .read()
+        .await
+        .get(NODE_A)
+        .and_then(|node| node.info.clone());
+    assert_eq!(cached_info.as_deref(), Some("initial"));
+
+    clean(&pool).await;
+    Ok(())
+}
+
 /// B. No JSONL side-effect in PostgreSQL mode.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]

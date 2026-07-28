@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { mockApiResponses } from "./fixtures/mockApi";
+import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 import { activateToolFanAction } from "./fixtures/toolFan";
 
 test.describe("Sicht mode", () => {
@@ -8,26 +8,28 @@ test.describe("Sicht mode", () => {
     await mockApiResponses(page);
 
     // 2. Explicit, deterministic mock data overrides
-    await page.route("**/api/nodes", async (route) => {
+    await page.route("**/api/nodes*", async (route) => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "node-1",
-            title: "Test Node 1",
-            kind: "Event",
-            location: { lat: 53.5, lon: 10.0 },
-            summary: "A test event node.",
-          },
-          {
-            id: "node-2",
-            title: "Test Node 2",
-            kind: "Place",
-            location: { lat: 53.6, lon: 10.1 },
-            summary: "A test place node.",
-          },
-        ]),
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [
+            {
+              id: "node-1",
+              title: "Test Node 1",
+              kind: "Event",
+              location: { lat: 53.5, lon: 10.0 },
+              summary: "A test event node.",
+            },
+            {
+              id: "node-2",
+              title: "Test Node 2",
+              kind: "Place",
+              location: { lat: 53.6, lon: 10.1 },
+              summary: "A test place node.",
+            },
+          ]),
+        ),
       });
     });
 
@@ -78,27 +80,29 @@ test.describe("Sicht mode", () => {
       });
     });
 
-    await page.route("**/api/accounts", async (route) => {
+    await page.route("**/api/accounts*", async (route) => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "account-1",
-            title: "Test Account",
-            type: "Garnrolle",
-            public_pos: { lat: 53.55, lon: 10.05 },
-            summary: "A test account.",
-          },
-        ]),
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [
+            {
+              id: "account-1",
+              title: "Test Account",
+              type: "Garnrolle",
+              public_pos: { lat: 53.55, lon: 10.05 },
+              summary: "A test account.",
+            },
+          ]),
+        ),
       });
     });
 
-    await page.route("**/api/edges", async (route) => {
+    await page.route("**/api/edges*", async (route) => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([]), // No edges needed for this test
+        body: JSON.stringify(mockListResponse(route.request().url(), [])), // No edges needed for this test
       });
     });
 

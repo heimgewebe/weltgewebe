@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { mockApiResponses } from "./fixtures/mockApi";
+import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 
 test.describe("Garnrolle relations", () => {
   test("shows connected Knoten and activity from persisted Fäden", async ({
@@ -7,59 +7,65 @@ test.describe("Garnrolle relations", () => {
   }) => {
     await mockApiResponses(page);
 
-    await page.route("**/api/nodes", async (route) => {
+    await page.route("**/api/nodes*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "node-1",
-            kind: "resource",
-            title: "fairschenkbox",
-            created_at: "2026-07-11T11:11:50.289607+00:00",
-            updated_at: "2026-07-11T11:11:50.289607+00:00",
-            summary: "sharing is caring",
-            address: "Caspar-Voght-Straße 35",
-            location: { lat: 53.55899732464337, lon: 10.060655662114556 },
-          },
-        ]),
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [
+            {
+              id: "node-1",
+              kind: "resource",
+              title: "fairschenkbox",
+              created_at: "2026-07-11T11:11:50.289607+00:00",
+              updated_at: "2026-07-11T11:11:50.289607+00:00",
+              summary: "sharing is caring",
+              address: "Caspar-Voght-Straße 35",
+              location: { lat: 53.55899732464337, lon: 10.060655662114556 },
+            },
+          ]),
+        ),
       });
     });
 
-    await page.route("**/api/accounts", async (route) => {
+    await page.route("**/api/accounts*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "account-1",
-            type: "garnrolle",
-            title: "Alexander Mohr",
-            summary: "schaunmermal",
-            public_pos: { lat: 53.560395907330474, lon: 10.063080663681632 },
-            map_state: "exact",
-            radius_m: 0,
-            tags: ["interest:Commons", "account", "garnrolle"],
-          },
-        ]),
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [
+            {
+              id: "account-1",
+              type: "garnrolle",
+              title: "Alexander Mohr",
+              summary: "schaunmermal",
+              public_pos: { lat: 53.560395907330474, lon: 10.063080663681632 },
+              map_state: "exact",
+              radius_m: 0,
+              tags: ["interest:Commons", "account", "garnrolle"],
+            },
+          ]),
+        ),
       });
     });
 
-    await page.route("**/api/edges", async (route) => {
+    await page.route("**/api/edges*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "edge-1",
-            source_id: "account-1",
-            source_type: "account",
-            target_id: "node-1",
-            target_type: "node",
-            edge_kind: "reference",
-            created_at: "2026-07-11T11:11:50.322307+00:00",
-          },
-        ]),
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [
+            {
+              id: "edge-1",
+              source_id: "account-1",
+              source_type: "account",
+              target_id: "node-1",
+              target_type: "node",
+              edge_kind: "reference",
+              created_at: "2026-07-11T11:11:50.322307+00:00",
+            },
+          ]),
+        ),
       });
     });
 
