@@ -1261,6 +1261,143 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.assertEqual(receipt["schema_version"], 5)
         self.assertEqual(receipt["result"], "verified_observed")
 
+    def schema5_verified_receipt(self, **overrides: object) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "schema_version": 5,
+            "environment": "production",
+            "commit": self.commit,
+            "web_artifact_sha256": "a" * 64,
+            "started_at": "2026-07-27T00:00:00+00:00",
+            "completed_at": "2026-07-27T00:01:00+00:00",
+            "api_commit": self.commit,
+            "frontend_commit": self.commit,
+            "observed_main_after_deploy": self.commit,
+            "migration_completed_at": "2026-07-27T00:00:30+00:00",
+            "lock_domain": "weltgewebe-production-deployment-v1",
+            "lock_owner_entrypoint": "deploy-helper",
+            "lock_handoff": "direct",
+            "result": "verified",
+            "deploy_invocation_id": None,
+        }
+        payload.update(overrides)
+        return payload
+
+    def assert_schema5_receipt_rewritten_as_observed(
+        self, payload: dict[str, object]
+    ) -> dict[str, object]:
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json", payload
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["schema_version"], 5)
+        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["lock_domain"], "weltgewebe-production-deployment-v1")
+        return receipt
+
+    def test_public_noop_preserves_valid_direct_schema5_verified_receipt(self) -> None:
+        original = self.schema5_verified_receipt()
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json", original
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt, original)
+
+    def test_public_noop_preserves_valid_inherited_schema5_verified_receipt(
+        self,
+    ) -> None:
+        original = self.schema5_verified_receipt(
+            lock_owner_entrypoint="reconciler",
+            lock_handoff="inherited",
+            deploy_invocation_id="b" * 64,
+        )
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json", original
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt, original)
+
+    def test_public_noop_rewrites_schema5_verified_with_unknown_field(self) -> None:
+        receipt = self.assert_schema5_receipt_rewritten_as_observed(
+            self.schema5_verified_receipt(untrusted_extension="value")
+        )
+        self.assertNotIn("untrusted_extension", receipt)
+
+    def test_public_noop_rewrites_schema5_verified_with_naive_timestamp(self) -> None:
+        self.assert_schema5_receipt_rewritten_as_observed(
+            self.schema5_verified_receipt(started_at="2026-07-27T00:00:00")
+        )
+
+    def test_public_noop_rewrites_schema5_verified_with_invalid_timestamp(self) -> None:
+        self.assert_schema5_receipt_rewritten_as_observed(
+            self.schema5_verified_receipt(completed_at="not-a-time")
+        )
+
+    def test_public_noop_rewrites_schema5_verified_with_overflowing_timestamp(
+        self,
+    ) -> None:
+        self.assert_schema5_receipt_rewritten_as_observed(
+            self.schema5_verified_receipt(
+                started_at="0001-01-01T00:00:00+23:59"
+            )
+        )
+
+    def test_public_noop_rewrites_schema5_verified_with_wrong_time_order(self) -> None:
+        self.assert_schema5_receipt_rewritten_as_observed(
+            self.schema5_verified_receipt(
+                migration_completed_at="2026-07-27T00:02:00+00:00"
+            )
+        )
+
+    def test_public_noop_preserves_valid_schema5_observed_receipt(self) -> None:
+        original = self.schema5_verified_receipt(
+            web_artifact_sha256=None,
+            started_at=None,
+            migration_completed_at=None,
+            lock_owner_entrypoint="reconciler",
+            lock_handoff="public-observation",
+            result="verified_observed",
+            evidence_boundary="Exact public readback only.",
+        )
+        self.install_root_json(
+            self.state / "receipts" / f"{self.commit}.json", original
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt, original)
+
+    def test_public_noop_rewrites_schema5_observed_with_unknown_field(self) -> None:
+        payload = self.schema5_verified_receipt(
+            web_artifact_sha256=None,
+            started_at=None,
+            migration_completed_at=None,
+            lock_owner_entrypoint="reconciler",
+            lock_handoff="public-observation",
+            result="verified_observed",
+            evidence_boundary="Exact public readback only.",
+            untrusted_extension="value",
+        )
+        receipt = self.assert_schema5_receipt_rewritten_as_observed(payload)
+        self.assertNotIn("untrusted_extension", receipt)
+
     def test_public_noop_rewrites_invalid_schema5_verified_receipt(self) -> None:
         self.install_root_json(
             self.state / "receipts" / f"{self.commit}.json",
