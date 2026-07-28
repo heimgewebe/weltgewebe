@@ -413,7 +413,7 @@ async fn create_profile_fields_are_bounded_and_normalised_before_jsonl_side_effe
             "id": "55555555-5555-4555-8555-555555555553",
             "title": "Tag too long",
             "location": {"lat": 53.55, "lon": 9.99},
-            "tags": ["x".repeat(81)]
+            "tags": ["x".repeat(65)]
         }),
     ];
 
@@ -432,12 +432,19 @@ async fn create_profile_fields_are_bounded_and_normalised_before_jsonl_side_effe
     );
 
     let id = "55555555-5555-4555-8555-555555555554";
+    let international_tag = "🐋".repeat(64);
+    let expected_tags = vec![
+        "alpha".to_string(),
+        "beta".to_string(),
+        international_tag.clone(),
+    ];
+    let expected_tags_json = serde_json::to_value(&expected_tags)?;
     let payload = serde_json::json!({
         "id": id,
         "title": "Normalised",
         "location": {"lat": 53.55, "lon": 9.99},
         "summary": "  Gemeinsame Dinge  ",
-        "tags": [" alpha ", "alpha", "", " beta "]
+        "tags": [" alpha ", "alpha", "", " beta ", international_tag]
     });
     let response = app
         .clone()
@@ -447,18 +454,18 @@ async fn create_profile_fields_are_bounded_and_normalised_before_jsonl_side_effe
     let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
     let created: serde_json::Value = serde_json::from_slice(&bytes)?;
     assert_eq!(created["summary"], "Gemeinsame Dinge");
-    assert_eq!(created["tags"], serde_json::json!(["alpha", "beta"]));
+    assert_eq!(created["tags"], expected_tags_json);
 
     let cached = state.accounts.read().await;
     let account = cached.get(id).context("normalised account in cache")?;
     assert_eq!(account.public.summary.as_deref(), Some("Gemeinsame Dinge"));
-    assert_eq!(account.public.tags, ["alpha", "beta"]);
+    assert_eq!(account.public.tags, expected_tags);
     drop(cached);
 
     let persisted = std::fs::read_to_string(in_dir.join("demo.accounts.jsonl"))?;
     let record: serde_json::Value = serde_json::from_str(persisted.trim())?;
     assert_eq!(record["summary"], "Gemeinsame Dinge");
-    assert_eq!(record["tags"], serde_json::json!(["alpha", "beta"]));
+    assert_eq!(record["tags"], expected_tags_json);
 
     Ok(())
 }

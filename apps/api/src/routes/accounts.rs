@@ -718,7 +718,7 @@ const MAX_PROFILE_TITLE_LEN: usize = 160;
 const MAX_PROFILE_SUMMARY_LEN: usize = 2_000;
 const MAX_PROFILE_ADDRESS_LEN: usize = 500;
 const MAX_PROFILE_TAGS: usize = 64;
-const MAX_PROFILE_TAG_LEN: usize = 80;
+const MAX_PROFILE_TAG_LEN: usize = 64;
 
 fn normalise_profile_summary(raw: Option<&str>) -> Result<Option<String>, &'static str> {
     let summary = raw
@@ -744,7 +744,7 @@ fn normalise_profile_tags<'a>(
         if tag.is_empty() {
             continue;
         }
-        if tag.len() > MAX_PROFILE_TAG_LEN {
+        if tag.chars().count() > MAX_PROFILE_TAG_LEN {
             return Err("a tag is too long");
         }
         if !tags.iter().any(|existing| existing == tag) {
