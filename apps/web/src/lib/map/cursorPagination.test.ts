@@ -174,7 +174,9 @@ describe("loadMapResources", () => {
   });
 
   it("uses cursor transport by default for relative same-origin APIs", async () => {
-    const fetcher = vi.fn(async () => page([], false, null, 1000));
+    const fetcher = vi.fn<(input: string) => Promise<Response>>(async () =>
+      page([], false, null, 1000),
+    );
 
     const result = await loadMapResources(fetcher, "");
 
