@@ -1,6 +1,6 @@
 ---
 name: PR1596 Isolated Conversation DB Proof
-# activation revision: 3
+# activation revision: 4
 
 permissions:
   contents: write
@@ -17,6 +17,10 @@ permissions:
     paths:
       - '.github/pr1596-isolate-conversation-db-tests.py'
       - '.github/workflows/pr1596-product-convergence.yml'
+
+concurrency:
+  group: pr1596-isolated-conversation-db-proof
+  cancel-in-progress: true
 
 jobs:
   prove:
@@ -40,6 +44,10 @@ jobs:
       DATABASE_URL: postgres://welt:gewebe@localhost:5432/weltgewebe_ci_proof
       GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Publish start receipt
+        run: |
+          gh pr comment 1596 --repo "${GITHUB_REPOSITORY}" --body "PR1596 isolated PostgreSQL proof started on head \`${GITHUB_SHA}\`."
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
