@@ -1,6 +1,6 @@
 ---
 name: PR1596 Product Convergence
-# activation revision: 5
+# activation revision: 6
 
 permissions:
   contents: write
@@ -95,7 +95,7 @@ jobs:
       - name: Validate docs
         run: |
           set -o pipefail
-          python3 scripts/docmeta/check_repo_index_consistency.py 2>&1 | tee /tmp/pr1596-docs.log
+          python3 -m scripts.docmeta.check_repo_index_consistency 2>&1 | tee /tmp/pr1596-docs.log
 
       - name: Diff check
         run: |
