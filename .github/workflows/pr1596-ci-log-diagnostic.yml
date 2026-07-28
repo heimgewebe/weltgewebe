@@ -1,5 +1,6 @@
 ---
 name: PR1596 CI Log Diagnostic
+# activation revision: 2
 
 permissions:
   actions: read
