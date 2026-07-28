@@ -248,12 +248,72 @@ where
     Deserialize::deserialize(deserializer).map(Some)
 }
 
+/// Mirrors `contracts/domain/node.schema.json` (`info.maxLength`) for every
+/// node write path, including partial updates.
+const NODE_INFO_MAX_LEN: usize = 20_000;
+
 #[derive(Deserialize)]
 pub struct UpdateNode {
     #[serde(default, deserialize_with = "deserialize_some")]
     pub info: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_some")]
     pub search_visibility: Option<Option<SearchVisibility>>,
+}
+
+#[derive(Debug, PartialEq)]
+enum NodePatchValidationError {
+    InfoTooLong { max: usize },
+}
+
+impl UpdateNode {
+    fn validate(&self) -> Result<(), NodePatchValidationError> {
+        if let Some(Some(info)) = &self.info {
+            if info.chars().count() > NODE_INFO_MAX_LEN {
+                return Err(NodePatchValidationError::InfoTooLong {
+                    max: NODE_INFO_MAX_LEN,
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+fn node_patch_error_message(error: &NodePatchValidationError) -> String {
+    match error {
+        NodePatchValidationError::InfoTooLong { max } => {
+            format!("info exceeds the maximum length of {max}")
+        }
+    }
+}
+
+#[cfg(test)]
+mod node_patch_validation_tests {
+    use super::{NodePatchValidationError, SearchVisibility, UpdateNode, NODE_INFO_MAX_LEN};
+
+    #[test]
+    fn accepts_absent_null_and_exact_limit_info() {
+        for info in [None, Some(None), Some(Some("a".repeat(NODE_INFO_MAX_LEN)))] {
+            let request = UpdateNode {
+                info,
+                search_visibility: Some(Some(SearchVisibility::Public)),
+            };
+            assert_eq!(request.validate(), Ok(()));
+        }
+    }
+
+    #[test]
+    fn rejects_info_over_limit() {
+        let request = UpdateNode {
+            info: Some(Some("a".repeat(NODE_INFO_MAX_LEN + 1))),
+            search_visibility: None,
+        };
+        assert_eq!(
+            request.validate(),
+            Err(NodePatchValidationError::InfoTooLong {
+                max: NODE_INFO_MAX_LEN,
+            })
+        );
+    }
 }
 
 /// Lightweight struct for fast-path ID checking during node rewrites.
@@ -1376,7 +1436,7 @@ pub async fn create_node(
 /// can safely replay the same account-scoped create action when the derived
 /// Faden projection fails after the node itself became durable.
 mod node_create {
-    use super::SearchVisibility;
+    use super::{SearchVisibility, NODE_INFO_MAX_LEN};
     use serde::{de, Deserialize, Deserializer};
     use uuid::Uuid;
 
@@ -1401,8 +1461,6 @@ mod node_create {
     const NODE_ADDRESS_MAX_LEN: usize = 500;
     /// Mirrors `contracts/domain/node.schema.json` (`summary.maxLength`).
     const NODE_SUMMARY_MAX_LEN: usize = 500;
-    /// Mirrors `contracts/domain/node.schema.json` (`info.maxLength`).
-    const NODE_INFO_MAX_LEN: usize = 20_000;
     /// Mirrors `contracts/domain/node.schema.json` (`tags.items.maxLength`).
     const NODE_TAG_MAX_LEN: usize = 64;
     /// The domain contract does not cap the number of tags; this bound exists
@@ -2801,6 +2859,15 @@ pub async fn patch_node(
 ) -> Result<Json<Node>, NodeMutationError> {
     reject_node_patch_unless_writable(&state)
         .map_err(|(status, body)| NodeMutationError::Message(status, body))?;
+    payload.validate().map_err(|error| {
+        NodeMutationError::Message(
+            StatusCode::BAD_REQUEST,
+            format!(
+                "invalid node patch request: {}",
+                node_patch_error_message(&error)
+            ),
+        )
+    })?;
 
     if state.config.domain_node_write_source == DomainNodeWriteSource::Postgres {
         return patch_node_postgres(&state, &id, payload).await;
