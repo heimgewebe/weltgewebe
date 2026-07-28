@@ -1,6 +1,6 @@
 ---
 name: PR1596 Product Convergence
-# activation revision: 2
+# activation revision: 3
 
 permissions:
   contents: write
@@ -55,11 +55,23 @@ jobs:
           expected=$'apps/api/src/routes/nodes.rs\napps/api/tests/api_collective_mutations.rs\napps/web/src/lib/api/domainWrites.test.ts\napps/web/src/lib/api/domainWrites.ts\napps/web/src/lib/components/ContextPanel.svelte\napps/web/src/lib/components/panels/NodePanel.svelte\napps/web/src/routes/map/+page.svelte\napps/web/tests/fixtures/mockApi.ts\napps/web/tests/node-mutations.spec.ts\ndocs/specs/objektlebenszyklen-und-loeschwirkungen.md'
           test "$(git diff --name-only | sort)" = "$expected"
 
-      - name: Validate Rust
+      - name: Clippy
         run: |
-          set -euo pipefail
-          cargo clippy --locked --manifest-path apps/api/Cargo.toml --all-targets -- -D warnings
-          cargo test --locked --manifest-path apps/api/Cargo.toml --test api_collective_mutations
+          set -o pipefail
+          cargo clippy --locked --manifest-path apps/api/Cargo.toml --all-targets -- -D warnings 2>&1 | tee /tmp/pr1596-clippy.log
+
+      - name: JSONL mutation tests
+        run: |
+          set -o pipefail
+          cargo test --locked --manifest-path apps/api/Cargo.toml --test api_collective_mutations 2>&1 | tee /tmp/pr1596-rust-tests.log
+
+      - name: Report Rust failure
+        if: failure()
+        run: |
+          echo 'BEGIN_PR1596_RUST_FAILURE'
+          test ! -f /tmp/pr1596-clippy.log || tail -n 80 /tmp/pr1596-clippy.log
+          test ! -f /tmp/pr1596-rust-tests.log || tail -n 80 /tmp/pr1596-rust-tests.log
+          echo 'END_PR1596_RUST_FAILURE'
 
       - name: Validate web
         working-directory: apps/web
