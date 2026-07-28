@@ -490,6 +490,17 @@ class InvalidReceiptContent(ValueError):
     pass
 
 
+def reject_duplicate_json_keys(
+    pairs: list[tuple[str, object]],
+) -> dict[str, object]:
+    payload: dict[str, object] = {}
+    for key, value in pairs:
+        if key in payload:
+            raise InvalidReceiptContent(f"receipt contains duplicate key: {key}")
+        payload[key] = value
+    return payload
+
+
 def read_root_json(path: Path, *, missing_ok: bool = False):
     directory_fd = None
     file_fd = None
@@ -538,7 +549,9 @@ def read_root_json(path: Path, *, missing_ok: bool = False):
             os.close(directory_fd)
 
     try:
-        payload = json.loads(raw.decode("utf-8"))
+        payload = json.loads(
+            raw.decode("utf-8"), object_pairs_hook=reject_duplicate_json_keys
+        )
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise InvalidReceiptContent(f"receipt is unreadable: {path}: {exc}") from exc
     if not isinstance(payload, dict):

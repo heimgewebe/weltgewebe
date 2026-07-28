@@ -677,12 +677,12 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         )
         return run(argv, check=False)
 
-    def install_root_json(self, path: Path, payload: dict[str, object]) -> None:
+    def install_root_text(self, path: Path, content: str) -> None:
         source = (
             self.root
             / f"receipt-source-{len(list(self.root.glob('receipt-source-*')))}.json"
         )
-        source.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+        source.write_text(content, encoding="utf-8")
         run(
             self.privileged(
                 [
@@ -713,6 +713,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 ]
             )
         )
+
+    def install_root_json(self, path: Path, payload: dict[str, object]) -> None:
+        self.install_root_text(path, json.dumps(payload) + "\n")
 
     def reconcile_existing_public_commit(self) -> subprocess.CompletedProcess[str]:
         reconcile_env = self.base_environment()
@@ -1407,6 +1410,28 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(receipt["result"], "verified_observed")
         self.assertNotIn("untrusted_extension", receipt)
+
+    def test_public_noop_does_not_promote_schema4_with_duplicate_keys(
+        self,
+    ) -> None:
+        serialized = json.dumps(self.schema4_verified_receipt())
+        conflicting_commit = "f" * 40
+        serialized = serialized.replace(
+            f'"commit": "{self.commit}"',
+            f'"commit": "{conflicting_commit}", "commit": "{self.commit}"',
+            1,
+        )
+        self.install_root_text(
+            self.state / "receipts" / f"{self.commit}.json", serialized + "\n"
+        )
+        result = self.reconcile_existing_public_commit()
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(
+            (self.state / "receipts" / f"{self.commit}.json").read_text()
+        )
+        self.assertEqual(receipt["result"], "verified_observed")
+        self.assert_observed_recovery_timestamps(receipt)
 
     def test_public_noop_rewrites_invalid_schema5_verified_receipt(self) -> None:
         self.install_root_json(
