@@ -71,6 +71,16 @@ class SecureReceiptIoTests(unittest.TestCase):
         with self.assertRaises(secure_io.SecurePayloadError):
             secure_io.read_secure_json(path, expected_uid=self.uid)
 
+    def test_duplicate_json_keys_are_payload_error(self) -> None:
+        path = self.root / "receipt.json"
+        path.write_text('{"value": 1, "value": 2}', encoding="utf-8")
+        path.chmod(0o600)
+
+        with self.assertRaisesRegex(
+            secure_io.SecurePayloadError, "duplicate key: value"
+        ):
+            secure_io.read_secure_json(path, expected_uid=self.uid)
+
     def test_non_object_json_is_payload_error(self) -> None:
         path = self.root / "receipt.json"
         path.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
