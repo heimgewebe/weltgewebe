@@ -635,18 +635,20 @@ jobs:
               --test db_domain_node_write_path \
               -- --include-ignored --test-threads=1
 
-      - name: Run node conversation proof (direct PostgreSQL, --include-ignored)
-        run: |
-          DATABASE_URL="postgres://${PGUSER}:${PGPASSWORD}@localhost:5432/${PGDATABASE}" \
-            cargo test --locked -p weltgewebe-api \
-              --test db_node_conversations \
-              -- --include-ignored --test-threads=1
-
       - name: Run governance conversation target proof (direct PostgreSQL, --include-ignored)
         run: |
           DATABASE_URL="postgres://${PGUSER}:${PGPASSWORD}@localhost:5432/${PGDATABASE}" \
             cargo test --locked -p weltgewebe-api \
               --test db_governance_conversation_target \
+              -- --include-ignored --test-threads=1
+
+      # This suite creates durable public-history fixtures that intentionally cannot be
+      # physically cleaned up. Run every rollback proof before it on the disposable DB.
+      - name: Run node conversation proof (direct PostgreSQL, --include-ignored)
+        run: |
+          DATABASE_URL="postgres://${PGUSER}:${PGPASSWORD}@localhost:5432/${PGDATABASE}" \
+            cargo test --locked -p weltgewebe-api \
+              --test db_node_conversations \
               -- --include-ignored --test-threads=1
 
   db-domain-edge-write-path-proof:
