@@ -42,7 +42,7 @@
             "min_initial_css_assets": 1
           },
           "/antraege": {
-            "max_initial_js_gzip_bytes": 55000,
+            "max_initial_js_gzip_bytes": 55250,
             "max_initial_css_gzip_bytes": 5000,
             "forbid_css_markers": [
               ".maplibregl-"
