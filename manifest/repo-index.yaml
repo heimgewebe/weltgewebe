@@ -19,6 +19,7 @@ zones:
       - ui-state-machine.md
       - garnrolle-knoten-faden.md
       - governance-antraege.md
+      - objektlebenszyklen-und-loeschwirkungen.md
       - ui-interaction.md
       - map-experience.md
       - federation-core.md
