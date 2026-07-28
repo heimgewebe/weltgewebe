@@ -87,8 +87,9 @@ Es beschreibt:
 ## 4 · Ethisch-technische Defaults
 
 - Sichtbarkeit (`fade_days`)
-  - Richtwert: 7 Tage laut zusammenstellung.md.
-  - Herkunft: Funktionsbeschreibung, nicht Code.
+  - Verfassungsfester Wert: 7 Tage für neu abgeleitete, unverzwirnte Fäden.
+  - `fade_days: 7` ist nur eine deklarative Spiegelung; abweichende Werte verhindern den API-Start.
+  - Herkunft: Domänenvertrag und fest gebundene Serverlogik.
 - Anonymisierung (`anonymization_valid_days`)
   - Richtwert: 28 Tage (Delegations-Analogon).
   - Herkunft: Geist & Plan-Ableitung.

@@ -1,5 +1,6 @@
 ---
 data_lifecycle:
+  # Declarative mirror of the fixed 168-hour constitutional Faden lifetime; not a tuning setting.
   fade_days: 7
   ron_days: 84
   delegation_expire_days: 28
