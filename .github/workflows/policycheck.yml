@@ -9,6 +9,7 @@ permissions:
   pull_request:
     paths:
       - "policies/**"
+      - "configs/app.defaults.yml"
       - "tools/py/**"
       - ".github/workflows/policycheck.yml"
       - ".python-version"

@@ -4,7 +4,7 @@ use super::query::{
     MAX_PAGE_SIZE,
 };
 use crate::auth::role::Role;
-use crate::config::DomainEdgeWriteSource;
+use crate::config::{DomainEdgeWriteSource, FIXED_FADEN_FADE_DAYS};
 use crate::domain_db::{
     insert_domain_edge, CreateOperationKey, CreateWriteOutcome, EdgeWriteError,
 };
@@ -183,7 +183,7 @@ pub(crate) const DEFAULT_MAX_EDGES_CACHE: usize = 500_000;
 /// The durable Webungsaktion remains the source of truth; only this active
 /// projection expires. Legacy records without `expires_at` remain visible until
 /// a later, explicit Garn/legacy migration can classify them without guessing.
-pub(crate) const FADEN_LIFETIME_HOURS: i64 = 168;
+pub(crate) const FADEN_LIFETIME_HOURS: i64 = FIXED_FADEN_FADE_DAYS as i64 * 24;
 
 fn faden_expires_at(created_at: DateTime<Utc>) -> DateTime<Utc> {
     created_at + Duration::hours(FADEN_LIFETIME_HOURS)
