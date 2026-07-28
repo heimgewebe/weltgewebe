@@ -50,6 +50,7 @@ import os
 import secrets
 import stat
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 path = Path(sys.argv[1])
@@ -263,7 +264,6 @@ import json
 import os
 import stat
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 MAX_RECEIPT_BYTES = 1048576
