@@ -1,6 +1,6 @@
 ---
 name: PR1596 Product Convergence
-# activation revision: 4
+# activation revision: 5
 
 permissions:
   contents: write
@@ -92,11 +92,23 @@ jobs:
           pnpm exec vitest run src/lib/api/domainWrites.test.ts
           pnpm run check:ci
 
-      - name: Validate docs and diff
+      - name: Validate docs
         run: |
-          set -euo pipefail
-          python3 scripts/docmeta/check_repo_index_consistency.py
-          git diff --check
+          set -o pipefail
+          python3 scripts/docmeta/check_repo_index_consistency.py 2>&1 | tee /tmp/pr1596-docs.log
+
+      - name: Diff check
+        run: |
+          set -o pipefail
+          git diff --check 2>&1 | tee /tmp/pr1596-diff.log
+
+      - name: Report final validation failure
+        if: failure()
+        run: |
+          echo 'BEGIN_PR1596_FINAL_FAILURE'
+          test ! -f /tmp/pr1596-docs.log || tail -n 80 /tmp/pr1596-docs.log
+          test ! -f /tmp/pr1596-diff.log || tail -n 80 /tmp/pr1596-diff.log
+          echo 'END_PR1596_FINAL_FAILURE'
 
       - name: Publish
         run: |
