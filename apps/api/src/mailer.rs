@@ -251,7 +251,6 @@ mod tests {
     fn mailer_rejects_credentials_on_plaintext_port() {
         let _smtp_auth = crate::test_helpers::EnvGuard::set("SMTP_AUTH", "on");
         let config = AppConfig {
-            fade_days: 7,
             anonymize_opt_in: true,
             delegation_expire_days: 28,
             max_guest_owned_nodes: 1_000,
@@ -295,7 +294,6 @@ mod tests {
     #[serial]
     fn mailer_fails_with_invalid_from_address() {
         let config = AppConfig {
-            fade_days: 7,
             anonymize_opt_in: true,
             delegation_expire_days: 28,
             max_guest_owned_nodes: 1_000,

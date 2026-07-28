@@ -11,13 +11,25 @@ permissions:
       - 'contracts/domain/**.schema.json'
       - 'contracts/domain/examples/**.json'
       - 'contracts/federation/v1/**.json'
+      - 'scripts/contracts-domain-check.sh'
+      - 'scripts/json-schema-check.mjs'
+      - 'scripts/tests/json-schema-check.test.mjs'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
       - '.node-version'
+      - '.github/workflows/contracts-domain.yml'
   pull_request:
     paths:
       - 'contracts/domain/**.schema.json'
       - 'contracts/domain/examples/**.json'
       - 'contracts/federation/v1/**.json'
+      - 'scripts/contracts-domain-check.sh'
+      - 'scripts/json-schema-check.mjs'
+      - 'scripts/tests/json-schema-check.test.mjs'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
       - '.node-version'
+      - '.github/workflows/contracts-domain.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,53 +46,49 @@ jobs:
           node-version-file: '.node-version'
           cache: 'pnpm'
 
-      - name: Install ajv-cli and ajv-formats
-        run: pnpm install -g ajv-cli ajv-formats
+      - name: Install pinned schema libraries
+        run: pnpm install --frozen-lockfile
 
-      - name: Compile schemas
-        run: |
-          for schema in contracts/domain/*.schema.json; do
-            echo "Compiling $schema"
-            ajv compile -s "$schema" --strict=false -c ajv-formats
-          done
-
-      - name: Validate example instances
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-
-          for example in contracts/domain/examples/*.example.json; do
-            filename=$(basename "$example")
-            entity="${filename%.example.json}"
-            schema="contracts/domain/${entity}.schema.json"
-            echo "Validating $example against $schema"
-            ajv validate -s "$schema" -d "$example" -c ajv-formats
-          done
+      - name: Compile domain schemas and validate examples
+        run: pnpm contracts:domain:check
 
       - name: Compile Federation v1 schemas
         run: |
           set -euo pipefail
           for schema in contracts/federation/v1/*.schema.json; do
             echo "Compiling $schema"
-            ajv compile --spec=draft2020 -s "$schema" --strict=false -c ajv-formats
+            node scripts/json-schema-check.mjs compile \
+              --schema "$schema" --spec draft2020
           done
 
       - name: Validate Federation v1 positive examples
         run: |
           set -euo pipefail
-          ajv validate --spec=draft2020 -s contracts/federation/v1/event.schema.json \
-            -d contracts/federation/v1/examples/event.example.json --strict=false -c ajv-formats
-          ajv validate --spec=draft2020 -s contracts/federation/v1/cell-descriptor.schema.json \
-            -d contracts/federation/v1/examples/cell-descriptor.example.json --strict=false -c ajv-formats
+          node scripts/json-schema-check.mjs validate \
+            --schema contracts/federation/v1/event.schema.json \
+            --data contracts/federation/v1/examples/event.example.json \
+            --spec draft2020
+          node scripts/json-schema-check.mjs validate \
+            --schema contracts/federation/v1/cell-descriptor.schema.json \
+            --data contracts/federation/v1/examples/cell-descriptor.example.json \
+            --spec draft2020
 
       - name: Reject Federation v1 negative fixtures
         run: |
           set -euo pipefail
           for fixture in contracts/federation/v1/examples/invalid/event.*.invalid.json; do
             echo "Expecting schema rejection: $fixture"
-            if ajv validate --spec=draft2020 -s contracts/federation/v1/event.schema.json \
-              -d "$fixture" --strict=false -c ajv-formats; then
-              echo "error: invalid fixture unexpectedly passed: $fixture" >&2
+            set +e
+            node scripts/json-schema-check.mjs validate \
+              --schema contracts/federation/v1/event.schema.json \
+              --data "$fixture" --spec draft2020
+            rc=$?
+            set -e
+            if [[ "$rc" -ne 1 ]]; then
+              echo "error: expected validation exit 1 for $fixture, got $rc" >&2
               exit 1
             fi
           done
+
+      - name: Test repository schema checker
+        run: pnpm test:json-schema-check

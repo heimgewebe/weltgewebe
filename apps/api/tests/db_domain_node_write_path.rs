@@ -244,7 +244,6 @@ async fn postgres_write_app_with_guest_limit(
         .context("load nodes for test")?;
 
     let config = AppConfig {
-        fade_days: 7,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
         max_guest_owned_nodes,
@@ -567,7 +566,6 @@ async fn postgres_read_jsonl_node_write_is_blocked() -> Result<()> {
     let nodes = load_nodes_from_postgres(&pool).await?;
 
     let config = AppConfig {
-        fade_days: 7,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
         max_guest_owned_nodes: 1_000,
@@ -748,7 +746,6 @@ async fn jsonl_default_node_patch_compiles_and_routes_correctly() -> Result<()> 
     )?;
 
     let config = AppConfig {
-        fade_days: 7,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
         max_guest_owned_nodes: 1_000,

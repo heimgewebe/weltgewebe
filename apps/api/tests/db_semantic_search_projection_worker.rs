@@ -1967,7 +1967,6 @@ async fn t006_search_api_against_postgres_projections() {
         nats_client: None,
         nats_configured: false,
         config: AppConfig {
-            fade_days: 7,
             anonymize_opt_in: true,
             delegation_expire_days: 28,
             max_guest_owned_nodes: 1000,

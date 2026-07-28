@@ -622,6 +622,122 @@ class EvidenceTests(unittest.TestCase):
         self.assertFalse(result["pass"])
         self.assertIn("two distinct reviewer identities", " ".join(result["reasons"]))
 
+    def test_r2_accepts_explicit_self_review_fallback_pair(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",))
+        primary = _record(
+            bundle, reviewer="Reviewer A", axis="correctness", risk="R2"
+        )
+        primary.update(
+            {"review_mode": "self-primary", "review_session": "pass-primary"}
+        )
+        fallback = _record(
+            bundle, reviewer="Reviewer A", axis="testing", risk="R2"
+        )
+        fallback.update(
+            {
+                "review_mode": "self-fallback",
+                "review_session": "pass-fallback",
+                "fallback_reason": (
+                    "External review was attempted but unavailable because the "
+                    "configured provider quota was exhausted."
+                ),
+            }
+        )
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=[
+                _comment(primary, comment_id=1),
+                _comment(fallback, comment_id=2),
+            ],
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+        self.assertEqual(
+            {review["review_mode"] for review in result["accepted_reviews"]},
+            {"self-primary", "self-fallback"},
+        )
+
+    def test_self_review_fallback_requires_distinct_sessions_and_reason(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",))
+        primary = _record(
+            bundle, reviewer="Reviewer A", axis="correctness", risk="R2"
+        )
+        primary.update(
+            {"review_mode": "self-primary", "review_session": "same-pass"}
+        )
+        fallback = _record(
+            bundle, reviewer="Reviewer A", axis="testing", risk="R2"
+        )
+        fallback.update(
+            {"review_mode": "self-fallback", "review_session": "same-pass"}
+        )
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=[
+                _comment(primary, comment_id=1),
+                _comment(fallback, comment_id=2),
+            ],
+        )
+        self.assertFalse(result["pass"])
+        self.assertGreaterEqual(result["malformed_evidence_count"], 1)
+
+        fallback["fallback_reason"] = (
+            "External reviewer unavailable after a documented provider quota failure."
+        )
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=[
+                _comment(primary, comment_id=1),
+                _comment(fallback, comment_id=2),
+            ],
+        )
+        self.assertFalse(result["pass"])
+        self.assertIn("distinct review sessions", " ".join(result["reasons"]))
+
+        fallback["review_session"] = "fallback-pass"
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=[
+                _comment(primary, comment_id=1),
+                _comment(fallback, comment_id=2),
+            ],
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+
+    def test_self_review_optional_fields_fail_closed(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",))
+        external = _record(
+            bundle, reviewer="Reviewer A", axis="correctness", risk="R2"
+        )
+        external["review_session"] = 7
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=[_comment(external)],
+        )
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["malformed_evidence_count"], 1)
+
+        primary = _record(
+            bundle, reviewer="Reviewer A", axis="correctness", risk="R2"
+        )
+        primary.update(
+            {
+                "review_mode": "self-primary",
+                "review_session": " pass-primary",
+            }
+        )
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=[_comment(primary)],
+        )
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["malformed_evidence_count"], 1)
+
     def test_r3_requires_high_risk_axis(self) -> None:
         bundle = _bundle(paths=(".github/workflows/ci.yml",))
         low_risk_comments = [
