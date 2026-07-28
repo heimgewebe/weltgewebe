@@ -277,7 +277,7 @@ async fn invalid_profile_fields_do_not_reach_postgres_or_cache() -> Result<()> {
         "id": id,
         "title": "Invalid profile fields",
         "location": {"lat": 53.55, "lon": 9.99},
-        "summary": "x".repeat(2_001)
+        "summary": "x".repeat(501)
     });
 
     let response = app

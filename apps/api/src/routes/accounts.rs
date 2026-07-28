@@ -715,7 +715,7 @@ pub(crate) async fn append_account_line(record: &Value) -> std::io::Result<()> {
 }
 
 const MAX_PROFILE_TITLE_LEN: usize = 160;
-const MAX_PROFILE_SUMMARY_LEN: usize = 2_000;
+const MAX_PROFILE_SUMMARY_LEN: usize = 500;
 const MAX_PROFILE_ADDRESS_LEN: usize = 500;
 const MAX_PROFILE_TAGS: usize = 64;
 const MAX_PROFILE_TAG_LEN: usize = 64;
@@ -727,7 +727,7 @@ fn normalise_profile_summary(raw: Option<&str>) -> Result<Option<String>, &'stat
         .map(str::to_string);
     if summary
         .as_ref()
-        .is_some_and(|value| value.len() > MAX_PROFILE_SUMMARY_LEN)
+        .is_some_and(|value| value.chars().count() > MAX_PROFILE_SUMMARY_LEN)
     {
         return Err("summary is too long");
     }
@@ -749,6 +749,9 @@ fn normalise_profile_tags<'a>(
         }
         if !tags.iter().any(|existing| existing == tag) {
             tags.push(tag.to_string());
+            if tags.len() > MAX_PROFILE_TAGS {
+                return Err("too many tags");
+            }
         }
     }
     for required in required_tags {
@@ -1738,6 +1741,39 @@ mod profile_update_tests {
             location,
             clear_location: false,
         }
+    }
+
+    #[test]
+    fn profile_summary_limit_uses_schema_characters() {
+        let valid = "🐋".repeat(MAX_PROFILE_SUMMARY_LEN);
+        let invalid = "🐋".repeat(MAX_PROFILE_SUMMARY_LEN + 1);
+
+        assert_eq!(
+            normalise_profile_summary(Some(&valid)).expect("500 Unicode characters"),
+            Some(valid)
+        );
+        assert_eq!(
+            normalise_profile_summary(Some(&invalid)),
+            Err("summary is too long")
+        );
+    }
+
+    #[test]
+    fn profile_tag_normalisation_stops_after_the_first_excess_tag() {
+        let raw = (0..MAX_PROFILE_TAGS + 2)
+            .map(|index| format!("tag-{index}"))
+            .collect::<Vec<_>>();
+        let mut consumed = 0;
+        let result = normalise_profile_tags(
+            raw.iter().map(|value| {
+                consumed += 1;
+                value.as_str()
+            }),
+            &[],
+        );
+
+        assert_eq!(result, Err("too many tags"));
+        assert_eq!(consumed, MAX_PROFILE_TAGS + 1);
     }
 
     #[test]

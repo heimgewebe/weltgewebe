@@ -401,7 +401,7 @@ async fn create_profile_fields_are_bounded_and_normalised_before_jsonl_side_effe
             "id": "55555555-5555-4555-8555-555555555551",
             "title": "Summary too long",
             "location": {"lat": 53.55, "lon": 9.99},
-            "summary": "x".repeat(2_001)
+            "summary": "x".repeat(501)
         }),
         serde_json::json!({
             "id": "55555555-5555-4555-8555-555555555552",
