@@ -162,12 +162,47 @@ describe("loadMapResources", () => {
       return page([], false, null, 1000);
     });
 
-    const result = await loadMapResources(fetcher, "");
+    const result = await loadMapResources(fetcher, "https://api.example.test");
 
     expect(result.resourceStatus.map((status) => status.resource)).toEqual([
       "nodes",
       "accounts",
       "edges",
+    ]);
+    expect(result.loadState).toBe("ok");
+    expect(result.loadNotice).toBeNull();
+  });
+
+  it("loads the built-in static demo endpoints as complete bare arrays", async () => {
+    const staticResources: Record<string, unknown[]> = {
+      nodes: [{ id: "node-1" }],
+      accounts: [{ id: "account-1" }],
+      edges: [{ id: "edge-1" }],
+    };
+    const fetcher = vi.fn(async (input: string) => {
+      const resource = new URL(input, "http://localhost").pathname
+        .split("/")
+        .at(-1)!;
+      return new Response(JSON.stringify(staticResources[resource]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const result = await loadMapResources(fetcher, "");
+
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/nodes",
+      "/api/accounts",
+      "/api/edges",
+    ]);
+    expect(result.nodes).toEqual([{ id: "node-1" }]);
+    expect(result.accounts).toEqual([{ id: "account-1" }]);
+    expect(result.edges).toEqual([{ id: "edge-1" }]);
+    expect(result.resourceStatus).toEqual([
+      { resource: "nodes", status: "complete", loaded: 1, pages: 1 },
+      { resource: "accounts", status: "complete", loaded: 1, pages: 1 },
+      { resource: "edges", status: "complete", loaded: 1, pages: 1 },
     ]);
     expect(result.loadState).toBe("ok");
     expect(result.loadNotice).toBeNull();

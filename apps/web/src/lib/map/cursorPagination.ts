@@ -214,6 +214,37 @@ export async function fetchCursorPages<T>(
   }
 }
 
+/**
+ * Load one complete resource from the in-repository prerendered demo API.
+ *
+ * These same-origin endpoints intentionally expose their full static dataset as
+ * a bare JSON array. Keeping this path explicit prevents remote cursor APIs from
+ * silently falling back to the legacy response shape.
+ */
+async function fetchCompleteStaticList<T>(
+  fetcher: FetchLike,
+  endpoint: string,
+): Promise<CursorPaginationResult<T>> {
+  const response = await fetcher(endpoint);
+  if (!response.ok) {
+    throw new CursorPaginationError(
+      `HTTP ${response.status} while loading static resource`,
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new CursorPaginationError("Invalid JSON in static resource");
+  }
+  if (!Array.isArray(body)) {
+    throw new CursorPaginationError("Invalid static resource response shape");
+  }
+
+  return { items: body as T[], status: "complete", pages: 1 };
+}
+
 export type MapResourceLoad = {
   nodes: Node[];
   accounts: Account[];
@@ -235,10 +266,11 @@ export async function loadMapResources(
     fallback: T[] = [],
   ): Promise<T[]> {
     try {
-      const result = await fetchCursorPages<T>(
-        fetcher,
-        `${apiUrl}/api/${resource}`,
-      );
+      const endpoint = `${apiUrl}/api/${resource}`;
+      const result =
+        apiUrl.length === 0
+          ? await fetchCompleteStaticList<T>(fetcher, endpoint)
+          : await fetchCursorPages<T>(fetcher, endpoint);
       resourceStatus.push(
         result.status === "complete"
           ? {
