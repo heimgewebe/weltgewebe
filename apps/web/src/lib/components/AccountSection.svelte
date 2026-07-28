@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { browser } from '$app/environment';
-  import { authStore } from '$lib/auth/store';
-  import { isRecord } from '$lib/utils/guards';
+  import { onMount } from "svelte";
+  import { browser } from "$app/environment";
+  import { authStore } from "$lib/auth/store";
+  import { isRecord } from "$lib/utils/guards";
 
   interface DeviceInfo {
     device_id: string;
@@ -12,20 +12,21 @@
   }
 
   let devices: DeviceInfo[] = [];
-  let devicesStatus: 'idle' | 'loading' | 'ok' | 'unauthorized' | 'error' = 'idle';
+  let devicesStatus: "idle" | "loading" | "ok" | "unauthorized" | "error" =
+    "idle";
   let actionMessage: string | null = null;
-  let actionVariant: 'info' | 'error' | 'success' = 'info';
+  let actionVariant: "info" | "error" | "success" = "info";
   let pending = false;
 
   function formatTimestamp(value: string): string {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat('de-DE', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
+    return new Intl.DateTimeFormat("de-DE", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
     }).format(date);
   }
 
@@ -37,43 +38,43 @@
   function isDeviceInfo(value: unknown): value is DeviceInfo {
     if (!isRecord(value)) return false;
     return (
-      typeof value.device_id === 'string' &&
-      typeof value.created_at === 'string' &&
-      typeof value.last_active === 'string' &&
-      typeof value.current === 'boolean'
+      typeof value.device_id === "string" &&
+      typeof value.created_at === "string" &&
+      typeof value.last_active === "string" &&
+      typeof value.current === "boolean"
     );
   }
 
   async function loadDevices() {
     if (!browser) return;
     if (!$authStore.authenticated) {
-      devicesStatus = 'unauthorized';
+      devicesStatus = "unauthorized";
       devices = [];
       return;
     }
-    devicesStatus = 'loading';
+    devicesStatus = "loading";
     try {
-      const res = await fetch('/api/auth/devices', { credentials: 'include' });
+      const res = await fetch("/api/auth/devices", { credentials: "include" });
       if (res.status === 401) {
-        devicesStatus = 'unauthorized';
+        devicesStatus = "unauthorized";
         devices = [];
         return;
       }
       if (!res.ok) {
-        devicesStatus = 'error';
+        devicesStatus = "error";
         devices = [];
         return;
       }
       const data = (await res.json()) as unknown;
       if (Array.isArray(data) && data.every(isDeviceInfo)) {
         devices = data;
-        devicesStatus = 'ok';
+        devicesStatus = "ok";
       } else {
-        devicesStatus = 'error';
+        devicesStatus = "error";
         devices = [];
       }
     } catch {
-      devicesStatus = 'error';
+      devicesStatus = "error";
       devices = [];
     }
   }
@@ -84,10 +85,14 @@
     actionMessage = null;
     try {
       await authStore.logout();
-      actionVariant = 'info';
-      actionMessage = 'Abgemeldet.';
+      actionVariant = "success";
+      actionMessage = "Abgemeldet.";
       devices = [];
-      devicesStatus = 'unauthorized';
+      devicesStatus = "unauthorized";
+    } catch {
+      actionVariant = "error";
+      actionMessage =
+        "Abmeldung konnte nicht bestätigt werden. Die Sitzung bleibt erhalten.";
     } finally {
       pending = false;
     }
@@ -98,50 +103,54 @@
     pending = true;
     actionMessage = null;
     try {
-      const res = await fetch('/api/auth/logout-all', {
-        method: 'POST',
-        credentials: 'include'
+      const res = await fetch("/api/auth/logout-all", {
+        method: "POST",
+        credentials: "include",
       });
       if (res.status === 403) {
         const payload = await res.json().catch(() => null);
         if (
           isRecord(payload) &&
-          payload.error === 'STEP_UP_REQUIRED' &&
-          typeof payload.challenge_id === 'string'
+          payload.error === "STEP_UP_REQUIRED" &&
+          typeof payload.challenge_id === "string"
         ) {
           try {
-            const stepUpRes = await fetch('/api/auth/step-up/magic-link/request', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({ challenge_id: payload.challenge_id })
-            });
+            const stepUpRes = await fetch(
+              "/api/auth/step-up/magic-link/request",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ challenge_id: payload.challenge_id }),
+              },
+            );
             if (stepUpRes.ok) {
-              actionVariant = 'info';
+              actionVariant = "info";
               actionMessage =
-                'Zur Bestätigung wurde ein Bestätigungslink an deine hinterlegte E-Mail-Adresse versendet.';
+                "Zur Bestätigung wurde ein Bestätigungslink an deine hinterlegte E-Mail-Adresse versendet.";
             } else {
-              actionVariant = 'error';
-              actionMessage = 'Bestätigungslink konnte nicht versendet werden.';
+              actionVariant = "error";
+              actionMessage = "Bestätigungslink konnte nicht versendet werden.";
             }
           } catch {
-            actionVariant = 'error';
-            actionMessage = 'Netzwerkfehler beim Versenden des Bestätigungslinks.';
+            actionVariant = "error";
+            actionMessage =
+              "Netzwerkfehler beim Versenden des Bestätigungslinks.";
           }
           return;
         }
       }
       if (!res.ok) {
-        actionVariant = 'error';
-        actionMessage = 'Aktion konnte nicht ausgelöst werden.';
+        actionVariant = "error";
+        actionMessage = "Aktion konnte nicht ausgelöst werden.";
         return;
       }
-      actionVariant = 'success';
-      actionMessage = 'Alle Sitzungen wurden beendet.';
+      actionVariant = "success";
+      actionMessage = "Alle Sitzungen wurden beendet.";
       await authStore.checkAuth();
     } catch {
-      actionVariant = 'error';
-      actionMessage = 'Netzwerkfehler beim Auslösen der Aktion.';
+      actionVariant = "error";
+      actionMessage = "Netzwerkfehler beim Auslösen der Aktion.";
     } finally {
       pending = false;
     }
@@ -157,7 +166,7 @@
         void loadDevices();
       } else {
         devices = [];
-        devicesStatus = 'unauthorized';
+        devicesStatus = "unauthorized";
       }
     });
     return unsubscribe;
@@ -176,7 +185,7 @@
     <dl class="status" data-testid="account-section-status">
       <dt>Konto</dt>
       <dd data-testid="account-section-account-id">
-        {$authStore.account_id ?? '–'}
+        {$authStore.account_id ?? "–"}
       </dd>
       <dt>Rolle</dt>
       <dd data-testid="account-section-role">{$authStore.role}</dd>
@@ -206,8 +215,8 @@
     {#if actionMessage}
       <div
         class="message {actionVariant}"
-        role={actionVariant === 'error' ? 'alert' : 'status'}
-        aria-live={actionVariant === 'error' ? 'assertive' : 'polite'}
+        role={actionVariant === "error" ? "alert" : "status"}
+        aria-live={actionVariant === "error" ? "assertive" : "polite"}
         data-testid="account-section-action-message"
       >
         {actionMessage}
@@ -216,11 +225,11 @@
 
     <div class="devices" data-testid="account-section-devices">
       <h3>Aktive Geräte</h3>
-      {#if devicesStatus === 'loading'}
+      {#if devicesStatus === "loading"}
         <p class="muted">Wird geladen…</p>
-      {:else if devicesStatus === 'unauthorized'}
+      {:else if devicesStatus === "unauthorized"}
         <p class="muted">Geräteliste benötigt eine aktive Sitzung.</p>
-      {:else if devicesStatus === 'error'}
+      {:else if devicesStatus === "error"}
         <p class="error">Geräteliste konnte nicht geladen werden.</p>
       {:else if devices.length === 0}
         <p class="muted">Keine aktiven Geräte gefunden.</p>
@@ -231,12 +240,15 @@
               class="device"
               class:current={device.current}
               data-testid="account-section-device"
-              data-device-current={device.current ? 'true' : 'false'}
+              data-device-current={device.current ? "true" : "false"}
             >
               <div class="device-id">
                 <code>{shortenDeviceId(device.device_id)}</code>
                 {#if device.current}
-                  <span class="badge" data-testid="account-section-device-current">
+                  <span
+                    class="badge"
+                    data-testid="account-section-device-current"
+                  >
                     Dieses Gerät
                   </span>
                 {/if}
@@ -255,9 +267,9 @@
       <h3>Passkey</h3>
       <p class="muted">
         Passkeys sind als optionaler Komfort- und Sicherheitsgewinn vorgesehen
-        (siehe Auth-Roadmap Phase 4). Die Aktivierung wird hier sichtbar gemacht,
-        sobald Register-Verify, Auth-Optionen und Auth-Verify im Backend
-        vollständig nachgewiesen sind.
+        (siehe Auth-Roadmap Phase 4). Die Aktivierung wird hier sichtbar
+        gemacht, sobald Register-Verify, Auth-Optionen und Auth-Verify im
+        Backend vollständig nachgewiesen sind.
       </p>
       <button
         type="button"

@@ -2,6 +2,8 @@ import type { AuthStatus } from "$lib/auth/store";
 import type { MapEntityViewModel } from "$lib/map/types";
 import type { MapUrlFocus } from "$lib/map/urlState";
 
+type MapAuthIdentity = Pick<AuthStatus, "authenticated" | "account_id">;
+
 export type MapCameraTargetSource = "focus" | "own-garnrolle" | "fallback";
 
 export interface MapCameraTarget {
@@ -56,7 +58,7 @@ function findFocusTarget(
 
 function findOwnGarnrolle(
   markers: MapEntityViewModel[],
-  auth: AuthStatus,
+  auth: MapAuthIdentity,
 ): MapEntityViewModel | undefined {
   if (!auth.authenticated || !auth.account_id) return undefined;
   return markers.find(
@@ -71,7 +73,7 @@ function findOwnGarnrolle(
  */
 export function resolveInitialMapCamera(
   markers: MapEntityViewModel[],
-  auth: AuthStatus,
+  auth: MapAuthIdentity,
   focus: MapUrlFocus | null,
   fallbackCenter: [number, number],
   fallbackZoom: number,

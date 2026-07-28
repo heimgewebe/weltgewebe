@@ -3403,6 +3403,43 @@ mod tests {
         assert_eq!(payload["error"], "AUTH_BACKEND_UNAVAILABLE");
     }
 
+    #[tokio::test]
+    async fn me_returns_ok_for_an_unauthenticated_status() {
+        let response = me(Extension(AuthContext {
+            authenticated: false,
+            account_id: None,
+            device_id: None,
+            role: Role::Gast,
+            expires_at: None,
+        }))
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read auth status body");
+        let payload: serde_json::Value =
+            serde_json::from_slice(&bytes).expect("parse auth status body");
+        assert_eq!(payload["authenticated"], false);
+        assert_eq!(payload["role"], "gast");
+    }
+
+    #[tokio::test]
+    async fn me_returns_ok_for_an_authenticated_identity() {
+        let response = me(Extension(AuthContext {
+            authenticated: true,
+            account_id: Some("account-a".to_owned()),
+            device_id: Some("device-a".to_owned()),
+            role: Role::Weber,
+            expires_at: None,
+        }))
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
     #[test]
     #[serial]
     fn test_direct_localhost_allowed() {
