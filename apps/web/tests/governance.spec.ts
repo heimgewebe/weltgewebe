@@ -576,11 +576,14 @@ test("a guest reaches the Weber application as a distinct weaving action", async
   await applicationAction.click();
   await expect(page).toHaveURL(/\/antraege#antrag-stellen$/);
   await expect(page.locator("#antrag-stellen")).toBeFocused({ timeout: 500 });
-  expect(
-    governance.requests.some(
-      (entry) => entry.method === "GET" && entry.pathname === "/api/proposals",
-    ),
-  ).toBe(true);
+  await expect
+    .poll(() =>
+      governance.requests.some(
+        (entry) =>
+          entry.method === "GET" && entry.pathname === "/api/proposals",
+      ),
+    )
+    .toBe(true);
   governance.releaseListResponse();
 });
 
