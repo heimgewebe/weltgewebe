@@ -120,6 +120,28 @@ describe("domain writes", () => {
     expect(error).toMatchObject({ status: 502, body: malformed });
   });
 
+  it("rejects a successful empty deletion response instead of accepting a null receipt", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
+
+    const error = await deleteNode("node-a").catch((reason) => reason);
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({ status: 502, body: undefined });
+  });
+
+  it("rejects invalid JSON in successful deletion responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("not-json", { status: 200 })),
+    );
+
+    const error = await deleteNode("node-a").catch((reason) => reason);
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({ status: 502, body: "not-json" });
+  });
+
   it("keeps the structured delete conflict from JSON responses", async () => {
     const body = {
       code: "node_conversation_not_empty",
