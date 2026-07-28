@@ -3664,6 +3664,30 @@ async fn test_update_email_no_op_returns_204() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn test_update_email_full_e2e_flow() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let _env = weltgewebe_api::test_helpers::EnvGuard::set(
+        "GEWEBE_IN_DIR",
+        tmp.path().to_str().expect("tempdir path is valid utf-8"),
+    );
+    let initial_record = serde_json::json!({
+        "id": "u1",
+        "type": "garnrolle",
+        "title": "User One",
+        "summary": "Summary 1",
+        "map_state": "not_on_map",
+        "radius_m": 0,
+        "disabled": false,
+        "tags": [],
+        "role": "gast",
+        "email": "u1@example.com",
+        "webauthn_user_id": uuid::Uuid::new_v4().to_string(),
+    });
+    tokio::fs::write(
+        tmp.path().join("demo.accounts.jsonl"),
+        format!("{}\n", serde_json::to_string(&initial_record)?),
+    )
+    .await?;
+
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
@@ -3771,10 +3795,19 @@ async fn test_update_email_full_e2e_flow() -> Result<()> {
     let res3 = app.oneshot(req3).await?;
     assert_eq!(res3.status(), StatusCode::NO_CONTENT);
 
-    // 5. Assert the database email has changed
-    let accounts = state.accounts.read().await;
-    let acc = accounts.get("u1").unwrap();
-    assert_eq!(acc.email, Some("e2e@example.com".to_string()));
+    // 5. Assert both the live cache and a fresh JSONL reload see the new email.
+    {
+        let accounts = state.accounts.read().await;
+        let acc = accounts.get("u1").unwrap();
+        assert_eq!(acc.email.as_deref(), Some("e2e@example.com"));
+    }
+    let reloaded = weltgewebe_api::routes::accounts::load_all_accounts().await?;
+    assert_eq!(
+        reloaded
+            .get("u1")
+            .and_then(|account| account.email.as_deref()),
+        Some("e2e@example.com")
+    );
 
     // Ensure challenge is consumed and gone
     assert!(state.challenges.get(&challenge_id).is_none());
@@ -4072,6 +4105,30 @@ async fn test_update_email_consume_wrong_session() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn test_update_email_consume_session_rotation() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let _env = weltgewebe_api::test_helpers::EnvGuard::set(
+        "GEWEBE_IN_DIR",
+        tmp.path().to_str().expect("tempdir path is valid utf-8"),
+    );
+    let initial_record = serde_json::json!({
+        "id": "u1",
+        "type": "garnrolle",
+        "title": "User One",
+        "summary": "Summary 1",
+        "map_state": "not_on_map",
+        "radius_m": 0,
+        "disabled": false,
+        "tags": [],
+        "role": "gast",
+        "email": "u1@example.com",
+        "webauthn_user_id": uuid::Uuid::new_v4().to_string(),
+    });
+    tokio::fs::write(
+        tmp.path().join("demo.accounts.jsonl"),
+        format!("{}\n", serde_json::to_string(&initial_record)?),
+    )
+    .await?;
+
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
 
@@ -4128,10 +4185,185 @@ async fn test_update_email_consume_session_rotation() -> Result<()> {
     // The binding matches because account_id and device_id match, despite the different session_id
     assert_eq!(res.status(), StatusCode::NO_CONTENT);
 
-    // Ensure the email was updated
+    // Ensure both the cache and a fresh JSONL reload observe the rotated email.
+    {
+        let accounts = state.accounts.read().await;
+        let acc = accounts.get("u1").unwrap();
+        assert_eq!(acc.email.as_deref(), Some("rotated@example.com"));
+    }
+    let reloaded = weltgewebe_api::routes::accounts::load_all_accounts().await?;
+    assert_eq!(
+        reloaded
+            .get("u1")
+            .and_then(|account| account.email.as_deref()),
+        Some("rotated@example.com")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_update_email_jsonl_invalid_source_leaves_cache_unchanged() -> Result<()> {
+    for corrupt_tail in ["{not-json", r#"{"id":"u1"}"#] {
+        let tmp = tempfile::tempdir()?;
+        let _env = weltgewebe_api::test_helpers::EnvGuard::set(
+            "GEWEBE_IN_DIR",
+            tmp.path().to_str().expect("tempdir path is valid utf-8"),
+        );
+        let initial_record = serde_json::json!({
+            "id": "u1",
+            "type": "garnrolle",
+            "title": "User One",
+            "summary": "Summary 1",
+            "map_state": "not_on_map",
+            "radius_m": 0,
+            "disabled": false,
+            "tags": [],
+            "role": "gast",
+            "email": "u1@example.com",
+            "webauthn_user_id": uuid::Uuid::new_v4().to_string(),
+        });
+        tokio::fs::write(
+            tmp.path().join("demo.accounts.jsonl"),
+            format!(
+                "{}\n{}\n",
+                serde_json::to_string(&initial_record)?,
+                corrupt_tail
+            ),
+        )
+        .await?;
+
+        let mut state = test_state_with_accounts()?;
+        state.config.auth_public_login = true;
+
+        let session = create_session(&state, "u1", Some("dev1")).await;
+        let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
+
+        use weltgewebe_api::auth::challenges::ChallengeIntent;
+        let challenge = state.challenges.create(
+            session.account_id.clone(),
+            session.device_id.clone(),
+            ChallengeIntent::UpdateEmail {
+                new_email: "must-not-stick@example.com".to_string(),
+            },
+        );
+        let token = state.step_up_tokens.create(
+            challenge.id.clone(),
+            session.account_id.clone(),
+            session.device_id.clone(),
+        );
+
+        let app = Router::new()
+            .merge(weltgewebe_api::routes::api_router())
+            .route_layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                weltgewebe_api::middleware::auth::auth_middleware,
+            ))
+            .with_state(state.clone());
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/auth/step-up/magic-link/consume")
+            .header("Cookie", cookie)
+            .header("Content-Type", "application/json")
+            .header("Origin", "http://localhost")
+            .header("X-Forwarded-For", "127.0.0.1")
+            .body(body::Body::from(
+                serde_json::json!({
+                    "token": token,
+                    "challenge_id": challenge.id
+                })
+                .to_string(),
+            ))?;
+
+        let res = app.oneshot(req).await?;
+        assert_eq!(
+            res.status(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "invalid JSONL tail must fail closed: {corrupt_tail}"
+        );
+
+        let accounts = state.accounts.read().await;
+        assert_eq!(
+            accounts
+                .get("u1")
+                .and_then(|account| account.email.as_deref()),
+            Some("u1@example.com"),
+            "an invalid JSONL source must not leave a cache-only email update"
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_update_email_jsonl_read_failure_leaves_cache_unchanged() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let invalid_in_dir = tmp.path().join("not-a-directory");
+    tokio::fs::write(&invalid_in_dir, b"not a directory").await?;
+    let _env = weltgewebe_api::test_helpers::EnvGuard::set(
+        "GEWEBE_IN_DIR",
+        invalid_in_dir
+            .to_str()
+            .expect("temporary path is valid utf-8"),
+    );
+
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+
+    let session = create_session(&state, "u1", Some("dev1")).await;
+    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
+
+    use weltgewebe_api::auth::challenges::ChallengeIntent;
+    let challenge = state.challenges.create(
+        session.account_id.clone(),
+        session.device_id.clone(),
+        ChallengeIntent::UpdateEmail {
+            new_email: "must-not-stick@example.com".to_string(),
+        },
+    );
+    let token = state.step_up_tokens.create(
+        challenge.id.clone(),
+        session.account_id.clone(),
+        session.device_id.clone(),
+    );
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/auth/step-up/magic-link/consume")
+        .header("Cookie", cookie)
+        .header("Content-Type", "application/json")
+        .header("Origin", "http://localhost")
+        .header("X-Forwarded-For", "127.0.0.1")
+        .body(body::Body::from(
+            serde_json::json!({
+                "token": token,
+                "challenge_id": challenge.id
+            })
+            .to_string(),
+        ))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
     let accounts = state.accounts.read().await;
-    let acc = accounts.get("u1").unwrap();
-    assert_eq!(acc.email, Some("rotated@example.com".to_string()));
+    assert_eq!(
+        accounts
+            .get("u1")
+            .and_then(|account| account.email.as_deref()),
+        Some("u1@example.com"),
+        "a failed durable JSONL read must not leave a cache-only email update"
+    );
 
     Ok(())
 }
