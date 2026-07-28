@@ -684,7 +684,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--service", default="api")
     parser.add_argument("--backup-manifest", type=Path, required=True)
     parser.add_argument("--restore-proof", type=Path, required=True)
-    parser.add_argument("--secondary-copy-manifest", type=Path)
+    secondary_copy_group = parser.add_mutually_exclusive_group()
+    secondary_copy_group.add_argument("--secondary-copy-manifest", type=Path)
+    secondary_copy_group.add_argument(
+        "--offhost-backup-manifest",
+        dest="secondary_copy_manifest",
+        type=Path,
+        help=argparse.SUPPRESS,
+    )
     parser.add_argument("--backup-max-age-hours", type=positive_hours, default=26.0)
     parser.add_argument("--restore-max-age-hours", type=positive_hours, default=192.0)
     parser.add_argument("--output", type=Path)

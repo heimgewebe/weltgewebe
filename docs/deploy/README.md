@@ -283,6 +283,14 @@ Zweitkopie liefert `fail` und Code `1`; `partial` endet mit Code `2`.
 `evidence_boundary.does_not_prove` nennt die fehlende Off-host- und
 Disaster-Recovery-Grenze unabhängig davon, ob eine lokale Zweitkopie vorliegt.
 
+Zur Migration bleibt `--offhost-backup-manifest` vorübergehend als veralteter,
+in der CLI-Hilfe verborgener Alias für `--secondary-copy-manifest` erhalten;
+beide Namen gleichzeitig sind unzulässig. Der Alias ändert keine Aussage:
+Auch damit ist die Zweitkopie nur lokal/hashgleich und niemals ein Off-host-
+oder Vollpass-Beleg. Nachgelagerte Aufrufer müssen Code `2` ausdrücklich als
+intentionale gesunde Obergrenze behandeln und dürfen ihn nicht in einen Fehler
+oder einen Vollpass umdeuten.
+
 Die JSON-Ausgabe verwendet für diesen korrigierten Vertrag Schema-Version 2,
 enthält UTC-Prüfzeitpunkt, explizite Read-only-/Redaktionsmarker und eine
 `evidence_boundary` mit bewiesenen und nicht bewiesenen Aussagen. Bei

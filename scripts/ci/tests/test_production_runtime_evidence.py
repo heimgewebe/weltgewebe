@@ -309,6 +309,89 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
         self.assertEqual(result["status"], "not-provided")
         self.assertFalse(result["required_for_overall_pass"])
 
+    def test_legacy_offhost_option_is_hidden_alias_for_secondary_copy(self) -> None:
+        parser = evidence.build_parser()
+        args = parser.parse_args(
+            [
+                "--backup-manifest",
+                "backup.manifest",
+                "--restore-proof",
+                "restore.proof",
+                "--offhost-backup-manifest",
+                "secondary.manifest",
+            ]
+        )
+
+        self.assertEqual(args.secondary_copy_manifest, Path("secondary.manifest"))
+        self.assertNotIn("--offhost-backup-manifest", parser.format_help())
+
+    def test_secondary_copy_option_and_legacy_alias_are_mutually_exclusive(self) -> None:
+        stderr = io.StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            evidence.build_parser().parse_args(
+                [
+                    "--backup-manifest",
+                    "backup.manifest",
+                    "--restore-proof",
+                    "restore.proof",
+                    "--secondary-copy-manifest",
+                    "secondary.manifest",
+                    "--offhost-backup-manifest",
+                    "legacy.manifest",
+                ]
+            )
+
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--offhost-backup-manifest", stderr.getvalue())
+        self.assertIn("--secondary-copy-manifest", stderr.getvalue())
+
+    def test_legacy_alias_cli_writes_partial_schema_v2_and_exits_two(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            production = root / "production"
+            secondary = root / "secondary"
+            production.mkdir()
+            secondary.mkdir()
+            manifest, backup_file, digest = self.make_backup_fixture(production)
+            proof = self.make_restore_fixture(production, backup_file, digest)
+            secondary_backup = secondary / backup_file.name
+            secondary_backup.write_bytes(backup_file.read_bytes())
+            secondary_manifest = secondary / manifest.name
+            secondary_manifest.write_bytes(manifest.read_bytes())
+            output = root / "runtime-evidence.json"
+            passing = {"status": "pass"}
+
+            with (
+                mock.patch.object(evidence, "utc_now", return_value=NOW),
+                mock.patch.object(evidence, "collect_public_evidence", return_value=passing),
+                mock.patch.object(evidence, "collect_runtime_modes", return_value=passing),
+            ):
+                result = evidence.main(
+                    [
+                        "--backup-manifest",
+                        str(manifest),
+                        "--restore-proof",
+                        str(proof),
+                        "--offhost-backup-manifest",
+                        str(secondary_manifest),
+                        "--output",
+                        str(output),
+                    ]
+                )
+
+            payload = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(result, 2)
+            self.assertEqual(payload["schema_version"], 2)
+            self.assertEqual(payload["status"], "partial")
+            self.assertEqual(payload["secondary_copy"]["status"], "pass")
+            self.assertEqual(payload["secondary_copy"]["kind"], "secondary_copy")
+            self.assertFalse(payload["secondary_copy"]["proves_offhost_boundary"])
+            self.assertNotIn("offhost_backup", payload)
+            self.assertIn(
+                "off-host storage or recovery boundary",
+                payload["evidence_boundary"]["does_not_prove"],
+            )
+
     def test_evidence_envelope_states_scope_and_secondary_copy_boundary(self) -> None:
         passing = {"status": "pass"}
         payload = evidence.build_evidence(
@@ -478,6 +561,8 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
             "vollständige Containerumgebung wird weder",
             "`status=partial`",
             "`secondary_copy`",
+            "`--offhost-backup-manifest`",
+            "gesunde Obergrenze",
             "Schema-Version 2",
             "Elternverzeichnis bereits existieren",
             "Code `2`",
