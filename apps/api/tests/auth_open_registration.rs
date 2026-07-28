@@ -34,7 +34,6 @@ fn test_state_open_reg() -> Result<ApiState> {
     // - Allowlist (Domain): None
     // - Rate Limits: Set (> 0)
     let config = AppConfig {
-        fade_days: 7,
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,

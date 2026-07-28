@@ -76,7 +76,6 @@ fn build_state() -> Result<ApiState> {
     // no-op and `is_open_registration()` is false — an unknown email therefore
     // stays unknown instead of being auto-provisioned.
     let config = AppConfig {
-        fade_days: 7,
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,

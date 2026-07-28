@@ -67,8 +67,8 @@ persistierte Webungsaktion wird nicht gelöscht.
 
 - Abgelaufene Projektionen bleiben aus Chronik- und Idempotenzgründen
   persistiert; sichere Archivierung/Kompaktion ist separat registriert.
-- `fade_days: 7` ist nur die deklarative Spiegelung des festen Fadenvertrags,
-  kein Tuning-Schalter; AppConfig und CI-Policycheck lehnen Abweichungen ab.
+- Die feste Sieben-Tage-Frist besitzt keine Runtime-Oberfläche mehr; AppConfig
+  weist die entfernten Schlüssel `fade_days` und `HA_FADE_DAYS` fail-closed ab.
 - Garn und Verzwirnung benötigen einen eigenen Domänen-, Ereignis- und
   Persistenzvertrag.
 - Endpoint-/Ablaufindexierung für sehr große Edge-Bestände ist als `WELTGEWEBE-EDGE-PROJECTION-INDEX-BENCH-V1` in Bureau-PR #649 registriert; sie erfordert zuerst eine reproduzierbare 500k-Messung.
