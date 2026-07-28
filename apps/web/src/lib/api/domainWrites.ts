@@ -244,10 +244,7 @@ export function deleteNode(
   id: string,
   etag?: string,
 ): Promise<NodeDeleteReceipt> {
-  return deleteJson<unknown>(
-    `/api/nodes/${encodeURIComponent(id)}`,
-    etag,
-  )
+  return deleteJson<unknown>(`/api/nodes/${encodeURIComponent(id)}`, etag)
     .then((value) => parseNodeDeleteReceipt(value, id))
     .catch((error) => preserveOnlyMatchingNodeConflict(error, id));
 }

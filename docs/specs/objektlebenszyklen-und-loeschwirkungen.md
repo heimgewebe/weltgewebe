@@ -11,6 +11,7 @@ organ: product-domain
 owner: product-domain
 last_reviewed: 2026-07-27
 review_after: 2026-10-19
+depends_on: []
 relations:
   - type: relates_to
     target: docs/specs/garnrolle-knoten-faden.md

@@ -87,7 +87,9 @@ test.describe("Knoten bearbeiten und löschen", () => {
         request.method() === "DELETE" &&
         /\/api\/nodes\/[^/]+$/.test(new URL(request.url()).pathname),
     );
-    await panel.getByRole("button", { name: "Aus dem Gewebe entfernen" }).click();
+    await panel
+      .getByRole("button", { name: "Aus dem Gewebe entfernen" })
+      .click();
     const deleteRequest = await deleteRequestPromise;
     expect(deleteRequest.headers()["if-match"]).toMatch(/^".+"$/);
 
@@ -109,8 +111,7 @@ test.describe("Knoten bearbeiten und löschen", () => {
       nodeDeleteConversation: {
         effect: "archived",
         archive_id: "70000000-0000-4000-8000-000000000001",
-        archive_url:
-          "/api/conversations/70000000-0000-4000-8000-000000000001",
+        archive_url: "/api/conversations/70000000-0000-4000-8000-000000000001",
       },
     });
     await page.goto("/map");
