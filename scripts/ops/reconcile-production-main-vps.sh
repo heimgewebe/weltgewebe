@@ -437,7 +437,7 @@ if is_current_verified_receipt(existing):
 
 migrated_schema4 = migrate_schema4_verified_receipt(existing)
 if migrated_schema4 is not None:
-    write_atomic_root_json(deployment_path, migrated_schema4)
+    write_secure_json(deployment_path, migrated_schema4)
     raise SystemExit(0)
 
 payload = {
