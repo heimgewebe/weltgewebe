@@ -501,21 +501,7 @@ pub async fn load_all_accounts() -> std::io::Result<AccountStore> {
     let mut line_number = 0usize;
     while let Some(line) = lines.next_line().await? {
         line_number += 1;
-        let value: Value = serde_json::from_str(&line).map_err(|error| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("invalid JSONL account record at {path:?} line {line_number}: {error}"),
-            )
-        })?;
-
-        let public = map_json_to_public_account(&value).ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!(
-                    "account record at {path:?} line {line_number} violates the canonical Garnrolle contract"
-                ),
-            )
-        })?;
+        let (value, public) = parse_jsonl_account_record(&path, line_number, &line)?;
 
         let role = value
             .get("role")
@@ -737,25 +723,50 @@ fn profile_response(
     }
 }
 
+fn parse_jsonl_account_record(
+    path: &std::path::Path,
+    line_number: usize,
+    line: &str,
+) -> std::io::Result<(Value, AccountPublic)> {
+    let value: Value = serde_json::from_str(line).map_err(|error| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("invalid JSONL account record at {path:?} line {line_number}: {error}"),
+        )
+    })?;
+    let public = map_json_to_public_account(&value).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "account record at {path:?} line {line_number} violates the canonical Garnrolle contract"
+            ),
+        )
+    })?;
+    Ok((value, public))
+}
+
 /// Return the latest append-only JSONL record for one account.
 ///
 /// Shared with the step-up email update path so every successful JSONL-mode
-/// account mutation is durable before the in-memory cache is changed.
+/// account mutation is durable before the in-memory cache is changed. The
+/// complete source is validated with the same strict contract as startup before
+/// a caller may append another record.
 pub(crate) async fn latest_jsonl_account_record(
     account_id: &str,
 ) -> std::io::Result<Option<Value>> {
-    let file = match File::open(accounts_path()).await {
+    let path = accounts_path();
+    let file = match File::open(&path).await {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error),
     };
     let mut lines = BufReader::new(file).lines();
+    let mut line_number = 0usize;
     let mut latest = None;
     while let Some(line) = lines.next_line().await? {
-        let Ok(value) = serde_json::from_str::<Value>(&line) else {
-            continue;
-        };
-        if value.get("id").and_then(Value::as_str) == Some(account_id) {
+        line_number += 1;
+        let (value, public) = parse_jsonl_account_record(&path, line_number, &line)?;
+        if public.id == account_id {
             latest = Some(value);
         }
     }

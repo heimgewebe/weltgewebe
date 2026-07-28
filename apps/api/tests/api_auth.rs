@@ -4204,6 +4204,101 @@ async fn test_update_email_consume_session_rotation() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn test_update_email_jsonl_invalid_source_leaves_cache_unchanged() -> Result<()> {
+    for corrupt_tail in ["{not-json", r#"{"id":"u1"}"#] {
+        let tmp = tempfile::tempdir()?;
+        let _env = weltgewebe_api::test_helpers::EnvGuard::set(
+            "GEWEBE_IN_DIR",
+            tmp.path().to_str().expect("tempdir path is valid utf-8"),
+        );
+        let initial_record = serde_json::json!({
+            "id": "u1",
+            "type": "garnrolle",
+            "title": "User One",
+            "summary": "Summary 1",
+            "map_state": "not_on_map",
+            "radius_m": 0,
+            "disabled": false,
+            "tags": [],
+            "role": "gast",
+            "email": "u1@example.com",
+            "webauthn_user_id": uuid::Uuid::new_v4().to_string(),
+        });
+        tokio::fs::write(
+            tmp.path().join("demo.accounts.jsonl"),
+            format!(
+                "{}\n{}\n",
+                serde_json::to_string(&initial_record)?,
+                corrupt_tail
+            ),
+        )
+        .await?;
+
+        let mut state = test_state_with_accounts()?;
+        state.config.auth_public_login = true;
+
+        let session = create_session(&state, "u1", Some("dev1")).await;
+        let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
+
+        use weltgewebe_api::auth::challenges::ChallengeIntent;
+        let challenge = state.challenges.create(
+            session.account_id.clone(),
+            session.device_id.clone(),
+            ChallengeIntent::UpdateEmail {
+                new_email: "must-not-stick@example.com".to_string(),
+            },
+        );
+        let token = state.step_up_tokens.create(
+            challenge.id.clone(),
+            session.account_id.clone(),
+            session.device_id.clone(),
+        );
+
+        let app = Router::new()
+            .merge(weltgewebe_api::routes::api_router())
+            .route_layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                weltgewebe_api::middleware::auth::auth_middleware,
+            ))
+            .with_state(state.clone());
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/auth/step-up/magic-link/consume")
+            .header("Cookie", cookie)
+            .header("Content-Type", "application/json")
+            .header("Origin", "http://localhost")
+            .header("X-Forwarded-For", "127.0.0.1")
+            .body(body::Body::from(
+                serde_json::json!({
+                    "token": token,
+                    "challenge_id": challenge.id
+                })
+                .to_string(),
+            ))?;
+
+        let res = app.oneshot(req).await?;
+        assert_eq!(
+            res.status(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "invalid JSONL tail must fail closed: {corrupt_tail}"
+        );
+
+        let accounts = state.accounts.read().await;
+        assert_eq!(
+            accounts
+                .get("u1")
+                .and_then(|account| account.email.as_deref()),
+            Some("u1@example.com"),
+            "an invalid JSONL source must not leave a cache-only email update"
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn test_update_email_jsonl_read_failure_leaves_cache_unchanged() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let invalid_in_dir = tmp.path().join("not-a-directory");
