@@ -152,7 +152,7 @@ describe("fetchCursorPages", () => {
 });
 
 describe("loadMapResources", () => {
-  it("returns resource statuses in stable domain order after out-of-order responses", async () => {
+  it("preserves declared resource order when responses resolve out of order", async () => {
     const delays: Record<string, number> = { nodes: 15, accounts: 5, edges: 0 };
     const fetcher = vi.fn(async (input: string) => {
       const resource = new URL(input, "http://localhost").pathname

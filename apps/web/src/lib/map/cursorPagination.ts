@@ -126,6 +126,8 @@ function cursorUrl(endpoint: string, cursor: string | null, pageSize: number) {
  * A safety-limit hit returns the bounded items with `status: "truncated"`.
  * Broken HTTP, JSON, envelope or cursor-progress contracts throw instead, so the
  * caller can mark the resource as failed rather than silently claim completeness.
+ * Contract validation happens before safety-limit truncation, so the final allowed
+ * page cannot hide a malformed continuation cursor behind a bounded result.
  */
 export async function fetchCursorPages<T>(
   fetcher: FetchLike,
@@ -205,14 +207,10 @@ export async function fetchCursorPages<T>(
     if (pages >= maxPages) {
       return { items, status: "truncated", pages, reason: "page_limit" };
     }
-    if (nextCursor === null) {
-      throw new CursorPaginationError(
-        `Missing next_cursor on page ${pageNumber}`,
-      );
-    }
 
-    seenCursors.add(nextCursor);
-    cursor = nextCursor;
+    const continuationCursor = nextCursor as string;
+    seenCursors.add(continuationCursor);
+    cursor = continuationCursor;
   }
 }
 
@@ -262,19 +260,17 @@ export async function loadMapResources(
   apiUrl: string,
   transport: MapResourceTransport = "cursor",
 ): Promise<MapResourceLoad> {
-  const resourceStatus: MapResourceStatus[] = [];
-
   async function loadResource<T>(
     resource: MapResourceName,
     fallback: T[] = [],
-  ): Promise<T[]> {
+  ): Promise<{ items: T[]; status: MapResourceStatus }> {
     try {
       const endpoint = `${apiUrl}/api/${resource}`;
       const result =
         transport === "static-list"
           ? await fetchCompleteStaticList<T>(fetcher, endpoint)
           : await fetchCursorPages<T>(fetcher, endpoint);
-      resourceStatus.push(
+      const status: MapResourceStatus =
         result.status === "complete"
           ? {
               resource,
@@ -288,31 +284,34 @@ export async function loadMapResources(
               loaded: result.items.length,
               pages: result.pages,
               reason: result.reason,
-            },
-      );
-      return result.items;
+            };
+      return { items: result.items, status };
     } catch (error) {
       console.error(`Error fetching ${resource} from`, apiUrl, error);
-      resourceStatus.push({
-        resource,
-        status: "failed",
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return fallback;
+      return {
+        items: fallback,
+        status: {
+          resource,
+          status: "failed",
+          error: error instanceof Error ? error.message : String(error),
+        },
+      };
     }
   }
 
-  const [nodes, accounts, edges] = await Promise.all([
+  const [nodesResult, accountsResult, edgesResult] = await Promise.all([
     loadResource<Node>("nodes"),
     loadResource<Account>("accounts"),
     loadResource<Edge>("edges"),
   ]);
-  const resourceOrder: MapResourceName[] = ["nodes", "accounts", "edges"];
-  resourceStatus.sort(
-    (left, right) =>
-      resourceOrder.indexOf(left.resource) -
-      resourceOrder.indexOf(right.resource),
-  );
+  const nodes = nodesResult.items;
+  const accounts = accountsResult.items;
+  const edges = edgesResult.items;
+  const resourceStatus: MapResourceStatus[] = [
+    nodesResult.status,
+    accountsResult.status,
+    edgesResult.status,
+  ];
   const failedCount = resourceStatus.filter(
     (status) => status.status === "failed",
   ).length;
@@ -331,13 +330,9 @@ export async function loadMapResources(
     edges: "Fäden",
   };
   const labelsFor = (status: "failed" | "truncated") =>
-    resourceOrder
-      .filter((resource) =>
-        resourceStatus.some(
-          (entry) => entry.resource === resource && entry.status === status,
-        ),
-      )
-      .map((resource) => resourceLabels[resource]);
+    resourceStatus
+      .filter((entry) => entry.status === status)
+      .map((entry) => resourceLabels[entry.resource]);
   const failedLabels = labelsFor("failed");
   const truncatedLabels = labelsFor("truncated");
   const loadNotice =
