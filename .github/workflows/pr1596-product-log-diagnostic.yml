@@ -1,6 +1,6 @@
 ---
 name: PR1596 Product Log Diagnostic
-# activation revision: 4
+# activation revision: 5
 
 permissions:
   actions: read
@@ -26,6 +26,17 @@ jobs:
             -H 'Accept: application/vnd.github+json' \
             /repos/${GITHUB_REPOSITORY}/actions/jobs/90210728355/logs \
             > /tmp/pr1596-product.log
-          echo 'BEGIN_PR1596_PRODUCT_ERROR'
-          grep -n -B 6 -A 24 -E 'error(:|\[)' /tmp/pr1596-product.log | tail -n 100
-          echo 'END_PR1596_PRODUCT_ERROR'
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          ansi = re.compile(r'\x1b\[[0-9;]*m')
+          lines = [ansi.sub('', line) for line in Path('/tmp/pr1596-product.log').read_text(errors='replace').splitlines()]
+          hits = [index for index, line in enumerate(lines) if 'error' in line.lower()]
+          print('BEGIN_PR1596_PRODUCT_ERROR')
+          for index in hits[-6:]:
+              for line in lines[max(0, index - 6): min(len(lines), index + 25)]:
+                  print(line)
+              print('---')
+          print('END_PR1596_PRODUCT_ERROR')
+          PY
