@@ -153,3 +153,59 @@ async fn test_open_registration_flow_auto_provisions_unknown_email() -> Result<(
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn test_open_registration_rejects_invalid_email_shapes_without_side_effects() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let _env = set_gewebe_in_dir(tmp.path());
+
+    let state = test_state_open_reg()?;
+    let app = app(state.clone());
+    let invalid_emails = [
+        "a@b@c",
+        "@example.org",
+        "user@",
+        "user name@example.org",
+        " user@example.org",
+        "user@example.org ",
+        "user@example.org\n",
+    ];
+
+    for email in invalid_emails {
+        let req = Request::post("/auth/magic-link/request")
+            .header("Content-Type", "application/json")
+            .body(body::Body::from(
+                serde_json::json!({"email": email}).to_string(),
+            ))?;
+
+        let res = app.clone().oneshot(req).await?;
+        assert_eq!(res.status(), StatusCode::OK, "email={email:?}");
+
+        let response_body = body::to_bytes(res.into_body(), usize::MAX).await?;
+        let body_val: serde_json::Value = serde_json::from_slice(&response_body)?;
+        assert_eq!(body_val["ok"], true, "email={email:?}");
+        assert_eq!(body_val["message"], GENERIC_LOGIN_MSG, "email={email:?}");
+
+        let accounts = state.accounts.read().await;
+        assert!(accounts.values().next().is_none(), "email={email:?}");
+        drop(accounts);
+        #[cfg(feature = "integration-testing")]
+        {
+            assert!(
+                state.tokens.latest_raw_for_email(email).is_none(),
+                "invalid email must not create a token: {email:?}"
+            );
+            let legacy_normalized = email.trim().to_ascii_lowercase();
+            assert!(
+                state
+                    .tokens
+                    .latest_raw_for_email(&legacy_normalized)
+                    .is_none(),
+                "invalid email must not create a normalized token: {email:?}"
+            );
+        }
+    }
+
+    Ok(())
+}

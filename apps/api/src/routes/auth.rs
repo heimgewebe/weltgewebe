@@ -54,6 +54,23 @@ pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will recei
 /// Maximum email length in bytes (RFC 5321 forward path limit).
 pub const MAX_EMAIL_LEN: usize = 254;
 
+fn normalize_login_email(input: &str) -> Option<String> {
+    if input.is_empty()
+        || input.len() > MAX_EMAIL_LEN
+        || input.chars().any(|c| c.is_whitespace() || c.is_control())
+        || input.matches('@').count() != 1
+    {
+        return None;
+    }
+
+    let (local, domain) = input.split_once('@')?;
+    if local.is_empty() || domain.is_empty() {
+        return None;
+    }
+
+    Some(input.to_ascii_lowercase())
+}
+
 fn shared_auth_backend_json_response(
     store: &'static str,
     error: &impl std::fmt::Display,
@@ -839,33 +856,22 @@ pub async fn request_login(
         message: GENERIC_LOGIN_MSG.to_string(),
     };
 
-    // 1. Validate email format (simple check)
-    if !payload.email.contains('@') {
-        tracing::warn!(%request_id, %client_ip, "Invalid email format in login request");
-        return (StatusCode::OK, Json(generic_response)).into_response();
-    }
-
-    // Normalize email input for semantic checks and downstream processing.
-    let email_raw = payload.email.trim();
-
-    // 1a. Reject overly long emails before any further processing (hashing, rate limiting,
-    // mailing). Bounds the work an unauthenticated client can force per request and matches
-    // RFC 5321 mailbox semantics after trimming surrounding whitespace. Response stays
-    // identical for Anti-Enumeration parity.
-    if email_raw.len() > MAX_EMAIL_LEN {
-        tracing::warn!(
-            event = "login.email_too_long",
-            request_id = %request_id,
-            client_ip = %client_ip,
-            email_len = email_raw.len(),
-            max_len = MAX_EMAIL_LEN,
-            "Email exceeds maximum length in login request"
-        );
-        return (StatusCode::OK, Json(generic_response)).into_response();
-    }
-
-    // Normalize email: lowercase
-    let email_norm = email_raw.to_ascii_lowercase();
+    // Validate and normalize before hashing, rate limiting, account lookup, provisioning,
+    // token creation, or mail delivery. The generic response preserves anti-enumeration.
+    let email_norm = match normalize_login_email(&payload.email) {
+        Some(email) => email,
+        None => {
+            tracing::warn!(
+                event = "login.email_invalid",
+                request_id = %request_id,
+                client_ip = %client_ip,
+                email_len = payload.email.len(),
+                max_len = MAX_EMAIL_LEN,
+                "Invalid email format in login request"
+            );
+            return (StatusCode::OK, Json(generic_response)).into_response();
+        }
+    };
 
     // Compute hash for privacy-preserving logging
     let mut hasher = Sha256::new();
