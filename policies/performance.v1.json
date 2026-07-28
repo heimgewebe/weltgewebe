@@ -22,12 +22,16 @@
       "runner": "apps/web/scripts/assert-route-performance-budget.mjs",
       "artifact_kind": "generated-route-assets",
       "budget": {
-        "schema_version": 2,
+        "schema_version": 3,
         "measurement": "sum of unique modulepreload and stylesheet assets referenced by prerendered route HTML, gzip level 9",
         "output_directories": [
           "build",
           ".vercel/output/static"
         ],
+        "initial_js_headroom_warning": {
+          "minimum_remaining_bytes": 1024,
+          "minimum_remaining_ratio": 0.02
+        },
         "routes": {
           "/login": {
             "max_initial_js_gzip_bytes": 46000,
