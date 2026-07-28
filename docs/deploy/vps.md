@@ -172,11 +172,15 @@ Wenn API-Healthchecks fehlschlagen, prüfe im Container:
 
 ```bash
 wg-compose logs api
-# Teste im Container
+# Der Container-Healthcheck verwendet ausschließlich Readiness.
 wg-compose exec api wget -qO- http://localhost:8080/health/ready
-# Oder Fallback
+# Liveness ist nur eine getrennte Diagnose für Prozesslebendigkeit.
 wg-compose exec api wget -qO- http://localhost:8080/health/live
 ```
+
+Ein erfolgreicher Liveness-Aufruf darf einen fehlgeschlagenen Readiness-Aufruf
+nicht überstimmen: Der Container bleibt ungesund, solange die API ihre
+Abhängigkeiten und Policy-Verträge nicht als bereit meldet.
 
 Startet die API gar nicht und meldet `AUTH_TRUSTED_PROXIES is not set`, dann
 läuft der Stack ohne `compose.vps.override.yml` (siehe oben) oder die
