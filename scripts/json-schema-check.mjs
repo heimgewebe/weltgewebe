@@ -9,6 +9,16 @@ import addFormats from "ajv-formats";
 
 const SUPPORTED_COMMANDS = new Set(["compile", "validate"]);
 const SUPPORTED_SPECS = new Set(["draft7", "draft2020"]);
+const SCHEMA_DECLARATIONS = new Map([
+  ["http://json-schema.org/draft-07/schema", "draft7"],
+  ["http://json-schema.org/draft-07/schema#", "draft7"],
+  ["https://json-schema.org/draft-07/schema", "draft7"],
+  ["https://json-schema.org/draft-07/schema#", "draft7"],
+  ["http://json-schema.org/draft/2020-12/schema", "draft2020"],
+  ["http://json-schema.org/draft/2020-12/schema#", "draft2020"],
+  ["https://json-schema.org/draft/2020-12/schema", "draft2020"],
+  ["https://json-schema.org/draft/2020-12/schema#", "draft2020"],
+]);
 
 function usage() {
   return [
@@ -107,16 +117,27 @@ function readJson(path, label) {
   }
 }
 
-function detectSpec(schema, explicitSpec) {
-  if (explicitSpec) return explicitSpec;
+function detectDeclaredSpec(schema) {
   const declaration = schema?.$schema;
-  if (declaration === undefined) return "draft7";
+  if (declaration === undefined) return undefined;
   if (typeof declaration !== "string") {
     throw new Error("schema $schema declaration must be a string");
   }
-  if (declaration.includes("2020-12")) return "draft2020";
-  if (declaration.includes("draft-07")) return "draft7";
-  throw new Error(`unsupported schema $schema ${JSON.stringify(declaration)}`);
+  const declaredSpec = SCHEMA_DECLARATIONS.get(declaration);
+  if (!declaredSpec) {
+    throw new Error(`unsupported schema $schema ${JSON.stringify(declaration)}`);
+  }
+  return declaredSpec;
+}
+
+function detectSpec(schema, explicitSpec) {
+  const declaredSpec = detectDeclaredSpec(schema);
+  if (explicitSpec && declaredSpec && explicitSpec !== declaredSpec) {
+    throw new Error(
+      `--spec ${JSON.stringify(explicitSpec)} conflicts with schema $schema ${JSON.stringify(schema.$schema)}`,
+    );
+  }
+  return explicitSpec ?? declaredSpec ?? "draft7";
 }
 
 function createValidator(spec) {
