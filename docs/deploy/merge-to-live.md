@@ -244,6 +244,23 @@ Deploymentbeleg fehlt, repariert der Reconciler die Zustandszeiger mit einem
 Webartefakt-Hash oder Startzeit ausdrücklich als unbekannt ausgewiesen und nicht
 erfunden.
 
+Für bestehende Deploymentbelege des Schemas 4 gilt eine enge Migrationsmatrix:
+
+| Schema-4-Ergebnis | Lock-Übergabe | Schema-5-Behandlung |
+| --- | --- | --- |
+| `verified` mit vollständigen kanonischen Feldern | `deploy-helper` / `direct` | verlustfreie Migration; alle Evidenzfelder bleiben erhalten, `deploy_invocation_id` wird explizit `null` |
+| `verified` | `reconciler` / `inherited` | keine Aufwertung ohne historische Aufruf-ID; nach frischem öffentlichen Readback Ersatz durch `verified_observed` |
+| nichtterminal, widersprüchlich, unvollständig oder mit unbekannten Feldern | beliebig | keine semantische Migration; nach frischem öffentlichen Readback Ersatz durch `verified_observed` |
+| syntaktisch beschädigt, aber dateisystemseitig sicher | beliebig | nach frischem öffentlichen Readback Ersatz durch `verified_observed` |
+| dateisystemseitig unsicher | beliebig | fehlgeschlossen; keine Zustandsreparatur |
+
+Die direkte Migration ist nur erlaubt, wenn Commit, API, Frontend, beobachtetes
+`main`, Lockdomäne, Ergebnis, Zeitfelder und Webartefakt-Hash vollständig zum
+Schema-4-Vertrag passen. Insbesondere wird für geerbte Handoffs keine
+`deploy_invocation_id` erfunden. Der ersetzende `verified_observed`-Beleg
+beansprucht ausschließlich den frischen öffentlichen Readback und verwirft
+unbestätigte Legacy-Metadaten bewusst.
+
 `verified` belegt die Code- und Webartefaktidentität. Laufzeitkonfiguration und
 Karteninhalt bleiben bewusst außerhalb dieser Commitidentität; ihre Belegung
 erfolgt über die bestehenden Produktions- und Kartenmanifeste.
