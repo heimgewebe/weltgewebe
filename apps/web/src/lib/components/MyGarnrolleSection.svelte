@@ -364,7 +364,7 @@
     profileError = null;
     saveMessage = null;
     draftMessage =
-      "Kartenanker wird entfernt; Sichtbarkeit „Privat“. Noch nicht gespeichert.";
+      "Kartenanker wird entfernt; Sichtbarkeit auf „Privat“ gesetzt. Noch nicht gespeichert.";
     await tick();
     locationButton?.focus();
   }
@@ -486,7 +486,7 @@
           </p>
         {:else if !ownGarnrolle}
           <p class="warn">
-            Öffentlicher Datensatz fehlt; das private Profil bleibt bearbeitbar.
+            Garnrollen-Datensatz fehlt; das private Profil bleibt bearbeitbar.
           </p>
         {/if}
       </div>
@@ -710,7 +710,7 @@
           >
             {radiusIsValid
               ? "Erlaubt sind 50 bis 5.000 Meter."
-              : "Wähle 50 bis 5.000 Meter."}
+              : "Bitte wähle einen Umkreis zwischen 50 und 5.000 Metern."}
           </p>
         {/if}
       </fieldset>
