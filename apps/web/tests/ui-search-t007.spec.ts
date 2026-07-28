@@ -27,6 +27,8 @@ const SIMILAR_NODE = {
   updated_at: "2026-07-23T00:00:00Z",
 };
 
+const SIMILARITY_QUIESCENCE_MS = 500;
+
 async function openSearch(page: Page) {
   await page.goto("/map");
   await page.waitForSelector(".map-marker");
@@ -157,13 +159,16 @@ test.describe("T007 authorized server search contract", () => {
     await expect(page.getByText("Altes Ergebnis")).toHaveCount(0);
   });
 
-  test("shows similar nodes as machine-computed suggestions, not relations, and navigates without mutation", async ({
+  test("loads similar nodes only after explicit request and navigates without mutation", async ({
     page,
   }) => {
     let mutationRequests = 0;
+    let similarityRequests = 0;
     await page.route("**/api/search**", async (route) => {
       const query = new URL(route.request().url()).searchParams.get("q") ?? "";
-      const items = query.includes("Werkzeuge teilen")
+      const isSimilarityRequest = query.includes("Werkzeuge teilen");
+      if (isSimilarityRequest) similarityRequests += 1;
+      const items = isSimilarityRequest
         ? [SOURCE_NODE, SIMILAR_NODE]
         : [SOURCE_NODE];
       await route.fulfill({
@@ -196,9 +201,20 @@ test.describe("T007 authorized server search contract", () => {
     );
     await expect(section).toContainText("keine Fäden");
     await expect(section).toContainText("keine kuratierten Beziehungen");
+    await expect(section).toContainText(
+      "Erst beim Anklicken wird eine Suche an den Server gesendet.",
+    );
+    await page.waitForTimeout(SIMILARITY_QUIESCENCE_MS);
+    expect(similarityRequests).toBe(0);
+
+    await section
+      .getByRole("button", { name: "Ähnliche Knoten suchen" })
+      .click();
     await expect(
       section.getByRole("button", { name: /Gemeinschaftliche Radstation/ }),
     ).toBeVisible();
+    await page.waitForTimeout(SIMILARITY_QUIESCENCE_MS);
+    expect(similarityRequests).toBe(1);
     expect(mutationRequests).toBe(0);
 
     await section
@@ -208,7 +224,7 @@ test.describe("T007 authorized server search contract", () => {
     expect(mutationRequests).toBe(0);
   });
 
-  test("keeps lexical fallback visible in the similar-nodes empty state", async ({
+  test("keeps lexical fallback visible after an explicit similar-nodes request", async ({
     page,
   }) => {
     await page.route("**/api/search**", async (route) => {
@@ -236,6 +252,9 @@ test.describe("T007 authorized server search contract", () => {
     await page.getByRole("option").first().click();
 
     const section = page.locator("section.similar-nodes");
+    await section
+      .getByRole("button", { name: "Ähnliche Knoten suchen" })
+      .click();
     await expect(section).toContainText(
       "Die semantische Ergänzung ist gerade nicht verfügbar; die Vorschläge stammen aus dem lexikalischen Serverpfad.",
     );

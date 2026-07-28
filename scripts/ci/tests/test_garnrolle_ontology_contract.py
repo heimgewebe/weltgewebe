@@ -20,6 +20,10 @@ class GarnrolleOntologyContractTests(unittest.TestCase):
         )
         self.assertNotIn("mode", schema["properties"])
         self.assertIn("map_state", schema["required"])
+        self.assertEqual(schema["properties"]["title"]["maxLength"], 200)
+        self.assertEqual(schema["properties"]["summary"]["maxLength"], 500)
+        self.assertEqual(schema["properties"]["tags"]["items"]["maxLength"], 64)
+        self.assertEqual(schema["properties"]["tags"]["maxItems"], 64)
 
     def test_new_data_producers_do_not_emit_legacy_identity_fields(self) -> None:
         paths = (

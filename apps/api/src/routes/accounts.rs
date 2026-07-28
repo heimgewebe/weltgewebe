@@ -700,11 +700,85 @@ pub(crate) async fn append_account_line(record: &Value) -> std::io::Result<()> {
     Ok(())
 }
 
-const MAX_PROFILE_TITLE_LEN: usize = 160;
-const MAX_PROFILE_SUMMARY_LEN: usize = 2_000;
+const MAX_ACCOUNT_TITLE_LEN: usize = 200;
+const MAX_PROFILE_SUMMARY_LEN: usize = 500;
 const MAX_PROFILE_ADDRESS_LEN: usize = 500;
 const MAX_PROFILE_TAGS: usize = 64;
-const MAX_PROFILE_TAG_LEN: usize = 80;
+const MAX_PROFILE_TAG_LEN: usize = 64;
+
+fn normalise_profile_title(raw: &str) -> Result<String, &'static str> {
+    let title = raw.trim();
+    if title.is_empty() || title.chars().count() > MAX_ACCOUNT_TITLE_LEN {
+        return Err("title must contain between 1 and 200 characters");
+    }
+    Ok(title.to_string())
+}
+
+fn normalise_profile_summary(raw: Option<&str>) -> Result<Option<String>, &'static str> {
+    let summary = raw
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    if summary
+        .as_ref()
+        .is_some_and(|value| value.chars().count() > MAX_PROFILE_SUMMARY_LEN)
+    {
+        return Err("summary is too long");
+    }
+    Ok(summary)
+}
+
+fn parse_optional_profile_summary(payload: &Value) -> Result<Option<String>, &'static str> {
+    match payload.get("summary") {
+        None => Ok(None),
+        Some(Value::String(summary)) => normalise_profile_summary(Some(summary)),
+        Some(_) => Err("summary must be a string"),
+    }
+}
+
+fn normalise_profile_tags<'a>(
+    raw_tags: impl IntoIterator<Item = &'a str>,
+    required_tags: &[&str],
+) -> Result<Vec<String>, &'static str> {
+    let mut tags = Vec::new();
+    for raw in raw_tags {
+        let tag = raw.trim();
+        if tag.is_empty() {
+            continue;
+        }
+        if tag.chars().count() > MAX_PROFILE_TAG_LEN {
+            return Err("a tag is too long");
+        }
+        if !tags.iter().any(|existing| existing == tag) {
+            tags.push(tag.to_string());
+            if tags.len() > MAX_PROFILE_TAGS {
+                return Err("too many tags");
+            }
+        }
+    }
+    for required in required_tags {
+        if !tags.iter().any(|tag| tag == required) {
+            tags.push((*required).to_string());
+        }
+    }
+    if tags.len() > MAX_PROFILE_TAGS {
+        return Err("too many tags");
+    }
+    Ok(tags)
+}
+
+fn parse_optional_profile_tags(payload: &Value) -> Result<Vec<String>, &'static str> {
+    match payload.get("tags") {
+        None => Ok(Vec::new()),
+        Some(Value::Array(tags)) => {
+            if !tags.iter().all(Value::is_string) {
+                return Err("tags must contain only strings");
+            }
+            normalise_profile_tags(tags.iter().filter_map(Value::as_str), &[])
+        }
+        Some(_) => Err("tags must be an array of strings"),
+    }
+}
 
 fn profile_response(
     account: &AccountInternal,
@@ -792,20 +866,8 @@ fn validate_profile_update(
     payload: UpdateOwnGarnrolleRequest,
 ) -> Result<AccountProfileUpdate, (StatusCode, String)> {
     let bad = |message: &str| (StatusCode::BAD_REQUEST, message.to_string());
-    let title = payload.title.trim().to_string();
-    if title.is_empty() || title.len() > MAX_PROFILE_TITLE_LEN {
-        return Err(bad("title must be between 1 and 160 bytes"));
-    }
-    let summary = payload
-        .summary
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
-    if summary
-        .as_ref()
-        .is_some_and(|value| value.len() > MAX_PROFILE_SUMMARY_LEN)
-    {
-        return Err(bad("summary is too long"));
-    }
+    let title = normalise_profile_title(&payload.title).map_err(bad)?;
+    let summary = normalise_profile_summary(payload.summary.as_deref()).map_err(bad)?;
     let address_was_provided = payload.address.is_some();
     let address = payload
         .address
@@ -827,27 +889,11 @@ fn validate_profile_update(
         return Err(bad("clear_location requires map_state not_on_map"));
     }
 
-    let mut tags = Vec::new();
-    for raw in payload.tags {
-        let tag = raw.trim();
-        if tag.is_empty() {
-            continue;
-        }
-        if tag.len() > MAX_PROFILE_TAG_LEN {
-            return Err(bad("a tag is too long"));
-        }
-        if !tags.iter().any(|existing| existing == tag) {
-            tags.push(tag.to_string());
-        }
-    }
-    for required in ["account", "garnrolle"] {
-        if !tags.iter().any(|tag| tag == required) {
-            tags.push(required.to_string());
-        }
-    }
-    if tags.len() > MAX_PROFILE_TAGS {
-        return Err(bad("too many tags"));
-    }
+    let tags = normalise_profile_tags(
+        payload.tags.iter().map(String::as_str),
+        &["account", "garnrolle"],
+    )
+    .map_err(bad)?;
 
     if let Some(location) = &payload.location {
         if !location.lat.is_finite()
@@ -1172,7 +1218,7 @@ pub async fn create_account(
         .and_then(|v| v.as_str())
         .map(str::trim)
         .unwrap_or("");
-    if title.is_empty() || title.chars().count() > 200 {
+    if title.is_empty() || title.chars().count() > MAX_ACCOUNT_TITLE_LEN {
         return Err(bad("title must contain between 1 and 200 characters"));
     }
 
@@ -1237,21 +1283,8 @@ pub async fn create_account(
     };
 
     // --- optional summary / tags / email ---
-    let summary = payload
-        .get("summary")
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string);
-    let tags: Vec<String> = payload
-        .get("tags")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|x| x.as_str().map(String::from))
-                .collect()
-        })
-        .unwrap_or_default();
+    let summary = parse_optional_profile_summary(&payload).map_err(bad)?;
+    let tags = parse_optional_profile_tags(&payload).map_err(bad)?;
     let email = payload
         .get("email")
         .and_then(|v| v.as_str())
@@ -1741,6 +1774,54 @@ mod profile_update_tests {
             location,
             clear_location: false,
         }
+    }
+
+    #[test]
+    fn profile_title_limit_uses_schema_characters() {
+        let valid = "🐋".repeat(MAX_ACCOUNT_TITLE_LEN);
+        let invalid = "🐋".repeat(MAX_ACCOUNT_TITLE_LEN + 1);
+
+        assert_eq!(
+            normalise_profile_title(&valid).expect("200 Unicode characters"),
+            valid
+        );
+        assert_eq!(
+            normalise_profile_title(&invalid),
+            Err("title must contain between 1 and 200 characters")
+        );
+    }
+
+    #[test]
+    fn profile_summary_limit_uses_schema_characters() {
+        let valid = "🐋".repeat(MAX_PROFILE_SUMMARY_LEN);
+        let invalid = "🐋".repeat(MAX_PROFILE_SUMMARY_LEN + 1);
+
+        assert_eq!(
+            normalise_profile_summary(Some(&valid)).expect("500 Unicode characters"),
+            Some(valid)
+        );
+        assert_eq!(
+            normalise_profile_summary(Some(&invalid)),
+            Err("summary is too long")
+        );
+    }
+
+    #[test]
+    fn profile_tag_normalisation_stops_after_the_first_excess_tag() {
+        let raw = (0..MAX_PROFILE_TAGS + 2)
+            .map(|index| format!("tag-{index}"))
+            .collect::<Vec<_>>();
+        let mut consumed = 0;
+        let result = normalise_profile_tags(
+            raw.iter().map(|value| {
+                consumed += 1;
+                value.as_str()
+            }),
+            &[],
+        );
+
+        assert_eq!(result, Err("too many tags"));
+        assert_eq!(consumed, MAX_PROFILE_TAGS + 1);
     }
 
     #[test]

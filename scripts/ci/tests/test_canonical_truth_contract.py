@@ -13,6 +13,21 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class CanonicalTruthContractTests(unittest.TestCase):
+    def test_policycheck_pr_trigger_covers_all_checked_inputs(self) -> None:
+        workflow = yaml.safe_load(
+            (ROOT / ".github/workflows/policycheck.yml").read_text(encoding="utf-8")
+        )
+        trigger_paths = set(workflow["on"]["pull_request"]["paths"])
+        self.assertTrue(
+            {
+                "policies/**",
+                "configs/app.defaults.yml",
+                "tools/py/**",
+                ".github/workflows/policycheck.yml",
+                ".python-version",
+            }.issubset(trigger_paths)
+        )
+
     def test_docmeta_ci_jobs_install_the_pinned_yaml_dependency(self) -> None:
         docs_workflow = (ROOT / ".github/workflows/docs-guard.yml").read_text(
             encoding="utf-8"
