@@ -7,6 +7,7 @@ name: Production live contract
     paths:
       - "apps/web/scripts/generate-version.js"
       - "scripts/ops/verify_public_release_commit.py"
+      - "scripts/ops/weltgewebe_secure_receipt_io.py"
       - "scripts/ops/validate_web_deploy_archive.py"
       - "scripts/ops/deploy-exact-commit-vps.sh"
       - "scripts/ops/reconcile-production-main-vps.sh"
@@ -15,6 +16,7 @@ name: Production live contract
       - "scripts/weltgewebe-up"
       - "scripts/ci/tests/test_generate_version_env.py"
       - "scripts/ci/tests/test_verify_public_release_commit.py"
+      - "scripts/ci/tests/test_secure_receipt_io.py"
       - "scripts/ci/tests/test_validate_web_deploy_archive.py"
       - "scripts/ci/tests/test_production_reconciler_contract.py"
       - "scripts/ci/tests/test_deploy_exact_commit_integration.py"
@@ -54,6 +56,7 @@ jobs:
       - name: Compile Python tools
         run: |
           python -m py_compile scripts/ops/verify_public_release_commit.py
+          python -m py_compile scripts/ops/weltgewebe_secure_receipt_io.py
           python -m py_compile scripts/ops/validate_web_deploy_archive.py
       - name: Check shell syntax and semantics
         run: |
@@ -84,6 +87,10 @@ jobs:
         run: >-
           python -m unittest -v
           scripts/ci/tests/test_verify_public_release_commit.py
+      - name: Verify secure receipt I/O
+        run: >-
+          python -m unittest -v
+          scripts/ci/tests/test_secure_receipt_io.py
       - name: Verify deployment archive validator
         run: >-
           python -m unittest -v

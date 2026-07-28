@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
+import io
 import json
 import os
 import stat
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 from scripts.ops import collect_production_runtime_evidence as evidence
 from scripts.ops.check_public_live_readiness import FetchResult
@@ -202,19 +206,19 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
         )
         return proof
 
-    def test_backup_restore_and_offhost_evidence_bind_same_artifact(self) -> None:
+    def test_backup_restore_and_secondary_copy_bind_same_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             production = root / "production"
-            offhost = root / "offhost"
+            secondary = root / "secondary"
             production.mkdir()
-            offhost.mkdir()
+            secondary.mkdir()
             manifest, backup_file, digest = self.make_backup_fixture(production)
             proof = self.make_restore_fixture(production, backup_file, digest)
-            offhost_backup = offhost / backup_file.name
-            offhost_backup.write_bytes(backup_file.read_bytes())
-            offhost_manifest = offhost / manifest.name
-            offhost_manifest.write_bytes(manifest.read_bytes())
+            secondary_backup = secondary / backup_file.name
+            secondary_backup.write_bytes(backup_file.read_bytes())
+            secondary_manifest = secondary / manifest.name
+            secondary_manifest.write_bytes(manifest.read_bytes())
 
             backup = evidence.collect_backup_evidence(
                 manifest_path=manifest,
@@ -227,8 +231,8 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
                 now=NOW,
                 max_age=timedelta(hours=192),
             )
-            copied = evidence.collect_offhost_evidence(
-                manifest_path=offhost_manifest,
+            copied = evidence.collect_secondary_copy_evidence(
+                manifest_path=secondary_manifest,
                 backup=backup,
             )
 
@@ -238,6 +242,8 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
             self.assertTrue(restore["backup_matches_manifest"])
             self.assertEqual(copied["status"], "pass")
             self.assertTrue(copied["copied_file_hash_matches"])
+            self.assertEqual(copied["kind"], "secondary_copy")
+            self.assertFalse(copied["proves_offhost_boundary"])
 
     def test_stale_backup_is_reported_without_inflating_the_claim(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -298,19 +304,102 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
             self.assertEqual(restore["status"], "fail")
             self.assertFalse(restore["not_before_backup"])
 
-    def test_offhost_is_explicitly_not_proven_when_omitted(self) -> None:
-        result = evidence.collect_offhost_evidence(manifest_path=None, backup={})
+    def test_secondary_copy_is_explicitly_not_proven_when_omitted(self) -> None:
+        result = evidence.collect_secondary_copy_evidence(manifest_path=None, backup={})
         self.assertEqual(result["status"], "not-provided")
         self.assertFalse(result["required_for_overall_pass"])
 
-    def test_evidence_envelope_states_scope_and_optional_offhost_boundary(self) -> None:
+    def test_legacy_offhost_option_is_hidden_alias_for_secondary_copy(self) -> None:
+        parser = evidence.build_parser()
+        args = parser.parse_args(
+            [
+                "--backup-manifest",
+                "backup.manifest",
+                "--restore-proof",
+                "restore.proof",
+                "--offhost-backup-manifest",
+                "secondary.manifest",
+            ]
+        )
+
+        self.assertEqual(args.secondary_copy_manifest, Path("secondary.manifest"))
+        self.assertNotIn("--offhost-backup-manifest", parser.format_help())
+
+    def test_secondary_copy_option_and_legacy_alias_are_mutually_exclusive(self) -> None:
+        stderr = io.StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            evidence.build_parser().parse_args(
+                [
+                    "--backup-manifest",
+                    "backup.manifest",
+                    "--restore-proof",
+                    "restore.proof",
+                    "--secondary-copy-manifest",
+                    "secondary.manifest",
+                    "--offhost-backup-manifest",
+                    "legacy.manifest",
+                ]
+            )
+
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--offhost-backup-manifest", stderr.getvalue())
+        self.assertIn("--secondary-copy-manifest", stderr.getvalue())
+
+    def test_legacy_alias_cli_writes_partial_schema_v2_and_exits_two(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            production = root / "production"
+            secondary = root / "secondary"
+            production.mkdir()
+            secondary.mkdir()
+            manifest, backup_file, digest = self.make_backup_fixture(production)
+            proof = self.make_restore_fixture(production, backup_file, digest)
+            secondary_backup = secondary / backup_file.name
+            secondary_backup.write_bytes(backup_file.read_bytes())
+            secondary_manifest = secondary / manifest.name
+            secondary_manifest.write_bytes(manifest.read_bytes())
+            output = root / "runtime-evidence.json"
+            passing = {"status": "pass"}
+
+            with (
+                mock.patch.object(evidence, "utc_now", return_value=NOW),
+                mock.patch.object(evidence, "collect_public_evidence", return_value=passing),
+                mock.patch.object(evidence, "collect_runtime_modes", return_value=passing),
+            ):
+                result = evidence.main(
+                    [
+                        "--backup-manifest",
+                        str(manifest),
+                        "--restore-proof",
+                        str(proof),
+                        "--offhost-backup-manifest",
+                        str(secondary_manifest),
+                        "--output",
+                        str(output),
+                    ]
+                )
+
+            payload = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(result, 2)
+            self.assertEqual(payload["schema_version"], 2)
+            self.assertEqual(payload["status"], "partial")
+            self.assertEqual(payload["secondary_copy"]["status"], "pass")
+            self.assertEqual(payload["secondary_copy"]["kind"], "secondary_copy")
+            self.assertFalse(payload["secondary_copy"]["proves_offhost_boundary"])
+            self.assertNotIn("offhost_backup", payload)
+            self.assertIn(
+                "off-host storage or recovery boundary",
+                payload["evidence_boundary"]["does_not_prove"],
+            )
+
+    def test_evidence_envelope_states_scope_and_secondary_copy_boundary(self) -> None:
         passing = {"status": "pass"}
         payload = evidence.build_evidence(
             public=passing,
             runtime=passing,
             backup=passing,
             restore=passing,
-            offhost={"status": "not-provided", "required_for_overall_pass": False},
+            secondary_copy={"status": "not-provided", "required_for_overall_pass": False},
             generated_at=NOW,
         )
         self.assertEqual(payload["status"], "partial")
@@ -319,33 +408,150 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
         self.assertTrue(payload["report_write_is_only_mutation"])
         self.assertTrue(payload["values_redacted"])
         self.assertIn(
-            "off-host recovery when no off-host manifest is supplied",
+            "off-host storage or recovery boundary",
             payload["evidence_boundary"]["does_not_prove"],
         )
 
 
-    def test_evidence_requires_verified_offhost_copy_for_full_pass(self) -> None:
+    def test_secondary_copy_never_claims_offhost_or_full_pass(self) -> None:
         passing = {"status": "pass"}
         payload = evidence.build_evidence(
             public=passing,
             runtime=passing,
             backup=passing,
             restore=passing,
-            offhost={"status": "pass", "required_for_overall_pass": True},
+            secondary_copy={
+                "status": "pass",
+                "kind": "secondary_copy",
+                "proves_offhost_boundary": False,
+            },
             generated_at=NOW,
         )
-        self.assertEqual(payload["status"], "pass")
+        self.assertEqual(payload["status"], "partial")
+        self.assertEqual(payload["schema_version"], 2)
+        self.assertNotIn("offhost_backup", payload)
+        self.assertIn("secondary_copy", payload)
+        self.assertIn(
+            "off-host storage or recovery boundary",
+            payload["evidence_boundary"]["does_not_prove"],
+        )
 
     def test_atomic_json_output_is_private_and_complete(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
-            target = Path(temp) / "nested" / "evidence.json"
-            payload = {"status": "pass", "schema_version": 1}
+            target = Path(temp) / "evidence.json"
+            payload = {"status": "partial", "schema_version": 2}
             evidence.write_json_atomic(target, payload)
             self.assertEqual(json.loads(target.read_text(encoding="utf-8")), payload)
             mode = stat.S_IMODE(os.stat(target).st_mode)
             self.assertEqual(mode, 0o600)
             self.assertEqual(list(target.parent.glob(f".{target.name}.*")), [])
 
+    def test_atomic_json_output_requires_existing_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            missing_parent = Path(temp) / "missing"
+            target = missing_parent / "evidence.json"
+            with self.assertRaisesRegex(evidence.EvidenceError, "parent directory does not exist"):
+                evidence.write_json_atomic(target, {"status": "partial"})
+            self.assertFalse(missing_parent.exists())
+
+    def test_atomic_json_output_rejects_symlink_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            actual = root / "actual"
+            actual.mkdir()
+            linked = root / "linked"
+            linked.symlink_to(actual, target_is_directory=True)
+            with self.assertRaisesRegex(evidence.EvidenceError, "non-symlink directory"):
+                evidence.write_json_atomic(linked / "evidence.json", {"status": "partial"})
+            self.assertEqual(list(actual.iterdir()), [])
+
+    def test_atomic_json_output_rejects_symlink_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            actual = root / "actual.json"
+            actual.write_text("unchanged\n", encoding="utf-8")
+            target = root / "evidence.json"
+            target.symlink_to(actual.name)
+            with self.assertRaisesRegex(evidence.EvidenceError, "regular non-symlink file"):
+                evidence.write_json_atomic(target, {"status": "partial"})
+            self.assertEqual(actual.read_text(encoding="utf-8"), "unchanged\n")
+            self.assertTrue(target.is_symlink())
+
+    def test_atomic_json_output_wraps_temporary_file_permission_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "evidence.json"
+            real_open = os.open
+
+            def fail_temporary_open(path, flags, mode=0o777, *, dir_fd=None):
+                if dir_fd is not None:
+                    raise PermissionError(errno.EACCES, "permission denied")
+                return real_open(path, flags, mode)
+
+            with mock.patch.object(evidence.os, "open", side_effect=fail_temporary_open):
+                with self.assertRaisesRegex(
+                    evidence.EvidenceError,
+                    "could not atomically write output",
+                ) as caught:
+                    evidence.write_json_atomic(target, {"status": "partial"})
+
+            self.assertIsInstance(caught.exception.__cause__, PermissionError)
+            self.assertFalse(target.exists())
+            self.assertEqual(list(target.parent.glob(f".{target.name}.*")), [])
+
+    def test_atomic_json_output_replace_enospc_is_bounded_at_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "evidence.json"
+            passing = {"status": "pass"}
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            with (
+                mock.patch.object(evidence, "collect_public_evidence", return_value=passing),
+                mock.patch.object(evidence, "collect_runtime_modes", return_value=passing),
+                mock.patch.object(evidence, "collect_backup_evidence", return_value=passing),
+                mock.patch.object(evidence, "collect_restore_evidence", return_value=passing),
+                mock.patch.object(
+                    evidence,
+                    "collect_secondary_copy_evidence",
+                    return_value={"status": "not-provided"},
+                ),
+                mock.patch.object(
+                    evidence.os,
+                    "replace",
+                    side_effect=OSError(errno.ENOSPC, "no space left on device"),
+                ),
+                redirect_stdout(stdout),
+                redirect_stderr(stderr),
+            ):
+                result = evidence.main(
+                    [
+                        "--backup-manifest",
+                        "unused-backup.manifest",
+                        "--restore-proof",
+                        "unused-restore.proof",
+                        "--output",
+                        str(target),
+                    ]
+                )
+
+            self.assertEqual(result, 1)
+            self.assertEqual(stdout.getvalue(), "")
+            self.assertEqual(
+                stderr.getvalue(),
+                f"runtime evidence output failed: could not atomically write output: {target}\n",
+            )
+            self.assertNotIn("Traceback", stderr.getvalue())
+            self.assertNotIn('"status": "partial"', stderr.getvalue())
+            self.assertFalse(target.exists())
+            self.assertEqual(list(target.parent.glob(f".{target.name}.*")), [])
+
+    def test_atomic_json_output_keeps_programmer_errors_visible(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "evidence.json"
+            with self.assertRaises(TypeError):
+                evidence.write_json_atomic(target, {"not-json-serializable": object()})
+            self.assertFalse(target.exists())
+            self.assertEqual(list(target.parent.glob(f".{target.name}.*")), [])
 
     def test_deploy_docs_preserve_redaction_and_partial_status_contract(self) -> None:
         repo = Path(__file__).resolve().parents[3]
@@ -353,8 +559,12 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
         for phrase in (
             "collect_production_runtime_evidence.py",
             "vollständige Containerumgebung wird weder",
-            "status=pass",
-            "Zustand `partial`",
+            "`status=partial`",
+            "`secondary_copy`",
+            "`--offhost-backup-manifest`",
+            "gesunde Obergrenze",
+            "Schema-Version 2",
+            "Elternverzeichnis bereits existieren",
             "Code `2`",
             "Dateimodus `0600`",
             "evidence_boundary",

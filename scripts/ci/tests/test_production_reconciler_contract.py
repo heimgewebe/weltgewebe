@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,65 @@ ROOT = Path(__file__).parents[3]
 class ProductionReconcilerContractTests(unittest.TestCase):
     def read(self, relative: str) -> str:
         return (ROOT / relative).read_text(encoding="utf-8")
+
+    def test_privileged_inline_python_uses_isolated_import_path(self) -> None:
+        scripts = (
+            self.read("scripts/ops/deploy-exact-commit-vps.sh"),
+            self.read("scripts/ops/reconcile-production-main-vps.sh"),
+        )
+        for script in scripts:
+            self.assertNotIn('export PYTHONPATH="$SCRIPT_DIR"', script)
+            self.assertIn(
+                'WELTGEWEBE_OPS_SCRIPT_DIR="$SCRIPT_DIR" python3 -I - "$@"',
+                script,
+            )
+            self.assertNotIn("python3 - ", script)
+            self.assertNotIn("python3 -c ", script)
+            self.assertEqual(
+                script.count("from weltgewebe_secure_receipt_io import"),
+                script.count(
+                    'sys.path.insert(0, os.environ["WELTGEWEBE_OPS_SCRIPT_DIR"])'
+                ),
+            )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            attacker = root / "attacker"
+            trusted = root / "trusted"
+            attacker.mkdir()
+            trusted.mkdir()
+            marker = root / "attacker-ran"
+            (attacker / "sitecustomize.py").write_text(
+                f"from pathlib import Path\nPath({str(marker)!r}).write_text('site')\n",
+                encoding="utf-8",
+            )
+            (attacker / "weltgewebe_secure_receipt_io.py").write_text(
+                f"from pathlib import Path\nPath({str(marker)!r}).write_text('module')\nSOURCE = 'attacker'\n",
+                encoding="utf-8",
+            )
+            (trusted / "weltgewebe_secure_receipt_io.py").write_text(
+                "SOURCE = 'trusted'\n",
+                encoding="utf-8",
+            )
+            environment = os.environ.copy()
+            environment["WELTGEWEBE_OPS_SCRIPT_DIR"] = str(trusted)
+            result = subprocess.run(
+                [sys.executable, "-I", "-"],
+                cwd=attacker,
+                env=environment,
+                input=(
+                    "import os\n"
+                    "import sys\n"
+                    "sys.path.insert(0, os.environ['WELTGEWEBE_OPS_SCRIPT_DIR'])\n"
+                    "from weltgewebe_secure_receipt_io import SOURCE\n"
+                    "print(SOURCE)\n"
+                ),
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            self.assertEqual(result.stdout.strip(), "trusted")
+            self.assertFalse(marker.exists())
 
     def test_deploy_helper_rechecks_main_after_public_readback(self) -> None:
         script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
@@ -70,14 +130,17 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("inherited deploy invocation identity is invalid", script)
         self.assertIn('lock_handoff="inherited"', script)
         self.assertIn("production_deployment=already_running", script)
+        receipt_io = self.read("scripts/ops/weltgewebe_secure_receipt_io.py")
+        self.assertIn("from weltgewebe_secure_receipt_io import", script)
+        self.assertIn("write_secure_json", script)
         for receipt_guard in (
             "os.O_EXCL",
-            "os.O_NOFOLLOW",
-            "os.fchmod(file_fd, 0o600)",
+            "O_NOFOLLOW",
+            "os.fchmod(file_fd, mode)",
             "metadata.st_nlink != 1",
             "os.replace(",
         ):
-            self.assertIn(receipt_guard, script)
+            self.assertIn(receipt_guard, receipt_io)
         self.assertIn(
             '"$release_dir/scripts/weltgewebe-up" "${arguments[@]}" 9>&-', script
         )
@@ -149,14 +212,18 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn('WELTGEWEBE_DEPLOY_INVOCATION_ID="$deploy_invocation_id"', script)
         self.assertIn("does not match current invocation", script)
         self.assertIn("read_deploy_tempfail_diagnostic", script)
+        receipt_io = self.read("scripts/ops/weltgewebe_secure_receipt_io.py")
+        self.assertIn("from weltgewebe_secure_receipt_io import", script)
+        self.assertIn("read_secure_json", script)
+        self.assertIn("write_secure_json", script)
         for receipt_guard in (
-            "os.O_NOFOLLOW",
+            "O_NOFOLLOW",
             "os.fstat(file_fd)",
             "metadata.st_nlink != 1",
             "os.read(file_fd",
-            "MAX_RECEIPT_BYTES = 1048576",
+            "DEFAULT_MAX_BYTES = 1024 * 1024",
         ):
-            self.assertIn(receipt_guard, script)
+            self.assertIn(receipt_guard, receipt_io)
         self.assertIn("production lock contention during inherited handoff", script)
         self.assertIn("child temporary failure", script)
         self.assertIn("unexpected superseded reason", script)
@@ -194,17 +261,29 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, script)
 
+    def test_secure_receipt_helper_is_in_critical_impl_registry(self) -> None:
+        registry = self.read("audit/impl-registry.yaml")
+        self.assertIn("id: impl.guard.secure-receipt-io", registry)
+        self.assertIn("path: scripts/ops/weltgewebe_secure_receipt_io.py", registry)
+        self.assertIn("scripts/ci/tests/test_secure_receipt_io.py", registry)
+        self.assertIn(".github/workflows/production-live-contract.yml", registry)
+
     def test_public_verifier_writes_receipts_through_safe_descriptors(self) -> None:
         script = self.read("scripts/ops/verify_public_release_commit.py")
+        receipt_io = self.read("scripts/ops/weltgewebe_secure_receipt_io.py")
+        self.assertIn(
+            "from weltgewebe_secure_receipt_io import write_secure_json", script
+        )
+        self.assertIn("write_secure_json(", script)
         for guard in (
             "os.O_EXCL",
-            "os.O_NOFOLLOW",
-            "os.fchmod(file_fd, 0o600)",
+            "O_NOFOLLOW",
+            "os.fchmod(file_fd, mode)",
             "os.fstat(file_fd)",
             "metadata.st_nlink != 1",
             "os.replace(",
         ):
-            self.assertIn(guard, script)
+            self.assertIn(guard, receipt_io)
         self.assertNotIn('temporary.open("w"', script)
 
     def test_systemd_timer_uses_completion_relative_cadence(self) -> None:
@@ -252,10 +331,26 @@ class ProductionReconcilerContractTests(unittest.TestCase):
             "/usr/local/libexec/weltgewebe-reconcile-production-main",
             "/usr/local/libexec/weltgewebe-validate-web-deploy-archive",
             "/usr/local/libexec/weltgewebe-verify-public-release",
+            "/usr/local/libexec/weltgewebe_secure_receipt_io.py",
             "/etc/systemd/system/weltgewebe-production-reconcile.service",
             "/etc/systemd/system/weltgewebe-production-reconcile.timer",
         ):
             self.assertIn(installed_path, script)
+        helper_install = script.index(
+            'atomic_install "$staging/weltgewebe_secure_receipt_io.py"'
+        )
+        deploy_install = script.index(
+            'atomic_install "$staging/weltgewebe-deploy-exact-commit"'
+        )
+        reconcile_install = script.index(
+            'atomic_install "$staging/weltgewebe-reconcile-production-main"'
+        )
+        verifier_install = script.index(
+            'atomic_install "$staging/weltgewebe-verify-public-release"'
+        )
+        self.assertLess(helper_install, deploy_install)
+        self.assertLess(helper_install, reconcile_install)
+        self.assertLess(helper_install, verifier_install)
         staged_verify = script.index("systemd-analyze verify")
         self.assertIn(
             '"$staging/weltgewebe-production-reconcile.service"',
