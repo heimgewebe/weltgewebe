@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { createEventDispatcher, onMount } from "svelte";
   import { authStore } from "$lib/auth/store";
   import GovernanceFaden from "./GovernanceFaden.svelte";
   import {
@@ -18,8 +18,13 @@
 
   export let proposalId: string;
 
+  const dispatch = createEventDispatcher<{
+    messagecountchange: { proposalId: string; messageCount: number };
+  }>();
+
   let proposal: ProposalDetail | null = null;
   let messages: ProposalMessage[] = [];
+  let knownMessageCount = 0;
   let loading = true;
   let error = "";
   let vetoReason = "";
@@ -34,6 +39,19 @@
     proposal.applicant_account_id !== $authStore.account_id;
   $: isOpen = proposal?.status === "consent" || proposal?.status === "voting";
 
+  function normalizeMessageCount(count: unknown): number {
+    return typeof count === "number" &&
+      Number.isFinite(count) &&
+      Number.isSafeInteger(count) &&
+      count >= 0
+      ? count
+      : 0;
+  }
+
+  function incrementMessageCount(count: number): number {
+    return count < Number.MAX_SAFE_INTEGER ? count + 1 : count;
+  }
+
   function describeError(cause: unknown): string {
     if (cause instanceof GovernanceApiError) {
       if (cause.status === 403) return "Über den eigenen Weberantrag kannst du nicht selbst entscheiden.";
@@ -47,10 +65,21 @@
     loading = true;
     error = "";
     try {
-      [proposal, messages] = await Promise.all([
+      const [loadedProposal, loadedMessages] = await Promise.all([
         getProposal(proposalId),
         listProposalMessages(proposalId),
       ]);
+      proposal = loadedProposal;
+      messages = loadedMessages;
+      knownMessageCount = Math.max(
+        knownMessageCount,
+        normalizeMessageCount(loadedProposal.message_count),
+        loadedMessages.length,
+      );
+      dispatch("messagecountchange", {
+        proposalId,
+        messageCount: knownMessageCount,
+      });
     } catch (cause) {
       error = describeError(cause);
     } finally {
@@ -94,6 +123,14 @@
     try {
       const created = await postProposalMessage(proposal.id, messageBody);
       messages = [...messages, created];
+      knownMessageCount = Math.max(
+        incrementMessageCount(knownMessageCount),
+        messages.length,
+      );
+      dispatch("messagecountchange", {
+        proposalId: proposal.id,
+        messageCount: knownMessageCount,
+      });
       messageBody = "";
     } catch (cause) {
       error = describeError(cause);

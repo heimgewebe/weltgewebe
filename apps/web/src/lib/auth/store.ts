@@ -1,168 +1,160 @@
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { browser } from "$app/environment";
-import { isRecord } from "$lib/utils/guards";
 
-// Definiert die Struktur des Benutzer-Objekts passend zur API /auth/me
+export type AuthState =
+  | "checking"
+  | "authenticated"
+  | "unauthenticated"
+  | "degraded";
+export type AuthRole = "gast" | "weber" | "admin";
 export interface AuthStatus {
+  state: AuthState;
   authenticated: boolean;
   account_id?: string;
-  role: string;
+  role: AuthRole;
 }
 
-const initialUser: AuthStatus = {
+export interface AuthCheckOptions {
+  force?: boolean;
+}
+
+export interface AuthStoreOptions {
+  isBrowser?: boolean;
+  fetcher?: typeof fetch;
+  authCheckTimeoutMs?: number;
+}
+
+const anonymous = (state: AuthState = "unauthenticated"): AuthStatus => ({
+  state,
   authenticated: false,
   role: "gast",
-  account_id: undefined,
-};
+});
 
-const SENSITIVE_GARNROLLE_SESSION_PREFIXES = [
+const SENSITIVE_SESSION_PREFIXES = [
   "weltgewebe:garnrolle-draft:",
   "weltgewebe:garnrolle-return-location:",
 ] as const;
 
-function clearSensitiveGarnrolleSessionData(keepAccountId?: string) {
-  if (!browser) return;
-  const keysToRemove: string[] = [];
-  for (let index = 0; index < sessionStorage.length; index += 1) {
+function clearSensitiveSession(enabled: boolean, keepAccountId?: string) {
+  if (!enabled || typeof sessionStorage === "undefined") return;
+  for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
     const key = sessionStorage.key(index);
     if (!key) continue;
-    const prefix = SENSITIVE_GARNROLLE_SESSION_PREFIXES.find((candidate) =>
-      key.startsWith(candidate),
+    const prefix = SENSITIVE_SESSION_PREFIXES.find((value) =>
+      key.startsWith(value),
     );
-    const keepKey =
-      prefix && keepAccountId ? `${prefix}${keepAccountId}` : null;
-    if (prefix && key !== keepKey) {
-      keysToRemove.push(key);
+    if (prefix && key !== (keepAccountId ? `${prefix}${keepAccountId}` : "")) {
+      sessionStorage.removeItem(key);
     }
-  }
-  for (const key of keysToRemove) {
-    sessionStorage.removeItem(key);
   }
 }
 
-const createAuthStore = () => {
-  const store = writable<AuthStatus>(initialUser);
+export const createAuthStore = (options: AuthStoreOptions = {}) => {
+  const isBrowser = options.isBrowser ?? browser;
+  const fetcher = options.fetcher ?? fetch;
+  const authCheckTimeoutMs = options.authCheckTimeoutMs ?? 5000;
+  const store = writable<AuthStatus>(
+    anonymous(isBrowser ? "checking" : "unauthenticated"),
+  );
   const { subscribe, set } = store;
-  function applyAuthState(next: AuthStatus) {
-    clearSensitiveGarnrolleSessionData(
-      next.authenticated ? next.account_id : undefined,
-    );
-    set(next);
-  }
+  let revision = 0;
+  let controller: AbortController | undefined;
+  let pending: Promise<AuthStatus> | undefined;
 
-  // Helper to fetch current status
-  const checkAuth = async () => {
-    if (!browser) return initialUser;
-    try {
-      const res = await fetch("/api/auth/me", { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
-        // Validation: Ensure robust handling of API response
-        if (
-          isRecord(data) &&
-          typeof data.authenticated === "boolean" &&
-          typeof data.role === "string"
-        ) {
-          const validated: AuthStatus = {
-            authenticated: data.authenticated,
-            role: data.role,
-            account_id:
-              typeof data.account_id === "string" ? data.account_id : undefined,
-          };
-          applyAuthState(validated);
-          return validated;
-        } else {
-          console.warn("Invalid auth payload:", data);
+  const publish = (next: AuthStatus, authoritative = false): AuthStatus => {
+    if (authoritative) {
+      clearSensitiveSession(
+        isBrowser,
+        next.authenticated ? next.account_id : undefined,
+      );
+    }
+    set(next);
+    return next;
+  };
+
+  const supersedePending = (): number => {
+    revision += 1;
+    controller?.abort();
+    controller = undefined;
+    pending = undefined;
+    return revision;
+  };
+
+  const checkAuth = (options: AuthCheckOptions = {}): Promise<AuthStatus> => {
+    if (!isBrowser) return Promise.resolve(get(store));
+    if (pending && !options.force) return pending;
+    if (pending) supersedePending();
+
+    const previous = get(store);
+    const current = ++revision;
+    const requestController = new AbortController();
+    let timeout!: ReturnType<typeof setTimeout>;
+    controller = requestController;
+    publish({ ...previous, state: "checking" });
+
+    pending = (async () => {
+      try {
+        const operation = import("./check").then((module) =>
+          module.fetchAuthStatus(fetcher, requestController.signal),
+        );
+        const timedOut = new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            requestController.abort();
+            reject(new Error());
+          }, authCheckTimeoutMs);
+        });
+        const next = await Promise.race([operation, timedOut]);
+        if (current !== revision) return get(store);
+        return next
+          ? publish(next, true)
+          : publish({ ...previous, state: "degraded" });
+      } catch {
+        if (current !== revision) return get(store);
+        return publish({ ...previous, state: "degraded" });
+      } finally {
+        clearTimeout(timeout);
+        if (current === revision) {
+          controller = undefined;
+          pending = undefined;
         }
       }
-      // Only an authoritative unauthenticated response may clear account-bound
-      // drafts. A transient server error or navigation-aborted request must not
-      // destroy unsaved private input.
-      if (res.status === 401 || res.status === 403) {
-        applyAuthState(initialUser);
-      } else {
-        set(initialUser);
-      }
-      return initialUser;
-    } catch (e) {
-      console.warn("Auth check failed:", e);
-      set(initialUser);
-      return initialUser;
-    }
+    })();
+    return pending;
   };
 
   return {
     subscribe,
     checkAuth,
     devLogin: async (accountId: string) => {
-      if (!browser) return;
-      try {
-        const res = await fetch("/api/auth/dev/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ account_id: accountId }),
-          credentials: "include",
-        });
-        if (res.ok) {
-          const newState = await checkAuth(); // Refresh state
-          if (!newState.authenticated) {
-            throw new Error(
-              "Login appeared successful but session was not established (cookie issue?).",
-            );
-          }
-        } else {
-          console.error("Login failed:", res.status);
-          throw new Error("Login failed");
-        }
-      } catch (e) {
-        console.error("Login error:", e);
-        throw e;
+      if (!isBrowser) return;
+      await (await import("./actions")).devLogin(fetcher, accountId);
+      const next = await checkAuth({ force: true });
+      if (!next.authenticated) {
+        throw new Error("Login invalid");
       }
     },
     requestLogin: async (email: string) => {
-      if (!browser) return;
-      try {
-        const res = await fetch("/api/auth/magic-link/request", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-          credentials: "include",
-        });
-        if (!res.ok) {
-          // If 404/403 (disabled), throw specific error
-          if (res.status === 404 || res.status === 403) {
-            throw new Error("Public login is disabled.");
-          }
-          throw new Error(`Request failed: ${res.status}`);
-        }
-        // Success: UI should show "Check Inbox"
-      } catch (e) {
-        console.error("Request Login error:", e);
-        throw e;
-      }
+      if (!isBrowser) return;
+      await (await import("./actions")).requestLogin(fetcher, email);
     },
     logout: async () => {
-      if (!browser) return;
-      clearSensitiveGarnrolleSessionData();
-      try {
-        await fetch("/api/auth/logout", {
-          method: "POST",
-          credentials: "include",
-        });
-        // Verify logout with server and update state
-        await checkAuth();
-      } catch (e) {
-        console.error("Logout error:", e);
-        // Even if network fails, we should clear local state
-        applyAuthState(initialUser);
-      }
+      if (!isBrowser) return;
+      const previous = get(store);
+      const ownedRevision = supersedePending();
+      await (
+        await import("./actions")
+      ).logoutAndVerify(
+        fetcher,
+        previous,
+        ownedRevision,
+        () => revision,
+        (status) => publish({ ...status, state: "degraded" }),
+        () => checkAuth({ force: true }),
+      );
     },
   };
 };
 
 export const authStore = createAuthStore();
 
-// Initialize in browser to restore session
-if (browser) {
-  authStore.checkAuth();
-}
+if (browser) void authStore.checkAuth();
