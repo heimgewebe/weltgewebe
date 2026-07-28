@@ -274,20 +274,23 @@ python3 scripts/ops/collect_production_runtime_evidence.py \
   --output /var/lib/weltgewebe/evidence/production-runtime.json
 ```
 
-Ein optionales `--offhost-backup-manifest` muss auf ein kopiertes Manifest
-zeigen, dessen Dump im selben Verzeichnis liegt. Nur wenn dieses Abbild
-hashgleich zum ausgewählten Produktionsbackup ist, erhält der Gesamtbeleg
-`status=pass`. Ohne Off-host-Beleg lautet der Zustand `partial` und der Prozess
-endet mit Code `2`; ein gebrochener Pflichtbeweis liefert `fail` und Code `1`.
-Damit kann ein lokaler Backup-/Restore-Beleg nicht versehentlich als
-Off-host-Recovery ausgegeben werden.
+Ein optionales `--secondary-copy-manifest` muss auf ein kopiertes Manifest
+zeigen, dessen Dump im selben Verzeichnis liegt. Ein hashgleiches Abbild wird
+nur als `secondary_copy` ausgewiesen. Es beweist weder einen anderen Host noch
+eine getrennte Ausfallzone und hebt den Gesamtbeleg deshalb nicht über
+`status=partial`. Ein gebrochener Pflichtbeweis oder eine widersprüchliche
+Zweitkopie liefert `fail` und Code `1`; `partial` endet mit Code `2`.
+`evidence_boundary.does_not_prove` nennt die fehlende Off-host- und
+Disaster-Recovery-Grenze unabhängig davon, ob eine lokale Zweitkopie vorliegt.
 
-Die JSON-Ausgabe besitzt Schema-Version, UTC-Prüfzeitpunkt, explizite
-Read-only-/Redaktionsmarker und eine `evidence_boundary` mit bewiesenen und nicht
-bewiesenen Aussagen. Bei `--output` wird sie atomar mit Dateimodus `0600`
-geschrieben; diese ausdrücklich gewählte Berichtdatei ist die einzige Mutation
-des Sammlers. Der Bericht beweist den beobachteten Zeitpunkt, nicht zukünftige
-Verfügbarkeit oder die fachliche Richtigkeit jeder Datenbankzeile.
+Die JSON-Ausgabe verwendet für diesen korrigierten Vertrag Schema-Version 2,
+enthält UTC-Prüfzeitpunkt, explizite Read-only-/Redaktionsmarker und eine
+`evidence_boundary` mit bewiesenen und nicht bewiesenen Aussagen. Bei
+`--output` muss das Elternverzeichnis bereits existieren und darf kein Symlink
+sein. Nur die Berichtdatei selbst wird atomar mit Dateimodus `0600` geschrieben;
+der Sammler erzeugt keine Verzeichnisse. Der Bericht beweist den beobachteten
+Zeitpunkt, nicht zukünftige Verfügbarkeit oder die fachliche Richtigkeit jeder
+Datenbankzeile.
 
 
 ---
