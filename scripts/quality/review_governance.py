@@ -56,6 +56,9 @@ ALLOWED_AXES = HIGH_RISK_AXES | {
     "user-experience",
     "testing",
 }
+REVIEW_MODES = {"external", "self-primary", "self-fallback"}
+REVIEW_SESSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$")
+MAX_FALLBACK_REASON_BYTES = 512
 RISK_RE = re.compile(r"<!--\s*weltgewebe-risk:\s*(R[0-3])\s*-->", re.IGNORECASE)
 EVIDENCE_START_RE = re.compile(r"<!--\s*weltgewebe-review-evidence\b", re.IGNORECASE)
 FORWARDED_EVIDENCE_START_RE = re.compile(r"<!--\s*weltgewebe-forwarded-review\b", re.IGNORECASE)
@@ -523,6 +526,13 @@ Der Kommentar muss von einem freigegebenen GitHub-Attestierer stammen. Leere,
 zu kurze, mehrfach markierte oder nicht zum Berichtshash passende Kommentare
 zählen nicht. Jeder neue Push, Basiswechsel oder Diffwechsel entwertet den Beleg
 automatisch.
+
+Ist nach einem dokumentierten Versuch kein Fremdreview verfügbar, darf dieselbe
+Prüferidentität zwei getrennte Pässe attestieren. Der erste ergänzt
+`"review_mode": "self-primary"` und eine eindeutige `review_session`; der zweite
+verwendet `"review_mode": "self-fallback"`, eine andere `review_session` und einen
+konkreten `fallback_reason`. Reviewachsen und Berichtshashes müssen verschieden
+bleiben; eine Unabhängigkeit der beiden Self-Reviews wird nicht behauptet.
 """
     request_path.write_text(request, encoding="utf-8")
     return Bundle(
@@ -984,11 +994,14 @@ def evaluate_evidence(
             "verdict",
             "findings_resolved",
         }
+        optional_fields = {"review_mode", "review_session", "fallback_reason"}
         payload_keys = record.get("_payload_keys", ())
+        payload_key_set = set(payload_keys) if isinstance(payload_keys, tuple) else set()
         if (
             not isinstance(payload_keys, tuple)
             or any(str(key).startswith("_") for key in payload_keys)
-            or set(payload_keys) != required_fields
+            or not required_fields.issubset(payload_key_set)
+            or not payload_key_set.issubset(required_fields | optional_fields)
         ):
             malformed += 1
             continue
@@ -1018,6 +1031,63 @@ def evaluate_evidence(
         report_sha256 = str(record.get("report_sha256") or "").strip()
         axis = str(record.get("review_axis") or "").strip().lower()
         verdict = str(record.get("verdict") or "").strip().upper()
+        review_mode_present = "review_mode" in payload_key_set
+        review_session_present = "review_session" in payload_key_set
+        fallback_reason_present = "fallback_reason" in payload_key_set
+        review_mode_raw = record.get("review_mode", "external")
+        review_mode = (
+            review_mode_raw.strip().lower()
+            if isinstance(review_mode_raw, str)
+            else ""
+        )
+        review_session_raw = record.get("review_session", "")
+        review_session = (
+            review_session_raw.strip()
+            if isinstance(review_session_raw, str)
+            else ""
+        )
+        fallback_reason_raw = record.get("fallback_reason", "")
+        fallback_reason = (
+            unicodedata.normalize("NFC", fallback_reason_raw.strip())
+            if isinstance(fallback_reason_raw, str)
+            else ""
+        )
+        self_review_fields_valid = True
+        if review_mode == "external":
+            self_review_fields_valid = (
+                (not review_mode_present or review_mode_raw == review_mode_raw.strip())
+                and not review_session_present
+                and not fallback_reason_present
+            )
+        elif review_mode in {"self-primary", "self-fallback"}:
+            self_review_fields_valid = bool(
+                review_mode_present
+                and isinstance(review_mode_raw, str)
+                and review_mode_raw == review_mode_raw.strip()
+                and review_session_present
+                and isinstance(review_session_raw, str)
+                and review_session_raw == review_session_raw.strip()
+                and REVIEW_SESSION_RE.fullmatch(review_session)
+            )
+            if review_mode == "self-primary":
+                self_review_fields_valid = (
+                    self_review_fields_valid and not fallback_reason_present
+                )
+            else:
+                fallback_bytes = len(fallback_reason.encode("utf-8"))
+                self_review_fields_valid = (
+                    self_review_fields_valid
+                    and fallback_reason_present
+                    and isinstance(fallback_reason_raw, str)
+                    and fallback_reason_raw == fallback_reason_raw.strip()
+                    and 20 <= fallback_bytes <= MAX_FALLBACK_REASON_BYTES
+                    and not any(
+                        unicodedata.category(char).startswith("C")
+                        for char in fallback_reason
+                    )
+                )
+        else:
+            self_review_fields_valid = False
         if (
             not reviewer
             or reviewer_raw != reviewer_raw.strip()
@@ -1030,6 +1100,7 @@ def evaluate_evidence(
             or axis not in ALLOWED_AXES
             or verdict not in {"PASS", "BLOCKED", "FAIL"}
             or not isinstance(record.get("findings_resolved"), bool)
+            or not self_review_fields_valid
         ):
             malformed += 1
             continue
@@ -1037,6 +1108,9 @@ def evaluate_evidence(
         record["report_sha256"] = report_sha256
         record["review_axis"] = axis
         record["verdict"] = verdict
+        record["review_mode"] = review_mode
+        record["review_session"] = review_session or None
+        record["fallback_reason"] = fallback_reason or None
         exact.append(record)
 
     for record in forwarded_records:
@@ -1185,8 +1259,34 @@ def evaluate_evidence(
     report_hashes = {record["report_sha256"] for record in accepted}
     axes = {record["review_axis"] for record in accepted}
     if required >= 2:
-        if len(reviewer_names) < 2:
-            reasons.append("R2/R3 require at least two distinct reviewer identities")
+        self_primary = [
+            record for record in accepted if record.get("review_mode") == "self-primary"
+        ]
+        self_fallback = [
+            record for record in accepted if record.get("review_mode") == "self-fallback"
+        ]
+        primary_sessions = {
+            record.get("review_session")
+            for record in self_primary
+            if record.get("review_session")
+        }
+        fallback_sessions = {
+            record.get("review_session")
+            for record in self_fallback
+            if record.get("review_session")
+        }
+        explicit_self_fallback = (
+            len(reviewer_names) == 1
+            and bool(primary_sessions)
+            and bool(fallback_sessions)
+            and primary_sessions.isdisjoint(fallback_sessions)
+            and all(record.get("fallback_reason") for record in self_fallback)
+        )
+        if len(reviewer_names) < 2 and not explicit_self_fallback:
+            reasons.append(
+                "R2/R3 require at least two distinct reviewer identities or an "
+                "explicit self-primary/self-fallback pair with distinct review sessions"
+            )
         if len(report_hashes) < 2:
             reasons.append("R2/R3 require at least two distinct review reports")
         if len(axes) < 2:
@@ -1198,10 +1298,16 @@ def evaluate_evidence(
 
     accepted_summary = [
         {
-            "kind": "forwarded-external-review" if record.get("_forwarded") else "attested-report",
+            "kind": (
+                "forwarded-external-review"
+                if record.get("_forwarded")
+                else "attested-report"
+            ),
             "reviewer": record["reviewer"],
             "report_sha256": record["report_sha256"],
             "review_axis": record["review_axis"],
+            "review_mode": record.get("review_mode", "external"),
+            "review_session": record.get("review_session"),
             "attester": record.get("_comment_author"),
             "comment_url": record.get("_comment_url"),
         }

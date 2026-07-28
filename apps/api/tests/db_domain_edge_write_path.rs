@@ -160,7 +160,6 @@ fn write_path_config(
     domain_edge_write_source: DomainEdgeWriteSource,
 ) -> AppConfig {
     AppConfig {
-        fade_days: 7,
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,

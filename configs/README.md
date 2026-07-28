@@ -5,7 +5,7 @@ Deployments eine alternative YAML-Datei via `APP_CONFIG_PATH` angeben oder einze
 Felder mit `HA_*`-Variablen überschreiben (`HA_RON_DAYS`,
 `HA_ANONYMIZE_OPT_IN`, `HA_DELEGATION_EXPIRE_DAYS`).
 
-`fade_days: 7` und der Kompatibilitätswert `HA_FADE_DAYS=7` spiegeln nur die
-verfassungsfeste Lebensdauer neu abgeleiteter, unverzwirnter Fäden. Andere oder
-syntaktisch ungültige Werte sind keine Konfiguration und verhindern den API-Start
-fail-closed.
+Die Lebensdauer neu abgeleiteter, unverzwirnter Fäden ist verfassungsfest auf
+sieben Tage gebunden und deshalb kein Runtime-Feld. Die entfernten Oberflächen
+`fade_days` und `HA_FADE_DAYS` werden fail-closed abgewiesen, damit alte
+Deployment-Konfiguration keine Scheinsteuerbarkeit erzeugt.

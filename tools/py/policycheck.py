@@ -24,7 +24,6 @@ def main() -> int:
         return 1
 
     try:
-        fade_days = lifecycle["fade_days"]
         ron_days = int(lifecycle["ron_days"])
     except (KeyError, TypeError, ValueError) as exc:
         print(f"::error::invalid lifecycle values: {exc}")
@@ -35,25 +34,23 @@ def main() -> int:
         print("::error::configs/app.defaults.yml missing")
         return 1
     defaults = yaml.safe_load(default_path.read_text(encoding="utf-8")) or {}
-    default_fade_days = defaults.get("fade_days")
 
-    for source, value in (
-        ("policies/retention.yml", fade_days),
-        ("configs/app.defaults.yml", default_fade_days),
+    for source, mapping in (
+        ("policies/retention.yml data_lifecycle", lifecycle),
+        ("configs/app.defaults.yml", defaults),
     ):
-        if (
-            isinstance(value, bool)
-            or not isinstance(value, int)
-            or value != FIXED_FADEN_FADE_DAYS
-        ):
+        if "fade_days" in mapping:
             print(
-                f"::error::{source} fade_days must be exactly {FIXED_FADEN_FADE_DAYS}; "
-                "it mirrors the fixed constitutional Faden lifetime and is not a tuning setting"
+                f"::error::{source} must not publish fade_days; the Faden lifetime is "
+                f"the fixed constitutional value of {FIXED_FADEN_FADE_DAYS} days"
             )
             return 1
 
-    if ron_days < fade_days:
-        print("::error::ron_days must be >= fade_days")
+    if ron_days < FIXED_FADEN_FADE_DAYS:
+        print(
+            "::error::ron_days must be >= the fixed constitutional Faden lifetime "
+            f"of {FIXED_FADEN_FADE_DAYS} days"
+        )
         return 1
 
     print("policy ok")
