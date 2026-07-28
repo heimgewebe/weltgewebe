@@ -98,6 +98,28 @@ describe("domain writes", () => {
     expect(error).toMatchObject({ status: 502, body: malformed });
   });
 
+  it("rejects non-string edge identifiers in successful deletion receipts", async () => {
+    const malformed = {
+      node_id: "node-a",
+      node_state: "removed",
+      removed_edge_ids: ["edge-a", 7],
+      conversation: { effect: "deleted_empty" },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(malformed), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    const error = await deleteNode("node-a").catch((reason) => reason);
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({ status: 502, body: malformed });
+  });
+
   it("keeps the structured delete conflict from JSON responses", async () => {
     const body = {
       code: "node_conversation_not_empty",
