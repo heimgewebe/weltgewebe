@@ -27,7 +27,7 @@ function isNodeVersionConflictBody(body: unknown, expectedId: string): boolean {
   );
 }
 
-async function readErrorBody(response: Response): Promise<unknown> {
+export async function readErrorBody(response: Response): Promise<unknown> {
   const text = await response.text().catch(() => "");
   if (!text) return undefined;
 
@@ -38,7 +38,7 @@ async function readErrorBody(response: Response): Promise<unknown> {
   }
 }
 
-function preserveOnlyMatchingNodeConflict(
+export function preserveOnlyMatchingNodeConflict(
   error: unknown,
   expectedId: string,
 ): never {
@@ -95,22 +95,6 @@ async function putJson<T>(
   etag?: string,
 ): Promise<T> {
   return requestJson<T>(path, "PUT", payload, etag);
-}
-
-async function deleteJson(path: string, etag?: string): Promise<unknown> {
-  const headers: HeadersInit = {};
-  if (etag) {
-    headers["If-Match"] = `"${etag}"`;
-  }
-  const res = await fetch(path, {
-    method: "DELETE",
-    headers,
-    credentials: "include",
-  });
-  if (!res.ok) {
-    throw new ApiRequestError(res.status, await readErrorBody(res));
-  }
-  return res.json().catch(() => undefined);
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -200,52 +184,4 @@ export function replaceNode(
     payload,
     etag,
   ).catch((error) => preserveOnlyMatchingNodeConflict(error, id));
-}
-
-export type NodeDeleteConversationEffect =
-  | { effect: "not_applicable" }
-  | { effect: "deleted_empty" }
-  | { effect: "archived"; archive_id: string; archive_url: string };
-
-export interface NodeDeleteReceipt {
-  node_id: string;
-  node_state: "removed";
-  removed_edge_ids: string[];
-  conversation: NodeDeleteConversationEffect;
-}
-
-function parseNodeDeleteReceipt(
-  value: unknown,
-  expectedNodeId: string,
-): NodeDeleteReceipt {
-  const receipt = value as NodeDeleteReceipt;
-  const conversation = receipt?.conversation;
-  const effect = conversation?.effect;
-  if (
-    receipt?.node_id !== expectedNodeId ||
-    receipt.node_state !== "removed" ||
-    !Array.isArray(receipt.removed_edge_ids) ||
-    receipt.removed_edge_ids.some((id) => typeof id !== "string") ||
-    !(
-      effect === "not_applicable" ||
-      effect === "deleted_empty" ||
-      (effect === "archived" &&
-        typeof conversation.archive_id === "string" &&
-        conversation.archive_url ===
-          `/api/conversations/${conversation.archive_id}`)
-    )
-  ) {
-    throw new ApiRequestError(502, value);
-  }
-  return receipt;
-}
-
-/** DELETE /api/nodes/:id — delete a node and report its exact lifecycle effects. */
-export function deleteNode(
-  id: string,
-  etag?: string,
-): Promise<NodeDeleteReceipt> {
-  return deleteJson(`/api/nodes/${encodeURIComponent(id)}`, etag)
-    .then((value) => parseNodeDeleteReceipt(value, id))
-    .catch((error) => preserveOnlyMatchingNodeConflict(error, id));
 }
